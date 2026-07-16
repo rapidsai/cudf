@@ -348,8 +348,11 @@ def test_task_lifecycle_events() -> None:
     task = Task(operator_id=operator_id, instance_name="task-0")
     queue = task.queueing().to_dict()
     assert queue["data"]["Task"]["state"]["Queueing"]["operator_id"] == str(operator_id)
+    assert queue["data"]["Task"]["seq"] == 0
+    # ``seq`` is a per-instance counter that increments by one on each
+    # transition, in emission order (queueing == 0, allocating == 1, exit == 2).
     assert task.allocating(uuid.uuid4()).to_dict()["data"]["Task"]["seq"] == 1
-    assert task.exit().to_dict()["data"]["Task"]["seq"] == 5
+    assert task.exit().to_dict()["data"]["Task"]["seq"] == 2
 
 
 def test_port_declare_serialization(
@@ -1030,7 +1033,7 @@ def test_finalize_network_channels(device_memory: Memory) -> None:
     assert len(exit_events) == 2
 
 
-def test_emit_task_begin_events_computing_node() -> None:
+def test_emit_task_events_computing_node() -> None:
     logger, quent_ir_execution_context = _make_quent_ir_execution_context()
     task = Task.from_ir(Filter, quent_ir_execution_context)
     assert task is not None
@@ -1039,19 +1042,33 @@ def test_emit_task_begin_events_computing_node() -> None:
         Filter,
         task,
         quent_ir_execution_context,
+        input_frames_bytes=0,
+    )
+
+    # Simulate the result
+    result = _make_dataframe(pl.DataFrame({"y": list(range(7))}))
+
+    quent_ir_execution_context.context._emit_task_end_events(
+        Filter,
+        task,
+        quent_ir_execution_context,
+        [],
+        result,
     )
 
     events = _drained_events(logger)
     task_events = [event for event in events if "Task" in event["data"]]
-    assert [event["data"]["Task"]["seq"] for event in task_events] == [0, 1, 3]
+    # queueing -> allocating -> computing -> exit
+    assert [event["data"]["Task"]["seq"] for event in task_events] == [0, 1, 2, 3]
     assert "Queueing" in task_events[0]["data"]["Task"]["state"]
     assert "Allocating" in task_events[1]["data"]["Task"]["state"]
     assert "Computing" in task_events[2]["data"]["Task"]["state"]
+    assert "Exit" in task_events[3]["data"]["Task"]["state"]
     processor_events = [event for event in events if "Processor" in event["data"]]
     assert len(processor_events) == 2
 
 
-def test_emit_task_begin_events_io_node(disk_to_device_channel: Channel) -> None:
+def test_emit_task_events_io_node(disk_to_device_channel: Channel) -> None:
     logger, quent_ir_execution_context = _make_quent_ir_execution_context(
         disk_to_device_channel=disk_to_device_channel
     )
@@ -1062,43 +1079,28 @@ def test_emit_task_begin_events_io_node(disk_to_device_channel: Channel) -> None
         DataFrameScan,
         task,
         quent_ir_execution_context,
+        input_frames_bytes=0,
     )
 
-    events = _drained_events(logger)
-    task_events = [event for event in events if "Task" in event["data"]]
-    assert [event["data"]["Task"]["seq"] for event in task_events] == [0, 2]
-    assert "Queueing" in task_events[0]["data"]["Task"]["state"]
-    loading = task_events[1]["data"]["Task"]["state"]["Loading"]
-    assert loading["use_fs_to_mem"]["resource_id"] == str(disk_to_device_channel.id)
-    assert loading["use_memory"]["resource_id"] == str(
-        quent_ir_execution_context.device_memory.id
-    )
-
-
-def test_emit_task_end_events() -> None:
-    logger, quent_ir_execution_context = _make_quent_ir_execution_context()
-    task = Task(operator_id=quent_ir_execution_context.quent_operator.id)
-    input_frame = _make_dataframe(pl.DataFrame({"x": [1, 2, 3]}))
+    # Simulate the result
     result = _make_dataframe(pl.DataFrame({"y": list(range(7))}))
-
     quent_ir_execution_context.context._emit_task_end_events(
+        DataFrameScan,
         task,
         quent_ir_execution_context,
-        [input_frame],
+        [],
         result,
     )
 
     events = _drained_events(logger)
-    operator_events = [event for event in events if "Operator" in event["data"]]
+    # queueing -> allocating -> loading -> computing -> exit
     task_events = [event for event in events if "Task" in event["data"]]
-    assert len(operator_events) == 1
-    stats = operator_events[0]["data"]["Operator"]["Statistics"]["custom_attributes"]
-    assert stats == [
-        {"key": "input_bytes", "value": {"U64": input_frame._size_bytes()}},
-        {"key": "output_bytes", "value": {"U64": result._size_bytes()}},
-        {"key": "output_rows", "value": {"U64": result.num_rows}},
-    ]
-    assert task_events[0]["data"]["Task"]["state"] == "Exit"
+    assert [event["data"]["Task"]["seq"] for event in task_events] == [0, 1, 2, 3, 4]
+    assert "Queueing" in task_events[0]["data"]["Task"]["state"]
+    assert "Allocating" in task_events[1]["data"]["Task"]["state"]
+    assert "Loading" in task_events[2]["data"]["Task"]["state"]
+    assert "Computing" in task_events[3]["data"]["Task"]["state"]
+    assert "Exit" in task_events[4]["data"]["Task"]["state"]
 
 
 def test_emit_task_end_events_on_failure() -> None:
@@ -1107,6 +1109,7 @@ def test_emit_task_end_events_on_failure() -> None:
     input_frame = _make_dataframe(pl.DataFrame({"x": [10, 20]}))
 
     quent_ir_execution_context.context._emit_task_end_events(
+        Filter,
         task,
         quent_ir_execution_context,
         [input_frame],

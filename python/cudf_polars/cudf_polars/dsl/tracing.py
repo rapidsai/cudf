@@ -199,6 +199,7 @@ def log_do_evaluate(
                     cls,
                     quent_task,
                     ir_execution_context.quent_ir_execution_context,
+                    input_frames_bytes=sum(frame._size_bytes() for frame in frames),
                 )
 
             before_start = time.monotonic_ns()
@@ -220,6 +221,7 @@ def log_do_evaluate(
                     and ir_execution_context.quent_ir_execution_context is not None
                 ):
                     ir_execution_context.quent_ir_execution_context.context._emit_task_end_events(
+                        cls,
                         quent_task,
                         ir_execution_context.quent_ir_execution_context,
                         frames,
@@ -232,6 +234,7 @@ def log_do_evaluate(
                     and ir_execution_context.quent_ir_execution_context is not None
                 ):
                     ir_execution_context.quent_ir_execution_context.context._emit_task_end_events(
+                        cls,
                         quent_task,
                         ir_execution_context.quent_ir_execution_context,
                         frames,

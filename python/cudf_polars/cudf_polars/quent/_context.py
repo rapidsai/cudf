@@ -121,6 +121,10 @@ class QuentContext:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "_query_group_cache_", set())
+        # Maps task id -> unix timestamp when an I/O task entered Allocating.
+        # Used to backdate the Loading transition so channel rate spans cover
+        # the full disk-to-device transfer duration.
+        object.__setattr__(self, "_io_loading_started_at_", {})
 
     def serialize(self) -> bytes:
         """
@@ -376,6 +380,7 @@ class QuentContext:
         ir_type: type[IR],
         quent_task: Task,
         quent_ir_execution_context: QuentIRExecutionContext,
+        input_frames_bytes: int,
     ) -> None:
         """
         Emit begin events for a Quent Task.
@@ -388,44 +393,47 @@ class QuentContext:
             The Quent Task to emit events for.
         quent_ir_execution_context: QuentIRExecutionContext
             The Quent IR execution context.
+        input_frames_bytes: int
+            The total size of the input dataframes in bytes.
 
         Notes
         -----
-        The following events are emitted:
+        This emits the following events:
 
-        - Queueing
-        - Loading (I/O nodes only)
-        - Allocating (non-I/O nodes only)
-        - Computing (non-I/O nodes only)
-
-        The Loading, Allocating, and Computing events will indicate the host CPU thread
-        and device memory that they're using.
+        - queueing
+        - allocating
+        - loading (I/O nodes only)
+        - computing (non-I/O nodes only)
         """
         quent_processor = quent_ir_execution_context.get_or_declare_processor(
             thread_ident=threading.get_ident(),
         )
         quent_ir_execution_context.logger.emit(quent_task.queueing())
-        if not ir_type.is_io_node:
-            quent_ir_execution_context.logger.emit(
-                quent_task.allocating(resource_id=quent_processor.id)
-            )
-            quent_ir_execution_context.logger.emit(
-                quent_task.computing(
-                    use_thread=quent_processor,
-                    use_memory=quent_ir_execution_context.device_memory,
-                )
-            )
-        else:
+        quent_ir_execution_context.logger.emit(
+            quent_task.allocating(resource_id=quent_processor.id)
+        )
+        if ir_type.is_io_node:
             quent_ir_execution_context.logger.emit(
                 quent_task.loading(
                     use_thread=quent_processor,
                     use_channel=quent_ir_execution_context.disk_to_device_channel,
+                    channel_capacity_bytes=input_frames_bytes,
                     use_memory=quent_ir_execution_context.device_memory,
+                    memory_capacity_bytes=input_frames_bytes,
+                )
+            )
+        else:
+            quent_ir_execution_context.logger.emit(
+                quent_task.computing(
+                    use_thread=quent_processor,
+                    use_memory=quent_ir_execution_context.device_memory,
+                    memory_capacity_bytes=input_frames_bytes,
                 )
             )
 
     def _emit_task_end_events(
         self,
+        ir_type: type[IR],
         quent_task: Task,
         quent_ir_execution_context: QuentIRExecutionContext,
         frames: Sequence[DataFrame],
@@ -436,6 +444,8 @@ class QuentContext:
 
         Parameters
         ----------
+        ir_type: type[IR]
+            The IR type of the operator.
         quent_task: Task
             The Quent Task to emit events for.
         quent_ir_execution_context: QuentIRExecutionContext
@@ -453,6 +463,12 @@ class QuentContext:
         -----
         This method emits an ``Exit`` event for the Quent Task, whose timestamp represents
         when the IR node completed host-side processing.
+
+        The Quent Task FSM only permits a task to exit from the ``Computing``
+        state. Non-I/O nodes already entered ``Computing`` in
+        :meth:`_emit_task_begin_events`. I/O nodes were left in ``Allocating``
+        during the load; here they transition through ``Loading`` (with byte
+        counts), ``Computing``, and ``Exit``.
 
         A ``Statistics`` record, associated with the Quent Operator bound to the IR execution context,
         is also emitted. It includes
@@ -479,7 +495,30 @@ class QuentContext:
                 )
             )
         )
+        if ir_type.is_io_node:
+            quent_processor = quent_ir_execution_context.get_or_declare_processor(
+                thread_ident=threading.get_ident(),
+            )
+            quent_ir_execution_context.logger.emit(
+                quent_task.computing(
+                    use_thread=quent_processor,
+                    use_memory=quent_ir_execution_context.device_memory,
+                    memory_capacity_bytes=output_capacity_bytes,
+                )
+            )
         quent_ir_execution_context.logger.emit(quent_task.exit())
+
+
+def _device_memory_capacity_bytes() -> int | None:
+    """Return total device memory in bytes, or ``None`` if unavailable."""
+    try:
+        import pynvml
+
+        pynvml.nvmlInit()
+        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+        return int(pynvml.nvmlDeviceGetMemoryInfo(handle).total)
+    except Exception:  # pragma: no cover - no GPU / pynvml unavailable
+        return None
 
 
 def declare_worker_resources(
@@ -512,12 +551,15 @@ def declare_worker_resources(
         target=device_memory,
     )
     thread_pool = ThreadPool(worker_id=worker_id)
+    device_memory_capacity = _device_memory_capacity_bytes()
     logger.emit(device_memory.initializing())
-    logger.emit(device_memory.operating(0))
+    logger.emit(device_memory.operating(device_memory_capacity))
     logger.emit(filesystem.initializing())
-    logger.emit(filesystem.operating(0))
+    # Filesystem capacity is unknown; declare as unbounded.
+    logger.emit(filesystem.operating(None))
     logger.emit(disk_to_device_channel.initializing())
-    logger.emit(disk_to_device_channel.operating())
+    # Channel capacity is a rate bound; unbounded when unknown.
+    logger.emit(disk_to_device_channel.operating(None))
     logger.emit(thread_pool.declare())
     return device_memory, disk_to_device_channel, thread_pool
 
@@ -575,7 +617,7 @@ def declare_network_channels(
             target=device_memory,
         )
         logger.emit(link.initializing())
-        logger.emit(link.operating())
+        logger.emit(link.operating(None))
         link_channels[target_rank] = link
 
     return network, link_channels

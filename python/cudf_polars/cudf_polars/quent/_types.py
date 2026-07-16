@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+import itertools
 import sys
 import time
 import uuid
@@ -17,6 +18,8 @@ from typing import TYPE_CHECKING, Any, Literal, Self, TypeAlias
 from cudf_polars import __version__
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from cudf_polars.dsl.ir import IR
     from cudf_polars.quent._context import QuentIRExecutionContext
 
@@ -38,6 +41,7 @@ class EventName(enum.Enum):
     CHANNEL = "Channel"
     THREAD_POOL = "ThreadPool"
     PROCESSOR = "Processor"
+    NETWORK = "Network"
 
 
 if sys.version_info >= (3, 14):  # pragma: no cover; requires Python 3.14+
@@ -555,6 +559,27 @@ def _deserialize_value(value: dict[str, Any] | None) -> Value | None:
     raise ValueError(f"Unsupported Quent custom attribute variant: '{variant}'")
 
 
+# Resource capacity helpers
+#
+# Quent distinguishes unit resources (Processor/thread), occupancy capacities
+# (Memory), and rate capacities (Channel). See quent/docs/modeling/resource.md.
+
+
+def occupancy_usage_capacity_bytes(capacity_bytes: int) -> dict[str, int]:
+    """Usage capacity for a Memory resource (occupancy over the usage span)."""
+    return {"capacity_bytes": capacity_bytes}
+
+
+def rate_usage_capacity_bytes(capacity_bytes: int) -> dict[str, int]:
+    """
+    Usage capacity for a Channel resource (total bytes over the usage span).
+
+    Rate capacity values represent the total quantity transferred during the
+    span, not bytes per second.
+    """
+    return {"capacity_bytes": capacity_bytes}
+
+
 # Resource types
 
 
@@ -586,7 +611,9 @@ class Memory:
             },
         )
 
-    def operating(self, capacity_bytes: int, timestamp: int | None = None) -> Event:
+    def operating(
+        self, capacity_bytes: int | None = None, timestamp: int | None = None
+    ) -> Event:
         """Build a Quent Memory Operating event."""
         return Event(
             id=self.id,
@@ -705,7 +732,7 @@ class Network:
             id=self.id,
             timestamp=timestamp if timestamp is not None else time.time_ns(),
             data={
-                "Network": {
+                EventName.NETWORK.value: {
                     "Declaration": {
                         "instance_name": "Network",
                         "parent_group_id": str(self.engine_id),
@@ -808,6 +835,9 @@ class Task:
     id: uuid.UUID = dataclasses.field(default_factory=new_quent_id)
     operator_id: uuid.UUID
     instance_name: str | None = None
+    _seq: Iterator[int] = dataclasses.field(
+        default_factory=itertools.count, compare=False, repr=False
+    )
 
     @classmethod
     def from_ir(
@@ -845,7 +875,7 @@ class Task:
             timestamp=timestamp if timestamp is not None else time.time_ns(),
             data={
                 EventName.TASK.value: {
-                    "seq": 0,
+                    "seq": next(self._seq),
                     "state": {
                         "Queueing": {
                             "instance_name": self.instance_name or self.id.hex[:8],
@@ -859,7 +889,6 @@ class Task:
     def allocating(
         self,
         resource_id: uuid.UUID,
-        capacity: int | None = None,
         timestamp: int | None = None,
     ) -> Event:
         """Build a Quent Task Allocating event."""
@@ -868,12 +897,12 @@ class Task:
             timestamp=timestamp if timestamp is not None else time.time_ns(),
             data={
                 EventName.TASK.value: {
-                    "seq": 1,
+                    "seq": next(self._seq),
                     "state": {
                         "Allocating": {
                             "use_thread": {
                                 "resource_id": str(resource_id),
-                                "capacity": capacity,
+                                "capacity": None,
                             }
                         }
                     },
@@ -900,19 +929,19 @@ class Task:
         if use_channel is not None:
             loading_data["use_fs_to_mem"] = {
                 "resource_id": str(use_channel.id),
-                "capacity": {"capacity_bytes": channel_capacity_bytes},
+                "capacity": rate_usage_capacity_bytes(channel_capacity_bytes),
             }
         if use_memory is not None:
             loading_data["use_memory"] = {
                 "resource_id": str(use_memory.id),
-                "capacity": {"capacity_bytes": memory_capacity_bytes},
+                "capacity": occupancy_usage_capacity_bytes(memory_capacity_bytes),
             }
         return Event(
             id=self.id,
             timestamp=timestamp if timestamp is not None else time.time_ns(),
             data={
                 EventName.TASK.value: {
-                    "seq": 2,
+                    "seq": next(self._seq),
                     "state": {"Loading": loading_data},
                 }
             },
@@ -922,11 +951,14 @@ class Task:
         self,
         use_thread: Processor | None = None,
         use_memory: Memory | None = None,
+        input_bytes: int = 0,
         memory_capacity_bytes: int = 0,
         timestamp: int | None = None,
     ) -> Event:
         """Build a Quent Task Computing event."""
-        computing_data: dict[str, dict[str, Any]] = {}
+        computing_data: dict[str, Any] = {}
+        computing_data["instance_name"] = ""
+        computing_data["input_bytes"] = input_bytes
         if use_thread is not None:
             computing_data["use_thread"] = {
                 "resource_id": str(use_thread.id),
@@ -935,14 +967,14 @@ class Task:
         if use_memory is not None:
             computing_data["use_memory"] = {
                 "resource_id": str(use_memory.id),
-                "capacity": {"capacity_bytes": memory_capacity_bytes},
+                "capacity": occupancy_usage_capacity_bytes(memory_capacity_bytes),
             }
         return Event(
             id=self.id,
             timestamp=timestamp if timestamp is not None else time.time_ns(),
             data={
                 EventName.TASK.value: {
-                    "seq": 3,
+                    "seq": next(self._seq),
                     "state": {"Computing": computing_data},
                 }
             },
@@ -965,14 +997,14 @@ class Task:
         if use_link is not None:
             sending_data["use_link"] = {
                 "resource_id": str(use_link.id),
-                "capacity": {"capacity_bytes": link_capacity_bytes},
+                "capacity": rate_usage_capacity_bytes(link_capacity_bytes),
             }
         return Event(
             id=self.id,
             timestamp=timestamp if timestamp is not None else time.time_ns(),
             data={
                 EventName.TASK.value: {
-                    "seq": 4,
+                    "seq": next(self._seq),
                     "state": {"Sending": sending_data},
                 }
             },
@@ -983,5 +1015,5 @@ class Task:
         return Event(
             id=self.id,
             timestamp=timestamp if timestamp is not None else time.time_ns(),
-            data={EventName.TASK.value: {"seq": 5, "state": "Exit"}},
+            data={EventName.TASK.value: {"seq": next(self._seq), "state": "Exit"}},
         )
