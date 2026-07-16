@@ -500,6 +500,7 @@ class streaming_groupby {
    *        companion vectors, and aggregation results table are all sized to this
    *        capacity. Cumulative input rows are not bounded.
    * @param null_handling Indicates whether rows in keys that contain NULL values should be included
+   * @param mr Device memory resource used to allocate the persistent hash table
    *
    * @throws std::invalid_argument if `max_distinct_keys <= 0`
    * @throws std::invalid_argument if any requested aggregation kind is unsupported
