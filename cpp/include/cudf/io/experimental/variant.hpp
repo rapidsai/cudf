@@ -31,13 +31,6 @@ namespace io::parquet::experimental {
 /**
  * @brief Extract the raw VARIANT-encoded bytes of a nested field by JSONPath-like path.
  *
- * Walks `path` step by step, descending into object values (`basic_type == 2`) at each name step
- * and into array values (`basic_type == 3`) at each `[N]` index step. Returns a `list<uint8>`
- * column containing the raw encoded bytes of the value at the end of the path for each row.
- *
- * Null is produced when the struct row is null, a name step's key is absent from the dictionary,
- * an index step is out of bounds, or the current value's basic type does not match the step kind.
- *
  * Path grammar:
  *   path  := "$"? first_step step*
  *   first := name | "." name | "[" index "]"
@@ -57,7 +50,9 @@ namespace io::parquet::experimental {
  * @param path JSONPath-like path string identifying the target field
  * @param stream CUDA stream
  * @param mr Device memory resource
- * @return `list<uint8>` column with the extracted value's encoded bytes
+ * @return `list<uint8>` column with the extracted value's encoded bytes. A row is null when the
+ *         input row is null, a name is absent, an index is out of bounds, or a step does not match
+ *         the current value.
  *
  * @throws std::invalid_argument on empty path or malformed syntax (`[*]` wildcards, negative
  *         indices, out-of-range indices, and quoted names inside `[...]` are not supported)
