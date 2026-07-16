@@ -183,12 +183,6 @@ class UnaryFunction(Expr):
 
         if self.name not in UnaryFunction._supported_fns:
             raise NotImplementedError(f"Unary function {name=}")  # pragma: no cover
-        if self.name in UnaryFunction._supported_cum_aggs:
-            (reverse,) = self.options
-            if reverse:
-                raise NotImplementedError(
-                    "reverse=True is not supported for cumulative aggregations"
-                )
         if self.name == "index_of" and plc.traits.is_nested(children[0].dtype.plc_type):
             raise NotImplementedError("index_of on nested types is not supported")
         if self.name == "fill_null_with_strategy" and self.options[1] not in {0, None}:
