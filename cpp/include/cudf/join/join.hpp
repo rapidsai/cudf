@@ -394,17 +394,19 @@ filter_join_indices(cudf::table_view const& left,
  *        the filtered index vectors.
  *
  * Runs the same predicate evaluation as `filter_join_indices` but skips the index
- * materialization step, returning the total number of pairs that would be emitted along with
- * the per-output contribution counts whose sum is that total. The semantics per `join_kind`
- * match `filter_join_indices`:
- * - INNER_JOIN: number of pairs where the predicate evaluates to true.
- * - LEFT_JOIN: predicate-passing pairs plus one entry per left row with no passing match.
- * - FULL_JOIN: input pairs plus one extra entry per pair whose predicate failed
- *   (because failed matches split into `(left, JoinNoMatch)` and `(JoinNoMatch, right)`).
+ * materialization step, returning the total number of pairs that would be emitted along with the
+ * per-output contribution counts whose sum is that total. The counts are laid out per `join_kind`
+ * so that each entry records how many output rows the corresponding input contributes:
+ * - INNER_JOIN: indexed per input pair; entry `i` is `1` if the predicate passes and `0` otherwise.
+ * - FULL_JOIN: indexed per input pair; entry `i` is `1` for a preserved pair (predicate passes or
+ *   the pair already contains a `JoinNoMatch`) and `2` for a failed valid pair (which splits into
+ *   `(left, JoinNoMatch)` and `(JoinNoMatch, right)`).
+ * - LEFT_JOIN: indexed per left row; each entry holds the number of passing pairs for that left
+ *   row, floored to `1` to account for the synthetic `(left, JoinNoMatch)` entry.
  *
  * The returned size and contribution counts may be passed as a precomputed hint to APIs that
- * compose `filter_join_indices` (for example, the mixed join APIs). The layout of the
- * contribution counts is an implementation detail that should not be relied upon.
+ * compose `filter_join_indices` (for example, the mixed join APIs). The layout above is an
+ * implementation detail that callers should treat as opaque rather than rely upon.
  *
  * @throw std::invalid_argument if `join_kind` is not INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
  * @throw std::invalid_argument if `left_indices` and `right_indices` have different sizes.
