@@ -2973,9 +2973,9 @@ class IndexedFrame(Frame):
         1  120  0.25
         2   30  0.50
         >>> df.hash_values(method="murmur3")
-        0      92443192
-        1     116637743
-        2    2602001908
+        0    3826000917
+        1     657073880
+        2     339499243
         dtype: uint32
         >>> df.hash_values(method="md5")
         0    57ce879751b5169c525907d5c563fae1
