@@ -48,6 +48,14 @@ rapidsmpf::streaming::Actor bloom_filter::build(
     chunk      = co_await chunk.make_available(
       ctx_,
       -rapidsmpf::safe_cast<std::int64_t>(chunk.data_alloc_size(rapidsmpf::MemoryType::DEVICE)));
+
+    // Reservation for the hash values in add.
+    auto res = co_await ctx_->memory(rapidsmpf::MemoryType::DEVICE)
+                 ->reserve_or_wait(rapidsmpf::safe_cast<std::size_t>(chunk.table_view().num_rows())
+                                     // TODO: no magic numbers: the hashing algorithm in
+                                     // `add` below returns an int64 column.
+                                     * sizeof(std::int64_t),
+                                   0);
     // Filter is allocated on `filter_stream`, but we run the additions on the chunk's
     // stream. The addition modifies global memory but we can safely launch two
     // kernels doing that concurrently because the updates are atomic.
