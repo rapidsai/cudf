@@ -1167,6 +1167,31 @@ class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ e
             return scheme.orderings[0].strict_boundaries
         return True
 
+    @staticmethod
+    def _ordering_covers_keys(
+        ordering: Ordering,
+        order_keys: Sequence[int | OrderKey],
+    ) -> bool:
+        """True when an ordering covers the requested sort keys."""
+        ordering_keys = ordering.keys
+        if len(ordering.keys) < len(order_keys):
+            # If we are only sorted on a subset of the keys, we need strict
+            # boundaries to know later keys cannot interleave across chunks.
+            if not ordering.strict_boundaries:
+                return False
+            order_keys = order_keys[: len(ordering.keys)]
+        else:
+            ordering_keys = ordering.keys[: len(order_keys)]
+        if all(isinstance(key, OrderKey) for key in order_keys):
+            return all(
+                current == target
+                for current, target in zip(ordering_keys, order_keys, strict=True)
+            )
+        key_indices = tuple(
+            key.column_index if isinstance(key, OrderKey) else key for key in order_keys
+        )
+        return tuple(key.column_index for key in ordering_keys) == key_indices
+
     def is_strictly_partitioned(
         self,
         *,
@@ -1185,12 +1210,7 @@ class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ e
         scheme = self._scheme_for_level(level)
         if not isinstance(scheme, OrderScheme):
             return False
-        ordering = scheme.orderings[0]
-        if len(ordering.keys) < len(order_keys):
-            # If we are only sorted on a subset of the keys, we need strict
-            # boundaries to know later keys cannot interleave across chunks.
-            return ordering.strict_boundaries
-        return True
+        return self._ordering_covers_keys(scheme.orderings[0], order_keys)
 
     def is_aligned_with(
         self, other: NormalizedPartitioning, br: BufferResource

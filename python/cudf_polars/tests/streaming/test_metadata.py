@@ -968,3 +968,15 @@ def test_is_ordered(spmd_engine, scheme_key_count, strict_boundaries, expected) 
     assert not nested.is_ordered(order_keys)
     assert nested.is_ordered(order_keys, level="inter_rank") is expected
     assert nested.is_ordered(order_keys, level="local") is expected
+
+    if scheme_key_count == 2:
+        desc, after = plc.types.Order.DESCENDING, plc.types.NullOrder.AFTER
+        mismatched_order_keys = [
+            (OrderKey(1, asc, before), OrderKey(0, asc, before)),
+            (OrderKey(0, desc, before), OrderKey(1, asc, before)),
+            (OrderKey(0, asc, after), OrderKey(1, asc, before)),
+        ]
+        for mismatched_keys in mismatched_order_keys:
+            assert not partitioning.is_ordered(mismatched_keys)
+            assert not nested.is_ordered(mismatched_keys, level="inter_rank")
+            assert not nested.is_ordered(mismatched_keys, level="local")
