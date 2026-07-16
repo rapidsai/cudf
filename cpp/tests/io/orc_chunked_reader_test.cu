@@ -176,11 +176,12 @@ TEST_F(OrcChunkedReaderTest, NestedEmptyStructColumnSelection)
     cudf::test::detail::make_null_mask(validity.begin(), validity.end());
 
   std::vector<std::unique_ptr<cudf::column>> struct_children;
-  struct_children.emplace_back(cudf::make_structs_column(num_rows, {}, 0, {}));
+  struct_children.emplace_back(
+    cudf::make_structs_column(num_rows, {}, null_count, std::move(null_mask)));
 
   std::vector<std::unique_ptr<cudf::column>> input_columns;
-  input_columns.emplace_back(cudf::make_structs_column(
-    num_rows, std::move(struct_children), null_count, std::move(null_mask)));
+  input_columns.emplace_back(
+    cudf::make_structs_column(num_rows, std::move(struct_children), 0, {}));
 
   auto expected = std::make_unique<cudf::table>(std::move(input_columns));
   cudf::io::table_input_metadata metadata(expected->view());
