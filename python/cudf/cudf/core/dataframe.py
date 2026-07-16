@@ -4389,9 +4389,20 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             result.index = out_index
 
         if columns:
-            result._data = result._data.rename_levels(
-                mapper=columns, level=level
-            )
+            new_ca = result._data.rename_levels(mapper=columns, level=level)
+            # pandas' rename rebuilds the columns Index from the transformed
+            # labels (``Index(items, tupleize_cols=False)`` in
+            # ``_transform_index``), re-inferring dtypes rather than
+            # preserving the originals: renaming object-dtype columns to
+            # all-string labels yields ``str``, and MultiIndex level dtypes
+            # are likewise re-inferred.
+            if new_ca.multiindex:
+                new_ca._level_dtypes = None
+            else:
+                new_ca.label_dtype = pd.Index(
+                    new_ca.names, tupleize_cols=False
+                ).dtype
+            result._data = new_ca
 
         return result
 
