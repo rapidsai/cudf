@@ -550,13 +550,6 @@ jlong execute_compiled_expression(jlong j_ast, jlong j_table, execution_backend 
   auto compiled_expr_ptr = reinterpret_cast<cudf::jni::ast::compiled_expr const*>(j_ast);
   auto tview_ptr         = reinterpret_cast<cudf::table_view const*>(j_table);
   auto const& expression = compiled_expr_ptr->get_top_expression();
-  if (backend == execution_backend::DEFAULT) {
-    auto const* literal = dynamic_cast<cudf::ast::literal const*>(&expression);
-    // The legacy evaluator silently corrupts decimal128 literal outputs in release builds.
-    if (literal != nullptr && literal->get_data_type().id() == cudf::type_id::DECIMAL128) {
-      throw std::invalid_argument("DECIMAL128 root literals require JIT evaluation");
-    }
-  }
   std::unique_ptr<cudf::column> result = backend == execution_backend::JIT
                                            ? cudf::compute_column_jit(*tview_ptr, expression)
                                            : cudf::compute_column(*tview_ptr, expression);

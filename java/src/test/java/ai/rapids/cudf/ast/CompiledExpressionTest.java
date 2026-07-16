@@ -20,6 +20,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.params.provider.NullSource;
 
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -348,6 +349,33 @@ public class CompiledExpressionTest extends CudfTestBase {
     try (Table t = new Table.TestBuilder().column(1, 2, 3).build();
          CompiledExpression compiledExpr = expr.compile()) {
       Assertions.assertThrows(CudfException.class, () -> compiledExpr.computeColumn(t).close());
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("createDecimal128LiteralParams")
+  public void testDecimal128IdentityLegacyTransformFails(DType type, BigInteger value) {
+    UnaryOperation expr = new UnaryOperation(
+        UnaryOperator.IDENTITY, Literal.ofDecimal(type, value));
+    try (Table t = new Table.TestBuilder().column(1, 2, 3).build();
+         CompiledExpression compiledExpr = expr.compile()) {
+      Assertions.assertThrows(CudfException.class, () -> compiledExpr.computeColumn(t).close());
+    }
+  }
+
+  @Test
+  public void testDecimal128LiteralComparisonLegacyTransform() {
+    DType type = DType.create(DType.DTypeEnum.DECIMAL128, 0);
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(0), Literal.ofDecimal(type, BigInteger.ONE));
+    try (Table t = new Table.TestBuilder()
+             .decimal128Column(0, RoundingMode.UNNECESSARY,
+                 BigInteger.ZERO, BigInteger.ONE, BigInteger.valueOf(2), null)
+             .build();
+         CompiledExpression compiledExpr = expr.compile();
+         ColumnVector actual = compiledExpr.computeColumn(t);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, true, null)) {
+      assertColumnsAreEqual(expected, actual);
     }
   }
 

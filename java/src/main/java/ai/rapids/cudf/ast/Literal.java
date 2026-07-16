@@ -309,6 +309,7 @@ public final class Literal extends AstExpression {
     return convertDecimal128FromJavaToCudf(bytes, type, ByteOrder.nativeOrder());
   }
 
+  // Visible for testing so both possible native byte orders can be exercised.
   static byte[] convertDecimal128FromJavaToCudf(
       byte[] bytes, DType type, ByteOrder byteOrder) {
     // BigInteger uses big-endian bytes, while JNI reads the decimal128 value in native order.

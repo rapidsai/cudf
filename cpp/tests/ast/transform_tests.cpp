@@ -1542,4 +1542,25 @@ TYPED_TEST(TransformTest, Decimal128Unsupported)
   }
 }
 
+TYPED_TEST(TransformTest, Decimal128IdentityOutput)
+{
+  using Executor = TypeParam;
+
+  auto const input   = column_wrapper<int32_t>{0, 0};
+  auto const table   = cudf::table_view{{input}};
+  auto const scale   = numeric::scale_type{-2};
+  auto literal_value = cudf::fixed_point_scalar<numeric::decimal128>(12345, scale, true);
+  auto literal       = cudf::ast::literal(literal_value);
+  auto expression    = cudf::ast::operation(cudf::ast::ast_operator::IDENTITY, literal);
+
+  if constexpr (std::is_same_v<Executor, executor_ast>) {
+    EXPECT_THROW(Executor::compute_column(table, expression), cudf::data_type_error);
+  } else {
+    auto result   = Executor::compute_column(table, expression);
+    auto expected = cudf::test::fixed_point_column_wrapper<__int128_t>(
+      {__int128_t{12345}, __int128_t{12345}}, scale);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+  }
+}
+
 CUDF_TEST_PROGRAM_MAIN()
