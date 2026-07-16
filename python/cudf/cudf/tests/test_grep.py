@@ -224,6 +224,19 @@ def test_main_benchmark_stdin_exit_code(capsys):
     assert rc == 2
 
 
+def test_main_benchmark_runs(tmp_path, monkeypatch):
+    # --benchmark on a real file invokes the benchmark and returns success.
+    f = _write(tmp_path, "log.txt", "ERROR one\nok\nERROR two\n")
+    calls = []
+    monkeypatch.setattr(
+        "cudf.grep._grep._run_benchmark",
+        lambda *args, **kwargs: calls.append(args),
+    )
+    rc = main(["--benchmark", "ERROR", f])
+    assert rc == 0
+    assert len(calls) == 1
+
+
 def test_empty_file(tmp_path):
     f = _write(tmp_path, "log.txt", "")
     assert grep("x", f) == []
