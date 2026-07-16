@@ -3532,7 +3532,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         ----------
         periods : int, default 1
             Periods to shift for forming percent change.
-        fill_method : str, default 'ffill'
+        fill_method : None
             Must be None.
         freq : str, optional
             Increment to use from time series API.
@@ -3548,12 +3548,15 @@ class GroupBy(Serializable, Reducible, Scannable):
         if fill_method is not None:
             raise ValueError(f"fill_method must be None; got {fill_method=}.")
 
-        filled = self.ffill()
-        fill_grp = filled.groupby(
+        # pandas 3.0 removed fill_method: no filling is performed, so NaN
+        # appears wherever the value or the group-shifted value is NA.
+        values = self.grouping.values
+        values.index = self.obj.index
+        value_grp = values.groupby(
             self.grouping, sort=self._sort, dropna=self._dropna
         )
-        shifted = fill_grp.shift(periods=periods, freq=freq)
-        return (filled / shifted) - 1
+        shifted = value_grp.shift(periods=periods, freq=freq)
+        return (values / shifted) - 1
 
     def _mimic_pandas_order(
         self, result: DataFrameOrSeries
