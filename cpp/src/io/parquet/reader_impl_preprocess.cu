@@ -5,6 +5,7 @@
 
 #include "error.hpp"
 #include "io/comp/common.hpp"
+#include "page_decode.cuh"
 #include "reader_impl.hpp"
 #include "reader_impl_chunking_utils.cuh"
 #include "reader_impl_preprocess_utils.cuh"
@@ -369,10 +370,6 @@ struct compute_page_offset_count {
             decode_kernel_mask::STRING_STREAM_SPLIT_NESTED,
             decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
 
-    // Mask for pages with lists (repetition levels)
-    constexpr uint32_t STRINGS_WITH_LISTS_MASK =
-      BitOr(decode_kernel_mask::STRING_LIST, decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
-
     auto const& page  = pages[page_idx];
     auto const& chunk = chunks[page.chunk_idx];
 
@@ -382,17 +379,13 @@ struct compute_page_offset_count {
     // Fixed length byte array: Offsets are fixed, no need to preprocess
     if (chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY) { return 0; }
 
-    auto const page_start_row    = chunk.start_row + page.chunk_row;
-    auto const page_end_row      = page_start_row + page.num_rows;
-    auto const subpass_start_row = skip_rows;
-    auto const subpass_end_row   = subpass_start_row + num_rows;
+    auto const page_start_row = chunk.start_row + page.chunk_row;
+    auto const page_end_row   = page_start_row + page.num_rows;
 
-    if ((page_end_row <= subpass_start_row) || (page_start_row >= subpass_end_row)) {
-      return 0;  // will skip the page
+    bool const is_list_col = chunk.max_level[level_type::REPETITION] > 0;
+    if (!page_has_rows_to_process(page, chunk.start_row, skip_rows, num_rows, is_list_col)) {
+      return 0;
     }
-
-    // Check if this column is a list type
-    bool const is_list_col = BitAnd(page.kernel_mask, STRINGS_WITH_LISTS_MASK) != 0;
 
     size_t page_num_values;
     if (is_list_col) {
@@ -403,7 +396,7 @@ struct compute_page_offset_count {
     } else {
       // For non-list columns, we don't know how many values we'll read, because we don't know
       // how many nulls we'll skip. So we have to read through the skipped rows on the page.
-      auto const read_end_row = min(page_end_row, subpass_end_row);
+      auto const read_end_row = min(page_end_row, skip_rows + num_rows);
       page_num_values         = read_end_row - page_start_row;
     }
 
@@ -472,16 +465,21 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
   _stream.synchronize();
 
   // Pre-process string offsets for non-dictionary string columns
+  kernel_error error_code(_stream);
   detail::preprocess_string_offsets(subpass.pages,
                                     pass.chunks,
                                     subpass.page_string_offset_indices,
                                     subpass_page_mask_span(),
                                     skip_rows,
                                     num_rows,
+                                    error_code.data(),
                                     _stream);
 
   // Wait for string offset preprocessing to complete before launching decode kernels
-  _stream.synchronize();
+  if (auto const error = error_code.value_sync(_stream); error != 0) {
+    CUDF_FAIL("Parquet string offset preprocess failed with code(s) " +
+              kernel_error::to_string(error));
+  }
 }
 
 std::pair<bool, std::future<void>> reader_impl::read_column_chunks()
@@ -1152,7 +1150,9 @@ struct map_global_to_local_row_index {
 
 }  // namespace
 
-std::unique_ptr<column> reader_impl::synthesize_row_index_column(row_range const& read_info)
+std::unique_ptr<column> reader_impl::synthesize_row_index_column(row_range const& read_info,
+                                                                 rmm::cuda_stream_view stream,
+                                                                 rmm::device_async_resource_ref mr)
 {
   using column_type = size_t;
 
@@ -1161,16 +1161,16 @@ std::unique_ptr<column> reader_impl::synthesize_row_index_column(row_range const
   }
 
   // Allocate column data vector
-  auto col_data = rmm::device_uvector<column_type>(read_info.num_rows, _stream, _mr);
+  auto col_data = rmm::device_uvector<column_type>(read_info.num_rows, stream, mr);
 
   // Map global row indices in the current row-range to corresponding source-local row indices
   {
     // Collect global and file-local start rows for each selected row group
     auto const& row_groups = _file_itm_data.row_groups;
     auto host_rg_global_offsets =
-      cudf::detail::make_empty_pinned_vector<std::size_t>(row_groups.size(), _stream);
+      cudf::detail::make_empty_pinned_vector<std::size_t>(row_groups.size(), stream);
     auto host_rg_local_offsets =
-      cudf::detail::make_empty_pinned_vector<size_t>(row_groups.size(), _stream);
+      cudf::detail::make_empty_pinned_vector<size_t>(row_groups.size(), stream);
     for (auto const& rg : row_groups) {
       host_rg_global_offsets.push_back(rg.start_row);
       host_rg_local_offsets.push_back(rg.source_start_row);
@@ -1178,9 +1178,9 @@ std::unique_ptr<column> reader_impl::synthesize_row_index_column(row_range const
 
     // Copy to device
     auto const rg_global_offsets = cudf::detail::make_device_uvector_async(
-      host_rg_global_offsets, _stream, cudf::get_current_device_resource_ref());
+      host_rg_global_offsets, stream, cudf::get_current_device_resource_ref());
     auto const rg_local_offsets = cudf::detail::make_device_uvector_async(
-      host_rg_local_offsets, _stream, cudf::get_current_device_resource_ref());
+      host_rg_local_offsets, stream, cudf::get_current_device_resource_ref());
 
     // For each output row, binary search its row group and compute the (file-local) row index
     CUDF_CUDA_TRY(cub::DeviceTransform::Transform(
@@ -1189,15 +1189,17 @@ std::unique_ptr<column> reader_impl::synthesize_row_index_column(row_range const
       read_info.num_rows,
       map_global_to_local_row_index{
         rg_global_offsets.data(), rg_local_offsets.data(), rg_global_offsets.size()},
-      _stream.value()));
-    _stream.synchronize();
+      stream.value()));
+    stream.synchronize();
   }
 
-  return std::make_unique<cudf::column>(std::move(col_data), rmm::device_buffer{}, 0);
+  return std::make_unique<cudf::column>(std::move(col_data), rmm::device_buffer{0, stream, mr}, 0);
 }
 
 std::unique_ptr<column> reader_impl::synthesize_source_index_column(
-  std::span<std::size_t const> num_rows_per_source)
+  std::span<std::size_t const> num_rows_per_source,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   using column_type = cudf::size_type;
 
@@ -1211,12 +1213,13 @@ std::unique_ptr<column> reader_impl::synthesize_source_index_column(
 
   // Single source
   if (num_sources == 1) {
-    auto const scalar = cudf::numeric_scalar<column_type>(0, true, _stream, _mr);
-    return cudf::make_column_from_scalar(scalar, num_rows, _stream, _mr);
+    auto const scalar =
+      cudf::numeric_scalar<column_type>(0, true, stream, cudf::get_current_device_resource_ref());
+    return cudf::make_column_from_scalar(scalar, num_rows, stream, mr);
   }
 
   // Allocate column data vector
-  auto col_data = rmm::device_uvector<column_type>(num_rows, _stream, _mr);
+  auto col_data = rmm::device_uvector<column_type>(num_rows, stream, mr);
 
   // Label each output row with its source index via segment boundaries.
   {
@@ -1228,13 +1231,13 @@ std::unique_ptr<column> reader_impl::synthesize_source_index_column(
     std::inclusive_scan(
       num_rows_per_source.begin(), num_rows_per_source.end(), host_row_offsets.begin() + 1);
     auto const row_offsets = cudf::detail::make_device_uvector_async(
-      host_row_offsets, _stream, cudf::get_current_device_resource_ref());
+      host_row_offsets, stream, cudf::get_current_device_resource_ref());
     cudf::detail::label_segments(
-      row_offsets.begin(), row_offsets.end(), col_data.begin(), col_data.end(), _stream);
-    _stream.synchronize();
+      row_offsets.begin(), row_offsets.end(), col_data.begin(), col_data.end(), stream);
+    stream.synchronize();
   }
 
-  return std::make_unique<cudf::column>(std::move(col_data), rmm::device_buffer{}, 0);
+  return std::make_unique<cudf::column>(std::move(col_data), rmm::device_buffer{0, stream, mr}, 0);
 }
 
 }  // namespace cudf::io::parquet::detail

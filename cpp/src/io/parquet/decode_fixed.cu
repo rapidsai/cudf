@@ -1081,7 +1081,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   rle_stream<uint32_t, decode_block_size_t, rolling_buf_size> dict_stream{dict_runs};
   if constexpr (has_dict_t) {
     dict_stream.init(
-      s->dict_bits, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
+      block, s->dict_bits, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
   }
 
   // Use dictionary stream memory for bools
@@ -1089,7 +1089,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   bool bools_are_rle_stream = (s->dict_run == 0);
   if constexpr (has_bools_t) {
     if (bools_are_rle_stream) {
-      bool_stream.init(1, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
+      bool_stream.init(
+        block, 1, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
     }
   }
   block.sync();

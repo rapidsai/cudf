@@ -26,7 +26,7 @@ A column is an array of data of a single type. Along with Tables, columns are th
 structures used in libcudf. Most libcudf algorithms operate on columns. Columns may have a validity
 mask representing whether each element is valid or null (invalid). Columns of nested types are
 supported, meaning that a column may have child columns. A column is the C++ equivalent to a cuDF
-Python [Series](https://docs.rapids.ai/api/cudf/stable/api_docs/series.html).
+Python [Series](https://docs.rapids.ai/api/cudf/stable/user_guide/api_docs/api/cudf.series/).
 
 ### Element
 
@@ -38,8 +38,10 @@ A type representing a single element of a data type.
 
 ### Table
 
-A table is a collection of columns with equal number of elements. A table is the C++ equivalent to
-a cuDF Python [DataFrame](https://docs.rapids.ai/api/cudf/stable/api_docs/dataframe.html).
+A table is a collection of columns that all have the same number of elements (rows). A table may
+also have zero columns while still carrying a row count, mirroring an `(N, 0)` DataFrame. A table is
+the C++ equivalent to a cuDF Python
+[DataFrame](https://docs.rapids.ai/api/cudf/stable/user_guide/api_docs/api/cudf.dataframe/).
 
 ### View
 
@@ -208,9 +210,8 @@ The following guidelines apply to organizing `#include` lines.
  * Tools like `clangd` often auto-insert includes when they can, but they usually get the grouping
    and brackets wrong. Correct the usage of quotes or brackets and then run clang-format to correct
    the grouping.
- * Always check that includes are only necessary for the file in which they are included.
-   Try to avoid excessive including especially in header files. Double check this when you remove
-   code.
+ * Follow the "include what you use" principle. Directly `#include` headers that declare or forward declare as appropriate every symbol a file uses and do not rely on headers being pulled in transitively through another include.
+ * Do not include headers whose symbols the file does not use and avoid excessive including especially in header files. Double check this when you remove code.
  * Avoid relative paths with `..` when possible. Paths with `..` are necessary when including
    (internal) headers from source paths not in the same directory as the including file,
    because source paths are not passed with `-I`.

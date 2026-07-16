@@ -216,6 +216,15 @@ class reader_impl {
   std::pair<bool, std::future<void>> read_column_chunks();
 
   /**
+   * @brief Build the `column_selection_options` bundle for `select_columns()`.
+   *
+   * @param options Reader options
+   * @return Column selection options
+   */
+  [[nodiscard]] column_selection_options make_column_selection_options(
+    parquet_reader_options const& options) const;
+
+  /**
    * @brief Read compressed data and page information for the current pass.
    */
   void read_compressed_data();
@@ -363,10 +372,40 @@ class reader_impl {
    */
   void compute_output_chunks_for_subpass();
 
+  /**
+   * @brief Check if there is more work to be done
+   */
   [[nodiscard]] bool has_more_work() const
   {
     return _file_itm_data.num_passes() > 0 &&
            _file_itm_data._current_input_pass < _file_itm_data.num_passes();
+  }
+
+  /**
+   * @brief Check if the user has specified columns from mismatched sources
+   *
+   * @param options Reader options
+   * @return True if the user has specified columns from mismatched sources
+   */
+  [[nodiscard]] bool has_cols_from_mismatched_sources(parquet_reader_options const& options) const
+  {
+    return (options.get_column_names().has_value() or
+            options.get_column_field_ids().has_value()) and
+           options.is_enabled_allow_mismatched_pq_schemas();
+  }
+
+  /**
+   * @brief Effective `ignore_missing_columns` policy for column selection
+   *
+   * This flag would be disabled when multiple sources use mismatched-schema column selection.
+   *
+   * @param options Reader options
+   * @return Effective `ignore_missing_columns` value
+   */
+  [[nodiscard]] bool ignore_missing_columns_policy(parquet_reader_options const& options) const
+  {
+    return options.is_enabled_ignore_missing_columns() and
+           not(has_cols_from_mismatched_sources(options) and _metadata->get_num_sources() > 1);
   }
 
  protected:
@@ -395,19 +434,22 @@ class reader_impl {
     return _file_itm_data._output_chunk_count == 0;
   }
 
-  /**
-   * @brief Check if number of rows per source should be included in output metadata.
-   *
-   * @return True if AST filter is not present
-   */
-  [[nodiscard]] bool include_output_num_rows_per_source() const
-  {
-    return not _expr_conv.get_converted_expr().has_value();
-  }
-
   [[nodiscard]] cudf::detail::hostdevice_span<bool> subpass_page_mask_span() const
   {
     return _subpass_page_mask ? *_subpass_page_mask : cudf::detail::hostdevice_span<bool>{};
+  }
+
+  /**
+   * @brief Offset the column references in `_expr_conv` by the number of columns prepended to
+   * the output
+   *
+   * @return Offsetted expression converter
+   */
+  [[nodiscard]] inline offset_column_references compute_offset_filter() const
+  {
+    auto const num_prepended_cols = static_cast<size_type>(_options.prepend_source_index_column) +
+                                    static_cast<size_type>(_options.prepend_row_index_column);
+    return offset_column_references(_expr_conv.get_converted_expr(), num_prepended_cols);
   }
 
   /**
@@ -424,10 +466,14 @@ class reader_impl {
    * @brief Synthesize source index column
    *
    * @param num_rows_per_source Number of rows per parquet source
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
    * @return Synthesized source index column
    */
   [[nodiscard]] std::unique_ptr<column> synthesize_source_index_column(
-    std::span<std::size_t const> num_rows_per_source);
+    std::span<std::size_t const> num_rows_per_source,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
 
   /**
    * @brief Synthesize file-local row index column
@@ -437,19 +483,21 @@ class reader_impl {
    *
    * @param read_info Row range of the output chunk relative to the first row of the first
    *                  selected row group
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
    * @return Synthesized row index column
    */
-  [[nodiscard]] std::unique_ptr<column> synthesize_row_index_column(row_range const& read_info);
+  [[nodiscard]] std::unique_ptr<column> synthesize_row_index_column(
+    row_range const& read_info, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 
   /**
    * @brief Computes the names of columns to be read from the file, if specified.
    *
    * @param options The reader options
-   * @param ignore_missing_columns Whether to ignore non-existent projected columns
    * @return Names of columns to be read from the file if specified, `nullopt` otherwise
    */
   [[nodiscard]] std::optional<std::vector<std::string>> get_column_projection(
-    parquet_reader_options const& options, bool ignore_missing_columns) const;
+    parquet_reader_options const& options) const;
 
   /**
    * @brief Cast any fixed-point output columns to the decimal width specified in options.

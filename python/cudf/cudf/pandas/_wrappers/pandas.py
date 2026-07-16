@@ -484,6 +484,9 @@ Index = make_final_proxy_type(
         "__array_function__": array_function_method,
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
+        # matches pd.Index (1000) so wrapped-ndarray proxies defer
+        # binops/ufuncs to the Index's reflected op
+        "__array_priority__": pd.Index.__array_priority__,
         "dt": _AccessorAttr(CombinedDatetimelikeProperties),
         "str": _AccessorAttr(StringMethods),
         "cat": _AccessorAttr(_CategoricalAccessor),
@@ -1163,6 +1166,17 @@ Float64Dtype = make_final_proxy_type(
     },
 )
 
+
+# ``GroupBy.nth`` is a property returning a selector object on both
+# sides; registering the selector pair as an intermediate proxy gives
+# ``gb.nth`` a proxied result whose ``__call__``/``__getitem__`` get the
+# usual call-time fast/slow dispatch (with the slow side re-derived from
+# the recorded ``getattr`` provenance on fallback).
+GroupByNthSelector = make_intermediate_proxy_type(
+    "GroupByNthSelector",
+    cudf.core.groupby.groupby.GroupByNthSelector,
+    pd.core.groupby.indexing.GroupByNthSelector,
+)
 
 SeriesGroupBy = make_intermediate_proxy_type(
     "SeriesGroupBy",

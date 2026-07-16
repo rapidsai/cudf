@@ -109,6 +109,18 @@ struct row_group_info {
 [[nodiscard]] std::size_t derive_pass_read_limit(std::size_t chunk_read_limit);
 
 /**
+ * @brief Find the offset of the column chunk with the given schema index in the specified row group
+ *
+ * @note For mismatched schemas, `schema_idx` must be pre-mapped to the row group's source using
+ * `map_schema_index`.
+ *
+ * @param row_group Row group
+ * @param schema_idx Schema index, already mapped to the row group's source
+ * @return Offset of the column chunk within the row group's columns
+ */
+[[nodiscard]] size_type find_colchunk_iter_offset(RowGroup const& row_group, size_type schema_idx);
+
+/**
  * @brief Class for parsing dataset metadata
  */
 struct metadata : public FileMetaData {
@@ -141,6 +153,36 @@ struct arrow_schema_data_types {
 struct surviving_row_group_metrics {
   std::optional<size_type> after_stats_filter;  // number of surviving row groups after stats filter
   std::optional<size_type> after_bloom_filter;  // number of surviving row groups after bloom filter
+};
+
+/**
+ * @brief Column selection mode
+ */
+enum class column_selection_mode : uint8_t {
+  NONE        = 0,  // No column selection
+  BY_NAME     = 1,  // Select columns by name
+  BY_INDEX    = 2,  // Select columns by top-levelindex
+  BY_FIELD_ID = 3,  // Select columns by field ID
+};
+
+/**
+ * @brief Bundle of column selection parameters
+ */
+struct column_selection_options {
+  // Column selection mode
+  column_selection_mode selection_mode = column_selection_mode::NONE;
+  // Whether to always include the PANDAS index column(s)
+  bool include_index = false;
+  // Type conversion parameter: convert strings to categorical columns
+  bool strings_to_categorical = false;
+  // Whether to ignore non-existent projected columns
+  bool ignore_missing_columns = false;
+  // Type conversion parameter for timestamp columns
+  type_id timestamp_type_id = type_id::EMPTY;
+  // Type conversion parameter for decimal columns
+  type_id decimal_type_id = type_id::EMPTY;
+  // Whether column name matching is case sensitive
+  bool case_sensitive_names = true;
 };
 
 class aggregate_reader_metadata {
@@ -633,11 +675,7 @@ class aggregate_reader_metadata {
    * @param use_names List of paths of column names to select; `nullopt` if user did not select
    * columns to read
    * @param filter_columns_names List of paths of column names that are present only in filter
-   * @param include_index Whether to always include the PANDAS index column(s)
-   * @param strings_to_categorical Type conversion parameter
-   * @param ignore_missing_columns Whether to ignore non-existent projected columns
-   * @param timestamp_type_id Type conversion parameter
-   * @param decimal_type_id Type conversion parameter
+   * @param selection_options Column selection options
    *
    * @return input column information, output column buffers, list of output column schema
    * indices
@@ -647,12 +685,7 @@ class aggregate_reader_metadata {
                            std::vector<size_type>>
   select_columns(std::optional<std::vector<std::string>> const& use_names,
                  std::optional<std::vector<std::string>> const& filter_columns_names,
-                 bool include_index,
-                 bool strings_to_categorical,
-                 bool ignore_missing_columns,
-                 type_id timestamp_type_id,
-                 type_id decimal_type_id,
-                 bool case_sensitive_names);
+                 column_selection_options const& selection_options);
 };
 
 }  // namespace cudf::io::parquet::detail

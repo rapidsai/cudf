@@ -1477,6 +1477,19 @@ def _transform_arg(
         transformed: list[Any] = [
             _transform_arg(a, attribute_name, seen) for a in arg.flat
         ]
+        if all(
+            new is old for new, old in zip(transformed, arg.flat, strict=True)
+        ):
+            # No element needed transforming: return the original array
+            # (as we already do for non-object ndarrays below) to
+            # preserve buffer identity. Rebuilding an equivalent copy
+            # breaks aliasing checks such as
+            # ``np.may_share_memory(np.asarray(x), x)`` that numpy uses
+            # (e.g. in ``Generator.permutation``) to decide whether to
+            # defensively copy before an in-place shuffle; the views
+            # pandas returns under copy-on-write are read-only, so
+            # skipping that copy raises "ValueError: array is read-only".
+            return arg
         # Keep the same memory layout as arg (the default is C_CONTIGUOUS)
         if arg.flags["F_CONTIGUOUS"] and not arg.flags["C_CONTIGUOUS"]:
             order = "F"
