@@ -258,7 +258,7 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::cuda_stream_view st
                     group_offsets(stream).begin(),
                     group_offsets(stream).begin() + num_unique_keys,
                     gather_map.begin(),
-                    [idx_data] __device__(size_type i) { return idx_data[i]; });
+                    [idx_data] __device__(size_type i) -> size_type { return idx_data[i]; });
 
   auto const gather_map_view =
     column_view{data_type{type_to_id<size_type>()}, num_unique_keys, gather_map.data(), nullptr, 0};
