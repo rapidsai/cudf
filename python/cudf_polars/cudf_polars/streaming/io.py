@@ -407,7 +407,7 @@ def _read_with_hybrid_scan(
         ).select(list(schema.keys()))
 
 
-def _evaluate_split_prefetched(
+def _evaluate_with_prefetch(
     scan: SplitScan,
     prefetched: PrefetchedByteRanges,
     *,

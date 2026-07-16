@@ -7,8 +7,8 @@ from __future__ import annotations
 import asyncio
 import ctypes
 import threading
-from concurrent.futures import Future
-from typing import TYPE_CHECKING
+from concurrent.futures import Future, ThreadPoolExecutor
+from typing import Any, TYPE_CHECKING, Self
 
 import pylibcudf as plc
 from rapidsmpf.memory.buffer import MemoryType
@@ -80,7 +80,7 @@ def pread_ranges(
     return buf.array, futures, buf
 
 
-def prefetch_split(
+def prefetch_scan_byte_ranges(
     scan: SplitScan,
     stream: Stream,
     pinned_mr: PinnedMemoryResource,
@@ -174,10 +174,10 @@ def prefetch_split(
 
 # TODO: Replace with a cucascade::io::datasource that accepts fadvise() hints
 # issued before evaluation, so pre-reading is driven by the datasource layer
-# rather than a separate host-pinned pipeline.
-class HybridScanPrefetcher:
+# rather than a separate host-pinned executor.
+class HybridScanPrefetchExecutor:
     """
-    Prefetch pipeline for SplitScan tasks.
+    Prefetch executor for scan tasks.
 
     One worker thread per producer runs stats and bloom pruning and issues
     async reads to pinned host memory ahead of each producer's evaluation
@@ -185,52 +185,57 @@ class HybridScanPrefetcher:
     system.
     """
 
+    _thread_local: threading.local = threading.local()
+
+    @staticmethod
+    def _init_stream() -> None:
+        # One stream per thread, reused across all tasks that thread picks up.
+        # PinnedBuffer holds a reference to the stream and uses it in __del__
+        # for deallocation, so the stream must outlive any buffer the thread creates.
+        HybridScanPrefetchExecutor._thread_local.stream = Stream()
+
     def __init__(
         self,
+        futures: list[Future[PrefetchedByteRanges | None]],
+        executor: ThreadPoolExecutor,
+    ):
+        self.futures = futures
+        self._executor = executor
+
+    @classmethod
+    def from_scans(
+        cls,
         scans: list[SplitScan],
         num_workers: int,
         context: Context,
         pinned_mr: PinnedMemoryResource | None = None,
-    ):
+    ) -> Self:
+        """Validate, submit all scan tasks to the thread pool, and return the executor."""
         if pinned_mr is None:
             raise ValueError(
-                "HybridScanPrefetcher requires a PinnedMemoryResource; "
+                "HybridScanPrefetchExecutor requires a PinnedMemoryResource; "
                 "pass context.br().pinned_mr or enable pinned memory."
             )
-        self.pinned_mr = pinned_mr
-        self.context = context
-        self.loop = asyncio.get_running_loop()
-        self.futures: list[Future[PrefetchedByteRanges | None]] = [Future() for _ in scans]
-
-        worker_tasks: list[list[tuple[int, SplitScan]]] = [[] for _ in range(num_workers)]
-        for task_idx, scan in enumerate(scans):
-            worker_tasks[task_idx % num_workers].append((task_idx, scan))
-
-        self.threads = [
-            threading.Thread(
-                target=self.run_worker,
-                args=(tasks,),
-                daemon=True,
-                name=f"hybrid-prefetch-{i}",
+        loop = asyncio.get_running_loop()
+        executor = ThreadPoolExecutor(
+            max_workers=num_workers,
+            initializer=cls._init_stream,
+            thread_name_prefix="hybrid-prefetch",
+        )
+        futures = [
+            executor.submit(
+                lambda s=scan: prefetch_scan_byte_ranges(s, cls._thread_local.stream, pinned_mr, context, loop)
             )
-            for i, tasks in enumerate(worker_tasks)
+            for scan in scans
         ]
-        for t in self.threads:
-            t.start()
+        return cls(futures, executor)
 
-    def run_worker(
-        self,
-        tasks: list[tuple[int, SplitScan]],
-    ) -> None:
-        stream = Stream()
-        for task_idx, scan in tasks:
-            try:
-                self.futures[task_idx].set_result(
-                    prefetch_split(scan, stream, self.pinned_mr, self.context, self.loop)
-                )
-            except Exception as exc:
-                self.futures[task_idx].set_exception(exc)
+    def __enter__(self) -> Self:
+        return self
 
-    def get(self, task_idx: int) -> PrefetchedByteRanges | None:
+    def __exit__(self, *args: Any) -> None:
+        self._executor.shutdown(cancel_futures=True, wait=False)
+
+    def result(self, task_idx: int) -> PrefetchedByteRanges | None:
         """Block until task_idx's prefetch result is ready and return it."""
         return self.futures[task_idx].result()

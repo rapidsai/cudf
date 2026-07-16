@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import functools
 import io
 import math
@@ -52,12 +53,12 @@ from cudf_polars.streaming.actor_graph.utils import (
 from cudf_polars.streaming.io import (
     StreamingScan,
     StreamingSink,
-    _evaluate_split_prefetched,
+    _evaluate_with_prefetch,
     _prepare_sink_directory,
     _sink_to_file,
     can_use_native_parquet_node,
 )
-from cudf_polars.streaming.prefetch import HybridScanPrefetcher
+from cudf_polars.streaming.prefetch import HybridScanPrefetchExecutor
 from cudf_polars.streaming.rank_aware_source import RankAwareSource
 
 if TYPE_CHECKING:
@@ -505,16 +506,16 @@ def _(
 
 def evaluate_with_prefetch(
     scan: SplitScan,
-    prefetcher: HybridScanPrefetcher,
+    prefetcher: HybridScanPrefetchExecutor,
     task_idx: int,
     *,
     context: IRExecutionContext,
 ) -> DataFrame:
     """Evaluate a scan using parquet byte ranges prefetched into pinned host memory."""
-    prefetched: PrefetchedByteRanges | None = prefetcher.get(task_idx)
+    prefetched: PrefetchedByteRanges | None = prefetcher.result(task_idx)
     if prefetched is None:
         return scan.do_evaluate(*scan._non_child_args, context=context)
-    return _evaluate_split_prefetched(scan, prefetched, context=context)
+    return _evaluate_with_prefetch(scan, prefetched, context=context)
 
 
 async def read_chunk(
@@ -526,7 +527,7 @@ async def read_chunk(
     estimated_chunk_bytes: int,
     tracer: ActorTracer | None = None,
     *,
-    prefetcher: HybridScanPrefetcher | None = None,
+    prefetcher: HybridScanPrefetchExecutor | None = None,
 ) -> None:
     """
     Read a chunk from disk and send it to the output channel.
@@ -613,92 +614,96 @@ async def scan_node(
     """
     scans: Sequence[SplitScan] | Sequence[FusedScan] = ir.scans
 
-    prefetcher: HybridScanPrefetcher | None = None
     first = scans[0] if scans else None
-    if (
+    use_prefetch = (
         first is not None
         and ir.scan_type == "split"
         and first.parquet_options.use_hybrid_scan  # type: ignore[union-attr]
         and first.parquet_options.prefetch_file_metadata  # type: ignore[union-attr]
         and first.cached_parquet_info is not None  # type: ignore[union-attr]
         and first.base_scan.predicate is not None  # type: ignore[union-attr]
-    ):
-        prefetcher = HybridScanPrefetcher(
+        and context.br().pinned_mr is not None
+    )
+    prefetcher: HybridScanPrefetchExecutor | None = (
+        HybridScanPrefetchExecutor.from_scans(
             list(scans),  # type: ignore[arg-type]
             num_workers=num_producers,
             context=context,
             pinned_mr=context.br().pinned_mr,
         )
-
-    async with shutdown_on_error(
-        context, ch_out, trace_ir=ir, ir_context=ir_context
-    ) as tracer:
-        # Send basic metadata
-        await send_metadata(
-            ch_out,
-            context,
-            ChannelMetadata(local_count=len(scans)),
-        )
-
-        # If there is nothing to scan, drain the channel and return
-        if len(scans) == 0:
-            await ch_out.drain(context)
-            return
-
-        # If there is only one scan or one producer, we can
-        # skip the lineariser and read the chunks directly
-        if len(scans) == 1 or num_producers == 1:
-            for seq_num, scan in enumerate(scans):
-                await read_chunk(
-                    context,
-                    scan,
-                    seq_num,
-                    ch_out,
-                    ir_context,
-                    estimated_chunk_bytes,
-                    tracer=tracer,
-                    prefetcher=prefetcher,
-                )
-            await ch_out.drain(context)
-            return
-
-        # Use Lineariser to ensure ordered delivery
-        num_producers = min(num_producers, len(scans))
-        lineariser = Lineariser(context, ch_out, num_producers)
-
-        # Assign tasks to producers using round-robin
-        producer_tasks: list[list[tuple[int, SplitScan | FusedScan]]] = [
-            [] for _ in range(num_producers)
-        ]
-        for task_idx, scan in enumerate(scans):
-            producer_id = task_idx % num_producers
-            # mypy resolves __iter__ on union-of-sequences to the common base (IR)
-            producer_tasks[producer_id].append((task_idx, scan))  # type: ignore[arg-type]
-
-        async def _producer(producer_id: int, ch_out: Channel) -> None:
-            for task_idx, scan in producer_tasks[producer_id]:
-                await read_chunk(
-                    context,
-                    scan,
-                    task_idx,
-                    ch_out,
-                    ir_context,
-                    estimated_chunk_bytes,
-                    tracer=tracer,
-                    prefetcher=prefetcher,
-                )
-            await ch_out.drain(context)
-
-        async with (
-            shutdown_on_error(context, *lineariser.input_channels, trace_ir=ir),
-        ):
-            await gather_in_task_group(
-                lineariser.drain(),
-                *(
-                    _producer(i, ch_in)
-                    for i, ch_in in enumerate(lineariser.input_channels)
-                ),
+        if use_prefetch
+        else None
+    )
+    with prefetcher or contextlib.nullcontext():
+        async with shutdown_on_error(
+            context, ch_out, trace_ir=ir, ir_context=ir_context
+        ) as tracer:
+            # Send basic metadata
+            await send_metadata(
+                ch_out,
+                context,
+                ChannelMetadata(local_count=len(scans)),
             )
+
+            # If there is nothing to scan, drain the channel and return
+            if len(scans) == 0:
+                await ch_out.drain(context)
+                return
+
+            # If there is only one scan or one producer, we can
+            # skip the lineariser and read the chunks directly
+            if len(scans) == 1 or num_producers == 1:
+                for seq_num, scan in enumerate(scans):
+                    await read_chunk(
+                        context,
+                        scan,
+                        seq_num,
+                        ch_out,
+                        ir_context,
+                        estimated_chunk_bytes,
+                        tracer=tracer,
+                        prefetcher=prefetcher,
+                    )
+                await ch_out.drain(context)
+                return
+
+            # Use Lineariser to ensure ordered delivery
+            num_producers = min(num_producers, len(scans))
+            lineariser = Lineariser(context, ch_out, num_producers)
+
+            # Assign tasks to producers using round-robin
+            producer_tasks: list[list[tuple[int, SplitScan | FusedScan]]] = [
+                [] for _ in range(num_producers)
+            ]
+            for task_idx, scan in enumerate(scans):
+                producer_id = task_idx % num_producers
+                # mypy resolves __iter__ on union-of-sequences to the common base (IR)
+                producer_tasks[producer_id].append((task_idx, scan))  # type: ignore[arg-type]
+
+            async def _producer(producer_id: int, ch_out: Channel) -> None:
+                for task_idx, scan in producer_tasks[producer_id]:
+                    await read_chunk(
+                        context,
+                        scan,
+                        task_idx,
+                        ch_out,
+                        ir_context,
+                        estimated_chunk_bytes,
+                        tracer=tracer,
+                        prefetcher=prefetcher,
+                    )
+                await ch_out.drain(context)
+
+            async with (
+                shutdown_on_error(context, *lineariser.input_channels, trace_ir=ir),
+            ):
+                await gather_in_task_group(
+                    lineariser.drain(),
+                    *(
+                        _producer(i, ch_in)
+                        for i, ch_in in enumerate(lineariser.input_channels)
+                    ),
+                )
 
 
 def make_rapidsmpf_read_parquet_node(
