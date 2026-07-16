@@ -489,6 +489,72 @@ def test_typecast_to_different_datetime_resolutions(datetime_types_as_str):
 @pytest.mark.parametrize(
     "data",
     [
+        np.array(["2263-01-01"], dtype="datetime64[s]"),
+        np.array(["1600-01-01"], dtype="datetime64[s]"),
+        np.array(["2263-01-01", "NaT"], dtype="datetime64[s]"),
+    ],
+    ids=["above-range", "below-range", "with-null"],
+)
+def test_typecast_datetime_narrowing_out_of_bounds(data):
+    # Casting to a finer resolution whose int64 range cannot hold the
+    # values must raise like pandas instead of wrapping around.
+    psr = pd.Series(data)
+    gsr = cudf.Series(data)
+    assert_exceptions_equal(
+        lfunc=psr.astype,
+        rfunc=gsr.astype,
+        lfunc_args_and_kwargs=(["datetime64[ns]"],),
+        rfunc_args_and_kwargs=(["datetime64[ns]"],),
+    )
+
+
+def test_typecast_datetime_narrowing_in_bounds():
+    # The bounds check is relative to the target unit: year 9999 fits in
+    # seconds and microseconds, just not nanoseconds.
+    data = [datetime.date(9999, 12, 31)]
+    psr = pd.Series(data, dtype="datetime64[s]")
+    gsr = cudf.Series(data, dtype="datetime64[s]")
+    assert_eq(psr.astype("datetime64[us]"), gsr.astype("datetime64[us]"))
+
+    # All-null columns can always be narrowed.
+    all_null = np.array(["NaT", "NaT"], dtype="datetime64[s]")
+    assert_eq(
+        pd.Series(all_null).astype("datetime64[ns]"),
+        cudf.Series(all_null).astype("datetime64[ns]"),
+    )
+
+
+def test_typecast_datetime_tz_narrowing_out_of_bounds():
+    data = np.array(["2263-01-01"], dtype="datetime64[s]")
+    psr = pd.Series(data).dt.tz_localize("UTC")
+    gsr = cudf.Series(data).dt.tz_localize("UTC")
+    target = pd.DatetimeTZDtype("ns", "UTC")
+    assert_exceptions_equal(
+        lfunc=psr.astype,
+        rfunc=gsr.astype,
+        lfunc_args_and_kwargs=([target],),
+        rfunc_args_and_kwargs=([target],),
+    )
+
+
+def test_string_astype_datetime_tz():
+    target = pd.DatetimeTZDtype("ns", "UTC")
+
+    data = ["2000-01-01"]
+    assert_eq(pd.Series(data).astype(target), cudf.Series(data).astype(target))
+
+    out_of_bounds = ["2263-01-01"]
+    assert_exceptions_equal(
+        lfunc=pd.Series(out_of_bounds).astype,
+        rfunc=cudf.Series(out_of_bounds).astype,
+        lfunc_args_and_kwargs=([target],),
+        rfunc_args_and_kwargs=([target],),
+    )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
         [
             "2019-07-16 00:00:00.333",
             "2019-07-16 00:00:00.666",
@@ -1509,16 +1575,19 @@ def test_categorical_typecast(data, categories):
 @pytest.mark.parametrize(
     ("values", "expected"),
     [
-        ([1], np.uint8),
-        ([1, None], np.uint8),
-        (np.arange(np.iinfo(np.int8).max), np.uint8),
-        (np.append(np.arange(np.iinfo(np.int8).max), [None]), np.uint8),
-        (np.arange(np.iinfo(np.int16).max), np.uint16),
-        (np.append(np.arange(np.iinfo(np.int16).max), [None]), np.uint16),
-        (np.arange(np.iinfo(np.uint8).max), np.uint8),
-        (np.append(np.arange(np.iinfo(np.uint8).max), [None]), np.uint8),
-        (np.arange(np.iinfo(np.uint16).max), np.uint16),
-        (np.append(np.arange(np.iinfo(np.uint16).max), [None]), np.uint16),
+        # cat.codes uses a signed dtype matching pandas (which widens
+        # int8 -> int16 -> int32 once the category count reaches each type's
+        # max), so e.g. 127 categories -> int16 and 32767 categories -> int32.
+        ([1], np.int8),
+        ([1, None], np.int8),
+        (np.arange(np.iinfo(np.int8).max), np.int16),
+        (np.append(np.arange(np.iinfo(np.int8).max), [None]), np.int16),
+        (np.arange(np.iinfo(np.int16).max), np.int32),
+        (np.append(np.arange(np.iinfo(np.int16).max), [None]), np.int32),
+        (np.arange(np.iinfo(np.uint8).max), np.int16),
+        (np.append(np.arange(np.iinfo(np.uint8).max), [None]), np.int16),
+        (np.arange(np.iinfo(np.uint16).max), np.int32),
+        (np.append(np.arange(np.iinfo(np.uint16).max), [None]), np.int32),
     ],
 )
 def test_astype_dtype(values, expected):

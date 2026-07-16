@@ -12,14 +12,14 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
-from cudf_polars.utils import dtypes
+from cudf_polars.utils import dtypes, sorting
 from cudf_polars.utils.versions import POLARS_VERSION_LT_136
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DataFrame, DataType
+    from cudf_polars.containers import DataFrame
 
 __all__ = ["Cast", "Len", "UnaryFunction"]
 
@@ -108,6 +108,10 @@ class UnaryFunction(Expr):
     _supported_misc_fns = frozenset(
         {
             "as_struct",
+            "arg_max",
+            "arg_min",
+            "arg_sort",
+            "arg_unique",
             "clip",
             "drop_nans",
             "drop_nulls",
@@ -115,17 +119,21 @@ class UnaryFunction(Expr):
             "fill_null",
             "fill_null_with_strategy",
             "gather_every",
+            "index_of",
             "mask_nans",
             "mode",
             "null_count",
             "rank",
             "reinterpret",
             "round",
+            "search_sorted",
             "set_sorted",
             "shift",
             "shift_and_fill",
             "top_k",
+            "truncate",
             "unique",
+            "unique_counts",
             "value_counts",
         }
     )
@@ -140,7 +148,9 @@ class UnaryFunction(Expr):
     )
     _supported_math_fns = frozenset(
         {
+            "cot",
             "degrees",
+            "log1p",
             "radians",
         }
     )
@@ -159,6 +169,7 @@ class UnaryFunction(Expr):
             "reinterpret",
             "round",
             "set_sorted",
+            "truncate",
         }
     ).union(_supported_math_fns, _OP_MAPPING.keys())
 
@@ -179,6 +190,8 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     "reverse=True is not supported for cumulative aggregations"
                 )
+        if self.name == "index_of" and plc.traits.is_nested(children[0].dtype.plc_type):
+            raise NotImplementedError("index_of on nested types is not supported")
         if self.name == "fill_null_with_strategy" and self.options[1] not in {0, None}:
             raise NotImplementedError(
                 "Filling null values with limit specified is not yet supported."
@@ -240,6 +253,53 @@ class UnaryFunction(Expr):
         if self.name == "mask_nans":
             (child,) = self.children
             return child.evaluate(df, context=context).mask_nans(stream=df.stream)
+        if self.name in ("arg_max", "arg_min"):
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            arg_agg = (
+                plc.aggregation.argmax()
+                if self.name == "arg_max"
+                else plc.aggregation.argmin()
+            )
+            return Column(
+                plc.Column.from_scalar(
+                    plc.reduce.reduce(
+                        column.obj,
+                        arg_agg,
+                        plc.DataType(plc.TypeId.INT32),
+                        stream=df.stream,
+                    ),
+                    1,
+                    stream=df.stream,
+                ),
+                dtype=DataType(pl.Int32()),
+            ).astype(self.dtype, stream=df.stream)
+        if self.name == "arg_sort":
+            (descending, nulls_last) = self.options
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            arg_order, arg_null_order = sorting.sort_order(
+                [descending], nulls_last=[nulls_last], num_keys=1
+            )
+            return Column(
+                plc.sorting.stable_sorted_order(
+                    plc.Table([column.obj]),
+                    arg_order,
+                    arg_null_order,
+                    stream=df.stream,
+                ),
+                dtype=DataType(pl.Int32()),
+            ).astype(self.dtype, stream=df.stream)
+        if self.name == "arg_unique":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            indices = plc.stream_compaction.distinct_indices(
+                plc.Table([column.obj]),
+                plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+                plc.types.NullEquality.EQUAL,
+                plc.types.NanEquality.ALL_EQUAL,
+                stream=df.stream,
+            )
+            return Column(indices, dtype=DataType(pl.Int32())).astype(
+                self.dtype, stream=df.stream
+            )
         if self.name == "null_count":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             return Column(
@@ -311,6 +371,45 @@ class UnaryFunction(Expr):
                 ),
                 dtype=self.dtype,
             ).sorted_like(values)  # pragma: no cover
+        elif self.name == "truncate":
+            column = self.children[0].evaluate(df, context=context)
+            out_type = self.dtype.plc_type
+            if not plc.traits.is_floating_point(out_type):
+                return column
+            (decimals,) = self.options
+            col_ref = plc.expressions.ColumnReference(0)
+            one = plc.expressions.Literal(
+                plc.Scalar.from_py(1.0, out_type, stream=df.stream)
+            )
+            if decimals == 0:
+                frac = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.MOD, col_ref, one
+                )
+                truncate_expr = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.SUB, col_ref, frac
+                )
+            else:
+                scale = plc.expressions.Literal(
+                    plc.Scalar.from_py(10.0**decimals, out_type, stream=df.stream)
+                )
+                scaled = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.MUL, col_ref, scale
+                )
+                frac = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.MOD, scaled, one
+                )
+                truncated = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.SUB, scaled, frac
+                )
+                truncate_expr = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.DIV, truncated, scale
+                )
+            return Column(
+                plc.transform.compute_column(
+                    plc.Table([column.obj]), truncate_expr, stream=df.stream
+                ),
+                dtype=self.dtype,
+            )
         elif self.name == "unique":
             (maintain_order,) = self.options
             (values,) = (child.evaluate(df, context=context) for child in self.children)
@@ -344,6 +443,41 @@ class UnaryFunction(Expr):
             if maintain_order:
                 column = column.sorted_like(values)
             return column
+        elif self.name == "unique_counts":
+            values = self.children[0].evaluate(df, context=context)
+            iota = plc.filling.sequence(
+                values.size,
+                plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32), stream=df.stream),
+                plc.Scalar.from_py(1, plc.DataType(plc.TypeId.INT32), stream=df.stream),
+                stream=df.stream,
+            )
+            (_, (counts_table, first_index_table)) = plc.groupby.GroupBy(
+                plc.Table([values.obj]), null_handling=plc.types.NullPolicy.INCLUDE
+            ).aggregate(
+                [
+                    plc.groupby.GroupByRequest(
+                        values.obj,
+                        [plc.aggregation.count(plc.types.NullPolicy.INCLUDE)],
+                    ),
+                    plc.groupby.GroupByRequest(iota, [plc.aggregation.min()]),
+                ],
+                stream=df.stream,
+            )
+            counts_col = counts_table.columns()[0]
+            if counts_col.type() != self.dtype.plc_type:
+                counts_col = plc.unary.cast(
+                    counts_col, self.dtype.plc_type, stream=df.stream
+                )
+            return Column(
+                plc.sorting.sort_by_key(
+                    plc.Table([counts_col]),
+                    first_index_table,
+                    [plc.types.Order.ASCENDING],
+                    [plc.types.NullOrder.BEFORE],
+                    stream=df.stream,
+                ).columns()[0],
+                dtype=self.dtype,
+            )
         elif self.name == "set_sorted":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             if isinstance(self.options[0], str):
@@ -433,6 +567,82 @@ class UnaryFunction(Expr):
                 [keys_col, counts_col],
             )
             return Column(plc_column, dtype=self.dtype)
+        elif self.name == "index_of":
+            column = self.children[0].evaluate(df, context=context)
+            if column.size == 0:
+                return Column(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(None, self.dtype.plc_type, stream=df.stream),
+                        1,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
+            value_expr = self.children[1]
+            is_float = plc.traits.is_floating_point(column.dtype.plc_type)
+            if isinstance(value_expr, Literal):
+                py_value = value_expr.value
+                value = plc.Scalar.from_py(
+                    py_value, column.dtype.plc_type, stream=df.stream
+                )
+            else:
+                value = value_expr.evaluate(df, context=context).obj_scalar(
+                    stream=df.stream
+                )
+                py_value = value.to_py(stream=df.stream) if is_float else None
+            if is_float and isinstance(py_value, float) and math.isnan(py_value):
+                mask = plc.unary.is_nan(column.obj, stream=df.stream)
+            else:
+                mask = plc.binaryop.binary_operation(
+                    column.obj,
+                    value,
+                    plc.binaryop.BinaryOperator.NULL_EQUALS,
+                    plc.DataType(plc.TypeId.BOOL8),
+                    stream=df.stream,
+                )
+            indices = plc.filling.sequence(
+                column.size,
+                plc.Scalar.from_py(0, self.dtype.plc_type, stream=df.stream),
+                plc.Scalar.from_py(1, self.dtype.plc_type, stream=df.stream),
+                stream=df.stream,
+            )
+            matched = plc.stream_compaction.apply_boolean_mask(
+                plc.Table([indices]), mask, stream=df.stream
+            ).columns()[0]
+            if matched.size() == 0:
+                return Column(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(None, self.dtype.plc_type, stream=df.stream),
+                        1,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
+            (first,) = plc.copying.slice(
+                plc.Table([matched]), [0, 1], stream=df.stream
+            )[0].columns()
+            return Column(first, dtype=self.dtype)
+        elif self.name == "search_sorted":
+            side, descending = self.options
+            column = self.children[0].evaluate(df, context=context)
+            needles = self.children[1].evaluate(df, context=context)
+            order = (
+                plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
+            )
+            bound = (
+                plc.search.upper_bound if side == "right" else plc.search.lower_bound
+            )
+            indices = bound(
+                plc.Table([column.obj]),
+                plc.Table([needles.obj]),
+                [order],
+                [plc.types.NullOrder.BEFORE],
+                stream=df.stream,
+            )
+            return Column(
+                plc.unary.cast(indices, self.dtype.plc_type, stream=df.stream),
+                dtype=self.dtype,
+            )
         elif self.name == "drop_nans":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             if not plc.traits.is_floating_point(column.obj.type()):
@@ -652,28 +862,6 @@ class UnaryFunction(Expr):
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
                 dtype=self.dtype,
             )
-        elif self.name in UnaryFunction._supported_math_fns:
-            column = (
-                self.children[0]
-                .evaluate(df, context=context)
-                .astype(self.dtype, stream=df.stream)
-            )
-            if self.name == "degrees":
-                factor = 180.0 / math.pi
-            else:
-                # radians
-                factor = math.pi / 180.0
-            out_type = self.dtype.plc_type
-            return Column(
-                plc.binaryop.binary_operation(
-                    column.obj,
-                    plc.Scalar.from_py(factor, out_type, stream=df.stream),
-                    plc.binaryop.BinaryOperator.MUL,
-                    out_type,
-                    stream=df.stream,
-                ),
-                dtype=self.dtype,
-            )
         elif self.name == "reinterpret":
             column = self.children[0].evaluate(df, context=context)
             return column.astype(self.dtype, stream=df.stream)
@@ -802,6 +990,56 @@ class UnaryFunction(Expr):
                 ).columns()[0],
                 dtype=self.dtype,
             )
+        elif self.name in UnaryFunction._supported_math_fns:
+            column = (
+                self.children[0]
+                .evaluate(df, context=context)
+                .astype(self.dtype, stream=df.stream)
+            )
+            if self.name in ("log1p", "cot"):
+                column_ref = plc.expressions.ColumnReference(0)
+                one = plc.expressions.Literal(
+                    plc.Scalar.from_py(1.0, self.dtype.plc_type, stream=df.stream)
+                )
+                if self.name == "log1p":
+                    expression = plc.expressions.Operation(
+                        plc.expressions.ASTOperator.LOG,
+                        plc.expressions.Operation(
+                            plc.expressions.ASTOperator.ADD, column_ref, one
+                        ),
+                    )
+                else:
+                    # cot
+                    expression = plc.expressions.Operation(
+                        plc.expressions.ASTOperator.DIV,
+                        one,
+                        plc.expressions.Operation(
+                            plc.expressions.ASTOperator.TAN, column_ref
+                        ),
+                    )
+                return Column(
+                    plc.transform.compute_column(
+                        plc.Table([column.obj]), expression, stream=df.stream
+                    ),
+                    dtype=self.dtype,
+                )
+            else:
+                if self.name == "degrees":
+                    factor = 180.0 / math.pi
+                else:
+                    # radians
+                    factor = math.pi / 180.0
+                out_type = self.dtype.plc_type
+                return Column(
+                    plc.binaryop.binary_operation(
+                        column.obj,
+                        plc.Scalar.from_py(factor, out_type, stream=df.stream),
+                        plc.binaryop.BinaryOperator.MUL,
+                        out_type,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
             if column.dtype.plc_type.id() != self.dtype.id():

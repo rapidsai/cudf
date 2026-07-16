@@ -167,6 +167,18 @@ def test_mode_maintain_order_unsupported(engine: pl.GPUEngine) -> None:
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
+@pytest.mark.parametrize("agg", ["arg_max", "arg_min"])
+def test_arg_max_min(engine: pl.GPUEngine, agg: str) -> None:
+    df = pl.LazyFrame(
+        {
+            "a": pl.Series([1, 2, 2, None, 3], dtype=pl.Int64),
+            "b": pl.Series([None, None, None, None, None], dtype=pl.Int64),
+        }
+    )
+    q = df.select(getattr(pl.col("a"), agg)(), getattr(pl.col("b"), agg)())
+    assert_gpu_result_equal(q, engine=engine)
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -313,19 +325,11 @@ def test_temporal_quantile_median_not_supported(engine: pl.GPUEngine, expr):
         pl.col("a").entropy(),
         pl.col("a").skew(),
         pl.col("a").kurtosis(),
-        pl.col("a").arg_min(),
-        pl.col("a").arg_max(),
-        pl.col("a").arg_sort(),
-        pl.col("a").arg_unique(),
     ],
     ids=[
         "entropy",
         "skew",
         "kurtosis",
-        "arg_min",
-        "arg_max",
-        "arg_sort",
-        "arg_unique",
     ],
 )
 def test_agg_unsupported(engine: pl.GPUEngine, expr: pl.Expr) -> None:
