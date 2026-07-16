@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import contextlib
@@ -84,6 +84,21 @@ def test_dataframe_hash_values_seed(method):
     assert out_one.iloc[0] == out_one.iloc[-1]
     assert out_two.iloc[0] == out_two.iloc[-1]
     assert_neq(out_one, out_two)
+
+
+def test_dataframe_hash_values_murmur3_iterative_seeding():
+    gdf = cudf.DataFrame(
+        {
+            "a": cudf.Series([0, 1, -1, 42, 123456789], dtype=np.int32),
+            "b": cudf.Series([10, 20, 30, -40, -987654321], dtype=np.int32),
+        }
+    )
+    expected = cudf.Series(
+        [2573243963, 1151116018, 1549484878, 3007216400, 2314233967],
+        dtype=np.uint32,
+    )
+
+    assert_eq(gdf.hash_values(method="murmur3", seed=42), expected)
 
 
 def test_dataframe_hash_values_xxhash32():
