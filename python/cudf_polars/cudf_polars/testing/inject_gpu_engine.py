@@ -461,6 +461,7 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/aggregation/test_aggregations.py::test_item_too_many": "Correct polars.exceptions.ComputeError raised but it's in an ExceptionGroup",
     "tests/unit/operations/aggregation/test_aggregations.py::test_single_empty": "Correct polars.exceptions.ComputeError raised but it's in an ExceptionGroup",
     "tests/unit/operations/test_join.py::test_empty_outer_join_22206": "https://github.com/rapidsai/cudf/issues/22084",
+    "tests/unit/operations/test_replace.py::test_replace_invalid_old_dtype": "Correct InvalidOperationError raised but it's in an ExceptionGroup",
     "tests/unit/operations/test_window.py::test_over_literal_cum_sum_26800": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
     "tests/unit/sql/test_joins.py::test_cross_join_unnest_from_cte": "https://github.com/rapidsai/cudf/issues/22073",
     "tests/unit/sql/test_window_functions.py::test_over_with_cumulative_window_funcs": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
