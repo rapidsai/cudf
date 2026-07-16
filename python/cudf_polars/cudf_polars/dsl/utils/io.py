@@ -52,13 +52,10 @@ class CachedParquetInfo:
     # selections. Splits of the same Scan share a single entry. compare=False
     # excludes them from equality and hashing so two instances for the same
     # file compare equal regardless of cache state.
-    # We separate metadata from reader so that when we support multi-file
-    # FusedScans we can build a multi-file reader instance the files for
-    # whcih that FusedScan is responsible.
+    # HybridScanMetadata is shared across splits of the same Scan node.
+    # HybridScanReader is not cached: it holds mutable per-read state and is not
+    # thread-safe, so each producer thread creates its own reader from the shared metadata.
     _hybrid_scan_metadata: dict[int, plc.io.experimental.HybridScanMetadata] = field(
-        default_factory=dict, compare=False, repr=False
-    )
-    _hybrid_scan_readers: dict[int, plc.io.experimental.HybridScanReader] = field(
         default_factory=dict, compare=False, repr=False
     )
     _remote_handle: list[Any] = field(default_factory=list, compare=False, repr=False)
@@ -83,14 +80,9 @@ class CachedParquetInfo:
         base_scan_id: int,
         options: plc.io.parquet.ParquetReaderOptions,
     ) -> plc.io.experimental.HybridScanReader:
-        """Return a HybridScanReader shared across splits of the same Scan node."""
-        reader = self._hybrid_scan_readers.get(base_scan_id)
-        if reader is None:
-            metadata = self.hybrid_scan_metadata(base_scan_id, options)
-            reader = plc.io.experimental.HybridScanReader.from_metadata(metadata)
-            self._hybrid_scan_readers.setdefault(base_scan_id, reader)
-            reader = self._hybrid_scan_readers[base_scan_id]
-        return reader
+        """Return a fresh HybridScanReader borrowing the shared metadata for this Scan node."""
+        metadata = self.hybrid_scan_metadata(base_scan_id, options)
+        return plc.io.experimental.HybridScanReader.from_metadata(metadata)
 
     def remote_handle(self) -> Any:
         """Return the kvikio handle for this file."""
