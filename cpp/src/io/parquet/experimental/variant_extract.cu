@@ -401,8 +401,11 @@ __device__ constexpr primitive_type primitive_type_for()
     return int64;
   } else if constexpr (cuda::std::is_same_v<T, float>) {
     return float32;
-  } else {
+  } else if constexpr (cuda::std::is_same_v<T, double>) {
     return float64;
+  } else {
+    CUDF_UNREACHABLE("primitive_type_for: T is not a supported variant primitive type");
+    return null;
   }
 }
 
