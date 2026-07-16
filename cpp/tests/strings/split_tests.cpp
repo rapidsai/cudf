@@ -517,6 +517,22 @@ TEST_F(StringsSplitTest, SplitRecordRegex)
   }
 }
 
+TEST_F(StringsSplitTest, SplitRecordRegexLazyQuantifier)
+{
+  auto const input = cudf::test::strings_column_wrapper({"\rbaab\r\ra"});
+  auto const sv    = cudf::strings_column_view(input);
+  auto const prog =
+    cudf::strings::regex_program::create("[^ \v\n\t\r\f]\\r+?\\n*",
+                                         cudf::strings::regex_flags::EXT_NEWLINE,
+                                         cudf::strings::capture_groups::NON_CAPTURE);
+
+  using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+  LCW expected{LCW{"\rbaa", "\ra"}};
+  auto const result = cudf::strings::split_record_re(sv, *prog);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+}
+
 TEST_F(StringsSplitTest, SplitRegexWithMaxSplit)
 {
   std::vector<char const*> h_strings{" Héllo\tthesé", nullptr, "are\nsome  ", "tést\rString", ""};
