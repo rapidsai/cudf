@@ -16,13 +16,16 @@
 #include <variant>
 #include <vector>
 
+/**
+ * @file
+ * @brief Column APIs for transforming rows
+ */
+
 namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup transformation_transform
  * @{
- * @file
- * @brief Column APIs for transforming rows
  */
 
 /**
