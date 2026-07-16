@@ -496,6 +496,25 @@ def _collect_series_key_column_names(obj, by) -> dict[int, Hashable]:
     return result
 
 
+class GroupByNthSelector:
+    """Mirror of :class:`pandas.core.groupby.indexing.GroupByNthSelector`.
+
+    ``GroupBy.nth`` supports both the call form ``gb.nth(n, dropna=...)``
+    and the index form ``gb.nth[n]``.
+    """
+
+    def __init__(self, groupby_object: GroupBy) -> None:
+        self.groupby_object = groupby_object
+
+    def __call__(
+        self, n, dropna: Literal["any", "all", None] = None
+    ) -> Series | DataFrame:
+        return self.groupby_object._nth(n, dropna)
+
+    def __getitem__(self, n) -> Series | DataFrame:
+        return self.groupby_object._nth(n)
+
+
 class GroupBy(Serializable, Reducible, Scannable):
     obj: Series | DataFrame
 
@@ -575,6 +594,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         # Must be done before ``nans_to_nulls`` which breaks identity.
         by_series_col_names = _collect_series_key_column_names(obj, by)
 
+        # Row-filter operations (``nth``) must return the original values,
+        # preserving the NaN-vs-null distinction that ``nans_to_nulls``
+        # erases below.
+        self._obj_original = obj
         if get_option("mode.pandas_compatible"):
             obj = obj.nans_to_nulls()
         self.obj = obj
@@ -1202,9 +1225,34 @@ class GroupBy(Serializable, Reducible, Scannable):
                 ):
                     cast_dtype = orig_dtype
                 elif agg not in {list, "collect"}:
-                    create_dtype = get_dtype_of_same_kind(
-                        orig_dtype, create_dtype
-                    )
+                    if (
+                        isinstance(orig_dtype, np.dtype)
+                        and orig_dtype.kind == "O"
+                        and is_dtype_obj_string(create_dtype)
+                    ):
+                        # a string-producing aggregation (first/last/min/
+                        # max/nth) on an object-dtype column stays object,
+                        # matching pandas. Scoped here rather than in
+                        # get_dtype_of_same_kind: other callers (e.g. merge
+                        # key coalescing) re-infer str for object inputs.
+                        create_dtype = orig_dtype
+                    elif (
+                        isinstance(orig_dtype, pd.DatetimeTZDtype)
+                        and isinstance(create_dtype, np.dtype)
+                        and create_dtype.kind == "M"
+                    ):
+                        # libcudf has no timezone notion: a DatetimeTZColumn
+                        # feeds its stored UTC instants to libcudf and the
+                        # result comes back as a tz-naive timestamp column.
+                        # Reattach the original tz (the values are unchanged
+                        # UTC instants, so this is lossless).
+                        create_dtype = pd.DatetimeTZDtype(
+                            np.datetime_data(create_dtype)[0], orig_dtype.tz
+                        )
+                    else:
+                        create_dtype = get_dtype_of_same_kind(
+                            orig_dtype, create_dtype
+                        )
 
                 result_col = ColumnBase.create(plc_result, create_dtype)
                 if agg == "cumcount":
@@ -1762,27 +1810,137 @@ class GroupBy(Serializable, Reducible, Scannable):
             n, take_head=False, preserve_order=preserve_order
         )
 
+    @property
+    def nth(self):
+        """
+        Take the nth row from each group if n is an int, otherwise a
+        subset of rows.
+
+        Like pandas, supports both the call form ``gb.nth(n, dropna=...)``
+        and the index form ``gb.nth[n]``.
+
+        Parameters
+        ----------
+        n : int, slice or list of ints and slices
+            A single nth value for the row, a slice with non-negative
+            step or a list of nth values and slices. Negative values
+            count from the end of each group.
+        dropna : {'any', 'all', None}, default None
+            Apply the specified dropna operation before counting which
+            row is the nth row. Only supported in the call form and not
+            currently implemented in cuDF (raises ``NotImplementedError``;
+            falls back to pandas under ``cudf.pandas``).
+
+        Returns
+        -------
+        Series or DataFrame
+            The nth row(s) of each group, keeping the original index and
+            row order (like a filter operation, the group keys are not
+            added as an index level).
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"A": [1, 1, 2, 1, 2],
+        ...                      "B": [None, 2, 3, 4, 5]})
+        >>> gb = df.groupby("A")
+        >>> gb.nth(0)
+           A     B
+        0  1  <NA>
+        2  2     3
+        >>> gb.nth(-1)
+           A  B
+        3  1  4
+        4  2  5
+        >>> gb.nth[:2]
+           A     B
+        0  1  <NA>
+        1  1     2
+        2  2     3
+        4  2     5
+        """
+        return GroupByNthSelector(self)
+
     @_performance_tracking
-    def nth(self, n, dropna: Literal["any", "all", None] = None):
-        """
-        Return the nth row from each group.
-        """
+    def _nth(self, n, dropna: Literal["any", "all", None] = None):
+        """Positional row filter mirroring pandas' GroupBy.nth."""
         if dropna is not None:
             raise NotImplementedError("dropna is not currently supported.")
-        self.obj["__groupbynth_order__"] = range(0, len(self.obj))
-        # We perform another groupby here to have the grouping columns
-        # be a part of dataframe columns.
-        result = self.obj.groupby(self.grouping.keys).agg(lambda x: x.nth(n))
-        sizes = self.size().reindex(result.index)
 
-        result = result[sizes > n]
+        # Normalize and validate ``n`` like pandas'
+        # GroupByIndexingMixin._make_mask_from_positional_indexer.
+        if isinstance(n, (int, np.integer)):
+            args: list = [int(n)]
+        elif isinstance(n, slice):
+            args = [n]
+        elif isinstance(n, (list, tuple, np.ndarray)):
+            args = list(n)
+        else:
+            raise TypeError(
+                f"Invalid index {type(n)}. "
+                "Must be integer, list-like, slice or a tuple of "
+                "integers and slices"
+            )
+        for arg in args:
+            if isinstance(arg, slice):
+                if (arg.step or 1) < 0:
+                    raise ValueError(
+                        f"Invalid step {arg.step}. Must be non-negative"
+                    )
+            elif not isinstance(arg, (int, np.integer)):
+                raise TypeError(
+                    f"Invalid index {type(n)}. "
+                    "Must be integer, list-like, slice or a tuple of "
+                    "integers and slices"
+                )
 
-        result.index = self.obj.index.take(
-            result._data["__groupbynth_order__"]
+        # Per-row position within its group and group size, in group-major
+        # order (same construction as ``_head_tail``).
+        _, offsets, _, _ = self._grouped()
+        group_offsets = np.asarray(offsets, dtype=SIZE_TYPE_DTYPE)
+        size_per_group = np.diff(group_offsets)
+        sizes = np.repeat(size_per_group, size_per_group)
+        pos = np.arange(len(sizes), dtype=SIZE_TYPE_DTYPE) - np.repeat(
+            group_offsets[:-1], size_per_group
         )
-        del result._data["__groupbynth_order__"]
-        del self.obj._data["__groupbynth_order__"]
-        return result
+
+        mask = np.zeros(len(sizes), dtype=bool)
+        for arg in args:
+            if isinstance(arg, slice):
+                step = arg.step or 1
+                if arg.start is None:
+                    start = np.zeros_like(sizes)
+                elif arg.start >= 0:
+                    start = np.full_like(sizes, arg.start)
+                else:
+                    # ``slice.indices`` clamps a negative start at 0 and
+                    # the step alignment begins at the clamped value
+                    start = np.maximum(sizes + arg.start, 0)
+                submask = pos >= start
+                if step > 1:
+                    submask &= (pos - start) % step == 0
+                if arg.stop is not None:
+                    if arg.stop >= 0:
+                        submask &= pos < arg.stop
+                    else:
+                        submask &= pos < np.maximum(sizes + arg.stop, 0)
+                mask |= submask
+            elif arg >= 0:
+                mask |= pos == arg
+            else:
+                mask |= pos == sizes + arg
+
+        # Map the selected group-major rows back to positions in the
+        # original object and gather from the *pre-nans_to_nulls* object:
+        # pandas' nth is a row filter, so values, dtypes, index and row
+        # order are those of the original rows.
+        to_take = as_column(np.nonzero(mask)[0].astype(SIZE_TYPE_DTYPE))
+        _, _, (ordering,) = self._groups([self._range_column_from_obj])
+        original_positions = ordering.take(to_take)
+        original_positions = original_positions.take(
+            original_positions.argsort()
+        )
+        return self._obj_original.take(original_positions)
 
     @_performance_tracking
     def ngroup(self, ascending=True):
