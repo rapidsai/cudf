@@ -37,6 +37,9 @@ size_type compute_group_offsets(table_view const& keys,
   auto const comparator  = cudf::detail::row::equality::self_comparator{keys, stream};
   auto const d_key_equal = comparator.equal_to<HasNested>(
     cudf::nullate::DYNAMIC{cudf::has_nested_nulls(keys)}, null_equality::EQUAL);
+  // Using a temporary buffer for intermediate transform results from the iterator containing
+  // the comparator speeds up compile-time significantly without much degradation in
+  // runtime performance over using the comparator directly in thrust::unique_copy.
   auto result       = rmm::device_uvector<bool>(size, stream);
   auto const itr    = cuda::counting_iterator<size_type>{0};
   auto const row_eq = permuted_row_equality_comparator(d_key_equal, sorted_order);
