@@ -340,6 +340,86 @@ inline std::vector<int64_t> delta_test_int64_values(int n, uint64_t seed = 101)
 }
 
 // ---------------------------------------------------------------------------------------------
+// string encodings
+// ---------------------------------------------------------------------------------------------
+
+// alphanumeric strings with lengths varying in [1, 20]; with shared_prefixes, each string keeps
+// a random-length prefix of its predecessor so the DELTA_BYTE_ARRAY prefix-length stream also
+// has varying non-zero deltas
+inline std::vector<std::string> delta_test_strings(int n, bool shared_prefixes, uint64_t seed = 201)
+{
+  constexpr char alphabet[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  std::vector<std::string> out;
+  out.reserve(n);
+  std::string prev;
+  for (int i = 0; i < n; i++) {
+    auto const length = 1 + static_cast<size_t>(delta_test_rand(seed) % 20);
+    std::string s;
+    if (shared_prefixes && !prev.empty()) {
+      auto const keep = delta_test_rand(seed) % (std::min(prev.size(), length) + 1);
+      s               = prev.substr(0, keep);
+    }
+    while (s.size() < length) {
+      s += alphabet[delta_test_rand(seed) % (sizeof(alphabet) - 1)];
+    }
+    out.push_back(s);
+    prev = std::move(s);
+  }
+  return out;
+}
+
+// complete file: one DELTA_LENGTH_BYTE_ARRAY string column "a" (delta-encoded lengths followed
+// by the concatenated string bytes)
+inline std::vector<uint8_t> build_delta_length_byte_array_parquet(
+  std::vector<std::string> const& strings, int block_size, int mini_block_count)
+{
+  std::vector<int64_t> lengths(strings.size());
+  std::transform(strings.begin(), strings.end(), lengths.begin(), [](auto const& s) {
+    return static_cast<int64_t>(s.size());
+  });
+  auto body = encode_delta_binary_packed(lengths, block_size, mini_block_count);
+  for (auto const& s : strings) {
+    body.insert(body.end(), s.begin(), s.end());
+  }
+  return wrap_single_page_parquet(body,
+                                  strings.size(),
+                                  parquet_delta_test::type_byte_array,
+                                  parquet_delta_test::enc_delta_length_ba,
+                                  true);
+}
+
+// complete file: one DELTA_BYTE_ARRAY string column "a" (front compression: delta-encoded
+// shared-prefix lengths, then delta-encoded suffix lengths, then the concatenated suffixes)
+inline std::vector<uint8_t> build_delta_byte_array_parquet(std::vector<std::string> const& strings,
+                                                           int block_size,
+                                                           int mini_block_count)
+{
+  std::vector<int64_t> prefix_lens, suffix_lens;
+  std::string suffix_bytes;
+  std::string prev;
+  for (auto const& s : strings) {
+    size_t lcp     = 0;
+    auto const end = std::min(prev.size(), s.size());
+    while (lcp < end && prev[lcp] == s[lcp]) {
+      lcp++;
+    }
+    prefix_lens.push_back(lcp);
+    suffix_lens.push_back(s.size() - lcp);
+    suffix_bytes.append(s, lcp, std::string::npos);
+    prev = s;
+  }
+  auto body                = encode_delta_binary_packed(prefix_lens, block_size, mini_block_count);
+  auto const suffix_stream = encode_delta_binary_packed(suffix_lens, block_size, mini_block_count);
+  body.insert(body.end(), suffix_stream.begin(), suffix_stream.end());
+  body.insert(body.end(), suffix_bytes.begin(), suffix_bytes.end());
+  return wrap_single_page_parquet(body,
+                                  strings.size(),
+                                  parquet_delta_test::type_byte_array,
+                                  parquet_delta_test::enc_delta_ba,
+                                  true);
+}
+
+// ---------------------------------------------------------------------------------------------
 // LIST<INT64>: one optional list column "col" of optional int64 "element" (max_def_level 3,
 // max_rep_level 1), no null lists or elements -- empty lists only. Emitted as a single
 // uncompressed V2 data page whose rep/def levels are RLE/bit-packed hybrid runs.

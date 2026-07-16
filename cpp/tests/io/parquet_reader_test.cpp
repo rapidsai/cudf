@@ -1129,6 +1129,20 @@ void delta_large_mini_block_read_test(std::vector<uint8_t> const& file_bytes,
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), expected_col);
 }
 
+// same as above for the DELTA_BYTE_ARRAY / DELTA_LENGTH_BYTE_ARRAY string files
+void delta_large_mini_block_string_read_test(std::vector<uint8_t> const& file_bytes,
+                                             std::vector<std::string> const& expected,
+                                             int64_t skip_rows                       = 0,
+                                             std::optional<cudf::size_type> num_rows = std::nullopt)
+{
+  auto const result =
+    cudf::io::read_parquet(delta_fixture_reader_options(file_bytes, skip_rows, num_rows));
+  auto const first        = expected.begin() + skip_rows;
+  auto const last         = num_rows.has_value() ? first + *num_rows : expected.end();
+  auto const expected_col = cudf::test::strings_column_wrapper(first, last);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), expected_col);
+}
+
 // same as above for the LIST<INT64> files; the expected column is built from the lists and
 // sliced to the requested row range
 void delta_large_mini_block_list_read_test(std::vector<uint8_t> const& file_bytes,
@@ -1212,6 +1226,97 @@ TEST_F(ParquetReaderTest, DeltaBinaryLargeMiniBlockSkipRows)
 
   auto const v64 = delta_test_int64_values(157);
   delta_large_mini_block_read_test(build_delta_binary_parquet(v64, 256, 4), v64, 65, 64);
+}
+
+// DELTA_BYTE_ARRAY pages with mini-blocks larger than 64 values. The string-size prepass
+// reads decoded lengths back per warp-size pass, so any mini-block size is supported.
+TEST_F(ParquetReaderTest, DeltaByteArrayLargeMiniBlock96)
+{
+  auto const strings = delta_test_strings(141, true);
+  delta_large_mini_block_string_read_test(build_delta_byte_array_parquet(strings, 384, 4), strings);
+}
+
+TEST_F(ParquetReaderTest, DeltaByteArrayLargeMiniBlock128)
+{
+  auto const strings = delta_test_strings(173, true);
+  delta_large_mini_block_string_read_test(build_delta_byte_array_parquet(strings, 128, 1), strings);
+}
+
+TEST_F(ParquetReaderTest, DeltaByteArrayLargeMiniBlock256)
+{
+  auto const strings = delta_test_strings(301, true);
+  delta_large_mini_block_string_read_test(build_delta_byte_array_parquet(strings, 256, 1), strings);
+}
+
+// n = 257 exactly fills the single 256-value mini-block (plus the header value), the shape
+// where a mis-sized string allocation causes out-of-bounds writes.
+TEST_F(ParquetReaderTest, DeltaByteArrayLargeMiniBlockExactFill)
+{
+  auto const strings = delta_test_strings(257, true);
+  delta_large_mini_block_string_read_test(build_delta_byte_array_parquet(strings, 256, 1), strings);
+}
+
+// Flat DELTA_BYTE_ARRAY bounds pages stage leading skipped strings through temp_string_buf
+// inside the decode loop (no whole-mini-block skip involved), so row-range reads work at any
+// mini-block size.
+TEST_F(ParquetReaderTest, DeltaByteArrayLargeMiniBlockSkipRows)
+{
+  auto const s256 = delta_test_strings(301, true);
+  delta_large_mini_block_string_read_test(build_delta_byte_array_parquet(s256, 256, 1), s256, 100);
+
+  auto const s128 = delta_test_strings(173, true);
+  delta_large_mini_block_string_read_test(
+    build_delta_byte_array_parquet(s128, 128, 1), s128, 40, 60);
+
+  auto const s96 = delta_test_strings(141, true);
+  delta_large_mini_block_string_read_test(build_delta_byte_array_parquet(s96, 384, 4), s96, 0, 70);
+}
+
+// DELTA_LENGTH_BYTE_ARRAY pages with mini-blocks larger than 64 values.
+TEST_F(ParquetReaderTest, DeltaLengthByteArrayLargeMiniBlock96)
+{
+  auto const strings = delta_test_strings(141, false);
+  delta_large_mini_block_string_read_test(build_delta_length_byte_array_parquet(strings, 384, 4),
+                                          strings);
+}
+
+TEST_F(ParquetReaderTest, DeltaLengthByteArrayLargeMiniBlock128)
+{
+  auto const strings = delta_test_strings(173, false);
+  delta_large_mini_block_string_read_test(build_delta_length_byte_array_parquet(strings, 128, 1),
+                                          strings);
+}
+
+TEST_F(ParquetReaderTest, DeltaLengthByteArrayLargeMiniBlock256)
+{
+  auto const strings = delta_test_strings(301, false);
+  delta_large_mini_block_string_read_test(build_delta_length_byte_array_parquet(strings, 256, 1),
+                                          strings);
+}
+
+// A num_rows-trimmed read makes the page a bounds page, which sizes the string output from
+// the delta-decoded lengths (the path that mis-summed lengths when a mini-block did not fit
+// the rolling buffer).
+TEST_F(ParquetReaderTest, DeltaLengthByteArrayLargeMiniBlockTrimmed)
+{
+  auto const s256 = delta_test_strings(301, false);
+  delta_large_mini_block_string_read_test(
+    build_delta_length_byte_array_parquet(s256, 256, 1), s256, 0, 200);
+
+  auto const s128 = delta_test_strings(173, false);
+  delta_large_mini_block_string_read_test(
+    build_delta_length_byte_array_parquet(s128, 128, 1), s128, 0, 100);
+}
+
+// A leading row-range skip within a >64-value mini-block still requires the whole mini-block
+// to be resident for DELTA_LENGTH_BYTE_ARRAY (skip_values_and_sum), and must fail with a clean
+// DELTA_PARAMS_UNSUPPORTED (0x100) error rather than decode garbage.
+TEST_F(ParquetReaderTest, DeltaLengthByteArrayLargeMiniBlockSkipRowsUnsupported)
+{
+  auto const strings = delta_test_strings(301, false);
+  auto const file    = build_delta_length_byte_array_parquet(strings, 256, 1);
+  auto const opts    = delta_fixture_reader_options(file, 100, std::nullopt);
+  EXPECT_THROW(cudf::io::read_parquet(opts), cudf::logic_error);
 }
 
 // LIST<INT64> with 64 values/mini-block. The leading-skip read resumes the delta decoder

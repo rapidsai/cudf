@@ -597,10 +597,11 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
   bool const is_skip_resume = is_bounds_pg and string_pos > 0;
 
-  // Mini-blocks larger than max_delta_mini_block_size are not supported for the string encodings
-  // yet: the string-size prepass in page_string_decode.cu still reads whole mini-blocks back from
-  // the rolling buffer.
-  if (prefix_db->values_per_mb > max_delta_mini_block_size) {
+  // The decode loop below sub-batches each mini-block into warp_size-wide passes, so any mini-block
+  // size is supported. The dba->skip() path still requires a whole mini-block to be resident in the
+  // rolling buffer, so mini-blocks larger than max_delta_mini_block_size are only supported when
+  // there is no leading row range to skip.
+  if (is_skip_resume and prefix_db->values_per_mb > max_delta_mini_block_size) {
     if (block.thread_rank() == 0) {
       set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
                 error_code);
@@ -832,10 +833,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   auto const is_bounds_pg =
     is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
   bool const is_skip_resume = is_bounds_pg and s->page.start_val > 0;
-  // Mini-blocks larger than max_delta_mini_block_size are not supported for the string encodings
-  // yet: the string-size prepass in page_string_decode.cu still reads whole mini-blocks back from
-  // the rolling buffer.
-  if (db->values_per_mb > max_delta_mini_block_size) {
+  // The skip_values_and_sum() path still requires a whole mini-block to be resident in the rolling
+  // buffer, so mini-blocks larger than max_delta_mini_block_size are only supported when there is
+  // no leading row range to skip.
+  if (is_skip_resume and db->values_per_mb > max_delta_mini_block_size) {
     if (block.thread_rank() == 0) {
       set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
                 error_code);

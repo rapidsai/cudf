@@ -441,12 +441,17 @@ __device__ cuda::std::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const
     uleb128_t lane_max = 0;
     while (db->current_value_idx < end_value &&
            db->current_value_idx < db->num_encoded_values(true)) {
-      // calculate values for current mini-block
-      db->calc_mini_block_values(lane_id);
+      if (not db->advance_past_first_value(lane_id)) { break; }
 
-      // get per lane sum for mini-block
-      for (uint32_t i = 0; i < db->values_per_mb; i += 32) {
-        uint32_t const idx = db->current_value_idx + i + lane_id;
+      // decode one warp_size-wide pass at a time and read it back immediately: a whole
+      // mini-block is only fully resident in the rolling buffer while it fits, but a single
+      // pass always is
+      uint32_t const num_pass = db->values_per_mb / warp_size;
+      for (uint32_t p = 0; p < num_pass; p++) {
+        db->calc_mini_block_pass(p, lane_id);
+
+        // get per lane sum for this pass
+        uint32_t const idx = db->current_value_idx + p * warp_size + lane_id;
         if (idx >= start_value && idx < end_value && idx < db->value_count) {
           lane_sum += db->value[rolling_index<delta_rolling_buf_size>(idx)];
         }
@@ -764,12 +769,17 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
     uleb128_t lane_sum = 0;
     while (string_lengths.current_value_idx < end_value &&
            string_lengths.current_value_idx < string_lengths.num_encoded_values(true)) {
-      // calculate values for current mini-block
-      string_lengths.calc_mini_block_values(t);
+      if (not string_lengths.advance_past_first_value(t)) { break; }
 
-      // get per lane sum for mini-block
-      for (uint32_t i = 0; i < string_lengths.values_per_mb; i += warp_size) {
-        uint32_t const idx = string_lengths.current_value_idx + i + t;
+      // decode one warp_size-wide pass at a time and read it back immediately: a whole
+      // mini-block is only fully resident in the rolling buffer while it fits, but a single
+      // pass always is
+      uint32_t const num_pass = string_lengths.values_per_mb / warp_size;
+      for (uint32_t p = 0; p < num_pass; p++) {
+        string_lengths.calc_mini_block_pass(p, t);
+
+        // get per lane sum for this pass
+        uint32_t const idx = string_lengths.current_value_idx + p * warp_size + t;
         if (idx >= start_value && idx < end_value && idx < string_lengths.value_count) {
           lane_sum += string_lengths.value[rolling_index<delta_rolling_buf_size>(idx)];
         }
