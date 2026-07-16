@@ -55,6 +55,7 @@ from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
     _indices_from_labels,
+    _unify_categorical_indexes,
     doc_reset_index_template,
 )
 from cudf.core.mixins import NoNewAttributesMixin
@@ -5569,9 +5570,12 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
 
     combined_index = series_list[0].index
     for sr in series_list[1:]:
+        lhs_index, rhs_index = _unify_categorical_indexes(
+            sr.index, combined_index
+        )
         combined_index = (
-            cudf.DataFrame(index=sr.index).join(
-                cudf.DataFrame(index=combined_index),
+            cudf.DataFrame(index=lhs_index).join(
+                cudf.DataFrame(index=rhs_index),
                 sort=True,
                 how=how,
             )
