@@ -106,6 +106,7 @@ class UnaryFunction(Expr):
     }
     _supported_misc_fns = frozenset(
         {
+            "argwhere",
             "as_struct",
             "arg_max",
             "arg_min",
@@ -447,6 +448,20 @@ class UnaryFunction(Expr):
             )
             return Column(indices, dtype=DataType(pl.Int32())).astype(
                 self.dtype, stream=df.stream
+            )
+        if self.name == "argwhere":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            indices = plc.filling.sequence(
+                column.size,
+                plc.Scalar.from_py(0, self.dtype.plc_type, stream=df.stream),
+                plc.Scalar.from_py(1, self.dtype.plc_type, stream=df.stream),
+                stream=df.stream,
+            )
+            return Column(
+                plc.stream_compaction.apply_boolean_mask(
+                    plc.Table([indices]), column.obj, stream=df.stream
+                ).columns()[0],
+                dtype=self.dtype,
             )
         if self.name == "null_count":
             (column,) = (child.evaluate(df, context=context) for child in self.children)

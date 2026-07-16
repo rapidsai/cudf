@@ -218,9 +218,6 @@ class reader_impl {
   /**
    * @brief Build the `column_selection_options` bundle for `select_columns()`.
    *
-   * Type-conversion and case-sensitivity settings are read from the cached `_options` (which must
-   * already be populated); selection-only settings are taken from @p options.
-   *
    * @param options Reader options
    * @return Column selection options
    */
@@ -390,11 +387,25 @@ class reader_impl {
    * @param options Reader options
    * @return True if the user has specified columns from mismatched sources
    */
-  [[nodiscard]] bool has_cols_from_mismatched_sources(parquet_reader_options const& options)
+  [[nodiscard]] bool has_cols_from_mismatched_sources(parquet_reader_options const& options) const
   {
     return (options.get_column_names().has_value() or
             options.get_column_field_ids().has_value()) and
            options.is_enabled_allow_mismatched_pq_schemas();
+  }
+
+  /**
+   * @brief Effective `ignore_missing_columns` policy for column selection
+   *
+   * This flag would be disabled when multiple sources use mismatched-schema column selection.
+   *
+   * @param options Reader options
+   * @return Effective `ignore_missing_columns` value
+   */
+  [[nodiscard]] bool ignore_missing_columns_policy(parquet_reader_options const& options) const
+  {
+    return options.is_enabled_ignore_missing_columns() and
+           not(has_cols_from_mismatched_sources(options) and _metadata->get_num_sources() > 1);
   }
 
  protected:
@@ -483,11 +494,10 @@ class reader_impl {
    * @brief Computes the names of columns to be read from the file, if specified.
    *
    * @param options The reader options
-   * @param ignore_missing_columns Whether to ignore non-existent projected columns
    * @return Names of columns to be read from the file if specified, `nullopt` otherwise
    */
   [[nodiscard]] std::optional<std::vector<std::string>> get_column_projection(
-    parquet_reader_options const& options, bool ignore_missing_columns) const;
+    parquet_reader_options const& options) const;
 
   /**
    * @brief Cast any fixed-point output columns to the decimal width specified in options.
