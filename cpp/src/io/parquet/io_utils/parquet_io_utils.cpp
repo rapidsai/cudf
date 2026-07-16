@@ -492,10 +492,12 @@ fetch_bloom_filters_to_device_impl(
   std::vector<std::size_t> bloom_header_sizes(total_filters, 0);
   std::vector<std::size_t> bloom_bitset_sizes(total_filters, 0);
   std::vector<std::size_t> bloom_total_sizes(total_filters, 0);
-  std::vector<std::size_t> per_source_device_size(num_sources, 0);
   std::vector<std::size_t> followup_source_indices;
   std::vector<std::size_t> followup_offsets;
   std::vector<std::size_t> followup_sizes;
+
+  // Accumulated bitset sizes for each source, rounded up to 32-byte boundaries
+  std::vector<std::size_t> bitset_buffer_size_per_source(num_sources, 0);
 
   // Parse filters' headers and bitsets, and queue follow-up reads if needed
   std::for_each(
@@ -523,7 +525,7 @@ fetch_bloom_filters_to_device_impl(
       bloom_bitset_sizes[filter_idx] = static_cast<std::size_t>(bitset_bytes);
       bloom_total_sizes[filter_idx] =
         bloom_header_sizes[filter_idx] + bloom_bitset_sizes[filter_idx];
-      per_source_device_size[spec_source_indices[filter_idx]] +=
+      bitset_buffer_size_per_source[spec_source_indices[filter_idx]] +=
         cudf::util::round_up_safe(bloom_bitset_sizes[filter_idx], bloom_filter_block_bytes);
 
       // Speculative read did not reach the whole bitset: queue a follow-up read for it
@@ -537,15 +539,14 @@ fetch_bloom_filters_to_device_impl(
   auto const followup_buffers =
     read_ranges_to_host(datasources, followup_source_indices, followup_offsets, followup_sizes);
 
-  // Phase 3: Create one aligned device buffer per source
-  std::vector<rmm::device_buffer> bloom_filter_buffers;
-  bloom_filter_buffers.reserve(num_sources);
-  std::transform(per_source_device_size.begin(),
-                 per_source_device_size.end(),
-                 std::back_inserter(bloom_filter_buffers),
+  // Phase 3: Batch copy all bitsets to their device slots
+  std::vector<rmm::device_buffer> bitset_buffers_per_source;
+  bitset_buffers_per_source.reserve(num_sources);
+  std::transform(bitset_buffer_size_per_source.begin(),
+                 bitset_buffer_size_per_source.end(),
+                 std::back_inserter(bitset_buffers_per_source),
                  [&](std::size_t size) { return rmm::device_buffer(size, stream, aligned_mr); });
 
-  // Phase 4: Batch copy all bitsets to their device slots
   std::vector<device_spans_per_source_type> bitset_spans_per_source(num_sources);
   std::vector<void*> copy_dsts;
   std::vector<void const*> copy_srcs;
@@ -560,7 +561,7 @@ fetch_bloom_filters_to_device_impl(
   for (std::size_t source_idx = 0; source_idx < num_sources; ++source_idx) {
     auto const& bloom_ranges            = bloom_filter_byte_ranges_per_source[source_idx];
     bitset_spans_per_source[source_idx] = device_spans_per_source_type(bloom_ranges.size());
-    auto* const device_base   = static_cast<uint8_t*>(bloom_filter_buffers[source_idx].data());
+    auto* const device_base   = static_cast<uint8_t*>(bitset_buffers_per_source[source_idx].data());
     std::size_t device_offset = 0;
     for (std::size_t inner_idx = 0; inner_idx < bloom_ranges.size(); ++inner_idx, ++filter_idx) {
       auto const bitset_size = bloom_bitset_sizes[filter_idx];
@@ -598,7 +599,7 @@ fetch_bloom_filters_to_device_impl(
     }
     stream.synchronize();
   }
-  return {std::move(bloom_filter_buffers), std::move(bitset_spans_per_source)};
+  return {std::move(bitset_buffers_per_source), std::move(bitset_spans_per_source)};
 }
 
 }  // namespace
