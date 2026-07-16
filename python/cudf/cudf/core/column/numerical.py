@@ -1223,6 +1223,10 @@ class NumericalColumn(NumericalBaseColumn):
             else to_dtype
         )
 
+        if len(self) == 0 and to_dtype_numpy.kind in "iufb":
+            # An empty column can be cast to any numeric dtype losslessly.
+            return True
+
         if self_dtype_numpy.kind == to_dtype_numpy.kind:
             # Check if self dtype can be safely cast to to_dtype
             # For same kinds, we can compare the sizes

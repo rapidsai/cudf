@@ -848,10 +848,25 @@ class Index(SingleColumnFrame):
         return result
 
     def _intersection(self, other, sort: bool | None = None) -> Index:
+        lcol = self.unique()._column
+        rcol = other.unique()._column
+        if (
+            is_dtype_obj_numeric(self.dtype, include_decimal=False)
+            and is_dtype_obj_numeric(other.dtype, include_decimal=False)
+            and self.dtype != other.dtype
+        ):
+            # pandas casts mismatched numeric dtypes to their common type
+            # for set operations ("cast to float, not object"); cast up
+            # front so the merge's key-dtype rules (which keep the left
+            # operand's dtype for inner joins) don't leak the left dtype
+            # into the result.
+            common_dtype = find_common_type([self.dtype, other.dtype])
+            lcol = lcol.astype(common_dtype)
+            rcol = rcol.astype(common_dtype)
         intersection_result = _index_from_data(
-            cudf.DataFrame._from_data({"None": self.unique()._column})
+            cudf.DataFrame._from_data({"None": lcol})
             .merge(
-                cudf.DataFrame._from_data({"None": other.unique()._column}),
+                cudf.DataFrame._from_data({"None": rcol}),
                 how="inner",
                 on="None",
             )

@@ -454,6 +454,35 @@ class hybrid_scan_multifile {
    */
   [[nodiscard]] bool has_next_table_chunk() const;
 
+  /**
+   * @brief Get byte ranges of column chunk dictionary pages for row group pruning
+   *
+   * @param row_group_indices Span of vectors of input row group indices, one per source
+   * @param options Parquet reader options
+   * @return Pair of flattened byte ranges to column chunk dictionary pages subject to the filter
+   *         predicate and their corresponding source indices
+   */
+  [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<size_type>>
+  dictionary_pages_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                               parquet_reader_options const& options) const;
+
+  /**
+   * @brief Filter the row groups using column chunk dictionary pages
+   *
+   * @param dictionary_page_data Device spans of dictionary page data of column chunks with an
+   *                             (in)equality predicate, ordered to match the dictionary page byte
+   *                             ranges returned by `dictionary_pages_byte_ranges`
+   * @param row_group_indices Span of vectors of input row group indices, one per source
+   * @param options Parquet reader options
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return Vector of vectors of filtered row group indices, one per source
+   */
+  [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_dictionary_pages(
+    cudf::host_span<cudf::device_span<uint8_t const> const> dictionary_page_data,
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream) const;
+
  private:
   std::unique_ptr<detail::hybrid_scan_reader_impl> _impl;
 };

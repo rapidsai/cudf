@@ -150,6 +150,34 @@ def test_exact_quantiles_int(quantile_interpolation):
     )
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    ["Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64"],
+)
+@pytest.mark.parametrize(
+    "data,q",
+    [
+        ([pd.NA, pd.NA], [0.1, 0.5]),  # all-NA -> masked int (all NA)
+        ([pd.NA, pd.NA, 1], [0.1, 0.5]),  # single value -> masked int
+        ([pd.NA, 10, 20], [0.5]),  # NA + integral result -> masked int
+        ([pd.NA, 10, 21], [0.5]),  # NA + fractional result -> Float64
+        ([1, 2, 3], [0.25, 0.5, 0.75]),  # no NA -> Float64
+    ],
+)
+def test_quantile_masked_integer_dtype(dtype, data, q):
+    # pandas keeps the masked integer dtype for quantile only when the input
+    # has missing values and every result value is integer-valued; otherwise
+    # the result is Float64.
+    psr = pd.Series(data, dtype=dtype)
+    gsr = cudf.Series(data, dtype=dtype)
+
+    expected = psr.quantile(q)
+    got = gsr.quantile(q)
+
+    assert str(got.dtype) == str(expected.dtype)
+    assert_eq(got, expected)
+
+
 def test_approx_quantiles():
     arr = np.asarray([6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7])
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
