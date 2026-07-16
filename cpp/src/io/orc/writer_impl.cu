@@ -393,10 +393,10 @@ void persisted_statistics::persist(uint64_t num_table_rows,
                                    intermediate_statistics&& intermediate_stats,
                                    rmm::cuda_stream_view stream)
 {
-  stats_dtypes = std::move(intermediate_stats.stats_dtypes);
-  col_types    = std::move(intermediate_stats.col_types);
+  col_types = std::move(intermediate_stats.col_types);
   num_rows += num_table_rows;
   if (num_table_rows == 0) { return; }
+  stats_dtypes = std::move(intermediate_stats.stats_dtypes);
 
   if (write_mode == single_write_mode::NO) {
     // persist the strings in the chunks into a string pool and update pointers

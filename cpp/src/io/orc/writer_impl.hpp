@@ -23,6 +23,7 @@
 #include <cuda/iterator>
 #include <thrust/host_vector.h>
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
