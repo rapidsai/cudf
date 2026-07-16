@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import itertools
 
@@ -77,3 +77,15 @@ def test_groupby_transform_maintain_index(by):
     assert_groupby_results_equal(
         pdf.groupby(by).transform("max"), gdf.groupby(by).transform("max")
     )
+
+
+def test_transform_scan_lambda():
+    # a named-aggregation lambda resolving to a scan must scan per group,
+    # not broadcast the group total
+    pdf = pd.DataFrame({"key": [0, 0, 1, 1], "val": [1.0, 2.0, 3.0, 4.0]})
+    gdf = cudf.DataFrame(pdf)
+
+    expect = pdf.groupby("key")["val"].transform(lambda x: x.cumsum())
+    got = gdf.groupby("key")["val"].transform(lambda x: x.cumsum())
+
+    assert_eq(expect, got)

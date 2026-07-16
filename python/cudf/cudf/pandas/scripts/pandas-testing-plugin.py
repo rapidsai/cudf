@@ -2025,8 +2025,6 @@ NODEIDS_THAT_FAIL = {
     "tests/groupby/test_timegrouper.py::TestGroupBy::test_timegrouper_apply_return_type_series": "TODO: Add a reason for failure",
     "tests/groupby/transform/test_transform.py::test_as_index_no_change[size-A]": "TODO: Add a reason for failure",
     "tests/groupby/transform/test_transform.py::test_as_index_no_change[size-keys1]": "TODO: Add a reason for failure",
-    "tests/groupby/transform/test_transform.py::test_cython_transform_series[cumprod-args0-<lambda>]": "TODO: Add a reason for failure",
-    "tests/groupby/transform/test_transform.py::test_cython_transform_series[cumsum-args1-<lambda>]": "TODO: Add a reason for failure",
     "tests/groupby/transform/test_transform.py::test_group_fill_methods[bfill-1-exp_vals3-1-2-False-False]": "AssertionError: DataFrame.iloc[:, 0] (column name='val') are different",
     "tests/groupby/transform/test_transform.py::test_group_fill_methods[bfill-1-exp_vals3-1-2-False-True]": "AssertionError: DataFrame.iloc[:, 0] (column name='val') are different",
     "tests/groupby/transform/test_transform.py::test_group_fill_methods[bfill-1-exp_vals3-1-2-True-False]": "AssertionError: Series are different",
