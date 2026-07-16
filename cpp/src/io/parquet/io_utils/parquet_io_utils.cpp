@@ -192,8 +192,7 @@ std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to
 using device_spans_per_source_type = std::vector<cudf::device_span<uint8_t const>>;
 using host_read_buffer             = std::unique_ptr<cudf::io::datasource::buffer>;
 
-// Shared across the byte-range and bloom-filter fetch paths to serialize their host reads and their
-// device reads/copies against each other.
+// Shared across the byte-range and bloom-filter fetch paths to serialize their readings
 std::mutex& host_read_mutex()
 {
   static std::mutex mutex;
@@ -207,7 +206,7 @@ std::mutex& device_read_mutex()
 }
 
 /**
- * @brief Schedules host reads for the given byte ranges.
+ * @brief Reads the given byte ranges to host.
  *
  * Holds a mutex while scheduling so each thread's host reads are submitted contiguously.
  *
@@ -215,9 +214,9 @@ std::mutex& device_read_mutex()
  * @param source_indices Datasource index for each byte range
  * @param offsets Offset for each byte range
  * @param sizes Size for each byte range
- * @return Pending host-read tasks, one per range in input order
+ * @return Host buffers for the read ranges, in input order
  */
-std::vector<std::future<host_read_buffer>> read_ranges_to_host(
+std::vector<host_read_buffer> read_ranges_to_host(
   cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
   cudf::host_span<std::size_t const> source_indices,
   cudf::host_span<std::size_t const> offsets,
@@ -245,7 +244,14 @@ std::vector<std::future<host_read_buffer>> read_ranges_to_host(
         }));
     });
   }
-  return host_read_tasks;
+
+  std::vector<host_read_buffer> host_buffers;
+  host_buffers.reserve(host_read_tasks.size());
+  std::transform(host_read_tasks.begin(),
+                 host_read_tasks.end(),
+                 std::back_inserter(host_buffers),
+                 [](auto& task) { return task.get(); });
+  return host_buffers;
 }
 
 std::tuple<std::vector<rmm::device_buffer>,
@@ -479,14 +485,8 @@ fetch_bloom_filters_to_device_impl(
                     });
                 });
 
-  // Complete speculative reads
-  auto spec_read_tasks =
+  auto const spec_buffers =
     read_ranges_to_host(datasources, spec_source_indices, spec_offsets, spec_sizes);
-  std::vector<host_read_buffer> spec_buffers{};
-  spec_buffers.reserve(spec_read_tasks.size());
-  for (auto& task : spec_read_tasks) {
-    spec_buffers.emplace_back(task.get());
-  }
 
   // Phase 2: Follow-up reads; absent filters keep a zero-length slot
   std::vector<std::size_t> bloom_header_sizes(total_filters, 0);
@@ -534,14 +534,8 @@ fetch_bloom_filters_to_device_impl(
       }
     });
 
-  // Complete follow-up reads
-  auto followup_read_tasks =
+  auto const followup_buffers =
     read_ranges_to_host(datasources, followup_source_indices, followup_offsets, followup_sizes);
-  std::vector<host_read_buffer> followup_buffers{};
-  followup_buffers.reserve(followup_read_tasks.size());
-  for (auto& task : followup_read_tasks) {
-    followup_buffers.emplace_back(task.get());
-  }
 
   // Phase 3: Create one aligned device buffer per source
   std::vector<rmm::device_buffer> bloom_filter_buffers;
