@@ -124,6 +124,7 @@ class UnaryFunction(Expr):
             "rank",
             "reinterpret",
             "round",
+            "round_sig_figs",
             "search_sorted",
             "set_sorted",
             "shift",
@@ -150,6 +151,7 @@ class UnaryFunction(Expr):
             "degrees",
             "log1p",
             "radians",
+            "sign",
         }
     )
     _supported_fns = frozenset().union(
@@ -166,6 +168,7 @@ class UnaryFunction(Expr):
             "mask_nans",
             "reinterpret",
             "round",
+            "round_sig_figs",
             "set_sorted",
             "truncate",
         }
@@ -324,6 +327,77 @@ class UnaryFunction(Expr):
                 ),
                 dtype=self.dtype,
             ).sorted_like(values)  # pragma: no cover
+        elif self.name == "round_sig_figs":
+            column = self.children[0].evaluate(df, context=context)
+            (digits,) = self.options
+            out_type = self.dtype.plc_type
+            is_float = plc.traits.is_floating_point(out_type)
+            work_type = out_type if is_float else plc.DataType(plc.TypeId.FLOAT64)
+            operand = column.obj
+            if operand.type().id() != work_type.id():
+                operand = plc.unary.cast(operand, work_type, stream=df.stream)
+            zero = plc.Scalar.from_py(0.0, work_type, stream=df.stream)
+            column_ref = plc.expressions.ColumnReference(0)
+            log10 = plc.expressions.Operation(
+                plc.expressions.ASTOperator.MUL,
+                plc.expressions.Operation(
+                    plc.expressions.ASTOperator.LOG,
+                    plc.expressions.Operation(
+                        plc.expressions.ASTOperator.ABS, column_ref
+                    ),
+                ),
+                plc.expressions.Literal(
+                    plc.Scalar.from_py(
+                        1.0 / math.log(10.0), work_type, stream=df.stream
+                    )
+                ),
+            )
+            scale_expr = plc.expressions.Operation(
+                plc.expressions.ASTOperator.POW,
+                plc.expressions.Literal(
+                    plc.Scalar.from_py(10.0, work_type, stream=df.stream)
+                ),
+                plc.expressions.Operation(
+                    plc.expressions.ASTOperator.SUB,
+                    plc.expressions.Literal(
+                        plc.Scalar.from_py(
+                            float(digits - 1), work_type, stream=df.stream
+                        )
+                    ),
+                    plc.expressions.Operation(plc.expressions.ASTOperator.FLOOR, log10),
+                ),
+            )
+            scale_column = plc.transform.compute_column(
+                plc.Table([operand]), scale_expr, stream=df.stream
+            )
+            scaled_column = plc.binaryop.binary_operation(
+                operand,
+                scale_column,
+                plc.binaryop.BinaryOperator.MUL,
+                work_type,
+                stream=df.stream,
+            )
+            rounded = plc.round.round(
+                scaled_column, 0, plc.round.RoundingMethod.HALF_UP, stream=df.stream
+            )
+            unscaled = plc.binaryop.binary_operation(
+                rounded,
+                scale_column,
+                plc.binaryop.BinaryOperator.DIV,
+                work_type,
+                stream=df.stream,
+            )
+            is_zero = plc.binaryop.binary_operation(
+                operand,
+                zero,
+                plc.binaryop.BinaryOperator.EQUAL,
+                plc.DataType(plc.TypeId.BOOL8),
+                stream=df.stream,
+            )
+            result = plc.copying.copy_if_else(zero, unscaled, is_zero, stream=df.stream)
+            if not is_float:
+                result = plc.unary.cast(result, out_type, stream=df.stream)
+            return Column(result, dtype=self.dtype)
         elif self.name == "truncate":
             column = self.children[0].evaluate(df, context=context)
             out_type = self.dtype.plc_type
@@ -976,7 +1050,7 @@ class UnaryFunction(Expr):
                     ),
                     dtype=self.dtype,
                 )
-            else:
+            elif self.name in ("degrees", "radians"):
                 if self.name == "degrees":
                     factor = 180.0 / math.pi
                 else:
@@ -993,6 +1067,43 @@ class UnaryFunction(Expr):
                     ),
                     dtype=self.dtype,
                 )
+            else:
+                # sign
+                operand = column.obj
+                out_type = self.dtype.plc_type
+                is_float = plc.traits.is_floating_point(out_type)
+                zero_py = 0.0 if is_float else 0
+                one_py = zero_py + 1
+                neg_one_py = -one_py
+                zero = plc.Scalar.from_py(zero_py, out_type, stream=df.stream)
+                positive = plc.binaryop.binary_operation(
+                    operand,
+                    zero,
+                    plc.binaryop.BinaryOperator.GREATER,
+                    plc.DataType(plc.TypeId.BOOL8),
+                    stream=df.stream,
+                )
+                signed = plc.copying.copy_if_else(
+                    plc.Scalar.from_py(one_py, out_type, stream=df.stream),
+                    operand,
+                    positive,
+                    stream=df.stream,
+                )
+                if not plc.traits.is_unsigned(out_type):
+                    negative = plc.binaryop.binary_operation(
+                        operand,
+                        zero,
+                        plc.binaryop.BinaryOperator.LESS,
+                        plc.DataType(plc.TypeId.BOOL8),
+                        stream=df.stream,
+                    )
+                    signed = plc.copying.copy_if_else(
+                        plc.Scalar.from_py(neg_one_py, out_type, stream=df.stream),
+                        signed,
+                        negative,
+                        stream=df.stream,
+                    )
+                return Column(signed, dtype=self.dtype)
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
             if column.dtype.plc_type.id() != self.dtype.id():
