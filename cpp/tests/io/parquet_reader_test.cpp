@@ -7,6 +7,7 @@
 #include "io/utilities/time_utils.hpp"
 #include "io_test_utils.hpp"
 #include "parquet_common.hpp"
+#include "parquet_delta_test_utils.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -15,6 +16,7 @@
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/column/column.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_metadata.hpp>
 #include <cudf/reshape.hpp>
@@ -34,6 +36,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 
@@ -1091,6 +1094,148 @@ TEST_F(ParquetReaderTest, DecimalRead)
       col2_data.begin(), col2_data.end(), validity_c2, numeric::scale_type{-1});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(2), col2);
   }
+}
+
+// Reading Parquet DELTA-encoded pages whose mini-blocks hold more than 64 values. No stock
+// writer emits over 64 values/mini-block (cudf and parquet-mr write 32, pyarrow and arrow-rs at
+// most 64), so the files are built in-memory by the parquet_delta_test_utils.hpp helpers.
+namespace {
+
+cudf::io::parquet_reader_options delta_fixture_reader_options(
+  std::vector<uint8_t> const& file_bytes,
+  int64_t skip_rows,
+  std::optional<cudf::size_type> num_rows)
+{
+  auto builder = cudf::io::parquet_reader_options::builder(
+    cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(file_bytes.data()), file_bytes.size()}});
+  if (skip_rows > 0) { builder.skip_rows(skip_rows); }
+  if (num_rows.has_value()) { builder.num_rows(*num_rows); }
+  return builder.build();
+}
+
+// read a DELTA_BINARY_PACKED file, optionally trimmed to [skip_rows, skip_rows + num_rows), and
+// compare with the matching slice of `expected`
+void delta_large_mini_block_read_test(std::vector<uint8_t> const& file_bytes,
+                                      std::vector<int64_t> const& expected,
+                                      int64_t skip_rows                       = 0,
+                                      std::optional<cudf::size_type> num_rows = std::nullopt)
+{
+  auto const result =
+    cudf::io::read_parquet(delta_fixture_reader_options(file_bytes, skip_rows, num_rows));
+  auto const first        = expected.begin() + skip_rows;
+  auto const last         = num_rows.has_value() ? first + *num_rows : expected.end();
+  auto const expected_col = cudf::test::fixed_width_column_wrapper<int64_t>(first, last);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), expected_col);
+}
+
+// same as above for the LIST<INT64> files; the expected column is built from the lists and
+// sliced to the requested row range
+void delta_large_mini_block_list_read_test(std::vector<uint8_t> const& file_bytes,
+                                           std::vector<std::vector<int64_t>> const& expected,
+                                           int64_t skip_rows                       = 0,
+                                           std::optional<cudf::size_type> num_rows = std::nullopt)
+{
+  auto const result =
+    cudf::io::read_parquet(delta_fixture_reader_options(file_bytes, skip_rows, num_rows));
+
+  std::vector<int32_t> offsets{0};
+  std::vector<int64_t> leaf_values;
+  for (auto const& list : expected) {
+    leaf_values.insert(leaf_values.end(), list.begin(), list.end());
+    offsets.push_back(leaf_values.size());
+  }
+  auto offsets_col =
+    cudf::test::fixed_width_column_wrapper<int32_t>(offsets.begin(), offsets.end());
+  auto child =
+    cudf::test::fixed_width_column_wrapper<int64_t>(leaf_values.begin(), leaf_values.end());
+  auto const num_lists    = static_cast<cudf::size_type>(expected.size());
+  auto const expected_col = cudf::make_lists_column(
+    num_lists, offsets_col.release(), child.release(), 0, rmm::device_buffer{});
+
+  auto const start           = static_cast<cudf::size_type>(skip_rows);
+  auto const end             = num_rows.has_value() ? start + *num_rows : num_lists;
+  auto const expected_sliced = cudf::slice(expected_col->view(), {start, end}).front();
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(0), expected_sliced);
+}
+
+}  // namespace
+
+// block_size=128, mini_block_count=1 -> 128 values/mini-block: the reader previously rejected
+// mini-blocks over 64 values with DELTA_PARAMS_UNSUPPORTED (0x100).
+TEST_F(ParquetReaderTest, DeltaBinaryLargeMiniBlock128)
+{
+  auto const values = delta_test_int64_values(173);
+  delta_large_mini_block_read_test(build_delta_binary_parquet(values, 128, 1), values);
+}
+
+// block_size=256, mini_block_count=1 -> 256 values/mini-block (8 passes), beyond what
+// simply raising the cap to 128 would cover.
+TEST_F(ParquetReaderTest, DeltaBinaryLargeMiniBlock256)
+{
+  auto const values = delta_test_int64_values(301);
+  delta_large_mini_block_read_test(build_delta_binary_parquet(values, 256, 1), values);
+}
+
+// block_size=384, mini_block_count=4 -> 96 values/mini-block: exercises multiple
+// mini-blocks per block (both the within-block and next-block advance paths) and a
+// non-power-of-two pass count (3).
+TEST_F(ParquetReaderTest, DeltaBinaryLargeMiniBlock96)
+{
+  auto const values = delta_test_int64_values(141);
+  delta_large_mini_block_read_test(build_delta_binary_parquet(values, 384, 4), values);
+}
+
+// block_size=256, mini_block_count=4 -> 64 values/mini-block: the mini-block size pyarrow and
+// arrow-rs write for INT64, and the boundary the rolling buffer and the per-iteration batch cap
+// are sized for. The in-repo writer emits 32, so nothing else covers it.
+TEST_F(ParquetReaderTest, DeltaBinaryMiniBlock64)
+{
+  auto const values = delta_test_int64_values(157);
+  delta_large_mini_block_read_test(build_delta_binary_parquet(values, 256, 4), values);
+}
+
+// Row-range trims on flat columns are handled on the consumer side (first_row), so leading
+// skips decode correctly for any mini-block size.
+TEST_F(ParquetReaderTest, DeltaBinaryLargeMiniBlockSkipRows)
+{
+  auto const v128 = delta_test_int64_values(173);
+  auto const f128 = build_delta_binary_parquet(v128, 128, 1);
+  delta_large_mini_block_read_test(f128, v128, 40);
+  delta_large_mini_block_read_test(f128, v128, 40, 50);
+
+  auto const v256 = delta_test_int64_values(301);
+  delta_large_mini_block_read_test(build_delta_binary_parquet(v256, 256, 1), v256, 100, 100);
+
+  auto const v96 = delta_test_int64_values(141);
+  delta_large_mini_block_read_test(build_delta_binary_parquet(v96, 384, 4), v96, 0, 60);
+
+  auto const v64 = delta_test_int64_values(157);
+  delta_large_mini_block_read_test(build_delta_binary_parquet(v64, 256, 4), v64, 65, 64);
+}
+
+// LIST<INT64> with 64 values/mini-block. The leading-skip read resumes the delta decoder
+// mid-page after skip_values(), the path that requires the single-pass-per-iteration batch.
+TEST_F(ParquetReaderTest, DeltaBinaryListMiniBlock64)
+{
+  auto const lists = delta_test_lists(150);
+  auto const file  = build_delta_binary_list_parquet(lists, 256, 4);
+  delta_large_mini_block_list_read_test(file, lists);
+  delta_large_mini_block_list_read_test(file, lists, 40);
+  delta_large_mini_block_list_read_test(file, lists, 40, 60);
+}
+
+// LIST<INT64> with 96 values/mini-block: full reads decode fine, but a leading skip lands
+// inside a >64-value mini-block, which skip_values() cannot hold resident; it must fail with
+// a clean DELTA_PARAMS_UNSUPPORTED (0x100) error.
+TEST_F(ParquetReaderTest, DeltaBinaryListLargeMiniBlock96)
+{
+  auto const lists = delta_test_lists(150);
+  auto const file  = build_delta_binary_list_parquet(lists, 384, 4);
+  delta_large_mini_block_list_read_test(file, lists);
+
+  auto const opts = delta_fixture_reader_options(file, 40, std::nullopt);
+  EXPECT_THROW(cudf::io::read_parquet(opts), cudf::logic_error);
 }
 
 TEST_F(ParquetReaderTest, EmptyOutput)

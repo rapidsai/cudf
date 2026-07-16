@@ -365,8 +365,12 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
   if (block.thread_rank() == 0) { db->init_binary_block(s->data_start, s->data_end); }
   block.sync();
 
-  auto const batch_size = db->values_per_mb;
-  if (db->error or batch_size > max_delta_mini_block_size) {
+  // The decode loop below sub-batches each mini-block into warp_size-wide passes, so any mini-block
+  // size is supported. The skip_values() path still requires a whole mini-block to be resident in
+  // the rolling buffer, so mini-blocks larger than max_delta_mini_block_size are only supported
+  // when no leading values are skipped.
+  bool const is_skip_resume = skipped_leaf_values > 0;
+  if (db->error or (is_skip_resume and db->values_per_mb > max_delta_mini_block_size)) {
     if (block.thread_rank() == 0) {
       set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
                 error_code);
@@ -374,9 +378,20 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
     return;
   }
 
+  // Number of values produced per main-loop iteration. Non-skip pages keep the schedule of the
+  // whole-mini-block decoder (values_per_mb per iteration, capped by the rolling buffer at
+  // max_delta_mini_block_size). When resuming after skip_values() the producer must emit a single
+  // warp_size pass per iteration: the skip leaves up to values_per_mb - 1 not-yet-consumed values
+  // in the rolling buffer, and a larger batch could wrap around and overwrite them before the
+  // consumer reads them.
+  uint32_t const batch_size =
+    is_skip_resume ? cudf::detail::warp_size
+                   : min(db->values_per_mb, static_cast<uint32_t>(max_delta_mini_block_size));
+  uint32_t const passes_per_batch = batch_size / cudf::detail::warp_size;
+
   // if skipped_leaf_values is non-zero, then we need to decode up to the first mini-block
   // that has a value we need.
-  if (skipped_leaf_values > 0) { db->skip_values(skipped_leaf_values); }
+  if (is_skip_resume) { db->skip_values(skipped_leaf_values); }
 
   while (s->error == 0 &&
          (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
@@ -403,7 +418,12 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
       gpuDecodeLevels<delta_rolling_buf_size, level_t>(s, sb, target_pos, rep, def, warp);
     } else if (warp.meta_group_rank() == 1) {
       // warp 1
-      db->decode_batch();
+      for (uint32_t i = 0; i < passes_per_batch; i++) {
+        // make lane 0's state updates from the previous pass visible to the whole warp; the
+        // block-wide sync below covers the last pass of the iteration
+        if (i > 0) { __syncwarp(); }
+        db->decode_next_pass();
+      }
     } else if (src_pos < target_pos) {
       // warp 2
       // nesting level that is storing actual leaf values
@@ -570,9 +590,17 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   int const leaf_level_index = s->col.max_nesting_depth - 1;
   auto strings_data          = nesting_info_base[leaf_level_index].string_out;
 
-  // sanity check to make sure we can process this page
-  auto const batch_size = prefix_db->values_per_mb;
-  if (batch_size > max_delta_mini_block_size) {
+  // if this is a bounds page and nested, then we need to skip up front. non-nested will work
+  // its way through the page.
+  int string_pos = has_repetition ? s->page.start_val : 0;
+  auto const is_bounds_pg =
+    is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
+  bool const is_skip_resume = is_bounds_pg and string_pos > 0;
+
+  // Mini-blocks larger than max_delta_mini_block_size are not supported for the string encodings
+  // yet: the string-size prepass in page_string_decode.cu still reads whole mini-blocks back from
+  // the rolling buffer.
+  if (prefix_db->values_per_mb > max_delta_mini_block_size) {
     if (block.thread_rank() == 0) {
       set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
                 error_code);
@@ -580,12 +608,15 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     return;
   }
 
-  // if this is a bounds page and nested, then we need to skip up front. non-nested will work
-  // its way through the page.
-  int string_pos = has_repetition ? s->page.start_val : 0;
-  auto const is_bounds_pg =
-    is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
-  if (is_bounds_pg && string_pos > 0) { dba->skip(use_char_ll); }
+  // Number of values produced per main-loop iteration (see decode_delta_binary_kernel for why
+  // skip-resume pages must produce a single warp_size pass per iteration).
+  uint32_t const batch_size =
+    is_skip_resume
+      ? cudf::detail::warp_size
+      : min(prefix_db->values_per_mb, static_cast<uint32_t>(max_delta_mini_block_size));
+  uint32_t const passes_per_batch = batch_size / cudf::detail::warp_size;
+
+  if (is_skip_resume) { dba->skip(use_char_ll); }
 
   while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
     uint32_t target_pos;
@@ -610,10 +641,18 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       gpuDecodeLevels<delta_rolling_buf_size, level_t>(s, sb, target_pos, rep, def, warp);
     } else if (warp.meta_group_rank() == 1) {
       // warp 1
-      prefix_db->decode_batch();
+      for (uint32_t i = 0; i < passes_per_batch; i++) {
+        // make lane 0's state updates from the previous pass visible to the whole warp; the
+        // block-wide sync below covers the last pass of the iteration
+        if (i > 0) { __syncwarp(); }
+        prefix_db->decode_next_pass();
+      }
     } else if (warp.meta_group_rank() == 2) {
       // warp 2
-      suffix_db->decode_batch();
+      for (uint32_t i = 0; i < passes_per_batch; i++) {
+        if (i > 0) { __syncwarp(); }
+        suffix_db->decode_next_pass();
+      }
     } else if (warp.meta_group_rank() == 3 and src_pos < target_pos) {
       // warp 3
       int const nproc = min(batch_size, s->page.end_val - string_pos);
@@ -773,9 +812,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   }
   block.sync();
 
-  // sanity check to make sure we can process this page
-  auto const batch_size = db->values_per_mb;
-  if (db->error or batch_size > max_delta_mini_block_size) {
+  // The decode loop below sub-batches each mini-block into warp_size-wide passes, so any mini-block
+  // size is supported (see decode_next_pass).
+  if (db->error) {
     if (block.thread_rank() == 0) {
       set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
                 error_code);
@@ -792,7 +831,26 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   // string data block.
   auto const is_bounds_pg =
     is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
-  if (is_bounds_pg && s->page.start_val > 0) {
+  bool const is_skip_resume = is_bounds_pg and s->page.start_val > 0;
+  // Mini-blocks larger than max_delta_mini_block_size are not supported for the string encodings
+  // yet: the string-size prepass in page_string_decode.cu still reads whole mini-blocks back from
+  // the rolling buffer.
+  if (db->values_per_mb > max_delta_mini_block_size) {
+    if (block.thread_rank() == 0) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
+                error_code);
+    }
+    return;
+  }
+
+  // Number of values produced per main-loop iteration (see decode_delta_binary_kernel for why
+  // skip-resume pages must produce a single warp_size pass per iteration).
+  uint32_t const batch_size =
+    is_skip_resume ? cudf::detail::warp_size
+                   : min(db->values_per_mb, static_cast<uint32_t>(max_delta_mini_block_size));
+  uint32_t const passes_per_batch = batch_size / cudf::detail::warp_size;
+
+  if (is_skip_resume) {
     if (warp.meta_group_rank() == 0) {
       // string_off is only valid on thread 0
       auto const string_off = db->skip_values_and_sum(s->page.start_val);
@@ -837,7 +895,12 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       gpuDecodeLevels<delta_rolling_buf_size, level_t>(s, sb, target_pos, rep, def, warp);
     } else if (warp.meta_group_rank() == 1) {
       // warp 1
-      db->decode_batch();
+      for (uint32_t i = 0; i < passes_per_batch; i++) {
+        // make lane 0's state updates from the previous pass visible to the whole warp; the
+        // block-wide sync below covers the last pass of the iteration
+        if (i > 0) { __syncwarp(); }
+        db->decode_next_pass();
+      }
     } else if (warp.meta_group_rank() == 2 && src_pos < target_pos) {
       // warp 2
       int const nproc = min(batch_size, s->page.end_val - string_pos);
