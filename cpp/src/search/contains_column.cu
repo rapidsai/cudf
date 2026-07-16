@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,30 +19,25 @@ namespace detail {
 
 namespace {
 
-struct contains_column_dispatch {
-  template <typename Element>
-  std::unique_ptr<column> operator()(column_view const& haystack,
-                                     column_view const& needles,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr) const
-  {
-    auto result_v = detail::contains(table_view{{haystack}},
-                                     table_view{{needles}},
-                                     null_equality::EQUAL,
-                                     nan_equality::ALL_EQUAL,
-                                     stream,
-                                     mr);
-    return std::make_unique<column>(
-      std::move(result_v), detail::copy_bitmask(needles, stream, mr), needles.null_count());
-  }
-};
+std::unique_ptr<column> contains_non_dictionary(column_view const& haystack,
+                                                column_view const& needles,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::device_async_resource_ref mr)
+{
+  auto result_v = detail::contains(table_view{{haystack}},
+                                   table_view{{needles}},
+                                   null_equality::EQUAL,
+                                   nan_equality::ALL_EQUAL,
+                                   stream,
+                                   mr);
+  return std::make_unique<column>(
+    std::move(result_v), detail::copy_bitmask(needles, stream, mr), needles.null_count());
+}
 
-template <>
-std::unique_ptr<column> contains_column_dispatch::operator()<dictionary32>(
-  column_view const& haystack_in,
-  column_view const& needles_in,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr) const
+std::unique_ptr<column> contains_dictionary(column_view const& haystack_in,
+                                            column_view const& needles_in,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::device_async_resource_ref mr)
 {
   dictionary_column_view const haystack(haystack_in);
   dictionary_column_view const needles(needles_in);
@@ -57,12 +52,7 @@ std::unique_ptr<column> contains_column_dispatch::operator()<dictionary32>(
   // now just use the indices for the contains
   column_view const haystack_indices = haystack_view.get_indices_annotated();
   column_view const needles_indices  = needles_view.get_indices_annotated();
-  return cudf::type_dispatcher(haystack_indices.type(),
-                               contains_column_dispatch{},
-                               haystack_indices,
-                               needles_indices,
-                               stream,
-                               mr);
+  return contains_non_dictionary(haystack_indices, needles_indices, stream, mr);
 }
 
 }  // namespace
@@ -72,8 +62,13 @@ std::unique_ptr<column> contains(column_view const& haystack,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
 {
-  return cudf::type_dispatcher(
-    haystack.type(), contains_column_dispatch{}, haystack, needles, stream, mr);
+  // `contains` is already type-erased below the dictionary normalization boundary. Dispatch only
+  // on the operation-specific distinction that changes the algorithm instead of instantiating the
+  // same implementation for every cudf type.
+  if (haystack.type().id() == type_id::DICTIONARY32) {
+    return contains_dictionary(haystack, needles, stream, mr);
+  }
+  return contains_non_dictionary(haystack, needles, stream, mr);
 }
 
 }  // namespace detail
