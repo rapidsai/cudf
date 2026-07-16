@@ -35,20 +35,18 @@ namespace cudf::io::parquet::detail {
 constexpr int delta_mini_block_size_multiple = 32;
 static_assert(delta_mini_block_size_multiple % cudf::detail::warp_size == 0);
 
-// The largest mini-block size the whole-mini-block skip paths (skip_values, skip_values_and_sum,
-// and delta_byte_array_decoder::skip) can handle, since they require a full mini-block to be
-// resident in the rolling buffer. The main decode loops sub-batch mini-blocks into warp_size-wide
-// passes (see decode_next_pass) and support any mini-block size, but produce at most this many
-// values per iteration.
-constexpr int max_delta_mini_block_size = 64;
+// The decoders produce values in warp_size-wide passes (see decode_next_pass), so mini-blocks of
+// any size decode with a fixed-size rolling buffer. The decode loops produce up to two passes per
+// iteration: pages whose mini-blocks hold at least two passes keep the two-pass batch the loops
+// have always used, and running several passes back to back amortizes the per-iteration
+// synchronization.
+constexpr int delta_max_batch_size = 2 * cudf::detail::warp_size;
 
-// The first pass decodes `values_per_mb` values, and then the second pass does another
-// batch of size `values_per_mb`. The largest value for values_per_miniblock among the
-// major writers seems to be 64, so 2 * 64 should be good. We save the first value separately
-// since it is not encoded in the first mini-block.
-// The extra 1 is for the first value, from the block header. It's not stored in the buffer, but it
-// still impacts buffer indexing and we need to account for it to avoid race conditions.
-constexpr int delta_rolling_buf_size = (2 * max_delta_mini_block_size) + 1;
+// The rolling buffer must hold two batches in flight (the consumer drains one batch while the
+// producer decodes the next), plus one slot for the first value from the block header: it is not
+// stored in the buffer, but it still impacts buffer indexing and we need to account for it to
+// avoid race conditions.
+constexpr int delta_rolling_buf_size = (2 * delta_max_batch_size) + 1;
 
 /**
  * @brief Read a ULEB128 varint integer
@@ -120,6 +118,13 @@ struct delta_binary_decoder {
   __device__ constexpr uint32_t num_encoded_values(bool all_values)
   {
     return value_count == 0 ? 0 : all_values ? value_count : value_count - 1;
+  }
+
+  // index just past the values decode_next_pass() has produced so far (0 before the first pass,
+  // even though the header value already occupies index 0)
+  __device__ constexpr uint32_t next_pass_start_idx()
+  {
+    return current_value_idx + cur_pass * cudf::detail::warp_size;
   }
 
   // read mini-block header into state object. should only be called from init_binary_block or
@@ -251,9 +256,7 @@ struct delta_binary_decoder {
   }
 
   // decode a single warp_size-wide pass (indexed by `pass`) of the current mini-block and convert
-  // the deltas to values. factored out of calc_mini_block_values so the pipelined decoders can
-  // produce one pass at a time and keep the rolling buffer small (see decode_next_pass). called by
-  // all threads in a single warp.
+  // the deltas to values (see decode_next_pass). called by all threads in a single warp.
   inline __device__ void calc_mini_block_pass(uint32_t pass, int lane_id)
   {
     using cudf::detail::warp_size;
@@ -310,45 +313,29 @@ struct delta_binary_decoder {
     __syncwarp();
   }
 
-  // decode the current mini-batch of deltas, and convert to values.
-  // called by all threads in a warp, currently only one warp supported.
-  inline __device__ void calc_mini_block_values(int lane_id)
-  {
-    using cudf::detail::warp_size;
-
-    if (not advance_past_first_value(lane_id)) { return; }
-
-    // need to do in multiple passes if values_per_mb != 32
-    uint32_t const num_pass = values_per_mb / warp_size;
-
-    for (uint32_t i = 0; i < num_pass; i++) {
-      calc_mini_block_pass(i, lane_id);
-    }
-  }
-
-  // decodes and skips values until the block containing the value after `skip` is reached.
+  // decodes and discards values so the decoder resumes at the pass boundary at or just past
+  // `skip`. the up to warp_size - 1 values decoded beyond `skip` stay resident in the rolling
+  // buffer for the consumer, which resumes reading at `skip`. works for any mini-block size.
   // called by all threads in a thread block.
   inline __device__ void skip_values(int skip)
   {
     using cudf::detail::warp_size;
-    int const t       = threadIdx.x;
-    int const lane_id = t % warp_size;
+    int const t = threadIdx.x;
 
-    while (current_value_idx < skip && current_value_idx < num_encoded_values(true)) {
-      // calc_mini_block_values only runs in warp 0, but writes to current_value_idx,
-      // so everyone must sync before we diverge
+    while (next_pass_start_idx() < static_cast<uint32_t>(skip) &&
+           current_value_idx < num_encoded_values(true)) {
+      // decode_next_pass only runs in warp 0, but advances decoder state everyone reads,
+      // so everyone must sync around it
       __syncthreads();
-      if (t < warp_size) {
-        calc_mini_block_values(lane_id);
-        if (lane_id == 0) { setup_next_mini_block(true); }
-      }
+      if (t < warp_size) { decode_next_pass(); }
       __syncthreads();
     }
   }
 
-  // Decodes and skips values until the block containing the value after `skip` is reached.
-  // Keeps a running sum of the values and returns that upon exit. Called by all threads in a
-  // warp 0. Result is only valid on thread 0.
+  // Decodes and skips values until the pass containing `skip` has been decoded, keeping a
+  // running sum of the skipped values (indices below `skip`) and returning it. Values decoded
+  // beyond `skip` stay resident in the rolling buffer for the consumer. Works for any
+  // mini-block size. Called by all threads in warp 0; the result is only valid on thread 0.
   // This is intended for use only by the DELTA_LENGTH_BYTE_ARRAY decoder.
   inline __device__ size_t skip_values_and_sum(int skip)
   {
@@ -368,49 +355,30 @@ struct delta_binary_decoder {
     // if only skipping one value, we're done already
     if (skip == 1) { return sum; }
 
-    // need to do in multiple passes if values_per_mb != 32
-    uint32_t const num_pass = values_per_mb / warp_size;
+    while (next_pass_start_idx() < static_cast<uint32_t>(skip) &&
+           current_value_idx < num_encoded_values(true)) {
+      // the pass decoded below produces indices [pass_first, pass_first + warp_size); the
+      // header value at index 0 is not part of any pass and is already in `sum`
+      auto const pass_first = max(next_pass_start_idx(), 1u);
+      decode_next_pass();
 
-    while (current_value_idx < skip && current_value_idx < num_encoded_values(true)) {
-      calc_mini_block_values(t);
-
-      int const idx = current_value_idx + t;
-
-      for (uint32_t p = 0; p < num_pass; p++) {
-        auto const pidx     = idx + p * warp_size;
-        size_t const val    = pidx < skip ? static_cast<delta_length_type>(value_at(pidx)) : 0;
-        auto const warp_sum = warp_reduce(temp_storage).Sum(val);
-        if (t == 0) { sum += warp_sum; }
-      }
-      if (t == 0) { setup_next_mini_block(true); }
+      auto const idx      = pass_first + t;
+      size_t const val    = idx < static_cast<uint32_t>(skip) && idx < value_count
+                              ? static_cast<delta_length_type>(value_at(idx))
+                              : 0;
+      auto const warp_sum = warp_reduce(temp_storage).Sum(val);
+      if (t == 0) { sum += warp_sum; }
       __syncwarp();
     }
 
     return sum;
   }
 
-  // decodes the current mini block and stores the values obtained. should only be called by
-  // a single warp.
-  inline __device__ void decode_batch()
-  {
-    using cudf::detail::warp_size;
-    int const t       = threadIdx.x;
-    int const lane_id = t % warp_size;
-
-    // unpack deltas and save in db->value
-    calc_mini_block_values(lane_id);
-
-    // set up for next mini-block
-    if (lane_id == 0) { setup_next_mini_block(true); }
-  }
-
-  // decode the next warp_size-wide pass of the current mini-block into db->value, advancing to the
-  // next mini-block once all of its passes have been decoded. Unlike decode_batch(), which decodes
-  // an entire mini-block at once, this decodes a single pass so the rolling buffer only needs to
-  // hold a fixed number of values (2 * warp_size + 1) regardless of the mini-block size. This lets
-  // the reader decode mini-blocks larger than max_delta_mini_block_size. Should only be called by a
-  // single warp. NOTE: lane 0's state updates are not synchronized on exit; the caller must
-  // synchronize the warp (or block) before the next call so all lanes observe them.
+  // decode the next warp_size-wide pass of the current mini-block into db->value, advancing to
+  // the next mini-block once all of its passes have been decoded. Decoding a single pass at a
+  // time keeps the rolling buffer footprint independent of the mini-block size. Should only be
+  // called by a single warp. NOTE: lane 0's state updates are not synchronized on exit; the
+  // caller must synchronize the warp (or block) before the next call so all lanes observe them.
   inline __device__ void decode_next_pass()
   {
     using cudf::detail::warp_size;

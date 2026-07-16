@@ -1173,6 +1173,35 @@ void delta_large_mini_block_list_read_test(std::vector<uint8_t> const& file_byte
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(0), expected_sliced);
 }
 
+// same as above for LIST<STRING> files
+void delta_large_mini_block_string_list_read_test(
+  std::vector<uint8_t> const& file_bytes,
+  std::vector<std::vector<std::string>> const& expected,
+  int64_t skip_rows                       = 0,
+  std::optional<cudf::size_type> num_rows = std::nullopt)
+{
+  auto const result =
+    cudf::io::read_parquet(delta_fixture_reader_options(file_bytes, skip_rows, num_rows));
+
+  std::vector<int32_t> offsets{0};
+  std::vector<std::string> leaf;
+  for (auto const& list : expected) {
+    leaf.insert(leaf.end(), list.begin(), list.end());
+    offsets.push_back(leaf.size());
+  }
+  auto offsets_col =
+    cudf::test::fixed_width_column_wrapper<int32_t>(offsets.begin(), offsets.end());
+  auto child              = cudf::test::strings_column_wrapper(leaf.begin(), leaf.end());
+  auto const num_lists    = static_cast<cudf::size_type>(expected.size());
+  auto const expected_col = cudf::make_lists_column(
+    num_lists, offsets_col.release(), child.release(), 0, rmm::device_buffer{});
+
+  auto const start           = static_cast<cudf::size_type>(skip_rows);
+  auto const end             = num_rows.has_value() ? start + *num_rows : num_lists;
+  auto const expected_sliced = cudf::slice(expected_col->view(), {start, end}).front();
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(0), expected_sliced);
+}
+
 }  // namespace
 
 // block_size=128, mini_block_count=1 -> 128 values/mini-block: the reader previously rejected
@@ -1257,12 +1286,12 @@ TEST_F(ParquetReaderTest, DeltaByteArrayLargeMiniBlockExactFill)
 }
 
 // Flat DELTA_BYTE_ARRAY bounds pages stage leading skipped strings through temp_string_buf
-// inside the decode loop (no whole-mini-block skip involved), so row-range reads work at any
-// mini-block size.
+// inside the decode loop, so row-range reads work at any mini-block size.
 TEST_F(ParquetReaderTest, DeltaByteArrayLargeMiniBlockSkipRows)
 {
   auto const s256 = delta_test_strings(301, true);
   delta_large_mini_block_string_read_test(build_delta_byte_array_parquet(s256, 256, 1), s256, 100);
+  delta_large_mini_block_string_read_test(build_delta_byte_array_parquet(s256, 256, 1), s256, 160);
 
   auto const s128 = delta_test_strings(173, true);
   delta_large_mini_block_string_read_test(
@@ -1308,15 +1337,17 @@ TEST_F(ParquetReaderTest, DeltaLengthByteArrayLargeMiniBlockTrimmed)
     build_delta_length_byte_array_parquet(s128, 128, 1), s128, 0, 100);
 }
 
-// A leading row-range skip within a >64-value mini-block still requires the whole mini-block
-// to be resident for DELTA_LENGTH_BYTE_ARRAY (skip_values_and_sum), and must fail with a clean
-// DELTA_PARAMS_UNSUPPORTED (0x100) error rather than decode garbage.
-TEST_F(ParquetReaderTest, DeltaLengthByteArrayLargeMiniBlockSkipRowsUnsupported)
+// Leading row-range skips sum the skipped lengths one pass at a time (skip_values_and_sum),
+// so they work for any mini-block size.
+TEST_F(ParquetReaderTest, DeltaLengthByteArrayLargeMiniBlockSkipRows)
 {
-  auto const strings = delta_test_strings(301, false);
-  auto const file    = build_delta_length_byte_array_parquet(strings, 256, 1);
-  auto const opts    = delta_fixture_reader_options(file, 100, std::nullopt);
-  EXPECT_THROW(cudf::io::read_parquet(opts), cudf::logic_error);
+  auto const s256 = delta_test_strings(301, false);
+  delta_large_mini_block_string_read_test(
+    build_delta_length_byte_array_parquet(s256, 256, 1), s256, 100);
+
+  auto const s96 = delta_test_strings(141, false);
+  delta_large_mini_block_string_read_test(
+    build_delta_length_byte_array_parquet(s96, 384, 4), s96, 40, 60);
 }
 
 // LIST<INT64> with 64 values/mini-block. The leading-skip read resumes the delta decoder
@@ -1330,17 +1361,53 @@ TEST_F(ParquetReaderTest, DeltaBinaryListMiniBlock64)
   delta_large_mini_block_list_read_test(file, lists, 40, 60);
 }
 
-// LIST<INT64> with 96 values/mini-block: full reads decode fine, but a leading skip lands
-// inside a >64-value mini-block, which skip_values() cannot hold resident; it must fail with
-// a clean DELTA_PARAMS_UNSUPPORTED (0x100) error.
-TEST_F(ParquetReaderTest, DeltaBinaryListLargeMiniBlock96)
+// LIST<INT64> with mini-blocks larger than the decode batch: a leading skip fast-forwards the
+// decoder one pass at a time (skip_values) and resumes at a pass boundary, so any mini-block
+// size works.
+TEST_F(ParquetReaderTest, DeltaBinaryListLargeMiniBlock)
 {
   auto const lists = delta_test_lists(150);
-  auto const file  = build_delta_binary_list_parquet(lists, 384, 4);
-  delta_large_mini_block_list_read_test(file, lists);
+  for (auto const& [block_size, mini_block_count] :
+       {std::pair{384, 4}, std::pair{128, 1}, std::pair{256, 1}}) {
+    auto const file = build_delta_binary_list_parquet(lists, block_size, mini_block_count);
+    delta_large_mini_block_list_read_test(file, lists);
+    delta_large_mini_block_list_read_test(file, lists, 40);
+    delta_large_mini_block_list_read_test(file, lists, 40, 60);
+  }
+}
 
-  auto const opts = delta_fixture_reader_options(file, 40, std::nullopt);
-  EXPECT_THROW(cudf::io::read_parquet(opts), cudf::logic_error);
+// LIST<STRING> with DELTA_BYTE_ARRAY leaves: a leading skip reconstructs the skipped strings
+// into temp_string_buf one pass at a time (delta_byte_array_decoder::skip), so any mini-block
+// size works. The long-string variant takes the character-parallel reconstruction path.
+TEST_F(ParquetReaderTest, DeltaByteArrayListLargeMiniBlock)
+{
+  auto const lists = delta_test_string_lists(150, true);
+  for (auto const& [block_size, mini_block_count] :
+       {std::pair{256, 4}, std::pair{384, 4}, std::pair{256, 1}}) {
+    auto const file = build_delta_byte_array_list_parquet(lists, block_size, mini_block_count);
+    delta_large_mini_block_string_list_read_test(file, lists);
+    delta_large_mini_block_string_list_read_test(file, lists, 40);
+    delta_large_mini_block_string_list_read_test(file, lists, 40, 60);
+  }
+
+  auto const long_lists = delta_test_string_lists(150, true, 502, 90);
+  auto const file       = build_delta_byte_array_list_parquet(long_lists, 384, 4);
+  delta_large_mini_block_string_list_read_test(file, long_lists, 40);
+}
+
+// LIST<STRING> with DELTA_LENGTH_BYTE_ARRAY leaves: a leading skip resumes the length decoder
+// mid-page (skip_values_and_sum) at a pass boundary.
+TEST_F(ParquetReaderTest, DeltaLengthByteArrayListLargeMiniBlock)
+{
+  auto const lists = delta_test_string_lists(150, false);
+  for (auto const& [block_size, mini_block_count] :
+       {std::pair{256, 4}, std::pair{384, 4}, std::pair{256, 1}}) {
+    auto const file =
+      build_delta_length_byte_array_list_parquet(lists, block_size, mini_block_count);
+    delta_large_mini_block_string_list_read_test(file, lists);
+    delta_large_mini_block_string_list_read_test(file, lists, 40);
+    delta_large_mini_block_string_list_read_test(file, lists, 40, 60);
+  }
 }
 
 TEST_F(ParquetReaderTest, EmptyOutput)

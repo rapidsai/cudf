@@ -23,6 +23,12 @@ namespace cg = cooperative_groups;
 constexpr int decode_block_size              = 128;
 constexpr int decode_delta_binary_block_size = 96;
 
+// Size of the ring buffer that maps leaf-value ordinals to output rows (nz_idx). The level
+// decoder runs up to two batches ahead of the value consumer and, on nested pages, overshoots
+// its target by up to a warp of values, so this needs to exceed 3 * delta_max_batch_size +
+// warp_size; anything smaller lets the level decoder wrap onto entries the consumer is reading.
+constexpr int delta_nz_buf_size = 4 * delta_max_batch_size;
+
 // DELTA_BYTE_ARRAY encoding (incremental encoding or front compression), is used for BYTE_ARRAY
 // columns. For each element in a sequence of strings, a prefix length from the preceding string
 // and a suffix is stored. The prefix lengths are DELTA_BINARY_PACKED encoded. The suffixes are
@@ -32,7 +38,9 @@ struct delta_byte_array_decoder {
   uint8_t const* last_string;       // pointer to last decoded string...needed for its prefix
   uint8_t const* suffix_char_data;  // pointer to the start of character data
 
-  uint8_t* temp_buf;         // buffer used when skipping values
+  uint8_t* temp_buf;         // scratch for strings skipped over by a leading row range
+  uint8_t* temp_buf_last;    // slot past the scratch area that preserves the last decoded string
+                             // while the next batch overwrites the scratch
   uint32_t start_val;        // decoded strings up to this index will be dumped to temp_buf
   uint32_t last_string_len;  // length of the last decoded string
 
@@ -40,13 +48,17 @@ struct delta_byte_array_decoder {
   delta_binary_decoder suffixes;  // state of decoder for suffix lengths
 
   // initialize the prefixes and suffixes blocks
-  __device__ void init(uint8_t const* start, uint8_t const* end, uint32_t start_idx, uint8_t* temp)
+  __device__ void init(
+    uint8_t const* start, uint8_t const* end, uint32_t start_idx, uint8_t* temp, size_t temp_size)
   {
     auto const* suffix_start = prefixes.find_end_of_block(start, end);
     suffix_char_data         = suffixes.find_end_of_block(suffix_start, end);
     last_string              = nullptr;
     temp_buf                 = temp;
-    start_val                = start_idx;
+    // the temp buffer holds delta_max_batch_size string slots of scratch plus one more slot
+    // (see the string-size prepass), reserved here for the last decoded string
+    temp_buf_last = temp + delta_max_batch_size * (temp_size / (delta_max_batch_size + 1));
+    start_val     = start_idx;
   }
 
   // kind of like an inclusive scan for strings. takes prefix_len bytes from preceding
@@ -196,6 +208,16 @@ struct delta_byte_array_decoder {
       __syncwarp();
     }
 
+    // the next batch overwrites the temp scratch from its start, so if the last decoded string
+    // lives there, preserve it in the reserved slot past the scratch area
+    if (end_idx <= start_val && last_string != temp_buf_last) {
+      if (lane_id == 0) {
+        memcpy(temp_buf_last, last_string, last_string_len);
+        last_string = temp_buf_last;
+      }
+      __syncwarp();
+    }
+
     return string_total;
   }
 
@@ -251,10 +273,21 @@ struct delta_byte_array_decoder {
       __syncwarp();
     }
 
+    // the next batch overwrites the temp scratch from its start, so if the last decoded string
+    // lives there, preserve it in the reserved slot past the scratch area
+    if (end_idx <= start_val && last_string != temp_buf_last) {
+      if (lane_id == 0) {
+        memcpy(temp_buf_last, last_string, last_string_len);
+        last_string = temp_buf_last;
+      }
+      __syncwarp();
+    }
+
     return string_total;
   }
 
-  // dump strings before start_val to temp buf
+  // dump strings before start_val to temp buf. decodes one warp_size-wide pass per round, so
+  // any mini-block size is supported. called by all threads in a thread block.
   __device__ void skip(bool use_char_ll)
   {
     using cudf::detail::warp_size;
@@ -264,31 +297,26 @@ struct delta_byte_array_decoder {
     // is this even necessary? return if asking to skip the whole block.
     if (start_val >= prefixes.num_encoded_values(true)) { return; }
 
-    // prefixes and suffixes will have the same parameters (it's checked earlier)
-    auto const batch_size = prefixes.values_per_mb;
-
     uint32_t skip_pos = 0;
-    while (prefixes.current_value_idx < start_val) {
-      // warp 0 gets prefixes and warp 1 gets suffixes
-      auto* const db = t < 32 ? &prefixes : &suffixes;
-
-      // this will potentially decode past start_val, but that's ok
-      if (t < 64) { db->decode_batch(); }
+    while (skip_pos < start_val) {
+      // warp 0 decodes a pass of prefixes and warp 1 a pass of suffixes. this will potentially
+      // decode past start_val, and those values stay resident in the rolling buffers for the
+      // decode loop that follows.
+      auto* const db = t < warp_size ? &prefixes : &suffixes;
+      if (t < 2 * warp_size) { db->decode_next_pass(); }
       __syncthreads();
 
-      // warp 0 decodes the batch.
-      if (t < 32) {
-        auto const num_to_decode = min(batch_size, start_val - skip_pos);
-        auto const bytes_written =
-          use_char_ll ? calculate_string_values_cp(temp_buf, skip_pos, num_to_decode, lane_id)
-                      : calculate_string_values(temp_buf, skip_pos, num_to_decode, lane_id);
-        // store last_string someplace safe in temp buffer
-        if (t == 0) {
-          memcpy(temp_buf + bytes_written, last_string, last_string_len);
-          last_string = temp_buf + bytes_written;
+      // warp 0 reconstructs this round's skipped strings into the temp scratch (the helpers
+      // preserve the round's last string past the scratch area for the next round's prefixes)
+      if (t < warp_size) {
+        auto const num_to_decode = min(static_cast<uint32_t>(warp_size), start_val - skip_pos);
+        if (use_char_ll) {
+          calculate_string_values_cp(temp_buf, skip_pos, num_to_decode, lane_id);
+        } else {
+          calculate_string_values(temp_buf, skip_pos, num_to_decode, lane_id);
         }
       }
-      skip_pos += prefixes.values_per_mb;
+      skip_pos += warp_size;
       __syncthreads();
     }
   }
@@ -309,7 +337,7 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
 {
   __shared__ __align__(16) delta_binary_decoder db_state;
   __shared__ __align__(16) page_state_s state_g;
-  __shared__ __align__(16) page_state_buffers_s<delta_rolling_buf_size, 1, 1> state_buffers;
+  __shared__ __align__(16) page_state_buffers_s<delta_nz_buf_size, 1, 1> state_buffers;
 
   page_state_s* const s = &state_g;
   auto* const sb        = &state_buffers;
@@ -365,12 +393,7 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
   if (block.thread_rank() == 0) { db->init_binary_block(s->data_start, s->data_end); }
   block.sync();
 
-  // The decode loop below sub-batches each mini-block into warp_size-wide passes, so any mini-block
-  // size is supported. The skip_values() path still requires a whole mini-block to be resident in
-  // the rolling buffer, so mini-blocks larger than max_delta_mini_block_size are only supported
-  // when no leading values are skipped.
-  bool const is_skip_resume = skipped_leaf_values > 0;
-  if (db->error or (is_skip_resume and db->values_per_mb > max_delta_mini_block_size)) {
+  if (db->error) {
     if (block.thread_rank() == 0) {
       set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
                 error_code);
@@ -378,15 +401,16 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
     return;
   }
 
-  // Number of values produced per main-loop iteration. Non-skip pages keep the schedule of the
-  // whole-mini-block decoder (values_per_mb per iteration, capped by the rolling buffer at
-  // max_delta_mini_block_size). When resuming after skip_values() the producer must emit a single
-  // warp_size pass per iteration: the skip leaves up to values_per_mb - 1 not-yet-consumed values
-  // in the rolling buffer, and a larger batch could wrap around and overwrite them before the
-  // consumer reads them.
+  bool const is_skip_resume = skipped_leaf_values > 0;
+
+  // Number of values produced per main-loop iteration: up to two warp_size passes, so pages whose
+  // mini-blocks hold at least two passes keep the schedule of the whole-mini-block decoder. When
+  // resuming after skip_values() the producer emits a single pass per iteration: the skip leaves
+  // up to warp_size not-yet-consumed values in the rolling buffer, and a larger batch could wrap
+  // around and overwrite them before the consumer reads them.
   uint32_t const batch_size =
     is_skip_resume ? cudf::detail::warp_size
-                   : min(db->values_per_mb, static_cast<uint32_t>(max_delta_mini_block_size));
+                   : min(db->values_per_mb, static_cast<uint32_t>(delta_max_batch_size));
   uint32_t const passes_per_batch = batch_size / cudf::detail::warp_size;
 
   // if skipped_leaf_values is non-zero, then we need to decode up to the first mini-block
@@ -415,7 +439,7 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
       // - update validity vectors
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
-      gpuDecodeLevels<delta_rolling_buf_size, level_t>(s, sb, target_pos, rep, def, warp);
+      gpuDecodeLevels<delta_nz_buf_size, level_t>(s, sb, target_pos, rep, def, warp);
     } else if (warp.meta_group_rank() == 1) {
       // warp 1
       for (uint32_t i = 0; i < passes_per_batch; i++) {
@@ -433,7 +457,7 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
       for (uint32_t sp = src_pos + warp.thread_rank(); sp < src_pos + batch_size;
            sp += warp.size()) {
         // the position in the output column/buffer
-        int32_t dst_pos = sb->nz_idx[rolling_index<delta_rolling_buf_size>(sp)];
+        int32_t dst_pos = sb->nz_idx[rolling_index<delta_nz_buf_size>(sp)];
 
         // handle skip_rows here. flat hierarchies can just skip up to first_row.
         if (!has_repetition) { dst_pos -= s->first_row; }
@@ -488,7 +512,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 {
   __shared__ __align__(16) delta_byte_array_decoder db_state;
   __shared__ __align__(16) page_state_s state_g;
-  __shared__ __align__(16) page_state_buffers_s<delta_rolling_buf_size, 1, 1> state_buffers;
+  __shared__ __align__(16) page_state_buffers_s<delta_nz_buf_size, 1, 1> state_buffers;
 
   page_state_s* const s = &state_g;
   auto* const sb        = &state_buffers;
@@ -564,7 +588,11 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   if (block.thread_rank() == 0) {
     // initialize the prefixes and suffixes blocks
-    dba->init(s->data_start, s->data_end, s->page.start_val, s->page.temp_string_buf);
+    dba->init(s->data_start,
+              s->data_end,
+              s->page.start_val,
+              s->page.temp_string_buf,
+              s->page.temp_string_size);
   }
   block.sync();
 
@@ -597,24 +625,11 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
   bool const is_skip_resume = is_bounds_pg and string_pos > 0;
 
-  // The decode loop below sub-batches each mini-block into warp_size-wide passes, so any mini-block
-  // size is supported. The dba->skip() path still requires a whole mini-block to be resident in the
-  // rolling buffer, so mini-blocks larger than max_delta_mini_block_size are only supported when
-  // there is no leading row range to skip.
-  if (is_skip_resume and prefix_db->values_per_mb > max_delta_mini_block_size) {
-    if (block.thread_rank() == 0) {
-      set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
-                error_code);
-    }
-    return;
-  }
-
   // Number of values produced per main-loop iteration (see decode_delta_binary_kernel for why
   // skip-resume pages must produce a single warp_size pass per iteration).
   uint32_t const batch_size =
-    is_skip_resume
-      ? cudf::detail::warp_size
-      : min(prefix_db->values_per_mb, static_cast<uint32_t>(max_delta_mini_block_size));
+    is_skip_resume ? cudf::detail::warp_size
+                   : min(prefix_db->values_per_mb, static_cast<uint32_t>(delta_max_batch_size));
   uint32_t const passes_per_batch = batch_size / cudf::detail::warp_size;
 
   if (is_skip_resume) { dba->skip(use_char_ll); }
@@ -639,7 +654,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       // - update validity vectors
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
-      gpuDecodeLevels<delta_rolling_buf_size, level_t>(s, sb, target_pos, rep, def, warp);
+      gpuDecodeLevels<delta_nz_buf_size, level_t>(s, sb, target_pos, rep, def, warp);
     } else if (warp.meta_group_rank() == 1) {
       // warp 1
       for (uint32_t i = 0; i < passes_per_batch; i++) {
@@ -667,7 +682,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       for (uint32_t sp = src_pos + warp.thread_rank(); sp < src_pos + batch_size;
            sp += warp.size()) {
         // the position in the output column/buffer
-        int dst_pos = sb->nz_idx[rolling_index<delta_rolling_buf_size>(sp)];
+        int dst_pos = sb->nz_idx[rolling_index<delta_nz_buf_size>(sp)];
 
         // handle skip_rows here. flat hierarchies can just skip up to first_row.
         if (!has_repetition) { dst_pos -= s->first_row; }
@@ -734,7 +749,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 {
   __shared__ __align__(16) delta_binary_decoder db_state;
   __shared__ __align__(16) page_state_s state_g;
-  __shared__ __align__(16) page_state_buffers_s<delta_rolling_buf_size, 1, 1> state_buffers;
+  __shared__ __align__(16) page_state_buffers_s<delta_nz_buf_size, 1, 1> state_buffers;
   __shared__ __align__(8) uint8_t const* page_string_data;
   __shared__ size_t string_offset;
 
@@ -833,22 +848,12 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   auto const is_bounds_pg =
     is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
   bool const is_skip_resume = is_bounds_pg and s->page.start_val > 0;
-  // The skip_values_and_sum() path still requires a whole mini-block to be resident in the rolling
-  // buffer, so mini-blocks larger than max_delta_mini_block_size are only supported when there is
-  // no leading row range to skip.
-  if (is_skip_resume and db->values_per_mb > max_delta_mini_block_size) {
-    if (block.thread_rank() == 0) {
-      set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
-                error_code);
-    }
-    return;
-  }
 
   // Number of values produced per main-loop iteration (see decode_delta_binary_kernel for why
   // skip-resume pages must produce a single warp_size pass per iteration).
   uint32_t const batch_size =
     is_skip_resume ? cudf::detail::warp_size
-                   : min(db->values_per_mb, static_cast<uint32_t>(max_delta_mini_block_size));
+                   : min(db->values_per_mb, static_cast<uint32_t>(delta_max_batch_size));
   uint32_t const passes_per_batch = batch_size / cudf::detail::warp_size;
 
   if (is_skip_resume) {
@@ -893,7 +898,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       // - update validity vectors
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
-      gpuDecodeLevels<delta_rolling_buf_size, level_t>(s, sb, target_pos, rep, def, warp);
+      gpuDecodeLevels<delta_nz_buf_size, level_t>(s, sb, target_pos, rep, def, warp);
     } else if (warp.meta_group_rank() == 1) {
       // warp 1
       for (uint32_t i = 0; i < passes_per_batch; i++) {
@@ -911,7 +916,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       for (uint32_t sp = src_pos + warp.thread_rank(); sp < src_pos + batch_size;
            sp += warp.size()) {
         // the position in the output column/buffer
-        int dst_pos = sb->nz_idx[rolling_index<delta_rolling_buf_size>(sp)];
+        int dst_pos = sb->nz_idx[rolling_index<delta_nz_buf_size>(sp)];
 
         // handle skip_rows here. flat hierarchies can just skip up to first_row.
         if (!has_repetition) { dst_pos -= s->first_row; }

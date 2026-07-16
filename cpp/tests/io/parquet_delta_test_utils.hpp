@@ -343,17 +343,20 @@ inline std::vector<int64_t> delta_test_int64_values(int n, uint64_t seed = 101)
 // string encodings
 // ---------------------------------------------------------------------------------------------
 
-// alphanumeric strings with lengths varying in [1, 20]; with shared_prefixes, each string keeps
-// a random-length prefix of its predecessor so the DELTA_BYTE_ARRAY prefix-length stream also
-// has varying non-zero deltas
-inline std::vector<std::string> delta_test_strings(int n, bool shared_prefixes, uint64_t seed = 201)
+// alphanumeric strings with lengths varying in [1, max_length]; with shared_prefixes, each
+// string keeps a random-length prefix of its predecessor so the DELTA_BYTE_ARRAY prefix-length
+// stream also has varying non-zero deltas
+inline std::vector<std::string> delta_test_strings(int n,
+                                                   bool shared_prefixes,
+                                                   uint64_t seed     = 201,
+                                                   size_t max_length = 20)
 {
   constexpr char alphabet[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   std::vector<std::string> out;
   out.reserve(n);
   std::string prev;
   for (int i = 0; i < n; i++) {
-    auto const length = 1 + static_cast<size_t>(delta_test_rand(seed) % 20);
+    auto const length = 1 + static_cast<size_t>(delta_test_rand(seed) % max_length);
     std::string s;
     if (shared_prefixes && !prev.empty()) {
       auto const keep = delta_test_rand(seed) % (std::min(prev.size(), length) + 1);
@@ -446,34 +449,47 @@ inline std::vector<uint8_t> encode_levels_bit_packed(std::vector<int> const& lev
   return out;
 }
 
-inline std::vector<uint8_t> build_delta_binary_list_parquet(
-  std::vector<std::vector<int64_t>> const& lists, int block_size, int mini_block_count)
+// per-value repetition/definition levels for a list column with the shape given by `sizes`
+// (max_def_level 3, max_rep_level 1, no null lists or elements -- empty lists only)
+struct list_levels {
+  std::vector<int> rep;
+  std::vector<int> def;
+  int num_nulls = 0;
+};
+
+inline list_levels compute_list_levels(std::vector<size_t> const& sizes)
+{
+  list_levels out;
+  for (auto const size : sizes) {
+    if (size == 0) {  // empty list: one level entry, def < max_def, no leaf value
+      out.rep.push_back(0);
+      out.def.push_back(1);
+      out.num_nulls++;
+      continue;
+    }
+    for (size_t j = 0; j < size; j++) {
+      out.rep.push_back(j == 0 ? 0 : 1);
+      out.def.push_back(3);
+    }
+  }
+  return out;
+}
+
+// V2 data page + footer around the encoded `values` of a single list column "col" of leaf
+// "element" with the given physical type and encoding
+inline std::vector<uint8_t> wrap_single_page_list_parquet(list_levels const& levels,
+                                                          int num_rows,
+                                                          std::vector<uint8_t> const& values,
+                                                          int leaf_physical_type,
+                                                          int encoding,
+                                                          bool utf8)
 {
   namespace pq = parquet_delta_test;
 
-  std::vector<int64_t> leaf_values;
-  std::vector<int> rep_levels, def_levels;
-  int num_nulls = 0;
-  for (auto const& list : lists) {
-    if (list.empty()) {  // empty list: one level entry, def < max_def, no leaf value
-      rep_levels.push_back(0);
-      def_levels.push_back(1);
-      num_nulls++;
-      continue;
-    }
-    for (size_t j = 0; j < list.size(); j++) {
-      rep_levels.push_back(j == 0 ? 0 : 1);
-      def_levels.push_back(3);
-      leaf_values.push_back(list[j]);
-    }
-  }
-  auto const num_values = static_cast<int>(rep_levels.size());
-  auto const num_rows   = static_cast<int>(lists.size());
-
-  auto const rep       = encode_levels_bit_packed(rep_levels, 1);  // max_rep_level 1
-  auto const dfn       = encode_levels_bit_packed(def_levels, 2);  // max_def_level 3
-  auto const values    = encode_delta_binary_packed(leaf_values, block_size, mini_block_count);
-  auto const page_size = static_cast<int64_t>(rep.size() + dfn.size() + values.size());
+  auto const num_values = static_cast<int>(levels.rep.size());
+  auto const rep        = encode_levels_bit_packed(levels.rep, 1);  // max_rep_level 1
+  auto const dfn        = encode_levels_bit_packed(levels.def, 2);  // max_def_level 3
+  auto const page_size  = static_cast<int64_t>(rep.size() + dfn.size() + values.size());
 
   thrift_compact_writer ph;
   int p = ph.i32(0, 1, pq::page_type_data_page_v2);
@@ -481,9 +497,9 @@ inline std::vector<uint8_t> build_delta_binary_list_parquet(
   p     = ph.i32(p, 3, page_size);
   p     = ph.field(p, 8, thrift_compact_writer::t_struct);  // data_page_header_v2
   int d = ph.i32(0, 1, num_values);
-  d     = ph.i32(d, 2, num_nulls);
+  d     = ph.i32(d, 2, levels.num_nulls);
   d     = ph.i32(d, 3, num_rows);
-  d     = ph.i32(d, 4, pq::enc_delta_binary);
+  d     = ph.i32(d, 4, encoding);
   d     = ph.i32(d, 5, dfn.size());  // definition_levels_byte_length
   d     = ph.i32(d, 6, rep.size());  // repetition_levels_byte_length
   d     = ph.boolean(d, 7, false);   // is_compressed
@@ -519,10 +535,11 @@ inline std::vector<uint8_t> build_delta_binary_list_parquet(
     g     = fm.i32(g, 5, 1);
     fm.stop();
   }
-  {  // optional int64 "element"
-    int e = fm.i32(0, 1, pq::type_int64);
+  {  // optional leaf "element"
+    int e = fm.i32(0, 1, leaf_physical_type);
     e     = fm.i32(e, 3, pq::rep_optional);
     e     = fm.binary(e, 4, "element");
+    if (utf8) { e = fm.i32(e, 6, pq::converted_utf8); }
     fm.stop();
   }
   f = fm.i64(f, 3, num_rows);
@@ -533,11 +550,11 @@ inline std::vector<uint8_t> build_delta_binary_list_parquet(
   int cc = fm.i64(0, 2, data_page_offset);
   cc     = fm.field(cc, 3, thrift_compact_writer::t_struct);  // meta_data
   {
-    int cm = fm.i32(0, 1, pq::type_int64);
+    int cm = fm.i32(0, 1, leaf_physical_type);
     cm     = fm.field(cm, 2, thrift_compact_writer::t_list);  // encodings
     fm.list_header(2, thrift_compact_writer::t_i32);
     fm.raw_i32(pq::enc_rle);
-    fm.raw_i32(pq::enc_delta_binary);
+    fm.raw_i32(encoding);
     cm = fm.field(cm, 3, thrift_compact_writer::t_list);  // path_in_schema
     fm.list_header(3, thrift_compact_writer::t_binary);
     fm.raw_binary("col");
@@ -569,6 +586,108 @@ inline std::vector<uint8_t> build_delta_binary_list_parquet(
     out.push_back((flen >> (8 * i)) & 0xff);
   }
   out.insert(out.end(), {'P', 'A', 'R', '1'});
+  return out;
+}
+
+inline std::vector<uint8_t> build_delta_binary_list_parquet(
+  std::vector<std::vector<int64_t>> const& lists, int block_size, int mini_block_count)
+{
+  std::vector<size_t> sizes(lists.size());
+  std::vector<int64_t> leaf_values;
+  for (size_t i = 0; i < lists.size(); i++) {
+    sizes[i] = lists[i].size();
+    leaf_values.insert(leaf_values.end(), lists[i].begin(), lists[i].end());
+  }
+  auto const values = encode_delta_binary_packed(leaf_values, block_size, mini_block_count);
+  return wrap_single_page_list_parquet(compute_list_levels(sizes),
+                                       lists.size(),
+                                       values,
+                                       parquet_delta_test::type_int64,
+                                       parquet_delta_test::enc_delta_binary,
+                                       false);
+}
+
+// complete file: one LIST<STRING> column, leaf strings DELTA_LENGTH_BYTE_ARRAY encoded
+inline std::vector<uint8_t> build_delta_length_byte_array_list_parquet(
+  std::vector<std::vector<std::string>> const& lists, int block_size, int mini_block_count)
+{
+  std::vector<size_t> sizes(lists.size());
+  std::vector<int64_t> lengths;
+  std::string chars;
+  for (size_t i = 0; i < lists.size(); i++) {
+    sizes[i] = lists[i].size();
+    for (auto const& s : lists[i]) {
+      lengths.push_back(s.size());
+      chars += s;
+    }
+  }
+  auto body = encode_delta_binary_packed(lengths, block_size, mini_block_count);
+  body.insert(body.end(), chars.begin(), chars.end());
+  return wrap_single_page_list_parquet(compute_list_levels(sizes),
+                                       lists.size(),
+                                       body,
+                                       parquet_delta_test::type_byte_array,
+                                       parquet_delta_test::enc_delta_length_ba,
+                                       true);
+}
+
+// complete file: one LIST<STRING> column, leaf strings DELTA_BYTE_ARRAY (front compression)
+// encoded over the flattened string sequence
+inline std::vector<uint8_t> build_delta_byte_array_list_parquet(
+  std::vector<std::vector<std::string>> const& lists, int block_size, int mini_block_count)
+{
+  std::vector<size_t> sizes(lists.size());
+  std::vector<int64_t> prefix_lens, suffix_lens;
+  std::string suffix_bytes;
+  std::string prev;
+  for (size_t i = 0; i < lists.size(); i++) {
+    sizes[i] = lists[i].size();
+    for (auto const& s : lists[i]) {
+      size_t lcp     = 0;
+      auto const end = std::min(prev.size(), s.size());
+      while (lcp < end && prev[lcp] == s[lcp]) {
+        lcp++;
+      }
+      prefix_lens.push_back(lcp);
+      suffix_lens.push_back(s.size() - lcp);
+      suffix_bytes.append(s, lcp, std::string::npos);
+      prev = s;
+    }
+  }
+  auto body                = encode_delta_binary_packed(prefix_lens, block_size, mini_block_count);
+  auto const suffix_stream = encode_delta_binary_packed(suffix_lens, block_size, mini_block_count);
+  body.insert(body.end(), suffix_stream.begin(), suffix_stream.end());
+  body.insert(body.end(), suffix_bytes.begin(), suffix_bytes.end());
+  return wrap_single_page_list_parquet(compute_list_levels(sizes),
+                                       lists.size(),
+                                       body,
+                                       parquet_delta_test::type_byte_array,
+                                       parquet_delta_test::enc_delta_ba,
+                                       true);
+}
+
+// lists of alphanumeric strings with the same shape as delta_test_lists (varying lengths 1..8,
+// empties mixed in, a trailing empty list); the flattened string sequence comes from
+// delta_test_strings so prefix and suffix lengths vary
+inline std::vector<std::vector<std::string>> delta_test_string_lists(int n_lists,
+                                                                     bool shared_prefixes,
+                                                                     uint64_t seed     = 501,
+                                                                     size_t max_length = 20)
+{
+  std::vector<size_t> lengths(n_lists);
+  size_t n_leaf = 0;
+  for (int i = 0; i < n_lists; i++) {
+    bool const empty = (i + 1 == n_lists) || delta_test_rand(seed) % 6 == 0;
+    lengths[i]       = empty ? 0 : 1 + delta_test_rand(seed) % 8;
+    n_leaf += lengths[i];
+  }
+  auto const strings = delta_test_strings(n_leaf, shared_prefixes, seed, max_length);
+  std::vector<std::vector<std::string>> out(n_lists);
+  size_t pos = 0;
+  for (int i = 0; i < n_lists; i++) {
+    out[i].assign(strings.begin() + pos, strings.begin() + pos + lengths[i]);
+    pos += lengths[i];
+  }
   return out;
 }
 
