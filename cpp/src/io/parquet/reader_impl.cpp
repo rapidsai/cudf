@@ -805,7 +805,7 @@ std::vector<size_t> reader_impl::calculate_output_num_rows_per_source(size_t con
 std::optional<std::vector<std::string>> reader_impl::get_column_projection(
   parquet_reader_options const& options) const
 {
-  auto const ignore_missing_columns = compute_ignore_missing_columns(options);
+  auto const ignore_missing_columns = ignore_missing_columns_policy(options);
 
   auto const has_column_names     = options.get_column_names().has_value();
   auto const has_column_indices   = options.get_column_indices().has_value();
@@ -884,7 +884,7 @@ column_selection_options reader_impl::make_column_selection_options(
     .selection_mode         = selection_mode,
     .include_index          = options.is_enabled_use_pandas_metadata(),
     .strings_to_categorical = options.is_enabled_convert_strings_to_categories(),
-    .ignore_missing_columns = compute_ignore_missing_columns(options),
+    .ignore_missing_columns = ignore_missing_columns_policy(options),
     .timestamp_type_id      = options.get_timestamp_type().id(),
     .decimal_type_id        = options.get_decimal_width(),
     .case_sensitive_names   = options.is_enabled_case_sensitive_names()};

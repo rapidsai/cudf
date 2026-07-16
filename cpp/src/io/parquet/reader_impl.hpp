@@ -402,7 +402,7 @@ class reader_impl {
    * @param options Reader options
    * @return Effective `ignore_missing_columns` value
    */
-  [[nodiscard]] bool compute_ignore_missing_columns(parquet_reader_options const& options) const
+  [[nodiscard]] bool ignore_missing_columns_policy(parquet_reader_options const& options) const
   {
     return options.is_enabled_ignore_missing_columns() and
            not(has_cols_from_mismatched_sources(options) and _metadata->get_num_sources() > 1);
