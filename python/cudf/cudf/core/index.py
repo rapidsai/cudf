@@ -818,28 +818,22 @@ class Index(SingleColumnFrame):
             for idx in (self, other)
         )
 
-        if not dtype_ignored and cudf.get_option("mode.pandas_compatible"):
+        if not dtype_ignored:
             # Cache dtype.kind to avoid repeated attribute access
             self_kind = self.dtype.kind
             other_kind = other.dtype.kind
 
-            if (self_kind == "b" and other_kind != "b") or (
-                self_kind != "b" and other_kind == "b"
-            ):
-                # Bools + other types will result in mixed type.
-                # This is not yet consistent in pandas and specific to APIs.
-                raise MixedTypeError("Cannot perform union with mixed types")
-            if (self_kind == "i" and other_kind == "u") or (
-                self_kind == "u" and other_kind == "i"
-            ):
-                # signed + unsigned types will result in
-                # mixed type for union in pandas.
-                raise MixedTypeError("Cannot perform union with mixed types")
             if (
-                self_kind in "Mm" or other_kind in "Mm"
-            ) and self_kind != other_kind:
-                # datetime/timedelta + any other type results in
-                # object dtype for union in pandas.
+                (self_kind in "Mm" or other_kind in "Mm")
+                and self_kind != other_kind
+                and not isinstance(self.dtype, CategoricalDtype)
+                and not isinstance(other.dtype, CategoricalDtype)
+            ):
+                # datetime/timedelta + any other kind results in object
+                # dtype for union in pandas, which cudf cannot represent;
+                # the non-empty merge path already refuses these pairs.
+                # Categorical operands are excluded because the merge
+                # decategorizes them, matching pandas.
                 raise MixedTypeError("Cannot perform union with mixed types")
             if (
                 self_kind == "M"
@@ -849,6 +843,25 @@ class Index(SingleColumnFrame):
             ):
                 # tz-naive + tz-aware results in object dtype in pandas.
                 raise MixedTypeError("Cannot perform union with mixed types")
+
+            if cudf.get_option("mode.pandas_compatible"):
+                if (self_kind == "b" and other_kind != "b") or (
+                    self_kind != "b" and other_kind == "b"
+                ):
+                    # Bools + other types will result in mixed type.
+                    # This is not yet consistent in pandas and specific
+                    # to APIs.
+                    raise MixedTypeError(
+                        "Cannot perform union with mixed types"
+                    )
+                if (self_kind == "i" and other_kind == "u") or (
+                    self_kind == "u" and other_kind == "i"
+                ):
+                    # signed + unsigned types will result in
+                    # mixed type for union in pandas.
+                    raise MixedTypeError(
+                        "Cannot perform union with mixed types"
+                    )
 
         # pandas reconciles mismatched dtypes to their common type before
         # short-circuiting on an empty operand, so the result dtype must
