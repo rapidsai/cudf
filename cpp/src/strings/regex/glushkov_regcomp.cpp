@@ -288,9 +288,8 @@ bool positions_chars_overlap(gkprog const& gp, uint32_t const p, uint32_t const 
  */
 bool frontier_has_priority_conflict(std::vector<frontier_item> const& items, gkprog const& gp)
 {
-  // Rule 1: ACCEPT before a later CHAR_POS. An ACCEPT-only frontier and a
-  // frontier ending in ACCEPT (the normal "end of pattern" case) are not
-  // priority conflicts.
+  // Rule 1: ACCEPT before a later CHAR_POS. A frontier ending in ACCEPT (the
+  // normal "end of pattern" case) is not a priority conflict.
   bool seen_accept = false;
   for (auto const& item : items) {
     if (item.kind == frontier_item::ACCEPT) { seen_accept = true; }
