@@ -34,27 +34,18 @@ namespace {
 }
 
 // Reads a bracket step "[<non-negative integer>]" from the front of `tail`.
-// The returned token keeps its brackets (e.g. "[42]"): the GPU-side path walker tells array-index
-// steps apart from object-key steps by their leading '[' and re-parses the index from the token.
+// The returned token keeps its brackets (e.g. "[42]").
 [[nodiscard]] std::string read_bracket_step(std::string_view tail)
 {
-  // tail[0] is '['; the index digits start at tail[1].
-  CUDF_EXPECTS(tail.size() >= 2, "unterminated '[' in variant path", std::invalid_argument);
-  CUDF_EXPECTS(
-    tail[1] != '*', "variant path wildcard '[*]' is not supported", std::invalid_argument);
-  CUDF_EXPECTS(
-    tail[1] != '-', "negative variant path index is not supported", std::invalid_argument);
-  CUDF_EXPECTS(tail[1] != '\'' && tail[1] != '"',
-               "quoted names in '[...]' are not supported",
-               std::invalid_argument);
-
-  // Consume the maximal run of decimal digits. Leading zeros are allowed and carry no special
-  // meaning.
+  // tail[0] is '['; index digits (if any) start at tail[1]. Consume the maximal run of decimal
+  // digits. Leading zeros are allowed and carry no special meaning. Anything else (an empty "[]",
+  // wildcards, negative signs, quoted names, ...) leaves n == 1 and is rejected below.
   std::size_t n = 1;
   while (n < tail.size() && tail[n] >= '0' && tail[n] <= '9') {
     ++n;
   }
-  CUDF_EXPECTS(n != 1, "expected non-negative integer after '['", std::invalid_argument);
+  CUDF_EXPECTS(
+    n != 1, "expected non-negative integer after '[' in variant path", std::invalid_argument);
 
   // Reject indices that cannot be a valid array position (don't fit in cudf::size_type), so the
   // GPU-side path walker never has to handle an out-of-range value.
@@ -63,8 +54,10 @@ namespace {
   CUDF_EXPECTS(
     result.ec == std::errc{}, "variant path index is out of range", std::invalid_argument);
 
-  CUDF_EXPECTS(
-    n < tail.size() && tail[n] == ']', "expected ']' after index", std::invalid_argument);
+  // A missing ']' here also covers an unterminated '[' that runs off the end of the path.
+  CUDF_EXPECTS(n < tail.size() && tail[n] == ']',
+               "expected ']' to close variant path index",
+               std::invalid_argument);
   return std::string{tail.substr(0, n + 1)};  // include the closing ']'
 }
 
