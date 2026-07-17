@@ -148,6 +148,15 @@ auto chunked_read(std::string const& filepath,
   return chunked_read(filepath, output_limit_bytes, input_limit{0UL}, output_granularity);
 }
 
+void expect_selected_nested_empty_struct_table(cudf::table_view expected, cudf::table_view actual)
+{
+  ASSERT_EQ(1, actual.num_columns());
+  ASSERT_EQ(1, actual.column(0).num_children());
+  ASSERT_EQ(cudf::type_id::STRUCT, actual.column(0).child(0).type().id());
+  ASSERT_EQ(0, actual.column(0).child(0).num_children());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, actual);
+}
+
 void expect_selected_nested_empty_struct_round_trip(std::unique_ptr<cudf::column> input_column,
                                                     std::string const& filename)
 {
@@ -166,18 +175,20 @@ void expect_selected_nested_empty_struct_round_trip(std::unique_ptr<cudf::column
       .build();
   cudf::io::write_orc(write_opts);
 
-  auto const read_opts = cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath})
-                           .columns({"name"})
-                           .build();
-  auto reader = cudf::io::chunked_orc_reader(1'000, 0, 10'000, read_opts);
+  auto const make_read_opts = [&filepath] {
+    return cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath})
+      .columns({"name"})
+      .build();
+  };
+
+  auto result = cudf::io::read_orc(make_read_opts());
+  expect_selected_nested_empty_struct_table(expected->view(), result.tbl->view());
+
+  auto reader = cudf::io::chunked_orc_reader(1'000, 0, 10'000, make_read_opts());
   auto chunk  = reader.read_chunk();
 
   EXPECT_FALSE(reader.has_next());
-  ASSERT_EQ(1, chunk.tbl->num_columns());
-  ASSERT_EQ(1, chunk.tbl->view().column(0).num_children());
-  ASSERT_EQ(cudf::type_id::STRUCT, chunk.tbl->view().column(0).child(0).type().id());
-  ASSERT_EQ(0, chunk.tbl->view().column(0).child(0).num_children());
-  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *chunk.tbl);
+  expect_selected_nested_empty_struct_table(expected->view(), chunk.tbl->view());
 }
 
 }  // namespace
@@ -202,8 +213,8 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadNoData)
 
 TEST_F(OrcChunkedReaderTest, NestedEmptyStructColumnSelection)
 {
-  cudf::size_type constexpr num_rows = 2;
-  auto const validity                = std::vector<bool>{true, false};
+  auto const validity = std::vector<bool>{true, false};
+  auto const num_rows = static_cast<cudf::size_type>(validity.size());
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(validity.begin(), validity.end());
 
@@ -223,8 +234,8 @@ TEST_F(OrcChunkedReaderTest, NestedEmptyStructColumnSelection)
 
 TEST_F(OrcChunkedReaderTest, NullableEmptyStructChildColumnSelection)
 {
-  cudf::size_type constexpr num_rows = 2;
-  auto const validity                = std::vector<bool>{true, false};
+  auto const validity = std::vector<bool>{true, false};
+  auto const num_rows = static_cast<cudf::size_type>(validity.size());
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(validity.begin(), validity.end());
 
