@@ -399,7 +399,7 @@ class QuentContext:
         This emits the following events:
 
         - queueing
-        - allocating
+        - allocating (with the Quent Processor for the current thread)
         - loading (I/O nodes only)
         - computing (non-I/O nodes only)
         """
@@ -440,6 +440,9 @@ class QuentContext:
         """
         Build and emit Quent events for the end of an IR node's evaluation.
 
+        The timestamp here represents when the IR node completed **host**-side
+        processing.  Work work may be happening asynchronously on the GPU.
+
         Parameters
         ----------
         ir_type: type[IR]
@@ -459,14 +462,10 @@ class QuentContext:
 
         Notes
         -----
-        This method emits an ``Exit`` event for the Quent Task, whose timestamp represents
-        when the IR node completed host-side processing.
+        This emits the following events:
 
-        The Quent Task FSM only permits a task to exit from the ``Computing``
-        state. Non-I/O nodes already entered ``Computing`` in
-        :meth:`_emit_task_begin_events`. I/O nodes were left in ``Allocating``
-        during the load; here they transition through ``Loading`` (with byte
-        counts), ``Computing``, and ``Exit``.
+        - computing (I/O nodes only)
+        - exit
         """
         if quent_ir_execution_context is None:  # pragma: no cover;
             return
