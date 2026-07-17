@@ -270,11 +270,6 @@ class aggregate_reader_metadata {
   void column_info_for_row_group(row_group_info& rg_info, size_t chunk_start_row) const;
 
   /**
-   * @brief Returns the required alignment for bloom filter buffers
-   */
-  [[nodiscard]] size_t get_bloom_filter_alignment() const;
-
-  /**
    * @brief Reads bloom filter bitsets for the specified columns from the given lists of row
    * groups.
    *
@@ -283,7 +278,7 @@ class aggregate_reader_metadata {
    * @param column_schemas Schema indices of columns whose bloom filters will be read
    * @param num_row_groups Number of row groups in the file
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param aligned_mr Aligned device memory resource to allocate bloom filter buffers
+   * @param mr Device memory resource used to allocate bloom filter buffers
    *
    * @return A pair of the device buffers backing the bloom filter bitsets and a flattened,
    * per-chunk list of bitset device spans (empty spans for chunks without a bloom filter)
@@ -295,7 +290,7 @@ class aggregate_reader_metadata {
                      host_span<int const> column_schemas,
                      size_type num_row_groups,
                      rmm::cuda_stream_view stream,
-                     rmm::device_async_resource_ref aligned_mr) const;
+                     rmm::device_async_resource_ref mr) const;
 
   /**
    * @brief Collects Parquet types for the columns with the specified schema indices

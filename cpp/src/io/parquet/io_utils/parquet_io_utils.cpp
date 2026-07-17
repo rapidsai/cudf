@@ -468,13 +468,14 @@ fetch_bloom_filters_to_device_impl(
   cudf::host_span<cudf::host_span<cudf::io::text::byte_range_info const> const>
     bloom_filter_byte_ranges_per_source,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref aligned_mr)
+  rmm::device_async_resource_ref mr)
 {
   auto const num_sources = datasources.size();
   CUDF_EXPECTS(num_sources == bloom_filter_byte_ranges_per_source.size(),
                "Encountered mismatch in number of datasources and bloom filter byte range spans");
 
   // Each bitset must align to 32-byte boundaries, as required by cuco's Arrow bloom filter bitsets.
+  // TODO(NVIDIA/cuCollections#829): replace with a cuco-provided block-size / alignment accessor.
   auto constexpr bloom_filter_block_bytes = std::size_t{32};
 
   auto const total_filters =
@@ -568,7 +569,7 @@ fetch_bloom_filters_to_device_impl(
     });
 
   // Phase 3: one device buffer holds every bitset
-  rmm::device_buffer bitset_buffer(total_device_size, stream, aligned_mr);
+  rmm::device_buffer bitset_buffer(total_device_size, bloom_filter_block_bytes, stream, mr);
   auto* const device_base = static_cast<uint8_t*>(bitset_buffer.data());
 
   // Resolve deferred bitset reads
@@ -743,7 +744,7 @@ fetch_bloom_filters_to_device(
   cudf::io::datasource& datasource,
   cudf::host_span<cudf::io::text::byte_range_info const> bloom_filter_byte_ranges,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref aligned_mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -756,7 +757,7 @@ fetch_bloom_filters_to_device(
     {datasources.data(), datasources.size()},
     {bloom_filter_byte_ranges_per_source.data(), bloom_filter_byte_ranges_per_source.size()},
     stream,
-    aligned_mr);
+    mr);
 
   return {std::move(buffers), std::move(fetched_byte_ranges.front())};
 }
@@ -768,7 +769,7 @@ fetch_bloom_filters_to_device(
   cudf::host_span<std::vector<cudf::io::text::byte_range_info> const>
     bloom_filter_byte_ranges_per_source,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref aligned_mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -783,7 +784,7 @@ fetch_bloom_filters_to_device(
                                             {bloom_filter_byte_range_spans_per_source.data(),
                                              bloom_filter_byte_range_spans_per_source.size()},
                                             stream,
-                                            aligned_mr);
+                                            mr);
 }
 
 }  // namespace cudf::io::parquet

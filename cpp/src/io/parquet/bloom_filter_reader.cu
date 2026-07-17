@@ -327,19 +327,6 @@ std::optional<std::pair<int64_t, std::size_t>> parse_bloom_filter_header(
                    static_cast<std::size_t>(header.num_bytes)};
 }
 
-std::size_t aggregate_reader_metadata::get_bloom_filter_alignment() const
-{
-  // Required alignment:
-  // https://github.com/NVIDIA/cuCollections/blob/deab5799f3e4226cb8a49acf2199c03b14941ee4/include/cuco/detail/bloom_filter/bloom_filter_impl.cuh#L55-L67
-  using policy_type        = arrow_filter_policy<cuda::std::byte>;
-  auto constexpr alignment = alignof(cuco::bloom_filter_ref<cuda::std::byte,
-                                                            cuco::extent<std::size_t>,
-                                                            cuco::thread_scope_thread,
-                                                            policy_type>::filter_block_type);
-  static_assert((alignment & (alignment - 1)) == 0, "Alignment must be a power of 2");
-  return std::max<std::size_t>(alignment, rmm::CUDA_ALLOCATION_ALIGNMENT);
-}
-
 std::pair<std::vector<rmm::device_buffer>, std::vector<cudf::device_span<cuda::std::byte const>>>
 aggregate_reader_metadata::read_bloom_filters(
   host_span<std::unique_ptr<datasource> const> sources,
@@ -347,7 +334,7 @@ aggregate_reader_metadata::read_bloom_filters(
   host_span<int const> column_schemas,
   size_type total_row_groups,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref aligned_mr) const
+  rmm::device_async_resource_ref mr) const
 {
   // Descriptors for all the chunks that make up the selected columns
   auto const num_input_columns = column_schemas.size();
@@ -405,8 +392,8 @@ aggregate_reader_metadata::read_bloom_filters(
       return std::ref(*source);
     });
 
-  auto [bloom_filter_buffers, bitset_spans_per_source] = fetch_bloom_filters_to_device(
-    datasource_refs, bloom_filter_byte_ranges_per_source, stream, aligned_mr);
+  auto [bloom_filter_buffers, bitset_spans_per_source] =
+    fetch_bloom_filters_to_device(datasource_refs, bloom_filter_byte_ranges_per_source, stream, mr);
 
   // Flatten the per-source bitset spans into per-chunk order
   std::vector<cudf::device_span<cuda::std::byte const>> bloom_filter_data;

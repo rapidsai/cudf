@@ -18,8 +18,6 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/mr/aligned_resource_adaptor.hpp>
-
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
@@ -319,10 +317,6 @@ aggregate_reader_metadata::filter_row_groups(
             {std::make_optional(num_stats_filtered_row_groups), std::nullopt}};
   }
 
-  // Aligned resource adaptor to allocate bloom filter buffers with
-  auto aligned_mr = rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource_ref(),
-                                                      get_bloom_filter_alignment());
-
   // Read a vector of bloom filter bitset device buffers for all columns with equality
   // predicate(s) across all row groups
   auto const [bloom_filter_buffers, bloom_filter_data] =
@@ -331,7 +325,7 @@ aggregate_reader_metadata::filter_row_groups(
                        equality_col_schemas,
                        num_stats_filtered_row_groups,
                        stream,
-                       aligned_mr);
+                       cudf::get_current_device_resource_ref());
 
   // No bloom filters, return early
   if (bloom_filter_data.empty()) {
