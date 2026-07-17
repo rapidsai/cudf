@@ -808,7 +808,17 @@ class Index(SingleColumnFrame):
                 f"[None, False, True]; {sort} was passed."
             )
 
-        if cudf.get_option("mode.pandas_compatible"):
+        # pandas ignores the dtype of a zero-length RangeIndex or
+        # object-dtype operand when reconciling dtypes for union
+        # (pandas-dev/pandas#60797), so such operands must neither
+        # trigger mixed-type errors nor dtype promotion.
+        dtype_ignored = any(
+            len(idx) == 0
+            and (isinstance(idx, RangeIndex) or idx.dtype == np.dtype(object))
+            for idx in (self, other)
+        )
+
+        if not dtype_ignored and cudf.get_option("mode.pandas_compatible"):
             # Cache dtype.kind to avoid repeated attribute access
             self_kind = self.dtype.kind
             other_kind = other.dtype.kind
@@ -825,9 +835,48 @@ class Index(SingleColumnFrame):
                 # signed + unsigned types will result in
                 # mixed type for union in pandas.
                 raise MixedTypeError("Cannot perform union with mixed types")
+            if (
+                self_kind in "Mm" or other_kind in "Mm"
+            ) and self_kind != other_kind:
+                # datetime/timedelta + any other type results in
+                # object dtype for union in pandas.
+                raise MixedTypeError("Cannot perform union with mixed types")
+            if (
+                self_kind == "M"
+                and other_kind == "M"
+                and isinstance(self.dtype, pd.DatetimeTZDtype)
+                != isinstance(other.dtype, pd.DatetimeTZDtype)
+            ):
+                # tz-naive + tz-aware results in object dtype in pandas.
+                raise MixedTypeError("Cannot perform union with mixed types")
+
+        # pandas reconciles mismatched dtypes to their common type before
+        # short-circuiting on an empty operand, so the result dtype must
+        # not depend on which operand is empty.
+        promote_dtype: Dtype | None = None
+        if not dtype_ignored and self.dtype != other.dtype:
+            if is_dtype_obj_numeric(
+                self.dtype, include_decimal=False
+            ) and is_dtype_obj_numeric(other.dtype, include_decimal=False):
+                common_dtype = find_common_type([self.dtype, other.dtype])
+                # Mixed-backend pairs can only reconcile to object; never
+                # promote numeric values through a lossy object cast.
+                if is_dtype_obj_numeric(common_dtype, include_decimal=False):
+                    promote_dtype = common_dtype
+            elif (
+                isinstance(self.dtype, np.dtype)
+                and isinstance(other.dtype, np.dtype)
+                and self.dtype.kind == other.dtype.kind
+                and self.dtype.kind in "Mm"
+            ):
+                # Same-kind datetime/timedelta dtypes only differ in
+                # unit; reconcile to the common resolution.
+                promote_dtype = find_common_type([self.dtype, other.dtype])
 
         if not len(other):
             res = self._get_reconciled_name_object(other)
+            if promote_dtype is not None:
+                res = res.astype(promote_dtype)
             if sort:
                 return res.sort_values()  # type: ignore[return-value]
             return res
@@ -839,6 +888,8 @@ class Index(SingleColumnFrame):
             return res
         elif not len(self):
             res = other._get_reconciled_name_object(self)
+            if promote_dtype is not None:
+                res = res.astype(promote_dtype)
             if sort:
                 return res.sort_values()
             return res
@@ -3040,11 +3091,22 @@ class RangeIndex(Index):
             return index
         # Evenly spaced values can return a
         # RangeIndex instead of a materialized Index.
-        if not index._column.has_nulls() and len(index) > 1:
-            uniques = cupy.unique(cupy.diff(index.values))
-            if len(uniques) == 1 and (diff := uniques[0].get()) != 0:
-                new_range = range(index[0], index[-1] + diff, diff)
-                return type(self)(new_range, name=index.name)
+        if not index._column.has_nulls():
+            if len(index) > 1:
+                uniques = cupy.unique(cupy.diff(index.values))
+                if len(uniques) == 1 and (diff := uniques[0].get()) != 0:
+                    new_range = range(index[0], index[-1] + diff, diff)
+                    return type(self)(new_range, name=index.name)
+            elif index.dtype == np.dtype(np.int64):
+                # 0- and 1-element results are always representable as a
+                # range, but only when int64: a narrower dtype means the
+                # result was deliberately materialized (e.g. under
+                # default_integer_bitwidth) and must be preserved.
+                if len(index) == 0:
+                    return type(self)(range(0), name=index.name)
+                start = int(index[0])
+                if start < np.iinfo(np.int64).max:
+                    return type(self)(range(start, start + 1), name=index.name)
         return index
 
     def sort_values(
