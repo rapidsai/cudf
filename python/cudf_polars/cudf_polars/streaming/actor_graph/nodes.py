@@ -87,6 +87,9 @@ async def default_node_single(
             ),
             duplicated=metadata_in.duplicated,
         )
+        import dataclasses
+
+        ir_context = dataclasses.replace(ir_context, tracer=tracer)
 
         # Process chunks (handle empty input for aggregation-like operations)
         await chunkwise_evaluate(

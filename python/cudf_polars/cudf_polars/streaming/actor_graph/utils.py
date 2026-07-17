@@ -347,16 +347,16 @@ async def shutdown_on_error(
                     output_rows = 0
                 else:
                     output_rows = tracer.row_count
-                quent_ir_execution_context.logger.emit(
-                    quent_ir_execution_context.quent_operator.statistics(
-                        statistics=cudf_polars.quent._types.Statistics(
-                            output_rows=output_rows,
-                            input_bytes=tracer.input_bytes,
-                            output_bytes=tracer.output_bytes,
-                            custom_attributes=custom_attributes,
-                        )
+                stats = quent_ir_execution_context.quent_operator.statistics(
+                    statistics=cudf_polars.quent._types.Statistics(
+                        output_rows=output_rows,
+                        input_bytes=tracer.input_bytes,
+                        output_bytes=tracer.output_bytes,
+                        custom_attributes=custom_attributes,
                     )
                 )
+
+                quent_ir_execution_context.logger.emit(stats)
 
 
 def _update_ordering_indices(

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import functools
 import io
 import math
@@ -281,7 +282,9 @@ async def dataframescan_node(
             await ch_out.drain(context)
 
         async with (
-            shutdown_on_error(context, *lineariser.input_channels, trace_ir=ir),
+            shutdown_on_error(
+                context, *lineariser.input_channels, trace_ir=ir, ir_context=ir_context
+            ),
         ):
             await gather_in_task_group(
                 lineariser.drain(),
@@ -536,6 +539,9 @@ async def read_chunk(
             context, size=estimated_chunk_bytes, net_memory_delta=estimated_chunk_bytes
         )
     ):
+        if ir_context.tracer is None:
+            ir_context = dataclasses.replace(ir_context, tracer=tracer)
+            assert ir_context.tracer is not None
         df = await ir_context.to_thread(
             scan.do_evaluate,
             *scan._non_child_args,
@@ -585,6 +591,7 @@ async def scan_node(
         context, ch_out, trace_ir=ir, ir_context=ir_context
     ) as tracer:
         # Send basic metadata
+        ir_context = dataclasses.replace(ir_context, tracer=tracer)
         await send_metadata(
             ch_out,
             context,
@@ -639,7 +646,9 @@ async def scan_node(
             await ch_out.drain(context)
 
         async with (
-            shutdown_on_error(context, *lineariser.input_channels, trace_ir=ir),
+            shutdown_on_error(
+                context, *lineariser.input_channels, trace_ir=ir, ir_context=ir_context
+            ),
         ):
             await gather_in_task_group(
                 lineariser.drain(),

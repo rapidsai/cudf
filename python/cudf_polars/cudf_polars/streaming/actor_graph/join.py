@@ -282,6 +282,11 @@ async def _broadcast_join_large_chunk(
 
     join_results: list[DataFrame] = []
     input_bytes = large_chunk_size + small_size
+
+    import dataclasses
+
+    ir_context = dataclasses.replace(ir_context, tracer=tracer)
+
     with opaque_memory_usage(
         await reserve_memory(context, size=input_bytes, net_memory_delta=0)
     ):
