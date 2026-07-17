@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 import polars as pl
+from polars.testing import assert_frame_equal
 
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
@@ -228,8 +229,24 @@ def test_hash(engine: pl.GPUEngine, seeds: tuple[int, ...]) -> None:
         }
     )
     q = df.select(pl.col("a").hash(*seeds), pl.col("b").hash(*seeds))
+    # CPU vs GPU hash implementations not guaranteed to be the same
+    # Check alignment of result type, stability across GPU collect calls
     result = q.collect(engine=engine)
     assert result.schema == {"a": pl.UInt64, "b": pl.UInt64}
+    next_result = q.collect(engine=engine)
+    assert_frame_equal(result, next_result)
+
+
+def test_hash_seed_sensitivity(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": pl.Series([1, 2, 3, None], dtype=pl.Int64)})
+    q = df.select(
+        same_a=pl.col("a").hash(0, 1, 2, 3),
+        same_b=pl.col("a").hash(0, 1, 2, 3),
+        diff_tail=pl.col("a").hash(0, 4, 5, 6),
+    )
+    result = q.collect(engine=engine)
+    assert result["same_a"].equals(result["same_b"])
+    assert not result["same_a"].equals(result["diff_tail"])
 
 
 def test_atan2_unsupported(engine: pl.GPUEngine) -> None:

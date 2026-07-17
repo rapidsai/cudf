@@ -490,7 +490,7 @@ class UnaryFunction(Expr):
             )
         if self.name == "hash":
             column = self.children[0].evaluate(df, context=context)
-            (seed, *_) = self.options
+            seed = hash(tuple(self.options)) & 0xFFFFFFFFFFFFFFFF
             return Column(
                 plc.hashing.xxhash_64(plc.Table([column.obj]), seed, stream=df.stream),
                 dtype=self.dtype,
