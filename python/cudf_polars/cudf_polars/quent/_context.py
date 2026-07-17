@@ -25,12 +25,10 @@ from cudf_polars.quent._types import (
     Processor,
     Query,
     QueryGroup,
-    Statistics,
     ThreadPool,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
     from typing import Self
 
     from cudf_polars.containers import DataFrame
@@ -437,7 +435,6 @@ class QuentContext:
         ir_type: type[IR],
         quent_task: Task,
         quent_ir_execution_context: QuentIRExecutionContext,
-        frames: Sequence[DataFrame],
         result: DataFrame | None,
     ) -> None:
         """
@@ -470,32 +467,14 @@ class QuentContext:
         :meth:`_emit_task_begin_events`. I/O nodes were left in ``Allocating``
         during the load; here they transition through ``Loading`` (with byte
         counts), ``Computing``, and ``Exit``.
-
-        A ``Statistics`` record, associated with the Quent Operator bound to the IR execution context,
-        is also emitted. It includes
-
-        - input bytes: the total size of the input dataframes.
-        - output bytes: the size of the output dataframe.
-        - output rows: the number of rows in the output dataframe.
         """
         if quent_ir_execution_context is None:  # pragma: no cover;
             return
 
         if result is not None:
-            output_rows = result.num_rows
             output_capacity_bytes = result._size_bytes()
         else:
-            output_rows = 0
             output_capacity_bytes = 0
-        quent_ir_execution_context.logger.emit(
-            quent_ir_execution_context.quent_operator.statistics(
-                statistics=Statistics(
-                    input_bytes=sum(frame._size_bytes() for frame in frames),
-                    output_bytes=output_capacity_bytes,
-                    output_rows=output_rows,
-                )
-            )
-        )
         if ir_type.is_io_node:
             quent_processor = quent_ir_execution_context.get_or_declare_processor(
                 thread_ident=threading.get_ident(),

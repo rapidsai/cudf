@@ -271,9 +271,11 @@ async def shutdown_on_error(
     ir_type = type(trace_ir).__name__
     tracer = ActorTracer(ir_id, ir_type)
     contextvars = {"actor_ir_id": ir_id, "actor_ir_type": ir_type}
+    import dataclasses
 
     if ir_context is not None:
         contextvars["cudf_polars_query_id"] = str(ir_context.query_id)
+        ir_context = dataclasses.replace(ir_context, tracer=tracer)
 
     with cudf_polars.dsl.tracing.bound_contextvars(**contextvars):
         start = time.monotonic_ns()
@@ -349,8 +351,8 @@ async def shutdown_on_error(
                     quent_ir_execution_context.quent_operator.statistics(
                         statistics=cudf_polars.quent._types.Statistics(
                             output_rows=output_rows,
-                            input_bytes=0,
-                            output_bytes=0,
+                            input_bytes=tracer.input_bytes,
+                            output_bytes=tracer.output_bytes,
                             custom_attributes=custom_attributes,
                         )
                     )
@@ -778,6 +780,8 @@ def _evaluate_chunk_sync(
         The IR execution context.
     br
         The buffer resource for lifetime tracking.
+    tracer
+        The actor tracer.
 
     Returns
     -------
@@ -831,7 +835,11 @@ async def evaluate_chunk(
     with opaque_memory_usage(extra):
         for single_ir in irs:
             chunk = await ir_context.to_thread(
-                _evaluate_chunk_sync, chunk, single_ir, ir_context, context.br()
+                _evaluate_chunk_sync,
+                chunk,
+                single_ir,
+                ir_context,
+                context.br(),
             )
         return chunk
 

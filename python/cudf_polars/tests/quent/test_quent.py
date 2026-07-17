@@ -1052,7 +1052,6 @@ def test_emit_task_events_computing_node() -> None:
         Filter,
         task,
         quent_ir_execution_context,
-        [],
         result,
     )
 
@@ -1088,7 +1087,6 @@ def test_emit_task_events_io_node(disk_to_device_channel: Channel) -> None:
         DataFrameScan,
         task,
         quent_ir_execution_context,
-        [],
         result,
     )
 
@@ -1101,26 +1099,3 @@ def test_emit_task_events_io_node(disk_to_device_channel: Channel) -> None:
     assert "Loading" in task_events[2]["data"]["Task"]["state"]
     assert "Computing" in task_events[3]["data"]["Task"]["state"]
     assert "Exit" in task_events[4]["data"]["Task"]["state"]
-
-
-def test_emit_task_end_events_on_failure() -> None:
-    logger, quent_ir_execution_context = _make_quent_ir_execution_context()
-    task = Task(operator_id=quent_ir_execution_context.quent_operator.id)
-    input_frame = _make_dataframe(pl.DataFrame({"x": [10, 20]}))
-
-    quent_ir_execution_context.context._emit_task_end_events(
-        Filter,
-        task,
-        quent_ir_execution_context,
-        [input_frame],
-        None,
-    )
-
-    events = _drained_events(logger)
-    operator_events = [event for event in events if "Operator" in event["data"]]
-    stats = operator_events[0]["data"]["Operator"]["Statistics"]["custom_attributes"]
-    assert stats == [
-        {"key": "input_bytes", "value": {"U64": input_frame._size_bytes()}},
-        {"key": "output_bytes", "value": {"U64": 0}},
-        {"key": "output_rows", "value": {"U64": 0}},
-    ]

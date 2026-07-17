@@ -224,7 +224,6 @@ def log_do_evaluate(
                         cls,
                         quent_task,
                         ir_execution_context.quent_ir_execution_context,
-                        frames,
                         None,
                     )
                 raise
@@ -233,11 +232,11 @@ def log_do_evaluate(
                     quent_task is not None
                     and ir_execution_context.quent_ir_execution_context is not None
                 ):
+                    # TODO: This should emit some Chunk-level statistics (duration, rows, bytes, schema, etc.)
                     ir_execution_context.quent_ir_execution_context.context._emit_task_end_events(
                         cls,
                         quent_task,
                         ir_execution_context.quent_ir_execution_context,
-                        frames,
                         result,
                     )
             stop = time.monotonic_ns()
@@ -262,6 +261,12 @@ def log_do_evaluate(
                 }
             )
             log.info("Execute IR", **record)
+
+            # Update the tracer with all the relevant information.
+            if (tracer := ir_execution_context.tracer) is not None:
+                # ActorTracer.send updates row_count and chunk_count
+                tracer.input_bytes += sum(frame._size_bytes() for frame in frames)
+                tracer.output_bytes += result._size_bytes()
 
             return result
 
