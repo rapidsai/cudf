@@ -175,7 +175,26 @@ cpdef Column cast(
 cpdef Column bit_cast(
     Column input, DataType data_type, object stream=None, DeviceMemoryResource mr=None
 ):
-    """Bit-cast a column to a different data type."""
+    """Bit-cast a column to a different data type.
+
+    For details, see :cpp:func:`bit_cast`.
+
+    Parameters
+    ----------
+    input : Column
+        The column to bit-cast.
+    data_type : DataType
+        The data type to bit-cast to.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned column's device memory.
+
+    Returns
+    -------
+    pylibcudf.Column
+        A column with the same bit representation reinterpreted as ``data_type``.
+    """
     cdef unique_ptr[column] result
 
     cdef Stream _stream = _get_stream(stream)
