@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 import pytest
@@ -185,15 +185,35 @@ def test_round(engine: pl.GPUEngine, ldf: pl.LazyFrame, mode: RoundMethod) -> No
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_to_physical(engine: pl.GPUEngine) -> None:
-    df = pl.LazyFrame(
-        {
-            "d": pl.Series([date(2024, 1, 1), None, date(2024, 1, 3)], dtype=pl.Date),
-            "x": pl.Series([1, None, 3], dtype=pl.Int64),
-        }
-    )
-    q = df.select(pl.col("d").to_physical(), pl.col("x").to_physical())
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pl.Date,
+        pl.Datetime("us"),
+        pl.Datetime("us", "America/New_York"),
+        pl.Duration("us"),
+        pl.Int64,
+        pl.Float64,
+    ],
+)
+def test_to_physical(engine: pl.GPUEngine, dtype: pl.DataType) -> None:
+    values = [1, None, 3]
+    s = pl.Series(values, dtype=pl.Int64).cast(dtype)
+    df = pl.LazyFrame({"a": s})
+    q = df.select(pl.col("a").to_physical())
     assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [pl.List(pl.Date), pl.Struct({"d": pl.Date})],
+)
+def test_to_physical_nested_logical_unsupported(
+    engine: pl.GPUEngine, dtype: pl.DataType
+) -> None:
+    df = pl.LazyFrame({"a": pl.Series([None], dtype=dtype)})
+    q = df.select(pl.col("a").to_physical())
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 def test_hash_unsupported(engine: pl.GPUEngine) -> None:

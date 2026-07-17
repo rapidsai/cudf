@@ -238,6 +238,14 @@ class UnaryFunction(Expr):
                     "reinterpret between integer and floating-point types is not "
                     "supported"
                 )
+        if (
+            self.name == "to_physical"
+            and children[0].dtype != self.dtype
+            and plc.traits.is_nested(children[0].dtype.plc_type)
+        ):
+            raise NotImplementedError(
+                "to_physical on nested types with logical inner types is not supported"
+            )
 
     @staticmethod
     def _bound_clip_operand(
