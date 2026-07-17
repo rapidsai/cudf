@@ -119,6 +119,7 @@ class UnaryFunction(Expr):
             "fill_null",
             "fill_null_with_strategy",
             "gather_every",
+            "hash",
             "index_of",
             "mask_nans",
             "null_count",
@@ -169,6 +170,7 @@ class UnaryFunction(Expr):
             "clip",
             "fill_null",
             "fill_null_with_strategy",
+            "hash",
             "mask_nans",
             "reinterpret",
             "replace",
@@ -485,6 +487,13 @@ class UnaryFunction(Expr):
                 order=column.order,
                 null_order=column.null_order,
                 name=column.name,
+            )
+        if self.name == "hash":
+            column = self.children[0].evaluate(df, context=context)
+            (seed, *_) = self.options
+            return Column(
+                plc.hashing.xxhash_64(plc.Table([column.obj]), seed, stream=df.stream),
+                dtype=self.dtype,
             )
         if self.name == "null_count":
             (column,) = (child.evaluate(df, context=context) for child in self.children)

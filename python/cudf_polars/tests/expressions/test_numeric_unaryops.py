@@ -216,10 +216,20 @@ def test_to_physical_nested_logical_unsupported(
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_hash_unsupported(engine: pl.GPUEngine) -> None:
-    df = pl.LazyFrame({"a": [1, 2, 3]})
-    q = df.select(pl.col("a").hash())
-    assert_ir_translation_raises(q, engine, NotImplementedError)
+@pytest.mark.parametrize(
+    "seeds",
+    [(0,), (10, 20, 30, 40)],
+)
+def test_hash(engine: pl.GPUEngine, seeds: tuple[int, ...]) -> None:
+    df = pl.LazyFrame(
+        {
+            "a": pl.Series([1, 2, None], dtype=pl.Int64),
+            "b": pl.Series(["x", None, "z"], dtype=pl.String),
+        }
+    )
+    q = df.select(pl.col("a").hash(*seeds), pl.col("b").hash(*seeds))
+    result = q.collect(engine=engine)
+    assert result.schema == {"a": pl.UInt64, "b": pl.UInt64}
 
 
 def test_atan2_unsupported(engine: pl.GPUEngine) -> None:
