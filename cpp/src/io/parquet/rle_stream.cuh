@@ -177,7 +177,8 @@ static constexpr int max_runs_per_chunk = 512;
 template <typename level_t,
           int decode_threads,
           int max_output_values,
-          bool use_chunked_expand = false>
+          bool use_chunked_expand   = false,
+          int smem_stage_size_bytes = 8 * 1024>
 struct rle_stream {
   static constexpr int num_rle_stream_decode_threads = decode_threads;
   // the -1 here is for the look-ahead warp that fills in the list of runs to be decoded
@@ -215,7 +216,7 @@ struct rle_stream {
   // level_bits-agnostic: definition/repetition levels, dictionary indices, and
   // boolean streams all benefit with identical code. Streams that do not fit
   // the budget transparently fall back to parsing from global.
-  static constexpr int smem_stage_size = 8 * 1024;
+  static constexpr int smem_stage_size = smem_stage_size_bytes;
 
   // Chunked-expand cross-call partial-run state.
   // When a run straddles a decode_next_chunked boundary we record its meta,
@@ -241,7 +242,8 @@ struct rle_stream {
                        level_t* _output,
                        int _total_values,
                        uint8_t* _smem_stage                                   = nullptr,
-                       cuda::barrier<cuda::thread_scope_block>* _copy_barrier = nullptr)
+                       cuda::barrier<cuda::thread_scope_block>* _copy_barrier = nullptr,
+                       int stage_capacity                                     = smem_stage_size)
   {
     level_bits = _level_bits;
     // s_start is set below after any smem-staging rebase, so downstream code
@@ -259,6 +261,8 @@ struct rle_stream {
     fill_index   = 0;
     decode_index = -1;  // signals the first iteration. Nothing to decode.
 
+    cudf_assert(stage_capacity >= 0);
+
     // If smem staging is active, use cuda::memcpy_async for a
     // block-cooperative global-to-shared copy that automatically dispatches to
     // the best copy path (cp.async, cp.async.bulk, or TMA) depending on the
@@ -269,7 +273,7 @@ struct rle_stream {
       auto* const smem_stage =
         static_cast<uint8_t const*>(cuda::std::assume_aligned<16>(_smem_stage));
       auto const len = static_cast<int>(cuda::std::distance(_start, _end));
-      if (len > 0 && len <= smem_stage_size) {
+      if (len > 0 && len <= stage_capacity) {
         cuda::memcpy_async(group, _smem_stage, _start, static_cast<size_t>(len), *_copy_barrier);
         // Rebase the parse cursor and end onto the shared copy. All downstream
         // reads (get_rle_run_info, decode, skip_runs) follow cur/end and now hit

@@ -452,7 +452,8 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
                                           rep,
                                           num_to_decode,
                                           stage,
-                                          &copy_barrier);
+                                          &copy_barrier,
+                                          rle_stream_t::smem_stage_size);
     copy_barrier.arrive_and_wait();
     decoders[level_type::REPETITION].decode_next(t, num_to_decode);
   }
@@ -475,7 +476,8 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
                                           def,
                                           num_to_decode,
                                           stage,
-                                          &copy_barrier);
+                                          &copy_barrier,
+                                          rle_stream_t::smem_stage_size);
     copy_barrier.arrive_and_wait();
     decoders[level_type::DEFINITION].decode_next(t, num_to_decode);
   }
