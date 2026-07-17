@@ -455,7 +455,7 @@ inline std::vector<uint8_t> enc_long_string(std::string_view s)
 {
   std::vector<uint8_t> out{make_variant_primitive(variant_primitive_type::LONG_STRING)};
   append_le(out, s.size(), 4);
-  out.insert(out.end(), s.begin(), s.end());
+  out.insert(out.end(), reinterpret_cast<uint8_t const *>(s.begin()), reinterpret_cast<uint8_t const *>(s.end()));
   return out;
 }
 
