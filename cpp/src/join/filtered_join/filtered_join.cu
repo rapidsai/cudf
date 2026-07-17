@@ -141,13 +141,14 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::se
     return cudf::detail::row::equality::preprocessed_table::create(left, stream);
   }();
 
-  auto contains_map = rmm::device_uvector<bool>(left.num_rows(), stream);
+  auto contains_map            = rmm::device_uvector<bool>(left.num_rows(), stream);
+  auto const contains_map_span = cudf::device_span<bool>{contains_map.data(), contains_map.size()};
   if (_right_mode == row_operator_mode::PRIMITIVE) {
-    query_right_table_primitive(left, preprocessed_left, contains_map, stream);
+    query_right_table_primitive(left, preprocessed_left, contains_map_span, stream);
   } else if (_right_mode == row_operator_mode::NESTED) {
-    query_right_table_nested(left, preprocessed_left, contains_map, stream);
+    query_right_table_nested(left, preprocessed_left, contains_map_span, stream);
   } else {
-    query_right_table_flat(left, preprocessed_left, contains_map, stream);
+    query_right_table_flat(left, preprocessed_left, contains_map_span, stream);
   }
 
   rmm::device_uvector<size_type> gather_map(left.num_rows(), stream, mr);
@@ -156,7 +157,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::se
                     cuda::counting_iterator<size_type>{0},
                     cuda::counting_iterator<size_type>{left.num_rows()},
                     gather_map.begin(),
-                    gather_mask{kind, contains_map});
+                    gather_mask{kind, contains_map_span});
   gather_map.resize(cuda::std::distance(gather_map.begin(), gather_map_end), stream);
   return std::make_unique<rmm::device_uvector<size_type>>(std::move(gather_map));
 }

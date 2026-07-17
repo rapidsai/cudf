@@ -13,9 +13,9 @@
 #include <cudf/detail/row_operator/preprocessed_table.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
 
 #include <cuco/operator.hpp>
 #include <cuco/static_set_ref.cuh>
@@ -48,7 +48,7 @@ void filtered_join::insert_right_table_flat(rmm::cuda_stream_view stream)
 void distinct_filtered_join::query_right_table_flat(
   cudf::table_view const& left,
   std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_left,
-  rmm::device_uvector<bool>& contains_map,
+  cudf::device_span<bool> contains_map,
   rmm::cuda_stream_view stream)
 {
   auto const comparator =

@@ -7,6 +7,7 @@
 #include <cudf/detail/join/filtered_join.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -56,25 +57,25 @@ class distinct_filtered_join : public filtered_join {
   void query_right_table(cudf::table_view const& left,
                          Iterator left_iter,
                          Ref query_ref,
-                         rmm::device_uvector<bool>& contains_map,
+                         cudf::device_span<bool> contains_map,
                          rmm::cuda_stream_view stream);
 
   void query_right_table_primitive(
     cudf::table_view const& left,
     std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_left,
-    rmm::device_uvector<bool>& contains_map,
+    cudf::device_span<bool> contains_map,
     rmm::cuda_stream_view stream);
 
   void query_right_table_flat(
     cudf::table_view const& left,
     std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_left,
-    rmm::device_uvector<bool>& contains_map,
+    cudf::device_span<bool> contains_map,
     rmm::cuda_stream_view stream);
 
   void query_right_table_nested(
     cudf::table_view const& left,
     std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_left,
-    rmm::device_uvector<bool>& contains_map,
+    cudf::device_span<bool> contains_map,
     rmm::cuda_stream_view stream);
 
  public:

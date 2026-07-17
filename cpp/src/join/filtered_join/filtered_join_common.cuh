@@ -12,10 +12,10 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include <rmm/device_uvector.hpp>
 
 #include <cuco/detail/open_addressing/kernels.cuh>
 #include <cuda/iterator>
@@ -87,7 +87,7 @@ template <int32_t CGSize, typename Iterator, typename Ref>
 void distinct_filtered_join::query_right_table(cudf::table_view const& left,
                                                Iterator left_iter,
                                                Ref query_ref,
-                                               rmm::device_uvector<bool>& contains_map,
+                                               cudf::device_span<bool> contains_map,
                                                rmm::cuda_stream_view stream)
 {
   cudf::scoped_range range{"distinct_filtered_join::query_right_table"};
