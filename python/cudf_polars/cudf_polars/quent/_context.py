@@ -214,11 +214,15 @@ class QuentContext:
         """
         Build a per-collect Quent Query with a unique id.
 
-        The engine-scoped ``QuentContext`` is reused across many
-        ``.collect()`` calls, so each collect must derive its own
-        :class:`Query` (identified by the per-collect ``query_id``) rather
-        than reusing the shared ``self.query``. The ``instance_name`` from
-        the template ``self.query`` is preserved.
+        Parameters
+        ----------
+        query_id: uuid.UUID
+            The unique ID for the query.
+
+        Returns
+        -------
+        A new Quent Query with the given ID and the same instance name as the
+        engine-scoped query.
         """
         return Query(id=query_id, instance_name=self.query.instance_name)
 
