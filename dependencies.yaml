@@ -1006,7 +1006,7 @@ dependencies:
           - libcudf-example==26.10.*,>=0.0.0a0
           - libcudf_kafka==26.10.*,>=0.0.0a0
           - libcudf-tests==26.10.*,>=0.0.0a0
-          - libcudf-streaming-tests==26.8.*,>=0.0.0a0
+          - libcudf-streaming-tests==26.10.*,>=0.0.0a0
   test_java:
     common:
       - output_types: conda
@@ -1524,7 +1524,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &librapidsmpf_unsuffixed librapidsmpf==26.8.*,>=0.0.0a0
+          - &librapidsmpf_unsuffixed librapidsmpf==26.10.*,>=0.0.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -1536,12 +1536,12 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - librapidsmpf-cu12==26.8.*,>=0.0.0a0
+              - librapidsmpf-cu12==26.10.*,>=0.0.0a0
           - matrix:
               cuda: "13.*"
               cuda_suffixed: "true"
             packages:
-              - librapidsmpf-cu13==26.8.*,>=0.0.0a0
+              - librapidsmpf-cu13==26.10.*,>=0.0.0a0
           - matrix:
             packages:
               - *librapidsmpf_unsuffixed
@@ -1549,7 +1549,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &libcudf_streaming_unsuffixed libcudf-streaming==26.8.*,>=0.0.0a0
+          - &libcudf_streaming_unsuffixed libcudf-streaming==26.10.*,>=0.0.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -1561,12 +1561,12 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - libcudf-streaming-cu12==26.8.*,>=0.0.0a0
+              - libcudf-streaming-cu12==26.10.*,>=0.0.0a0
           - matrix:
               cuda: "13.*"
               cuda_suffixed: "true"
             packages:
-              - libcudf-streaming-cu13==26.8.*,>=0.0.0a0
+              - libcudf-streaming-cu13==26.10.*,>=0.0.0a0
           - matrix:
             packages:
               - *libcudf_streaming_unsuffixed
@@ -1574,7 +1574,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &cudf_streaming_unsuffixed cudf-streaming==26.8.*,>=0.0.0a0
+          - &cudf_streaming_unsuffixed cudf-streaming==26.10.*,>=0.0.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -1586,12 +1586,12 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - cudf-streaming-cu12==26.8.*,>=0.0.0a0
+              - cudf-streaming-cu12==26.10.*,>=0.0.0a0
           - matrix:
               cuda: "13.*"
               cuda_suffixed: "true"
             packages:
-              - cudf-streaming-cu13==26.8.*,>=0.0.0a0
+              - cudf-streaming-cu13==26.10.*,>=0.0.0a0
           - matrix:
             packages:
               - *cudf_streaming_unsuffixed
