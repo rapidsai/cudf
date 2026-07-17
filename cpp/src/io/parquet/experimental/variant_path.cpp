@@ -37,9 +37,11 @@ namespace {
 // The returned token keeps its brackets (e.g. "[42]").
 [[nodiscard]] std::string read_bracket_step(std::string_view tail)
 {
-  // tail[0] is '['; index digits (if any) start at tail[1]. Consume the maximal run of decimal
-  // digits. Leading zeros are allowed and carry no special meaning. Anything else (an empty "[]",
-  // wildcards, negative signs, quoted names, ...) leaves n == 1 and is rejected below.
+  CUDF_EXPECTS(!tail.empty() && tail.front() == '[',
+               "expected '[' to open variant path index",
+               std::invalid_argument);
+
+  // Consume the maximal run of decimal digits.
   std::size_t n = 1;
   while (n < tail.size() && tail[n] >= '0' && tail[n] <= '9') {
     ++n;
@@ -47,14 +49,12 @@ namespace {
   CUDF_EXPECTS(
     n != 1, "expected non-negative integer after '[' in variant path", std::invalid_argument);
 
-  // Reject indices that cannot be a valid array position (don't fit in cudf::size_type), so the
-  // GPU-side path walker never has to handle an out-of-range value.
+  // Reject indices that cannot be a valid array position (don't fit in cudf::size_type)
   cudf::size_type index = 0;
   auto const result     = std::from_chars(tail.data() + 1, tail.data() + n, index);
   CUDF_EXPECTS(
     result.ec == std::errc{}, "variant path index is out of range", std::invalid_argument);
 
-  // A missing ']' here also covers an unterminated '[' that runs off the end of the path.
   CUDF_EXPECTS(n < tail.size() && tail[n] == ']',
                "expected ']' to close variant path index",
                std::invalid_argument);
