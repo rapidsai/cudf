@@ -63,7 +63,7 @@ std::unique_ptr<column> murmurhash3_x86_32(table_view const& input,
     preprocessed_input, input.num_rows(), seed, nullate::DYNAMIC{has_nulls(input)}, stream, mr);
 }
 
-std::unique_ptr<column> murmurhash3_x86_32_preprocessed(
+std::unique_ptr<column> murmurhash3_x86_32(
   std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& input,
   size_type num_rows,
   uint32_t seed,

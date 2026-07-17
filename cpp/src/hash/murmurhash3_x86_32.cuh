@@ -22,7 +22,7 @@ struct preprocessed_table;
 
 namespace hashing::detail {
 
-std::unique_ptr<column> murmurhash3_x86_32_preprocessed(
+std::unique_ptr<column> murmurhash3_x86_32(
   std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& input,
   size_type num_rows,
   uint32_t seed,
