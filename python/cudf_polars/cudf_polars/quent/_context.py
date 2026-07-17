@@ -27,6 +27,7 @@ from cudf_polars.quent._types import (
     QueryGroup,
     ThreadPool,
 )
+from cudf_polars.utils.config import get_total_device_memory
 
 if TYPE_CHECKING:
     from typing import Self
@@ -488,18 +489,6 @@ class QuentContext:
         quent_ir_execution_context.logger.emit(quent_task.exit())
 
 
-def _device_memory_capacity_bytes() -> int | None:
-    """Return total device memory in bytes, or ``None`` if unavailable."""
-    try:
-        import pynvml
-
-        pynvml.nvmlInit()
-        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-        return int(pynvml.nvmlDeviceGetMemoryInfo(handle).total)
-    except Exception:  # pragma: no cover - no GPU / pynvml unavailable
-        return None
-
-
 def declare_worker_resources(
     logger: QuentLogger,
     *,
@@ -530,7 +519,7 @@ def declare_worker_resources(
         target=device_memory,
     )
     thread_pool = ThreadPool(worker_id=worker_id)
-    device_memory_capacity = _device_memory_capacity_bytes()
+    device_memory_capacity = get_total_device_memory() or 0
     logger.emit(device_memory.initializing())
     logger.emit(device_memory.operating(device_memory_capacity))
     logger.emit(filesystem.initializing())
