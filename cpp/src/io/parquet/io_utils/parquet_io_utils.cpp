@@ -58,10 +58,8 @@ using device_spans_per_source_type = std::vector<cudf::device_span<uint8_t const
 using host_read_buffer             = std::unique_ptr<cudf::io::datasource::buffer>;
 
 /**
- * @brief Mutex serializing host reads across the byte-range and bloom-filter fetch paths
- *
- * Function-local static (shared, not a global) so each caller thread's host reads are scheduled
- * contiguously without interleaving with other threads.
+ * @brief Serializes host-read submission batches to avoid cross-thread request interleaving and
+ * completion stalls
  */
 std::mutex& host_read_mutex()
 {
@@ -70,7 +68,8 @@ std::mutex& host_read_mutex()
 }
 
 /**
- * @brief Mutex serializing device reads and host-to-device copies across those same fetch paths
+ * @brief Serializes device reads and host-to-device copies to avoid cross-thread request
+ * interleaving and completion stalls
  */
 std::mutex& device_read_mutex()
 {
