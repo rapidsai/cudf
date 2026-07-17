@@ -445,10 +445,8 @@ inline std::vector<uint8_t> enc_int64(int64_t v)
 
 inline std::vector<uint8_t> enc_float64(double v)
 {
-  std::uint64_t bits = 0;
-  std::memcpy(&bits, &v, sizeof(bits));
   std::vector<uint8_t> out{make_variant_primitive(variant_primitive_type::FLOAT64)};
-  append_le(out, bits, 8);
+  append_le(out, std::bit_cast<uint64_t>(v), 8);
   return out;
 }
 
