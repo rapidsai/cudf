@@ -537,6 +537,21 @@ TEST_F(ExtractVariantFieldTest, ApacheArrayPrimitiveIndexing)
   // Out-of-bounds index resolves to null.
   cudf::test::fixed_width_column_wrapper<int8_t> const null_expected({0}, {false});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*get("$[4]"), null_expected);
+
+  // Exercise 2-, 3-, and 4-byte offsets with a four-byte element count.
+  for (uint8_t offset_size = 2; offset_size <= 4; ++offset_size) {
+    auto const value_header = static_cast<uint8_t>(0x04 | (offset_size - 1));
+    std::vector<uint8_t> value{static_cast<uint8_t>(0x03 | (value_header << 2)), 1, 0, 0, 0};
+    value.insert(value.end(), offset_size, 0);  // offsets[0]
+    value.push_back(2);                         // offsets[1]
+    value.insert(value.end(), offset_size - 1, 0);
+    value.insert(value.end(), {0x0c, 42});  // INT8(42)
+
+    auto wide_col = wrap_single_variant(build_metadata({}), value);
+    auto got = cudf::io::parquet::experimental::extract_variant_field(wide_col, "$[0]", i8, stream);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got,
+                                   cudf::test::fixed_width_column_wrapper<int8_t>{int8_t{42}});
+  }
 }
 
 TEST_F(ExtractVariantFieldTest, ArrayIndexingTypeMismatchAndBounds)
@@ -569,6 +584,17 @@ TEST_F(ExtractVariantFieldTest, EmptyArrayIndexing)
   for (auto const* path : {"$[0]", "$[1]"}) {
     SCOPED_TRACE(std::string{"path: "} + path);
     auto got = cudf::io::parquet::experimental::extract_variant_field(col, path, i8, stream);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, null_expected);
+  }
+
+  // Truncated counts/tables, decreasing offsets, and offsets beyond the values region yield null.
+  for (auto const& value : std::vector<std::vector<uint8_t>>{{0x13},
+                                                             {0x03, 0x01, 0x00},
+                                                             {0x03, 0x01, 0x02, 0x01, 0x0c, 42},
+                                                             {0x03, 0x01, 0x00, 0x03, 0x0c, 42}}) {
+    auto malformed_col = wrap_single_variant(build_metadata({}), value);
+    auto got =
+      cudf::io::parquet::experimental::extract_variant_field(malformed_col, "$[0]", i8, stream);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, null_expected);
   }
 }
