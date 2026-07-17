@@ -4993,6 +4993,24 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             left_on, right_on = right_on, left_on
             left_index, right_index = right_index, left_index
             suffixes = (suffixes[1], suffixes[0])
+            if (
+                orig_on is None
+                and orig_left_on is None
+                and orig_right_on is None
+                and not orig_left_index
+                and not orig_right_index
+            ):
+                # Merge infers the common key columns from its (post-swap)
+                # left frame, but pandas keys an inferred merge by the
+                # *original* left frame's column order regardless of ``how``.
+                # Pass the keys explicitly to preserve that order (it decides
+                # both the key column order and the sort priority).
+                right_names = set(right._column_names)
+                inferred_on = [
+                    name for name in self._column_names if name in right_names
+                ]
+                if inferred_on:
+                    on = inferred_on
         elif how in {"leftsemi", "leftanti"}:
             merge_cls = MergeSemi
 
@@ -5051,8 +5069,28 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 and not orig_left_index
                 and not orig_right_index
             ):
-                # Auto-detect: intersection of column names are the keys.
-                k = len(set(self._column_names) & set(right._column_names))
+                # Auto-detected keys sit wherever they appear within each
+                # frame, so a segment swap cannot reproduce pandas' layout
+                # (the original left frame's columns in their own order,
+                # then the right frame's non-key columns). No suffixing can
+                # occur here -- any label shared by both frames is a key --
+                # so the result labels are unchanged and a label-based
+                # reorder is exact.
+                common = set(self._column_names) & set(right._column_names)
+                expected = list(self._column_names) + [
+                    name for name in right._column_names if name not in common
+                ]
+                positions = {
+                    label: i for i, label in enumerate(result._column_names)
+                }
+                if len(expected) == n_result and all(
+                    label in positions for label in expected
+                ):
+                    result = result.iloc[
+                        :, [positions[label] for label in expected]
+                    ]
+                # skip the positional segment swap below
+                k = n_result
             else:
                 k = 0
             # Only reorder when there are both right non-key cols and self
@@ -5064,6 +5102,98 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     + list(range(k, N_r))
                 )
                 result = result.iloc[:, new_indices]
+
+        if how != "cross":
+            orig_how = "right" if is_right_join else how
+            if is_right_join:
+                key_on, key_lon, key_ron = orig_on, orig_left_on, orig_right_on
+                key_li, key_ri = orig_left_index, orig_right_index
+            else:
+                key_on, key_lon, key_ron = on, left_on, right_on
+                key_li, key_ri = left_index, right_index
+
+            def _restore_key_dtype(name, target, right_dtype):
+                # Restore a result key column to ``target`` to match pandas.
+                if name not in result._data:
+                    return
+                # Categorical keys follow the (de)categorization rules applied
+                # during the join itself.
+                if isinstance(target, CategoricalDtype) or isinstance(
+                    right_dtype, CategoricalDtype
+                ):
+                    return
+                if result._data[name].dtype == target:
+                    return
+                # Do not undo the numpy int -> float64 upcast that unmatched
+                # rows require.
+                if (
+                    isinstance(target, np.dtype)
+                    and result._data[name].null_count
+                ):
+                    return
+                result[name] = result[name].astype(target)
+
+            def _keep_left_dtype(target, right_dtype):
+                # pandas presents a shared-name key with the LEFT dtype when an
+                # extension dtype is involved (all joins) or for inner/left
+                # joins; right/outer numpy keys take the common type.
+                one_extension = (not isinstance(target, np.dtype)) or (
+                    right_dtype is not None
+                    and not isinstance(right_dtype, np.dtype)
+                )
+                return one_extension or orig_how in {
+                    "inner",
+                    "left",
+                    "leftsemi",
+                    "leftanti",
+                }
+
+            if not key_li and not key_ri:
+                if key_lon is not None and key_ron is not None:
+                    lon = [key_lon] if is_scalar(key_lon) else list(key_lon)
+                    ron = [key_ron] if is_scalar(key_ron) else list(key_ron)
+                    for lk, rk in zip(lon, ron, strict=True):
+                        if lk == rk:
+                            if lk in self._data:
+                                target = self._data[lk].dtype
+                                rd = (
+                                    right._data[lk].dtype
+                                    if lk in right._data
+                                    else None
+                                )
+                                if _keep_left_dtype(target, rd):
+                                    _restore_key_dtype(lk, target, rd)
+                        else:
+                            # Differently-named keys both survive, each with
+                            # its own operand's dtype.
+                            if lk in self._data:
+                                _restore_key_dtype(
+                                    lk, self._data[lk].dtype, None
+                                )
+                            if rk in right._data:
+                                _restore_key_dtype(
+                                    rk, right._data[rk].dtype, None
+                                )
+                else:
+                    if key_on is not None:
+                        key_names = (
+                            [key_on] if is_scalar(key_on) else list(key_on)
+                        )
+                    else:
+                        key_names = list(
+                            set(self._column_names) & set(right._column_names)
+                        )
+                    for name in key_names:
+                        if name not in self._data:
+                            continue
+                        target = self._data[name].dtype
+                        rd = (
+                            right._data[name].dtype
+                            if name in right._data
+                            else None
+                        )
+                        if _keep_left_dtype(target, rd):
+                            _restore_key_dtype(name, target, rd)
 
         return result
 
@@ -5332,7 +5462,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         supported by the CUDA Python Numba target
         <https://numba.readthedocs.io/en/stable/cuda/cudapysupported.html>`__.
         For more information, see the `cuDF guide to user defined functions
-        <https://docs.rapids.ai/api/cudf/stable/cudf/guide-to-udfs.html>`__.
+        <https://docs.rapids.ai/api/cudf/stable/cudf/guide-to-udfs/>`__.
 
         Some string functions and methods are supported. Refer to the guide
         to UDFs for details.
@@ -5516,7 +5646,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         For a complete list of supported functions and methods that may be
         used to manipulate string data, see the UDF guide,
-        <https://docs.rapids.ai/api/cudf/stable/cudf/guide-to-udfs.html>
+        <https://docs.rapids.ai/api/cudf/stable/cudf/guide-to-udfs/>
         """
         if axis != 1:
             raise NotImplementedError(
