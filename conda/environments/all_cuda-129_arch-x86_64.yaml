@@ -49,7 +49,7 @@ dependencies:
 - librapidsmpf==26.10.*,>=0.0.0a0
 - librdkafka<2.15.0a0
 - librmm==26.10.*,>=0.0.0a0
-- libucxx==0.51.*,>=0.0.0a0
+- libucxx==0.52.*,>=0.0.0a0
 - make
 - matplotlib-base<3.11
 - mmh3
@@ -112,7 +112,7 @@ dependencies:
 - structlog
 - sysroot_linux-64==2.28
 - typing_extensions>=4.0.0
-- ucxx==0.51.*,>=0.0.0a0
+- ucxx==0.52.*,>=0.0.0a0
 - xlrd
 - xlsxwriter
 - zlib>=1.2.13
