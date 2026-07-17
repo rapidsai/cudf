@@ -1167,6 +1167,17 @@ Float64Dtype = make_final_proxy_type(
 )
 
 
+# ``GroupBy.nth`` is a property returning a selector object on both
+# sides; registering the selector pair as an intermediate proxy gives
+# ``gb.nth`` a proxied result whose ``__call__``/``__getitem__`` get the
+# usual call-time fast/slow dispatch (with the slow side re-derived from
+# the recorded ``getattr`` provenance on fallback).
+GroupByNthSelector = make_intermediate_proxy_type(
+    "GroupByNthSelector",
+    cudf.core.groupby.groupby.GroupByNthSelector,
+    pd.core.groupby.indexing.GroupByNthSelector,
+)
+
 SeriesGroupBy = make_intermediate_proxy_type(
     "SeriesGroupBy",
     cudf.core.groupby.groupby.SeriesGroupBy,

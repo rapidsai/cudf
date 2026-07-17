@@ -201,6 +201,30 @@ class Translator:
 
             return result
 
+    def unsupported_operations_error(self) -> NotImplementedError | None:
+        """
+        Build an error describing unsupported operations during translation.
+
+        Returns
+        -------
+        A `NotImplementedError` whose message (``args[0]``) is safe to surface
+        to users and whose second argument contains the deduplicated underlying
+        errors, or ``None`` if no translation errors were recorded.
+        """
+        if not self.errors:
+            return None
+        unique_errors = sorted({str(e): e for e in self.errors}.values(), key=str)
+        # TODO: Display these errors in user-friendly way, tracked in
+        # https://github.com/rapidsai/cudf/issues/17051
+        formatted_errors = "\n".join(
+            f"- {e.__class__.__name__}: {e}" for e in unique_errors
+        )
+        message = (
+            "Query execution with GPU not possible: unsupported operations."
+            f"\nThe errors were:\n{formatted_errors}"
+        )
+        return NotImplementedError(message, unique_errors)
+
     def translate_expr(self, *, n: int, schema: Schema) -> expr.Expr:
         """
         Translate a polars-internal expression IR into our representation.
