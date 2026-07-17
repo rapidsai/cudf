@@ -1461,7 +1461,7 @@ if(CUDF_BUILD_TESTUTIL)
   add_library(cudftestutil_objects OBJECT)
   target_link_libraries(
     cudftestutil_objects
-    PUBLIC cudf::cudftestutil GTest::gmock GTest::gmock_main GTest::gtest GTest::gtest_main
+    PUBLIC cudf::cudftestutil GTest::gmock GTest::gmock_main GTest::gtest GTest::gtest_main rmm::rmm
     PRIVATE cudf::cudftestutil_impl
   )
   add_library(cudf::cudftestutil_objects ALIAS cudftestutil_objects)
