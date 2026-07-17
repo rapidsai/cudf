@@ -26,6 +26,18 @@
 
 namespace cudf::detail {
 
+struct precomputed_hash {
+  CUDF_HOST_DEVICE constexpr precomputed_hash(hash_value_type const* hashes) : _hashes{hashes} {}
+
+  __device__ __forceinline__ hash_value_type operator()(size_type i) const noexcept
+  {
+    return _hashes[i];
+  }
+
+ private:
+  hash_value_type const* _hashes;
+};
+
 std::pair<rmm::device_buffer, bitmask_type const*> make_filtered_join_row_bitmask(
   table_view const& input, null_equality nulls_equal, rmm::cuda_stream_view stream);
 

@@ -1146,14 +1146,6 @@ add_library(
 
 add_dependencies(cudf cudf_cuda_embed cudf_fragments)
 
-# Parallelize device optimization within the two template-heavy TUs.
-set_property(
-  SOURCE src/join/filtered_join/filtered_join_nested.cu
-         src/join/filtered_join/filtered_join_nested_query.cu
-  APPEND
-  PROPERTY COMPILE_OPTIONS --split-compile=4
-)
-
 set_property(
   SOURCE src/io/parquet/writer_impl.cu
   APPEND
