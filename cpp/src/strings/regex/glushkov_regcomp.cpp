@@ -278,7 +278,7 @@ bool positions_chars_overlap(gkprog const& gp, uint32_t const p, uint32_t const 
  *        Glushkov's bit-order cannot represent.
  *
  * Two rules:
- *   Rule 1 – END before later char: an ACCEPT item appears before a CHAR_POS
+ *   Rule 1 – ACCEPT before later char: an ACCEPT item appears before a CHAR_POS
  *             item in Thompson priority order → the accepted path has higher
  *             priority than a continuation that Glushkov cannot kill correctly.
  *   Rule 2 – non-monotone gpos + char overlap: two CHAR_POS items appear with
