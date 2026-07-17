@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,6 +22,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/polymorphic_allocator.hpp>
 
+#include <memory>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -48,19 +50,9 @@ rmm::device_uvector<cudf::size_type> dispatch_row_equal(
   cudf::detail::row::equality::self_comparator row_equal,
   Func&& func)
 {
-  if (compare_nans == nan_equality::ALL_EQUAL) {
-    auto const d_equal = row_equal.equal_to<HasNested>(
-      nullate::DYNAMIC{has_nulls},
-      compare_nulls,
-      cudf::detail::row::equality::nan_equal_physical_equality_comparator{});
-    return func(d_equal);
-  } else {
-    auto const d_equal =
-      row_equal.equal_to<HasNested>(nullate::DYNAMIC{has_nulls},
-                                    compare_nulls,
-                                    cudf::detail::row::equality::physical_equality_comparator{});
-    return func(d_equal);
-  }
+  auto const d_equal = row_equal.equal_to<HasNested>(
+    nullate::DYNAMIC{has_nulls}, compare_nulls, distinct_physical_equality{compare_nans});
+  return func(d_equal);
 }
 }  // namespace
 
