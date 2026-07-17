@@ -374,7 +374,7 @@ jobs:
       build_type: pull-request
       node_type: cpu16
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:26.08-latest"
+      container_image: "rapidsai/ci-conda:26.10-latest"
       script: "ci/test_cmake.sh"
   cpp-linters:
     permissions:
@@ -490,7 +490,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:26.08-latest"
+      container_image: "rapidsai/ci-conda:26.10-latest"
       script: "ci/test_java.sh"
   conda-notebook-tests:
     needs: [conda-python-build, conda-python-build-noarch, changed-files]
@@ -507,7 +507,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:26.08-latest"
+      container_image: "rapidsai/ci-conda:26.10-latest"
       script: "ci/test_notebooks.sh"
   docs-build:
     needs: [conda-python-build, conda-python-build-noarch, changed-files]
@@ -524,7 +524,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:26.08-latest"
+      container_image: "rapidsai/ci-conda:26.10-latest"
       script: "ci/build_docs.sh"
   wheel-build-libcudf:
     needs: checks
@@ -789,7 +789,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
       continue-on-error: true
-      container_image: "rapidsai/ci-conda:26.08-latest"
+      container_image: "rapidsai/ci-conda:26.10-latest"
       script: |
         ci/cudf_pandas_scripts/third-party-integration/test.sh python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml
   cuml-compat-tests:
@@ -810,7 +810,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
       continue-on-error: true
-      container_image: "rapidsai/ci-conda:26.06-latest"
+      container_image: "rapidsai/ci-conda:26.10-latest"
       script: "ci/test_cuml_compat.sh"
   pandas-tests:
     # run the Pandas unit tests using PR branch
@@ -830,7 +830,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
-      container_image: "rapidsai/citestwheel:26.08-latest"
+      container_image: "rapidsai/citestwheel:26.10-latest"
       script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
   narwhals-tests:
     needs: [conda-python-build, conda-python-build-noarch, changed-files]
@@ -849,7 +849,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
-      container_image: "rapidsai/ci-conda:26.08-latest"
+      container_image: "rapidsai/ci-conda:26.10-latest"
       script: ci/test_narwhals.sh
   spark-rapids-jni:
     needs: changed-files

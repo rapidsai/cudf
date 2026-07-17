@@ -121,12 +121,13 @@ def evaluate_logical_plan(
                     evaluate_pipeline_spmd_mode,
                 )
 
-                result, metadata_collector = evaluate_pipeline_spmd_mode(
+                _gpu_result, metadata_collector = evaluate_pipeline_spmd_mode(
                     ir,
                     config_options,
                     collect_metadata=collect_metadata,
                     query_id=query_id,
                 )
+                result = _gpu_result.to_polars()
             case "ray":
                 from cudf_polars.engine.ray import (
                     evaluate_pipeline_ray_mode,

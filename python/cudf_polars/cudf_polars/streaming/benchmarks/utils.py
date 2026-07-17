@@ -688,16 +688,7 @@ class RunConfig:
         }
         if engine is not None:
             config_options = ConfigOptions.from_polars_engine(engine)
-            # Drop non-serializable contexts.
-            config_options = dataclasses.replace(
-                config_options,
-                executor=dataclasses.replace(
-                    config_options.executor,
-                    spmd_context=None,
-                    ray_context=None,
-                    dask_context=None,
-                ),
-            )
+            config_options = config_options.drop_unserializable()
             rapidsmpf_options = engine.rapidsmpf_options.get_strings()
             result["config_options"] = {
                 "config_options": dataclasses.asdict(config_options),
