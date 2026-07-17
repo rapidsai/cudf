@@ -12,6 +12,7 @@
 #include <cudf/detail/utilities/getenv_or.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_io_utils.hpp>
@@ -52,6 +53,30 @@
 namespace cudf::io::parquet {
 
 namespace {
+
+using device_spans_per_source_type = std::vector<cudf::device_span<uint8_t const>>;
+using host_read_buffer             = std::unique_ptr<cudf::io::datasource::buffer>;
+
+/**
+ * @brief Mutex serializing host reads across the byte-range and bloom-filter fetch paths
+ *
+ * Function-local static (shared, not a global) so each caller thread's host reads are scheduled
+ * contiguously without interleaving with other threads.
+ */
+std::mutex& host_read_mutex()
+{
+  static std::mutex mutex;
+  return mutex;
+}
+
+/**
+ * @brief Mutex serializing device reads and host-to-device copies across those same fetch paths
+ */
+std::mutex& device_read_mutex()
+{
+  static std::mutex mutex;
+  return mutex;
+}
 
 /**
  * @brief Dispatches each indexed task and collects the results
@@ -189,43 +214,34 @@ std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to
   });
 }
 
-using device_spans_per_source_type = std::vector<cudf::device_span<uint8_t const>>;
-using host_read_buffer             = std::unique_ptr<cudf::io::datasource::buffer>;
-
-// Shared across the byte-range and bloom-filter fetch paths to serialize their readings
-std::mutex& host_read_mutex()
-{
-  static std::mutex mutex;
-  return mutex;
-}
-
-std::mutex& device_read_mutex()
-{
-  static std::mutex mutex;
-  return mutex;
-}
-
 /**
- * @brief Reads the given byte ranges to host.
+ * @brief Reads the given byte ranges into a caller-provided host buffer.
  *
- * Holds a mutex while scheduling so each thread's host reads are submitted contiguously.
+ * Holds a mutex while scheduling so each thread's host reads are submitted contiguously. Each range
+ * is read into `dst` at its destination offset; zero-size ranges are skipped.
  *
  * @param datasources Input datasources
  * @param source_indices Datasource index for each byte range
- * @param offsets Offset for each byte range
+ * @param offsets Datasource offset for each byte range
  * @param sizes Size for each byte range
- * @return Host buffers for the read ranges, in input order
+ * @param dst_offsets Destination offset into `dst` for each byte range
+ * @param dst Host buffer that receives the read data
  */
-std::vector<host_read_buffer> read_ranges_to_host(
+void read_ranges_to_host(
   cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
   cudf::host_span<std::size_t const> source_indices,
   cudf::host_span<std::size_t const> offsets,
-  cudf::host_span<std::size_t const> sizes)
+  cudf::host_span<std::size_t const> sizes,
+  cudf::host_span<std::size_t const> dst_offsets,
+  cudf::host_span<uint8_t> dst)
 {
-  std::vector<std::future<host_read_buffer>> host_read_tasks;
+  std::vector<std::future<std::size_t>> host_read_tasks;
+  std::vector<std::size_t> expected_sizes;
   host_read_tasks.reserve(source_indices.size());
+  expected_sizes.reserve(source_indices.size());
 
-  auto iter = cuda::make_zip_iterator(source_indices.begin(), offsets.begin(), sizes.begin());
+  auto iter = cuda::make_zip_iterator(
+    source_indices.begin(), offsets.begin(), sizes.begin(), dst_offsets.begin());
 
   // Schedule host reads holding the `host_read_mutex` so that all reads for a caller thread
   // are scheduled without interleaving with reads from other threads yielding better pipelining
@@ -233,25 +249,30 @@ std::vector<host_read_buffer> read_ranges_to_host(
     std::scoped_lock<std::mutex> lock(host_read_mutex());
 
     std::for_each(iter, iter + source_indices.size(), [&](auto const& tuple) {
-      auto const src_idx   = cuda::std::get<0>(tuple);
-      auto const io_offset = cuda::std::get<1>(tuple);
-      auto const io_size   = cuda::std::get<2>(tuple);
+      auto const src_idx    = cuda::std::get<0>(tuple);
+      auto const io_offset  = cuda::std::get<1>(tuple);
+      auto const io_size    = cuda::std::get<2>(tuple);
+      auto const dst_offset = cuda::std::get<3>(tuple);
 
-      auto& datasource = datasources[src_idx].get();
+      if (io_size == 0) { return; }
+
+      auto& datasource    = datasources[src_idx].get();
+      auto* const dst_ptr = dst.data() + dst_offset;
+      expected_sizes.push_back(io_size);
       host_read_tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
-        [&datasource, io_offset, io_size]() -> host_read_buffer {
-          return datasource.host_read(io_offset, io_size);
+        [&datasource, io_offset, io_size, dst_ptr]() -> std::size_t {
+          return datasource.host_read(io_offset, io_size, dst_ptr);
         }));
     });
   }
 
-  std::vector<host_read_buffer> host_buffers;
-  host_buffers.reserve(host_read_tasks.size());
-  std::transform(host_read_tasks.begin(),
-                 host_read_tasks.end(),
-                 std::back_inserter(host_buffers),
-                 [](auto& task) { return task.get(); });
-  return host_buffers;
+  // Complete the reads; every range must be read in full
+  std::for_each(cuda::counting_iterator<std::size_t>(0),
+                cuda::counting_iterator<std::size_t>(host_read_tasks.size()),
+                [&](std::size_t i) {
+                  CUDF_EXPECTS(host_read_tasks[i].get() == expected_sizes[i],
+                               "Failed to read complete byte range to host");
+                });
 }
 
 std::tuple<std::vector<rmm::device_buffer>,
@@ -346,8 +367,6 @@ fetch_byte_ranges_to_device_async_impl(
   CUDF_EXPECTS(io_offsets.size() == io_sizes.size() and io_sizes.size() == destinations.size() and
                  io_source_indices.size() == io_offsets.size(),
                "Unexpected number of IO source indices, offsets, sizes, or destinations");
-
-  using host_read_buffer = std::unique_ptr<cudf::io::datasource::buffer>;
 
   // Vectors to hold futures from datasource
   std::vector<std::future<size_t>> device_read_tasks{};
@@ -464,53 +483,60 @@ fetch_bloom_filters_to_device_impl(
                     std::size_t{0},
                     [](auto acc, auto const& bloom_ranges) { return acc + bloom_ranges.size(); });
 
-  // Phase 1: Speculative reads; absent filters keep a zero-length slot
-  std::vector<std::size_t> spec_source_indices;
-  std::vector<std::size_t> spec_offsets;
-  std::vector<std::size_t> spec_sizes;
-  spec_source_indices.reserve(total_filters);
-  spec_offsets.reserve(total_filters);
-  spec_sizes.reserve(total_filters);
-
-  // Queue speculative reads
-  std::for_each(cuda::counting_iterator<std::size_t>(0),
-                cuda::counting_iterator<std::size_t>(num_sources),
-                [&](std::size_t source_idx) {
-                  auto const& bloom_ranges = bloom_filter_byte_ranges_per_source[source_idx];
-                  std::for_each(
-                    bloom_ranges.begin(), bloom_ranges.end(), [&](auto const& bloom_range) {
-                      spec_source_indices.push_back(source_idx);
-                      spec_offsets.push_back(static_cast<std::size_t>(bloom_range.offset()));
-                      spec_sizes.push_back(static_cast<std::size_t>(bloom_range.size()));
+  // Phase 1: Initial read. Cover the complete bloom filter or enough bytes to parse the header
+  std::vector<std::size_t> initial_source_indices(total_filters);
+  std::vector<std::size_t> initial_offsets(total_filters);
+  std::vector<std::size_t> initial_sizes(total_filters);
+  std::vector<std::size_t> initial_dst_offsets(total_filters);
+  std::size_t total_initial_read_size = 0;
+  {
+    std::size_t filter_idx = 0;
+    std::for_each(cuda::counting_iterator<std::size_t>(0),
+                  cuda::counting_iterator<std::size_t>(num_sources),
+                  [&](auto const source_idx) {
+                    auto const& bloom_ranges = bloom_filter_byte_ranges_per_source[source_idx];
+                    std::for_each(bloom_ranges.begin(), bloom_ranges.end(), [&](auto const& range) {
+                      initial_source_indices[filter_idx] = source_idx;
+                      initial_offsets[filter_idx]        = static_cast<std::size_t>(range.offset());
+                      initial_sizes[filter_idx]          = static_cast<std::size_t>(range.size());
+                      initial_dst_offsets[filter_idx]    = total_initial_read_size;
+                      total_initial_read_size += initial_sizes[filter_idx];
+                      ++filter_idx;
                     });
-                });
+                  });
+  }
 
-  auto const spec_buffers =
-    read_ranges_to_host(datasources, spec_source_indices, spec_offsets, spec_sizes);
+  // Read every initial bloom filter bytes into one host buffer
+  auto initial_buffer = cudf::detail::make_host_vector<uint8_t>(total_initial_read_size, stream);
+  read_ranges_to_host(datasources,
+                      initial_source_indices,
+                      initial_offsets,
+                      initial_sizes,
+                      initial_dst_offsets,
+                      initial_buffer);
 
-  // Phase 2: Follow-up reads; absent filters keep a zero-length slot
-  std::vector<std::size_t> bloom_header_sizes(total_filters, 0);
-  std::vector<std::size_t> bloom_bitset_sizes(total_filters, 0);
-  std::vector<std::size_t> bloom_total_sizes(total_filters, 0);
-  std::vector<std::size_t> followup_source_indices;
-  std::vector<std::size_t> followup_offsets;
-  std::vector<std::size_t> followup_sizes;
+  // Phase 2: Parse headers, organize bitset slots, and record deferred bitset reads
+  std::vector<std::size_t> bitset_sizes(total_filters, 0);
+  std::vector<void const*> bitset_src_addrs(total_filters, nullptr);
+  std::size_t total_device_size = 0;
 
-  // Accumulated bitset sizes for each source, rounded up to 32-byte boundaries
-  std::vector<std::size_t> bitset_buffer_size_per_source(num_sources, 0);
+  std::vector<std::size_t> deferred_filter_indices;
+  std::vector<std::size_t> deferred_source_indices;
+  std::vector<std::size_t> deferred_offsets;
+  std::vector<std::size_t> deferred_sizes;
+  std::vector<std::size_t> deferred_dst_offsets;
+  std::size_t total_deferred_size = 0;
 
-  // Parse filters' headers and bitsets, and queue follow-up reads if needed
   std::for_each(
     cuda::counting_iterator<std::size_t>(0),
     cuda::counting_iterator<std::size_t>(total_filters),
     [&](std::size_t filter_idx) {
-      // Absent chunk: no bloom filter to read
-      if (spec_sizes[filter_idx] == 0) { return; }
+      // Absent filter: no bloom filter to read
+      if (initial_sizes[filter_idx] == 0) { return; }
 
-      // Parse the filter's header
-      auto const bytes_read = spec_buffers[filter_idx]->size();
+      auto const* const filter_addr = initial_buffer.data() + initial_dst_offsets[filter_idx];
       auto const header_info =
-        detail::parse_bloom_filter_header({spec_buffers[filter_idx]->data(), bytes_read});
+        detail::parse_bloom_filter_header({filter_addr, initial_sizes[filter_idx]});
       if (not header_info.has_value()) {
         CUDF_LOG_WARN("Encountered an invalid bloom filter header. Skipping");
         return;
@@ -521,32 +547,46 @@ fetch_bloom_filters_to_device_impl(
           "Encountered a bloom filter bitset size that is not a multiple of 32 bytes. Skipping");
         return;
       }
-      bloom_header_sizes[filter_idx] = static_cast<std::size_t>(header_bytes);
-      bloom_bitset_sizes[filter_idx] = static_cast<std::size_t>(bitset_bytes);
-      bloom_total_sizes[filter_idx] =
-        bloom_header_sizes[filter_idx] + bloom_bitset_sizes[filter_idx];
-      bitset_buffer_size_per_source[spec_source_indices[filter_idx]] +=
-        cudf::util::round_up_safe(bloom_bitset_sizes[filter_idx], bloom_filter_block_bytes);
 
-      // Speculative read did not reach the whole bitset: queue a follow-up read for it
-      if (bytes_read < bloom_total_sizes[filter_idx]) {
-        followup_source_indices.push_back(spec_source_indices[filter_idx]);
-        followup_offsets.push_back(spec_offsets[filter_idx] + bloom_header_sizes[filter_idx]);
-        followup_sizes.push_back(bloom_bitset_sizes[filter_idx]);
+      bitset_sizes[filter_idx] = static_cast<std::size_t>(bitset_bytes);
+      total_device_size += bitset_sizes[filter_idx];
+
+      auto const header_size = static_cast<std::size_t>(header_bytes);
+      auto const total_bytes = header_size + bitset_bytes;
+      if (initial_sizes[filter_idx] >= total_bytes) {
+        // Whole bitset already in the host buffer: point at it, stripping the header
+        bitset_src_addrs[filter_idx] = filter_addr + header_size;
+      } else {
+        // Defer a read of only the bitset bytes
+        deferred_filter_indices.push_back(filter_idx);
+        deferred_source_indices.push_back(initial_source_indices[filter_idx]);
+        deferred_offsets.push_back(initial_offsets[filter_idx] + header_size);
+        deferred_sizes.push_back(bitset_sizes[filter_idx]);
+        deferred_dst_offsets.push_back(total_deferred_size);
+        total_deferred_size += bitset_sizes[filter_idx];
       }
     });
 
-  auto const followup_buffers =
-    read_ranges_to_host(datasources, followup_source_indices, followup_offsets, followup_sizes);
+  // Phase 3: one device buffer holds every bitset
+  rmm::device_buffer bitset_buffer(total_device_size, stream, aligned_mr);
+  auto* const device_base = static_cast<uint8_t*>(bitset_buffer.data());
 
-  // Phase 3: Batch copy all bitsets to their device slots
-  std::vector<rmm::device_buffer> bitset_buffers_per_source;
-  bitset_buffers_per_source.reserve(num_sources);
-  std::transform(bitset_buffer_size_per_source.begin(),
-                 bitset_buffer_size_per_source.end(),
-                 std::back_inserter(bitset_buffers_per_source),
-                 [&](std::size_t size) { return rmm::device_buffer(size, stream, aligned_mr); });
+  // Resolve deferred bitset reads
+  auto deferred_buffer = cudf::detail::make_host_vector<uint8_t>(total_deferred_size, stream);
+  read_ranges_to_host(datasources,
+                      deferred_source_indices,
+                      deferred_offsets,
+                      deferred_sizes,
+                      deferred_dst_offsets,
+                      deferred_buffer);
+  std::for_each(cuda::counting_iterator<std::size_t>(0),
+                cuda::counting_iterator<std::size_t>(deferred_filter_indices.size()),
+                [&](std::size_t i) {
+                  bitset_src_addrs[deferred_filter_indices[i]] =
+                    deferred_buffer.data() + deferred_dst_offsets[i];
+                });
 
+  // Build the per-source device spans and the batched copy list
   std::vector<device_spans_per_source_type> bitset_spans_per_source(num_sources);
   std::vector<void*> copy_dsts;
   std::vector<void const*> copy_srcs;
@@ -555,42 +595,40 @@ fetch_bloom_filters_to_device_impl(
   copy_srcs.reserve(total_filters);
   copy_sizes.reserve(total_filters);
 
-  // Queue bitset copies
-  std::size_t filter_idx     = 0;
-  std::size_t followup_index = 0;
-  for (std::size_t source_idx = 0; source_idx < num_sources; ++source_idx) {
-    auto const& bloom_ranges            = bloom_filter_byte_ranges_per_source[source_idx];
-    bitset_spans_per_source[source_idx] = device_spans_per_source_type(bloom_ranges.size());
-    auto* const device_base   = static_cast<uint8_t*>(bitset_buffers_per_source[source_idx].data());
-    std::size_t device_offset = 0;
-    for (std::size_t inner_idx = 0; inner_idx < bloom_ranges.size(); ++inner_idx, ++filter_idx) {
-      auto const bitset_size = bloom_bitset_sizes[filter_idx];
+  std::size_t filter_idx    = 0;
+  std::size_t device_offset = 0;
+  std::for_each(
+    cuda::counting_iterator<std::size_t>(0),
+    cuda::counting_iterator<std::size_t>(num_sources),
+    [&](auto const source_idx) {
+      auto const& bloom_ranges            = bloom_filter_byte_ranges_per_source[source_idx];
+      bitset_spans_per_source[source_idx] = device_spans_per_source_type(bloom_ranges.size());
+      std::for_each(
+        cuda::counting_iterator<std::size_t>(0),
+        cuda::counting_iterator<std::size_t>(bloom_ranges.size()),
+        [&](auto const inner_idx) {
+          auto const bitset_size = bitset_sizes[filter_idx];
 
-      // Absent filter: leave an empty span
-      if (bitset_size == 0) { continue; }
+          // Absent or skipped filter: leave an empty span
+          if (bitset_size == 0) {
+            ++filter_idx;
+            return;
+          }
 
-      auto* const device_dst = device_base + device_offset;
-      CUDF_EXPECTS(reinterpret_cast<std::uintptr_t>(device_dst) % bloom_filter_block_bytes == 0,
-                   "Encountered a misaligned bloom filter bitset");
-      bitset_spans_per_source[source_idx][inner_idx] =
-        cudf::device_span<uint8_t const>{device_dst, bitset_size};
+          auto* const device_dst = device_base + device_offset;
+          CUDF_EXPECTS(reinterpret_cast<std::uintptr_t>(device_dst) % bloom_filter_block_bytes == 0,
+                       "Encountered a misaligned bloom filter bitset");
+          bitset_spans_per_source[source_idx][inner_idx] =
+            cudf::device_span<uint8_t const>{device_dst, bitset_size};
+          copy_dsts.push_back(device_dst);
+          copy_srcs.push_back(bitset_src_addrs[filter_idx]);
+          copy_sizes.push_back(bitset_size);
+          device_offset += bitset_size;
+          ++filter_idx;
+        });
+    });
 
-      if (spec_buffers[filter_idx]->size() >= bloom_total_sizes[filter_idx]) {
-        // Whole bitset already read speculatively: copy it directly, stripping the header
-        copy_srcs.push_back(spec_buffers[filter_idx]->data() + bloom_header_sizes[filter_idx]);
-      } else {
-        // Bitset came from the follow-up read (queued in the same order)
-        auto const& buffer = followup_buffers[followup_index++];
-        CUDF_EXPECTS(buffer->size() == bitset_size, "Failed to read complete bloom filter bitset");
-        copy_srcs.push_back(buffer->data());
-      }
-      copy_dsts.push_back(device_dst);
-      copy_sizes.push_back(bitset_size);
-      device_offset += cudf::util::round_up_safe(bitset_size, bloom_filter_block_bytes);
-    }
-  }
-
-  // One batched host-to-device copy for every bitset (bloom filters never use direct device reads).
+  // One batched copy
   if (not copy_dsts.empty()) {
     {
       std::scoped_lock<std::mutex> lock(device_read_mutex());
@@ -599,7 +637,10 @@ fetch_bloom_filters_to_device_impl(
     }
     stream.synchronize();
   }
-  return {std::move(bitset_buffers_per_source), std::move(bitset_spans_per_source)};
+
+  std::vector<rmm::device_buffer> bitset_buffers;
+  bitset_buffers.push_back(std::move(bitset_buffer));
+  return {std::move(bitset_buffers), std::move(bitset_spans_per_source)};
 }
 
 }  // namespace

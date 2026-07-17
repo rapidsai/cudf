@@ -384,9 +384,11 @@ aggregate_reader_metadata::read_bloom_filters(
             auto const length = col_meta.bloom_filter_length.has_value()
                                   ? static_cast<int64_t>(col_meta.bloom_filter_length.value())
                                   : std::min(speculative_read_size, source_size - offset);
-            source_ranges.push_back(cudf::io::text::byte_range_info{offset, length});
+            CUDF_EXPECTS(length >= 0 and offset + length <= source_size,
+                         "Bloom filter length is out of datasource bounds");
+            source_ranges.push_back({offset, length});
           } else {
-            source_ranges.push_back(cudf::io::text::byte_range_info{0, 0});
+            source_ranges.push_back({0, 0});
           }
         });
       });
