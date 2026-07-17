@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 ########################
 # cuDF Version Updater #
@@ -144,6 +144,7 @@ echo "${RAPIDS_BRANCH_NAME}" > RAPIDS_BRANCH
 DEPENDENCIES=(
   cudf
   cudf-polars
+  cudf-streaming
   cudf_kafka
   cugraph
   cuml
@@ -153,9 +154,11 @@ DEPENDENCIES=(
   kvikio
   libcudf
   libcudf-example
+  libcudf-streaming
   libcudf-tests
   libcudf_kafka
   libkvikio
+  librapidsmpf
   librmm
   pylibcudf
   rapids-dask-dependency
