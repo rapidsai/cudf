@@ -143,7 +143,7 @@ class IRExecutionContext:
     quent_ir_execution_context
         Optional Quent tracing context bound to a physical operator.
     tracer
-        The actor tracer.
+        The actor tracer. Used to propagate statistics.
     """
 
     py_executor: concurrent.futures.ThreadPoolExecutor | None = field(default=None)

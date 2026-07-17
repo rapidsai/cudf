@@ -119,10 +119,6 @@ class QuentContext:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "_query_group_cache_", set())
-        # Maps task id -> unix timestamp when an I/O task entered Allocating.
-        # Used to backdate the Loading transition so channel rate spans cover
-        # the full disk-to-device transfer duration.
-        object.__setattr__(self, "_io_loading_started_at_", {})
 
     def serialize(self) -> bytes:
         """
