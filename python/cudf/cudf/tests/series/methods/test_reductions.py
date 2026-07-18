@@ -903,7 +903,7 @@ def test_timedelta_reductions(data, op, timedelta_types_as_str):
     actual = getattr(sr, op)()
     expected = getattr(psr, op)()
 
-    if np.isnat(expected.to_numpy()) and np.isnat(actual):
+    if expected is pd.NaT and actual is pd.NaT:
         assert True
     else:
         assert_eq(expected.to_numpy(), actual)
