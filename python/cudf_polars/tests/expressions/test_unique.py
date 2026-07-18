@@ -12,6 +12,12 @@ from cudf_polars.testing.asserts import (
 )
 
 
+def test_arg_unique(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [1, 2, 2, None, 3]})
+    q = df.select(pl.col("a").arg_unique())
+    assert_gpu_result_equal(q, engine=engine)
+
+
 def test_unique_counts(engine: pl.GPUEngine) -> None:
     df = pl.LazyFrame({"a": [1, 2, 2, None, 3]})
     q = df.select(pl.col("a").unique_counts())
