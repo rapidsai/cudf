@@ -2463,6 +2463,16 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if not len(chunk_results):
             return self.obj.head(0)
+        if (
+            isinstance(self.obj, DataFrame)
+            and not isinstance(chunk_results, ColumnBase)
+            and all(res is None for res in chunk_results)
+        ):
+            # pandas GH9684/GH57775: an all-None DataFrameGroupBy.apply
+            # returns an empty frame keeping the (non-grouping) columns and
+            # dtypes. (An all-None SeriesGroupBy.apply stays in the scalar
+            # branch below: pandas returns an object Series of Nones.)
+            return grouped_values.head(0).reset_index(drop=True)
         if isinstance(chunk_results, ColumnBase) or is_scalar(
             chunk_results[0]
         ):
@@ -2491,41 +2501,49 @@ class GroupBy(Serializable, Reducible, Scannable):
                 result.columns = result.columns.set_names(
                     [chunk_results[0].name]
                 )
-            # When the UDF is like df.x + df.y, the result for each
-            # group is the same length as the original group
-            elif (total_rows := sum(len(chk) for chk in chunk_results)) in {
-                len(self.obj),
-                len(group_names),
-            }:
-                result = concat(chunk_results)
-                if total_rows == len(group_names):
-                    result.index = group_names
-                    # TODO: Is there a better way to determine what
-                    # the column name should be, especially if we applied
-                    # a nameless UDF.
-                    result = result.to_frame(
-                        name=grouped_values._column_names[0]
-                    )
-                else:
-                    index_data = group_keys._data.copy(deep=True)
-                    inner_name = grouped_values.index.name
-                    index_data[None] = grouped_values.index._column
-                    mi = MultiIndex._from_data(index_data)
-                    # ColumnAccessor keys must be unique, so the inner
-                    # level's name (which may duplicate a key name) is
-                    # restored after construction.
-                    mi.names = [*mi.names[:-1], inner_name]
-                    result.index = mi
-            elif len(chunk_results) == len(group_names):
-                result = concat(chunk_results, axis=1).T
+            # pandas stacks Series results that share an identical index
+            # into a DataFrame with one row per group and columns given by
+            # the common index (DataFrameGroupBy._wrap_applied_output_series)
+            elif all(
+                chunk_results[0].index.equals(chk.index)
+                for chk in chunk_results[1:]
+            ):
+                # a consistent Series name becomes the columns-axis name
+                # (pandas GH6124). Chunks are renamed positionally before
+                # the axis=1 concat because cuDF rejects duplicate column
+                # names.
+                names = {chk.name for chk in chunk_results}
+                result = concat(
+                    [chk.rename(i) for i, chk in enumerate(chunk_results)],
+                    axis=1,
+                ).T
                 result.index = group_names
                 result.index.names = self.grouping.names
+                if len(names) == 1:
+                    result._data._level_names = (names.pop(),)
             else:
-                raise TypeError(
-                    "Error handling Groupby apply output with input of "
-                    f"type {type(self.obj)} and output of "
-                    f"type {type(chunk_results[0])}"
+                # pandas GH8467: Series results with differing indexes are
+                # concatenated along axis 0 into a Series with the group
+                # keys prepended as the outer index level(s), each key
+                # repeated by its chunk's actual length and the UDF-returned
+                # index kept as the inner level
+                # (GroupBy._concat_objects with ``not_indexed_same=True``).
+                # This also covers transform-like UDFs: chunks indexed like
+                # their input concatenate back to the grouped input's index.
+                lengths = [len(chk) for chk in chunk_results]
+                result = concat(chunk_results)
+                gather = as_column(
+                    np.repeat(np.arange(len(group_names)), lengths)
                 )
+                index_data = {
+                    i: col.take(gather)
+                    for i, col in enumerate(group_names._columns)
+                }
+                inner_name = result.index.name
+                index_data[None] = result.index._column
+                mi = MultiIndex._from_data(index_data)
+                mi.names = [*self.grouping.names, inner_name]
+                result.index = mi
         else:
             result = concat(chunk_results)
             if self._group_keys:
@@ -2543,6 +2561,19 @@ class GroupBy(Serializable, Reducible, Scannable):
                 # construction.
                 mi.names = [*mi.names[:-1], inner_name]
                 result.index = mi
+            elif len(result) == len(grouped_values) and result.index.equals(
+                grouped_values.index
+            ):
+                # Every chunk result is indexed like its input chunk, i.e.
+                # the UDF acted as a transform. pandas restores the original
+                # row order in this case (GroupBy._concat_objects) regardless
+                # of ``sort``. The concatenated chunks are in key-sorted
+                # group order, so gather back through the inverse of the
+                # grouping permutation.
+                _, _, (positions,) = self._groups(
+                    [self._range_column_from_obj]
+                )
+                result = result.take(positions.argsort().values)
         return result
 
     @_performance_tracking
@@ -2578,8 +2609,8 @@ class GroupBy(Serializable, Reducible, Scannable):
           where possible and will fall back to the iterative algorithm if
           necessary.
         include_groups : bool, default False
-            When True, will attempt to apply ``func`` to the groupings in
-            the case that they are columns of the DataFrame.
+            Only ``False`` is accepted (matching pandas 3.0, where
+            ``include_groups=True`` raises a ``ValueError``).
         kwargs : dict
             Optional keyword arguments to pass to the function.
             Currently not supported
@@ -2659,6 +2690,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         dtype: int64
 
         """
+        if include_groups:
+            # matches pandas 3.0
+            raise ValueError("include_groups=True is no longer allowed.")
         if kwargs:
             raise NotImplementedError(
                 "Passing kwargs to func is currently not supported."
@@ -2739,8 +2773,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         else:
             raise ValueError(f"Unsupported engine '{engine}'")
 
-        if self._sort:
-            result = result.sort_index()
+        # No final sort: group-keyed results are already produced in
+        # sorted group-key order, and pandas preserves the UDF's
+        # within-group row order (and a transform's original row order)
+        # regardless of ``sort`` (pandas GH52444).
         if self._as_index is False:
             result = result.reset_index()
         return result

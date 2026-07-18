@@ -937,11 +937,13 @@ def _mapping_to_column_accessor(
             if (
                 dtype is None
                 and len(column) == 0
-                and isinstance(value, (list, tuple, range))
+                and isinstance(value, (list, tuple, Iterator))
             ):
-                # pandas' DataFrame constructor coerces untyped empty
-                # sequences to float64 (unlike Series([]), which stays
-                # object).
+                # pandas' DataFrame constructor defaults untyped empty
+                # sequences (list/tuple/iterator) to float64 (numpy's
+                # default for np.array([])), unlike Series([]) which
+                # defaults to object. An empty range stays int64 like
+                # pandas (as_column already handles it via from_range).
                 column = column_empty(0, dtype=np.dtype(np.float64))
             value_lengths.add(len(column))
             col_data[key] = column
@@ -4432,9 +4434,20 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             result.index = out_index
 
         if columns:
-            result._data = result._data.rename_levels(
-                mapper=columns, level=level
-            )
+            new_ca = result._data.rename_levels(mapper=columns, level=level)
+            # pandas' rename rebuilds the columns Index from the transformed
+            # labels (``Index(items, tupleize_cols=False)`` in
+            # ``_transform_index``), re-inferring dtypes rather than
+            # preserving the originals: renaming object-dtype columns to
+            # all-string labels yields ``str``, and MultiIndex level dtypes
+            # are likewise re-inferred.
+            if new_ca.multiindex:
+                new_ca._level_dtypes = None
+            else:
+                new_ca.label_dtype = pd.Index(
+                    new_ca.names, tupleize_cols=False
+                ).dtype
+            result._data = new_ca
 
         return result
 
@@ -6731,8 +6744,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 include=[np.number], exclude=["datetime64", "timedelta64"]
             )
 
-        if columns is None:
-            columns = set(data_df._column_names)
+        if columns is not None:
+            requested = set(columns)
+            data_df = data_df[
+                [k for k in data_df._column_names if k in requested]
+            ]
 
         if isinstance(q, numbers.Number):
             q_is_number = True
@@ -6782,17 +6798,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             interpolation = interpolation or "linear"
             result = {}
             for k in data_df._column_names:
-                if k in columns:
-                    ser = data_df[k]
-                    res = ser.quantile(
-                        qs,
-                        interpolation=interpolation,
-                        exact=exact,
-                        quant_index=False,
-                    )._column
-                    if len(res) == 0:
-                        res = column_empty(row_count=len(qs), dtype=ser.dtype)
-                    result[k] = res
+                ser = data_df[k]
+                res = ser.quantile(
+                    qs,
+                    interpolation=interpolation,
+                    exact=exact,
+                    quant_index=False,
+                )._column
+                if len(res) == 0:
+                    res = column_empty(row_count=len(qs), dtype=ser.dtype)
+                result[k] = res
         result_ca = ColumnAccessor(
             result,
             multiindex=data_df._data.multiindex,

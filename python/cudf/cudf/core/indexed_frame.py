@@ -4907,11 +4907,24 @@ class IndexedFrame(Frame):
             new_column_data[name] = col
         # This is to match pandas where the new data columns are always
         # inserted to the left of existing data columns.
+        label_dtype = None
+        if not self._data.multiindex:
+            # pandas computes the result columns by Index.insert into the
+            # existing columns Index, which preserves its dtype (e.g.
+            # Index([None], dtype=object).insert(0, "a") stays object);
+            # rebuilding from the merged labels would re-infer (pandas 3.0
+            # infers "str" for all-string labels). Emulate the insert
+            # provenance.
+            pd_columns = self._data.to_pandas_index
+            for new_name in reversed(list(new_column_data)):
+                pd_columns = pd_columns.insert(0, new_name)
+            label_dtype = pd_columns.dtype
         return (
             ColumnAccessor(
                 {**new_column_data, **self._data},
                 self._data.multiindex,
                 self._data._level_names,
+                label_dtype=label_dtype,
             ),
             index,
         )
