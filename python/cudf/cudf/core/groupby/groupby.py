@@ -2784,7 +2784,12 @@ class GroupBy(Serializable, Reducible, Scannable):
             values = values._align_to_index(
                 self.grouping.keys, how="right", allow_non_unique=True
             )
-            values.index = self.obj.index
+        # Even when no alignment is needed (every group is a single row,
+        # so the aggregated index already equals the group keys), the
+        # result must be indexed like the input rows, not the group
+        # labels (pandas GH#9941: transform returns an obj-indexed
+        # result).
+        values.index = self.obj.index
         return values
 
     @_performance_tracking
