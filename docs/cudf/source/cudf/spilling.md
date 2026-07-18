@@ -38,7 +38,7 @@ Spilling uses these public options and matching environment variables:
 | `spill` | `CUDF_SPILL` | `False` | Enables the global spill manager. |
 | `spill_on_demand` | `CUDF_SPILL_ON_DEMAND` | `True` | Registers an RMM out-of-memory handler when spilling is enabled. |
 | `spill_device_limit` | `CUDF_SPILL_DEVICE_LIMIT` | `None` | Sets a soft byte limit over manager-tracked, currently unspilled cuDF buffers. |
-| `spill_stats` | `CUDF_SPILL_STATS` | `0` | Enables transfer totals at level 1 and exposure tracebacks at level 2 or above. |
+| `spill_stats` | `CUDF_SPILL_STATS` | `0` | Enables duration and byte totals for spill and unspill transfers at level 1 and tracebacks for permanently exposed spillable buffers at level 2 or above. |
 
 `spill_on_demand`, `spill_device_limit`, and `spill_stats` have no effect when `spill` is disabled.
 See {ref}`api.options` for the public options reference.
