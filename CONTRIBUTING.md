@@ -103,6 +103,22 @@ CUDA/GPU Runtime:
 You can obtain CUDA from
 [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).
 
+Host resources for local source builds:
+
+* For a practical local build setup, use at least 8 CPU cores and 32 GB of host RAM.
+* A build may work with about 16 GB of host RAM if compilation is limited to one job, but compile
+  time will be very long.
+* The `build.sh` script defaults `PARALLEL_LEVEL` to `nproc`, so CMake build steps use all
+  detected CPU cores unless you set a lower value.
+  For a memory-constrained host, run a single-job build with:
+
+```bash
+PARALLEL_LEVEL=1 ./build.sh libcudf
+```
+
+Disk use depends on the selected build targets, dependency caches, tests, benchmarks, GPU
+architecture selection, and retained build directories.
+
 ### Create the build environment
 
 - Clone the repository:
