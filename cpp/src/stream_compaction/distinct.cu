@@ -7,22 +7,27 @@
 #include "hash/murmurhash3_x86_32.cuh"
 
 #include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/gather.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/stream_compaction.hpp>
+#include <cudf/hashing.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/polymorphic_allocator.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <cuco/types.cuh>
 
 #include <memory>
 #include <type_traits>

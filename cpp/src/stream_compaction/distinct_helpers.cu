@@ -6,9 +6,13 @@
 #include "distinct_helpers.hpp"
 
 #include <cudf/detail/algorithms/copy_if.cuh>
+#include <cudf/stream_compaction.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <cuda/iterator>

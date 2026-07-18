@@ -4,6 +4,14 @@
  */
 
 #include "distinct_helpers.cuh"
+#include "distinct_helpers.hpp"
+
+#include <cudf/detail/row_operator/equality.cuh>
+#include <cudf/types.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf::detail {
 

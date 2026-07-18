@@ -7,13 +7,19 @@
 
 #include "distinct_helpers.hpp"
 
+#include <cudf/stream_compaction.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuco/operator.hpp>
 #include <cuda/iterator>
 #include <cuda/std/atomic>
+#include <cuda/std/iterator>
 #include <thrust/for_each.h>
 
 namespace cudf::detail {

@@ -5,21 +5,28 @@
 
 #pragma once
 
-#include <cudf/detail/cuco_helpers.hpp>
-#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/row_operator/hashing.cuh>
+#include <cudf/hashing.hpp>
+#include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/polymorphic_allocator.hpp>
+#include <rmm/resource_ref.hpp>
 
+#include <cuco/extent.cuh>
+#include <cuco/probing_scheme.cuh>
 #include <cuco/static_set.cuh>
-#include <cuda/functional>
-#include <cuda/std/iterator>
+#include <cuco/storage.cuh>
+#include <cuda/atomic>
+
+#include <cstdint>
+#include <limits>
 
 namespace cudf::detail {
 
