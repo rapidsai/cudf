@@ -4,6 +4,8 @@
  */
 
 #include "io/orc/orc.hpp"
+#include "io/parquet/compact_protocol_reader.hpp"
+#include "io/parquet/compact_protocol_writer.hpp"
 #include "io/parquet/reader_impl_helpers.hpp"
 
 #include <cudf/detail/iterator.cuh>
@@ -30,6 +32,7 @@
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <algorithm>
 #include <functional>
@@ -682,6 +685,30 @@ std::vector<parquet::FileMetaData> read_parquet_footers(
 {
   CUDF_FUNC_RANGE();
   return detail_parquet::read_parquet_footers(sources);
+}
+
+parquet::FileMetaData read_parquet_footer_bytes(host_span<uint8_t const> footer_bytes)
+{
+  CUDF_FUNC_RANGE();
+  CompactProtocolReader reader{footer_bytes.data(), footer_bytes.size()};
+  parquet::FileMetaData metadata;
+  // Deliberately does not require the buffer to be consumed exactly. Callers legitimately pass a
+  // footer framed with trailing bytes (e.g. the Parquet footer-length word), which the reader
+  // ignores by stopping at the struct terminator, matching the Thrift-compact reader's contract.
+  // In-struct truncation and corruption still fail via the reader's overread guard and per-field
+  // bounds checks; bytes past the terminator are trusted by design (indistinguishable from a
+  // legitimate frame) and are not validated.
+  reader.read(&metadata);
+  return metadata;
+}
+
+std::vector<uint8_t> write_parquet_footer_bytes(parquet::FileMetaData const& metadata)
+{
+  CUDF_FUNC_RANGE();
+  std::vector<uint8_t> out;
+  CompactProtocolWriter writer{&out};
+  writer.write(metadata);
+  return out;
 }
 
 /**

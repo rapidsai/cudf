@@ -14,7 +14,9 @@
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/span.hpp>
 
+#include <cstdint>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -293,6 +295,31 @@ parquet_metadata read_parquet_metadata(source_info const& src_info);
  */
 std::vector<parquet::FileMetaData> read_parquet_footers(
   std::span<std::unique_ptr<cudf::io::datasource> const> sources);
+
+/**
+ * @brief Deserialize a Parquet footer (`FileMetaData`) from Thrift-compact-encoded bytes
+ *
+ * @ingroup io_readers
+ *
+ * @note Bytes after the footer struct (such as a trailing length or magic frame) are ignored
+ *
+ * @param footer_bytes Thrift-compact-encoded Parquet `FileMetaData` (footer) bytes
+ *
+ * @throws cudf::logic_error If the input is truncated or corrupt
+ * @return The deserialized `FileMetaData`
+ */
+parquet::FileMetaData read_parquet_footer_bytes(host_span<uint8_t const> footer_bytes);
+
+/**
+ * @brief Serialize a Parquet footer (`FileMetaData`) to Thrift-compact-encoded bytes
+ *
+ * @ingroup io_writers
+ *
+ * @param metadata The `FileMetaData` (footer) to serialize
+ *
+ * @return The Thrift-compact-encoded bytes
+ */
+std::vector<uint8_t> write_parquet_footer_bytes(parquet::FileMetaData const& metadata);
 
 /** @} */  // end of group
 }  // namespace io
