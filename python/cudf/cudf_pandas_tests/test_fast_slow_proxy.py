@@ -642,6 +642,90 @@ def test_transform_arg_preserves_object_ndarray_identity(
     assert type(result[1]) is type(expected)
 
 
+@pytest.mark.parametrize("attribute_name", ["_fsproxy_fast", "_fsproxy_slow"])
+def test_transform_arg_preserves_list_and_dict_identity(attribute_name):
+    # A list or dict whose entries need no transformation must be
+    # returned as-is rather than rebuilt: a user function may close over
+    # a mutable container and mutate it for its side effects (e.g.
+    # ``names.append(group.name)`` inside groupby.apply), and rebuilding
+    # the closure around an equivalent copy would silently discard those
+    # mutations.
+    transform = partial(
+        _transform_arg, attribute_name=attribute_name, seen=set()
+    )
+    for unchanged in (
+        [],
+        [1, "a"],
+        {},
+        {"k": 1, 2: "v"},
+        [[1], {"k": (2,)}],
+        {"k": [1, {"nested": 2}]},
+    ):
+        assert transform(unchanged) is unchanged
+
+
+@pytest.mark.parametrize("attribute_name", ["_fsproxy_fast", "_fsproxy_slow"])
+def test_transform_arg_rebuilds_containers_holding_proxies(
+    attribute_name, final_proxy
+):
+    transform = partial(
+        _transform_arg, attribute_name=attribute_name, seen=set()
+    )
+    fast_x, slow_x, x = final_proxy
+    expected_type = type(
+        fast_x if attribute_name == "_fsproxy_fast" else slow_x
+    )
+
+    lst = [1, x]
+    result = transform(lst)
+    assert result is not lst
+    assert result[0] == 1
+    assert type(result[1]) is expected_type
+
+    dct = {"k": x}
+    result = transform(dct)
+    assert result is not dct
+    assert type(result["k"]) is expected_type
+
+    # A proxy nested deeper down rebuilds every enclosing container.
+    nested = [{"k": x}]
+    result = transform(nested)
+    assert result is not nested
+    assert type(result[0]["k"]) is expected_type
+
+    # Rebuilt lists preserve list subclasses.
+    class MyList(list):
+        pass
+
+    my_list = MyList([1, x])
+    result = transform(my_list)
+    assert result is not my_list
+    assert type(result) is MyList
+    assert type(result[1]) is expected_type
+
+
+@pytest.mark.parametrize("attribute_name", ["_fsproxy_fast", "_fsproxy_slow"])
+def test_transform_arg_dict_subclass_identity_avoids_overrides(
+    attribute_name,
+):
+    # The unchanged-identity detection must compare entries via ``items()``
+    # (which the transformation itself already consumed) rather than
+    # ``__iter__``/``__getitem__``, which a mapping subclass may override
+    # with semantics that break the comparison.
+    class NoDunderDict(dict):
+        def __iter__(self):
+            raise AssertionError("__iter__ must not be used")
+
+        def __getitem__(self, key):
+            raise AssertionError("__getitem__ must not be used")
+
+    transform = partial(
+        _transform_arg, attribute_name=attribute_name, seen=set()
+    )
+    unchanged = NoDunderDict({"k": 1})
+    assert transform(unchanged) is unchanged
+
+
 def test_tuple_with_attrs_transform():
     Bunch = tuple_with_attrs("Bunch", ["a", "b"], {"c", "d"})
     Bunch2 = tuple_with_attrs("Bunch", ["a", "b"], {"c", "d"})
@@ -661,7 +745,8 @@ def test_tuple_with_attrs_transform():
     cprime = transform(c)
     dprime = transform(d)
     assert a == aprime and a is not aprime
-    assert b == bprime and b is not bprime
+    # A plain tuple with no transformable elements keeps its identity.
+    assert b is bprime
     assert c == cprime and c is not cprime
     assert d == dprime and d is not dprime
 
