@@ -1418,7 +1418,26 @@ def _transform_arg(
     elif isinstance(arg, types.ModuleType) and attribute_name in arg.__dict__:
         return arg.__dict__[attribute_name]
     elif isinstance(arg, list):
-        return type(arg)(_transform_arg(a, attribute_name, seen) for a in arg)
+        transformed_list = [
+            _transform_arg(a, attribute_name, seen) for a in arg
+        ]
+        if all(
+            new is old for new, old in zip(transformed_list, arg, strict=True)
+        ):
+            # No element needed transforming: return the original list (as
+            # the object-ndarray branch below already does) to preserve
+            # identity. A user function may close over a mutable container
+            # and mutate it for its side effects (e.g.
+            # ``names.append(group.name)`` inside groupby.apply); copying
+            # here would silently discard those side effects on both the
+            # fast attempt and the pandas fallback, and also defeats
+            # _replace_closurevars' unchanged-check so the original
+            # function object is never passed through.
+            return arg
+        # Pass an iterator rather than the materialized list so list
+        # subclasses see the same non-list iterable constructor argument
+        # they always received here.
+        return type(arg)(iter(transformed_list))
     elif isinstance(arg, tuple):
         # This attempts to handle arbitrary subclasses of tuple by
         # assuming that if you've subclassed tuple with some special
@@ -1455,9 +1474,19 @@ def _transform_arg(
                     )
                 )
             else:
-                return tuple(
+                transformed_tuple = [
                     _transform_arg(a, attribute_name, seen) for a in arg
-                )
+                ]
+                if all(
+                    new is old
+                    for new, old in zip(transformed_tuple, arg, strict=True)
+                ):
+                    # No element needed transforming: return the original
+                    # tuple (immutable, so this is safe) so containers
+                    # enclosing it also keep their identity (see the list
+                    # branch above).
+                    return arg
+                return tuple(transformed_tuple)
         elif hasattr(arg, "__getnewargs_ex__"):
             # Partial implementation of to reconstruct with
             # transformed pieces
@@ -1490,12 +1519,21 @@ def _transform_arg(
                 _transform_arg(a, attribute_name, seen) for a in args
             )
     elif isinstance(arg, dict):
-        return {
+        transformed_dict = {
             _transform_arg(k, attribute_name, seen): _transform_arg(
                 a, attribute_name, seen
             )
             for k, a in arg.items()
         }
+        if len(transformed_dict) == len(arg) and all(
+            new_k is old_k and new_v is old_v
+            for (new_k, new_v), (old_k, old_v) in zip(
+                transformed_dict.items(), arg.items(), strict=True
+            )
+        ):
+            # see the list branch above: preserve identity when unchanged
+            return arg
+        return transformed_dict
     elif isinstance(arg, np.ndarray) and arg.dtype == "O":
         transformed: list[Any] = [
             _transform_arg(a, attribute_name, seen) for a in arg.flat
