@@ -199,6 +199,15 @@ multisource_device_data fetch_multisource_device_data(
 {
   auto const byte_ranges_per_source =
     group_byte_ranges_by_source(byte_ranges_and_source_map, inputs.datasources.size());
+  return fetch_multisource_device_data(inputs, byte_ranges_per_source, stream, mr);
+}
+
+multisource_device_data fetch_multisource_device_data(
+  multifile_inputs const& inputs,
+  std::vector<std::vector<cudf::io::text::byte_range_info>> const& byte_ranges_per_source,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
   auto [buffers, per_source_spans, tasks] = cudf::io::parquet::fetch_byte_ranges_to_device_async(
     inputs.datasource_refs,
     cudf::host_span<std::vector<cudf::io::text::byte_range_info> const>{byte_ranges_per_source},

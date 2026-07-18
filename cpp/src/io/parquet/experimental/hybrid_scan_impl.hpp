@@ -194,6 +194,13 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   payload_column_chunks_byte_ranges(std::span<std::vector<size_type> const> row_group_indices,
                                     parquet_reader_options const& options);
 
+  [[nodiscard]] std::vector<std::vector<byte_range_info>> payload_column_chunks_byte_ranges(
+    std::span<std::vector<size_type> const> row_group_indices,
+    cudf::column_view const& row_mask,
+    use_data_page_mask mask_data_pages,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream);
+
   /**
    * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::materialize_payload_columns
    */
@@ -260,6 +267,17 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr);
 
+  void setup_chunking_for_payload_columns(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    std::span<std::vector<size_type> const> row_group_indices,
+    cudf::column_view const& row_mask,
+    use_data_page_mask mask_data_pages,
+    std::span<std::vector<cudf::device_span<uint8_t const>> const> page_data_per_source,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
+
   /**
    * @copydoc
    * cudf::io::parquet::experimental::hybrid_scan_multifile::materialize_payload_columns_chunk
@@ -313,6 +331,26 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @brief Enum indicating whether we are reading the filter, payload, or all columns
    */
   enum class read_columns_mode { FILTER_COLUMNS, PAYLOAD_COLUMNS, ALL_COLUMNS };
+
+  struct page_range_mapping {
+    cudf::size_type source_idx{};
+    std::size_t range_idx{};
+    std::size_t range_offset{};
+    std::size_t size{};
+    bool fetched{};
+  };
+
+  struct payload_page_io_plan {
+    bool sparse{};
+    use_data_page_mask mask_data_pages{};
+    std::vector<std::vector<size_type>> row_group_indices;
+    std::vector<int> column_schema_indices;
+    std::vector<std::vector<byte_range_info>> source_ranges;
+    std::vector<page_range_mapping> page_mappings;
+    std::vector<std::size_t> resident_bytes_per_chunk;
+    std::vector<uint8_t> dictionary_present_per_chunk;
+    thrust::host_vector<bool> data_page_mask;
+  };
 
   /**
    * @brief Populate the reader's `_options` config (and related members) from the user options.
@@ -460,7 +498,8 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    *
    * @param column_chunk_data Device spans of buffers containing column chunk data
    */
-  void setup_next_pass(std::span<cudf::device_span<uint8_t const> const> column_chunk_data);
+  void setup_next_pass(std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
+                       host_span<bool const> data_page_mask);
 
   /**
    * @brief Setup pointers to columns chunks to be processed for this pass.
@@ -567,6 +606,12 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   bool _is_filter_columns_selected{false};
   bool _is_payload_columns_selected{false};
   bool _is_all_columns_selected{false};
+
+  std::optional<payload_page_io_plan> _pending_payload_page_io_plan;
+  std::vector<cudf::device_span<uint8_t const>> _sparse_page_spans;
+  std::vector<std::size_t> _sparse_resident_bytes_per_chunk;
+  std::vector<uint8_t> _sparse_dictionary_present_per_chunk;
+  bool _sparse_page_io{false};
 };
 
 }  // namespace cudf::io::parquet::experimental::detail

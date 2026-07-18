@@ -719,7 +719,8 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
     auto const max_def_level = schema.max_definition_level;
     auto const max_rep_level = schema.max_repetition_level;
 
-    // Return early if any columns lack the offset index.
+    // Page locations and row boundaries only require the offset index. Additional value-count
+    // metadata is populated below when a column index is also available.
     if (not col_chunk.offset_index.has_value()) { return; }
 
     auto const& offset_index = col_chunk.offset_index.value();
