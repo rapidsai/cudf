@@ -81,7 +81,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
     from datetime import tzinfo
 
-    from cudf._typing import ColumnLike, Dtype
+    from cudf._typing import ColumnLike, Dtype, DtypeObj
     from cudf.core.dataframe import DataFrame
     from cudf.core.multiindex import MultiIndex
     from cudf.core.series import Series
@@ -844,29 +844,24 @@ class Index(SingleColumnFrame):
                 # tz-naive + tz-aware results in object dtype in pandas.
                 raise MixedTypeError("Cannot perform union with mixed types")
 
-            if cudf.get_option("mode.pandas_compatible"):
-                if (self_kind == "b" and other_kind != "b") or (
-                    self_kind != "b" and other_kind == "b"
-                ):
-                    # Bools + other types will result in mixed type.
-                    # This is not yet consistent in pandas and specific
-                    # to APIs.
-                    raise MixedTypeError(
-                        "Cannot perform union with mixed types"
-                    )
-                if (self_kind == "i" and other_kind == "u") or (
-                    self_kind == "u" and other_kind == "i"
-                ):
-                    # signed + unsigned types will result in
-                    # mixed type for union in pandas.
-                    raise MixedTypeError(
-                        "Cannot perform union with mixed types"
-                    )
+            if (self_kind == "b" and other_kind != "b") or (
+                self_kind != "b" and other_kind == "b"
+            ):
+                # Bools + other types will result in mixed type.
+                # This is not yet consistent in pandas and specific to
+                # APIs.
+                raise MixedTypeError("Cannot perform union with mixed types")
+            if (self_kind == "i" and other_kind == "u") or (
+                self_kind == "u" and other_kind == "i"
+            ):
+                # signed + unsigned types will result in mixed type for
+                # union in pandas, which cudf cannot represent.
+                raise MixedTypeError("Cannot perform union with mixed types")
 
         # pandas reconciles mismatched dtypes to their common type before
         # short-circuiting on an empty operand, so the result dtype must
         # not depend on which operand is empty.
-        promote_dtype: Dtype | None = None
+        promote_dtype: DtypeObj | None = None
         if not dtype_ignored and self.dtype != other.dtype:
             if is_dtype_obj_numeric(
                 self.dtype, include_decimal=False
