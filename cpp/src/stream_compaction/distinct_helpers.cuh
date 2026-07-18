@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,18 +18,31 @@
 
 namespace cudf::detail {
 
-template <typename RowEqual>
-rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
-                                             size_type num_rows,
-                                             duplicate_keep_option keep,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
+template <typename Set>
+rmm::device_uvector<size_type> reduce_by_row_keep_any(Set& set,
+                                                      size_type num_rows,
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::device_async_resource_ref mr)
+{
+  auto output_indices = rmm::device_uvector<size_type>(num_rows, stream, mr);
+
+  auto const iter = cuda::counting_iterator<cudf::size_type>{0};
+  set.insert_async(iter, iter + num_rows, stream.value());
+  auto const output_end = set.retrieve_all(output_indices.begin(), stream.value());
+  output_indices.resize(cuda::std::distance(output_indices.begin(), output_end), stream);
+  return output_indices;
+}
+
+template <typename Set>
+rmm::device_uvector<size_type> reduce_by_row_keep_first_last_none(Set& set,
+                                                                  size_type num_rows,
+                                                                  duplicate_keep_option keep,
+                                                                  rmm::cuda_stream_view stream,
+                                                                  rmm::device_async_resource_ref mr)
 {
   auto output_indices    = rmm::device_uvector<size_type>(num_rows, stream, mr);
   auto reduction_results = rmm::device_uvector<size_type>(num_rows, stream, mr);
-  if (keep != duplicate_keep_option::KEEP_ANY) {
-    initialize_reduction_results(reduction_results.data(), num_rows, keep, stream);
-  }
+  initialize_reduction_results(reduction_results.data(), num_rows, keep, stream);
 
   auto set_ref = set.ref(cuco::op::insert_and_find);
 
@@ -38,24 +51,19 @@ rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
                    cuda::counting_iterator{num_rows},
                    [set_ref, keep, reduction_results = reduction_results.begin()] __device__(
                      size_type const idx) mutable {
-                     auto const [inserted_idx_ptr, inserted] = set_ref.insert_and_find(idx);
+                     auto const [inserted_idx_ptr, _] = set_ref.insert_and_find(idx);
 
-                     if (keep == duplicate_keep_option::KEEP_ANY) {
-                       reduction_results[idx] =
-                         inserted ? idx : cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
+                     auto ref = cuda::atomic_ref<size_type, cuda::thread_scope_device>{
+                       reduction_results[*inserted_idx_ptr]};
+                     if (keep == duplicate_keep_option::KEEP_FIRST) {
+                       // Store the smallest index of all rows that are equal.
+                       ref.fetch_min(idx, cuda::memory_order_relaxed);
+                     } else if (keep == duplicate_keep_option::KEEP_LAST) {
+                       // Store the greatest index of all rows that are equal.
+                       ref.fetch_max(idx, cuda::memory_order_relaxed);
                      } else {
-                       auto ref = cuda::atomic_ref<size_type, cuda::thread_scope_device>{
-                         reduction_results[*inserted_idx_ptr]};
-                       if (keep == duplicate_keep_option::KEEP_FIRST) {
-                         // Store the smallest index of all rows that are equal.
-                         ref.fetch_min(idx, cuda::memory_order_relaxed);
-                       } else if (keep == duplicate_keep_option::KEEP_LAST) {
-                         // Store the greatest index of all rows that are equal.
-                         ref.fetch_max(idx, cuda::memory_order_relaxed);
-                       } else {
-                         // Count the number of rows in each group of rows that are compared equal.
-                         ref.fetch_add(size_type{1}, cuda::memory_order_relaxed);
-                       }
+                       // Count the number of rows in each group of rows that are compared equal.
+                       ref.fetch_add(size_type{1}, cuda::memory_order_relaxed);
                      }
                    });
 

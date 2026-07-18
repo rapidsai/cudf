@@ -7,12 +7,12 @@
 
 namespace cudf::detail {
 
-template rmm::device_uvector<size_type> reduce_by_row(
-  distinct_set_t<cudf::detail::row::equality::
-                   device_row_comparator<true, cudf::nullate::DYNAMIC, distinct_physical_equality>>&
-    set,
+template rmm::device_uvector<size_type> reduce_by_row_keep_any(
+  distinct_set_t<cudf::detail::row::equality::device_row_comparator<
+    false,
+    cudf::nullate::DYNAMIC,
+    cudf::detail::row::equality::nan_equal_physical_equality_comparator>>& set,
   size_type num_rows,
-  duplicate_keep_option keep,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 

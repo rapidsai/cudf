@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "distinct_helpers.cuh"
+#include "distinct_helpers.hpp"
 
 #include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/utilities/memory_resource.hpp>
@@ -47,7 +47,7 @@ size_type copy_reduction_results(size_type const* results,
         stream);
     }
 
-    // Other modes store desired row indices or the mode's initial marker.
+    // KEEP_FIRST and KEEP_LAST store desired row indices or the mode's initial marker.
     return cudf::detail::copy_if(
       results,
       results + num_rows,
@@ -59,14 +59,5 @@ size_type copy_reduction_results(size_type const* results,
 
   return cuda::std::distance(output, output_end);
 }
-
-template rmm::device_uvector<size_type> reduce_by_row(
-  distinct_set_t<
-    cudf::detail::row::equality::
-      device_row_comparator<false, cudf::nullate::DYNAMIC, distinct_physical_equality>>& set,
-  size_type num_rows,
-  duplicate_keep_option keep,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
 
 }  // namespace cudf::detail
