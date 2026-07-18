@@ -30,7 +30,9 @@ from cudf_polars.dsl.ir import (
     _prepare_parquet_predicate,
 )
 from cudf_polars.dsl.to_ast import to_parquet_filter
-from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
+import nvtx
+
+from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN, nvtx_annotate_cudf_polars
 from cudf_polars.streaming.base import (
     IOPartitionFlavor,
     IOPartitionPlan,
@@ -217,8 +219,8 @@ class PrefetchedByteRanges:
     payload_ranges: list[plc.io.text.ByteRangeInfo]
     filter_host: memoryview | None
     payload_host: memoryview | None
-    filter_futures: list[IOFuture]
-    payload_futures: list[IOFuture]
+    filter_futures: list[IOFuture] = dataclasses.field(default_factory=list, compare=False, repr=False)
+    payload_futures: list[IOFuture] = dataclasses.field(default_factory=list, compare=False, repr=False)
     filter_buf: PinnedBuffer | None = dataclasses.field(default=None, compare=False, repr=False)
     payload_buf: PinnedBuffer | None = dataclasses.field(default=None, compare=False, repr=False)
 
@@ -231,8 +233,6 @@ class PrefetchedByteRanges:
             payload_ranges=[],
             filter_host=None,
             payload_host=None,
-            filter_futures=[],
-            payload_futures=[],
         )
 
     def release(self) -> None:
@@ -257,16 +257,23 @@ def copy_host_ranges_to_device(
     futures: list[IOFuture],
     stream: Stream,
 ) -> list[plc.gpumemoryview]:
-    """Wait for in-flight reads and async-copy each range from pinned host to device."""
-    for f in futures:
-        f.get()
+    """Wait for in-flight S3 reads then copy pinned host ranges to device."""
+    total = sum(r.size for r in ranges)
+    if not total:
+        return []
+    rng = nvtx.start_range("copy_host_ranges_to_device", domain=CUDF_POLARS_NVTX_DOMAIN)
+    with nvtx_annotate_cudf_polars(message="pread_ranges:wait"):
+        for f in futures:
+            f.get()
+    buf = DeviceBuffer(size=total)
+    buf.copy_from_host(host[:total], stream=stream)
+    gv = plc.gpumemoryview(buf)
     result = []
     offset = 0
     for r in ranges:
-        dev = DeviceBuffer(size=r.size)
-        dev.copy_from_host(host[offset : offset + r.size], stream=stream)
-        result.append(plc.gpumemoryview(dev))
+        result.append(gv[offset : offset + r.size])
         offset += r.size
+    nvtx.end_range(rng)
     return result
 
 

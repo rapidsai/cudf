@@ -245,13 +245,6 @@ class ParquetOptions:
         row group assigned to this split, which is useful for benchmarking
         the two-pass read overhead in isolation.
         Only has effect when ``use_hybrid_scan`` is ``True``.
-    prefetch_depth
-        Number of splits whose pinned host buffers may be in-flight
-        simultaneously per prefetch worker. Higher values allow the prefetch
-        workers to run further ahead of producers at the cost of additional
-        pinned host memory. Default is 2.
-        Only has effect when ``use_hybrid_scan`` and ``prefetch_file_metadata``
-        are both ``True``.
     prefetch_file_metadata
         Whether to prefetch parquet file metadata and pass it through
         `parquet_metadatas` to avoid rereading file footers.
@@ -322,13 +315,6 @@ class ParquetOptions:
             default=True,
         )
     )
-    prefetch_depth: int = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__PREFETCH_DEPTH",
-            int,
-            default=2,
-        )
-    )
     use_jit_filter: bool = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__USE_JIT_FILTER",
@@ -356,8 +342,6 @@ class ParquetOptions:
             raise TypeError("use_hybrid_scan must be a bool")
         if not isinstance(self.hybrid_scan_stats_pruning, bool):
             raise TypeError("hybrid_scan_stats_pruning must be a bool")
-        if not isinstance(self.prefetch_depth, int):
-            raise TypeError("prefetch_depth must be an int")
         if not isinstance(self.prefetch_file_metadata, bool):
             raise TypeError("prefetch_file_metadata must be a bool")
 

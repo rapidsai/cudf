@@ -16,8 +16,11 @@ from rapidsmpf.memory.pinned_memory_resource import PinnedMemoryResource
 from rapidsmpf.streaming.core.memory_reserve_or_wait import reserve_memory
 from rmm.pylibrmm.stream import Stream
 
+import nvtx
+
 from cudf_polars.dsl.ir import _prepare_parquet_predicate
 from cudf_polars.dsl.to_ast import to_parquet_filter
+from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN, nvtx_annotate_cudf_polars
 from cudf_polars.streaming.io import PrefetchedByteRanges, _fetch_byte_ranges
 
 if TYPE_CHECKING:
@@ -53,8 +56,12 @@ class PinnedBuffer:
         self.array = memoryview((ctypes.c_uint8 * nbytes).from_address(self.ptr))
 
     def __del__(self) -> None:
-        self.reservation.clear()
-        self.mr.deallocate(self.ptr, self.nbytes, self.stream)
+        # Guard against partial init (e.g. if reserve_memory raised before
+        # self.reservation was set).
+        if hasattr(self, "reservation"):
+            self.reservation.clear()
+        if hasattr(self, "ptr"):
+            self.mr.deallocate(self.ptr, self.nbytes, self.stream)
 
 
 def pread_ranges(
@@ -72,11 +79,12 @@ def pread_ranges(
     buf = PinnedBuffer(pinned_mr, total, stream, context, loop)
     futures = []
     offset = 0
-    for r in ranges:
-        futures.append(
-            handle.pread(buf.array[offset : offset + r.size], size=r.size, file_offset=r.offset)
-        )
-        offset += r.size
+    with nvtx_annotate_cudf_polars(message="pread_ranges:submit"):
+        for r in ranges:
+            futures.append(
+                handle.pread(buf.array[offset : offset + r.size], size=r.size, file_offset=r.offset)
+            )
+            offset += r.size
     return buf.array, futures, buf
 
 
@@ -137,27 +145,37 @@ def prefetch_scan_byte_ranges(
     reader = cached_info[0].hybrid_scan_reader(id(scan.base_scan), options)
 
     if scan.parquet_options.hybrid_scan_stats_pruning:
-        row_group_indices = reader.filter_row_groups_with_stats(
-            row_group_indices, options, stream=stream
-        )
+        with nvtx_annotate_cudf_polars(message="filter_row_groups_with_stats"):
+            row_group_indices = reader.filter_row_groups_with_stats(
+                row_group_indices, options, stream=stream
+            )
 
     if row_group_indices:
         bloom_ranges, _ = reader.secondary_filters_byte_ranges(row_group_indices, options)
         if bloom_ranges:
-            bloom_chunks = _fetch_byte_ranges(scan.paths, bloom_ranges, stream)
-            row_group_indices = reader.filter_row_groups_with_bloom_filters(
-                bloom_chunks, row_group_indices, options, stream=stream
-            )
+            with nvtx_annotate_cudf_polars(message="filter_row_groups_with_bloom_filters"):
+                bloom_chunks = _fetch_byte_ranges(scan.paths, bloom_ranges, stream)
+                row_group_indices = reader.filter_row_groups_with_bloom_filters(
+                    bloom_chunks, row_group_indices, options, stream=stream
+                )
 
     if not row_group_indices:
         return PrefetchedByteRanges.empty()
 
-    filter_ranges = reader.filter_column_chunks_byte_ranges(row_group_indices, options)
-    payload_ranges = reader.payload_column_chunks_byte_ranges(row_group_indices, options)
+    with nvtx_annotate_cudf_polars(message="byte_range_computation"):
+        filter_ranges = reader.filter_column_chunks_byte_ranges(row_group_indices, options)
+        payload_ranges = reader.payload_column_chunks_byte_ranges(row_group_indices, options)
 
+    # Submit filter and payload reads in one combined pread_ranges call so S3 serves
+    # both concurrently, then split the contiguous pinned buffer into two views.
     handle = cached_info[0].remote_handle()
-    filter_host, filter_futures, filter_buf = pread_ranges(handle, filter_ranges, pinned_mr, stream, context, loop)
-    payload_host, payload_futures, payload_buf = pread_ranges(handle, payload_ranges, pinned_mr, stream, context, loop)
+    with nvtx_annotate_cudf_polars(message="pread_filter_and_payload"):
+        filter_host, filter_futures, filter_buf = pread_ranges(
+            handle, filter_ranges, pinned_mr, stream, context, loop
+        )
+        payload_host, payload_futures, payload_buf = pread_ranges(
+            handle, payload_ranges, pinned_mr, stream, context, loop
+        )
 
     return PrefetchedByteRanges(
         row_group_indices=row_group_indices,
