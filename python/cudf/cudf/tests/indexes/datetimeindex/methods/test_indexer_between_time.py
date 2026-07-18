@@ -4,6 +4,7 @@
 import datetime
 
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -48,6 +49,32 @@ def test_indexer_between_time(start_time, end_time, kwargs):
     result = cudf_dti.indexer_between_time(start_time, end_time, **kwargs)
 
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "start_time, end_time", [("09:00", "15:00"), ("23:00", "01:00")]
+)
+def test_indexer_between_time_arrow_dtype(start_time, end_time):
+    # ArrowDtype regression: pandas has no arrow-backed DatetimeIndex, so the
+    # NumPy-backed index is the oracle.
+    pd_dti = pd.DatetimeIndex(
+        [
+            "2024-01-01 09:00:00",
+            "2024-01-01 12:00:00",
+            "2024-01-01 15:00:00",
+            "2024-01-01 23:30:00",
+            "2024-01-02 00:30:00",
+        ],
+        name="foo",
+    )
+    cudf_dti = cudf.from_pandas(pd_dti).astype(
+        pd.ArrowDtype(pa.timestamp("us"))
+    )
+
+    assert_eq(
+        cudf_dti.indexer_between_time(start_time, end_time),
+        pd_dti.indexer_between_time(start_time, end_time),
+    )
 
 
 def test_indexer_between_time_nat():
@@ -126,4 +153,33 @@ def test_indexer_between_time_empty():
     assert_eq(
         cudf_dti.indexer_between_time("09:00", "15:00"),
         pd_dti.indexer_between_time("09:00", "15:00"),
+    )
+
+
+@pytest.mark.parametrize(
+    "start_time, end_time", [("09:00", "15:00"), ("23:00", "01:00")]
+)
+def test_indexer_between_time_all_nat(start_time, end_time):
+    # In the wrap-around branch all NaT rows are included because their -1
+    # sentinel satisfies the `<= end` predicate; a normal range excludes them.
+    pd_dti = pd.DatetimeIndex(["NaT", "NaT", "NaT"])
+    cudf_dti = cudf.from_pandas(pd_dti)
+
+    assert_eq(
+        cudf_dti.indexer_between_time(start_time, end_time),
+        pd_dti.indexer_between_time(start_time, end_time),
+    )
+
+
+@pytest.mark.parametrize(
+    "start_time, end_time",
+    [("09:00", "15:00"), ("13:00", "14:00"), ("18:00", "13:00")],
+)
+def test_indexer_between_time_single_element(start_time, end_time):
+    pd_dti = pd.DatetimeIndex(["2024-01-01 12:00:00"])
+    cudf_dti = cudf.from_pandas(pd_dti)
+
+    assert_eq(
+        cudf_dti.indexer_between_time(start_time, end_time),
+        pd_dti.indexer_between_time(start_time, end_time),
     )

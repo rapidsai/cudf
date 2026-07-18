@@ -3612,7 +3612,7 @@ class DatetimeIndex(Index):
         column = self._column
         if isinstance(column, DatetimeTZColumn):
             column = column._local_time
-        unit, _ = np.datetime_data(column.dtype)
+        unit = column.time_unit
         time_of_day = (
             Index._from_column(column.astype(np.dtype(np.int64)))
             % _PERIODS_PER_DAY[unit]
