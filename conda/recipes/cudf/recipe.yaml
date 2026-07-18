@@ -96,7 +96,7 @@ requirements:
     # lives in `dependencies.yaml::depends_on_numba_cuda_mlir`.
     - numba >=0.60.0,<0.65.0
     - numpy >=2.0,<3.0
-    - pyarrow>=19.0.0
+    - pyarrow>=19.0.0,<24  # https://github.com/rapidsai/cudf/issues/22229
     - libcudf =${{ version }}
     - pylibcudf =${{ version }}
     - ${{ pin_compatible("rmm", upper_bound="x.x") }}
