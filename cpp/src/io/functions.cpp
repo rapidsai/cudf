@@ -687,17 +687,12 @@ std::vector<parquet::FileMetaData> read_parquet_footers(
   return detail_parquet::read_parquet_footers(sources);
 }
 
-parquet::FileMetaData read_parquet_footer_bytes(host_span<uint8_t const> footer_bytes)
+parquet::FileMetaData read_parquet_footer_bytes(host_span<uint8_t const> footer_bytes,
+                                                parquet::throw_if_type_mismatch mode)
 {
   CUDF_FUNC_RANGE();
-  CompactProtocolReader reader{footer_bytes.data(), footer_bytes.size()};
+  CompactProtocolReader reader{footer_bytes.data(), footer_bytes.size(), mode};
   parquet::FileMetaData metadata;
-  // Deliberately does not require the buffer to be consumed exactly. Callers legitimately pass a
-  // footer framed with trailing bytes (e.g. the Parquet footer-length word), which the reader
-  // ignores by stopping at the struct terminator, matching the Thrift-compact reader's contract.
-  // In-struct truncation and corruption still fail via the reader's overread guard and per-field
-  // bounds checks; bytes past the terminator are trusted by design (indistinguishable from a
-  // legitimate frame) and are not validated.
   reader.read(&metadata);
   return metadata;
 }

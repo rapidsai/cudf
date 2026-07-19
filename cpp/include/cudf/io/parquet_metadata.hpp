@@ -301,14 +301,21 @@ std::vector<parquet::FileMetaData> read_parquet_footers(
  *
  * @ingroup io_readers
  *
- * @note Bytes after the footer struct (such as a trailing length or magic frame) are ignored
+ * @note Stops at the footer struct terminator, so trailing frame bytes (e.g. a footer-length word
+ * or magic) are accepted and ignored rather than validated
+ *
+ * @throws cudf::logic_error If the footer is truncated or corrupt within the struct, caught by the
+ * reader's overread guard and per-field bounds checks
  *
  * @param footer_bytes Thrift-compact-encoded Parquet `FileMetaData` (footer) bytes
+ * @param mode `throw_if_type_mismatch::YES` (default) rejects a field whose wire type mismatches
+ * the schema type; `::NO` skips it (Thrift forward-compat)
  *
- * @throws cudf::logic_error If the input is truncated or corrupt
  * @return The deserialized `FileMetaData`
  */
-parquet::FileMetaData read_parquet_footer_bytes(host_span<uint8_t const> footer_bytes);
+parquet::FileMetaData read_parquet_footer_bytes(
+  host_span<uint8_t const> footer_bytes,
+  parquet::throw_if_type_mismatch mode = parquet::throw_if_type_mismatch::YES);
 
 /**
  * @brief Serialize a Parquet footer (`FileMetaData`) to Thrift-compact-encoded bytes
