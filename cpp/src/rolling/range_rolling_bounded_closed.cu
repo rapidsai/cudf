@@ -4,16 +4,14 @@
  */
 
 #include "detail/range_rolling.hpp"
-#include "detail/range_utils.cuh"
-
-#include <cudf/utilities/type_dispatcher.hpp>
+#include "range_rolling/dispatch.hpp"
 
 #include <memory>
 
 namespace cudf::detail {
 
 std::unique_ptr<column> dispatch_range_window(
-  bounded_closed,
+  bounded_closed window,
   column_view const& orderby,
   rolling::direction direction,
   order order,
@@ -23,16 +21,10 @@ std::unique_ptr<column> dispatch_range_window(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  return type_dispatcher(orderby.type(),
-                         rolling::range_window_clamper<bounded_closed>{},
-                         orderby,
-                         direction,
-                         order,
-                         grouping,
-                         nulls_at_start,
-                         row_delta,
-                         stream,
-                         mr);
+  return rolling::dispatch_range_window_by_family(
+    window,
+    rolling::range_window_dispatch_args{
+      orderby, direction, order, grouping, nulls_at_start, row_delta, stream, mr});
 }
 
 }  // namespace cudf::detail
