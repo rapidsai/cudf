@@ -483,27 +483,37 @@ fetch_bloom_filters_to_device_impl(
                     std::size_t{0},
                     [](auto acc, auto const& bloom_ranges) { return acc + bloom_ranges.size(); });
 
+  std::vector<device_spans_per_source_type> bitset_spans_per_source(num_sources);
+  std::vector<std::pair<std::size_t, std::size_t>> output_span_indices(total_filters);
+
   // Phase 1: Initial read. Cover the complete bloom filter or enough bytes to parse the header
   std::vector<std::size_t> initial_source_indices(total_filters);
   std::vector<std::size_t> initial_offsets(total_filters);
   std::vector<std::size_t> initial_sizes(total_filters);
   std::vector<std::size_t> initial_dst_offsets(total_filters);
   std::size_t total_initial_read_size = 0;
+
   {
     std::size_t filter_idx = 0;
-    std::for_each(cuda::counting_iterator<std::size_t>(0),
-                  cuda::counting_iterator<std::size_t>(num_sources),
-                  [&](auto const source_idx) {
-                    auto const& bloom_ranges = bloom_filter_byte_ranges_per_source[source_idx];
-                    std::for_each(bloom_ranges.begin(), bloom_ranges.end(), [&](auto const& range) {
-                      initial_source_indices[filter_idx] = source_idx;
-                      initial_offsets[filter_idx]        = static_cast<std::size_t>(range.offset());
-                      initial_sizes[filter_idx]          = static_cast<std::size_t>(range.size());
-                      initial_dst_offsets[filter_idx]    = total_initial_read_size;
-                      total_initial_read_size += initial_sizes[filter_idx];
-                      ++filter_idx;
-                    });
-                  });
+    std::for_each(
+      cuda::counting_iterator<std::size_t>(0),
+      cuda::counting_iterator<std::size_t>(num_sources),
+      [&](auto const source_idx) {
+        auto const& bloom_ranges            = bloom_filter_byte_ranges_per_source[source_idx];
+        bitset_spans_per_source[source_idx] = device_spans_per_source_type(bloom_ranges.size());
+        std::for_each(cuda::counting_iterator<std::size_t>(0),
+                      cuda::counting_iterator<std::size_t>(bloom_ranges.size()),
+                      [&](auto const span_idx) {
+                        auto const& range                  = bloom_ranges[span_idx];
+                        output_span_indices[filter_idx]    = {source_idx, span_idx};
+                        initial_source_indices[filter_idx] = source_idx;
+                        initial_offsets[filter_idx]     = static_cast<std::size_t>(range.offset());
+                        initial_sizes[filter_idx]       = static_cast<std::size_t>(range.size());
+                        initial_dst_offsets[filter_idx] = total_initial_read_size;
+                        total_initial_read_size += initial_sizes[filter_idx];
+                        ++filter_idx;
+                      });
+      });
   }
 
   // Read every initial bloom filter bytes into one host buffer
@@ -516,8 +526,14 @@ fetch_bloom_filters_to_device_impl(
                       initial_buffer);
 
   // Phase 2: Parse headers, organize bitset slots, and record deferred bitset reads
-  std::vector<std::size_t> bitset_sizes(total_filters, 0);
-  std::vector<void const*> bitset_src_addrs(total_filters, nullptr);
+  std::vector<void*> copy_dsts;
+  std::vector<std::size_t> copy_dst_offsets;
+  std::vector<void const*> copy_srcs;
+  std::vector<std::size_t> copy_sizes;
+  copy_dsts.reserve(total_filters);
+  copy_dst_offsets.reserve(total_filters);
+  copy_srcs.reserve(total_filters);
+  copy_sizes.reserve(total_filters);
   std::size_t total_device_size = 0;
 
   std::vector<std::size_t> deferred_filter_indices;
@@ -531,47 +547,59 @@ fetch_bloom_filters_to_device_impl(
     cuda::counting_iterator<std::size_t>(0),
     cuda::counting_iterator<std::size_t>(total_filters),
     [&](std::size_t filter_idx) {
+      auto const push_empty_filter = [&]() {
+        copy_dsts.push_back(nullptr);
+        copy_dst_offsets.push_back(0);
+        copy_srcs.push_back(nullptr);
+        copy_sizes.push_back(0);
+      };
+
       // Absent filter: no bloom filter to read
-      if (initial_sizes[filter_idx] == 0) { return; }
+      if (initial_sizes[filter_idx] == 0) {
+        push_empty_filter();
+        return;
+      }
 
       auto const* const filter_addr = initial_buffer.data() + initial_dst_offsets[filter_idx];
       auto const header_info =
         detail::parse_bloom_filter_header({filter_addr, initial_sizes[filter_idx]});
       if (not header_info.has_value()) {
         CUDF_LOG_WARN("Encountered an invalid bloom filter header. Skipping");
+        push_empty_filter();
         return;
       }
       auto const [header_bytes, bitset_bytes] = header_info.value();
       if (bitset_bytes % bloom_filter_block_bytes != 0) {
         CUDF_LOG_WARN(
           "Encountered a bloom filter bitset size that is not a multiple of 32 bytes. Skipping");
+        push_empty_filter();
         return;
       }
 
-      bitset_sizes[filter_idx] = static_cast<std::size_t>(bitset_bytes);
-      total_device_size += bitset_sizes[filter_idx];
-
       auto const header_size = static_cast<std::size_t>(header_bytes);
-      auto const total_bytes = header_size + bitset_bytes;
-      if (initial_sizes[filter_idx] >= total_bytes) {
+      auto const bitset_size = static_cast<std::size_t>(bitset_bytes);
+      copy_dsts.push_back(nullptr);
+      copy_dst_offsets.push_back(total_device_size);
+      copy_sizes.push_back(bitset_size);
+      total_device_size += bitset_size;
+
+      if (initial_sizes[filter_idx] >= header_size + bitset_size) {
         // Whole bitset already in the host buffer: point at it, stripping the header
-        bitset_src_addrs[filter_idx] = filter_addr + header_size;
+        copy_srcs.push_back(filter_addr + header_size);
       } else {
-        // Defer a read of only the bitset bytes
-        deferred_filter_indices.push_back(filter_idx);
+        // Whole bitset not in the host buffer: defer the read
+        copy_srcs.push_back(nullptr);
+
+        deferred_filter_indices.push_back(copy_srcs.size() - 1);
         deferred_source_indices.push_back(initial_source_indices[filter_idx]);
         deferred_offsets.push_back(initial_offsets[filter_idx] + header_size);
-        deferred_sizes.push_back(bitset_sizes[filter_idx]);
+        deferred_sizes.push_back(bitset_size);
         deferred_dst_offsets.push_back(total_deferred_size);
-        total_deferred_size += bitset_sizes[filter_idx];
+        total_deferred_size += bitset_size;
       }
     });
 
-  // Phase 3: one device buffer holds every bitset
-  rmm::device_buffer bitset_buffer(total_device_size, bloom_filter_block_bytes, stream, mr);
-  auto* const device_base = static_cast<uint8_t*>(bitset_buffer.data());
-
-  // Resolve deferred bitset reads
+  // Phase 3: Resolve deferred reads, then batch copy all bitsets to the device
   auto deferred_buffer = cudf::detail::make_host_vector<uint8_t>(total_deferred_size, stream);
   read_ranges_to_host(datasources,
                       deferred_source_indices,
@@ -582,59 +610,33 @@ fetch_bloom_filters_to_device_impl(
   std::for_each(cuda::counting_iterator<std::size_t>(0),
                 cuda::counting_iterator<std::size_t>(deferred_filter_indices.size()),
                 [&](std::size_t i) {
-                  bitset_src_addrs[deferred_filter_indices[i]] =
+                  copy_srcs[deferred_filter_indices[i]] =
                     deferred_buffer.data() + deferred_dst_offsets[i];
                 });
 
-  // Build the per-source device spans and the batched copy list
-  std::vector<device_spans_per_source_type> bitset_spans_per_source(num_sources);
-  std::vector<void*> copy_dsts;
-  std::vector<void const*> copy_srcs;
-  std::vector<std::size_t> copy_sizes;
-  copy_dsts.reserve(total_filters);
-  copy_srcs.reserve(total_filters);
-  copy_sizes.reserve(total_filters);
+  // Add the buffer base to every non-empty output span and copy destination.
+  rmm::device_buffer bitset_buffer(total_device_size, bloom_filter_block_bytes, stream, mr);
+  auto* const device_base = static_cast<uint8_t*>(bitset_buffer.data());
+  std::for_each(cuda::counting_iterator<std::size_t>(0),
+                cuda::counting_iterator<std::size_t>(total_filters),
+                [&](std::size_t filter_idx) {
+                  auto const bitset_size = copy_sizes[filter_idx];
+                  auto* const device_dst =
+                    bitset_size == 0 ? nullptr : device_base + copy_dst_offsets[filter_idx];
+                  if (bitset_size != 0) {
+                    CUDF_EXPECTS(rmm::is_pointer_aligned(device_dst, bloom_filter_block_bytes),
+                                 "Encountered a misaligned bloom filter bitset");
+                  }
+                  auto const [source_idx, span_idx]             = output_span_indices[filter_idx];
+                  bitset_spans_per_source[source_idx][span_idx] = {device_dst, bitset_size};
+                  copy_dsts[filter_idx]                         = device_dst;
+                });
 
-  std::size_t filter_idx    = 0;
-  std::size_t device_offset = 0;
-  std::for_each(
-    cuda::counting_iterator<std::size_t>(0),
-    cuda::counting_iterator<std::size_t>(num_sources),
-    [&](auto const source_idx) {
-      auto const& bloom_ranges            = bloom_filter_byte_ranges_per_source[source_idx];
-      bitset_spans_per_source[source_idx] = device_spans_per_source_type(bloom_ranges.size());
-      std::for_each(
-        cuda::counting_iterator<std::size_t>(0),
-        cuda::counting_iterator<std::size_t>(bloom_ranges.size()),
-        [&](auto const inner_idx) {
-          auto const bitset_size = bitset_sizes[filter_idx];
-
-          // Absent or skipped filter: leave an empty span
-          if (bitset_size == 0) {
-            ++filter_idx;
-            return;
-          }
-
-          auto* const device_dst = device_base + device_offset;
-          CUDF_EXPECTS(reinterpret_cast<std::uintptr_t>(device_dst) % bloom_filter_block_bytes == 0,
-                       "Encountered a misaligned bloom filter bitset");
-          bitset_spans_per_source[source_idx][inner_idx] =
-            cudf::device_span<uint8_t const>{device_dst, bitset_size};
-          copy_dsts.push_back(device_dst);
-          copy_srcs.push_back(bitset_src_addrs[filter_idx]);
-          copy_sizes.push_back(bitset_size);
-          device_offset += bitset_size;
-          ++filter_idx;
-        });
-    });
-
-  // One batched copy
-  if (not copy_dsts.empty()) {
-    {
-      std::scoped_lock<std::mutex> lock(device_read_mutex());
-      CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(
-        copy_dsts.data(), copy_srcs.data(), copy_sizes.data(), copy_dsts.size(), stream));
-    }
+  // One batched copy (entries with a null source or zero size are ignored by the batch API)
+  if (total_device_size != 0) {
+    std::scoped_lock<std::mutex> lock(device_read_mutex());
+    CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(
+      copy_dsts.data(), copy_srcs.data(), copy_sizes.data(), total_filters, stream));
     stream.synchronize();
   }
 
