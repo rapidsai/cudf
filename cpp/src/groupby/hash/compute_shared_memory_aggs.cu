@@ -10,6 +10,7 @@
 #include "single_pass_functors.cuh"
 
 #include <cudf/aggregation.hpp>
+#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
@@ -17,16 +18,84 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cooperative_groups.h>
+#include <cuda/std/algorithm>
 #include <cuda/std/cstddef>
+
+#include <cstddef>
+#include <cstdint>
+#include <utility>
 
 namespace cudf::groupby::detail::hash {
 namespace {
 /// Shared memory data alignment
 CUDF_HOST_DEVICE cudf::size_type constexpr ALIGNMENT = 16;
+
+// Compound hash aggregations are decomposed into these simple aggregations before this kernel is
+// launched. SUM_OVERFLOW is the only other simple hash aggregation and is explicitly rejected by
+// is_shared_memory_compatible.
+template <typename F, typename... Ts>
+__device__ decltype(auto) dispatch_shared_memory_aggregation(cudf::aggregation::Kind kind,
+                                                             F&& f,
+                                                             Ts&&... args)
+{
+  switch (kind) {
+    case cudf::aggregation::SUM:
+      return f.template operator()<cudf::aggregation::SUM>(std::forward<Ts>(args)...);
+    case cudf::aggregation::PRODUCT:
+      return f.template operator()<cudf::aggregation::PRODUCT>(std::forward<Ts>(args)...);
+    case cudf::aggregation::MIN:
+      return f.template operator()<cudf::aggregation::MIN>(std::forward<Ts>(args)...);
+    case cudf::aggregation::MAX:
+      return f.template operator()<cudf::aggregation::MAX>(std::forward<Ts>(args)...);
+    case cudf::aggregation::COUNT_VALID:
+      return f.template operator()<cudf::aggregation::COUNT_VALID>(std::forward<Ts>(args)...);
+    case cudf::aggregation::COUNT_ALL:
+      return f.template operator()<cudf::aggregation::COUNT_ALL>(std::forward<Ts>(args)...);
+    case cudf::aggregation::SUM_OF_SQUARES:
+      return f.template operator()<cudf::aggregation::SUM_OF_SQUARES>(std::forward<Ts>(args)...);
+    case cudf::aggregation::ARGMAX:
+      return f.template operator()<cudf::aggregation::ARGMAX>(std::forward<Ts>(args)...);
+    case cudf::aggregation::ARGMIN:
+      return f.template operator()<cudf::aggregation::ARGMIN>(std::forward<Ts>(args)...);
+    default: CUDF_UNREACHABLE("Unsupported shared memory aggregation.");
+  }
+}
+
+template <typename Element>
+struct dispatch_shared_memory_aggregation_fn {
+  template <cudf::aggregation::Kind kind, typename F, typename... Ts>
+  __device__ decltype(auto) operator()(F&& f, Ts&&... args) const
+  {
+    return f.template operator()<Element, kind>(std::forward<Ts>(args)...);
+  }
+};
+
+struct dispatch_shared_memory_source_fn {
+  template <typename Element, typename F, typename... Ts>
+  __device__ decltype(auto) operator()(cudf::aggregation::Kind kind, F&& f, Ts&&... args) const
+  {
+    return dispatch_shared_memory_aggregation(kind,
+                                              dispatch_shared_memory_aggregation_fn<Element>{},
+                                              std::forward<F>(f),
+                                              std::forward<Ts>(args)...);
+  }
+};
+
+template <typename F, typename... Ts>
+__device__ decltype(auto) dispatch_shared_memory_type_and_aggregation(cudf::data_type type,
+                                                                      cudf::aggregation::Kind kind,
+                                                                      F&& f,
+                                                                      Ts&&... args)
+{
+  return cudf::type_dispatcher(
+    type, dispatch_shared_memory_source_fn{}, kind, std::forward<F>(f), std::forward<Ts>(args)...);
+}
 
 // Allocates shared memory required for output columns. Exits if there is insufficient memory to
 // perform shared memory aggregation for the current output column.
@@ -81,7 +150,7 @@ __device__ void initialize_shmem_aggregations(cooperative_groups::thread_block c
         reinterpret_cast<cuda::std::byte*>(shmem_agg_storage + shmem_agg_res_offsets[col_idx]);
       auto target_mask =
         reinterpret_cast<bool*>(shmem_agg_storage + shmem_agg_mask_offsets[col_idx]);
-      cudf::detail::dispatch_type_and_aggregation(output_values.column(col_idx).type(),
+      dispatch_shared_memory_type_and_aggregation(output_values.column(col_idx).type(),
                                                   d_agg_kinds[col_idx],
                                                   initialize_shmem{},
                                                   target,
@@ -116,7 +185,7 @@ __device__ void compute_pre_aggregations(cudf::size_type col_start,
         bool* target_mask =
           reinterpret_cast<bool*>(shmem_agg_storage + shmem_agg_mask_offsets[col_idx]);
 
-        cudf::detail::dispatch_type_and_aggregation(source_col.type(),
+        dispatch_shared_memory_type_and_aggregation(source_col.type(),
                                                     d_agg_kinds[col_idx],
                                                     shmem_element_aggregator{},
                                                     target,
@@ -154,7 +223,7 @@ __device__ void compute_final_aggregations(cooperative_groups::thread_block cons
         reinterpret_cast<cuda::std::byte*>(shmem_agg_storage + agg_res_offsets[col_idx]);
       bool* source_mask = reinterpret_cast<bool*>(shmem_agg_storage + agg_mask_offsets[col_idx]);
 
-      cudf::detail::dispatch_type_and_aggregation(input_values.column(col_idx).type(),
+      dispatch_shared_memory_type_and_aggregation(input_values.column(col_idx).type(),
                                                   d_agg_kinds[col_idx],
                                                   gmem_element_aggregator{},
                                                   target_col,

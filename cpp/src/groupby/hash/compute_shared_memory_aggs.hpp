@@ -10,6 +10,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cstdint>
+
 namespace cudf::groupby::detail::hash {
 
 /*
