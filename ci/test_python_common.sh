@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 # Common setup steps shared by Python test jobs
@@ -10,9 +10,6 @@ set -euo pipefail
 
 rapids-logger "Configuring conda strict channel priority"
 conda config --set channel_priority strict
-
-# TODO: Remove before merging. Use conda packages from rapidsai/rapidsmpf#1106.
-source ./ci/use_conda_packages_from_prs.sh
 
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_cpp libcudf cudf --cuda "$RAPIDS_CUDA_VERSION")")
@@ -33,15 +30,7 @@ done
 CMD="${CMD} \
   --prepend-channel \"${CPP_CHANNEL}\" \
   --prepend-channel \"${PYTHON_CHANNEL}\" \
-  --prepend-channel \"${PYTHON_NOARCH_CHANNEL}\""
-
-# TODO: Remove before merging. Prepend dependency PR channels ahead of the
-# default channels so the solver prefers them over rapidsai-nightly.
-for _channel in "${RAPIDS_PREPENDED_CONDA_CHANNELS[@]}"; do
-  CMD="${CMD} --prepend-channel \"${_channel}\""
-done
-
-CMD="${CMD} \
+  --prepend-channel \"${PYTHON_NOARCH_CHANNEL}\" \
   --matrix \"cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}\""
 
 eval ${CMD} | tee "${ENV_YAML_DIR}/env.yaml"

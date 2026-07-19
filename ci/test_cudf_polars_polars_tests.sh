@@ -18,9 +18,6 @@ CUDF_POLARS_WHEELHOUSE=$(rapids-download-from-github "$(rapids-artifact-name whe
 # generate constraints (possibly pinning to oldest support versions of dependencies)
 rapids-generate-pip-constraints py_test_cudf_polars "${PIP_CONSTRAINT}"
 
-# TODO: Remove before merging. Use rapidsmpf wheels from rapidsai/rapidsmpf#1106.
-source ./ci/use_wheels_from_prs.sh
-
 rapids-logger "Install libcudf, pylibcudf and cudf_polars"
 
 # notes:
