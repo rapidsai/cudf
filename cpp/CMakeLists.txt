@@ -979,24 +979,8 @@ add_library(
   src/rolling/grouped_rolling.cu
   src/rolling/range_rolling.cu
   src/rolling/range_rolling_bounded_closed.cu
-  src/rolling/range_rolling/bounded_closed_fixed_point.cu
-  src/rolling/range_rolling/bounded_closed_floating.cu
-  src/rolling/range_rolling/bounded_closed_signed.cu
-  src/rolling/range_rolling/bounded_closed_timestamp.cu
-  src/rolling/range_rolling/bounded_closed_unsigned.cu
   src/rolling/range_rolling_bounded_open.cu
-  src/rolling/range_rolling/bounded_open_fixed_point.cu
-  src/rolling/range_rolling/bounded_open_floating.cu
-  src/rolling/range_rolling/bounded_open_signed.cu
-  src/rolling/range_rolling/bounded_open_timestamp.cu
-  src/rolling/range_rolling/bounded_open_unsigned.cu
   src/rolling/range_rolling_current_row.cu
-  src/rolling/range_rolling/current_row_fixed_point.cu
-  src/rolling/range_rolling/current_row_floating.cu
-  src/rolling/range_rolling/current_row_signed.cu
-  src/rolling/range_rolling/current_row_string.cu
-  src/rolling/range_rolling/current_row_timestamp.cu
-  src/rolling/range_rolling/current_row_unsigned.cu
   src/rolling/range_rolling_multi_column.cu
   src/rolling/range_rolling_unbounded.cu
   src/rolling/range_window_bounds.cpp
