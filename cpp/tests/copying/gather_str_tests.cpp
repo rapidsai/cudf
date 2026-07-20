@@ -13,6 +13,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cuda/iterator>
+
 #include <random>
 
 class GatherTestStr : public cudf::test::BaseFixture {};
@@ -64,6 +66,48 @@ TEST_F(GatherTestStr, GatherSlicedStringsColumn)
     auto result = cudf::gather(cudf::table_view{{sliced_strings[2]}}, gather_map);
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result->view());
   }
+}
+
+TEST_F(GatherTestStr, GatherLongSlicedNullableStrings)
+{
+  std::string const a(80, 'a');
+  std::string const b(80, 'b');
+  std::string const c(80, 'c');
+
+  cudf::test::strings_column_wrapper strings{
+    {"prefix", a, b, c, "suffix"}, {true, true, false, true, true}};
+
+  std::vector<cudf::size_type> const slice_indices{1, 4};
+  auto const sliced_strings = cudf::slice(strings, slice_indices);
+
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> gather_map{{2, 0, 1}};
+  auto result = cudf::gather(cudf::table_view{{sliced_strings[0]}}, gather_map);
+
+  cudf::test::strings_column_wrapper expected{{c, a, b}, {true, true, false}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view().column(0));
+}
+
+TEST_F(GatherTestStr, GatherCubBatchedCopy)
+{
+  constexpr cudf::size_type output_count = 512 * 1024;
+  auto const zeros                       = cuda::constant_iterator<cudf::size_type>{0};
+
+  cudf::test::strings_column_wrapper valid_strings({"x"});
+  cudf::test::strings_column_wrapper null_strings({""}, {false});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> gather_map(
+    zeros, zeros + output_count);
+
+  auto result = cudf::gather(cudf::table_view{{valid_strings, null_strings}}, gather_map);
+
+  auto const x_values = cuda::constant_iterator<std::string>{"x"};
+  auto const empty    = cuda::constant_iterator<std::string>{""};
+  auto const invalid  = cuda::constant_iterator<bool>{false};
+  cudf::test::strings_column_wrapper expected_valid(x_values, x_values + output_count);
+  cudf::test::strings_column_wrapper expected_null(
+    empty, empty + output_count, invalid);
+
+  cudf::table_view expected{{expected_valid, expected_null}};
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result->view());
 }
 
 TEST_F(GatherTestStr, Gather)

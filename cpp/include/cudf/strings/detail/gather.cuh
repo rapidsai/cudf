@@ -5,9 +5,9 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
-#include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
@@ -15,6 +15,8 @@
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/strings/string_view.hpp>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/prefetch.hpp>
 
@@ -34,6 +36,37 @@
 namespace cudf {
 namespace strings {
 namespace detail {
+
+/**
+ * @brief Non-owning device-access descriptor for a strings column.
+ *
+ * `offsets` is adjusted to the slice, while `chars` and `null_mask` point to
+ * their base allocations.
+ */
+struct string_gather_source {
+  cudf::detail::input_offsetalator offsets;
+  char const* chars;
+  bitmask_type const* null_mask;
+  size_type null_mask_offset;
+  size_type size;
+
+  __device__ bool is_valid(size_type idx) const
+  {
+    return null_mask == nullptr || bit_is_set(null_mask, null_mask_offset + idx);
+  }
+
+  __device__ size_type size_bytes(size_type idx) const
+  {
+    return static_cast<size_type>(offsets[idx + 1] - offsets[idx]);
+  }
+
+  __device__ string_view element(size_type idx) const
+  {
+    auto const offset = offsets[idx];
+    auto const bytes  = static_cast<size_type>(offsets[idx + 1] - offset);
+    return bytes == 0 ? string_view{} : string_view{chars + offset, bytes};
+  }
+};
 
 // Helper function for loading 16B from a potentially unaligned memory location to registers.
 __forceinline__ __device__ uint4 load_uint4(char const* ptr)
@@ -229,18 +262,22 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
   if (output_count == 0) return make_empty_column(type_id::STRING);
 
   // build offsets column
-  auto const d_strings    = column_device_view::create(strings.parent(), stream);
   auto const d_in_offsets = cudf::detail::offsetalator_factory::make_input_iterator(
     strings.is_empty() ? make_empty_column(type_id::INT32)->view() : strings.offsets(),
     strings.offset());
+  auto const source = string_gather_source{d_in_offsets,
+                                           strings.chars_begin(stream),
+                                           strings.null_mask(),
+                                           strings.offset(),
+                                           strings.size()};
 
   auto sizes_itr = thrust::make_transform_iterator(
     begin,
     cuda::proclaim_return_type<size_type>(
-      [d_strings = *d_strings, d_in_offsets] __device__(size_type idx) {
-        if (NullifyOutOfBounds && (idx < 0 || idx >= d_strings.size())) { return 0; }
-        if (not d_strings.is_valid(idx)) { return 0; }
-        return static_cast<size_type>(d_in_offsets[idx + 1] - d_in_offsets[idx]);
+      [source] __device__(size_type idx) {
+        if (NullifyOutOfBounds && (idx < 0 || idx >= source.size)) { return 0; }
+        if (not source.is_valid(idx)) { return 0; }
+        return source.size_bytes(idx);
       }));
 
   auto [out_offsets_column, out_char_bytes] = cudf::strings::detail::make_offsets_child_column(
@@ -263,6 +300,11 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
 
   int64_t const average_string_length = out_char_bytes / output_count;
 
+  auto const strings_begin = cudf::detail::make_counting_transform_iterator(
+    size_type{0},
+    cuda::proclaim_return_type<string_view>(
+      [source] __device__(size_type idx) { return source.element(idx); }));
+
   if (average_string_length > string_parallel_threshold) {
     constexpr int max_threadblocks = 65536;
     auto const grid_size =
@@ -273,7 +315,7 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
                                       warps_per_threadblock * cudf::detail::warp_size,
                                       0,
                                       stream.value()>>>(
-      d_strings->begin<string_view>(), d_out_chars, offsets_view, begin, output_count);
+      strings_begin, d_out_chars, offsets_view, begin, output_count);
   } else {
     // Threshold is based on empirical data on H100.
     // If row count is above this threshold we use the cub::DeviceMemcpy::Batched API, otherwise we
@@ -286,24 +328,24 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
         static_cast<int64_t>(output_count), static_cast<int64_t>(strings_per_threadblock));
       gather_chars_fn_char_parallel<strings_per_threadblock>
         <<<grid_size, warps_per_threadblock * cudf::detail::warp_size, 0, stream.value()>>>(
-          d_strings->begin<string_view>(), d_out_chars, offsets_view, begin, output_count);
+          strings_begin, d_out_chars, offsets_view, begin, output_count);
     } else {
       // Iterator over the character column of input strings to gather
       auto in_chars_itr = thrust::make_transform_iterator(
         begin,
-        cuda::proclaim_return_type<char const*>([d_strings = *d_strings] __device__(size_type idx) {
-          if (NullifyOutOfBounds && (idx < 0 || idx >= d_strings.size())) {
+        cuda::proclaim_return_type<char const*>([source] __device__(size_type idx) {
+          if (NullifyOutOfBounds && (idx < 0 || idx >= source.size)) {
             return static_cast<char const*>(nullptr);
           }
-          if (not d_strings.is_valid(idx)) { return static_cast<char const*>(nullptr); }
-          return d_strings.element<string_view>(idx).data();
+          if (not source.is_valid(idx)) { return static_cast<char const*>(nullptr); }
+          return source.element(idx).data();
         }));
 
       // Iterator over the output locations to write the output
       auto out_chars_itr = cudf::detail::make_counting_transform_iterator(
         0,
         cuda::proclaim_return_type<char*>(
-          [d_strings = *d_strings, offsets_view, d_out_chars] __device__(size_type idx) {
+          [offsets_view, d_out_chars] __device__(size_type idx) {
             return d_out_chars + offsets_view[idx];
           }));
 

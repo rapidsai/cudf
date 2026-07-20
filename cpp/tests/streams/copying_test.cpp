@@ -36,6 +36,17 @@ TEST_F(CopyingTest, Gather)
                cudf::test::get_default_stream());
 }
 
+TEST_F(CopyingTest, GatherStrings)
+{
+  cudf::test::strings_column_wrapper source_column{"a", "bb", "ccc"};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> gather_map{2, 0, 1};
+
+  cudf::gather(cudf::table_view{{source_column}},
+               gather_map,
+               cudf::out_of_bounds_policy::DONT_CHECK,
+               cudf::test::get_default_stream());
+}
+
 TEST_F(CopyingTest, ReverseTable)
 {
   constexpr cudf::size_type num_values{10};
