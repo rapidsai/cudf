@@ -62,9 +62,10 @@ cdef extern from "cudf/reduction/approx_distinct_count.hpp" namespace "cudf" nog
             null_policy null_handling,
             nan_policy nan_handling,
             cudaStream_t stream
+            device_async_resource_ref mr
         ) except +libcudf_exception_handler
         void add(
-            const table_view& input, cudaStream_t stream
+            const table_view& input, cudaStream_t stream,
         ) except +libcudf_exception_handler
         void merge(
             const approx_distinct_count& other, cudaStream_t stream

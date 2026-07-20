@@ -69,6 +69,7 @@ class ApproxDistinctCount:
         null_handling: NullPolicy = ...,
         nan_handling: NanPolicy = ...,
         stream: CudaStreamLike | None = None,
+        mr: DeviceMemoryResource | None = None,
     ) -> None: ...
     def add(
         self, input: Table, stream: CudaStreamLike | None = None

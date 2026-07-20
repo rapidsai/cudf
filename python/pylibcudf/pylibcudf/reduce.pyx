@@ -382,14 +382,16 @@ cdef class ApproxDistinctCount:
         null_policy null_handling=null_policy.EXCLUDE,
         nan_policy nan_handling=nan_policy.NAN_IS_NULL,
         object stream=None,
+        DeviceMemoryResource mr=None,
     ):
         cdef Stream _stream = _get_stream(stream)
         cdef cudaStream_t _cs = _stream.view().value()
+        cdef DeviceMemoryResource _mr = _get_memory_resource(mr)
         cdef table_view c_input = input.view()
         with nogil:
             self.c_obj.reset(
                 new cpp_approx_distinct_count(
-                    c_input, precision, null_handling, nan_handling, _cs
+                    c_input, precision, null_handling, nan_handling, _cs, _mr.get_mr()
                 )
             )
 
