@@ -190,4 +190,3 @@ python/cudf/cudf_pandas_tests/data/rmm_log.txt
 
 # Quent traces
 logs/*.ndjson
-
