@@ -371,10 +371,20 @@ class Merge:
 
         if self.how == "cross":
             lib_table = plc.join.cross_join(
-                plc.Table([col.plc_column for col in self.lhs._columns]),
-                plc.Table([col.plc_column for col in self.rhs._columns]),
+                plc.Table(
+                    [col.plc_column for col in self.lhs._columns],
+                    num_rows=len(self.lhs),
+                ),
+                plc.Table(
+                    [col.plc_column for col in self.rhs._columns],
+                    num_rows=len(self.rhs),
+                ),
             )
             columns = lib_table.columns()
+            # A cross join of two column-less operands is a column-less table
+            # whose row count is the product of the operands' row counts.
+            # ``columns`` cannot carry that count, so remember it explicitly.
+            cross_num_rows = lib_table.num_rows()
             num_left_cols = len(self.lhs._column_names)
             left_result = DataFrame._from_data(
                 {
@@ -444,6 +454,13 @@ class Merge:
         result = DataFrame._from_data(
             *self._merge_results(left_result, right_result)
         )
+        if self.how == "cross" and result._num_columns == 0:
+            from cudf.core.index import RangeIndex
+
+            # Both operands were column-less, so the cross product is a
+            # column-less table whose row count an empty ColumnAccessor cannot
+            # carry. Rebuild the result with the row count captured above.
+            result = DataFrame._from_data({}, index=RangeIndex(cross_num_rows))
 
         if self.sort:
             result = self._sort_result(result)

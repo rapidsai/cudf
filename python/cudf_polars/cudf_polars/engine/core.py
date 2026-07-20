@@ -842,7 +842,6 @@ def drop_if_replicated(
             df.column_names,
             df.dtypes,
             df.stream,
-            num_rows=0,
         )
     return df
 
