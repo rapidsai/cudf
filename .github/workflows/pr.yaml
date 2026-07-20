@@ -44,9 +44,6 @@ jobs:
       - narwhals-tests
       - telemetry-setup
       - third-party-integration-tests-cudf-pandas
-      # TEMPORARY: revert java-build and java-gather additions before merging
-      - java-build
-      - java-gather
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@release/26.08
     permissions:
       contents: read
@@ -864,73 +861,6 @@ jobs:
       pull-requests: read
     uses: ./.github/workflows/spark-rapids-jni.yaml
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_java
-  # TEMPORARY: revert addition of the java-build and java-gather jobs before merging.
-  # Keep this in sync with the same jobs in build.yaml.
-  java-build:
-    needs: [telemetry-setup]
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { cuda: "12.9", cuda_major: "12", arch: "x86_64", runner: "linux-amd64-cpu16" }
-          - { cuda: "13.3", cuda_major: "13", arch: "x86_64", runner: "linux-amd64-cpu16" }
-          - { cuda: "12.9", cuda_major: "12", arch: "aarch64", runner: "linux-arm64-cpu16" }
-          - { cuda: "13.3", cuda_major: "13", arch: "aarch64", runner: "linux-arm64-cpu16" }
-    runs-on: ${{ matrix.runner }}
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout code repo
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Build static libcudf
-        run: |
-          ./java/ci/build_static_libcudf.sh \
-            --output-dir "${RUNNER_TEMP}/libcudf" \
-            --cuda-version "${{ matrix.cuda }}"
-      - name: Build cuDF Java JAR
-        run: |
-          ./java/ci/build_cudf_java_jar.sh \
-            --libcudf-dir "${RUNNER_TEMP}/libcudf" \
-            --output-dir "${RUNNER_TEMP}/jars" \
-            --cuda-version "${{ matrix.cuda }}"
-      - name: Upload per-entry JAR artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: cudf_java_cuda${{ matrix.cuda_major }}_${{ matrix.arch }}
-          path: |
-            ${{ runner.temp }}/jars
-            !${{ runner.temp }}/jars/.mvn-temp-target
-          if-no-files-found: error
-  java-gather:
-    needs: [java-build]
-    runs-on: linux-amd64-cpu4
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout code repo
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - name: Download per-entry JAR artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          pattern: cudf_java_cuda*
-          path: ${{ runner.temp }}/jars
-          merge-multiple: true
-      - name: Assemble Maven repository layout
-        run: |
-          ./java/ci/assemble_maven_repo.sh \
-            --jars-dir "${RUNNER_TEMP}/jars" \
-            --output-dir "${RUNNER_TEMP}/maven-repo"
-      - name: Upload combined Maven repository artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: cudf_java_maven_repo
-          path: ${{ runner.temp }}/maven-repo
-          if-no-files-found: error
   telemetry-summarize:
     # This job must use a self-hosted runner to record telemetry traces.
     runs-on: linux-amd64-cpu4
