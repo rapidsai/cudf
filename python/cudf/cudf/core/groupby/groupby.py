@@ -1233,7 +1233,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 elif (
                     agg_name in {"cumsum", "cumprod"}
                     and is_pandas_nullable_extension_dtype(orig_dtype)
-                    and getattr(orig_dtype, "kind", None) in {"i", "u"}
+                    and orig_dtype.kind in {"i", "u"}
                 ):
                     # libcudf's SUM/PRODUCT scans promote narrow integers
                     # to 64-bit. pandas does the same for numpy dtypes
