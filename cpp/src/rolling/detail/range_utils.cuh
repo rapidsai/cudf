@@ -9,7 +9,6 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/rolling.hpp>
 #include <cudf/rolling.hpp>
@@ -21,15 +20,15 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/exec_policy.hpp>
 #include <rmm/resource_ref.hpp>
 
+#include <cub/device/device_transform.cuh>
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 #include <thrust/binary_search.h>
-#include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 
 #include <optional>
@@ -456,11 +455,11 @@ struct range_window_clamper {
                         mutable_column_view& result,
                         rmm::cuda_stream_view stream) const
   {
-    thrust::copy_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                   cudf::detail::make_counting_transform_iterator(
-                     0, unbounded_distance_functor{grouping, direction}),
-                   size,
-                   result.begin<size_type>());
+    CUDF_CUDA_TRY(cub::DeviceTransform::Transform(cuda::counting_iterator<size_type>{0},
+                                                  result.begin<size_type>(),
+                                                  size,
+                                                  unbounded_distance_functor{grouping, direction},
+                                                  stream.value()));
   }
 
   template <typename Grouping, typename OrderbyT>
@@ -472,11 +471,12 @@ struct range_window_clamper {
                           mutable_column_view& result,
                           rmm::cuda_stream_view stream) const
   {
-    thrust::copy_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                   cudf::detail::make_counting_transform_iterator(
-                     0, current_row_distance_functor{grouping, direction, order, begin}),
-                   size,
-                   result.begin<size_type>());
+    CUDF_CUDA_TRY(cub::DeviceTransform::Transform(
+      cuda::counting_iterator<size_type>{0},
+      result.begin<size_type>(),
+      size,
+      current_row_distance_functor{grouping, direction, order, begin},
+      stream.value()));
   }
 
   template <typename Grouping, typename OrderbyT, typename DeltaT>
@@ -489,13 +489,13 @@ struct range_window_clamper {
                       mutable_column_view& result,
                       rmm::cuda_stream_view stream) const
   {
-    thrust::copy_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                   cudf::detail::make_counting_transform_iterator(
-                     0,
-                     bounded_distance_functor<Grouping, OrderbyT, DeltaT, WindowType>{
-                       grouping, direction, order, begin, row_delta}),
-                   size,
-                   result.begin<size_type>());
+    CUDF_CUDA_TRY(cub::DeviceTransform::Transform(
+      cuda::counting_iterator<size_type>{0},
+      result.begin<size_type>(),
+      size,
+      bounded_distance_functor<Grouping, OrderbyT, DeltaT, WindowType>{
+        grouping, direction, order, begin, row_delta},
+      stream.value()));
   }
 
   /**
