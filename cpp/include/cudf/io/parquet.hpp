@@ -934,16 +934,28 @@ class parquet_reader_options_builder {
   }
 
   /**
-   * @brief Sets to enable/disable trying to output DICTIONARY32 columns.
+   * @brief Sets whether to prepend a source file index column to the output.
    *
-   * @param val Boolean value whether to try to output DICTIONARY32 columns
+   * @param val Boolean indicating whether to prepend a source file index column
    * @return this for chaining
    */
-  parquet_reader_options_builder& prepend_source_index_column(bool val)
-  {
-    options._prepend_source_index_column = val;
-    return *this;
-  }
+   parquet_reader_options_builder& prepend_source_index_column(bool val)
+   {
+     options.enable_prepend_source_index_column(val);
+     return *this;
+   }
+ 
+   /**
+    * @brief Sets whether to prepend a file-local row index column to the output.
+    *
+    * @param val Boolean indicating whether to prepend a row index column
+    * @return this for chaining
+    */
+   parquet_reader_options_builder& prepend_row_index_column(bool val)
+   {
+     options.enable_prepend_row_index_column(val);
+     return *this;
+   }
 
   /**
    * @brief Sets to enable/disable trying to output DICTIONARY32 columns.
@@ -951,7 +963,7 @@ class parquet_reader_options_builder {
    * @param val Boolean value whether to try to output DICTIONARY32 columns
    * @return this for chaining
    */
-  parquet_reader_options_builder& try_output_dict_columns(bool val)
+  parquet_reader_options_builder& output_dict_columns(bool val)
   {
     options._output_dict_columns = val;
     return *this;
