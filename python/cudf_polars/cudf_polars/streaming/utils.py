@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition utilities."""
 
@@ -122,4 +122,22 @@ def _contains_unsupported_fill_strategy(exprs: Sequence[Expr]) -> bool:
             and e.options[0] not in ("zero", "one")
         ):
             return True
+    return False
+
+
+def _contains_cum_sum_without_order_by(exprs: Sequence[Expr]) -> bool:
+    # Returns True for cum_sum(...) or fill_null_with_strategy(cum_sum(...)).
+    for e in traversal(exprs):
+        if not (isinstance(e, GroupedWindow) and not e.options[1]):
+            continue
+        for ne in e.named_aggs:
+            v = ne.value
+            if (
+                isinstance(v, UnaryFunction)
+                and v.name == "fill_null_with_strategy"
+                and isinstance(v.children[0], UnaryFunction)
+            ):
+                v = v.children[0]
+            if isinstance(v, UnaryFunction) and v.name == "cum_sum":
+                return True
     return False
