@@ -1553,7 +1553,7 @@ TYPED_TEST(TransformTest, Decimal128IdentityOutput)
     EXPECT_THROW(Executor::compute_column(table, expression), cudf::data_type_error);
   } else {
     auto result   = Executor::compute_column(table, expression);
-    auto expected = cudf::test::fixed_point_column_wrapper<__int128_t>({12345, 12345}, scale);
+    auto expected = cudf::test::fixed_point_column_wrapper<__int128>({12345, 12345}, scale);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
   }
 }
