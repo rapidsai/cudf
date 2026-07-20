@@ -528,7 +528,7 @@ TEST_F(ExtractVariantFieldTest, ApacheArrayPrimitiveIndexing)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*get("$[3]"),
                                  cudf::test::fixed_width_column_wrapper<int8_t>{int8_t{9}});
 
-  // Leading zeros are allowed and interpreted in base 10: "[00]" == "[0]", "[01]" == "[1]".
+  // Leading zeros are allowed
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*get("$[00]"),
                                  cudf::test::fixed_width_column_wrapper<int8_t>{int8_t{2}});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*get("$[01]"),

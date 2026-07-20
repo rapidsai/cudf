@@ -266,7 +266,7 @@ __device__ cuda::std::optional<size_type> find_key_in_metadata(device_span<uint8
 
   auto const offsets_start = pos;
   auto const offsets_bytes = (static_cast<uint64_t>(num_entries.value()) + 1) * offset_size;
-  if (offsets_bytes > static_cast<uint64_t>(meta_len - offsets_start)) {
+  if (cuda::std::cmp_greater(offsets_bytes, meta_len - offsets_start)) {
     return cuda::std::nullopt;
   }
 
@@ -381,50 +381,48 @@ __device__ device_span<uint8_t const> locate_object_field(device_span<uint8_t co
 //                 offsets
 //   values:       concatenated element blobs
 //
-// Unlike object field offsets (which are ordered by field name and so are not necessarily
-// monotonic, see locate_object_field), array element offsets are monotonically increasing per the
-// Variant spec, so the element length is taken directly from the offset delta (o1 - o0) rather than
-// from the element's own header.
-__device__ device_span<uint8_t const> locate_array_element(device_span<uint8_t const> val,
+// Array element offsets are monotonically increasing, so the element length is taken directly from
+// the offset delta (o1 - o0) rather than from the element's own header.
+__device__ device_span<uint8_t const> locate_array_element(device_span<uint8_t const> value,
                                                            size_type index)
 {
   if (index < 0) { return {}; }
 
-  auto const val_len = static_cast<size_type>(val.size());
-  if (val_len < 1) { return {}; }
-  uint8_t const value_metadata = val[0];
+  auto const value_size = static_cast<size_type>(value.size());
+  if (value_size < 1) { return {}; }
+  uint8_t const value_metadata = value[0];
   if (variant_basic_type(value_metadata) != basic_type::array) { return {}; }
 
   int const value_header = variant_value_header(value_metadata);
   [[maybe_unused]] auto const [offset_size, _, num_elements_size] =
     decode_object_array_header(value_header, false);
 
-  size_type pos           = 1;
-  auto const num_elements = narrow_cast(read_uint64(val, pos, num_elements_size));
-  if (!num_elements.has_value()) { return {}; }
-  auto const n = num_elements.value();
-  if (index >= n) { return {}; }
-  pos += num_elements_size;
+  size_type position            = 1;
+  auto const num_elements_value = narrow_cast(read_uint64(value, position, num_elements_size));
+  if (!num_elements_value.has_value()) { return {}; }
+  auto const num_elements = num_elements_value.value();
+  if (index >= num_elements) { return {}; }
+  position += num_elements_size;
 
-  size_type const offsets_start = pos;
-  auto const offsets_bytes      = (static_cast<uint64_t>(n) + 1) * offset_size;
-  if (offsets_bytes > static_cast<uint64_t>(val_len - offsets_start)) { return {}; }
+  size_type const offsets_start = position;
+  auto const offsets_bytes      = (static_cast<uint64_t>(num_elements) + 1) * offset_size;
+  if (cuda::std::cmp_greater(offsets_bytes, value_size - offsets_start)) { return {}; }
   size_type const values_base = offsets_start + static_cast<size_type>(offsets_bytes);
-  auto const values_extent    = val_len - values_base;
+  auto const values_extent    = value_size - values_base;
 
   auto const start_offset_pos = offsets_start + static_cast<uint64_t>(index) * offset_size;
   auto const end_offset_pos   = offsets_start + (static_cast<uint64_t>(index) + 1) * offset_size;
-  if (end_offset_pos + offset_size > static_cast<uint64_t>(val_len)) { return {}; }
+  if (cuda::std::cmp_greater(end_offset_pos + offset_size, value_size)) { return {}; }
 
-  auto const start_offset = read_uint64(val, static_cast<size_type>(start_offset_pos), offset_size);
-  auto const end_offset   = read_uint64(val, static_cast<size_type>(end_offset_pos), offset_size);
+  auto const start_offset = read_uint64(value, start_offset_pos, offset_size);
+  auto const end_offset   = read_uint64(value, end_offset_pos, offset_size);
   if (!start_offset.has_value() || !end_offset.has_value()) { return {}; }
   auto const element_start = *start_offset;
   auto const element_end   = *end_offset;
-  if (element_end < element_start || element_end > static_cast<uint64_t>(values_extent)) {
+  if (element_end < element_start || cuda::std::cmp_greater(element_end, values_extent)) {
     return {};
   }
-  return val.subspan(values_base + element_start, element_end - element_start);
+  return value.subspan(values_base + element_start, element_end - element_start);
 }
 
 // The fixed-width signed integers a VARIANT value can be cast to: INT{8,16,32,64}.  Matches the
@@ -464,18 +462,20 @@ __device__ inline cuda::std::optional<T> decode_int(device_span<uint8_t const> e
 // range for any array, so the caller treats it as a missing element).
 __device__ cuda::std::optional<size_type> parse_index_step(cudf::string_view step)
 {
-  auto const slen = step.size_bytes();
-  auto const* sd  = step.data();
-  if (slen < 3 || sd[0] != '[' || sd[slen - 1] != ']') { return cuda::std::nullopt; }
+  auto const step_size  = step.size_bytes();
+  auto const* step_data = step.data();
+  if (step_size < 3 || step_data[0] != '[' || step_data[step_size - 1] != ']') {
+    return cuda::std::nullopt;
+  }
 
   // The index is accumulated in an unsigned 64-bit value so a long digit run cannot overflow the
   // signed `size_type` accumulator (which would be UB) before the range check rejects it.
   uint64_t index = 0;
-  for (size_type k = 1; k < slen - 1; ++k) {
-    char const c = sd[k];
+  for (size_type k = 1; k < step_size - 1; ++k) {
+    char const c = step_data[k];
     if (c < '0' || c > '9') { return cuda::std::nullopt; }
     index = index * 10 + static_cast<uint64_t>(c - '0');
-    if (index > static_cast<uint64_t>(cuda::std::numeric_limits<size_type>::max())) {
+    if (cuda::std::cmp_greater(index, cuda::std::numeric_limits<size_type>::max())) {
       return cuda::std::nullopt;
     }
   }
