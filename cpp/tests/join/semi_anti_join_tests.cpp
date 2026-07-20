@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,6 +22,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
@@ -513,6 +514,19 @@ TEST_F(SemiAntiJoinTest, MarkJoinPrefilterLoadFactorOverload)
   auto sorted_expected     = cudf::gather(expected, *expected_sort_order);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_expected, *sorted_result);
+}
+
+TEST_F(SemiAntiJoinTest, MarkJoinMemoryResource)
+{
+  column_wrapper<int32_t> left_col{0, 1, 1, 2, 3, 5};
+  auto left = cudf::table_view{{left_col}};
+
+  auto mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+
+  cudf::mark_join obj(
+    left, cudf::null_equality::EQUAL, cudf::join_prefilter::YES, cudf::get_default_stream(), mr);
+
+  EXPECT_GT(mr.get_bytes_counter().peak, 0);
 }
 
 std::string test_name(join_implementation implementation)
