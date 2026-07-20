@@ -76,6 +76,7 @@ dependencies:
 - pandoc
 - polars>=1.35,<1.43
 - pre-commit
+- psutil
 - pyarrow>=19.0.0,<24
 - pytables
 - pytest-benchmark

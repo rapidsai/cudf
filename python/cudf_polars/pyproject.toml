@@ -45,6 +45,7 @@ classifiers = [
 test = [
     "dask-cuda==26.8.*,>=0.0.0a0",
     "pandas>=3.0.0,<3.0.4a0",
+    "psutil",
     "pytest-cov",
     "pytest-httpserver",
     "pytest-timeout",
