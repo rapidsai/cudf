@@ -225,6 +225,7 @@ def log_do_evaluate(
                         cls,
                         quent_task,
                         ir_execution_context.quent_ir_execution_context,
+                        frames,
                         None,
                     )
                 raise
@@ -238,6 +239,7 @@ def log_do_evaluate(
                         cls,
                         quent_task,
                         ir_execution_context.quent_ir_execution_context,
+                        frames,
                         result,
                     )
             stop = time.monotonic_ns()

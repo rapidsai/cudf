@@ -1052,17 +1052,19 @@ def test_emit_task_events_computing_node() -> None:
         Filter,
         task,
         quent_ir_execution_context,
+        [],
         result,
     )
 
     events = _drained_events(logger)
     task_events = [event for event in events if "Task" in event["data"]]
     # queueing -> allocating -> computing -> exit
-    assert [event["data"]["Task"]["seq"] for event in task_events] == [0, 1, 2, 3]
+    assert [event["data"]["Task"]["seq"] for event in task_events] == [0, 1, 2, 3, 4]
     assert "Queueing" in task_events[0]["data"]["Task"]["state"]
     assert "Allocating" in task_events[1]["data"]["Task"]["state"]
     assert "Computing" in task_events[2]["data"]["Task"]["state"]
     assert "Exit" in task_events[3]["data"]["Task"]["state"]
+    assert "Statistics" in task_events[4]["data"]["Task"]["state"]
     processor_events = [event for event in events if "Processor" in event["data"]]
     assert len(processor_events) == 2
 
@@ -1087,15 +1089,17 @@ def test_emit_task_events_io_node(disk_to_device_channel: Channel) -> None:
         DataFrameScan,
         task,
         quent_ir_execution_context,
+        [],
         result,
     )
 
     events = _drained_events(logger)
     # queueing -> allocating -> loading -> computing -> exit
     task_events = [event for event in events if "Task" in event["data"]]
-    assert [event["data"]["Task"]["seq"] for event in task_events] == [0, 1, 2, 3, 4]
+    assert [event["data"]["Task"]["seq"] for event in task_events] == [0, 1, 2, 3, 4, 5]
     assert "Queueing" in task_events[0]["data"]["Task"]["state"]
     assert "Allocating" in task_events[1]["data"]["Task"]["state"]
     assert "Loading" in task_events[2]["data"]["Task"]["state"]
     assert "Computing" in task_events[3]["data"]["Task"]["state"]
     assert "Exit" in task_events[4]["data"]["Task"]["state"]
+    assert "Statistics" in task_events[5]["data"]["Task"]["state"]

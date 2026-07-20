@@ -1017,3 +1017,17 @@ class Task:
             timestamp=timestamp if timestamp is not None else time.time_ns(),
             data={EventName.TASK.value: {"seq": next(self._seq), "state": "Exit"}},
         )
+
+    def statistics(self, statistics: Statistics, timestamp: int | None = None) -> Event:
+        """Build a Quent Task Statistics event."""
+        return Event(
+            id=self.id,
+            timestamp=timestamp if timestamp is not None else time.time_ns(),
+            data={
+                EventName.TASK.value: {
+                    "seq": next(self._seq),
+                    "state": "Statistics",
+                    "data": statistics.to_dict(),
+                }
+            },
+        )
