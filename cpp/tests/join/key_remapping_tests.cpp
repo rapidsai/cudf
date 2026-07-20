@@ -761,6 +761,7 @@ TEST_F(KeyRemappingTest, MemoryResource)
   auto result = remap.remap_right_keys();
   auto ids    = to_host<int32_t>(result->view());
 
+  ASSERT_EQ(ids.size(), 4);
   EXPECT_EQ(ids[1], ids[2]);
   EXPECT_NE(ids[0], ids[1]);
   EXPECT_NE(ids[1], ids[3]);
