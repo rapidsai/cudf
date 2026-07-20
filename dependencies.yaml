@@ -1006,7 +1006,7 @@ dependencies:
           - libcudf-example==26.10.*,>=0.0.0a0
           - libcudf_kafka==26.10.*,>=0.0.0a0
           - libcudf-tests==26.10.*,>=0.0.0a0
-          - libcudf-streaming-tests==26.8.*,>=0.0.0a0
+          - libcudf-streaming-tests==26.10.*,>=0.0.0a0
   test_java:
     common:
       - output_types: conda
@@ -1193,7 +1193,7 @@ dependencies:
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -1266,7 +1266,7 @@ dependencies:
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -1289,7 +1289,7 @@ dependencies:
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -1312,7 +1312,7 @@ dependencies:
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -1378,7 +1378,7 @@ dependencies:
           - &libkvikio_unsuffixed libkvikio==26.10.*,>=0.0.0a0
       - output_types: requirements
         packages:
-          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -1403,7 +1403,7 @@ dependencies:
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -1428,7 +1428,7 @@ dependencies:
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -1449,11 +1449,11 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &libucxx_unsuffixed libucxx==0.51.*,>=0.0.0a0
+          - &libucxx_unsuffixed libucxx==0.52.*,>=0.0.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -1461,12 +1461,12 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - libucxx-cu12==0.51.*,>=0.0.0a0
+              - libucxx-cu12==0.52.*,>=0.0.0a0
           - matrix:
               cuda: "13.*"
               cuda_suffixed: "true"
             packages:
-              - libucxx-cu13==0.51.*,>=0.0.0a0
+              - libucxx-cu13==0.52.*,>=0.0.0a0
           - matrix:
             packages:
               - *libucxx_unsuffixed
@@ -1474,11 +1474,11 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &ucxx_unsuffixed ucxx==0.51.*,>=0.0.0a0
+          - &ucxx_unsuffixed ucxx==0.52.*,>=0.0.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -1486,12 +1486,12 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - ucxx-cu12==0.51.*,>=0.0.0a0
+              - ucxx-cu12==0.52.*,>=0.0.0a0
           - matrix:
               cuda: "13.*"
               cuda_suffixed: "true"
             packages:
-              - ucxx-cu13==0.51.*,>=0.0.0a0
+              - ucxx-cu13==0.52.*,>=0.0.0a0
           - matrix:
             packages:
               - *ucxx_unsuffixed
@@ -1503,7 +1503,7 @@ dependencies:
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -1524,11 +1524,11 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &librapidsmpf_unsuffixed librapidsmpf==26.8.*,>=0.0.0a0
+          - &librapidsmpf_unsuffixed librapidsmpf==26.10.*,>=0.0.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -1536,12 +1536,12 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - librapidsmpf-cu12==26.8.*,>=0.0.0a0
+              - librapidsmpf-cu12==26.10.*,>=0.0.0a0
           - matrix:
               cuda: "13.*"
               cuda_suffixed: "true"
             packages:
-              - librapidsmpf-cu13==26.8.*,>=0.0.0a0
+              - librapidsmpf-cu13==26.10.*,>=0.0.0a0
           - matrix:
             packages:
               - *librapidsmpf_unsuffixed
@@ -1549,11 +1549,11 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &libcudf_streaming_unsuffixed libcudf-streaming==26.8.*,>=0.0.0a0
+          - &libcudf_streaming_unsuffixed libcudf-streaming==26.10.*,>=0.0.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -1561,12 +1561,12 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - libcudf-streaming-cu12==26.8.*,>=0.0.0a0
+              - libcudf-streaming-cu12==26.10.*,>=0.0.0a0
           - matrix:
               cuda: "13.*"
               cuda_suffixed: "true"
             packages:
-              - libcudf-streaming-cu13==26.8.*,>=0.0.0a0
+              - libcudf-streaming-cu13==26.10.*,>=0.0.0a0
           - matrix:
             packages:
               - *libcudf_streaming_unsuffixed
@@ -1574,11 +1574,11 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &cudf_streaming_unsuffixed cudf-streaming==26.8.*,>=0.0.0a0
+          - &cudf_streaming_unsuffixed cudf-streaming==26.10.*,>=0.0.0a0
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -1586,12 +1586,12 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - cudf-streaming-cu12==26.8.*,>=0.0.0a0
+              - cudf-streaming-cu12==26.10.*,>=0.0.0a0
           - matrix:
               cuda: "13.*"
               cuda_suffixed: "true"
             packages:
-              - cudf-streaming-cu13==26.8.*,>=0.0.0a0
+              - cudf-streaming-cu13==26.10.*,>=0.0.0a0
           - matrix:
             packages:
               - *cudf_streaming_unsuffixed
@@ -1611,7 +1611,7 @@ dependencies:
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/
   test_python_pandas_cudf:
     common:
       - output_types: [requirements, pyproject]
@@ -1665,7 +1665,7 @@ dependencies:
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
-          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/
     specific:
       - output_types: [requirements, pyproject]
         matrices:
