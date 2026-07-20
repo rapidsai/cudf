@@ -309,7 +309,7 @@ std::vector<parquet::FileMetaData> read_parquet_footers(
  *
  * @param footer_bytes Thrift-compact-encoded Parquet `FileMetaData` (footer) bytes
  * @param mode `throw_if_type_mismatch::YES` (default) rejects a field whose wire type mismatches
- * the schema type; `::NO` skips it (Thrift forward-compat)
+ * the schema type; `throw_if_type_mismatch::NO` skips it (Thrift forward-compat)
  *
  * @return The deserialized `FileMetaData`
  */
