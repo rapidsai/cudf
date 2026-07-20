@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,7 +18,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 
-#include <cuda/iterator>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <vector>
 
@@ -29,21 +29,21 @@ TEST_F(StringsSplitTest, Split)
   std::vector<char const*> h_strings{
     "Héllo thesé", nullptr, "are some", "tést String", "", "no-delimiter"};
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    h_strings.begin(),
+    h_strings.end(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   cudf::strings_column_view strings_view(strings);
 
   std::vector<char const*> h_expected1{"Héllo", nullptr, "are", "tést", "", "no-delimiter"};
   cudf::test::strings_column_wrapper expected1(
     h_expected1.begin(),
     h_expected1.end(),
-    cuda::transform_iterator(h_expected1.begin(), [](auto str) { return str != nullptr; }));
+    thrust::make_transform_iterator(h_expected1.begin(), [](auto str) { return str != nullptr; }));
   std::vector<char const*> h_expected2{"thesé", nullptr, "some", "String", nullptr, nullptr};
   cudf::test::strings_column_wrapper expected2(
     h_expected2.begin(),
     h_expected2.end(),
-    cuda::transform_iterator(h_expected2.begin(), [](auto str) { return str != nullptr; }));
+    thrust::make_transform_iterator(h_expected2.begin(), [](auto str) { return str != nullptr; }));
   std::vector<std::unique_ptr<cudf::column>> expected_columns;
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());
@@ -119,9 +119,9 @@ TEST_F(StringsSplitTest, RSplit)
   std::vector<char const*> h_strings{
     "héllo", nullptr, "a_bc_déf", "a__bc", "_ab_cd", "ab_cd_", "", " a b ", " a  bbb   c"};
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    h_strings.begin(),
+    h_strings.end(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   cudf::strings_column_view strings_view(strings);
 
   std::vector<char const*> h_expected1{
@@ -129,19 +129,19 @@ TEST_F(StringsSplitTest, RSplit)
   cudf::test::strings_column_wrapper expected1(
     h_expected1.begin(),
     h_expected1.end(),
-    cuda::transform_iterator(h_expected1.begin(), [](auto str) { return str != nullptr; }));
+    thrust::make_transform_iterator(h_expected1.begin(), [](auto str) { return str != nullptr; }));
   std::vector<char const*> h_expected2{
     nullptr, nullptr, "bc", "", "ab", "cd", nullptr, nullptr, nullptr};
   cudf::test::strings_column_wrapper expected2(
     h_expected2.begin(),
     h_expected2.end(),
-    cuda::transform_iterator(h_expected2.begin(), [](auto str) { return str != nullptr; }));
+    thrust::make_transform_iterator(h_expected2.begin(), [](auto str) { return str != nullptr; }));
   std::vector<char const*> h_expected3{
     nullptr, nullptr, "déf", "bc", "cd", "", nullptr, nullptr, nullptr};
   cudf::test::strings_column_wrapper expected3(
     h_expected3.begin(),
     h_expected3.end(),
-    cuda::transform_iterator(h_expected3.begin(), [](auto str) { return str != nullptr; }));
+    thrust::make_transform_iterator(h_expected3.begin(), [](auto str) { return str != nullptr; }));
   std::vector<std::unique_ptr<cudf::column>> expected_columns;
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());
@@ -176,26 +176,26 @@ TEST_F(StringsSplitTest, RSplitWhitespace)
 {
   std::vector<char const*> h_strings{"héllo", nullptr, "a_bc_déf", "", " a\tb ", " a\r bbb   c"};
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    h_strings.begin(),
+    h_strings.end(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
   cudf::strings_column_view strings_view(strings);
   std::vector<char const*> h_expected1{"héllo", nullptr, "a_bc_déf", nullptr, "a", "a"};
   cudf::test::strings_column_wrapper expected1(
     h_expected1.begin(),
     h_expected1.end(),
-    cuda::transform_iterator(h_expected1.begin(), [](auto str) { return str != nullptr; }));
+    thrust::make_transform_iterator(h_expected1.begin(), [](auto str) { return str != nullptr; }));
   std::vector<char const*> h_expected2{nullptr, nullptr, nullptr, nullptr, "b", "bbb"};
   cudf::test::strings_column_wrapper expected2(
     h_expected2.begin(),
     h_expected2.end(),
-    cuda::transform_iterator(h_expected2.begin(), [](auto str) { return str != nullptr; }));
+    thrust::make_transform_iterator(h_expected2.begin(), [](auto str) { return str != nullptr; }));
   std::vector<char const*> h_expected3{nullptr, nullptr, nullptr, nullptr, nullptr, "c"};
   cudf::test::strings_column_wrapper expected3(
     h_expected3.begin(),
     h_expected3.end(),
-    cuda::transform_iterator(h_expected3.begin(), [](auto str) { return str != nullptr; }));
+    thrust::make_transform_iterator(h_expected3.begin(), [](auto str) { return str != nullptr; }));
   std::vector<std::unique_ptr<cudf::column>> expected_columns;
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());
@@ -431,7 +431,7 @@ TEST_F(StringsSplitTest, SplitRegex)
 {
   std::vector<char const*> h_strings{" Héllo thesé", nullptr, "are some  ", "tést String", ""};
   auto validity =
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
   cudf::test::strings_column_wrapper input(h_strings.begin(), h_strings.end(), validity);
   auto sv = cudf::strings_column_view(input);
 
@@ -478,7 +478,7 @@ TEST_F(StringsSplitTest, SplitRecordRegex)
 {
   std::vector<char const*> h_strings{" Héllo thesé", nullptr, "are some  ", "tést String", ""};
   auto validity =
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
   cudf::test::strings_column_wrapper input(h_strings.begin(), h_strings.end(), validity);
   auto sv = cudf::strings_column_view(input);
 
@@ -521,7 +521,7 @@ TEST_F(StringsSplitTest, SplitRegexWithMaxSplit)
 {
   std::vector<char const*> h_strings{" Héllo\tthesé", nullptr, "are\nsome  ", "tést\rString", ""};
   auto validity =
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
   cudf::test::strings_column_wrapper input(h_strings.begin(), h_strings.end(), validity);
   auto sv = cudf::strings_column_view(input);
   {
@@ -619,7 +619,7 @@ TEST_F(StringsSplitTest, RSplitRecord)
   std::vector<char const*> h_strings{
     "héllo", nullptr, "a_bc_déf", "a__bc", "_ab_cd", "ab_cd_", "", " a b ", " a  bbb   c"};
   auto validity =
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end(), validity);
 
   using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
@@ -650,7 +650,7 @@ TEST_F(StringsSplitTest, RSplitRecordWithMaxSplit)
                                      " a b ___",
                                      "___ a  bbb   c"};
   auto validity =
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end(), validity);
 
   using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
@@ -675,7 +675,7 @@ TEST_F(StringsSplitTest, RSplitRecordWhitespace)
 {
   std::vector<char const*> h_strings{"héllo", nullptr, "a_bc_déf", "", " a\tb ", " a\r bbb   c"};
   auto validity =
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end(), validity);
 
   using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
@@ -692,7 +692,7 @@ TEST_F(StringsSplitTest, RSplitRecordWhitespaceWithMaxSplit)
   std::vector<char const*> h_strings{
     "  héllo Asher ", nullptr, "   a_bc_déf   ", "", " a\tb ", " a\r bbb   c"};
   auto validity =
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end(), validity);
 
   using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
@@ -709,7 +709,7 @@ TEST_F(StringsSplitTest, RSplitRegexWithMaxSplit)
 {
   std::vector<char const*> h_strings{" Héllo\tthesé", nullptr, "are some\n ", "tést\rString", ""};
   auto validity =
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
   cudf::test::strings_column_wrapper input(h_strings.begin(), h_strings.end(), validity);
   auto sv = cudf::strings_column_view(input);
 
@@ -897,28 +897,28 @@ TEST_F(StringsSplitTest, Partition)
     "_",     "_",     "",  "",  "", nullptr, "bc_déf", "_bc",   "ab_cd", "cd_",   "",  ""};
 
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    h_strings.begin(),
+    h_strings.end(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   cudf::strings_column_view strings_view(strings);
   auto results = cudf::strings::partition(strings_view, cudf::string_scalar("_"));
   EXPECT_TRUE(results->num_columns() == 3);
 
   auto exp_itr = h_expecteds.begin();
   cudf::test::strings_column_wrapper expected1(
-    exp_itr, exp_itr + h_strings.size(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    exp_itr,
+    exp_itr + h_strings.size(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   exp_itr += h_strings.size();
   cudf::test::strings_column_wrapper expected2(
-    exp_itr, exp_itr + h_strings.size(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    exp_itr,
+    exp_itr + h_strings.size(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   exp_itr += h_strings.size();
   cudf::test::strings_column_wrapper expected3(
-    exp_itr, exp_itr + h_strings.size(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    exp_itr,
+    exp_itr + h_strings.size(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   std::vector<std::unique_ptr<cudf::column>> expected_columns;
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());
@@ -937,28 +937,28 @@ TEST_F(StringsSplitTest, PartitionWhitespace)
                                        "",      nullptr, "bc déf", " bc", "ab cd", "cd ", "", ""};
 
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    h_strings.begin(),
+    h_strings.end(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   cudf::strings_column_view strings_view(strings);
   auto results = cudf::strings::partition(strings_view);
   EXPECT_TRUE(results->num_columns() == 3);
 
   auto exp_itr = h_expecteds.begin();
   cudf::test::strings_column_wrapper expected1(
-    exp_itr, exp_itr + h_strings.size(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    exp_itr,
+    exp_itr + h_strings.size(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   exp_itr += h_strings.size();
   cudf::test::strings_column_wrapper expected2(
-    exp_itr, exp_itr + h_strings.size(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    exp_itr,
+    exp_itr + h_strings.size(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   exp_itr += h_strings.size();
   cudf::test::strings_column_wrapper expected3(
-    exp_itr, exp_itr + h_strings.size(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    exp_itr,
+    exp_itr + h_strings.size(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   std::vector<std::unique_ptr<cudf::column>> expected_columns;
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());
@@ -977,28 +977,28 @@ TEST_F(StringsSplitTest, RPartition)
                                        "héllo", nullptr, "déf",  "bc", "cd",  "",      "", " a b "};
 
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    h_strings.begin(),
+    h_strings.end(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   cudf::strings_column_view strings_view(strings);
   auto results = cudf::strings::rpartition(strings_view, cudf::string_scalar("_"));
   EXPECT_TRUE(results->num_columns() == 3);
 
   auto exp_itr = h_expecteds.begin();
   cudf::test::strings_column_wrapper expected1(
-    exp_itr, exp_itr + h_strings.size(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    exp_itr,
+    exp_itr + h_strings.size(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   exp_itr += h_strings.size();
   cudf::test::strings_column_wrapper expected2(
-    exp_itr, exp_itr + h_strings.size(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    exp_itr,
+    exp_itr + h_strings.size(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   exp_itr += h_strings.size();
   cudf::test::strings_column_wrapper expected3(
-    exp_itr, exp_itr + h_strings.size(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    exp_itr,
+    exp_itr + h_strings.size(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   std::vector<std::unique_ptr<cudf::column>> expected_columns;
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());
@@ -1017,28 +1017,28 @@ TEST_F(StringsSplitTest, RPartitionWhitespace)
                                        "héllo", nullptr, "déf",  "bc", "cd",  "",      "", "a_b"};
 
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    h_strings.begin(),
+    h_strings.end(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   cudf::strings_column_view strings_view(strings);
   auto results = cudf::strings::rpartition(strings_view);
   EXPECT_TRUE(results->num_columns() == 3);
 
   auto exp_itr = h_expecteds.begin();
   cudf::test::strings_column_wrapper expected1(
-    exp_itr, exp_itr + h_strings.size(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    exp_itr,
+    exp_itr + h_strings.size(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   exp_itr += h_strings.size();
   cudf::test::strings_column_wrapper expected2(
-    exp_itr, exp_itr + h_strings.size(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    exp_itr,
+    exp_itr + h_strings.size(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   exp_itr += h_strings.size();
   cudf::test::strings_column_wrapper expected3(
-    exp_itr, exp_itr + h_strings.size(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    exp_itr,
+    exp_itr + h_strings.size(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   std::vector<std::unique_ptr<cudf::column>> expected_columns;
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());

@@ -15,6 +15,7 @@
 #include <cudf/detail/iterator.cuh>
 
 #include <cuda/iterator>
+#include <thrust/iterator/transform_iterator.h>
 
 template <typename T>
 struct ColumnUtilitiesTest : public cudf::test::BaseFixture {
@@ -146,9 +147,9 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHost)
 {
   std::vector<char const*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    h_strings.begin(),
+    h_strings.end(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   auto host_data  = cudf::test::to_host<std::string>(strings);
   auto result_itr = host_data.first.begin();
   for (auto itr = h_strings.begin(); itr != h_strings.end(); ++itr, ++result_itr) {
@@ -160,9 +161,9 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHostAllNulls)
 {
   std::vector<char const*> h_strings{nullptr, nullptr, nullptr};
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    h_strings.begin(),
+    h_strings.end(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   auto host_data = cudf::test::to_host<std::string>(strings);
   auto results   = host_data.first;
   EXPECT_EQ(std::size_t{3}, host_data.first.size());

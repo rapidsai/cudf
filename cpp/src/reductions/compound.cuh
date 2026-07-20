@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,7 +14,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <cuda/iterator>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <stdexcept>
 #include <type_traits>
@@ -62,19 +62,19 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
 
   if (!cudf::is_dictionary(col.type())) {
     if (col.has_nulls()) {
-      auto it = cuda::transform_iterator(
+      auto it = thrust::make_transform_iterator(
         dcol->pair_begin<ElementType, true>(),
         compound_op.template get_null_replacing_element_transformer<ResultType>());
       return cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
         it, col.size(), compound_op, valid_count, ddof, stream, mr);
     } else {
-      auto it = cuda::transform_iterator(
+      auto it = thrust::make_transform_iterator(
         dcol->begin<ElementType>(), compound_op.template get_element_transformer<ResultType>());
       return cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
         it, col.size(), compound_op, valid_count, ddof, stream, mr);
     }
   } else {
-    auto it = cuda::transform_iterator(
+    auto it = thrust::make_transform_iterator(
       cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType>(*dcol, col.has_nulls()),
       compound_op.template get_null_replacing_element_transformer<ResultType>());
     return cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(

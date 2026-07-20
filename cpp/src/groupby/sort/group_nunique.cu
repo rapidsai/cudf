@@ -15,6 +15,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/iterator>
+#include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
 namespace groupby {

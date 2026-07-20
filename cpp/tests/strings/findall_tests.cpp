@@ -14,7 +14,7 @@
 #include <cudf/strings/regex/regex_program.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <cuda/iterator>
+#include <thrust/iterator/transform_iterator.h>
 
 struct StringsFindallTests : public cudf::test::BaseFixture {};
 

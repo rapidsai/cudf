@@ -18,6 +18,7 @@
 #include <cuda/iterator>
 #include <cuda/std/cmath>
 #include <thrust/for_each.h>
+#include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
 namespace io {

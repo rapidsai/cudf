@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,8 +15,8 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
 
-#include <cuda/iterator>
 #include <thrust/host_vector.h>
+#include <thrust/iterator/transform_iterator.h>
 
 namespace CUDF_EXPORT cudf {
 namespace test {

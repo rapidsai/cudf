@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2023, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,7 +10,7 @@
 #include <cudf/strings/convert/convert_urls.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <cuda/iterator>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <random>
 #include <vector>
@@ -31,7 +31,8 @@ TEST_F(StringsConvertTest, UrlEncode)
   cudf::test::strings_column_wrapper strings(
     h_strings.cbegin(),
     h_strings.cend(),
-    cuda::transform_iterator(h_strings.cbegin(), [](auto const str) { return str != nullptr; }));
+    thrust::make_transform_iterator(h_strings.cbegin(),
+                                    [](auto const str) { return str != nullptr; }));
 
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::url_encode(strings_view);
@@ -48,7 +49,8 @@ TEST_F(StringsConvertTest, UrlEncode)
   cudf::test::strings_column_wrapper expected(
     h_expected.cbegin(),
     h_expected.cend(),
-    cuda::transform_iterator(h_expected.cbegin(), [](auto const str) { return str != nullptr; }));
+    thrust::make_transform_iterator(h_expected.cbegin(),
+                                    [](auto const str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
@@ -65,7 +67,8 @@ TEST_F(StringsConvertTest, UrlDecode)
   cudf::test::strings_column_wrapper strings(
     h_strings.cbegin(),
     h_strings.cend(),
-    cuda::transform_iterator(h_strings.cbegin(), [](auto const str) { return str != nullptr; }));
+    thrust::make_transform_iterator(h_strings.cbegin(),
+                                    [](auto const str) { return str != nullptr; }));
 
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::url_decode(strings_view);
@@ -81,7 +84,8 @@ TEST_F(StringsConvertTest, UrlDecode)
   cudf::test::strings_column_wrapper expected(
     h_expected.cbegin(),
     h_expected.cend(),
-    cuda::transform_iterator(h_expected.cbegin(), [](auto const str) { return str != nullptr; }));
+    thrust::make_transform_iterator(h_expected.cbegin(),
+                                    [](auto const str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
@@ -97,7 +101,8 @@ TEST_F(StringsConvertTest, UrlDecodeNop)
   cudf::test::strings_column_wrapper strings(
     h_strings.cbegin(),
     h_strings.cend(),
-    cuda::transform_iterator(h_strings.cbegin(), [](auto const str) { return str != nullptr; }));
+    thrust::make_transform_iterator(h_strings.cbegin(),
+                                    [](auto const str) { return str != nullptr; }));
 
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::url_decode(strings_view);
@@ -118,7 +123,8 @@ TEST_F(StringsConvertTest, UrlDecodeSliced)
   cudf::test::strings_column_wrapper strings(
     h_strings.cbegin(),
     h_strings.cend(),
-    cuda::transform_iterator(h_strings.cbegin(), [](auto const str) { return str != nullptr; }));
+    thrust::make_transform_iterator(h_strings.cbegin(),
+                                    [](auto const str) { return str != nullptr; }));
 
   std::vector<char const*> h_expected{"www.nvidia.com/rapids/?p=é%",
                                       "01/_file-1234567890.txt",
@@ -131,7 +137,8 @@ TEST_F(StringsConvertTest, UrlDecodeSliced)
   cudf::test::strings_column_wrapper expected(
     h_expected.cbegin(),
     h_expected.cend(),
-    cuda::transform_iterator(h_expected.cbegin(), [](auto const str) { return str != nullptr; }));
+    thrust::make_transform_iterator(h_expected.cbegin(),
+                                    [](auto const str) { return str != nullptr; }));
 
   std::vector<cudf::size_type> slice_indices{0, 3, 3, 6, 6, 8};
   auto sliced_strings  = cudf::slice(strings, slice_indices);
@@ -190,7 +197,8 @@ TEST_F(StringsConvertTest, UrlDecodeLargeStrings)
   cudf::test::strings_column_wrapper strings(
     h_strings.cbegin(),
     h_strings.cend(),
-    cuda::transform_iterator(h_strings.cbegin(), [](auto const str) { return str != nullptr; }));
+    thrust::make_transform_iterator(h_strings.cbegin(),
+                                    [](auto const str) { return str != nullptr; }));
 
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::url_decode(strings_view);
@@ -199,7 +207,8 @@ TEST_F(StringsConvertTest, UrlDecodeLargeStrings)
   cudf::test::strings_column_wrapper expected(
     h_expected.cbegin(),
     h_expected.cend(),
-    cuda::transform_iterator(h_expected.cbegin(), [](auto const str) { return str != nullptr; }));
+    thrust::make_transform_iterator(h_expected.cbegin(),
+                                    [](auto const str) { return str != nullptr; }));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,7 +15,7 @@
 
 #include <nvtext/generate_ngrams.hpp>
 
-#include <cuda/iterator>
+#include <thrust/iterator/transform_iterator.h>
 
 struct TextGenerateNgramsTest : public cudf::test::BaseFixture {};
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,7 +13,7 @@
 #include <cudf/dictionary/update_keys.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <cuda/iterator>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <vector>
 
@@ -35,7 +35,7 @@ TEST_F(DictionaryRemoveKeysTest, StringsColumn)
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(),
       h_expected.end(),
-      cuda::transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+      thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
     auto const decoded = cudf::dictionary::decode(result->view());
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(decoded->view(), expected);
   }

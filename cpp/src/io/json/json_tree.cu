@@ -34,8 +34,9 @@
 #include <thrust/binary_search.h>
 #include <thrust/count.h>
 #include <thrust/fill.h>
-#include <thrust/for_each.h>
 #include <thrust/gather.h>
+#include <thrust/iterator/permutation_iterator.h>
+#include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/remove.h>
@@ -122,7 +123,7 @@ struct node_ranges {
 
 struct is_nested_end {
   PdaTokenT const* tokens;
-  __device__ auto operator()(NodeIndexT i) const -> bool
+  __device__ auto operator()(NodeIndexT i) -> bool
   {
     return tokens[i] == token_t::StructEnd or tokens[i] == token_t::ListEnd;
   }
@@ -294,7 +295,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   rmm::device_uvector<TreeDepthT> node_levels(num_nodes, stream, mr);
   {
     rmm::device_uvector<TreeDepthT> token_levels(num_tokens, stream);
-    auto const push_pop_it = cuda::transform_iterator(
+    auto const push_pop_it = thrust::make_transform_iterator(
       tokens.begin(),
       cuda::proclaim_return_type<size_type>(
         [does_push, does_pop] __device__(PdaTokenT const token) -> size_type {
@@ -437,7 +438,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     rmm::device_uvector<TreeDepthT> token_levels(num_nested, stream);
     rmm::device_uvector<NodeIndexT> token_id(num_nested, stream);
     rmm::device_uvector<NodeIndexT> parent_node_ids(num_nested, stream);
-    auto const push_pop_it = cuda::transform_iterator(
+    auto const push_pop_it = thrust::make_transform_iterator(
       tokens.begin(),
       cuda::proclaim_return_type<cudf::size_type>(
         [] __device__(PdaTokenT const token) -> size_type {
@@ -500,21 +501,20 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
       stream);
 
     // scatter to node_range_end for only nested end tokens.
-    thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                       cuda::counting_iterator<NodeIndexT>{0},
-                       num_nested,
-                       [token_ids_ptr       = token_id.data(),
-                        token_indices_ptr   = token_indices.data(),
-                        parent_node_ids_ptr = parent_node_ids.data(),
-                        node_range_end_ptr  = node_range_end.data(),
-                        is_end = is_nested_end{tokens.data()}] __device__(NodeIndexT const idx) {
-                         auto const token_idx = token_ids_ptr[idx];
-                         if (is_end(token_idx)) {
-                           // add +1 to include end symbol.
-                           node_range_end_ptr[parent_node_ids_ptr[idx]] =
-                             token_indices_ptr[token_idx] + 1;
-                         }
-                       });
+    auto token_indices_it =
+      thrust::make_permutation_iterator(token_indices.begin(), token_id.begin());
+    auto nested_node_range_end_it =
+      thrust::make_transform_output_iterator(node_range_end.begin(), [] __device__(auto i) {
+        // add +1 to include end symbol.
+        return i + 1;
+      });
+    auto stencil = thrust::make_transform_iterator(token_id.begin(), is_nested_end{tokens.data()});
+    thrust::scatter_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                       token_indices_it,
+                       token_indices_it + num_nested,
+                       parent_node_ids.begin(),
+                       stencil,
+                       nested_node_range_end_it);
   }
 
   return {std::move(node_categories),

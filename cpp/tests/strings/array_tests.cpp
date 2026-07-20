@@ -16,6 +16,7 @@
 #include <cudf/table/table_view.hpp>
 
 #include <cuda/iterator>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <vector>
 
@@ -60,7 +61,8 @@ TEST_P(SliceParmsTest, Slice)
   cudf::test::strings_column_wrapper expected(
     h_strings.begin() + start,
     h_strings.begin() + end,
-    cuda::transform_iterator(h_strings.begin() + start, [](auto str) { return str != nullptr; }));
+    thrust::make_transform_iterator(h_strings.begin() + start,
+                                    [](auto str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
@@ -79,7 +81,8 @@ TEST_P(SliceParmsTest, SliceAllNulls)
   cudf::test::strings_column_wrapper expected(
     h_strings.begin() + start,
     h_strings.begin() + end,
-    cuda::transform_iterator(h_strings.begin() + start, [](auto str) { return str != nullptr; }));
+    thrust::make_transform_iterator(h_strings.begin() + start,
+                                    [](auto str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 

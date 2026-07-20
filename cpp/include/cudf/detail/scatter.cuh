@@ -28,6 +28,7 @@
 
 #include <cuda/iterator>
 #include <thrust/count.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 #include <thrust/uninitialized_fill.h>
@@ -379,9 +380,9 @@ std::unique_ptr<table> scatter(table_view const& source,
 
   // Transform negative indices to index + target size.
   auto updated_scatter_map_begin =
-    cuda::transform_iterator(scatter_map_begin, index_converter<MapType>{target.num_rows()});
+    thrust::make_transform_iterator(scatter_map_begin, index_converter<MapType>{target.num_rows()});
   auto updated_scatter_map_end =
-    cuda::transform_iterator(scatter_map_end, index_converter<MapType>{target.num_rows()});
+    thrust::make_transform_iterator(scatter_map_end, index_converter<MapType>{target.num_rows()});
   auto result = std::vector<std::unique_ptr<column>>(target.num_columns());
 
   std::transform(source.begin(),

@@ -17,7 +17,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <cuda/iterator>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <memory>
 

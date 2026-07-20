@@ -29,9 +29,10 @@ struct StringsReplaceTest : public cudf::test::BaseFixture {
                                        "",
                                        nullptr};
 
-    return {h_strings.begin(),
-            h_strings.end(),
-            cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; })};
+    return {
+      h_strings.begin(),
+      h_strings.end(),
+      thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; })};
   }
 
   std::unique_ptr<cudf::column> build_large(cudf::column_view const& first,
@@ -292,9 +293,9 @@ TEST_F(StringsReplaceTest, ReplaceSlice)
   std::vector<char const*> h_strings{"Héllo", "thesé", nullptr, "ARE THE", "tést strings", ""};
 
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
-      return str != nullptr;
-    }));
+    h_strings.begin(),
+    h_strings.end(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   auto strings_view = cudf::strings_column_view(strings);
 
   {
@@ -304,7 +305,7 @@ TEST_F(StringsReplaceTest, ReplaceSlice)
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(),
       h_expected.end(),
-      cuda::transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+      thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
@@ -314,7 +315,7 @@ TEST_F(StringsReplaceTest, ReplaceSlice)
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(),
       h_expected.end(),
-      cuda::transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+      thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
@@ -324,7 +325,7 @@ TEST_F(StringsReplaceTest, ReplaceSlice)
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(),
       h_expected.end(),
-      cuda::transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+      thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
@@ -361,7 +362,7 @@ TEST_F(StringsReplaceTest, ReplaceMulti)
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(),
       h_expected.end(),
-      cuda::transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+      thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 
@@ -381,7 +382,7 @@ TEST_F(StringsReplaceTest, ReplaceMulti)
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(),
       h_expected.end(),
-      cuda::transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+      thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }

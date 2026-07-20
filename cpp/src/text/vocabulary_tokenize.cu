@@ -119,8 +119,7 @@ struct tokenize_vocabulary::tokenize_vocabulary_impl {
 };
 
 struct key_pair {
-  __device__ cuco::pair<cudf::size_type, cudf::size_type> operator()(
-    cudf::size_type idx) const noexcept
+  __device__ auto operator()(cudf::size_type idx) const noexcept
   {
     return cuco::make_pair(idx, idx);
   }

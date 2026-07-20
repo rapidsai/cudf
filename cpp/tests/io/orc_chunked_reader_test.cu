@@ -1365,7 +1365,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
   static_assert(total_rows > std::numeric_limits<cudf::size_type>::max());
 
   auto const it =
-    cuda::transform_iterator(cuda::counting_iterator<int64_t>{0}, [num_rows](int64_t i) {
+    thrust::make_transform_iterator(cuda::counting_iterator<int64_t>{0}, [num_rows](int64_t i) {
       return (i % num_rows) % static_cast<int64_t>(std::numeric_limits<data_type>::max() / 2);
     });
   auto const col         = data_col(it, it + num_rows);

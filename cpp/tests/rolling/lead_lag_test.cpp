@@ -17,7 +17,7 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <cuda/iterator>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <initializer_list>
 #include <memory>

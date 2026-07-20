@@ -12,7 +12,7 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/rolling.hpp>
 
-#include <cuda/iterator>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <memory>
 #include <optional>
