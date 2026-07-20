@@ -390,22 +390,21 @@ template <typename T>
   requires(is_variant_primitive<T>)
 __device__ constexpr primitive_type primitive_type_for()
 {
-  using enum primitive_type;
   if constexpr (cuda::std::is_same_v<T, int8_t>) {
-    return int8;
+    return primitive_type::int8;
   } else if constexpr (cuda::std::is_same_v<T, int16_t>) {
-    return int16;
+    return primitive_type::int16;
   } else if constexpr (cuda::std::is_same_v<T, int32_t>) {
-    return int32;
+    return primitive_type::int32;
   } else if constexpr (cuda::std::is_same_v<T, int64_t>) {
-    return int64;
+    return primitive_type::int64;
   } else if constexpr (cuda::std::is_same_v<T, float>) {
-    return float32;
+    return primitive_type::float32;
   } else if constexpr (cuda::std::is_same_v<T, double>) {
-    return float64;
+    return primitive_type::float64;
   } else {
     CUDF_UNREACHABLE("primitive_type_for: T is not a supported variant primitive type");
-    return null;
+    return primitive_type::null;
   }
 }
 
