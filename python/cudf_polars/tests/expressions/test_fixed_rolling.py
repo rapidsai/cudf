@@ -103,7 +103,7 @@ def test_fixed_rolling_sum_dtypes(engine: pl.GPUEngine, dtype):
     assert_gpu_result_equal(q, engine=engine)
 
 
-# TODO: Remove warning filter when fixed-size rolling supports streaming
+# TODO: Remove once fixed-size rolling supports multi-partition streaming.
 @pytest.mark.filterwarnings(
     "ignore:This selection is not supported for multiple partitions\\.:UserWarning"
 )
@@ -116,4 +116,18 @@ def test_fixed_rolling_large_window(engine: pl.GPUEngine):
 
 def test_fixed_rolling_weighted_raises(df, engine: pl.GPUEngine):
     q = df.select(pl.col("x").rolling_mean(window_size=3, weights=[1.0, 2.0, 3.0]))
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+def test_fixed_rolling_invalid_dtype_raises(engine: pl.GPUEngine):
+    q = pl.LazyFrame({"x": ["a", "b", "c"]}).select(
+        pl.col("x").rolling_min(window_size=2)
+    )
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+def test_fixed_rolling_unsupported_function_raises(engine: pl.GPUEngine):
+    q = pl.LazyFrame({"x": [1.0, 2.0, 3.0]}).select(
+        pl.col("x").rolling_quantile(0.5, window_size=2)
+    )
     assert_ir_translation_raises(q, engine, NotImplementedError)

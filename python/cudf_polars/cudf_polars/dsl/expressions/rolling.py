@@ -272,7 +272,7 @@ class FixedSizeRollingWindow(Expr):
         if agg_fn is None:
             raise NotImplementedError(
                 f"Unsupported fixed-size rolling aggregation: {self.agg_name}"
-            )
+            )  # pragma: no cover; translation validates aggregation names
         return agg_fn(*self.fn_params)
 
     def do_evaluate(
