@@ -107,7 +107,7 @@ def test_transform_as_index_no_change(as_index):
     assert_eq(expect, got)
 
 
-def test_transform_cumcount_series():
+def test_transform_cumcount_series(dropna):
     # transform("cumcount") is an unnamed Series over the original index,
     # never a per-value-column result
     pdf = pd.DataFrame(
@@ -116,7 +116,6 @@ def test_transform_cumcount_series():
     )
     gdf = cudf.DataFrame(pdf)
 
-    for dropna in (True, False):
-        expect = pdf.groupby("A", dropna=dropna).transform("cumcount")
-        got = gdf.groupby("A", dropna=dropna).transform("cumcount")
-        assert_eq(expect, got)
+    expect = pdf.groupby("A", dropna=dropna).transform("cumcount")
+    got = gdf.groupby("A", dropna=dropna).transform("cumcount")
+    assert_eq(expect, got)
