@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal
 
 import pylibcudf as plc
@@ -175,6 +175,7 @@ async def broadcast_join_actor(
         trace_ir=ir,
         ir_context=ir_context,
     ) as tracer:
+        ir_context = replace(ir_context, tracer=tracer)
         await _broadcast_join(
             context,
             comm,
@@ -292,10 +293,6 @@ async def _broadcast_join_large_chunk(
 
     join_results: list[DataFrame] = []
     input_bytes = large_chunk_size + small_size
-
-    import dataclasses
-
-    ir_context = dataclasses.replace(ir_context, tracer=tracer)
 
     with opaque_memory_usage(
         await reserve_memory(context, size=input_bytes, net_memory_delta=0)
@@ -1364,6 +1361,7 @@ async def join_actor(
         trace_ir=ir,
         ir_context=ir_context,
     ) as tracer:
+        ir_context = replace(ir_context, tracer=tracer)
         left_metadata, right_metadata = await gather_in_task_group(
             recv_metadata(ch_left, context),
             recv_metadata(ch_right, context),
