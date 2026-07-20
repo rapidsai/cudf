@@ -345,9 +345,9 @@ class parquet_reader_options {
   /**
    * @brief Returns whether the reader should try to output DICTIONARY32 columns.
    *
-   * When true, the reader outputs DICTIONARY32 columns for fully dict-encoded
-   * string columns instead of fully decoded STRING columns. A DICTIONARY32 column
-   * consists of an INT32 indices child and a STRING keys child.
+   * When true, the reader outputs DICTIONARY32 columns (instead of fully decoded STRING columns)
+   * for fully dict-encoded string columns . A DICTIONARY32 column consists of an INT32 indices
+   * child and a STRING keys child.
    *
    * AST filters do not support dictionary columns yet, so when a filter is set this option is
    * silently disabled and the columns are returned as STRING for the filter to operate on.
@@ -939,23 +939,23 @@ class parquet_reader_options_builder {
    * @param val Boolean indicating whether to prepend a source file index column
    * @return this for chaining
    */
-   parquet_reader_options_builder& prepend_source_index_column(bool val)
-   {
-     options.enable_prepend_source_index_column(val);
-     return *this;
-   }
- 
-   /**
-    * @brief Sets whether to prepend a file-local row index column to the output.
-    *
-    * @param val Boolean indicating whether to prepend a row index column
-    * @return this for chaining
-    */
-   parquet_reader_options_builder& prepend_row_index_column(bool val)
-   {
-     options.enable_prepend_row_index_column(val);
-     return *this;
-   }
+  parquet_reader_options_builder& prepend_source_index_column(bool val)
+  {
+    options.enable_prepend_source_index_column(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets whether to prepend a file-local row index column to the output.
+   *
+   * @param val Boolean indicating whether to prepend a row index column
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& prepend_row_index_column(bool val)
+  {
+    options.enable_prepend_row_index_column(val);
+    return *this;
+  }
 
   /**
    * @brief Sets to enable/disable trying to output DICTIONARY32 columns.
