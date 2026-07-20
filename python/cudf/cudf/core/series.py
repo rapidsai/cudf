@@ -1093,16 +1093,22 @@ class Series(SingleColumnFrame, IndexedFrame):
             raise TypeError(
                 "Cannot reset_index inplace on a Series to create a DataFrame"
             )
-        data, index = self._reset_index(
-            level=level, drop=drop, allow_duplicates=allow_duplicates
-        )
         if not drop:
+            # pandas semantics are ``self.to_frame(name).reset_index()``:
+            # resolve ``name`` first so the columns-dtype provenance in
+            # ``_reset_index`` sees the final value-column label.
             if name is no_default:
                 name = 0 if self.name is None else self.name
-            data[name] = data.pop(self.name)
+            frame = self._to_frame(name, index=self.index)
+            data, index = frame._reset_index(
+                level=level, drop=drop, allow_duplicates=allow_duplicates
+            )
             return self._constructor_expanddim._from_data(
                 data, index, attrs=self.attrs
             )
+        data, index = self._reset_index(
+            level=level, drop=drop, allow_duplicates=allow_duplicates
+        )
         # For ``name`` behavior, see:
         # https://github.com/pandas-dev/pandas/issues/44575
         # ``name`` has to be ignored when `drop=True`
