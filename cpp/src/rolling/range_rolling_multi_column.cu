@@ -41,6 +41,9 @@ namespace CUDF_EXPORT cudf {
 namespace detail {
 namespace {
 
+/**
+ * @brief Computes preceding and following offsets from one group lookup
+ */
 template <typename Grouping>
 struct unbounded_distance_fn {
   Grouping const groups;
@@ -67,6 +70,9 @@ struct directional_unbounded_distance_fn {
   }
 };
 
+/**
+ * @brief Computes preceding and following offsets from different groupings.
+ */
 template <typename Preceding, typename Following>
 struct mixed_unbounded_distance_fn {
   directional_unbounded_distance_fn<Preceding> const preceding_fn;
@@ -79,6 +85,9 @@ struct mixed_unbounded_distance_fn {
   }
 };
 
+/**
+ * @brief Selects grouping and writes preceding and following offsets.
+ */
 template <typename GroupHelper>
 void select_and_write_offsets(range_window_type const& preceding,
                               range_window_type const& following,
@@ -89,6 +98,7 @@ void select_and_write_offsets(range_window_type const& preceding,
                               size_type num_rows,
                               rmm::cuda_stream_view stream)
 {
+  // Write the offsets to the output columns
   auto const write_offsets = [&](auto offset_fn) {
     auto const src_iter = cudf::detail::make_counting_transform_iterator(
       size_type{0}, cuda::proclaim_return_type<cuda::std::tuple<size_type, size_type>>(offset_fn));
@@ -99,9 +109,11 @@ void select_and_write_offsets(range_window_type const& preceding,
       cuda::zip_iterator(preceding_view.begin<size_type>(), following_view.begin<size_type>()));
   };
 
+  // Write offsets for the current row case
   if (std::holds_alternative<current_row>(preceding) &&
       std::holds_alternative<current_row>(following)) {
     write_offsets(unbounded_distance_fn<rolling::grouped>{peers});
+    // Write offsets for the unbounded case
   } else if (std::holds_alternative<unbounded>(preceding) &&
              std::holds_alternative<unbounded>(following)) {
     if (group_helper.has_value()) {
@@ -111,6 +123,7 @@ void select_and_write_offsets(range_window_type const& preceding,
       write_offsets(unbounded_distance_fn<rolling::ungrouped>{{num_rows}});
     }
   } else {
+    // Select groupings for preceding and following windows
     auto const select_grouping =
       [&](range_window_type const& window) -> std::variant<rolling::grouped, rolling::ungrouped> {
       if (std::holds_alternative<current_row>(window)) {
