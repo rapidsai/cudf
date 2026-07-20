@@ -443,6 +443,7 @@ struct bounded_distance_functor {
   }
 };
 
+// Using a custom kernel instead of CUB is intentional to reduce compile time and binary size.
 template <typename Transform>
 CUDF_KERNEL void materialize_range_window_bounds_kernel(size_type size,
                                                         size_type* result,
