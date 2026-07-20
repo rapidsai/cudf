@@ -25,6 +25,7 @@ from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.to_ast import insert_colrefs
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.aggregations import decompose_single_agg
 from cudf_polars.dsl.utils.groupby import rewrite_groupby
 from cudf_polars.dsl.utils.naming import unique_names
@@ -109,6 +110,34 @@ def _check_compression(data: bytes) -> str | None:
 def _read_file_bytes(path: Path, num_bytes: int = 4) -> bytes:
     with path.open("rb") as f:
         return f.read(num_bytes)
+
+
+def _unsupported_fill_over_window(value: expr.Expr) -> bool:
+    """
+    Check if a fill_null_with_strategy over a window function is unsupported.
+
+    The only supported pattern is fill_null_with_strategy(cum_sum(...)) where
+    cum_sum is the direct and only windowed child.
+    """
+    if not (
+        isinstance(value, expr.UnaryFunction)
+        and value.name == "fill_null_with_strategy"
+    ):
+        return False
+    windowed = [
+        node
+        for node in traversal([value])
+        if isinstance(node, expr.UnaryFunction) and node.name in {"rank", "cum_sum"}
+    ]
+    if not windowed:
+        return False
+    child = value.children[0]
+    return not (
+        len(windowed) == 1
+        and windowed[0] is child
+        and isinstance(child, expr.UnaryFunction)
+        and child.name == "cum_sum"
+    )
 
 
 class Translator:
@@ -1138,12 +1167,26 @@ def _(
 
         named_aggs = [agg for agg, _ in aggs]
 
+        for named_agg in named_aggs:
+            if _unsupported_fill_over_window(named_agg.value):
+                raise NotImplementedError(
+                    "fill_null with strategy over a window is only supported when "
+                    "applied directly to cum_sum()"
+                )
+
         by_exprs = [
             translator.translate_expr(n=n, schema=schema) for n in node.partition_by
         ]
 
         child_deps = [
-            v.children[0]
+            v.children[0].children[0]
+            if (
+                isinstance(v, expr.UnaryFunction)
+                and v.name == "fill_null_with_strategy"
+                and isinstance(v.children[0], expr.UnaryFunction)
+                and v.children[0].name == "cum_sum"
+            )
+            else v.children[0]
             for ne in named_aggs
             for v in (ne.value,)
             if isinstance(v, expr.Agg)
