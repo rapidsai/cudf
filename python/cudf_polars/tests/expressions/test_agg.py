@@ -303,14 +303,10 @@ def test_temporal_quantile_median_not_supported(engine: pl.GPUEngine, expr):
     [
         pl.col("a").mode(),
         pl.col("a").entropy(),
-        pl.col("a").skew(),
-        pl.col("a").kurtosis(),
     ],
     ids=[
         "mode",
         "entropy",
-        "skew",
-        "kurtosis",
     ],
 )
 def test_agg_unsupported(engine: pl.GPUEngine, expr: pl.Expr) -> None:
