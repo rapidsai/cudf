@@ -1,10 +1,9 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "join/filter_join_indices/filter_join_indices_kernel.cuh"
-#include "join/filter_join_indices/filter_join_indices_kernel.hpp"
 
 namespace cudf::detail {
 template void launch_filter_gather_map_kernel<false, true>(
