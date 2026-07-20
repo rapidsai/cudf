@@ -20,7 +20,6 @@
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/logger.hpp>
 
-#include <rmm/aligned.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
@@ -606,8 +605,6 @@ fetch_bloom_filters_to_device_impl(
       copy_srcs[filter_idx] = deferred_buffer.data() + deferred_dst_offset;
       deferred_dst_offset += copy_sizes[filter_idx];
     });
-  CUDF_EXPECTS(deferred_dst_offset == total_deferred_size,
-               "Unexpected deferred bloom filter buffer size");
 
   // Add the buffer base to every non-empty output span and copy destination.
   rmm::device_buffer bitset_buffer(total_device_size, bloom_filter_block_bytes, stream, mr);
@@ -618,11 +615,7 @@ fetch_bloom_filters_to_device_impl(
                 [&](std::size_t filter_idx) {
                   auto const bitset_size = copy_sizes[filter_idx];
                   auto* const device_dst = bitset_size == 0 ? nullptr : device_base + device_offset;
-                  if (bitset_size != 0) {
-                    CUDF_EXPECTS(rmm::is_pointer_aligned(device_dst, bloom_filter_block_bytes),
-                                 "Encountered a misaligned bloom filter bitset");
-                  }
-                  copy_dsts[filter_idx] = device_dst;
+                  copy_dsts[filter_idx]  = device_dst;
                   device_offset += bitset_size;
                 });
   CUDF_EXPECTS(device_offset == total_device_size, "Unexpected bloom filter device buffer size");
