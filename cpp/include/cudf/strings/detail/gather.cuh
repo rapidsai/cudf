@@ -14,8 +14,8 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.hpp>
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/prefetch.hpp>
@@ -272,13 +272,11 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
                                            strings.size()};
 
   auto sizes_itr = thrust::make_transform_iterator(
-    begin,
-    cuda::proclaim_return_type<size_type>(
-      [source] __device__(size_type idx) {
-        if (NullifyOutOfBounds && (idx < 0 || idx >= source.size)) { return 0; }
-        if (not source.is_valid(idx)) { return 0; }
-        return source.size_bytes(idx);
-      }));
+    begin, cuda::proclaim_return_type<size_type>([source] __device__(size_type idx) {
+      if (NullifyOutOfBounds && (idx < 0 || idx >= source.size)) { return 0; }
+      if (not source.is_valid(idx)) { return 0; }
+      return source.size_bytes(idx);
+    }));
 
   auto [out_offsets_column, out_char_bytes] = cudf::strings::detail::make_offsets_child_column(
     sizes_itr, sizes_itr + output_count, stream, mr);
@@ -301,9 +299,9 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
   int64_t const average_string_length = out_char_bytes / output_count;
 
   auto const strings_begin = cudf::detail::make_counting_transform_iterator(
-    size_type{0},
-    cuda::proclaim_return_type<string_view>(
-      [source] __device__(size_type idx) { return source.element(idx); }));
+    size_type{0}, cuda::proclaim_return_type<string_view>([source] __device__(size_type idx) {
+      return source.element(idx);
+    }));
 
   if (average_string_length > string_parallel_threshold) {
     constexpr int max_threadblocks = 65536;
@@ -332,8 +330,7 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
     } else {
       // Iterator over the character column of input strings to gather
       auto in_chars_itr = thrust::make_transform_iterator(
-        begin,
-        cuda::proclaim_return_type<char const*>([source] __device__(size_type idx) {
+        begin, cuda::proclaim_return_type<char const*>([source] __device__(size_type idx) {
           if (NullifyOutOfBounds && (idx < 0 || idx >= source.size)) {
             return static_cast<char const*>(nullptr);
           }
@@ -343,11 +340,9 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
 
       // Iterator over the output locations to write the output
       auto out_chars_itr = cudf::detail::make_counting_transform_iterator(
-        0,
-        cuda::proclaim_return_type<char*>(
-          [offsets_view, d_out_chars] __device__(size_type idx) {
-            return d_out_chars + offsets_view[idx];
-          }));
+        0, cuda::proclaim_return_type<char*>([offsets_view, d_out_chars] __device__(size_type idx) {
+          return d_out_chars + offsets_view[idx];
+        }));
 
       // Determine temporary device storage requirements
       size_t temp_storage_bytes = 0;
