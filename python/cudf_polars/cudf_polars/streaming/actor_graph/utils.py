@@ -1235,9 +1235,17 @@ class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ e
                 )
             return lhs == "inherit" and rhs == "inherit"
 
+        def _local_schemes_strict(
+            lhs: PartitioningScheme, rhs: PartitioningScheme
+        ) -> bool:
+            return (lhs == "inherit" and rhs == "inherit") or (
+                self._scheme_is_strict(lhs) and self._scheme_is_strict(rhs)
+            )
+
         return (
-            self.is_strictly_partitioned()
-            and other.is_strictly_partitioned()
+            self.is_strictly_partitioned(level="inter_rank")
+            and other.is_strictly_partitioned(level="inter_rank")
+            and _local_schemes_strict(self.local_scheme, other.local_scheme)
             and _schemes_aligned(self.inter_rank_scheme, other.inter_rank_scheme)
             and _schemes_aligned(self.local_scheme, other.local_scheme)
         )
