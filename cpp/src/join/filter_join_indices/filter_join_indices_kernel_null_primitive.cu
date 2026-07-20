@@ -4,6 +4,7 @@
  */
 
 #include "join/filter_join_indices/filter_join_indices_kernel.cuh"
+#include "join/filter_join_indices/filter_join_indices_kernel.hpp"
 
 namespace cudf::detail {
 template void launch_filter_gather_map_kernel<true, false>(
