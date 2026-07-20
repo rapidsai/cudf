@@ -9,7 +9,7 @@ and runs on the CPU.
 
 ## Install
 
-Follow the [RAPIDS installation guide](https://docs.rapids.ai/install) and pick the
+Follow the [RAPIDS installation guide](https://docs.rapids.ai/install/) and pick the
 `cudf-polars` package for your CUDA and Python versions. For example, with conda:
 
 ```bash
