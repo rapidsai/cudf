@@ -5,7 +5,7 @@
 
 /**
  * @file types.hpp
- * @brief cuDF-IO API type definitions
+ * @brief Type definitions for the cuDF-IO API
  */
 
 #pragma once
@@ -38,7 +38,6 @@ namespace io {
 /**
  * @addtogroup io_types
  * @{
- * @file
  */
 
 /**

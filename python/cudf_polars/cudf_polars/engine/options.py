@@ -23,6 +23,7 @@ from cudf_polars.utils.config import MemoryResourceConfig
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from cudf_polars.quent import QuentContext
     from cudf_polars.utils.config import (
         DynamicPlanningOptions,
         ParquetOptions,
@@ -254,6 +255,10 @@ class StreamingOptions:
         Env: ``CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY``.
         Default: ``True`` (forced by the streaming engines).
         Category: executor.
+    quent_context
+        Quent tracing context, or ``None`` to disable tracing.
+        Env: ``CUDF_POLARS__EXECUTOR__QUENT_CONTEXT`` (``true``/``false``).
+        Default: ``None`` (disabled).
     raise_on_fail
         Raise instead of falling back to CPU.
         Default: ``False``.
@@ -344,6 +349,10 @@ class StreamingOptions:
     sink_to_directory: bool | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY", parse_boolean
     )
+    quent_context: QuentContext | None | Unspecified = _opt(
+        "executor",
+    )
+
     # ---- Engine ----
     raise_on_fail: bool | Unspecified = _opt("engine")
     parquet_options: dict[str, Any] | ParquetOptions | Unspecified = _opt("engine")
