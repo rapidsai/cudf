@@ -217,6 +217,8 @@ Suggested fix:
 - Prefer `cudf::detail::make_pinned_vector{,_async}` over `make_host_vector{,_async}` for small H2D/D2H transfers
 - Prefer `span` versions of constructors for `make_pinned_vector{,_async}` and `make_host_vector{,_async}`
 - Use `host_span`/`device_span`; no owning vectors passed by copy/reference unless explicitly moved
+- Prefer span parameters over pointer + size/length pairs (e.g. `T const* data, size_t size`)
+- Prefer `std::span` over `host_span<T>` whenever no host-device communication is required
 
 **Stream Management**:
 - Stream and MR as last two parameters (stream before MR)
