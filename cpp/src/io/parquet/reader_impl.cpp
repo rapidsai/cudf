@@ -543,8 +543,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   _reader_column_schema = options.get_column_schema();
 
   // Select only columns required by the options and filter
-  auto select_column_names =
-    get_column_projection(options, options.is_enabled_ignore_missing_columns());
+  auto select_column_names = get_column_projection(options);
 
   std::optional<std::vector<std::string>> filter_only_columns_names;
   auto const has_column_selection = options.get_column_names().has_value() or
@@ -804,8 +803,10 @@ std::vector<size_t> reader_impl::calculate_output_num_rows_per_source(size_t con
 }
 
 std::optional<std::vector<std::string>> reader_impl::get_column_projection(
-  parquet_reader_options const& options, bool ignore_missing_columns) const
+  parquet_reader_options const& options) const
 {
+  auto const ignore_missing_columns = ignore_missing_columns_policy(options);
+
   auto const has_column_names     = options.get_column_names().has_value();
   auto const has_column_indices   = options.get_column_indices().has_value();
   auto const has_column_field_ids = options.get_column_field_ids().has_value();
@@ -883,7 +884,7 @@ column_selection_options reader_impl::make_column_selection_options(
     .selection_mode         = selection_mode,
     .include_index          = options.is_enabled_use_pandas_metadata(),
     .strings_to_categorical = options.is_enabled_convert_strings_to_categories(),
-    .ignore_missing_columns = options.is_enabled_ignore_missing_columns(),
+    .ignore_missing_columns = ignore_missing_columns_policy(options),
     .timestamp_type_id      = options.get_timestamp_type().id(),
     .decimal_type_id        = options.get_decimal_width(),
     .case_sensitive_names   = options.is_enabled_case_sensitive_names()};
@@ -949,10 +950,7 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
   }
 
   // Offset column references in `_expr_conv` by the number of prepended columns
-  auto const num_prepended_cols = static_cast<size_type>(_options.prepend_source_index_column) +
-                                  static_cast<size_type>(_options.prepend_row_index_column);
-  auto const final_filter =
-    offset_column_references(_expr_conv.get_converted_expr(), num_prepended_cols);
+  auto const final_filter      = compute_offset_filter();
   auto const final_filter_expr = final_filter.get_converted_expr();
 
   // check if the output filter AST expression (= _expr_conv.get_converted_expr()) exists
