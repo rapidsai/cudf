@@ -11,7 +11,7 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.types cimport data_type, null_policy
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 ctypedef const scalar constscalar
@@ -22,7 +22,7 @@ cdef extern from "cudf/reduction.hpp" namespace "cudf" nogil:
         const reduce_aggregation& agg,
         data_type output_type,
         optional[reference_wrapper[constscalar]] init,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -35,13 +35,13 @@ cdef extern from "cudf/reduction.hpp" namespace "cudf" nogil:
         const scan_aggregation& agg,
         scan_type inclusive,
         null_policy null_handling,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
     cdef pair[unique_ptr[scalar], unique_ptr[scalar]] minmax(
         const column_view& col,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp cimport bool
@@ -8,6 +8,7 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.io.types cimport SourceInfo, SinkInfo, TableWithMetadata
@@ -672,7 +673,7 @@ cdef class CsvReaderOptionsBuilder:
 
 cpdef TableWithMetadata read_csv(
     CsvReaderOptions options,
-    Stream stream = None,
+    object stream = None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -694,9 +695,10 @@ cpdef TableWithMetadata read_csv(
     """
     cdef table_with_metadata c_result
     cdef Stream s = _get_stream(stream)
+    cdef cudaStream_t _cs = s.view().value()
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = move(cpp_read_csv(options.c_obj, s.view(), mr.get_mr()))
+        c_result = move(cpp_read_csv(options.c_obj, _cs, mr.get_mr()))
 
     cdef TableWithMetadata tbl_meta = TableWithMetadata.from_libcudf(c_result, s, mr)
     return tbl_meta
@@ -869,6 +871,24 @@ cdef class CsvWriterOptionsBuilder:
         self.c_obj.false_value(val.encode())
         return self
 
+    cpdef CsvWriterOptionsBuilder quoting(self, quote_style style):
+        """Sets quoting style for string columns.
+
+        Parameters
+        ----------
+        style : quote_style
+            Quoting style (MINIMAL or NONE).
+            MINIMAL: Quote only fields containing special characters.
+            NONE: Never quote fields.
+
+        Returns
+        -------
+        CsvWriterOptionsBuilder
+            Builder to build CsvWriterOptions
+        """
+        self.c_obj.quoting(style)
+        return self
+
     cpdef CsvWriterOptions build(self):
         """Create a CsvWriterOptions object"""
         cdef CsvWriterOptions csv_options = CsvWriterOptions.__new__(
@@ -882,7 +902,7 @@ cdef class CsvWriterOptionsBuilder:
 
 cpdef void write_csv(
     CsvWriterOptions options,
-    Stream stream = None,
+    object stream = None,
 ):
     """
     Write to CSV format.
@@ -900,8 +920,9 @@ cpdef void write_csv(
         CUDA stream used for device memory operations and kernel launches
     """
     cdef Stream s = _get_stream(stream)
+    cdef cudaStream_t _cs = s.view().value()
     with nogil:
-        cpp_write_csv(move(options.c_obj), s.view())
+        cpp_write_csv(move(options.c_obj), _cs)
 
 
 cpdef bool is_supported_write_csv(DataType type):

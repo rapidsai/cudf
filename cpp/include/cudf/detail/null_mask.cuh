@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -223,6 +223,27 @@ CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
   // Only the first lane in the warp writes the result
   if (lane == 0) { null_counts[segment_id] = warp_count; }
 }
+
+// Forward declarations; defined later in this header but called from the templates below.
+template <typename Binop>
+size_type inplace_bitmask_binop(Binop op,
+                                device_span<bitmask_type> dest_mask,
+                                host_span<bitmask_type const* const> masks,
+                                host_span<size_type const> masks_begin_bits,
+                                size_type mask_size_bits,
+                                rmm::cuda_stream_view stream);
+
+template <typename Binop>
+rmm::device_uvector<size_type> inplace_segmented_bitmask_binop(
+  Binop op,
+  device_span<bitmask_type*> dest_masks,
+  size_type dest_mask_size,
+  host_span<bitmask_type const* const> masks,
+  host_span<size_type const> masks_begin_bits,
+  size_type mask_size_bits,
+  host_span<size_type const> segment_offsets,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc bitmask_binop(Binop op, host_span<bitmask_type const* const>, host_span<size_type>
@@ -564,7 +585,7 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
         auto const end   = cuda::std::get<1>(segment);
         return end - begin;
       }));
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       segment_length_iterator,
                       segment_length_iterator + num_ranges,
                       d_bit_counts.data(),

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import itertools
 import warnings
 from typing import TYPE_CHECKING, Any, TypeVar
 
+import cupy
 import numpy as np
 import pandas as pd
 from pandas.api.indexers import BaseIndexer
@@ -21,6 +22,7 @@ from cudf.api.types import (
 from cudf.core._internals import aggregation
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.copy_types import GatherMap
+from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import GetAttrGetItemMixin, Reducible
 from cudf.core.multiindex import MultiIndex
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE, dtype_from_pylibcudf_column
@@ -99,11 +101,11 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     Rolling sum with window size 2.
 
     >>> print(a.rolling(2).sum())
-    0    <NA>
+    0     NaN
     1     3.0
     2     5.0
-    3    <NA>
-    4    <NA>
+    3     NaN
+    4     NaN
     dtype: float64
 
     Rolling sum with window size 2 and min_periods 1.
@@ -119,8 +121,8 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     Rolling count with window size 3.
 
     >>> print(a.rolling(3).count())
-    0    <NA>
-    1    <NA>
+    0     NaN
+    1     NaN
     2     3.0
     3     2.0
     4     2.0
@@ -130,11 +132,11 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     center of the window.
 
     >>> print(a.rolling(3, center=True).count())
-    0    <NA>
+    0     NaN
     1     3.0
     2     2.0
     3     2.0
-    4    <NA>
+    4     NaN
     dtype: float64
 
     Rolling max with variable window size specified by an offset;
@@ -153,12 +155,12 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     ... )
 
     >>> print(a.rolling('2s').max())
-    2019-01-01 09:00:00     1.0
-    2019-01-01 09:00:01     9.0
-    2019-01-01 09:00:02     9.0
-    2019-01-01 09:00:04     4.0
-    2019-01-01 09:00:07    <NA>
-    2019-01-01 09:00:08     1.0
+    2019-01-01 09:00:00    1.0
+    2019-01-01 09:00:01    9.0
+    2019-01-01 09:00:02    9.0
+    2019-01-01 09:00:04    4.0
+    2019-01-01 09:00:07    NaN
+    2019-01-01 09:00:08    1.0
     dtype: float64
 
     Apply custom function on the window with the *apply* method
@@ -285,7 +287,13 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                     raise NotImplementedError(
                         "center is not implemented for frequency-based windows"
                     )
-                pre = self.window.value
+                # Convert the timedelta to the same resolution as
+                # the datetime index so that the range-based window
+                # comparison uses matching units.
+                resolution = self.obj.index.unit
+                pre = int(
+                    self.window.as_unit(resolution).to_numpy().view(np.int64)
+                )
                 fwd = 0
                 orderby_obj = self.obj.index._column.astype(np.dtype(np.int64))
             else:
@@ -351,6 +359,10 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     def _apply_agg_column(
         self, source_column: ColumnBase, agg_name: str | Callable, **agg_kwargs
     ) -> ColumnBase:
+        if isinstance(source_column.dtype, CategoricalDtype):
+            # pandas window aggregations operate on the category values,
+            # not the codes
+            source_column = source_column._get_decategorized_column()  # type: ignore[attr-defined]
         pre, fwd = self._plc_windows
 
         rolling_agg = aggregation.make_aggregation(
@@ -666,8 +678,38 @@ class RollingGroupby(Rolling):
     """
 
     def __init__(self, groupby, window, min_periods=None, center=False):
+        if isinstance(window, BaseIndexer):
+            raise NotImplementedError(
+                "BaseIndexer subclasses are not yet supported with "
+                "groupby.rolling: the window bounds would not be computed "
+                "per group"
+            )
+        self._as_index = groupby._as_index
+        sort_inds = groupby.grouping.keys._get_sorted_inds()
+        if not groupby._sort:
+            # With sort=False pandas keeps groups in order of first
+            # appearance; reorder the key-sorted blocks accordingly while
+            # keeping the original row order within each block.
+            offsets, _, (positions,) = groupby._groups(
+                [groupby._range_column_from_obj]
+            )
+            pos = cupy.asarray(positions.values)
+            off = cupy.asarray(offsets)
+            # broadcast each group's first-appearance position to its rows
+            # (searchsorted maps each row to its group block; older cupy
+            # does not support an ndarray ``repeats`` in ``cupy.repeat``)
+            row_group = (
+                cupy.searchsorted(off, cupy.arange(len(pos)), side="right") - 1
+            )
+            row_first_pos = pos[off[:-1]][row_group]
+            # lexsort: primary key is each row's group-first-appearance
+            # position, ties broken by the current (key-sorted) order
+            order = cupy.lexsort(
+                cupy.stack([cupy.arange(len(pos)), row_first_pos])
+            )
+            sort_inds = as_column(pos[order])
         sort_order = GatherMap.from_column_unchecked(
-            groupby.grouping.keys._get_sorted_inds(),
+            sort_inds,
             len(groupby.obj),
             nullify=False,
         )
@@ -685,7 +727,46 @@ class RollingGroupby(Rolling):
 
         super().__init__(obj, window, min_periods=min_periods, center=center)
 
+    def __getitem__(self, arg) -> Self:
+        if isinstance(arg, tuple):
+            arg = list(arg)
+        new = object.__new__(type(self))
+        # Preserve grouping context when subsetting columns.
+        Rolling.__init__(
+            new,
+            self.obj[arg],
+            self.window,
+            min_periods=self.min_periods,
+            center=self.center,
+        )
+        new._group_keys = self._group_keys
+        new._as_index = self._as_index
+        return new
+
     def _apply_agg(self, agg_name: str, **agg_kwargs) -> DataFrame | Series:
+        from cudf.core.dataframe import DataFrame
+
+        result = super()._apply_agg(agg_name, **agg_kwargs)
+
+        if self._as_index is False and isinstance(result, DataFrame):
+            # pandas returns the group keys as leading columns with the
+            # original (group-ordered) index when as_index=False.
+            data = dict(
+                zip(
+                    self._group_keys._column_names,  # type: ignore[union-attr]
+                    self._group_keys._columns,  # type: ignore[union-attr]
+                    strict=True,
+                )
+            )
+            for name, col in result._data.items():
+                if name in data:
+                    raise NotImplementedError(
+                        "as_index=False with a group key sharing a column "
+                        "name with the result is not supported"
+                    )
+                data[name] = col
+            return DataFrame._from_data(data, index=self.obj.index)
+
         index = MultiIndex._from_data(
             dict(
                 enumerate(
@@ -702,6 +783,5 @@ class RollingGroupby(Rolling):
                 self.obj.index._column_names,
             )
         )
-        result = super()._apply_agg(agg_name, **agg_kwargs)
         result.index = index
         return result

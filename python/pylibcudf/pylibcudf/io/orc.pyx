@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from libcpp.string cimport string
@@ -8,6 +8,7 @@ from libcpp.vector cimport vector
 import datetime
 
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.io.types cimport SourceInfo, TableWithMetadata, SinkInfo
@@ -48,6 +49,7 @@ from pylibcudf.libcudf.io.orc cimport (
 )
 
 from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.libcudf.table.table_view cimport table_view
 
 from pylibcudf.types cimport DataType
 
@@ -444,7 +446,7 @@ cdef class OrcReaderOptionsBuilder:
 
 
 cpdef TableWithMetadata read_orc(
-    OrcReaderOptions options, Stream stream = None, DeviceMemoryResource mr=None
+    OrcReaderOptions options, object stream = None, DeviceMemoryResource mr=None
 ):
     """
     Read from ORC format.
@@ -465,17 +467,17 @@ cpdef TableWithMetadata read_orc(
     """
     cdef table_with_metadata c_result
     cdef Stream s = _get_stream(stream)
+    cdef cudaStream_t _cs = s.view().value()
     mr = _get_memory_resource(mr)
-
     with nogil:
-        c_result = move(cpp_read_orc(options.c_obj, s.view(), mr.get_mr()))
+        c_result = move(cpp_read_orc(options.c_obj, _cs, mr.get_mr()))
 
     return TableWithMetadata.from_libcudf(c_result, s, mr)
 
 
 cpdef ParsedOrcStatistics read_parsed_orc_statistics(
     SourceInfo source_info,
-    Stream stream=None
+    object stream=None
 ):
     """
     Read ORC statistics from a source.
@@ -494,8 +496,9 @@ cpdef ParsedOrcStatistics read_parsed_orc_statistics(
     """
     cdef Stream s = _get_stream(stream)
     cdef parsed_orc_statistics parsed
+    cdef cudaStream_t _cs = s.view().value()
     with nogil:
-        parsed = cpp_read_parsed_orc_statistics(source_info.c_obj, s.view())
+        parsed = cpp_read_parsed_orc_statistics(source_info.c_obj, _cs)
     return ParsedOrcStatistics.from_libcudf(parsed)
 
 
@@ -667,7 +670,7 @@ cdef class OrcWriterOptionsBuilder:
         return orc_options
 
 
-cpdef void write_orc(OrcWriterOptions options, Stream stream = None):
+cpdef void write_orc(OrcWriterOptions options, object stream = None):
     """
     Write to ORC format.
 
@@ -688,8 +691,9 @@ cpdef void write_orc(OrcWriterOptions options, Stream stream = None):
     None
     """
     cdef Stream s = _get_stream(stream)
+    cdef cudaStream_t _cs = s.view().value()
     with nogil:
-        cpp_write_orc(move(options.c_obj), s.view())
+        cpp_write_orc(move(options.c_obj), _cs)
 
 
 cdef class OrcChunkedWriter:
@@ -717,11 +721,12 @@ cdef class OrcChunkedWriter:
         -------
         None
         """
+        cdef table_view c_table = table.view()
         with nogil:
-            self.c_obj.get()[0].write(table.view())
+            self.c_obj.get()[0].write(c_table)
 
     @staticmethod
-    def from_options(ChunkedOrcWriterOptions options, Stream stream = None):
+    def from_options(ChunkedOrcWriterOptions options, object stream = None):
         """
         Creates a chunked ORC writer from options
 
@@ -740,7 +745,8 @@ cdef class OrcChunkedWriter:
             OrcChunkedWriter
         )
         cdef Stream s = _get_stream(stream)
-        orc_writer.c_obj.reset(new orc_chunked_writer(options.c_obj, s.view()))
+        cdef cudaStream_t _cs = s.view().value()
+        orc_writer.c_obj.reset(new orc_chunked_writer(options.c_obj, _cs))
         return orc_writer
 
 

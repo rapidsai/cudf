@@ -45,8 +45,9 @@ std::unique_ptr<cudf::column> add_calendrical_days(cudf::column_view const& time
                                                    rmm::device_async_resource_ref mr)
 {
   CUDF_BENCHMARK_RANGE();
-  auto const days_duration_type = cudf::cast(days, cudf::data_type{cudf::type_id::DURATION_DAYS});
-  auto const data_type          = cudf::data_type{cudf::type_id::TIMESTAMP_DAYS};
+  auto const days_duration_type =
+    cudf::cast(days, cudf::data_type{cudf::type_id::DURATION_DAYS}, stream, mr);
+  auto const data_type = cudf::data_type{cudf::type_id::TIMESTAMP_DAYS};
   return cudf::binary_operation(
     timestamp_days, days_duration_type->view(), cudf::binary_operator::ADD, data_type, stream, mr);
 }
@@ -358,13 +359,13 @@ std::unique_ptr<cudf::table> perform_left_join(cudf::table_view const& left_inpu
 {
   CUDF_BENCHMARK_RANGE();
   auto const part_a = cudf::strings::from_integers(
-    generate_random_numeric_column<int16_t>(10, 34, num_rows, stream, mr)->view());
+    generate_random_numeric_column<int16_t>(10, 34, num_rows, stream, mr)->view(), stream, mr);
   auto const part_b = cudf::strings::from_integers(
-    generate_random_numeric_column<int16_t>(100, 999, num_rows, stream, mr)->view());
+    generate_random_numeric_column<int16_t>(100, 999, num_rows, stream, mr)->view(), stream, mr);
   auto const part_c = cudf::strings::from_integers(
-    generate_random_numeric_column<int16_t>(100, 999, num_rows, stream, mr)->view());
+    generate_random_numeric_column<int16_t>(100, 999, num_rows, stream, mr)->view(), stream, mr);
   auto const part_d = cudf::strings::from_integers(
-    generate_random_numeric_column<int16_t>(1000, 9999, num_rows, stream, mr)->view());
+    generate_random_numeric_column<int16_t>(1000, 9999, num_rows, stream, mr)->view(), stream, mr);
   auto const phone_parts_table =
     cudf::table_view({part_a->view(), part_b->view(), part_c->view(), part_d->view()});
   return cudf::strings::concatenate(phone_parts_table,

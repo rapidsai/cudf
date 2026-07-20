@@ -1,11 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "expression_transform_helpers.hpp"
 #include "reader_impl_helpers.hpp"
 #include "stats_filter_helpers.hpp"
+#include "timestamp_utils.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -22,6 +23,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
+#include <functional>
 #include <numeric>
 #include <optional>
 #include <unordered_set>
@@ -46,7 +48,7 @@ struct row_group_stats_caster : public stats_caster_base {
   template <typename T>
   std::
     tuple<std::unique_ptr<column>, std::unique_ptr<column>, std::optional<std::unique_ptr<column>>>
-    operator()(int schema_idx,
+    operator()(host_span<int const> per_source_schema_indices,
                cudf::data_type dtype,
                rmm::cuda_stream_view stream,
                rmm::device_async_resource_ref mr) const
@@ -62,12 +64,23 @@ struct row_group_stats_caster : public stats_caster_base {
 
       size_type stats_idx = 0;
       for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
+        auto const mapped_schema_idx = per_source_schema_indices[src_idx];
+        // Compute timestamp scale factor for precision conversion from the mapped source schema.
+        auto const ts_scale = [&] {
+          if constexpr (cudf::is_timestamp<T>()) {
+            auto const& schema = per_file_metadata[src_idx].schema[mapped_schema_idx];
+            return calc_timestamp_scale(schema.logical_type, static_cast<int32_t>(T::period::den));
+          }
+          return 0;
+        }();
+
         for (auto const rg_idx : row_group_indices[src_idx]) {
           auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
-          auto col              = std::find_if(
-            row_group.columns.begin(),
-            row_group.columns.end(),
-            [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx; });
+          auto col              = std::find_if(row_group.columns.begin(),
+                                  row_group.columns.end(),
+                                  [mapped_schema_idx](ColumnChunk const& col) {
+                                    return col.schema_idx == mapped_schema_idx;
+                                  });
           if (col != std::end(row_group.columns)) {
             auto const& colchunk = *col;
             // To support deprecated min, max fields.
@@ -78,8 +91,8 @@ struct row_group_stats_caster : public stats_caster_base {
                                       ? colchunk.meta_data.statistics.max_value
                                       : colchunk.meta_data.statistics.max;
             // translate binary data to Type then to <T>
-            min.set_index(stats_idx, min_value, colchunk.meta_data.type);
-            max.set_index(stats_idx, max_value, colchunk.meta_data.type);
+            min.set_index(stats_idx, min_value, colchunk.meta_data.type, ts_scale);
+            max.set_index(stats_idx, max_value, colchunk.meta_data.type, ts_scale);
             // Check the nullability of this column chunk
             if (has_is_null_operator) {
               if (colchunk.meta_data.statistics.null_count.has_value()) {
@@ -115,6 +128,41 @@ struct row_group_stats_caster : public stats_caster_base {
 
 }  // namespace
 
+bool aggregate_reader_metadata::any_row_group_stats_available(
+  host_span<std::vector<size_type> const> input_row_group_indices,
+  host_span<int const> filter_column_schemas) const
+{
+  auto const colchunk_has_stats = [](ColumnChunk const& colchunk) {
+    auto const& stats = colchunk.meta_data.statistics;
+    return stats.min_value.has_value() or stats.max_value.has_value() or stats.min.has_value() or
+           stats.max.has_value() or stats.null_count.has_value();
+  };
+
+  // Iterate columns on the outside so a single offset caches the chunk position across sources
+  for (auto const schema_idx : filter_column_schemas) {
+    std::optional<size_type> colchunk_offset{std::nullopt};
+
+    for (size_t src_idx = 0; src_idx < input_row_group_indices.size(); ++src_idx) {
+      auto const& row_group_indices = input_row_group_indices[src_idx];
+      if (row_group_indices.empty()) { continue; }
+
+      auto const& first_row_group =
+        per_file_metadata[src_idx].row_groups[row_group_indices.front()];
+      auto const num_col_chunks    = static_cast<size_type>(first_row_group.columns.size());
+      auto const mapped_schema_idx = map_schema_index(schema_idx, static_cast<int>(src_idx));
+      auto const cached_offset     = colchunk_offset.value_or(-1);
+
+      if (cached_offset < 0 or cached_offset >= num_col_chunks or
+          first_row_group.columns[cached_offset].schema_idx != mapped_schema_idx) {
+        colchunk_offset = find_colchunk_iter_offset(first_row_group, mapped_schema_idx);
+      }
+
+      if (colchunk_has_stats(first_row_group.columns[colchunk_offset.value()])) { return true; }
+    }
+  }
+  return false;
+}
+
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::apply_stats_filters(
   host_span<std::vector<size_type> const> input_row_group_indices,
   size_type total_row_groups,
@@ -132,6 +180,21 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
 
   // Return early if no columns will participate in stats based filtering
   if (stats_columns_mask.empty()) { return std::nullopt; }
+
+  // Scope the stats-availability check to the columns referenced by the filter.
+  std::vector<int> filter_column_schemas;
+  filter_column_schemas.reserve(output_column_schemas.size());
+  thrust::copy_if(thrust::host,
+                  output_column_schemas.begin(),
+                  output_column_schemas.end(),
+                  stats_columns_mask.begin(),
+                  std::back_inserter(filter_column_schemas),
+                  std::identity{});
+
+  // Skip building the stats table if no filter column carries usable row-group statistics.
+  if (not any_row_group_stats_available(input_row_group_indices, filter_column_schemas)) {
+    return std::nullopt;
+  }
 
   // Converts Column chunk statistics to a table
   // where min(col[i]) = columns[i*2], max(col[i])=columns[i*2+1]
@@ -172,8 +235,16 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
       }
       continue;
     }
-    auto [min_col, max_col, is_null_col] =
-      cudf::type_dispatcher<dispatch_storage_type>(dtype, stats_col, schema_idx, dtype, stream, mr);
+    // Map each filter column's zeroth-source schema index into every source's schema tree.
+    auto const num_sources         = input_row_group_indices.size();
+    auto per_source_schema_indices = std::vector<int>(num_sources);
+    auto const src_iter            = cuda::counting_iterator<size_t>{0};
+    std::transform(
+      src_iter, src_iter + num_sources, per_source_schema_indices.begin(), [&](size_t src_idx) {
+        return map_schema_index(schema_idx, static_cast<int>(src_idx));
+      });
+    auto [min_col, max_col, is_null_col] = cudf::type_dispatcher<dispatch_storage_type>(
+      dtype, stats_col, per_source_schema_indices, dtype, stream, mr);
     columns.push_back(std::move(min_col));
     columns.push_back(std::move(max_col));
     if (has_is_null_operator) {
@@ -229,7 +300,8 @@ aggregate_reader_metadata::filter_row_groups(
 
   // Collect equality literals for each input table column for bloom filtering
   auto const equality_literals =
-    equality_literals_collector{filter.get(), static_cast<cudf::size_type>(output_dtypes.size())}
+    equality_literals_collector{
+      filter.get(), output_dtypes, output_column_schemas, per_file_metadata[0].schema}
       .get_literals();
 
   // Collect schema indices of columns with equality predicate(s)

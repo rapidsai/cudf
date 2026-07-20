@@ -11,16 +11,10 @@ from cudf_polars.dsl import ir
 from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.testing.asserts import assert_gpu_result_equal
-from cudf_polars.utils.versions import POLARS_VERSION_LT_1323
 
 
-def test_cache(request):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=not POLARS_VERSION_LT_1323,
-            reason="python no longer manages cache hits",
-        )
-    )
+@pytest.mark.xfail(reason="python no longer manages cache hits")
+def test_cache(engine: pl.GPUEngine):
     df1 = pl.LazyFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
@@ -30,7 +24,7 @@ def test_cache(request):
     df2 = pl.LazyFrame({"a": [7, 8], "b": [12, 13]})
 
     q = pl.concat([df1, df2, df1, df2, df1])
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
     t = Translator(q._ldf.visit(), pl.GPUEngine())
     qir = t.translate_ir()

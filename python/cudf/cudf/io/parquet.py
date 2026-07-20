@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -288,14 +288,18 @@ def _write_parquet(
 ) -> np.ndarray | None:
     if is_list_like(paths) and len(paths) > 1:
         if partitions_info is None:
-            ValueError("partition info is required for multiple paths")
+            raise ValueError("partition info is required for multiple paths")
         elif not is_list_like(partitions_info):
-            ValueError("partition info must be list-like for multiple paths")
+            raise ValueError(
+                "partition info must be list-like for multiple paths"
+            )
         elif not len(paths) == len(partitions_info):
-            ValueError("partitions_info and paths must be of same size")
+            raise ValueError("partitions_info and paths must be of same size")
     if is_list_like(partitions_info) and len(partitions_info) > 1:
         if not is_list_like(paths):
-            ValueError("paths must be list-like when partitions_info provided")
+            raise ValueError(
+                "paths must be list-like when partitions_info provided"
+            )
 
     paths_or_bufs = [
         ioutils.get_writer_filepath_or_buffer(
@@ -1341,10 +1345,7 @@ def _parquet_to_frame(
     if len(dfs) > 1:
         # Concatenate dfs and return.
         # Assume we can ignore the index if it has no name.
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            res = concat(dfs, ignore_index=dfs[-1].index.name is None)
-        return res
+        return concat(dfs, ignore_index=dfs[-1].index.name is None)
     else:
         return dfs[0]
 
@@ -1422,13 +1423,13 @@ def _read_parquet(
             column_names = tbl_w_meta.column_names(include_children=False)
             child_names = tbl_w_meta.child_names
             per_file_user_data = tbl_w_meta.per_file_user_data
-            concatenated_columns = tbl_w_meta.tbl.columns()
+            concatenated_columns = tbl_w_meta.tbl.release()
 
             # save memory
             del tbl_w_meta
 
             while reader.has_next():
-                columns = reader.read_chunk().tbl.columns()
+                columns = reader.read_chunk().tbl.release()
                 # Iterate in reverse to avoid O(n²) cost from popping
                 for i in range(len(concatenated_columns) - 1, -1, -1):
                     concatenated_columns[i] = plc.concatenate.concatenate(
@@ -2493,6 +2494,13 @@ def _process_metadata(
                 df._data[col].dtype.precision = meta_data_per_column[col][  # type: ignore[union-attr]
                     "metadata"
                 ]["precision"]
+            elif (
+                isinstance(df._data[col].dtype, pd.StringDtype)
+                and col in meta_data_per_column
+                and meta_data_per_column[col]["pandas_type"] == "empty"
+                and meta_data_per_column[col]["numpy_type"] == "object"
+            ):
+                df._data[col] = df._data[col].astype(np.dtype("object"))
 
     # Set the index column
     if index_col is not None and len(index_col) > 0:

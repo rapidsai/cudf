@@ -263,12 +263,6 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
   query_deletion_vectors(
     row_index_column, deletion_vector_refs, rows_per_deletion_vector, row_mask_view, stream);
 
-  // Invert the membership result so that `true` indicates a non-deleted row
-  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                    row_mask_view.begin<bool>(),
-                    row_mask_view.end<bool>(),
-                    row_mask_view.begin<bool>(),
-                    cuda::std::logical_not<bool>{});
   return row_mask_column;
 }
 
@@ -278,21 +272,15 @@ size_t compute_deleted_row_count(
   cudf::host_span<size_type const> deletion_vector_row_counts,
   rmm::cuda_stream_view stream)
 {
-  auto const num_rows      = row_index_column.size();
-  auto row_mask_column     = cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::BOOL8},
-                                                       num_rows,
-                                                       mask_state::UNALLOCATED,
-                                                       stream,
-                                                       cudf::get_current_device_resource_ref());
-  auto const row_mask_view = row_mask_column->mutable_view();
-
-  query_deletion_vectors(
-    row_index_column, deletion_vector_refs, deletion_vector_row_counts, row_mask_view, stream);
-
+  auto row_mask_column = compute_row_mask_column(row_index_column,
+                                                 deletion_vector_refs,
+                                                 deletion_vector_row_counts,
+                                                 stream,
+                                                 cudf::get_current_device_resource_ref());
   return static_cast<size_t>(
     thrust::count(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                  row_mask_view.begin<bool>(),
-                  row_mask_view.end<bool>(),
+                  row_mask_column->view().begin<bool>(),
+                  row_mask_column->view().end<bool>(),
                   true));
 }
 

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from cudf.core.accessors.lists import ListMethods
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.dtypes import ListDtype
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
+    DEFAULT_STRING_DTYPE,
     can_convert_to_column,
 )
 
@@ -54,7 +54,7 @@ def _massage_string_arg(
 
     if allow_col:
         if isinstance(value, list):
-            return as_column(value, dtype=CUDF_STRING_DTYPE)  # type: ignore[return-value]
+            return as_column(value, dtype=DEFAULT_STRING_DTYPE)  # type: ignore[return-value]
 
         from cudf.core.column.string import StringColumn
 
@@ -100,8 +100,23 @@ class StringMethods(BaseAccessor):
             # Validate dtype is suitable for string operations
             is_valid_string = is_string_dtype(value_type)
         if not is_valid_string:
+            # Mirror pandas' inferred-type naming in the error message
+            # (see pandas lib.infer_dtype) so error messages match.
+            kind_to_inferred = {
+                "i": "integer",
+                "u": "integer",
+                "f": "floating",
+                "b": "boolean",
+                "c": "complex",
+                "M": "datetime64",
+                "m": "timedelta64",
+            }
+            inferred_dtype = kind_to_inferred.get(
+                getattr(value_type, "kind", ""), str(value_type)
+            )
             raise AttributeError(
-                "Can only use .str accessor with string values"
+                "Can only use .str accessor with string values, "
+                f"not {inferred_dtype}"
             )
         super().__init__(parent=parent)
 
@@ -287,9 +302,9 @@ class StringMethods(BaseAccessor):
         >>> s.str.cat(['A', 'B', 'C', 'D'], sep=',')
         0     a,A
         1     b,B
-        2    None
+        2    NaN
         3     d,D
-        dtype: object
+        dtype: str
 
         Missing values will remain missing in the result, but can again be
         represented using na_rep
@@ -299,7 +314,7 @@ class StringMethods(BaseAccessor):
         1    b,B
         2    -,C
         3    d,D
-        dtype: object
+        dtype: str
 
         If sep is not specified, the values are concatenated without
         separation.
@@ -309,7 +324,7 @@ class StringMethods(BaseAccessor):
         1    bB
         2    -C
         3    dD
-        dtype: object
+        dtype: str
         """
         if sep is None:
             sep = ""
@@ -339,14 +354,14 @@ class StringMethods(BaseAccessor):
                     (
                         as_column(
                             frame.reindex(parent_index),
-                            dtype=CUDF_STRING_DTYPE,
+                            dtype=DEFAULT_STRING_DTYPE,
                         )
                         if (
                             parent_index is not None
                             and isinstance(frame, cudf.Series)
                             and not frame.index.equals(parent_index)
                         )
-                        else as_column(frame, dtype=CUDF_STRING_DTYPE)
+                        else as_column(frame, dtype=DEFAULT_STRING_DTYPE)
                     )
                     for frame in others
                 )
@@ -358,10 +373,10 @@ class StringMethods(BaseAccessor):
                 ):
                     others = others.reindex(parent_index)
 
-                other_cols = [as_column(others, dtype=CUDF_STRING_DTYPE)]
+                other_cols = [as_column(others, dtype=DEFAULT_STRING_DTYPE)]
             else:
                 raise TypeError(
-                    "others must be Series, Index, DataFrame, np.ndarrary "
+                    "others must be Series, Index, DataFrame, np.ndarray "
                     "or list-like (either containing only strings or "
                     "containing only objects of type Series/Index/"
                     "np.ndarray[1-dim])"
@@ -441,7 +456,7 @@ class StringMethods(BaseAccessor):
         1      d-e
         2        f
         3    g- -h
-        dtype: object
+        dtype: str
 
         ``sep`` can an array-like input:
 
@@ -450,7 +465,7 @@ class StringMethods(BaseAccessor):
         1      d+e
         2        f
         3    g= =h
-        dtype: object
+        dtype: str
 
         If the actual series doesn't have lists, each character is joined
         by `sep`:
@@ -460,12 +475,12 @@ class StringMethods(BaseAccessor):
         0    abc
         1    def
         2    ghi
-        dtype: object
+        dtype: str
         >>> ser.str.join(sep='_')
         0    a_b_c
         1    d_e_f
         2    g_h_i
-        dtype: object
+        dtype: str
 
         We can replace `<NA>`/`None` values present in lists using
         ``string_na_rep`` if the lists contain at least one valid string
@@ -480,20 +495,20 @@ class StringMethods(BaseAccessor):
         dtype: list
         >>> ser.str.join(sep='_', string_na_rep='k')
         0    a_b_k
-        1     None
-        2     None
+        1     NaN
+        2     NaN
         3      c_d
-        dtype: object
+        dtype: str
 
         We can replace `<NA>`/`None` values present in lists of ``sep``
         using ``sep_na_rep``:
 
         >>> ser.str.join(sep=[None, '^', '.', '-'], sep_na_rep='+')
         0    a+b+
-        1    None
-        2    None
+        1    NaN
+        2    NaN
         3     c-d
-        dtype: object
+        dtype: str
         """
         if sep is None:
             sep = ""
@@ -594,7 +609,7 @@ class StringMethods(BaseAccessor):
               0     1
         0     a     1
         1     b     2
-        2  None  None
+        2   NaN   NaN
 
         A pattern with one group will return a DataFrame with one
         column if expand=True.
@@ -603,15 +618,15 @@ class StringMethods(BaseAccessor):
               0
         0     1
         1     2
-        2  None
+        2   NaN
 
         A pattern with one group will return a Series if expand=False.
 
         >>> s.str.extract(r'[ab](\d)', expand=False)
         0       1
         1       2
-        2    None
-        dtype: object
+        2    NaN
+        dtype: str
 
         .. pandas-compat::
             :meth:`pandas.Series.str.extract`
@@ -706,14 +721,14 @@ class StringMethods(BaseAccessor):
         1                 dog
         2    house and parrot
         3                  23
-        4                None
-        dtype: object
+        4                 NaN
+        dtype: str
         >>> s1.str.contains('og', regex=False)
         0    False
         1     True
         2    False
         3    False
-        4     <NA>
+        4    False
         dtype: bool
 
         Returning an Index of booleans using only a literal pattern.
@@ -721,9 +736,9 @@ class StringMethods(BaseAccessor):
         >>> data = ['Mouse', 'dog', 'house and parrot', '23.0', np.nan]
         >>> idx = cudf.Index(data)
         >>> idx
-        Index(['Mouse', 'dog', 'house and parrot', '23.0', <NA>], dtype='object')
+        Index(['Mouse', 'dog', 'house and parrot', '23.0', nan], dtype='str')
         >>> idx.str.contains('23', regex=False)
-        Index([False, False, False, True, <NA>], dtype='bool')
+        Index([False, False, False, True, False], dtype='bool')
 
         Returning 'house' or 'dog' when either expression occurs in a string.
 
@@ -732,7 +747,7 @@ class StringMethods(BaseAccessor):
         1     True
         2     True
         3    False
-        4     <NA>
+        4    False
         dtype: bool
 
         Returning any digit using regular expression.
@@ -742,7 +757,7 @@ class StringMethods(BaseAccessor):
         1    False
         2    False
         3     True
-        4     <NA>
+        4    False
         dtype: bool
 
         Ensure ``pat`` is a not a literal pattern when ``regex`` is set
@@ -768,7 +783,7 @@ class StringMethods(BaseAccessor):
         1     True
         2     True
         3     True
-        4     <NA>
+        4    False
         dtype: bool
 
         .. pandas-compat::
@@ -786,10 +801,8 @@ class StringMethods(BaseAccessor):
             and not isinstance(na, bool)
         ):
             # GH#59561
-            warnings.warn(
-                "Allowing a non-bool 'na' in obj.str.contains is deprecated "
-                "and will raise in a future version.",
-                FutureWarning,
+            raise ValueError(
+                f"na must be None, pd.NA, np.nan, True, or False;got {na!r}"
             )
         if regex and isinstance(pat, re.Pattern):
             flags = pat.flags & ~re.U
@@ -817,13 +830,19 @@ class StringMethods(BaseAccessor):
                 result_col = input_column.str_contains(pat_normed)
         else:
             # TODO: we silently ignore the `regex=` flag here
-            col_pat = as_column(pat, dtype=CUDF_STRING_DTYPE)
+            col_pat = as_column(pat, dtype=DEFAULT_STRING_DTYPE)
             if case is False:
                 input_column = self._column.to_lower()
                 col_pat = col_pat.to_lower()  # type: ignore[attr-defined]
             else:
                 input_column = self._column
             result_col = input_column.str_contains(col_pat)  # type: ignore[arg-type]
+        if (
+            na is no_default
+            and self._column._PANDAS_NA_VALUE in {np.nan, None}
+            and self._column.has_nulls()
+        ):
+            result_col = result_col.fillna(False)
         if na is not no_default:
             result_col = result_col.fillna(na)
         return self._return_or_inplace(result_col)
@@ -920,7 +939,7 @@ class StringMethods(BaseAccessor):
         0    a
         1    b
         2    c
-        dtype: object
+        dtype: str
 
         Single int repeats string in Series
 
@@ -928,7 +947,7 @@ class StringMethods(BaseAccessor):
         0    aa
         1    bb
         2    cc
-        dtype: object
+        dtype: str
 
         Sequence of int repeats corresponding string in Series
 
@@ -936,8 +955,10 @@ class StringMethods(BaseAccessor):
         0      a
         1     bb
         2    ccc
-        dtype: object
+        dtype: str
         """
+        if isinstance(repeats, int) and repeats < 0:
+            raise ValueError("Negative repeats is not allowed.")
         if can_convert_to_column(repeats):
             repeats = as_column(repeats, dtype=np.dtype(np.int64))  # type: ignore[assignment]
         return self._return_or_inplace(self._column.repeat_strings(repeats))  # type: ignore[arg-type]
@@ -969,6 +990,7 @@ class StringMethods(BaseAccessor):
             Number of replacements to make from the start.
         regex : bool, default True
             If True, assumes the pattern is a regular expression.
+            Raises ValueError if pat is not a string.
             If False, treats the pattern as a literal string.
 
         Returns
@@ -984,8 +1006,8 @@ class StringMethods(BaseAccessor):
         >>> s
         0     foo
         1     fuz
-        2    None
-        dtype: object
+        2    NaN
+        dtype: str
 
         When pat is a string and regex is True (the default), the given pat
         is compiled as a regex. When repl is a string, it replaces matching
@@ -995,8 +1017,8 @@ class StringMethods(BaseAccessor):
         >>> s.str.replace('f.', 'ba', regex=True)
         0     bao
         1     baz
-        2    None
-        dtype: object
+        2    NaN
+        dtype: str
 
         When pat is a string and `regex` is False, every pat is replaced
         with repl as with ``str.replace()``:
@@ -1004,8 +1026,8 @@ class StringMethods(BaseAccessor):
         >>> s.str.replace('f.', 'ba', regex=False)
         0     foo
         1     fuz
-        2    None
-        dtype: object
+        2    NaN
+        dtype: str
 
         .. pandas-compat::
             :meth:`pandas.Series.str.replace`
@@ -1027,14 +1049,13 @@ class StringMethods(BaseAccessor):
                 )
 
             if regex:
-                result = self._column.replace_re(
-                    list(pat),
-                    as_column(repl, dtype=CUDF_STRING_DTYPE),  # type: ignore[arg-type]
+                raise ValueError(
+                    "multiple pattern replace with regex=True is not supported"
                 )
             else:
                 result = self._column.replace_multiple(
-                    as_column(pat, dtype=CUDF_STRING_DTYPE),  # type: ignore[arg-type]
-                    as_column(repl, dtype=CUDF_STRING_DTYPE),  # type: ignore[arg-type]
+                    as_column(pat, dtype=DEFAULT_STRING_DTYPE),  # type: ignore[arg-type]
+                    as_column(repl, dtype=DEFAULT_STRING_DTYPE),  # type: ignore[arg-type]
                 )
             return self._return_or_inplace(result)
 
@@ -1084,7 +1105,7 @@ class StringMethods(BaseAccessor):
         >>> s.str.replace_with_backrefs('(\\d)(\\d)', 'V\\2\\1')
         0    AV453
         1    ZV576
-        dtype: object
+        dtype: str
         """
         # If 'pat' is re.Pattern then get the pattern string from it
         if isinstance(pat, re.Pattern):
@@ -1135,32 +1156,32 @@ class StringMethods(BaseAccessor):
         0        koala
         1          fox
         2    chameleon
-        dtype: object
+        dtype: str
         >>> s.str.slice(start=1)
         0        oala
         1          ox
         2    hameleon
-        dtype: object
+        dtype: str
         >>> s.str.slice(start=-1)
         0    a
         1    x
         2    n
-        dtype: object
+        dtype: str
         >>> s.str.slice(stop=2)
         0    ko
         1    fo
         2    ch
-        dtype: object
+        dtype: str
         >>> s.str.slice(step=2)
         0      kaa
         1       fx
         2    caeen
-        dtype: object
+        dtype: str
         >>> s.str.slice(start=0, stop=5, step=3)
         0    kl
         1     f
         2    cm
-        dtype: object
+        dtype: str
         """
         return self._return_or_inplace(
             self._column.slice_strings(start, stop, step)
@@ -1895,7 +1916,7 @@ class StringMethods(BaseAccessor):
         1              capitals
         2    this is a sentence
         3              swapcase
-        dtype: object
+        dtype: str
         """
         return self._return_or_inplace(self._column.to_lower())
 
@@ -1940,13 +1961,13 @@ class StringMethods(BaseAccessor):
         1              CAPITALS
         2    this is a sentence
         3              SwApCaSe
-        dtype: object
+        dtype: str
         >>> s.str.upper()
         0                 LOWER
         1              CAPITALS
         2    THIS IS A SENTENCE
         3              SWAPCASE
-        dtype: object
+        dtype: str
         """
         return self._return_or_inplace(self._column.to_upper())
 
@@ -1969,12 +1990,12 @@ class StringMethods(BaseAccessor):
         1              Capitals
         2    This is a sentence
         3              Swapcase
-        dtype: object
+        dtype: str
         >>> s = cudf.Series(["hello, friend","goodbye, friend"])
         >>> s.str.capitalize()
         0      Hello, friend
         1    Goodbye, friend
-        dtype: object
+        dtype: str
         """
         return self._return_or_inplace(self._column.capitalize())
 
@@ -2015,13 +2036,13 @@ class StringMethods(BaseAccessor):
         1              CAPITALS
         2    this is a sentence
         3              SwApCaSe
-        dtype: object
+        dtype: str
         >>> s.str.swapcase()
         0                 LOWER
         1              capitals
         2    THIS IS A SENTENCE
         3              sWaPcAsE
-        dtype: object
+        dtype: str
         """
         return self._return_or_inplace(self._column.swapcase())
 
@@ -2061,13 +2082,13 @@ class StringMethods(BaseAccessor):
         1              CAPITALS
         2    this is a sentence
         3              SwApCaSe
-        dtype: object
+        dtype: str
         >>> s.str.title()
         0                 Lower
         1              Capitals
         2    This Is A Sentence
         3              Swapcase
-        dtype: object
+        dtype: str
         """
         return self._return_or_inplace(self._column.title())
 
@@ -2124,7 +2145,7 @@ class StringMethods(BaseAccessor):
         1    plums  34
         2     Temp 72
         3        100K
-        dtype: object
+        dtype: str
         """
         if repl is None:
             repl = ""
@@ -2187,13 +2208,13 @@ class StringMethods(BaseAccessor):
         >>> s
         0    hello
         1    there
-        dtype: object
+        dtype: str
         >>> starts = cudf.Series([1, 3])
         >>> stops = cudf.Series([5, 5])
         >>> s.str.slice_from(starts, stops)
         0    ello
         1      re
-        dtype: object
+        dtype: str
         """
         return self._return_or_inplace(
             self._column.slice_strings(starts._column, stops._column)
@@ -2240,7 +2261,7 @@ class StringMethods(BaseAccessor):
         2      abc
         3     abdc
         4    abcde
-        dtype: object
+        dtype: str
 
         Specify just `start`, meaning replace `start` until the `end` of
         the string with `repl`.
@@ -2251,7 +2272,7 @@ class StringMethods(BaseAccessor):
         2    aX
         3    aX
         4    aX
-        dtype: object
+        dtype: str
 
         Specify just `stop`, meaning the `start` of the string to `stop`
         is replaced with `repl`, and the rest of the string is included.
@@ -2262,7 +2283,7 @@ class StringMethods(BaseAccessor):
         2      Xc
         3     Xdc
         4    Xcde
-        dtype: object
+        dtype: str
 
         Specify `start` and `stop`, meaning the slice from `start`
         to `stop` is replaced with `repl`. Everything before or
@@ -2274,7 +2295,7 @@ class StringMethods(BaseAccessor):
         2      aX
         3     aXc
         4    aXde
-        dtype: object
+        dtype: str
         """
         if start is None:
             start = 0
@@ -2326,21 +2347,21 @@ class StringMethods(BaseAccessor):
         >>> s.str.insert(2, '_')
         0    ab_cdefghij
         1    01_23456789
-        dtype: object
+        dtype: str
 
         When no `repl` is passed, nothing is inserted.
 
         >>> s.str.insert(2)
         0    abcdefghij
         1    0123456789
-        dtype: object
+        dtype: str
 
         Negative values are also supported for `start`.
 
         >>> s.str.insert(-1,'_')
         0    abcdefghij_
         1    0123456789_
-        dtype: object
+        dtype: str
         """
         return self.slice_replace(start, start, repl)
 
@@ -2365,17 +2386,17 @@ class StringMethods(BaseAccessor):
         0    hello world
         1         rapids
         2           cudf
-        dtype: object
+        dtype: str
         >>> s.str.get(10)
         0       d
-        1    None
-        2    None
-        dtype: object
+        1    NaN
+        2    NaN
+        dtype: str
         >>> s.str.get(1)
         0    e
         1    a
         2    u
-        dtype: object
+        dtype: str
 
         ``get`` also accepts negative index number.
 
@@ -2383,7 +2404,7 @@ class StringMethods(BaseAccessor):
         0    d
         1    s
         2    f
-        dtype: object
+        dtype: str
         """
         if isinstance(self._column.dtype, ListDtype):
             return ListMethods(self._parent).get(i)
@@ -2452,7 +2473,7 @@ class StringMethods(BaseAccessor):
         ... )
         >>> series.str.get_json_object("$.store.book")
         0    [{"category":"reference","author":"Nigel Rees"...
-        dtype: object
+        dtype: str
         """
         return self._return_or_inplace(
             self._column.get_json_object(
@@ -2540,8 +2561,8 @@ class StringMethods(BaseAccessor):
         >>> s
         0            this is a regular sentence
         1    https://docs.python.org/index.html
-        2                                  None
-        dtype: object
+        2                                   NaN
+        dtype: str
 
         In the default setting, the string is split by whitespace.
 
@@ -2584,8 +2605,8 @@ class StringMethods(BaseAccessor):
         >>> s.str.split(expand=True)
                                             0     1     2        3         4
         0                                this    is     a  regular  sentence
-        1  https://docs.python.org/index.html  None  None     None      None
-        2                                None  None  None     None      None
+        1  https://docs.python.org/index.html   NaN   NaN      NaN       NaN
+        2                                 NaN   NaN   NaN      NaN       NaN
         """
 
         if expand not in (True, False):
@@ -2719,8 +2740,8 @@ class StringMethods(BaseAccessor):
         >>> s
         0                       this is a regular sentence
         1    https://docs.python.org/3/tutorial/index.html
-        2                                             None
-        dtype: object
+        2                                              NaN
+        dtype: str
 
         In the default setting, the string is split by whitespace.
 
@@ -2760,8 +2781,8 @@ class StringMethods(BaseAccessor):
         >>> s.str.rsplit(n=2, expand=True)
                                                        0        1         2
         0                                      this is a  regular  sentence
-        1  https://docs.python.org/3/tutorial/index.html     None      None
-        2                                           None     None      None
+        1  https://docs.python.org/3/tutorial/index.html      NaN       NaN
+        2                                            NaN      NaN       NaN
 
         For slightly more complex use cases like splitting the
         html document name from a url, a combination of parameter
@@ -2769,9 +2790,9 @@ class StringMethods(BaseAccessor):
 
         >>> s.str.rsplit("/", n=1, expand=True)
                                             0           1
-        0          this is a regular sentence        None
+        0          this is a regular sentence         NaN
         1  https://docs.python.org/3/tutorial  index.html
-        2                                None        None
+        2                                 NaN         NaN
         """
 
         if expand not in (True, False):
@@ -2844,8 +2865,8 @@ class StringMethods(BaseAccessor):
         >>> s.str.split_part(delimiter="_", index=1)
         0       b
         1       e
-        2    None
-        dtype: object
+        2    NaN
+        dtype: str
         """
 
         if delimiter is None:
@@ -2891,7 +2912,7 @@ class StringMethods(BaseAccessor):
         >>> s
         0    Linda van der Berg
         1    George Pitt-Rivers
-        dtype: object
+        dtype: str
 
         >>> s.str.partition()
                 0  1             2
@@ -2909,7 +2930,7 @@ class StringMethods(BaseAccessor):
 
         >>> idx = cudf.Index(['X 123', 'Y 999'])
         >>> idx
-        Index(['X 123', 'Y 999'], dtype='object')
+        Index(['X 123', 'Y 999'], dtype='str')
 
         Which will create a MultiIndex:
 
@@ -2979,7 +3000,7 @@ class StringMethods(BaseAccessor):
         >>> s
         0    Linda van der Berg
         1    George Pitt-Rivers
-        dtype: object
+        dtype: str
         >>> s.str.rpartition()
                     0  1            2
         0  Linda van der            Berg
@@ -2989,7 +3010,7 @@ class StringMethods(BaseAccessor):
 
         >>> idx = cudf.Index(['X 123', 'Y 999'])
         >>> idx
-        Index(['X 123', 'Y 999'], dtype='object')
+        Index(['X 123', 'Y 999'], dtype='str')
 
         Which will create a MultiIndex:
 
@@ -3070,17 +3091,17 @@ class StringMethods(BaseAccessor):
         >>> s.str.pad(width=10)
         0       caribou
         1         tiger
-        dtype: object
+        dtype: str
 
         >>> s.str.pad(width=10, side='right', fillchar='-')
         0    caribou---
         1    tiger-----
-        dtype: object
+        dtype: str
 
         >>> s.str.pad(width=10, side='both', fillchar='-')
         0    -caribou--
         1    --tiger---
-        dtype: object
+        dtype: str
         """
         if not isinstance(fillchar, str):
             msg = (
@@ -3151,8 +3172,8 @@ class StringMethods(BaseAccessor):
         0      -1
         1       1
         2    1000
-        3    None
-        dtype: object
+        3    NaN
+        dtype: str
 
         Note that ``None`` is not string, therefore it is converted
         to ``None``. ``1000`` remains unchanged as
@@ -3162,8 +3183,8 @@ class StringMethods(BaseAccessor):
         0     -01
         1     001
         2    1000
-        3    None
-        dtype: object
+        3    NaN
+        dtype: str
         """
         if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
@@ -3198,33 +3219,33 @@ class StringMethods(BaseAccessor):
         >>> s.str.center(1)
         0       a
         1       b
-        2    None
+        2    NaN
         3       d
-        dtype: object
+        dtype: str
         >>> s.str.center(1, fillchar='-')
         0       a
         1       b
-        2    None
+        2    NaN
         3       d
-        dtype: object
+        dtype: str
         >>> s.str.center(2, fillchar='-')
         0      a-
         1      b-
-        2    None
+        2    NaN
         3      d-
-        dtype: object
+        dtype: str
         >>> s.str.center(5, fillchar='-')
         0    --a--
         1    --b--
-        2     None
+        2     NaN
         3    --d--
-        dtype: object
+        dtype: str
         >>> s.str.center(6, fillchar='-')
         0    --a---
         1    --b---
-        2      None
+        2      NaN
         3    --d---
-        dtype: object
+        dtype: str
         """
         return self.pad(width, "both", fillchar)
 
@@ -3256,14 +3277,14 @@ class StringMethods(BaseAccessor):
         >>> s.str.ljust(10, fillchar="_")
         0    hello world
         1     rapids ai_
-        dtype: object
+        dtype: str
         >>> s = cudf.Series(["a", "",  "ab", "__"])
         >>> s.str.ljust(1, fillchar="-")
         0     a
         1     -
         2    ab
         3    __
-        dtype: object
+        dtype: str
         """
         return self.pad(width, "right", fillchar)
 
@@ -3295,14 +3316,14 @@ class StringMethods(BaseAccessor):
         >>> s.str.rjust(20, fillchar="_")
         0    _________hello world
         1    ___________rapids ai
-        dtype: object
+        dtype: str
         >>> s = cudf.Series(["a", "",  "ab", "__"])
         >>> s.str.rjust(1, fillchar="-")
         0     a
         1     -
         2    ab
         3    __
-        dtype: object
+        dtype: str
         """
         return self.pad(width, "left", fillchar)
 
@@ -3343,20 +3364,20 @@ class StringMethods(BaseAccessor):
         0    1. Ant.
         1    2. Bee!\n
         2    3. Cat?\t
-        3         None
-        dtype: object
+        3          NaN
+        dtype: str
         >>> s.str.strip()
         0    1. Ant.
         1    2. Bee!
         2    3. Cat?
-        3       None
-        dtype: object
+        3        NaN
+        dtype: str
         >>> s.str.strip('123.!? \n\t')
         0     Ant
         1     Bee
         2     Cat
-        3    None
-        dtype: object
+        3    NaN
+        dtype: str
         """
         if not (isinstance(to_strip, str) or to_strip is None):
             raise TypeError(
@@ -3403,8 +3424,8 @@ class StringMethods(BaseAccessor):
         0     Ant.
         1     Bee!\n
         2     Cat?\t
-        3       None
-        dtype: object
+        3        NaN
+        dtype: str
         """
         if not (isinstance(to_strip, str) or to_strip is None):
             raise TypeError(
@@ -3453,14 +3474,14 @@ class StringMethods(BaseAccessor):
         0    1. Ant.
         1    2. Bee!\n
         2    3. Cat?\t
-        3         None
-        dtype: object
+        3          NaN
+        dtype: str
         >>> s.str.rstrip('.!? \n\t')
         0    1. Ant
         1    2. Bee
         2    3. Cat
-        3      None
-        dtype: object
+        3       NaN
+        dtype: str
         """
         if not (isinstance(to_strip, str) or to_strip is None):
             raise TypeError(
@@ -3513,7 +3534,7 @@ class StringMethods(BaseAccessor):
         >>> s.str.wrap(12, expand_tabs=False, break_long_words=False, break_on_hyphens=False)
         0             line to be\nwrapped
         1    another line\nto be\nwrapped
-        dtype: object
+        dtype: str
         """
         if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
@@ -3775,7 +3796,7 @@ class StringMethods(BaseAccessor):
         1         to
         2     search
         3         in
-        dtype: object
+        dtype: str
         >>> t = cudf.Series(["a", "string", "g", "inn", "o", "r", "sea"])
         >>> t
         0         a
@@ -3785,7 +3806,7 @@ class StringMethods(BaseAccessor):
         4         o
         5         r
         6       sea
-        dtype: object
+        dtype: str
         >>> s.str.find_multiple(t)
         0       [-1, 0, 5, -1, -1, 2, -1]
         1     [-1, -1, -1, -1, 1, -1, -1]
@@ -3801,7 +3822,7 @@ class StringMethods(BaseAccessor):
                 f"found {type(patterns)}"
             )
 
-        if patterns_column.dtype != CUDF_STRING_DTYPE:
+        if not is_string_dtype(patterns_column.dtype):
             raise TypeError(
                 "patterns can only be of 'string' dtype, "
                 f"got: {patterns_column.dtype}"
@@ -3845,7 +3866,7 @@ class StringMethods(BaseAccessor):
             # mypy can't deduce that the return value of
             # StringColumn.__eq__ is ColumnBase because the binops are
             # dynamically added by a mixin class
-            cast(ColumnBase, self._column == "").fillna(False)
+            cast("ColumnBase", self._column == "").fillna(False)
         )
 
     def isspace(self) -> Series | Index:
@@ -3942,13 +3963,13 @@ class StringMethods(BaseAccessor):
         0     bat
         1    bear
         2     caT
-        3    None
-        dtype: object
+        3    NaN
+        dtype: str
         >>> s.str.endswith('t')
         0     True
         1    False
         2    False
-        3     <NA>
+        3    False
         dtype: bool
 
         .. pandas-compat::
@@ -3993,13 +4014,13 @@ class StringMethods(BaseAccessor):
         0     bat
         1    Bear
         2     cat
-        3    None
-        dtype: object
+        3    NaN
+        dtype: str
         >>> s.str.startswith('b')
         0     True
         1    False
         2    False
-        3     <NA>
+        3    False
         dtype: bool
         """
         return self._starts_ends_with(plc.strings.find.starts_with, pat)
@@ -4028,12 +4049,12 @@ class StringMethods(BaseAccessor):
         0    foo_str
         1    bar_str
         2    no_suffix
-        dtype: object
+        dtype: str
         >>> s.str.removesuffix("_str")
         0    foo
         1    bar
         2    no_suffix
-        dtype: object
+        dtype: str
         """
         if suffix is None or len(suffix) == 0:
             return self._return_or_inplace(self._column)
@@ -4067,12 +4088,12 @@ class StringMethods(BaseAccessor):
         0    str_foo
         1    str_bar
         2    no_prefix
-        dtype: object
+        dtype: str
         >>> s.str.removeprefix("str_")
         0    foo
         1    bar
         2    no_prefix
-        dtype: object
+        dtype: str
         """
         if prefix is None or len(prefix) == 0:
             return self._return_or_inplace(self._column)
@@ -4385,6 +4406,8 @@ class StringMethods(BaseAccessor):
         result = self._column.matches_re(pat, flags)
         if na is not no_default:
             result = result.fillna(na)
+        elif self._column._PANDAS_NA_VALUE in {np.nan, None}:
+            result = result.fillna(False)
         return self._return_or_inplace(result)
 
     def url_decode(self) -> Series | Index:
@@ -4405,14 +4428,14 @@ class StringMethods(BaseAccessor):
         0    A/B-C/D
         1      e f.g
         2      4-5,6
-        dtype: object
+        dtype: str
         >>> data = ["https%3A%2F%2Frapids.ai%2Fstart.html",
         ...     "https%3A%2F%2Fmedium.com%2Frapids-ai"]
         >>> s = cudf.Series(data)
         >>> s.str.url_decode()
         0    https://rapids.ai/start.html
         1    https://medium.com/rapids-ai
-        dtype: object
+        dtype: str
         """
         return self._return_or_inplace(self._column.url_decode())
 
@@ -4436,14 +4459,14 @@ class StringMethods(BaseAccessor):
         0    A%2FB-C%2FD
         1        e%20f.g
         2        4-5%2C6
-        dtype: object
+        dtype: str
         >>> data = ["https://rapids.ai/start.html",
         ...     "https://medium.com/rapids-ai"]
         >>> s = cudf.Series(data)
         >>> s.str.url_encode()
         0    https%3A%2F%2Frapids.ai%2Fstart.html
         1    https%3A%2F%2Fmedium.com%2Frapids-ai
-        dtype: object
+        dtype: str
         """
         return self._return_or_inplace(self._column.url_encode())
 
@@ -4514,13 +4537,13 @@ class StringMethods(BaseAccessor):
         1              CAPITALS
         2    this is 1 sentence
         3              SwApC1Se
-        dtype: object
+        dtype: str
         >>> s.str.translate({'a': "1", "e":"#"})
         0                 low#r
         1              CAPITALS
         2    this is 1 s#nt#nc#
         3              SwApC1S#
-        dtype: object
+        dtype: str
         """
         return self._return_or_inplace(self._column.translate(table))
 
@@ -4561,12 +4584,12 @@ class StringMethods(BaseAccessor):
         0    aei
         1     OU
         2    456
-        dtype: object
+        dtype: str
         >>> s.str.filter_characters({'a':'l', 'M':'Z', '4':'6'}, False, "_")
         0         ___ou
         1         AEI__
         2    0123___789
-        dtype: object
+        dtype: str
         """
         if repl is None:
             repl = ""
@@ -4598,7 +4621,7 @@ class StringMethods(BaseAccessor):
         >>> ser.str.normalize_spaces()
         0    hello world
         1    test string
-        dtype: object
+        dtype: str
         """
         return self._return_or_inplace(self._column.normalize_spaces())
 
@@ -4629,7 +4652,7 @@ class StringMethods(BaseAccessor):
         1      world
         2      hello
         2    goodbye
-        dtype: object
+        dtype: str
         """
         delim = _massage_string_arg(delimiter, "delimiter", allow_col=True)
 
@@ -4683,7 +4706,7 @@ class StringMethods(BaseAccessor):
         0    hello world
         1        one two
         2          three
-        dtype: object
+        dtype: str
         """
         sep = _massage_string_arg(separator, "separator")
         return self._return_or_inplace(
@@ -4736,7 +4759,7 @@ class StringMethods(BaseAccessor):
         1    o
         1    u
         1    .
-        dtype: object
+        dtype: str
         """
         result_col = ColumnBase.create(
             self._column.character_tokenize().plc_column.children()[1],
@@ -4815,13 +4838,13 @@ class StringMethods(BaseAccessor):
         >>> str_series = cudf.Series(['this is my', 'favorite book'])
         >>> str_series.str.ngrams(2, "_")
         0    this is my_favorite book
-        dtype: object
+        dtype: str
         >>> str_series = cudf.Series(['abc','def','xyz','hhh'])
         >>> str_series.str.ngrams(2, "_")
         0    abc_def
         1    def_xyz
         2    xyz_hhh
-        dtype: object
+        dtype: str
         """
         sep = _massage_string_arg(separator, "separator")
         return self._return_or_inplace(
@@ -4857,14 +4880,14 @@ class StringMethods(BaseAccessor):
         1    gh
         2    xy
         2    yz
-        dtype: object
+        dtype: str
         >>> str_series.str.character_ngrams(3)
         0    abc
         0    bcd
         1    efg
         1    fgh
         2    xyz
-        dtype: object
+        dtype: str
         >>> str_series.str.character_ngrams(3,True)
         0    [abc, bcd]
         1    [efg, fgh]
@@ -4878,7 +4901,7 @@ class StringMethods(BaseAccessor):
         if isinstance(result, cudf.Series) and not as_list:
             # before exploding, removes those lists which have 0 length
             result = result[result.list.len() > 0]
-            return result.explode()  # type: ignore[union-attr]
+            return result.explode()
         return result
 
     def hash_character_ngrams(
@@ -4955,7 +4978,7 @@ class StringMethods(BaseAccessor):
         0      this_is
         1       is_the
         2    best_book
-        dtype: object
+        dtype: str
         """
         delim = _massage_string_arg(delimiter, "delimiter")
         sep = _massage_string_arg(separator, "separator")
@@ -4999,13 +5022,13 @@ class StringMethods(BaseAccessor):
         0       this _ _
         1    theme music
         2
-        dtype: object
+        dtype: str
         >>> sr = cudf.Series(["this;is;me", "theme;music", ""])
         >>> sr.str.replace_tokens(targets=targets, replacements=":")
         0     this;is;me
         1    theme;music
         2
-        dtype: object
+        dtype: str
         """
         if can_convert_to_column(targets):
             targets_column = as_column(targets)
@@ -5085,13 +5108,13 @@ class StringMethods(BaseAccessor):
         0       this _ _
         1    theme music
         2
-        dtype: object
+        dtype: str
         >>> sr = cudf.Series(["this;is;me", "theme;music", ""])
         >>> sr.str.filter_tokens(5,None,";")
         0             ;;
         1    theme;music
         2
-        dtype: object
+        dtype: str
         """
 
         if replacement is None:
@@ -5313,7 +5336,7 @@ class StringMethods(BaseAccessor):
         """
         The ``targets`` strings are measured against the strings in this
         instance using the Levenshtein edit distance algorithm.
-        https://www.cuelogic.com/blog/the-levenshtein-algorithm
+        https://en.wikipedia.org/wiki/Levenshtein_distance
 
         The ``targets`` parameter may also be a single string in which
         case the edit distance is computed for all the strings against
@@ -5357,45 +5380,6 @@ class StringMethods(BaseAccessor):
         return self._return_or_inplace(
             self._column.edit_distance(targets_column)  # type: ignore[arg-type]
         )
-
-    def edit_distance_matrix(self) -> Series | Index:
-        """Computes the edit distance between strings in the series.
-
-        The series to compute the matrix should have more than 2 strings and
-        should not contain nulls.
-
-        Edit distance is measured based on the `Levenshtein edit distance
-        algorithm <https://www.cuelogic.com/blog/the-levenshtein-algorithm>`_.
-
-        Returns
-        -------
-        Series of ListDtype(int64)
-            Assume ``N`` is the length of this series. The return series
-            contains ``N`` lists of size ``N``, where the ``j`` th number in
-            the ``i`` th row of the series tells the edit distance between the
-            ``i`` th string and the ``j`` th string of this series.  The matrix
-            is symmetric. Diagonal elements are 0.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series(['abc', 'bc', 'cba'])
-        >>> s.str.edit_distance_matrix()
-        0    [0, 1, 2]
-        1    [1, 0, 2]
-        2    [2, 2, 0]
-        dtype: list
-        """
-        if self._column.size < 2:
-            raise ValueError(
-                "Require size >= 2 to compute edit distance matrix."
-            )
-        if self._column.has_nulls():
-            raise ValueError(
-                "Cannot compute edit distance between null strings. "
-                "Consider removing them using `dropna` or fill with `fillna`."
-            )
-        return self._return_or_inplace(self._column.edit_distance_matrix())
 
     def minhash(
         self, seed: int, a: ColumnLike, b: ColumnLike, width: int

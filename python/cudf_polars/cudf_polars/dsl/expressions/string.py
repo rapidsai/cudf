@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: Document StringFunction to remove noqa
 # ruff: noqa: D101
@@ -12,7 +12,7 @@ from datetime import datetime
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
-from polars import Struct as pl_Struct, polars  # type: ignore[attr-defined]
+from polars import Struct as pl_Struct  # noqa: TC002 (used in runtime cast())
 from polars.exceptions import InvalidOperationError
 
 import pylibcudf as plc
@@ -21,14 +21,16 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
 from cudf_polars.dsl.utils.reshape import broadcast
+from cudf_polars.utils.dtypes import make_empty_column
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_132,
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_138,
 )
 
 if TYPE_CHECKING:
     from typing import Self
+
+    from polars import polars  # type: ignore[attr-defined]
 
     from cudf_polars.containers import DataFrame, DataType
 
@@ -44,7 +46,7 @@ def _dtypes_for_json_decode(dtype: DataType) -> JsonDecodeType:
         return [
             (field.name, child.plc_type, _dtypes_for_json_decode(child))
             for field, child in zip(
-                cast(pl_Struct, dtype.polars_type).fields,
+                cast("pl_Struct", dtype.polars_type).fields,
                 dtype.children,
                 strict=True,
             )
@@ -122,6 +124,7 @@ class StringFunction(Expr):
         Name.Contains,
         Name.CountMatches,
         Name.EndsWith,
+        Name.EscapeRegex,
         Name.Extract,
         Name.ExtractGroups,
         Name.Find,
@@ -152,6 +155,11 @@ class StringFunction(Expr):
         Name.Titlecase,
         Name.ZFill,
     }
+    # Regex meta characters escaped by ``str.escape_regex`` (matching polars'
+    # ``regex_syntax::escape``). Each matched character is prefixed with a
+    # backslash via a back-reference replacement template.
+    _ESCAPE_REGEX_PATTERN: ClassVar[str] = r"([#$&()*+\-.?\[\\\]\^{|}~])"
+    _ESCAPE_REGEX_REPLACEMENT: ClassVar[str] = r"\\1"
     __slots__ = ("_regex_program", "name", "options")
     _non_child = ("dtype", "name", "options")
 
@@ -195,6 +203,8 @@ class StringFunction(Expr):
                     )
                 pattern = self.children[1].value
                 self._regex_program = self._create_regex_program(pattern)
+        elif self.name is StringFunction.Name.EscapeRegex:
+            self._regex_program = self._create_regex_program(self._ESCAPE_REGEX_PATTERN)
         elif self.name is StringFunction.Name.Extract:
             (group_index,) = self.options
             if group_index == 0:
@@ -291,21 +301,6 @@ class StringFunction(Expr):
                 raise NotImplementedError(
                     "strip operations only support scalar patterns"
                 )
-        elif self.name is StringFunction.Name.ZFill:
-            if isinstance(self.children[1], Literal):
-                _, width = self.children
-                assert isinstance(width, Literal)
-                if (
-                    POLARS_VERSION_LT_132
-                    and width.value is not None
-                    and width.value < 0
-                ):  # pragma: no cover
-                    dtypestr = polars.dtype_str_repr(width.dtype.polars_type)
-                    raise InvalidOperationError(
-                        f"conversion from `{dtypestr}` to `u64` "
-                        f"failed in column 'literal' for 1 out of "
-                        f"1 values: [{width.value}]"
-                    ) from None
 
     @staticmethod
     def _create_regex_program(
@@ -436,24 +431,6 @@ class StringFunction(Expr):
             else:
                 col_width = self.children[1].evaluate(df, context=context)
                 assert isinstance(col_width, Column)
-                all_gt_0 = plc.binaryop.binary_operation(
-                    col_width.obj,
-                    plc.Scalar.from_py(
-                        0, plc.DataType(plc.TypeId.INT64), stream=df.stream
-                    ),
-                    plc.binaryop.BinaryOperator.GREATER_EQUAL,
-                    plc.DataType(plc.TypeId.BOOL8),
-                    stream=df.stream,
-                )
-
-                if POLARS_VERSION_LT_132 and not plc.reduce.reduce(
-                    all_gt_0,
-                    plc.aggregation.all(),
-                    plc.DataType(plc.TypeId.BOOL8),
-                    stream=df.stream,
-                ).to_py(stream=df.stream):  # pragma: no cover
-                    raise InvalidOperationError("fill conversion failed.")
-
                 return Column(
                     plc.strings.padding.zfill_by_widths(
                         column.obj, col_width.obj, stream=df.stream
@@ -489,6 +466,14 @@ class StringFunction(Expr):
             child, arg = self.children
             plc_column = child.evaluate(df, context=context).obj
             plc_targets = arg.evaluate(df, context=context).obj
+            if plc_column.size() == 0:
+                # contains_multiple launches a kernel with grid_1d sized
+                # against the input rows, which asserts num_blocks > 0.
+                # Skip the kernel call on empty input.
+                return Column(
+                    make_empty_column(self.dtype, df.stream),
+                    dtype=self.dtype,
+                )
             if ascii_case_insensitive:
                 plc_column = plc.strings.case.to_lower(plc_column, stream=df.stream)
                 plc_targets = plc.strings.case.to_lower(plc_targets, stream=df.stream)
@@ -574,6 +559,14 @@ class StringFunction(Expr):
             return Column(plc_column, dtype=self.dtype)
         elif self.name is StringFunction.Name.JsonDecode:
             plc_column = self.children[0].evaluate(df, context=context).obj
+            if plc_column.size() == 0:
+                # read_json_from_string_column raises
+                # "Generated token count exceeds the expected token count"
+                # on empty input. Return a typed empty struct column directly.
+                return Column(
+                    make_empty_column(self.dtype, df.stream),
+                    dtype=self.dtype,
+                )
             plc_table_with_metadata = plc.io.json.read_json_from_string_column(
                 plc_column,
                 plc.Scalar.from_py("\n", stream=df.stream),
@@ -686,7 +679,7 @@ class StringFunction(Expr):
                     max_splits - 1,
                     stream=df.stream,
                 )
-                children = plc_table.columns()
+                children = plc_table.release()
                 ref_column = children[0]
                 if (remainder := n + int(not is_split_n) - len(children)) > 0:
                     # Reach expected number of splits by padding with nulls
@@ -964,21 +957,14 @@ class StringFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.PadStart:
-            if POLARS_VERSION_LT_132:  # pragma: no cover
-                (column,) = columns
-                width_arg, char = self.options
-                pad_width = cast(int, width_arg)
-            else:
-                (column, width_col) = columns
-                (char,) = self.options
-                # TODO: Maybe accept a string scalar in
-                # cudf::strings::pad to avoid DtoH transfer
-                # See https://github.com/rapidsai/cudf/issues/20202
-                width_py = width_col.obj.to_scalar(stream=df.stream).to_py(
-                    stream=df.stream
-                )
-                assert width_py is not None
-                pad_width = int(width_py)
+            (column, width_col) = columns
+            (char,) = self.options
+            # TODO: Maybe accept a string scalar in
+            # cudf::strings::pad to avoid DtoH transfer
+            # See https://github.com/rapidsai/cudf/issues/20202
+            width_py = width_col.obj.to_scalar(stream=df.stream).to_py(stream=df.stream)
+            assert width_py is not None
+            pad_width = int(width_py)
 
             return Column(
                 plc.strings.padding.pad(
@@ -991,20 +977,13 @@ class StringFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.PadEnd:
-            if POLARS_VERSION_LT_132:  # pragma: no cover
-                (column,) = columns
-                width_arg, char = self.options
-                pad_width = cast(int, width_arg)
-            else:
-                (column, width_col) = columns
-                (char,) = self.options
-                # TODO: Maybe accept a string scalar in
-                # cudf::strings::pad to avoid DtoH transfer
-                width_py = width_col.obj.to_scalar(stream=df.stream).to_py(
-                    stream=df.stream
-                )
-                assert width_py is not None
-                pad_width = int(width_py)
+            (column, width_col) = columns
+            (char,) = self.options
+            # TODO: Maybe accept a string scalar in
+            # cudf::strings::pad to avoid DtoH transfer
+            width_py = width_col.obj.to_scalar(stream=df.stream).to_py(stream=df.stream)
+            assert width_py is not None
+            pad_width = int(width_py)
 
             return Column(
                 plc.strings.padding.pad(
@@ -1026,6 +1005,17 @@ class StringFunction(Expr):
             (column,) = columns
             return Column(
                 plc.strings.capitalize.title(column.obj, stream=df.stream),
+                dtype=self.dtype,
+            )
+        elif self.name is StringFunction.Name.EscapeRegex:
+            (column,) = columns
+            return Column(
+                plc.strings.replace_re.replace_with_backrefs(
+                    column.obj,
+                    self._regex_program,
+                    self._ESCAPE_REGEX_REPLACEMENT,
+                    stream=df.stream,
+                ),
                 dtype=self.dtype,
             )
         raise NotImplementedError(

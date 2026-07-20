@@ -8,7 +8,7 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.scalar.scalar cimport string_scalar
 from pylibcudf.libcudf.types cimport size_type
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
@@ -18,7 +18,7 @@ cdef extern from "cudf/strings/replace.hpp" namespace "cudf::strings" nogil:
         string_scalar repl,
         size_type start,
         size_type stop,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr) except +libcudf_exception_handler
 
     cdef unique_ptr[column] replace(
@@ -26,12 +26,12 @@ cdef extern from "cudf/strings/replace.hpp" namespace "cudf::strings" nogil:
         string_scalar target,
         string_scalar repl,
         int32_t maxrepl,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr) except +libcudf_exception_handler
 
     cdef unique_ptr[column] replace_multiple(
         column_view source_strings,
         column_view target_strings,
         column_view repl_strings,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr) except +libcudf_exception_handler

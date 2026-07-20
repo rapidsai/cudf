@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -202,10 +202,10 @@ struct MixedJoinTest : public cudf::test::BaseFixture {
   /**
    * Compare two join results, sorting both before comparison since order is not guaranteed.
    */
-  void compare_join_results(const PairJoinReturn& expected_result,
-                            const PairJoinReturn& actual_result)
+  void compare_join_results(PairJoinReturn const& expected_result,
+                            PairJoinReturn const& actual_result)
   {
-    auto device_results_to_host = [](const PairJoinReturn& result) {
+    auto device_results_to_host = [](PairJoinReturn const& result) {
       // Create column views from device_uvectors
       auto left_view  = cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
                                          result.first->size(),
@@ -433,6 +433,16 @@ struct MixedInnerJoinTest : public MixedJoinPairReturnTest<T> {
         cudf::join_kind::INNER_JOIN);
       this->compare_join_results(mixed_result, ast_filter_result);
 
+      // Verify filter_join_indices_output_size matches the materialized output size.
+      auto const fji_size = cudf::filter_join_indices_output_size(
+        left_conditional,
+        right_conditional,
+        cudf::device_span<cudf::size_type const>(*hash_join_result.first),
+        cudf::device_span<cudf::size_type const>(*hash_join_result.second),
+        predicate,
+        cudf::join_kind::INNER_JOIN);
+      EXPECT_EQ(fji_size, ast_filter_result.first->size());
+
       // Verify JIT filter_join_indices if provided
       if (!jit_predicate.empty()) {
         auto jit_filter_result = cudf::filter_join_indices_jit(
@@ -602,9 +612,11 @@ TYPED_TEST(MixedInnerJoinTest, BasicInequality)
 // This test is designed to prevent https://github.com/NVIDIA/spark-rapids/issues/13416 from
 // happening again, where the block atomic counter was improperly set, causing illegal memory access
 // when the input data is large enough that multiple blocks are needed for the kernel.
-TYPED_TEST(MixedInnerJoinTest, LargeDataMultiBlockCoordination)
+struct MixedInnerJoinTestInt32 : public MixedInnerJoinTest<int32_t> {};
+TEST_F(MixedInnerJoinTestInt32, LargeDataMultiBlockCoordination)
 {
-  using T = TypeParam;
+  using TypeParam = int32_t;
+  using T         = TypeParam;
 
   // These sizes are large enough to ensure the kernel launches with multiple blocks
   constexpr int left_size  = 5000;
@@ -656,7 +668,7 @@ TYPED_TEST(MixedInnerJoinTest, LargeDataMultiBlockCoordination)
   EXPECT_EQ(result.second->size(), expected_size);
   EXPECT_GT(expected_size, 0);
 
-  auto to_sorted_pairs = [](const PairJoinReturn& join_result) {
+  auto to_sorted_pairs = [](PairJoinReturn const& join_result) {
     std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
     for (size_t i = 0; i < join_result.first->size(); ++i) {
       result_pairs.emplace_back(join_result.first->element(i, cudf::get_default_stream()),
@@ -1089,6 +1101,16 @@ struct MixedLeftJoinTest : public MixedJoinPairReturnTest<T> {
         cudf::join_kind::LEFT_JOIN);
       this->compare_join_results(mixed_result, ast_filter_result);
 
+      // Verify filter_join_indices_output_size matches the materialized output size.
+      auto const fji_size = cudf::filter_join_indices_output_size(
+        left_conditional,
+        right_conditional,
+        cudf::device_span<cudf::size_type const>(*hash_join_result.first),
+        cudf::device_span<cudf::size_type const>(*hash_join_result.second),
+        predicate,
+        cudf::join_kind::LEFT_JOIN);
+      EXPECT_EQ(fji_size, ast_filter_result.first->size());
+
       // Verify JIT filter_join_indices if provided
       if (!jit_predicate.empty()) {
         auto jit_filter_result = cudf::filter_join_indices_jit(
@@ -1366,6 +1388,16 @@ struct MixedFullJoinTest : public MixedJoinPairReturnTest<T> {
         predicate,
         cudf::join_kind::FULL_JOIN);
       this->compare_join_results(mixed_result, ast_filter_result);
+
+      // Verify filter_join_indices_output_size matches the materialized output size.
+      auto const fji_size = cudf::filter_join_indices_output_size(
+        left_conditional,
+        right_conditional,
+        cudf::device_span<cudf::size_type const>(*hash_join_result.first),
+        cudf::device_span<cudf::size_type const>(*hash_join_result.second),
+        predicate,
+        cudf::join_kind::FULL_JOIN);
+      EXPECT_EQ(fji_size, ast_filter_result.first->size());
 
       // Verify JIT filter_join_indices if provided
       if (!jit_predicate.empty()) {

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,12 +17,15 @@
 #include <variant>
 #include <vector>
 
+/**
+ * @file
+ * @brief Column APIs for filtering rows
+ */
+
 namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup reorder_compact
  * @{
- * @file
- * @brief Column APIs for filtering rows
  */
 
 namespace ast {
@@ -215,6 +218,34 @@ std::unique_ptr<table> apply_boolean_mask(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief Filters `input` using `deletion_mask` of boolean values as a mask.
+ *
+ * Given an input `table_view` and a mask `column_view`, an element `i` from
+ * each column_view of the `input` is copied from the corresponding output column
+ * if the corresponding element `i` in the mask is non-null and `false`.
+ * This operation is stable: the input order is preserved.
+ *
+ * @note if @p input.num_rows() is zero, there is no error, and an empty table
+ * is returned.
+ *
+ * @throws cudf::logic_error if `input.num_rows() != deletion_mask.size()`.
+ * @throws cudf::logic_error if `deletion_mask` is not `type_id::BOOL8` type.
+ *
+ * @param[in] input The input table_view to filter
+ * @param[in] deletion_mask A nullable column_view of type type_id::BOOL8 used
+ * as a mask to filter the `input`.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ * @param[in] mr Device memory resource used to allocate the returned table's device memory
+ * @return Table containing copy of all rows of @p input that are not marked
+ * for deletion by @p deletion_mask.
+ */
+std::unique_ptr<table> apply_deletion_mask(
+  table_view const& input,
+  column_view const& deletion_mask,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
  * @brief Choices for drop_duplicates API for retainment of duplicate rows
  */
 enum class duplicate_keep_option {
@@ -238,6 +269,9 @@ enum class duplicate_keep_option {
  *
  * Performance hint: if the input is pre-sorted, `cudf::unique` can produce an equivalent result
  * (i.e., same set of output rows) but with less running time than `cudf::distinct`.
+ *
+ * A zero-column `input` is treated as empty, producing an empty table even when `input` has a
+ * non-zero row count.
  *
  * @throws cudf::logic_error if the `keys` column indices are out of bounds in the `input` table.
  *
@@ -271,6 +305,9 @@ std::unique_ptr<table> unique(
  * Performance hint: if the input is pre-sorted, `cudf::unique` can produce an equivalent result
  * (i.e., same set of output rows) but with less running time than `cudf::distinct`.
  *
+ * A zero-column `input` is treated as empty, producing an empty table even when `input` has a
+ * non-zero row count.
+ *
  * @param input The input table
  * @param keys Vector of indices indicating key columns in the `input` table
  * @param keep Copy any, first, last, or none of the found duplicates
@@ -278,6 +315,7 @@ std::unique_ptr<table> unique(
  * @param nans_equal Flag to specify whether NaN elements should be considered as equal
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table
+ *
  * @return Table with distinct rows in an unspecified order
  */
 std::unique_ptr<table> distinct(
@@ -295,12 +333,16 @@ std::unique_ptr<table> distinct(
  * Given an `input` table_view, an output vector of all row indices of the distinct rows is
  * generated. If there are duplicate rows, which index is kept depends on the `keep` parameter.
  *
+ * A zero-column `input` is treated as empty, producing an empty column even when `input` has a
+ * non-zero row count.
+ *
  * @param input The input table
  * @param keep Get index of any, first, last, or none of the found duplicates
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param nans_equal Flag to specify whether NaN elements should be considered as equal
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned vector
+ *
  * @return Column containing the result indices
  */
 std::unique_ptr<column> distinct_indices(
@@ -325,6 +367,9 @@ std::unique_ptr<column> distinct_indices(
  * with another values column `3, 4, 5`, the result could contain values `3, 4` or `4, 5` but not
  * `4, 3` or `5, 4`.
  *
+ * A zero-column `input` is treated as empty, producing an empty table even when `input` has a
+ * non-zero row count.
+ *
  * @param input The input table
  * @param keys Vector of indices indicating key columns in the `input` table
  * @param keep Copy any, first, last, or none of the found duplicates
@@ -332,6 +377,7 @@ std::unique_ptr<column> distinct_indices(
  * @param nans_equal Flag to specify whether NaN elements should be considered as equal
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned table
+ *
  * @return Table with distinct rows, preserving input order
  */
 std::unique_ptr<table> stable_distinct(

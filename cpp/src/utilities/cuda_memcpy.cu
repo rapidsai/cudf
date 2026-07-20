@@ -1,8 +1,7 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
@@ -14,6 +13,8 @@
 
 #include <thrust/copy.h>
 
+#include <algorithm>
+#include <ranges>
 #include <vector>
 
 namespace cudf::detail {
@@ -32,7 +33,7 @@ void copy_pinned(void* dst, void const* src, std::size_t size, rmm::cuda_stream_
   if (size == 0) return;
 
   if (size < get_kernel_pinned_copy_threshold()) {
-    const int block_size = 256;
+    int const block_size = 256;
     auto const grid_size = cudf::util::div_rounding_up_safe<size_t>(size, block_size);
     // We are explicitly launching the kernel here instead of calling a thrust function because the
     // thrust function can potentially call cudaMemcpyAsync instead of using a kernel
@@ -58,31 +59,37 @@ cudaError_t memcpy_batch_async(void* const* dsts,
                                std::size_t count,
                                rmm::cuda_stream_view stream)
 {
-  // Filter out invalid copies (nullptr dst/src or size==0);
-  // cudaMemcpyBatchAsync does not support these inputs
-  std::vector<void*> valid_dsts;
-  std::vector<void const*> valid_srcs;
-  std::vector<std::size_t> valid_sizes;
-  valid_dsts.reserve(count);
-  valid_srcs.reserve(count);
-  valid_sizes.reserve(count);
-  for (std::size_t i = 0; i < count; ++i) {
-    if (dsts[i] != nullptr && srcs[i] != nullptr && sizes[i] != 0) {
-      valid_dsts.push_back(dsts[i]);
-      valid_srcs.push_back(srcs[i]);
-      valid_sizes.push_back(sizes[i]);
-    }
-  }
-  if (valid_dsts.empty()) { return cudaSuccess; }
-  dsts  = valid_dsts.data();
-  srcs  = valid_srcs.data();
-  sizes = valid_sizes.data();
-  count = valid_dsts.size();
-
-  // Uses cudaMemcpyBatchAsync for CUDA 13.0+ to avoid driver-side locking overhead.
-  // cudaMemcpyBatchAsync does not support the default stream.
+// Uses cudaMemcpyBatchAsync for CUDA 13.0+ to avoid driver-side locking overhead.
+// cudaMemcpyBatchAsync does not support the default stream.
 #if CUDART_VERSION >= 13000
   if (!stream.is_default()) {
+    // Filter out invalid copies (nullptr dst/src or size==0);
+    // cudaMemcpyBatchAsync does not support these inputs
+    auto is_invalid = [&](auto i) {
+      return dsts[i] == nullptr || srcs[i] == nullptr || sizes[i] == 0;
+    };
+    std::vector<void*> valid_dsts;
+    std::vector<void const*> valid_srcs;
+    std::vector<std::size_t> valid_sizes;
+
+    if (std::ranges::any_of(std::ranges::views::iota(std::size_t{0}, count), is_invalid)) {
+      valid_dsts.reserve(count);
+      valid_srcs.reserve(count);
+      valid_sizes.reserve(count);
+      for (std::size_t i = 0; i < count; ++i) {
+        if (dsts[i] != nullptr && srcs[i] != nullptr && sizes[i] != 0) {
+          valid_dsts.push_back(dsts[i]);
+          valid_srcs.push_back(srcs[i]);
+          valid_sizes.push_back(sizes[i]);
+        }
+      }
+      if (valid_dsts.empty()) { return cudaSuccess; }
+      dsts  = valid_dsts.data();
+      srcs  = valid_srcs.data();
+      sizes = valid_sizes.data();
+      count = valid_dsts.size();
+    }
+
     cudaMemcpyAttributes attrs = {.srcAccessOrder = cudaMemcpySrcAccessOrderStream,
                                   .flags          = cudaMemcpyFlagPreferOverlapWithCompute};
     std::size_t attrs_idxs     = 0;

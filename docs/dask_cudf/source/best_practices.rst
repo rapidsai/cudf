@@ -72,7 +72,7 @@ Enable cuDF spilling
 
 When using Dask cuDF for classic ETL workloads, it is usually best
 to enable `native spilling support in cuDF
-<https://docs.rapids.ai/api/cudf/stable/developer_guide/library_design/#spilling-to-host-memory>`__.
+<https://docs.rapids.ai/api/cudf/stable/cudf/developer_guide/library_design/#spilling-to-host-memory>`__.
 When using :class:`dask_cuda.LocalCUDACluster`, this is easily accomplished by
 setting ``enable_cudf_spill=True``.
 
@@ -265,7 +265,7 @@ over :func:`dask.dataframe.from_delayed`:
 * It allows proper lazy execution of your custom logic
 * It enables column projection (as long as the mapped function supports a ``columns`` key-word argument)
 
-See the `from_map API documentation <https://docs.dask.org/en/stable/generated/dask_expr.from_map.html#dask_expr.from_map>`__
+See the `from_map API documentation <https://docs.dask.org/en/latest/generated/dask.dataframe.from_map.html>`__
 for more details.
 
 .. note::

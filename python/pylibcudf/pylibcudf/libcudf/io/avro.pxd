@@ -5,7 +5,7 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.types cimport size_type
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
@@ -49,6 +49,6 @@ cdef extern from "cudf/io/avro.hpp" namespace "cudf::io" nogil:
 
     cdef cudf_io_types.table_with_metadata read_avro(
         avro_reader_options &options,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler

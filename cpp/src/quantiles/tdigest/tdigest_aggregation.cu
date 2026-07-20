@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,18 +24,21 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/device/device_reduce.cuh>
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/std/span>
 #include <cuda/std/tuple>
+#include <cuda/stream_ref>
 #include <thrust/binary_search.h>
+#include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
-#include <thrust/merge.h>
 #include <thrust/reduce.h>
 #include <thrust/remove.h>
 #include <thrust/replace.h>
@@ -621,6 +624,7 @@ void generate_cluster_limits(int delta,
       group_num_clusters,
       group_cluster_start,
       has_nulls);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   // overlap CPU work
@@ -1046,14 +1050,20 @@ std::unique_ptr<column> compute_tdigests(int delta,
     mean_col.begin<double>(), weight_col.begin<double>(), cuda::make_discard_iterator()));
 
   auto const num_values = std::distance(centroids_begin, centroids_end);
-  thrust::reduce_by_key(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                        keys,
-                        keys + num_values,              // keys
-                        centroids_begin,                // values
-                        cuda::make_discard_iterator(),  // key output
-                        output,                         // output
-                        cuda::std::equal_to{},          // key equality check
-                        merge_centroids{});
+  // Use `cub::DeviceReduce::ReduceByKey` instead of `thrust::reduce_by_key`: nvcc 13.0
+  // mis-compiles thrust's reduce-by-key kernel for sm_100, causing illegal memory accesses
+  auto env = cuda::std::execution::env{
+    cuda::std::execution::prop{cuda::get_stream_t{}, cuda::stream_ref{stream.value()}},
+    cuda::std::execution::prop{cuda::mr::get_memory_resource_t{},
+                               cudf::get_current_device_resource_ref()}};
+  CUDF_CUDA_TRY(cub::DeviceReduce::ReduceByKey(keys,                           // keys in
+                                               cuda::make_discard_iterator(),  // unique keys out
+                                               centroids_begin,                // values in
+                                               output,                         // reduced values out
+                                               cuda::make_discard_iterator(),  // number of runs out
+                                               merge_centroids{},              // reduction op
+                                               num_values,                     // number of items
+                                               env));
 
   // generate offsets column. if we are running in the simple case, cinfo.cluster_start will not
   // be accurate, so we need to compute with a scan. in the non-simple case, cinfo.cluster_start

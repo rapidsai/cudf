@@ -5,7 +5,7 @@ from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.copying cimport out_of_bounds_policy
 from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 cdef extern from "cudf/lists/gather.hpp" namespace "cudf::lists" nogil:
@@ -13,6 +13,6 @@ cdef extern from "cudf/lists/gather.hpp" namespace "cudf::lists" nogil:
         const lists_column_view& source_column,
         const lists_column_view& gather_map_list,
         out_of_bounds_policy bounds_policy,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler

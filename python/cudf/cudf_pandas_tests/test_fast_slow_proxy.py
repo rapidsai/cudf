@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -233,6 +233,66 @@ def test_fallback_with_stringio():
     assert pxy(StringIO("hello")) == "hello"
 
 
+# "Pure" (resource-free) iterators that ``_transform_arg`` handles specially:
+# they force a fallback on the fast path and are transformed lazily into a new
+# generator on the slow path.
+_PURE_ITERATOR_FACTORIES = [
+    lambda items: (item for item in items),
+    lambda items: map(lambda item: item, items),
+    lambda items: filter(lambda item: True, items),
+    lambda items: zip(items, strict=True),
+    lambda items: enumerate(items),
+]
+_PURE_ITERATOR_IDS = ["generator", "map", "filter", "zip", "enumerate"]
+
+
+@pytest.mark.parametrize(
+    "make_iterator", _PURE_ITERATOR_FACTORIES, ids=_PURE_ITERATOR_IDS
+)
+def test_pure_iterator_forces_fallback_and_stays_iterator(
+    make_iterator, final_proxy
+):
+    # A pure iterator argument forces a fallback to the slow path (the fast
+    # path raises before consuming it), and the slow callable must receive a
+    # *bare* iterator rather than a materialized list (pandas treats iterators
+    # and lists differently, e.g. ``is_nested_list_like``).
+    _, _, x = final_proxy
+    received = {}
+
+    def fast(it):
+        raise AssertionError("fast path must not run for pure iterators")
+
+    def slow(it):
+        received["bare_iterator"] = iter(it) is it and not isinstance(
+            it, (list, tuple)
+        )
+        return list(it)
+
+    pxy = _FunctionProxy(fast=fast, slow=slow)
+    result = pxy(make_iterator([x, x]))
+    assert received["bare_iterator"]
+    assert len(result) == 2
+
+
+@pytest.mark.parametrize(
+    "make_iterator",
+    _PURE_ITERATOR_FACTORIES[:3],
+    ids=_PURE_ITERATOR_IDS[:3],
+)
+def test_pure_iterator_slow_path_unwraps_elements(make_iterator, final_proxy):
+    # The lazily produced generator still unwraps proxy elements to their slow
+    # counterparts (the motivation for transforming rather than passing the
+    # iterator through untouched, which dropped type info such as the
+    # ``category`` dtype in ``MultiIndex.from_product(map(...))``).
+    _, slow_x, x = final_proxy
+    transformed = _slow_arg(make_iterator([x, x]))
+    assert iter(transformed) is transformed
+    items = list(transformed)
+    assert items == [slow_x, slow_x]
+    # Each element is the unwrapped *slow* object, not the proxy.
+    assert all(type(item) is type(slow_x) for item in items)
+
+
 def test_access_class():
     def func():
         pass
@@ -405,8 +465,10 @@ def test_dir(fast_and_intermediate_with_doc, slow_and_intermediate_with_doc):
     "check",
     [
         lambda Pxy, Slow: dir(Pxy().method) == dir(Slow().method),
-        lambda Pxy, Slow: dir(Pxy().intermediate().method)
-        == dir(Slow().intermediate().method),
+        lambda Pxy, Slow: (
+            dir(Pxy().intermediate().method)
+            == dir(Slow().intermediate().method)
+        ),
     ],
 )
 def test_dir_bound_method(
@@ -552,6 +614,116 @@ def __getnewargs_ex__(self):
     )
 
 
+@pytest.mark.parametrize("attribute_name", ["_fsproxy_fast", "_fsproxy_slow"])
+def test_transform_arg_preserves_object_ndarray_identity(
+    attribute_name, final_proxy
+):
+    # An object-dtype ndarray whose elements need no transformation must
+    # be returned as-is rather than rebuilt: an equivalent copy breaks
+    # aliasing checks such as ``np.may_share_memory(np.asarray(x), x)``
+    # that numpy uses (e.g. in ``Generator.permutation``) to decide
+    # whether to defensively copy before an in-place shuffle.
+    transform = partial(
+        _transform_arg, attribute_name=attribute_name, seen=set()
+    )
+    arr = np.array(["a", "bb", "ccc"], dtype=object)
+    assert transform(arr) is arr
+
+    # An object-dtype ndarray containing a proxy is still rebuilt with
+    # the unwrapped elements.
+    fast_x, slow_x, x = final_proxy
+    expected = fast_x if attribute_name == "_fsproxy_fast" else slow_x
+    arr_with_proxy = np.array(["a", x], dtype=object)
+    result = transform(arr_with_proxy)
+    assert result is not arr_with_proxy
+    assert result[0] == "a"
+    assert type(result[1]) is type(expected)
+
+
+@pytest.mark.parametrize("attribute_name", ["_fsproxy_fast", "_fsproxy_slow"])
+def test_transform_arg_preserves_list_and_dict_identity(attribute_name):
+    # A list or dict whose entries need no transformation must be
+    # returned as-is rather than rebuilt: a user function may close over
+    # a mutable container and mutate it for its side effects (e.g.
+    # ``names.append(group.name)`` inside groupby.apply), and rebuilding
+    # the closure around an equivalent copy would silently discard those
+    # mutations.
+    transform = partial(
+        _transform_arg, attribute_name=attribute_name, seen=set()
+    )
+    for unchanged in (
+        [],
+        [1, "a"],
+        {},
+        {"k": 1, 2: "v"},
+        [[1], {"k": (2,)}],
+        {"k": [1, {"nested": 2}]},
+    ):
+        assert transform(unchanged) is unchanged
+
+
+@pytest.mark.parametrize("attribute_name", ["_fsproxy_fast", "_fsproxy_slow"])
+def test_transform_arg_rebuilds_containers_holding_proxies(
+    attribute_name, final_proxy
+):
+    transform = partial(
+        _transform_arg, attribute_name=attribute_name, seen=set()
+    )
+    fast_x, slow_x, x = final_proxy
+    expected_type = type(
+        fast_x if attribute_name == "_fsproxy_fast" else slow_x
+    )
+
+    lst = [1, x]
+    result = transform(lst)
+    assert result is not lst
+    assert result[0] == 1
+    assert type(result[1]) is expected_type
+
+    dct = {"k": x}
+    result = transform(dct)
+    assert result is not dct
+    assert type(result["k"]) is expected_type
+
+    # A proxy nested deeper down rebuilds every enclosing container.
+    nested = [{"k": x}]
+    result = transform(nested)
+    assert result is not nested
+    assert type(result[0]["k"]) is expected_type
+
+    # Rebuilt lists preserve list subclasses.
+    class MyList(list):
+        pass
+
+    my_list = MyList([1, x])
+    result = transform(my_list)
+    assert result is not my_list
+    assert type(result) is MyList
+    assert type(result[1]) is expected_type
+
+
+@pytest.mark.parametrize("attribute_name", ["_fsproxy_fast", "_fsproxy_slow"])
+def test_transform_arg_dict_subclass_identity_avoids_overrides(
+    attribute_name,
+):
+    # The unchanged-identity detection must compare entries via ``items()``
+    # (which the transformation itself already consumed) rather than
+    # ``__iter__``/``__getitem__``, which a mapping subclass may override
+    # with semantics that break the comparison.
+    class NoDunderDict(dict):
+        def __iter__(self):
+            raise AssertionError("__iter__ must not be used")
+
+        def __getitem__(self, key):
+            raise AssertionError("__getitem__ must not be used")
+
+    transform = partial(
+        _transform_arg, attribute_name=attribute_name, seen=set()
+    )
+    unchanged = NoDunderDict({"k": 1})
+    assert transform(unchanged) is unchanged
+
+
 def test_tuple_with_attrs_transform():
     Bunch = tuple_with_attrs("Bunch", ["a", "b"], {"c", "d"})
     Bunch2 = tuple_with_attrs("Bunch", ["a", "b"], {"c", "d"})
@@ -571,6 +743,7 @@ def test_tuple_with_attrs_transform():
     cprime = transform(c)
     dprime = transform(d)
     assert a == aprime and a is not aprime
-    assert b == bprime and b is not bprime
+    # A plain tuple with no transformable elements keeps its identity.
+    assert b is bprime
     assert c == cprime and c is not cprime
     assert d == dprime and d is not dprime

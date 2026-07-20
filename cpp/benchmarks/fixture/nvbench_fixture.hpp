@@ -106,7 +106,8 @@ struct nvbench_base_fixture {
 
   ~nvbench_base_fixture()
   {
-    // Ensure the the pool is freed before the CUDA context is destroyed:
+    // Ensure the the pool is freed before the CUDA context is destroyed
+    rmm::mr::reset_current_device_resource();
     cudf::set_pinned_memory_resource(this->make_cuio_host_pinned());
   }
 

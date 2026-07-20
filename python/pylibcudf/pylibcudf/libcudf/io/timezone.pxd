@@ -6,7 +6,7 @@ from libcpp.optional cimport optional
 from libcpp.string cimport string
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.table.table cimport table
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
@@ -14,6 +14,6 @@ cdef extern from "cudf/timezone.hpp" namespace "cudf" nogil:
     unique_ptr[table] make_timezone_transition_table(
         optional[string] tzif_dir,
         string timezone_name,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler

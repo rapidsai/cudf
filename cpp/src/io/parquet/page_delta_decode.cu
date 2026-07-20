@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -366,9 +366,11 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
   block.sync();
 
   auto const batch_size = db->values_per_mb;
-  if (batch_size > max_delta_mini_block_size) {
-    set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
-              error_code);
+  if (db->error or batch_size > max_delta_mini_block_size) {
+    if (block.thread_rank() == 0) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
+                error_code);
+    }
     return;
   }
 
@@ -546,6 +548,15 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   }
   block.sync();
 
+  // Propagate malformed-header errors from either underlying DELTA_BINARY_PACKED decoder.
+  if (prefix_db->error or suffix_db->error) {
+    if (block.thread_rank() == 0) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
+                error_code);
+    }
+    return;
+  }
+
   // assert that prefix and suffix have same mini-block size
   if (prefix_db->values_per_mb != suffix_db->values_per_mb or
       prefix_db->block_size != suffix_db->block_size or
@@ -562,15 +573,18 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   // sanity check to make sure we can process this page
   auto const batch_size = prefix_db->values_per_mb;
   if (batch_size > max_delta_mini_block_size) {
-    set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
-              error_code);
+    if (block.thread_rank() == 0) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
+                error_code);
+    }
     return;
   }
 
   // if this is a bounds page and nested, then we need to skip up front. non-nested will work
   // its way through the page.
-  int string_pos          = has_repetition ? s->page.start_val : 0;
-  auto const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
+  int string_pos = has_repetition ? s->page.start_val : 0;
+  auto const is_bounds_pg =
+    is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
   if (is_bounds_pg && string_pos > 0) { dba->skip(use_char_ll); }
 
   while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
@@ -759,20 +773,25 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   }
   block.sync();
 
-  int const leaf_level_index = s->col.max_nesting_depth - 1;
-
   // sanity check to make sure we can process this page
   auto const batch_size = db->values_per_mb;
-  if (batch_size > max_delta_mini_block_size) {
-    set_error(static_cast<int32_t>(decode_error::DELTA_PARAMS_UNSUPPORTED), error_code);
+  if (db->error or batch_size > max_delta_mini_block_size) {
+    if (block.thread_rank() == 0) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
+                error_code);
+    }
     return;
   }
+
+  int const leaf_level_index = s->col.max_nesting_depth - 1;
+
   // db->init_binary_block below resets db->values_per_mb
   block.sync();
   // if this is a bounds page, then we need to decode up to the first mini-block
   // that has a value we need, and set string_offset to the position of the first value in the
   // string data block.
-  auto const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
+  auto const is_bounds_pg =
+    is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
   if (is_bounds_pg && s->page.start_val > 0) {
     if (warp.meta_group_rank() == 0) {
       // string_off is only valid on thread 0
@@ -908,9 +927,11 @@ void decode_delta_binary(cudf::detail::hostdevice_span<PageInfo> pages,
   if (level_type_size == 1) {
     decode_delta_binary_kernel<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
+    CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     decode_delta_binary_kernel<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 
@@ -935,9 +956,11 @@ void decode_delta_byte_array(cudf::detail::hostdevice_span<PageInfo> pages,
   if (level_type_size == 1) {
     decode_delta_byte_array_kernel<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, initial_str_offsets, error_code);
+    CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     decode_delta_byte_array_kernel<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, initial_str_offsets, error_code);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 
@@ -962,9 +985,11 @@ void decode_delta_length_byte_array(cudf::detail::hostdevice_span<PageInfo> page
   if (level_type_size == 1) {
     decode_delta_length_byte_array_kernel<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, initial_str_offsets, error_code);
+    CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     decode_delta_length_byte_array_kernel<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, initial_str_offsets, error_code);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 

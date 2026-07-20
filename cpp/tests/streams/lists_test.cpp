@@ -152,6 +152,14 @@ TEST_F(ListTest, ApplyBooleanMask)
   cudf::lists::apply_boolean_mask(list_col, boolean_mask, cudf::test::get_default_stream());
 }
 
+TEST_F(ListTest, ApplyDeletionMask)
+{
+  cudf::test::lists_column_wrapper<int> list_col{{0, 1}, {2, 3, 7, 8}, {4, 5}};
+  cudf::test::lists_column_wrapper<bool> deletion_mask{
+    {false, true}, {true, true, true, false}, {false, true}};
+  cudf::lists::apply_deletion_mask(list_col, deletion_mask, cudf::test::get_default_stream());
+}
+
 TEST_F(ListTest, Distinct)
 {
   cudf::test::lists_column_wrapper<int> list_col{{0, 1}, {2, 3, 7, 8}, {4, 5}};

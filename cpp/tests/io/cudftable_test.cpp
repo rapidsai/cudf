@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -637,10 +637,10 @@ TEST_F(CudftableTest, CorruptedMetadataLength)
   size_check.close();
 
   // Corrupt the metadata length (set to a value larger than the file).
-  // metadata_length lives at offset 16 in the header (after magic, version,
-  // compression, block_size).
+  // metadata_length lives at offset 24 in the header (after magic, version,
+  // compression, block_size, metadata_version, reserved).
   std::fstream file(filepath, std::ios::in | std::ios::out | std::ios::binary);
-  file.seekp(16);
+  file.seekp(24);
   uint64_t bad_meta_length = static_cast<uint64_t>(file_size) + 1000;
   file.write(reinterpret_cast<char*>(&bad_meta_length), sizeof(uint64_t));
   file.close();
@@ -661,13 +661,14 @@ TEST_F(CudftableTest, CorruptedDataLength)
                                             cudf::io::sink_info{filepath}, expected)
                                             .build());
 
-  // Header layout (48 bytes):
+  // Header layout (56 bytes):
   // magic(4) + version(4) + compression(4) + block_size(4)
+  //   + metadata_version(4) + reserved(4)
   //   + metadata_length(8) + uncompressed_data_length(8)
   //   + num_blocks(8) + compressed_data_length(8)
-  // Corrupt compressed_data_length at offset 40 so that the file size check fails.
+  // Corrupt compressed_data_length at offset 48 so that the file size check fails.
   std::fstream file(filepath, std::ios::in | std::ios::out | std::ios::binary);
-  file.seekp(40);
+  file.seekp(48);
   uint64_t bad_compressed_length = 999999999ULL;
   file.write(reinterpret_cast<char*>(&bad_compressed_length), sizeof(uint64_t));
   file.close();
@@ -911,13 +912,14 @@ TEST_F(CudftableTest, CorruptedCompressedDataLength)
                                             .compression(cudf::io::compression_type::SNAPPY)
                                             .build());
 
-  // Header layout (48 bytes):
+  // Header layout (56 bytes):
   // magic(4) + version(4) + compression(4) + block_size(4)
+  //   + metadata_version(4) + reserved(4)
   //   + metadata_length(8) + uncompressed_data_length(8)
   //   + num_blocks(8) + compressed_data_length(8)
-  // Corrupt compressed_data_length at offset 40.
+  // Corrupt compressed_data_length at offset 48.
   std::fstream file(filepath, std::ios::in | std::ios::out | std::ios::binary);
-  file.seekp(40);
+  file.seekp(48);
   uint64_t bad_length = 999999999ULL;
   file.write(reinterpret_cast<char*>(&bad_length), sizeof(uint64_t));
   file.close();
@@ -1006,10 +1008,10 @@ TEST_F(CudftableTest, CorruptedBlockIndex)
   // compressed_data_length in a valid file).
   std::fstream file(filepath, std::ios::in | std::ios::out | std::ios::binary);
   uint64_t metadata_length{};
-  file.seekg(16);
+  file.seekg(24);
   file.read(reinterpret_cast<char*>(&metadata_length), sizeof(uint64_t));
 
-  constexpr size_t header_size       = 48;
+  constexpr size_t header_size       = 56;
   auto const block_index_offset      = header_size + metadata_length;
   uint64_t const bad_compressed_size = 1;  // too small to match the header
   file.seekp(static_cast<std::streamoff>(block_index_offset));

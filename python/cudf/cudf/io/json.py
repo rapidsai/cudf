@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -154,9 +154,7 @@ def read_json(
         filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
             path_or_buf,
             iotypes=(BytesIO, StringIO),
-            allow_raw_text_input=True,
             storage_options=storage_options,
-            warn_on_raw_text_input=True,
             warn_meta=("json", "read_json"),
             expand_dir_pattern="*.json",
         )
@@ -245,7 +243,6 @@ def read_json(
         filepath_or_buffer = ioutils.get_reader_filepath_or_buffer(
             path_or_data=path_or_buf,
             iotypes=(BytesIO, StringIO),
-            allow_raw_text_input=True,
             storage_options=storage_options,
         )
         filepath_or_buffer = ioutils._select_single_source(
@@ -332,6 +329,7 @@ def _plc_write_json(
     include_nulls: bool = True,
     lines: bool = False,
     rows_per_chunk: int = 1024 * 64,  # 64K rows
+    force_ascii: bool = True,
 ) -> None:
     with access_columns(*table._columns, mode="read", scope="internal"):
         try:
@@ -349,6 +347,7 @@ def _plc_write_json(
                 .include_nulls(include_nulls)
                 .lines(lines)
                 .compression(_to_plc_compression(compression))
+                .utf8_escaped(force_ascii)
                 .build()
             )
             if rows_per_chunk != np.iinfo(np.int32).max:

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Callback for the polars collect function to execute on device."""
@@ -24,7 +24,9 @@ import rmm
 from rmm._cuda import gpu
 
 import cudf_polars.dsl.tracing
-from cudf_polars.dsl.ir import IRExecutionContext
+from cudf_polars.dsl.ir import (
+    IRExecutionContext,
+)
 from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.utils.config import (
@@ -159,13 +161,12 @@ def set_memory_resource(
     """
     previous = rmm.mr.get_current_device_resource()
     if mr is None:
-        # Use cuda async by default with the rapidsmpf runtime.
+        # Use cuda async by default with the streaming executor.
         if (
             memory_resource_config is None
             and executor.name == "streaming"
-            and executor.runtime == "rapidsmpf"
             and (device_size := get_total_device_memory()) is not None
-        ):  # pragma: no cover; Requires rapidsmpf runtime.
+        ):  # pragma: no cover
             memory_resource_config = MemoryResourceConfig(
                 qualname="rmm.mr.CudaAsyncMemoryResource",
                 options={
@@ -308,15 +309,13 @@ def _callback(
             else:
                 return df, timer.timings
         elif config_options.executor.name == "streaming":
-            from cudf_polars.experimental.parallel import evaluate_streaming
+            from cudf_polars.streaming.parallel import evaluate_streaming
 
             if timer is not None:
                 msg = textwrap.dedent("""\
                     LazyFrame.profile() is not supported with the streaming executor.
-                    To profile execution with the streaming executor, use:
-
-                    - NVIDIA NSight Systems with the 'streaming' scheduler.
-                    - Dask's built-in profiling tools with the 'distributed' scheduler.
+                    To profile execution with the streaming executor, use NVIDIA
+                    NSight Systems with the 'streaming' scheduler.
                     """)
                 raise NotImplementedError(msg)
 
@@ -364,29 +363,13 @@ def execute_with_cudf(
     with nvtx.annotate(message="ConvertIR", domain=CUDF_POLARS_NVTX_DOMAIN):
         translator = Translator(nt, config)
         ir = translator.translate_ir()
-        ir_translation_errors = translator.errors
         if timer is not None:
             timer.store(start, time.monotonic_ns(), "gpu-ir-translation")
 
-        if (
-            memory_resource is None
-            and translator.config_options.executor.name == "streaming"
-            and translator.config_options.executor.cluster == "distributed"
-        ):  # pragma: no cover; Requires distributed cluster
-            memory_resource = rmm.mr.get_current_device_resource()
-        if len(ir_translation_errors):
-            # TODO: Display these errors in user-friendly way.
-            # tracked in https://github.com/rapidsai/cudf/issues/17051
-            unique_errors = sorted(set(ir_translation_errors), key=str)
-            formatted_errors = "\n".join(
-                f"- {e.__class__.__name__}: {e}" for e in unique_errors
-            )
-            error_message = (
-                "Query execution with GPU not possible: unsupported operations."
-                f"\nThe errors were:\n{formatted_errors}"
-            )
-            exception = NotImplementedError(error_message, unique_errors)
-            if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
+        exception = translator.unsupported_operations_error()
+        if exception is not None:
+            error_message = exception.args[0]
+            if bool(int(os.environ.get("POLARS_VERBOSE", "0"))):
                 warnings.warn(error_message, PerformanceWarning, stacklevel=2)
             if translator.config_options.raise_on_fail:
                 raise exception

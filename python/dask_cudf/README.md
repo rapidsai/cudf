@@ -11,14 +11,14 @@ Please visit [the official documentation page](https://docs.rapids.ai/api/dask-c
 
 ## Installation
 
-See the [RAPIDS install page](https://docs.rapids.ai/install) for the most up-to-date information and commands for installing Dask cuDF and other RAPIDS packages.
+See the [RAPIDS install page](https://docs.rapids.ai/install/) for the most up-to-date information and commands for installing Dask cuDF and other RAPIDS packages.
 
 ## Resources
 
 - [Dask cuDF documentation](https://docs.rapids.ai/api/dask-cudf/stable/)
 - [Best practices](https://docs.rapids.ai/api/dask-cudf/stable/best_practices/)
 - [cuDF documentation](https://docs.rapids.ai/api/cudf/stable/)
-- [10 Minutes to cuDF and Dask cuDF](https://docs.rapids.ai/api/cudf/stable/user_guide/10min/)
+- [10 Minutes to cuDF and Dask cuDF](https://docs.rapids.ai/api/cudf/latest/user_guide/10min/)
 - [Dask-CUDA documentation](https://docs.rapids.ai/api/dask-cuda/stable/)
 - [Deployment](https://docs.rapids.ai/deployment/stable/)
 - [RAPIDS Community](https://rapids.ai/learn-more/#get-involved): Get help, contribute, and collaborate.
@@ -59,6 +59,6 @@ if __name__ == "__main__":
   query.head()
 ```
 
-If you do not have multiple GPUs available, using `LocalCUDACluster` is optional. However, it is still a good idea to [enable cuDF spilling](https://docs.rapids.ai/api/cudf/stable/developer_guide/library_design/#spilling-to-host-memory).
+If you do not have multiple GPUs available, using `LocalCUDACluster` is optional. However, it is still a good idea to [enable cuDF spilling](https://docs.rapids.ai/api/cudf/stable/cudf/developer_guide/library_design/#spilling-to-host-memory).
 
 If you wish to scale across multiple nodes, you will need to use a different mechanism to deploy your Dask-CUDA workers. Please see [the RAPIDS deployment documentation](https://docs.rapids.ai/deployment/stable/) for more instructions.

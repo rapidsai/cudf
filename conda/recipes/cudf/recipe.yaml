@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 schema_version: 1
 
@@ -76,7 +76,7 @@ requirements:
     - rapids-build-backend >=0.4.0,<0.5.0
     - scikit-build-core>=0.11.0
     - dlpack >=0.8,<1.0
-    - numba-cuda >=0.22.2,<0.29.0
+    - numba-cuda >=0.22.2
     - libcudf =${{ version }}
     - pylibcudf =${{ version }}
     - rmm =${{ minor_version }}
@@ -88,20 +88,22 @@ requirements:
     - cuda-version =${{ cuda_version }}
   run:
     - python
-    - pandas >=2.0,<2.4.0
-    - cupy >=13.6.0,!=14.0.0
-    - numba-cuda >=0.22.2,<0.29.0
+    - pandas >=3.0.0,<3.1.0
+    - cupy >=14.0.1,!=14.1.0
+    - numba-cuda >=0.22.2
+    # TODO: add `numba-cuda-mlir >=0.3.0` here once it is published to a conda
+    # channel. Currently only available via PyPI; the pip-only declaration
+    # lives in `dependencies.yaml::depends_on_numba_cuda_mlir`.
     - numba >=0.60.0,<0.65.0
-    - numpy >=1.26,<3.0
-    - pyarrow>=19.0.0
+    - numpy >=2.0,<3.0
+    - pyarrow>=19.0.0,<24  # https://github.com/rapidsai/cudf/issues/22229
     - libcudf =${{ version }}
     - pylibcudf =${{ version }}
     - ${{ pin_compatible("rmm", upper_bound="x.x") }}
     - fsspec >=0.6.0
-    - cuda-cudart
     - if: cuda_major == "12"
-      then: cuda-python >=12.9.2,<13.0
-      else: cuda-python >=13.0.1,<14.0
+      then: cuda-bindings >=12.9.2,<13.0
+      else: cuda-bindings >=13.0.1,<14.0
     - if: linux and x86_64
       then:
         - libcufile

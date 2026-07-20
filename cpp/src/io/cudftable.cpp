@@ -1,11 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "comp/compression.hpp"
 
 #include <cudf/contiguous_split.hpp>
+#include <cudf/detail/contiguous_split.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/data_sink.hpp>
@@ -32,14 +33,19 @@ constexpr uint32_t magic_number      = 0x4C425443;  ///< "CTBL" in little-endian
 constexpr uint32_t format_version_v1 = 1;
 
 /**
- * @brief Binary file format header for CudfTable (48 bytes)
+ * @brief Binary file format header for CudfTable (56 bytes)
  *
  * Layout: [magic(4)] [version=1(4)] [compression(4)] [block_size(4)]
+ *         [metadata_version(4)] [reserved(4)]
  *         [metadata_length(8)] [uncompressed_data_length(8)]
  *         [num_blocks(8)] [compressed_data_length(8)]
  * Followed by: [metadata (variable, uncompressed)]
  *              [block_index (num_blocks * 16 bytes)]
  *              [block payloads (variable)]
+ *
+ * `metadata_version` records the pack() metadata layout version (see
+ * cpp/src/copying/pack.cpp) so that readers reject files whose embedded
+ * metadata they cannot parse instead of misinterpreting it.
  *
  * When `compression == NONE`, exactly one block holds all data and its payload
  * is written uncompressed (no codec invocation on write or read). An empty
@@ -50,6 +56,8 @@ struct cudftable_header {
   uint32_t format_version{};
   uint32_t compression{};
   uint32_t block_size{};
+  int32_t metadata_version{};  ///< Version of the embedded pack() metadata layout
+  int32_t reserved{};          ///< Padding; kept zero for deterministic output
   uint64_t metadata_length{};
   uint64_t uncompressed_data_length{};
   uint64_t num_blocks{};
@@ -61,11 +69,13 @@ struct cudftable_header {
                    uint64_t metadata_size,
                    uint64_t uncomp_data_size,
                    uint64_t n_blocks,
-                   uint64_t comp_data_size)
+                   uint64_t comp_data_size,
+                   int32_t meta_version)
     : magic{magic_number},
       format_version{format_version_v1},
       compression{static_cast<uint32_t>(comp)},
       block_size{blk_size},
+      metadata_version{meta_version},
       metadata_length{metadata_size},
       uncompressed_data_length{uncomp_data_size},
       num_blocks{n_blocks},
@@ -73,6 +83,10 @@ struct cudftable_header {
   {
   }
 };
+
+// Header is written/read via memcpy, so guard against accidental padding that
+// would leave uninitialized bytes in the file.
+static_assert(sizeof(cudftable_header) == 56);
 
 /**
  * @brief Per-block size entry in the block index (16 bytes each).
@@ -171,7 +185,8 @@ void write_cudftable(data_sink* sink,
                                          packed.metadata->size(),
                                          data_size,
                                          num_blocks,
-                                         /*compressed=*/data_size};
+                                         /*compressed=*/data_size,
+                                         cudf::detail::packed_metadata_version};
     sink->host_write(&header, sizeof(cudftable_header));
     sink->host_write(packed.metadata->data(), header.metadata_length);
     if (num_blocks > 0) {
@@ -197,7 +212,8 @@ void write_cudftable(data_sink* sink,
                                          packed.metadata->size(),
                                          /*uncomp=*/0,
                                          /*num_blocks=*/0,
-                                         /*comp=*/0};
+                                         /*comp=*/0,
+                                         cudf::detail::packed_metadata_version};
     sink->host_write(&header, sizeof(cudftable_header));
     sink->host_write(packed.metadata->data(), header.metadata_length);
     sink->flush();
@@ -261,8 +277,13 @@ void write_cudftable(data_sink* sink,
       h_dsts.data(), h_srcs.data(), h_sizes.data(), num_blocks, stream));
   }
 
-  auto const header = cudftable_header{
-    compression, block_size, packed.metadata->size(), data_size, num_blocks, total_compressed};
+  auto const header = cudftable_header{compression,
+                                       block_size,
+                                       packed.metadata->size(),
+                                       data_size,
+                                       num_blocks,
+                                       total_compressed,
+                                       cudf::detail::packed_metadata_version};
   sink->host_write(&header, sizeof(cudftable_header));
   sink->host_write(packed.metadata->data(), header.metadata_length);
   sink->host_write(block_index.data(), num_blocks * sizeof(block_index_entry));
@@ -283,6 +304,8 @@ packed_table read_cudftable(datasource* source,
   CUDF_EXPECTS(header.magic == magic_number, "Invalid magic number in cudftable header");
   CUDF_EXPECTS(header.format_version == format_version_v1,
                "Unsupported cudftable format version: " + std::to_string(header.format_version));
+  CUDF_EXPECTS(header.metadata_version == cudf::detail::packed_metadata_version,
+               "Unsupported cudftable packed metadata version");
 
   auto const comp = static_cast<compression_type>(header.compression);
 

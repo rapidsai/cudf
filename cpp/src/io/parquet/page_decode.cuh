@@ -1,11 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include "error.hpp"
+#include "io/parquet/timestamp_utils.cuh"
 #include "io/utilities/block_utils.cuh"
 #include "parquet_gpu.hpp"
 #include "rle_stream.cuh"
@@ -179,20 +180,22 @@ __device__ constexpr bool is_string_col(PageInfo const& page,
  * @brief Returns whether or not a page spans either the beginning or the end of the
  * specified row bounds
  *
- * @param s The page to be checked
+ * @param page The page to be checked
+ * @param chunk_start_row Absolute row index of the first row in the page's column chunk
  * @param start_row The starting row index
  * @param num_rows The number of rows
  * @param has_repetition True if the schema has nesting
  *
  * @return True if the page spans the beginning or the end of the row bounds
  */
-inline __device__ bool is_bounds_page(page_state_s* const s,
+inline __device__ bool is_bounds_page(PageInfo const& page,
+                                      size_t chunk_start_row,
                                       size_t start_row,
                                       size_t num_rows,
                                       bool has_repetition)
 {
-  size_t const page_begin = s->col.start_row + s->page.chunk_row;
-  size_t const page_end   = page_begin + s->page.num_rows;
+  size_t const page_begin = chunk_start_row + page.chunk_row;
+  size_t const page_end   = page_begin + page.num_rows;
   size_t const begin      = start_row;
   size_t const end        = start_row + num_rows;
 
@@ -204,8 +207,7 @@ inline __device__ bool is_bounds_page(page_state_s* const s,
   // relax the test for `page_end` if we adjusted the `num_rows` for the last page to compensate
   // for list row size estimates in `generate_list_column_row_count_estimates()` when chunked
   // read mode.
-  auto const test_page_end_nonlists =
-    s->page.is_num_rows_adjusted ? page_end >= end : page_end > end;
+  auto const test_page_end_nonlists = page.is_num_rows_adjusted ? page_end >= end : page_end > end;
 
   auto const is_bounds_page_nonlists =
     (page_begin < begin and page_end > begin) or (page_begin < end and test_page_end_nonlists);
@@ -217,20 +219,63 @@ inline __device__ bool is_bounds_page(page_state_s* const s,
  * @brief Returns whether or not a page is completely contained within the specified
  * row bounds
  *
- * @param s The page to be checked
+ * @param page The page to be checked
+ * @param chunk_start_row Absolute row index of the first row in the page's column chunk
  * @param start_row The starting row index
  * @param num_rows The number of rows
  *
  * @return True if the page is completely contained within the row bounds
  */
-inline __device__ bool is_page_contained(page_state_s* const s, size_t start_row, size_t num_rows)
+inline __device__ bool is_page_contained(PageInfo const& page,
+                                         size_t chunk_start_row,
+                                         size_t start_row,
+                                         size_t num_rows)
 {
-  size_t const page_begin = s->col.start_row + s->page.chunk_row;
-  size_t const page_end   = page_begin + s->page.num_rows;
+  size_t const page_begin = chunk_start_row + page.chunk_row;
+  size_t const page_end   = page_begin + page.num_rows;
   size_t const begin      = start_row;
   size_t const end        = start_row + num_rows;
 
   return page_begin >= begin && page_end <= end;
+}
+
+/**
+ * @brief Determine whether a page contains work to do for the requested row bounds.
+ *
+ * A page normally has work to do when its row range [page_start_row, page_start_row +
+ * page_num_rows) intersects the requested range [min_row, min_row + num_rows).
+ *
+ * For list schemas a single row can span multiple pages, so a page may legitimately
+ * carry values while containing zero of its own rows. Such a page must still be processed when
+ * it spans (is a "bounds" page for) or is fully contained within the requested range.
+ *
+ * @param page The page to be checked
+ * @param chunk_start_row Absolute row index of the first row in the page's column chunk
+ * @param min_row Absolute index of the first requested row
+ * @param num_rows Number of requested rows
+ * @param has_repetition True if the schema has nesting (list) columns
+ *
+ * @return True if the page has rows/values to process for the requested range
+ */
+inline __device__ bool page_has_rows_to_process(PageInfo const& page,
+                                                size_t chunk_start_row,
+                                                size_t min_row,
+                                                size_t num_rows,
+                                                bool has_repetition)
+{
+  size_t const page_start_row = chunk_start_row + page.chunk_row;
+  size_t const page_end_row   = page_start_row + page.num_rows;
+  size_t const end_row        = min_row + num_rows;
+
+  // A page has rows to read when its row range intersects the requested range.
+  bool const has_rows =
+    (page.num_rows > 0) && (page_start_row < end_row) && (page_end_row > min_row);
+  if (has_rows || !has_repetition) { return has_rows; }
+
+  // A single list row can span pages, so a list page can carry values (and offsets) with 0 rows;
+  // such a page carries no rows of its own but must still be processed.
+  return is_bounds_page(page, chunk_start_row, min_row, num_rows, has_repetition) ||
+         is_page_contained(page, chunk_start_row, min_row, num_rows);
 }
 
 /**
@@ -389,7 +434,7 @@ __device__ cuda::std::pair<int, int> decode_dictionary_indices(
         if (t >= batch_len || (pos + t >= target_pos)) { return 0; }
         uint32_t const dict_pos = (s->dict_bits > 0) ? dict_idx * sizeof(string_index_pair) : 0;
         if (dict_pos < (uint32_t)s->dict_size) {
-          const auto* src = reinterpret_cast<const string_index_pair*>(s->dict_base + dict_pos);
+          auto const* src = reinterpret_cast<string_index_pair const*>(s->dict_base + dict_pos);
           return src->second;
         }
         return 0;
@@ -1157,9 +1202,7 @@ inline __device__ bool setup_local_page_info(page_state_s* const s,
   // NOTE: this check needs to be done after the null counts have been zeroed out
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
   if ((stage == page_processing_stage::STRING_BOUNDS || stage == page_processing_stage::DECODE) &&
-      s->num_rows == 0 &&
-      !(has_repetition && (is_bounds_page(s, min_row, num_rows, has_repetition) ||
-                           is_page_contained(s, min_row, num_rows)))) {
+      !page_has_rows_to_process(s->page, s->col.start_row, min_row, num_rows, has_repetition)) {
     return false;
   }
 
@@ -1187,22 +1230,7 @@ inline __device__ bool setup_local_page_info(page_state_s* const s,
         case Type::FLOAT: s->dtype_len = 4; break;
         case Type::INT64:
           if (s->col.ts_clock_rate) {
-            int32_t units = 0;
-            // Duration types are not included because no scaling is done when reading
-            if (s->col.logical_type.has_value()) {
-              auto const& lt = *s->col.logical_type;
-              if (lt.is_timestamp_millis()) {
-                units = cudf::timestamp_ms::period::den;
-              } else if (lt.is_timestamp_micros()) {
-                units = cudf::timestamp_us::period::den;
-              } else if (lt.is_timestamp_nanos()) {
-                units = cudf::timestamp_ns::period::den;
-              }
-            }
-            if (units and units != s->col.ts_clock_rate) {
-              s->ts_scale = (s->col.ts_clock_rate < units) ? -(units / s->col.ts_clock_rate)
-                                                           : (s->col.ts_clock_rate / units);
-            }
+            s->ts_scale = calc_timestamp_scale(s->col.logical_type, s->col.ts_clock_rate);
           }
           [[fallthrough]];
         case Type::DOUBLE: s->dtype_len = 8; break;

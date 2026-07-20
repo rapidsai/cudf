@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -12,6 +12,7 @@ enable_testing()
 
 include(rapids-test)
 rapids_test_init()
+rapids_cmake_install_lib_dir(lib_dir)
 
 # This function takes in a test name and test source and handles setting all of the associated
 # properties and linking to build the test
@@ -42,7 +43,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
   set_target_properties(
     ${CMAKE_TEST_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
-               INSTALL_RPATH "\$ORIGIN/../../../lib"
+               INSTALL_RPATH "\$ORIGIN/../../../${lib_dir}"
                CXX_STANDARD 20
                CXX_STANDARD_REQUIRED ON
                # For std:: support of __int128_t. Can be removed once using cuda::std
@@ -60,7 +61,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
     ${CMAKE_TEST_NAME} PRIVATE cudf::cudftestutil_objects nvtx3::nvtx3-cpp
                                $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIBS}"
   )
-  rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
+  rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ON)
   rapids_test_add(
     NAME ${CMAKE_TEST_NAME}
     COMMAND ${CMAKE_TEST_NAME}
@@ -84,7 +85,9 @@ endfunction()
 # ##################################################################################################
 
 # No need to install Arrow libs when only the final test executables are shipped.
-set(CUDF_EXCLUDE_ARROW_FROM_ALL ON)
+set(CUDF_INSTALL_LIBRARY_DEPS OFF)
+set(CUDF_EXCLUDE_DEPS_FROM_ALL ON)
+set(CUDF_EXCLUDE_DEPS_FROM_ALL_FLAG EXCLUDE_FROM_ALL)
 set(CUDF_ENABLE_ARROW_COMPUTE ON)
 include(../cmake/thirdparty/get_arrow.cmake)
 
@@ -151,11 +154,12 @@ ConfigureTest(
   groupby/replace_nulls_tests.cpp
   groupby/shift_tests.cpp
   groupby/std_tests.cpp
+  groupby/streaming_groupby_test.cpp
   groupby/structs_tests.cpp
   groupby/sum_of_squares_tests.cpp
   groupby/sum_scan_tests.cpp
   groupby/sum_tests.cpp
-  groupby/sum_with_overflow_tests.cpp
+  groupby/sum_overflow_tests.cpp
   groupby/tdigest_tests.cpp
   groupby/topk_tests.cpp
   groupby/var_tests.cpp
@@ -172,6 +176,7 @@ ConfigureTest(
   join/cross_join_tests.cpp
   join/semi_anti_join_tests.cpp
   join/mixed_join_tests.cu
+  join/direct_join_tests.cpp
   join/distinct_join_tests.cpp
   join/key_remapping_tests.cpp
   GPUS 1
@@ -185,6 +190,7 @@ ConfigureTest(IS_SORTED_TEST sort/is_sorted_tests.cpp)
 # ##################################################################################################
 # * datetime tests --------------------------------------------------------------------------------
 ConfigureTest(DATETIME_OPS_TEST datetime/datetime_ops_test.cpp)
+ConfigureTest(TIMEZONE_TEST datetime/timezone_test.cpp)
 
 # ##################################################################################################
 # * hashing tests ---------------------------------------------------------------------------------
@@ -315,11 +321,12 @@ ConfigureTest(
 # * io tests --------------------------------------------------------------------------------------
 ConfigureTest(COMPRESSION_TEST io/comp/comp_test.cpp)
 ConfigureTest(ROW_SELECTION_TEST io/row_selection_test.cpp)
+ConfigureTest(FILEPATH_SOURCE_TEST io/filepath_source_test.cpp)
 
 ConfigureTest(
   CSV_TEST io/csv_test.cpp
   GPUS 1
-  PERCENT 30 EXTRA_LIBS ${ARROW_LIBRARIES}
+  PERCENT 30
 )
 ConfigureTest(
   ORC_TEST io/orc_chunked_reader_test.cu io/orc_test.cpp
@@ -342,12 +349,17 @@ ConfigureTest(
 )
 ConfigureTest(
   HYBRID_SCAN_TEST
+  io/experimental/hybrid_scan_common.cpp
   io/experimental/hybrid_scan_composer.cpp
   io/experimental/hybrid_scan_filters_test.cpp
+  io/experimental/hybrid_scan_multifile_composer.cpp
+  io/experimental/hybrid_scan_multifile_filters_test.cpp
+  io/experimental/hybrid_scan_multifile_test.cpp
   io/experimental/hybrid_scan_test.cpp
   io/parquet_common.cpp
   io/parquet_test.cpp
 )
+ConfigureTest(VARIANT_EXTRACT_TEST io/experimental/variant_extract_test.cpp)
 ConfigureTest(
   PARQUET_DELETION_VECTORS_TEST
   io/parquet_deletion_vectors_test.cpp
@@ -365,7 +377,7 @@ ConfigureTest(
   JSON_TEST io/json/json_chunked_reader.cpp io/json/json_test.cpp io/json/json_type_cast_test.cpp
   io/json/json_utils.cu
   GPUS 1
-  PERCENT 30 EXTRA_LIBS ${ARROW_LIBRARIES}
+  PERCENT 30
 )
 ConfigureTest(JSON_WRITER_TEST io/json/json_writer.cpp)
 ConfigureTest(NESTED_JSON_TEST io/json/nested_json_test.cpp io/json/json_tree.cpp)
@@ -437,6 +449,7 @@ ConfigureTest(
   utilities_tests/default_stream_tests.cpp
   utilities_tests/io_utilities_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
+  utilities_tests/memory_resource_tests.cpp
   utilities_tests/pinned_memory_tests.cpp
   utilities_tests/type_check_tests.cpp
   utilities_tests/type_list_tests.cpp
@@ -677,7 +690,39 @@ ConfigureTest(ENCODE_TEST encode/encode_tests.cpp)
 
 # ##################################################################################################
 # * ast tests -------------------------------------------------------------------------------------
-ConfigureTest(AST_TEST ast/transform_tests.cpp ast/ast_tree_tests.cpp)
+ConfigureTest(AST_TEST ast/transform_tests.cpp ast/ast_tree_tests.cpp ast/jit_expressions_tests.cpp)
+
+# ##################################################################################################
+# * transform LTO tests
+# -------------------------------------------------------------------------------------
+rtcx_add_embed(cudf_test_fragments)
+
+add_fragment(
+  cudf_test_fragments FRAGMENT bankers_rounding SOURCE transform/fragments/bankers_rounding.cu
+)
+
+add_fragment(cudf_test_fragments FRAGMENT distance SOURCE transform/fragments/distance.cu)
+
+add_fragment(cudf_test_fragments FRAGMENT invsqrt SOURCE transform/fragments/invsqrt.cu)
+
+add_fragment(cudf_test_fragments FRAGMENT lehmer_mean SOURCE transform/fragments/lehmer_mean.cu)
+
+add_fragment(
+  cudf_test_fragments FRAGMENT sum_of_squares SOURCE transform/fragments/sum_of_squares.cu
+)
+
+add_fragment(cudf_test_fragments FRAGMENT to_upper SOURCE transform/fragments/to_upper.cu)
+
+rtcx_embed(
+  cudf_test_fragments COMPRESSION none OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
+)
+
+ConfigureTest(
+  TRANSFORM_LTO_TEST transform/transform_lto_test.cpp
+  ${cudf_test_fragments_SOURCE_DIR}/cudf_test_fragments.s
+)
+add_dependencies(TRANSFORM_LTO_TEST cudf_test_fragments)
+target_include_directories(TRANSFORM_LTO_TEST PRIVATE ${cudf_test_fragments_SOURCE_DIR})
 
 # ##################################################################################################
 # * lists tests ----------------------------------------------------------------------------------
@@ -789,6 +834,7 @@ ConfigureTest(
   STREAM_MODE
   testing
 )
+ConfigureTest(STREAM_TABLE_EQUALITY_TEST streams/table_equality_test.cpp STREAM_MODE testing)
 ConfigureTest(
   STREAM_TEXT_TEST
   streams/text/edit_distance_test.cpp

@@ -1,7 +1,9 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+#include "utilities/time_utils.cuh"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -99,7 +101,7 @@ struct format_compiler {
 
   // clang-format off
   // The specifiers are documented here (not all are supported):
-  // https://en.cppreference.com/w/cpp/chrono/system_clock/formatter
+  // https://en.cppreference.com/cpp/chrono/system_clock/formatter
   specifier_map specifiers = {
     {'Y', 4}, {'y', 2}, {'m', 2}, {'d', 2}, {'H', 2}, {'I', 2}, {'M', 2},
     {'S', 2}, {'f', 6}, {'z', 5}, {'Z', 3}, {'p', 2}, {'j', 3},
@@ -152,8 +154,8 @@ struct format_compiler {
     }
 
     // copy format_items to device memory
-    d_items = cudf::detail::make_device_uvector_async(
-      items, stream, cudf::get_current_device_resource_ref());
+    d_items =
+      cudf::detail::make_device_uvector(items, stream, cudf::get_current_device_resource_ref());
   }
 
   device_span<format_item const> format_items() { return device_span<format_item const>(d_items); }
@@ -190,18 +192,6 @@ struct parse_datetime {
   column_device_view const d_strings;
   device_span<format_item const> const d_format_items;
   int8_t const subsecond_precision;
-
-  /**
-   * @brief Return power of ten value given an exponent.
-   *
-   * @return `1x10^exponent` for `0 <= exponent <= 9`
-   */
-  [[nodiscard]] __device__ constexpr int64_t power_of_ten(int32_t const exponent) const
-  {
-    constexpr int64_t powers_of_ten[] = {
-      1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
-    return powers_of_ten[exponent];
-  }
 
   __device__ bool format_contains(char specifier) const
   {
@@ -289,7 +279,7 @@ struct parse_datetime {
             cuda::std::min(static_cast<int32_t>(item.length), static_cast<int32_t>(length));
           auto const [fraction, left] = parse_int(ptr, read_size);
           timeparts.subsecond =
-            static_cast<int32_t>(fraction * power_of_ten(item.length - read_size + left));
+            fraction * cudf::detail::powers_of_ten[item.length - read_size + left];
           bytes_read = read_size - left;
           break;
         }
@@ -373,8 +363,10 @@ struct parse_datetime {
     if constexpr (std::is_same_v<T, cudf::timestamp_s>) { return timestamp; }
 
     int64_t const subsecond =
-      (timeparts.subsecond * power_of_ten(9 - subsecond_precision)) /  // normalize to nanoseconds
-      (1000000000L / T::period::type::den);                            // and rescale to T
+      static_cast<int64_t>(
+        timeparts.subsecond *
+        cudf::detail::powers_of_ten[9 - subsecond_precision]) /  // normalize to nanoseconds
+      (1000000000L / T::period::type::den);                      // and rescale to T
 
     timestamp *= T::period::type::den;
     timestamp += subsecond;
@@ -795,7 +787,7 @@ struct datetime_formatter_fn {
     // and retrieving the hour, minute, second, and subsecond values from it
     // but it did not scale/modulo the components for negative timestamps
     // correctly -- it simply did an abs(timestamp) as documented here:
-    // https://en.cppreference.com/w/cpp/chrono/hh_mm_ss/hh_mm_ss
+    // https://en.cppreference.com/cpp/chrono/hh_mm_ss/hh_mm_ss
 
     if constexpr (not std::is_same_v<T, cudf::timestamp_s>) {
       int64_t constexpr base = T::period::type::den;  // 1000=ms, 1000000=us, etc

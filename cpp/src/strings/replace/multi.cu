@@ -334,6 +334,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   auto const num_blocks = util::div_rounding_up_safe(
     util::div_rounding_up_safe(chars_bytes, static_cast<int64_t>(bytes_per_thread)), block_size);
   count_targets<<<num_blocks, block_size, 0, stream.value()>>>(fn, chars_bytes, d_count.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
   auto target_count = d_count.value(stream);
   // Create a vector of every target position in the chars column.
   // These may also include overlapping targets which will be resolved later.

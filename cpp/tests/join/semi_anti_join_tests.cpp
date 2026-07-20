@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,6 +22,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
@@ -52,7 +53,7 @@ namespace {
                                                                     : cudf::join_prefilter::NO;
 }
 
-// Helper to perform semi/anti join with configurable build side
+// Helper to perform semi/anti join via either filtered_join or mark_join
 std::unique_ptr<cudf::table> left_semi_join(
   cudf::table_view const& left_input,
   cudf::table_view const& right_input,
@@ -356,32 +357,32 @@ TEST_P(SemiAntiJoinTest, AntiJoinWithStructsAndNullsOnOneSide)
 TEST_P(SemiAntiJoinTest, AntiJoinEmptyTables)
 {
   auto const implementation = GetParam();
-  cudf::table empty_build_table{};
-  cudf::table empty_probe_table{};
+  cudf::table empty_right_table{};
+  cudf::table empty_left_table{};
   column_wrapper<int32_t> col{0, 1, 2};
   auto nonempty_table = cudf::table_view{{col}};
-  // Empty build and probe tables
+  // Empty left and right tables
   {
     auto result = left_anti_join(
-      empty_probe_table, empty_build_table, {}, {}, cudf::null_equality::EQUAL, implementation);
+      empty_left_table, empty_right_table, {}, {}, cudf::null_equality::EQUAL, implementation);
     auto expected_indices_col = column_wrapper<cudf::size_type>{};
-    auto expected             = cudf::gather(empty_probe_table, expected_indices_col);
+    auto expected             = cudf::gather(empty_left_table, expected_indices_col);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*expected, *result);
   }
-  // Empty build table
+  // Empty right table
   {
     auto result = left_anti_join(
-      nonempty_table, empty_build_table, {0}, {}, cudf::null_equality::EQUAL, implementation);
+      nonempty_table, empty_right_table, {0}, {}, cudf::null_equality::EQUAL, implementation);
     auto expected_indices_col = column_wrapper<cudf::size_type>{0, 1, 2};
     auto expected             = cudf::gather(nonempty_table, expected_indices_col);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*expected, *result);
   }
-  // Empty probe table
+  // Empty left table
   {
     auto result = left_anti_join(
-      empty_probe_table, nonempty_table, {}, {0}, cudf::null_equality::EQUAL, implementation);
+      empty_left_table, nonempty_table, {}, {0}, cudf::null_equality::EQUAL, implementation);
     auto expected_indices_col = column_wrapper<cudf::size_type>{};
-    auto expected             = cudf::gather(empty_probe_table, expected_indices_col);
+    auto expected             = cudf::gather(empty_left_table, expected_indices_col);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*expected, *result);
   }
 }
@@ -389,32 +390,32 @@ TEST_P(SemiAntiJoinTest, AntiJoinEmptyTables)
 TEST_P(SemiAntiJoinTest, SemiJoinEmptyTables)
 {
   auto const implementation = GetParam();
-  cudf::table empty_build_table{};
-  cudf::table empty_probe_table{};
+  cudf::table empty_right_table{};
+  cudf::table empty_left_table{};
   column_wrapper<int32_t> col{0, 1, 2};
   auto nonempty_table = cudf::table_view{{col}};
-  // Empty build and probe tables
+  // Empty left and right tables
   {
     auto result = left_semi_join(
-      empty_probe_table, empty_build_table, {}, {}, cudf::null_equality::EQUAL, implementation);
+      empty_left_table, empty_right_table, {}, {}, cudf::null_equality::EQUAL, implementation);
     auto expected_indices_col = column_wrapper<cudf::size_type>{};
-    auto expected             = cudf::gather(empty_probe_table, expected_indices_col);
+    auto expected             = cudf::gather(empty_left_table, expected_indices_col);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*expected, *result);
   }
-  // Empty build table
+  // Empty right table
   {
     auto result = left_semi_join(
-      nonempty_table, empty_build_table, {0}, {}, cudf::null_equality::EQUAL, implementation);
+      nonempty_table, empty_right_table, {0}, {}, cudf::null_equality::EQUAL, implementation);
     auto expected_indices_col = column_wrapper<cudf::size_type>{};
-    auto expected             = cudf::gather(empty_probe_table, expected_indices_col);
+    auto expected             = cudf::gather(nonempty_table, expected_indices_col);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*expected, *result);
   }
-  // Empty probe table
+  // Empty left table
   {
     auto result = left_semi_join(
-      empty_probe_table, nonempty_table, {}, {0}, cudf::null_equality::EQUAL, implementation);
+      empty_left_table, nonempty_table, {}, {0}, cudf::null_equality::EQUAL, implementation);
     auto expected_indices_col = column_wrapper<cudf::size_type>{};
-    auto expected             = cudf::gather(empty_probe_table, expected_indices_col);
+    auto expected             = cudf::gather(empty_left_table, expected_indices_col);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*expected, *result);
   }
 }
@@ -435,19 +436,19 @@ TEST_P(SemiAntiJoinTest, AntiSemiJoinLargeExtentOverflowPrevention)
 
   // Create test tables and validate semi join operations succeed
   auto const init = cudf::numeric_scalar<cudf::size_type>{0};
-  auto build_col  = cudf::sequence(table_size, init, cudf::numeric_scalar<cudf::size_type>{1});
+  auto right_col  = cudf::sequence(table_size, init, cudf::numeric_scalar<cudf::size_type>{1});
 
-  auto build_table = cudf::table_view{{build_col->view()}};
-  cudf::table empty_probe_table{};
+  auto right_table = cudf::table_view{{right_col->view()}};
+  cudf::table empty_left_table{};
 
   // Test with load factors that would cause overflow in int32_t extent
   EXPECT_NO_THROW({
     cudf::filtered_join obj(
-      build_table, cudf::null_equality::EQUAL, load_factor, cudf::get_default_stream());
+      right_table, cudf::null_equality::EQUAL, load_factor, cudf::get_default_stream());
     auto result = obj.semi_join(
-      empty_probe_table, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+      empty_left_table, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
     result = obj.anti_join(
-      empty_probe_table, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+      empty_left_table, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   });
 }
 
@@ -513,6 +514,19 @@ TEST_F(SemiAntiJoinTest, MarkJoinPrefilterLoadFactorOverload)
   auto sorted_expected     = cudf::gather(expected, *expected_sort_order);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_expected, *sorted_result);
+}
+
+TEST_F(SemiAntiJoinTest, MarkJoinMemoryResource)
+{
+  column_wrapper<int32_t> left_col{0, 1, 1, 2, 3, 5};
+  auto left = cudf::table_view{{left_col}};
+
+  auto mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+
+  cudf::mark_join obj(
+    left, cudf::null_equality::EQUAL, cudf::join_prefilter::YES, cudf::get_default_stream(), mr);
+
+  EXPECT_GT(mr.get_bytes_counter().peak, 0);
 }
 
 std::string test_name(join_implementation implementation)

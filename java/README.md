@@ -79,13 +79,6 @@ If you decide to build without Docker and the build script, examining the cmake 
 settings in the [Java CI build script](ci/build-in-docker.sh) can be helpful if you are
 encountering difficulties during the build.
 
-## Statically Linking the CUDA Runtime
-
-If you use the default cmake options libcudart will be dynamically linked to libcudf and libcudfjni.
-To build with a static CUDA runtime, build libcudf with the `-DCUDA_STATIC_RUNTIME=ON` as a cmake
-parameter, and similarly build with `-DCUDA_STATIC_RUNTIME=ON` when building the Java bindings
-with Maven.
-
 ### Building with a libcudf Archive
 
 When statically linking the CUDA runtime, it is recommended to build cuDF as an archive rather than
@@ -99,7 +92,7 @@ bindings with Maven.
 The JNI code can be built with *per-thread default stream* (PTDS), which gives each host thread its
 own default CUDA stream, and can potentially increase the overlap of data copying and compute
 between different threads (see
-[blog post](https://devblogs.nvidia.com/gpu-pro-tip-cuda-7-streams-simplify-concurrency/)).
+[blog post](https://developer.nvidia.com/blog/gpu-pro-tip-cuda-7-streams-simplify-concurrency/)).
 
 Since the PTDS option is for each compilation unit, it should be done at the same time across the
 whole codebase. To enable PTDS, first build cuDF:

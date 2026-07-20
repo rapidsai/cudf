@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,13 +22,19 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <rmm/device_buffer.hpp>
+
 #include <cuda/iterator>
 
 #include <src/io/parquet/parquet_common.hpp>
 
+#include <algorithm>
 #include <array>
+#include <bit>
 #include <fstream>
 #include <functional>
+#include <iterator>
+#include <random>
 
 using cudf::test::iterators::no_nulls;
 
@@ -660,7 +666,7 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   auto expected = table_view{{col}};
 
   auto const filepath = temp_env->get_temp_filepath("CheckPageRows.parquet");
-  const cudf::io::parquet_writer_options out_opts =
+  cudf::io::parquet_writer_options const out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .max_page_size_rows(page_rows);
   cudf::io::write_parquet(out_opts);
@@ -688,7 +694,7 @@ TEST_F(ParquetWriterTest, CheckPageRowsAdjusted)
   // enough for a few pages with the default 20'000 rows/page
   constexpr auto rows_per_page = 20'000;
   constexpr auto num_rows      = 3 * rows_per_page;
-  const std::string s1(32, 'a');
+  std::string const s1(32, 'a');
   auto col0_elements =
     cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return s1; });
   auto col0 = cudf::test::strings_column_wrapper(col0_elements, col0_elements + num_rows);
@@ -696,7 +702,7 @@ TEST_F(ParquetWriterTest, CheckPageRowsAdjusted)
   auto const expected = table_view{{col0}};
 
   auto const filepath = temp_env->get_temp_filepath("CheckPageRowsAdjusted.parquet");
-  const cudf::io::parquet_writer_options out_opts =
+  cudf::io::parquet_writer_options const out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .max_page_size_rows(rows_per_page);
   cudf::io::write_parquet(out_opts);
@@ -724,7 +730,7 @@ TEST_F(ParquetWriterTest, CheckPageRowsTooSmall)
   constexpr auto rows_per_page = 1'000;
   constexpr auto fragment_size = 5'000;
   constexpr auto num_rows      = 3 * rows_per_page;
-  const std::string s1(32, 'a');
+  std::string const s1(32, 'a');
   auto col0_elements =
     cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return s1; });
   auto col0 = cudf::test::strings_column_wrapper(col0_elements, col0_elements + num_rows);
@@ -732,7 +738,7 @@ TEST_F(ParquetWriterTest, CheckPageRowsTooSmall)
   auto const expected = table_view{{col0}};
 
   auto const filepath = temp_env->get_temp_filepath("CheckPageRowsTooSmall.parquet");
-  const cudf::io::parquet_writer_options out_opts =
+  cudf::io::parquet_writer_options const out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .max_page_fragment_size(fragment_size)
       .max_page_size_rows(rows_per_page);
@@ -771,7 +777,7 @@ TEST_F(ParquetWriterTest, Decimal32Stats)
   auto expected = table_view{{col0}};
 
   auto const filepath = temp_env->get_temp_filepath("Decimal32Stats.parquet");
-  const cudf::io::parquet_writer_options out_opts =
+  cudf::io::parquet_writer_options const out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
   cudf::io::write_parquet(out_opts);
 
@@ -800,7 +806,7 @@ TEST_F(ParquetWriterTest, Decimal64Stats)
   auto expected = table_view{{col0}};
 
   auto const filepath = temp_env->get_temp_filepath("Decimal64Stats.parquet");
-  const cudf::io::parquet_writer_options out_opts =
+  cudf::io::parquet_writer_options const out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
   cudf::io::write_parquet(out_opts);
 
@@ -832,7 +838,7 @@ TEST_F(ParquetWriterTest, Decimal128Stats)
   auto expected = table_view{{col0}};
 
   auto const filepath = temp_env->get_temp_filepath("Decimal128Stats.parquet");
-  const cudf::io::parquet_writer_options out_opts =
+  cudf::io::parquet_writer_options const out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
   cudf::io::write_parquet(out_opts);
 
@@ -845,6 +851,107 @@ TEST_F(ParquetWriterTest, Decimal128Stats)
 
   EXPECT_EQ(expected_min, stats.min_value);
   EXPECT_EQ(expected_max, stats.max_value);
+}
+
+TEST_F(ParquetWriterTest, FloatingPointWithNaNStatsOmitted)
+{
+  // PARQUET-1246: a float/double column containing a NaN must not expose min/max, or a
+  // reader doing `= NaN` predicate pushdown skips the row group. NVIDIA/spark-rapids#15004.
+  auto constexpr nanf = std::numeric_limits<float>::quiet_NaN();
+  auto constexpr nand = std::numeric_limits<double>::quiet_NaN();
+
+  column_wrapper<float> col_f_nan{{1.0f, nanf, 3.0f, 2.0f}};     // NaN mixed with non-NaN
+  column_wrapper<double> col_d_nan{{1.0, 2.0, nand, 4.0}};       // double variant
+  column_wrapper<float> col_f_allnan{{nanf, nanf, nanf, nanf}};  // all NaN
+  column_wrapper<float> col_f_nonan{{1.0f, 2.0f, 3.0f, 4.0f}};   // control: no NaN
+  column_wrapper<float> col_f_nan_null{{1.0f, nanf, 3.0f, 5.0f},
+                                       {true, true, true, false}};  // NaN alongside a null
+
+  auto const expected =
+    table_view{{col_f_nan, col_d_nan, col_f_allnan, col_f_nonan, col_f_nan_null}};
+
+  auto const filepath = temp_env->get_temp_filepath("FloatingPointWithNaNStats.parquet");
+  cudf::io::parquet_writer_options const out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  auto const stats_f_nan      = get_statistics(fmd.row_groups[0].columns[0]);
+  auto const stats_d_nan      = get_statistics(fmd.row_groups[0].columns[1]);
+  auto const stats_f_allnan   = get_statistics(fmd.row_groups[0].columns[2]);
+  auto const stats_f_nonan    = get_statistics(fmd.row_groups[0].columns[3]);
+  auto const stats_f_nan_null = get_statistics(fmd.row_groups[0].columns[4]);
+
+  // any column containing a NaN must not expose min/max
+  EXPECT_FALSE(stats_f_nan.min_value.has_value());
+  EXPECT_FALSE(stats_f_nan.max_value.has_value());
+  EXPECT_FALSE(stats_d_nan.min_value.has_value());
+  EXPECT_FALSE(stats_d_nan.max_value.has_value());
+  EXPECT_FALSE(stats_f_allnan.min_value.has_value());
+  EXPECT_FALSE(stats_f_allnan.max_value.has_value());
+
+  // a column with no NaN is unaffected and still carries min/max
+  EXPECT_TRUE(stats_f_nonan.min_value.has_value());
+  EXPECT_TRUE(stats_f_nonan.max_value.has_value());
+
+  // a null alongside the NaN does not interfere with NaN detection
+  EXPECT_FALSE(stats_f_nan_null.min_value.has_value());
+  EXPECT_FALSE(stats_f_nan_null.max_value.has_value());
+}
+
+TEST_F(ParquetWriterTest, FloatingPointWithNaNStatsOmittedAcrossFragments)
+{
+  // A NaN in any page fragment must propagate through the fragment -> column-chunk statistics
+  // merge, so a multi-fragment column chunk with a single NaN still omits min/max.
+  // NVIDIA/spark-rapids#15004.
+  auto constexpr nanf     = std::numeric_limits<float>::quiet_NaN();
+  auto constexpr num_rows = 20000;  // > default 5000-row page fragment -> multiple fragments merged
+  std::vector<float> data(num_rows);
+  for (int i = 0; i < num_rows; ++i) {
+    data[i] = static_cast<float>(i);
+  }
+  data[num_rows / 2] = nanf;  // a single NaN in a middle fragment
+  column_wrapper<float> col(data.begin(), data.end());
+  auto const expected = table_view{{col}};
+
+  auto const filepath = temp_env->get_temp_filepath("FloatingPointNaNStatsFragments.parquet");
+  cudf::io::parquet_writer_options const out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  ASSERT_EQ(fmd.row_groups.size(), 1);
+  auto const stats = get_statistics(fmd.row_groups[0].columns[0]);
+  EXPECT_FALSE(stats.min_value.has_value());
+  EXPECT_FALSE(stats.max_value.has_value());
+}
+
+TEST_F(ParquetWriterTest, FloatingPointWithNaNStatsOmittedNested)
+{
+  // NaN detection must reach a float leaf nested in a LIST column (rapidsai/cudf#22817).
+  auto constexpr nanf = std::numeric_limits<float>::quiet_NaN();
+  cudf::test::lists_column_wrapper<float> list_col{{1.0f, nanf, 3.0f}, {4.0f, 5.0f}};
+  auto const expected = table_view{{list_col}};
+
+  auto const filepath = temp_env->get_temp_filepath("FloatingPointNaNStatsNested.parquet");
+  cudf::io::parquet_writer_options const out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  // the leaf float column (list element) contains a NaN -> min/max omitted
+  auto const stats = get_statistics(fmd.row_groups[0].columns[0]);
+  EXPECT_FALSE(stats.min_value.has_value());
+  EXPECT_FALSE(stats.max_value.has_value());
 }
 
 TEST_F(ParquetWriterTest, CheckColumnIndexTruncation)
@@ -1104,6 +1211,102 @@ TEST_F(ParquetWriterTest, SingleValueDictionaryTest)
   auto const oi    = read_offset_index(source, fmd.row_groups[0].columns[0]);
   auto const nbits = read_dict_bits(source, oi.page_locations[0]);
   EXPECT_EQ(nbits, expected_bits);
+}
+
+TEST_F(ParquetWriterTest, VariableBitWidthDictEncoding)
+{
+  constexpr auto num_rows          = 100'000;
+  constexpr auto num_pages         = 10;
+  constexpr auto page_size         = num_rows / num_pages;
+  constexpr auto freq_pages        = num_pages - 2;
+  constexpr auto cardinality       = 64'000;
+  constexpr auto frequent_set_size = 64;
+
+  auto const filepath = temp_env->get_temp_filepath("VariableBitWidthDictEncoding.parquet");
+  {
+    std::mt19937 rng{0xACAD1A};
+    using ColumnType = cudf::test::fixed_width_column_wrapper<int64_t>;
+
+    // Hot pages contain values in [0, frequent_set_size - 1], (first `freq_pages` pages in the
+    // chunk). Rare pages contain values in [frequent_set_size, cardinality - 1], (last `num_pages -
+    // freq_pages` pages in the chunk)
+    std::uniform_int_distribution<int64_t> freq_dist(0, frequent_set_size - 1);
+    std::uniform_int_distribution<int64_t> rare_dist(frequent_set_size, cardinality - 1);
+    auto constexpr threshold = freq_pages * page_size;
+    auto values              = std::vector<int64_t>{};
+    values.reserve(num_rows);
+    std::transform(
+      cuda::counting_iterator(0),
+      cuda::counting_iterator(num_rows),
+      std::back_inserter(values),
+      [&](auto row_idx) { return row_idx < threshold ? freq_dist(rng) : rare_dist(rng); });
+    auto const col = ColumnType(values.begin(), values.end());
+
+    auto writer_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table_view{{col}})
+        .compression(cudf::io::compression_type::NONE)              // No compression
+        .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)  // Write page index
+        .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)     // Always dictionary encode
+        .row_group_size_rows(num_rows)                              // Single row group only
+        .max_page_size_rows(page_size)               // Max page size is set to the page size
+        .max_page_size_bytes(std::size_t{64} << 20)  // Unlimited page size
+        .build();
+    cudf::io::write_parquet(writer_opts);
+  }
+
+  auto datasource = cudf::io::datasource::create(filepath);
+
+  // Extract dictionary bit width for each data page from page index
+  std::vector<int> page_dict_bits;
+  {
+    // Read file metadata
+    cudf::io::parquet::FileMetaData file_metadata;
+    read_footer(datasource, &file_metadata);
+
+    // Check dictionary encoded pages
+    auto const& colchunk = file_metadata.row_groups.front().columns.front();
+    EXPECT_TRUE(std::any_of(colchunk.meta_data.encodings.begin(),
+                            colchunk.meta_data.encodings.end(),
+                            [](auto const encoding) {
+                              return encoding == cudf::io::parquet::Encoding::PLAIN_DICTIONARY or
+                                     encoding == cudf::io::parquet::Encoding::RLE_DICTIONARY;
+                            }));
+
+    auto const oi = read_offset_index(datasource, colchunk);
+    page_dict_bits.reserve(oi.page_locations.size());
+    std::transform(oi.page_locations.begin(),
+                   oi.page_locations.end(),
+                   std::back_inserter(page_dict_bits),
+                   [&datasource](auto const& page_location) {
+                     return read_dict_bits(datasource, page_location);
+                   });
+
+    // Check page count
+    EXPECT_EQ(oi.page_locations.size(), static_cast<std::size_t>(num_pages));
+  }
+
+  // Checks
+  {
+    // Check min and max bit widths
+    auto const [min_bits_iter, max_bits_iter] = std::ranges::minmax_element(page_dict_bits);
+    auto const chunk_wide_max_bits            = std::bit_width<uint32_t>(cardinality - 1);
+    auto const frequent_max_bits              = std::bit_width<uint32_t>(frequent_set_size - 1);
+
+    ASSERT_FALSE(page_dict_bits.empty());
+    EXPECT_GT(*min_bits_iter, 1);
+    EXPECT_GT(*max_bits_iter, frequent_max_bits);
+    EXPECT_LE(*max_bits_iter, chunk_wide_max_bits);
+
+    // Check expected number of freq and rare pages
+    // TODO(mh): Race-dependent checks. Enable these along with cuDF PR #22323.
+
+    // auto const total_page_count = static_cast<int>(page_dict_bits.size());
+    // auto const freq_page_count  = static_cast<int>(
+    //   std::ranges::count_if(page_dict_bits, [&](int nbits) { return nbits <= frequent_max_bits;
+    //   }));
+    // EXPECT_EQ(freq_page_count, freq_pages);
+    // EXPECT_EQ(total_page_count - freq_page_count, num_pages - freq_pages);
+  }
 }
 
 TEST_F(ParquetWriterTest, DictionaryNeverTest)
@@ -1832,6 +2035,88 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
   EXPECT_TRUE(has_delta);
 }
 
+TEST_F(ParquetWriterTest, ListElementFieldIds)
+{
+  // Field-id overview for the written Parquet schema:
+  //
+  //   simple_list                           -> id=1
+  //   simple_list.list                      -> synthetic repeated group, no id
+  //   simple_list.list.element              -> id=2
+  //
+  //   nested_list                           -> id=3
+  //   nested_list.list                      -> synthetic repeated group, no id
+  //   nested_list.list.element              -> id=4
+  //   nested_list.list.element.list         -> synthetic repeated group, no id
+  //   nested_list.list.element.list.element -> id=5
+  auto simple_values  = cudf::test::fixed_width_column_wrapper<int64_t>{1, 2, 3};
+  auto simple_offsets = cudf::test::fixed_width_column_wrapper<int32_t>{0, 2, 3};
+  auto simple_list =
+    cudf::make_lists_column(2, simple_offsets.release(), simple_values.release(), 0, {});
+
+  auto nested_values  = cudf::test::fixed_width_column_wrapper<int32_t>{10, 11, 12, 13};
+  auto nested_offsets = cudf::test::fixed_width_column_wrapper<int32_t>{0, 2, 3, 4};
+  auto inner_list =
+    cudf::make_lists_column(3, nested_offsets.release(), nested_values.release(), 0, {});
+  auto outer_offsets = cudf::test::fixed_width_column_wrapper<int32_t>{0, 2, 3};
+  auto nested_list =
+    cudf::make_lists_column(2, outer_offsets.release(), std::move(inner_list), 0, {});
+
+  auto const expected = cudf::table_view{{*simple_list, *nested_list}};
+
+  cudf::io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_name("simple_list").set_parquet_field_id(1);
+  expected_metadata.column_metadata[0].child(1).set_name("element").set_parquet_field_id(2);
+  expected_metadata.column_metadata[1].set_name("nested_list").set_parquet_field_id(3);
+  expected_metadata.column_metadata[1].child(1).set_name("element").set_parquet_field_id(4);
+  expected_metadata.column_metadata[1].child(1).child(1).set_name("element").set_parquet_field_id(
+    5);
+
+  auto const filepath = temp_env->get_temp_filepath("ListElementFieldIds.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(expected_metadata);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  // The footer schema is stored in pre-order traversal:
+  //   [1] simple_list(id=1), [2] list(no id), [3] element(id=2)
+  //   [4] nested_list(id=3), [5] list(no id), [6] element(id=4),
+  //   [7] list(no id), [8] element(id=5)
+  ASSERT_GE(fmd.schema.size(), 9);
+
+  ASSERT_TRUE(fmd.schema[1].field_id.has_value());
+  EXPECT_EQ(fmd.schema[1].name, "simple_list");
+  EXPECT_EQ(fmd.schema[1].field_id.value(), 1);
+
+  EXPECT_EQ(fmd.schema[2].name, "list");
+  EXPECT_FALSE(fmd.schema[2].field_id.has_value());
+
+  ASSERT_TRUE(fmd.schema[3].field_id.has_value());
+  EXPECT_EQ(fmd.schema[3].name, "element");
+  EXPECT_EQ(fmd.schema[3].field_id.value(), 2);
+
+  ASSERT_TRUE(fmd.schema[4].field_id.has_value());
+  EXPECT_EQ(fmd.schema[4].name, "nested_list");
+  EXPECT_EQ(fmd.schema[4].field_id.value(), 3);
+
+  EXPECT_EQ(fmd.schema[5].name, "list");
+  EXPECT_FALSE(fmd.schema[5].field_id.has_value());
+
+  ASSERT_TRUE(fmd.schema[6].field_id.has_value());
+  EXPECT_EQ(fmd.schema[6].name, "element");
+  EXPECT_EQ(fmd.schema[6].field_id.value(), 4);
+
+  EXPECT_EQ(fmd.schema[7].name, "list");
+  EXPECT_FALSE(fmd.schema[7].field_id.has_value());
+
+  ASSERT_TRUE(fmd.schema[8].field_id.has_value());
+  EXPECT_EQ(fmd.schema[8].name, "element");
+  EXPECT_EQ(fmd.schema[8].field_id.value(), 5);
+}
+
 TEST_F(ParquetWriterTest, Decimal128DeltaByteArray)
 {
   // decimal128 in cuDF maps to FIXED_LEN_BYTE_ARRAY, which is allowed by the spec to use
@@ -1849,7 +2134,7 @@ TEST_F(ParquetWriterTest, Decimal128DeltaByteArray)
     .set_nullability(false);
 
   auto const filepath = temp_env->get_temp_filepath("Decimal128DeltaByteArray.parquet");
-  const cudf::io::parquet_writer_options out_opts =
+  cudf::io::parquet_writer_options const out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .compression(cudf::io::compression_type::NONE)
       .metadata(table_metadata);

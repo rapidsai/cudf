@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -7,12 +7,12 @@ from decimal import Decimal
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_230
 from cudf.testing import assert_eq
-from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
+from cudf.testing._utils import assert_exceptions_equal
 
 
 @pytest.mark.parametrize("data", [[], [1, 2, 3]])
@@ -150,6 +150,34 @@ def test_exact_quantiles_int(quantile_interpolation):
     )
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    ["Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64"],
+)
+@pytest.mark.parametrize(
+    "data,q",
+    [
+        ([pd.NA, pd.NA], [0.1, 0.5]),  # all-NA -> masked int (all NA)
+        ([pd.NA, pd.NA, 1], [0.1, 0.5]),  # single value -> masked int
+        ([pd.NA, 10, 20], [0.5]),  # NA + integral result -> masked int
+        ([pd.NA, 10, 21], [0.5]),  # NA + fractional result -> Float64
+        ([1, 2, 3], [0.25, 0.5, 0.75]),  # no NA -> Float64
+    ],
+)
+def test_quantile_masked_integer_dtype(dtype, data, q):
+    # pandas keeps the masked integer dtype for quantile only when the input
+    # has missing values and every result value is integer-valued; otherwise
+    # the result is Float64.
+    psr = pd.Series(data, dtype=dtype)
+    gsr = cudf.Series(data, dtype=dtype)
+
+    expected = psr.quantile(q)
+    got = gsr.quantile(q)
+
+    assert str(got.dtype) == str(expected.dtype)
+    assert_eq(got, expected)
+
+
 def test_approx_quantiles():
     arr = np.asarray([6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7])
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
@@ -195,6 +223,106 @@ def test_misc_quantiles(data, q):
 
     expected = pdf_series.quantile(q.get() if isinstance(q, cp.ndarray) else q)
     actual = gdf_series.quantile(q)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("dtype", ["bool", "boolean", "bool[pyarrow]"])
+@pytest.mark.parametrize("q", [0.5, [0.25, 0.75]])
+def test_quantile_bool_raises(dtype, q, quantile_interpolation):
+    gs = cudf.Series([True, False, True], dtype=dtype)
+    with pytest.raises(NotImplementedError):
+        gs.quantile(q, interpolation=quantile_interpolation)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        # Larger than 2**53 — round-trips through float64 lose precision.
+        1577840461000001000,
+        9007199254740993,
+        -9007199254740993,
+    ],
+)
+@pytest.mark.parametrize("interpolation", ["lower", "higher", "nearest"])
+@pytest.mark.parametrize("q", [0.5, [0.5, 0.5]])
+def test_quantile_int64_non_interpolating_preserves_precision(
+    value, interpolation, q
+):
+    ps = pd.Series([value, value, value], dtype="int64")
+    gs = cudf.Series([value, value, value], dtype="int64")
+    expected = ps.quantile(q, interpolation=interpolation)
+    actual = gs.quantile(q, interpolation=interpolation)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("unit", ["s", "ms", "us", "ns"])
+@pytest.mark.parametrize("interpolation", ["lower", "higher", "nearest"])
+@pytest.mark.parametrize("q", [0.5, [0.5, 0.5]])
+def test_quantile_datetime_non_interpolating_preserves_precision(
+    unit, interpolation, q
+):
+    # Repeats of a single timestamp whose underlying int64 exceeds 2**53.
+    # For non-arithmetic interpolations the result must equal the input
+    # value exactly (no float64 round-trip).
+    ts = pd.Timestamp("2020-01-01 01:01:01.000001").as_unit(unit)
+    ps = pd.Series([ts, ts, ts])
+    gs = cudf.Series([ts, ts, ts])
+    expected = ps.quantile(q, interpolation=interpolation)
+    actual = gs.quantile(q, interpolation=interpolation)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("unit", ["s", "ms", "us", "ns"])
+@pytest.mark.parametrize("tz", ["US/Pacific", "US/Eastern", "UTC"])
+@pytest.mark.parametrize("q", [0.1, 0.5, [0.25, 0.75]])
+def test_quantile_datetime_tz_preserves_tz(
+    unit, tz, q, quantile_interpolation
+):
+    # Pre-compute via numpy datetime so we exercise both the scalar and
+    # column return paths.
+    ps = (
+        pd.Series([1, 2, 3])
+        .astype("datetime64[ns]")
+        .dt.tz_localize(tz)
+        .astype(f"datetime64[{unit}, {tz}]")
+    )
+    gs = cudf.Series(ps)
+    expected = ps.quantile(q, interpolation=quantile_interpolation)
+    actual = gs.quantile(q, interpolation=quantile_interpolation)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "Int8",
+        "Int16",
+        "Int32",
+        "Int64",
+        "UInt8",
+        "UInt16",
+        "UInt32",
+        "UInt64",
+        "Float32",
+        "Float64",
+        "int8[pyarrow]",
+        "int16[pyarrow]",
+        "int32[pyarrow]",
+        "int64[pyarrow]",
+        "uint8[pyarrow]",
+        "uint16[pyarrow]",
+        "uint32[pyarrow]",
+        "uint64[pyarrow]",
+        "float32[pyarrow]",
+        "float64[pyarrow]",
+    ],
+)
+@pytest.mark.parametrize("q", [0.5, [0.25, 0.5, 0.75]])
+def test_quantile_pandas_nullable_dtype(dtype, q, quantile_interpolation):
+    ps = pd.Series([1, 2, 3], dtype=dtype)
+    gs = cudf.Series([1, 2, 3], dtype=dtype)
+    expected = ps.quantile(q, interpolation=quantile_interpolation)
+    actual = gs.quantile(q, interpolation=quantile_interpolation)
     assert_eq(expected, actual)
 
 
@@ -693,6 +821,7 @@ def test_categorical_reductions(request, reduction_methods):
     )
 
 
+@pytest.mark.filterwarnings("ignore:Mean of empty slice:RuntimeWarning")
 @pytest.mark.parametrize(
     "data_non_overflow",
     [
@@ -721,17 +850,7 @@ def test_timedelta_reduction_ops(
     gsr = cudf.Series(data_non_overflow, dtype=timedelta_types_as_str)
     psr = gsr.to_pandas()
 
-    if len(psr) > 0 and psr.isnull().all() and reduction_methods == "median":
-        with pytest.warns(RuntimeWarning, match="Mean of empty slice"):
-            expected = getattr(psr, reduction_methods)()
-    else:
-        with expect_warning_if(
-            PANDAS_GE_230
-            and reduction_methods == "quantile"
-            and len(data_non_overflow) == 0
-            and timedelta_types_as_str != "timedelta64[ns]"
-        ):
-            expected = getattr(psr, reduction_methods)()
+    expected = getattr(psr, reduction_methods)()
     actual = getattr(gsr, reduction_methods)()
     if pd.isna(expected) and pd.isna(actual):
         pass
@@ -847,22 +966,116 @@ def test_string_std():
     assert_exceptions_equal(lfunc=psr.std, rfunc=sr.std)
 
 
-def test_string_reduction_error():
+def test_string_reduction():
     s = cudf.Series([None, None], dtype="str")
     ps = s.to_pandas(nullable=True)
-    assert_exceptions_equal(
-        s.any,
-        ps.any,
-        lfunc_args_and_kwargs=([], {"skipna": False}),
-        rfunc_args_and_kwargs=([], {"skipna": False}),
-    )
+    # pandas 3 treats the NaN null sentinel as truthy (numpy semantics), so
+    # any/all(skipna=False) return True (not TypeError) on null-only string series.
+    assert s.any(skipna=False) == ps.any(skipna=False)
+    assert s.all(skipna=False) == ps.all(skipna=False)
 
-    assert_exceptions_equal(
-        s.all,
-        ps.all,
-        lfunc_args_and_kwargs=([], {"skipna": False}),
-        rfunc_args_and_kwargs=([], {"skipna": False}),
+
+@pytest.mark.parametrize("min_count", [0, 1])
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        np.dtype("object"),
+        pd.StringDtype(storage="python", na_value=pd.NA),
+        pd.StringDtype(storage="python", na_value=np.nan),
+        pd.StringDtype(storage="pyarrow", na_value=pd.NA),
+        pd.StringDtype(storage="pyarrow", na_value=np.nan),
+        pd.ArrowDtype(pa.string()),
+        pd.ArrowDtype(pa.large_string()),
+    ],
+)
+def test_string_sum_empty_and_all_null(dtype, skipna, min_count):
+    # Summing no elements returns the additive identity (0 for object
+    # dtype, "" for string dtypes, matching pandas
+    # tests/arrays/string_/test_string.py::test_reduce_empty); once
+    # min_count is not met the result is a missing value. cudf's missing
+    # sentinel is pd.NA where pandas uses np.nan for object dtype and
+    # "str" dtypes, so missing results are compared via pd.isna.
+    expected = pd.Series([], dtype=dtype).sum(
+        skipna=skipna, min_count=min_count
     )
+    result = cudf.Series([], dtype=dtype).sum(
+        skipna=skipna, min_count=min_count
+    )
+    if pd.isna(expected):
+        assert pd.isna(result)
+    else:
+        assert result == expected
+
+    # All-null input: nulls are skipped down to an empty sum.
+    result = cudf.Series([None, None], dtype=dtype).sum(
+        skipna=skipna, min_count=min_count
+    )
+    if dtype == np.dtype("object") and not skipna:
+        # pandas raises TypeError (None + None); cudf treats the values
+        # as nulls and returns a missing value instead.
+        with pytest.raises(TypeError):
+            pd.Series([None, None], dtype=dtype).sum(
+                skipna=skipna, min_count=min_count
+            )
+        assert pd.isna(result)
+    else:
+        expected = pd.Series([None, None], dtype=dtype).sum(
+            skipna=skipna, min_count=min_count
+        )
+        if pd.isna(expected):
+            assert pd.isna(result)
+        else:
+            assert result == expected
+
+
+@pytest.mark.parametrize("method", ["min", "max"])
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pd.StringDtype(storage="python", na_value=pd.NA),
+        pd.StringDtype(storage="python", na_value=np.nan),
+        pd.StringDtype(storage="pyarrow", na_value=pd.NA),
+        pd.StringDtype(storage="pyarrow", na_value=np.nan),
+        pd.ArrowDtype(pa.string()),
+        pd.ArrowDtype(pa.large_string()),
+    ],
+)
+def test_string_min_max_null_identity(dtype, method, skipna):
+    # Matches pandas tests/arrays/string_/test_string.py::test_min_max:
+    # with skipna=False the result must be the dtype's exact na_value
+    # singleton (pd.NA for "string" dtypes and ArrowDtype, the np.nan
+    # float singleton for "str" dtypes).
+    data = ["a", "b", "c", None]
+    psr = pd.Series(data, dtype=dtype)
+    gsr = cudf.Series(data, dtype=dtype)
+
+    expected = getattr(psr, method)(skipna=skipna)
+    result = getattr(gsr, method)(skipna=skipna)
+
+    if skipna:
+        assert result == expected
+    else:
+        assert expected is dtype.na_value
+        assert result is expected
+
+
+@pytest.mark.parametrize("method", ["min", "max"])
+def test_object_min_max_with_null(method, skipna):
+    # pandas raises TypeError here (comparing str with the missing
+    # value); cudf treats None as a null: skipped when skipna=True,
+    # otherwise the result is a missing value.
+    data = ["a", "b", "c", None]
+    with pytest.raises(TypeError):
+        getattr(pd.Series(data, dtype=np.dtype("object")), method)(
+            skipna=skipna
+        )
+
+    sr = cudf.Series(data, dtype=np.dtype("object"))
+    result = getattr(sr, method)(skipna=skipna)
+    if skipna:
+        assert result == ("a" if method == "min" else "c")
+    else:
+        assert pd.isna(result)
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3], [], [1, 20, 1000, None]])
@@ -872,13 +1085,7 @@ def test_datetime_stats(data, datetime_types_as_str, reduction_methods):
     gsr = cudf.Series(data, dtype=datetime_types_as_str)
     psr = gsr.to_pandas()
 
-    with expect_warning_if(
-        PANDAS_GE_230
-        and reduction_methods == "quantile"
-        and len(data) == 0
-        and datetime_types_as_str != "datetime64[ns]"
-    ):
-        expected = getattr(psr, reduction_methods)()
+    expected = getattr(psr, reduction_methods)()
     actual = getattr(gsr, reduction_methods)()
 
     if len(data) == 0:
@@ -887,6 +1094,7 @@ def test_datetime_stats(data, datetime_types_as_str, reduction_methods):
         assert_eq(expected, actual)
 
 
+@pytest.mark.filterwarnings("ignore:Mean of empty slice:RuntimeWarning")
 @pytest.mark.parametrize(
     "data",
     [
@@ -904,11 +1112,7 @@ def test_datetime_reductions(data, reduction_methods, datetime_types_as_str):
     psr = sr.to_pandas()
 
     actual = getattr(sr, reduction_methods)()
-    with expect_warning_if(
-        psr.size > 0 and psr.isnull().all() and reduction_methods == "median",
-        RuntimeWarning,
-    ):
-        expected = getattr(psr, reduction_methods)()
+    expected = getattr(psr, reduction_methods)()
 
     if (
         expected is pd.NaT

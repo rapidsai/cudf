@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import singledispatchmethod
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import pylibcudf as plc
 
@@ -22,16 +22,21 @@ from cudf_polars.dsl.utils.windows import (
     offsets_to_windows,
     range_window_bounds,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_136
+from cudf_polars.utils.versions import POLARS_VERSION_LT_136, POLARS_VERSION_LT_139
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.typing import ClosedInterval, Duration
 
-__all__ = ["GroupedWindow", "RollingWindow", "to_request"]
+__all__ = ["FixedSizeRollingWindow", "GroupedWindow", "RollingWindow", "to_request"]
+
+_REPLACE_POLICY = {
+    "forward": plc.replace.ReplacePolicy.PRECEDING,
+    "backward": plc.replace.ReplacePolicy.FOLLOWING,
+}
 
 
 @dataclass(frozen=True)
@@ -79,14 +84,14 @@ def to_request(
     elif isinstance(value, expr.Agg):
         child = value.children[0]
         col = child.evaluate(df, context=ExecutionContext.ROLLING)
-        if POLARS_VERSION_LT_136 and value.name == "var":  # pragma: no cover
+        if (POLARS_VERSION_LT_136 or not POLARS_VERSION_LT_139) and value.name == "var":
             # Polars variance produces null if nvalues <= ddof
             # libcudf produces NaN. However, we can get the polars
             # behaviour by setting the minimum window size to ddof +
             # 1.
-            #
-            # We still need this check, polars is not hitting it because
-            # of https://github.com/pola-rs/polars/pull/25117
+            # In polars 1.36-1.38 this code path is not hit because
+            # rolling goes through the IR path (not RollingWindow).
+            # See https://github.com/pola-rs/polars/pull/25117
             min_periods = value.options + 1
     else:
         col = value.evaluate(
@@ -146,12 +151,12 @@ class RollingWindow(Expr):  # pragma: no cover; polars >1.36 uses AExpr::Rolling
             raise NotImplementedError(
                 "Incorrect handling of empty groups for list collection"
             )
-        if POLARS_VERSION_LT_136 and not plc.rolling.is_valid_rolling_aggregation(
+        if (
+            POLARS_VERSION_LT_136 or not POLARS_VERSION_LT_139
+        ) and not plc.rolling.is_valid_rolling_aggregation(
             agg.dtype.plc_type, agg.agg_request
         ):
-            raise NotImplementedError(
-                f"Unsupported rolling aggregation {agg}"
-            )  # pragma: no cover; polars may raise ahead of time
+            raise NotImplementedError(f"Unsupported rolling aggregation {agg}")
 
     def do_evaluate(  # noqa: D102
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -203,6 +208,100 @@ class RollingWindow(Expr):  # pragma: no cover; polars >1.36 uses AExpr::Rolling
             [to_request(agg, orderby, df)],
             stream=df.stream,
         ).columns()
+        return Column(result, dtype=self.dtype)
+
+
+class FixedSizeRollingWindow(Expr):
+    """
+    Fixed-size integer-based rolling window aggregation.
+
+    Handles expressions like ``pl.col("x").rolling_sum(window_size=3)``.
+    Uses ``pylibcudf.rolling.rolling_window`` with integer preceding
+    and following window sizes.
+    """
+
+    __slots__ = (
+        "_agg_request",
+        "agg_name",
+        "fn_params",
+        "following",
+        "min_periods",
+        "preceding",
+    )
+    _non_child = (
+        "dtype",
+        "agg_name",
+        "preceding",
+        "following",
+        "min_periods",
+        "fn_params",
+    )
+
+    _aggregations: ClassVar[dict[str, Callable[..., plc.aggregation.Aggregation]]] = {
+        "sum": plc.aggregation.sum,
+        "min": plc.aggregation.min,
+        "max": plc.aggregation.max,
+        "mean": plc.aggregation.mean,
+        "var": plc.aggregation.variance,
+        "std": plc.aggregation.std,
+    }
+
+    def __init__(
+        self,
+        dtype: DataType,
+        agg_name: str,
+        preceding: int,
+        following: int,
+        min_periods: int,
+        fn_params: tuple[Any, ...],
+        child: Expr,
+    ) -> None:
+        self.dtype = dtype
+        self.agg_name = agg_name
+        self.preceding = preceding
+        self.following = following
+        self.min_periods = min_periods
+        self.fn_params = fn_params
+        self.children = (child,)
+        self.is_pointwise = False
+        self._agg_request = self._make_agg_request()
+        if not plc.rolling.is_valid_rolling_aggregation(
+            child.dtype.plc_type, self._agg_request
+        ):
+            raise NotImplementedError(
+                f"Unsupported fixed-size rolling aggregation {agg_name}"
+            )
+
+    def _make_agg_request(self) -> plc.aggregation.Aggregation:
+        agg_fn = self._aggregations.get(self.agg_name)
+        if agg_fn is None:
+            raise NotImplementedError(
+                f"Unsupported fixed-size rolling aggregation: {self.agg_name}"
+            )  # pragma: no cover; translation validates aggregation names
+        return agg_fn(*self.fn_params)
+
+    def do_evaluate(
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        if context != ExecutionContext.FRAME:
+            raise RuntimeError(
+                "Rolling aggregation inside groupby/over/rolling"
+            )  # pragma: no cover; translation raises first
+        (child,) = self.children
+        col = child.evaluate(df, context=context)
+
+        result = plc.rolling.rolling_window(
+            col.obj,
+            self.preceding,
+            self.following,
+            self.min_periods,
+            self._agg_request,
+            stream=df.stream,
+        )
+        if result.type() != self.dtype.plc_type:
+            result = plc.unary.cast(result, self.dtype.plc_type, stream=df.stream)
+
         return Column(result, dtype=self.dtype)
 
 
@@ -416,16 +515,26 @@ class GroupedWindow(Expr):
         cum_named = op.named_exprs
         order_index = op.order_index
 
-        requests: list[plc.groupby.GroupByRequest] = []
-        out_names: list[str] = []
-        out_dtypes: list[DataType] = []
+        data_exprs: list[expr.Expr] = []
+        fill_policies: list[plc.replace.ReplacePolicy | None] = []
+        for ne in cum_named:
+            v = ne.value
+            if (
+                isinstance(v, expr.UnaryFunction)
+                and v.name == "fill_null_with_strategy"
+            ):
+                data_exprs.append(v.children[0].children[0])
+                fill_policies.append(_REPLACE_POLICY[v.options[0]])
+            else:
+                data_exprs.append(v.children[0])
+                fill_policies.append(None)
 
         # Instead of calling self._gather_columns, let's call plc.copying.gather directly
         # since we need plc.Column objects, not cudf_polars Column objects
+        val_cols: Sequence[plc.Column]
         if order_index is not None:
             plc_cols = [
-                ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
-                for ne in cum_named
+                e.evaluate(df, context=ExecutionContext.FRAME).obj for e in data_exprs
             ]
             val_cols = plc.copying.gather(
                 plc.Table(plc_cols),
@@ -435,11 +544,13 @@ class GroupedWindow(Expr):
             ).columns()
         else:
             val_cols = [
-                ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
-                for ne in cum_named
+                e.evaluate(df, context=ExecutionContext.FRAME).obj for e in data_exprs
             ]
         agg = plc.aggregation.sum()
 
+        requests: list[plc.groupby.GroupByRequest] = []
+        out_names: list[str] = []
+        out_dtypes: list[DataType] = []
         for ne, val_col in zip(cum_named, val_cols, strict=True):
             requests.append(plc.groupby.GroupByRequest(val_col, [agg]))
             out_names.append(ne.name)
@@ -449,7 +560,14 @@ class GroupedWindow(Expr):
         assert isinstance(local_grouper, plc.groupby.GroupBy)
         _, tables = local_grouper.scan(requests)
 
-        return out_names, out_dtypes, tables
+        result_tables: list[plc.Table] = []
+        for tbl, policy in zip(tables, fill_policies, strict=True):
+            if policy is None:
+                result_tables.append(tbl)
+            else:
+                _, filled = local_grouper.replace_nulls(tbl, [policy])
+                result_tables.append(filled)
+        return out_names, out_dtypes, result_tables
 
     def _reorder_to_input(
         self,
@@ -513,7 +631,14 @@ class GroupedWindow(Expr):
 
         for ne in self.named_aggs:
             v = ne.value
-            if isinstance(v, expr.UnaryFunction) and v.name in unary_window_ops:
+            if (
+                isinstance(v, expr.UnaryFunction)
+                and v.name == "fill_null_with_strategy"
+                and isinstance(v.children[0], expr.UnaryFunction)
+                and v.children[0].name == "cum_sum"
+            ):
+                unary_window_ops["cum_sum"].append(ne)
+            elif isinstance(v, expr.UnaryFunction) and v.name in unary_window_ops:
                 unary_window_ops[v.name].append(ne)
             else:
                 reductions.append(ne)
@@ -598,8 +723,9 @@ class GroupedWindow(Expr):
         ob_nulls_last: bool,
         grouper: plc.groupby.GroupBy,
         stream: Stream,
+        require_sorted_groups: bool = False,
     ) -> tuple[plc.Column | None, list[Column] | None, plc.groupby.GroupBy]:
-        if order_by_col is None:
+        if order_by_col is None and not require_sorted_groups:
             # keep the original ordering
             return None, None, grouper
         order_index = self._build_window_order_index(
@@ -615,13 +741,17 @@ class GroupedWindow(Expr):
         local = self._sorted_grouper(by_cols_for_scan)
         return order_index, by_cols_for_scan, local
 
+    # TODO: this is an ordered left-join that drops the join keys.
+    # Rename it and replace the manual scatter+gather with the Join IR's
+    # _reorder_maps helper (lifted to a shared utility) so the streaming
+    # and in-memory over paths share the same primitive.
     def _broadcast_agg_results(
         self,
         by_tbl: plc.Table,
         group_keys_tbl: plc.Table,
-        value_tbls: list[plc.Table],
-        names: list[str],
-        dtypes: list[DataType],
+        value_tbl: plc.Table,
+        names: Sequence[str],
+        dtypes: Sequence[DataType],
         stream: Stream,
     ) -> list[Column]:
         # We do a left-join between the input keys to group-keys
@@ -647,7 +777,7 @@ class GroupedWindow(Expr):
 
         # Broadcast each scalar aggregated result back to row-shape using
         # the aligned mapping between row indices and group indices.
-        out_cols = (t.columns()[0] for t in value_tbls)
+        out_cols = value_tbl.columns()
         return [
             Column(
                 plc.copying.gather(
@@ -690,15 +820,16 @@ class GroupedWindow(Expr):
                 eval_cols.append(child.evaluate(df, context=ExecutionContext.FRAME).obj)
                 val_nodes.append((ne, val))
 
+        gathered_cols: Sequence[plc.Column] = eval_cols
         if order_index is not None and eval_cols:
-            eval_cols = plc.copying.gather(
+            gathered_cols = plc.copying.gather(
                 plc.Table(eval_cols),
                 order_index,
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
                 stream=df.stream,
             ).columns()
 
-        gathered_iter = iter(eval_cols)
+        gathered_iter = iter(gathered_cols)
         for ne in named_exprs:
             val = ne.value
             if isinstance(val, expr.Len):
@@ -773,7 +904,7 @@ class GroupedWindow(Expr):
         broadcasted_cols = self._broadcast_agg_results(
             by_tbl,
             group_keys_tbl,
-            value_tables,
+            plc.Table([col for t in value_tables for col in t.columns()]),
             out_names,
             out_dtypes,
             df.stream,
@@ -807,7 +938,7 @@ class GroupedWindow(Expr):
                 self._broadcast_agg_results(
                     by_tbl,
                     group_keys_tbl_local,
-                    value_tables_local,
+                    plc.Table([col for t in value_tables_local for col in t.columns()]),
                     out_names,
                     out_dtypes,
                     df.stream,
@@ -913,11 +1044,6 @@ class GroupedWindow(Expr):
                 assert isinstance(fill_null_expr, expr.UnaryFunction)
                 strategy_exprs[fill_null_expr.options[0]].append(ne)
 
-            replace_policy = {
-                "forward": plc.replace.ReplacePolicy.PRECEDING,
-                "backward": plc.replace.ReplacePolicy.FOLLOWING,
-            }
-
             for strategy, fill_exprs in strategy_exprs.items():
                 names, dtypes, tables = self._apply_unary_op(
                     FillNullWithStrategyOp(
@@ -925,7 +1051,7 @@ class GroupedWindow(Expr):
                         order_index=order_index,
                         by_cols_for_scan=fill_null_by_cols_for_scan,
                         local_grouper=local,
-                        policy=replace_policy[strategy],
+                        policy=_REPLACE_POLICY[strategy],
                     ),
                     df,
                     grouper,
@@ -944,6 +1070,14 @@ class GroupedWindow(Expr):
                 )
 
         if cum_named := unary_window_ops["cum_sum"]:
+            # A fill_null_with_strategy fill runs on the scan output, which is
+            # always in sorted-group order, so it needs a sorted grouper even when
+            # there is no order_by.
+            has_fill = any(
+                isinstance(ne.value, expr.UnaryFunction)
+                and ne.value.name == "fill_null_with_strategy"
+                for ne in cum_named
+            )
             order_index, cum_sum_by_cols_for_scan, local = (
                 self._grouped_window_scan_setup(
                     by_cols,
@@ -959,6 +1093,7 @@ class GroupedWindow(Expr):
                     else False,
                     grouper=grouper,
                     stream=df.stream,
+                    require_sorted_groups=has_fill,
                 )
             )
             names, dtypes, tables = self._apply_unary_op(

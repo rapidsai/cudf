@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,14 +18,27 @@
 #include <cuco/bloom_filter.cuh>
 #include <cuco/bloom_filter_policies.cuh>
 
+#include <cstdint>
+
 using StringType = cudf::string_view;
 
 class ParquetBloomFilterTest : public cudf::test::BaseFixture {};
 
 TEST_F(ParquetBloomFilterTest, TestStrings)
 {
-  using key_type    = StringType;
-  using policy_type = cuco::arrow_filter_policy<key_type, cudf::hashing::detail::XXHash_64>;
+  using key_type = StringType;
+  // Apache Arrow Block-Split Bloom Filter layout, hashing keys with cudf's `XXHash_64` (matching
+  // `cudf::io::parquet::detail::arrow_filter_policy`).
+  using policy_type = cuco::parametric_filter_policy<cudf::hashing::detail::XXHash_64<key_type>,
+                                                     std::uint32_t,
+                                                     8,
+                                                     8,
+                                                     8,
+                                                     1,
+                                                     1,
+                                                     8,
+                                                     false,
+                                                     false>;
   using word_type   = policy_type::word_type;
 
   std::size_t constexpr num_filter_blocks = 4;

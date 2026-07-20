@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,12 +19,16 @@
 
 #include <cstdint>
 
+/**
+ * @file
+ * @brief Common types and utilities shared by cuDF's join APIs.
+ */
+
 namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup column_join
  * @{
- * @file
  */
 
 /**
@@ -43,7 +47,8 @@ enum class join_kind : int32_t {
 };
 
 /**
- * @brief Specifies whether a join implementation should apply an optional probe-side prefilter.
+ * @brief Specifies whether a join implementation should apply an optional prefilter that reduces
+ *        candidate rows before probing the hash table.
  *
  * `NO` preserves the current direct probe behavior. `YES` enables implementation-defined
  * prefiltering, such as bloom-filter-based candidate reduction before probing a hash table.
@@ -87,6 +92,14 @@ struct join_match_context {
     : _left_table{left_table}, _match_counts{std::move(match_counts)}
   {
   }
+  join_match_context(join_match_context const&)            = delete;
+  join_match_context& operator=(join_match_context const&) = delete;
+  join_match_context(join_match_context&&)                 = default;  ///< Move constructor
+  /**
+   * @brief Move assignment operator
+   * @return Reference to this object
+   */
+  join_match_context& operator=(join_match_context&&) = default;
   virtual ~join_match_context() = default;  ///< Virtual destructor for proper polymorphic deletion
 };
 
@@ -235,6 +248,10 @@ full_join(cudf::table_view const& left_keys,
  *
  * The cross join returns the cartesian product of rows from each table.
  *
+ * The result has `left.num_rows() * right.num_rows()` rows and
+ * `left.num_columns() + right.num_columns()` columns. Either operand may have
+ * zero columns and still contribute its row count.
+ *
  * @note Warning: This function can easily cause out-of-memory errors. The size of the output is
  * equal to `left.num_rows() * right.num_rows()`. Use with caution.
  *
@@ -243,8 +260,9 @@ full_join(cudf::table_view const& left_keys,
  * Right b: {3, 4, 5}
  * Result: { a: {0, 0, 0, 1, 1, 1, 2, 2, 2}, b: {3, 4, 5, 3, 4, 5, 3, 4, 5} }
  * @endcode
-
- * @throw cudf::logic_error if the number of columns in either `left` or `right` table is 0
+ *
+ * @throw std::overflow_error if `left.num_rows() * right.num_rows()` exceeds the maximum
+ * number of rows a column can hold.
  *
  * @param left  The left table
  * @param right The right table
@@ -314,6 +332,7 @@ std::unique_ptr<cudf::table> cross_join(
  *
  * @throw std::invalid_argument if join_kind is not INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
  * @throw std::invalid_argument if left_indices and right_indices have different sizes.
+ * @throw std::invalid_argument if predicate does not produce a Boolean output.
  *
  * @param left The left table for predicate evaluation (conditional columns only).
  * @param right The right table for predicate evaluation (conditional columns only).
@@ -337,6 +356,44 @@ filter_join_indices(cudf::table_view const& left,
                     cudf::join_kind join_kind,
                     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Returns the exact output size of `filter_join_indices` without materializing
+ *        the filtered index vectors.
+ *
+ * Runs the same predicate evaluation as `filter_join_indices` but skips the index
+ * materialization step, returning only the total number of pairs that would be
+ * emitted. The semantics per `join_kind` match `filter_join_indices`:
+ * - INNER_JOIN: number of pairs where the predicate evaluates to true.
+ * - LEFT_JOIN: predicate-passing pairs plus one entry per left row with no passing match.
+ * - FULL_JOIN: input pairs plus one extra entry per pair whose predicate failed
+ *   (because failed matches split into `(left, JoinNoMatch)` and `(JoinNoMatch, right)`).
+ *
+ * The returned size may be passed as a precomputed hint to APIs that compose
+ * `filter_join_indices` (for example, the mixed join APIs).
+ *
+ * @throw std::invalid_argument if `join_kind` is not INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
+ * @throw std::invalid_argument if `left_indices` and `right_indices` have different sizes.
+ * @throw std::invalid_argument if `predicate` does not produce a Boolean output.
+ *
+ * @param left The left table for predicate evaluation (conditional columns only).
+ * @param right The right table for predicate evaluation (conditional columns only).
+ * @param left_indices Device span of row indices in the left table.
+ * @param right_indices Device span of row indices in the right table.
+ * @param predicate An AST expression that returns a boolean for each pair of rows.
+ * @param join_kind The type of join operation. Must be INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
+ * @param stream CUDA stream used for kernel launches and memory operations.
+ *
+ * @return The exact number of pairs that `filter_join_indices` would produce.
+ */
+[[nodiscard]] std::size_t filter_join_indices_output_size(
+  cudf::table_view const& left,
+  cudf::table_view const& right,
+  cudf::device_span<size_type const> left_indices,
+  cudf::device_span<size_type const> right_indices,
+  cudf::ast::expression const& predicate,
+  cudf::join_kind join_kind,
+  rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief JIT-based filtering of join result indices using string predicate.

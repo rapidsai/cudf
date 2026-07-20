@@ -12,17 +12,16 @@ namespace cudf::detail {
 
 template <typename Hasher>
 cudf::join_match_context hash_join<Hasher>::inner_join_match_context(
-  cudf::table_view const& probe,
+  cudf::table_view const& left,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr) const
 {
   cudf::scoped_range range{"hash_join::inner_join_match_context"};
-  return cudf::join_match_context{probe,
-                                  make_match_counts(join_kind::INNER_JOIN, probe, stream, mr)};
+  return cudf::join_match_context{left, make_match_counts(join_kind::INNER_JOIN, left, stream, mr)};
 }
 
 template cudf::join_match_context cudf::hash_join::impl_type::inner_join_match_context(
-  cudf::table_view const& probe,
+  cudf::table_view const& left,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr) const;
 

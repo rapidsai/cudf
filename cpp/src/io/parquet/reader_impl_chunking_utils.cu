@@ -1,11 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/comp/decompression.hpp"
 #include "io/comp/gpuinflate.hpp"
-#include "io/utilities/time_utils.cuh"
+#include "io/utilities/time_utils.hpp"
 #include "reader_impl_chunking.hpp"
 #include "reader_impl_chunking_utils.cuh"
 
@@ -13,6 +13,7 @@
 #include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -231,7 +232,7 @@ int64_t find_next_split(int64_t cur_pos,
   cuda::std::optional<LogicalType> logical_type)
 {
   int32_t const clock_rate =
-    is_chrono(data_type{column_type_id}) ? to_clockrate(timestamp_type_id) : 0;
+    is_chrono(data_type{column_type_id}) ? cudf::io::detail::to_clockrate(timestamp_type_id) : 0;
 
   // TODO(ets): this is leftover from the original code, but will we ever output decimal as
   // anything but fixed point?
@@ -616,13 +617,27 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     start_pos += codec.num_pages;
   }
   // now copy the uncompressed V2 def and rep level data
-  if (not copy_in.empty()) {
+  if (curr_copy_page > 0) {
     auto const d_copy_in = cudf::detail::make_device_uvector_async(
       copy_in, stream, cudf::get_current_device_resource_ref());
     auto const d_copy_out = cudf::detail::make_device_uvector_async(
       copy_out, stream, cudf::get_current_device_resource_ref());
 
-    cudf::io::detail::gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
+    auto const src_iter = cudf::detail::make_counting_transform_iterator(
+      size_type{0},
+      cuda::proclaim_return_type<uint8_t const*>(
+        [inputs = d_copy_in.data()] __device__(size_type i) { return inputs[i].data(); }));
+    auto const dst_iter = cudf::detail::make_counting_transform_iterator(
+      size_type{0},
+      cuda::proclaim_return_type<uint8_t*>(
+        [outputs = d_copy_out.data()] __device__(size_type i) { return outputs[i].data(); }));
+    auto const size_iter = cudf::detail::make_counting_transform_iterator(
+      size_type{0},
+      cuda::proclaim_return_type<size_t>(
+        [inputs = d_copy_in.data(), outputs = d_copy_out.data()] __device__(size_type i) {
+          return inputs[i].size() < outputs[i].size() ? inputs[i].size() : outputs[i].size();
+        }));
+    cudf::detail::batched_memcpy_async(src_iter, dst_iter, size_iter, curr_copy_page, stream);
   }
 
   CUDF_EXPECTS(
@@ -715,8 +730,8 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
     return cudf::io::detail::get_decompression_scratch_size(d);
   });
 
-  rmm::device_uvector<size_t> d_temp_cost = cudf::detail::make_device_uvector_async(
-    temp_cost, stream, cudf::get_current_device_resource_ref());
+  rmm::device_uvector<size_t> d_temp_cost =
+    cudf::detail::make_device_uvector(temp_cost, stream, cudf::get_current_device_resource_ref());
 
   std::array codecs{compression_type::BROTLI,
                     compression_type::GZIP,
