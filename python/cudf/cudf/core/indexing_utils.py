@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
 import numpy as np
+import pandas as pd
 
 import pylibcudf as plc
 
@@ -93,6 +94,28 @@ def validate_scalar_key(key: Any, error_msg: str) -> None:
         for k in key:
             if is_list_like(k):
                 raise ValueError(error_msg)
+
+
+def check_dict_or_set_indexers(key: Any) -> None:
+    """Disallow using a set or dict (or a tuple nesting one) as an indexer.
+
+    Mirrors ``pandas.core.indexing.check_dict_or_set_indexers``. pandas
+    rejected set/dict indexers in 2.0 (GH#42825). The recursion into tuples
+    matches pandas' handling of nested ``.loc`` keys on a ``MultiIndex``
+    (e.g. ``df.loc[(({1}, 2), "a")]``).
+    """
+    if isinstance(key, set):
+        raise TypeError(
+            "Passing a set as an indexer is not supported. Use a list instead."
+        )
+    elif isinstance(key, dict):
+        raise TypeError(
+            "Passing a dict as an indexer is not supported. "
+            "Use a list instead."
+        )
+    elif isinstance(key, tuple):
+        for sub_key in key:
+            check_dict_or_set_indexers(sub_key)
 
 
 # Helpers for code-sharing between loc and iloc paths
@@ -660,6 +683,23 @@ def parse_single_row_loc_key(
         is_scalar = _is_scalar_or_zero_d_array(key)
         if is_scalar and isinstance(key, np.ndarray):
             key = as_column(key.item())
+        elif (
+            isinstance(key, Series)
+            and key.dtype.kind == "b"
+            and not key.index.equals(index)
+        ):
+            # A boolean Series indexer is aligned to the frame's index by
+            # label rather than applied positionally. Only labels missing
+            # from the mask make it unalignable; pre-existing NA values in
+            # the mask are treated as not-selected (matching pandas), so
+            # check for missing labels rather than for nulls post-reindex.
+            if len(index.difference(key.index)) > 0:
+                raise ValueError(
+                    "Unalignable boolean Series provided as indexer "
+                    "(index of the boolean Series and of the indexed "
+                    "object do not match)."
+                )
+            key = key.reindex(index)._column
         else:
             key = as_column(key)
         if (
@@ -682,7 +722,15 @@ def parse_single_row_loc_key(
                     return MaskIndexer(BooleanMask(key, n))
             elif index.dtype.kind == "M":
                 # Try to turn strings into datetimes
-                key = as_column(key, dtype=index.dtype)
+                try:
+                    key = as_column(key, dtype=index.dtype)
+                except pd.errors.OutOfBoundsDatetime:
+                    if is_scalar:
+                        # A label beyond the index unit's bounds cannot
+                        # be present; pandas raises KeyError for scalar
+                        # lookups but OutOfBoundsDatetime for list keys.
+                        raise KeyError(key.element_indexing(0))
+                    raise
             haystack = index._column
             gather_map = ordered_find(key, haystack)
             if is_scalar and len(gather_map.column) == 1:

@@ -29,6 +29,7 @@ from cudf.core.column.column import (
     pylibcudf_result_dtype_policy,
     same_dtype_policy,
 )
+from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
@@ -39,11 +40,14 @@ from cudf.utils.dtypes import (
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
-from cudf.utils.temporal import infer_format
+from cudf.utils.temporal import (
+    infer_format,
+    raise_if_datetime_seconds_out_of_bounds,
+)
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping
+    from collections.abc import Callable, Iterable, Mapping, Sequence
 
     import cupy as cp
 
@@ -204,11 +208,11 @@ class StringColumn(ColumnBase, Scannable):
         if min_count > 0 and col.valid_count < min_count:
             return pd.NA
 
-        return (
-            0
-            if len(col) == 0
-            else col.join_strings("", None).element_indexing(0)
-        )
+        if len(col) == 0:
+            # pandas sums an empty/all-null object series to the numeric
+            # identity 0; genuine string dtypes concatenate to "".
+            return 0 if self.dtype == np.dtype("object") else ""
+        return col.join_strings("", None).element_indexing(0)
 
     def any(
         self, skipna: bool = True, min_count: int = 0, **kwargs: Any
@@ -329,6 +333,33 @@ class StringColumn(ColumnBase, Scannable):
             if not valid.all():
                 raise ValueError(f"Column contains invalid data for {format=}")
 
+            if isinstance(dtype, np.dtype):
+                target_unit = np.datetime_data(dtype)[0]
+            elif isinstance(dtype, pd.DatetimeTZDtype):
+                target_unit = dtype.unit
+            else:
+                target_unit = dtype.pyarrow_dtype.unit
+            if target_unit != "s" and len(without_nat):
+                # libcudf parses directly into int64 values of the
+                # target unit and silently wraps on overflow
+                # (see https://github.com/rapidsai/cudf/issues/23247).
+                # Parse to seconds first (which cannot realistically
+                # overflow) and reject values whose whole-second part
+                # falls outside the target unit's range, like pandas
+                # does. This double parse can be removed once libcudf
+                # detects the overflow itself.
+                with without_nat.access(mode="read", scope="internal"):
+                    seconds = ColumnBase.create(
+                        plc.strings.convert.convert_datetime.to_timestamps(
+                            without_nat.plc_column,
+                            dtype_to_pylibcudf_type(np.dtype("datetime64[s]")),
+                            format,
+                        ),
+                        np.dtype("datetime64[s]"),
+                    )
+                lo, hi = seconds.minmax()
+                raise_if_datetime_seconds_out_of_bounds(lo, hi, target_unit)
+
             casting_func = plc.strings.convert.convert_datetime.to_timestamps
             add_back_nat = is_nat.any()
         elif dtype.kind == "m":
@@ -397,6 +428,18 @@ class StringColumn(ColumnBase, Scannable):
             return cast("Self", ColumnBase.create(self.plc_column, dtype))
         return self
 
+    def _process_values_for_isin(
+        self, values: Sequence | ColumnBase
+    ) -> tuple[ColumnBase, ColumnBase]:
+        lhs, rhs = super()._process_values_for_isin(values)
+        if lhs.dtype != rhs.dtype and is_dtype_obj_string(rhs.dtype):
+            # Strings of any dtype flavor (object, pd.StringDtype with
+            # python/pyarrow storage and NaN/NA na_value, pd.ArrowDtype
+            # string) hold comparable values; align rhs with lhs's dtype
+            # so ColumnBase.isin does not treat them as disjoint types.
+            rhs = rhs.astype(lhs.dtype)
+        return lhs, rhs
+
     @property
     def values(self) -> cp.ndarray:
         """
@@ -419,9 +462,14 @@ class StringColumn(ColumnBase, Scannable):
         result = super().to_arrow()
         # libcudf produces arrow string (32-bit offsets), but pandas 3.0
         # uses large_string (64-bit offsets) for pyarrow-backed string
-        # dtypes. Cast to large_string to match pandas arrow output.
-        if pa.types.is_string(result.type) and self._should_use_large_string:
-            result = result.cast(pa.large_string())
+        # dtypes. Cast to match the offset width declared by self.dtype so
+        # that the physical arrow type is consistent with the cudf dtype
+        # regardless of the offset width preserved from the source.
+        if self._should_use_large_string:
+            if pa.types.is_string(result.type):
+                result = result.cast(pa.large_string())
+        elif pa.types.is_large_string(result.type):
+            result = result.cast(pa.string())
         return result
 
     def to_pandas(
@@ -435,9 +483,14 @@ class StringColumn(ColumnBase, Scannable):
                 f"{arrow_type=} and {nullable=} cannot both be set."
             )
         if arrow_type:
-            # Use the raw column arrow (without large_string cast)
-            # so that ArrowExtensionArray preserves the original type.
-            pa_array = ColumnBase.to_arrow(self)
+            # When the dtype is an explicit ArrowDtype, honor the offset width
+            # (string vs large_string) it declares via self.to_arrow().
+            # Otherwise (e.g. a default StringDtype) preserve the source's raw
+            # arrow offset width so round-trips do not silently widen.
+            if isinstance(self.dtype, pd.ArrowDtype):
+                pa_array = self.to_arrow()
+            else:
+                pa_array = ColumnBase.to_arrow(self)
             return pd.Index(
                 pd.arrays.ArrowExtensionArray(pa_array), copy=False
             )
@@ -1315,20 +1368,30 @@ class StringColumn(ColumnBase, Scannable):
             ).execute_with_args(self),
         )
 
-    def is_all_integer(self) -> bool:
+    def is_all_integer(self, int_type: DtypeObj | None = None) -> bool:
         """Check if all non-null strings in the column are integers.
 
         This is an optimized version of `is_integer().all()` that avoids
         creating an intermediate boolean column.
+
+        Parameters
+        ----------
+        int_type : dtype, optional
+            If provided, additionally checks that every string represents a
+            value that fits within ``int_type`` (i.e. no underflow/overflow).
+            By default no range checking is performed.
 
         Returns
         -------
         bool
             True if all non-null strings are valid integers, False otherwise.
         """
+        plc_int_type = (
+            dtype_to_pylibcudf_type(int_type) if int_type is not None else None
+        )
         with self.access(mode="read", scope="internal"):
             bool_plc = plc.strings.convert.convert_integers.is_integer(
-                self.plc_column
+                self.plc_column, plc_int_type
             )
             return self._reduce_bool_column(bool_plc)
 

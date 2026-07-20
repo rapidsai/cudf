@@ -7,8 +7,8 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
-from cudf_streaming.streaming.channel_metadata import ChannelMetadata
-from cudf_streaming.streaming.table_chunk import (
+from cudf_streaming.channel_metadata import ChannelMetadata
+from cudf_streaming.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,
 )
@@ -81,7 +81,9 @@ async def default_node_single(
         metadata_in = await recv_metadata(ch_in, context)
         metadata_out = ChannelMetadata(
             local_count=metadata_in.local_count,
-            partitioning=maybe_remap_partitioning(ir, metadata_in.partitioning),
+            partitioning=maybe_remap_partitioning(
+                ir, metadata_in.partitioning, context=context
+            ),
             duplicated=metadata_in.duplicated,
         )
 
@@ -145,7 +147,10 @@ async def default_node_multi(
             if idx == partitioning_index:
                 # Remap partitioning from child schema to output schema
                 partitioning = maybe_remap_partitioning(
-                    ir, md_child.partitioning, child_ir=ir.children[idx]
+                    ir,
+                    md_child.partitioning,
+                    child_ir=ir.children[idx],
+                    context=context,
                 )
         metadata = ChannelMetadata(
             local_count=local_count,

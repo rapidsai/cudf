@@ -1,13 +1,14 @@
-/**
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights
- * reserved. SPDX-License-Identifier: Apache-2.0
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <cudf_streaming/integrations/partition.hpp>
+#include <cudf_streaming/partition_utils.hpp>
 
 #include <rapidsmpf/bootstrap/bootstrap.hpp>
 #include <rapidsmpf/bootstrap/utils.hpp>
 #include <rapidsmpf/communicator/communicator.hpp>
+#include <rapidsmpf/communicator/logger.hpp>
 #include <rapidsmpf/error.hpp>
 #include <rapidsmpf/memory/spill.hpp>
 #include <rapidsmpf/nvtx.hpp>
@@ -286,7 +287,7 @@ rapidsmpf::Duration do_run(rapidsmpf::shuffler::PartID const total_num_partition
     shuffler.wait();
     for (auto finished_partition : shuffler.local_partitions()) {
       auto packed_chunks    = shuffler.extract(finished_partition);
-      auto output_partition = cudf_streaming::integrations::unpack_and_concat(
+      auto output_partition = cudf_streaming::unpack_and_concat(
         rapidsmpf::unspill_partitions(
           std::move(packed_chunks), br, rapidsmpf::AllowOverbooking::YES),
         stream,
@@ -303,15 +304,15 @@ rapidsmpf::Duration do_run(rapidsmpf::shuffler::PartID const total_num_partition
   // Check the shuffle result (this test only works for non-empty partitions
   // thus we only check large shuffles).
   if (args.num_local_rows >= 1000000) {
-    for (const auto& output_partition : output_partitions) {
-      auto [parts, owner] = cudf_streaming::integrations::partition_and_split(
-        output_partition->view(),
-        {0},
-        static_cast<std::int32_t>(total_num_partitions),
-        cudf::hash_id::HASH_MURMUR3,
-        cudf::DEFAULT_HASH_SEED,
-        stream,
-        br);
+    for (auto const& output_partition : output_partitions) {
+      auto [parts, owner] =
+        cudf_streaming::partition_and_split(output_partition->view(),
+                                            {0},
+                                            static_cast<std::int32_t>(total_num_partitions),
+                                            cudf::hash_id::HASH_MURMUR3,
+                                            cudf::DEFAULT_HASH_SEED,
+                                            stream,
+                                            br);
       RAPIDSMPF_EXPECTS(
         std::count_if(
           parts.begin(), parts.end(), [](auto const& table) { return table.num_rows() > 0; }) == 1,
@@ -406,14 +407,13 @@ rapidsmpf::Duration run_hash_partition_inline(std::shared_ptr<rapidsmpf::Communi
     generate_input_partitions(args, stream, br, std::identity{});
 
   auto make_chunk_fn = [&](cudf::table const& partition) {
-    return cudf_streaming::integrations::partition_and_pack(
-      partition,
-      {0},
-      static_cast<std::int32_t>(total_num_partitions),
-      cudf::hash_id::HASH_MURMUR3,
-      cudf::DEFAULT_HASH_SEED,
-      stream,
-      br);
+    return cudf_streaming::partition_and_pack(partition,
+                                              {0},
+                                              static_cast<std::int32_t>(total_num_partitions),
+                                              cudf::hash_id::HASH_MURMUR3,
+                                              cudf::DEFAULT_HASH_SEED,
+                                              stream,
+                                              br);
   };
 
   return do_run(total_num_partitions, comm, args, stream, br, statistics, [&](auto& shuffler) {
@@ -446,14 +446,13 @@ rapidsmpf::Duration run_hash_partition_with_datagen(
 
   std::vector<std::unordered_map<rapidsmpf::shuffler::PartID, rapidsmpf::PackedData>>
     input_partitions = generate_input_partitions(args, stream, br, [&](cudf::table&& table) {
-      return cudf_streaming::integrations::partition_and_pack(
-        table,
-        {0},
-        static_cast<std::int32_t>(total_num_partitions),
-        cudf::hash_id::HASH_MURMUR3,
-        cudf::DEFAULT_HASH_SEED,
-        stream,
-        br);
+      return cudf_streaming::partition_and_pack(table,
+                                                {0},
+                                                static_cast<std::int32_t>(total_num_partitions),
+                                                cudf::hash_id::HASH_MURMUR3,
+                                                cudf::DEFAULT_HASH_SEED,
+                                                stream,
+                                                br);
     });
 
   return do_run(total_num_partitions, comm, args, stream, br, statistics, [&](auto& shuffler) {
@@ -492,8 +491,7 @@ int main(int argc, char** argv)
   // Initialize configuration options from environment variables.
   rapidsmpf::config::Options options{rapidsmpf::config::get_environment_variables()};
 
-  set_current_rmm_resource(args.rmm_mr);
-  rapidsmpf::RmmResourceAdaptor stat_enabled_mr = set_device_mem_resource_with_stats();
+  auto rmm_mr = create_rmm_resource(args.rmm_mr);
 
   std::unordered_map<rapidsmpf::MemoryType, std::int64_t> memory_limits{};
   if (args.device_mem_limit_mb >= 0) {
@@ -504,14 +502,26 @@ int main(int argc, char** argv)
 
   // We're only going to measure the last run, so disable initially.
   stats->disable();
+  RAPIDSMPF_EXPECTS(args.pinned_mem_disable || rapidsmpf::is_pinned_memory_resources_supported(),
+                    "pinned host memory is not supported on this system; pass `-L` to disable it.",
+                    std::runtime_error);
+  auto pinned_pool_properties =
+    args.pinned_mem_disable ? rapidsmpf::PinnedMemoryDisabled : rapidsmpf::PinnedPoolProperties{};
   auto br = rapidsmpf::BufferResource::create(
-    stat_enabled_mr,
-    args.pinned_mem_disable ? rapidsmpf::PinnedMemoryResource::Disabled
-                            : rapidsmpf::PinnedMemoryResource::make_if_available(),
+    rmm_mr,
+    std::move(pinned_pool_properties),
     std::move(memory_limits),
     std::chrono::milliseconds{1},
     std::make_shared<rmm::cuda_stream_pool>(16, rmm::cuda_stream::flags::non_blocking),
     stats);
+  // `BufferResource` wraps the device resource in an internal tracking
+  // `RmmResourceAdaptor` (exposed via `device_mr_adaptor()`). Install the
+  // tracking adaptor as the current device resource so libcudf temporary
+  // allocations are also tracked.
+  auto& stat_enabled_mr = br->device_mr_adaptor();
+  rmm::mr::set_current_device_resource(stat_enabled_mr);
+
+  auto log = rapidsmpf::Logger::from_options(options);
 
   std::shared_ptr<rapidsmpf::Communicator> comm;
   auto progress_thread = std::make_shared<rapidsmpf::ProgressThread>(stats);
@@ -524,7 +534,7 @@ int main(int argc, char** argv)
       return 1;
     }
     rapidsmpf::mpi::init(&argc, &argv);
-    comm = std::make_shared<rapidsmpf::MPI>(MPI_COMM_WORLD, options, progress_thread);
+    comm = std::make_shared<rapidsmpf::MPI>(MPI_COMM_WORLD, progress_thread, log);
 #else
     std::cerr << "Error: MPI communicator is not available in this build." << std::endl;
     return 1;
@@ -534,11 +544,11 @@ int main(int argc, char** argv)
     if (use_bootstrap) {
       // Launched with rrun - use bootstrap backend
       comm = rapidsmpf::bootstrap::create_ucxx_comm(
-        progress_thread, rapidsmpf::bootstrap::BackendType::AUTO, options);
+        progress_thread, rapidsmpf::bootstrap::BackendType::AUTO, options, log);
     } else {
 #ifdef CUDF_STREAMING_HAVE_MPI
       // Launched with mpirun - use MPI bootstrap
-      comm = rapidsmpf::ucxx::init_using_mpi(MPI_COMM_WORLD, options, progress_thread);
+      comm = rapidsmpf::ucxx::init_using_mpi(MPI_COMM_WORLD, options, progress_thread, log);
 #else
       std::cerr << "Error: UCXX without MPI support requires bootstrap mode." << std::endl;
       return 1;
@@ -555,7 +565,6 @@ int main(int argc, char** argv)
 
   args.pprint(*comm);
 
-  auto& log                    = comm->logger();
   rmm::cuda_stream_view stream = cudf::get_default_stream();
 
   // Print benchmark/hardware info.

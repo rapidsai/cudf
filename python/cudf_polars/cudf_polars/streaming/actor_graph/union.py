@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Union logic for the RapidsMPF streaming runtime."""
 
@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from cudf_streaming.streaming.channel_metadata import ChannelMetadata
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.channel_metadata import ChannelMetadata
+from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.streaming.core.message import Message
 
 from cudf_polars.dsl.ir import Union

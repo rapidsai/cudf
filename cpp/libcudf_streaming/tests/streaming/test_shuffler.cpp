@@ -1,6 +1,6 @@
 /**
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "../utils.hpp"
@@ -10,9 +10,8 @@
 
 #include <cudf/copying.hpp>
 
-#include <cudf_streaming/integrations/partition.hpp>
-#include <cudf_streaming/streaming/partition.hpp>
-#include <cudf_streaming/streaming/table_chunk.hpp>
+#include <cudf_streaming/partition.hpp>
+#include <cudf_streaming/table_chunk.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -26,19 +25,19 @@
 
 using namespace rapidsmpf;
 using namespace rapidsmpf::streaming;
-using cudf_streaming::streaming::TableChunk;
+using cudf_streaming::table_chunk;
 namespace actor    = rapidsmpf::streaming::actor;
-namespace cs_actor = cudf_streaming::streaming::actor;
+namespace cs_actor = cudf_streaming::actor;
 
 class StreamingShuffler : public BaseStreamingFixture, public ::testing::WithParamInterface<int> {
  public:
-  const unsigned int num_partitions = 10;
-  const unsigned int num_rows       = 1000;
-  const unsigned int num_chunks     = 5;
-  const unsigned int chunk_size     = num_rows / num_chunks;
-  const std::int64_t seed           = 42;
-  const cudf::hash_id hash_function = cudf::hash_id::HASH_MURMUR3;
-  const OpID op_id                  = 0;
+  unsigned int const num_partitions = 10;
+  unsigned int const num_rows       = 1000;
+  unsigned int const num_chunks     = 5;
+  unsigned int const chunk_size     = num_rows / num_chunks;
+  std::int64_t const seed           = 42;
+  cudf::hash_id const hash_function = cudf::hash_id::HASH_MURMUR3;
+  OpID const op_id                  = 0;
 
   void SetUp() override { BaseStreamingFixture::SetUpWithThreads(GetParam()); }
 
@@ -60,7 +59,7 @@ TEST_P(StreamingShuffler, basic_shuffler)
   for (unsigned int i = 0; i < num_chunks; ++i) {
     input_chunks.emplace_back(
       to_message(i,
-                 std::make_unique<TableChunk>(
+                 std::make_unique<table_chunk>(
                    std::make_unique<cudf::table>(
                      cudf::slice(full_input_table,
                                  {static_cast<cudf::size_type>(i * chunk_size),
@@ -122,7 +121,7 @@ TEST_P(StreamingShuffler, basic_shuffler)
   // Concat all output chunks to a single table.
   std::vector<cudf::table_view> output_chunks_as_views;
   for (auto& chunk : output_chunks) {
-    output_chunks_as_views.push_back(chunk.get<TableChunk>().table_view());
+    output_chunks_as_views.push_back(chunk.get<table_chunk>().table_view());
   }
   auto result_table = cudf::concatenate(output_chunks_as_views);
 

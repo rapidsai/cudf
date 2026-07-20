@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -248,12 +248,6 @@ void names_from_expression::visit_operands(
   auto const& selected_column_indices   = options.get_column_indices();
   auto const& selected_column_field_ids = options.get_column_field_ids();
 
-  CUDF_EXPECTS(static_cast<int>(selected_column_names.has_value()) +
-                   static_cast<int>(selected_column_indices.has_value()) +
-                   static_cast<int>(selected_column_field_ids.has_value()) <=
-                 1,
-               "Parquet reader encountered multiple column selection modes");
-
   // Map counting indices to the selected column by names
   if (selected_column_names.has_value()) {
     std::transform(selected_column_names->begin(),
@@ -269,20 +263,21 @@ void names_from_expression::visit_operands(
   else if (selected_column_indices.has_value()) {
     auto const& root = schema_tree.front();
 
-    std::transform(selected_column_indices->begin(),
-                   selected_column_indices->end(),
-                   cuda::counting_iterator<cudf::size_type>{0},
-                   std::inserter(column_indices_to_names, column_indices_to_names.end()),
-                   [&](auto selected_col_idx, auto const mapped_col_idx) {
-                     CUDF_EXPECTS(
-                       std::cmp_less(selected_col_idx, root.children_idx.size()),
-                       "Encountered an invalid col index in the top-level column selection",
-                       std::invalid_argument);
-                     auto const schema_idx = root.children_idx[selected_col_idx];
-                     return std::make_pair(
-                       mapped_col_idx,
-                       normalize_column_path(schema_tree[schema_idx].name, case_sensitive_names));
-                   });
+    std::transform(
+      selected_column_indices->begin(),
+      selected_column_indices->end(),
+      cuda::counting_iterator<cudf::size_type>{0},
+      std::inserter(column_indices_to_names, column_indices_to_names.end()),
+      [&](auto selected_col_idx, auto const mapped_col_idx) {
+        CUDF_EXPECTS(
+          selected_col_idx >= 0 and std::cmp_less(selected_col_idx, root.children_idx.size()),
+          "Encountered an invalid col index in the top-level column selection",
+          std::invalid_argument);
+        auto const schema_idx = root.children_idx[selected_col_idx];
+        return std::make_pair(
+          mapped_col_idx,
+          normalize_column_path(schema_tree[schema_idx].name, case_sensitive_names));
+      });
   }
   // Map selected field ids to column paths from the schema tree
   else if (selected_column_field_ids.has_value()) {
@@ -387,6 +382,32 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
   }
 
   return {filtered_row_group_indices};
+}
+
+offset_column_references::offset_column_references(
+  std::optional<std::reference_wrapper<ast::expression const>> expr, size_type offset)
+  : _offset{offset}
+{
+  if (!expr.has_value()) { return; }
+
+  if (offset == 0) {
+    _converted_expr = expr;
+    return;
+  }
+  _converted_expr = expr.value().get().accept(*this);
+}
+
+std::reference_wrapper<ast::expression const> offset_column_references::visit(
+  ast::column_reference const& expr)
+{
+  _col_ref.emplace_back(expr.get_column_index() + _offset, expr.get_table_source());
+  return _col_ref.back();
+}
+
+std::reference_wrapper<ast::expression const> offset_column_references::visit(
+  ast::column_name_reference const&)
+{
+  CUDF_FAIL("Column name references are not supported in offset_column_references");
 }
 
 }  // namespace cudf::io::parquet::detail

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -23,6 +23,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
+#include <functional>
 #include <numeric>
 #include <optional>
 #include <unordered_set>
@@ -127,6 +128,41 @@ struct row_group_stats_caster : public stats_caster_base {
 
 }  // namespace
 
+bool aggregate_reader_metadata::any_row_group_stats_available(
+  host_span<std::vector<size_type> const> input_row_group_indices,
+  host_span<int const> filter_column_schemas) const
+{
+  auto const colchunk_has_stats = [](ColumnChunk const& colchunk) {
+    auto const& stats = colchunk.meta_data.statistics;
+    return stats.min_value.has_value() or stats.max_value.has_value() or stats.min.has_value() or
+           stats.max.has_value() or stats.null_count.has_value();
+  };
+
+  // Iterate columns on the outside so a single offset caches the chunk position across sources
+  for (auto const schema_idx : filter_column_schemas) {
+    std::optional<size_type> colchunk_offset{std::nullopt};
+
+    for (size_t src_idx = 0; src_idx < input_row_group_indices.size(); ++src_idx) {
+      auto const& row_group_indices = input_row_group_indices[src_idx];
+      if (row_group_indices.empty()) { continue; }
+
+      auto const& first_row_group =
+        per_file_metadata[src_idx].row_groups[row_group_indices.front()];
+      auto const num_col_chunks    = static_cast<size_type>(first_row_group.columns.size());
+      auto const mapped_schema_idx = map_schema_index(schema_idx, static_cast<int>(src_idx));
+      auto const cached_offset     = colchunk_offset.value_or(-1);
+
+      if (cached_offset < 0 or cached_offset >= num_col_chunks or
+          first_row_group.columns[cached_offset].schema_idx != mapped_schema_idx) {
+        colchunk_offset = find_colchunk_iter_offset(first_row_group, mapped_schema_idx);
+      }
+
+      if (colchunk_has_stats(first_row_group.columns[colchunk_offset.value()])) { return true; }
+    }
+  }
+  return false;
+}
+
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::apply_stats_filters(
   host_span<std::vector<size_type> const> input_row_group_indices,
   size_type total_row_groups,
@@ -144,6 +180,21 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
 
   // Return early if no columns will participate in stats based filtering
   if (stats_columns_mask.empty()) { return std::nullopt; }
+
+  // Scope the stats-availability check to the columns referenced by the filter.
+  std::vector<int> filter_column_schemas;
+  filter_column_schemas.reserve(output_column_schemas.size());
+  thrust::copy_if(thrust::host,
+                  output_column_schemas.begin(),
+                  output_column_schemas.end(),
+                  stats_columns_mask.begin(),
+                  std::back_inserter(filter_column_schemas),
+                  std::identity{});
+
+  // Skip building the stats table if no filter column carries usable row-group statistics.
+  if (not any_row_group_stats_available(input_row_group_indices, filter_column_schemas)) {
+    return std::nullopt;
+  }
 
   // Converts Column chunk statistics to a table
   // where min(col[i]) = columns[i*2], max(col[i])=columns[i*2+1]

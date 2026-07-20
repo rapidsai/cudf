@@ -14,6 +14,7 @@ jobs:
       - check-nightly-ci
       - changed-files
       - checks
+      - cmake-tests
       - conda-cpp-build
       - cpp-linters
       - conda-cpp-checks
@@ -359,6 +360,22 @@ jobs:
       build_type: pull-request
       node_type: cpu16
       script: ci/build_cpp.sh
+  cmake-tests:
+    needs: checks
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: read
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    with:
+      build_type: pull-request
+      node_type: cpu16
+      arch: "amd64"
+      container_image: "rapidsai/ci-conda:26.10-latest"
+      script: "ci/test_cmake.sh"
   cpp-linters:
     permissions:
       actions: read
@@ -473,7 +490,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:26.08-latest"
+      container_image: "rapidsai/ci-conda:26.10-latest"
       script: "ci/test_java.sh"
   conda-notebook-tests:
     needs: [conda-python-build, conda-python-build-noarch, changed-files]
@@ -490,7 +507,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:26.08-latest"
+      container_image: "rapidsai/ci-conda:26.10-latest"
       script: "ci/test_notebooks.sh"
   docs-build:
     needs: [conda-python-build, conda-python-build-noarch, changed-files]
@@ -507,7 +524,7 @@ jobs:
       build_type: pull-request
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:26.08-latest"
+      container_image: "rapidsai/ci-conda:26.10-latest"
       script: "ci/build_docs.sh"
   wheel-build-libcudf:
     needs: checks
@@ -662,7 +679,7 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       container-options: "--cap-add CAP_SYS_PTRACE --shm-size=8g --ulimit=nofile=1000000:1000000"
-      script: "ci/test_wheel_cudf_polars.sh"
+      script: "env POLARS_VERSIONS=endpoints ci/test_wheel_cudf_polars.sh"
   cudf-polars-polars-tests:
     needs: [wheel-build-cudf-polars, wheel-build-cudf-streaming, changed-files]
     permissions:
@@ -727,7 +744,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/build-in-devcontainer.yaml@main
     with:
       arch: '["amd64", "arm64"]'
-      cuda: '["13.2"]'
+      cuda: '["13.3"]'
       node_type: "cpu8"
       timeout-minutes: 90
       env: |
@@ -772,7 +789,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
       continue-on-error: true
-      container_image: "rapidsai/ci-conda:26.08-latest"
+      container_image: "rapidsai/ci-conda:26.10-latest"
       script: |
         ci/cudf_pandas_scripts/third-party-integration/test.sh python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml
   cuml-compat-tests:
@@ -793,7 +810,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
       continue-on-error: true
-      container_image: "rapidsai/ci-conda:26.06-latest"
+      container_image: "rapidsai/ci-conda:26.10-latest"
       script: "ci/test_cuml_compat.sh"
   pandas-tests:
     # run the Pandas unit tests using PR branch
@@ -813,7 +830,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
-      container_image: "rapidsai/citestwheel:26.08-latest"
+      container_image: "rapidsai/citestwheel:26.10-latest"
       script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
   narwhals-tests:
     needs: [conda-python-build, conda-python-build-noarch, changed-files]
@@ -832,7 +849,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
-      container_image: "rapidsai/ci-conda:26.08-latest"
+      container_image: "rapidsai/ci-conda:26.10-latest"
       script: ci/test_narwhals.sh
   spark-rapids-jni:
     needs: changed-files

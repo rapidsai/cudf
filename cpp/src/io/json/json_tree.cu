@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -682,7 +682,7 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
   auto get_utf8_matched_field_nodes = [&]() {
     auto make_map = [&stream](auto num_keys) {
       using hasher_type3 = cudf::hashing::detail::default_hash<size_type>;
-      return cuco::static_map{cuco::extent{num_keys},
+      return cuco::static_map{cuco::extent{static_cast<std::size_t>(num_keys)},
                               1.0,  // 100% load factor
                               cuco::empty_key{empty_node_index_sentinel},
                               cuco::empty_value{empty_node_index_sentinel},
@@ -767,7 +767,9 @@ get_array_children_indices(TreeDepthT row_array_children_level,
     cuda::counting_iterator{num_nodes},
     node_levels.begin(),
     level2_nodes.begin(),
-    [row_array_children_level] __device__(auto level) { return level == row_array_children_level; },
+    [row_array_children_level] __device__(auto level) -> bool {
+      return level == row_array_children_level;
+    },
     stream);
   auto level2_parent_nodes =
     thrust::make_permutation_iterator(parent_node_ids.begin(), level2_nodes.cbegin());

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -382,7 +382,7 @@ size_t decompress_zstd(host_span<uint8_t const> src, host_span<uint8_t> dst)
   };
   size_t const decompressed_bytes = ZSTD_decompress(reinterpret_cast<void*>(dst.data()),
                                                     dst.size(),
-                                                    reinterpret_cast<const void*>(src.data()),
+                                                    reinterpret_cast<void const*>(src.data()),
                                                     src.size());
   check_error_code(ZSTD_isError(decompressed_bytes), __LINE__);
   return decompressed_bytes;
@@ -465,7 +465,7 @@ source_properties get_source_properties(compression_type compression, host_span<
     }
     case compression_type::ZSTD: {
       auto const ret =
-        ZSTD_findDecompressedSize(reinterpret_cast<const void*>(src.data()), src.size());
+        ZSTD_findDecompressedSize(reinterpret_cast<void const*>(src.data()), src.size());
       uncomp_len = static_cast<size_t>(ret);
       if (compression != compression_type::AUTO) {
         CUDF_EXPECTS(ret != ZSTD_CONTENTSIZE_UNKNOWN,
@@ -584,6 +584,7 @@ void host_decompress(compression_type compression,
     h_results[i] = {tasks[i].get(), codec_status::SUCCESS};
   }
 
+  cudf::detail::join_streams(streams, stream);
   cudf::detail::cuda_memcpy<codec_exec_result>(results, h_results, stream);
 }
 

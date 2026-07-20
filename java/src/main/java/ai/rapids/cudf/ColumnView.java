@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -881,8 +881,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Create a deep copy of the column while replacing the null mask. The resultant null mask is the
-   * bitwise merge of null masks in the columns given as arguments.
-   * The result will be sanitized to not contain any non-empty nulls in case of nested types
+   * bitwise {@code mergeOp} of null masks in the columns given as arguments, AND-ed with this column's
+   * existing null mask.
+   *
+   * For STRUCT columns the new mask is also pushed down into every descendant column, to
+   * stay consistent with the parent. For LIST/STRING columns the resultant offsets are
+   * sanitized to not contain any non-empty nulls.
+   *
+   * If {@code columns} is empty, this column's null mask is dropped entirely (every row is
+   * treated as valid).
    *
    * @param mergeOp binary operator (BITWISE_AND and BITWISE_OR only)
    * @param columns array of columns whose null masks are merged, must have identical number of rows.
@@ -4309,7 +4316,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Segmented sort of the elements within a list in each row of a list column.
-   * NOTICE: list columns with nested child are NOT supported yet.
+   * The list child may be of any type whose leaf elements are relationally comparable, including
+   * arbitrarily nested LIST and STRUCT children.
    *
    * @param isDescending   whether sorting each row with descending order (or ascending order)
    * @param isNullSmallest whether to regard the null value as the min value (or the max value)
