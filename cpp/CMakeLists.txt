@@ -703,6 +703,7 @@ add_library(
   src/groupby/sort/host_udf_aggregation.cpp
   src/groupby/sort/scan.cpp
   src/groupby/sort/sort_helper.cu
+  src/groupby/sort/sort_helper_nested.cu
   src/groupby/streaming_groupby.cpp
   src/groupby/streaming_groupby/aggregate.cu
   src/groupby/streaming_groupby/impl.cu
