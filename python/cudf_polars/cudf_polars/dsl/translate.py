@@ -113,6 +113,12 @@ def _read_file_bytes(path: Path, num_bytes: int = 4) -> bytes:
 
 
 def _unsupported_fill_over_window(value: expr.Expr) -> bool:
+    """
+    Check if a fill_null_with_strategy over a window function is unsupported.
+
+    The only supported pattern is fill_null_with_strategy(cum_sum(...)) where
+    cum_sum is the direct and only windowed child.
+    """
     if not (
         isinstance(value, expr.UnaryFunction)
         and value.name == "fill_null_with_strategy"
