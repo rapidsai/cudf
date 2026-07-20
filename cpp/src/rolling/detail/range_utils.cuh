@@ -7,11 +7,17 @@
 
 #include "rolling_utils.cuh"
 
+#include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/column/column_view.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/rolling.hpp>
+#include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/rolling.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -22,15 +28,16 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-#include <cub/device/device_transform.cuh>
 #include <cuda/functional>
-#include <cuda/iterator>
+#include <cuda/std/cmath>
 #include <cuda/std/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 
+#include <memory>
 #include <optional>
 
 namespace cudf {
@@ -436,6 +443,32 @@ struct bounded_distance_functor {
   }
 };
 
+template <typename Transform>
+CUDF_KERNEL void materialize_range_window_bounds_kernel(size_type size,
+                                                        size_type* result,
+                                                        Transform transform)
+{
+  auto const index = cudf::detail::grid_1d::global_thread_id();
+  if (index < size) { result[index] = transform(static_cast<size_type>(index)); }
+}
+
+template <typename Transform>
+void materialize_range_window_bounds(size_type size,
+                                     size_type* result,
+                                     Transform transform,
+                                     rmm::cuda_stream_view stream)
+{
+  if (size == 0) { return; }
+
+  constexpr thread_index_type block_size{128};
+  cudf::detail::grid_1d config{size, block_size};
+  materialize_range_window_bounds_kernel<<<config.num_blocks,
+                                           config.num_threads_per_block,
+                                           0,
+                                           stream.value()>>>(size, result, transform);
+  CUDF_CUDA_TRY(cudaGetLastError());
+}
+
 /**
  * @brief Functor to dispatch computation of clamped range-based rolling window bounds.
  *
@@ -455,11 +488,8 @@ struct range_window_clamper {
                         mutable_column_view& result,
                         rmm::cuda_stream_view stream) const
   {
-    CUDF_CUDA_TRY(cub::DeviceTransform::Transform(cuda::counting_iterator<size_type>{0},
-                                                  result.begin<size_type>(),
-                                                  size,
-                                                  unbounded_distance_functor{grouping, direction},
-                                                  stream.value()));
+    materialize_range_window_bounds(
+      size, result.data<size_type>(), unbounded_distance_functor{grouping, direction}, stream);
   }
 
   template <typename Grouping, typename OrderbyT>
@@ -471,12 +501,10 @@ struct range_window_clamper {
                           mutable_column_view& result,
                           rmm::cuda_stream_view stream) const
   {
-    CUDF_CUDA_TRY(cub::DeviceTransform::Transform(
-      cuda::counting_iterator<size_type>{0},
-      result.begin<size_type>(),
-      size,
-      current_row_distance_functor{grouping, direction, order, begin},
-      stream.value()));
+    materialize_range_window_bounds(size,
+                                    result.data<size_type>(),
+                                    current_row_distance_functor{grouping, direction, order, begin},
+                                    stream);
   }
 
   template <typename Grouping, typename OrderbyT, typename DeltaT>
@@ -489,13 +517,12 @@ struct range_window_clamper {
                       mutable_column_view& result,
                       rmm::cuda_stream_view stream) const
   {
-    CUDF_CUDA_TRY(cub::DeviceTransform::Transform(
-      cuda::counting_iterator<size_type>{0},
-      result.begin<size_type>(),
+    materialize_range_window_bounds(
       size,
+      result.data<size_type>(),
       bounded_distance_functor<Grouping, OrderbyT, DeltaT, WindowType>{
         grouping, direction, order, begin, row_delta},
-      stream.value()));
+      stream);
   }
 
   /**

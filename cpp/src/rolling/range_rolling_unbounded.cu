@@ -6,9 +6,19 @@
 #include "detail/range_rolling.hpp"
 #include "detail/range_utils.cuh"
 
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/detail/rolling.hpp>
+#include <cudf/rolling.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
+
 #include <memory>
+#include <optional>
 
 namespace cudf::detail {
 
