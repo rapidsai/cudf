@@ -583,7 +583,7 @@ struct range_window_clamper {
         // bounds for every other orderby type before dispatching, so no runtime guard is needed.
         static_assert(cudf::is_numeric_not_bool<OrderbyT>() || cudf::is_timestamp<OrderbyT>(),
                       "Column-valued RANGE bounds support only numeric and timestamp orderby "
-                      "columns.");
+                         "columns.");
         if constexpr (cudf::is_numeric_not_bool<OrderbyT>()) {
           auto const* d_row_delta = delta_col->data<OrderbyT>();
           expand_bounded</*PerRow=*/true>(
@@ -680,9 +680,10 @@ struct range_window_clamper {
     rmm::device_async_resource_ref mr) const
   {
     if constexpr (is_column_range_window<WindowType>()) {
-      // Column-valued bounds are unsupported for fixed-point orderby columns. Rejecting here (rather
-      // than deeper in `window_bounds`) keeps `window_bounds<fixed_point, *_column>` from ever being
-      // instantiated, so the column branch there need only handle numeric and timestamp orderbys.
+      // Column-valued bounds are unsupported for fixed-point orderby columns. Rejecting here
+      // (rather than deeper in `window_bounds`) keeps `window_bounds<fixed_point, *_column>` from
+      // ever being instantiated, so the column branch there need only handle numeric and timestamp
+      // orderbys.
       CUDF_FAIL("Column-valued RANGE bounds are not supported for fixed-point order-by columns.",
                 cudf::data_type_error);
     } else {

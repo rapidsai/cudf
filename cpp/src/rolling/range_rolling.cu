@@ -105,8 +105,8 @@ std::unique_ptr<column> make_range_window(
     [&](auto&& window) -> std::unique_ptr<column> {
       using WindowType      = cuda::std::decay_t<decltype(window)>;
       auto const* delta_col = window.delta_column();
-      // Type-independent invariants for a per-row delta column are enforced once here, regardless of
-      // the orderby type. The orderby-type-specific type relationship is checked per-type in
+      // Type-independent invariants for a per-row delta column are enforced once here, regardless
+      // of the orderby type. The orderby-type-specific type relationship is checked per-type in
       // range_window_clamper::operator().
       if (delta_col != nullptr) {
         CUDF_EXPECTS(delta_col->size() == orderby.size(),
