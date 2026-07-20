@@ -11,12 +11,16 @@
 
 #include <span>
 
+/**
+ * @file
+ * @brief APIs for adding, removing, and matching the keys of dictionary columns.
+ */
+
 namespace CUDF_EXPORT cudf {
 namespace dictionary {
 /**
  * @addtogroup dictionary_update
  * @{
- * @file
  */
 
 /**

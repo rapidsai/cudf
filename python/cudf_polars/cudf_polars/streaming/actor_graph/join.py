@@ -29,8 +29,13 @@ from rapidsmpf.streaming.core.message import Message
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Join
 from cudf_polars.dsl.utils.naming import names_to_indices
-from cudf_polars.streaming.actor_graph.collectives.allgather import AllGatherManager
-from cudf_polars.streaming.actor_graph.collectives.shuffle import _global_shuffle
+from cudf_polars.streaming.actor_graph.collectives.allgather import (
+    AllGatherManager,
+)
+from cudf_polars.streaming.actor_graph.collectives.shuffle import (
+    _global_shuffle,
+    _key_column_indices,
+)
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
 )
@@ -40,6 +45,7 @@ from cudf_polars.streaming.actor_graph.utils import (
     CUDF_ROW_LIMIT,
     MAX_ROWS_PER_PARTITION,
     ChannelManager,
+    ChunkStore,
     NormalizedPartitioning,
     TableSizeStats,
     _sample_chunks,
@@ -65,6 +71,7 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
+    from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
     from cudf_polars.streaming.actor_graph.tracing import ActorTracer
@@ -90,6 +97,10 @@ class JoinStrategy:
     """The shuffle indices for the left side. Only used for shuffle joins."""
     right_indices: tuple[int, ...] = ()
     """The shuffle indices for the right side. Only used for shuffle joins."""
+    left_keys: tuple[NamedExpr, ...] = ()
+    """The key expressions for the left side. Only used for shuffle joins."""
+    right_keys: tuple[NamedExpr, ...] = ()
+    """The key expressions for the right side. Only used for shuffle joins."""
 
 
 @dataclass(frozen=True)
@@ -344,6 +355,7 @@ async def _broadcast_join(
             ir,
             left_metadata.partitioning,
             child_ir=ir.children[0],
+            context=context,
         )
     else:
         small_ch, large_ch = ch_left, ch_right
@@ -355,6 +367,7 @@ async def _broadcast_join(
                 ir,
                 right_metadata.partitioning,
                 child_ir=ir.children[1],
+                context=context,
             )
             if ir.options[0] == "Right"
             else None
@@ -408,23 +421,34 @@ async def _broadcast_join(
 def _get_key_indices(
     ir: Join,
     n_partitioned_keys: int | None,
-) -> tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...]]:
+) -> tuple[
+    tuple[int, ...],
+    tuple[int, ...],
+    tuple[int, ...],
+    tuple[NamedExpr, ...],
+    tuple[NamedExpr, ...],
+]:
     left, right = ir.children
-    left_key_indices = names_to_indices(ir.left_on, left.schema)
-    right_key_indices = names_to_indices(ir.right_on, right.schema)
-
-    n_keys = (
-        n_partitioned_keys if n_partitioned_keys is not None else len(left_key_indices)
-    )
+    n_keys = n_partitioned_keys if n_partitioned_keys is not None else len(ir.left_on)
+    left_keys = ir.left_on[:n_keys]
+    right_keys = ir.right_on[:n_keys]
+    left_key_indices = _key_column_indices(left_keys, left.schema) or ()
+    right_key_indices = _key_column_indices(right_keys, right.schema) or ()
     if ir.options[0] == "Right":
-        join_keys_for_output = ir.right_on
+        output_keys = right_keys
     else:
-        join_keys_for_output = ir.left_on
-    output_key_indices = names_to_indices(join_keys_for_output, ir.schema)
+        output_keys = left_keys
+    output_key_indices = (
+        _key_column_indices(output_keys, ir.schema)
+        if left_key_indices and right_key_indices
+        else None
+    )
     return (
-        left_key_indices[:n_keys],
-        right_key_indices[:n_keys],
-        output_key_indices[:n_keys],
+        left_key_indices,
+        right_key_indices,
+        output_key_indices or (),
+        left_keys,
+        right_keys,
     )
 
 
@@ -623,10 +647,6 @@ def _select_join_prefilter(
     JoinPrefilterDecision
         The selected prefilter configuration, or the reason it was skipped.
     """
-    key_column_count = len(left_key_indices)
-    assert key_column_count == len(right_key_indices), (
-        "left and right join key counts must match"
-    )
     if threshold == 0.0:
         return JoinPrefilterDecision(
             left_rows=left_rows,
@@ -635,17 +655,24 @@ def _select_join_prefilter(
             reason_skipped="disabled",
         )
 
-    if max_key_columns is not None:
-        key_column_count = min(key_column_count, max_key_columns)
-
     if join_type not in ("Inner", "Semi", "Left", "Anti", "Right"):
         return JoinPrefilterDecision(
             left_rows=left_rows,
             right_rows=right_rows,
             threshold=threshold,
-            key_column_count=key_column_count,
             reason_skipped="unsupported_join_type",
         )
+
+    if len(left_key_indices) != len(right_key_indices) or len(left_key_indices) == 0:
+        return JoinPrefilterDecision(
+            left_rows=left_rows,
+            right_rows=right_rows,
+            threshold=threshold,
+            reason_skipped="expression_keys",
+        )
+    key_column_count = len(left_key_indices)
+    if max_key_columns is not None:
+        key_column_count = min(key_column_count, max_key_columns)
 
     small_rows, large_rows = sorted((left_rows, right_rows))
     ratio = small_rows / large_rows if large_rows > 0 else None
@@ -877,13 +904,12 @@ async def _shuffle_join(
     await send_metadata(ch_out, context, metadata_out)
     left_rows, right_rows = row_counts
     bloom_tag = collective_ids.pop(0)
-    left_key_indices, right_key_indices, _ = _get_key_indices(ir, None)
     prefilter_decision = _select_join_prefilter(
         ir.options[0],
         left_rows,
         right_rows,
-        left_key_indices,
-        right_key_indices,
+        strategy.left_indices,
+        strategy.right_indices,
         threshold=prefilter_threshold,
         max_key_columns=prefilter_max_key_columns,
     )
@@ -929,7 +955,8 @@ async def _shuffle_join(
                 ir_context,
                 ch_left_shuffle,
                 ch_left,
-                strategy.left_indices,
+                strategy.left_keys,
+                ir.children[0].schema,
                 strategy.shuffle_modulus,
                 collective_ids.pop(0),
             ),
@@ -939,7 +966,8 @@ async def _shuffle_join(
                 ir_context,
                 ch_right_shuffle,
                 ch_right,
-                strategy.right_indices,
+                strategy.right_keys,
+                ir.children[1].schema,
                 strategy.shuffle_modulus,
                 collective_ids.pop(0),
             ),
@@ -983,9 +1011,13 @@ def _make_shuffle_strategy(
     else:
         n_partitioned_keys = None  # both unpartitioned: shuffle on all join keys
 
-    left_key_indices, right_key_indices, output_key_indices = _get_key_indices(
-        ir, n_partitioned_keys
-    )
+    (
+        left_key_indices,
+        right_key_indices,
+        output_key_indices,
+        left_keys,
+        right_keys,
+    ) = _get_key_indices(ir, n_partitioned_keys)
 
     return JoinStrategy(
         left_meta=left_metadata,
@@ -994,6 +1026,8 @@ def _make_shuffle_strategy(
         output_indices=output_key_indices,
         left_indices=left_key_indices,
         right_indices=right_key_indices,
+        left_keys=left_keys,
+        right_keys=right_keys,
     )
 
 
@@ -1213,11 +1247,22 @@ async def _choose_strategy(
         keys=names_to_indices(ir.right_on, ir.children[1].schema, concrete_prefix=True),
     )
 
-    if left_partitioning.is_aligned_with(right_partitioning, context.br()):
+    hash_chunkwise = isinstance(
+        left_partitioning.inter_rank_scheme, HashScheme
+    ) and isinstance(right_partitioning.inter_rank_scheme, HashScheme)
+    if hash_chunkwise and left_partitioning.is_aligned_with(
+        right_partitioning, context.br()
+    ):
         # We can use a chunkwise join
         chunkwise = True
-        left_sample = TableSizeStats(total_chunks=left_metadata.local_count)
-        right_sample = TableSizeStats(total_chunks=right_metadata.local_count)
+        left_sample = TableSizeStats(
+            chunks=ChunkStore(context),
+            total_chunks=left_metadata.local_count,
+        )
+        right_sample = TableSizeStats(
+            chunks=ChunkStore(context),
+            total_chunks=right_metadata.local_count,
+        )
     else:
         # Need to shuffle or broadcast - Use sampled data to choose a strategy
         chunkwise = False

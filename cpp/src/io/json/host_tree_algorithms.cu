@@ -38,6 +38,10 @@
 #include <algorithm>
 #include <deque>
 #include <functional>
+#include <map>
+#include <set>
+#include <unordered_map>
+#include <utility>
 
 namespace cudf::io::json::detail {
 
@@ -219,19 +223,51 @@ struct json_column_data {
 using hashmap_of_device_columns =
   std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>;
 
-std::
-  tuple<cudf::detail::host_vector<bool>, cudf::detail::host_vector<bool>, hashmap_of_device_columns>
-  build_tree(device_json_column& root,
-             host_span<uint8_t const> is_str_column_all_nulls,
-             tree_meta_t& d_column_tree,
-             device_span<NodeIndexT const> d_unique_col_ids,
-             device_span<size_type const> d_max_row_offsets,
-             std::vector<std::string> const& column_names,
-             NodeIndexT row_array_parent_col_id,
-             bool is_array_of_arrays,
-             cudf::io::json_reader_options const& options,
-             rmm::cuda_stream_view stream,
-             rmm::device_async_resource_ref mr);
+struct build_tree_result {
+  build_tree_result(cudf::detail::host_vector<bool> ignore_vals,
+                    cudf::detail::host_vector<bool> is_mixed_pruned,
+                    hashmap_of_device_columns columns,
+                    cudf::detail::host_vector<bool> is_schema_mismatched,
+                    cudf::detail::host_vector<NodeT> expected_types,
+                    NodeIndexT named_level)
+    : ignore_vals{std::move(ignore_vals)},
+      is_mixed_pruned{std::move(is_mixed_pruned)},
+      columns{std::move(columns)},
+      is_schema_mismatched{std::move(is_schema_mismatched)},
+      expected_types{std::move(expected_types)},
+      named_level{named_level}
+  {
+  }
+
+  explicit build_tree_result(rmm::cuda_stream_view stream)
+    : build_tree_result{cudf::detail::make_host_vector<bool>(0, stream),
+                        cudf::detail::make_host_vector<bool>(0, stream),
+                        {},
+                        cudf::detail::make_host_vector<bool>(0, stream),
+                        cudf::detail::make_host_vector<NodeT>(0, stream),
+                        parent_node_sentinel}
+  {
+  }
+
+  cudf::detail::host_vector<bool> ignore_vals;
+  cudf::detail::host_vector<bool> is_mixed_pruned;
+  hashmap_of_device_columns columns;
+  cudf::detail::host_vector<bool> is_schema_mismatched;
+  cudf::detail::host_vector<NodeT> expected_types;
+  NodeIndexT named_level;
+};
+
+[[nodiscard]] build_tree_result build_tree(device_json_column& root,
+                                           host_span<uint8_t const> is_str_column_all_nulls,
+                                           tree_meta_t& d_column_tree,
+                                           device_span<NodeIndexT const> d_unique_col_ids,
+                                           device_span<size_type const> d_max_row_offsets,
+                                           std::vector<std::string> const& column_names,
+                                           NodeIndexT row_array_parent_col_id,
+                                           bool is_array_of_arrays,
+                                           cudf::io::json_reader_options const& options,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr);
 
 void scatter_offsets(tree_meta_t const& tree,
                      device_span<NodeIndexT const> col_ids,
@@ -239,8 +275,8 @@ void scatter_offsets(tree_meta_t const& tree,
                      device_span<size_type> node_ids,
                      device_span<size_type> sorted_col_ids,  // Reuse this for parent_col_ids
                      tree_meta_t const& d_column_tree,
-                     host_span<const bool> ignore_vals,
-                     host_span<const bool> is_mixed,
+                     host_span<bool const> ignore_vals,
+                     host_span<bool const> is_mixed,
                      hashmap_of_device_columns const& columns,
                      rmm::cuda_stream_view stream);
 
@@ -284,6 +320,7 @@ std::map<std::string, schema_element> unified_schema(cudf::io::json_reader_optio
  * @param row_offsets Row offsets of the nodes in the tree
  * @param root Root node of the `d_json_column` tree
  * @param is_array_of_arrays Whether the tree is an array of arrays
+ * @param collect_schema_mismatch_rows Whether to collect row-level schema mismatch diagnostics
  * @param options Parsing options specifying the parsing behaviour
  * options affecting behaviour are
  *   is_enabled_lines: Whether the input is a line-delimited JSON
@@ -298,6 +335,7 @@ void make_device_json_column(device_span<SymbolT const> input,
                              device_span<size_type const> row_offsets,
                              device_json_column& root,
                              bool is_array_of_arrays,
+                             bool collect_schema_mismatch_rows,
                              cudf::io::json_reader_options const& options,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
@@ -364,18 +402,74 @@ void make_device_json_column(device_span<SymbolT const> input,
     }
     return std::vector<uint8_t>();
   }();
-  auto const [ignore_vals, is_mixed_pruned, columns] = build_tree(root,
-                                                                  is_str_column_all_nulls,
-                                                                  d_column_tree,
-                                                                  d_unique_col_ids,
-                                                                  d_max_row_offsets,
-                                                                  column_names,
-                                                                  row_array_parent_col_id,
-                                                                  is_array_of_arrays,
-                                                                  options,
-                                                                  stream,
-                                                                  mr);
+  auto build_result                = build_tree(root,
+                                 is_str_column_all_nulls,
+                                 d_column_tree,
+                                 d_unique_col_ids,
+                                 d_max_row_offsets,
+                                 column_names,
+                                 row_array_parent_col_id,
+                                 is_array_of_arrays,
+                                 options,
+                                 stream,
+                                 mr);
+  auto const& ignore_vals          = build_result.ignore_vals;
+  auto const& is_mixed_pruned      = build_result.is_mixed_pruned;
+  auto const& is_schema_mismatched = build_result.is_schema_mismatched;
+  auto const& expected_types       = build_result.expected_types;
+  auto const named_level           = build_result.named_level;
+  auto const& columns              = build_result.columns;
   if (ignore_vals.empty()) return;
+
+  if (collect_schema_mismatch_rows) {
+    auto const h_col_ids     = cudf::detail::make_pinned_vector_async(col_ids, stream);
+    auto const h_row_offsets = cudf::detail::make_pinned_vector_async(row_offsets, stream);
+    auto const h_parent_node_ids =
+      cudf::detail::make_pinned_vector_async(tree.parent_node_ids, stream);
+    auto const h_column_parent_ids =
+      cudf::detail::make_pinned_vector_async(d_column_tree.parent_node_ids, stream);
+    auto const h_node_categories =
+      cudf::detail::make_pinned_vector_async(tree.node_categories, stream);
+    stream.synchronize();
+
+    std::map<std::string, std::set<size_type>> rows_by_top_level_column;
+    for (size_type node_id = 0; node_id < static_cast<size_type>(h_col_ids.size()); ++node_id) {
+      auto const mismatch_col_id = h_col_ids[node_id];
+      if (mismatch_col_id < 0 ||
+          static_cast<std::size_t>(mismatch_col_id) >= expected_types.size()) {
+        continue;
+      }
+
+      auto const actual_category   = h_node_categories[node_id];
+      auto const expected_category = expected_types[mismatch_col_id];
+      auto const expected_nested_category_mismatch =
+        (expected_category == NC_STRUCT || expected_category == NC_LIST) &&
+        actual_category != NC_FN && actual_category != expected_category;
+      if (!is_schema_mismatched[mismatch_col_id] && !expected_nested_category_mismatch) {
+        continue;
+      }
+
+      auto top_node_id = static_cast<NodeIndexT>(node_id);
+      while (top_node_id != parent_node_sentinel) {
+        auto const top_col_id = h_col_ids[top_node_id];
+        if (top_col_id >= 0 && static_cast<std::size_t>(top_col_id) < h_column_parent_ids.size() &&
+            h_column_parent_ids[top_col_id] == named_level) {
+          auto const& top_level_column_name = column_names[top_col_id];
+          root.schema_mismatch_column_names.insert(top_level_column_name);
+          rows_by_top_level_column[top_level_column_name].insert(h_row_offsets[top_node_id]);
+          break;
+        }
+        top_node_id = h_parent_node_ids[top_node_id];
+      }
+    }
+
+    root.rows_with_schema_mismatch.reserve(rows_by_top_level_column.size());
+    for (auto const& [col_name, rows] : rows_by_top_level_column) {
+      root.rows_with_schema_mismatch.push_back(
+        schema_mismatch_rows{col_name, std::vector<size_type>{rows.begin(), rows.end()}});
+    }
+  }
+
   scatter_offsets(tree,
                   col_ids,
                   row_offsets,
@@ -388,19 +482,17 @@ void make_device_json_column(device_span<SymbolT const> input,
                   stream);
 }
 
-std::
-  tuple<cudf::detail::host_vector<bool>, cudf::detail::host_vector<bool>, hashmap_of_device_columns>
-  build_tree(device_json_column& root,
-             host_span<uint8_t const> is_str_column_all_nulls,
-             tree_meta_t& d_column_tree,
-             device_span<NodeIndexT const> d_unique_col_ids,
-             device_span<size_type const> d_max_row_offsets,
-             std::vector<std::string> const& column_names,
-             NodeIndexT row_array_parent_col_id,
-             bool is_array_of_arrays,
-             cudf::io::json_reader_options const& options,
-             rmm::cuda_stream_view stream,
-             rmm::device_async_resource_ref mr)
+[[nodiscard]] build_tree_result build_tree(device_json_column& root,
+                                           host_span<uint8_t const> is_str_column_all_nulls,
+                                           tree_meta_t& d_column_tree,
+                                           device_span<NodeIndexT const> d_unique_col_ids,
+                                           device_span<size_type const> d_max_row_offsets,
+                                           std::vector<std::string> const& column_names,
+                                           NodeIndexT row_array_parent_col_id,
+                                           bool is_array_of_arrays,
+                                           cudf::io::json_reader_options const& options,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
 {
   bool const is_enabled_lines                 = options.is_enabled_lines();
   bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
@@ -493,10 +585,7 @@ std::
   // Pruning: iterate through schema and mark only those columns and enforce type.
   // NoPruning: iterate through schema and enforce type.
 
-  if (adj[parent_node_sentinel].empty())
-    return {cudf::detail::make_host_vector<bool>(0, stream),
-            cudf::detail::make_host_vector<bool>(0, stream),
-            {}};  // for empty file
+  if (adj[parent_node_sentinel].empty()) return build_tree_result{stream};  // for empty file
   CUDF_EXPECTS(adj[parent_node_sentinel].size() == 1, "Should be 1");
   auto expected_types = cudf::detail::make_host_vector<NodeT>(num_columns, stream);
   std::fill_n(expected_types.begin(), num_columns, NUM_NODE_CLASSES);
@@ -577,10 +666,7 @@ std::
     }
   };
   if (is_array_of_arrays) {
-    if (adj[adj[parent_node_sentinel][0]].empty())
-      return {cudf::detail::make_host_vector<bool>(0, stream),
-              cudf::detail::make_host_vector<bool>(0, stream),
-              {}};
+    if (adj[adj[parent_node_sentinel][0]].empty()) return build_tree_result{stream};
     auto root_list_col_id =
       is_enabled_lines ? adj[parent_node_sentinel][0] : adj[adj[parent_node_sentinel][0]][0];
     // mark root and row array col_id as not pruned.
@@ -870,7 +956,13 @@ std::
   // its top-level output column on `root.schema_mismatch_column_names`. The diagnostic is only
   // surfaced per top-level output column, so we do not need to mark intermediate ancestors'
   // `device_json_column`s.
+  auto is_schema_mismatched = cudf::detail::make_host_vector<bool>(num_columns, stream);
+  std::fill_n(is_schema_mismatched.begin(), num_columns, false);
   for (auto const mismatched_id : mismatched_col_ids) {
+    if (mismatched_id >= 0 &&
+        static_cast<std::size_t>(mismatched_id) < is_schema_mismatched.size()) {
+      is_schema_mismatched[mismatched_id] = true;
+    }
     add_top_level_schema_mismatch(mismatched_id);
   }
   std::transform(expected_types.cbegin(),
@@ -880,7 +972,12 @@ std::
                  [](auto exp, auto cat) { return exp == NUM_NODE_CLASSES ? cat : exp; });
   cudf::detail::cuda_memcpy<NodeT>(d_column_tree.node_categories, expected_types, stream);
 
-  return {is_pruned, is_mixed_pruned, columns};
+  return build_tree_result{std::move(is_pruned),
+                           std::move(is_mixed_pruned),
+                           std::move(columns),
+                           std::move(is_schema_mismatched),
+                           std::move(expected_types),
+                           named_level};
 }
 
 void scatter_offsets(tree_meta_t const& tree,
@@ -889,8 +986,8 @@ void scatter_offsets(tree_meta_t const& tree,
                      device_span<size_type> node_ids,
                      device_span<size_type> sorted_col_ids,  // Reuse this for parent_col_ids
                      tree_meta_t const& d_column_tree,
-                     host_span<const bool> ignore_vals,
-                     host_span<const bool> is_mixed_pruned,
+                     host_span<bool const> ignore_vals,
+                     host_span<bool const> is_mixed_pruned,
                      hashmap_of_device_columns const& columns,
                      rmm::cuda_stream_view stream)
 {

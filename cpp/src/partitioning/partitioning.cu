@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -58,7 +58,7 @@ class modulo_partitioner {
   __device__ size_type operator()(hash_value_t hash_value) const { return hash_value % divisor; }
 
  private:
-  const size_type divisor;
+  size_type const divisor;
 };
 
 template <typename T>
@@ -88,7 +88,7 @@ class bitwise_partitioner {
   }
 
  private:
-  const size_type mask;
+  size_type const mask;
 };
 
 /**
@@ -725,7 +725,8 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
     }
 
     stream.synchronize();  // Async D2H copy must finish before returning host vec
-    return std::pair{std::make_unique<table>(std::move(output_cols)), std::move(partition_offsets)};
+    return std::pair{std::make_unique<table>(std::move(output_cols), num_rows),
+                     std::move(partition_offsets)};
   } else {
     // Compute a scatter map from input to output such that the output rows are
     // sorted by partition number

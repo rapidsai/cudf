@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "page_data.cuh"
@@ -711,7 +711,7 @@ __device__ int update_validity_and_row_indices_lists(int32_t target_value_count,
         // and we have a valid data_out pointer, it implies this is a list column, so
         // emit an offset.
         if (in_nesting_bounds && ni.data_out != nullptr) {
-          const auto& next_ni = s->nesting_info[d_idx + 1];
+          auto const& next_ni = s->nesting_info[d_idx + 1];
           int const idx       = ni.value_count + thread_value_count;
           cudf::size_type const ofs =
             next_ni.value_count + next_thread_value_count + next_ni.page_start_value;
@@ -1081,7 +1081,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   rle_stream<uint32_t, decode_block_size_t, rolling_buf_size> dict_stream{dict_runs};
   if constexpr (has_dict_t) {
     dict_stream.init(
-      s->dict_bits, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
+      block, s->dict_bits, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
   }
 
   // Use dictionary stream memory for bools
@@ -1089,7 +1089,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   bool bools_are_rle_stream = (s->dict_run == 0);
   if constexpr (has_bools_t) {
     if (bools_are_rle_stream) {
-      bool_stream.init(1, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
+      bool_stream.init(
+        block, 1, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
     }
   }
   block.sync();

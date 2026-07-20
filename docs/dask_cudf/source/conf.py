@@ -16,7 +16,7 @@ from packaging.version import Version
 
 DASK_CUDF_VERSION = Version(dask_cudf.__version__)
 
-project = "dask-cuDF"
+project = "NVIDIA Dask-cuDF"
 copyright = f"2018-{datetime.datetime.today().year}, NVIDIA Corporation"
 author = "NVIDIA Corporation"
 version = f"{DASK_CUDF_VERSION.major:02}.{DASK_CUDF_VERSION.minor:02}"
@@ -61,7 +61,6 @@ pygments_style = "sphinx"
 html_theme_options = {
     "external_links": [],
     "github_url": "https://github.com/rapidsai/cudf",
-    "twitter_url": "https://twitter.com/rapidsai",
     "show_toc_level": 1,
     "navbar_align": "right",
     "navbar_center": "navbar-nav, version-switcher, navbar-external-links",
@@ -70,9 +69,9 @@ html_theme_options = {
 include_pandas_compat = True
 
 intersphinx_mapping = {
-    "python": ("https://docs.python.org/3", None),
+    "python": ("https://docs.python.org/3/", None),
     "cupy": ("https://docs.cupy.dev/en/stable/", None),
-    "numpy": ("https://numpy.org/doc/stable", None),
+    "numpy": ("https://numpy.org/doc/stable/", None),
     "pyarrow": ("https://arrow.apache.org/docs/", None),
     "cudf": ("https://docs.rapids.ai/api/cudf/stable/", None),
     "dask": ("https://docs.dask.org/en/stable/", None),

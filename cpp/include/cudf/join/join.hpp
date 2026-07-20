@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,12 +19,16 @@
 
 #include <cstdint>
 
+/**
+ * @file
+ * @brief Common types and utilities shared by cuDF's join APIs.
+ */
+
 namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup column_join
  * @{
- * @file
  */
 
 /**
@@ -244,6 +248,10 @@ full_join(cudf::table_view const& left_keys,
  *
  * The cross join returns the cartesian product of rows from each table.
  *
+ * The result has `left.num_rows() * right.num_rows()` rows and
+ * `left.num_columns() + right.num_columns()` columns. Either operand may have
+ * zero columns and still contribute its row count.
+ *
  * @note Warning: This function can easily cause out-of-memory errors. The size of the output is
  * equal to `left.num_rows() * right.num_rows()`. Use with caution.
  *
@@ -252,8 +260,9 @@ full_join(cudf::table_view const& left_keys,
  * Right b: {3, 4, 5}
  * Result: { a: {0, 0, 0, 1, 1, 1, 2, 2, 2}, b: {3, 4, 5, 3, 4, 5, 3, 4, 5} }
  * @endcode
-
- * @throw cudf::logic_error if the number of columns in either `left` or `right` table is 0
+ *
+ * @throw std::overflow_error if `left.num_rows() * right.num_rows()` exceeds the maximum
+ * number of rows a column can hold.
  *
  * @param left  The left table
  * @param right The right table

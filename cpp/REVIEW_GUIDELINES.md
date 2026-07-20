@@ -104,7 +104,7 @@
 - Deprecated CUDA API usage
 - Missing Doxygen `@param`, `@return`, `@throw`, `@tparam` tags on public API functions
 - Missing `static_assert` with clear message to prevent template misuse
-- Unnecessary includes in headers or incorrect bracket style (`<>` vs `""`)
+- Includes that violate "include what you use": a symbol used without directly including its header (relying on a transitive include), an unused header left behind, or incorrect bracket style (`<>` vs `""`)
 
 ## Best Practices to Encourage
 

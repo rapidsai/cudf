@@ -413,20 +413,23 @@ include(cmake/thirdparty/get_nanoarrow.cmake)
 # find thread_pool
 include(cmake/thirdparty/get_thread_pool.cmake)
 
+# find xxhash
+include(cmake/thirdparty/get_xxhash.cmake)
+
 # find zstd
 include(cmake/thirdparty/get_zstd.cmake)
 
-# Build librtcx as a subdirectory (zstd and nvtx3 are already available at this point)
-add_subdirectory(librtcx)
+# Fetch librtcx via CPM (zstd and nvtx3 are already available at this point)
+include(cmake/thirdparty/get_rtcx.cmake)
 
-# JIT Embedding helper functions
-include(librtcx/embed.cmake)
+# Pre-compiled fragment management helper functions
+include(cmake/Modules/AddFragment.cmake)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
-  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow zstd)
+  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow zstd rtcx)
 
   foreach(METADATA_KIND IN LISTS METADATA_KINDS)
     foreach(dep IN LISTS dependencies)
@@ -437,46 +440,41 @@ if(NOT BUILD_SHARED_LIBS)
   if(TARGET conda_env)
     install(TARGETS conda_env EXPORT cudf-exports)
   endif()
-  install(
-    TARGETS rtcx
-    EXPORT cudf-exports
-    DESTINATION ${lib_dir}
-  )
 endif()
 
-add_embed(cudf_cuda_embed)
+rtcx_add_embed(cudf_cuda_embed)
 
-embed_includes(
-  cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/librtcx/libcxx DEST_DIRECTORY
-  librtcx/libcxx INCLUDE_DIRECTORIES librtcx/libcxx
+rtcx_embed_includes(
+  cudf_cuda_embed SOURCE_DIRECTORY ${rtcx_SOURCE_DIR}/libcxx DEST_DIRECTORY librtcx/libcxx
+  INCLUDE_DIRECTORIES librtcx/libcxx
 )
 
-embed_includes(
+rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf DEST_DIRECTORY
   cudf/cpp/include/cudf INCLUDE_DIRECTORIES cudf/cpp/include
 )
 
-embed_includes(
+rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/jit DEST_DIRECTORY
   cudf/cpp/src/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-embed_includes(
+rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/binaryop/jit DEST_DIRECTORY
   cudf/cpp/src/binaryop/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-embed_includes(
+rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/join/jit DEST_DIRECTORY
   cudf/cpp/src/join/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-embed_includes(
+rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/rolling DEST_DIRECTORY
   cudf/cpp/src/rolling INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-embed_includes(
+rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/transform/jit DEST_DIRECTORY
   cudf/cpp/src/transform/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
@@ -486,13 +484,91 @@ get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLU
 foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
   cmake_path(GET INC_DIR FILENAME INC_DIR_NAME)
 
-  embed_includes(
+  rtcx_embed_includes(
     cudf_cuda_embed SOURCE_DIRECTORY ${INC_DIR} DEST_DIRECTORY CCCL/libcudacxx/${INC_DIR_NAME}
     INCLUDE_DIRECTORIES CCCL/libcudacxx/${INC_DIR_NAME}
   )
 endforeach()
 
-embed(cudf_cuda_embed COMPRESSION zstd OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
+rtcx_embed(
+  cudf_cuda_embed COMPRESSION zstd OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
+)
+
+rtcx_add_embed(cudf_fragments)
+
+list(APPEND CUDF_PRECOMPILE_PHYSICAL_TYPES uint8_t uint16_t uint32_t uint64_t numeric::decimal32
+     numeric::decimal64 numeric::decimal128
+)
+
+foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_PHYSICAL_TYPES})
+  set(FRAGMENT_NAME transform_kernel)
+  get_property(
+    FILE_INDEX
+    TARGET cudf_fragments__embed_props
+    PROPERTY EMBED_FILE_INDEX
+  )
+  set(VARIANT_NAME transform_kernel_${FILE_INDEX})
+  set(INSTANCE
+      "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::column_device_view_core, ${TYPE}, false, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::mutable_column_device_view_core, ${TYPE}, false, 0>>>"
+  )
+  add_fragment(
+    cudf_fragments
+    FRAGMENT
+    ${VARIANT_NAME}
+    SOURCE
+    src/transform/jit/kernel.cu
+    KERNEL_INSTANCE
+    ${INSTANCE}
+    UDF_TYPE
+    "int(${TYPE} *, ${TYPE})"
+    DEFINITIONS
+    CUDF_LTO_MODE
+    ARRAY_IDS
+    ${FRAGMENT_NAME}_FILE_INDEX
+    ${FRAGMENT_NAME}_INSTANCE
+    ARRAY_VALUES
+    ${FILE_INDEX}
+    "${INSTANCE}"
+  )
+endforeach()
+
+foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_PHYSICAL_TYPES})
+  foreach(RHS_IS_SCALAR IN ITEMS "false" "true")
+    set(FRAGMENT_NAME transform_kernel)
+    get_property(
+      FILE_INDEX
+      TARGET cudf_fragments__embed_props
+      PROPERTY EMBED_FILE_INDEX
+    )
+    set(VARIANT_NAME transform_kernel_${FILE_INDEX})
+    set(INSTANCE
+        "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::column_device_view_core, ${TYPE}, false, 0>, cudf::jit::column_accessor<1ULL, cudf::column_device_view_core, ${TYPE}, ${RHS_IS_SCALAR}, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::mutable_column_device_view_core, ${TYPE}, false, 0>>>"
+    )
+    add_fragment(
+      cudf_fragments
+      FRAGMENT
+      ${VARIANT_NAME}
+      SOURCE
+      src/transform/jit/kernel.cu
+      KERNEL_INSTANCE
+      ${INSTANCE}
+      UDF_TYPE
+      "int(${TYPE} *, ${TYPE}, ${TYPE})"
+      DEFINITIONS
+      CUDF_LTO_MODE
+      ARRAY_IDS
+      ${FRAGMENT_NAME}_FILE_INDEX
+      ${FRAGMENT_NAME}_INSTANCE
+      ARRAY_VALUES
+      ${FILE_INDEX}
+      "${INSTANCE}"
+    )
+  endforeach()
+endforeach()
+
+rtcx_embed(
+  cudf_fragments COMPRESSION none OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
+)
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
@@ -503,6 +579,7 @@ add_library(
   src/aggregation/result_cache.cpp
   src/ast/expression_parser.cpp
   src/ast/expressions.cpp
+  src/ast/jit/expressions.cpp
   src/ast/operators.cpp
   src/binaryop/binaryop.cpp
   src/binaryop/compiled/ATan2.cu
@@ -764,6 +841,7 @@ add_library(
   src/jit/util.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
+  src/join/direct_join.cu
   src/join/distinct_hash_join.cu
   src/join/filter_join_indices/filter_join_indices.cu
   src/join/filter_join_indices/filter_join_indices_jit.cu
@@ -968,6 +1046,8 @@ add_library(
   src/strings/merge/merge.cu
   src/strings/padding.cu
   src/strings/positions.cu
+  src/strings/regex/gkexec.cpp
+  src/strings/regex/glushkov_regcomp.cpp
   src/strings/regex/regcomp.cpp
   src/strings/regex/regexec.cpp
   src/strings/regex/regex_program.cpp
@@ -1057,9 +1137,10 @@ add_library(
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp
   ${cudf_cuda_embed_SOURCE_DIR}/cudf_cuda_embed.s
+  ${cudf_fragments_SOURCE_DIR}/cudf_fragments.s
 )
 
-add_dependencies(cudf cudf_cuda_embed)
+add_dependencies(cudf cudf_cuda_embed cudf_fragments)
 
 set_property(
   SOURCE src/io/parquet/writer_impl.cu
@@ -1130,6 +1211,7 @@ target_include_directories(
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
           "$<BUILD_INTERFACE:${ZSTD_INCLUDE_DIR}>"
           "$<BUILD_INTERFACE:${cudf_cuda_embed_INCLUDE_DIRS}>"
+          "$<BUILD_INTERFACE:${cudf_fragments_INCLUDE_DIRS}>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
@@ -1171,8 +1253,15 @@ target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_A
 target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
-  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> $<BUILD_LOCAL_INTERFACE:cuco::cuco> ZLIB::ZLIB
-          ${CUDF_nvcomp_TARGET} kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd rtcx::rtcx
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+          $<BUILD_LOCAL_INTERFACE:cuco::cuco>
+          ZLIB::ZLIB
+          ${CUDF_nvcomp_TARGET}
+          kvikio::kvikio
+          ${CUDF_nanoarrow_TARGET}
+          zstd
+          $<BUILD_LOCAL_INTERFACE:xxhash>
+          rtcx::rtcx
 )
 
 # When rmm is a static library being absorbed via whole-archive, strip nvtx3 from its public
@@ -1347,18 +1436,21 @@ if(CUDF_BUILD_TESTUTIL)
   add_library(cudf::cudftestutil_impl ALIAS cudftestutil_impl)
   target_sources(
     cudftestutil_impl
-    INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/io/metadata_utilities.cpp>
-              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/column_utilities.cu>
-              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/debug_utilities.cu>
-              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/random_seed.cpp>
-              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/table_utilities.cu>
-              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/tdigest_utilities.cpp>
-              $<INSTALL_INTERFACE:src/cudftestutil/io/metadata_utilities.cpp>
-              $<INSTALL_INTERFACE:src/cudftestutil/utilities/column_utilities.cu>
-              $<INSTALL_INTERFACE:src/cudftestutil/utilities/debug_utilities.cu>
-              $<INSTALL_INTERFACE:src/cudftestutil/utilities/random_seed.cpp>
-              $<INSTALL_INTERFACE:src/cudftestutil/utilities/table_utilities.cu>
-              $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cpp>
+    INTERFACE
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/io/metadata_utilities.cpp>
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/column_utilities.cu>
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/debug_utilities.cu>
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/memory_resource_utilities.cpp>
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/random_seed.cpp>
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/table_utilities.cu>
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/tdigest_utilities.cpp>
+      $<INSTALL_INTERFACE:src/cudftestutil/io/metadata_utilities.cpp>
+      $<INSTALL_INTERFACE:src/cudftestutil/utilities/column_utilities.cu>
+      $<INSTALL_INTERFACE:src/cudftestutil/utilities/debug_utilities.cu>
+      $<INSTALL_INTERFACE:src/cudftestutil/utilities/memory_resource_utilities.cpp>
+      $<INSTALL_INTERFACE:src/cudftestutil/utilities/random_seed.cpp>
+      $<INSTALL_INTERFACE:src/cudftestutil/utilities/table_utilities.cu>
+      $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cpp>
   )
   target_link_libraries(cudftestutil_impl INTERFACE cudf::cudftestutil)
   target_compile_features(cudftestutil_impl INTERFACE cxx_std_20)
@@ -1378,6 +1470,7 @@ if(CUDF_BUILD_TESTUTIL)
   install(
     FILES tests/utilities/column_utilities.cu
           tests/utilities/debug_utilities.cu
+          tests/utilities/memory_resource_utilities.cpp
           tests/utilities/random_seed.cpp
           tests/utilities/table_utilities.cu
           tests/utilities/tdigest_utilities.cpp

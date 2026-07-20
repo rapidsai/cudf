@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import datetime
 import pickle
 import warnings
 from collections.abc import (
@@ -3064,6 +3065,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     )
 
             if is_na_like(other):
+                is_nat = other is pd.NaT or (
+                    isinstance(other, (np.datetime64, np.timedelta64))
+                    and np.isnat(other)
+                )
+                if (
+                    is_nat
+                    and is_pandas_nullable_extension_dtype(self.dtype)
+                    and self.dtype.kind not in {"m", "M"}
+                ):
+                    # pandas only accepts NaT as a missing value for
+                    # datetime/timedelta dtypes, not for masked dtypes
+                    raise TypeError(
+                        f"Invalid value '{other}' for dtype '{self.dtype}'"
+                    )
                 if (
                     cudf.get_option("mode.pandas_compatible")
                     and not is_pandas_nullable_extension_dtype(self.dtype)
@@ -3850,9 +3865,17 @@ def as_column(
                     length=length,
                 )
             elif (
-                isinstance(element, (pd.Timestamp, pd.Timedelta, pd.Interval))
+                isinstance(
+                    element,
+                    (datetime.datetime, datetime.timedelta, pd.Interval),
+                )
                 or element is pd.NaT
             ):
+                # datetime.datetime/timedelta cover their pd.Timestamp/
+                # pd.Timedelta subclasses; routing stdlib datetimes through
+                # pandas keeps mixed datetime+non-datetime inputs on the
+                # object-dtype path (MixedTypeError) instead of silently
+                # coercing them.
                 # TODO: Remove this after
                 # https://github.com/apache/arrow/issues/26492
                 # is fixed.

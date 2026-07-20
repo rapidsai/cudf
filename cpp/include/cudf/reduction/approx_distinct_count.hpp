@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,12 +18,16 @@
 #include <cstdint>
 #include <memory>
 
+/**
+ * @file
+ * @brief Class for computing approximate distinct counts using a HyperLogLog sketch
+ */
+
 namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup column_reduction
  * @{
- * @file
  */
 
 // Forward declarations

@@ -1,10 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Tests for SPMD execution mode."""
 
 from __future__ import annotations
 
 import os
+import uuid
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
@@ -16,6 +17,7 @@ import rmm.mr
 from rapidsmpf.bootstrap import is_running_with_rrun
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 
+import cudf_polars.quent
 from cudf_polars.engine.core import _find_memory_error
 from cudf_polars.engine.hardware_binding import HardwareBindingPolicy
 from cudf_polars.engine.options import StreamingOptions
@@ -315,6 +317,65 @@ def test_sort_slice_over_union_of_duplicated_streams(
     assert_gpu_result_equal(lf, engine=spmd_engine, check_row_order=False)
 
 
+def test_execute_duplicated_result_present_on_all_ranks(
+    spmd_engine: SPMDEngine,
+) -> None:
+    """A duplicated (broadcast) execute() result must be whole on every rank."""
+
+    lf1 = (
+        pl.LazyFrame({"name": ["alice"], "score": [1.0]})
+        .group_by("name")
+        .agg(pl.col("score").sum())
+    )
+    lf2 = (
+        pl.LazyFrame({"name": ["bob"], "score": [2.0]})
+        .group_by("name")
+        .agg(pl.col("score").sum())
+    )
+    lf = pl.concat([lf1, lf2]).sort("score").head(10)
+
+    result = spmd_engine.execute(lf)
+    local = result.lazy().collect(engine=spmd_engine).sort("name")
+
+    # The full duplicated output is present on this rank, whatever its index.
+    assert local["name"].to_list() == ["alice", "bob"]
+    assert local["score"].to_list() == [1.0, 2.0]
+
+
+def test_execute_duplicated_result_chained_into_distributed_agg(
+    spmd_engine: SPMDEngine,
+) -> None:
+    """Chaining a duplicated execute() result into a distributed aggregate must
+    not double-count the duplicates.
+
+    The persisted result is duplicated (identical on every rank), so a re-scan
+    must re-advertise ``duplicated`` for the downstream global sum. Without that,
+    every rank contributes its copy and the total is inflated by ``nranks``.
+    """
+    lf1 = (
+        pl.LazyFrame({"name": ["alice"], "score": [1.0]})
+        .group_by("name")
+        .agg(pl.col("score").sum())
+    )
+    lf2 = (
+        pl.LazyFrame({"name": ["bob"], "score": [2.0]})
+        .group_by("name")
+        .agg(pl.col("score").sum())
+    )
+    duplicated = pl.concat([lf1, lf2]).sort("score").head(10)
+
+    result = spmd_engine.execute(duplicated)
+    total = (
+        result.lazy()
+        .select(pl.col("score").sum().alias("total"))
+        .collect(engine=spmd_engine)
+    )
+
+    # 1.0 + 2.0 = 3.0, independent of nranks (would be 3.0 * nranks if the
+    # duplicated partitions were treated as distinct).
+    assert total["total"].to_list() == [3.0]
+
+
 def test_reset_keeps_comm_alive(comm: Communicator) -> None:
     """``_reset`` must not rebuild the communicator."""
     with SPMDEngine(
@@ -391,6 +452,30 @@ def test_reset_rejects_construction_time_engine_options(
             )
         with pytest.raises(ValueError, match="memory_resource_config"):
             engine._reset(engine_options={"memory_resource_config": None})
+
+
+def test_quent_context_user_provided(spmd_engine: SPMDEngine) -> None:
+    # Ensure that the user-provided quent context is used if provided
+    quent_context = cudf_polars.quent.QuentContext(
+        engine=cudf_polars.quent.Engine(
+            id=uuid.uuid4(),
+            implementation=cudf_polars.quent.Implementation(
+                name="test_implementation", version="0.0.0"
+            ),
+        ),
+        query_group=cudf_polars.quent.QueryGroup(instance_name="test_query_group"),
+        query=cudf_polars.quent.Query(instance_name="test_query"),
+    )
+
+    with SPMDEngine(
+        comm=spmd_engine.comm, executor_options={"quent_context": quent_context}
+    ) as engine:
+        assert engine.config["executor_options"]["quent_context"] == quent_context
+
+
+def test_quent_context_default(spmd_engine: SPMDEngine) -> None:
+    with SPMDEngine(comm=spmd_engine.comm) as engine:
+        assert engine.config["executor_options"].get("quent_context") is None
 
 
 # Group keys probed with num_partitions=2, nranks=2, ROUND_ROBIN:

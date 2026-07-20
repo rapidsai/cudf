@@ -1,6 +1,6 @@
 /**
  * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -45,7 +45,7 @@ struct device_bloom_filter {
    *
    * @return A const-qualified bloom filter viewing the underlying storage.
    */
-  static const device_bloom_filter view(std::size_t num_blocks,
+  static device_bloom_filter const view(std::size_t num_blocks,
                                         std::uint64_t seed,
                                         void const* storage,
                                         rmm::cuda_stream_view stream);
