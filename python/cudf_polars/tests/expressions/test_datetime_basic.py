@@ -57,6 +57,16 @@ datetime_extract_fields = [
     "nanosecond",
 ]
 
+duration_extract_fields = [
+    "total_seconds",
+    "total_milliseconds",
+    "total_microseconds",
+    "total_nanoseconds",
+    "total_days",
+    "total_hours",
+    "total_minutes",
+]
+
 
 @pytest.fixture(
     ids=datetime_extract_fields,
@@ -169,6 +179,77 @@ def test_strftime_duration(engine: pl.GPUEngine, format):
 
     q = ldf.select(pl.col("durations").dt.strftime(format))
     assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+@pytest.mark.parametrize("field", duration_extract_fields)
+@pytest.mark.parametrize(
+    "dtype", [pl.Duration("ms"), pl.Duration("us"), pl.Duration("ns")]
+)
+def test_duration_total_component_extract(engine: pl.GPUEngine, field, dtype):
+    ldf = pl.LazyFrame(
+        {
+            "durations": pl.Series(
+                [
+                    0,
+                    1,
+                    15,
+                    -1500,
+                    1000,
+                    1111,
+                    1500,
+                    11111,
+                    -134234534,
+                    134234534,
+                    # values beyond float64's exact-integer range to guard
+                    # against precision loss in the unit conversion
+                    5857593848682946,
+                    -5857593848682946,
+                ],
+                dtype=dtype,
+            ),
+        }
+    )
+    q = ldf.select(getattr(pl.col("durations").dt, field)())
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize("method", ["century", "millennium"])
+@pytest.mark.parametrize(
+    "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
+)
+def test_century_millennium(engine: pl.GPUEngine, method, dtype):
+    data = pl.Series(
+        [
+            datetime.date(1897, 5, 7),
+            datetime.date(1900, 12, 31),
+            datetime.date(1901, 1, 1),
+            datetime.date(2000, 1, 1),
+            datetime.date(2001, 7, 5),
+            None,
+        ],
+        dtype=pl.Date(),
+    ).cast(dtype)
+    ldf = pl.LazyFrame({"dates": data})
+    q = ldf.select(getattr(pl.col("dates").dt, method)())
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize("method", ["century", "millennium"])
+@pytest.mark.parametrize(
+    "days",
+    [
+        # ``Date`` supports a much wider year range than ``Datetime``; include
+        # pre-year-1 offsets to exercise the floor-division branch of the
+        # century/millennium formula.
+        [-1_000_000, -800_000, -365, 0],
+        [364_000, 376_000],  # years ~2966 and ~3000
+    ],
+)
+def test_century_millennium_date_extreme_years(engine: pl.GPUEngine, method, days):
+    dates = pl.Series(days, dtype=pl.Int32).cast(pl.Date())
+    ldf = pl.LazyFrame({"dates": dates})
+    q = ldf.select(getattr(pl.col("dates").dt, method)())
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(
@@ -446,6 +527,47 @@ def test_datetime_truncate_unsupported(engine: pl.GPUEngine, every: str):
 
     q = ldf.select(pl.col("datetimes").dt.truncate(every))
     assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
+)
+def test_datetime_quarter(engine: pl.GPUEngine, dtype):
+    data = pl.Series(
+        [
+            datetime.date(2001, 1, 1),
+            datetime.date(2001, 3, 31),
+            datetime.date(2001, 4, 1),
+            datetime.date(2001, 6, 30),
+            datetime.date(2001, 9, 15),
+            datetime.date(2001, 12, 27),
+            None,
+        ],
+        dtype=pl.Date(),
+    ).cast(dtype)
+    ldf = pl.LazyFrame({"dates": data})
+    q = ldf.select(pl.col("dates").dt.quarter())
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
+)
+def test_datetime_days_in_month(engine: pl.GPUEngine, dtype):
+    data = pl.Series(
+        [
+            datetime.date(2001, 1, 15),
+            datetime.date(2001, 2, 15),  # non-leap February
+            datetime.date(2000, 2, 15),  # leap February
+            datetime.date(2001, 4, 15),
+            datetime.date(2001, 12, 31),
+            None,
+        ],
+        dtype=pl.Date(),
+    ).cast(dtype)
+    ldf = pl.LazyFrame({"dates": data})
+    q = ldf.select(pl.col("dates").dt.days_in_month())
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(

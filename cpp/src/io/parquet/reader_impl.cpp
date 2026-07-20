@@ -1,10 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "reader_impl.hpp"
 
+#include "column_path_helpers.hpp"
 #include "error.hpp"
 #include "runtime/context.hpp"
 
@@ -512,7 +513,9 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
              options.get_num_bytes(),
              options.get_row_groups(),
              options.is_enabled_use_jit_filter(),
-             options.is_enabled_case_sensitive_names()},
+             options.is_enabled_case_sensitive_names(),
+             options.is_enabled_prepend_source_index_column(),
+             options.is_enabled_prepend_row_index_column()},
     _sources{std::move(sources)},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
@@ -520,16 +523,15 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   // Open and parse the source dataset metadata
   CUDF_EXPECTS(file_metadatas.empty() or file_metadatas.size() == _sources.size(),
                "Encountered a mismatch in the number of provided data sources and metadatas");
+
   _metadata = file_metadatas.empty() ? std::make_unique<aggregate_reader_metadata>(
                                          _sources,
                                          options.is_enabled_use_arrow_schema(),
-                                         options.get_column_names().has_value() and
-                                           options.is_enabled_allow_mismatched_pq_schemas())
+                                         has_cols_from_mismatched_sources(options))
                                      : std::make_unique<aggregate_reader_metadata>(
                                          std::forward<std::vector<FileMetaData>>(file_metadatas),
                                          options.is_enabled_use_arrow_schema(),
-                                         options.get_column_names().has_value() and
-                                           options.is_enabled_allow_mismatched_pq_schemas());
+                                         has_cols_from_mismatched_sources(options));
 
   // Number of input sources
   _num_sources = _sources.size();
@@ -541,27 +543,21 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   _reader_column_schema = options.get_column_schema();
 
   // Select only columns required by the options and filter
-  auto select_column_names =
-    get_column_projection(options, options.is_enabled_ignore_missing_columns());
+  auto select_column_names = get_column_projection(options);
 
   std::optional<std::vector<std::string>> filter_only_columns_names;
-  if (options.get_filter().has_value() and
-      (options.get_column_names().has_value() or options.get_column_indices().has_value())) {
+  auto const has_column_selection = options.get_column_names().has_value() or
+                                    options.get_column_indices().has_value() or
+                                    options.get_column_field_ids().has_value();
+  if (options.get_filter().has_value() and has_column_selection) {
     // list, struct, dictionary are not supported by AST filter yet.
     // extract columns not present in get_column_names() & keep count to remove at end.
     filter_only_columns_names = get_column_names_in_expression(
       options.get_filter(), *select_column_names, options, _metadata->get_schema_tree());
     _num_filter_only_columns = filter_only_columns_names->size();
   }
-  std::tie(_input_columns, _output_buffers, _output_column_schemas) =
-    _metadata->select_columns(select_column_names,
-                              filter_only_columns_names,
-                              options.is_enabled_use_pandas_metadata(),
-                              _strings_to_categorical,
-                              options.is_enabled_ignore_missing_columns(),
-                              _options.timestamp_type.id(),
-                              _options.decimal_width,
-                              _options.case_sensitive_names);
+  std::tie(_input_columns, _output_buffers, _output_column_schemas) = _metadata->select_columns(
+    select_column_names, filter_only_columns_names, make_column_selection_options(options));
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
   std::transform(
@@ -678,12 +674,9 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
 
   // no work to do (this can happen on the first pass if we have no rows to read)
   if (!has_more_work()) {
-    // Check if number of rows per source should be included in output metadata.
-    if (include_output_num_rows_per_source()) {
-      // Empty dataframe case: Simply initialize to a list of zeros
-      out_metadata.num_rows_per_source =
-        std::vector<size_t>(_file_itm_data.num_rows_per_source.size(), 0);
-    }
+    // Empty dataframe case: Simply initialize to a list of zeros
+    out_metadata.num_rows_per_source =
+      std::vector<size_t>(_file_itm_data.num_rows_per_source.size(), 0);
 
     // Finalize output
     return finalize_output(mode, out_metadata, out_columns);
@@ -745,18 +738,13 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
   out_columns =
     cudf::structs::detail::enforce_null_consistency(std::move(out_columns), _stream, _mr);
 
-  // Check if number of rows per source should be included in output metadata.
-  if (include_output_num_rows_per_source()) {
-    // For chunked reading, compute the output number of rows per source
-    if (mode == read_mode::CHUNKED_READ) {
-      out_metadata.num_rows_per_source =
-        calculate_output_num_rows_per_source(read_info.skip_rows, read_info.num_rows);
-    }
-    // Simply move the number of rows per file if reading all at once
-    else {
-      // Move is okay here as we are reading in one go.
-      out_metadata.num_rows_per_source = std::move(_file_itm_data.num_rows_per_source);
-    }
+  // Compute the output number of rows per source
+  if (mode == read_mode::CHUNKED_READ) {
+    out_metadata.num_rows_per_source =
+      calculate_output_num_rows_per_source(read_info.skip_rows, read_info.num_rows);
+  } else {
+    // Move is okay here as we are reading in one go.
+    out_metadata.num_rows_per_source = std::move(_file_itm_data.num_rows_per_source);
   }
 
   // Add empty columns if needed. Filter output columns based on filter.
@@ -815,24 +803,20 @@ std::vector<size_t> reader_impl::calculate_output_num_rows_per_source(size_t con
 }
 
 std::optional<std::vector<std::string>> reader_impl::get_column_projection(
-  parquet_reader_options const& options, bool ignore_missing_columns) const
+  parquet_reader_options const& options) const
 {
-  auto const has_column_names   = options.get_column_names().has_value();
-  auto const has_column_indices = options.get_column_indices().has_value();
+  auto const ignore_missing_columns = ignore_missing_columns_policy(options);
 
-  CUDF_EXPECTS(
-    not(has_column_names and has_column_indices),
-    "Parquet reader encountered column selection by both names and indices simultaneously");
+  auto const has_column_names     = options.get_column_names().has_value();
+  auto const has_column_indices   = options.get_column_indices().has_value();
+  auto const has_column_field_ids = options.get_column_field_ids().has_value();
 
-  // No column selection specified. Return nullopt indicating all columns to be selected
-  if (not has_column_names and not has_column_indices) {
-    return std::nullopt;
-  } else if (has_column_names) {
-    return options.get_column_names();
-  } else {
+  if (has_column_names) { return options.get_column_names(); }
+
+  if (has_column_indices) {
     std::vector<std::string> col_names;
     auto const& top_level_schema_indices = _metadata->get_schema(0).children_idx;
-    for (auto const index : options.get_column_indices().value_or(std::vector<cudf::size_type>{})) {
+    for (auto const index : options.get_column_indices().value()) {
       auto const is_valid_index =
         std::cmp_greater_equal(index, 0) and std::cmp_less(index, top_level_schema_indices.size());
       CUDF_EXPECTS(ignore_missing_columns or is_valid_index,
@@ -843,6 +827,28 @@ std::optional<std::vector<std::string>> reader_impl::get_column_projection(
     }
     return std::make_optional(std::move(col_names));
   }
+
+  if (has_column_field_ids) {
+    std::vector<std::string> col_names;
+    auto const& schema_tree = _metadata->get_schema_tree();
+    for (auto const field_id : options.get_column_field_ids().value()) {
+      auto const schema_iter =
+        std::find_if(schema_tree.cbegin() + 1, schema_tree.cend(), [field_id](auto const& schema) {
+          return schema.field_id.has_value() and schema.field_id.value() == field_id;
+        });
+      CUDF_EXPECTS(ignore_missing_columns or schema_iter != schema_tree.end(),
+                   "Encountered a non-existent Parquet field ID in selected columns",
+                   std::invalid_argument);
+      if (schema_iter != schema_tree.end()) {
+        auto const schema_idx = static_cast<int>(std::distance(schema_tree.cbegin(), schema_iter));
+        col_names.emplace_back(column_path_from_index(schema_tree, schema_idx));
+      }
+    }
+    return std::make_optional(std::move(col_names));
+  }
+
+  // No column selection specified. Return nullopt indicating all columns to be selected.
+  return std::nullopt;
 }
 
 void reader_impl::apply_decimal_width_cast(std::vector<std::unique_ptr<column>>& out_columns)
@@ -857,6 +863,31 @@ void reader_impl::apply_decimal_width_cast(std::vector<std::unique_ptr<column>>&
         cudf::cast(col->view(), data_type{_options.decimal_width, col_type.scale()}, _stream, _mr);
     }
   }
+}
+
+column_selection_options reader_impl::make_column_selection_options(
+  parquet_reader_options const& options) const
+{
+  auto const selection_mode = [&]() {
+    if (options.get_column_names().has_value()) {
+      return column_selection_mode::BY_NAME;
+    } else if (options.get_column_indices().has_value()) {
+      return column_selection_mode::BY_INDEX;
+    } else if (options.get_column_field_ids().has_value()) {
+      return column_selection_mode::BY_FIELD_ID;
+    } else {
+      return column_selection_mode::NONE;
+    }
+  }();
+
+  return column_selection_options{
+    .selection_mode         = selection_mode,
+    .include_index          = options.is_enabled_use_pandas_metadata(),
+    .strings_to_categorical = options.is_enabled_convert_strings_to_categories(),
+    .ignore_missing_columns = ignore_missing_columns_policy(options),
+    .timestamp_type_id      = options.get_timestamp_type().id(),
+    .decimal_type_id        = options.get_decimal_width(),
+    .case_sensitive_names   = options.is_enabled_case_sensitive_names()};
 }
 
 table_with_metadata reader_impl::finalize_output(read_mode mode,
@@ -883,6 +914,13 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
     _output_metadata = std::make_unique<table_metadata>(out_metadata);
   }
 
+  // Row-range of the current output chunk relative to the current row group selection.
+  auto const read_info =
+    (_file_itm_data._current_input_pass < _file_itm_data.num_passes())
+      ? _pass_itm_data->subpass
+          ->output_chunk_read_info[_pass_itm_data->subpass->current_output_chunk]
+      : row_range{0, 0};
+
   // advance output chunk/subpass/pass info for non-empty tables if and only if we are in bounds
   if (_file_itm_data._current_input_pass < _file_itm_data.num_passes()) {
     auto& pass    = *_pass_itm_data;
@@ -893,8 +931,30 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
   // increment the output chunk count
   _file_itm_data._output_chunk_count++;
 
+  // Prepend the source and row index columns if requested
+  {
+    if (_options.prepend_row_index_column) {
+      out_columns.emplace(out_columns.begin(),
+                          synthesize_row_index_column(read_info, _stream, _mr));
+      out_metadata.schema_info.emplace(out_metadata.schema_info.begin(),
+                                       column_name_info{.name = "row_index", .is_nullable = false});
+    }
+    if (_options.prepend_source_index_column) {
+      out_columns.emplace(
+        out_columns.begin(),
+        synthesize_source_index_column(out_metadata.num_rows_per_source, _stream, _mr));
+      out_metadata.schema_info.emplace(
+        out_metadata.schema_info.begin(),
+        column_name_info{.name = "source_index", .is_nullable = false});
+    }
+  }
+
+  // Offset column references in `_expr_conv` by the number of prepended columns
+  auto const final_filter      = compute_offset_filter();
+  auto const final_filter_expr = final_filter.get_converted_expr();
+
   // check if the output filter AST expression (= _expr_conv.get_converted_expr()) exists
-  if (_expr_conv.get_converted_expr().has_value()) {
+  if (final_filter_expr.has_value()) {
     auto read_table         = std::make_unique<table>(std::move(out_columns));
     auto counting_it        = cuda::counting_iterator<std::size_t>{0};
     auto const output_count = read_table->num_columns() - _num_filter_only_columns;
@@ -902,11 +962,14 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
 
     if (_num_filter_only_columns > 0) { out_metadata.schema_info.resize(output_count); }
 
+    // Clear the number of rows per source as it is not valid after filtering
+    out_metadata.num_rows_per_source.clear();
+
     bool use_jit = cudf::get_context().use_jit() || _options.use_jit_filter;
 
     if (!use_jit) {
-      auto predicate = cudf::detail::compute_column(
-        *read_table, _expr_conv.get_converted_expr().value().get(), _stream, _mr);
+      auto predicate =
+        cudf::detail::compute_column(*read_table, final_filter_expr.value().get(), _stream, _mr);
       CUDF_EXPECTS(predicate->view().type().id() == type_id::BOOL8,
                    "Predicate filter should return a boolean");
       // Exclude columns present in filter only in output
@@ -914,11 +977,8 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
         only_output, *predicate, cudf::detail::mask_type::RETENTION, _stream, _mr);
       return {std::move(output_table), std::move(out_metadata)};
     } else {
-      auto output_table = cudf::filter(read_table->view(),
-                                       _expr_conv.get_converted_expr().value().get(),
-                                       only_output,
-                                       _stream,
-                                       _mr);
+      auto output_table = cudf::filter(
+        read_table->view(), final_filter_expr.value().get(), only_output, _stream, _mr);
 
       return {std::move(output_table), std::move(out_metadata)};
     }
@@ -1123,7 +1183,7 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
 }
 
 std::vector<parquet::FileMetaData> read_parquet_footers(
-  host_span<std::unique_ptr<datasource> const> sources)
+  std::span<std::unique_ptr<datasource> const> sources)
 {
   // Do not use arrow schema when only reading the parquet metadata.
   constexpr auto use_arrow_schema = false;
@@ -1136,7 +1196,10 @@ std::vector<parquet::FileMetaData> read_parquet_footers(
 
   // Parse the source dataset metadata
   return aggregate_reader_metadata(
-           sources, use_arrow_schema, has_column_projection, read_page_indexes)
+           host_span<std::unique_ptr<datasource> const>{sources.data(), sources.size()},
+           use_arrow_schema,
+           has_column_projection,
+           read_page_indexes)
     .get_parquet_metadatas();
 }
 

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -34,6 +34,7 @@ from cudf_polars.utils.versions import (
         "std",
         "var",
         # scan aggs from UnaryFunction
+        "cum_count",
         "cum_min",
         "cum_max",
         "cum_prod",
@@ -110,6 +111,53 @@ def test_bool_agg(engine: pl.GPUEngine, agg):
     q = df.select(expr)
 
     assert_gpu_result_equal(q, engine=engine, check_exact=False)
+
+
+@pytest.mark.parametrize(
+    "data,dtype",
+    [
+        ([1, 2, 3, 4], pl.Int32),
+        ([1, 2, None, 4], pl.Int32),
+        ([1, 0, 3], pl.Int32),
+        ([2, 3, 4], pl.Int8),
+        ([1.5, 2.0, 3.0], pl.Float64),
+        ([1.5, None, 3.0], pl.Float64),
+        ([True, False, True], pl.Boolean),
+        ([], pl.Int32),
+        ([None, None], pl.Int32),
+    ],
+)
+def test_product(engine: pl.GPUEngine, data, dtype):
+    df = pl.LazyFrame({"a": pl.Series(data, dtype=dtype)})
+    q = df.select(pl.col("a").product())
+    assert_gpu_result_equal(q, engine=engine, check_exact=False)
+
+
+@pytest.mark.parametrize("agg", ["arg_max", "arg_min"])
+def test_arg_max_min(engine: pl.GPUEngine, agg: str) -> None:
+    df = pl.LazyFrame(
+        {
+            "a": pl.Series([1, 2, 2, None, 3], dtype=pl.Int64),
+            "b": pl.Series([None, None, None, None, None], dtype=pl.Int64),
+        }
+    )
+    q = df.select(getattr(pl.col("a"), agg)(), getattr(pl.col("b"), agg)())
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, None, 3, None, 5],
+        [None, None, None],
+        [1, 2, 3],
+        [],
+    ],
+)
+def test_cum_count(engine: pl.GPUEngine, data):
+    df = pl.LazyFrame({"a": pl.Series(data, dtype=pl.Int64())})
+    q = df.select(pl.col("a").cum_count())
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("cum_agg", sorted(expr.UnaryFunction._supported_cum_aggs))
@@ -257,20 +305,12 @@ def test_temporal_quantile_median_not_supported(engine: pl.GPUEngine, expr):
         pl.col("a").entropy(),
         pl.col("a").skew(),
         pl.col("a").kurtosis(),
-        pl.col("a").arg_min(),
-        pl.col("a").arg_max(),
-        pl.col("a").arg_sort(),
-        pl.col("a").arg_unique(),
     ],
     ids=[
         "mode",
         "entropy",
         "skew",
         "kurtosis",
-        "arg_min",
-        "arg_max",
-        "arg_sort",
-        "arg_unique",
     ],
 )
 def test_agg_unsupported(engine: pl.GPUEngine, expr: pl.Expr) -> None:

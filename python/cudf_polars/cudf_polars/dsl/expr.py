@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """
 DSL nodes for the polars expression language.
@@ -13,7 +13,7 @@ In particular, the interpretation of the expression language in a
 
 from __future__ import annotations
 
-from cudf_polars.dsl.expressions.aggregation import Agg
+from cudf_polars.dsl.expressions.aggregation import Agg, Item
 from cudf_polars.dsl.expressions.base import (
     Col,
     ColRef,
@@ -46,6 +46,7 @@ __all__ = [
     "Filter",
     "Gather",
     "GroupedWindow",
+    "Item",
     "Len",
     "Literal",
     "LiteralColumn",
