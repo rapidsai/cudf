@@ -25,6 +25,7 @@ from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.to_ast import insert_colrefs
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.aggregations import decompose_single_agg
 from cudf_polars.dsl.utils.groupby import rewrite_groupby
 from cudf_polars.dsl.utils.naming import unique_names
@@ -47,6 +48,8 @@ if TYPE_CHECKING:
     from polars import GPUEngine
 
     from cudf_polars.typing import NodeTraverser, Slice as Zlice
+
+_HAS_ROLLING_FUNCTION = hasattr(plrs._expr_nodes, "RollingFunction")
 
 __all__ = ["Translator", "translate_named_expr"]
 
@@ -109,6 +112,34 @@ def _check_compression(data: bytes) -> str | None:
 def _read_file_bytes(path: Path, num_bytes: int = 4) -> bytes:
     with path.open("rb") as f:
         return f.read(num_bytes)
+
+
+def _unsupported_fill_over_window(value: expr.Expr) -> bool:
+    """
+    Check if a fill_null_with_strategy over a window function is unsupported.
+
+    The only supported pattern is fill_null_with_strategy(cum_sum(...)) where
+    cum_sum is the direct and only windowed child.
+    """
+    if not (
+        isinstance(value, expr.UnaryFunction)
+        and value.name == "fill_null_with_strategy"
+    ):
+        return False
+    windowed = [
+        node
+        for node in traversal([value])
+        if isinstance(node, expr.UnaryFunction) and node.name in {"rank", "cum_sum"}
+    ]
+    if not windowed:
+        return False
+    child = value.children[0]
+    return not (
+        len(windowed) == 1
+        and windowed[0] is child
+        and isinstance(child, expr.UnaryFunction)
+        and child.name == "cum_sum"
+    )
 
 
 class Translator:
@@ -200,6 +231,30 @@ class Translator:
                 return ir.ErrorNode(schema, str(error))
 
             return result
+
+    def unsupported_operations_error(self) -> NotImplementedError | None:
+        """
+        Build an error describing unsupported operations during translation.
+
+        Returns
+        -------
+        A `NotImplementedError` whose message (``args[0]``) is safe to surface
+        to users and whose second argument contains the deduplicated underlying
+        errors, or ``None`` if no translation errors were recorded.
+        """
+        if not self.errors:
+            return None
+        unique_errors = sorted({str(e): e for e in self.errors}.values(), key=str)
+        # TODO: Display these errors in user-friendly way, tracked in
+        # https://github.com/rapidsai/cudf/issues/17051
+        formatted_errors = "\n".join(
+            f"- {e.__class__.__name__}: {e}" for e in unique_errors
+        )
+        message = (
+            "Query execution with GPU not possible: unsupported operations."
+            f"\nThe errors were:\n{formatted_errors}"
+        )
+        return NotImplementedError(message, unique_errors)
 
     def translate_expr(self, *, n: int, schema: Schema) -> expr.Expr:
         """
@@ -466,6 +521,7 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
             )
         ),
         parquet_options,
+        cached_parquet_info=None,
     )
 
 
@@ -964,8 +1020,71 @@ def _(
             options,
             *(translator.translate_expr(n=n, schema=schema) for n in node.input),
         )
+    elif _HAS_ROLLING_FUNCTION and isinstance(name, plrs._expr_nodes.RollingFunction):
+        window_size, min_periods, weights, center, fn_params = options
+        if weights is not None:
+            raise NotImplementedError("Weighted rolling windows")
+        RF = plrs._expr_nodes.RollingFunction
+        agg_names = {
+            RF.Sum: "sum",
+            RF.Min: "min",
+            RF.Max: "max",
+            RF.Mean: "mean",
+            RF.Var: "var",
+            RF.Std: "std",
+        }
+        agg_name = agg_names.get(name)
+        if agg_name is None:
+            raise NotImplementedError(f"Unsupported rolling function: {name}")
+        # Convert center + window_size to preceding/following for libcudf.
+        # libcudf rolling_window semantics: element i uses elements
+        # [i - preceding + 1, i + following].
+        if center:
+            following = (window_size - 1) // 2
+            preceding = window_size - following
+        else:
+            preceding = window_size
+            following = 0
+        # Polars produces null when count <= ddof for var/std, but
+        # libcudf produces NaN. Raise min_periods so that libcudf
+        # returns null instead.
+        if agg_name in ("var", "std"):
+            (ddof,) = fn_params
+            min_periods = max(min_periods, ddof + 1)
+        (child,) = (translator.translate_expr(n=n, schema=schema) for n in node.input)
+        return expr.FixedSizeRollingWindow(
+            dtype, agg_name, preceding, following, min_periods, fn_params, child
+        )
     elif isinstance(name, str):
         children = (translator.translate_expr(n=n, schema=schema) for n in node.input)
+        if name == "rechunk":
+            # Rechunking is a physical execution hint to Polars.
+            # cudf-polars has no concept of chunking, so we can just
+            # drop it.
+            # Note: This could be a plan hook for explicit repartition for streaming engines
+            # https://github.com/rapidsai/cudf/pull/23192#discussion_r3553113408
+            (child,) = children
+            return child
+        if name == "fused":
+            # TODO: fuse into a single kernel via JIT transform, see
+            # https://github.com/rapidsai/cudf/issues/21456. We don't use
+            # libcudf AST here because it widens the dtype for integer types
+            # narrower than int32 (e.g. int8*int8 to int32), then fails
+            # with a type mismatch when doing the add/sub with the third operand.
+            (flavor,) = options
+            a, b, c = children
+            mul = plc.binaryop.BinaryOperator.MUL
+            add = plc.binaryop.BinaryOperator.ADD
+            sub = plc.binaryop.BinaryOperator.SUB
+            match flavor:
+                case "fma":
+                    return expr.BinOp(dtype, add, expr.BinOp(dtype, mul, a, b), c)
+                case "fsm":
+                    return expr.BinOp(dtype, sub, a, expr.BinOp(dtype, mul, b, c))
+                case "fms":
+                    return expr.BinOp(dtype, sub, expr.BinOp(dtype, mul, a, b), c)
+                case _:  # pragma: no cover
+                    raise NotImplementedError(f"Unsupported fused expression {flavor=}")
         if name == "log" or (
             name == "l"
             and isinstance(options[0], str)
@@ -981,6 +1100,8 @@ def _(
             )
         elif name == "pow":
             return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
+        elif name == "product":
+            return expr.Agg(dtype, "product", None, translator._expr_context, *children)
         elif not POLARS_VERSION_LT_141 and name == "quantile":
             # polars >= 1.41 emits quantile as a string-named Function
             # expression (function_data=("quantile", interpolation)) with the
@@ -990,6 +1111,9 @@ def _(
             return expr.Agg(
                 dtype, "quantile", interp, translator._expr_context, *children
             )
+        if name == "arg_max" and len(options) == 2:
+            # IRFunctionExpr::ArgSort is exposed as ("arg_max", descending, nulls_last)
+            name = "arg_sort"
         return expr.UnaryFunction(dtype, name, options, *children)
     raise NotImplementedError(
         f"No handler for Expr function node with {name=}"
@@ -1080,12 +1204,26 @@ def _(
 
         named_aggs = [agg for agg, _ in aggs]
 
+        for named_agg in named_aggs:
+            if _unsupported_fill_over_window(named_agg.value):
+                raise NotImplementedError(
+                    "fill_null with strategy over a window is only supported when "
+                    "applied directly to cum_sum()"
+                )
+
         by_exprs = [
             translator.translate_expr(n=n, schema=schema) for n in node.partition_by
         ]
 
         child_deps = [
-            v.children[0]
+            v.children[0].children[0]
+            if (
+                isinstance(v, expr.UnaryFunction)
+                and v.name == "fill_null_with_strategy"
+                and isinstance(v.children[0], expr.UnaryFunction)
+                and v.children[0].name == "cum_sum"
+            )
+            else v.children[0]
             for ne in named_aggs
             for v in (ne.value,)
             if isinstance(v, expr.Agg)
