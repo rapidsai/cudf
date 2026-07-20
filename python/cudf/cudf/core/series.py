@@ -2868,9 +2868,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                 self.dtype.kind in "mM"
                 and isinstance(self.dtype, (np.dtype, pd.DatetimeTZDtype))
             )
-            or isinstance(
-                self.dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)
-            )
+            or isinstance(self.dtype, cudf.CategoricalDtype)
             else "last"
         )
         return Series._from_column(

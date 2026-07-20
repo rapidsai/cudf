@@ -106,7 +106,6 @@ def test_series_mode(gs, dropna):
         pd.Series([1, 1, None, None], dtype=pd.ArrowDtype(pa.duration("ns"))),
     ],
 )
-@pytest.mark.parametrize("dropna", [True, False])
 def test_mode_null_position_matches_pandas(pdata, dropna):
     # pandas sorts mode results on the underlying representation: NaT
     # (INT64_MIN as i8) and the categorical null code (-1) sort before
