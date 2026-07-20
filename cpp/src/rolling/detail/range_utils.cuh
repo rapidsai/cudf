@@ -130,6 +130,20 @@ struct comparator_impl<T, bounded_open_column> {
 };
 
 /**
+ * @brief Whether `WindowType` is a column-valued (per-row delta) bounded window.
+ *
+ * The column-valued endpoints (`bounded_closed_column`, `bounded_open_column`) read their delta
+ * from a per-row column instead of a single scalar. They are supported only for numeric and
+ * timestamp orderby columns.
+ */
+template <typename WindowType>
+[[nodiscard]] constexpr bool is_column_range_window()
+{
+  return cuda::std::is_same_v<WindowType, bounded_closed_column> ||
+         cuda::std::is_same_v<WindowType, bounded_open_column>;
+}
+
+/**
  * @brief Select the appropriate ordering comparator for the window type.
  *
  * @tparam T The type being compared.
@@ -374,8 +388,7 @@ template <typename Grouping,
 struct bounded_distance_functor {
   static_assert(cuda::std::is_same_v<WindowType, bounded_open> ||
                   cuda::std::is_same_v<WindowType, bounded_closed> ||
-                  cuda::std::is_same_v<WindowType, bounded_open_column> ||
-                  cuda::std::is_same_v<WindowType, bounded_closed_column>,
+                  is_column_range_window<WindowType>(),
                 "Invalid WindowType, expecting a bounded (scalar or column) window.");
   Grouping const groups;
   direction const direction;
@@ -471,8 +484,7 @@ struct range_window_clamper {
                   cuda::std::is_same_v<WindowType, current_row> ||
                   cuda::std::is_same_v<WindowType, bounded_closed> ||
                   cuda::std::is_same_v<WindowType, bounded_open> ||
-                  cuda::std::is_same_v<WindowType, bounded_closed_column> ||
-                  cuda::std::is_same_v<WindowType, bounded_open_column>,
+                  is_column_range_window<WindowType>(),
                 "Invalid WindowType descriptor");
   template <typename Grouping>
   void expand_unbounded(Grouping grouping,
@@ -564,24 +576,22 @@ struct range_window_clamper {
       } else if constexpr (cuda::std::is_same_v<WindowType, current_row>) {
         expand_current_row(
           grouping, direction, order, d_begin, orderby.size(), result_view, stream);
-      } else if constexpr (cuda::std::is_same_v<WindowType, bounded_closed_column> ||
-                           cuda::std::is_same_v<WindowType, bounded_open_column>) {
-        // Per-row delta sourced from a column (one entry per orderby row). The delta column shares
-        // the orderby type for numeric orderby columns, and is the matching duration type for
-        // timestamp orderby columns. Other orderby types are rejected before reaching this point.
+      } else if constexpr (is_column_range_window<WindowType>()) {
+        // Per-row delta sourced from a column (one entry per orderby row): numeric orderby columns
+        // read a delta of the same type, timestamp orderby columns read the matching duration type.
+        // These are the only orderby types instantiated here -- `operator()` rejects column-valued
+        // bounds for every other orderby type before dispatching, so no runtime guard is needed.
+        static_assert(cudf::is_numeric_not_bool<OrderbyT>() || cudf::is_timestamp<OrderbyT>(),
+                      "Column-valued RANGE bounds support only numeric and timestamp orderby "
+                      "columns.");
         if constexpr (cudf::is_numeric_not_bool<OrderbyT>()) {
           auto const* d_row_delta = delta_col->data<OrderbyT>();
           expand_bounded</*PerRow=*/true>(
             grouping, direction, order, d_begin, d_row_delta, orderby.size(), result_view, stream);
-        } else if constexpr (cudf::is_timestamp<OrderbyT>()) {
+        } else {
           auto const* d_row_delta = delta_col->data<typename OrderbyT::duration>();
           expand_bounded</*PerRow=*/true>(
             grouping, direction, order, d_begin, d_row_delta, orderby.size(), result_view, stream);
-        } else {
-          CUDF_FAIL(
-            "Column-valued RANGE bounds are only supported for numeric and timestamp order-by "
-               "columns.",
-            cudf::data_type_error);
         }
       } else {
         auto const* d_row_delta = static_cast<ScalarT const*>(row_delta)->data();
@@ -643,10 +653,9 @@ struct range_window_clamper {
     CUDF_EXPECTS(!row_delta || row_delta->type().id() == type_to_id<typename OrderbyT::duration>(),
                  "Row delta must have same the resolution as orderby.",
                  cudf::data_type_error);
+    // Size and null-ness of `delta_col` are validated once, up front, in `make_range_window`; here
+    // we enforce only the orderby-type-specific relationship (a matching-resolution duration).
     if (delta_col) {
-      CUDF_EXPECTS(delta_col->size() == orderby.size(),
-                   "Delta column must have the same number of rows as the orderby column.");
-      CUDF_EXPECTS(!delta_col->has_nulls(), "Delta column must not contain nulls.");
       CUDF_EXPECTS(cudf::is_duration(delta_col->type()),
                    "Delta column must be a duration type.",
                    cudf::data_type_error);
@@ -670,30 +679,35 @@ struct range_window_clamper {
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const
   {
-    CUDF_EXPECTS(!delta_col,
-                 "Column-valued RANGE bounds are not supported for fixed-point order-by columns.",
-                 cudf::data_type_error);
-    CUDF_EXPECTS(!row_delta || (orderby.type().id() == row_delta->type().id()),
-                 "Orderby column and row_delta must both be fixed point.",
-                 cudf::data_type_error);
-    // TODO: Push this requirement onto the caller and just check for
-    // equal scales (avoids a kernel launch to rescale)
-    CUDF_EXPECTS(!row_delta || row_delta->type().scale() >= orderby.type().scale(),
-                 "row_delta must have at least as much scale as orderby column.",
-                 cudf::data_type_error);
-    if (row_delta && row_delta->type().scale() != orderby.type().scale()) {
-      auto const value =
-        static_cast<fixed_point_scalar<OrderbyT> const*>(row_delta)->fixed_point_value(stream);
-      auto const new_scalar = cudf::fixed_point_scalar<OrderbyT>{
-        value.rescaled(numeric::scale_type{orderby.type().scale()}),
-        true,
-        stream,
-        cudf::get_current_device_resource_ref()};
+    if constexpr (is_column_range_window<WindowType>()) {
+      // Column-valued bounds are unsupported for fixed-point orderby columns. Rejecting here (rather
+      // than deeper in `window_bounds`) keeps `window_bounds<fixed_point, *_column>` from ever being
+      // instantiated, so the column branch there need only handle numeric and timestamp orderbys.
+      CUDF_FAIL("Column-valued RANGE bounds are not supported for fixed-point order-by columns.",
+                cudf::data_type_error);
+    } else {
+      CUDF_EXPECTS(!row_delta || (orderby.type().id() == row_delta->type().id()),
+                   "Orderby column and row_delta must both be fixed point.",
+                   cudf::data_type_error);
+      // TODO: Push this requirement onto the caller and just check for
+      // equal scales (avoids a kernel launch to rescale)
+      CUDF_EXPECTS(!row_delta || row_delta->type().scale() >= orderby.type().scale(),
+                   "row_delta must have at least as much scale as orderby column.",
+                   cudf::data_type_error);
+      if (row_delta && row_delta->type().scale() != orderby.type().scale()) {
+        auto const value =
+          static_cast<fixed_point_scalar<OrderbyT> const*>(row_delta)->fixed_point_value(stream);
+        auto const new_scalar = cudf::fixed_point_scalar<OrderbyT>{
+          value.rescaled(numeric::scale_type{orderby.type().scale()}),
+          true,
+          stream,
+          cudf::get_current_device_resource_ref()};
+        return window_bounds<OrderbyT>(
+          orderby, direction, order, grouping, nulls_at_start, &new_scalar, delta_col, stream, mr);
+      }
       return window_bounds<OrderbyT>(
-        orderby, direction, order, grouping, nulls_at_start, &new_scalar, delta_col, stream, mr);
+        orderby, direction, order, grouping, nulls_at_start, row_delta, delta_col, stream, mr);
     }
-    return window_bounds<OrderbyT>(
-      orderby, direction, order, grouping, nulls_at_start, row_delta, delta_col, stream, mr);
   }
 
   template <typename OrderbyT, CUDF_ENABLE_IF(cudf::is_numeric_not_bool<OrderbyT>())>
@@ -711,10 +725,9 @@ struct range_window_clamper {
     CUDF_EXPECTS(!row_delta || cudf::have_same_types(orderby, *row_delta),
                  "Orderby column and row_delta must have the same type.",
                  cudf::data_type_error);
+    // Size and null-ness of `delta_col` are validated once, up front, in `make_range_window`; here
+    // we enforce only the orderby-type-specific relationship (an identical type).
     if (delta_col) {
-      CUDF_EXPECTS(delta_col->size() == orderby.size(),
-                   "Delta column must have the same number of rows as the orderby column.");
-      CUDF_EXPECTS(!delta_col->has_nulls(), "Delta column must not contain nulls.");
       CUDF_EXPECTS(cudf::have_same_types(orderby, *delta_col),
                    "Orderby column and delta column must have the same type.",
                    cudf::data_type_error);
@@ -740,8 +753,9 @@ struct range_window_clamper {
   {
     CUDF_EXPECTS(!row_delta,
                  "Not expecting window range to have value for string-based window calculation");
-    CUDF_EXPECTS(!delta_col,
-                 "Not expecting window range to have value for string-based window calculation");
+    // `delta_col` is necessarily null here: this overload is enabled only for CURRENT ROW /
+    // UNBOUNDED windows, which never carry a delta column. String orderby columns with
+    // column-valued bounds are rejected by the unsupported-type overload below.
     return window_bounds<OrderbyT>(
       orderby, direction, order, grouping, nulls_at_start, row_delta, delta_col, stream, mr);
   }
