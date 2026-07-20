@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 ########################
 # cuDF Version Updater #
@@ -73,9 +73,12 @@ NEXT_MINOR=$(echo "$NEXT_FULL_TAG" | awk '{split($0, a, "."); print a[2]}')
 NEXT_PATCH=$(echo "$NEXT_FULL_TAG" | awk '{split($0, a, "."); print a[3]}')
 NEXT_SHORT_TAG=${NEXT_MAJOR}.${NEXT_MINOR}
 
+NEXT_UCXX_TAG="$(curl -s https://version.gpuci.io/rapids/"${NEXT_SHORT_TAG}")"
+
 # Need to distutils-normalize the versions for some use cases
 NEXT_SHORT_TAG_PEP440=$(python -c "from packaging.version import Version; print(Version('${NEXT_SHORT_TAG}'))")
 PATCH_PEP440=$(python -c "from packaging.version import Version; print(Version('${NEXT_PATCH}'))")
+NEXT_UCXX_SHORT_TAG_PEP440=$(python -c "from packaging.version import Version; print(Version('${NEXT_UCXX_TAG}'))")
 
 # Set branch references based on RUN_CONTEXT
 if [[ "${RUN_CONTEXT}" == "main" ]]; then
@@ -144,6 +147,7 @@ echo "${RAPIDS_BRANCH_NAME}" > RAPIDS_BRANCH
 DEPENDENCIES=(
   cudf
   cudf-polars
+  cudf-streaming
   cudf_kafka
   cugraph
   cuml
@@ -153,21 +157,38 @@ DEPENDENCIES=(
   kvikio
   libcudf
   libcudf-example
+  libcudf-streaming
   libcudf-tests
   libcudf_kafka
   libkvikio
+  librapidsmpf
   librmm
   pylibcudf
   rapids-dask-dependency
   rapidsmpf
   rmm
 )
+
+UCXX_DEPENDENCIES=(
+  libucxx
+  ucxx
+)
+
 for DEP in "${DEPENDENCIES[@]}"; do
   for FILE in dependencies.yaml conda/environments/*.yaml python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml; do
     sed_runner "/-.* ${DEP}\(-cu[[:digit:]]\{2\}\)\{0,1\}\(\[.*\]\)\{0,1\}==/ s/==.*/==${NEXT_SHORT_TAG_PEP440}.*,>=0.0.0a0/g" "${FILE}"
   done
   for FILE in python/*/pyproject.toml; do
     sed_runner "/\"${DEP}==/ s/==.*\"/==${NEXT_SHORT_TAG_PEP440}.*,>=0.0.0a0\"/g" "${FILE}"
+  done
+done
+
+for DEP in "${UCXX_DEPENDENCIES[@]}"; do
+  for FILE in dependencies.yaml conda/environments/*.yaml python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml; do
+    sed_runner "/-.* ${DEP}\(-cu[[:digit:]]\{2\}\)\{0,1\}==/ s/==.*/==${NEXT_UCXX_SHORT_TAG_PEP440}.*,>=0.0.0a0/g" "${FILE}"
+  done
+  for FILE in python/*/pyproject.toml; do
+    sed_runner "/\"${DEP}\(-cu[[:digit:]]\{2\}\)\{0,1\}==/ s/==.*\"/==${NEXT_UCXX_SHORT_TAG_PEP440}\.*,>=0.0.0a0\"/g" "${FILE}"
   done
 done
 
