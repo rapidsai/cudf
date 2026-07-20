@@ -45,7 +45,7 @@ repos:
           "pyarrow>=19.0.0,<24.0.0",  # https://github.com/rapidsai/cudf/issues/22229
           "pytest>=8.0.0,<9.1.0",
           "types-cachetools>=5.5.0",
-          "rmm-cu12==26.8.*,>=0.0.0a0; sys_platform=='linux'",
+          "rmm-cu12==26.10.*,>=0.0.0a0; sys_platform=='linux'",
           "--extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/"
         ]
         args: ["--config-file=pyproject.toml",
@@ -220,7 +220,7 @@ repos:
         args: ["--fix"]
       - id: ruff-format
   - repo: https://github.com/rapidsai/pre-commit-hooks
-    rev: v1.5.1
+    rev: v1.6.0
     hooks:
       - id: verify-copyright
         name: verify-copyright-cudf
@@ -242,6 +242,7 @@ repos:
             recipe[.]yaml$|
             dependencies[.]yaml$|
             pytest[.]ini$|
+            ^[.]clang-format$|
             ^[.]pre-commit-config[.]yaml$|
             Makefile$
         # TODO: Remove FindCUDAToolkit once we require CMake 4.4

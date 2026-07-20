@@ -75,6 +75,16 @@ def test_ufunc_series(request, numpy_ufunc, has_nulls, indexed):
             else args
         )
         mask = reduce(operator.or_, (a.isna() for a in aligned)).to_pandas()
+        if numpy_ufunc in (np.power, np.float_power):
+            # pandas honors 1 ** x == 1 and x ** 0 == 1 even when x is
+            # missing, and cudf matches, so those positions are valid in the
+            # result. The 0-filled pandas args already compute 1 there
+            # (1 ** 0 and 0 ** 0), so just unmask them.
+            base, exponent = aligned
+            identity = ((base == 1).fillna(False) & exponent.isna()) | (
+                (exponent == 0).fillna(False) & base.isna()
+            )
+            mask &= ~identity.to_pandas()
 
     got = numpy_ufunc(*args)
 
