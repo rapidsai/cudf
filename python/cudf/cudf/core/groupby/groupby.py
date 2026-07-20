@@ -3435,14 +3435,50 @@ class GroupBy(Serializable, Reducible, Scannable):
         values = self.grouping.values
         from cudf.core.dataframe import DataFrame
 
-        result = self.obj._from_data(
-            dict(
-                zip(
-                    values._column_names,
-                    self._replace_nulls(values._columns, method),
-                    strict=True,
+        value_columns = values._columns
+        if limit is not None and limit < 0:
+            # pandas treats a negative limit as unlimited
+            limit = None
+        if limit is None:
+            replaced = tuple(self._replace_nulls(value_columns, method))
+        else:
+            # pandas accepts integer-valued floats
+            limit = int(limit)
+            # Group-relative row position, masked null exactly where the
+            # value is null: group-filling the positions with the same
+            # policy yields, per row, the position of the value that
+            # sourced its fill, making (own position - source position)
+            # the fill distance. The unmasked positions column is passed
+            # through the same replace_nulls call because the output rows
+            # come back in grouped order, not the original row order.
+            cum = self.cumcount()._column
+            pos_columns = tuple(
+                cum.set_mask(col.mask, col.null_count) if col.nullable else cum
+                for col in value_columns
+            )
+            n = len(value_columns)
+            filled = tuple(
+                self._replace_nulls(
+                    (*value_columns, *pos_columns, cum), method
                 )
             )
+            grouped_cum = filled[-1]
+            limited = []
+            for fcol, fpos in zip(filled[:n], filled[n : 2 * n], strict=True):
+                if method == plc.replace.ReplacePolicy.PRECEDING:
+                    dist = grouped_cum - fpos
+                else:
+                    dist = fpos - grouped_cum
+                # Rows within limit of their fill source stay valid
+                # (originally-valid rows are their own source, distance
+                # 0); nulls no fill reached have a null distance and stay
+                # null, so ``keep`` alone is a valid final null mask.
+                keep = (dist <= limit).fillna(False)
+                limited.append(fcol.set_mask(*keep.as_mask()))
+            replaced = tuple(limited)
+
+        result = self.obj._from_data(
+            dict(zip(values._column_names, replaced, strict=True))
         )
         # Pandas' groupby.ffill/bfill builds the result columns via a ``take``
         # on the input columns, which converts integer-valued column labels
@@ -3474,7 +3510,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         Parameters
         ----------
         limit : int, default None
-            Unsupported
+            The maximum number of consecutive NA values within a group
+            filled forward from the most recent valid value. ``None``
+            fills without limit.
         """
         return self._scan_fill(plc.replace.ReplacePolicy.PRECEDING, limit)
 
@@ -3484,7 +3522,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         Parameters
         ----------
         limit : int, default None
-            Unsupported
+            The maximum number of consecutive NA values within a group
+            filled backward from the next valid value. ``None`` fills
+            without limit.
         """
         return self._scan_fill(plc.replace.ReplacePolicy.FOLLOWING, limit)
 
