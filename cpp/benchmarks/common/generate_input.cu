@@ -42,7 +42,6 @@
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/gather.h>
-#include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/random/uniform_int_distribution.h>
 #include <thrust/random/uniform_real_distribution.h>
@@ -443,10 +442,11 @@ rmm::device_uvector<cudf::size_type> sample_indices_with_run_length(cudf::size_t
 }
 
 struct valid_or_zero {
-  template <typename T>
-  __device__ T operator()(cuda::std::tuple<T, bool> len_valid) const
+  template <typename Tuple>
+  __device__ uint32_t operator()(Tuple len_valid) const
   {
-    return cuda::std::get<1>(len_valid) ? cuda::std::get<0>(len_valid) : T{0};
+    using cuda::std::get;
+    return get<1>(len_valid) ? get<0>(len_valid) : uint32_t{0};
   }
 };
 
@@ -792,7 +792,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     auto offsets = len_dist(engine, current_num_rows + 1);
     auto valids  = valid_dist(engine, current_num_rows);
     // to ensure these values <= current_child_column->size()
-    auto output_offsets = thrust::make_transform_output_iterator(
+    auto output_offsets = cuda::make_transform_output_iterator(
       offsets.begin(), clamp_down{current_child_column->size()});
 
     thrust::exclusive_scan(thrust::device, offsets.begin(), offsets.end(), output_offsets);

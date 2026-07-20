@@ -34,9 +34,8 @@
 #include <thrust/binary_search.h>
 #include <thrust/count.h>
 #include <thrust/fill.h>
+#include <thrust/for_each.h>
 #include <thrust/gather.h>
-#include <thrust/iterator/permutation_iterator.h>
-#include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/remove.h>
@@ -123,7 +122,7 @@ struct node_ranges {
 
 struct is_nested_end {
   PdaTokenT const* tokens;
-  __device__ auto operator()(NodeIndexT i) -> bool
+  __device__ auto operator()(NodeIndexT i) const -> bool
   {
     return tokens[i] == token_t::StructEnd or tokens[i] == token_t::ListEnd;
   }
@@ -220,8 +219,8 @@ void propagate_first_sibling_to_other(cudf::device_span<TreeDepthT const> node_l
     rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     sorted_node_levels.begin(),
     sorted_node_levels.end(),
-    thrust::make_permutation_iterator(parent_node_ids.begin(), sorted_order.begin()),
-    thrust::make_permutation_iterator(parent_node_ids.begin(), sorted_order.begin()),
+    cuda::make_permutation_iterator(parent_node_ids.begin(), sorted_order.begin()),
+    cuda::make_permutation_iterator(parent_node_ids.begin(), sorted_order.begin()),
     cuda::std::equal_to<TreeDepthT>{},
     cuda::maximum<NodeIndexT>{});
 }
@@ -303,7 +302,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
         }));
     auto depth_out_of_range =
       cudf::detail::device_scalar<int32_t>(0, stream, cudf::get_current_device_resource_ref());
-    auto const token_level_output_it = thrust::make_transform_output_iterator(
+    auto const token_level_output_it = cuda::make_transform_output_iterator(
       token_levels.begin(), checked_token_level_output{depth_out_of_range.data()});
     thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                            push_pop_it,
@@ -387,7 +386,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   // Node categories: copy_if with transform.
   rmm::device_uvector<NodeT> node_categories(num_nodes, stream, mr);
   auto const node_categories_it =
-    thrust::make_transform_output_iterator(node_categories.begin(), token_to_node{});
+    cuda::make_transform_output_iterator(node_categories.begin(), token_to_node{});
   auto const node_categories_end =
     cudf::detail::copy_if(tokens.begin(), tokens.end(), node_categories_it, is_node, stream);
   CUDF_EXPECTS(cuda::std::distance(node_categories_it, node_categories_end) ==
@@ -402,7 +401,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   // Whether the tokenizer stage should keep quote characters for string values
   // If the tokenizer keeps the quote characters, they may be stripped during type casting
   constexpr bool include_quote_char = true;
-  auto const node_range_out_it      = thrust::make_transform_output_iterator(
+  auto const node_range_out_it      = cuda::make_transform_output_iterator(
     node_range_tuple_it, node_ranges{tokens, token_indices, include_quote_char});
 
   auto const node_range_out_end = cudf::detail::copy_if(
@@ -501,20 +500,21 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
       stream);
 
     // scatter to node_range_end for only nested end tokens.
-    auto token_indices_it =
-      thrust::make_permutation_iterator(token_indices.begin(), token_id.begin());
-    auto nested_node_range_end_it =
-      thrust::make_transform_output_iterator(node_range_end.begin(), [] __device__(auto i) {
-        // add +1 to include end symbol.
-        return i + 1;
-      });
-    auto stencil = cuda::transform_iterator(token_id.begin(), is_nested_end{tokens.data()});
-    thrust::scatter_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                       token_indices_it,
-                       token_indices_it + num_nested,
-                       parent_node_ids.begin(),
-                       stencil,
-                       nested_node_range_end_it);
+    thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                       cuda::counting_iterator<NodeIndexT>{0},
+                       num_nested,
+                       [token_ids_ptr       = token_id.data(),
+                        token_indices_ptr   = token_indices.data(),
+                        parent_node_ids_ptr = parent_node_ids.data(),
+                        node_range_end_ptr  = node_range_end.data(),
+                        is_end = is_nested_end{tokens.data()}] __device__(NodeIndexT const idx) {
+                         auto const token_idx = token_ids_ptr[idx];
+                         if (is_end(token_idx)) {
+                           // add +1 to include end symbol.
+                           node_range_end_ptr[parent_node_ids_ptr[idx]] =
+                             token_indices_ptr[token_idx] + 1;
+                         }
+                       });
   }
 
   return {std::move(node_categories),
@@ -707,7 +707,7 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
 
     // store to static_map with keys as field keys[index], and values as keys[found_keys[index]]
     auto reverse_map        = make_map(num_keys);
-    auto matching_keys_iter = thrust::make_permutation_iterator(keys.begin(), found_keys.begin());
+    auto matching_keys_iter = cuda::make_permutation_iterator(keys.begin(), found_keys.begin());
     auto pair_iter =
       thrust::make_zip_iterator(cuda::std::make_tuple(keys.begin(), matching_keys_iter));
     reverse_map.insert_async(pair_iter, pair_iter + num_keys, stream);
@@ -772,7 +772,7 @@ get_array_children_indices(TreeDepthT row_array_children_level,
     },
     stream);
   auto level2_parent_nodes =
-    thrust::make_permutation_iterator(parent_node_ids.begin(), level2_nodes.cbegin());
+    cuda::make_permutation_iterator(parent_node_ids.begin(), level2_nodes.cbegin());
   thrust::exclusive_scan_by_key(
     rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     level2_parent_nodes,

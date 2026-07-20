@@ -20,7 +20,7 @@
 
 #include <rmm/mr/aligned_resource_adaptor.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <algorithm>
 #include <functional>
