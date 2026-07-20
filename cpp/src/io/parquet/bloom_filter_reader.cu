@@ -344,7 +344,7 @@ aggregate_reader_metadata::read_bloom_filters(
   auto have_bloom_filters = false;
   // Speculatively read when a bloom filter's length is absent, enough to cover the header (and
   // often the whole bitset).
-  auto constexpr speculative_read_size = int64_t{512};
+  auto constexpr speculative_read_size = int64_t{256};
   // Build complete bloom filter byte ranges (header + bitset) for every column chunk
   std::vector<std::vector<cudf::io::text::byte_range_info>> bloom_filter_byte_ranges_per_source(
     row_group_indices.size());

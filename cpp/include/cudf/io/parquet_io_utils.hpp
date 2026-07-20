@@ -163,7 +163,8 @@ fetch_byte_ranges_to_device_async(
  * @param stream CUDA stream
  * @param mr Device memory resource used to allocate the returned device buffers
  *
- * @return A pair containing the device buffers and the device spans of the bitset data
+ * @return A pair containing buffers that own the fetched bitsets and one device span per input byte
+ * range
  */
 std::pair<std::vector<rmm::device_buffer>, std::vector<cudf::device_span<uint8_t const>>>
 fetch_bloom_filters_to_device(cudf::io::datasource& datasource,
@@ -182,7 +183,8 @@ fetch_bloom_filters_to_device(cudf::io::datasource& datasource,
  * @param stream CUDA stream
  * @param mr Device memory resource used to allocate the returned device buffers
  *
- * @return A pair containing a vector of device buffers and a vector of vectors of device spans
+ * @return A pair containing buffers that own the fetched bitsets and per-source device spans, with
+ * one inner vector per datasource
  */
 std::pair<std::vector<rmm::device_buffer>,
           std::vector<std::vector<cudf::device_span<uint8_t const>>>>
