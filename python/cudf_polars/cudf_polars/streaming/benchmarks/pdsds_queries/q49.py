@@ -218,9 +218,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     .otherwise(None)
                 ).alias("return_ratio"),
                 # Currency ratio calculation
-                # TODO: Polars Decimal/Decimal division returns Decimal, but DuckDB SQL
-                # promotes Decimal/Decimal to Float64. We cast to Float64 here to match.
-                # Other queries with Decimal arithmetic may have similar semantic differences.
+                # DuckDB SQL promotes Decimal/Decimal to Float64; Polars keeps it as
+                # Decimal. Cast to Float64 to match DuckDB return type.
                 (
                     pl.when(pl.col("ws_net_paid").drop_nulls().count() > 0)
                     .then(
@@ -280,9 +279,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     .otherwise(None)
                 ).alias("return_ratio"),
                 # Currency ratio calculation
-                # TODO: Polars Decimal/Decimal division returns Decimal, but DuckDB SQL
-                # promotes Decimal/Decimal to Float64. We cast to Float64 here to match.
-                # Other queries with Decimal arithmetic may have similar semantic differences.
+                # DuckDB SQL promotes Decimal/Decimal to Float64; Polars keeps it as
+                # Decimal. Cast to Float64 to match DuckDB return type.
                 (
                     pl.when(pl.col("cs_net_paid").drop_nulls().count() > 0)
                     .then(
@@ -342,9 +340,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     .otherwise(None)
                 ).alias("return_ratio"),
                 # Currency ratio calculation
-                # TODO: Polars Decimal/Decimal division returns Decimal, but DuckDB SQL
-                # promotes Decimal/Decimal to Float64. We cast to Float64 here to match.
-                # Other queries with Decimal arithmetic may have similar semantic differences.
+                # DuckDB SQL promotes Decimal/Decimal to Float64; Polars keeps it as
+                # Decimal. Cast to Float64 to match DuckDB return type.
                 (
                     pl.when(pl.col("ss_net_paid").drop_nulls().count() > 0)
                     .then(

@@ -136,9 +136,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     ).join(web_customers, on=join_keys, how="anti", nulls_equal=True)
     return QueryResult(
         # Use pl.col("d_date").len() instead of pl.len() to avoid the zero-column
-        # streaming chunk bug (https://github.com/rapidsai/cudf/issues/21428):
-        # Polars >=1.41 projects to 0 columns before len(), causing Len.do_evaluate
-        # to see df.num_rows == 0 and return 0 for every chunk.
+        # streaming chunk bug (https://github.com/rapidsai/cudf/issues/21428)
         frame=result.select(
             [pl.col("d_date").len().cast(pl.Int64).alias("count_star()")]
         ),

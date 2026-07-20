@@ -204,9 +204,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .join(ws3, on="ca_county", suffix="_ws3")
         .with_columns(
             [
-                # TODO: DuckDB SQL promotes Decimal/Decimal to Float64; Polars keeps it as
-                # Decimal. Cast to Float64 to match DuckDB return type and filter semantics.
-                # Check other queries with Decimal arithmetic for similar semantic differences.
+                # DuckDB SQL promotes Decimal/Decimal to Float64; Polars keeps it as
+                # Decimal. Cast to Float64 to match DuckDB return type.
                 pl.when(pl.col("web_sales") > 0)
                 .then(
                     pl.col("web_sales_ws2").cast(pl.Float64)

@@ -104,6 +104,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             .agg([pl.col("cs_ext_sales_price").sum().alias("itemrevenue")])
             .with_columns(
                 [
+                    # DuckDB SQL promotes Decimal/Decimal to Float64; Polars keeps it as
+                    # Decimal. Cast to Float64 to match DuckDB return type.
                     (
                         pl.col("itemrevenue").cast(pl.Float64)
                         * 100
