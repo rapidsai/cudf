@@ -16,12 +16,14 @@ from werkzeug import Response
 
 import polars as pl
 
+from cudf_polars.containers import DataType
+from cudf_polars.dsl.ir import IRExecutionContext, Scan
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.testing.engine_utils import is_streaming_engine
 from cudf_polars.testing.io import make_partitioned_source
+from cudf_polars.utils.config import ConfigOptions, ParquetOptions
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_138,
     POLARS_VERSION_LT_139,
@@ -169,6 +171,46 @@ def test_negative_slice_pushdown_raises(engine: pl.GPUEngine, tmp_path):
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
+def test_scan_parquet_prefetch_file_metadata_in_memory_raises():
+    with pytest.raises(
+        NotImplementedError,
+        match=r"Prefetching is not supported for the in-memory executor.",
+    ):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="in-memory",
+                parquet_options=ParquetOptions(prefetch_file_metadata=True),
+            )
+        )
+
+
+def test_scan_do_evaluate_missing_prefetch_metadata() -> None:
+    paths = ["/some/missing/file.parquet"]
+    parquet_options = ParquetOptions(prefetch_file_metadata=True)
+    context = IRExecutionContext()
+    schema = {"a": DataType(pl.Int64())}
+
+    with pytest.raises(
+        AssertionError,
+        match=(r"Paths do not match cached parquet info."),
+    ):
+        Scan.do_evaluate(
+            schema,
+            "parquet",
+            {},
+            paths,
+            None,
+            0,
+            -1,
+            None,
+            None,
+            None,
+            parquet_options,
+            [],
+            context=context,
+        )
+
+
 def test_scan_unsupported_raises(engine: pl.GPUEngine, tmp_path):
     df = pl.DataFrame({"a": [1, 2, 3]})
 
@@ -193,6 +235,24 @@ def test_scan_row_index_projected_out(tmp_path):
     q = pl.scan_parquet(tmp_path / "df.pq").with_row_index().select(pl.col("a"))
 
     assert_gpu_result_equal(q, engine=NO_CHUNK_ENGINE)
+
+
+@pytest.mark.parametrize("chunked", [False, True])
+def test_scan_parquet_pandas_index_projected_out(tmp_path, chunked):
+    pd = pytest.importorskip("pandas")
+    pytest.importorskip("pyarrow")
+
+    pd.DataFrame({"a": [1, 2, 3], "b": [4.0, 5.0, 6.0]}).to_parquet(
+        tmp_path / "pdf.pq", engine="pyarrow", index=True
+    )
+    q = pl.scan_parquet(tmp_path / "pdf.pq").select("b")
+
+    engine = pl.GPUEngine(
+        executor="in-memory",
+        raise_on_fail=True,
+        parquet_options={"chunked": chunked},
+    )
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_scan_csv_column_renames_projection_schema(engine: pl.GPUEngine, tmp_path):
@@ -744,15 +804,9 @@ def test_scan_tiny_file_not_compressed(engine: pl.GPUEngine, tmp_path):
 )
 @pytest.mark.parametrize("custom_engine", [None, NO_CHUNK_ENGINE])
 def test_scan_parquet_zero_width_with_limit(
-    engine: pl.GPUEngine, tmp_path, custom_engine, request
+    engine: pl.GPUEngine, tmp_path, custom_engine
 ):
     active_engine = custom_engine if custom_engine is not None else engine
-    request.applymarker(
-        pytest.mark.xfail(
-            is_streaming_engine(active_engine),
-            reason="https://github.com/rapidsai/cudf/issues/21644",
-        )
-    )
     path = tmp_path / "zero_width.parquet"
     pl.LazyFrame(height=20).sink_parquet(path)
     q = pl.scan_parquet(path).head(5)
