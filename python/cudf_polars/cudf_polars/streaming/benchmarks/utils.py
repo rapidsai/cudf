@@ -240,20 +240,12 @@ class ValidationMethod:
     comparison_options: dict[str, Any]
     expected_location: str | None
 
-    def expected_file(self, q_id: int) -> Path:
+    def expected_file(self, q_id: int) -> str:
         """Return path to disk-based result for the given query."""
         if self.expected_location is None:
             raise RuntimeError("No expected location given")
 
-        # search for either q_{q_id:02d}.parquet or q{q_id:02d}.parquet
-        files = list(Path(self.expected_location).glob(f"q*{q_id:02d}.parquet"))
-        if not files:
-            raise FileNotFoundError(f"Expected result file for query {q_id} not found")
-        elif len(files) > 1:
-            raise ValueError(
-                f"Multiple expected result files for query {q_id}: {files}"
-            )
-        return files[0]
+        return self.expected_location.rstrip("/") + f"/q*{q_id:02d}.parquet"
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -618,7 +610,7 @@ class RunConfig:
                 expected_source="duckdb-disk",
                 comparison_method="polars",
                 comparison_options=get_validation_options(args),
-                expected_location=str(args.validate_directory),
+                expected_location=args.validate_directory,
             )
         elif args.validate_against is not None:
             validation_method = ValidationMethod(
@@ -714,16 +706,7 @@ class RunConfig:
         }
         if engine is not None:
             config_options = ConfigOptions.from_polars_engine(engine)
-            # Drop non-serializable contexts.
-            config_options = dataclasses.replace(
-                config_options,
-                executor=dataclasses.replace(
-                    config_options.executor,
-                    spmd_context=None,
-                    ray_context=None,
-                    dask_context=None,
-                ),
-            )
+            config_options = config_options.drop_unserializable()
             rapidsmpf_options = engine.rapidsmpf_options.get_strings()
             result["config_options"] = {
                 "config_options": dataclasses.asdict(config_options),
@@ -2147,12 +2130,12 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     )
     group.add_argument(
         "--validate-directory",
-        type=Path,
+        type=str,
         default=None,
         help=(
-            "Validate the results against a directory with a pre-computed set of 'golden' results. "
-            "The directory should contain one parquet file per query, named 'q_DD.parquet', or `qDD.parquet` "
-            "where DD is the zero-padded query number."
+            "Validate the results against a directory or object-storage prefix with a pre-computed set "
+            "of 'golden' results. The directory should contain one parquet file per query, "
+            "named 'q_DD.parquet', or `qDD.parquet` where DD is the zero-padded query number."
         ),
     )
     parser.add_argument(
@@ -2256,14 +2239,6 @@ def parse_args(
         parser.error(
             "--blocksize is not supported with --frontend; "
             "use --target-partition-size instead."
-        )
-
-    if (
-        parsed_args.validate_directory is not None
-        and not parsed_args.validate_directory.exists()
-    ):
-        raise FileNotFoundError(
-            f"--validate-directory: {parsed_args.validate_directory} does not exist."
         )
 
     if (

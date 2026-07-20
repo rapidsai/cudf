@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import datetime
 import pickle
 import warnings
 from collections.abc import (
@@ -3864,9 +3865,17 @@ def as_column(
                     length=length,
                 )
             elif (
-                isinstance(element, (pd.Timestamp, pd.Timedelta, pd.Interval))
+                isinstance(
+                    element,
+                    (datetime.datetime, datetime.timedelta, pd.Interval),
+                )
                 or element is pd.NaT
             ):
+                # datetime.datetime/timedelta cover their pd.Timestamp/
+                # pd.Timedelta subclasses; routing stdlib datetimes through
+                # pandas keeps mixed datetime+non-datetime inputs on the
+                # object-dtype path (MixedTypeError) instead of silently
+                # coercing them.
                 # TODO: Remove this after
                 # https://github.com/apache/arrow/issues/26492
                 # is fixed.
