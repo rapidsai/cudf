@@ -63,7 +63,7 @@ struct directional_unbounded_distance_fn {
   {
     auto const row_info = groups.row_info(i);
     return direction == rolling::direction::PRECEDING ? i - row_info.group_start() + 1
-                                                       : row_info.group_end() - i - 1;
+                                                      : row_info.group_end() - i - 1;
   }
 };
 
@@ -170,8 +170,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   }
 
   auto const is_peer_bound = [](range_window_type const& window) {
-    return std::holds_alternative<unbounded>(window) ||
-           std::holds_alternative<current_row>(window);
+    return std::holds_alternative<unbounded>(window) || std::holds_alternative<current_row>(window);
   };
   CUDF_EXPECTS(is_peer_bound(preceding) && is_peer_bound(following),
                "Multi-column RANGE windows support only UNBOUNDED and CURRENT ROW bounds");
