@@ -33,12 +33,13 @@
 // both a lower and an upper reference:
 //
 //   - "plain_string":  reader default; the column materializes as STRING. This is the cheapest
-//                      possible read (no dictionary built) and serves as the lower-bound reference --
-//                      it does strictly less work and produces a different (STRING) output.
+//                      possible read (no dictionary built) and serves as the lower-bound reference
+//                      -- it does strictly less work and produces a different (STRING) output.
 //   - "decode_encode": read as STRING, then `cudf::dictionary::encode` to DICTIONARY32. This is the
-//                      pre-existing way to obtain a dictionary column and is the fair apples-to-apples
-//                      baseline the transcode fast path aims to beat.
-//   - "transcode":     `output_dict_columns=true`; the reader keeps the dictionary representation and
+//                      pre-existing way to obtain a dictionary column and is the fair
+//                      apples-to-apples baseline the transcode fast path aims to beat.
+//   - "transcode":     `output_dict_columns=true`; the reader keeps the dictionary representation
+//   and
 //                      emits DICTIONARY32 directly, skipping string materialization.
 //
 // Both "decode_encode" and "transcode" produce DICTIONARY32 output, so their times and peak memory
@@ -87,11 +88,11 @@ enum class bench_mode { plain_string, decode_encode, transcode };
 }
 
 // nvbench invokes the benchmark once per axis combination, prints its own results table, and omits
-// skipped states from it; there is also no cross-state hook, so a single invocation cannot group the
-// three modes of a configuration together. This collector accumulates each run's CPU/GPU mean time
-// (and any transcode skip reason), keyed by every setting except `mode`, and prints one row per
-// configuration from its destructor -- i.e. at program exit, after nvbench's own output -- with all
-// three modes in fixed order (plain_string, decode_encode, transcode) so each configuration is
+// skipped states from it; there is also no cross-state hook, so a single invocation cannot group
+// the three modes of a configuration together. This collector accumulates each run's CPU/GPU mean
+// time (and any transcode skip reason), keyed by every setting except `mode`, and prints one row
+// per configuration from its destructor -- i.e. at program exit, after nvbench's own output -- with
+// all three modes in fixed order (plain_string, decode_encode, transcode) so each configuration is
 // grouped and ordered regardless of nvbench's state ordering or its omission of skipped states.
 struct run_settings {
   std::int64_t cardinality;
@@ -150,8 +151,9 @@ class comparison_collector {
   {
     if (_rows.empty()) { return; }
 
-    std::printf("\n# Per-configuration mode comparison "
-                "(order: plain_string, decode_encode, transcode)\n\n");
+    std::printf(
+      "\n# Per-configuration mode comparison "
+      "(order: plain_string, decode_encode, transcode)\n\n");
     std::printf(
       "| cardinality | ~dict_bits | data_size (MiB) | row_group_size_rows | max_page_size_rows | "
       "plain_string CPU (ms) | decode_encode CPU (ms) | transcode CPU (ms) | "
@@ -165,16 +167,17 @@ class comparison_collector {
       return std::string{buf.data()};
     };
     // Timing cell: the value if the mode ran, otherwise the skip reason (transcode only) or "-".
-    auto const cell = [&](mode_timing const& t, double mode_timing::*field, std::string const& note) {
-      if (t.present) { return num(t.*field); }
-      return note.empty() ? std::string{"-"} : note;
-    };
+    auto const cell =
+      [&](mode_timing const& t, double mode_timing::* field, std::string const& note) {
+        if (t.present) { return num(t.*field); }
+        return note.empty() ? std::string{"-"} : note;
+      };
 
     // Speedup of transcode over the decode_encode baseline, as a signed percentage of baseline time
     // saved: 100 * (decode_encode - transcode) / decode_encode. Positive = transcode is faster,
     // negative = slower. "-" when either mode is missing.
     auto const speedup =
-      [](mode_timing const& base, mode_timing const& cand, double mode_timing::*field) {
+      [](mode_timing const& base, mode_timing const& cand, double mode_timing::* field) {
         if (not(base.present and cand.present)) { return std::string{"-"}; }
         std::array<char, 16> buf{};
         std::snprintf(
@@ -265,8 +268,8 @@ void BM_parquet_read_dict_transcode(nvbench::state& state)
       .output_dict_columns(mode == bench_mode::transcode);
 
   // Perform the full work for the selected mode: read, and for `decode_encode` additionally encode
-  // each STRING column to DICTIONARY32. Returns the resulting table so it can be reused for both the
-  // outside-the-timed-region verification and the timed measurement.
+  // each STRING column to DICTIONARY32. Returns the resulting table so it can be reused for both
+  // the outside-the-timed-region verification and the timed measurement.
   auto const run_mode = [&]() -> std::unique_ptr<cudf::table> {
     auto result = cudf::io::read_parquet(read_opts);
     if (mode == bench_mode::decode_encode) {
@@ -282,8 +285,8 @@ void BM_parquet_read_dict_transcode(nvbench::state& state)
 
   // Verification (outside the timed region, run for every mode so warm-up is symmetric). For
   // `transcode`, the writer may have fallen back to plain encoding at high cardinality / large row
-  // groups, leaving the column ineligible for the fast path; in that case skip the state rather than
-  // silently measuring the plain path or aborting the whole sweep.
+  // groups, leaving the column ineligible for the fast path; in that case skip the state rather
+  // than silently measuring the plain path or aborting the whole sweep.
   {
     auto const probe = run_mode();
     // Bind the table_view to a local: `probe->view()` returns a temporary, so calling it separately
@@ -300,8 +303,8 @@ void BM_parquet_read_dict_transcode(nvbench::state& state)
     if (mode == bench_mode::plain_string) {
       if (not all_of_type(cudf::type_id::STRING)) {
         state.skip("plain_string produced unexpected type_id=" + std::to_string(actual_type_id) +
-                   " (expected STRING=" +
-                   std::to_string(static_cast<int>(cudf::type_id::STRING)) + ")");
+                   " (expected STRING=" + std::to_string(static_cast<int>(cudf::type_id::STRING)) +
+                   ")");
         return;
       }
     } else if (mode == bench_mode::decode_encode) {

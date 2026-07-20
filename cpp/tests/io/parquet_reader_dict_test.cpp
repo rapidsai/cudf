@@ -94,20 +94,20 @@ std::unique_ptr<cudf::column> make_low_cardinality_lists_of_strings()
 
 void write_parquet(cudf::table_view const& input, std::string const& filepath)
 {
+  // Produce row groups consisting of `row_group_size` rows, with a single (non-chunked) write. Row
+  // groups are built from whole page fragments, so `max_page_fragment_size` must also be lowered to
+  // `row_group_size`
+  // -- otherwise the default 5000-row fragment would force row groups to snap to multiples of 5000
+  // instead of the requested size.
   auto const options =
-    cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{filepath})
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, input)
       .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
       .compression(cudf::io::compression_type::NONE)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .row_group_size_rows(row_group_size)
+      .max_page_fragment_size(row_group_size)
       .build();
-
-  cudf::io::chunked_parquet_writer writer(options);
-  for (auto offset = 0; offset < input.num_rows(); offset += row_group_size) {
-    auto const length = std::min(row_group_size, input.num_rows() - offset);
-    auto const chunk  = cudf::slice(input, {offset, offset + length});
-    writer.write(chunk.front());
-  }
-  writer.close();
+  cudf::io::write_parquet(options);
 }
 
 cudf::io::table_with_metadata read_parquet_as_dict(std::string const& filepath)
