@@ -941,6 +941,21 @@ class StreamingExecutor:
             d["quent_context"] = json.dumps(quent_context)
         return hash(tuple(sorted(d.items())))
 
+    def drop_unserializable(self) -> StreamingExecutor:
+        """
+        Return a copy without the per-cluster contexts that cannot be pickled.
+
+        The streaming executor holds live, process-local handles (communicators,
+        streaming contexts, thread pools) that must not be shipped to a worker/actor.
+
+        Returns
+        -------
+        A copy of this executor with the cluster contexts set to ``None``.
+        """
+        return dataclasses.replace(
+            self, spmd_context=None, ray_context=None, dask_context=None
+        )
+
 
 @dataclasses.dataclass(frozen=True, eq=True)
 class InMemoryExecutor:
@@ -951,6 +966,10 @@ class InMemoryExecutor:
     """
 
     name: Literal["in-memory"] = dataclasses.field(default="in-memory", init=False)
+
+    def drop_unserializable(self) -> InMemoryExecutor:
+        """Return ``self``, the in-memory executor holds no unserializable state."""
+        return self
 
 
 ExecutorType = TypeVar("ExecutorType", StreamingExecutor, InMemoryExecutor)
@@ -986,6 +1005,16 @@ class ConfigOptions(Generic[ExecutorType]):
     )
     device: int | None = None
     memory_resource_config: MemoryResourceConfig | None = None
+
+    def drop_unserializable(self) -> ConfigOptions[ExecutorType]:
+        """
+        Return a copy safe to pickle to a worker/actor.
+
+        Returns
+        -------
+        A copy of these options with unserializable executor state removed.
+        """
+        return dataclasses.replace(self, executor=self.executor.drop_unserializable())
 
     @classmethod
     def from_polars_engine(

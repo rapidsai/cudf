@@ -31,6 +31,7 @@ using metadata_base                  = parquet::detail::metadata;
 using io::detail::inline_column_buffer;
 using parquet::detail::CompactProtocolReader;
 using parquet::detail::equality_literals_collector;
+using parquet::detail::find_colchunk_iter_offset;
 using parquet::detail::input_column_info;
 using parquet::detail::row_group_info;
 using text::byte_range_info;
@@ -429,7 +430,8 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
   return bloom_filter_bytes;
 }
 
-std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_bytes(
+std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
+aggregate_reader_metadata::dictionary_pages_byte_ranges(
   std::span<std::vector<cudf::size_type> const> row_group_indices,
   std::span<data_type const> output_dtypes,
   std::span<cudf::size_type const> output_column_schemas,
@@ -447,7 +449,7 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
                   std::back_inserter(dictionary_col_schemas),
                   [](auto& dict_literals) { return not dict_literals.empty(); });
 
-  // No (in)equality literals found, return empty vector
+  // No (in)equality literals found, return empty vectors
   if (dictionary_col_schemas.empty()) { return {}; }
 
   // Compute total number of input row groups
@@ -463,6 +465,13 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
   // Flag to check if we have at least one valid dictionary page
   auto have_dictionary_pages = false;
 
+  // Association between each dictionary page byte range and its source
+  std::vector<cudf::size_type> dictionary_page_source_map;
+  dictionary_page_source_map.reserve(num_chunks);
+
+  // Cache each dictionary column's chunk offset across sources and row groups
+  std::vector<std::optional<size_type>> colchunk_offsets(dictionary_col_schemas.size());
+
   // For all sources
   std::for_each(
     cuda::counting_iterator<std::size_t>{0},
@@ -470,31 +479,27 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
     [&](auto const src_index) {
       // Get all row group indices in the data source
       auto const& rg_indices = row_group_indices[src_index];
-      std::optional<size_type> colchunk_iter_offset{};
       // For all row groups
       std::for_each(rg_indices.cbegin(), rg_indices.cend(), [&](auto const rg_index) {
-        auto const& row_group = per_file_metadata[src_index].row_groups[rg_index];
-        // For all column chunks
+        auto const& row_group     = per_file_metadata[src_index].row_groups[rg_index];
+        auto const num_col_chunks = static_cast<size_type>(row_group.columns.size());
+        // For all dictionary column chunks
         std::for_each(
-          dictionary_col_schemas.begin(),
-          dictionary_col_schemas.end(),
-          [&](auto const& schema_idx) {
-            // Get the column chunk iterator
-            if (not colchunk_iter_offset.has_value() or
-                row_group.columns[colchunk_iter_offset.value()].schema_idx != schema_idx) {
-              auto const& colchunk_iter = std::find_if(
-                row_group.columns.begin(), row_group.columns.end(), [schema_idx](auto const& col) {
-                  return col.schema_idx == schema_idx;
-                });
-              CUDF_EXPECTS(colchunk_iter != row_group.columns.end(),
-                           "Column chunk with schema index " + std::to_string(schema_idx) +
-                             " not found in row group",
-                           std::invalid_argument);
-              colchunk_iter_offset = std::distance(row_group.columns.begin(), colchunk_iter);
+          cuda::counting_iterator<std::size_t>{0},
+          cuda::counting_iterator{dictionary_col_schemas.size()},
+          [&](auto const col) {
+            // Map the schema index to this source
+            auto const mapped_schema_idx =
+              map_schema_index(dictionary_col_schemas[col], static_cast<int>(src_index));
+            auto& colchunk_offset    = colchunk_offsets[col];
+            auto const cached_offset = colchunk_offset.value_or(-1);
+            if (cached_offset < 0 or cached_offset >= num_col_chunks or
+                row_group.columns[cached_offset].schema_idx != mapped_schema_idx) {
+              colchunk_offset = find_colchunk_iter_offset(row_group, mapped_schema_idx);
             }
-            auto const colchunk_iter = row_group.columns.begin() + colchunk_iter_offset.value();
-            auto const& col_chunk    = *colchunk_iter;
-            auto const& col_meta     = col_chunk.meta_data;
+
+            auto const& col_chunk = row_group.columns[colchunk_offset.value()];
+            auto const& col_meta  = col_chunk.meta_data;
 
             // Make sure that we have page index and the column chunk doesn't have any
             // non-dictionary encoded pages
@@ -550,13 +555,14 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
             }
 
             dictionary_page_bytes.emplace_back(dictionary_offset, dictionary_size);
+            dictionary_page_source_map.emplace_back(static_cast<size_type>(src_index));
           });
       });
     });
 
   if (not have_dictionary_pages) { return {}; }
 
-  return dictionary_page_bytes;
+  return {std::move(dictionary_page_bytes), std::move(dictionary_page_source_map)};
 }
 
 std::vector<std::vector<cudf::size_type>>

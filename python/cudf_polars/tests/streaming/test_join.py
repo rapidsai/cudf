@@ -411,19 +411,18 @@ def test_join_prefilter_skips_unsupported_cross_join() -> None:
     assert decision.reason_skipped == "unsupported_join_type"
 
 
-def test_join_prefilter_asserts_mismatched_key_count() -> None:
-    with pytest.raises(
-        AssertionError, match="left and right join key counts must match"
-    ):
-        _select_join_prefilter(
-            "Inner",
-            10,
-            1_000,
-            (0,),
-            (0, 1),
-            threshold=0.5,
-            max_key_columns=1,
-        )
+def test_join_prefilter_skips_mismatched_key_count() -> None:
+    decision = _select_join_prefilter(
+        "Inner",
+        10,
+        1_000,
+        (0,),
+        (0, 1),
+        threshold=0.5,
+        max_key_columns=1,
+    )
+    assert not decision.enabled
+    assert decision.reason_skipped == "expression_keys"
 
 
 @pytest.mark.parametrize(
@@ -596,7 +595,7 @@ def test_join_computed_expr_right_key(streaming_engine_factory) -> None:
             target_partition_size=1,
             max_rows_per_partition=4,
             broadcast_limit=1,  # Disable broadcast joins
-            fallback_mode="warn",
+            raise_on_fail=True,
         ),
     )
     if engine.nranks < 2:
@@ -643,9 +642,4 @@ def test_join_computed_expr_right_key(streaming_engine_factory) -> None:
         left_on="zip_prefix",
         right_on=pl.col("full_zip").str.slice(0, 2),
     )
-    with warns_on_spmd(
-        engine,
-        UserWarning,
-        match=r"Multi-partition Join not supported for keys with expressions\.",
-    ):
-        assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)

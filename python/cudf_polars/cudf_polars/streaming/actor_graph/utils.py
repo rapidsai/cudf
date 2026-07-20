@@ -222,6 +222,27 @@ async def gather_in_task_group(*coroutines: Coroutine[Any, Any, Any]) -> list[An
     return [task.result() for task in tasks]
 
 
+async def shutdown_channels(context: Context, *channels: Channel[Any]) -> None:
+    """Shutdown data and metadata paths for all channels."""
+    await gather_in_task_group(
+        *itertools.chain.from_iterable(
+            (ch.shutdown(context), ch.shutdown_metadata(context)) for ch in channels
+        )
+    )
+
+
+@asynccontextmanager
+async def shutdown_channels_on_error(
+    context: Context, *channels: Channel[Any]
+) -> AsyncIterator[None]:
+    """Shutdown channels on error without actor tracing."""
+    try:
+        yield
+    except BaseException:
+        await shutdown_channels(context, *channels)
+        raise
+
+
 @asynccontextmanager
 async def shutdown_on_error(
     context: Context,
@@ -230,10 +251,10 @@ async def shutdown_on_error(
     ir_context: IRExecutionContext | None = None,
 ) -> AsyncIterator[ActorTracer | None]:
     """
-    Shutdown on error for rapidsmpf.
+    Actor-level shutdown and tracing for rapidsmpf.
 
-    This context manager handles channel cleanup on errors and optionally
-    emits structlog tracing events when LOG_TRACES is enabled.
+    This context manager handles actor channel cleanup on errors and emits
+    structlog tracing events.
 
     Parameters
     ----------
@@ -272,12 +293,7 @@ async def shutdown_on_error(
         try:
             yield tracer
         except BaseException:
-            await gather_in_task_group(
-                *itertools.chain.from_iterable(
-                    (ch.shutdown(context), ch.shutdown_metadata(context))
-                    for ch in channels
-                )
-            )
+            await shutdown_channels(context, *channels)
             raise
         finally:
             stop = time.monotonic_ns()
