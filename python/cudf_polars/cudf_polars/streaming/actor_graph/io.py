@@ -73,6 +73,7 @@ if TYPE_CHECKING:
         StatsCollector,
     )
     from cudf_polars.streaming.io import FusedScan, SplitScan
+    from cudf_polars.utils.config import ParquetOptions
 
 
 class Lineariser:
@@ -439,10 +440,22 @@ async def python_scan_node(
                 context=ir_context,
             )
         )
+        # A rank-aware source may emit a duplicated output (an identical copy on
+        # every rank, e.g. a persisted global sort/limit). Re-advertise that as
+        # the channel's ``duplicated`` flag so downstream collectives treat the
+        # copies as duplicates rather than distinct partitions.
+        duplicated = (
+            rank_aware_source is not None
+            and rank_aware_source.output_duplicated(comm.rank, comm.nranks)
+        )
         if count is not None:
             # The chunk count is available so we can stream one chunk at a time.
             announced = max(count, 1)
-            await send_metadata(ch_out, context, ChannelMetadata(local_count=announced))
+            await send_metadata(
+                ch_out,
+                context,
+                ChannelMetadata(local_count=announced, duplicated=duplicated),
+            )
             sentinel = object()
             seq_num = 0
             while True:
@@ -469,7 +482,9 @@ async def python_scan_node(
             # count before announcing it.
             chunks = await ir_context.to_thread(lambda: list(raw_chunks))
             await send_metadata(
-                ch_out, context, ChannelMetadata(local_count=len(chunks))
+                ch_out,
+                context,
+                ChannelMetadata(local_count=len(chunks), duplicated=duplicated),
             )
             for seq_num, chunk in enumerate(chunks):
                 await _process_and_send_chunk(
@@ -656,6 +671,7 @@ def make_rapidsmpf_read_parquet_node(
     ch_out: Channel[TableChunk],
     stats: StatsCollector,
     partition_info: PartitionInfo,
+    parquet_options: ParquetOptions,
 ) -> Any | None:
     """
     Make a RapidsMPF read parquet node.
@@ -676,6 +692,8 @@ def make_rapidsmpf_read_parquet_node(
         The statistics collector.
     partition_info
         The partition information.
+    parquet_options
+        The Parquet options.
 
     Returns
     -------
@@ -687,11 +705,14 @@ def make_rapidsmpf_read_parquet_node(
     # Build ParquetReaderOptions
     try:
         stream = context.br().stream_pool.get_stream()
-        parquet_reader_options = (
-            plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(ir.paths))
-            .decimal_width(plc.TypeId.DECIMAL128)
-            .build()
+        builder = plc.io.parquet.ParquetReaderOptions.builder(
+            plc.io.SourceInfo(ir.paths)
         )
+        if (
+            ir.predicate is not None and parquet_options.use_jit_filter
+        ):  # pragma: no cover; no test yet
+            builder.use_jit_filter(use_jit_filter=True)
+        parquet_reader_options = builder.decimal_width(plc.TypeId.DECIMAL128).build()
 
         if ir.with_columns is not None:
             parquet_reader_options.set_column_names(ir.with_columns)
@@ -789,6 +810,7 @@ def _(
             ch_in,
             rec.state["stats"],
             partition_info,
+            parquet_options,
         )
 
         # Need metadata node, because the native read_parquet

@@ -1,6 +1,6 @@
 /**
  * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "../environment.hpp"
@@ -10,6 +10,7 @@
 #include <cuda_runtime_api.h>
 
 #include <mpi.h>
+#include <rapidsmpf/communicator/logger.hpp>
 #include <rapidsmpf/communicator/mpi.hpp>
 #include <rapidsmpf/communicator/ucxx_utils.hpp>
 #include <rapidsmpf/config.hpp>
@@ -39,8 +40,10 @@ class UCXXEnvironment : public Environment {
                       "didn't get the requested thread level support: MPI_THREAD_MULTIPLE");
 
     options_ = rapidsmpf::config::Options(rapidsmpf::config::get_environment_variables());
-    comm_    = rapidsmpf::ucxx::init_using_mpi(
-      MPI_COMM_WORLD, options_, std::make_shared<rapidsmpf::ProgressThread>());
+    comm_    = rapidsmpf::ucxx::init_using_mpi(MPI_COMM_WORLD,
+                                            options_,
+                                            std::make_shared<rapidsmpf::ProgressThread>(),
+                                            rapidsmpf::Logger::from_options(options_));
   }
 
   void TearDown() override

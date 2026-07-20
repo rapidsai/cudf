@@ -32,7 +32,7 @@ conda install cudf -c rapidsai-nightly -c conda-forge
 ```
 
 3. Build and view the docs locally following the instructions in the [Building
-documentation docs](https://docs.rapids.ai/api/cudf/stable/cudf/developer_guide/documentation/#building-and-viewing-docs)
+documentation docs](https://docs.rapids.ai/api/cudf/stable/developer_guide/documentation/#building-documentation)
 4. Follow steps 7-10 in the section [Your first issue](#your-first-issue)
 
 ## Code contributions
@@ -54,7 +54,10 @@ documentation docs](https://docs.rapids.ai/api/cudf/stable/cudf/developer_guide/
 8. Verify that CI passes all [status checks](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/about-status-checks).
    Fix if needed.
 9. Wait for other developers to review your code and update code as needed.
-   Changes to any C++ files require at least 2 approvals from the cudf-cpp-codeowners before merging.
+   Changes to libcudf C++ files require at least 2 approvals from the cudf-cpp-codeowners before
+   merging.
+   Changes limited to libcudf_streaming C++ files require at least 1 approval from the
+   rapidsmpf-cpp-codeowners before merging.
 10. Once reviewed and approved, a RAPIDS developer will merge your pull request.
 
 If you are unsure about anything, don't hesitate to comment on issues and ask for clarification!
@@ -324,7 +327,7 @@ This will bring up an interactive prompt to select which spelling fixes to apply
 
 The [C++ Developer Guide](cpp/doxygen/developer_guide/DEVELOPER_GUIDE.md) includes details on contributing to libcudf C++ code.
 
-The [Python Developer Guide](https://docs.rapids.ai/api/cudf/stable/cudf/developer_guide/index.html) includes details on contributing to cuDF Python code.
+The [Python Developer Guide](https://docs.rapids.ai/api/cudf/stable/cudf/developer_guide/) includes details on contributing to cuDF Python code.
 
 
 ## Attribution
