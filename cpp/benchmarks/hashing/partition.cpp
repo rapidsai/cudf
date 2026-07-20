@@ -23,27 +23,19 @@
 
 namespace {
 
-/** Seed used for the first independently generated key column. */
-constexpr unsigned first_key_seed = 1;
-
-/** Seed used for the first independently generated payload column. */
-constexpr unsigned first_payload_seed = 1'000;
-
-/** Integer key types exercised by the analytic benchmark. */
-using analytic_key_types = nvbench::type_list<std::int32_t, std::int64_t>;
-
 /**
- * @brief Create a deterministic random-data profile.
+ * @brief Configure deterministic random data generation.
  *
- * A cardinality of zero generates values directly from each type's distribution. A positive
- * cardinality limits the number of distinct values.
+ * A zero cardinality draws values from the full distribution for the column type. A positive
+ * cardinality limits the number of distinct values. Omitting the null probability produces a
+ * column without a validity mask.
  *
  * @param cardinality Maximum number of distinct values, or zero for no limit
- * @param null_probability Probability of a null, or no value for no validity mask
- * @return Data-generation profile
+ * @param null_probability Probability that a value is null
+ * @return Configured data-generation profile
  */
-data_profile make_profile(cudf::size_type cardinality,
-                          std::optional<double> null_probability = std::nullopt)
+data_profile make_data_profile(cudf::size_type cardinality,
+                               std::optional<double> null_probability = std::nullopt)
 {
   data_profile profile;
   profile.set_cardinality(cardinality);
@@ -53,13 +45,15 @@ data_profile make_profile(cudf::size_type cardinality,
 }
 
 /**
- * @brief Append independently generated columns to an owning column vector.
+ * @brief Append random columns using consecutive deterministic seeds.
  *
- * @param columns Destination column vector
- * @param types Types of columns to append
+ * Each column uses the current seed, then advances it before generating the next column.
+ *
+ * @param columns Column vector to append to
+ * @param types Column types to append
  * @param num_rows Number of rows in each column
- * @param profile Data-generation profile
- * @param seed Seed for the first column; incremented once per appended column
+ * @param profile Random data configuration
+ * @param seed Seed for the next column
  */
 void append_random_columns(std::vector<std::unique_ptr<cudf::column>>& columns,
                            std::vector<cudf::type_id> const& types,
@@ -73,17 +67,17 @@ void append_random_columns(std::vector<std::unique_ptr<cudf::column>>& columns,
 }
 
 /**
- * @brief Create a table with independently generated key and payload columns.
+ * @brief Create a table with key columns followed by payload columns.
  *
- * Key columns are generated first and have high cardinality by default. Payload columns are not
- * cardinality-limited. Separate seed ranges keep all columns independent and deterministic.
+ * Key cardinality is capped at the row count. Payload values use the full distribution for their
+ * type. Every column consumes the next deterministic seed.
  *
- * @param key_types Types of the leading key columns
- * @param payload_types Types of the trailing payload columns
+ * @param key_types Key column types
+ * @param payload_types Payload column types
  * @param num_rows Number of table rows
- * @param key_null_probability Probability of a null in each key column
- * @param payload_null_probability Probability of a null in each payload column
- * @return Owning input table
+ * @param key_null_probability Probability that a key value is null
+ * @param payload_null_probability Probability that a payload value is null
+ * @return Generated input table
  */
 std::unique_ptr<cudf::table> make_input_table(
   std::vector<cudf::type_id> const& key_types,
@@ -92,23 +86,48 @@ std::unique_ptr<cudf::table> make_input_table(
   std::optional<double> key_null_probability     = std::nullopt,
   std::optional<double> payload_null_probability = std::nullopt)
 {
-  auto const key_profile     = make_profile(num_rows, key_null_probability);
-  auto const payload_profile = make_profile(0, payload_null_probability);
+  auto const key_profile     = make_data_profile(num_rows, key_null_probability);
+  auto const payload_profile = make_data_profile(0, payload_null_probability);
   auto columns               = std::vector<std::unique_ptr<cudf::column>>{};
   columns.reserve(key_types.size() + payload_types.size());
 
-  auto key_seed     = first_key_seed;
-  auto payload_seed = first_payload_seed;
-  append_random_columns(columns, key_types, num_rows, key_profile, key_seed);
-  append_random_columns(columns, payload_types, num_rows, payload_profile, payload_seed);
+  auto seed = 1234u;
+  append_random_columns(columns, key_types, num_rows, key_profile, seed);
+  append_random_columns(columns, payload_types, num_rows, payload_profile, seed);
   return std::make_unique<cudf::table>(std::move(columns));
 }
 
 /**
- * @brief Return the indices of the leading key columns.
+ * @brief Create a key column containing a requested fraction of one hot value.
  *
- * @param num_keys Number of leading columns to select
- * @return Consecutive column indices beginning at zero
+ * Non-hot rows contain high-cardinality random values. A deterministic random Boolean mask
+ * distributes the hot value throughout the column instead of creating long runs.
+ *
+ * @param num_rows Number of rows
+ * @param hot_probability Probability that a row contains the hot value
+ * @param seed Seed for the next generated column
+ * @return Generated INT64 key column
+ */
+std::unique_ptr<cudf::column> make_hot_key_column(cudf::size_type num_rows,
+                                                  double hot_probability,
+                                                  unsigned& seed)
+{
+  auto const tail_profile = make_data_profile(num_rows);
+  auto tail = create_random_column(cudf::type_id::INT64, row_count{num_rows}, tail_profile, seed++);
+
+  auto mask_profile = make_data_profile(0);
+  mask_profile.set_bool_probability_true(hot_probability);
+  auto mask = create_random_column(cudf::type_id::BOOL8, row_count{num_rows}, mask_profile, seed++);
+
+  auto const hot_key = cudf::numeric_scalar<std::int64_t>{0};
+  return cudf::copy_if_else(hot_key, tail->view(), mask->view());
+}
+
+/**
+ * @brief Create indices for the leading columns in a table.
+ *
+ * @param num_keys Number of columns to select
+ * @return Column indices in the range [0, num_keys)
  */
 std::vector<cudf::size_type> make_key_indices(cudf::size_type num_keys)
 {
@@ -118,11 +137,14 @@ std::vector<cudf::size_type> make_key_indices(cudf::size_type num_keys)
 }
 
 /**
- * @brief Run hash partitioning and register memory-traffic metrics.
+ * @brief Measure hash partitioning and record benchmark metrics.
  *
- * @param state NVBench state
- * @param input Owning input table
- * @param keys Indices of columns to hash
+ * The timed region contains only the call to cudf::hash_partition. The benchmark also records
+ * row count, buffer sizes, estimated memory traffic, and peak memory use.
+ *
+ * @param state Benchmark state
+ * @param input Table to partition
+ * @param keys Column indices to hash
  * @param num_partitions Number of output partitions
  */
 void run_hash_partition(nvbench::state& state,
@@ -159,10 +181,13 @@ void run_hash_partition(nvbench::state& state,
 }
 
 /**
- * @brief Benchmark representative analytic tables with independently varied keys and payloads.
+ * @brief Measure hash partitioning across common analytic table shapes.
+ *
+ * The benchmark varies key type, key count, payload column count, row count, and partition count
+ * independently.
  *
  * @tparam Key Key element type
- * @param state NVBench state
+ * @param state Benchmark state
  */
 template <typename Key>
 void bench_hash_partition_analytic(nvbench::state& state, nvbench::type_list<Key>)
@@ -181,9 +206,11 @@ void bench_hash_partition_analytic(nvbench::state& state, nvbench::type_list<Key
 }
 
 /**
- * @brief Benchmark partition-count scaling through 4,096 partitions.
+ * @brief Measure partition-count scaling for a fixed table.
  *
- * @param state NVBench state
+ * The input contains one INT64 key, eight INT64 payload columns, and 2^23 rows.
+ *
+ * @param state Benchmark state
  */
 void bench_hash_partition_partition_count(nvbench::state& state)
 {
@@ -195,9 +222,12 @@ void bench_hash_partition_partition_count(nvbench::state& state)
 }
 
 /**
- * @brief Benchmark column-count scaling at fixed input byte sizes.
+ * @brief Measure column-count scaling while holding input bytes constant.
  *
- * @param state NVBench state
+ * Each table contains one INT64 key and only INT64 payload columns. The row count changes with the
+ * column count to preserve the requested input size.
+ *
+ * @param state Benchmark state
  */
 void bench_hash_partition_equal_input_size(nvbench::state& state)
 {
@@ -218,34 +248,12 @@ void bench_hash_partition_equal_input_size(nvbench::state& state)
 }
 
 /**
- * @brief Create a key column containing a requested fraction of one hot value.
+ * @brief Measure hash partitioning with low-cardinality and hot keys.
  *
- * Non-hot rows contain an independently shuffled high-cardinality tail. The random Boolean mask
- * makes hot rows deterministic without forming long runs.
+ * The key contains at most 16 uniformly distributed values, or a hot value selected with 50% or
+ * 90% probability. Each input also contains eight INT64 payload columns.
  *
- * @param num_rows Number of key rows
- * @param hot_probability Fraction of rows containing the hot value
- * @return Owning INT64 key column
- */
-std::unique_ptr<cudf::column> make_hot_key_column(cudf::size_type num_rows, double hot_probability)
-{
-  auto const tail_profile = make_profile(num_rows);
-  auto tail =
-    create_random_column(cudf::type_id::INT64, row_count{num_rows}, tail_profile, first_key_seed);
-
-  auto mask_profile = make_profile(0);
-  mask_profile.set_bool_probability_true(hot_probability);
-  auto mask = create_random_column(
-    cudf::type_id::BOOL8, row_count{num_rows}, mask_profile, first_key_seed + 1);
-
-  auto const hot_key = cudf::numeric_scalar<std::int64_t>{0};
-  return cudf::copy_if_else(hot_key, tail->view(), mask->view());
-}
-
-/**
- * @brief Benchmark partition imbalance from low-cardinality and hot-key distributions.
- *
- * @param state NVBench state
+ * @param state Benchmark state
  */
 void bench_hash_partition_key_skew(nvbench::state& state)
 {
@@ -255,34 +263,33 @@ void bench_hash_partition_key_skew(nvbench::state& state)
 
   auto columns = std::vector<std::unique_ptr<cudf::column>>{};
   columns.reserve(9);
+  auto seed = 1234u;
   if (distribution == "uniform_16_values") {
-    auto const profile = make_profile(16);
+    auto const profile = make_data_profile(16);
     columns.push_back(
-      create_random_column(cudf::type_id::INT64, row_count{num_rows}, profile, first_key_seed));
+      create_random_column(cudf::type_id::INT64, row_count{num_rows}, profile, seed++));
   } else if (distribution == "hot_50_percent") {
-    columns.push_back(make_hot_key_column(num_rows, 0.5));
+    columns.push_back(make_hot_key_column(num_rows, 0.5, seed));
   } else if (distribution == "hot_90_percent") {
-    columns.push_back(make_hot_key_column(num_rows, 0.9));
+    columns.push_back(make_hot_key_column(num_rows, 0.9, seed));
   } else {
     state.skip("Unknown key distribution");
     return;
   }
 
-  auto const payload_profile = make_profile(0);
-  auto payload_seed          = first_payload_seed;
-  append_random_columns(columns,
-                        std::vector<cudf::type_id>(8, cudf::type_id::INT64),
-                        num_rows,
-                        payload_profile,
-                        payload_seed);
+  auto const payload_profile = make_data_profile(0);
+  append_random_columns(
+    columns, std::vector<cudf::type_id>(8, cudf::type_id::INT64), num_rows, payload_profile, seed);
   auto input = std::make_unique<cudf::table>(std::move(columns));
   run_hash_partition(state, input, {0}, num_partitions);
 }
 
 /**
- * @brief Benchmark validity masks on keys, payload columns, and both.
+ * @brief Measure hash partitioning when keys, payload columns, or both contain nulls.
  *
- * @param state NVBench state
+ * Each selected column generates nulls with 10% probability.
+ *
+ * @param state Benchmark state
  */
 void bench_hash_partition_nullability(nvbench::state& state)
 {
@@ -314,9 +321,12 @@ void bench_hash_partition_nullability(nvbench::state& state)
 }
 
 /**
- * @brief Benchmark representative fixed-width, hybrid, and string-key tables.
+ * @brief Measure fixed-width and string table layouts.
  *
- * @param state NVBench state
+ * The layouts cover heterogeneous fixed-width payloads, a string payload mixed with fixed-width
+ * columns, a string key, and a composite INT64 and string key.
+ *
+ * @param state Benchmark state
  */
 void bench_hash_partition_type_mix(nvbench::state& state)
 {
@@ -362,9 +372,11 @@ void bench_hash_partition_type_mix(nvbench::state& state)
 }
 
 /**
- * @brief Benchmark DISTINCT-style partitioning that hashes every input column.
+ * @brief Measure wide-table partitioning when every column is a key.
  *
- * @param state NVBench state
+ * This models DISTINCT-style partitioning and increases the hashing work with the column count.
+ *
+ * @param state Benchmark state
  */
 void bench_hash_partition_all_keys_stress(nvbench::state& state)
 {
@@ -378,7 +390,8 @@ void bench_hash_partition_all_keys_stress(nvbench::state& state)
 
 }  // namespace
 
-NVBENCH_BENCH_TYPES(bench_hash_partition_analytic, NVBENCH_TYPE_AXES(analytic_key_types))
+NVBENCH_BENCH_TYPES(bench_hash_partition_analytic,
+                    NVBENCH_TYPE_AXES(nvbench::type_list<std::int32_t, std::int64_t>))
   .set_name("hash_partition_analytic")
   .set_type_axes_names({"key_type"})
   .add_int64_axis("num_rows", {1 << 17, 1 << 21, 1 << 24})
