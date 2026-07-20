@@ -217,6 +217,8 @@ Suggested fix:
 - Prefer `cudf::detail::make_pinned_vector{,_async}` over `make_host_vector{,_async}` for small H2D/D2H transfers
 - Prefer `span` versions of constructors for `make_pinned_vector{,_async}` and `make_host_vector{,_async}`
 - Use `host_span`/`device_span`; no owning vectors passed by copy/reference unless explicitly moved
+- Prefer span parameters over pointer + size/length pairs (e.g. `T const* data, size_t size`)
+- Prefer `std::span` over `host_span<T>` whenever no host-device communication is required
 
 **Stream Management**:
 - Stream and MR as last two parameters (stream before MR)
@@ -231,7 +233,6 @@ Suggested fix:
 - Use `cuda::make_constant_iterator` over `thrust::make_constant_iterator` for device-side constant iterators
 - Use `cuda::proclaim_return_type<T>(lambda)` when passing device lambdas to `make_counting_transform_iterator`
 - Prefer modern CUDA C++ primitives: `cuda::std::popcount` over `__popc`, `cg::thread_block::thread_rank()` over `threadIdx.x`
-- Prefer `host_span<T>`/`device_span<T>` parameters over pointer + size/length pairs (e.g. `T const* data, size_t size`)
 
 **Public API** (`cpp/include/cudf/`, `cpp/include/nvtext/`):
 - Functions must have `CUDF_EXPORT`
