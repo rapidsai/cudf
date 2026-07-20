@@ -272,8 +272,18 @@ class StringColumn(ColumnBase, Scannable):
             )
 
         cast_func: Callable[[plc.Column, plc.DataType], plc.Column]
+        data = self
         if dtype.kind in {"i", "u"}:
-            if not self.is_all_integer():
+            if data.str_contains("_").any():
+                # Python (PEP 515) allows underscores between digits in
+                # integer literals (e.g. "123_1" == 1231) but libcudf does
+                # not. Strip only the valid underscores so invalid ones
+                # (e.g. "_12", "12_", "1__2") still fail like pandas.
+                # Two passes: the first can skip an underscore whose
+                # neighboring digit was consumed by a previous match.
+                data = data.replace_with_backrefs(r"(\d)_(\d)", r"\1\2")
+                data = data.replace_with_backrefs(r"(\d)_(\d)", r"\1\2")
+            if not data.is_all_integer():
                 raise ValueError(
                     "Could not convert strings to integer "
                     "type due to presence of non-integer values."
@@ -289,11 +299,11 @@ class StringColumn(ColumnBase, Scannable):
         else:
             raise ValueError(f"dtype must be a numerical type, not {dtype}")
         plc_dtype = dtype_to_pylibcudf_type(dtype)
-        with self.access(mode="read", scope="internal"):
+        with data.access(mode="read", scope="internal"):
             return cast(
                 "cudf.core.column.numerical.NumericalColumn",
                 ColumnBase.create(
-                    cast_func(self.plc_column, plc_dtype), dtype
+                    cast_func(data.plc_column, plc_dtype), dtype
                 ),
             )
 
