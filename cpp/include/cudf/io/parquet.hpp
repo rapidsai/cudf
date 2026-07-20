@@ -965,7 +965,7 @@ class parquet_reader_options_builder {
    */
   parquet_reader_options_builder& output_dict_columns(bool val)
   {
-    options._output_dict_columns = val;
+    options.enable_output_dict_columns(val);
     return *this;
   }
 
