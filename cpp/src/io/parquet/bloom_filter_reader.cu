@@ -400,14 +400,13 @@ aggregate_reader_metadata::read_bloom_filters(
   std::vector<cudf::device_span<cuda::std::byte const>> bloom_filter_data;
   bloom_filter_data.reserve(num_chunks);
   auto flat_bitset_spans = bitset_spans_per_source | std::views::join;
-  std::transform(
-    flat_bitset_spans.begin(),
-    flat_bitset_spans.end(),
-    std::back_inserter(bloom_filter_data),
-    [](auto const& span) {
-      return cudf::device_span<cuda::std::byte const>{
-        reinterpret_cast<cuda::std::byte const*>(span.data()), span.size()};
-    });
+  std::transform(flat_bitset_spans.begin(),
+                 flat_bitset_spans.end(),
+                 std::back_inserter(bloom_filter_data),
+                 [](auto const& span) {
+                   return cudf::device_span<cuda::std::byte const>{
+                     reinterpret_cast<cuda::std::byte const*>(span.data()), span.size()};
+                 });
 
   return {std::move(bloom_filter_buffers), std::move(bloom_filter_data)};
 }
