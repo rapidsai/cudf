@@ -34,6 +34,7 @@
 #include <future>
 #include <numeric>
 #include <optional>
+#include <ranges>
 #include <utility>
 
 namespace cudf::io::parquet::detail {
@@ -398,15 +399,14 @@ aggregate_reader_metadata::read_bloom_filters(
   // Flatten the per-source bitset spans into per-chunk order
   std::vector<cudf::device_span<cuda::std::byte const>> bloom_filter_data;
   bloom_filter_data.reserve(num_chunks);
-  std::for_each(
-    bitset_spans_per_source.begin(), bitset_spans_per_source.end(), [&](auto const& source_spans) {
-      std::transform(source_spans.begin(),
-                     source_spans.end(),
-                     std::back_inserter(bloom_filter_data),
-                     [](auto const& span) {
-                       return cudf::device_span<cuda::std::byte const>{
-                         reinterpret_cast<cuda::std::byte const*>(span.data()), span.size()};
-                     });
+  auto flat_bitset_spans = bitset_spans_per_source | std::views::join;
+  std::transform(
+    flat_bitset_spans.begin(),
+    flat_bitset_spans.end(),
+    std::back_inserter(bloom_filter_data),
+    [](auto const& span) {
+      return cudf::device_span<cuda::std::byte const>{
+        reinterpret_cast<cuda::std::byte const*>(span.data()), span.size()};
     });
 
   return {std::move(bloom_filter_buffers), std::move(bloom_filter_data)};
