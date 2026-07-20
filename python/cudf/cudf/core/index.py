@@ -16,6 +16,7 @@ import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from pandas.core.tools.times import to_time
 
 import pylibcudf as plc
 
@@ -33,6 +34,7 @@ from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
     DatetimeColumn,
+    DatetimeTZColumn,
     IntervalColumn,
     NumericalColumn,
     StringColumn,
@@ -3401,6 +3403,21 @@ class RangeIndex(Index):
         return (type(self), self.start, self.stop, self.step)
 
 
+_PERIODS_PER_DAY = {
+    "s": 86_400,
+    "ms": 86_400_000,
+    "us": 86_400_000_000,
+    "ns": 86_400_000_000_000,
+}
+
+
+def _time_to_micros(value: datetime.time) -> int:
+    """Return the number of microseconds since midnight for ``value``."""
+    return (
+        value.hour * 3600 + value.minute * 60 + value.second
+    ) * 1_000_000 + value.microsecond
+
+
 class DatetimeIndex(Index):
     """
     Immutable , ordered and sliceable sequence of datetime64 data,
@@ -3725,6 +3742,84 @@ class DatetimeIndex(Index):
             ),
             name=self.name,
         )
+
+    @_performance_tracking
+    def indexer_between_time(
+        self,
+        start_time,
+        end_time,
+        include_start: bool = True,
+        include_end: bool = True,
+    ) -> cupy.ndarray:
+        """
+        Return index positions of values between particular times of day.
+
+        Parameters
+        ----------
+        start_time, end_time : datetime.time, str
+            Time passed either as object (datetime.time) or as string in
+            appropriate format ("%H:%M", "%H%M", "%I:%M%p", "%I%M%p",
+            "%H:%M:%S", "%H%M%S", "%I:%M:%S%p", "%I%M%S%p").
+        include_start : bool, default True
+        include_end : bool, default True
+
+        Returns
+        -------
+        cupy.ndarray
+            Integer positions of values between ``start_time`` and
+            ``end_time``. Returned as a device array, following cuDF
+            convention (pandas returns a host ``numpy.ndarray``).
+        """
+        start_time = to_time(start_time)
+        end_time = to_time(end_time)
+
+        # Microseconds since midnight for each value, computed the way pandas'
+        # DatetimeIndex._get_time_micros does: take the integer view of the
+        # local wall-clock timestamps, reduce it modulo one day, and scale the
+        # remainder to microseconds (truncating any finer resolution). Using
+        # the local time makes tz-aware indexes match pandas. NaT entries
+        # become nulls, filled with the -1 sentinel pandas also uses; it sits
+        # below every real time-of-day, so NaT is excluded from an ordinary
+        # range and (as in pandas) included by a midnight-wrapping one.
+        column = self._column
+        if isinstance(column, DatetimeTZColumn):
+            column = column._local_time
+        unit = column.time_unit
+        time_of_day = (
+            Index._from_column(column.astype(np.dtype(np.int64)))
+            % _PERIODS_PER_DAY[unit]
+        )
+        if unit == "ns":
+            time_micros = time_of_day // 1_000
+        elif unit == "ms":
+            time_micros = time_of_day * 1_000
+        elif unit == "s":
+            time_micros = time_of_day * 1_000_000
+        else:  # microsecond resolution
+            time_micros = time_of_day
+        time_micros = time_micros.fillna(-1)
+
+        start_micros = _time_to_micros(start_time)
+        end_micros = _time_to_micros(end_time)
+
+        after_start = (
+            time_micros >= start_micros
+            if include_start
+            else time_micros > start_micros
+        )
+        before_end = (
+            time_micros <= end_micros
+            if include_end
+            else time_micros < end_micros
+        )
+
+        if start_micros <= end_micros:
+            mask = after_start & before_end
+        else:
+            # the interval wraps around midnight
+            mask = after_start | before_end
+
+        return cupy.flatnonzero(mask)
 
     @cached_property
     def _constructor(self):
