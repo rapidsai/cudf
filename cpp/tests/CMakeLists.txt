@@ -176,6 +176,7 @@ ConfigureTest(
   join/cross_join_tests.cpp
   join/semi_anti_join_tests.cpp
   join/mixed_join_tests.cu
+  join/direct_join_tests.cpp
   join/distinct_join_tests.cpp
   join/key_remapping_tests.cpp
   GPUS 1
