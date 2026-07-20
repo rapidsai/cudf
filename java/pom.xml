@@ -272,7 +272,11 @@
                                 </goals>
                                 <configuration>
                                     <reuseForks>false</reuseForks>
-                                    <test>*/NativeDepsLoaderTest.java</test>
+                                    <excludes combine.self="override"/>
+                                    <includes>
+                                        <include>**/NativeDepsLoaderTest.java</include>
+                                    </includes>
+                                    <failIfNoTests>true</failIfNoTests>
                                 </configuration>
                             </execution>
                         </executions>
@@ -334,7 +338,11 @@
                                 </goals>
                                 <configuration>
                                     <reuseForks>false</reuseForks>
-                                    <test>*/NativeDepsLoaderTest.java</test>
+                                    <excludes combine.self="override"/>
+                                    <includes>
+                                        <include>**/NativeDepsLoaderTest.java</include>
+                                    </includes>
+                                    <failIfNoTests>true</failIfNoTests>
                                 </configuration>
                             </execution>
                         </executions>
