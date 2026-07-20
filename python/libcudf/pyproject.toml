@@ -26,8 +26,8 @@ classifiers = [
     "Environment :: GPU :: NVIDIA CUDA",
 ]
 dependencies = [
-    "libkvikio==26.8.*,>=0.0.0a0",
-    "librmm==26.8.*,>=0.0.0a0",
+    "libkvikio==26.10.*,>=0.0.0a0",
+    "librmm==26.10.*,>=0.0.0a0",
     "nvidia-libnvcomp==5.2.0.13",
     "nvidia-nvjitlink>=13.3,<14",
     "rapids-logger==0.2.*,>=0.0.0a0",
@@ -70,8 +70,8 @@ dependencies-file = "../../dependencies.yaml"
 matrix-entry = "cuda_suffixed=true;use_cuda_wheels=true"
 requires = [
     "cmake>=4.0",
-    "libkvikio==26.8.*,>=0.0.0a0",
-    "librmm==26.8.*,>=0.0.0a0",
+    "libkvikio==26.10.*,>=0.0.0a0",
+    "librmm==26.10.*,>=0.0.0a0",
     "ninja",
     "nvidia-libnvcomp==5.2.0.13",
     "nvidia-nvjitlink>=13.3,<14",
