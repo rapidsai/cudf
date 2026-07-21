@@ -14,7 +14,11 @@ from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport data_type, nan_policy, null_policy
 from cuda.bindings.cyruntime cimport cudaStream_t
-from rmm.librmm.memory_resource cimport device_async_resource_ref
+from rmm.librmm.memory_resource cimport (
+    any_resource,
+    device_accessible,
+    device_async_resource_ref,
+)
 
 ctypedef const scalar constscalar
 
@@ -62,7 +66,7 @@ cdef extern from "cudf/reduction/approx_distinct_count.hpp" namespace "cudf" nog
             null_policy null_handling,
             nan_policy nan_handling,
             cudaStream_t stream,
-            device_async_resource_ref mr,
+            any_resource[device_accessible] mr,
         ) except +libcudf_exception_handler
         void add(
             const table_view& input, cudaStream_t stream,
