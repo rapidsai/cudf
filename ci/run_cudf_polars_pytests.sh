@@ -6,8 +6,11 @@ set -euo pipefail
 
 # It is essential to cd into python/cudf_polars as `pytest-xdist` + `coverage` seem to work only at this directory level.
 # Support invoking run_cudf_polars_pytests.sh outside the script directory
+TIMEOUT_TOOL_PATH="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/timeout_with_stack.py
+
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_polars/
 
-python -m pytest --cache-clear "$@" tests \
-    --ignore=tests/streaming/test_tpch.py \
-    --ignore=tests/streaming/test_tpcds.py
+python "${TIMEOUT_TOOL_PATH}" --enable-python 3600 \
+       python -m pytest --cache-clear "$@" tests \
+           --ignore=tests/streaming/test_tpch.py \
+           --ignore=tests/streaming/test_tpcds.py

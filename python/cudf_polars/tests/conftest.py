@@ -339,9 +339,6 @@ def engine_raise_on_fail() -> pl.GPUEngine:
 def timeout_seconds() -> int:
     """
     Conservative timeout for APIs that accept a timeout parameter.
-
-    Since pytest-timeout is installed, ensure this value is less than timeout
-    in python/cudf_polars/pyproject.toml.
     """
     return 30
 

@@ -129,6 +129,19 @@ files:
       - depends_on_cudf_polars
       - depends_on_ray
       - depends_on_cudf_streaming
+  build_java:
+    # Toolchain for building static libcudf from source and packaging the cuDF
+    # Java JAR. `depends_on_libcudf` is excluded because the Java build links
+    # against a static libcudf built from source, not a conda shared libcudf.
+    output: none
+    includes:
+      - build_base
+      - build_all
+      - build_cpp
+      - cuda
+      - cuda_static
+      - cuda_version
+      - build_java
   test_java:
     output: none
     includes:
@@ -636,6 +649,17 @@ dependencies:
           - croaring==4.4.2
           - flatbuffers==24.3.25
           - librdkafka<2.15.0a0
+  build_java:
+    common:
+      - output_types: conda
+        packages:
+          - boost
+          # cuda_profiler_api.h is used by the JNI layer (CudaJni.cpp) but is
+          # not pulled in by the base `cuda` dev packages.
+          - cuda-profiler-api
+          - make
+          - maven
+          - openjdk=8.*
   depends_on_libnvcomp:
     common:
       - output_types: conda
@@ -1176,13 +1200,18 @@ dependencies:
         packages:
           - rich
           - pytest-httpserver
-          - pytest-timeout
           - zstandard
+          # Used by ci/timeout_with_stack.py utility
+          - psutil
           # The polars test suite constructs pandas objects for interop and
           # dask-cuda pulls pandas in transitively (unbounded), so constrain it
           # here to exclude the 3.0.4 release that segfaults on pd.Timedelta
           # (https://github.com/pandas-dev/pandas/issues/66086).
           - *pandas
+      - output_types: conda
+        packages:
+          # Used by timeout_with_stack.py utility
+          - gdb
   test_cudf_polars_tpch:
     common:
       - output_types: [conda, requirements, pyproject]

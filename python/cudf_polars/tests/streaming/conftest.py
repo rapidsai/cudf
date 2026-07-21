@@ -21,12 +21,7 @@ if TYPE_CHECKING:
 
 
 class PytestGroupAdapter:
-    """Adapts a pytest option group to the argparse group interface.
-
-    Allows :meth:`StreamingOptions._add_cli_args` and :func:`_add_dataset_args`
-    to register their options directly onto the pytest parser without duplicating
-    the definitions.
-    """
+    """Adapts a pytest option group to the argparse group interface."""
 
     def __init__(self, group: Any) -> None:
         self._group = group
