@@ -201,12 +201,11 @@ void launch(cudf::kernel const& kernel,
             rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  void* args[] = {&row_size, &stencil, &user_data, &input_cols, &output_cols, &max_error};
   auto cfg     = kernel.max_occupancy_config(0, 0);
   CUDF_EXPECTS(cfg.block_size % cudf::detail::warp_size == 0,
                "Expected block size to be a multiple of warp size",
                std::runtime_error);
-  kernel.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
+  kernel.launch_with({cfg.min_grid_size}, {cfg.block_size}, 0, stream, row_size, stencil, user_data, input_cols, output_cols, max_error);
 }
 
 std::string get_element_type_name(column_view const& view, bool use_physical_type);
@@ -389,8 +388,7 @@ std::string reflect_udf_signature(bool is_null_aware,
 {
   std::vector<std::string> in_types;
 
-  for (size_t i = 0; i < inputs.size(); i++) {
-    auto& in = inputs[i];
+  for (auto& in : inputs) {
     auto element =
       std::visit([&](auto& c) { return reflect_input_element(c, use_physical_types); }, in);
     in_types.push_back(is_null_aware ? std::format("cuda::std::optional<{}>", element) : element);
@@ -398,8 +396,7 @@ std::string reflect_udf_signature(bool is_null_aware,
 
   std::vector<std::string> out_types;
 
-  for (size_t i = 0; i < outputs.size(); i++) {
-    auto& out = outputs[i];
+  for (auto& out : outputs) {
     auto element =
       std::visit([&](auto& c) { return reflect_output_element(c, use_physical_types); }, out);
     out_types.push_back(is_null_aware ? std::format("cuda::std::optional<{}> *", element)
@@ -407,14 +404,18 @@ std::string reflect_udf_signature(bool is_null_aware,
   }
 
   std::vector<std::string> params;
-  if (has_user_data) { params.push_back("void*"); }
+  if (has_user_data) {
+    params.emplace_back("void*");
+    params.emplace_back("cudf::size_type");
+  }
   params.insert(params.end(), out_types.begin(), out_types.end());
   params.insert(params.end(), in_types.begin(), in_types.end());
 
   auto joined =
     params.empty()
       ? ""
-      : std::accumulate(std::next(params.begin()), params.end(), params[0], [](auto a, auto b) {
+      : std::accumulate(
+          std::next(params.begin()), params.end(), params[0], [](auto const& a, auto const& b) {
           return std::format("{}, {}", a, b);
         });
 

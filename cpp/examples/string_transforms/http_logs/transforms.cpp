@@ -21,7 +21,7 @@
 
 #include <chrono>
 #include <cstdlib>
-#include <iomanip>
+#include <format>
 #include <iostream>
 #include <limits>
 #include <optional>

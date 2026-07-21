@@ -442,6 +442,24 @@ if(NOT BUILD_SHARED_LIBS)
   endif()
 endif()
 
+set(LIBCUDF_FRAGMENT_LINK_LIBRARIES
+    CCCL::CCCL
+    rapids_logger::rapids_logger
+    rmm::rmm
+    $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
+    $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+    $<BUILD_LOCAL_INTERFACE:cuco::cuco>
+    ZLIB::ZLIB
+    nvcomp::nvcomp
+    kvikio::kvikio
+    nanoarrow::nanoarrow
+    zstd
+)
+set(LIBCUDF_FRAGMENT_INCLUDE_DIRECTORIES "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
+                                         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+)
+set(LIBCUDF_FRAGMENT_COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
+
 rtcx_add_embed(cudf_cuda_embed)
 
 rtcx_embed_includes(
@@ -517,7 +535,6 @@ function(precompile_fixed_width_kernel_fragments)
     )
     add_fragment(
       cudf_fragments
-      LINK_CUDF_DEPS
       FRAGMENT
       ${VARIANT_NAME}
       SOURCE
@@ -534,7 +551,14 @@ function(precompile_fixed_width_kernel_fragments)
       ARRAY_VALUES
       ${FILE_INDEX}
       "${INSTANCE}"
+      COMPILE_OPTIONS
+      ${LIBCUDF_FRAGMENT_COMPILE_OPTIONS}
+      INCLUDE_DIRECTORIES
+      ${LIBCUDF_FRAGMENT_INCLUDE_DIRECTORIES}
+      LINK_LIBRARIES
+      ${LIBCUDF_FRAGMENT_LINK_LIBRARIES}
     )
+
   endforeach()
 
   # Precompile binary-op kernel fragments for fixed-width types. To minimize binary size impact,
@@ -553,7 +577,6 @@ function(precompile_fixed_width_kernel_fragments)
       )
       add_fragment(
         cudf_fragments
-        LINK_CUDF_DEPS
         FRAGMENT
         ${VARIANT_NAME}
         SOURCE
@@ -570,14 +593,20 @@ function(precompile_fixed_width_kernel_fragments)
         ARRAY_VALUES
         ${FILE_INDEX}
         "${INSTANCE}"
+        COMPILE_OPTIONS
+        ${LIBCUDF_FRAGMENT_COMPILE_OPTIONS}
+        INCLUDE_DIRECTORIES
+        ${LIBCUDF_FRAGMENT_INCLUDE_DIRECTORIES}
+        LINK_LIBRARIES
+        ${LIBCUDF_FRAGMENT_LINK_LIBRARIES}
       )
     endforeach()
   endforeach()
 endfunction()
 
 # This function precompiles kernel fragments for string transforms. It precompiles kernel fragments
-# for common string transform operations: multi-extract, multi-split, string-parsing. 
-# This helps amortize the cost of JIT compilation for kernels that have matching signatures
+# for common string transform operations: multi-extract, multi-split, string-parsing. This helps
+# amortize the cost of JIT compilation for kernels that have matching signatures
 function(precompile_string_kernel_fragments)
   list(APPEND CUDF_PRECOMPILE_STRING_OUTPUT_PHYSICAL_TYPES uint8_t uint16_t uint32_t uint64_t
        cuda::std::span<char>
@@ -614,14 +643,13 @@ function(precompile_string_kernel_fragments)
         )
         list(APPEND OUTPUT_POINTERS "${OUTPUT_TYPE} *")
       endforeach()
-      list(JOIN OUTPUT_ACCESSORS "," OUTPUT_ACCESSORS_STR)
-      list(JOIN OUTPUT_POINTERS "," OUTPUT_POINTERS_STR)
+      list(JOIN OUTPUT_ACCESSORS " ," OUTPUT_ACCESSORS_STR)
+      list(JOIN OUTPUT_POINTERS " ," OUTPUT_POINTERS_STR)
       set(INSTANCE
           "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::column_device_view_core, cudf::string_view, false, 0>>, cudf::jit::type_list<${OUTPUT_ACCESSORS_STR}>>"
       )
       add_fragment(
         cudf_fragments
-        LINK_CUDF_DEPS
         FRAGMENT
         ${VARIANT_NAME}
         SOURCE
@@ -638,6 +666,12 @@ function(precompile_string_kernel_fragments)
         ARRAY_VALUES
         ${FILE_INDEX}
         "${INSTANCE}"
+        COMPILE_OPTIONS
+        ${LIBCUDF_FRAGMENT_COMPILE_OPTIONS}
+        INCLUDE_DIRECTORIES
+        ${LIBCUDF_FRAGMENT_INCLUDE_DIRECTORIES}
+        LINK_LIBRARIES
+        ${LIBCUDF_FRAGMENT_LINK_LIBRARIES}
       )
     endforeach()
   endforeach()

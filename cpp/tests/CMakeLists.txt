@@ -698,29 +698,93 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp ast/ast_tree_tests.cpp ast/jit_ex
 rtcx_add_embed(cudf_test_fragments)
 
 add_fragment(
-  cudf_test_fragments LINK_CUDF_DEPS FRAGMENT bankers_rounding SOURCE
+  cudf_test_fragments
+  LINK_CUDF_DEPS
+  FRAGMENT
+  bankers_rounding
+  SOURCE
   transform/fragments/bankers_rounding.cu
+  LINK_LIBRARIES
+  ${LIBCUDF_FRAGMENT_LINK_LIBRARIES}
+  INCLUDE_DIRECTORIES
+  ${LIBCUDF_FRAGMENT_INCLUDE_DIRECTORIES}
+  COMPILE_OPTIONS
+  ${LIBCUDF_FRAGMENT_COMPILE_OPTIONS}
 )
 
 add_fragment(
-  cudf_test_fragments LINK_CUDF_DEPS FRAGMENT distance SOURCE transform/fragments/distance.cu
+  cudf_test_fragments
+  LINK_CUDF_DEPS
+  FRAGMENT
+  distance
+  SOURCE
+  transform/fragments/distance.cu
+  LINK_LIBRARIES
+  ${LIBCUDF_FRAGMENT_LINK_LIBRARIES}
+  INCLUDE_DIRECTORIES
+  ${LIBCUDF_FRAGMENT_INCLUDE_DIRECTORIES}
+  COMPILE_OPTIONS
+  ${LIBCUDF_FRAGMENT_COMPILE_OPTIONS}
 )
 
 add_fragment(
-  cudf_test_fragments LINK_CUDF_DEPS FRAGMENT invsqrt SOURCE transform/fragments/invsqrt.cu
+  cudf_test_fragments
+  LINK_CUDF_DEPS
+  FRAGMENT
+  invsqrt
+  SOURCE
+  transform/fragments/invsqrt.cu
+  LINK_LIBRARIES
+  ${LIBCUDF_FRAGMENT_LINK_LIBRARIES}
+  INCLUDE_DIRECTORIES
+  ${LIBCUDF_FRAGMENT_INCLUDE_DIRECTORIES}
+  COMPILE_OPTIONS
+  ${LIBCUDF_FRAGMENT_COMPILE_OPTIONS}
 )
 
 add_fragment(
-  cudf_test_fragments LINK_CUDF_DEPS FRAGMENT lehmer_mean SOURCE transform/fragments/lehmer_mean.cu
+  cudf_test_fragments
+  LINK_CUDF_DEPS
+  FRAGMENT
+  lehmer_mean
+  SOURCE
+  transform/fragments/lehmer_mean.cu
+  LINK_LIBRARIES
+  ${LIBCUDF_FRAGMENT_LINK_LIBRARIES}
+  INCLUDE_DIRECTORIES
+  ${LIBCUDF_FRAGMENT_INCLUDE_DIRECTORIES}
+  COMPILE_OPTIONS
+  ${LIBCUDF_FRAGMENT_COMPILE_OPTIONS}
 )
 
 add_fragment(
-  cudf_test_fragments LINK_CUDF_DEPS FRAGMENT sum_of_squares SOURCE
+  cudf_test_fragments
+  LINK_CUDF_DEPS
+  FRAGMENT
+  sum_of_squares
+  SOURCE
   transform/fragments/sum_of_squares.cu
+  LINK_LIBRARIES
+  ${LIBCUDF_FRAGMENT_LINK_LIBRARIES}
+  INCLUDE_DIRECTORIES
+  ${LIBCUDF_FRAGMENT_INCLUDE_DIRECTORIES}
+  COMPILE_OPTIONS
+  ${LIBCUDF_FRAGMENT_COMPILE_OPTIONS}
 )
 
 add_fragment(
-  cudf_test_fragments LINK_CUDF_DEPS FRAGMENT to_upper SOURCE transform/fragments/to_upper.cu
+  cudf_test_fragments
+  LINK_CUDF_DEPS
+  FRAGMENT
+  to_upper
+  SOURCE
+  transform/fragments/to_upper.cu
+  LINK_LIBRARIES
+  ${LIBCUDF_FRAGMENT_LINK_LIBRARIES}
+  INCLUDE_DIRECTORIES
+  ${LIBCUDF_FRAGMENT_INCLUDE_DIRECTORIES}
+  COMPILE_OPTIONS
+  ${LIBCUDF_FRAGMENT_COMPILE_OPTIONS}
 )
 
 rtcx_embed(
