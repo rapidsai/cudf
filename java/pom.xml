@@ -649,6 +649,13 @@
                                 def cm = cudaPattern.matcher(nvccout)
                                 if (cm.find()) {
                                     def classifier = 'cuda' + cm.group(1)
+                                    // Emit "cuda<major>" on x86_64 and "cuda<major>-arm64" on
+                                    // aarch64 so a single pom produces a distinct Maven
+                                    // classifier per architecture.
+                                    def osArch = System.getProperty('os.arch')
+                                    if (osArch == 'aarch64' || osArch == 'arm64') {
+                                        classifier = classifier + '-arm64'
+                                    }
                                     project.properties['cuda.classifier'] = classifier
                                 } else {
                                     throw new RuntimeException('could not find CUDA version')
