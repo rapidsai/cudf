@@ -1028,8 +1028,8 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   // Mapping a row mask to data pages only requires page row locations from the offset index.
   if (not has_offset_index(per_file_metadata, row_group_indices, column_schema_indices)) {
     CUDF_LOG_WARN(
-      "Encountered missing Parquet offset index for one or more materialized columns; skipping "
-      "data page pruning");
+      "Encountered missing Parquet offset index for one or more output columns. Skipping page "
+      "pruning.");
     return thrust::host_vector<bool>(0, stream);
   }
 
