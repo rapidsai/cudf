@@ -1,42 +1,41 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
-#include <cudf/join/hash_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <memory>
 #include <optional>
+#include <span>
 #include <utility>
-#include <vector>
 
 namespace cudf::detail {
 
 /**
  * @brief Implementation of `cudf::streaming_hash_join`.
  *
- * For the initial scope this class supports a single `insert()` call and delegates probing to an
- * internally-constructed `cudf::hash_join`. Multi-partition support (n-table row equality
- * dispatch on probe) will be added in a follow-up; calling `insert()` more than once currently
- * throws.
+ * Owns a persistent hash table and supports probing rows stored across multiple right-side
+ * partitions.
  */
 class streaming_hash_join {
  public:
-  streaming_hash_join(host_span<data_type const> right_schema,
-                      host_span<size_type const> right_key_indices,
+  streaming_hash_join(std::span<data_type const> right_schema,
+                      std::span<size_type const> right_key_indices,
                       size_type total_right_rows,
+                      size_type max_num_batches,
                       nullable_join has_nulls,
                       null_equality compare_nulls,
-                      double load_factor);
+                      double load_factor,
+                      rmm::cuda_stream_view stream,
+                      cuda::mr::any_resource<cuda::mr::device_accessible> mr);
 
   ~streaming_hash_join();
   streaming_hash_join(streaming_hash_join const&)            = delete;
@@ -55,15 +54,8 @@ class streaming_hash_join {
              rmm::device_async_resource_ref mr) const;
 
  private:
-  std::vector<data_type> _right_schema;
-  std::vector<size_type> _right_key_indices;
-  size_type _total_right_rows;
-  nullable_join _has_nulls;
-  null_equality _compare_nulls;
-  double _load_factor;
-
-  size_type _inserted_rows{0};
-  std::unique_ptr<cudf::hash_join> _hash_join;
+  struct impl;
+  std::unique_ptr<impl> _impl;
 };
 
 }  // namespace cudf::detail

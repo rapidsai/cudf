@@ -1,24 +1,23 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
-#include <cudf/join/hash_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <memory>
 #include <optional>
+#include <span>
 #include <utility>
 
 namespace CUDF_EXPORT cudf {
@@ -34,8 +33,7 @@ class streaming_hash_join;
 }  // namespace detail
 
 /**
- * @brief Streaming hash join that accepts the right (build) side incrementally via `insert()`
- *        and exposes the same probe API as `cudf::hash_join`.
+ * @brief Streaming hash join that accepts the right (build) side incrementally via `insert()`.
  *
  * The persistent hash table is sized at construction time to accommodate `total_right_rows`
  * cumulative right-side rows. Right-side partitions are fed in via `insert()` and are not
@@ -43,11 +41,8 @@ class streaming_hash_join;
  * this object is destroyed.
  *
  * This shape mirrors `cudf::groupby::streaming_groupby`. It is intended for query engines that
- * receive partitioned right-side data (e.g. inter-GPU exchange) and want to avoid the ~2x peak
- * memory of concatenating partitions before constructing a `cudf::hash_join`.
- *
- * @note Multi-partition `insert()` is not yet implemented; the current scaffold accepts a single
- * `insert()` call and throws on the second.
+ * receive partitioned right-side data (e.g. inter-GPU exchange), avoiding the ~2x peak memory of
+ * concatenating partitions before building a join table.
  *
  * @note All NaNs are considered equal.
  */
@@ -74,6 +69,7 @@ class streaming_hash_join {
    * @throws std::invalid_argument if `right_schema` is empty
    * @throws std::invalid_argument if `right_key_indices` is empty or out of range
    * @throws std::invalid_argument if `total_right_rows` is negative
+   * @throws std::invalid_argument if `max_num_batches` is not positive
    * @throws std::invalid_argument if `load_factor` is not in (0, 1]
    *
    * @param right_schema Column types of every right-side partition. All partitions inserted later
@@ -81,29 +77,39 @@ class streaming_hash_join {
    * @param right_key_indices Indices into `right_schema` identifying the join-key columns.
    * @param total_right_rows Upper bound on the cumulative number of right-side rows that will be
    *                         inserted; the persistent hash table is sized accordingly.
+   * @param max_num_batches Maximum number of batches. The batch ID uses
+   *                        `ceil(log2(max_num_batches))` high row-hash bits.
    * @param has_nulls Whether the right table (or any later left table) may contain nulls in the
    *                  key columns.
    * @param compare_nulls Controls whether null join-key values should match or not.
    * @param load_factor Target hash-table occupancy ratio in (0, 1]. Defaults to 0.5.
+   * @param stream CUDA stream used to allocate and initialize the persistent hash table.
+   * @param mr Device memory resource used for persistent allocations. The resource is owned by the
+   *           join object and must be copyable.
    */
-  streaming_hash_join(host_span<data_type const> right_schema,
-                      host_span<size_type const> right_key_indices,
+  streaming_hash_join(std::span<data_type const> right_schema,
+                      std::span<size_type const> right_key_indices,
                       size_type total_right_rows,
+                      size_type max_num_batches,
                       nullable_join has_nulls,
                       null_equality compare_nulls,
-                      double load_factor = 0.5);
+                      double load_factor           = 0.5,
+                      rmm::cuda_stream_view stream = cudf::get_default_stream(),
+                      cuda::mr::any_resource<cuda::mr::device_accessible> mr =
+                        cudf::get_current_device_resource_ref());
 
   /**
    * @brief Insert a right-side partition into the persistent hash table.
    *
    * The partition is not deep-copied; the caller must keep `right_partition` and the columns it
-   * views alive until this object is destroyed. Each row in the partition is assigned a global
-   * row index equal to `cumulative_rows_so_far + local_row_idx`.
+   * views alive until this object is destroyed. The row index stored for each hash-table entry is
+   * local to this partition.
    *
    * @throws std::invalid_argument if `right_partition`'s schema does not match the schema passed
    *                               to the constructor
    * @throws std::invalid_argument if inserting this partition would push the cumulative row count
    *                               above `total_right_rows`
+   * @throws std::invalid_argument if inserting this partition would exceed `max_num_batches`
    *
    * @param right_partition The right-side partition to insert.
    * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -115,10 +121,8 @@ class streaming_hash_join {
    * @brief Returns the row indices that can be used to construct the result of an inner join
    *        between the accumulated right-side partitions and the given `left` table.
    *
-   * @see cudf::hash_join::inner_join
-   *
-   * The returned `right_indices` are global indices into the logical concatenation of every
-   * partition passed to `insert()`, in insertion order.
+   * The returned right-side indices identify the source partition and the row within that
+   * partition.
    *
    * @param left The left table, from which the tuples are probed.
    * @param output_size Optional exact output size hint to avoid an extra count pass.
