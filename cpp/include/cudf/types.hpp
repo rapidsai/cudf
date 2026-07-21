@@ -27,8 +27,9 @@
 
 #include <cudf/utilities/export.hpp>
 
-#include <cuda/std/iterator>
 #include <rmm/detail/export.hpp>
+
+#include <cuda/std/iterator>
 
 #include <cassert>
 #include <cstddef>
