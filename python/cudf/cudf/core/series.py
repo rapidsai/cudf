@@ -1093,16 +1093,22 @@ class Series(SingleColumnFrame, IndexedFrame):
             raise TypeError(
                 "Cannot reset_index inplace on a Series to create a DataFrame"
             )
-        data, index = self._reset_index(
-            level=level, drop=drop, allow_duplicates=allow_duplicates
-        )
         if not drop:
+            # pandas semantics are ``self.to_frame(name).reset_index()``:
+            # resolve ``name`` first so the columns-dtype provenance in
+            # ``_reset_index`` sees the final value-column label.
             if name is no_default:
                 name = 0 if self.name is None else self.name
-            data[name] = data.pop(self.name)
+            frame = self._to_frame(name, index=self.index)
+            data, index = frame._reset_index(
+                level=level, drop=drop, allow_duplicates=allow_duplicates
+            )
             return self._constructor_expanddim._from_data(
                 data, index, attrs=self.attrs
             )
+        data, index = self._reset_index(
+            level=level, drop=drop, allow_duplicates=allow_duplicates
+        )
         # For ``name`` behavior, see:
         # https://github.com/pandas-dev/pandas/issues/44575
         # ``name`` has to be ignored when `drop=True`
@@ -2851,8 +2857,22 @@ class Series(SingleColumnFrame, IndexedFrame):
         if len(val_counts) > 0:
             val_counts = val_counts[val_counts == val_counts.iloc[0]]
 
+        # pandas sorts mode results on the underlying representation:
+        # NaT (INT64_MIN as i8) and the categorical null code (-1) sort
+        # before valid values, while float NaN and the <NA> of
+        # nullable/arrow dtypes (including arrow timestamps/durations)
+        # sort last.
+        na_position = (
+            "first"
+            if (
+                self.dtype.kind in "mM"
+                and isinstance(self.dtype, (np.dtype, pd.DatetimeTZDtype))
+            )
+            or isinstance(self.dtype, cudf.CategoricalDtype)
+            else "last"
+        )
         return Series._from_column(
-            val_counts.index.sort_values()._column,
+            val_counts.index.sort_values(na_position=na_position)._column,
             name=self.name,
             attrs=self.attrs,
         )

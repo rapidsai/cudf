@@ -107,8 +107,10 @@ hybrid_scan_reader_impl::hybrid_scan_reader_impl(
 hybrid_scan_reader_impl::hybrid_scan_reader_impl(
   cudf::host_span<FileMetaData const> parquet_metadatas, parquet_reader_options const& options)
 {
-  _metadata = std::make_shared<aggregate_reader_metadata>(
-    parquet_metadatas, options.is_enabled_use_arrow_schema(), has_cols_from_mismatched_sources(options));
+  _metadata =
+    std::make_shared<aggregate_reader_metadata>(parquet_metadatas,
+                                                options.is_enabled_use_arrow_schema(),
+                                                has_cols_from_mismatched_sources(options));
   _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
 }
 
@@ -149,8 +151,7 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
     if (_is_all_columns_selected) { return; }
 
     // Select only columns required by the options and filter
-    auto const select_column_names =
-      get_column_projection(options, options.is_enabled_ignore_missing_columns());
+    auto const select_column_names = get_column_projection(options);
 
     // Select only columns required by the options and filter.
     // Using as is from:
@@ -184,8 +185,7 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
   } else {
     if (_is_payload_columns_selected) { return; }
 
-    auto select_column_names =
-      get_column_projection(options, options.is_enabled_ignore_missing_columns());
+    auto select_column_names = get_column_projection(options);
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
       _extended_metadata->select_payload_columns(
         select_column_names, _filter_columns_names, selection_options);

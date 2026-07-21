@@ -575,7 +575,7 @@ async def read_chunk(
         if prefetcher is not None:
             df = await ir_context.to_thread(
                 evaluate_with_prefetch,
-                scan,
+                scan,  # type: ignore[arg-type]
                 prefetcher,
                 seq_num,
                 context=ir_context,
@@ -632,10 +632,10 @@ async def scan_node(
     use_prefetch = (
         first is not None
         and ir.scan_type == "split"
-        and first.parquet_options.use_hybrid_scan  # type: ignore[union-attr]
-        and first.parquet_options.prefetch_file_metadata  # type: ignore[union-attr]
-        and first.cached_parquet_info is not None  # type: ignore[union-attr]
-        and first.base_scan.predicate is not None  # type: ignore[union-attr]
+        and first.parquet_options.use_hybrid_scan
+        and first.parquet_options.prefetch_file_metadata
+        and first.cached_parquet_info is not None
+        and first.base_scan.predicate is not None
         and context.br().pinned_mr is not None
     )
     prefetcher: HybridScanPrefetchExecutor | None = (

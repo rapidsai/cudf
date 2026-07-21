@@ -13,11 +13,12 @@ from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Self, overload
 
-from rmm import DeviceBuffer
+import nvtx
 
 import polars as pl
 
 import pylibcudf as plc
+from rmm import DeviceBuffer
 
 from cudf_polars.containers import Column, DataFrame
 from cudf_polars.dsl.ir import (
@@ -30,8 +31,6 @@ from cudf_polars.dsl.ir import (
     _prepare_parquet_predicate,
 )
 from cudf_polars.dsl.to_ast import to_parquet_filter
-import nvtx
-
 from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN, nvtx_annotate_cudf_polars
 from cudf_polars.streaming.base import (
     IOPartitionFlavor,
@@ -48,20 +47,21 @@ from cudf_polars.utils.versions import POLARS_VERSION_LT_137
 if TYPE_CHECKING:
     from collections.abc import Hashable, MutableMapping, Sequence
 
-    import pylibcudf.expressions as plc_expr
     from kvikio.cufile import IOFuture
+
+    import pylibcudf.expressions as plc_expr
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.containers import DataType
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import CachedParquetInfo, IRExecutionContext
-    from cudf_polars.streaming.prefetch import PinnedBuffer
     from cudf_polars.streaming.base import (
         DataSourceInfo,
         SerializedDataSourceInfo,
         StatsCollector,
     )
     from cudf_polars.streaming.dispatch import LowerIRTransformer
+    from cudf_polars.streaming.prefetch import PinnedBuffer
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import (
         ConfigOptions,
@@ -219,10 +219,18 @@ class PrefetchedByteRanges:
     payload_ranges: list[plc.io.text.ByteRangeInfo]
     filter_host: memoryview | None
     payload_host: memoryview | None
-    filter_futures: list[IOFuture] = dataclasses.field(default_factory=list, compare=False, repr=False)
-    payload_futures: list[IOFuture] = dataclasses.field(default_factory=list, compare=False, repr=False)
-    filter_buf: PinnedBuffer | None = dataclasses.field(default=None, compare=False, repr=False)
-    payload_buf: PinnedBuffer | None = dataclasses.field(default=None, compare=False, repr=False)
+    filter_futures: list[IOFuture] = dataclasses.field(
+        default_factory=list, compare=False, repr=False
+    )
+    payload_futures: list[IOFuture] = dataclasses.field(
+        default_factory=list, compare=False, repr=False
+    )
+    filter_buf: PinnedBuffer | None = dataclasses.field(
+        default=None, compare=False, repr=False
+    )
+    payload_buf: PinnedBuffer | None = dataclasses.field(
+        default=None, compare=False, repr=False
+    )
 
     @classmethod
     def empty(cls) -> PrefetchedByteRanges:
@@ -349,6 +357,7 @@ def _read_with_hybrid_scan(
         row_mask = reader.build_all_true_row_mask(row_group_indices, stream=stream)
 
         if prefetched is not None:
+            assert prefetched.filter_host is not None
             filter_chunks = copy_host_ranges_to_device(
                 prefetched.filter_host,
                 prefetched.filter_ranges,
@@ -371,6 +380,7 @@ def _read_with_hybrid_scan(
         )
 
         if prefetched is not None:
+            assert prefetched.payload_host is not None
             payload_chunks = copy_host_ranges_to_device(
                 prefetched.payload_host,
                 prefetched.payload_ranges,

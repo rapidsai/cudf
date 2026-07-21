@@ -7,26 +7,26 @@ from __future__ import annotations
 import asyncio
 import ctypes
 import threading
-from concurrent.futures import Future, ThreadPoolExecutor
-from typing import Any, TYPE_CHECKING, Self
+from concurrent.futures import ThreadPoolExecutor
+from typing import TYPE_CHECKING, Any, Self
 
 import pylibcudf as plc
 from rapidsmpf.memory.buffer import MemoryType
-from rapidsmpf.memory.pinned_memory_resource import PinnedMemoryResource
 from rapidsmpf.streaming.core.memory_reserve_or_wait import reserve_memory
 from rmm.pylibrmm.stream import Stream
 
-import nvtx
-
 from cudf_polars.dsl.ir import _prepare_parquet_predicate
 from cudf_polars.dsl.to_ast import to_parquet_filter
-from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN, nvtx_annotate_cudf_polars
+from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.streaming.io import PrefetchedByteRanges, _fetch_byte_ranges
 
 if TYPE_CHECKING:
+    from concurrent.futures import Future
+
     from kvikio.cufile import CuFile, IOFuture
     from kvikio.remote_file import RemoteFile
 
+    from rapidsmpf.memory.pinned_memory_resource import PinnedMemoryResource
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.streaming.io import SplitScan
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 class PinnedBuffer:
     """Pinned host buffer backed by a rapidsmpf PinnedMemoryResource pool."""
 
-    __slots__ = ("mr", "ptr", "nbytes", "stream", "reservation", "array")
+    __slots__ = ("array", "mr", "nbytes", "ptr", "reservation", "stream")
 
     def __init__(
         self,
@@ -49,13 +49,18 @@ class PinnedBuffer:
         self.nbytes = nbytes
         self.stream = stream  # keep alive so __del__ can pass it back to the pool
         self.reservation = asyncio.run_coroutine_threadsafe(
-            reserve_memory(context, size=nbytes, net_memory_delta=nbytes, mem_type=MemoryType.PINNED_HOST),
+            reserve_memory(
+                context,
+                size=nbytes,
+                net_memory_delta=nbytes,
+                mem_type=MemoryType.PINNED_HOST,
+            ),
             loop,
         ).result()
         self.ptr = mr.allocate(nbytes, stream)
         self.array = memoryview((ctypes.c_uint8 * nbytes).from_address(self.ptr))
 
-    def __del__(self) -> None:
+    def __del__(self) -> None:  # noqa: D105
         # Guard against partial init (e.g. if reserve_memory raised before
         # self.reservation was set).
         if hasattr(self, "reservation"):
@@ -82,7 +87,11 @@ def pread_ranges(
     with nvtx_annotate_cudf_polars(message="pread_ranges:submit"):
         for r in ranges:
             futures.append(
-                handle.pread(buf.array[offset : offset + r.size], size=r.size, file_offset=r.offset)
+                handle.pread(
+                    buf.array[offset : offset + r.size],
+                    size=r.size,
+                    file_offset=r.offset,
+                )
             )
             offset += r.size
     return buf.array, futures, buf
@@ -151,9 +160,13 @@ def prefetch_scan_byte_ranges(
             )
 
     if row_group_indices:
-        bloom_ranges, _ = reader.secondary_filters_byte_ranges(row_group_indices, options)
+        bloom_ranges, _ = reader.secondary_filters_byte_ranges(
+            row_group_indices, options
+        )
         if bloom_ranges:
-            with nvtx_annotate_cudf_polars(message="filter_row_groups_with_bloom_filters"):
+            with nvtx_annotate_cudf_polars(
+                message="filter_row_groups_with_bloom_filters"
+            ):
                 bloom_chunks = _fetch_byte_ranges(scan.paths, bloom_ranges, stream)
                 row_group_indices = reader.filter_row_groups_with_bloom_filters(
                     bloom_chunks, row_group_indices, options, stream=stream
@@ -163,8 +176,12 @@ def prefetch_scan_byte_ranges(
         return PrefetchedByteRanges.empty()
 
     with nvtx_annotate_cudf_polars(message="byte_range_computation"):
-        filter_ranges = reader.filter_column_chunks_byte_ranges(row_group_indices, options)
-        payload_ranges = reader.payload_column_chunks_byte_ranges(row_group_indices, options)
+        filter_ranges = reader.filter_column_chunks_byte_ranges(
+            row_group_indices, options
+        )
+        payload_ranges = reader.payload_column_chunks_byte_ranges(
+            row_group_indices, options
+        )
 
     # Submit filter and payload reads in one combined pread_ranges call so S3 serves
     # both concurrently, then split the contiguous pinned buffer into two views.
@@ -240,18 +257,21 @@ class HybridScanPrefetchExecutor:
             initializer=cls._init_stream,
             thread_name_prefix="hybrid-prefetch",
         )
-        futures = [
-            executor.submit(
-                lambda s=scan: prefetch_scan_byte_ranges(s, cls._thread_local.stream, pinned_mr, context, loop)
+
+        def _task(s: SplitScan) -> PrefetchedByteRanges | None:
+            return prefetch_scan_byte_ranges(
+                s, cls._thread_local.stream, pinned_mr, context, loop
             )
-            for scan in scans
-        ]
+
+        futures = [executor.submit(_task, scan) for scan in scans]
         return cls(futures, executor)
 
     def __enter__(self) -> Self:
+        """Enter the context manager."""
         return self
 
     def __exit__(self, *args: Any) -> None:
+        """Shut down the thread pool, cancelling pending futures."""
         self._executor.shutdown(cancel_futures=True, wait=False)
 
     def result(self, task_idx: int) -> PrefetchedByteRanges | None:
