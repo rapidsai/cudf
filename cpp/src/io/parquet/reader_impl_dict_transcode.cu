@@ -196,8 +196,6 @@ bool reader_impl::prepare_dict_transcode(read_mode mode)
   // path here too and fall back to the post-hoc encode.
   if (uses_custom_row_bounds(mode)) { return false; }
 
-  if (_pass_itm_data == nullptr or _pass_itm_data->subpass == nullptr) { return false; }
-
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
