@@ -903,7 +903,7 @@ def test_timedelta_reductions(data, op, timedelta_types_as_str):
     actual = getattr(sr, op)()
     expected = getattr(psr, op)()
 
-    if np.isnat(expected.to_numpy()) and np.isnat(actual):
+    if expected is pd.NaT and actual is pd.NaT:
         assert True
     else:
         assert_eq(expected.to_numpy(), actual)
@@ -1122,6 +1122,109 @@ def test_datetime_reductions(data, reduction_methods, datetime_types_as_str):
         assert True
     else:
         assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "datetime64[ns]",
+        "datetime64[ms]",
+        "timedelta64[ns]",
+        "timedelta64[s]",
+    ],
+)
+@pytest.mark.parametrize("data", [[], [None, None]])
+@pytest.mark.parametrize("op", ["min", "max"])
+def test_temporal_reduction_all_null_returns_nat_singleton(dtype, data, op):
+    # Reductions with no valid values return the pd.NaT singleton
+    # (identity, matching pandas), not a unit-qualified numpy NaT.
+    psr = pd.Series(data, dtype=dtype)
+    sr = cudf.Series(psr)
+    expected = getattr(psr, op)()
+    assert expected is pd.NaT
+    assert getattr(sr, op)() is expected
+    assert getattr(cudf.Index(sr), op)() is getattr(pd.Index(psr), op)()
+
+
+@pytest.mark.parametrize("dtype", ["Int64", "UInt32", "Float64", "boolean"])
+@pytest.mark.parametrize("data", [[], [None, None]])
+@pytest.mark.parametrize("op", ["mean", "var", "std", "min", "max"])
+def test_masked_reduction_all_null_returns_na(dtype, data, op):
+    # pandas returns <NA> for empty/all-null reductions of nullable
+    # dtypes even when the reduction result dtype is a plain numpy dtype
+    # (e.g. Int64.mean() -> float64).
+    psr = pd.Series(data, dtype=dtype)
+    sr = cudf.Series(psr)
+    expected = getattr(psr, op)()
+    assert expected is pd.NA
+    assert getattr(sr, op)() is expected
+
+
+@pytest.mark.parametrize("dtype", ["boolean", "Int64", "UInt64", "Float64"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        [0, 0, 0],
+        [1, 1, 1],
+        [pd.NA, pd.NA, pd.NA],
+        [0, pd.NA, 0],
+        [1, pd.NA, 1],
+        [1, pd.NA, 0],
+    ],
+)
+@pytest.mark.parametrize("op", ["any", "all"])
+def test_any_all_masked_kleene_logic(dtype, data, op, skipna):
+    # Kleene logic for nullable dtypes (pandas GH-37506/GH-41967): with
+    # skipna=False a result that would flip if the nulls were filled is
+    # <NA>; with skipna=True nulls are simply dropped.
+    psr = pd.Series(pd.array(data, dtype=dtype))
+    sr = cudf.Series(psr)
+    expected = getattr(psr, op)(skipna=skipna)
+    result = getattr(sr, op)(skipna=skipna)
+    if expected is pd.NA:
+        assert result is pd.NA
+    else:
+        assert result == expected
+
+
+@pytest.mark.parametrize("data", [[np.nan, 0.0], [np.nan, 1.0]])
+def test_any_all_numpy_float_nan_sentinel_truthy(data):
+    # For numpy dtypes the NaN null sentinel is truthy with skipna=False
+    # (numpy semantics), unlike the Kleene <NA> of nullable dtypes.
+    sr = cudf.Series(data)
+    psr = pd.Series(data)
+    for skipna in [True, False]:
+        assert sr.any(skipna=skipna) == psr.any(skipna=skipna)
+        assert sr.all(skipna=skipna) == psr.all(skipna=skipna)
+
+
+def test_any_all_masked_with_true_nan_values():
+    # A nullable float column holding actual NaN values (not <NA>): NaN
+    # is a truthy value, so all() over the remaining values is True and
+    # any(skipna=False) short-circuits to True.
+    psr = pd.Series(
+        pd.arrays.FloatingArray(
+            np.array([np.nan, np.nan]), np.array([False, False])
+        )
+    )
+    sr = cudf.Series([np.nan, np.nan], nan_as_null=False, dtype="Float64")
+    assert sr.all() == psr.all()
+    assert sr.all(skipna=False) == psr.all(skipna=False)
+    assert sr.any(skipna=False) == psr.any(skipna=False)
+
+
+def test_string_any_all_skipna_false_partial_nulls():
+    # cudf strings follow the pandas-3 "str" dtype (NaN null sentinel):
+    # with skipna=False the sentinel is truthy, so any() is True, but
+    # all() depends on the truthiness of the non-null strings and is not
+    # computed natively (it must not blanket-return True for
+    # partially-null columns).
+    psr = pd.Series(["", None], dtype=pd.StringDtype(na_value=np.nan))
+    sr = cudf.Series(["", None])
+    assert sr.any(skipna=False) == psr.any(skipna=False)
+    assert not psr.all(skipna=False)
+    with pytest.raises(NotImplementedError):
+        sr.all(skipna=False)
 
 
 @pytest.mark.parametrize("op", ["min", "max"])
