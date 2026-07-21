@@ -36,6 +36,7 @@ import psutil
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from types import FrameType
 
 
 class StackType(IntEnum):
@@ -115,25 +116,30 @@ def capture_stack_trace(pid: int, stack_type=StackType.C) -> None:
         print(f"Skipping stack trace for process {pid}: gdb not found")
         return
 
-    proc = subprocess.run(
-        [
-            gdb,
-            "--quiet",
-            "--pid",
-            str(pid),
-            "-ex",
-            "set pagination off",
-            "-ex",
-            "set confirm off",
-            "-ex",
-            bt_command,
-            "-ex",
-            "quit",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        proc = subprocess.run(
+            [
+                gdb,
+                "--quiet",
+                "--pid",
+                str(pid),
+                "-ex",
+                "set pagination off",
+                "-ex",
+                "set confirm off",
+                "-ex",
+                bt_command,
+                "-ex",
+                "quit",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        print(f"Timed out capturing stack trace for process {pid}")
+        return
 
     print(proc.stdout)
     if proc.stderr:
@@ -234,6 +240,20 @@ def terminate_process_tree(pid: int) -> None:
         pass
 
 
+def install_signal_handler(pid: int, *signals: signal.Signals) -> None:
+    """
+    Install signal handler that terminates the given pid on receiving any of signals
+    """
+
+    def handler(signum: int, frame: FrameType | None) -> None:
+        print(f"Received {signum=}, terminating process tree")
+        terminate_process_tree(pid)
+        sys.exit(signum)
+
+    for sig in signals:
+        signal.signal(sig, handler)
+
+
 def run_with_timeout(
     cmd: Sequence[str], timeout: float, *, enable_python: bool = False
 ) -> int:
@@ -275,6 +295,13 @@ def run_with_timeout(
     process = subprocess.Popen(
         cmd,
         preexec_fn=os.setsid,
+    )
+    install_signal_handler(
+        process.pid,
+        signal.SIGTERM,
+        signal.SIGABRT,
+        signal.SIGHUP,
+        signal.SIGQUIT,
     )
     start_time = time.time()
 
