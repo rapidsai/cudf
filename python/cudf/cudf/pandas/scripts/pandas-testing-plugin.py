@@ -1914,8 +1914,6 @@ NODEIDS_THAT_FAIL = {
     "tests/groupby/test_reductions.py::test_sum_skipna_object[False]": "Inherent cudf.pandas None-vs-NaN difference for object-dtype null (skipna logic is correct)",
     "tests/groupby/test_timegrouper.py::TestGroupBy::test_groupby_with_timegrouper": "TODO: Add a reason for failure",
     "tests/groupby/test_timegrouper.py::TestGroupBy::test_scalar_call_versus_list_call": "TODO: Add a reason for failure",
-    "tests/groupby/transform/test_transform.py::test_cython_transform_series[cumprod-args0-<lambda>]": "TODO: Add a reason for failure",
-    "tests/groupby/transform/test_transform.py::test_cython_transform_series[cumsum-args1-<lambda>]": "TODO: Add a reason for failure",
     "tests/indexes/base_class/test_reshape.py::TestReshape::test_insert_missing[Decimal]": "TODO: Add a reason for failure",
     "tests/indexes/categorical/test_astype.py::TestAstype::test_categorical_date_roundtrip[False]": "TODO: Add a reason for failure",
     "tests/indexes/categorical/test_astype.py::TestAstype::test_categorical_date_roundtrip[True]": "TODO: Add a reason for failure",
