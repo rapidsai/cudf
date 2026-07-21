@@ -1111,6 +1111,7 @@ class GroupedWindow(Expr):
                         if self._order_by_expr is not None
                         else False,
                         grouper=grouper,
+                        reverse=is_reverse,
                         stream=df.stream,
                         require_sorted_groups=has_fill,
                     )
