@@ -167,8 +167,9 @@ repos:
       - id: cudf-polars-version-compat
         name: cudf-polars-version-compat
         description: 'Check that cudf-polars polars version-compat flags are not stale.'
-        entry: ./ci/checks/versions_compat.py
-        language: script
+        entry: python ci/checks/versions_compat.py
+        language: python
+        additional_dependencies: [packaging]
         files: ^python/cudf_polars/(pyproject\.toml|cudf_polars/utils/versions\.py)$
         pass_filenames: false
         verbose: true
