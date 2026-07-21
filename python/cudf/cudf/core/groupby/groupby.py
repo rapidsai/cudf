@@ -215,7 +215,28 @@ def _is_all_scan_aggregate(all_aggs: list[list[str]]) -> bool:
     }
 
     def get_name(agg):
-        return agg.__name__ if callable(agg) else agg
+        if not callable(agg):
+            return agg
+        if agg is not list:
+            # A ``lambda x: x.cumsum()``-style aggregation carries its
+            # scan-ness only in the aggregation name it resolves to
+            # (``Aggregation.cumsum`` is an alias of ``sum``; libcudf
+            # separates scan from reduction by the *call*, not the
+            # aggregation object). Probe the callable with a
+            # name-recording stand-in mirroring ``make_aggregation``'s
+            # ``op(Aggregation)`` protocol; true UDFs raise inside the
+            # probe and fall back to ``__name__``.
+            class _NameProbe:
+                def __getattr__(self, name):
+                    return lambda *args, **kwargs: name
+
+            try:
+                name = agg(_NameProbe())
+            except Exception:
+                return agg.__name__
+            if isinstance(name, str):
+                return name
+        return agg.__name__
 
     all_scan = all(
         get_name(agg_name) in groupby_scans
