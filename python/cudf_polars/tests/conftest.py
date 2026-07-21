@@ -21,6 +21,8 @@ from cudf_polars.testing.engine_utils import (
 )
 from cudf_polars.utils.versions import POLARS_VERSION_LT_140, POLARS_VERSION_LT_141
 
+SUPPORTED_CUDF_POLARS_ENGINES = ("in-memory", "spmd", "dask", "ray")
+
 
 @pytest.fixture
 def xfail_decimal_sum_precision_polars_140(request: pytest.FixtureRequest) -> None:
@@ -346,6 +348,21 @@ def timeout_seconds() -> int:
     return 30
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Add cudf-polars-specific pytest options."""
+    group = parser.getgroup("cudf-polars", "cudf-polars test options")
+    group.addoption(
+        "--cudf-polars-engine",
+        action="store",
+        default=None,
+        choices=SUPPORTED_CUDF_POLARS_ENGINES,
+        help=(
+            "Restrict cudf-polars engine fixture parametrization to one "
+            "backend. Defaults to running all configured engines."
+        ),
+    )
+
+
 def pytest_configure(config: pytest.Config):
     config.addinivalue_line(
         "markers",
@@ -367,6 +384,17 @@ def pytest_configure(config: pytest.Config):
     config.addinivalue_line("filterwarnings", "ignore::DeprecationWarning")
 
 
+def _filter_fixture_engines(
+    engines: list[str], requested_engine: str | None
+) -> list[str]:
+    """Filter fixture parameters to a selected backend, if requested."""
+    if requested_engine is None:
+        return engines
+    if requested_engine == "spmd":
+        return [engine for engine in engines if engine in ("spmd", "spmd-small")]
+    return [engine for engine in engines if engine == requested_engine]
+
+
 def pytest_generate_tests(metafunc: pytest.Metafunc):
     """Parametrize the shared engine fixture without cartesian products."""
     fixtures = set(metafunc.fixturenames)
@@ -380,11 +408,14 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
     elif "dask_engine" in fixtures:
         engines = ["dask"]
     elif "streaming_engine" in fixtures or "streaming_engine_factory" in fixtures:
-        engines = STREAMING_ENGINE_FIXTURE_PARAMS
+        engines = list(STREAMING_ENGINE_FIXTURE_PARAMS)
     elif "engine" in fixtures:
-        engines = ALL_ENGINE_FIXTURE_PARAMS
+        engines = list(ALL_ENGINE_FIXTURE_PARAMS)
     else:
         raise AssertionError("Unknown engine fixture")
+
+    requested_engine = metafunc.config.getoption("--cudf-polars-engine")
+    engines = _filter_fixture_engines(engines, requested_engine)
 
     metafunc.parametrize(
         "_engine_param",

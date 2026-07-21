@@ -255,7 +255,7 @@ jobs:
       continue-on-error: true
       container_image: "rapidsai/ci-conda:26.10-latest"
       script: "ci/test_cuml_compat.sh"
-  wheel-tests-cudf-polars:
+  wheel-tests-cudf-polars-in-memory:
     permissions:
       actions: read
       contents: read
@@ -270,7 +270,55 @@ jobs:
       container-options: "--cap-add CAP_SYS_PTRACE --shm-size=8g --ulimit=nofile=1000000:1000000"
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      script: "ci/test_wheel_cudf_polars.sh"
+      script: "env CUDF_POLARS_ENGINE=in-memory ci/test_wheel_cudf_polars.sh"
+  wheel-tests-cudf-polars-spmd:
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: read
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
+    with:
+      build_type: ${{ inputs.build_type }}
+      branch: ${{ inputs.branch }}
+      container-options: "--cap-add CAP_SYS_PTRACE --shm-size=8g --ulimit=nofile=1000000:1000000"
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      script: "env CUDF_POLARS_ENGINE=spmd ci/test_wheel_cudf_polars.sh"
+  wheel-tests-cudf-polars-dask:
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: read
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
+    with:
+      build_type: ${{ inputs.build_type }}
+      branch: ${{ inputs.branch }}
+      container-options: "--cap-add CAP_SYS_PTRACE --shm-size=8g --ulimit=nofile=1000000:1000000"
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      script: "env CUDF_POLARS_ENGINE=dask ci/test_wheel_cudf_polars.sh"
+  wheel-tests-cudf-polars-ray:
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: read
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
+    with:
+      build_type: ${{ inputs.build_type }}
+      branch: ${{ inputs.branch }}
+      container-options: "--cap-add CAP_SYS_PTRACE --shm-size=8g --ulimit=nofile=1000000:1000000"
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      script: "env CUDF_POLARS_ENGINE=ray ci/test_wheel_cudf_polars.sh"
   cudf-polars-polars-tests:
     permissions:
       actions: read

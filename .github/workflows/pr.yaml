@@ -34,7 +34,10 @@ jobs:
       - wheel-build-cudf
       - wheel-tests-cudf
       - wheel-build-cudf-polars
-      - wheel-tests-cudf-polars
+      - wheel-tests-cudf-polars-in-memory
+      - wheel-tests-cudf-polars-spmd
+      - wheel-tests-cudf-polars-dask
+      - wheel-tests-cudf-polars-ray
       - cudf-polars-polars-tests
       - wheel-build-dask-cudf
       - wheel-tests-dask-cudf
@@ -663,7 +666,7 @@ jobs:
       package-name: cudf_polars
       package-type: python
       pure-wheel: true
-  wheel-tests-cudf-polars:
+  wheel-tests-cudf-polars-in-memory:
     needs: [wheel-build-cudf-polars, wheel-build-cudf-streaming, changed-files]
     permissions:
       actions: read
@@ -679,7 +682,58 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       container-options: "--cap-add CAP_SYS_PTRACE --shm-size=8g --ulimit=nofile=1000000:1000000"
-      script: "env POLARS_VERSIONS=endpoints ci/test_wheel_cudf_polars.sh"
+      script: "env POLARS_VERSIONS=endpoints CUDF_POLARS_ENGINE=in-memory ci/test_wheel_cudf_polars.sh"
+  wheel-tests-cudf-polars-spmd:
+    needs: [wheel-build-cudf-polars, wheel-build-cudf-streaming, changed-files]
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: read
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels && fromJSON(needs.changed-files.outputs.changed_file_groups).neither_cudf_nor_dask_cudf
+    with:
+      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      build_type: pull-request
+      container-options: "--cap-add CAP_SYS_PTRACE --shm-size=8g --ulimit=nofile=1000000:1000000"
+      script: "env POLARS_VERSIONS=endpoints CUDF_POLARS_ENGINE=spmd ci/test_wheel_cudf_polars.sh"
+  wheel-tests-cudf-polars-dask:
+    needs: [wheel-build-cudf-polars, wheel-build-cudf-streaming, changed-files]
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: read
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels && fromJSON(needs.changed-files.outputs.changed_file_groups).neither_cudf_nor_dask_cudf
+    with:
+      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      build_type: pull-request
+      container-options: "--cap-add CAP_SYS_PTRACE --shm-size=8g --ulimit=nofile=1000000:1000000"
+      script: "env POLARS_VERSIONS=endpoints CUDF_POLARS_ENGINE=dask ci/test_wheel_cudf_polars.sh"
+  wheel-tests-cudf-polars-ray:
+    needs: [wheel-build-cudf-polars, wheel-build-cudf-streaming, changed-files]
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: read
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels && fromJSON(needs.changed-files.outputs.changed_file_groups).neither_cudf_nor_dask_cudf
+    with:
+      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      build_type: pull-request
+      container-options: "--cap-add CAP_SYS_PTRACE --shm-size=8g --ulimit=nofile=1000000:1000000"
+      script: "env POLARS_VERSIONS=endpoints CUDF_POLARS_ENGINE=ray ci/test_wheel_cudf_polars.sh"
   cudf-polars-polars-tests:
     needs: [wheel-build-cudf-polars, wheel-build-cudf-streaming, changed-files]
     permissions:
