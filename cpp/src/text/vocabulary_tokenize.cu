@@ -144,7 +144,7 @@ tokenize_vocabulary::tokenize_vocabulary(cudf::strings_column_view const& input,
     detail::probe_scheme{detail::vocab_hasher{*d_vocabulary}},
     cuco::thread_scope_device,
     detail::cuco_storage{},
-    rmm::mr::polymorphic_allocator<char>{},
+    rmm::mr::polymorphic_allocator<char>{mr},
     stream.value());
 
   // the row index is the token id (value for each key in the map)
