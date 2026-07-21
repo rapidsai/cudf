@@ -567,11 +567,11 @@ async def read_chunk(
         Optional prefetch pipeline. When set, retrieves the prefetched
         I/O result before evaluating.
     """
-    with nvtx_annotate_cudf_polars(message="reserve_memory"):
-        reservation = await reserve_memory(
+    with opaque_memory_usage(
+        await reserve_memory(
             context, size=estimated_chunk_bytes, net_memory_delta=estimated_chunk_bytes
         )
-    with opaque_memory_usage(reservation):
+    ):
         if prefetcher is not None:
             df = await ir_context.to_thread(
                 evaluate_with_prefetch,
@@ -593,8 +593,7 @@ async def read_chunk(
             exclusive_view=True,
             br=context.br(),
         )
-    with nvtx_annotate_cudf_polars(message="send_chunk"):
-        await send_chunk(context, ch_out, chunk, seq_num, tracer=tracer)
+    await send_chunk(context, ch_out, chunk, seq_num, tracer=tracer)
 
 
 @define_actor()
