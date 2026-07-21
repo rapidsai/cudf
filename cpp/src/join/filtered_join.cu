@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -220,24 +220,27 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::qu
 filtered_join::filtered_join(cudf::table_view const& right,
                              cudf::null_equality compare_nulls,
                              double load_factor,
-                             rmm::cuda_stream_view stream)
+                             rmm::cuda_stream_view stream,
+                             cuda::mr::any_resource<cuda::mr::device_accessible> mr)
   : _right_props{right_properties{cudf::has_nested_columns(right)}},
     _nulls_equal{compare_nulls},
     _right{right},
     _preprocessed_right{cudf::detail::row::equality::preprocessed_table::create(_right, stream)},
     _bucket_storage{cuco::extent<std::size_t>{compute_bucket_storage_size(right, load_factor)},
-                    rmm::mr::polymorphic_allocator<char>{},
+                    rmm::mr::polymorphic_allocator<char>{std::move(mr)},
                     stream.value()}
 {
   if (_right.num_rows() == 0) return;
   _bucket_storage.initialize(empty_sentinel_key, stream);
 }
 
-distinct_filtered_join::distinct_filtered_join(cudf::table_view const& right,
-                                               cudf::null_equality compare_nulls,
-                                               double load_factor,
-                                               rmm::cuda_stream_view stream)
-  : filtered_join(right, compare_nulls, load_factor, stream)
+distinct_filtered_join::distinct_filtered_join(
+  cudf::table_view const& right,
+  cudf::null_equality compare_nulls,
+  double load_factor,
+  rmm::cuda_stream_view stream,
+  cuda::mr::any_resource<cuda::mr::device_accessible> mr)
+  : filtered_join(right, compare_nulls, load_factor, stream, std::move(mr))
 {
   cudf::scoped_range range{"distinct_filtered_join::distinct_filtered_join"};
   if (_right.num_rows() == 0) return;
@@ -381,16 +384,19 @@ filtered_join::~filtered_join() = default;
 filtered_join::filtered_join(cudf::table_view const& build,
                              null_equality compare_nulls,
                              double load_factor,
-                             rmm::cuda_stream_view stream)
+                             rmm::cuda_stream_view stream,
+                             cuda::mr::any_resource<cuda::mr::device_accessible> mr)
   : _impl{std::make_unique<cudf::detail::distinct_filtered_join>(
-      build, compare_nulls, load_factor, stream)}
+      build, compare_nulls, load_factor, stream, std::move(mr))}
 {
 }
 
 filtered_join::filtered_join(cudf::table_view const& build,
                              null_equality compare_nulls,
-                             rmm::cuda_stream_view stream)
-  : filtered_join(build, compare_nulls, cudf::detail::CUCO_DESIRED_LOAD_FACTOR, stream)
+                             rmm::cuda_stream_view stream,
+                             cuda::mr::any_resource<cuda::mr::device_accessible> mr)
+  : filtered_join(
+      build, compare_nulls, cudf::detail::CUCO_DESIRED_LOAD_FACTOR, stream, std::move(mr))
 {
 }
 
