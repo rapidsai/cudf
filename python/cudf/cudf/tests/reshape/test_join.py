@@ -568,6 +568,30 @@ def test_outer_merge_dtype_preserved_with_empty_side(empty_side):
     assert_join_results_equal(expect, got, how="outer")
 
 
+@pytest.mark.parametrize("empty_side", ["left", "right"])
+def test_outer_merge_int_width_preserved_with_empty_side(empty_side):
+    # https://github.com/rapidsai/cudf/issues/9981
+    # In an outer merge, every output row's key value comes from whichever
+    # side is non-empty, so if one side of the merge key has no rows, no
+    # value could actually be lost. The non-empty side's width should
+    # survive the merge just like it does in pandas, instead of being
+    # promoted to max(ltype, rtype).
+    pdf_data = pd.DataFrame({"a": pd.Series([1, 2, 3], dtype="int8")})
+    pdf_empty = pd.DataFrame({"a": pd.Series([], dtype="int64")})
+    lhs, rhs = (
+        (pdf_empty, pdf_data)
+        if empty_side == "left"
+        else (pdf_data, pdf_empty)
+    )
+    glhs, grhs = cudf.from_pandas(lhs), cudf.from_pandas(rhs)
+
+    expect = lhs.merge(rhs, how="outer")
+    got = glhs.merge(grhs, how="outer")
+
+    assert expect["a"].dtype == got["a"].dtype
+    assert_join_results_equal(expect, got, how="outer")
+
+
 def test_outer_merge_both_sides_empty_dtype():
     # https://github.com/rapidsai/cudf/issues/9981
     # With BOTH sides empty the one-empty-side shortcut does not apply;

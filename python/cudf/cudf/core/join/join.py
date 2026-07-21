@@ -354,9 +354,9 @@ class Merge:
             # are unaffected (an empty side yields an empty gather map).
             # Outer joins with exactly one empty side are excluded: there
             # ``_match_join_keys`` already adopts the non-empty side's dtype,
-            # and the output key is built by filling the left key from the
-            # right, so both sides must share that dtype. When both sides are
-            # empty the shortcut does not fire, so the restore still applies.
+            # so both sides must share that dtype for the combined output key.
+            # When both sides are empty the shortcut does not fire, so the
+            # restore still applies.
             one_side_empty = (len(lcol) == 0) != (len(rcol) == 0)
             if (
                 not (self.how == "outer" and one_side_empty)
