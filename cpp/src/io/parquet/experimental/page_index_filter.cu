@@ -896,6 +896,7 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
     return build_all_true_row_mask(row_group_indices, stream, mr);
   }
 
+  // We need both column and offset index to be present for each participating column
   if (not has_page_index(per_file_metadata, row_group_indices, stats_column_schemas)) {
     CUDF_LOG_WARN(
       "Encountered missing Parquet column or offset index for one or more "
