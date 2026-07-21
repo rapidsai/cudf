@@ -35,6 +35,7 @@ dependencies:
 - flatbuffers==24.3.25
 - fsspec>=0.6.0
 - gcc_linux-64=14.*
+- gdb
 - hypothesis>=6.131.7
 - identify>=2.5.20
 - include-what-you-use==0.24.0
@@ -84,7 +85,6 @@ dependencies:
 - pytest-cov
 - pytest-httpserver
 - pytest-rerunfailures!=16.0.0
-- pytest-timeout
 - pytest-xdist
 - pytest<9.1.0
 - python-calamine

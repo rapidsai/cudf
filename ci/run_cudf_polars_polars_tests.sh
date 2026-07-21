@@ -72,7 +72,6 @@ python "${TIMEOUT_TOOL_PATH}" --enable-python 3600 \
        -n 4 \
        --dist=worksteal \
        --tb=native \
-       --timeout=240 \
        --durations 10 --durations-min 10 \
        -ra \
        $DESELECTED_TESTS_STR \
@@ -95,7 +94,6 @@ python "${TIMEOUT_TOOL_PATH}" --enable-python 3600 \
        -n 4 \
        --dist=worksteal \
        --tb=native \
-       --timeout=240 \
        --durations 10 --durations-min 10 \
        -ra \
        $DESELECTED_TESTS_STR \

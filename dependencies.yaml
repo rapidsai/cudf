@@ -1172,7 +1172,6 @@ dependencies:
         packages:
           - rich
           - pytest-httpserver
-          - pytest-timeout
           - zstandard
           # Used by ci/timeout_with_stack.py utility
           - psutil
@@ -1181,6 +1180,10 @@ dependencies:
           # here to exclude the 3.0.4 release that segfaults on pd.Timedelta
           # (https://github.com/pandas-dev/pandas/issues/66086).
           - *pandas
+      - output_types: conda
+        packages:
+          # Used by timeout_with_stack.py utility
+          - gdb
   test_python_narwhals:
     common:
       - output_types: [conda, requirements, pyproject]
