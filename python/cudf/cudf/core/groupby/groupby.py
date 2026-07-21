@@ -2748,10 +2748,11 @@ class GroupBy(Serializable, Reducible, Scannable):
             values = values._align_to_index(
                 self.grouping.keys, how="right", allow_non_unique=True
             )
-        # The equal-index fast path above only holds when every group is a
-        # singleton already in row order, so in both branches the rows are
-        # positionally aligned with the source object; pandas always labels
-        # the broadcast result with the original object's index.
+        # Even when no alignment is needed (every group is a single row,
+        # so the aggregated index already equals the group keys), the
+        # result must be indexed like the input rows, not the group
+        # labels (pandas GH#9941: transform returns an obj-indexed
+        # result).
         values.index = self.obj.index
         return values
 
@@ -2813,8 +2814,27 @@ class GroupBy(Serializable, Reducible, Scannable):
             raise TypeError(
                 "Aggregation must be a named aggregation or a callable"
             )
+        gb = self
+        if not self._as_index:
+            # as_index has no effect on transform in pandas (GH#49834):
+            # the key-column reset that agg/size apply for as_index=False
+            # must not leak into the broadcast result.
+            gb = copy.copy(self)
+            gb._as_index = True
+        if func == "size":
+            # size counts group rows rather than aggregating each value
+            # column, so pandas broadcasts GroupBy.size() as a single
+            # Series (unnamed for DataFrameGroupBy, keeping the source
+            # name for SeriesGroupBy) instead of going per-column.
+            return gb._broadcast(gb.size())
+        if func == "cumcount":
+            # cumcount numbers the rows of each group: always an unnamed
+            # Series over the original index, never a per-column result.
+            return gb.cumcount()
+        if func == "ngroup":
+            return gb.ngroup()
         try:
-            result = self.agg(func)
+            result = gb.agg(func)
         except TypeError as e:
             raise NotImplementedError(
                 "Currently, `transform()` supports only aggregations."
@@ -2826,7 +2846,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     "Unexpected result length for scan transform"
                 )
             return result
-        return self._broadcast(result)
+        return gb._broadcast(result)
 
     def rolling(self, *args, **kwargs):
         """
