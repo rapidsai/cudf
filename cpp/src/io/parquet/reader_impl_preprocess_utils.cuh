@@ -137,6 +137,16 @@ void decode_page_headers(pass_intermediate_data& pass,
                          rmm::cuda_stream_view stream);
 
 /**
+ * @brief Decode page information using one exact span per logical indexed page
+ *
+ * Empty spans represent masked pages and retain their logical page-index metadata.
+ */
+void decode_page_headers(pass_intermediate_data& pass,
+                         device_span<PageInfo> unsorted_pages,
+                         host_span<cudf::device_span<uint8_t const> const> page_spans,
+                         rmm::cuda_stream_view stream);
+
+/**
  * @brief Check if the column chunk has a string (byte array or FLBA) type
  */
 __device__ constexpr inline bool is_string_chunk(ColumnChunkDesc const& chunk)
@@ -157,6 +167,7 @@ struct page_index_info {
   int32_t num_nulls;
   int32_t num_valids;
   int32_t str_bytes;
+  bool has_value_info;
 };
 
 /**
@@ -168,17 +179,19 @@ struct copy_page_info {
 
   __device__ constexpr void operator()(size_type idx)
   {
-    auto& pg                = pages[idx];
-    auto const& pi          = page_indexes[idx];
-    pg.num_rows             = pi.num_rows;
-    pg.chunk_row            = pi.chunk_row;
-    pg.has_page_index       = true;
-    pg.num_nulls            = pi.num_nulls;
-    pg.num_valids           = pi.num_valids;
-    pg.str_bytes_from_index = pi.str_bytes;
-    pg.str_bytes            = pi.str_bytes;
-    pg.start_val            = 0;
-    pg.end_val              = pg.num_valids;
+    auto& pg          = pages[idx];
+    auto const& pi    = page_indexes[idx];
+    pg.num_rows       = pi.num_rows;
+    pg.chunk_row      = pi.chunk_row;
+    pg.has_page_index = pi.has_value_info;
+    pg.start_val      = 0;
+    if (pi.has_value_info) {
+      pg.num_nulls            = pi.num_nulls;
+      pg.num_valids           = pi.num_valids;
+      pg.str_bytes_from_index = pi.str_bytes;
+      pg.str_bytes            = pi.str_bytes;
+      pg.end_val              = pg.num_valids;
+    }
   }
 };
 

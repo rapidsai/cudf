@@ -351,6 +351,11 @@ class reader_impl {
                                                 size_t num_rows);
 
   /**
+   * @brief Fill in string and list offsets for rows covered by pruned data pages.
+   */
+  void fill_pruned_offsets(size_t skip_rows, size_t num_rows);
+
+  /**
    * @brief Creates file-wide parquet chunk information.
    *
    * Creates information about all chunks in the file, storing it in
