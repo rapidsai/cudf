@@ -8,6 +8,7 @@ import polars as pl
 
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
+    assert_ir_translation_raises,
 )
 from cudf_polars.testing.engine_utils import is_streaming_engine
 
@@ -134,3 +135,16 @@ def test_repeat_by_negative_raises(engine: pl.GPUEngine) -> None:
             pl.exceptions.InvalidOperationError, match="must not be negative"
         ):
             q.collect(engine=engine)
+
+
+def test_gather_non_integer_indices_unsupported(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [1, 2, 3]})
+    q = df.select(pl.col("a").gather(pl.lit("y")))
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+def test_gather_repeat_by_unsupported(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [1, 2, 3, 4, 5], "n": [2, 1, 3, 1, 2]})
+    expr = pl.col("a").repeat_by(pl.col("n"))
+    q = df.select(expr)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
