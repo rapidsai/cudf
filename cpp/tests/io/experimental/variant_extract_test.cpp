@@ -637,36 +637,38 @@ TEST_F(GetVariantFieldTest, EmptyInput)
   EXPECT_EQ(cudf::lists_column_view{got->view()}.child().type().id(), cudf::type_id::UINT8);
 }
 
-struct CastVariantTest : public cudf::test::BaseFixture {};
-
-TEST_F(CastVariantTest, ApachePrimitiveInts)
-{
-  auto stream     = cudf::test::get_default_stream();
-  auto const cast = [&](auto const& fixture, auto expected_val) {
-    using T          = decltype(expected_val);
+struct CastVariantTest : public cudf::test::BaseFixture {
+  template <typename T, std::size_t M, std::size_t V>
+  std::unique_ptr<cudf::column> cast_apache_primitive(avf::fixture<M, V> const& fixture,
+                                                      rmm::cuda_stream_view stream)
+  {
     auto col         = make_apache_variant(fixture);
     auto const value = cudf::structs_column_view{col}.get_sliced_child(1, stream);
     return cudf::io::parquet::experimental::cast_variant(
       value, cudf::data_type{cudf::type_to_id<T>()}, stream);
-  };
+  }
+};
 
+TEST_F(CastVariantTest, ApachePrimitiveInts)
+{
+  auto stream = cudf::test::get_default_stream();
   {
-    auto got = cast(avf::primitive_int8, int8_t{42});
+    auto got = cast_apache_primitive<int8_t>(avf::primitive_int8, stream);
     cudf::test::fixed_width_column_wrapper<int8_t> expected{int8_t{42}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
   }
   {
-    auto got = cast(avf::primitive_int16, int16_t{1234});
+    auto got = cast_apache_primitive<int16_t>(avf::primitive_int16, stream);
     cudf::test::fixed_width_column_wrapper<int16_t> expected{int16_t{1234}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
   }
   {
-    auto got = cast(avf::primitive_int32, int32_t{123456});
+    auto got = cast_apache_primitive<int32_t>(avf::primitive_int32, stream);
     cudf::test::fixed_width_column_wrapper<int32_t> expected{int32_t{123456}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
   }
   {
-    auto got = cast(avf::primitive_int64, int64_t{1234567890123456789LL});
+    auto got = cast_apache_primitive<int64_t>(avf::primitive_int64, stream);
     cudf::test::fixed_width_column_wrapper<int64_t> expected{int64_t{1234567890123456789LL}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
   }
@@ -674,22 +676,14 @@ TEST_F(CastVariantTest, ApachePrimitiveInts)
 
 TEST_F(CastVariantTest, ApachePrimitiveFloats)
 {
-  auto stream     = cudf::test::get_default_stream();
-  auto const cast = [&](auto const& fixture, auto expected_val) {
-    using T          = decltype(expected_val);
-    auto col         = make_apache_variant(fixture);
-    auto const value = cudf::structs_column_view{col}.get_sliced_child(1, stream);
-    return cudf::io::parquet::experimental::cast_variant(
-      value, cudf::data_type{cudf::type_to_id<T>()}, stream);
-  };
-
+  auto stream = cudf::test::get_default_stream();
   {
-    auto got = cast(avf::primitive_float, float{1234567936.0f});
+    auto got = cast_apache_primitive<float>(avf::primitive_float, stream);
     cudf::test::fixed_width_column_wrapper<float> expected{float{1234567936.0f}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
   }
   {
-    auto got = cast(avf::primitive_double, double{1234567890.1234});
+    auto got = cast_apache_primitive<double>(avf::primitive_double, stream);
     cudf::test::fixed_width_column_wrapper<double> expected{double{1234567890.1234}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
   }
