@@ -116,12 +116,15 @@ struct row_group_info {
  *
  * @param row_group Row group
  * @param schema_idx Schema index, already mapped to the row group's source
- * @param cached_offset Offset from a previous lookup, updated if it is invalid
- * @return `true` if a matching column chunk was found
+ * @param cached_offset Offset from a previous lookup
+ * @param assert_if_not_found Whether to assert when no matching column chunk is found
+ * @return Offset of the matching column chunk, if found
  */
-[[nodiscard]] bool find_colchunk_iter_offset(RowGroup const& row_group,
-                                             size_type schema_idx,
-                                             std::optional<size_type>& cached_offset);
+[[nodiscard]] std::optional<size_type> find_colchunk_iter_offset(
+  RowGroup const& row_group,
+  size_type schema_idx,
+  std::optional<size_type> cached_offset = std::nullopt,
+  bool assert_if_not_found               = true);
 
 /**
  * @brief Class for parsing dataset metadata

@@ -149,11 +149,8 @@ bool aggregate_reader_metadata::any_row_group_stats_available(
       auto const& first_row_group =
         per_file_metadata[src_idx].row_groups[row_group_indices.front()];
       auto const mapped_schema_idx = map_schema_index(schema_idx, static_cast<int>(src_idx));
-      CUDF_EXPECTS(
-        find_colchunk_iter_offset(first_row_group, mapped_schema_idx, colchunk_offset),
-        std::format(
-          "Column chunk with schema index {} not found in source {}", mapped_schema_idx, src_idx),
-        std::invalid_argument);
+      colchunk_offset =
+        find_colchunk_iter_offset(first_row_group, mapped_schema_idx, colchunk_offset);
 
       if (colchunk_has_stats(first_row_group.columns[colchunk_offset.value()])) { return true; }
     }

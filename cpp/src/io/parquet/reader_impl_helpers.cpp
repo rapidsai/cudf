@@ -57,14 +57,15 @@ std::size_t derive_pass_read_limit(std::size_t chunk_read_limit)
   return pass_read_limit;
 }
 
-bool find_colchunk_iter_offset(RowGroup const& row_group,
-                               size_type schema_idx,
-                               std::optional<size_type>& cached_offset)
+std::optional<size_type> find_colchunk_iter_offset(RowGroup const& row_group,
+                                                   size_type schema_idx,
+                                                   std::optional<size_type> cached_offset,
+                                                   bool assert_if_not_found)
 {
   if (cached_offset.has_value() and
       std::cmp_less(cached_offset.value(), row_group.columns.size()) and
       row_group.columns[cached_offset.value()].schema_idx == schema_idx) {
-    return true;
+    return cached_offset;
   }
 
   auto const& colchunk_iter =
@@ -72,11 +73,13 @@ bool find_colchunk_iter_offset(RowGroup const& row_group,
       return col.schema_idx == schema_idx;
     });
   if (colchunk_iter == row_group.columns.end()) {
-    cached_offset.reset();
-    return false;
+    CUDF_EXPECTS(
+      not assert_if_not_found,
+      std::format("Column chunk with schema index {} not found in row group", schema_idx),
+      std::invalid_argument);
+    return std::nullopt;
   }
-  cached_offset = std::distance(row_group.columns.begin(), colchunk_iter);
-  return true;
+  return std::distance(row_group.columns.begin(), colchunk_iter);
 }
 
 namespace flatbuf = cudf::io::parquet::flatbuf;
@@ -1237,11 +1240,8 @@ ColumnChunkMetaData const& aggregate_reader_metadata::get_column_metadata(size_t
   // Map schema index to the provided source file index
   schema_idx = map_schema_index(schema_idx, src_idx);
 
-  auto const& row_group = per_file_metadata[src_idx].row_groups[row_group_index];
-  std::optional<size_type> colchunk_offset;
-  CUDF_EXPECTS(find_colchunk_iter_offset(row_group, schema_idx, colchunk_offset),
-               std::format("Column chunk with schema index {} not found in row group", schema_idx),
-               std::invalid_argument);
+  auto const& row_group      = per_file_metadata[src_idx].row_groups[row_group_index];
+  auto const colchunk_offset = find_colchunk_iter_offset(row_group, schema_idx);
   return row_group.columns[colchunk_offset.value()].meta_data;
 }
 
