@@ -56,6 +56,35 @@ def test_skew_kurtosis_constant(engine):
     assert_gpu_result_equal(q, engine=engine, check_exact=False)
 
 
+def test_skew_kurtosis_large_offset(engine):
+    df = pl.LazyFrame({"a": [1e12 + value for value in range(8)]})
+    q = df.select(
+        pl.col("a").skew().alias("s"),
+        pl.col("a").kurtosis().alias("k"),
+    )
+    assert_gpu_result_equal(q, engine=engine, check_exact=False)
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        [0.0, 1.1288e103],
+        [0.0, 0.0, 1.1972e103],
+        [6.0383e169],
+        [1e200, -1e200, 1e200, -1e200],
+    ],
+)
+def test_skew_kurtosis_overflow(engine, values):
+    df = pl.LazyFrame({"a": pl.Series("a", values, dtype=pl.Float64)})
+    q = df.select(
+        pl.col("a").skew().alias("s"),
+        pl.col("a").skew(bias=False).alias("sb"),
+        pl.col("a").kurtosis().alias("k"),
+        pl.col("a").kurtosis(bias=False).alias("kb"),
+    )
+    assert_gpu_result_equal(q, engine=engine, check_exact=False)
+
+
 @pytest.mark.parametrize("bias", [True, False])
 def test_skew_small_sample(engine, bias):
     df = pl.LazyFrame({"a": [1.0, 2.0]})

@@ -31,6 +31,30 @@ __all__ = ["Agg", "Item", "Kurtosis", "Skew"]
 _EPS = sys.float_info.epsilon
 
 
+def _mul_overflowsafe(a: float, b: float) -> float:
+    """Multiply two floats, returning signed ``inf`` on overflow like IEEE-754."""
+    try:
+        return a * b
+    except OverflowError:
+        return math.inf if (a >= 0) == (b >= 0) else -math.inf
+
+
+def _div_overflowsafe(a: float, b: float) -> float:
+    """Divide two floats, returning signed ``inf`` on overflow like IEEE-754."""
+    try:
+        return a / b
+    except OverflowError:
+        return math.inf if (a >= 0) == (b >= 0) else -math.inf
+
+
+def _powf_overflowsafe(base: float, exponent: float) -> float:
+    """Raise ``base`` to ``exponent``, returning ``inf`` on overflow like IEEE-754."""
+    try:
+        return base**exponent
+    except OverflowError:
+        return math.inf
+
+
 class Item(Expr):
     """Validate and return the result of an ``item`` aggregation."""
 
@@ -521,13 +545,19 @@ class Skew(Expr):
         effectively zero, matching Polars' ``m2 <= (eps * mean)**2`` check),
         with the sample bias correction ``sqrt(n * (n - 1)) / (n - 2)``
         applied when ``bias=False`` (returning null for ``n <= 2``).
+
+        Overflow follows IEEE-754 (producing ``inf``/``nan``) matching Rust,
+        rather than raising Python's ``OverflowError``.
         """
-        biased = math.nan if m2 <= (_EPS * mean) ** 2 else m3 / m2**1.5
+        is_zero = m2 <= _mul_overflowsafe(_EPS * mean, _EPS * mean)
+        biased = (
+            math.nan if is_zero else _div_overflowsafe(m3, _powf_overflowsafe(m2, 1.5))
+        )
         if bias:
             return biased
         if n <= 2:
             return None
-        return math.sqrt(n * (n - 1)) / (n - 2) * biased
+        return _mul_overflowsafe(math.sqrt(n * (n - 1)) / (n - 2), biased)
 
     @staticmethod
     def _scalar_column(value: float | None, dtype: DataType, stream: Stream) -> Column:
@@ -639,7 +669,10 @@ class Kurtosis(Expr):
         bias correction applied when ``bias=False`` (returning null for
         ``n <= 3``), and subtracting 3.0 for Fisher's definition.
         """
-        biased = math.nan if m2 <= (_EPS * mean) ** 2 else m4 / (m2 * m2)
+        is_zero = m2 <= _mul_overflowsafe(_EPS * mean, _EPS * mean)
+        biased = (
+            math.nan if is_zero else _div_overflowsafe(m4, _mul_overflowsafe(m2, m2))
+        )
         if bias:
             out = biased
         else:
@@ -648,7 +681,7 @@ class Kurtosis(Expr):
             nm1_nm2 = (n - 1) / (n - 2)
             np1_nm3 = (n + 1) / (n - 3)
             nm1_nm3 = (n - 1) / (n - 3)
-            out = nm1_nm2 * (np1_nm3 * biased - 3.0 * nm1_nm3) + 3.0
+            out = nm1_nm2 * (_mul_overflowsafe(np1_nm3, biased) - 3.0 * nm1_nm3) + 3.0
         return out - 3.0 if fisher else out
 
     @staticmethod
