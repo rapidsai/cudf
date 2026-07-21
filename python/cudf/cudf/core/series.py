@@ -2857,8 +2857,22 @@ class Series(SingleColumnFrame, IndexedFrame):
         if len(val_counts) > 0:
             val_counts = val_counts[val_counts == val_counts.iloc[0]]
 
+        # pandas sorts mode results on the underlying representation:
+        # NaT (INT64_MIN as i8) and the categorical null code (-1) sort
+        # before valid values, while float NaN and the <NA> of
+        # nullable/arrow dtypes (including arrow timestamps/durations)
+        # sort last.
+        na_position = (
+            "first"
+            if (
+                self.dtype.kind in "mM"
+                and isinstance(self.dtype, (np.dtype, pd.DatetimeTZDtype))
+            )
+            or isinstance(self.dtype, cudf.CategoricalDtype)
+            else "last"
+        )
         return Series._from_column(
-            val_counts.index.sort_values()._column,
+            val_counts.index.sort_values(na_position=na_position)._column,
             name=self.name,
             attrs=self.attrs,
         )
