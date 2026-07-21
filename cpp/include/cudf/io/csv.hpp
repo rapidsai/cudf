@@ -325,7 +325,7 @@ class csv_reader_options {
   /**
    * @brief Whether to treat `\r\n` as line terminator.
    *
-   * @deprecated Deprecated in 26.08 and will be removed in 26.10+. CRLF input is supported using
+   * @deprecated Deprecated in 26.10 and will be removed in 26.12+. CRLF input is supported using
    * the default `\n` line terminator.
    *
    * @return `true` if `\r\n` is treated as line terminator
