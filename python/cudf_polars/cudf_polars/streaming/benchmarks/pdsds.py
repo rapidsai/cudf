@@ -23,7 +23,6 @@ try:
     from cudf_polars.streaming.benchmarks.utils import (
         COUNT_DTYPE,
         _CPU_ENGINES,
-        _is_blackwell_gpu,
         build_parser,
         parse_args,
         run_polars,
@@ -31,9 +30,6 @@ try:
 except ImportError as e:
     if e.name is not None and not e.name.startswith("cudf_polars"):
         raise
-
-    def _is_blackwell_gpu() -> bool:
-        return False
 
 
 if TYPE_CHECKING:
@@ -90,15 +86,6 @@ class PDSDSPolarsQueries(PDSDSQueries):
     # values are reasons for the failures. These queries will be skipped in GPU runs.
     EXPECTED_FAILURES_TPCDS: ClassVar[dict[int, str]] = {
         5: "GPU execution failure (packed data cannot be empty): https://github.com/rapidsai/cudf/issues/22073",
-        9: "GPU cross join with empty left table: https://github.com/rapidsai/cudf/issues/22824",
-        **(
-            {
-                2: "decimal128 groupby-sum incorrect result on Blackwell: https://github.com/rapidsai/cudf/issues/23150",
-                43: "decimal128 groupby-sum incorrect result on Blackwell: https://github.com/rapidsai/cudf/issues/23150",
-            }
-            if _is_blackwell_gpu()
-            else {}
-        ),
     }
     # See comments for EXPECTED_CASTS and EXPECTED_CASTS_DECIMAL
     # in cudf/python/cudf_polars/cudf_polars/streaming/benchmarks/pdsh.py

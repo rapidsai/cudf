@@ -324,6 +324,8 @@ def assert_tpch_result_equal(
                         pl.col(col).lt(val - 2 * abs_tol)
                         | pl.col(col).gt(val + 2 * abs_tol)
                     )
+                elif val is None:
+                    filter_exprs.append(pl.lit(False))
                 else:
                     if desc:
                         # then "before" means "greater than"

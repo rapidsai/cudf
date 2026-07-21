@@ -25,7 +25,6 @@ try:
         _CPU_ENGINES,
         QueryResult,
         RunConfig,
-        _is_blackwell_gpu,
         build_parser,
         get_data,
         parse_args,
@@ -36,9 +35,6 @@ except ImportError as e:
         raise
     # We want to be able to import pdsh in a CPU-only environment.
     COUNT_DTYPE = None  # type: ignore[assignment]
-
-    def _is_blackwell_gpu() -> bool:
-        return False
 
 
 if TYPE_CHECKING:
@@ -130,13 +126,7 @@ class PDSHQueries:
     EXPECTED_CASTS_TIMESTAMP = EXPECTED_CASTS_TIMESTAMP
     # Queries expected to fail on GPU due to known bugs. Keys are query numbers;
     # values are reasons for the failures. These queries will be skipped in GPU runs.
-    EXPECTED_FAILURES_TPCH: ClassVar[dict[int, str]] = (
-        {
-            1: "Q1 incorrect result on Blackwell: https://github.com/rapidsai/cudf/issues/23150",
-        }
-        if _is_blackwell_gpu()
-        else {}
-    )
+    EXPECTED_FAILURES_TPCH: ClassVar[dict[int, str]] = {}
 
     @property
     def duckdb_queries(self) -> PDSHDuckDBQueries:
