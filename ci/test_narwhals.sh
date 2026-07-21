@@ -61,8 +61,13 @@ test_get_level \
 "
 
 # test_dtypes: narwhals' dtype mapping changed with polars 1.40 (reports Object where the test expects Int8).
+# test_len_over_2369: cudf now routes transform("size") to the group-level size
+#   (https://github.com/rapidsai/cudf/issues/18491 is fixed), so narwhals' own
+#   xfail for the cudf constructor is stale and the test strict-XPASSes; deselect
+#   until narwhals removes the xfail.
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF=" \
 test_dtypes or \
+test_len_over_2369[cudf] or \
 test_to_numpy[cudf] or \
 test_fill_null_strategies_with_limit_as_none[cudf] or \
 test_fill_null_series_limit_as_none[cudf] or \
@@ -163,7 +168,6 @@ rapids-logger "Run narwhals tests for cuDF Pandas"
 # test_is_finite_expr & test_is_finite_series: https://github.com/rapidsai/cudf/issues/18257
 # test_maybe_convert_dtypes_pandas: https://github.com/rapidsai/cudf/issues/14149
 # test_log_dtype_pandas: cudf is promoting the type to float64
-# test_len_over_2369: It fails during fallback. The error is 'DataFrame' object has no attribute 'to_frame'
 # test_all_ignore_nulls, test_allh_kleene, and test_anyh_kleene: https://github.com/rapidsai/cudf/issues/19417
 # test_offset_by_date_pandas: https://github.com/rapidsai/cudf/issues/19418
 # test_select_boolean_cols and test_select_boolean_cols_multi_group_by: https://github.com/rapidsai/cudf/issues/19421
@@ -173,7 +177,6 @@ test_is_finite_expr or \
 test_is_finite_series or \
 test_maybe_convert_dtypes_pandas or \
 test_log_dtype_pandas or \
-test_len_over_2369 or \
 test_all_ignore_nulls or \
 test_allh_kleene or \
 test_anyh_kleene or \
