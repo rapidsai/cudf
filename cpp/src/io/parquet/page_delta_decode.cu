@@ -38,9 +38,10 @@ struct delta_byte_array_decoder {
   uint8_t const* last_string;       // pointer to last decoded string...needed for its prefix
   uint8_t const* suffix_char_data;  // pointer to the start of character data
 
-  uint8_t* temp_buf;         // scratch for strings skipped over by a leading row range
-  uint8_t* temp_buf_last;    // slot past the scratch area that preserves the last decoded string
-                             // while the next batch overwrites the scratch
+  uint8_t* temp_buf;         // scratch for strings skipped over by a leading row range; the next
+                             // batch overwrites it from its start each round
+  uint8_t* prefix_seed;      // one reserved slot ahead of temp_buf holding a durable copy of the
+                             // last decoded string, used to seed the next batch's first prefix
   uint32_t start_val;        // decoded strings up to this index will be dumped to temp_buf
   uint32_t last_string_len;  // length of the last decoded string
 
@@ -54,11 +55,12 @@ struct delta_byte_array_decoder {
     auto const* suffix_start = prefixes.find_end_of_block(start, end);
     suffix_char_data         = suffixes.find_end_of_block(suffix_start, end);
     last_string              = nullptr;
-    temp_buf                 = temp;
-    // the temp buffer holds delta_max_batch_size string slots of scratch plus one more slot
-    // (see the string-size prepass), reserved here for the last decoded string
-    temp_buf_last = temp + delta_max_batch_size * (temp_size / (delta_max_batch_size + 1));
-    start_val     = start_idx;
+    // the temp allocation holds one leading string slot (see the string-size prepass) followed by
+    // delta_max_batch_size scratch slots. reserve the leading slot for the last decoded string so
+    // it stays clear of the scratch, which each round overwrites from its start.
+    prefix_seed = temp;
+    temp_buf    = temp + temp_size / (delta_max_batch_size + 1);
+    start_val   = start_idx;
   }
 
   // kind of like an inclusive scan for strings. takes prefix_len bytes from preceding
@@ -209,11 +211,11 @@ struct delta_byte_array_decoder {
     }
 
     // the next batch overwrites the temp scratch from its start, so if the last decoded string
-    // lives there, preserve it in the reserved slot past the scratch area
-    if (end_idx <= start_val && last_string != temp_buf_last) {
+    // lives there, preserve it in the reserved seed slot ahead of the scratch
+    if (end_idx <= start_val && last_string != prefix_seed) {
       if (lane_id == 0) {
-        memcpy(temp_buf_last, last_string, last_string_len);
-        last_string = temp_buf_last;
+        memcpy(prefix_seed, last_string, last_string_len);
+        last_string = prefix_seed;
       }
       __syncwarp();
     }
@@ -274,11 +276,11 @@ struct delta_byte_array_decoder {
     }
 
     // the next batch overwrites the temp scratch from its start, so if the last decoded string
-    // lives there, preserve it in the reserved slot past the scratch area
-    if (end_idx <= start_val && last_string != temp_buf_last) {
+    // lives there, preserve it in the reserved seed slot ahead of the scratch
+    if (end_idx <= start_val && last_string != prefix_seed) {
       if (lane_id == 0) {
-        memcpy(temp_buf_last, last_string, last_string_len);
-        last_string = temp_buf_last;
+        memcpy(prefix_seed, last_string, last_string_len);
+        last_string = prefix_seed;
       }
       __syncwarp();
     }

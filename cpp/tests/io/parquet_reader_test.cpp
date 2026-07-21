@@ -3040,6 +3040,113 @@ TEST_F(ParquetReaderTest, DeltaByteArraySkipAllValid)
                                 result.tbl->view());
 }
 
+namespace {
+// read `buffer` trimmed to [skip, skip + n) and compare column 0 with the matching slice of
+// `expected`
+void delta_byte_array_nested_skip_check(std::vector<char> const& buffer,
+                                        cudf::table_view const& expected,
+                                        cudf::size_type skip,
+                                        cudf::size_type n)
+{
+  auto const result =
+    cudf::io::read_parquet(cudf::io::parquet_reader_options::builder(
+                             cudf::io::source_info{cudf::host_span<std::byte const>{
+                               reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
+                             .skip_rows(skip)
+                             .num_rows(n)
+                             .build());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(0),
+                                      cudf::slice(expected, {skip, skip + n}).front().column(0));
+}
+}  // namespace
+
+// STRUCT<STRING> whose string field is DELTA_BYTE_ARRAY encoded. A struct adds a definition level
+// (the field is nullable here) but no repetition, so leading skips stage the skipped strings
+// through the in-loop temp_string_buf and carry the prefix seed across rounds -- the flat-column
+// path, but exercised under a nested schema with nulls.
+TEST_F(ParquetReaderTest, DeltaByteArrayStructSkipRows)
+{
+  constexpr cudf::size_type num_rows = 400;
+  auto const strings                 = delta_test_strings(num_rows, true);
+  auto const str_valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 5 != 0; });
+
+  std::vector<std::unique_ptr<cudf::column>> children;
+  children.push_back(cudf::purge_nonempty_nulls(
+    cudf::test::strings_column_wrapper(strings.begin(), strings.end(), str_valids)));
+  auto const struct_col = cudf::make_structs_column(num_rows, std::move(children), 0, {});
+  auto const expected   = cudf::table_view({struct_col->view()});
+
+  cudf::io::table_input_metadata md(expected);
+  md.column_metadata[0].set_name("s");
+  md.column_metadata[0].child(0).set_name("str").set_encoding(
+    cudf::io::column_encoding::DELTA_BYTE_ARRAY);
+
+  std::vector<char> buffer;
+  cudf::io::write_parquet(
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, expected)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER)
+      .write_v2_headers(true)
+      .metadata(std::move(md))
+      .build());
+
+  for (auto const& [skip, n] : std::vector<std::pair<cudf::size_type, cudf::size_type>>{
+         {0, num_rows}, {40, num_rows - 40}, {100, 200}, {160, 33}}) {
+    delta_byte_array_nested_skip_check(buffer, expected, skip, n);
+  }
+}
+
+// MAP<STRING, STRING> is physically LIST<STRUCT<key, value>>, so both string leaves decode under
+// repetition. A leading skip resumes each DELTA_BYTE_ARRAY leaf mid-page via
+// delta_byte_array_decoder::skip, which stages the skipped strings through temp_string_buf and
+// carries the prefix seed across rounds. Varying map sizes (including empties) exercise the
+// definition levels.
+TEST_F(ParquetReaderTest, DeltaByteArrayMapSkipRows)
+{
+  constexpr cudf::size_type num_rows = 250;
+  uint64_t seed                      = 601;
+  std::vector<cudf::size_type> offsets{0};
+  for (cudf::size_type i = 0; i < num_rows; i++) {
+    auto const sz = (delta_test_rand(seed) % 6 == 0)
+                      ? 0
+                      : 1 + static_cast<cudf::size_type>(delta_test_rand(seed) % 6);
+    offsets.push_back(offsets.back() + sz);
+  }
+  auto const n_leaf = static_cast<int>(offsets.back());
+  auto const keys   = delta_test_strings(n_leaf, true, 602);
+  auto const vals   = delta_test_strings(n_leaf, true, 603);
+
+  auto keys_col   = cudf::test::strings_column_wrapper(keys.begin(), keys.end());
+  auto vals_col   = cudf::test::strings_column_wrapper(vals.begin(), vals.end());
+  auto struct_col = cudf::test::structs_column_wrapper({keys_col, vals_col}).release();
+  auto offsets_col =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>(offsets.begin(), offsets.end());
+  auto const map_col = cudf::make_lists_column(
+    num_rows, offsets_col.release(), std::move(struct_col), 0, rmm::device_buffer{});
+  auto const expected = cudf::table_view({map_col->view()});
+
+  cudf::io::table_input_metadata md(expected);
+  md.column_metadata[0].set_name("m");
+  md.column_metadata[0].set_list_column_as_map();
+  md.column_metadata[0].child(1).child(0).set_name("key").set_encoding(
+    cudf::io::column_encoding::DELTA_BYTE_ARRAY);
+  md.column_metadata[0].child(1).child(1).set_name("value").set_encoding(
+    cudf::io::column_encoding::DELTA_BYTE_ARRAY);
+
+  std::vector<char> buffer;
+  cudf::io::write_parquet(
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, expected)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER)
+      .write_v2_headers(true)
+      .metadata(std::move(md))
+      .build());
+
+  for (auto const& [skip, n] : std::vector<std::pair<cudf::size_type, cudf::size_type>>{
+         {0, num_rows}, {40, num_rows - 40}, {70, 100}, {130, 40}}) {
+    delta_byte_array_nested_skip_check(buffer, expected, skip, n);
+  }
+}
+
 // test that using page stats is working for full reads and various skip rows
 TEST_F(ParquetReaderTest, StringsWithPageStats)
 {
