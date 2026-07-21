@@ -7,17 +7,15 @@ from __future__ import annotations
 
 import contextlib
 import subprocess
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 
-from cudf_polars.engine.spmd import SPMDEngine
 from cudf_polars.streaming.benchmarks.pdsh import PDSHQueries
 from cudf_polars.streaming.benchmarks.utils import (
     FailedRecord,
     RunConfig,
-    RunOptions,
-    ValidationMethod,
     check_input_data_type,
     run_polars_query,
 )
@@ -25,6 +23,9 @@ from cudf_polars.testing.engine_utils import warns_on_spmd
 
 if TYPE_CHECKING:
     from pytest_subtests import SubTests
+
+    from cudf_polars.engine.spmd import SPMDEngine
+    from cudf_polars.streaming.benchmarks.utils import RunOptions, ValidationMethod
 
 TPCH_SUFFIX = "/*.parquet"
 
@@ -67,7 +68,7 @@ def tpch_run_config(
         engine_name="cudf-polars",
         queries=list(range(1, 23)),
         query_set="pdsh",
-        dataset_path=tpch_data_dir,
+        dataset_path=Path(tpch_data_dir),
         scale_factor=1,
         suffix=request.config.getoption("suffix") or TPCH_SUFFIX,
         frontend="spmd",
@@ -132,5 +133,8 @@ def test_tpch_query(
             with subtests.test(msg=f"iter{record.iteration}"):
                 if isinstance(record, FailedRecord):
                     pytest.fail(record.traceback)
-                elif record.validation_result is not None and record.validation_result.status == "Failed":
+                elif (
+                    record.validation_result is not None
+                    and record.validation_result.status == "Failed"
+                ):
                     pytest.fail(record.validation_result.message or "Validation failed")

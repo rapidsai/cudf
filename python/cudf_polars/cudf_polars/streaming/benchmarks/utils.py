@@ -657,14 +657,14 @@ class RunConfig:
             validation_method = ValidationMethod(
                 expected_source="duckdb-disk",
                 comparison_method="polars",
-                comparison_options=get_validation_options(args),
+                comparison_options=get_validation_options(RunOptions.from_args(args)),
                 expected_location=args.validate_directory,
             )
         elif args.validate_against is not None:
             validation_method = ValidationMethod(
                 args.validate_against,
                 comparison_method="polars",
-                comparison_options=get_validation_options(args),
+                comparison_options=get_validation_options(RunOptions.from_args(args)),
                 expected_location=None,
             )
         else:
@@ -690,7 +690,7 @@ class RunConfig:
             query_set=name,
             dataset_path=path,
             scale_factor=scale_factor,
-            suffix=args.suffix,
+            suffix=args.suffix if args.suffix is not None else ".parquet",
             qualification=args.qualification,
             frontend=args.frontend,
             iterations=args.iterations,
@@ -1016,7 +1016,9 @@ def run_polars_query_iteration(
     result_casts: list[pl.Expr] | None = None,
 ) -> SuccessRecord:
     """Run a single query iteration. Caller must wrap in try/except."""
-    result, duration = execute_query(q_id, iteration, q, run_config, run_options, engine)
+    result, duration = execute_query(
+        q_id, iteration, q, run_config, run_options, engine
+    )
 
     if expected is not None and prepare_validation_result is not None:
         result = prepare_validation_result(result)
@@ -1075,7 +1077,9 @@ def run_polars_query(
     query_result: QueryResult = getattr(benchmark, f"q{q_id}")(run_config)
     q = query_result.frame
 
-    print_query_plan(q_id, q, run_options, run_config, engine, print_plans=run_options.print_plans)
+    print_query_plan(
+        q_id, q, run_options, run_config, engine, print_plans=run_options.print_plans
+    )
     plan = None
     if (run_options.explain or run_options.explain_logical) and engine is not None:
         from cudf_polars.streaming.explain import serialize_query
@@ -2043,7 +2047,7 @@ def _add_dataset_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--suffix",
         type=str,
-        default=".parquet",
+        default=None,
         help=textwrap.dedent("""\
             File suffix for input table files.
             Default: .parquet"""),

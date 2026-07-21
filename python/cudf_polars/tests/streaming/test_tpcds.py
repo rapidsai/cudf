@@ -6,19 +6,16 @@
 from __future__ import annotations
 
 import contextlib
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+import duckdb
 import pytest
 
-import duckdb
-
-from cudf_polars.engine.spmd import SPMDEngine
 from cudf_polars.streaming.benchmarks.pdsds import PDSDSPolarsQueries
 from cudf_polars.streaming.benchmarks.utils import (
     FailedRecord,
     RunConfig,
-    RunOptions,
-    ValidationMethod,
     check_input_data_type,
     run_polars_query,
 )
@@ -27,9 +24,14 @@ from cudf_polars.testing.engine_utils import warns_on_spmd
 if TYPE_CHECKING:
     from pytest_subtests import SubTests
 
+    from cudf_polars.engine.spmd import SPMDEngine
+    from cudf_polars.streaming.benchmarks.utils import RunOptions, ValidationMethod
+
 TPCDS_SUFFIX = ".parquet"
 
-CONDITIONAL_JOIN_NOT_SUPPORTED = "ConditionalJoin not supported for multiple partitions."
+CONDITIONAL_JOIN_NOT_SUPPORTED = (
+    "ConditionalJoin not supported for multiple partitions."
+)
 SORT_NOT_SUPPORTED = "sort currently only supports column names as `by` keys."
 
 EXPECTED_WARNINGS: dict[int, str] = {
@@ -52,13 +54,9 @@ def tpcds_data_dir(
     scale = request.config.getoption("scale") or 1.0
     data_dir = tmp_path_factory.mktemp("tpcds")
     conn = duckdb.connect()
-    conn.execute(
-        f"INSTALL tpcds; LOAD tpcds; CALL dsdgen(sf={scale});"
-    )
+    conn.execute(f"INSTALL tpcds; LOAD tpcds; CALL dsdgen(sf={scale});")
     for table in conn.execute("SHOW TABLES").df()["name"]:
-        conn.execute(
-            f"COPY {table} TO '{data_dir}/{table}.parquet' (FORMAT PARQUET)"
-        )
+        conn.execute(f"COPY {table} TO '{data_dir}/{table}.parquet' (FORMAT PARQUET)")
     return str(data_dir)
 
 
@@ -73,7 +71,7 @@ def tpcds_run_config(
         engine_name="cudf-polars",
         queries=list(range(1, 100)),
         query_set="pdsds",
-        dataset_path=tpcds_data_dir,
+        dataset_path=Path(tpcds_data_dir),
         scale_factor=request.config.getoption("scale") or 1.0,
         suffix=request.config.getoption("suffix") or TPCDS_SUFFIX,
         qualification=request.config.getoption("qualification"),
@@ -139,5 +137,8 @@ def test_tpcds_query(
             with subtests.test(msg=f"iter{record.iteration}"):
                 if isinstance(record, FailedRecord):
                     pytest.fail(record.traceback)
-                elif record.validation_result is not None and record.validation_result.status == "Failed":
+                elif (
+                    record.validation_result is not None
+                    and record.validation_result.status == "Failed"
+                ):
                     pytest.fail(record.validation_result.message or "Validation failed")

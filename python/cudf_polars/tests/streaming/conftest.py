@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import argparse
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -16,12 +16,16 @@ from cudf_polars.streaming.benchmarks.utils import (
     _add_dataset_args,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
-class _PytestGroupShim:
-    """Makes a pytest option group look like an argparse group.
 
-    Allows :meth:`StreamingOptions._add_cli_args` to register its options
-    directly onto the pytest parser without duplicating the definitions.
+class PytestGroupAdapter:
+    """Adapts a pytest option group to the argparse group interface.
+
+    Allows :meth:`StreamingOptions._add_cli_args` and :func:`_add_dataset_args`
+    to register their options directly onto the pytest parser without duplicating
+    the definitions.
     """
 
     def __init__(self, group: Any) -> None:
@@ -47,15 +51,15 @@ class _PytestGroupShim:
             kwargs.pop("metavar", None)
             self._group.addoption(*args, **kwargs)
 
-    def add_argument_group(self, *args: Any, **kwargs: Any) -> _PytestGroupShim:
+    def add_argument_group(self, *args: Any, **kwargs: Any) -> PytestGroupAdapter:
         return self
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
     group = parser.getgroup("TPC benchmark options")
-    shim = _PytestGroupShim(group)
-    StreamingOptions._add_cli_args(shim)  # type: ignore[arg-type]
-    _add_dataset_args(shim)  # type: ignore[arg-type]
+    adapter = PytestGroupAdapter(group)
+    StreamingOptions._add_cli_args(adapter)  # type: ignore[arg-type]
+    _add_dataset_args(adapter)  # type: ignore[arg-type]
 
 
 _TPC_QUERY_COUNTS = {"tpch": 22, "tpcds": 99}
@@ -84,12 +88,9 @@ def tpc_streaming_options(request: pytest.FixtureRequest) -> StreamingOptions:
     _add_dataset_args(ref)
     ns: dict[str, Any] = {"raise_on_fail": True}
     for action in ref._actions:
-        if not action.option_strings:
+        if not action.option_strings or action.dest == "help":
             continue
-        try:
-            ns[action.dest] = request.config.getoption(action.dest)
-        except ValueError:
-            pass
+        ns[action.dest] = request.config.getoption(action.dest)
     return StreamingOptions._from_argparse(argparse.Namespace(**ns))
 
 
@@ -107,13 +108,18 @@ def tpc_validation_method(tpc_run_options: RunOptions) -> ValidationMethod:
     return ValidationMethod(
         expected_source="duckdb",
         comparison_method="polars",
-        comparison_options={**POLARS_VALIDATION_OPTIONS, "abs_tol": tpc_run_options.validation_abs_tol},
+        comparison_options={
+            **POLARS_VALIDATION_OPTIONS,
+            "abs_tol": tpc_run_options.validation_abs_tol,
+        },
         expected_location=None,
     )
 
 
 @pytest.fixture(scope="session")
-def tpc_spmd_engine(tpc_streaming_options: StreamingOptions) -> SPMDEngine:
+def tpc_spmd_engine(
+    tpc_streaming_options: StreamingOptions,
+) -> Generator[SPMDEngine, None, None]:
     with SPMDEngine(
         rapidsmpf_options=tpc_streaming_options.to_rapidsmpf_options(),
         executor_options=tpc_streaming_options.to_executor_options(),
