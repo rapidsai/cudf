@@ -118,7 +118,7 @@ std::pair<bool, bool> compute_page_index_presence(
       for (auto const schema_idx : schema_indices) {
         auto& colchunk_offset = *cached_offset_iter++;
         colchunk_offset =
-          parquet::detail::find_colchunk_iter_offset(row_group, schema_idx, colchunk_offset, false);
+          parquet::detail::find_colchunk_iter_offset(row_group, schema_idx, colchunk_offset);
         auto const has_colchunk = colchunk_offset.has_value();
         auto const has_column_index =
           has_colchunk and row_group.columns[colchunk_offset.value()].column_index.has_value();

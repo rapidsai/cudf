@@ -57,28 +57,22 @@ std::size_t derive_pass_read_limit(std::size_t chunk_read_limit)
   return pass_read_limit;
 }
 
-std::optional<size_type> find_colchunk_iter_offset(RowGroup const& row_group,
-                                                   size_type schema_idx,
-                                                   std::optional<size_type> cached_offset,
-                                                   bool assert_if_not_found)
+size_type find_colchunk_iter_offset(RowGroup const& row_group,
+                                    size_type schema_idx,
+                                    std::optional<size_type> cached_offset)
 {
   if (cached_offset.has_value() and
       std::cmp_less(cached_offset.value(), row_group.columns.size()) and
       row_group.columns[cached_offset.value()].schema_idx == schema_idx) {
-    return cached_offset;
+    return cached_offset.value();
   }
-
   auto const& colchunk_iter =
     std::find_if(row_group.columns.begin(), row_group.columns.end(), [schema_idx](auto const& col) {
       return col.schema_idx == schema_idx;
     });
-  if (colchunk_iter == row_group.columns.end()) {
-    CUDF_EXPECTS(
-      not assert_if_not_found,
-      std::format("Column chunk with schema index {} not found in row group", schema_idx),
-      std::invalid_argument);
-    return std::nullopt;
-  }
+  CUDF_EXPECTS(colchunk_iter != row_group.columns.end(),
+               std::format("Column chunk with schema index {} not found in row group", schema_idx),
+               std::invalid_argument);
   return std::distance(row_group.columns.begin(), colchunk_iter);
 }
 
