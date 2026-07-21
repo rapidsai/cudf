@@ -23,6 +23,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <algorithm>
+#include <limits>
 
 namespace cudf::io::experimental {
 namespace detail {
@@ -309,11 +310,24 @@ packed_table read_cudftable(datasource* source,
 
   auto const comp = static_cast<compression_type>(header.compression);
 
-  auto const metadata_offset    = header_size;
-  auto const block_index_offset = metadata_offset + header.metadata_length;
+  // Validate the header size fields with overflow-safe arithmetic before using
+  // them to compute file offsets or size allocations. A forged header must not
+  // be able to wrap a 64-bit sum/product and still satisfy the file-size check.
+  auto const file_size   = static_cast<uint64_t>(source->size());
+  auto const checked_add = [](uint64_t a, uint64_t b) {
+    CUDF_EXPECTS(a <= std::numeric_limits<uint64_t>::max() - b,
+                 "cudftable header size arithmetic overflow");
+    return a + b;
+  };
+  CUDF_EXPECTS(
+    header.num_blocks <= std::numeric_limits<uint64_t>::max() / sizeof(block_index_entry),
+    "cudftable block index size overflow");
+
+  auto const metadata_offset    = uint64_t{header_size};
+  auto const block_index_offset = checked_add(metadata_offset, header.metadata_length);
   auto const block_index_size   = header.num_blocks * sizeof(block_index_entry);
-  auto const blocks_offset      = block_index_offset + block_index_size;
-  CUDF_EXPECTS(source->size() == blocks_offset + header.compressed_data_length,
+  auto const blocks_offset      = checked_add(block_index_offset, block_index_size);
+  CUDF_EXPECTS(checked_add(blocks_offset, header.compressed_data_length) == file_size,
                "File size mismatch for cudftable");
 
   auto packed = packed_columns{};
