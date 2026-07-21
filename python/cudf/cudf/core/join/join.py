@@ -352,7 +352,15 @@ class Merge:
             # the other (empty) side has a different numeric/object dtype;
             # cudf's common-type cast would otherwise change it. The join maps
             # are unaffected (an empty side yields an empty gather map).
-            if (len(lcol) == 0 or len(rcol) == 0) and lcol.dtype != rcol.dtype:
+            # Outer joins are excluded: there ``_match_join_keys`` already
+            # adopts the non-empty side's dtype, and the output key is built
+            # by filling the left key from the right, so both sides must
+            # share that dtype.
+            if (
+                self.how != "outer"
+                and (len(lcol) == 0 or len(rcol) == 0)
+                and lcol.dtype != rcol.dtype
+            ):
                 l_numeric = is_dtype_obj_numeric(lcol.dtype)
                 r_numeric = is_dtype_obj_numeric(rcol.dtype)
                 l_objlike = is_dtype_obj_string(lcol.dtype) or (
