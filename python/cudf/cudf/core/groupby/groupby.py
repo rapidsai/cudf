@@ -1325,30 +1325,27 @@ class GroupBy(Serializable, Reducible, Scannable):
             and self.obj.ndim == 2
             and self.obj._data.level_names != (None,)
         ):
+            mi_kwargs: dict[str, Any] = {}
             if self.obj._data.multiindex and all(
                 isinstance(label, tuple)
                 and len(label) == self.obj._data.nlevels
                 for label in data
             ):
                 # the aggregation kept the source's tuple labels: preserve
-                # the MultiIndex columns and their per-level metadata
-                data = ColumnAccessor(
-                    data,
-                    multiindex=True,
-                    level_names=self.obj._data.level_names,
-                    label_dtype=self.obj._data.label_dtype,
-                    level_dtypes=self.obj._data.level_dtypes,
-                )
-            else:
-                # relabeling aggregations (``agg(new=(col, func))``) emit
-                # new flat labels: the source's multi-level metadata does
-                # not describe them
-                data = ColumnAccessor(
-                    data,
-                    multiindex=False,
-                    level_names=self.obj._data.level_names,
-                    label_dtype=self.obj._data.label_dtype,
-                )
+                # the MultiIndex columns and their per-level metadata.
+                # Relabeling aggregations (``agg(new=(col, func))``) emit
+                # new flat labels the source's multi-level metadata does
+                # not describe, so they keep the flat default.
+                mi_kwargs = {
+                    "multiindex": True,
+                    "level_dtypes": self.obj._data.level_dtypes,
+                }
+            data = ColumnAccessor(
+                data,
+                level_names=self.obj._data.level_names,
+                label_dtype=self.obj._data.label_dtype,
+                **mi_kwargs,
+            )
         else:
             data = ColumnAccessor(data, multiindex=multilevel)
         if not multilevel and len(data) > 0:
