@@ -32,6 +32,27 @@ using parquet::detail::input_column_info;
 using parquet::detail::row_group_info;
 
 /**
+ * @brief Checks whether column indexes are present for selected columns.
+ */
+[[nodiscard]] bool has_column_index(std::span<metadata_base const> file_metadatas,
+                                    std::span<std::vector<size_type> const> row_group_indices,
+                                    std::span<size_type const> schema_indices);
+
+/**
+ * @brief Checks whether offset indexes are present for selected columns.
+ */
+[[nodiscard]] bool has_offset_index(std::span<metadata_base const> file_metadatas,
+                                    std::span<std::vector<size_type> const> row_group_indices,
+                                    std::span<size_type const> schema_indices);
+
+/**
+ * @brief Checks whether column and offset indexes are present for selected columns.
+ */
+[[nodiscard]] bool has_page_index(std::span<metadata_base const> file_metadatas,
+                                  std::span<std::vector<size_type> const> row_group_indices,
+                                  std::span<size_type const> schema_indices);
+
+/**
  * @brief Class for parsing dataset metadata
  */
 struct metadata : public metadata_base {
@@ -286,6 +307,20 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
     std::span<cudf::size_type const> output_column_schemas,
     std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Builds a row mask with all rows set to true
+   *
+   * @param row_group_indices Input row groups indices
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned column's device memory
+   *
+   * @return A boolean column representing a mask of rows with all rows set to true
+   */
+  [[nodiscard]] std::unique_ptr<cudf::column> build_all_true_row_mask(
+    std::span<std::vector<size_type> const> row_group_indices,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
 
   /**
    * @brief Builds a row mask based on the data pages that survive page-level statistics based on

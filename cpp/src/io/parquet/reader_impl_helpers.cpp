@@ -57,16 +57,26 @@ std::size_t derive_pass_read_limit(std::size_t chunk_read_limit)
   return pass_read_limit;
 }
 
-size_type find_colchunk_iter_offset(RowGroup const& row_group, size_type schema_idx)
+bool find_colchunk_iter_offset(RowGroup const& row_group,
+                               size_type schema_idx,
+                               std::optional<size_type>& cached_offset)
 {
+  if (cached_offset.has_value() and
+      std::cmp_less(cached_offset.value(), row_group.columns.size()) and
+      row_group.columns[cached_offset.value()].schema_idx == schema_idx) {
+    return true;
+  }
+
   auto const& colchunk_iter =
     std::find_if(row_group.columns.begin(), row_group.columns.end(), [schema_idx](auto const& col) {
       return col.schema_idx == schema_idx;
     });
-  CUDF_EXPECTS(colchunk_iter != row_group.columns.end(),
-               std::format("Column chunk with schema index {} not found in row group", schema_idx),
-               std::invalid_argument);
-  return std::distance(row_group.columns.begin(), colchunk_iter);
+  if (colchunk_iter == row_group.columns.end()) {
+    cached_offset.reset();
+    return false;
+  }
+  cached_offset = std::distance(row_group.columns.begin(), colchunk_iter);
+  return true;
 }
 
 namespace flatbuf = cudf::io::parquet::flatbuf;
@@ -1228,7 +1238,11 @@ ColumnChunkMetaData const& aggregate_reader_metadata::get_column_metadata(size_t
   schema_idx = map_schema_index(schema_idx, src_idx);
 
   auto const& row_group = per_file_metadata[src_idx].row_groups[row_group_index];
-  return row_group.columns[find_colchunk_iter_offset(row_group, schema_idx)].meta_data;
+  std::optional<size_type> colchunk_offset;
+  CUDF_EXPECTS(find_colchunk_iter_offset(row_group, schema_idx, colchunk_offset),
+               std::format("Column chunk with schema index {} not found in row group", schema_idx),
+               std::invalid_argument);
+  return row_group.columns[colchunk_offset.value()].meta_data;
 }
 
 std::vector<std::unordered_map<std::string, int64_t>>
