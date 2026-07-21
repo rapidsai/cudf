@@ -13,13 +13,10 @@ include_guard(GLOBAL)
 # final library with metadata that allows it to be looked up at runtime.
 macro(add_fragment)
   set(TARGET ${ARGV0})
-  set(ONE_VALUE_ARGS FRAGMENT SOURCE KERNEL_ONLY KERNEL_INSTANCE UDF_TYPE LINK_CUDF_DEPS)
+  set(OPTIONS LINK_CUDF_DEPS)
+  set(ONE_VALUE_ARGS FRAGMENT SOURCE KERNEL_ONLY KERNEL_INSTANCE UDF_TYPE)
   set(MULTI_VALUE_ARGS DEFINITIONS ARRAY_IDS ARRAY_VALUES INCLUDE_DIRS)
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
-
-  if(NOT DEFINED ARG_LINK_CUDF_DEPS)
-    set(ARG_LINK_CUDF_DEPS ON)
-  endif()
 
   if(NOT ARG_FRAGMENT)
     message(FATAL_ERROR "add_fragment requires FRAGMENT argument")
@@ -76,7 +73,7 @@ macro(add_fragment)
                CUDA_VISIBILITY_PRESET hidden
   )
 
-  if(ARG_LINK_CUDF_DEPS)
+  if(DEFINED ARG_LINK_CUDF_DEPS AND ARG_LINK_CUDF_DEPS)
     target_link_libraries(
       ${OBJECT_ID}
       PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm
@@ -84,13 +81,13 @@ macro(add_fragment)
       PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> $<BUILD_LOCAL_INTERFACE:cuco::cuco>
               ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio nanoarrow::nanoarrow zstd
     )
-  endif()
 
-  target_include_directories(
-    ${OBJECT_ID} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
-                         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
-  )
-  target_compile_options(${OBJECT_ID} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
+    target_include_directories(
+      ${OBJECT_ID} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
+                           "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+    )
+    target_compile_options(${OBJECT_ID} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
+  endif()
 
   rtcx_embed_blob(
     ${TARGET} FILE $<TARGET_OBJECTS:${OBJECT_ID}> DEST fragments/${ARG_FRAGMENT}.fatbin ID
