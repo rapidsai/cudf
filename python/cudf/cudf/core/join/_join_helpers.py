@@ -91,6 +91,7 @@ def _match_join_keys(
     # matching the behavior when both sides are non-empty.
     if (
         how == "outer"
+        and ltype != rtype
         and not isinstance(
             ltype, (Decimal32Dtype, Decimal64Dtype, Decimal128Dtype)
         )

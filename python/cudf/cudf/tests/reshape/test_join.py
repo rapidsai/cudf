@@ -568,6 +568,22 @@ def test_outer_merge_dtype_preserved_with_empty_side(empty_side):
     assert_join_results_equal(expect, got, how="outer")
 
 
+def test_outer_merge_both_sides_empty_dtype():
+    # https://github.com/rapidsai/cudf/issues/9981
+    # With BOTH sides empty the one-empty-side shortcut does not apply;
+    # pandas keeps the left (object) dtype for the combined key, and so
+    # should cudf via the empty-key dtype restore.
+    lhs = pd.DataFrame(columns=["a"])
+    rhs = pd.DataFrame({"a": pd.Series([], dtype="int64")})
+    glhs, grhs = cudf.from_pandas(lhs), cudf.from_pandas(rhs)
+
+    expect = lhs.merge(rhs, how="outer")
+    got = glhs.merge(grhs, how="outer")
+
+    assert expect["a"].dtype == got["a"].dtype
+    assert_join_results_equal(expect, got, how="outer")
+
+
 @pytest.mark.parametrize("empty_side", ["left", "right"])
 def test_outer_merge_datetime_resolution_preserved_with_empty_side(
     empty_side,
@@ -620,6 +636,56 @@ def test_outer_merge_categorical_preserved_with_empty_side(empty_side):
     got = glhs.merge(grhs, how="outer")
 
     assert isinstance(got["a"].dtype, cudf.CategoricalDtype)
+    assert_join_results_equal(expect, got, how="outer")
+
+
+@pytest.mark.parametrize("empty_side", ["left", "right"])
+def test_outer_merge_categorical_category_mismatch_with_empty_side(
+    empty_side,
+):
+    # https://github.com/rapidsai/cudf/issues/9981
+    # When the empty side's categories differ from the non-empty side's,
+    # pandas keeps the non-empty side's categorical dtype (categories and
+    # all); the shortcut adopts the non-empty side's dtype, matching that.
+    pdf_data = pd.DataFrame(
+        {"a": pd.Categorical(["x", "y"], categories=["x", "y"])}
+    )
+    pdf_empty = pd.DataFrame({"a": pd.Categorical([], categories=["y", "z"])})
+    lhs, rhs = (
+        (pdf_empty, pdf_data)
+        if empty_side == "left"
+        else (pdf_data, pdf_empty)
+    )
+    glhs, grhs = cudf.from_pandas(lhs), cudf.from_pandas(rhs)
+
+    expect = lhs.merge(rhs, how="outer")
+    got = glhs.merge(grhs, how="outer")
+
+    assert isinstance(got["a"].dtype, cudf.CategoricalDtype)
+    assert list(got["a"].dtype.categories.to_pandas()) == list(
+        expect["a"].dtype.categories
+    )
+    assert_join_results_equal(expect, got, how="outer")
+
+
+@pytest.mark.parametrize("empty_side", ["left", "right"])
+def test_outer_merge_int_vs_empty_categorical(empty_side):
+    # https://github.com/rapidsai/cudf/issues/9981
+    # A non-empty int64 key against an empty categorical key adopts the
+    # int64 dtype, matching pandas.
+    pdf_data = pd.DataFrame({"a": pd.Series([1, 2, 3], dtype="int64")})
+    pdf_empty = pd.DataFrame({"a": pd.Categorical([])})
+    lhs, rhs = (
+        (pdf_empty, pdf_data)
+        if empty_side == "left"
+        else (pdf_data, pdf_empty)
+    )
+    glhs, grhs = cudf.from_pandas(lhs), cudf.from_pandas(rhs)
+
+    expect = lhs.merge(rhs, how="outer")
+    got = glhs.merge(grhs, how="outer")
+
+    assert expect["a"].dtype == got["a"].dtype
     assert_join_results_equal(expect, got, how="outer")
 
 
