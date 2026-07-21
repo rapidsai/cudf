@@ -118,6 +118,8 @@ class Agg(Expr):
             )
         elif name in {"first", "last", "item", "first_non_null"}:
             req = None
+        elif name == "implode":
+            req = plc.aggregation.collect_list(plc.types.NullPolicy.INCLUDE)
         elif name == "mean":
             req = plc.aggregation.mean()
         elif name == "sum":
@@ -178,7 +180,15 @@ class Agg(Expr):
             op = partial(op, propagate_nans=options)
         elif name == "count":
             op = partial(op, include_nulls=options)
-        elif name in {"sum", "product", "first", "last", "item", "first_non_null"}:
+        elif name in {
+            "sum",
+            "product",
+            "first",
+            "last",
+            "item",
+            "first_non_null",
+            "implode",
+        }:
             pass
         else:
             raise NotImplementedError(
@@ -195,6 +205,7 @@ class Agg(Expr):
             "first",
             "first_non_null",
             "item",
+            "implode",
             "last",
             "mean",
             "m2",
@@ -375,6 +386,28 @@ class Agg(Expr):
             )
         return Column(
             plc_result,
+            name=column.name,
+            dtype=self.dtype,
+        )
+
+    def _implode(self, column: Column, stream: Stream) -> Column:
+        size_type = plc.DataType(plc.TypeId.INT32)
+        offsets = plc.filling.sequence(
+            2,
+            plc.Scalar.from_py(0, size_type, stream=stream),
+            plc.Scalar.from_py(column.size, size_type, stream=stream),
+            stream=stream,
+        )
+        return Column(
+            plc.Column(
+                self.dtype.plc_type,
+                1,
+                None,
+                None,
+                0,
+                0,
+                [offsets, column.obj],
+            ),
             name=column.name,
             dtype=self.dtype,
         )
