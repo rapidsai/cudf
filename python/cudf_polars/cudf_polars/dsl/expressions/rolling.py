@@ -1079,8 +1079,14 @@ class GroupedWindow(Expr):
         if cum_named := unary_window_ops["cum_sum"]:
             cum_reverse = []
             for ne in cum_named:
-                assert isinstance(ne.value, expr.UnaryFunction)
-                cum_reverse.append(bool(ne.value.options[0]))
+                v = ne.value
+                assert isinstance(v, expr.UnaryFunction)
+                if v.name == "fill_null_with_strategy":
+                    cum_sum_expr = v.children[0]
+                    assert isinstance(cum_sum_expr, expr.UnaryFunction)
+                    cum_reverse.append(bool(cum_sum_expr.options[0]))
+                else:
+                    cum_reverse.append(bool(v.options[0]))
             for is_reverse in (False, True):
                 subset = [
                     ne
