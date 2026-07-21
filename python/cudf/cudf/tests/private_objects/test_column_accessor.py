@@ -408,7 +408,9 @@ def test_to_pandas_index_restores_int_level_with_missing_entries():
         codes=[[0, 1], [0, -1]],
     )
     gdf = cudf.DataFrame([[1, 2]], columns=pmi)
-    result = gdf._data.to_pandas_index
+    # a fresh .copy() carries no primed cache, so to_pandas_index must
+    # rebuild from the tuple labels and restore the recorded level dtype
+    result = gdf._data.copy().to_pandas_index
     assert result.levels[1].dtype == pmi.levels[1].dtype
     pd.testing.assert_index_equal(result, pmi, exact=True)
 
@@ -423,3 +425,30 @@ def test_getitem_nan_label_any_nan_object():
     assert_eq(ca[fresh_nan], ca[np.nan])
     with pytest.raises(KeyError):
         ca["missing"]
+
+
+@pytest.mark.parametrize(
+    "nan", [np.float16("nan"), np.float32("nan"), np.float64("nan")]
+)
+def test_getitem_nan_label_numpy_floating(nan):
+    # NumPy floating NaNs (only np.float64 subclasses python float) must
+    # canonicalize like python floats, on both sides of the lookup
+    ca = ColumnAccessor(
+        {("a", nan): as_column([1]), ("b", "x"): as_column([2])},
+        multiindex=True,
+    )
+    assert_eq(ca[("a", float("nan"))], ca[("a", nan)])
+    assert_eq(ca[("a", np.nan)], ca[("a", nan)])
+
+
+def test_getitem_nan_label_skips_ambiguous_pd_na_label():
+    # comparing against a pd.NA label yields pd.NA, whose truthiness
+    # raises; the NaN retry must treat that as a non-match and still find
+    # the genuine NaN label further on
+    ca = ColumnAccessor(
+        {("a", pd.NA): as_column([1]), ("a", np.nan): as_column([2])},
+        multiindex=True,
+    )
+    assert_eq(ca[("a", float("nan"))], ca[("a", np.nan)])
+    with pytest.raises(KeyError):
+        ca[("b", float("nan"))]

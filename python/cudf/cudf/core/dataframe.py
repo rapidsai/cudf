@@ -855,11 +855,8 @@ def _array_to_column_accessor(
         label_dtype=columns_labels.dtype,
         level_names=tuple(columns_labels.names),
         level_dtypes=_pd_index_level_dtypes(columns_labels),
+        pandas_index=columns_labels,
     )
-    if isinstance(columns_labels, pd.MultiIndex):
-        # prime the cache with the exact source MultiIndex (rebuilding from
-        # tuples would re-sort the levels)
-        ca.to_pandas_index = columns_labels
     return ca
 
 
@@ -1290,11 +1287,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 level_names=tuple(columns.names),
                 label_dtype=columns.dtype,
                 level_dtypes=_pd_index_level_dtypes(columns),
+                pandas_index=columns,
             )
-            if isinstance(columns, pd.MultiIndex):
-                # prime the cache with the exact source MultiIndex
-                # (rebuilding from tuples would re-sort the levels)
-                col_accessor.to_pandas_index = columns
         elif isinstance(data, Mapping):
             # Note: We excluded ColumnAccessor already above
             result = _mapping_to_column_accessor(
@@ -1369,16 +1363,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         final_pd_columns = (
             second_columns if second_columns is not None else columns
         )
-        if (
-            self._data.multiindex
-            and isinstance(final_pd_columns, pd.MultiIndex)
-            and len(self._data) == len(final_pd_columns)
-        ):
-            # prime the cache with the exact source MultiIndex: rebuilding
-            # from tuples would re-sort the levels, losing e.g. an explicit
-            # unsorted level layout (level order affects pandas operations
-            # that work on codes, like legacy stack's sort)
-            self._data.to_pandas_index = final_pd_columns
+        if isinstance(final_pd_columns, pd.Index):
+            self._data._prime_to_pandas_index(final_pd_columns)
 
     @classmethod
     def _from_data(  # type: ignore[override]
@@ -3319,13 +3305,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             rangeindex=rangeindex,
             level_dtypes=level_dtypes,
             verify=False,
+            pandas_index=pd_columns,
         )
-        if multiindex:
-            # prime the cache with the exact source MultiIndex: rebuilding
-            # from tuples would re-sort the levels, losing e.g. an explicit
-            # unsorted level layout (levels order affects pandas operations
-            # that work on codes, like legacy stack's sort)
-            self._data.to_pandas_index = pd_columns
 
     def _set_columns_like(self, other: ColumnAccessor) -> None:
         """
