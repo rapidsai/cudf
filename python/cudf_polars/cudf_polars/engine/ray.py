@@ -794,15 +794,11 @@ class RayEngine(StreamingEngine):
         quent_context: QuentContext | None = executor_options.get("quent_context")
         if quent_context is not None:
             self._quent_logger = cudf_polars.quent._logging.QuentLogger()
-        else:
-            self._quent_logger = None
-
-        if quent_context is not None:
             executor_options.setdefault("quent_context", quent_context)
-            assert self._quent_logger is not None
             quent_context._emit_engine_init_events(self._quent_logger)
             engine = quent_context.engine
         else:
+            self._quent_logger = None
             engine = cudf_polars.quent.Engine(id=uuid.uuid4())
 
         # This engine's store uid, used to key its partitions in each actor's process rank-local store.
