@@ -41,13 +41,13 @@ so plain `rm -rf` works.
 ```
 
 This compiles the JNI layer against the static libcudf from Step 1 and emits a
-single classifier JAR (e.g. `cudf-26.08.0-SNAPSHOT-cuda12.jar`) plus its POM
+single classifier JAR (e.g. `cudf-26.10.0-SNAPSHOT-cuda12.jar`) plus its POM
 into a classifier-named subdirectory under `--output-dir`:
 
 ```
 /tmp/jars/cuda12/
-    cudf-26.08.0-SNAPSHOT-cuda12.jar
-    cudf-26.08.0-SNAPSHOT.pom
+    cudf-26.10.0-SNAPSHOT-cuda12.jar
+    cudf-26.10.0-SNAPSHOT.pom
 ```
 
 The classifier is derived from `--cuda-version` (major) + host arch (`uname
@@ -73,10 +73,10 @@ artifact version from the JAR filenames (requiring a single unique version
 across subdirs), and lays them out as:
 
 ```
-/tmp/maven-repo/ai/rapids/cudf/26.08.0-SNAPSHOT/
-    cudf-26.08.0-SNAPSHOT-cuda12.jar
-    cudf-26.08.0-SNAPSHOT-cuda13.jar
-    cudf-26.08.0-SNAPSHOT.pom
+/tmp/maven-repo/ai/rapids/cudf/26.10.0-SNAPSHOT/
+    cudf-26.10.0-SNAPSHOT-cuda12.jar
+    cudf-26.10.0-SNAPSHOT-cuda13.jar
+    cudf-26.10.0-SNAPSHOT.pom
 ```
 
 The set of classifiers is whatever subdirectories are present under
