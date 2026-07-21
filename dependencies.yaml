@@ -1189,6 +1189,7 @@ dependencies:
         packages:
           - duckdb
           - pyarrow
+          - pytest>=9
           - tpchgen-cli>=3.0.0
   test_python_narwhals:
     common:
