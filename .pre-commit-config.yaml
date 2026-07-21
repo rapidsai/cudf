@@ -7,7 +7,9 @@ ci:
   autoupdate_branch: ""
   autoupdate_commit_msg: "[pre-commit.ci] pre-commit autoupdate"
   autoupdate_schedule: quarterly
-  skip: ["mypy", "verify-alpha-spec"]
+  # Both lychee hooks use an installer that calls Git from pre-commit.ci's
+  # differently owned cache clone.
+  skip: ["mypy", "verify-alpha-spec", "lychee"]
   submodules: false
 
 # Agent skill artifacts are validated and signed by the NVIDIA skills pipeline.
