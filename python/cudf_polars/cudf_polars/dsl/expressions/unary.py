@@ -505,6 +505,7 @@ class UnaryFunction(Expr):
             )
         if self.name == "hash":
             column = self.children[0].evaluate(df, context=context)
+            # Ensure seed is positive for xxhash_64 by returning the unsigned two's complement of hash
             seed = hash(tuple(self.options)) & 0xFFFFFFFFFFFFFFFF
             return Column(
                 plc.hashing.xxhash_64(plc.Table([column.obj]), seed, stream=df.stream),
