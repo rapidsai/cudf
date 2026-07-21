@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -32,7 +32,7 @@ namespace detail {
  *
  * Unless otherwise noted, the memory layout of the `column_view_base`'s data
  *and bitmask is expected to adhere to the Arrow Physical Memory Layout
- * Specification: https://arrow.apache.org/docs/memory_layout.html
+ * Specification: https://arrow.apache.org/docs/format/Columnar.html#format-columnar
  *
  * Because `column_view_base` is non-owning, no device memory is allocated nor
  *freed when `column_view_base` objects are created or destroyed.
@@ -306,7 +306,7 @@ class column_view_base {
  *
  * Unless otherwise noted, the memory layout of the `column_view`'s data and
  * bitmask is expected to adhere to the Arrow Physical Memory Layout
- * Specification: https://arrow.apache.org/docs/memory_layout.html
+ * Specification: https://arrow.apache.org/docs/format/Columnar.html#format-columnar
  *
  * Because `column_view` is non-owning, no device memory is allocated nor freed
  * when `column_view` objects are created or destroyed.
@@ -482,7 +482,7 @@ class column_view : public detail::column_view_base {
  *
  * Unless otherwise noted, the memory layout of the `mutable_column_view`'s data
  * and bitmask is expected to adhere to the Arrow Physical Memory Layout
- * Specification: https://arrow.apache.org/docs/memory_layout.html
+ * Specification: https://arrow.apache.org/docs/format/Columnar.html#format-columnar
  *
  * Because `mutable_column_view` is non-owning, no device memory is allocated
  * nor freed when `mutable_column_view` objects are created or destroyed.

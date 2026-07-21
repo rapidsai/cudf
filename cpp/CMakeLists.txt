@@ -703,6 +703,7 @@ add_library(
   src/groupby/sort/host_udf_aggregation.cpp
   src/groupby/sort/scan.cpp
   src/groupby/sort/sort_helper.cu
+  src/groupby/sort/sort_helper_nested.cu
   src/groupby/streaming_groupby.cpp
   src/groupby/streaming_groupby/aggregate.cu
   src/groupby/streaming_groupby/impl.cu
@@ -841,6 +842,7 @@ add_library(
   src/jit/util.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
+  src/join/direct_join.cu
   src/join/distinct_hash_join.cu
   src/join/filter_join_indices/filter_join_indices.cu
   src/join/filter_join_indices/filter_join_indices_jit.cu
@@ -989,8 +991,6 @@ add_library(
   src/search/contains_scalar.cu
   src/search/contains_table.cu
   src/search/contains_table_impl.cu
-  src/search/contains_table_impl_nested.cu
-  src/search/contains_table_impl_primitive.cu
   src/search/search_ordered.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
@@ -1045,6 +1045,8 @@ add_library(
   src/strings/merge/merge.cu
   src/strings/padding.cu
   src/strings/positions.cu
+  src/strings/regex/gkexec.cpp
+  src/strings/regex/glushkov_regcomp.cpp
   src/strings/regex/regcomp.cpp
   src/strings/regex/regexec.cpp
   src/strings/regex/regex_program.cpp

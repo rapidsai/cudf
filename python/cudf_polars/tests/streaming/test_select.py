@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -21,8 +21,7 @@ from cudf_polars.streaming.select import _inline_hstack_false, _sub_expr
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
 )
-from cudf_polars.testing.engine_utils import is_streaming_engine, warns_on_spmd
-from cudf_polars.utils.versions import POLARS_VERSION_LT_141
+from cudf_polars.testing.engine_utils import warns_on_spmd
 
 
 @pytest.fixture
@@ -119,20 +118,8 @@ def test_select_fill_null_with_strategy(df, streaming_engine_factory):
         (pl.col("a").min(), pl.col("b"), pl.col("c").max()),
     ],
 )
-def test_select_aggs(df, engine, aggs, request):
+def test_select_aggs(df, engine, aggs):
     # Test supported aggs (e.g. "min", "max", "mean", "n_unique")
-    if (
-        not POLARS_VERSION_LT_141
-        and is_streaming_engine(engine)
-        and len(aggs) == 1
-        and "len()" in str(aggs[0])
-    ):
-        request.applymarker(
-            pytest.mark.xfail(
-                reason="len() row count lost in zero-column streaming chunks "
-                "(https://github.com/rapidsai/cudf/issues/21428)"
-            )
-        )
     query = df.select(*aggs)
     assert_gpu_result_equal(query, engine=engine)
 
@@ -193,13 +180,6 @@ def test_select_mean_with_decimals(engine):
     assert_gpu_result_equal(q, engine=engine)
 
 
-@pytest.mark.xfail(
-    condition=not POLARS_VERSION_LT_141,
-    reason=(
-        "len() row count lost in zero-column streaming chunks "
-        "(https://github.com/rapidsai/cudf/issues/21428)"
-    ),
-)
 def test_select_with_len(streaming_engine_factory):
     engine = streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=3, fallback_mode="warn"),
