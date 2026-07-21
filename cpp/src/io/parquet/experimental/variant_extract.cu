@@ -405,7 +405,9 @@ __device__ device_span<uint8_t const> locate_array_element(device_span<uint8_t c
   position += num_elements_size;
 
   size_type const offsets_start = position;
-  auto const offsets_bytes      = (static_cast<uint64_t>(num_elements) + 1) * offset_size;
+  // Computed in 64-bit because (num_elements + 1) * offset_size can exceed the signed `size_type`
+  // range (which would be UB); the check below then rejects any array that overruns the value blob.
+  auto const offsets_bytes = (static_cast<uint64_t>(num_elements) + 1) * offset_size;
   if (cuda::std::cmp_greater(offsets_bytes, value_size - offsets_start)) { return {}; }
   size_type const values_base = offsets_start + static_cast<size_type>(offsets_bytes);
   auto const values_extent    = value_size - values_base;
