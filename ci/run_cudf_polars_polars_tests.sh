@@ -62,11 +62,13 @@ DESELECTED_TESTS_STR=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
 # Don't quote the `DESELECTED_...` variable because `pytest` can't handle
 # multiple quoted arguments inline
 # shellcheck disable=SC2086
+# Fail fast (-x) because failed tests pollute the state
 echo "Run polars tests with injected in-memory GPU engine"
 python "${TIMEOUT_TOOL_PATH}" --enable-python 3600 \
    python -m pytest \
        --import-mode=importlib \
        --cache-clear \
+       -x \
        -m "" \
        -p cudf_polars.testing.inject_gpu_engine \
        -n 4 \
@@ -87,6 +89,7 @@ python "${TIMEOUT_TOOL_PATH}" --enable-python 3600 \
    python -m pytest \
        --import-mode=importlib \
        --cache-clear \
+       -x \
        -v \
        -m "" \
        -p cudf_polars.testing.inject_gpu_engine \
