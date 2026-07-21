@@ -87,12 +87,20 @@ def gen_rand_ufunc_input(ufunc, rng, size, low=1, high=10):
         "invert",
         "left_shift",
         "right_shift",
+        "gcd",
+        "lcm",
+        "ldexp",
+        "ceil",
+        "floor",
+        "trunc",
+        "fmod",
+        "remainder",
     ):
         return rng.integers(low=low, high=high, size=size)
     if name == "arccosh":
         return rng.uniform(low=0.9, high=10.0, size=size)
-    if name in ("log", "log2", "log10", "log1p", "sqrt"):
-        return rng.uniform(low=-0.1, high=10.0, size=size)
+    if name in ("log", "log2", "log10", "log1p", "sqrt", "float_power"):
+        return rng.uniform(low=0.0, high=10.0, size=size)
     return rng.uniform(low=-1.1, high=1.1, size=size)
 
 
