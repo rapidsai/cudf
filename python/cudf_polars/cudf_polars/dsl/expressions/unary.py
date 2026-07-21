@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any, ClassVar, TypeGuard, assert_never, cast
+from typing import TYPE_CHECKING, Any, ClassVar, TypeGuard, assert_never
 
 import polars as pl
 
@@ -14,8 +14,9 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
-from cudf_polars.dsl.expressions.literal import Literal
+from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
 from cudf_polars.utils import dtypes, sorting
+from cudf_polars.utils.versions import POLARS_VERSION_LT_136
 
 if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame
@@ -106,6 +107,7 @@ class UnaryFunction(Expr):
     }
     _supported_misc_fns = frozenset(
         {
+            "argwhere",
             "as_struct",
             "arg_max",
             "arg_min",
@@ -121,9 +123,12 @@ class UnaryFunction(Expr):
             "hist",
             "index_of",
             "mask_nans",
+            "mode",
             "null_count",
             "rank",
             "reinterpret",
+            "replace",
+            "replace_strict",
             "round",
             "round_sig_figs",
             "search_sorted",
@@ -131,6 +136,7 @@ class UnaryFunction(Expr):
             "shift",
             "shift_and_fill",
             "top_k",
+            "top_k_by",
             "truncate",
             "unique",
             "unique_counts",
@@ -168,6 +174,8 @@ class UnaryFunction(Expr):
             "fill_null_with_strategy",
             "mask_nans",
             "reinterpret",
+            "replace",
+            "replace_strict",
             "round",
             "round_sig_figs",
             "set_sorted",
@@ -206,11 +214,35 @@ class UnaryFunction(Expr):
                 )
             if bin_count is None:
                 raise NotImplementedError("hist without bin_count is not supported")
+        if self.name == "mode" and not POLARS_VERSION_LT_136:
+            (maintain_order,) = self.options
+            if maintain_order:
+                raise NotImplementedError(
+                    "mode with maintain_order=True is not yet supported"
+                )
         if self.name == "rank":
             method, _, _ = self.options
             if method not in {"average", "min", "max", "dense", "ordinal"}:
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
+                )
+        if self.name == "replace" and not all(
+            isinstance(child, (Literal, LiteralColumn)) for child in self.children[1:]
+        ):
+            raise NotImplementedError(
+                "replace only supports literal old and new values"
+            )
+        if self.name == "replace_strict":
+            if len(self.children) != 4:
+                raise NotImplementedError(
+                    "replace_strict only supports an explicit default"
+                )
+            if not all(
+                isinstance(child, (Literal, LiteralColumn))
+                for child in self.children[1:]
+            ):
+                raise NotImplementedError(
+                    "replace_strict only supports literal old, new, and default values"
                 )
         if self.name == "reinterpret":
             source = children[0].dtype.plc_type
@@ -222,6 +254,12 @@ class UnaryFunction(Expr):
                     "reinterpret between integer and floating-point types is not "
                     "supported"
                 )
+        if self.name == "top_k_by":
+            if len(self.children) != 3:
+                raise NotImplementedError(
+                    "top_k_by only supports a single by expression"
+                )
+            self.options = (tuple(self.options[0]),)
 
     @staticmethod
     def _bound_clip_operand(
@@ -250,6 +288,105 @@ class UnaryFunction(Expr):
         """Whether a ``clip`` bound can use the scalar ``clamp`` fast path."""
         return operand is None or isinstance(operand, plc.Scalar)
 
+    @staticmethod
+    def _cast_replace_operand(
+        column: Column, out_type: DataType, df: DataFrame
+    ) -> Column:
+        """Cast a ``replace`` operand, mapping an all-null operand onto ``out_type``."""
+        if column.obj.type().id() == plc.TypeId.EMPTY:
+            return Column(
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(None, out_type.plc_type, stream=df.stream),
+                    column.size,
+                    stream=df.stream,
+                ),
+                dtype=out_type,
+            )
+        return column.astype(out_type, stream=df.stream)
+
+    def _replace(
+        self, column: Column, old: Column, new: Column, df: DataFrame
+    ) -> Column:
+        """Evaluate a non-strict ``replace``, filling matched nulls separately."""
+        if old.obj.null_count() == 0:
+            return Column(
+                plc.replace.find_and_replace_all(
+                    column.obj, old.obj, new.obj, stream=df.stream
+                ),
+                dtype=self.dtype,
+            )
+        result = column.obj
+        if old.obj.null_count() != old.size:
+            nonnull_old, nonnull_new = plc.stream_compaction.apply_boolean_mask(
+                plc.Table([old.obj, new.obj]),
+                plc.unary.is_valid(old.obj, stream=df.stream),
+                stream=df.stream,
+            ).columns()
+            result = plc.replace.find_and_replace_all(
+                result, nonnull_old, nonnull_new, stream=df.stream
+            )
+        null_new = plc.stream_compaction.apply_boolean_mask(
+            plc.Table([new.obj]),
+            plc.unary.is_null(old.obj, stream=df.stream),
+            stream=df.stream,
+        ).columns()[0]
+        return Column(
+            plc.copying.copy_if_else(
+                plc.copying.get_element(null_new, 0, stream=df.stream),
+                result,
+                plc.unary.is_null(column.obj, stream=df.stream),
+                stream=df.stream,
+            ),
+            dtype=self.dtype,
+        )
+
+    def _replace_strict(
+        self, column: Column, old: Column, new: Column, default: Column, df: DataFrame
+    ) -> Column:
+        """Evaluate a strict ``replace_strict`` via a left join onto the mapping."""
+        distinct = plc.stream_compaction.distinct_indices(
+            plc.Table([old.obj]),
+            plc.stream_compaction.DuplicateKeepOption.KEEP_ANY,
+            plc.types.NullEquality.EQUAL,
+            plc.types.NanEquality.ALL_EQUAL,
+            stream=df.stream,
+        )
+        if distinct.size() != old.size:
+            raise pl.exceptions.InvalidOperationError(
+                "`old` input for `replace` must not contain duplicates"
+            )
+        left_map, right_map = plc.join.left_join(
+            plc.Table([column.obj]),
+            plc.Table([old.obj]),
+            plc.types.NullEquality.EQUAL,
+            stream=df.stream,
+        )
+        mapped = plc.copying.gather(
+            plc.Table([new.obj]),
+            right_map,
+            plc.copying.OutOfBoundsPolicy.NULLIFY,
+            stream=df.stream,
+        ).columns()[0]
+        matched = plc.binaryop.binary_operation(
+            right_map,
+            plc.Scalar.from_py(0, right_map.type(), stream=df.stream),
+            plc.binaryop.BinaryOperator.GREATER_EQUAL,
+            plc.DataType(plc.TypeId.BOOL8),
+            stream=df.stream,
+        )
+        joined = plc.copying.copy_if_else(
+            mapped,
+            default.obj_scalar(stream=df.stream),
+            matched,
+            stream=df.stream,
+        )
+        return Column(
+            plc.copying.scatter(
+                plc.Table([joined]), left_map, plc.Table([joined]), stream=df.stream
+            ).columns()[0],
+            dtype=self.dtype,
+        )
+
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
@@ -257,6 +394,38 @@ class UnaryFunction(Expr):
         if self.name == "mask_nans":
             (child,) = self.children
             return child.evaluate(df, context=context).mask_nans(stream=df.stream)
+        if self.name in {"replace", "replace_strict"}:
+            column, old, new = (
+                child.evaluate(df, context=context) for child in self.children[:3]
+            )
+            is_strict = self.name == "replace_strict"
+            old_polars = old.dtype.polars_type
+            old_label = getattr(old_polars, "inner", old_polars)._string_repr()
+            try:
+                old = self._cast_replace_operand(old, column.dtype, df)
+            except pl.exceptions.InvalidOperationError:
+                raise pl.exceptions.InvalidOperationError(
+                    f"conversion from `{old_label}` to "
+                    f"`{column.dtype.polars_type._string_repr()}` failed"
+                ) from None
+            new = self._cast_replace_operand(new, self.dtype, df)
+            if old.size != new.size:
+                if new.size != 1:
+                    raise pl.exceptions.InvalidOperationError(
+                        f"`new` input for `{self.name}` must have the same length as `old` or have length 1"
+                    )
+                new = Column(
+                    plc.Column.from_scalar(
+                        new.obj_scalar(stream=df.stream), old.size, stream=df.stream
+                    ),
+                    dtype=self.dtype,
+                )
+            if is_strict:
+                default = self._cast_replace_operand(
+                    self.children[3].evaluate(df, context=context), self.dtype, df
+                )
+                return self._replace_strict(column, old, new, default, df)
+            return self._replace(column, old, new, df)
         if self.name in ("arg_max", "arg_min"):
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             arg_agg = (
@@ -303,6 +472,20 @@ class UnaryFunction(Expr):
             )
             return Column(indices, dtype=DataType(pl.Int32())).astype(
                 self.dtype, stream=df.stream
+            )
+        if self.name == "argwhere":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            indices = plc.filling.sequence(
+                column.size,
+                plc.Scalar.from_py(0, self.dtype.plc_type, stream=df.stream),
+                plc.Scalar.from_py(1, self.dtype.plc_type, stream=df.stream),
+                stream=df.stream,
+            )
+            return Column(
+                plc.stream_compaction.apply_boolean_mask(
+                    plc.Table([indices]), column.obj, stream=df.stream
+                ).columns()[0],
+                dtype=self.dtype,
             )
         if self.name == "null_count":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
@@ -397,6 +580,45 @@ class UnaryFunction(Expr):
                     plc.Table(
                         [plc.Column.from_scalar(zero, bin_count, stream=df.stream)]
                     ),
+                    stream=df.stream,
+                ).columns()[0],
+                dtype=self.dtype,
+            )
+        if self.name == "mode":
+            (values,) = (child.evaluate(df, context=context) for child in self.children)
+            (keys_table, (counts_table,)) = plc.groupby.GroupBy(
+                plc.Table([values.obj]), null_handling=plc.types.NullPolicy.INCLUDE
+            ).aggregate(
+                [
+                    plc.groupby.GroupByRequest(
+                        values.obj,
+                        [plc.aggregation.count(plc.types.NullPolicy.INCLUDE)],
+                    )
+                ],
+                stream=df.stream,
+            )
+            counts_col = counts_table.columns()[0]
+            max_count = plc.reduce.reduce(
+                counts_col,
+                plc.aggregation.max(),
+                counts_col.type(),
+                stream=df.stream,
+            )
+            mask = plc.binaryop.binary_operation(
+                counts_col,
+                max_count,
+                plc.binaryop.BinaryOperator.EQUAL,
+                plc.DataType(plc.TypeId.BOOL8),
+                stream=df.stream,
+            )
+            modes = plc.stream_compaction.apply_boolean_mask(
+                keys_table, mask, stream=df.stream
+            )
+            return Column(
+                plc.sorting.sort(
+                    modes,
+                    [plc.types.Order.ASCENDING],
+                    [plc.types.NullOrder.BEFORE],
                     stream=df.stream,
                 ).columns()[0],
                 dtype=self.dtype,
@@ -941,19 +1163,56 @@ class UnaryFunction(Expr):
 
             return Column(ranked, dtype=self.dtype)
         elif self.name == "top_k":
-            (column, _k) = (
-                child.evaluate(df, context=context) for child in self.children
-            )
+            column = self.children[0].evaluate(df, context=context)
             (reverse,) = self.options
+            k_expr = self.children[1]
+            if isinstance(k_expr, Literal):
+                k = k_expr.value
+            else:
+                k = (
+                    k_expr.evaluate(df, context=context)
+                    .obj_scalar(stream=df.stream)
+                    .to_py(stream=df.stream)
+                )
             return Column(
                 plc.sorting.top_k(
                     column.obj,
-                    cast("Literal", self.children[1]).value,
+                    k,
                     plc.types.Order.ASCENDING
                     if reverse
                     else plc.types.Order.DESCENDING,
                     stream=df.stream,
                 ),
+                dtype=self.dtype,
+            )
+        elif self.name == "top_k_by":
+            col_value = self.children[0].evaluate(df, context=context)
+            by = self.children[2].evaluate(df, context=context)
+            (descending,) = self.options
+            k_expr = self.children[1]
+            if isinstance(k_expr, Literal):
+                k = k_expr.value
+            else:
+                k = (
+                    k_expr.evaluate(df, context=context)
+                    .obj_scalar(stream=df.stream)
+                    .to_py(stream=df.stream)
+                )
+            indices = plc.sorting.top_k_order(
+                by.obj,
+                k,
+                plc.types.Order.ASCENDING
+                if descending[0]
+                else plc.types.Order.DESCENDING,
+                stream=df.stream,
+            )
+            return Column(
+                plc.copying.gather(
+                    plc.Table([col_value.obj]),
+                    indices,
+                    plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+                    stream=df.stream,
+                ).columns()[0],
                 dtype=self.dtype,
             )
         elif self.name in ("shift", "shift_and_fill"):
