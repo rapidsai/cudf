@@ -265,18 +265,11 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   }
 
   // launch dict-index-as-int32 decoder for flat columns
+  // TODO: extend the Parquet-dict → DICTIONARY32 transcode to nested and list string columns by
+  // adding DICT_INT32_NESTED / DICT_INT32_LIST launches here. Only flat string columns are
+  // transcoded today; nested/list columns fall back to the normal decode path.
   if (BitAnd(kernel_mask, decode_kernel_mask::DICT_INT32) != 0) {
     decode_data(decode_kernel_mask::DICT_INT32);
-  }
-
-  // launch dict-index-as-int32 decoder for nested columns
-  if (BitAnd(kernel_mask, decode_kernel_mask::DICT_INT32_NESTED) != 0) {
-    decode_data(decode_kernel_mask::DICT_INT32_NESTED);
-  }
-
-  // launch dict-index-as-int32 decoder for list columns
-  if (BitAnd(kernel_mask, decode_kernel_mask::DICT_INT32_LIST) != 0) {
-    decode_data(decode_kernel_mask::DICT_INT32_LIST);
   }
 
   // launch delta byte array decoder
@@ -681,7 +674,6 @@ void reader_impl::preprocess_chunk_strings(read_mode mode, row_range const& read
 
 table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
 {
-  // TODO: Having local views instead of offsets for the segments/
   CUDF_FUNC_RANGE();
 
   // If `_output_metadata` has been constructed, just copy it over.
@@ -956,14 +948,9 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
 
   apply_decimal_width_cast(out_columns);
 
-  // When the user requested DICTIONARY32 output for flat string columns, the direct transcode
-  // fast path in `prepare_dict_transcode`/`assemble_dict_transcoded_columns` has already
-  // assembled DICTIONARY32 columns for all *eligible* flat STRING columns (i.e. those whose
-  // chunks were fully dictionary-encoded). For columns that were *not* eligible (e.g. chunks
-  // with mixed or non-dictionary encodings, nested schemas, or columns added as empty columns
-  // above), fall back to a post-hoc `dictionary::detail::encode` so the user still gets a
-  // DICTIONARY32 column from every flat string column in the output table.
   if (_options.output_dict_columns) {
+    // For columns that were not eligible for the direct transcode fast path, fall back to a
+    // post-hoc `dictionary::detail::encode`.
     for (auto& col : out_columns) {
       if (col and col->type().id() == type_id::STRING) {
         col =

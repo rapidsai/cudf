@@ -980,9 +980,7 @@ CUDF_HOST_DEVICE constexpr bool has_dict()
          (kernel_mask_t == decode_kernel_mask::STRING_DICT) ||
          (kernel_mask_t == decode_kernel_mask::STRING_DICT_NESTED) ||
          (kernel_mask_t == decode_kernel_mask::STRING_DICT_LIST) ||
-         (kernel_mask_t == decode_kernel_mask::DICT_INT32) ||
-         (kernel_mask_t == decode_kernel_mask::DICT_INT32_NESTED) ||
-         (kernel_mask_t == decode_kernel_mask::DICT_INT32_LIST);
+         (kernel_mask_t == decode_kernel_mask::DICT_INT32);
 }
 
 /**
@@ -993,14 +991,12 @@ CUDF_HOST_DEVICE constexpr bool has_dict()
  * INT32 indices child of a DICTIONARY32 column rather than fully materialized values.
  *
  * @tparam kernel_mask_t The decode kernel mask to test
- * @return True for the DICT_INT32, DICT_INT32_NESTED and DICT_INT32_LIST masks
+ * @return True for the DICT_INT32 mask
  */
 template <decode_kernel_mask kernel_mask_t>
 CUDF_HOST_DEVICE constexpr bool is_dict_int32_output()
 {
-  return (kernel_mask_t == decode_kernel_mask::DICT_INT32) ||
-         (kernel_mask_t == decode_kernel_mask::DICT_INT32_NESTED) ||
-         (kernel_mask_t == decode_kernel_mask::DICT_INT32_LIST);
+  return (kernel_mask_t == decode_kernel_mask::DICT_INT32);
 }
 
 template <decode_kernel_mask kernel_mask_t>
@@ -1026,8 +1022,7 @@ CUDF_HOST_DEVICE constexpr bool has_nesting()
          (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED) ||
          (kernel_mask_t == decode_kernel_mask::STRING_NESTED) ||
          (kernel_mask_t == decode_kernel_mask::STRING_DICT_NESTED) ||
-         (kernel_mask_t == decode_kernel_mask::STRING_STREAM_SPLIT_NESTED) ||
-         (kernel_mask_t == decode_kernel_mask::DICT_INT32_NESTED);
+         (kernel_mask_t == decode_kernel_mask::STRING_STREAM_SPLIT_NESTED);
 }
 
 /**
@@ -1045,8 +1040,7 @@ CUDF_HOST_DEVICE constexpr bool has_lists()
          (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST) ||
          (kernel_mask_t == decode_kernel_mask::STRING_LIST) ||
          (kernel_mask_t == decode_kernel_mask::STRING_DICT_LIST) ||
-         (kernel_mask_t == decode_kernel_mask::STRING_STREAM_SPLIT_LIST) ||
-         (kernel_mask_t == decode_kernel_mask::DICT_INT32_LIST);
+         (kernel_mask_t == decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
 }
 
 template <decode_kernel_mask kernel_mask_t>
@@ -1492,12 +1486,6 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
       break;
     case decode_kernel_mask::DICT_INT32:
       launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::DICT_INT32>{});
-      break;
-    case decode_kernel_mask::DICT_INT32_NESTED:
-      launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::DICT_INT32_NESTED>{});
-      break;
-    case decode_kernel_mask::DICT_INT32_LIST:
-      launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::DICT_INT32_LIST>{});
       break;
     default: CUDF_EXPECTS(false, "Kernel type not handled by this function"); break;
   }

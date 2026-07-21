@@ -225,8 +225,9 @@ enum class decode_kernel_mask {
     (1 << 24),  // Run decode kernel for nested BYTE_STREAM_SPLIT string data
   STRING_STREAM_SPLIT_LIST = (1 << 25),  // Run decode kernel for list BYTE_STREAM_SPLIT string data
   DICT_INT32               = (1 << 26),  // Run decode kernel for dict string → INT32 indices
-  DICT_INT32_NESTED        = (1 << 27),  // Run decode kernel for nested dict string → INT32 indices
-  DICT_INT32_LIST          = (1 << 28),  // Run decode kernel for list dict string → INT32 indices
+  // TODO: add DICT_INT32_NESTED (1 << 27) and DICT_INT32_LIST (1 << 28) to extend the Parquet-dict
+  // → DICTIONARY32 transcode fast path to nested and list string columns. Only flat string columns
+  // are supported today (see compute_dict_transcode_eligibility / prepare_dict_transcode).
 };
 
 constexpr uint32_t STRINGS_MASK_NON_DELTA = BitOr(decode_kernel_mask::STRING,
