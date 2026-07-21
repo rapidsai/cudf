@@ -180,6 +180,43 @@ void hybrid_scan_reader_impl::setup_compressed_data(
 
   auto& chunks = pass.chunks;
 
+  if (_sparse_page_io) {
+    CUDF_EXPECTS(_has_page_index, "Sparse page I/O requires complete page indexes");
+    CUDF_EXPECTS(_sparse_resident_bytes_per_chunk.size() == chunks.size(),
+                 "Sparse resident-byte accounting does not match the logical chunks");
+    CUDF_EXPECTS(_sparse_dictionary_present_per_chunk.size() == chunks.size(),
+                 "Sparse dictionary mapping does not match the logical chunks");
+    pass.has_compressed_data = false;
+    for (std::size_t chunk_idx = 0; chunk_idx < chunks.size(); ++chunk_idx) {
+      auto& chunk           = chunks[chunk_idx];
+      chunk.compressed_data = nullptr;
+      chunk.compressed_size = _sparse_resident_bytes_per_chunk[chunk_idx];
+      pass.has_compressed_data |=
+        chunk.codec != Compression::UNCOMPRESSED and chunk.compressed_size > 0;
+    }
+
+    auto const indexed_total_pages = count_page_headers_with_pgidx(chunks, _stream);
+    auto total_pages               = std::size_t{0};
+    for (std::size_t chunk_idx = 0; chunk_idx < chunks.size(); ++chunk_idx) {
+      chunks[chunk_idx].num_dict_pages = _sparse_dictionary_present_per_chunk[chunk_idx] ? 1 : 0;
+      total_pages += chunks[chunk_idx].num_data_pages + chunks[chunk_idx].num_dict_pages;
+    }
+    CUDF_EXPECTS(total_pages <= indexed_total_pages,
+                 "Sparse dictionary mapping exceeds page-index metadata");
+    chunks.host_to_device_async(_stream);
+    CUDF_EXPECTS(total_pages == _sparse_page_spans.size(),
+                 "Sparse page span count does not match page-index metadata");
+    if (total_pages <= 0) { return; }
+    // `decode_page_headers` may not write every byte of each PageInfo, and `sort_pages` copies
+    // PageInfo as whole objects.
+    auto unsorted_pages = cudf::detail::make_zeroed_device_uvector_async<PageInfo>(
+      total_pages, _stream, cudf::get_current_device_resource_ref());
+    parquet::detail::decode_page_headers(pass, unsorted_pages, _sparse_page_spans, _stream);
+    CUDF_EXPECTS(pass.page_offsets.size() - 1 == static_cast<size_t>(_input_columns.size()),
+                 "Encountered page_offsets / num_columns mismatch");
+    return;
+  }
+
   pass.has_compressed_data = setup_column_chunks(column_chunk_data);
 
   // Process dataset chunk pages into output columns
