@@ -208,7 +208,6 @@ def test_boolean_horizontal(engine: pl.GPUEngine, expr, has_nulls, wide):
     [
         pytest.param(
             pl.col("a").is_in(pl.col("b").implode()),
-            marks=pytest.mark.xfail(reason="Need to support implode agg"),
             id="implode",
         ),
         pytest.param(pl.col("a").is_in([1, 2, 3]), id="list_small"),

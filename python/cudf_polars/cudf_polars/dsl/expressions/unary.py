@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any, ClassVar, TypeGuard, assert_never, cast
+from typing import TYPE_CHECKING, Any, ClassVar, TypeGuard, assert_never
 
 import polars as pl
 
@@ -17,6 +17,7 @@ from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.utils import dtypes, sorting
+from cudf_polars.utils.versions import POLARS_VERSION_LT_136
 
 if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame
@@ -122,6 +123,7 @@ class UnaryFunction(Expr):
             "gather_every",
             "index_of",
             "mask_nans",
+            "mode",
             "null_count",
             "rank",
             "reinterpret",
@@ -134,6 +136,7 @@ class UnaryFunction(Expr):
             "shift",
             "shift_and_fill",
             "top_k",
+            "top_k_by",
             "truncate",
             "unique",
             "unique_counts",
@@ -219,6 +222,12 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"{self.name} is not supported for dtype {self.dtype.id().name}"
                 )
+        if self.name == "mode" and not POLARS_VERSION_LT_136:
+            (maintain_order,) = self.options
+            if maintain_order:
+                raise NotImplementedError(
+                    "mode with maintain_order=True is not yet supported"
+                )
         if self.name == "rank":
             method, _, _ = self.options
             if method not in {"average", "min", "max", "dense", "ordinal"}:
@@ -253,6 +262,12 @@ class UnaryFunction(Expr):
                     "reinterpret between integer and floating-point types is not "
                     "supported"
                 )
+        if self.name == "top_k_by":
+            if len(self.children) != 3:
+                raise NotImplementedError(
+                    "top_k_by only supports a single by expression"
+                )
+            self.options = (tuple(self.options[0]),)
 
     @staticmethod
     def _bound_clip_operand(
@@ -490,6 +505,45 @@ class UnaryFunction(Expr):
                     1,
                     stream=df.stream,
                 ),
+                dtype=self.dtype,
+            )
+        if self.name == "mode":
+            (values,) = (child.evaluate(df, context=context) for child in self.children)
+            (keys_table, (counts_table,)) = plc.groupby.GroupBy(
+                plc.Table([values.obj]), null_handling=plc.types.NullPolicy.INCLUDE
+            ).aggregate(
+                [
+                    plc.groupby.GroupByRequest(
+                        values.obj,
+                        [plc.aggregation.count(plc.types.NullPolicy.INCLUDE)],
+                    )
+                ],
+                stream=df.stream,
+            )
+            counts_col = counts_table.columns()[0]
+            max_count = plc.reduce.reduce(
+                counts_col,
+                plc.aggregation.max(),
+                counts_col.type(),
+                stream=df.stream,
+            )
+            mask = plc.binaryop.binary_operation(
+                counts_col,
+                max_count,
+                plc.binaryop.BinaryOperator.EQUAL,
+                plc.DataType(plc.TypeId.BOOL8),
+                stream=df.stream,
+            )
+            modes = plc.stream_compaction.apply_boolean_mask(
+                keys_table, mask, stream=df.stream
+            )
+            return Column(
+                plc.sorting.sort(
+                    modes,
+                    [plc.types.Order.ASCENDING],
+                    [plc.types.NullOrder.BEFORE],
+                    stream=df.stream,
+                ).columns()[0],
                 dtype=self.dtype,
             )
         arg: plc.Column | plc.Scalar
@@ -1032,19 +1086,56 @@ class UnaryFunction(Expr):
 
             return Column(ranked, dtype=self.dtype)
         elif self.name == "top_k":
-            (column, _k) = (
-                child.evaluate(df, context=context) for child in self.children
-            )
+            column = self.children[0].evaluate(df, context=context)
             (reverse,) = self.options
+            k_expr = self.children[1]
+            if isinstance(k_expr, Literal):
+                k = k_expr.value
+            else:
+                k = (
+                    k_expr.evaluate(df, context=context)
+                    .obj_scalar(stream=df.stream)
+                    .to_py(stream=df.stream)
+                )
             return Column(
                 plc.sorting.top_k(
                     column.obj,
-                    cast("Literal", self.children[1]).value,
+                    k,
                     plc.types.Order.ASCENDING
                     if reverse
                     else plc.types.Order.DESCENDING,
                     stream=df.stream,
                 ),
+                dtype=self.dtype,
+            )
+        elif self.name == "top_k_by":
+            col_value = self.children[0].evaluate(df, context=context)
+            by = self.children[2].evaluate(df, context=context)
+            (descending,) = self.options
+            k_expr = self.children[1]
+            if isinstance(k_expr, Literal):
+                k = k_expr.value
+            else:
+                k = (
+                    k_expr.evaluate(df, context=context)
+                    .obj_scalar(stream=df.stream)
+                    .to_py(stream=df.stream)
+                )
+            indices = plc.sorting.top_k_order(
+                by.obj,
+                k,
+                plc.types.Order.ASCENDING
+                if descending[0]
+                else plc.types.Order.DESCENDING,
+                stream=df.stream,
+            )
+            return Column(
+                plc.copying.gather(
+                    plc.Table([col_value.obj]),
+                    indices,
+                    plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+                    stream=df.stream,
+                ).columns()[0],
                 dtype=self.dtype,
             )
         elif self.name in ("shift", "shift_and_fill"):
