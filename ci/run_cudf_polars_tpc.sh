@@ -50,30 +50,10 @@ export TPCDS_DATA_DIR
 TPCDS_DATA_DIR=$(mktemp -d)
 python3 "$(dirname "$0")/generate_tpcds_data.py" --scale 1 --output-dir "${TPCDS_DATA_DIR}"
 
-rapids-logger "Running TPC-H validation tests"
+rapids-logger "Running TPC-H and TPC-DS validation tests"
 
 cd python/cudf_polars
 
-python -m cudf_polars.streaming.benchmarks.pdsh all \
-    --path "${TPCH_DATA_DIR}" \
-    --suffix "/*.parquet" \
-    --frontend spmd \
-    --validate-against duckdb \
+python -m pytest tests/streaming/test_tpch.py tests/streaming/test_tpcds.py \
     --iterations 2 \
-    --debug \
-    --print-results \
-    --explain \
-    --explain-logical \
-    --explain-partition-plan \
-    --rapidsmpf-log DEBUG \
-    --rapidsmpf-statistics
-
-rapids-logger "Running TPC-DS validation tests"
-
-python -m cudf_polars.streaming.benchmarks.pdsds all \
-    --path "${TPCDS_DATA_DIR}" \
-    --scale 1 \
-    --qualification \
-    --frontend spmd \
-    --validate-against duckdb \
-    --iterations 2
+    -v

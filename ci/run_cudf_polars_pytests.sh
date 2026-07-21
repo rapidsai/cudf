@@ -8,4 +8,6 @@ set -euo pipefail
 # Support invoking run_cudf_polars_pytests.sh outside the script directory
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_polars/
 
-python -m pytest --cache-clear "$@" tests
+python -m pytest --cache-clear "$@" tests \
+    --ignore=tests/streaming/test_tpch.py \
+    --ignore=tests/streaming/test_tpcds.py
