@@ -231,12 +231,13 @@ class StringColumn(ColumnBase, Scannable):
         self, skipna: bool = True, min_count: int = 0, **kwargs: Any
     ) -> ScalarLike:
         """Check if all string values are truthy (non-empty)."""
-        if skipna and self.null_count == self.size:
-            return True
-        elif not skipna and self.has_nulls():
-            # pandas 3 treats the NaN null sentinel as truthy, matching
-            # numpy semantics, so all(skipna=False) returns True when all
-            # values are null.
+        if self.null_count == self.size:
+            # With skipna=True nulls are dropped, so all-null is vacuously
+            # True. pandas 3 treats the NaN null sentinel as truthy,
+            # matching numpy semantics, so all(skipna=False) is True too.
+            # A partially-null column must NOT short-circuit here: the
+            # result depends on the truthiness of the non-null strings
+            # (e.g. all([NaN, ""], skipna=False) is False).
             return True
         raise NotImplementedError("`all` not implemented for `StringColumn`")
 
