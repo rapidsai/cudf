@@ -209,10 +209,6 @@ set_property(
 )
 message(VERBOSE "CUDF: LIBCUDF_LOGGING_LEVEL = '${LIBCUDF_LOGGING_LEVEL}'.")
 
-if(NOT CUDF_GENERATED_INCLUDE_DIR)
-  set(CUDF_GENERATED_INCLUDE_DIR ${CUDF_BINARY_DIR})
-endif()
-
 # ##################################################################################################
 # * linter configuration ---------------------------------------------------------------------------
 if(CUDF_CLANG_TIDY)
@@ -508,9 +504,7 @@ foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
   )
 endforeach()
 
-rtcx_embed(
-  cudf_cuda_embed COMPRESSION zstd OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
-)
+rtcx_embed(cudf_cuda_embed COMPRESSION zstd OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/embed")
 
 rtcx_add_embed(cudf_fragments)
 
@@ -623,9 +617,8 @@ function(precompile_string_kernel_fragments)
   foreach(OUTPUT_TYPE OUTPUT_COLUMN_TYPE IN ZIP_LISTS CUDF_PRECOMPILE_STRING_OUTPUT_PHYSICAL_TYPES
                       CUDF_PRECOMPILE_STRING_OUTPUT_COLUMN_TYPES
   )
-    foreach(OUTPUT_INDICES IN ITEMS "0" "0;1" "0;1;2" "0;1;2;3" "0;1;2;3;4" "0;1;2;3;4;5"
-                                    "0;1;2;3;4;5;6" "0;1;2;3;4;5;6;7"
-    )
+    # Pre-compile for up to 4 output columns
+    foreach(OUTPUT_INDICES IN ITEMS "0" "0;1" "0;1;2" "0;1;2;3")
       set(FRAGMENT_NAME transform_kernel)
       get_property(
         FILE_INDEX
@@ -680,9 +673,7 @@ endfunction()
 precompile_fixed_width_kernel_fragments()
 precompile_string_kernel_fragments()
 
-rtcx_embed(
-  cudf_fragments COMPRESSION none OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
-)
+rtcx_embed(cudf_fragments COMPRESSION none OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/embed")
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
@@ -1318,7 +1309,6 @@ target_compile_options(
 target_include_directories(
   cudf
   PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>" "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
-         "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"

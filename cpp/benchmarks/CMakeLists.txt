@@ -421,8 +421,7 @@ add_fragment(
   ${LIBCUDF_FRAGMENT_COMPILE_OPTIONS}
 )
 rtcx_embed(
-  cudf_benchmark_fragments COMPRESSION none OUTPUT_DIRECTORY
-  "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
+  cudf_benchmark_fragments COMPRESSION none OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/embed"
 )
 
 # ##################################################################################################

@@ -21,12 +21,13 @@ include(../fetch_dependencies.cmake)
 include(rapids-cmake)
 rapids_cmake_build_type("Release")
 
+# Fetch librtcx and its dependencies
 include(${CMAKE_CURRENT_LIST_DIR}/../../cmake/thirdparty/get_zstd.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/../../cmake/thirdparty/get_xxhash.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/../../cmake/thirdparty/get_rtcx.cmake)
+
+# Include the helper function for embedding FATBINs of fragments
 include(${CMAKE_CURRENT_LIST_DIR}/../../cmake/Modules/AddFragment.cmake)
-set(CUDF_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/../..")
-set(CUDF_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 # For now, disable CMake's automatic module scanning for C++ files. There is an sccache bug in the
 # version RAPIDS uses in CI that causes it to handle the resulting -M* flags incorrectly with
@@ -55,19 +56,35 @@ add_string_transforms_example(format_phone_precompiled format_phone_precompiled.
 add_string_transforms_example(localize_phone_jit localize_phone_jit.cpp)
 add_string_transforms_example(localize_phone_precompiled localize_phone_precompiled.cpp)
 
+# Compile and embed the UDFs so we can link them at runtime
 rtcx_add_embed(http_log_fragments)
 add_fragment(
-  http_log_fragments FRAGMENT request_line_sizes SOURCE http_logs/fragments.cu DEFINITIONS
-  UDF_COMPUTE_SIZES 
-  INCLUDE_DIRECTORIES ${CMAKE_CURRENT_LIST_DIR}/http_logs
+  http_log_fragments
+  FRAGMENT
+  request_line_sizes
+  SOURCE
+  http_logs/fragments.cu
+  DEFINITIONS
+  UDF_COMPUTE_SIZES
+  INCLUDE_DIRECTORIES
+  ${CMAKE_CURRENT_LIST_DIR}/http_logs
+  LINK_LIBRARIES
+  cudf::cudf
 )
 add_fragment(
-  http_log_fragments FRAGMENT request_line_output SOURCE http_logs/fragments.cu DEFINITIONS
-  UDF_WRITE_OUTPUT INCLUDE_DIRECTORIES ${CMAKE_CURRENT_LIST_DIR}/http_logs
+  http_log_fragments
+  FRAGMENT
+  request_line_output
+  SOURCE
+  http_logs/fragments.cu
+  DEFINITIONS
+  UDF_WRITE_OUTPUT
+  INCLUDE_DIRECTORIES
+  ${CMAKE_CURRENT_LIST_DIR}/http_logs
+  LINK_LIBRARIES
+  cudf::cudf
 )
-rtcx_embed(
-  http_log_fragments COMPRESSION none OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
-)
+rtcx_embed(http_log_fragments COMPRESSION none OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/embed")
 
 add_string_transforms_example(http_log_transforms http_logs/transforms.cpp)
 target_sources(http_log_transforms PRIVATE ${http_log_fragments_SOURCE_DIR}/http_log_fragments.s)

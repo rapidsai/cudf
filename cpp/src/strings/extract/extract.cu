@@ -160,7 +160,7 @@ std::unique_ptr<column> extract_single(strings_column_view const& input,
                "group parameter outside the range of capture groups found in the regex pattern",
                std::invalid_argument);
 
-  auto indices = rmm::device_uvector<string_index_pair>(input.size(), stream);
+  auto indices = rmm::device_uvector<string_index_pair>(input.size(), stream, mr);
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
 

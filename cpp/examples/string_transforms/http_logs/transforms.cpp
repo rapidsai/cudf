@@ -12,6 +12,8 @@
 #include <cudf/reduction.hpp>
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/regex/regex_program.hpp>
+#include <cudf/strings/slice.hpp>
+#include <cudf/strings/split/partition.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/transform.hpp>
 
@@ -50,10 +52,8 @@ __device__ int compute_request_line_sizes(int32_t* method_size,
   auto n = input.size_bytes();
 
   auto find_character = [&](int32_t begin, char needle) {
-    for (auto i = begin; i < n; ++i) {
-      if (input.data()[i] == needle) { return i; }
-    }
-    return n;
+    return cuda::std::find(input.data() + begin, input.data() + input.size_bytes(), needle) -
+        input.data();
   };
 
   auto method_end = find_character(0, ' ');
@@ -91,16 +91,8 @@ __device__ int write_request_line(cuda::std::span<char>* method,
   auto n = input.size_bytes();
 
   auto find_character = [&](int32_t begin, char needle) {
-    for (auto i = begin; i < n; ++i) {
-      if (input.data()[i] == needle) { return i; }
-    }
-    return n;
-  };
-
-  auto copy_field = [&](cuda::std::span<char> out, int32_t begin, int32_t end) {
-    for (auto index = begin; index < end; ++index) {
-      out[index - begin] = input.data()[index];
-    }
+    return cuda::std::find(input.data() + begin, input.data() + input.size_bytes(), needle) -
+        input.data();
   };
 
   auto method_end = find_character(0, ' ');
@@ -119,9 +111,9 @@ __device__ int write_request_line(cuda::std::span<char>* method,
   // The path ends at the query or the target, whichever comes first.
   auto path_end = query_begin < target_end ? query_begin : target_end;
 
-  copy_field(*method, 0, method_end);
-  copy_field(*path, method_end + 1, path_end);
-  copy_field(*version, target_end + 6, n);
+  memcpy(method->data(), input.data(), method_end);
+  memcpy(path->data(), input.data() + method_end + 1, path_end - (method_end + 1));
+  memcpy(version->data(), input.data() + target_end + 6, n - (target_end + 6));
 
   // return 0 to indicate success
   return 0;
@@ -130,16 +122,52 @@ __device__ int write_request_line(cuda::std::span<char>* method,
 
 constexpr std::string_view usage =
   "usage: http_log_transforms INPUT.csv OUTPUT.csv "
-  "<precompiled|jit|lto> ROWS ITERATIONS\n"
+  "<regex|precompiled|jit|lto> ROWS ITERATIONS\n"
   "       http_log_transforms <usage|--help>\n";
+
+[[nodiscard]] std::unique_ptr<cudf::table> run_regex(cudf::column_view input,
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::device_async_resource_ref mr)
+{
+  // Match the CUDA parsers: accept any method and HTTP version, extract the path before an optional
+  // query, and require only the delimiters and literal "HTTP/" prefix that they validate.
+  static auto program =
+    cudf::strings::regex_program::create(R"(^([^ ]*) ([^ ?]*)[^ ]* HTTP/(.*)$)");
+  return cudf::strings::extract(cudf::strings_column_view{input}, *program, stream, mr);
+}
 
 [[nodiscard]] std::unique_ptr<cudf::table> run_precompiled(cudf::column_view input,
                                                            rmm::cuda_stream_view stream,
                                                            rmm::device_async_resource_ref mr)
 {
-  static auto program =
-    cudf::strings::regex_program::create(R"(^([A-Z]+) ([^ ?]+)[^ ]* HTTP/([0-9]+[.][0-9]+)$)");
-  return cudf::strings::extract(cudf::strings_column_view{input}, *program, stream, mr);
+  auto space = cudf::string_scalar{" ", true, stream, mr};
+  auto query = cudf::string_scalar{"?", true, stream, mr};
+
+  // split "METHOD target HTTP/version" into its three logical fields using public string APIs.
+  auto request = cudf::strings::partition(cudf::strings_column_view{input}, space, stream, mr);
+  auto request_columns     = request->release();
+  auto target_and_protocol = cudf::strings::rpartition(
+    cudf::strings_column_view{request_columns[2]->view()}, space, stream, mr);
+  auto target_and_protocol_columns = target_and_protocol->release();
+
+  // remove the optional query from the request target and the "HTTP/" protocol prefix.
+  auto path_and_query = cudf::strings::partition(
+    cudf::strings_column_view{target_and_protocol_columns[0]->view()}, query, stream, mr);
+  auto path_and_query_columns = path_and_query->release();
+  auto version =
+    cudf::strings::slice_strings(cudf::strings_column_view{target_and_protocol_columns[2]->view()},
+                                 5,
+                                 std::nullopt,
+                                 std::nullopt,
+                                 stream,
+                                 mr);
+
+  std::vector<std::unique_ptr<cudf::column>> result;
+  result.reserve(output_count);
+  result.push_back(std::move(request_columns[0]));
+  result.push_back(std::move(path_and_query_columns[0]));
+  result.push_back(std::move(version));
+  return std::make_unique<cudf::table>(std::move(result));
 }
 
 [[nodiscard]] std::unique_ptr<cudf::table> run_jit(cudf::column_view input,
@@ -250,8 +278,9 @@ int main(int argc, char const** argv)
     auto input_path     = std::string{argv[1]};
     auto output_path    = std::string{argv[2]};
     auto implementation = std::string_view{argv[3]};
-    if (implementation != "precompiled" && implementation != "jit" && implementation != "lto") {
-      throw std::invalid_argument("variant must be precompiled, jit, or lto");
+    if (implementation != "regex" && implementation != "precompiled" && implementation != "jit" &&
+        implementation != "lto") {
+      throw std::invalid_argument("variant must be regex, precompiled, jit, or lto");
     }
 
     auto requested_rows = std::stoll(argv[4]);
@@ -262,11 +291,10 @@ int main(int argc, char const** argv)
 
     if (iterations < 1) { throw std::invalid_argument("ITERATIONS must be positive"); }
 
-    auto rows           = static_cast<cudf::size_type>(requested_rows);
-    auto is_precompiled = implementation == "precompiled";
-    auto use_lto        = implementation == "lto";
-    auto stream         = cudf::get_default_stream();
-    auto mr             = cudf::get_current_device_resource_ref();
+    auto rows    = static_cast<cudf::size_type>(requested_rows);
+    auto use_lto = implementation == "lto";
+    auto stream  = cudf::get_default_stream();
+    auto mr      = cudf::get_current_device_resource_ref();
 
     auto read_options = cudf::io::csv_reader_options::builder(cudf::io::source_info{input_path})
                           .header(0)
@@ -284,14 +312,18 @@ int main(int argc, char const** argv)
     // Track allocations made by the transforms without changing the application's upstream memory
     // resource.
     rmm::mr::statistics_resource_adaptor stats{mr};
-    auto stats_mr = rmm::device_async_resource_ref{stats};
+    auto stats_mr      = rmm::device_async_resource_ref{stats};
+    auto run_transform = [&]() {
+      if (implementation == "regex") { return run_regex(input_view, stream, stats_mr); }
+      if (implementation == "precompiled") { return run_precompiled(input_view, stream, stats_mr); }
+      return run_jit(input_view, use_lto, stream, stats_mr);
+    };
 
     stream.synchronize();
     // The cold measurement includes regex setup or JIT compilation/linking performed on first use.
     auto cold_start = std::chrono::steady_clock::now();
     nvtxRangePush("http_log_cold");
-    auto cold_result = is_precompiled ? run_precompiled(input_view, stream, stats_mr)
-                                      : run_jit(input_view, use_lto, stream, stats_mr);
+    auto cold_result = run_transform();
     stream.synchronize();
     nvtxRangePop();
     auto cold_seconds =
@@ -304,8 +336,7 @@ int main(int argc, char const** argv)
     nvtxRangePush("http_log_warm");
     for (auto i = 0; i < iterations; ++i) {
       result.reset();
-      result = is_precompiled ? run_precompiled(input_view, stream, stats_mr)
-                              : run_jit(input_view, use_lto, stream, stats_mr);
+      result = run_transform();
     }
     stream.synchronize();
     nvtxRangePop();

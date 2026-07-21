@@ -201,11 +201,12 @@ void launch(cudf::kernel const& kernel,
             rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
+  void* args[] = {&row_size, &stencil, &user_data, &input_cols, &output_cols, &max_error};
   auto cfg     = kernel.max_occupancy_config(0, 0);
   CUDF_EXPECTS(cfg.block_size % cudf::detail::warp_size == 0,
                "Expected block size to be a multiple of warp size",
                std::runtime_error);
-  kernel.launch_with({cfg.min_grid_size}, {cfg.block_size}, 0, stream, row_size, stencil, user_data, input_cols, output_cols, max_error);
+  kernel.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
 }
 
 std::string get_element_type_name(column_view const& view, bool use_physical_type);
@@ -416,8 +417,8 @@ std::string reflect_udf_signature(bool is_null_aware,
       ? ""
       : std::accumulate(
           std::next(params.begin()), params.end(), params[0], [](auto const& a, auto const& b) {
-          return std::format("{}, {}", a, b);
-        });
+            return std::format("{}, {}", a, b);
+          });
 
   return std::format("int({})", joined);
 }

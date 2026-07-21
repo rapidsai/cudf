@@ -15,8 +15,9 @@ The following examples are included:
 5. `extract_email_precompiled` - Performs same transformation on the table as `output` but uses precompiled public APIs
 6. `format_phone_jit` - Using a transform kernel to output a string to a pre-allocated buffer
 7. `format_phone_precompiled` - Performs same transformation on the table as `preallocated` but uses precompiled public APIs
-8. `http_log_transforms` - Compares three multi-output HTTP log extractors:
-   - `precompiled`: `cudf::strings::extract` with a public regex program.
+8. `http_log_transforms` - Compares four multi-output HTTP log extractors:
+   - `regex`: `cudf::strings::extract` with a regex program.
+   - `precompiled`: public string partition and slice APIs, without regular expressions.
    - `jit`: two CUDA source transforms compiled at runtime. The first produces exact per-row string
      sizes; inclusive scans turn those sizes into run-end offsets, and the second writes directly to
      the resulting string character buffers.
