@@ -7,8 +7,9 @@ ci:
   autoupdate_branch: ""
   autoupdate_commit_msg: "[pre-commit.ci] pre-commit autoupdate"
   autoupdate_schedule: quarterly
-  # Both lychee hooks use an installer that calls Git from pre-commit.ci's
-  # differently owned cache clone.
+  # Lychee's hook script runs `git rev-parse` at run time, which exits 128 in
+  # pre-commit.ci's differently-owned clone. Lychee still runs in rapids `checks`
+  # CI via `pre-commit run --all-files` in ci/check_style.sh.
   skip: ["mypy", "verify-alpha-spec", "lychee"]
   submodules: false
 
@@ -344,6 +345,8 @@ repos:
       - id: lychee
         name: lychee (markdown)
         files: \.md$
+        # These READMEs use publish-site-relative links lychee cannot resolve from
+        # the repo, so this exclusion is deliberate.
         exclude: |
           (?x)
             ^docs/cudf/source/|
@@ -364,6 +367,7 @@ repos:
             "--no-progress",
             "--root-dir", "docs/cudf/source",
             "--fallback-extensions", "md,rst,ipynb",
+            # These are MyST cross-reference labels, not files. Add new lychee hits here.
             "--exclude", "(^|/)cudf-pandas-profiling$",
             "--exclude", "(^|/)api[.]options$",
           ]
