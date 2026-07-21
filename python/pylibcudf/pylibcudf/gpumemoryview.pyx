@@ -13,7 +13,7 @@ cdef gpumemoryview _make_subview(gpumemoryview parent, uintptr_t ptr, uint64_t n
     cdef gpumemoryview v = gpumemoryview.__new__(gpumemoryview)
     v.ptr = ptr
     v.nbytes = nbytes
-    v.obj = parent # keep the parent original buffer alive
+    v.obj = parent  # keep the parent original buffer alive
     v.cai = {"data": (ptr, False), "shape": (nbytes,), "typestr": "|u1", "version": 3}
     return v
 
