@@ -664,7 +664,7 @@ class csv_reader_options {
   /**
    * @brief Sets whether to treat `\r\n` as line terminator.
    *
-   * @deprecated Deprecated in 26.08 and will be removed in 26.10+. CRLF input is supported using
+   * @deprecated Deprecated in 26.10 and will be removed in 26.12+. CRLF input is supported using
    * the default `\n` line terminator.
    *
    * @param val Boolean value to enable/disable
@@ -1079,7 +1079,7 @@ class csv_reader_options_builder {
   /**
    * @brief Sets whether to treat `\r\n` as line terminator.
    *
-   * @deprecated Deprecated in 26.08 and will be removed in 26.10+. CRLF input is supported using
+   * @deprecated Deprecated in 26.10 and will be removed in 26.12+. CRLF input is supported using
    * the default `\n` line terminator.
    *
    * @param val Boolean value to enable/disable
