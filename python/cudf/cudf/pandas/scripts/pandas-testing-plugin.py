@@ -1713,7 +1713,6 @@ NODEIDS_THAT_FAIL = {
     "tests/frame/test_stack_unstack.py::TestStackUnstackMultiLevel::test_stack[True]": "TODO: Add a reason for failure",
     "tests/frame/test_stack_unstack.py::TestStackUnstackMultiLevel::test_stack_level_name[False]": "TODO: Add a reason for failure",
     "tests/frame/test_stack_unstack.py::TestStackUnstackMultiLevel::test_stack_level_name[True]": "TODO: Add a reason for failure",
-    "tests/frame/test_stack_unstack.py::TestStackUnstackMultiLevel::test_stack_mixed_dtype[True]": "TODO: Add a reason for failure",
     "tests/frame/test_stack_unstack.py::TestStackUnstackMultiLevel::test_stack_multiple_bug[False]": "TODO: Add a reason for failure",
     "tests/frame/test_stack_unstack.py::TestStackUnstackMultiLevel::test_stack_multiple_bug[True]": "TODO: Add a reason for failure",
     "tests/frame/test_stack_unstack.py::TestStackUnstackMultiLevel::test_stack_multiple_out_of_bounds[False]": "TODO: Add a reason for failure",

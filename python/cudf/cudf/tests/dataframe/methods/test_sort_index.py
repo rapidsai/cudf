@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import itertools
 
@@ -163,3 +163,46 @@ def test_df_cat_sort_index():
     expect = df.to_pandas().set_index("a").sort_index()
 
     assert_eq(got, expect)
+
+
+@pytest.mark.parametrize("level", [0, 1, "c1", ["c2"], ["c2", "c1"], [1, 0]])
+@pytest.mark.parametrize("sort_remaining", [True, False])
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("na_position", ["first", "last"])
+def test_sort_index_axis_1_multiindex_level(
+    level, sort_remaining, ascending, na_position
+):
+    # axis=1 previously ignored level= and sort_remaining= silently
+    pdf = pd.DataFrame(
+        [[1, 2, 3, 4]],
+        columns=pd.MultiIndex.from_tuples(
+            [("b", 2), ("a", 1), (np.nan, 3), ("a", 4)], names=["c1", "c2"]
+        ),
+    )
+    gdf = cudf.DataFrame(pdf)
+
+    expect = pdf.sort_index(
+        axis=1,
+        level=level,
+        sort_remaining=sort_remaining,
+        ascending=ascending,
+        na_position=na_position,
+    )
+    got = gdf.sort_index(
+        axis=1,
+        level=level,
+        sort_remaining=sort_remaining,
+        ascending=ascending,
+        na_position=na_position,
+    )
+    assert_eq(expect, got)
+
+
+def test_sort_index_axis_1_level_out_of_bounds():
+    pdf = pd.DataFrame(
+        [[1, 2]],
+        columns=pd.MultiIndex.from_tuples([("a", 1), ("b", 2)]),
+    )
+    gdf = cudf.DataFrame(pdf)
+    with pytest.raises(IndexError):
+        gdf.sort_index(axis=1, level=5)

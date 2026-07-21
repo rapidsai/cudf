@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import copy
+import functools
 import itertools
 import textwrap
 import warnings
@@ -2921,7 +2922,71 @@ class IndexedFrame(Frame):
             if ignore_index:
                 out = out.reset_index(drop=True)
         else:
-            labels = sorted(self._column_names, reverse=not ascending)
+            if level is not None and self._data.multiindex:
+                if not is_list_like(level):
+                    level = [level]
+                nlevels = self._data.nlevels
+                level_names = list(self._data.level_names)
+
+                def _level_number(lvl):
+                    if isinstance(lvl, int):
+                        norm = lvl + nlevels if lvl < 0 else lvl
+                        if not 0 <= norm < nlevels:
+                            raise IndexError(
+                                f"Too many levels: Index has only "
+                                f"{nlevels} levels, {lvl} is not a valid "
+                                "level number"
+                            )
+                        return norm
+                    return level_names.index(lvl)
+
+                key_order = [_level_number(lvl) for lvl in level]
+                ascending_per_key: list[bool] = (
+                    [bool(flag) for flag in cast("Iterable[bool]", ascending)]
+                    if is_list_like(ascending)
+                    else [bool(ascending)] * len(key_order)
+                )
+                if len(ascending_per_key) != len(key_order):
+                    raise ValueError(
+                        "level must have same length as ascending: "
+                        f"{len(key_order)} != {len(ascending_per_key)}"
+                    )
+                if sort_remaining:
+                    seen = set(key_order)
+                    for i in range(nlevels):
+                        if i not in seen:
+                            key_order.append(i)
+                            ascending_per_key.append(ascending_per_key[0])
+
+                def _is_na_label(value) -> bool:
+                    return value is None or (
+                        isinstance(value, float) and value != value
+                    )
+
+                def _label_sort_key(
+                    label, pos: int, na_rank: int
+                ) -> tuple[int, Any]:
+                    value = label[pos]
+                    if _is_na_label(value):
+                        return (na_rank, None)
+                    return (1 - na_rank, value)
+
+                # Stable multi-key sort: sort by the least significant key
+                # first. Missing labels are placed per ``na_position``,
+                # independently of the per-key direction.
+                labels = list(self._column_names)
+                for pos, asc in reversed(
+                    list(zip(key_order, ascending_per_key, strict=True))
+                ):
+                    na_rank = int(asc == (na_position == "last"))
+                    labels.sort(
+                        key=functools.partial(
+                            _label_sort_key, pos=pos, na_rank=na_rank
+                        ),
+                        reverse=not asc,
+                    )
+            else:
+                labels = sorted(self._column_names, reverse=not ascending)
             result_columns = (self._data[label] for label in labels)
             if ignore_index:
                 ca = ColumnAccessor(
