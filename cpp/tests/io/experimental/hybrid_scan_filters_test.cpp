@@ -926,7 +926,7 @@ TEST_F(HybridScanFiltersTest, OffsetIndexOnlyDataPageMask)
     cudf::io::parquet::fetch_byte_ranges_to_device_async(*datasource, byte_ranges, stream, mr);
   read_tasks.get();
 
-  // Materialization maps the row mask to pages using only OffsetIndex, then applies the row mask.
+  // Materialization maps the row mask to pages using only offset index, then applies the row mask.
   auto const result = offset_only_reader.materialize_payload_columns(
     selected_row_groups,
     column_data,
@@ -938,7 +938,7 @@ TEST_F(HybridScanFiltersTest, OffsetIndexOnlyDataPageMask)
   auto const expected = cudf::apply_boolean_mask(written_table->view(), row_mask_view, stream, mr);
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), result.tbl->view());
 
-  // Without OffsetIndex, data-page pruning falls back to decoding all pages.
+  // Without offset index, data-page pruning falls back to decoding all pages.
   for (auto& row_group : metadata.row_groups) {
     for (auto& column : row_group.columns) {
       column.offset_index.reset();
