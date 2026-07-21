@@ -453,6 +453,9 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
     cudf::detail::make_pinned_vector(cudf::host_span<cudf::size_type* const>{out_buffers}, _stream);
   write_final_offsets(pinned_final_offsets, pinned_out_buffers, _stream);
 
+  // For page-level I/O, fill output string and list offsets for pruned pages
+  fill_pruned_offsets(skip_rows, num_rows);
+
   // update null counts in the final column buffers
   for (size_t idx = 0; idx < subpass.pages.size(); idx++) {
     PageInfo* pi = &subpass.pages[idx];

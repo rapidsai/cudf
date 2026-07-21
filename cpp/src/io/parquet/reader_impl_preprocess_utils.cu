@@ -286,6 +286,11 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
       page.num_nulls  = chunk_info.pages[p].num_nulls.value_or(0);
       page.num_valids = chunk_info.pages[p].num_valid.value_or(0);
       page.str_bytes  = chunk_info.pages[p].var_bytes_size.value_or(0);
+      page.has_value_info =
+        chunk_info.pages[p].num_nulls.has_value() and
+        chunk_info.pages[p].num_valid.has_value() and
+        (chunk.physical_type != Type::BYTE_ARRAY or
+         chunk_info.pages[p].var_bytes_size.has_value());
 
       start_row += page.num_rows;
     }
@@ -406,10 +411,13 @@ cudf::detail::hostdevice_vector<PageInfo> sort_pages(device_span<PageInfo const>
   return pass_pages;
 }
 
-void decode_page_headers(pass_intermediate_data& pass,
-                         device_span<PageInfo> unsorted_pages,
-                         bool has_page_index,
-                         rmm::cuda_stream_view stream)
+namespace {
+
+void decode_page_headers_impl(pass_intermediate_data& pass,
+                              device_span<PageInfo> unsorted_pages,
+                              bool has_page_index,
+                              host_span<cudf::device_span<uint8_t const> const> page_spans,
+                              rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
 
@@ -439,9 +447,23 @@ void decode_page_headers(pass_intermediate_data& pass,
 
   kernel_error error_code(stream);
 
+  if (not page_spans.empty()) {
+    CUDF_EXPECTS(has_page_index, "Sparse page spans require Parquet page indexes");
+    CUDF_EXPECTS(page_spans.size() == unsorted_pages.size(),
+                 "Page span count must match the number of logical pages");
+    auto device_page_spans = cudf::detail::make_device_uvector_async(
+      page_spans, stream, cudf::get_current_device_resource_ref());
+    decode_page_headers_with_pgidx_spans(
+      device_span<ColumnChunkDesc const>(pass.chunks.device_ptr(), pass.chunks.size()),
+      unsorted_pages,
+      device_page_spans,
+      chunk_page_offsets.begin(),
+      error_code.data(),
+      stream);
+  }
   // If page index is present, collect data ptrs for all pages and launch the accelerated decode
   // page headers kernel
-  if (has_page_index) {
+  else if (has_page_index) {
     auto host_page_locations =
       cudf::detail::make_pinned_vector_async<uint8_t*>(unsorted_pages.size(), stream);
     auto curr_page_idx = 0;
@@ -574,6 +596,24 @@ void decode_page_headers(pass_intermediate_data& pass,
   pass.pages.device_to_host_async(stream);
   pass.chunks.device_to_host_async(stream);
   stream.synchronize();
+}
+
+}  // namespace
+
+void decode_page_headers(pass_intermediate_data& pass,
+                         device_span<PageInfo> unsorted_pages,
+                         bool has_page_index,
+                         rmm::cuda_stream_view stream)
+{
+  decode_page_headers_impl(pass, unsorted_pages, has_page_index, {}, stream);
+}
+
+void decode_page_headers(pass_intermediate_data& pass,
+                         device_span<PageInfo> unsorted_pages,
+                         host_span<cudf::device_span<uint8_t const> const> page_spans,
+                         rmm::cuda_stream_view stream)
+{
+  decode_page_headers_impl(pass, unsorted_pages, true, page_spans, stream);
 }
 
 }  // namespace cudf::io::parquet::detail

@@ -729,6 +729,19 @@ void decode_page_headers_with_pgidx(cudf::device_span<ColumnChunkDesc const> chu
                                     rmm::cuda_stream_view stream);
 
 /**
+ * @brief Decode indexed page headers from exact, potentially discontiguous page spans
+ *
+ * Empty spans initialize the corresponding logical page descriptor but are not parsed.
+ */
+void decode_page_headers_with_pgidx_spans(cudf::device_span<ColumnChunkDesc const> chunks,
+                                          cudf::device_span<PageInfo> pages,
+                                          cudf::device_span<cudf::device_span<uint8_t const> const>
+                                            page_spans,
+                                          size_type* chunk_page_offsets,
+                                          kernel_error::pointer error_code,
+                                          rmm::cuda_stream_view stream);
+
+/**
  * @brief Launches kernel for building the dictionary index for the column
  * chunks
  *
