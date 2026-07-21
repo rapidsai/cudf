@@ -2109,14 +2109,14 @@ class MultiIndex(Index):
         except ValueError:
             if not is_integer(level):
                 raise KeyError(f"Level {level} not found")
-            if level < 0:
-                level += self.nlevels
-            if level >= self.nlevels:
+            norm = level + self.nlevels if level < 0 else level
+            if not 0 <= norm < self.nlevels:
+                # matches pandas MultiIndex._get_level_number
                 raise IndexError(
-                    f"Level {level} out of bounds. "
-                    f"Index has {self.nlevels} levels."
+                    f"Too many levels: Index has only {self.nlevels} "
+                    f"levels, {level} is not a valid level number"
                 ) from None
-            return level
+            return norm
 
     @_performance_tracking
     def get_indexer(self, target, method=None, limit=None, tolerance=None):
