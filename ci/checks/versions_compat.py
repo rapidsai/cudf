@@ -31,12 +31,14 @@ from packaging.version import Version
 # this checker fails to recognize is worse than one it correctly flags,
 # since it would make the check report "clean" when it isn't.
 ASSIGNMENT_PATTERN = re.compile(
-    r"^[ \t]*(?P<name>POLARS_VERSION_LT_\w+)\s*=", re.MULTILINE
+    r"^[ \t]*(?P<name>POLARS_VERSION_LT_\w+)(?:\s*:\s*[^=\n]+)?\s*=",
+    re.MULTILINE,
 )
 
 # The specific form we know how to extract a version threshold from.
 FLAG_PATTERN = re.compile(
-    r"^[ \t]*(?P<name>POLARS_VERSION_LT_\w+)\s*=\s*POLARS_VERSION\s*<\s*"
+    r"^[ \t]*(?P<name>POLARS_VERSION_LT_\w+)(?:\s*:\s*[^=\n]+)?\s*="
+    r"\s*POLARS_VERSION\s*<\s*"
     r"parse\(\s*[\"'](?P<version>[0-9]+(?:\.[0-9]+){1,2})[\"']\s*\)",
     re.MULTILINE,
 )
@@ -61,9 +63,12 @@ def minimum_polars_version(pyproject: Path) -> Version:
         if req.name != "polars":
             continue
         specs = {spec.operator: spec.version for spec in req.specifier}
-        for operator in (">=", "==", "~=", ">"):
+        for operator in (">=", "==", "~="):
             if operator in specs:
                 return Version(specs[operator])
+        if ">" in specs:
+            # A strict > floor uses its bound intentionally to avoid over-flagging.
+            return Version(specs[">"])
         raise ValueError(
             f"'polars' dependency in {pyproject} has no '>=', '==', "
             f"'~=', or '>' specifier to establish a minimum version: "

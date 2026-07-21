@@ -96,6 +96,35 @@ def test_find_stale_flags_equal_to_minimum_is_stale(tmp_path: Path) -> None:
     assert len(stale) == 1
 
 
+def test_find_stale_flags_detects_annotated_stale_flag(
+    tmp_path: Path,
+) -> None:
+    versions_py = tmp_path / "versions.py"
+    versions_py.write_text(
+        'POLARS_VERSION_LT_138: bool = POLARS_VERSION < parse("1.38")\n'
+    )
+    stale = versions_compat.find_stale_flags(
+        versions_py, versions_compat.Version("1.38")
+    )
+    assert [flag.name for flag in stale] == ["POLARS_VERSION_LT_138"]
+
+
+def test_find_stale_flags_raises_on_unparseable_annotated_flag(
+    tmp_path: Path,
+) -> None:
+    versions_py = tmp_path / "versions.py"
+    versions_py.write_text(
+        'POLARS_VERSION_LT_136: bool = parse("1.36.0") > POLARS_VERSION\n'
+    )
+    with pytest.raises(
+        versions_compat.UnparseableFlagError,
+        match="POLARS_VERSION_LT_136",
+    ):
+        versions_compat.find_stale_flags(
+            versions_py, versions_compat.Version("1.38")
+        )
+
+
 def test_find_stale_flags_ignores_unrelated_content(tmp_path: Path) -> None:
     versions_py = tmp_path / "versions.py"
     versions_py.write_text(
@@ -218,6 +247,29 @@ def test_main_missing_file_exits_one_with_error(
                 str(pyproject),
                 "--versions-file",
                 str(missing),
+            ]
+        )
+        == 1
+    )
+    assert "Error:" in capsys.readouterr().err
+
+
+def test_main_missing_project_table_exits_one_with_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text('[build-system]\nrequires = ["setuptools"]\n')
+    versions_py = tmp_path / "versions.py"
+    versions_py.write_text(
+        'POLARS_VERSION_LT_140 = POLARS_VERSION < parse("1.40.0")\n'
+    )
+    assert (
+        versions_compat.main(
+            [
+                "--pyproject",
+                str(pyproject),
+                "--versions-file",
+                str(versions_py),
             ]
         )
         == 1
