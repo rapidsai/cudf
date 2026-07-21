@@ -215,7 +215,28 @@ def _is_all_scan_aggregate(all_aggs: list[list[str]]) -> bool:
     }
 
     def get_name(agg):
-        return agg.__name__ if callable(agg) else agg
+        if not callable(agg):
+            return agg
+        if agg is not list:
+            # A ``lambda x: x.cumsum()``-style aggregation carries its
+            # scan-ness only in the aggregation name it resolves to
+            # (``Aggregation.cumsum`` is an alias of ``sum``; libcudf
+            # separates scan from reduction by the *call*, not the
+            # aggregation object). Probe the callable with a
+            # name-recording stand-in mirroring ``make_aggregation``'s
+            # ``op(Aggregation)`` protocol; true UDFs raise inside the
+            # probe and fall back to ``__name__``.
+            class _NameProbe:
+                def __getattr__(self, name):
+                    return lambda *args, **kwargs: name
+
+            try:
+                name = agg(_NameProbe())
+            except Exception:
+                return agg.__name__
+            if isinstance(name, str):
+                return name
+        return agg.__name__
 
     all_scan = all(
         get_name(agg_name) in groupby_scans
@@ -2748,7 +2769,12 @@ class GroupBy(Serializable, Reducible, Scannable):
             values = values._align_to_index(
                 self.grouping.keys, how="right", allow_non_unique=True
             )
-            values.index = self.obj.index
+        # Even when no alignment is needed (every group is a single row,
+        # so the aggregated index already equals the group keys), the
+        # result must be indexed like the input rows, not the group
+        # labels (pandas GH#9941: transform returns an obj-indexed
+        # result).
+        values.index = self.obj.index
         return values
 
     @_performance_tracking
@@ -2809,8 +2835,27 @@ class GroupBy(Serializable, Reducible, Scannable):
             raise TypeError(
                 "Aggregation must be a named aggregation or a callable"
             )
+        gb = self
+        if not self._as_index:
+            # as_index has no effect on transform in pandas (GH#49834):
+            # the key-column reset that agg/size apply for as_index=False
+            # must not leak into the broadcast result.
+            gb = copy.copy(self)
+            gb._as_index = True
+        if func == "size":
+            # size counts group rows rather than aggregating each value
+            # column, so pandas broadcasts GroupBy.size() as a single
+            # Series (unnamed for DataFrameGroupBy, keeping the source
+            # name for SeriesGroupBy) instead of going per-column.
+            return gb._broadcast(gb.size())
+        if func == "cumcount":
+            # cumcount numbers the rows of each group: always an unnamed
+            # Series over the original index, never a per-column result.
+            return gb.cumcount()
+        if func == "ngroup":
+            return gb.ngroup()
         try:
-            result = self.agg(func)
+            result = gb.agg(func)
         except TypeError as e:
             raise NotImplementedError(
                 "Currently, `transform()` supports only aggregations."
@@ -2822,7 +2867,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     "Unexpected result length for scan transform"
                 )
             return result
-        return self._broadcast(result)
+        return gb._broadcast(result)
 
     def rolling(self, *args, **kwargs):
         """
