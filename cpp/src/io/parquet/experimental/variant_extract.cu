@@ -33,6 +33,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/numeric>
 #include <cuda/std/cstring>
 #include <cuda/std/limits>
 #include <cuda/std/optional>
@@ -470,18 +471,19 @@ __device__ cuda::std::optional<size_type> parse_index_step(cudf::string_view ste
     return cuda::std::nullopt;
   }
 
-  // The index is accumulated in an unsigned 64-bit value so a long digit run cannot overflow the
-  // signed `size_type` accumulator (which would be UB) before the range check rejects it.
-  uint64_t index = 0;
+  // Accumulate directly in `size_type`; the checked-arithmetic helpers reject the token if the
+  // running value overflows, which means the index is out of range for any array and the caller
+  // treats it as a missing element.
+  size_type index = 0;
   for (size_type k = 1; k < step_size - 1; ++k) {
     char const c = step_data[k];
     if (c < '0' || c > '9') { return cuda::std::nullopt; }
-    index = index * 10 + static_cast<uint64_t>(c - '0');
-    if (cuda::std::cmp_greater(index, cuda::std::numeric_limits<size_type>::max())) {
+    if (cuda::mul_overflow(index, index, size_type{10}) ||
+        cuda::add_overflow(index, index, static_cast<size_type>(c - '0'))) {
       return cuda::std::nullopt;
     }
   }
-  return static_cast<size_type>(index);
+  return index;
 }
 
 // Walk a path of object-key or array-index steps level by level starting at `val` and return
