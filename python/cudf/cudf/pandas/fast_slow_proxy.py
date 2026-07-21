@@ -570,7 +570,6 @@ def get_registered_functions():
     return dict()
 
 
-_MIRROR_SKIP = object()
 _SLOW_ABSENT = object()
 
 
@@ -587,13 +586,12 @@ def _enable_fsproxy_mirroring(cls: type) -> None:
     ``monkeypatch``/``mock.patch`` save and re-assign on undo) translates
     to restoring the slow type's pristine attribute for ``name``.
     """
-    slow = cls.__dict__.get("_fsproxy_slow_type")
-    pristine = {}
-    if slow is not None:
-        for name, value in cls.__dict__.items():
-            if name.startswith("_"):
-                continue
-            pristine[name] = (value, slow.__dict__.get(name, _SLOW_ABSENT))
+    slow = cls._fsproxy_slow_type  # type: ignore[attr-defined]
+    pristine = {
+        name: (value, slow.__dict__.get(name, _SLOW_ABSENT))
+        for name, value in cls.__dict__.items()
+        if not name.startswith("_")
+    }
     type.__setattr__(cls, "_fsproxy_pristine_attrs", pristine)
     type.__setattr__(cls, "_fsproxy_mirror_slow_overrides", True)
 
@@ -606,69 +604,19 @@ def _setattr_fsproxy_no_mirror(cls: type, name: str, value: Any) -> None:
     visible to the pandas fallback path. cudf.pandas itself installs a handful
     of custom methods (e.g. ``DataFrame.query``/``DataFrame.eval``) onto the
     proxy classes that must *not* clobber pandas' genuine implementations; use
-    this helper for those (rare) assignments. The attribute is registered as
+    this helper for those (rare) assignments, after the proxy type has been
+    fully constructed by ``make_*_proxy_type``. The attribute is registered as
     part of the proxy's pristine state so that a later save/patch/re-assign
     cycle restores the slow type's own attribute rather than forwarding the
     cudf-internal object to it.
     """
     type.__setattr__(cls, name, value)
-    pristine = cls.__dict__.get("_fsproxy_pristine_attrs")
-    slow = cls.__dict__.get("_fsproxy_slow_type")
-    if pristine is not None and slow is not None and not name.startswith("_"):
-        pristine[name] = (value, slow.__dict__.get(name, _SLOW_ABSENT))
-
-
-def _mirror_value_to_slow(
-    value: Any, slow: type, name: str, pristine: dict
-) -> Any:
-    """Translate a value assigned on a proxy type into "slow" space.
-
-    A value read off a proxy type (e.g. the original that a caller saves
-    before patching and re-assigns to undo) is proxy machinery wrapping a
-    slow-side object; mirroring it verbatim would install that machinery on
-    the real type. Unwrap it to the slow object it delegates to instead, so
-    that save/patch/re-assign cycles round-trip on the real type.
-
-    Returns ``_MIRROR_SKIP`` when the value has no determinable slow-side
-    equivalent, in which case nothing should be mirrored.
-    """
-    if isinstance(value, _FastSlowAttribute):
-        # The proxy's own delegating descriptor (a *pristine* one is already
-        # handled by identity in ``__setattr__``; this covers a descriptor
-        # obtained some other way): its slow equivalent is the method it
-        # wraps, if it ever resolved one.
-        attr = value._attr
-        if not isinstance(attr, _MethodProxy):
-            return _MIRROR_SKIP
-        value = attr
-    if isinstance(value, _FunctionProxy):
-        unwrapped = value._fsproxy_slow
-        entry = pristine.get(name)
-        if entry is not None and entry[1] is not _SLOW_ABSENT:
-            # Re-assigning a saved ``cls.method`` (a ``_MethodProxy`` over
-            # the *resolved* slow attribute): if it resolves back to the
-            # slow type's pristine attribute, restore the pristine
-            # class-dict entry itself so ``classmethod``/``staticmethod``
-            # descriptors are not degraded to their bound/plain-function
-            # forms.
-            descriptor = entry[1]
-            try:
-                resolved = (
-                    descriptor.__get__(None, slow)
-                    if hasattr(type(descriptor), "__get__")
-                    else descriptor
-                )
-                if unwrapped is resolved or unwrapped == resolved:
-                    return descriptor
-            except Exception:
-                pass
-        return unwrapped
-    if isinstance(value, _FastSlowProxy):
-        return value._fsproxy_slow
-    if isinstance(value, _FastSlowProxyMeta):
-        slow_type = getattr(value, "_fsproxy_slow_type", None)
-        return slow_type if slow_type is not None else _MIRROR_SKIP
-    return value
+    if not name.startswith("_"):
+        slow = cls._fsproxy_slow_type  # type: ignore[attr-defined]
+        cls._fsproxy_pristine_attrs[name] = (  # type: ignore[attr-defined]
+            value,
+            slow.__dict__.get(name, _SLOW_ABSENT),
+        )
 
 
 class _FastSlowProxyMeta(type):
@@ -689,15 +637,20 @@ class _FastSlowProxyMeta(type):
     def _fsproxy_fast(self) -> type:
         return self._fsproxy_fast_type
 
-    def __init__(cls, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __new__(mcls, *args, **kwargs):
+        cls = super().__new__(mcls, *args, **kwargs)
         # Per-proxy-type switch controlling whether class-level attribute
         # writes are mirrored onto the underlying "slow" (real) type (see
         # ``__setattr__``/``__delattr__``). It starts disabled so that the
         # attributes installed while the proxy type is being built are not
         # forwarded to the real type; ``make_*_proxy_type`` enables it once
-        # construction is complete.
+        # construction is complete. Initialized in ``__new__`` rather than
+        # ``__init__`` because cooperating metaclasses may perform
+        # class-level attribute writes from their own ``__new__`` — e.g.
+        # ``ABCMeta.__new__`` assigns ``__abstractmethods__``, dispatching
+        # to ``__setattr__`` below before ``__init__`` ever runs.
         type.__setattr__(cls, "_fsproxy_mirror_slow_overrides", False)
+        return cls
 
     def __setattr__(cls, name, value):
         # Class-level attribute assignments on a proxy type (e.g.
@@ -713,7 +666,7 @@ class _FastSlowProxyMeta(type):
         # delegates to, so save/patch/re-assign cycles round-trip on the
         # real type as well.
         type.__setattr__(cls, name, value)
-        if not cls.__dict__.get("_fsproxy_mirror_slow_overrides", False):
+        if not cls._fsproxy_mirror_slow_overrides:
             # The proxy type is still being constructed (or this is a
             # non-pandas proxy): only mirror user/runtime monkeypatches,
             # never the custom methods cudf.pandas installs on the proxy
@@ -721,32 +674,81 @@ class _FastSlowProxyMeta(type):
             return
         if name.startswith("_"):
             return
-        slow = cls.__dict__.get("_fsproxy_slow_type")
-        if slow is None:
-            return
+        slow = cls._fsproxy_slow_type
         try:
             # Mirroring is best-effort: translating a wrapped proxy instance
             # can require a fast-to-slow conversion, which may itself fail;
             # never let that escape an otherwise-successful assignment.
-            pristine = cls.__dict__.get("_fsproxy_pristine_attrs") or {}
+            pristine = cls._fsproxy_pristine_attrs
             entry = pristine.get(name)
             if entry is not None and value is entry[0]:
                 # The proxy's pristine attribute for ``name`` is being
                 # re-assigned (e.g. ``monkeypatch``/``mock.patch`` undo
                 # re-setting the saved class-dict entry). Its slow-space
-                # equivalent is the slow type's pristine attribute: restore
-                # it, or remove the mirrored entry if the slow type had
-                # none of its own (leaving any inherited one visible).
+                # equivalent is the slow type's pristine attribute.
                 if entry[1] is _SLOW_ABSENT:
+                    # The slow type never defined ``name`` itself: the proxy
+                    # mirrors the slow type's *dir*, so it has pristine
+                    # attributes for methods the slow type only inherits
+                    # (e.g. ``DataFrame.head`` lives on ``NDFrame``).
+                    # Mirroring a patch for such a name added a shadowing
+                    # entry to the slow type's dict; undoing the patch must
+                    # remove that entry again so the inherited
+                    # implementation becomes visible. It may legitimately be
+                    # missing (the mirror is best-effort), hence the guard.
                     if name in slow.__dict__:
                         delattr(slow, name)
                 else:
                     setattr(slow, name, entry[1])
                 return
-            slow_value = _mirror_value_to_slow(value, slow, name, pristine)
-            if slow_value is _MIRROR_SKIP:
-                return
-            setattr(slow, name, slow_value)
+            # Otherwise translate the assigned value into "slow" space
+            # before mirroring it: a value read off a proxy type (e.g. the
+            # original that a caller saves before patching and re-assigns
+            # to undo) is proxy machinery wrapping a slow-side object, and
+            # mirroring it verbatim would install that machinery on the
+            # real type. Unwrap it to the slow object it delegates to, so
+            # save/patch/re-assign cycles round-trip on the real type;
+            # values with no determinable slow-side equivalent are not
+            # mirrored at all.
+            if isinstance(value, _FastSlowAttribute):
+                # The proxy's own delegating descriptor (a *pristine* one is
+                # already handled by identity above; this covers a
+                # descriptor obtained some other way): its slow equivalent
+                # is the method it wraps, if it ever resolved one.
+                attr = value._attr
+                if not isinstance(attr, _MethodProxy):
+                    return
+                value = attr
+            if isinstance(value, _FunctionProxy):
+                unwrapped = value._fsproxy_slow
+                if entry is not None and entry[1] is not _SLOW_ABSENT:
+                    # Re-assigning a saved ``cls.method`` (a ``_MethodProxy``
+                    # over the *resolved* slow attribute): if it resolves
+                    # back to the slow type's pristine attribute, restore
+                    # the pristine class-dict entry itself so
+                    # ``classmethod``/``staticmethod`` descriptors are not
+                    # degraded to their bound/plain-function forms.
+                    descriptor = entry[1]
+                    try:
+                        resolved = (
+                            descriptor.__get__(None, slow)
+                            if hasattr(type(descriptor), "__get__")
+                            else descriptor
+                        )
+                        if unwrapped is resolved or unwrapped == resolved:
+                            setattr(slow, name, descriptor)
+                            return
+                    except Exception:
+                        pass
+                setattr(slow, name, unwrapped)
+            elif isinstance(value, _FastSlowProxy):
+                setattr(slow, name, value._fsproxy_slow)
+            elif isinstance(value, _FastSlowProxyMeta):
+                slow_type = getattr(value, "_fsproxy_slow_type", None)
+                if slow_type is not None:
+                    setattr(slow, name, slow_type)
+            else:
+                setattr(slow, name, value)
         except Exception:
             pass
 
@@ -756,15 +758,12 @@ class _FastSlowProxyMeta(type):
         # ``del cls.name`` the attribute is gone from the proxy, so it must
         # also be gone from the real type seen by fallback code.
         type.__delattr__(cls, name)
-        if not cls.__dict__.get("_fsproxy_mirror_slow_overrides", False):
+        if not cls._fsproxy_mirror_slow_overrides:
             return
         if name.startswith("_"):
             return
-        slow = cls.__dict__.get("_fsproxy_slow_type")
-        if slow is None:
-            return
         try:
-            delattr(slow, name)
+            delattr(cls._fsproxy_slow_type, name)
         except (AttributeError, TypeError):
             pass
 
