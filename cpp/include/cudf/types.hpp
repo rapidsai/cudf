@@ -28,6 +28,7 @@
 #include <cudf/utilities/export.hpp>
 
 #include <cuda/std/iterator>
+#include <rmm/detail/export.hpp>
 
 #include <cassert>
 #include <cstddef>
@@ -41,7 +42,9 @@
 // Forward declarations
 /// @cond
 namespace rmm {
+inline namespace RMM_ABI_NAMESPACE {
 class device_buffer;
+}  // namespace RMM_ABI_NAMESPACE
 /// @endcond
 
 }  // namespace rmm
