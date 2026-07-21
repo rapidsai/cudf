@@ -615,7 +615,12 @@ def _pd_index_level_dtypes(idx) -> tuple | None:
     dtype cannot be inferred from zero entries).
     """
     if isinstance(idx, pd.MultiIndex):
-        return tuple(idx.get_level_values(i).dtype for i in range(idx.nlevels))
+        # use the levels, not get_level_values: materializing a level that
+        # has missing entries (-1 codes) upcasts e.g. int64 to float64
+        return tuple(level.dtype for level in idx.levels)
+    if isinstance(idx, cudf.MultiIndex):
+        # the per-row columns share their dtype with the levels
+        return tuple(dtype for _, dtype in idx._dtypes)
     return None
 
 
@@ -837,7 +842,7 @@ def _array_to_column_accessor(
         columns_labels = columns
     else:
         columns_labels = pd.RangeIndex(data.shape[1])
-    return ColumnAccessor(
+    ca = ColumnAccessor(
         {
             column_label: as_column(data[:, i], nan_as_null=nan_as_null)
             for column_label, i in zip(
@@ -851,6 +856,11 @@ def _array_to_column_accessor(
         level_names=tuple(columns_labels.names),
         level_dtypes=_pd_index_level_dtypes(columns_labels),
     )
+    if isinstance(columns_labels, pd.MultiIndex):
+        # prime the cache with the exact source MultiIndex (rebuilding from
+        # tuples would re-sort the levels)
+        ca.to_pandas_index = columns_labels
+    return ca
 
 
 @_performance_tracking
@@ -1281,6 +1291,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 label_dtype=columns.dtype,
                 level_dtypes=_pd_index_level_dtypes(columns),
             )
+            if isinstance(columns, pd.MultiIndex):
+                # prime the cache with the exact source MultiIndex
+                # (rebuilding from tuples would re-sort the levels)
+                col_accessor.to_pandas_index = columns
         elif isinstance(data, Mapping):
             # Note: We excluded ColumnAccessor already above
             result = _mapping_to_column_accessor(
@@ -1351,6 +1365,20 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         if dtype:
             self._data = self.astype(dtype)._data
+
+        final_pd_columns = (
+            second_columns if second_columns is not None else columns
+        )
+        if (
+            self._data.multiindex
+            and isinstance(final_pd_columns, pd.MultiIndex)
+            and len(self._data) == len(final_pd_columns)
+        ):
+            # prime the cache with the exact source MultiIndex: rebuilding
+            # from tuples would re-sort the levels, losing e.g. an explicit
+            # unsorted level layout (level order affects pandas operations
+            # that work on codes, like legacy stack's sort)
+            self._data.to_pandas_index = final_pd_columns
 
     @classmethod
     def _from_data(  # type: ignore[override]
@@ -2554,6 +2582,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
             elif self._data._level_names == other._data._level_names:
                 ca_attributes["level_names"] = self._data.level_names
+                if self._data.multiindex == other._data.multiindex:
+                    # equal labels can still fail the ``equals`` check above
+                    # on level-dtype differences (e.g. Int8 vs int64); the
+                    # result keeps hierarchical columns like pandas
+                    ca_attributes["multiindex"] = self._data.multiindex
         elif isinstance(other, (dict, Mapping)):
             # Need to fail early on host mapping types because we ultimately
             # convert everything to a dict.
@@ -3237,6 +3270,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         rangeindex = False
         label_dtype = None
         level_names = None
+        level_dtypes = None
         if isinstance(columns, (pd.MultiIndex, cudf.MultiIndex)):
             multiindex = True
             if isinstance(columns, cudf.MultiIndex):
@@ -3246,6 +3280,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if pd_columns.nunique(dropna=False) != len(pd_columns):
                 raise ValueError("Duplicate column names are not allowed")
             level_names = list(pd_columns.names)
+            level_dtypes = _pd_index_level_dtypes(pd_columns)
         elif isinstance(columns, (Index, ColumnBase, Series)):
             level_names = (getattr(columns, "name", None),)
             rangeindex = isinstance(columns, cudf.RangeIndex)
@@ -3282,8 +3317,15 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             level_names=level_names,
             label_dtype=label_dtype,
             rangeindex=rangeindex,
+            level_dtypes=level_dtypes,
             verify=False,
         )
+        if multiindex:
+            # prime the cache with the exact source MultiIndex: rebuilding
+            # from tuples would re-sort the levels, losing e.g. an explicit
+            # unsorted level layout (levels order affects pandas operations
+            # that work on codes, like legacy stack's sort)
+            self._data.to_pandas_index = pd_columns
 
     def _set_columns_like(self, other: ColumnAccessor) -> None:
         """

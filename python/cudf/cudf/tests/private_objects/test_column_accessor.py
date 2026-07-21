@@ -1,7 +1,8 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -379,3 +380,46 @@ def test_not_rangeindex_and_multiindex():
 def test_data_values_not_column_raises():
     with pytest.raises(ValueError):
         ColumnAccessor({"a": [1]})
+
+
+def test_to_pandas_index_preserves_unsorted_level_order():
+    # rebuilding the columns MultiIndex from tuples would re-sort the
+    # levels; the exact source level layout must round-trip (level order
+    # affects pandas operations that work on codes, e.g. legacy
+    # stack(sort=True))
+    pmi = pd.MultiIndex(
+        levels=[["b", "a"], ["y", "x"]],
+        codes=[[0, 0, 1], [0, 1, 0]],
+        names=["outer", "inner"],
+    )
+    gdf = cudf.DataFrame([[1, 2, 3]], columns=pmi)
+    pd.testing.assert_index_equal(gdf._data.to_pandas_index, pmi, exact=True)
+
+    # the primed index survives accessor copies
+    copied = ColumnAccessor(gdf._data)
+    pd.testing.assert_index_equal(copied.to_pandas_index, pmi, exact=True)
+
+
+def test_to_pandas_index_restores_int_level_with_missing_entries():
+    # an int64 level whose codes contain -1 (missing) materializes as
+    # float64 via from_tuples; the recorded level dtype must be restored
+    pmi = pd.MultiIndex(
+        levels=[["a", "b"], pd.Index([10, 2], dtype="int64")],
+        codes=[[0, 1], [0, -1]],
+    )
+    gdf = cudf.DataFrame([[1, 2]], columns=pmi)
+    result = gdf._data.to_pandas_index
+    assert result.levels[1].dtype == pmi.levels[1].dtype
+    pd.testing.assert_index_equal(result, pmi, exact=True)
+
+
+def test_getitem_nan_label_any_nan_object():
+    # NaN labels round-tripped through a pandas Index materialize fresh
+    # float('nan') objects, which hash/compare unequal; lookup must match
+    # them under pandas' all-NaNs-equal label semantics
+    ca = ColumnAccessor({np.nan: as_column([1, 2]), "x": as_column([3, 4])})
+    fresh_nan = float("nan")
+    assert fresh_nan is not np.nan
+    assert_eq(ca[fresh_nan], ca[np.nan])
+    with pytest.raises(KeyError):
+        ca["missing"]
