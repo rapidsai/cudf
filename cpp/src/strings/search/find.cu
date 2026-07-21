@@ -5,6 +5,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -432,18 +433,26 @@ CUDF_KERNEL void contains_warp_parallel_fn_heterogeneous(column_device_view cons
 
     auto constexpr bytes_per_warp = 4;
     auto found                    = false;
-    for (auto i = lane_idx * bytes_per_warp;
-         !found && ((i + d_target.size_bytes()) <= d_str.size_bytes());
-         i += cudf::detail::warp_size * bytes_per_warp) {
-      for (auto j = 0; !found && (j < bytes_per_warp); j++) {
-        if (((i + j + d_target.size_bytes()) <= d_str.size_bytes()) &&
-            d_target.compare(d_str.data() + i + j, d_target.size_bytes()) == 0) {
-          found = true;
+    // All lanes must participate in every warp.any() call. Using `!found` or a per-lane bounds
+    // check as the loop condition would cause lanes to exit at different iterations, leaving the
+    // remaining warp.any() calls with only a partial tile. Instead, keep all lanes in lockstep
+    // via an unconditional while(true) and guard per-lane work with in-loop predicates.
+    auto i = static_cast<cudf::size_type>(lane_idx * bytes_per_warp);
+    while (true) {
+      bool const in_bounds = (i + d_target.size_bytes()) <= d_str.size_bytes();
+      // All lanes converge: stop when no lane has unchecked positions.
+      if (!warp.any(in_bounds && !found)) break;
+      if (in_bounds && !found) {
+        for (auto j = 0; !found && (j < bytes_per_warp); j++) {
+          if (((i + j + d_target.size_bytes()) <= d_str.size_bytes()) &&
+              d_target.compare(d_str.data() + i + j, d_target.size_bytes()) == 0) {
+            found = true;
+          }
         }
       }
-      // Early exit: stop all lanes as soon as any lane finds the target. Without this, `!found`
-      // only gates the lane's own loop — other lanes continue scanning past the match.
+      // All lanes converge: early-exit as soon as any lane finds the target.
       if (warp.any(found)) break;
+      i += cudf::detail::warp_size * bytes_per_warp;
     }
 
     auto const result = warp.any(found);
@@ -493,7 +502,7 @@ std::unique_ptr<column> contains_heterogeneous(strings_column_view const& input,
   // the worst case (all rows long); only the first `long_count` entries are populated.
   size_type const length_threshold = 128;
   rmm::device_uvector<size_type> long_indices(strings_count, stream);
-  rmm::device_scalar<size_type> d_long_count(0, stream);
+  cudf::detail::device_scalar<size_type> d_long_count(0, stream);
 
   auto const grid = cudf::detail::grid_1d{strings_count, block_size};
   contains_string_per_thread_heterogeneous<<<grid.num_blocks,
@@ -501,6 +510,7 @@ std::unique_ptr<column> contains_heterogeneous(strings_column_view const& input,
                                              0,
                                              stream.value()>>>(
     d_strings, d_target, d_results, length_threshold, long_indices.data(), d_long_count.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   // Second pass (warp-per-string): search the deferred long rows. The deferred count is read on the
   // device inside the kernel, so this launches back-to-back with the first pass and never
@@ -521,6 +531,7 @@ std::unique_ptr<column> contains_heterogeneous(strings_column_view const& input,
 
   contains_warp_parallel_fn_heterogeneous<<<num_warp_blocks, block_size, 0, stream.value()>>>(
     d_strings, d_target, d_results, long_indices.data(), d_long_count.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   results->set_null_count(input.null_count());
   return results;
