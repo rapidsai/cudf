@@ -403,10 +403,7 @@ aggregate_reader_metadata::read_bloom_filters(
   std::transform(flat_bitset_spans.begin(),
                  flat_bitset_spans.end(),
                  std::back_inserter(bloom_filter_data),
-                 [](auto const& span) {
-                   return cudf::device_span<cuda::std::byte const>{
-                     reinterpret_cast<cuda::std::byte const*>(span.data()), span.size()};
-                 });
+                 [](auto const& span) { return cuda::std::as_bytes(span); });
 
   return {std::move(bloom_filter_buffers), std::move(bloom_filter_data)};
 }
