@@ -110,37 +110,38 @@ std::pair<std::vector<size_type>, size_type> compute_page_row_offsets(
   page_row_offsets.push_back(0);
   size_type max_page_size = 0;
 
-  std::for_each(cuda::counting_iterator<std::size_t>{0},
-                cuda::counting_iterator{row_group_indices.size()},
-                [&](auto const src_idx) {
-                  // For all row groups in this source
-                  auto const& rg_indices = row_group_indices[src_idx];
-                  std::optional<size_type> colchunk_iter_offset{};
-                  std::for_each(rg_indices.begin(), rg_indices.end(), [&](auto const& rg_idx) {
-                    auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
-                    CUDF_EXPECTS(parquet::detail::find_colchunk_iter_offset(
-                                   row_group, schema_idx, colchunk_iter_offset),
-                                 "Column chunk with schema index " + std::to_string(schema_idx) +
-                                   " not found in row group",
-                                 std::invalid_argument);
-                    auto const& colchunk_iter = row_group.columns[colchunk_iter_offset.value()];
-                    auto const& offset_index  = colchunk_iter.offset_index.value();
-                    auto const row_group_num_pages = offset_index.page_locations.size();
-                    std::for_each(cuda::counting_iterator<std::size_t>{0},
-                                  cuda::counting_iterator{row_group_num_pages},
-                                  [&](auto const page_idx) {
-                                    int64_t const first_row_idx =
-                                      offset_index.page_locations[page_idx].first_row_index;
-                                    int64_t const last_row_idx =
-                                      (page_idx < row_group_num_pages - 1)
-                                        ? offset_index.page_locations[page_idx + 1].first_row_index
-                                        : row_group.num_rows;
-                                    auto const page_size = last_row_idx - first_row_idx;
-                                    max_page_size = std::max<size_type>(max_page_size, page_size);
-                                    page_row_offsets.push_back(page_row_offsets.back() + page_size);
-                                  });
-                  });
-                });
+  std::for_each(
+    cuda::counting_iterator<std::size_t>{0},
+    cuda::counting_iterator{row_group_indices.size()},
+    [&](auto const src_idx) {
+      // For all row groups in this source
+      auto const& rg_indices = row_group_indices[src_idx];
+      std::optional<size_type> colchunk_iter_offset{};
+      std::for_each(rg_indices.begin(), rg_indices.end(), [&](auto const& rg_idx) {
+        auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
+        CUDF_EXPECTS(
+          parquet::detail::find_colchunk_iter_offset(row_group, schema_idx, colchunk_iter_offset),
+          "Column chunk with schema index " + std::to_string(schema_idx) +
+            " not found in row group",
+          std::invalid_argument);
+        auto const& colchunk_iter      = row_group.columns.begin() + colchunk_iter_offset.value();
+        auto const& offset_index       = colchunk_iter->offset_index.value();
+        auto const row_group_num_pages = offset_index.page_locations.size();
+        std::for_each(cuda::counting_iterator<std::size_t>{0},
+                      cuda::counting_iterator{row_group_num_pages},
+                      [&](auto const page_idx) {
+                        int64_t const first_row_idx =
+                          offset_index.page_locations[page_idx].first_row_index;
+                        int64_t const last_row_idx =
+                          (page_idx < row_group_num_pages - 1)
+                            ? offset_index.page_locations[page_idx + 1].first_row_index
+                            : row_group.num_rows;
+                        auto const page_size = last_row_idx - first_row_idx;
+                        max_page_size        = std::max<size_type>(max_page_size, page_size);
+                        page_row_offsets.push_back(page_row_offsets.back() + page_size);
+                      });
+      });
+    });
 
   return {std::move(page_row_offsets), max_page_size};
 }
