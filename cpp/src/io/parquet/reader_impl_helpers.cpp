@@ -1236,7 +1236,7 @@ ColumnChunkMetaData const& aggregate_reader_metadata::get_column_metadata(size_t
 
   auto const& row_group      = per_file_metadata[src_idx].row_groups[row_group_index];
   auto const colchunk_offset = find_colchunk_iter_offset(row_group, schema_idx);
-  return row_group.columns[colchunk_offset.value()].meta_data;
+  return row_group.columns[colchunk_offset].meta_data;
 }
 
 std::vector<std::unordered_map<std::string, int64_t>>
