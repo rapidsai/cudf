@@ -40,6 +40,13 @@ set +e
 PASSED=()
 FAILED=()
 
+# Avoid oversubscribing the CPU: NJOBS pytest-xdist workers each get nproc/NJOBS Polars threads
+NJOBS=4
+NPROC=$(nproc)
+export POLARS_MAX_THREADS=$(( NPROC / NJOBS > 0 ? NPROC / NJOBS : 1 ))
+export OMP_NUM_THREADS=${POLARS_MAX_THREADS}
+echo "n-jobs=${NJOBS}, n-proc=${NPROC}, polars-max-threads=${POLARS_MAX_THREADS}"
+
 for version in "${VERSIONS[@]}"; do
     rapids-logger "Testing cudf_polars with polars ${version}.*"
 
@@ -93,7 +100,7 @@ for version in "${VERSIONS[@]}"; do
     ./ci/run_cudf_polars_pytests.sh \
         -vv \
         "${COVERAGE_ARGS[@]}" \
-        --numprocesses=4 \
+        --numprocesses=${NJOBS} \
         --dist=worksteal \
         --durations 10 --durations-min 10 \
         -x \

@@ -4,6 +4,14 @@
 
 set -euo pipefail
 
+# Avoid oversubscribing the CPU: NJOBS pytest-xdist workers each get nproc/NJOBS Polars threads
+NJOBS=4
+NPROC=$(nproc)
+export POLARS_MAX_THREADS=$(( NPROC / NJOBS > 0 ? NPROC / NJOBS : 1 ))
+export OMP_NUM_THREADS=${POLARS_MAX_THREADS}
+
+echo "n-jobs=${NJOBS}, n-proc=${NPROC}, polars-max-threads=${POLARS_MAX_THREADS}"
+
 TIMEOUT_TOOL_PATH="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/timeout_with_stack.py
 
 # Support invoking run_cudf_polars_pytests.sh outside the script directory
@@ -71,7 +79,7 @@ python "${TIMEOUT_TOOL_PATH}" --enable-python 5400 \
        -x \
        -m "" \
        -p cudf_polars.testing.inject_gpu_engine \
-       -n 4 \
+       -n ${NJOBS} \
        --dist=worksteal \
        --tb=native \
        --durations 10 --durations-min 10 \
@@ -94,7 +102,7 @@ python "${TIMEOUT_TOOL_PATH}" --enable-python 5400 \
        -m "" \
        -p cudf_polars.testing.inject_gpu_engine \
        -W ignore::ResourceWarning \
-       -n 4 \
+       -n ${NJOBS} \
        --dist=worksteal \
        --tb=native \
        --durations 10 --durations-min 10 \
