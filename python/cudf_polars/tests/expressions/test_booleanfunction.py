@@ -12,7 +12,10 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_142
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_141,
+    POLARS_VERSION_LT_142,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -205,7 +208,6 @@ def test_boolean_horizontal(engine: pl.GPUEngine, expr, has_nulls, wide):
     [
         pytest.param(
             pl.col("a").is_in(pl.col("b").implode()),
-            marks=pytest.mark.xfail(reason="Need to support implode agg"),
             id="implode",
         ),
         pytest.param(pl.col("a").is_in([1, 2, 3]), id="list_small"),
@@ -280,6 +282,28 @@ def test_boolean_is_close(engine: pl.GPUEngine):
     q = ldf.select(pl.col("a").is_close(1.4, abs_tol=0.1))
 
     assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_141,
+    reason="has_nulls added to polars' BooleanFunction in 1.41",
+)
+@pytest.mark.parametrize("data", [[1, None, 3], [1, 2, 3], []])
+def test_boolean_has_nulls(engine: pl.GPUEngine, data):
+    ldf = pl.LazyFrame({"a": pl.Series(data, dtype=pl.Int64)})
+    q = ldf.select(pl.col("a").has_nulls())
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_141,
+    reason="is_empty added to polars' BooleanFunction in 1.41",
+)
+@pytest.mark.parametrize("data", [[1, 2, 3], [None, None], []])
+def test_boolean_is_empty(engine: pl.GPUEngine, data):
+    ldf = pl.LazyFrame({"a": pl.Series(data, dtype=pl.Int64)})
+    q = ldf.select(pl.col("a").is_empty())
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(

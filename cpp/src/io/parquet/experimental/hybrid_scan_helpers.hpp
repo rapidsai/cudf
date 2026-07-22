@@ -158,12 +158,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    *
    * @param payload_column_names List of paths of select payload column names, if any
    * @param filter_column_names List of paths of column names present only in filter, if any
-   * @param include_index Whether to always include the PANDAS index column(s)
-   * @param strings_to_categorical Type conversion parameter
-   * @param ignore_missing_columns Whether to ignore non-existent columns
-   * @param timestamp_type_id Type conversion parameter
-   * @param decimal_type_id Type conversion parameter
-   * @param case_sensitive_names Boolean indicating if column names are case sensitive
+   * @param selection_options Bundled column selection options
    *
    * @return input column information, output column buffers, list of output column schema
    * indices
@@ -172,12 +167,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
     tuple<std::vector<input_column_info>, std::vector<inline_column_buffer>, std::vector<size_type>>
     select_payload_columns(std::optional<std::vector<std::string>> const& payload_column_names,
                            std::optional<std::vector<std::string>> const& filter_column_names,
-                           bool include_index,
-                           bool strings_to_categorical,
-                           bool ignore_missing_columns,
-                           type_id timestamp_type_id,
-                           type_id decimal_type_id,
-                           bool case_sensitive_names);
+                           parquet::detail::column_selection_options const& selection_options);
 
   /**
    * @brief Filters row groups such that only the row groups that start within the byte range
@@ -239,13 +229,15 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param output_column_schemas schema indices of output columns
    * @param filter AST expression to filter row groups based on dictionary pages
    *
-   * @return Byte ranges of dictionary pages, one input column chunk with (in)equality predicate
+   * @return A pair of vectors containing dictionary page byte ranges and corresponding source
+   *         indices
    */
-  [[nodiscard]] std::vector<cudf::io::text::byte_range_info> get_dictionary_page_bytes(
-    std::span<std::vector<size_type> const> row_group_indices,
-    std::span<data_type const> output_dtypes,
-    std::span<cudf::size_type const> output_column_schemas,
-    std::reference_wrapper<ast::expression const> filter);
+  [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
+                          std::vector<cudf::size_type>>
+  dictionary_pages_byte_ranges(std::span<std::vector<size_type> const> row_group_indices,
+                               std::span<data_type const> output_dtypes,
+                               std::span<cudf::size_type const> output_column_schemas,
+                               std::reference_wrapper<ast::expression const> filter);
 
   /**
    * @brief Filter the row groups using dictionaries based on predicate filter
