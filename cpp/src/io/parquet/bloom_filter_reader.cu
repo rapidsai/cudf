@@ -309,7 +309,8 @@ std::optional<std::pair<int64_t, std::size_t>> parse_bloom_filter_header(
   host_span<uint8_t const> bytes)
 {
   using policy_type              = arrow_filter_policy<cuda::std::byte>;
-  auto constexpr words_per_block = policy_type::words_per_block;
+  using word_type                = typename policy_type::word_type;
+  auto constexpr bytes_per_block = sizeof(word_type) * policy_type::words_per_block;
 
   // Deserialize the bloom filter header from the front of the buffer
   BloomFilterHeader header;
@@ -318,7 +319,7 @@ std::optional<std::pair<int64_t, std::size_t>> parse_bloom_filter_header(
 
   // Check if the bloom filter header is valid
   auto const is_header_valid =
-    (header.num_bytes % words_per_block) == 0 and
+    (header.num_bytes % bytes_per_block) == 0 and
     header.compression.compression == BloomFilterCompression::UNCOMPRESSED and
     header.algorithm.algorithm == BloomFilterAlgorithm::SPLIT_BLOCK and
     header.hash.hash == BloomFilterHash::XXHASH;
