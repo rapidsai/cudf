@@ -2850,14 +2850,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 if isinstance(into, defaultdict):
                     cons = functools.partial(cons, into.default_factory)
             elif issubclass(into, Mapping):
-                cons = into  # type: ignore[assignment]
+                cons = into
                 if issubclass(into, defaultdict):
                     raise TypeError(
                         "to_dict() only accepts initialized defaultdicts"
                     )
             else:
                 raise TypeError(f"unsupported type: {into}")
-            return cons(self.items())  # type: ignore[misc]
+            return cons(self.items())
 
         return self.to_pandas().to_dict(orient=orient, into=into, index=index)
 
