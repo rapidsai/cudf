@@ -45,7 +45,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto const is_list_col = chunk.max_level[level_type::REPETITION] != 0;
 
   // Write offsets for pruned non-list (flat) string columns.
-  // Mirrors `update_string_offsets_for_pruned_pages` in page_string_utils.cuh.
   if (not is_list_col and is_string_col(chunk)) {
     auto data = static_cast<size_type*>(chunk.column_data_base[chunk.max_nesting_depth - 1]);
     if (data == nullptr) { return; }
@@ -65,7 +64,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   }
 
   // Write offsets to list locations at each depth.
-  // Mirrors `update_list_offsets_for_pruned_pages` in page_decode.cuh.
   if (is_list_col and page.nesting != nullptr and page.nesting_decode != nullptr) {
     for (auto depth = 0; depth < chunk.max_nesting_depth - 1; depth++) {
       auto offsets       = static_cast<size_type*>(chunk.column_data_base[depth]);

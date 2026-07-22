@@ -138,56 +138,6 @@ inline __device__ void compute_initial_large_strings_offset(page_state_s const* 
   }
 }
 
-/**
- * @brief Update offsets with either zeros if this is a large string column, `initial_value`
- *        otherwise.
- *
- * For large string columns, fill zeros (sizes) at all offsets and atomically update the initial
- * string offset. Otherwise, fill `initial_value` at all offsets.
- *
- * @tparam block_size Thread block size
- * @tparam has_lists Whether the column is a list column
- * @param[in,out] state page state
- * @param[out] initial_str_offsets Initial string offsets
- * @param[in] page Page information
- */
-template <int block_size, bool has_lists>
-__device__ void update_string_offsets_for_pruned_pages(
-  page_state_s* state, cudf::device_span<size_t> initial_str_offsets, PageInfo const& page)
-{
-  namespace cg = cooperative_groups;
-
-  // Initial string offset
-  auto const initial_value = page.str_offset;
-  // The value count is either the leaf-level batch size in case of lists or the number of
-  // effective rows being read by this page
-  auto const value_count =
-    has_lists ? page.nesting[state->col.max_nesting_depth - 1].batch_size : state->num_rows;
-  auto const tid = cg::this_thread_block().thread_rank();
-
-  // Offsets pointer contains string sizes in case of large strings and actual offsets
-  // otherwise
-  auto& ni    = state->nesting_info[state->col.max_nesting_depth - 1];
-  auto offptr = reinterpret_cast<size_type*>(ni.data_out);
-  // For large strings, update the initial string buffer offset to be used during large string
-  // column construction. Otherwise, convert string sizes to final offsets
-  if (state->col.is_large_string_col) {
-    // Write zero string sizes
-    for (int idx = tid; idx < value_count; idx += block_size) {
-      offptr[idx] = 0;
-    }
-    // page.chunk_idx are ordered by input_col_idx and row_group_idx respectively
-    auto const chunks_per_rowgroup = initial_str_offsets.size();
-    auto const input_col_idx       = page.chunk_idx % chunks_per_rowgroup;
-    compute_initial_large_strings_offset<has_lists>(state, initial_str_offsets[input_col_idx]);
-  } else {
-    // Write the initial offset at all positions to indicate zero sized strings
-    for (int idx = tid; idx < value_count; idx += block_size) {
-      offptr[idx] = initial_value;
-    }
-  }
-}
-
 template <int value>
 CUDF_HOST_DEVICE constexpr int log2_int()
 {
