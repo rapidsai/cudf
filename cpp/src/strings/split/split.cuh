@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,6 +24,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
 #include <cuda/atomic>
 #include <cuda/iterator>
@@ -450,6 +451,162 @@ struct rsplit_ws_tokenizer_fn : base_ws_split_tokenizer<rsplit_ws_tokenizer_fn> 
   {
   }
 };
+
+// Per-string kernel outperforms the global-scan split_helper for short strings;
+// fall back to split_helper above this average byte length per non-null string.
+constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 120;
+
+// Per-string token count — returns number of tokens (delimiters found + 1), capped at max_tokens.
+struct token_count_fn {
+  column_device_view const d_strings;
+  string_view const d_delimiter;
+  size_type const max_tokens;
+
+  __device__ size_type operator()(size_type const idx) const
+  {
+    if (d_strings.is_null(idx)) { return 0; }
+    auto const d_str    = d_strings.element<string_view>(idx);
+    auto const size     = d_str.size_bytes();
+    auto const del_size = d_delimiter.size_bytes();
+    auto const base     = d_str.data();
+    size_type count     = 1;
+    size_type pos       = 0;
+    while (pos + del_size <= size) {
+      if (d_delimiter.compare(base + pos, del_size) == 0) {
+        if (++count == max_tokens) { break; }
+        pos += del_size;
+      } else {
+        ++pos;
+      }
+    }
+    return count;
+  }
+};
+
+// Extract tokens forward (split): scan left-to-right, emit up to token_count tokens.
+struct forward_extract_fn {
+  column_device_view const d_strings;
+  string_view const d_delimiter;
+  cudf::detail::input_offsetalator const d_token_offsets;
+  string_index_pair* const d_tokens;
+
+  __device__ void operator()(size_type const idx) const
+  {
+    if (d_strings.is_null(idx)) { return; }
+    auto const d_str        = d_strings.element<string_view>(idx);
+    auto const token_offset = d_token_offsets[idx];
+    auto const token_count  = static_cast<size_type>(d_token_offsets[idx + 1] - token_offset);
+    auto* const d_result    = d_tokens + token_offset;
+    auto const size         = d_str.size_bytes();
+    auto const del_size     = d_delimiter.size_bytes();
+    auto const base         = d_str.data();
+
+    if (size == 0) {
+      d_result[0] = string_index_pair{"", 0};
+      return;
+    }
+    size_type token_idx = 0;
+    size_type last_pos  = 0;
+    size_type pos       = 0;
+    while (pos + del_size <= size && token_idx < token_count - 1) {
+      if (d_delimiter.compare(base + pos, del_size) == 0) {
+        d_result[token_idx++] = string_index_pair{base + last_pos, pos - last_pos};
+        last_pos              = pos + del_size;
+        pos                   = last_pos;
+      } else {
+        ++pos;
+      }
+    }
+    d_result[token_idx] = string_index_pair{base + last_pos, size - last_pos};
+  }
+};
+
+// Extract tokens backward (rsplit): scan right-to-left, emit up to token_count tokens.
+struct backward_extract_fn {
+  column_device_view const d_strings;
+  string_view const d_delimiter;
+  cudf::detail::input_offsetalator const d_token_offsets;
+  string_index_pair* const d_tokens;
+
+  __device__ void operator()(size_type const idx) const
+  {
+    if (d_strings.is_null(idx)) { return; }
+    auto const d_str        = d_strings.element<string_view>(idx);
+    auto const token_offset = d_token_offsets[idx];
+    auto const token_count  = static_cast<size_type>(d_token_offsets[idx + 1] - token_offset);
+    auto* const d_result    = d_tokens + token_offset;
+    auto const size         = d_str.size_bytes();
+    auto const del_size     = d_delimiter.size_bytes();
+    auto const base         = d_str.data();
+
+    if (size == 0) {
+      d_result[0] = string_index_pair{"", 0};
+      return;
+    }
+    size_type token_idx = 0;
+    size_type last_end  = size;
+    int64_t pos         = static_cast<int64_t>(size) - static_cast<int64_t>(del_size);
+    while (pos >= 0 && token_idx < token_count - 1) {
+      if (d_delimiter.compare(base + pos, del_size) == 0) {
+        auto const start                      = static_cast<size_type>(pos) + del_size;
+        d_result[token_count - 1 - token_idx] = string_index_pair{base + start, last_end - start};
+        last_end                              = static_cast<size_type>(pos);
+        pos -= static_cast<int64_t>(del_size);
+        ++token_idx;
+      } else {
+        --pos;
+      }
+    }
+    d_result[0] = string_index_pair{base, last_end};
+  }
+};
+
+/**
+ * @brief Per-string pipeline replacing split_helper for the non-whitespace case.
+ *
+ * Three kernel launches: count tokens per string, prefix-sum into offsets, extract tokens.
+ * Returns the same (offsets, tokens) pair as split_helper so callers are interchangeable.
+ */
+template <bool Forward>
+std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split_per_string_helper(
+  strings_column_view const& input,
+  string_view const d_delimiter,
+  size_type const max_tokens,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  auto d_strings           = column_device_view::create(input.parent(), stream);
+  auto const strings_count = input.size();
+  auto const mr_ref        = cudf::get_current_device_resource_ref();
+  auto const zero_iter     = cuda::counting_iterator<size_type>{0};
+
+  auto token_counts = rmm::device_uvector<size_type>(strings_count, stream);
+  thrust::transform(rmm::exec_policy_nosync(stream, mr_ref),
+                    zero_iter,
+                    zero_iter + strings_count,
+                    token_counts.begin(),
+                    token_count_fn{*d_strings, d_delimiter, max_tokens});
+
+  auto [offsets, total_tokens] =
+    cudf::detail::make_offsets_child_column(token_counts.begin(), token_counts.end(), stream, mr);
+  auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
+
+  auto tokens = rmm::device_uvector<string_index_pair>(total_tokens, stream);
+  if (total_tokens > 0) {
+    if constexpr (Forward) {
+      thrust::for_each_n(rmm::exec_policy_nosync(stream, mr_ref),
+                         zero_iter,
+                         strings_count,
+                         forward_extract_fn{*d_strings, d_delimiter, d_offsets, tokens.data()});
+    } else {
+      thrust::for_each_n(rmm::exec_policy_nosync(stream, mr_ref),
+                         zero_iter,
+                         strings_count,
+                         backward_extract_fn{*d_strings, d_delimiter, d_offsets, tokens.data()});
+    }
+  }
+  return {std::move(offsets), std::move(tokens)};
+}
 
 /**
  * @brief Count the number of delimiters in a strings column
