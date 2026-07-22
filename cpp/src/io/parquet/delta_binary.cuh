@@ -7,6 +7,8 @@
 
 #include "page_decode.cuh"
 
+#include <cudf/detail/utilities/assert.cuh>
+
 namespace cudf::io::parquet::detail {
 
 // DELTA_XXX encoding support
@@ -47,6 +49,13 @@ constexpr int delta_max_batch_size = 2 * cudf::detail::warp_size;
 // stored in the buffer, but it still impacts buffer indexing and we need to account for it to
 // avoid race conditions.
 constexpr int delta_rolling_buf_size = (2 * delta_max_batch_size) + 1;
+
+// The DELTA_BYTE_ARRAY decoders run two delta_binary_decoders at once -- one for the prefix lengths
+// and one for the suffix lengths -- and no DELTA encoding produces more concurrent length streams
+// than that. So at most two WarpScans are ever live at the same time, and each concurrent caller of
+// calc_mini_block_pass claims a distinct scan slot (see the scan_slot parameter). This is a
+// structural property of the encoding, not a tunable batch size like delta_max_batch_size.
+constexpr int delta_max_concurrent_scans = 2;
 
 /**
  * @brief Read a ULEB128 varint integer
@@ -122,7 +131,7 @@ struct delta_binary_decoder {
 
   // index just past the values decode_next_pass() has produced so far (0 before the first pass,
   // even though the header value already occupies index 0)
-  __device__ constexpr uint32_t next_pass_start_idx()
+  __device__ uint32_t next_pass_start_idx()
   {
     return current_value_idx + cur_pass * cudf::detail::warp_size;
   }
@@ -257,7 +266,9 @@ struct delta_binary_decoder {
 
   // decode a single warp_size-wide pass (indexed by `pass`) of the current mini-block and convert
   // the deltas to values (see decode_next_pass). called by all threads in a single warp.
-  inline __device__ void calc_mini_block_pass(uint32_t pass, int lane_id)
+  // `scan_slot` (0 or 1) selects which shared WarpScan temp storage this warp uses; up to two
+  // decoders run this concurrently, so concurrent callers must pass distinct slots.
+  inline __device__ void calc_mini_block_pass(uint32_t pass, int lane_id, int scan_slot)
   {
     using cudf::detail::warp_size;
 
@@ -292,14 +303,15 @@ struct delta_binary_decoder {
     // add min delta to get true delta
     delta += cur_min_delta;
 
-    // do inclusive scan to get value - first_value at each position
-    // NOTE: this function-scope shared TempStorage is shared by all warps that call this method
-    // concurrently (e.g. the prefix and suffix decoder warps of the DELTA_BYTE_ARRAY kernels).
-    // that is safe today because a 32-lane WarpScan over int64_t is shuffle-based and never
-    // touches its (empty) TempStorage, but a cub change or a wider scan type could turn this
-    // into a race.
-    __shared__ cub::WarpScan<int64_t>::TempStorage temp_storage;
-    cub::WarpScan<int64_t>(temp_storage).InclusiveSum(delta, delta);
+    // do inclusive scan to get value - first_value at each position.
+    // up to two delta decoders run this scan concurrently (e.g. the prefix and suffix decoder
+    // warps of the DELTA_BYTE_ARRAY kernels), so each caller passes a distinct scan_slot to claim
+    // its own TempStorage. those warps are not always block-wide warps 0 and 1 (the byte-array
+    // decode kernel decodes on warps 1 and 2), so the slot cannot simply be the warp id here.
+    cudf_assert(scan_slot < delta_max_concurrent_scans &&
+                "delta WarpScan supports at most 2 concurrent warps");
+    __shared__ cub::WarpScan<int64_t>::TempStorage temp_storage[delta_max_concurrent_scans];
+    cub::WarpScan<int64_t>(temp_storage[scan_slot]).InclusiveSum(delta, delta);
 
     // now add first value from header or last value from previous pass to get true value
     delta += last_value;
@@ -327,7 +339,7 @@ struct delta_binary_decoder {
       // decode_next_pass only runs in warp 0, but advances decoder state everyone reads,
       // so everyone must sync around it
       __syncthreads();
-      if (t < warp_size) { decode_next_pass(); }
+      if (t < warp_size) { decode_next_pass(0); }
       __syncthreads();
     }
   }
@@ -360,7 +372,7 @@ struct delta_binary_decoder {
       // the pass decoded below produces indices [pass_first, pass_first + warp_size); the
       // header value at index 0 is not part of any pass and is already in `sum`
       auto const pass_first = max(next_pass_start_idx(), 1u);
-      decode_next_pass();
+      decode_next_pass(0);
 
       auto const idx      = pass_first + t;
       size_t const val    = idx < static_cast<uint32_t>(skip) && idx < value_count
@@ -377,9 +389,11 @@ struct delta_binary_decoder {
   // decode the next warp_size-wide pass of the current mini-block into db->value, advancing to
   // the next mini-block once all of its passes have been decoded. Decoding a single pass at a
   // time keeps the rolling buffer footprint independent of the mini-block size. Should only be
-  // called by a single warp. NOTE: lane 0's state updates are not synchronized on exit; the
-  // caller must synchronize the warp (or block) before the next call so all lanes observe them.
-  inline __device__ void decode_next_pass()
+  // called by a single warp. `scan_slot` (0 or 1) selects this warp's shared WarpScan temp
+  // storage; concurrent callers (e.g. the prefix and suffix decoder warps) must pass distinct
+  // slots. NOTE: lane 0's state updates are not synchronized on exit; the caller must synchronize
+  // the warp (or block) before the next call so all lanes observe them.
+  inline __device__ void decode_next_pass(int scan_slot)
   {
     using cudf::detail::warp_size;
     int const t       = threadIdx.x;
@@ -388,7 +402,7 @@ struct delta_binary_decoder {
     if (not advance_past_first_value(lane_id)) { return; }
 
     // unpack one pass of deltas and save in db->value
-    calc_mini_block_pass(cur_pass, lane_id);
+    calc_mini_block_pass(cur_pass, lane_id, scan_slot);
 
     // advance within the mini-block; move to the next mini-block once all passes are decoded
     if (lane_id == 0) {

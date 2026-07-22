@@ -448,7 +448,7 @@ __device__ cuda::std::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const
       // pass always is
       uint32_t const num_pass = db->values_per_mb / warp_size;
       for (uint32_t p = 0; p < num_pass; p++) {
-        db->calc_mini_block_pass(p, lane_id);
+        db->calc_mini_block_pass(p, lane_id, warp_id);
 
         // get per lane sum for this pass
         uint32_t const idx = db->current_value_idx + p * warp_size + lane_id;
@@ -774,7 +774,7 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
       // pass always is
       uint32_t const num_pass = string_lengths.values_per_mb / warp_size;
       for (uint32_t p = 0; p < num_pass; p++) {
-        string_lengths.calc_mini_block_pass(p, t);
+        string_lengths.calc_mini_block_pass(p, t, 0);
 
         // get per lane sum for this pass
         uint32_t const idx = string_lengths.current_value_idx + p * warp_size + t;

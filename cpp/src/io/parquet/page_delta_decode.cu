@@ -305,7 +305,7 @@ struct delta_byte_array_decoder {
       // decode past start_val, and those values stay resident in the rolling buffers for the
       // decode loop that follows.
       auto* const db = t < warp_size ? &prefixes : &suffixes;
-      if (t < 2 * warp_size) { db->decode_next_pass(); }
+      if (t < 2 * warp_size) { db->decode_next_pass(t < warp_size ? 0 : 1); }
       __syncthreads();
 
       // warp 0 reconstructs this round's skipped strings into the temp scratch (the helpers
@@ -448,7 +448,7 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
         // make lane 0's state updates from the previous pass visible to the whole warp; the
         // block-wide sync below covers the last pass of the iteration
         if (i > 0) { __syncwarp(); }
-        db->decode_next_pass();
+        db->decode_next_pass(0);
       }
     } else if (src_pos < target_pos) {
       // warp 2
@@ -663,13 +663,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         // make lane 0's state updates from the previous pass visible to the whole warp; the
         // block-wide sync below covers the last pass of the iteration
         if (i > 0) { __syncwarp(); }
-        prefix_db->decode_next_pass();
+        prefix_db->decode_next_pass(0);
       }
     } else if (warp.meta_group_rank() == 2) {
       // warp 2
       for (uint32_t i = 0; i < passes_per_batch; i++) {
         if (i > 0) { __syncwarp(); }
-        suffix_db->decode_next_pass();
+        suffix_db->decode_next_pass(1);
       }
     } else if (warp.meta_group_rank() == 3 and src_pos < target_pos) {
       // warp 3
@@ -907,7 +907,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         // make lane 0's state updates from the previous pass visible to the whole warp; the
         // block-wide sync below covers the last pass of the iteration
         if (i > 0) { __syncwarp(); }
-        db->decode_next_pass();
+        db->decode_next_pass(0);
       }
     } else if (warp.meta_group_rank() == 2 && src_pos < target_pos) {
       // warp 2
