@@ -690,8 +690,7 @@ def test_composite_domain_columns_follow_renames(engine: SPMDEngine) -> None:
     analyzed = analyze_plan(renamed, StatsCollector())
     facts = PlanFacts(
         row_estimates={renamed: 20, source: 10},
-        source_costs=analyzed.source_costs,
-        source_counts=analyzed.source_counts,
+        source_facts=analyzed.source_facts,
         selective_nodes=analyzed.selective_nodes,
         column_lineages=analyzed.column_lineages,
     )

@@ -54,7 +54,7 @@ The implementation uses the following terms:
     the target.
 
 Plan rewrite has three stages. ``analyze_plan`` gathers row estimates, source
-scan costs and counts, selective nodes, and column value-domain lineages.
+scan facts, selective nodes, and column value-domain lineages.
 Candidate selection consumes those facts and returns a decision.
 ``apply_candidate`` then constructs the selected semi-join rewrite.
 
@@ -112,6 +112,14 @@ DomainScore: TypeAlias = tuple[int, int, int]
 
 
 @dataclass(frozen=True)
+class SourceFacts:
+    """Source-derived facts for an IR node."""
+
+    cost: int | None
+    is_single_source: bool
+
+
+@dataclass(frozen=True)
 class _Producer:
     """A subtree and its bound column names at an insertion point."""
 
@@ -119,6 +127,7 @@ class _Producer:
     columns: tuple[str, ...]
     rows: int
     cost: int
+    is_single_source: bool
     path: tuple[int, ...] = ()
     """Child-edge path from the candidate root to ``node``."""
 
@@ -194,8 +203,7 @@ class PlanFacts:
     """Facts derived in one bottom-up traversal of an IR DAG."""
 
     row_estimates: Mapping[IR, int | None]
-    source_costs: Mapping[IR, int | None]
-    source_counts: Mapping[IR, int]
+    source_facts: Mapping[IR, SourceFacts]
     selective_nodes: frozenset[IR]
     column_lineages: Mapping[ColumnRef, ColumnLineage]
 
@@ -225,8 +233,7 @@ def analyze_plan(ir: IR, stats: StatsCollector) -> PlanFacts:
     Gather facts about the plan.
     """
     row_estimates: dict[IR, int | None] = {}
-    source_costs: dict[IR, int | None] = {}
-    source_counts: dict[IR, int] = {}
+    source_facts: dict[IR, SourceFacts] = {}
     source_nodes: dict[IR, frozenset[IR]] = {}
     selective_nodes: set[IR] = set()
     column_lineages: dict[ColumnRef, ColumnLineage] = {}
@@ -261,13 +268,15 @@ def analyze_plan(ir: IR, stats: StatsCollector) -> PlanFacts:
                 source for child in node.children for source in source_nodes[child]
             )
         source_nodes[node] = sources
-        source_counts[node] = len(sources)
         source_rows = [
             source_rows
             for source in sources
             if (source_rows := row_estimates[source]) is not None and source_rows > 0
         ]
-        source_costs[node] = sum(source_rows) if source_rows else rows
+        source_facts[node] = SourceFacts(
+            cost=sum(source_rows) if source_rows else rows,
+            is_single_source=len(sources) == 1,
+        )
 
         if (
             (isinstance(node, Scan) and node.predicate is not None)
@@ -296,8 +305,7 @@ def analyze_plan(ir: IR, stats: StatsCollector) -> PlanFacts:
 
     return PlanFacts(
         row_estimates=row_estimates,
-        source_costs=source_costs,
-        source_counts=source_counts,
+        source_facts=source_facts,
         selective_nodes=frozenset(selective_nodes),
         column_lineages=column_lineages,
     )
@@ -594,7 +602,7 @@ def _simple_candidates(
             continue
         if contains_node(target.node, domain.node):
             continue
-        if facts.source_counts.get(domain.node) == 1 and has_filtering_semi_ancestor(
+        if domain.is_single_source and has_filtering_semi_ancestor(
             target_child, target.path
         ):
             continue
@@ -737,6 +745,27 @@ def _make_semi_join(
     )
 
 
+def make_producer(
+    node: IR,
+    columns: tuple[str, ...],
+    path: tuple[int, ...],
+    facts: PlanFacts,
+) -> _Producer | None:
+    """Construct a producer from gathered plan facts, if fully estimated."""
+    rows = facts.row_estimates.get(node)
+    source = facts.source_facts[node]
+    if rows is None or rows <= 0 or source.cost is None:
+        return None
+    return _Producer(
+        node=node,
+        columns=columns,
+        rows=rows,
+        cost=source.cost,
+        is_single_source=source.is_single_source,
+        path=path,
+    )
+
+
 def _smallest_key_producer(
     root: IR,
     column: str,
@@ -750,15 +779,11 @@ def _smallest_key_producer(
         node, bound_column = reference.node, reference.name
         if node is exclude:
             continue
-        rows = facts.row_estimates.get(node)
-        if rows is None or rows <= 0:
-            continue
-        cost = facts.source_costs.get(node)
-        if cost is None:
-            continue
         if require_selective and node not in facts.selective_nodes:
             continue
-        producers.append(_Producer(node, (bound_column,), rows, cost, path))
+        producer = make_producer(node, (bound_column,), path, facts)
+        if producer is not None:
+            producers.append(producer)
     if not producers:
         return None
     return min(producers, key=lambda p: p.domain_score)
@@ -782,11 +807,9 @@ def _smallest_node_containing_all(
         if any(lineage.column.node != node for lineage in lineages[1:]):
             break
         bound_columns = tuple(lineage.column.name for lineage in lineages)
-        rows = facts.row_estimates.get(node)
-        if rows is not None and rows > 0:
-            cost = facts.source_costs.get(node)
-            if cost is not None:
-                producers.append(_Producer(node, bound_columns, rows, cost, path))
+        producer = make_producer(node, bound_columns, path, facts)
+        if producer is not None:
+            producers.append(producer)
         if blocks_pushdown(node):
             break
         source_child_index = lineages[0].source_child_index
@@ -810,16 +833,13 @@ def _largest_key_source(root: IR, column: str, facts: PlanFacts) -> _Producer | 
     fallback_candidates = []
     for reference, path in semijoin_pushdown_candidates(facts, root, column):
         node, bound_column = reference.node, reference.name
-        rows = facts.row_estimates.get(node)
-        if rows is None or rows <= 0:
-            continue
-        cost = facts.source_costs.get(node)
-        if cost is None:
+        producer = make_producer(node, (bound_column,), path, facts)
+        if producer is None:
             continue
         item = (
-            rows,
+            producer.rows,
             len(node.schema),
-            _Producer(node, (bound_column,), rows, cost, path),
+            producer,
         )
         if isinstance(node, (Scan, DataFrameScan)):
             source_candidates.append(item)
