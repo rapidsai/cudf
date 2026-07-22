@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any, ClassVar, TypeGuard, assert_never, cast
+from typing import TYPE_CHECKING, Any, ClassVar, TypeGuard, assert_never
 
 import polars as pl
 
@@ -114,6 +114,7 @@ class UnaryFunction(Expr):
             "arg_sort",
             "arg_unique",
             "clip",
+            "diff",
             "drop_nans",
             "drop_nulls",
             "extend_constant",
@@ -124,6 +125,7 @@ class UnaryFunction(Expr):
             "mask_nans",
             "mode",
             "null_count",
+            "pct_change",
             "rank",
             "reinterpret",
             "replace",
@@ -135,6 +137,7 @@ class UnaryFunction(Expr):
             "shift",
             "shift_and_fill",
             "top_k",
+            "top_k_by",
             "truncate",
             "unique",
             "unique_counts",
@@ -244,6 +247,12 @@ class UnaryFunction(Expr):
                     "reinterpret between integer and floating-point types is not "
                     "supported"
                 )
+        if self.name == "top_k_by":
+            if len(self.children) != 3:
+                raise NotImplementedError(
+                    "top_k_by only supports a single by expression"
+                )
+            self.options = (tuple(self.options[0]),)
 
     @staticmethod
     def _bound_clip_operand(
@@ -271,6 +280,20 @@ class UnaryFunction(Expr):
     ) -> TypeGuard[plc.Scalar | None]:
         """Whether a ``clip`` bound can use the scalar ``clamp`` fast path."""
         return operand is None or isinstance(operand, plc.Scalar)
+
+    @staticmethod
+    def _evaluate_n(n_expr: Expr, df: DataFrame, context: ExecutionContext) -> int:
+        """Evaluate the integer ``n`` offset for ``diff`` and ``pct_change``."""
+        if isinstance(n_expr, Literal):
+            value = n_expr.value
+        else:
+            value = (
+                n_expr.evaluate(df, context=context)
+                .obj_scalar(stream=df.stream)
+                .to_py(stream=df.stream)
+            )
+        assert isinstance(value, int)
+        return value
 
     @staticmethod
     def _cast_replace_operand(
@@ -649,6 +672,65 @@ class UnaryFunction(Expr):
             return Column(
                 plc.transform.compute_column(
                     plc.Table([column.obj]), truncate_expr, stream=df.stream
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name == "diff":
+            column = self.children[0].evaluate(df, context=context)
+            (null_behavior,) = self.options
+            offset = self._evaluate_n(self.children[1], df, context)
+            shifted = plc.copying.shift(
+                column.obj,
+                offset,
+                plc.Scalar.from_py(None, column.dtype.plc_type, stream=df.stream),
+                stream=df.stream,
+            )
+            diffed = Column(
+                plc.binaryop.binary_operation(
+                    column.obj,
+                    shifted,
+                    plc.binaryop.BinaryOperator.SUB,
+                    self.dtype.plc_type,
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
+            if null_behavior == "drop":
+                if offset >= 0:
+                    diffed = diffed.slice((offset, None), stream=df.stream)
+                else:
+                    diffed = diffed.slice(
+                        (0, column.obj.size() + offset), stream=df.stream
+                    )
+            return diffed
+        elif self.name == "pct_change":
+            column = (
+                self.children[0]
+                .evaluate(df, context=context)
+                .astype(self.dtype, stream=df.stream)
+            )
+            offset = self._evaluate_n(self.children[1], df, context)
+            out_type = self.dtype.plc_type
+            shifted = plc.copying.shift(
+                column.obj,
+                offset,
+                plc.Scalar.from_py(None, out_type, stream=df.stream),
+                stream=df.stream,
+            )
+            expression = plc.expressions.Operation(
+                plc.expressions.ASTOperator.SUB,
+                plc.expressions.Operation(
+                    plc.expressions.ASTOperator.DIV,
+                    plc.expressions.ColumnReference(0),
+                    plc.expressions.ColumnReference(1),
+                ),
+                plc.expressions.Literal(
+                    plc.Scalar.from_py(1.0, out_type, stream=df.stream)
+                ),
+            )
+            return Column(
+                plc.transform.compute_column(
+                    plc.Table([column.obj, shifted]), expression, stream=df.stream
                 ),
                 dtype=self.dtype,
             )
@@ -1062,19 +1144,56 @@ class UnaryFunction(Expr):
 
             return Column(ranked, dtype=self.dtype)
         elif self.name == "top_k":
-            (column, _k) = (
-                child.evaluate(df, context=context) for child in self.children
-            )
+            column = self.children[0].evaluate(df, context=context)
             (reverse,) = self.options
+            k_expr = self.children[1]
+            if isinstance(k_expr, Literal):
+                k = k_expr.value
+            else:
+                k = (
+                    k_expr.evaluate(df, context=context)
+                    .obj_scalar(stream=df.stream)
+                    .to_py(stream=df.stream)
+                )
             return Column(
                 plc.sorting.top_k(
                     column.obj,
-                    cast("Literal", self.children[1]).value,
+                    k,
                     plc.types.Order.ASCENDING
                     if reverse
                     else plc.types.Order.DESCENDING,
                     stream=df.stream,
                 ),
+                dtype=self.dtype,
+            )
+        elif self.name == "top_k_by":
+            col_value = self.children[0].evaluate(df, context=context)
+            by = self.children[2].evaluate(df, context=context)
+            (descending,) = self.options
+            k_expr = self.children[1]
+            if isinstance(k_expr, Literal):
+                k = k_expr.value
+            else:
+                k = (
+                    k_expr.evaluate(df, context=context)
+                    .obj_scalar(stream=df.stream)
+                    .to_py(stream=df.stream)
+                )
+            indices = plc.sorting.top_k_order(
+                by.obj,
+                k,
+                plc.types.Order.ASCENDING
+                if descending[0]
+                else plc.types.Order.DESCENDING,
+                stream=df.stream,
+            )
+            return Column(
+                plc.copying.gather(
+                    plc.Table([col_value.obj]),
+                    indices,
+                    plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+                    stream=df.stream,
+                ).columns()[0],
                 dtype=self.dtype,
             )
         elif self.name in ("shift", "shift_and_fill"):
