@@ -86,11 +86,13 @@ class distinct_filtered_join : public filtered_join {
    * @param compare_nulls How null values should be compared
    * @param load_factor Target load factor for the hash table
    * @param stream CUDA stream on which to perform operations
+   * @param mr Device memory resource used to allocate the internal hash table
    */
   distinct_filtered_join(cudf::table_view const& right,
                          cudf::null_equality compare_nulls,
                          double load_factor,
-                         rmm::cuda_stream_view stream);
+                         rmm::cuda_stream_view stream,
+                         cuda::mr::any_resource<cuda::mr::device_accessible> mr);
 
   /**
    * @brief Implementation of semi join for set

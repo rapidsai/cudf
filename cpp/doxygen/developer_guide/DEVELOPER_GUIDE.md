@@ -229,7 +229,7 @@ data structures you will use when developing libcudf code.
 
 Resource ownership is an essential concept in libcudf. In short, an "owning" object owns a
 resource (such as device memory). It acquires that resource during construction and releases the
-resource in destruction ([RAII](https://en.cppreference.com/w/cpp/language/raii)). A "non-owning"
+resource in destruction ([RAII](https://en.cppreference.com/cpp/language/raii)). A "non-owning"
 object does not own resources. Any class in libcudf with the `*_view` suffix is non-owning. For more
 detail see the [`libcudf` presentation.](https://docs.google.com/presentation/d/1zKzAtc1AWFKfMhiUlV5yRZxSiPLwsObxMlWRWz_f5hA/edit?usp=sharing)
 
@@ -975,7 +975,7 @@ only two objects of different types. Multiple objects of the same type may be re
 `std::vector<T>`.
 
 Alternatively, with C++17 (supported from cudf v0.20),
-[structured binding](https://en.cppreference.com/w/cpp/language/structured_binding)
+[structured binding](https://en.cppreference.com/cpp/language/structured_binding)
 may be used to disaggregate multiple return values:
 
 ```c++
@@ -1160,7 +1160,7 @@ void isolated_helper_function(...);
 } // anonymous namespace
 ```
 
-[**Anonymous namespaces should *never* be used in a header file.**](https://wiki.sei.cmu.edu/confluence/display/cplusplus/DCL59-CPP.+Do+not+define+an+unnamed+namespace+in+a+header+file)
+[**Anonymous namespaces should *never* be used in a header file.**](https://cmu-sei.github.io/secure-coding-standards/sei-cert-cpp-coding-standard/rules/declarations-and-initialization-dcl/dcl59-cpp/)
 
 # Deprecating and Removing Code
 
@@ -1173,7 +1173,7 @@ basis, the libcudf team will notify users of changes that we expect to have sign
 widespread effects.
 
 Where possible, indicate pending API removals using the
-[deprecated](https://en.cppreference.com/w/cpp/language/attributes/deprecated) attribute and
+[deprecated](https://en.cppreference.com/cpp/language/attributes/deprecated) attribute and
 document them using Doxygen's
 [deprecated](https://www.doxygen.nl/manual/commands.html#cmddeprecated) command prior to removal.
 When a replacement API is available for a deprecated API, mention the replacement in both the
@@ -1416,7 +1416,7 @@ template <>
 void type_printer::operator()<double>() { std::cout << "double\n"; }
 ```
 
-The second method is to use [SFINAE](https://en.cppreference.com/w/cpp/language/sfinae) with
+The second method is to use [SFINAE](https://en.cppreference.com/cpp/language/sfinae) with
 `std::enable_if_t`. This is useful to partially specialize for a set of types with a common trait.
 The following example functor prints `integral` or `floating point` for integral or floating point
 types, respectively.

@@ -97,11 +97,12 @@ std::size_t filtered_join::compute_bucket_storage_size(cudf::size_type num_rows,
 filtered_join::filtered_join(cudf::table_view const& right,
                              cudf::null_equality compare_nulls,
                              double load_factor,
-                             rmm::cuda_stream_view stream)
+                             rmm::cuda_stream_view stream,
+                             cuda::mr::any_resource<cuda::mr::device_accessible> mr)
   : _right_mode{select_row_operator_mode(right)},
     _bucket_storage{cuco::extent<std::size_t>{
                       compute_bucket_storage_size(right.num_rows(), load_factor, _right_mode)},
-                    rmm::mr::polymorphic_allocator<char>{},
+                    rmm::mr::polymorphic_allocator<char>{std::move(mr)},
                     stream.value()},
     _right{right},
     _nulls_equal{compare_nulls},
@@ -111,11 +112,13 @@ filtered_join::filtered_join(cudf::table_view const& right,
   _bucket_storage.initialize(empty_sentinel_key, stream);
 }
 
-distinct_filtered_join::distinct_filtered_join(cudf::table_view const& right,
-                                               cudf::null_equality compare_nulls,
-                                               double load_factor,
-                                               rmm::cuda_stream_view stream)
-  : filtered_join(right, compare_nulls, load_factor, stream)
+distinct_filtered_join::distinct_filtered_join(
+  cudf::table_view const& right,
+  cudf::null_equality compare_nulls,
+  double load_factor,
+  rmm::cuda_stream_view stream,
+  cuda::mr::any_resource<cuda::mr::device_accessible> mr)
+  : filtered_join(right, compare_nulls, load_factor, stream, std::move(mr))
 {
   cudf::scoped_range range{"distinct_filtered_join::distinct_filtered_join"};
   if (_right.num_rows() == 0) return;
@@ -199,16 +202,19 @@ filtered_join::~filtered_join() = default;
 filtered_join::filtered_join(cudf::table_view const& build,
                              null_equality compare_nulls,
                              double load_factor,
-                             rmm::cuda_stream_view stream)
+                             rmm::cuda_stream_view stream,
+                             cuda::mr::any_resource<cuda::mr::device_accessible> mr)
   : _impl{std::make_unique<cudf::detail::distinct_filtered_join>(
-      build, compare_nulls, load_factor, stream)}
+      build, compare_nulls, load_factor, stream, std::move(mr))}
 {
 }
 
 filtered_join::filtered_join(cudf::table_view const& build,
                              null_equality compare_nulls,
-                             rmm::cuda_stream_view stream)
-  : filtered_join(build, compare_nulls, cudf::detail::CUCO_DESIRED_LOAD_FACTOR, stream)
+                             rmm::cuda_stream_view stream,
+                             cuda::mr::any_resource<cuda::mr::device_accessible> mr)
+  : filtered_join(
+      build, compare_nulls, cudf::detail::CUCO_DESIRED_LOAD_FACTOR, stream, std::move(mr))
 {
 }
 
