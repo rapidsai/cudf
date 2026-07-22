@@ -40,13 +40,16 @@ so plain `rm -rf` works.
   --cuda-version 12.9
 ```
 
-This compiles the JNI layer against the static libcudf from Step 1 and emits a
-single classifier JAR (e.g. `cudf-26.08.0-SNAPSHOT-cuda12.jar`) plus its POM
-into a classifier-named subdirectory under `--output-dir`:
+This compiles the JNI layer against the static libcudf from Step 1 and emits
+the classifier JAR (e.g. `cudf-26.08.0-SNAPSHOT-cuda12.jar`), a
+classifier-independent sources jar and javadoc jar, and the POM into a
+classifier-named subdirectory under `--output-dir`:
 
 ```
 /tmp/jars/cuda12/
     cudf-26.08.0-SNAPSHOT-cuda12.jar
+    cudf-26.08.0-SNAPSHOT-sources.jar
+    cudf-26.08.0-SNAPSHOT-javadoc.jar
     cudf-26.08.0-SNAPSHOT.pom
 ```
 
@@ -68,14 +71,17 @@ inside the container.
 ```
 
 This walks every subdirectory of `--jars-dir` (each subdir name IS the
-classifier), gathers the per-classifier JAR and shared POM, derives the
-artifact version from the JAR filenames (requiring a single unique version
-across subdirs), and lays them out as:
+classifier), gathers the per-classifier JAR, one shared sources jar, one
+shared javadoc jar, and the shared POM, derives the artifact version from
+the JAR filenames (requiring a single unique version across subdirs), and
+lays them out as:
 
 ```
 /tmp/maven-repo/ai/rapids/cudf/26.08.0-SNAPSHOT/
     cudf-26.08.0-SNAPSHOT-cuda12.jar
     cudf-26.08.0-SNAPSHOT-cuda13.jar
+    cudf-26.08.0-SNAPSHOT-sources.jar
+    cudf-26.08.0-SNAPSHOT-javadoc.jar
     cudf-26.08.0-SNAPSHOT.pom
 ```
 
