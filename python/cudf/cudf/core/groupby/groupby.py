@@ -215,7 +215,28 @@ def _is_all_scan_aggregate(all_aggs: list[list[str]]) -> bool:
     }
 
     def get_name(agg):
-        return agg.__name__ if callable(agg) else agg
+        if not callable(agg):
+            return agg
+        if agg is not list:
+            # A ``lambda x: x.cumsum()``-style aggregation carries its
+            # scan-ness only in the aggregation name it resolves to
+            # (``Aggregation.cumsum`` is an alias of ``sum``; libcudf
+            # separates scan from reduction by the *call*, not the
+            # aggregation object). Probe the callable with a
+            # name-recording stand-in mirroring ``make_aggregation``'s
+            # ``op(Aggregation)`` protocol; true UDFs raise inside the
+            # probe and fall back to ``__name__``.
+            class _NameProbe:
+                def __getattr__(self, name):
+                    return lambda *args, **kwargs: name
+
+            try:
+                name = agg(_NameProbe())
+            except Exception:
+                return agg.__name__
+            if isinstance(name, str):
+                return name
+        return agg.__name__
 
     all_scan = all(
         get_name(agg_name) in groupby_scans
@@ -1314,7 +1335,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # RangeIndex) columns.
             data = ColumnAccessor(
                 data,
-                multiindex=False,
+                multiindex=self.obj._data.multiindex,
                 level_names=self.obj._data.level_names,
                 rangeindex=self.obj._data.rangeindex,
                 label_dtype=self.obj._data.label_dtype,
@@ -1325,11 +1346,26 @@ class GroupBy(Serializable, Reducible, Scannable):
             and self.obj.ndim == 2
             and self.obj._data.level_names != (None,)
         ):
+            mi_kwargs: dict[str, Any] = {}
+            if self.obj._data.multiindex and all(
+                isinstance(label, tuple)
+                and len(label) == self.obj._data.nlevels
+                for label in data
+            ):
+                # the aggregation kept the source's tuple labels: preserve
+                # the MultiIndex columns and their per-level metadata.
+                # Relabeling aggregations (``agg(new=(col, func))``) emit
+                # new flat labels the source's multi-level metadata does
+                # not describe, so they keep the flat default.
+                mi_kwargs = {
+                    "multiindex": True,
+                    "level_dtypes": self.obj._data.level_dtypes,
+                }
             data = ColumnAccessor(
                 data,
-                multiindex=False,
                 level_names=self.obj._data.level_names,
                 label_dtype=self.obj._data.label_dtype,
+                **mi_kwargs,
             )
         else:
             data = ColumnAccessor(data, multiindex=multilevel)
