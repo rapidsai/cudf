@@ -335,18 +335,22 @@ repos:
     rev: v1.27.0
     hooks:
       - id: zizmor
-  # lychee checks local/relative links only (--offline): no external URL liveness
-  # checking, so it stays fast and network-independent as a commit hook.
+  # lychee checks local/relative links only (--offline), so checking itself
+  # makes no network requests.
   # Anchors/fragments after '#' are also not validated.
   # Notebook link checking would require markdown extraction before lychee.
+  # RST files are not scanned as sources; --fallback-extensions only affects
+  # resolution of extensionless link targets.
   - repo: https://github.com/lycheeverse/lychee
     rev: lychee-v0.24.2
     hooks:
       - id: lychee
+        alias: lychee-md
         name: lychee (markdown)
         files: \.md$
-        # These READMEs use publish-site-relative links lychee cannot resolve from
-        # the repo, so this exclusion is deliberate.
+        # The python READMEs are symlinks to the root README, whose root-relative
+        # links break when resolved from each symlink directory. The Sphinx hook owns
+        # docs/cudf/source.
         exclude: |
           (?x)
             ^docs/cudf/source/|
@@ -359,6 +363,7 @@ repos:
             "--fallback-extensions", "md,rst,ipynb",
           ]
       - id: lychee
+        alias: lychee-sphinx
         name: lychee (sphinx docs)
         files: ^docs/cudf/source/.*[.]md$
         args:
