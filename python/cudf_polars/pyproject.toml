@@ -45,9 +45,9 @@ classifiers = [
 test = [
     "dask-cuda==26.8.*,>=0.0.0a0",
     "pandas>=3.0.0,<3.0.4a0",
+    "psutil",
     "pytest-cov",
     "pytest-httpserver",
-    "pytest-timeout",
     "pytest-xdist",
     "pytest<9.1.0",
     "rich",
@@ -91,7 +91,6 @@ filterwarnings = [
     "error",
     "ignore:Port .* is already in use.:UserWarning",
 ]
-timeout = 45
 xfail_strict = true
 
 [tool.coverage.report]
