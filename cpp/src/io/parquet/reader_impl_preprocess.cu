@@ -570,8 +570,8 @@ void reader_impl::read_compressed_data()
   read_chunks_tasks.get();
 
   // Process dataset chunk pages into output columns
-  auto const total_pages = _has_page_index ? count_page_headers_with_pgidx(chunks, _stream)
-                                           : count_page_headers(chunks, _stream);
+  auto const total_pages = _has_offset_index ? count_page_headers_with_pgidx(chunks, _stream)
+                                             : count_page_headers(chunks, _stream);
   if (total_pages <= 0) { return; }
 
   // Zero out the vector before `decode_page_headers` as it may not write every byte of the buffer,
@@ -580,7 +580,7 @@ void reader_impl::read_compressed_data()
     total_pages, _stream, cudf::get_current_device_resource_ref());
 
   // decoding of column/page information
-  decode_page_headers(pass, unsorted_pages, _has_page_index, _stream);
+  decode_page_headers(pass, unsorted_pages, _has_offset_index, _stream);
   CUDF_EXPECTS(pass.page_offsets.size() - 1 == static_cast<size_t>(_input_columns.size()),
                "Encountered page_offsets / num_columns mismatch");
 }
@@ -632,10 +632,11 @@ void reader_impl::preprocess_file(read_mode mode)
                            _file_itm_data.exclusive_sum_num_rows_per_source.begin());
   }
 
-  // check for page indexes
-  _has_page_index = std::all_of(_file_itm_data.row_groups.cbegin(),
-                                _file_itm_data.row_groups.cend(),
-                                [](auto const& row_group) { return row_group.has_page_index(); });
+  // Check for offset indexes.
+  _has_offset_index =
+    std::all_of(_file_itm_data.row_groups.cbegin(),
+                _file_itm_data.row_groups.cend(),
+                [](auto const& row_group) { return row_group.has_offset_index(); });
 
   if (_file_itm_data.global_num_rows > 0 && not _file_itm_data.row_groups.empty() &&
       not _input_columns.empty()) {
@@ -841,7 +842,15 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
                is_treat_fixed_length_as_string(chunk.logical_type);
       });
 
-    if (!_has_page_index || has_flba) {
+    // String pages with missing value info do not have the value counts or string byte sizes needed
+    // for chunking. Scan them so chunk boundaries and output allocations use their actual sizes.
+    auto const has_string_page_without_info =
+      std::any_of(subpass.pages.host_begin(), subpass.pages.host_end(), [](auto const& page) {
+        return (static_cast<uint32_t>(page.kernel_mask) & STRINGS_MASK) != 0 and
+               (page.flags & PAGEINFO_FLAGS_DICTIONARY) == 0 and not page.has_value_info;
+      });
+
+    if (has_string_page_without_info || has_flba) {
       constexpr bool compute_all_string_sizes = true;
       compute_page_string_sizes_pass1(subpass.pages,
                                       pass.chunks,
@@ -891,7 +900,7 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
     // corner case: only decode up to the second-to-last row, except if this is the last page in the
     // entire pass or if we have the page index. this handles the case where we only have 1 chunk, 1
     // page, and potentially even just 1 row.
-    if (is_list and std::cmp_less(max_col_row, last_pass_row) and not _has_page_index) {
+    if (is_list and std::cmp_less(max_col_row, last_pass_row) and not _has_offset_index) {
       // compute min row for this column in the subpass
       auto const& first_page  = subpass.pages[first_page_index];
       auto const& first_chunk = pass.chunks[first_page.chunk_idx];
