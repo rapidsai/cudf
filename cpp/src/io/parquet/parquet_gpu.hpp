@@ -1043,6 +1043,7 @@ void preprocess_levels(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] pages All pages to be processed
  * @param[in] chunks All chunks to be processed
  * @param[in] page_mask Boolean vector indicating which pages are decoded
+ * @param[in,out] initial_str_offsets Initial offsets used to construct large nested strings
  * @param[in] skip_rows Number of rows to skip
  * @param[in] num_rows Number of rows to read
  * @param[in] stream CUDA stream to use
@@ -1050,6 +1051,7 @@ void preprocess_levels(cudf::detail::hostdevice_span<PageInfo> pages,
 void fill_pruned_offsets(cudf::device_span<PageInfo> pages,
                          cudf::device_span<ColumnChunkDesc const> chunks,
                          cudf::device_span<bool const> page_mask,
+                         cudf::device_span<size_t> initial_str_offsets,
                          size_t skip_rows,
                          size_t num_rows,
                          rmm::cuda_stream_view stream);

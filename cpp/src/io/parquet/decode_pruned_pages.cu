@@ -8,6 +8,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 
 #include <cooperative_groups.h>
+#include <cuda/atomic>
 #include <cuda/std/algorithm>
 
 namespace cudf::io::parquet::detail {
@@ -27,6 +28,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   fill_pruned_offsets_kernel(device_span<PageInfo> pages,
                              device_span<ColumnChunkDesc const> chunks,
                              device_span<bool const> page_mask,
+                             device_span<size_t> initial_str_offsets,
                              size_t skip_rows,
                              size_t num_rows)
 {
@@ -54,6 +56,18 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     auto const read_end   = skip_rows + num_rows;
     auto const begin      = cuda::std::max(page_begin, skip_rows);
     auto const end        = cuda::std::min(page_end, read_end);
+    if (begin >= end) { return; }
+
+    // Large strings needs the first page string offset, including if the page was
+    // pruned. Record it here.
+    if (chunk.is_large_string_col and t == 0) {
+      auto const chunks_per_rowgroup = initial_str_offsets.size();
+      auto const input_col_idx       = page.chunk_idx % chunks_per_rowgroup;
+      cuda::atomic_ref<size_t, cuda::std::thread_scope_device> initial_str_offset{
+        initial_str_offsets[input_col_idx]};
+      initial_str_offset.fetch_min(page.str_offset, cuda::std::memory_order_relaxed);
+    }
+
     // Write zeros for large strings and the page's initial offset otherwise.
     auto const value =
       chunk.is_large_string_col ? size_type{0} : static_cast<size_type>(page.str_offset);
@@ -88,13 +102,14 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 void fill_pruned_offsets(cudf::device_span<PageInfo> pages,
                          cudf::device_span<ColumnChunkDesc const> chunks,
                          cudf::device_span<bool const> page_mask,
+                         cudf::device_span<size_t> initial_str_offsets,
                          size_t skip_rows,
                          size_t num_rows,
                          rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(pages.size() == page_mask.size(), "Page mask size does not match page count");
   fill_pruned_offsets_kernel<<<pages.size(), block_size, 0, stream.value()>>>(
-    pages, chunks, page_mask, skip_rows, num_rows);
+    pages, chunks, page_mask, initial_str_offsets, skip_rows, num_rows);
   CUDF_CUDA_TRY(cudaGetLastError());
 }
 
