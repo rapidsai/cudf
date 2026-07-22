@@ -40,11 +40,11 @@
 
 // Forward declarations
 /// @cond
-namespace rmm {
+#include <rmm/detail/export.hpp>
+RMM_NAMESPACE_BEGIN
 class device_buffer;
+RMM_NAMESPACE_END
 /// @endcond
-
-}  // namespace rmm
 
 namespace CUDF_EXPORT cudf {
 // Forward declaration

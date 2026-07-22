@@ -343,35 +343,58 @@ namespace {
  * The long-index append uses a warp-aggregated atomic so each group of coalesced long-row threads
  * performs a single `atomicAdd` on `d_long_count`, minimizing global-atomic contention.
  *
+ * Also atomically tracks the maximum byte length of all non-null strings in `d_max_length`.
+ * The caller reads this value to decide whether the warp-parallel pass is needed at all:
+ * if the max is at or below `length_threshold`, every non-null string was handled here and
+ * the warp kernel can be skipped entirely.
+ *
  * @param d_strings Column of input strings
  * @param d_target String to search for in each row of `d_strings`
  * @param d_results Indicates which rows contain `d_target`
  * @param length_threshold Rows with more bytes than this are deferred to the warp-parallel pass
  * @param d_long_indices Output list of deferred long-row indices (capacity == d_strings.size())
  * @param d_long_count Output count of entries written to `d_long_indices`
+ * @param d_max_length Output maximum byte length of any non-null string (used to skip second pass)
  */
 CUDF_KERNEL void contains_string_per_thread_heterogeneous(column_device_view const d_strings,
                                                           string_view const d_target,
                                                           bool* d_results,
                                                           size_type const length_threshold,
                                                           size_type* d_long_indices,
-                                                          size_type* d_long_count)
+                                                          size_type* d_long_count,
+                                                          size_type* d_max_length)
 {
-  auto const tidx = cudf::detail::grid_1d::global_thread_id();
-  if (tidx >= static_cast<cudf::thread_index_type>(d_strings.size())) { return; }
-  auto const str_idx = static_cast<size_type>(tidx);
+  // Warp-level max reduction: all threads in the warp reduce their byte counts with a single
+  // warp-shuffle before one global atomicMax per warp. This reduces contention on the global
+  // location by 32× vs per-thread atomics and requires no __syncthreads() block barrier.
+  // All threads (including OOB and null) contribute before any early return so the reduction is
+  // complete and the warp stays in lock-step.
+  namespace cg    = cooperative_groups;
+  auto const warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
 
-  if (d_strings.is_null(str_idx)) {
+  auto const tidx      = cudf::detail::grid_1d::global_thread_id();
+  bool const in_bounds = (tidx < static_cast<cudf::thread_index_type>(d_strings.size()));
+  auto const str_idx   = in_bounds ? static_cast<size_type>(tidx) : size_type{0};
+  bool const is_valid  = in_bounds && !d_strings.is_null(str_idx);
+
+  // Load the string view for valid threads; OOB/null threads get an empty view (0 bytes).
+  auto const d_str     = is_valid ? d_strings.element<string_view>(str_idx) : string_view{};
+  auto const str_bytes = is_valid ? d_str.size_bytes() : size_type{0};
+
+  // Warp-level max: one global atomicMax per warp instead of one per thread.
+  auto const warp_max = cg::reduce(warp, str_bytes, cg::greater<size_type>());
+  if (warp.thread_rank() == 0) { atomicMax(d_max_length, warp_max); }
+
+  if (!in_bounds) { return; }
+  if (!is_valid) {
     d_results[str_idx] = false;
     return;
   }
 
-  auto const d_str = d_strings.element<string_view>(str_idx);
-
-  if (d_str.size_bytes() <= length_threshold) {
+  if (str_bytes <= length_threshold) {
     auto const target_bytes = d_target.size_bytes();
     auto found              = false;
-    for (size_type i = 0; !found && ((i + target_bytes) <= d_str.size_bytes()); ++i) {
+    for (size_type i = 0; !found && ((i + target_bytes) <= str_bytes); ++i) {
       found = d_target.compare(d_str.data() + i, target_bytes) == 0;
     }
     d_results[str_idx] = found;
@@ -380,7 +403,6 @@ CUDF_KERNEL void contains_string_per_thread_heterogeneous(column_device_view con
 
   // Long row: defer to the warp-parallel pass. Coalesced long-row threads aggregate their appends
   // into a single atomicAdd, then each writes its index at a distinct offset.
-  namespace cg      = cooperative_groups;
   auto const active = cg::coalesced_threads();
   size_type offset  = 0;
   if (active.thread_rank() == 0) {
@@ -397,25 +419,22 @@ CUDF_KERNEL void contains_string_per_thread_heterogeneous(column_device_view con
  * long-row indices collected by ::contains_string_per_thread_heterogeneous are processed.
  * @see AVG_CHAR_BYTES_THRESHOLD
  *
- * The row count is read from `d_long_count` on the device so the two passes launch back-to-back on
- * the stream with no intervening host synchronization. A fixed (grid-stride) launch is used: each
- * warp strides over the deferred rows, so the second pass works for any `*d_long_count` without the
- * host needing to know the value to size the grid.
+ * The row count is passed as a kernel argument (read on the host after the first pass), allowing
+ * the grid to be sized precisely to the actual number of long rows rather than the worst case.
+ * A grid-stride loop is still used so the kernel is correct for any `long_count`.
  *
  * @param d_strings Column of input strings
  * @param d_target String to search for in each row of `d_strings`
  * @param d_results Indicates which rows contain `d_target`
  * @param d_long_indices Indices of the long (non-null) rows to process
- * @param d_long_count Number of entries in `d_long_indices` (read on the device)
+ * @param long_count Number of entries in `d_long_indices`
  */
 CUDF_KERNEL void contains_warp_parallel_fn_heterogeneous(column_device_view const d_strings,
                                                          string_view const d_target,
                                                          bool* d_results,
                                                          size_type const* d_long_indices,
-                                                         size_type const* d_long_count)
+                                                         size_type const long_count)
 {
-  auto const long_count = *d_long_count;
-
   namespace cg        = cooperative_groups;
   auto const warp     = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
   auto const lane_idx = warp.thread_rank();
@@ -500,37 +519,59 @@ std::unique_ptr<column> contains_heterogeneous(strings_column_view const& input,
   // First pass (thread-per-string): search the short rows in place and collect the indices of the
   // long rows (> length_threshold bytes) for the warp-parallel pass. `long_indices` is sized for
   // the worst case (all rows long); only the first `long_count` entries are populated.
+  // Also tracks the maximum byte length of any non-null string via atomicMax.
   size_type const length_threshold = 128;
   rmm::device_uvector<size_type> long_indices(strings_count, stream);
   cudf::detail::device_scalar<size_type> d_long_count(0, stream);
+  cudf::detail::device_scalar<size_type> d_max_length(0, stream);
 
   auto const grid = cudf::detail::grid_1d{strings_count, block_size};
   contains_string_per_thread_heterogeneous<<<grid.num_blocks,
                                              grid.num_threads_per_block,
                                              0,
-                                             stream.value()>>>(
-    d_strings, d_target, d_results, length_threshold, long_indices.data(), d_long_count.data());
+                                             stream.value()>>>(d_strings,
+                                                               d_target,
+                                                               d_results,
+                                                               length_threshold,
+                                                               long_indices.data(),
+                                                               d_long_count.data(),
+                                                               d_max_length.data());
   CUDF_CUDA_TRY(cudaGetLastError());
 
-  // Second pass (warp-per-string): search the deferred long rows. The deferred count is read on the
-  // device inside the kernel, so this launches back-to-back with the first pass and never
-  // synchronizes the stream (a host readback here dominates the runtime on small columns).
+  // Batch both D2H copies into a single cudaMemcpyBatchAsync so the GPU sees only one DMA
+  // operation between the first pass kernel and the potential second pass kernel.  A single
+  // stream.synchronize() waits for the first pass and both copies to complete.
   //
-  // A fixed grid-stride launch is used: size it for full occupancy but never exceed the worst case
-  // of one warp per row, so short-heavy columns launch only a handful of blocks that read
-  // `*d_long_count == 0` and exit immediately.
+  // When max_length <= threshold, every row was already handled in the first pass and the second
+  // pass kernel is skipped entirely.  Otherwise the grid is sized precisely to the actual number
+  // of deferred long rows (long_count) instead of the worst-case strings_count.
+  auto h_stats = cudf::detail::make_pinned_vector<size_type>(2, stream);
+  {
+    void* dsts[2]        = {h_stats.data(), h_stats.data() + 1};
+    void const* srcs[2]  = {d_max_length.data(), d_long_count.data()};
+    std::size_t sizes[2] = {sizeof(size_type), sizeof(size_type)};
+    CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(dsts, srcs, sizes, 2, stream));
+  }
+  stream.synchronize();
+  auto const host_max_length = h_stats[0];
+  if (host_max_length <= length_threshold) {
+    results->set_null_count(input.null_count());
+    return results;
+  }
+  auto const host_long_count = h_stats[1];
+
   auto constexpr warps_per_block = block_size / cudf::detail::warp_size;
   int max_blocks_per_sm          = 0;
   CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
     &max_blocks_per_sm, contains_warp_parallel_fn_heterogeneous, block_size, 0));
   auto const persistent_blocks =
     static_cast<int64_t>(max_blocks_per_sm) * cudf::detail::num_multiprocessors();
-  auto const worst_case_blocks =
-    cudf::util::div_rounding_up_safe<int64_t>(strings_count, warps_per_block);
-  auto const num_warp_blocks = std::max<int64_t>(1, std::min(persistent_blocks, worst_case_blocks));
+  auto const exact_blocks =
+    cudf::util::div_rounding_up_safe<int64_t>(host_long_count, warps_per_block);
+  auto const num_warp_blocks = std::max<int64_t>(1, std::min(persistent_blocks, exact_blocks));
 
   contains_warp_parallel_fn_heterogeneous<<<num_warp_blocks, block_size, 0, stream.value()>>>(
-    d_strings, d_target, d_results, long_indices.data(), d_long_count.data());
+    d_strings, d_target, d_results, long_indices.data(), host_long_count);
   CUDF_CUDA_TRY(cudaGetLastError());
 
   results->set_null_count(input.null_count());
