@@ -619,6 +619,73 @@ TEST_F(OrcWriterTest, negTimestampsNano)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
+// Regression test for https://github.com/rapidsai/cudf/issues/19350.
+// A negative timestamp with a sub-second fractional part produces a negative remainder when the
+// writer splits it into (seconds, nanos). ORC's SECONDARY stream is unsigned and the Apache ORC
+// reference implementation expects a non-negative nanos value; the writer must normalize the
+// remainder to be non-negative. Because the reader (and Apache ORC, per ORC-306/ORC-763) borrows
+// one second on read only when the stored nanos are >= 1 ms, the writer must additionally carry the
+// borrow itself for sub-millisecond remainders. This test exercises both the >= 1 ms and the
+// sub-millisecond negative cases across resolutions and verifies the libcudf round-trip is
+// lossless. Note: the definitive interop check (reading the generated file with Apache ORC / Spark
+// and confirming it no longer throws "nanos > 999999999 or < 0") must be performed with an external
+// reader.
+template <typename T>
+void test_negative_fractional_timestamp_roundtrip(std::vector<typename T::rep> const& values)
+{
+  cudf::test::fixed_width_column_wrapper<T, typename T::rep> const ts(values.begin(), values.end());
+  cudf::table_view const expected({ts});
+
+  std::vector<char> out_buffer;
+  cudf::io::orc_writer_options const out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer}, expected);
+  cudf::io::write_orc(out_opts);
+
+  cudf::io::orc_reader_options const in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{cudf::host_span<std::byte const>{
+                                            reinterpret_cast<std::byte const*>(out_buffer.data()),
+                                            out_buffer.size()}})
+      .use_index(false)
+      .timestamp_type(cudf::data_type{cudf::type_to_id<T>()});
+  auto const result = cudf::io::read_orc(in_opts);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    expected.column(0), result.tbl->view().column(0), cudf::test::debug_output_level::ALL_ERRORS);
+}
+
+TEST_F(OrcWriterTest, NegativeFractionalTimestampsInterop)
+{
+  // Microseconds: mix of positive, negative with >= 1 ms fraction, and negative sub-millisecond
+  // fractions (e.g. -5'999'500 us == -5.9995 s, fraction -0.5 ms). The sub-ms cases are misread by
+  // one second unless the writer carries the borrow.
+  test_negative_fractional_timestamp_roundtrip<cudf::timestamp_us>({
+    45'045'557'685'074'778L,   // positive, unaffected by the fix
+    116'614'807'755'579'786L,  // positive, unaffected by the fix
+    942'496L,                  // small positive, sub-second
+    -7'713'116'127L,           // negative, fraction >= 1 ms
+    -33'426'545'118'057'504L,  // negative, fraction >= 1 ms
+    -54'218'791'351'223'251L,  // negative, fraction >= 1 ms
+    -5'999'500L,               // negative, sub-millisecond fraction
+    -5'999'999L,               // negative, sub-millisecond fraction
+    -100'000'500L,             // negative, sub-millisecond fraction
+  });
+
+  // Nanoseconds: values < -1 s with sub-millisecond fractions.
+  test_negative_fractional_timestamp_roundtrip<cudf::timestamp_ns>({
+    -5'999'500'000L,
+    -5'999'999'999L,
+    -9'000'000'500L,
+    -131'968'727'238'000'000L,
+  });
+
+  // Milliseconds: negative fractional values (always >= 1 ms granularity).
+  test_negative_fractional_timestamp_roundtrip<cudf::timestamp_ms>({
+    -5'999L,
+    -123'456L,
+    -1'000L,
+  });
+}
+
 TEST_F(OrcWriterTest, Slice)
 {
   int32_col col{{1, 2, 3, 4, 5}, cudf::test::iterators::null_at(3)};
