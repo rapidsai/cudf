@@ -30,6 +30,7 @@ from cudf_polars.utils.config import (
     Cluster,
     ConfigOptions,
     DynamicPlanningOptions,
+    InMemoryExecutor,
     MemoryResourceConfig,
     StreamingExecutor,
 )
@@ -825,3 +826,8 @@ def test_dask_sink_to_directory_false_raises() -> None:
         ValueError, match="The dask cluster requires sink_to_directory=True"
     ):
         StreamingExecutor(cluster=Cluster.DASK, sink_to_directory=False)
+
+
+def test_in_memory_executor_drop_unserializable() -> None:
+    executor = InMemoryExecutor()
+    assert executor.drop_unserializable() is executor

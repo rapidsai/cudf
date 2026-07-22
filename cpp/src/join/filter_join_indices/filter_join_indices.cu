@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "join/filter_join_indices/filter_join_indices_kernel.cuh"
+#include "join/filter_join_indices/filter_join_indices_kernel.hpp"
 #include "join/filter_join_indices/filter_join_indices_output_size_kernel.hpp"
 #include "join/join_common_utils.hpp"
 

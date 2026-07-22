@@ -143,8 +143,7 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
     if (_is_all_columns_selected) { return; }
 
     // Select only columns required by the options and filter
-    auto const select_column_names =
-      get_column_projection(options, options.is_enabled_ignore_missing_columns());
+    auto const select_column_names = get_column_projection(options);
 
     // Select only columns required by the options and filter.
     // Using as is from:
@@ -178,8 +177,7 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
   } else {
     if (_is_payload_columns_selected) { return; }
 
-    auto select_column_names =
-      get_column_projection(options, options.is_enabled_ignore_missing_columns());
+    auto select_column_names = get_column_projection(options);
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
       _extended_metadata->select_payload_columns(
         select_column_names, _filter_columns_names, selection_options);

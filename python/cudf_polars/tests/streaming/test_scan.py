@@ -73,7 +73,6 @@ def df():
         ("parquet", pl.scan_parquet),
     ],
 )
-@pytest.mark.timeout(90)
 def test_parallel_scan(
     tmp_path: Path,
     df: pl.DataFrame,

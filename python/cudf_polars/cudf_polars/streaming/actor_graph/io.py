@@ -440,10 +440,22 @@ async def python_scan_node(
                 context=ir_context,
             )
         )
+        # A rank-aware source may emit a duplicated output (an identical copy on
+        # every rank, e.g. a persisted global sort/limit). Re-advertise that as
+        # the channel's ``duplicated`` flag so downstream collectives treat the
+        # copies as duplicates rather than distinct partitions.
+        duplicated = (
+            rank_aware_source is not None
+            and rank_aware_source.output_duplicated(comm.rank, comm.nranks)
+        )
         if count is not None:
             # The chunk count is available so we can stream one chunk at a time.
             announced = max(count, 1)
-            await send_metadata(ch_out, context, ChannelMetadata(local_count=announced))
+            await send_metadata(
+                ch_out,
+                context,
+                ChannelMetadata(local_count=announced, duplicated=duplicated),
+            )
             sentinel = object()
             seq_num = 0
             while True:
@@ -470,7 +482,9 @@ async def python_scan_node(
             # count before announcing it.
             chunks = await ir_context.to_thread(lambda: list(raw_chunks))
             await send_metadata(
-                ch_out, context, ChannelMetadata(local_count=len(chunks))
+                ch_out,
+                context,
+                ChannelMetadata(local_count=len(chunks), duplicated=duplicated),
             )
             for seq_num, chunk in enumerate(chunks):
                 await _process_and_send_chunk(

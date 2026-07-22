@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import io
 import os
@@ -104,6 +104,53 @@ def test_read_parquet_basic(
     # No filtering done
     assert res.num_row_groups_after_stats_filter is None
     assert res.num_row_groups_after_bloom_filter is None
+
+
+def test_read_parquet_column_field_ids(binary_source_or_sink):
+    schema = pa.schema(
+        [
+            pa.field(
+                "col_int64",
+                pa.int64(),
+                metadata={b"PARQUET:field_id": b"10"},
+            ),
+            pa.field(
+                "col_string",
+                pa.string(),
+                metadata={b"PARQUET:field_id": b"20"},
+            ),
+            pa.field(
+                "col_bool",
+                pa.bool_(),
+                metadata={b"PARQUET:field_id": b"30"},
+            ),
+        ]
+    )
+    pa_table = pa.Table.from_arrays(
+        [
+            pa.array([1, 2, 3], type=pa.int64()),
+            pa.array(["a", "b", "c"], type=pa.string()),
+            pa.array([True, False, True], type=pa.bool_()),
+        ],
+        schema=schema,
+    )
+    source = make_source(
+        binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS
+    )
+    source_info = plc.io.SourceInfo([source])
+    options = (
+        plc.io.parquet.ParquetReaderOptions.builder(source_info)
+        .column_field_ids([30, 10])
+        .build()
+    )
+
+    res = plc.io.parquet.read_parquet(options)
+
+    assert_table_and_meta_eq(
+        pa_table.select(["col_bool", "col_int64"]),
+        res,
+        check_field_nullability=False,
+    )
 
 
 @pytest.mark.parametrize("if_prune_rowgroup,result", [(True, 0), (False, 1)])

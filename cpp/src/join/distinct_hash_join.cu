@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "join_common_utils.cuh"
@@ -151,15 +151,17 @@ void find_matches_in_hash_table(HashTableType const& hash_table,
 
 distinct_hash_join::distinct_hash_join(cudf::table_view const& right,
                                        cudf::null_equality compare_nulls,
-                                       rmm::cuda_stream_view stream)
-  : distinct_hash_join{right, compare_nulls, CUCO_DESIRED_LOAD_FACTOR, stream}
+                                       rmm::cuda_stream_view stream,
+                                       cuda::mr::any_resource<cuda::mr::device_accessible> mr)
+  : distinct_hash_join{right, compare_nulls, CUCO_DESIRED_LOAD_FACTOR, stream, std::move(mr)}
 {
 }
 
 distinct_hash_join::distinct_hash_join(cudf::table_view const& right,
                                        cudf::null_equality compare_nulls,
                                        double load_factor,
-                                       rmm::cuda_stream_view stream)
+                                       rmm::cuda_stream_view stream,
+                                       cuda::mr::any_resource<cuda::mr::device_accessible> mr)
   : _has_nested_columns{cudf::has_nested_columns(right)},
     _nulls_equal{compare_nulls},
     _right{right},
@@ -172,7 +174,7 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& right,
                 {},
                 cuco::thread_scope_device,
                 cuco_storage_type{},
-                rmm::mr::polymorphic_allocator<char>{},
+                rmm::mr::polymorphic_allocator<char>{std::move(mr)},
                 stream.value()}
 {
   CUDF_FUNC_RANGE();
@@ -408,8 +410,9 @@ distinct_hash_join::~distinct_hash_join() = default;
 distinct_hash_join::distinct_hash_join(cudf::table_view const& right,
                                        null_equality compare_nulls,
                                        double load_factor,
-                                       rmm::cuda_stream_view stream)
-  : _impl{std::make_unique<impl_type>(right, compare_nulls, load_factor, stream)}
+                                       rmm::cuda_stream_view stream,
+                                       cuda::mr::any_resource<cuda::mr::device_accessible> mr)
+  : _impl{std::make_unique<impl_type>(right, compare_nulls, load_factor, stream, std::move(mr))}
 {
 }
 
