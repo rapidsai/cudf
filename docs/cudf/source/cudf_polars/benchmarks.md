@@ -8,13 +8,13 @@ The steps below reproduce the PDS-H benchmark results using the Polars GPU engin
 
 ### Setup
 
-**GPU machines** can run both CPU and GPU benchmarks. Install `cudf-polars` following the
-[RAPIDS installation guide](https://docs.rapids.ai/install). For nightly wheels, install with
+Install `cudf-polars` following the
+[RAPIDS installation guide](https://docs.rapids.ai/install/). For nightly wheels, install with
 the `ray` extra (required for multi-GPU benchmarking):
 
 ```bash
 CUDA_MAJOR=$(nvidia-smi | grep -oP 'CUDA Version: \K[0-9]+')
-pip install --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
+pip install --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/ \
     "cudf-polars-cu${CUDA_MAJOR}[ray]>=0.0.0a0"
 ```
 
@@ -26,15 +26,6 @@ Polars release.
      (and possibly structlog) so benchmark dependencies can be installed in one step:
      pip install "cudf-polars-cu${CUDA_MAJOR}[ray,benchmark]>=0.0.0a0"
      Requires changes to pyproject.toml and dependencies.yaml. -->
-
-**CPU-only machines** (no CUDA) can only run the `--frontend polars-cpu` benchmark. Since the
-`cudf-polars` GPU wheels require CUDA, install from source instead:
-
-```bash
-git clone --depth=1 https://github.com/rapidsai/cudf.git
-pip install --no-deps ./cudf/python/cudf_polars
-pip install polars nvtx
-```
 
 Then install `tpchgen-cli`, a Rust-based TPC-H data generator used to produce the benchmark
 dataset as Parquet files:

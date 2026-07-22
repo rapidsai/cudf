@@ -30,6 +30,7 @@ import os
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
 if TYPE_CHECKING:
+    import uuid
     from collections.abc import Callable
     from concurrent.futures import ThreadPoolExecutor
 
@@ -43,6 +44,8 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.engine.ray import RankActor
+    from cudf_polars.quent._context import QuentContext
+    from cudf_polars.quent._logging import QuentLogger
 
 
 __all__ = [
@@ -51,6 +54,7 @@ __all__ = [
     "DaskContext",
     "DynamicPlanningOptions",
     "InMemoryExecutor",
+    "JoinFilterPushdownOptions",
     "ParquetOptions",
     "RayContext",
     "SPMDContext",
@@ -159,9 +163,9 @@ def _make_default_factory(
 
 def _bool_converter(v: str) -> bool:
     lowered = v.lower()
-    if lowered in {"1", "true", "yes", "y"}:
+    if lowered in {"true", "yes", "y", "1"}:
         return True
-    elif lowered in {"0", "false", "no", "n"}:
+    elif lowered in {"false", "no", "n", "0"}:
         return False
     else:
         raise ValueError(f"Invalid boolean value: '{v}'")
@@ -175,6 +179,20 @@ def _optional_converter(v: str, parse: Callable[[str], T]) -> T | None:
 
 def _optional_int_converter(v: str) -> int | None:
     return _optional_converter(v, int)
+
+
+def _quent_context_converter(v: str) -> QuentContext | None:
+    from cudf_polars.quent._context import QuentContext
+
+    try:
+        enabled = _bool_converter(v)
+    except ValueError as e:
+        raise ValueError(f"Invalid value for quent_context: '{v}'") from e
+    else:
+        if enabled:
+            return QuentContext()
+        else:
+            return None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -214,6 +232,14 @@ class ParquetOptions:
     use_rapidsmpf_native
         Whether to use the native rapidsmpf node for parquet reading.
         This option is only used by the streaming executor.
+        Default is False.
+    prefetch_file_metadata
+        Whether to prefetch parquet file metadata and pass it through
+        `parquet_metadatas` to avoid rereading file footers.
+    use_jit_filter
+        Whether to use JIT compilation for post-read filtering in Parquet scans.
+        When enabled, filter predicates are JIT-compiled to CUDA kernels for
+        improved performance on large datasets with complex filters.
         Default is False.
     """
 
@@ -256,6 +282,20 @@ class ParquetOptions:
             default=False,
         )
     )
+    prefetch_file_metadata: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__PREFETCH_FILE_METADATA",
+            _bool_converter,
+            default=False,
+        )
+    )
+    use_jit_filter: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_JIT_FILTER",
+            _bool_converter,
+            default=False,
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.chunked, bool):
@@ -272,6 +312,15 @@ class ParquetOptions:
             raise TypeError("max_row_group_samples must be an int")
         if not isinstance(self.use_rapidsmpf_native, bool):
             raise TypeError("use_rapidsmpf_native must be a bool")
+        if not isinstance(self.prefetch_file_metadata, bool):
+            raise TypeError("prefetch_file_metadata must be a bool")
+
+        if self.use_rapidsmpf_native and self.prefetch_file_metadata:
+            raise NotImplementedError(
+                "'use_rapidsmpf_native=True' does not currently support 'prefetch_file_metadata=True'"
+            )
+        if not isinstance(self.use_jit_filter, bool):
+            raise TypeError("use_jit_filter must be a bool")
 
 
 def default_target_partition_size(min_device_size: int | None) -> int:
@@ -314,8 +363,9 @@ class DynamicPlanningOptions:
         The maximum number of chunks to sample before making
         dynamic-planning decisions. Default is 2.
     join_prefilter_threshold
-        Row-count ratio (small / large) below which a join key prefilter is
-        applied. Set to 0 to disable join prefiltering. Default is 0.5.
+        Row-count ratio (small / large) below which one side of a join is
+        filtered by a bloom filter built from the other side before
+        performing the join. Set to 0 to disable. Default is 0.5.
     join_prefilter_max_key_columns
         Maximum number of columns from the join-key prefix to use for the
         prefilter. Set to ``None`` to use the full join-key list. Default is 1.
@@ -378,6 +428,59 @@ class DynamicPlanningOptions:
                 )
         if not isinstance(self.join_prefilter_trace, bool):
             raise TypeError("join_prefilter_trace must be a bool")
+
+
+@dataclasses.dataclass(frozen=True)
+class JoinFilterPushdownOptions:
+    """
+    Configuration options for join filter pushdown in the logical plan.
+
+    When performing a join between two tables, it is often favourable
+    to pre-filter one side of the join with the keys (full or partial) of
+    the other side. This can reduce the size of tables that actually
+    participate in the join.
+
+    cudf-polars supports a form of this where we can rewrite inner joins by
+    selecting a side to be filtered by the keys of the other side.
+
+    Pass ``None`` to ``StreamingExecutor(join_filter_pushdown=...)`` to
+    disable the rewrite.
+
+    These options can be configured via environment variables with the prefix
+    ``CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN__``.
+
+    Parameters
+    ----------
+    threshold
+        Row-count ratio (key-provider-rows / to-be-filtered-table-rows) below which a
+        filter on is inserted on the to-be-filtered table. Default is 0.5.
+    trace
+        Whether to emit plan-time trace decisions for filter decisions. Default is False.
+    """
+
+    _env_prefix = "CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN"
+
+    threshold: float = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__THRESHOLD", float, default=0.5
+        )
+    )
+    trace: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__TRACE", _bool_converter, default=False
+        )
+    )
+
+    def __post_init__(self) -> None:  # noqa: D105
+        threshold = self.threshold
+        if isinstance(threshold, bool) or not isinstance(threshold, (int, float)):
+            raise TypeError("threshold must be a float or int")
+        threshold = float(threshold)
+        object.__setattr__(self, "threshold", threshold)
+        if not 0.0 <= threshold <= 1.0:
+            raise ValueError("threshold must be between 0 and 1")
+        if not isinstance(self.trace, bool):
+            raise TypeError("trace must be a bool")
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -527,6 +630,9 @@ class SPMDContext:
     comm: Communicator
     context: Context
     py_executor: ThreadPoolExecutor
+    engine_id: uuid.UUID
+    worker_id: uuid.UUID
+    quent_logger: QuentLogger | None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -549,6 +655,7 @@ class RayContext:
     """
 
     rank_actors: list[ActorHandle[RankActor]]
+    quent_logger: QuentLogger | None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -578,6 +685,7 @@ class DaskContext:
 
     client: distributed.Client
     rapidsmpf_id: str
+    quent_logger: QuentLogger | None
     owned_client: distributed.Client | None = None
     owned_cluster: Any | None = None
 
@@ -640,6 +748,10 @@ class StreamingExecutor:
     dynamic_planning
         Options controlling dynamic shuffle planning. See
         :class:`~cudf_polars.utils.config.DynamicPlanningOptions` for more.
+    join_filter_pushdown
+        Options controlling the logical join-domain prefilter rewrite. See
+        :class:`~cudf_polars.utils.config.JoinFilterPushdownOptions` for more.
+        ``None`` disables the rewrite.
     max_io_threads
         Maximum number of IO threads. Default is 4.
         This controls the parallelism of IO operations when reading data.
@@ -651,6 +763,12 @@ class StreamingExecutor:
     num_py_executors
         Maximum number of workers for the Python ThreadPoolExecutor.
         Default is 8.
+    quent_context
+        Quent tracing context. When ``None`` (default), Quent tracing is disabled.
+        Pass a :class:`~cudf_polars.quent.QuentContext` instance to enable tracing.
+        Can be set via the ``CUDF_POLARS__EXECUTOR__QUENT_CONTEXT`` environment
+        variable (``true`` enables tracing with a default context, ``false``
+        disables it).
 
     Notes
     -----
@@ -703,6 +821,9 @@ class StreamingExecutor:
     dynamic_planning: DynamicPlanningOptions | None = dataclasses.field(
         default_factory=DynamicPlanningOptions
     )
+    join_filter_pushdown: JoinFilterPushdownOptions | None = dataclasses.field(
+        default_factory=JoinFilterPushdownOptions
+    )
     max_io_threads: int = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__MAX_IO_THREADS", int, default=4
@@ -718,10 +839,16 @@ class StreamingExecutor:
             f"{_env_prefix}__NUM_PY_EXECUTORS", int, default=8
         )
     )
+
     min_device_size: int | None = None
     spmd_context: SPMDContext | None = None
     ray_context: RayContext | None = None
     dask_context: DaskContext | None = None
+    quent_context: QuentContext | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__QUENT_CONTEXT", _quent_context_converter, default=None
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.cluster is None:
@@ -758,6 +885,20 @@ class StreamingExecutor:
                 DynamicPlanningOptions(**self.dynamic_planning),
             )
 
+        if isinstance(self.join_filter_pushdown, dict):
+            object.__setattr__(
+                self,
+                "join_filter_pushdown",
+                JoinFilterPushdownOptions(**self.join_filter_pushdown),
+            )
+        if self.join_filter_pushdown is not None and not isinstance(
+            self.join_filter_pushdown, JoinFilterPushdownOptions
+        ):
+            raise TypeError(
+                "join_filter_pushdown must be a JoinFilterPushdownOptions "
+                "instance, dict, or None"
+            )
+
         if self.cluster in ("spmd", "ray", "dask"):
             if self.sink_to_directory is False:
                 raise ValueError(
@@ -790,7 +931,30 @@ class StreamingExecutor:
         # to json and hash that.
         d = dataclasses.asdict(self)
         d["dynamic_planning"] = json.dumps(d["dynamic_planning"])
+        d["join_filter_pushdown"] = json.dumps(d["join_filter_pushdown"])
+
+        # Hash the quent context UUIDs as ints
+        quent_context = d["quent_context"]
+        if quent_context is not None:
+            for key in ["engine", "query_group", "query"]:
+                quent_context[key]["id"] = int(quent_context[key]["id"])
+            d["quent_context"] = json.dumps(quent_context)
         return hash(tuple(sorted(d.items())))
+
+    def drop_unserializable(self) -> StreamingExecutor:
+        """
+        Return a copy without the per-cluster contexts that cannot be pickled.
+
+        The streaming executor holds live, process-local handles (communicators,
+        streaming contexts, thread pools) that must not be shipped to a worker/actor.
+
+        Returns
+        -------
+        A copy of this executor with the cluster contexts set to ``None``.
+        """
+        return dataclasses.replace(
+            self, spmd_context=None, ray_context=None, dask_context=None
+        )
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -802,6 +966,10 @@ class InMemoryExecutor:
     """
 
     name: Literal["in-memory"] = dataclasses.field(default="in-memory", init=False)
+
+    def drop_unserializable(self) -> InMemoryExecutor:
+        """Return ``self``, the in-memory executor holds no unserializable state."""
+        return self
 
 
 ExecutorType = TypeVar("ExecutorType", StreamingExecutor, InMemoryExecutor)
@@ -838,6 +1006,16 @@ class ConfigOptions(Generic[ExecutorType]):
     device: int | None = None
     memory_resource_config: MemoryResourceConfig | None = None
 
+    def drop_unserializable(self) -> ConfigOptions[ExecutorType]:
+        """
+        Return a copy safe to pickle to a worker/actor.
+
+        Returns
+        -------
+        A copy of these options with unserializable executor state removed.
+        """
+        return dataclasses.replace(self, executor=self.executor.drop_unserializable())
+
     @classmethod
     def from_polars_engine(
         cls, engine: polars.lazyframe.engine_config.GPUEngine
@@ -866,6 +1044,11 @@ class ConfigOptions(Generic[ExecutorType]):
         user_parquet_options = engine.config.get("parquet_options", {})
         if user_parquet_options is None:
             user_parquet_options = {}
+
+        if isinstance(user_parquet_options, dict):
+            parquet_options = ParquetOptions(**user_parquet_options)
+        else:
+            parquet_options = user_parquet_options
         # This is set in polars, and so can't be overridden by the environment
         user_raise_on_fail = engine.config.get("raise_on_fail", False)
         user_memory_resource_config = engine.config.get("memory_resource_config", None)
@@ -893,6 +1076,10 @@ class ConfigOptions(Generic[ExecutorType]):
         match user_executor:
             case "in-memory":
                 executor = InMemoryExecutor(**user_executor_options)
+                if parquet_options.prefetch_file_metadata:
+                    raise NotImplementedError(
+                        "Prefetching is not supported for the in-memory executor."
+                    )
             case "streaming":
                 user_executor_options = user_executor_options.copy()
                 if "min_device_size" not in user_executor_options:
@@ -909,13 +1096,24 @@ class ConfigOptions(Generic[ExecutorType]):
                     if not _bool_converter(env_dynamic_planning):
                         user_executor_options["dynamic_planning"] = None
 
+                # Handle join_filter_pushdown: check user config, then env var
+                user_join_filter_pushdown = user_executor_options.get(
+                    "join_filter_pushdown", None
+                )
+                if user_join_filter_pushdown is None:
+                    env_join_filter_pushdown = os.environ.get(
+                        "CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN", "1"
+                    )
+                    if not _bool_converter(env_join_filter_pushdown):
+                        user_executor_options["join_filter_pushdown"] = None
+
                 executor = StreamingExecutor(**user_executor_options)
             case _:  # pragma: no cover; Unreachable
                 raise ValueError(f"Unsupported executor: {user_executor}")
 
         kwargs = {
             "raise_on_fail": user_raise_on_fail,
-            "parquet_options": ParquetOptions(**user_parquet_options),
+            "parquet_options": parquet_options,
             "executor": executor,
             "device": engine.device,
             "memory_resource_config": user_memory_resource_config,
