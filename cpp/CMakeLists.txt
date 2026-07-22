@@ -1416,7 +1416,7 @@ if(CUDF_BUILD_TESTUTIL)
   )
 
   target_link_libraries(
-    cudftestutil INTERFACE $<BUILD_LOCAL_INTERFACE:cuco::cuco> Threads::Threads cudf
+    cudftestutil INTERFACE $<BUILD_LOCAL_INTERFACE:cuco::cuco> Threads::Threads cudf rmm::rmm
                            cudftest_default_stream $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 
