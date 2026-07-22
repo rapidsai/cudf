@@ -78,8 +78,7 @@ TEST(DeviceBloomFilterTest, RequiresAlignedStorageSize)
 
   EXPECT_EQ(storage->size(), aligned_size);
 
-  auto const filter =
-    cudf_streaming::detail::device_bloom_filter{aligned_size, 0, storage->data(), stream};
+  auto const filter = cudf_streaming::detail::device_bloom_filter{aligned_size, 0, storage->data()};
   EXPECT_EQ(filter.size(), aligned_size);
 }
 
