@@ -196,7 +196,7 @@ def test_bloom_filter_build_exception_no_shutdown(
         context,
         comm,
         seed=42,
-        num_filter_blocks=BloomFilter.fitting_num_blocks(1 << 20),
+        filter_size=(1 << 20),
     )
     ch_in: Channel[TableChunk] = context.create_channel()
     ch_out: Channel[BloomFilterChunk] = context.create_channel()
