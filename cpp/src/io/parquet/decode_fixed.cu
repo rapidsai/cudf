@@ -987,9 +987,6 @@ CUDF_HOST_DEVICE constexpr bool has_dict()
  * @brief Check whether the kernel mask decodes parquet dictionary indices directly to an INT32
  * column.
  *
- * These masks back the Parquet-dict → DICTIONARY32 transcode path, where the decoded output is the
- * INT32 indices child of a DICTIONARY32 column rather than fully materialized values.
- *
  * @tparam kernel_mask_t The decode kernel mask to test
  * @return True for the DICT_INT32 mask
  */

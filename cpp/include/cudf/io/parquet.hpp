@@ -958,9 +958,13 @@ class parquet_reader_options_builder {
   }
 
   /**
-   * @brief Sets to enable/disable trying to output DICTIONARY32 columns.
+   * @brief Sets options for enabling/disabling output of DICTIONARY32 columns.
    *
-   * @param val Boolean value whether to try to output DICTIONARY32 columns
+   * @param val Boolean value whether to output DICTIONARY32 columns
+   *
+   * @note When enabled, the output columns will be of type DICTIONARY32. When disabled, the output
+   * columns will be of type STRING.
+   *
    * @return this for chaining
    */
   parquet_reader_options_builder& output_dict_columns(bool val)
