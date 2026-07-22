@@ -188,9 +188,9 @@ struct copy_page_info {
     auto const& pi    = page_indexes[idx];
     pg.num_rows       = pi.num_rows;
     pg.chunk_row      = pi.chunk_row;
-    pg.has_page_index = pi.has_value_info != 0;
+    pg.has_value_info = pi.has_value_info != 0;
     pg.start_val      = 0;
-    if (pg.has_page_index) {
+    if (pg.has_value_info) {
       pg.num_nulls            = pi.num_nulls;
       pg.num_valids           = pi.num_valids;
       pg.str_bytes_from_index = pi.str_bytes;
