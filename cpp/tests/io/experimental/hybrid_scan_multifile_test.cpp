@@ -299,6 +299,54 @@ TEST_F(HybridScanMultifileTest, PageLevelDictionaryPayloadByteReduction)
   test_hybrid_scan_multifile({col0, col1}, true, threshold, true);
 }
 
+TEST_F(HybridScanMultifileTest, PageLevelStringsSeparatedByPrunedPages)
+{
+  auto filter_values = cudf::detail::make_counting_transform_iterator(
+    cudf::size_type{0}, [](auto i) { return (i / page_size_for_ordered_tests) % 2 == 0; });
+  auto filter =
+    cudf::test::fixed_width_column_wrapper<bool>(filter_values, filter_values + num_ordered_rows);
+
+  auto payload_values = std::vector<std::string>(num_ordered_rows);
+  for (auto i = std::size_t{0}; i < payload_values.size(); ++i) {
+    payload_values[i] = "payload value " + std::to_string(i);
+  }
+  auto payload = cudf::test::strings_column_wrapper(payload_values.begin(), payload_values.end());
+  auto table   = cudf::table_view{{filter, payload}};
+
+  auto metadata = cudf::io::table_input_metadata(table);
+  metadata.column_metadata[0].set_name("filter");
+  metadata.column_metadata[1].set_name("payload");
+
+  auto parquet_buffers = std::vector<std::vector<char>>(2);
+  for (auto& parquet_buffer : parquet_buffers) {
+    auto options =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&parquet_buffer}, table)
+        .metadata(metadata)
+        .row_group_size_rows(num_ordered_rows)
+        .max_page_size_rows(page_size_for_ordered_tests)
+        .max_page_size_bytes(64 * 1024 * 1024)
+        .compression(cudf::io::compression_type::NONE)
+        .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
+        .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN);
+    cudf::io::write_parquet(options);
+  }
+
+  auto const filter_ref  = cudf::ast::column_name_reference("filter");
+  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::IDENTITY, filter_ref);
+  auto source_info       = build_source_info(parquet_buffers);
+  auto const stream      = cudf::get_default_stream();
+  auto const mr          = cudf::get_current_device_resource_ref();
+  auto expected_options =
+    cudf::io::parquet_reader_options::builder(source_info).filter(filter_expression).build();
+  auto expected = cudf::io::read_parquet(expected_options, stream, mr);
+
+  auto const [filter_result, payload_result] =
+    page_level_chunked_hybrid_scan_multifile(source_info, filter_expression, {}, true, stream, mr);
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected.tbl->select({0}), filter_result->view());
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected.tbl->select({1}), payload_result->view());
+}
+
 TEST_F(HybridScanMultifileTest, PageLevelAsymmetricSourceRowGroupOrdering)
 {
   auto constexpr rows_per_group = 2 * page_size_for_ordered_tests;

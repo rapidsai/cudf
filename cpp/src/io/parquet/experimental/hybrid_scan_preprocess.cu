@@ -207,7 +207,10 @@ void hybrid_scan_reader_impl::setup_compressed_data(
     CUDF_EXPECTS(total_pages == _sparse_page_spans.size(),
                  "Sparse page span count does not match page-index metadata");
     if (total_pages <= 0) { return; }
-    rmm::device_uvector<PageInfo> unsorted_pages(total_pages, _stream);
+    // `decode_page_headers` may not write every byte of each PageInfo, and `sort_pages` copies
+    // PageInfo as whole objects.
+    auto unsorted_pages = cudf::detail::make_zeroed_device_uvector_async<PageInfo>(
+      total_pages, _stream, cudf::get_current_device_resource_ref());
     parquet::detail::decode_page_headers(pass, unsorted_pages, _sparse_page_spans, _stream);
     CUDF_EXPECTS(pass.page_offsets.size() - 1 == static_cast<size_t>(_input_columns.size()),
                  "Encountered page_offsets / num_columns mismatch");
