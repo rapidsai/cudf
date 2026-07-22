@@ -103,6 +103,12 @@ def test_gather_on_literal(
     assert_gpu_result_equal(q, engine=engine)
 
 
+def test_gather_non_integer_indices_unsupported(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [1, 2, 3]})
+    q = df.select(pl.col("a").gather(pl.lit("y")))
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
 def test_gather_repeat_by_unsupported(engine: pl.GPUEngine) -> None:
     df = pl.LazyFrame({"a": [1, 2, 3, 4, 5], "n": [2, 1, 3, 1, 2]})
     expr = pl.col("a").repeat_by(pl.col("n"))

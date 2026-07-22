@@ -972,7 +972,7 @@ __device__ void prefetch_warp(inflate_state_s volatile* s, int t)
 
 /**
  * @brief Parse GZIP header
- * See https://tools.ietf.org/html/rfc1952
+ * See https://datatracker.ietf.org/doc/html/rfc1952
  */
 __device__ int parse_gzip_header(uint8_t const* src, size_t src_size)
 {
