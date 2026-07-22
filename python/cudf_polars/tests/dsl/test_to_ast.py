@@ -131,9 +131,26 @@ def test_to_parquet_filter_with_colref_raises():
 def test_to_parquet_filter_null_checks_on_column(name):
     col = expr_nodes.Col(DataType(pl.datatypes.Int64()), "a")
     fn = expr_nodes.BooleanFunction(DataType(pl.datatypes.Boolean()), name, (), col)
-    filter_expr, exact = to_parquet_filter(fn, stream=get_cuda_stream())
+    filter_expr, residual = to_parquet_filter(fn, stream=get_cuda_stream())
     assert filter_expr is not None
-    assert exact
+    assert residual is None
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        expr_nodes.BooleanFunction.Name.IsNull,
+        expr_nodes.BooleanFunction.Name.IsNotNull,
+    ],
+)
+def test_to_parquet_filter_null_checks_on_nested_column_not_pushed(name):
+    # See https://github.com/rapidsai/cudf/issues/23397
+    struct_dtype = DataType(pl.Struct({"a": pl.Int64}))
+    col = expr_nodes.Col(struct_dtype, "s")
+    fn = expr_nodes.BooleanFunction(DataType(pl.datatypes.Boolean()), name, (), col)
+    filter_expr, residual = to_parquet_filter(fn, stream=get_cuda_stream())
+    assert filter_expr is None
+    assert residual is None
 
 
 @pytest.mark.parametrize(
@@ -148,6 +165,6 @@ def test_to_parquet_filter_conjunction_splitting(predicate, pushed, exact):
     lf = pl.LazyFrame({"a": [1, 2, 3], "s": ["x", "y", "z"]})
     ir = Translator(lf.filter(predicate)._ldf.visit(), pl.GPUEngine()).translate_ir()
     mask = next(n.mask.value for n in traversal([ir]) if isinstance(n, ir_nodes.Filter))
-    filter_expr, is_exact = to_parquet_filter(mask, stream=get_cuda_stream())
+    filter_expr, residual = to_parquet_filter(mask, stream=get_cuda_stream())
     assert (filter_expr is not None) == pushed
-    assert is_exact == exact
+    assert (filter_expr is not None and residual is None) == exact

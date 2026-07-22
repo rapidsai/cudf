@@ -231,18 +231,19 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
                     for value in values
                 ),
             )
-    if (
-        self.state["for_parquet"]
-        and isinstance(node.children[0], expr.Col)
-        and node.name
-        not in (
+    if self.state["for_parquet"] and isinstance(node.children[0], expr.Col):
+        if node.name not in (
             expr.BooleanFunction.Name.IsNull,
             expr.BooleanFunction.Name.IsNotNull,
-        )
-    ):
-        raise NotImplementedError(
-            f"Parquet filters don't support {node.name} on columns"
-        )
+        ):
+            raise NotImplementedError(
+                f"Parquet filters don't support {node.name} on columns"
+            )
+        if node.children[0].dtype.id() in (plc.TypeId.STRUCT, plc.TypeId.LIST):
+            # TODO: Remove once https://github.com/rapidsai/cudf/issues/23397 is resolved.
+            raise NotImplementedError(
+                f"Parquet filters don't support {node.name} on nested types"
+            )
     if node.name is expr.BooleanFunction.Name.IsNull:
         return plc_expr.Operation(plc_expr.ASTOperator.IS_NULL, self(node.children[0]))
     elif node.name is expr.BooleanFunction.Name.IsNotNull:
@@ -296,7 +297,7 @@ def _to_parquet_filter(
 
 def to_parquet_filter(
     node: expr.Expr, stream: Stream
-) -> tuple[plc_expr.Expression | None, bool]:
+) -> tuple[plc_expr.Expression | None, expr.Expr | None]:
     """
     Convert an expression to libcudf AST nodes suitable for parquet filtering.
 
@@ -312,29 +313,40 @@ def to_parquet_filter(
     filter
         pylibcudf Expression suitable for parquet filtering, or None if no part
         of the predicate can be converted.
-    exact
-        Whether ``filter`` is equivalent to ``node``. If only some conjuncts of
-        a top-level ``AND`` convert, ``filter`` keeps a superset of the rows
-        ``node`` selects and ``exact`` is False, so the full predicate must
-        still be applied as a post-read mask.
+    residual
+        Expression still to be applied as a post-read filter, or None when
+        ``filter`` is exact (equivalent to ``node``).  When ``filter`` is None
+        the caller must apply the full original predicate post-read.
     """
     mapper: Transformer = CachingVisitor(
         _to_ast, state={"for_parquet": True, "stream": stream}
     )
     whole = _to_parquet_filter(node, mapper)
     if whole is not None:
-        return whole, True
-    filter_exprs = [
-        filter_expr
-        for conjunct in _extract_conjuncts(node)
-        if (filter_expr := _to_parquet_filter(conjunct, mapper)) is not None
-    ]
-    if not filter_exprs:
-        return None, False
+        return whole, None
+    can_handle_filters = []
+    cant_handle_exprs = []
+    for conjunct in _extract_conjuncts(node):
+        f = _to_parquet_filter(conjunct, mapper)
+        if f is not None:
+            can_handle_filters.append(f)
+        else:
+            cant_handle_exprs.append(conjunct)
+    if not can_handle_filters:
+        return None, None
     combined = reduce(
-        partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_AND), filter_exprs
+        partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_AND),
+        can_handle_filters,
     )
-    return combined, False
+    if not cant_handle_exprs:
+        return combined, None
+    residual = reduce(
+        lambda a, b: expr.BinOp(
+            b.dtype, plc.binaryop.BinaryOperator.NULL_LOGICAL_AND, a, b
+        ),
+        cant_handle_exprs,
+    )
+    return combined, residual
 
 
 def to_ast(node: expr.Expr, stream: Stream) -> plc_expr.Expression | None:
