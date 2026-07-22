@@ -378,7 +378,7 @@ def test_prefilter_uses_cheaper_source_domain_and_skips_expensive_domain(
     )
     root = translate_query(query, engine)
 
-    optimized = optimize_join_domain_prefilters(
+    optimized = optimize_join_filter_pushdown(
         root,
         StatsCollector(),
         ConfigOptions.from_polars_engine(engine),
@@ -435,7 +435,7 @@ def test_source_only_domain_does_not_stack_on_prefiltered_source(
     )
     root = translate_query(query, engine)
 
-    optimized = optimize_join_domain_prefilters(
+    optimized = optimize_join_filter_pushdown(
         root,
         StatsCollector(),
         ConfigOptions.from_polars_engine(engine),
