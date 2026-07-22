@@ -104,11 +104,15 @@ namespace detail {
                                           deletion_vector_row_counts,
                                           stream,
                                           cudf::get_current_device_resource_ref());
+
+  auto const mask_type = deletion_vector_info.are_retention_vectors
+                           ? cudf::detail::mask_type::RETENTION
+                           : cudf::detail::mask_type::DELETION;
+
   // Filter the table using the deletion vector
-  return table_with_metadata{
+  return cudf::io::table_with_metadata{
     // Supply user-provided mr to apply deletion mask to allocate output table's memory
-    cudf::detail::apply_mask(
-      table_with_index->view(), row_mask->view(), cudf::detail::mask_type::DELETION, stream, mr),
+    cudf::detail::apply_mask(table_with_index->view(), row_mask->view(), mask_type, stream, mr),
     std::move(metadata)};
 }
 
@@ -200,6 +204,8 @@ chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
                                                rmm::device_async_resource_ref mr)
   : _start_row{0},
     _is_unspecified_row_group_data{deletion_vector_info.row_group_offsets.empty()},
+    _mask_type{deletion_vector_info.are_retention_vectors ? cudf::detail::mask_type::RETENTION
+                                                          : cudf::detail::mask_type::DELETION},
     _stream{stream},
     _mr{mr},
     // Use default mr for the internal chunked reader and row index column if we will
@@ -317,10 +323,9 @@ table_with_metadata chunked_parquet_reader::read_chunk()
                                                   _deletion_vector_row_counts,
                                                   _stream,
                                                   cudf::get_current_device_resource_ref());
-  return table_with_metadata{
+  return cudf::io::table_with_metadata{
     // Supply user-provided mr to apply deletion mask to allocate output table's memory
-    cudf::detail::apply_mask(
-      table_with_index->view(), row_mask->view(), cudf::detail::mask_type::DELETION, _stream, _mr),
+    cudf::detail::apply_mask(table_with_index->view(), row_mask->view(), _mask_type, _stream, _mr),
     std::move(metadata)};
 }
 
