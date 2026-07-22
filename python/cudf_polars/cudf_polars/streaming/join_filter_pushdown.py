@@ -139,7 +139,7 @@ class SimpleCandidate:
     @property
     def score(self) -> tuple[int, int, int]:
         """Rank after composite candidates, then by domain cost."""
-        return (1, self.domain.cost, self.domain.cost)
+        return (1, self.domain.cost, self.domain.rows)
 
 
 @dataclass(frozen=True)
