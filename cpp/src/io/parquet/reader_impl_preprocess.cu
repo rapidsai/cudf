@@ -1100,7 +1100,9 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
     pinned_nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);
 }
 
-void reader_impl::fill_pruned_offsets(size_t skip_rows, size_t num_rows)
+void reader_impl::fill_pruned_offsets(size_t skip_rows,
+                                      size_t num_rows,
+                                      cudf::device_span<size_t> initial_str_offsets)
 {
   // Return early if there are no pruned pages
   auto const page_mask = subpass_page_mask_span();
@@ -1118,7 +1120,7 @@ void reader_impl::fill_pruned_offsets(size_t skip_rows, size_t num_rows)
 
   // Set offsets for pruned string and list pages.
   parquet::detail::fill_pruned_offsets(
-    pages, chunks, device_page_mask, skip_rows, num_rows, _stream);
+    pages, chunks, device_page_mask, initial_str_offsets, skip_rows, num_rows, _stream);
 }
 
 cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
