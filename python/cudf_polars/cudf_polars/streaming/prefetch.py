@@ -107,8 +107,24 @@ def prefetch_scan_byte_ranges(
     """
     Run stats and bloom pruning for one SplitScan and issue async reads.
 
-    Returns None when the split cannot use the hybrid-scan path, signalling
-    the producer to fall back to SplitScan.do_evaluate.
+    Parameters
+    ----------
+    scan
+        The split scan task to prefetch.
+    stream
+        CUDA stream used for filter expression compilation.
+    pinned_mr
+        Pinned memory resource to allocate host buffers from.
+    context
+        rapidsmpf context used for pinned memory reservation.
+    loop
+        Event loop used to submit the reservation coroutine from a worker thread.
+
+    Returns
+    -------
+    PrefetchedByteRanges | None
+        None when the split cannot use the hybrid-scan path, signalling
+        the producer to fall back to SplitScan.do_evaluate.
     """
     cached_info = scan.cached_parquet_info
     if cached_info is None:
@@ -183,8 +199,6 @@ def prefetch_scan_byte_ranges(
             row_group_indices, options
         )
 
-    # Submit filter and payload reads in one combined pread_ranges call so S3 serves
-    # both concurrently, then split the contiguous pinned buffer into two views.
     handle = cached_info[0].remote_handle()
     with nvtx_annotate_cudf_polars(message="pread_filter_and_payload"):
         filter_host, filter_futures, filter_buf = pread_ranges(
@@ -211,14 +225,7 @@ def prefetch_scan_byte_ranges(
 # issued before evaluation, so pre-reading is driven by the datasource layer
 # rather than a separate host-pinned executor.
 class HybridScanPrefetchExecutor:
-    """
-    Prefetch executor for scan tasks.
-
-    One worker thread per producer runs stats and bloom pruning and issues
-    async reads to pinned host memory ahead of each producer's evaluation
-    loop. Pinned memory backpressure is managed via rapidsmpf's reservation
-    system.
-    """
+    """Prefetch executor for SplitScan tasks."""
 
     _thread_local: threading.local = threading.local()
 
@@ -243,13 +250,33 @@ class HybridScanPrefetchExecutor:
         scans: list[SplitScan],
         num_workers: int,
         context: Context,
-        pinned_mr: PinnedMemoryResource | None = None,
     ) -> Self:
-        """Validate, submit all scan tasks to the thread pool, and return the executor."""
+        """
+        Submit prefetch tasks for all scans.
+
+        Parameters
+        ----------
+        scans
+            Tasks to prefetch.
+        num_workers
+            Number of background worker threads.
+        context
+            rapidsmpf context. ``context.br().pinned_mr`` must not be ``None``.
+
+        Returns
+        -------
+        HybridScanPrefetchExecutor
+
+        Raises
+        ------
+        ValueError
+            If ``context.br().pinned_mr`` is ``None``.
+        """
+        pinned_mr = context.br().pinned_mr
         if pinned_mr is None:
             raise ValueError(
                 "HybridScanPrefetchExecutor requires a PinnedMemoryResource; "
-                "pass context.br().pinned_mr or enable pinned memory."
+                "enable pinned memory via --pinned-memory."
             )
         loop = asyncio.get_running_loop()
         executor = ThreadPoolExecutor(
@@ -275,5 +302,5 @@ class HybridScanPrefetchExecutor:
         self._executor.shutdown(cancel_futures=True, wait=False)
 
     def result(self, task_idx: int) -> PrefetchedByteRanges | None:
-        """Block until task_idx's prefetch result is ready and return it."""
+        """Block until the tasks' prefetch result is ready and return it."""
         return self.futures[task_idx].result()

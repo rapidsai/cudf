@@ -642,7 +642,6 @@ async def scan_node(
             list(scans),  # type: ignore[arg-type]
             num_workers=num_producers,
             context=context,
-            pinned_mr=context.br().pinned_mr,
         )
         if use_prefetch
         else None
