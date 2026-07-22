@@ -523,6 +523,7 @@ TEST_F(SemiAntiJoinTest, InvalidLoadFactor)
   auto const table = cudf::table_view{{keys}};
 
   for (auto const load_factor : {-0.1, 0.0, 1.1}) {
+    SCOPED_TRACE(load_factor);
     EXPECT_THROW(cudf::filtered_join(
                    table, cudf::null_equality::EQUAL, load_factor, cudf::get_default_stream()),
                  std::invalid_argument);
