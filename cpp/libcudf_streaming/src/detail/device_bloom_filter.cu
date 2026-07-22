@@ -140,14 +140,15 @@ rmm::device_uvector<bool> device_bloom_filter::contains(cudf::table_view const& 
   return result;
 }
 
-std::size_t aligned_size(std::size_t size) noexcept
+std::size_t device_bloom_filter::aligned_size(std::size_t size) noexcept
 {
   return rmm::align_down(size, std::alignment_of_v<StorageType>);
 }
 
-std::size_t max_size() noexcept {
-  return BloomFilterPolicy::max_filter_blocks * sizeof(StorageType)
-};
+std::size_t device_bloom_filter::max_size() noexcept
+{
+  return BloomFilterPolicy::max_filter_blocks * sizeof(StorageType);
+}
 
 void* device_bloom_filter::data() noexcept { return storage_; }
 
