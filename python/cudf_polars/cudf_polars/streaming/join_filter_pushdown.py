@@ -108,6 +108,9 @@ if TYPE_CHECKING:
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
+DomainScore: TypeAlias = tuple[int, int, int]
+
+
 @dataclass(frozen=True)
 class _Producer:
     """A subtree and its bound column names at an insertion point."""
@@ -124,6 +127,11 @@ class _Producer:
         """First bound column in the producer."""
         return self.columns[0]
 
+    @property
+    def domain_score(self) -> DomainScore:
+        """Scoring function for a domain."""
+        return (self.cost, self.rows, len(self.node.schema))
+
 
 @dataclass(frozen=True)
 class SimpleCandidate:
@@ -137,9 +145,9 @@ class SimpleCandidate:
     domain_key: expr.Col
 
     @property
-    def score(self) -> tuple[int, int, int]:
+    def score(self) -> tuple[int, DomainScore]:
         """Rank after composite candidates, then by domain cost."""
-        return (1, self.domain.cost, self.domain.rows)
+        return (1, self.domain.domain_score)
 
 
 @dataclass(frozen=True)
@@ -157,9 +165,9 @@ class CompositeCandidate:
     target_constraint_key: expr.Col
 
     @property
-    def score(self) -> tuple[int, int, int]:
+    def score(self) -> tuple[int, DomainScore, DomainScore]:
         """Prefer cheaper constraint and domain inputs."""
-        return (0, self.constraint_domain.cost, self.domain.cost)
+        return (0, self.constraint_domain.domain_score, self.domain.domain_score)
 
 
 Candidate: TypeAlias = SimpleCandidate | CompositeCandidate
@@ -737,7 +745,7 @@ def _smallest_key_producer(
     require_selective: bool,
     exclude: IR | None = None,
 ) -> _Producer | None:
-    candidates = []
+    producers = []
     for reference, path in semijoin_pushdown_candidates(facts, root, column):
         node, bound_column = reference.node, reference.name
         if node is exclude:
@@ -750,17 +758,16 @@ def _smallest_key_producer(
             continue
         if require_selective and node not in facts.selective_nodes:
             continue
-        producer = _Producer(node, (bound_column,), rows, cost, path)
-        candidates.append((cost, rows, len(node.schema), producer))
-    if not candidates:
+        producers.append(_Producer(node, (bound_column,), rows, cost, path))
+    if not producers:
         return None
-    return min(candidates, key=lambda item: (item[0], item[1], item[2]))[3]
+    return min(producers, key=lambda p: p.domain_score)
 
 
 def _smallest_node_containing_all(
     root: IR, columns: Sequence[str], facts: PlanFacts
 ) -> _Producer | None:
-    candidates = []
+    producers = []
     lineages: list[ColumnLineage] = []
     for column in columns:
         lineage = facts.column_lineages.get(ColumnRef(root, column))
@@ -779,14 +786,7 @@ def _smallest_node_containing_all(
         if rows is not None and rows > 0:
             cost = facts.source_costs.get(node)
             if cost is not None:
-                candidates.append(
-                    (
-                        cost,
-                        rows,
-                        len(node.schema),
-                        _Producer(node, bound_columns, rows, cost, path),
-                    )
-                )
+                producers.append(_Producer(node, bound_columns, rows, cost, path))
         if blocks_pushdown(node):
             break
         source_child_index = lineages[0].source_child_index
@@ -800,9 +800,9 @@ def _smallest_node_containing_all(
             break
         path = (*path, source_child_index)
         lineages = sources
-    if not candidates:
+    if not producers:
         return None
-    return min(candidates, key=lambda item: (item[0], item[1], item[2]))[3]
+    return min(producers, key=lambda p: p.domain_score)
 
 
 def _largest_key_source(root: IR, column: str, facts: PlanFacts) -> _Producer | None:
