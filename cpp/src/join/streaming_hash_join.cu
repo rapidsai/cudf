@@ -344,11 +344,11 @@ struct streaming_hash_join::impl {
         0, build_pair_fn{row_hasher, layout, batch_id});
 
       if (compare_nulls == null_equality::EQUAL || !nullable(keys)) {
-        hash_table.insert(input_begin, input_begin + batch_rows, stream.value());
+        hash_table.insert_async(input_begin, input_begin + batch_rows, stream.value());
       } else {
         auto const row_bitmask =
           cudf::detail::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first;
-        hash_table.insert_if(
+        hash_table.insert_if_async(
           input_begin,
           input_begin + batch_rows,
           cuda::counting_iterator<size_type>{0},
