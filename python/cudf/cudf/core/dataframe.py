@@ -924,11 +924,13 @@ def _mapping_to_column_accessor(
             if (
                 dtype is None
                 and len(column) == 0
-                and isinstance(value, (list, tuple, range))
+                and isinstance(value, (list, tuple, Iterator))
             ):
-                # pandas' DataFrame constructor coerces untyped empty
-                # sequences to float64 (unlike Series([]), which stays
-                # object).
+                # pandas' DataFrame constructor defaults untyped empty
+                # sequences (list/tuple/iterator) to float64 (numpy's
+                # default for np.array([])), unlike Series([]) which
+                # defaults to object. An empty range stays int64 like
+                # pandas (as_column already handles it via from_range).
                 column = column_empty(0, dtype=np.dtype(np.float64))
             value_lengths.add(len(column))
             col_data[key] = column
@@ -2848,14 +2850,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 if isinstance(into, defaultdict):
                     cons = functools.partial(cons, into.default_factory)
             elif issubclass(into, Mapping):
-                cons = into  # type: ignore[assignment]
+                cons = into
                 if issubclass(into, defaultdict):
                     raise TypeError(
                         "to_dict() only accepts initialized defaultdicts"
                     )
             else:
                 raise TypeError(f"unsupported type: {into}")
-            return cons(self.items())  # type: ignore[misc]
+            return cons(self.items())
 
         return self.to_pandas().to_dict(orient=orient, into=into, index=index)
 
@@ -4387,9 +4389,20 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             result.index = out_index
 
         if columns:
-            result._data = result._data.rename_levels(
-                mapper=columns, level=level
-            )
+            new_ca = result._data.rename_levels(mapper=columns, level=level)
+            # pandas' rename rebuilds the columns Index from the transformed
+            # labels (``Index(items, tupleize_cols=False)`` in
+            # ``_transform_index``), re-inferring dtypes rather than
+            # preserving the originals: renaming object-dtype columns to
+            # all-string labels yields ``str``, and MultiIndex level dtypes
+            # are likewise re-inferred.
+            if new_ca.multiindex:
+                new_ca._level_dtypes = None
+            else:
+                new_ca.label_dtype = pd.Index(
+                    new_ca.names, tupleize_cols=False
+                ).dtype
+            result._data = new_ca
 
         return result
 
@@ -4993,6 +5006,24 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             left_on, right_on = right_on, left_on
             left_index, right_index = right_index, left_index
             suffixes = (suffixes[1], suffixes[0])
+            if (
+                orig_on is None
+                and orig_left_on is None
+                and orig_right_on is None
+                and not orig_left_index
+                and not orig_right_index
+            ):
+                # Merge infers the common key columns from its (post-swap)
+                # left frame, but pandas keys an inferred merge by the
+                # *original* left frame's column order regardless of ``how``.
+                # Pass the keys explicitly to preserve that order (it decides
+                # both the key column order and the sort priority).
+                right_names = set(right._column_names)
+                inferred_on = [
+                    name for name in self._column_names if name in right_names
+                ]
+                if inferred_on:
+                    on = inferred_on
         elif how in {"leftsemi", "leftanti"}:
             merge_cls = MergeSemi
 
@@ -5051,8 +5082,28 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 and not orig_left_index
                 and not orig_right_index
             ):
-                # Auto-detect: intersection of column names are the keys.
-                k = len(set(self._column_names) & set(right._column_names))
+                # Auto-detected keys sit wherever they appear within each
+                # frame, so a segment swap cannot reproduce pandas' layout
+                # (the original left frame's columns in their own order,
+                # then the right frame's non-key columns). No suffixing can
+                # occur here -- any label shared by both frames is a key --
+                # so the result labels are unchanged and a label-based
+                # reorder is exact.
+                common = set(self._column_names) & set(right._column_names)
+                expected = list(self._column_names) + [
+                    name for name in right._column_names if name not in common
+                ]
+                positions = {
+                    label: i for i, label in enumerate(result._column_names)
+                }
+                if len(expected) == n_result and all(
+                    label in positions for label in expected
+                ):
+                    result = result.iloc[
+                        :, [positions[label] for label in expected]
+                    ]
+                # skip the positional segment swap below
+                k = n_result
             else:
                 k = 0
             # Only reorder when there are both right non-key cols and self
@@ -5064,6 +5115,98 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     + list(range(k, N_r))
                 )
                 result = result.iloc[:, new_indices]
+
+        if how != "cross":
+            orig_how = "right" if is_right_join else how
+            if is_right_join:
+                key_on, key_lon, key_ron = orig_on, orig_left_on, orig_right_on
+                key_li, key_ri = orig_left_index, orig_right_index
+            else:
+                key_on, key_lon, key_ron = on, left_on, right_on
+                key_li, key_ri = left_index, right_index
+
+            def _restore_key_dtype(name, target, right_dtype):
+                # Restore a result key column to ``target`` to match pandas.
+                if name not in result._data:
+                    return
+                # Categorical keys follow the (de)categorization rules applied
+                # during the join itself.
+                if isinstance(target, CategoricalDtype) or isinstance(
+                    right_dtype, CategoricalDtype
+                ):
+                    return
+                if result._data[name].dtype == target:
+                    return
+                # Do not undo the numpy int -> float64 upcast that unmatched
+                # rows require.
+                if (
+                    isinstance(target, np.dtype)
+                    and result._data[name].null_count
+                ):
+                    return
+                result[name] = result[name].astype(target)
+
+            def _keep_left_dtype(target, right_dtype):
+                # pandas presents a shared-name key with the LEFT dtype when an
+                # extension dtype is involved (all joins) or for inner/left
+                # joins; right/outer numpy keys take the common type.
+                one_extension = (not isinstance(target, np.dtype)) or (
+                    right_dtype is not None
+                    and not isinstance(right_dtype, np.dtype)
+                )
+                return one_extension or orig_how in {
+                    "inner",
+                    "left",
+                    "leftsemi",
+                    "leftanti",
+                }
+
+            if not key_li and not key_ri:
+                if key_lon is not None and key_ron is not None:
+                    lon = [key_lon] if is_scalar(key_lon) else list(key_lon)
+                    ron = [key_ron] if is_scalar(key_ron) else list(key_ron)
+                    for lk, rk in zip(lon, ron, strict=True):
+                        if lk == rk:
+                            if lk in self._data:
+                                target = self._data[lk].dtype
+                                rd = (
+                                    right._data[lk].dtype
+                                    if lk in right._data
+                                    else None
+                                )
+                                if _keep_left_dtype(target, rd):
+                                    _restore_key_dtype(lk, target, rd)
+                        else:
+                            # Differently-named keys both survive, each with
+                            # its own operand's dtype.
+                            if lk in self._data:
+                                _restore_key_dtype(
+                                    lk, self._data[lk].dtype, None
+                                )
+                            if rk in right._data:
+                                _restore_key_dtype(
+                                    rk, right._data[rk].dtype, None
+                                )
+                else:
+                    if key_on is not None:
+                        key_names = (
+                            [key_on] if is_scalar(key_on) else list(key_on)
+                        )
+                    else:
+                        key_names = list(
+                            set(self._column_names) & set(right._column_names)
+                        )
+                    for name in key_names:
+                        if name not in self._data:
+                            continue
+                        target = self._data[name].dtype
+                        rd = (
+                            right._data[name].dtype
+                            if name in right._data
+                            else None
+                        )
+                        if _keep_left_dtype(target, rd):
+                            _restore_key_dtype(name, target, rd)
 
         return result
 
@@ -6556,8 +6699,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 include=[np.number], exclude=["datetime64", "timedelta64"]
             )
 
-        if columns is None:
-            columns = set(data_df._column_names)
+        if columns is not None:
+            requested = set(columns)
+            data_df = data_df[
+                [k for k in data_df._column_names if k in requested]
+            ]
 
         if isinstance(q, numbers.Number):
             q_is_number = True
@@ -6607,17 +6753,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             interpolation = interpolation or "linear"
             result = {}
             for k in data_df._column_names:
-                if k in columns:
-                    ser = data_df[k]
-                    res = ser.quantile(
-                        qs,
-                        interpolation=interpolation,
-                        exact=exact,
-                        quant_index=False,
-                    )._column
-                    if len(res) == 0:
-                        res = column_empty(row_count=len(qs), dtype=ser.dtype)
-                    result[k] = res
+                ser = data_df[k]
+                res = ser.quantile(
+                    qs,
+                    interpolation=interpolation,
+                    exact=exact,
+                    quant_index=False,
+                )._column
+                if len(res) == 0:
+                    res = column_empty(row_count=len(qs), dtype=ser.dtype)
+                result[k] = res
         result_ca = ColumnAccessor(
             result,
             multiindex=data_df._data.multiindex,
