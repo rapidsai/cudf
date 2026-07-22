@@ -774,21 +774,27 @@ dependencies:
               use_cuda_wheels: "true"
             packages:
               - cuda-toolkit==12.2.*
+              # Pin the oldest available cuFile wheel, released with CUDA Toolkit 12.6.3.
+              - nvidia-cufile-cu12==1.11.1.6.*
           - matrix:
               cuda: "12.5"
               use_cuda_wheels: "true"
             packages:
               - cuda-toolkit==12.5.*
+              # Pin the oldest available cuFile wheel, released with CUDA Toolkit 12.6.3.
+              - nvidia-cufile-cu12==1.11.1.6.*
           - matrix:
               cuda: "12.8"
               use_cuda_wheels: "true"
             packages:
               - cuda-toolkit==12.8.*
+              - nvidia-cufile-cu12==1.13.1.3.*
           - matrix:
               cuda: "12.9"
               use_cuda_wheels: "true"
             packages:
               - cuda-toolkit==12.9.*
+              - nvidia-cufile-cu12==1.14.1.1.*
           - matrix:
               cuda: "13.0"
               use_cuda_wheels: "true"
@@ -977,12 +983,16 @@ dependencies:
               use_cuda_wheels: "true"
             packages:
               - cuda-toolkit[nvcc,nvrtc]==12.*
+              # CUDA Toolkit releases before 12.6.3 do not provide the `cufile`
+              # extra, and it has a -cu12 suffix. `cuda_version` pins it at test
+              # time.
+              - nvidia-cufile-cu12
           - matrix:
               cuda: "13.*"
               cuda_suffixed: "true"
               use_cuda_wheels: "true"
             packages:
-              - cuda-toolkit[nvcc,nvrtc]==13.*
+              - cuda-toolkit[cufile,nvcc,nvrtc]==13.*
           - {matrix: null, packages: []}
   run_cudf_polars:
     common:
