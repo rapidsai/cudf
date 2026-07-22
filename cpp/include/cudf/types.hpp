@@ -38,14 +38,6 @@
  * @brief Type declarations for libcudf.
  */
 
-// Forward declarations
-/// @cond
-namespace rmm {
-class device_buffer;
-/// @endcond
-
-}  // namespace rmm
-
 namespace CUDF_EXPORT cudf {
 // Forward declaration
 class column;

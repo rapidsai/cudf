@@ -411,19 +411,18 @@ def test_join_prefilter_skips_unsupported_cross_join() -> None:
     assert decision.reason_skipped == "unsupported_join_type"
 
 
-def test_join_prefilter_asserts_mismatched_key_count() -> None:
-    with pytest.raises(
-        AssertionError, match="left and right join key counts must match"
-    ):
-        _select_join_prefilter(
-            "Inner",
-            10,
-            1_000,
-            (0,),
-            (0, 1),
-            threshold=0.5,
-            max_key_columns=1,
-        )
+def test_join_prefilter_skips_mismatched_key_count() -> None:
+    decision = _select_join_prefilter(
+        "Inner",
+        10,
+        1_000,
+        (0,),
+        (0, 1),
+        threshold=0.5,
+        max_key_columns=1,
+    )
+    assert not decision.enabled
+    assert decision.reason_skipped == "expression_keys"
 
 
 @pytest.mark.parametrize(
@@ -492,18 +491,17 @@ def test_broadcast_limit(
     q = left.join(right, on="y", how="inner")
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     config_options = ConfigOptions.from_polars_engine(engine)
-    shuffle_nodes = [
-        type(node)
-        for node in lower_ir_graph(
+    lowering = lower_ir_graph(
+        ir,
+        config_options,
+        collect_statistics(
             ir,
             config_options,
-            collect_statistics(
-                ir,
-                config_options,
-                parquet_stats_executor,
-            ),
-        )[1]
-        if isinstance(node, Shuffle)
+            parquet_stats_executor,
+        ),
+    )
+    shuffle_nodes = [
+        type(node) for node in lowering.partition_info if isinstance(node, Shuffle)
     ]
 
     # NOTE: Expect small table to have 3 partitions (9 / 3).
@@ -517,7 +515,7 @@ def test_broadcast_limit(
         assert len(shuffle_nodes) == 0
 
 
-def test_cache_preserves_partitioning_join(
+def test_shared_join_preserves_partitioning(
     parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
 ):
     engine = pl.GPUEngine(
@@ -543,20 +541,24 @@ def test_cache_preserves_partitioning_join(
 
     config_options = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
-    lowered_ir, partition_info = lower_ir_graph(
+    lowering = lower_ir_graph(
         ir,
         config_options,
         collect_statistics(ir, config_options, parquet_stats_executor),
     )
+    lowered_ir = lowering.lowered
+    partition_info = lowering.partition_info
 
-    # Cache should preserve partitioning on 'key'
-    cache_partitioning = [
+    assert not any(isinstance(node, Cache) for node in traversal([lowered_ir]))
+
+    # Removing Cache should preserve the shared join's partitioning on 'key'.
+    join_partitioning = [
         [ne.name for ne in partition_info[node].partitioned_on]
         for node in traversal([lowered_ir])
-        if isinstance(node, Cache)
+        if isinstance(node, Join)
     ]
-    assert cache_partitioning == [["key"]], (
-        f"Cache should preserve partitioning on 'key', got {cache_partitioning}"
+    assert join_partitioning == [["key"]], (
+        f"Shared join should be partitioned on 'key', got {join_partitioning}"
     )
 
     # Only 2 shuffles needed (for join sides, not for groupby)
@@ -593,7 +595,7 @@ def test_join_computed_expr_right_key(streaming_engine_factory) -> None:
             target_partition_size=1,
             max_rows_per_partition=4,
             broadcast_limit=1,  # Disable broadcast joins
-            fallback_mode="warn",
+            raise_on_fail=True,
         ),
     )
     if engine.nranks < 2:
@@ -640,9 +642,4 @@ def test_join_computed_expr_right_key(streaming_engine_factory) -> None:
         left_on="zip_prefix",
         right_on=pl.col("full_zip").str.slice(0, 2),
     )
-    with warns_on_spmd(
-        engine,
-        UserWarning,
-        match=r"Multi-partition Join not supported for keys with expressions\.",
-    ):
-        assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)

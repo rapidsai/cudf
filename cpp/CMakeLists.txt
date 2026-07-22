@@ -703,6 +703,7 @@ add_library(
   src/groupby/sort/host_udf_aggregation.cpp
   src/groupby/sort/scan.cpp
   src/groupby/sort/sort_helper.cu
+  src/groupby/sort/sort_helper_nested.cu
   src/groupby/streaming_groupby.cpp
   src/groupby/streaming_groupby/aggregate.cu
   src/groupby/streaming_groupby/impl.cu
@@ -841,6 +842,7 @@ add_library(
   src/jit/util.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
+  src/join/direct_join.cu
   src/join/distinct_hash_join.cu
   src/join/filter_join_indices/filter_join_indices.cu
   src/join/filter_join_indices/filter_join_indices_jit.cu
@@ -879,12 +881,8 @@ add_library(
   src/join/key_remapping.cu
   src/join/mark_join.cu
   src/join/mixed_join.cu
-  src/join/mixed_join_kernel.cu
-  src/join/mixed_join_kernel_nulls.cu
   src/join/mixed_join_kernels_semi.cu
   src/join/mixed_join_semi.cu
-  src/join/mixed_join_size_kernel.cu
-  src/join/mixed_join_size_kernel_nulls.cu
   src/join/sort_merge_join.cu
   src/json/json_path.cu
   src/lists/contains.cu
@@ -989,8 +987,6 @@ add_library(
   src/search/contains_scalar.cu
   src/search/contains_table.cu
   src/search/contains_table_impl.cu
-  src/search/contains_table_impl_nested.cu
-  src/search/contains_table_impl_primitive.cu
   src/search/search_ordered.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu

@@ -2921,7 +2921,23 @@ class IndexedFrame(Frame):
             if ignore_index:
                 out = out.reset_index(drop=True)
         else:
-            labels = sorted(self._column_names, reverse=not ascending)
+            # The column labels are host-side pandas metadata, so have
+            # pandas compute the sorted column order: a Series holding the
+            # original positions, indexed by the column labels, sorted by
+            # its index yields the positional indexer while inheriting
+            # pandas' exact level resolution and validation, per-level
+            # ascending, sort_remaining, and na_position semantics.
+            pd_columns = self._data.to_pandas_index
+            indexer = pd.Series(
+                range(len(pd_columns)), index=pd_columns
+            ).sort_index(
+                level=level,
+                ascending=ascending,
+                sort_remaining=sort_remaining,
+                na_position=na_position,
+                kind="stable",
+            )
+            labels = [self._column_names[i] for i in indexer]
             result_columns = (self._data[label] for label in labels)
             if ignore_index:
                 ca = ColumnAccessor(
@@ -4842,11 +4858,24 @@ class IndexedFrame(Frame):
             new_column_data[name] = col
         # This is to match pandas where the new data columns are always
         # inserted to the left of existing data columns.
+        label_dtype = None
+        if not self._data.multiindex:
+            # pandas computes the result columns by Index.insert into the
+            # existing columns Index, which preserves its dtype (e.g.
+            # Index([None], dtype=object).insert(0, "a") stays object);
+            # rebuilding from the merged labels would re-infer (pandas 3.0
+            # infers "str" for all-string labels). Emulate the insert
+            # provenance.
+            pd_columns = self._data.to_pandas_index
+            for new_name in reversed(list(new_column_data)):
+                pd_columns = pd_columns.insert(0, new_name)
+            label_dtype = pd_columns.dtype
         return (
             ColumnAccessor(
                 {**new_column_data, **self._data},
                 self._data.multiindex,
                 self._data._level_names,
+                label_dtype=label_dtype,
             ),
             index,
         )
