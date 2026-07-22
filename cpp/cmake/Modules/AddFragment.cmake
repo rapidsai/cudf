@@ -56,7 +56,6 @@ macro(add_fragment)
     )
   endif()
 
-  target_compile_definitions(${OBJECT_ID} PRIVATE CUDF_DISABLE_EXPORTS ${ARG_DEFINITIONS})
   if(ARG_INCLUDE_DIRECTORIES)
     target_include_directories(${OBJECT_ID} PRIVATE ${ARG_INCLUDE_DIRECTORIES})
   endif()
