@@ -47,6 +47,7 @@ from ..fast_slow_proxy import (
     _FastSlowAttribute,
     _FunctionProxy,
     _maybe_wrap_result,
+    _setattr_fsproxy_no_mirror,
     _State,
     _Unusable,
     is_proxy_object,
@@ -1337,6 +1338,36 @@ DatetimeIndexResampler = make_intermediate_proxy_type(
     pd.core.resample.DatetimeIndexResampler,
 )
 
+PeriodIndexResampler = make_intermediate_proxy_type(
+    "PeriodIndexResampler",
+    _Unusable,
+    pd.core.resample.PeriodIndexResampler,
+)
+
+TimedeltaIndexResampler = make_intermediate_proxy_type(
+    "TimedeltaIndexResampler",
+    _Unusable,
+    pd.core.resample.TimedeltaIndexResampler,
+)
+
+DatetimeIndexResamplerGroupby = make_intermediate_proxy_type(
+    "DatetimeIndexResamplerGroupby",
+    _Unusable,
+    pd.core.resample.DatetimeIndexResamplerGroupby,
+)
+
+PeriodIndexResamplerGroupby = make_intermediate_proxy_type(
+    "PeriodIndexResamplerGroupby",
+    _Unusable,
+    pd.core.resample.PeriodIndexResamplerGroupby,
+)
+
+TimedeltaIndexResamplerGroupby = make_intermediate_proxy_type(
+    "TimedeltaIndexResamplerGroupby",
+    _Unusable,
+    pd.core.resample.TimedeltaIndexResamplerGroupby,
+)
+
 StataReader = make_final_proxy_type(
     "StataReader",
     _Unusable,
@@ -1661,8 +1692,10 @@ def _df_query_method(self, *args, local_dict=None, global_dict=None, **kwargs):
     )
 
 
-DataFrame.eval = _df_eval_method
-DataFrame.query = _df_query_method
+# These custom implementations are installed by cudf.pandas itself and must
+# not be mirrored onto (and clobber) the real ``pandas.DataFrame``.
+_setattr_fsproxy_no_mirror(DataFrame, "eval", _df_eval_method)
+_setattr_fsproxy_no_mirror(DataFrame, "query", _df_query_method)
 
 _JsonReader = make_intermediate_proxy_type(
     "_JsonReader",
