@@ -983,9 +983,7 @@ dependencies:
               use_cuda_wheels: "true"
             packages:
               - cuda-toolkit[nvcc,nvrtc]==12.*
-              # CUDA Toolkit releases before 12.6.3 do not provide the `cufile`
-              # extra, and it has a -cu12 suffix. `cuda_version` pins it at test
-              # time.
+              # cuda-toolkit before 12.6.3 does not have the `cufile` extra.
               - nvidia-cufile-cu12
           - matrix:
               cuda: "13.*"
