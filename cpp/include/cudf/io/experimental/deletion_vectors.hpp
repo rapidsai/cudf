@@ -150,7 +150,7 @@ class chunked_parquet_reader {
   std::queue<size_type> _deletion_vector_row_counts;
   size_t _start_row;
   bool _is_unspecified_row_group_data;
-  bool _mask_type;
+  bool _are_retentions;
   rmm::cuda_stream_view _stream;
   rmm::device_async_resource_ref _mr;
   rmm::device_async_resource_ref _table_mr;
