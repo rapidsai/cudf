@@ -500,7 +500,7 @@ cdef class FileMetaData:
 
         Returns
         -------
-        row_counts
+        list
             A list with the row count per row group in this file.
 
         Notes
@@ -524,7 +524,7 @@ cdef class FileMetaData:
 
         Returns
         -------
-        columnchunk_metadata
+        dict[str, list[int]]
             Map of dotted column paths (``".".join(path_in_schema)``)
             to lists of `total_uncompressed_size` metadata from all
             their column chunks.
@@ -543,9 +543,8 @@ cdef class FileMetaData:
            ...             col.meta_data.total_uncompressed_size
            ...         )
         """
-        cdef Py_ssize_t i, j, k, n_path
+        cdef Py_ssize_t i, j, k, n_path, n_col
         cdef Py_ssize_t n_rg = self.c_obj.row_groups.size()
-        cdef Py_ssize_t n_col
         cdef dict result = {}
         cdef str name
         cdef list path_parts
