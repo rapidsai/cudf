@@ -97,7 +97,6 @@ def _make_quent_ir_execution_context(
         id=operator_id,
         plan=plan,
         parent_operators=[],
-        instance_name="Filter-NodeIndex(0)",
         type_name="Filter",
     )
     local_context = LocalQuentContext(
