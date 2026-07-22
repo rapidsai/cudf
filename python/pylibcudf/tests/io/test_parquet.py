@@ -546,6 +546,40 @@ def test_file_metadata_row_group_sorting_columns(tmp_path) -> None:
             assert sorting_column.nulls_first == pa_sorting_column.nulls_first
 
 
+def test_file_metadata_columnchunk_metadata() -> None:
+    table = pa.table(
+        {
+            "a": list(range(100)),
+            "b": [x * 10 for x in range(100)],
+        }
+    )
+    sink = io.BytesIO()
+    write_table(table, sink, row_group_size=25)
+    sink.seek(0)
+    parquet_file = pq.ParquetFile(sink)
+    sink.seek(0)
+
+    source_info = plc.io.SourceInfo([sink])
+    file_metadata = plc.io.parquet_metadata.read_parquet_footers(source_info)[
+        0
+    ]
+
+    result = file_metadata.columnchunk_metadata
+    assert set(result) == {"a", "b"}
+
+    expected: dict[str, list[int]] = {"a": [], "b": []}
+    for rg_idx in range(parquet_file.metadata.num_row_groups):
+        pa_row_group = parquet_file.metadata.row_group(rg_idx)
+        for col_idx in range(pa_row_group.num_columns):
+            pa_col = pa_row_group.column(col_idx)
+            expected[pa_col.path_in_schema].append(
+                pa_col.total_uncompressed_size
+            )
+
+    for name, sizes in expected.items():
+        assert result[name] == sizes
+
+
 # TODO: Test these options
 # list row_groups = None,
 # ^^^ This one is not tested since it's not in pyarrow/pandas, deprecate?
