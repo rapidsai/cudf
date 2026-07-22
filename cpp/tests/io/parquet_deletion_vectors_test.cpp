@@ -302,7 +302,12 @@ void test_read_parquet_and_apply_mask(
 
         auto [local_deletion_vector, local_expected_row_mask_column] =
           build_roaring_bitmap_and_expected_row_mask(
-            num_input_rows, deletion_probability, local_expected_row_indices, stream, mr);
+            num_input_rows,
+            deletion_probability,
+            local_expected_row_indices,
+            stream,
+            mr,
+            final_deletion_vector_info.are_retention_vectors);
 
         // Insert the expected table, the corresponding deletion vector and its data span
         tables.emplace_back(build_expected_table(input_table_view,
@@ -608,24 +613,28 @@ TEST_F(DeletionVectorsCountTests, NoRowIndex)
   auto row_indices = thrust::host_vector<size_t>(num_rows);
   std::iota(row_indices.begin(), row_indices.end(), size_t{0});
 
-  auto [deletion_vector, expected_row_mask_column] = build_roaring_bitmap_and_expected_row_mask(
-    num_rows, deletion_probability, row_indices, stream, mr);
+  for (auto const are_retention_vectors : {false, true}) {
+    auto [deletion_vector, expected_row_mask_column] = build_roaring_bitmap_and_expected_row_mask(
+      num_rows, deletion_probability, row_indices, stream, mr, are_retention_vectors);
 
-  auto const expected_row_mask = cudf::detail::make_host_vector(
-    cudf::device_span<bool const>(expected_row_mask_column->view().data<bool>(), num_rows), stream);
-  auto const expected_deleted =
-    std::count(expected_row_mask.begin(), expected_row_mask.end(), false);
+    auto const expected_row_mask = cudf::detail::make_host_vector(
+      cudf::device_span<bool const>(expected_row_mask_column->view().data<bool>(), num_rows),
+      stream);
+    auto const expected_deleted =
+      std::count(expected_row_mask.begin(), expected_row_mask.end(), false);
 
-  auto deletion_vector_info = cudf::io::parquet::experimental::deletion_vector_info{
-    .serialized_roaring_bitmaps = {deletion_vector},
-    .deletion_vector_row_counts = {num_rows},
-    .row_group_offsets          = {},
-    .row_group_num_rows         = {}};
+    auto deletion_vector_info = cudf::io::parquet::experimental::deletion_vector_info{
+      .serialized_roaring_bitmaps = {deletion_vector},
+      .deletion_vector_row_counts = {num_rows},
+      .row_group_offsets          = {},
+      .row_group_num_rows         = {},
+      .are_retention_vectors      = are_retention_vectors};
 
-  for (auto chunk_size : {num_rows, num_rows / 2}) {
-    auto const result = cudf::io::parquet::experimental::compute_num_deleted_rows(
-      deletion_vector_info, chunk_size, stream);
-    EXPECT_EQ(result, expected_deleted);
+    for (auto chunk_size : {num_rows, num_rows / 2}) {
+      auto const result = cudf::io::parquet::experimental::compute_num_deleted_rows(
+        deletion_vector_info, chunk_size, stream);
+      EXPECT_EQ(result, expected_deleted);
+    }
   }
 }
 

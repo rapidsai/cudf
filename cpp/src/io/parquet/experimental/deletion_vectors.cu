@@ -165,7 +165,7 @@ namespace detail {
     dv_row_counts_queue.push(deletion_vector_row_counts[i]);
   }
 
-  size_t deleted_rows   = 0;
+  size_t matched_rows   = 0;
   size_t remaining_rows = num_rows;
   size_t start_row      = 0;
 
@@ -180,14 +180,15 @@ namespace detail {
                                        is_row_group_data_unspecified,
                                        stream,
                                        cudf::get_current_device_resource_ref());
-    deleted_rows += compute_partial_deleted_row_count(
+    matched_rows += compute_partial_deleted_row_count(
       row_index_column->view(), dv_queue, dv_row_counts_queue, stream);
 
     start_row += chunk_rows;
     remaining_rows -= chunk_rows;
   }
 
-  return deleted_rows;
+  // Bitmap hits are deleted rows for deletion vectors, retained rows for retention vectors
+  return deletion_vector_info.are_retention_vectors ? num_rows - matched_rows : matched_rows;
 }
 
 }  // namespace detail
