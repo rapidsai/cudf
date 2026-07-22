@@ -68,6 +68,10 @@ macro(add_fragment)
     target_compile_options(${OBJECT_ID} PRIVATE ${ARG_COMPILE_OPTIONS})
   endif()
 
+  if(ARG_DEFINITIONS)
+    target_compile_definitions(${OBJECT_ID} PRIVATE ${ARG_DEFINITIONS})
+  endif()
+
   set_target_properties(
     ${OBJECT_ID}
     PROPERTIES CUDA_SEPARABLE_COMPILATION ON
