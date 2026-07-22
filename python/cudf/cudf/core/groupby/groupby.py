@@ -215,7 +215,28 @@ def _is_all_scan_aggregate(all_aggs: list[list[str]]) -> bool:
     }
 
     def get_name(agg):
-        return agg.__name__ if callable(agg) else agg
+        if not callable(agg):
+            return agg
+        if agg is not list:
+            # A ``lambda x: x.cumsum()``-style aggregation carries its
+            # scan-ness only in the aggregation name it resolves to
+            # (``Aggregation.cumsum`` is an alias of ``sum``; libcudf
+            # separates scan from reduction by the *call*, not the
+            # aggregation object). Probe the callable with a
+            # name-recording stand-in mirroring ``make_aggregation``'s
+            # ``op(Aggregation)`` protocol; true UDFs raise inside the
+            # probe and fall back to ``__name__``.
+            class _NameProbe:
+                def __getattr__(self, name):
+                    return lambda *args, **kwargs: name
+
+            try:
+                name = agg(_NameProbe())
+            except Exception:
+                return agg.__name__
+            if isinstance(name, str):
+                return name
+        return agg.__name__
 
     all_scan = all(
         get_name(agg_name) in groupby_scans
@@ -1220,6 +1241,28 @@ class GroupBy(Serializable, Reducible, Scannable):
                     create_dtype = get_dtype_of_same_kind(
                         orig_dtype, ListDtype(orig_dtype)
                     )
+                if agg_kind in {"ARGMIN", "ARGMAX"} and not isinstance(
+                    self.obj.index, MultiIndex
+                ):
+                    # libcudf returns the integer row-position of the
+                    # min/max element within each group (null if the
+                    # group's values are all NA); pandas returns the
+                    # *label* of that row from the source index and raises
+                    # for all-NA groups. Gather from the raw position
+                    # column before any dtype morphing (a masked gather
+                    # map cannot feed ``take``). MultiIndex sources fall
+                    # through and stay positional: pandas maps them to
+                    # tuple labels in an object column, which is not
+                    # currently supported.
+                    pos_col = ColumnBase.create(plc_result, create_dtype)
+                    if pos_col.has_nulls():
+                        how = "idxmin" if agg_kind == "ARGMIN" else "idxmax"
+                        raise ValueError(
+                            f"{how} with skipna=True encountered all NA "
+                            "values in a group."
+                        )
+                    data[key] = self.obj.index._column.take(pos_col)
+                    continue
                 # Override for specific aggregation types that need dtype adjustments
                 if agg_kind in {"COUNT", "SIZE", "ARGMIN", "ARGMAX"}:
                     if isinstance(orig_dtype, pd.StringDtype):
@@ -1402,64 +1445,6 @@ class GroupBy(Serializable, Reducible, Scannable):
             # the output, regardless of ``as_index``.
             return self._mimic_pandas_order(result)
 
-        return result
-
-    def _wrap_idxmin_idxmax(
-        self, result: DataFrame | Series, *, skipna: bool, how: str
-    ):
-        # libcudf's idxmin/idxmax return the integer row-position of the
-        # min/max element within each group (null if the group's values were
-        # all NA). pandas instead returns the *label* of that row taken from
-        # the source object's row index, so we validate skipna against the raw
-        # positions and then gather the corresponding index labels.
-        from cudf.core.multiindex import MultiIndex
-        from cudf.core.series import Series
-
-        if not skipna:
-            # pandas does not support positional idxmin/idxmax with
-            # skipna=False (it cannot represent "the label of a NA").
-            raise ValueError(f"{how} with skipna=False")
-
-        key_names = set(self.grouping.names)
-        if result.ndim == 2:
-            value_items = [
-                (name, col)
-                for name, col in result._column_labels_and_values
-                if name not in key_names
-            ]
-        else:
-            value_items = [(None, result._column)]
-
-        if skipna and any(col.has_nulls() for _, col in value_items):
-            raise ValueError(
-                "Encountered all NA values in a group with skipna=True"
-            )
-
-        index = self.obj.index
-        if isinstance(index, MultiIndex):
-            # pandas maps the positions to tuple-valued MultiIndex labels
-            # stored in an object column, which is not currently supported.
-            # Leave the (positional) result untouched, as before.
-            return result
-
-        def gather_labels(positions: ColumnBase) -> ColumnBase:
-            # ``gather`` cannot consume a null gather-map, so redirect null
-            # positions to an out-of-bounds index; ``take(nullify=True)`` then
-            # yields a null label for them while valid positions still gather
-            # their (possibly null) index label.
-            if positions.has_nulls():
-                positions = positions.fillna(len(index))
-            return index._column.take(positions, nullify=True)
-
-        if result.ndim == 2:
-            for name, col in value_items:
-                result._data[name] = gather_labels(col)
-        else:
-            result = Series._from_column(
-                gather_labels(result._column),
-                index=result.index,
-                name=result.name,
-            )
         return result
 
     def _reduce_numeric_only(self, op: str):
@@ -2783,7 +2768,12 @@ class GroupBy(Serializable, Reducible, Scannable):
             values = values._align_to_index(
                 self.grouping.keys, how="right", allow_non_unique=True
             )
-            values.index = self.obj.index
+        # Even when no alignment is needed (every group is a single row,
+        # so the aggregated index already equals the group keys), the
+        # result must be indexed like the input rows, not the group
+        # labels (pandas GH#9941: transform returns an obj-indexed
+        # result).
+        values.index = self.obj.index
         return values
 
     @_performance_tracking
@@ -2844,8 +2834,27 @@ class GroupBy(Serializable, Reducible, Scannable):
             raise TypeError(
                 "Aggregation must be a named aggregation or a callable"
             )
+        gb = self
+        if not self._as_index:
+            # as_index has no effect on transform in pandas (GH#49834):
+            # the key-column reset that agg/size apply for as_index=False
+            # must not leak into the broadcast result.
+            gb = copy.copy(self)
+            gb._as_index = True
+        if func == "size":
+            # size counts group rows rather than aggregating each value
+            # column, so pandas broadcasts GroupBy.size() as a single
+            # Series (unnamed for DataFrameGroupBy, keeping the source
+            # name for SeriesGroupBy) instead of going per-column.
+            return gb._broadcast(gb.size())
+        if func == "cumcount":
+            # cumcount numbers the rows of each group: always an unnamed
+            # Series over the original index, never a per-column result.
+            return gb.cumcount()
+        if func == "ngroup":
+            return gb.ngroup()
         try:
-            result = self.agg(func)
+            result = gb.agg(func)
         except TypeError as e:
             raise NotImplementedError(
                 "Currently, `transform()` supports only aggregations."
@@ -2857,7 +2866,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     "Unexpected result length for scan transform"
                 )
             return result
-        return self._broadcast(result)
+        return gb._broadcast(result)
 
     def rolling(self, *args, **kwargs):
         """
@@ -3880,8 +3889,11 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
         numeric_only: bool = False,
         **kwargs: Any,
     ) -> DataFrame:
-        result = self._reduce("idxmin", numeric_only=numeric_only)
-        return self._wrap_idxmin_idxmax(result, skipna=skipna, how="idxmin")
+        if not skipna:
+            # pandas does not support positional idxmin with skipna=False
+            # (it cannot represent "the label of a NA").
+            raise ValueError("idxmin with skipna=False")
+        return self._reduce("idxmin", numeric_only=numeric_only)
 
     def idxmax(
         self,
@@ -3890,8 +3902,9 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
         numeric_only: bool = False,
         **kwargs: Any,
     ) -> DataFrame:
-        result = self._reduce("idxmax", numeric_only=numeric_only)
-        return self._wrap_idxmin_idxmax(result, skipna=skipna, how="idxmax")
+        if not skipna:
+            raise ValueError("idxmax with skipna=False")
+        return self._reduce("idxmax", numeric_only=numeric_only)
 
     def value_counts(
         self,
@@ -4302,14 +4315,16 @@ class SeriesGroupBy(GroupBy):
     def idxmin(
         self, skipna: bool = True, min_count: int = 0, **kwargs: Any
     ) -> Series:
-        result = self._reduce("idxmin")
-        return self._wrap_idxmin_idxmax(result, skipna=skipna, how="idxmin")
+        if not skipna:
+            raise ValueError("idxmin with skipna=False")
+        return self._reduce("idxmin")
 
     def idxmax(
         self, skipna: bool = True, min_count: int = 0, **kwargs: Any
     ) -> Series:
-        result = self._reduce("idxmax")
-        return self._wrap_idxmin_idxmax(result, skipna=skipna, how="idxmax")
+        if not skipna:
+            raise ValueError("idxmax with skipna=False")
+        return self._reduce("idxmax")
 
     @property
     def dtype(self) -> pd.Series:
