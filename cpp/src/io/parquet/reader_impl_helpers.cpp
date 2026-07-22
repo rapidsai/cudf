@@ -61,7 +61,7 @@ size_type find_colchunk_iter_offset(RowGroup const& row_group,
                                     size_type schema_idx,
                                     std::optional<size_type> cached_offset)
 {
-  if (cached_offset.has_value() and
+  if (cached_offset.has_value() and cached_offset.value() >= 0 and
       std::cmp_less(cached_offset.value(), row_group.columns.size()) and
       row_group.columns[cached_offset.value()].schema_idx == schema_idx) {
     return cached_offset.value();
