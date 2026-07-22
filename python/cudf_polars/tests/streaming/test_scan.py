@@ -204,7 +204,7 @@ def test_target_partition_size(
     )
     qir = Translator(q._ldf.visit(), _engine).translate_ir()
     config_options = ConfigOptions.from_polars_engine(_engine)
-    ir, info = lower_ir_graph(
+    lowering = lower_ir_graph(
         qir,
         config_options,
         collect_statistics(
@@ -213,6 +213,8 @@ def test_target_partition_size(
             parquet_stats_executor,
         ),
     )
+    ir = lowering.lowered
+    info = lowering.partition_info
     count = info[ir].count
     if blocksize <= 12_000:
         assert count > n_files
