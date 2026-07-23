@@ -45,6 +45,8 @@ NJOBS=4
 NPROC=$(nproc)
 export POLARS_MAX_THREADS=$(( NPROC / NJOBS > 0 ? NPROC / NJOBS : 1 ))
 export OMP_NUM_THREADS=${POLARS_MAX_THREADS}
+export RAY_worker_num_grpc_internal_threads=1
+export RAY_core_worker_num_server_call_thread=1
 echo "n-jobs=${NJOBS}, n-proc=${NPROC}, polars-max-threads=${POLARS_MAX_THREADS}"
 
 for version in "${VERSIONS[@]}"; do
@@ -101,7 +103,7 @@ for version in "${VERSIONS[@]}"; do
         -vv \
         "${COVERAGE_ARGS[@]}" \
         --numprocesses=${NJOBS} \
-        --dist=worksteal \
+        --dist=loadgroup \
         --durations 10 --durations-min 10 \
         -x \
         -ra \
