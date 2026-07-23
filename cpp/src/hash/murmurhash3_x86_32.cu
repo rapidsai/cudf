@@ -17,6 +17,22 @@ namespace cudf {
 namespace hashing {
 namespace detail {
 
+template <template <template <typename> class, typename> class DeviceRowHasher>
+void hash_rows(cudf::detail::row::hash::row_hasher const& row_hasher,
+               size_type num_rows,
+               hash_value_type* output_begin,
+               bool nullable,
+               uint32_t seed,
+               rmm::cuda_stream_view stream)
+{
+  auto const hasher = row_hasher.device_hasher<MurmurHash3_x86_32, DeviceRowHasher>(nullable, seed);
+  // thrust::tabulate is slow here, see NVIDIA/cccl#9070
+  CUDF_CUDA_TRY(cub::DeviceFor::Bulk(
+    num_rows,
+    [output_begin, hasher] __device__(size_type i) mutable { output_begin[i] = hasher(i); },
+    stream.value()));
+}
+
 std::unique_ptr<column> murmurhash3_x86_32(table_view const& input,
                                            uint32_t seed,
                                            rmm::cuda_stream_view stream,
@@ -30,18 +46,17 @@ std::unique_ptr<column> murmurhash3_x86_32(table_view const& input,
 
   if (input.num_rows() == 0) { return output; }
 
-  bool const nullable   = has_nulls(input);
-  auto const row_hasher = cudf::detail::row::hash::row_hasher(input, stream);
-  auto output_view      = output->mutable_view();
+  bool const nullable     = has_nulls(input);
+  auto const row_hasher   = cudf::detail::row::hash::row_hasher(input, stream);
+  auto const output_begin = output->mutable_view().begin<hash_value_type>();
 
-  // Compute the hash value for each row
-  auto const output_begin = output_view.begin<hash_value_type>();
-  auto const hasher       = row_hasher.device_hasher<MurmurHash3_x86_32>(nullable, seed);
-  // thrust::tabulate is slow here, see NVIDIA/cccl#9070
-  CUDF_CUDA_TRY(cub::DeviceFor::Bulk(
-    input.num_rows(),
-    [output_begin, hasher] __device__(size_type i) mutable { output_begin[i] = hasher(i); },
-    stream.value()));
+  if (input.num_columns() > 1) {
+    hash_rows<cudf::detail::row::hash::device_row_hasher_iterative>(
+      row_hasher, input.num_rows(), output_begin, nullable, seed, stream);
+  } else {
+    hash_rows<cudf::detail::row::hash::device_row_hasher>(
+      row_hasher, input.num_rows(), output_begin, nullable, seed, stream);
+  }
 
   return output;
 }

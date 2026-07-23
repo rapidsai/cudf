@@ -22,9 +22,9 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
-#include <thrust/iterator/transform_iterator.h>
 
 #include <memory>
 
@@ -101,8 +101,11 @@ class element_hasher {
  *
  * @tparam hash_function Hash functor to use for hashing elements.
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
+ * @tparam use_iterative_seeding Whether to use each column hash as the seed for the next column
  */
-template <template <typename> class hash_function, typename Nullate>
+template <template <typename> class hash_function,
+          typename Nullate,
+          bool use_iterative_seeding = false>
 class device_row_hasher {
   friend class row_hasher;
 
@@ -117,16 +120,22 @@ class device_row_hasher {
    */
   __device__ result_type operator()(size_type row_index) const noexcept
   {
-    auto const hasher = [row_index, this](auto const& column) {
+    auto const hasher = [row_index, this](auto seed, auto const& column) {
       return cudf::type_dispatcher<dispatch_storage_type>(
-        column.type(), element_hasher_adapter{_check_nulls, _seed}, column, row_index);
+        column.type(), element_hasher_adapter{_check_nulls, seed}, column, row_index);
     };
 
+    if constexpr (use_iterative_seeding) {
+      return detail::accumulate(_table.begin(), _table.end(), _seed, hasher);
+    }
+
     auto const has_columns = _table.num_columns() > 0;
-    auto const init        = has_columns ? hasher(_table.column(0)) : _seed;
+    auto const init        = has_columns ? hasher(_seed, _table.column(0)) : _seed;
     auto const start_col   = static_cast<size_type>(has_columns);
 
-    auto it = thrust::make_transform_iterator(_table.begin() + start_col, hasher);
+    auto it = cuda::transform_iterator{
+      _table.begin() + start_col,
+      [hasher, seed = _seed](auto const& column) { return hasher(seed, column); }};
     return detail::accumulate(
       it, it + (_table.num_columns() - start_col), init, [](auto hash, auto h) {
         return cudf::hashing::detail::hash_combine(hash, h);
@@ -227,6 +236,21 @@ class device_row_hasher {
   // Assumes seeds are the same as the result type of the hash function
   result_type const _seed;
 };
+
+/**
+ * @brief A device row hasher that uses each column hash as the seed for the next column.
+ *
+ * Spark computes multi-column MurmurHash3 values by using each column hash as the seed for the
+ * following column. This iterative seed propagation is therefore required for Spark-compatible
+ * results when the element-level hashing semantics are otherwise compatible.
+ *
+ * @note This hasher provides Spark-compatible seed propagation only.
+ *
+ * @tparam hash_function Hash functor to use for hashing elements
+ * @tparam Nullate A cudf::nullate type describing whether to check for nulls
+ */
+template <template <typename> class hash_function, typename Nullate>
+using device_row_hasher_iterative = device_row_hasher<hash_function, Nullate, true>;
 
 /**
  * @brief Computes the hash value of a row in the given table.

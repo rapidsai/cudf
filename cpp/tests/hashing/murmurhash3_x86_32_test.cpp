@@ -50,6 +50,20 @@ TEST_F(MurmurHashTest, MultiValue)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
+TEST_F(MurmurHashTest, IterativeSeeding)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> const first({0, 1, -1, 42, 123456789});
+  cudf::test::fixed_width_column_wrapper<int32_t> const second({10, 20, 30, -40, -987654321});
+  auto const input = cudf::table_view({first, second});
+
+  auto const output = cudf::hashing::murmurhash3_x86_32(input, 42);
+
+  // Matches Apache Spark for non-null fixed-width inputs with seed 42.
+  cudf::test::fixed_width_column_wrapper<uint32_t> const expected(
+    {2573243963u, 1151116018u, 1549484878u, 3007216400u, 2314233967u});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(), expected);
+}
+
 TEST_F(MurmurHashTest, MultiValueNulls)
 {
   // Nulls with different values should be equal
