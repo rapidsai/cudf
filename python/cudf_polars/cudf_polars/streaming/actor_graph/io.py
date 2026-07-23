@@ -720,15 +720,15 @@ def make_rapidsmpf_read_parquet_node(
         # Build predicate filter if present (passed separately to read_parquet)
         filter_obj = None
         if ir.predicate is not None:
-            filter_expr = to_parquet_filter(
+            filter_expr, residual = to_parquet_filter(
                 _prepare_parquet_predicate(
                     ir.predicate.value, ir.paths, ir.schema, ir.with_columns
                 ),
                 stream=stream,
             )
-            if filter_expr is None:
-                # Predicate cannot be converted to parquet filter
-                # Return None to signal fallback to scan_node
+            if filter_expr is None or residual is not None:
+                # Predicate is not fully convertible to a parquet filter and this
+                # path applies no post-read mask, so fall back to scan_node.
                 return None
             filter_obj = Filter(stream, filter_expr)
     except Exception as e:
