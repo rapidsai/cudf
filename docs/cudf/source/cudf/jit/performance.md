@@ -9,6 +9,7 @@ Kernels that are generated from dynamic expressions (e.g. SQL expressions, UDFs,
 Each expression has different arithmetic intensity and memory access patterns, which can be optimized by the JIT compiler. Static expressions that are known at compile time will most benefit from standard AOT kernel compilation.
 
 libcudf also has a pre-compiled AST interpreter that can be used to evaluate expressions without JIT compilation. Its performance is generally lower than JIT compilation but provides lower cold-start latency for single-shot expression evaluation. It is limited by:
+
 - The types of expressions it can evaluate
 - The types of inputs it can handle
 - The dimensionality of the inputs it can handle (scalar vs columnar)
@@ -16,11 +17,9 @@ libcudf also has a pre-compiled AST interpreter that can be used to evaluate exp
 - Intermediate results that are materialized in shared memory instead of registers, which can lead to lower performance for complex expressions
 - Increased AOT compilation times, thus increasing the overall build time of libcudf and its dependencies. This is because the pre-compiled AST interpreter needs to be compiled for all possible expressions and input types, which can lead to a combinatorial explosion of code paths and makes the compiler work harder to optimize the code.
 
-
 ### 2. Architecture-Specific Optimizations & Optimization Policies
 
 For workloads that require very specific optimization policies (e.g. memory layouts, vectorization policies, kernel configurations, etc.) that are not known at compile time (i.e. GPU-specific tuning policies), JIT compilation can be used to generate specialized kernels that are optimized for the specific workload. Pre-compiling kernels for all possible configurations is not feasible due to the combinatorial explosion of code paths and the increased AOT compilation times. JIT compilation allows for the generation of specialized kernels at runtime, which can lead to better codegen and significant performance improvements.
-
 
 ### 3. Long-Running High-Throughput Workloads
 
@@ -28,7 +27,6 @@ JIT compilation is most beneficial for long-running, high-throughput workloads w
 The overhead of JIT compilation can be significant, especially for complex expressions, so it is important to consider the trade-offs between JIT compilation and pre-compiled kernels when designing workloads. For example, compiling a transform kernel with cold PCH cache can take up to 900ms, while compiling the same kernel with hot PCH cache can take 80ms. This is a significant difference that can impact the overall performance of a workload. We continue to optimize the JIT compilation path to reduce this overhead, but it is important to consider the trade-offs between JIT compilation and pre-compiled kernels when designing workloads.
 
 For workloads that require low cold-start latency, pre-compiled kernels may be preferred over JIT compilation.
-
 
 ## Performance Considerations
 
@@ -42,7 +40,6 @@ When benchmarking JIT workloads, it is important to consider the following facto
 
 - **Amortization of JIT Compilation Overhead**: The overhead of JIT compilation can be significant, especially for complex expressions and kernels. It is important to consider the break-even point where the overhead of JIT compilation is amortized over many executions. This amortization point primarily depends on the number of rows to be processed and the number of times the kernel is re-used.
 
-
 <!-- TODO -->
 
 ## How Precompiled Headers Affect JIT Performance
@@ -55,14 +52,11 @@ Precompiled headers are presently generated at **the first** cold JIT compilatio
 
 This is because NVRTC's PCH cache is **process-local** and not shared across processes. This means that if a kernel is compiled in one process, the precompiled headers are not available to other processes. This can lead to performance degradation in multi-process environments where the same kernel is compiled in different processes. If NVRTC's PCH could be prepared at compile time, this would eliminate the cold PCH cache overhead entirely.
 
-
-
 ## JIT Performance Tuning Options
 
 ### `LIBCUDF_KERNEL_CACHE_PATH:path`
 
 This environment variable affects where the libcudf JIT kernel cache path is located. For a multi-process container environment (i.e. Presto multi-container executor) the paths should point to a shared location to ensure re-use of compiled kernels across the processes. If this path is not specified, libcudf will attempt to find a suitable and accessible filesystem path to store compilation artifacts/kernels.
-
 
 ### `LIBCUDF_JIT_ENABLED:bool`
 
@@ -84,10 +78,10 @@ This environment variable removes all cached kernel artifacts in libcudf's JIT k
 
 This environment variable disables cuDF's CUDA codegen cache. It affects PTX and CUBIN code generation after CUDA frontend processing.
 
-
 ### `LIBCUDF_JIT_VERBOSE:bool`
 
 This environment variable informs libcudf to print verbose information about JIT compilation. This is useful for debugging and benchmarking purposes. It prints information such as:
+
 - NVRTC compilation times (CUDA C++ frontend, PTXAS, Codegen)
 - NVRTC include headers
 - NVRTC compilation flags
@@ -95,10 +89,10 @@ This environment variable informs libcudf to print verbose information about JIT
 ### `LIBCUDF_JIT_DUMP_TRACE:bool`
 
 This environment variable enables dumping of JIT compilation traces. It is useful for debugging and performance analysis. The trace is dumped to the command line as text
+
 - NVRTC compilation times (CUDA C++ frontend, PTXAS, Codegen)
 - Optimization passes and their times
 - NVRTC passes and their times
-
 
 ### `LIBCUDF_JIT_DUMP_TIME_PROFILE:bool`
 
@@ -107,7 +101,6 @@ This is same as `LIBCUDF_JIT_DUMP_TRACE` but dumps the trace as a perfetto json 
 ### `LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS:integer`
 
 This environment variable limits the number of cached kernels per process. This is useful to control the memory footprint of the kernel cache in multi-process environments. It can also be used to disable caching of kernels for benchmarking purposes.
-
 
 ### `cudf::enable_jit_cache(bool)`
 

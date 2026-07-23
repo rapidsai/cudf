@@ -21,7 +21,6 @@ Row IR acts as the bridge between high-level expression semantics and the CUDA-b
 
 Analysing ASTs while simultaneously building source text is difficult to reason about, error-prone, and leads to confusing code paths and logic inversion. It is much easier to accomplish in a structured IR.
 
-
 These decisions also help us analyze an expression and reduce memory bandwidth usage and memory footprint. For example, if an operator is null-aware and produces a valid output even if its inputs are nullable, then the surrounding kernel can avoid allocating a null mask for that output. Determining this would require reasoning about both the global and local attributes of each expression.
 
 ## What Row IR Is Not
@@ -33,7 +32,6 @@ It is also helpful to be explicit about what Row IR is not:
 - It is not what nvJitLink consumes
 - It is not a public-facing API for users to author JIT code. This is intentional and helps us evolve the implementation without worrying about breaking user code
 - It is not a replacement for source-based JIT authoring in general
-
 
 ## How Row IR Works
 
@@ -89,9 +87,7 @@ node magnitude{opcode::SQRT, {dot_product}};
 node setter0{output_reference{0}, magnitude};
 ```
 
-
 NOTE: Row IR is progressively lowered and has its type & attributes resolved during instantiation.
-
 
 ### Instantiation & Resolution
 
@@ -103,7 +99,6 @@ In this phase, the following information is determined and propagated from one n
 - Null-dependence
 - Output nullability
 - Error propagation
-
 
 At this stage, the IR above is conceptually lowered to:
 
@@ -139,23 +134,25 @@ At this phase, the fully lowered IR is now converted to CUDA code. With all attr
 For a CUDA function target the equivalent code is generated:
 
 ```cpp
-__device__ void transform(float * arg0, float arg1, float arg2){
-    float input0 = arg1;
-    float input1 = arg2;
-    float x_square = cudf::ops::mul(input0, input0);
-    float y_square = cudf::ops::mul(input1, input1);
-    float dot_product = cudf::ops::add(x_square, y_square);
-    float magnitude = cudf::ops::sqrt(dot_product);
-    *arg0 = magnitude;
+__device__ void transform(float* arg0, float arg1, float arg2)
+{
+  float input0      = arg1;
+  float input1      = arg2;
+  float x_square    = cudf::ops::mul(input0, input0);
+  float y_square    = cudf::ops::mul(input1, input1);
+  float dot_product = cudf::ops::add(x_square, y_square);
+  float magnitude   = cudf::ops::sqrt(dot_product);
+  *arg0             = magnitude;
 }
 
-__global__ void transform_kernel(mutable_column_device_view const * outputs, column_device_view const * inputs, int n){
-    for(...){
-        transform(
-            &outputs[0].element<float>(i),
-            inputs[0].element<float>(i),
-            inputs[1].element<float>(i));
-    }
+__global__ void transform_kernel(mutable_column_device_view const* outputs,
+                                 column_device_view const* inputs,
+                                 int n)
+{
+  for (...) {
+    transform(
+      &outputs[0].element<float>(i), inputs[0].element<float>(i), inputs[1].element<float>(i));
+  }
 }
 ```
 
