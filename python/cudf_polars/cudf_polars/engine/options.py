@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # ruff: noqa: RUF009  -- _opt() returns dataclasses.field(), not a mutable default
 """Unified streaming options for the RapidsMPF frontend."""
@@ -23,8 +23,10 @@ from cudf_polars.utils.config import MemoryResourceConfig
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from cudf_polars.quent import QuentContext
     from cudf_polars.utils.config import (
         DynamicPlanningOptions,
+        JoinFilterPushdownOptions,
         ParquetOptions,
     )
 
@@ -247,6 +249,14 @@ class StreamingOptions:
         Env: ``CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING``.
         Default: enabled.
         Category: executor.
+    join_filter_pushdown
+        Config for join filter pushdown optimizations, dict or
+        :class:`~cudf_polars.utils.config.JoinFilterPushdownOptions`. ``None``
+        disables the rewrite.
+        Env: ``CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN`` and
+        ``CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN__*``.
+        Default: enabled.
+        Category: executor.
     sink_to_directory
         Whether multi-partition sink operations should write to a directory
         rather than a single file. The ``spmd``/``ray``/``dask`` engines
@@ -254,6 +264,10 @@ class StreamingOptions:
         Env: ``CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY``.
         Default: ``True`` (forced by the streaming engines).
         Category: executor.
+    quent_context
+        Quent tracing context, or ``None`` to disable tracing.
+        Env: ``CUDF_POLARS__EXECUTOR__QUENT_CONTEXT`` (``true``/``false``).
+        Default: ``None`` (disabled).
     raise_on_fail
         Raise instead of falling back to CPU.
         Default: ``False``.
@@ -267,10 +281,6 @@ class StreamingOptions:
         RMM configuration, dict or
         :class:`~cudf_polars.utils.config.MemoryResourceConfig`.
         Env: ``CUDF_POLARS__MEMORY_RESOURCE_CONFIG__*``.
-        Category: engine.
-    cuda_stream_policy
-        CUDA stream policy (``"default"``, ``"pool"`` or config dict).
-        Env: ``CUDF_POLARS__CUDA_STREAM_POLICY``.
         Category: engine.
     hardware_binding
         Hardware binding policy. Pass a :class:`~cudf_polars.engine.hardware_binding.HardwareBindingPolicy`
@@ -345,16 +355,20 @@ class StreamingOptions:
     dynamic_planning: dict[str, Any] | DynamicPlanningOptions | None | Unspecified = (
         _opt("executor")
     )
+    join_filter_pushdown: (
+        dict[str, Any] | JoinFilterPushdownOptions | None | Unspecified
+    ) = _opt("executor")
     sink_to_directory: bool | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY", parse_boolean
     )
+    quent_context: QuentContext | None | Unspecified = _opt(
+        "executor",
+    )
+
     # ---- Engine ----
     raise_on_fail: bool | Unspecified = _opt("engine")
     parquet_options: dict[str, Any] | ParquetOptions | Unspecified = _opt("engine")
     memory_resource_config: MemoryResourceConfig | Unspecified = _opt("engine")
-    cuda_stream_policy: Literal["default", "pool"] | dict[str, Any] | Unspecified = (
-        _opt("engine", "CUDF_POLARS__CUDA_STREAM_POLICY")
-    )
     hardware_binding: HardwareBindingPolicy | Unspecified = _opt(
         "engine", "CUDF_POLARS__HARDWARE_BINDING", _parse_hardware_binding
     )
@@ -495,10 +509,6 @@ class StreamingOptions:
         dyn = getattr(args, "dynamic_planning", None)
         dynamic_planning: Any = None if dyn is False else UNSPECIFIED
 
-        # Special: stream_policy "auto" or absent → UNSPECIFIED
-        sp = getattr(args, "stream_policy", None)
-        cuda_stream_policy: Any = UNSPECIFIED if (sp is None or sp == "auto") else sp
-
         # target_partition_size: canonical dest from _add_cli_args; fall back to
         # "blocksize" for legacy benchmark scripts that predate this module.
         target_partition_size = (
@@ -530,7 +540,6 @@ class StreamingOptions:
             raise_on_fail=_get("raise_on_fail"),
             parquet_options=_get("parquet_options"),
             memory_resource_config=_get("memory_resource_config"),
-            cuda_stream_policy=cuda_stream_policy,
         )
 
     @staticmethod
@@ -742,16 +751,6 @@ class StreamingOptions:
             help=textwrap.dedent("""\
                 Enable dynamic planning. Use --no-dynamic-planning to disable.
                 Env: CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING. Built-in default: enabled."""),
-        )
-        g.add_argument(
-            "--stream-policy",
-            dest="stream_policy",
-            default=None,
-            type=str,
-            choices=["auto", "default", "new", "pool"],
-            help=textwrap.dedent("""\
-                CUDA stream pool policy. "auto" defers to the built-in default.
-                Env: CUDF_POLARS__CUDA_STREAM_POLICY. Built-in default: default."""),
         )
         g.add_argument(
             "--parquet-options",

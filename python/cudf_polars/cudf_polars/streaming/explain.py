@@ -29,6 +29,7 @@ from cudf_polars.dsl.ir import (
     GroupBy,
     HStack,
     Join,
+    PythonScan,
     Scan,
     Select,
     Sort,
@@ -122,8 +123,10 @@ def explain_query(
     if physical:
         with cm:
             stats = collect_statistics(ir, config, executor)
-        lowered_ir, partition_info = lower_ir_graph(ir, config, stats)
-        return _repr_ir_tree(lowered_ir, partition_info, stats=stats, config=config)
+        lowered = lower_ir_graph(ir, config, stats)
+        return _repr_ir_tree(
+            lowered.lowered, lowered.partition_info, stats=stats, config=config
+        )
     else:
         if config.executor.name == "streaming":
             # Include row-count statistics for the logical plan
@@ -149,7 +152,9 @@ def collect_partition_plan(
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         stats = collect_statistics(ir, config, executor)
-    lowered_ir, partition_info = lower_ir_graph(ir, config, stats)
+    lowered = lower_ir_graph(ir, config, stats)
+    lowered_ir = lowered.lowered
+    partition_info = lowered.partition_info
 
     seen: set[tuple] = set()
     rows: list[PartitionPlanRow] = []
@@ -407,7 +412,11 @@ def _repr_ir_tree(
             f" projected={_fmt_partition_bytes(projected_size)}"
         )
         header = header.rstrip("\n") + f" [{plan_info}]\n"
-    if count is not None:
+    if isinstance(ir, PythonScan):
+        # The lowered partition count is a placeholder. under dynamic planning the
+        # runtime adapts to the real chunk count, so don't report a misleading value.
+        header = header.rstrip("\n") + " [unknown]\n"
+    elif count is not None:
         header = header.rstrip("\n") + f" [{count}]\n"
 
     children_strs = [
@@ -488,8 +497,11 @@ def _predicate_to_str(expr: Expr) -> str:
             sym = _BINOP_SYMBOLS.get(op, op.name)
             return f"({_predicate_to_str(left)} {sym} {_predicate_to_str(right)})"
         case UnaryFunction(name=name):
-            (child,) = expr.children
-            return f"{name}({_predicate_to_str(child)})"
+            # Unlike the other cases here, UnaryFunction doesn't have a fixed
+            # number of children. E.g. `pl.col("x").fill_null(0)` has two:
+            # the column expression ("x") and the fill value literal (0).
+            args = ", ".join(_predicate_to_str(child) for child in expr.children)
+            return f"{name}({args})"
         case Ternary():
             when, then, otherwise = expr.children
             return f"when({_predicate_to_str(when)}).then({_predicate_to_str(then)}).otherwise({_predicate_to_str(otherwise)})"
@@ -747,7 +759,9 @@ class SerializablePlan:
         if lowered:
             with cm:
                 stats = collect_statistics(ir, config_options, executor)
-            ir, partition_info_d = lower_ir_graph(ir, config_options, stats)
+            lowering = lower_ir_graph(ir, config_options, stats)
+            ir = lowering.lowered
+            partition_info_d = lowering.partition_info
             partition_info_dict = {}
 
         nodes: dict[str, SerializableIRNode] = {}

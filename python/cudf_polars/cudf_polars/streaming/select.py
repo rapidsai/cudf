@@ -1,9 +1,10 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Parallel Select Logic."""
 
 from __future__ import annotations
 
+import dataclasses
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
@@ -24,6 +25,7 @@ from cudf_polars.streaming.io import StreamingScan
 from cudf_polars.streaming.over import _fuse_over_nodes
 from cudf_polars.streaming.repartition import Repartition
 from cudf_polars.streaming.utils import (
+    _contains_cum_sum_without_order_by,
     _contains_unsupported_fill_strategy,
     _dynamic_planning_on,
     _lower_ir_fallback,
@@ -412,6 +414,18 @@ def _(
             ),
         )
 
+    if rec.state["nranks"] > 1 and _contains_cum_sum_without_order_by(
+        [e.value for e in ir.exprs]
+    ):
+        return _lower_ir_fallback(
+            ir.reconstruct([child]),
+            rec,
+            msg=(
+                "cum_sum() over a window without order_by is not supported across "
+                "multiple ranks; falling back to a single partition."
+            ),
+        )
+
     # Fast count optimization - reads parquet metadata only, works regardless of partitioning
     scan_child: Scan | None = None
     if Select._is_len_expr(ir.exprs):
@@ -431,8 +445,17 @@ def _(
 
     if scan_child and scan_child.predicate is None and scan_child.typ == "parquet":
         # Special Case: Fast count.
+        # We can't use prefetched file metadata here, because we're in lowering,
+        # not execution, so we don't have an IRExecutionContext with the prefetched
+        # file metadata yet.
         count = Scan._get_parquet_row_count_from_metadata(
-            scan_child.paths, scan_child.skip_rows, scan_child.n_rows
+            scan_child.paths,
+            scan_child.skip_rows,
+            scan_child.n_rows,
+            dataclasses.replace(
+                scan_child.parquet_options, prefetch_file_metadata=False
+            ),
+            None,
         )
         dtype = ir.exprs[0].value.dtype
 

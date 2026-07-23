@@ -162,6 +162,9 @@ struct operator_functor {
     requires(op == ast_operator::ADD || op == ast_operator::SUB || op == ast_operator::MUL ||
              op == ast_operator::DIV || op == ast_operator::MOD || op == ast_operator::PYMOD)
   {
+    // this implementation must be kept in sync with the implementation of
+    // `cudf::detail::row_ir::get_op_output_scale`
+    // (https://github.com/lamarrr/cudf/blob/a3a81058ba6288cf8d5dec995925690ef7f28d69/cpp/src/jit/row_ir.cpp#L39)
     if constexpr (op == ast_operator::ADD || op == ast_operator::SUB) {
       return cuda::std::min(a, b);
     } else if constexpr (op == ast_operator::MUL) {

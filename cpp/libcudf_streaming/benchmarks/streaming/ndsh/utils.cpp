@@ -1,6 +1,6 @@
 /**
  * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "utils.hpp"
@@ -18,6 +18,7 @@
 #include <rapidsmpf/bootstrap/bootstrap.hpp>
 #include <rapidsmpf/bootstrap/utils.hpp>
 #include <rapidsmpf/communicator/communicator.hpp>
+#include <rapidsmpf/communicator/logger.hpp>
 #include <rapidsmpf/communicator/single.hpp>
 #include <rapidsmpf/config.hpp>
 #include <rapidsmpf/error.hpp>
@@ -194,10 +195,10 @@ std::pair<std::shared_ptr<streaming::Context>, std::shared_ptr<Communicator>> cr
     "noting that this may significantly degrade spilling performance.",
     std::invalid_argument);
 
+  auto pinned_pool_properties =
+    arguments.no_pinned_host_memory ? PinnedMemoryDisabled : PinnedPoolProperties{};
   auto br                              = BufferResource::create(std::move(mr),
-                                   arguments.no_pinned_host_memory
-                                                                  ? PinnedMemoryResource::Disabled
-                                                                  : PinnedMemoryResource::make_if_available(),
+                                   std::move(pinned_pool_properties),
                                    std::move(memory_limits),
                                    arguments.periodic_spill,
                                    std::make_shared<rmm::cuda_stream_pool>(
@@ -206,6 +207,7 @@ std::pair<std::shared_ptr<streaming::Context>, std::shared_ptr<Communicator>> cr
   auto environment                     = config::get_environment_variables();
   environment["NUM_STREAMING_THREADS"] = std::to_string(arguments.num_streaming_threads);
   auto options                         = config::Options(environment);
+  auto log                             = Logger::from_options(options);
   auto progress_thread                 = std::make_shared<rapidsmpf::ProgressThread>(statistics);
   std::shared_ptr<Communicator> comm;
   switch (arguments.comm_type) {
@@ -214,20 +216,21 @@ std::pair<std::shared_ptr<streaming::Context>, std::shared_ptr<Communicator>> cr
       RAPIDSMPF_EXPECTS(!bootstrap::is_running_with_rrun(), "Can't use MPI communicator with rrun");
       mpi::init(nullptr, nullptr);
 
-      comm = std::make_shared<MPI>(MPI_COMM_WORLD, options, progress_thread);
+      comm = std::make_shared<MPI>(MPI_COMM_WORLD, progress_thread, log);
 #else
       RAPIDSMPF_FAIL("MPI communicator is not available in this build", std::invalid_argument);
 #endif
       break;
-    case CommType::SINGLE: comm = std::make_shared<Single>(options, progress_thread); break;
+    case CommType::SINGLE: comm = std::make_shared<Single>(progress_thread, log); break;
     case CommType::UCXX:
 #ifdef CUDF_STREAMING_HAVE_UCXX
       if (bootstrap::is_running_with_rrun()) {
-        comm = bootstrap::create_ucxx_comm(progress_thread, bootstrap::BackendType::AUTO, options);
+        comm =
+          bootstrap::create_ucxx_comm(progress_thread, bootstrap::BackendType::AUTO, options, log);
       } else {
 #ifdef CUDF_STREAMING_HAVE_MPI
         mpi::init(nullptr, nullptr);
-        comm = ucxx::init_using_mpi(MPI_COMM_WORLD, options, progress_thread);
+        comm = ucxx::init_using_mpi(MPI_COMM_WORLD, options, progress_thread, log);
 #else
         RAPIDSMPF_FAIL("UCXX without MPI support requires bootstrap mode", std::invalid_argument);
 #endif
@@ -238,13 +241,13 @@ std::pair<std::shared_ptr<streaming::Context>, std::shared_ptr<Communicator>> cr
       break;
     default: RAPIDSMPF_FAIL("Unknown communicator type");
   }
-  auto ctx = std::make_shared<streaming::Context>(options, comm->logger(), br);
+  auto ctx = std::make_shared<streaming::Context>(options, log, br);
   if (comm->rank() == 0) {
-    comm->logger()->print("Execution context on ",
-                          comm->nranks(),
-                          " ranks has ",
-                          ctx->executor()->num_streaming_threads(),
-                          " threads");
+    log->print("Execution context on ",
+               comm->nranks(),
+               " ranks has ",
+               ctx->executor()->num_streaming_threads(),
+               " threads");
   }
   return {ctx, comm};
 }

@@ -26,7 +26,6 @@ namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup aggregation_factories
  * @{
- * @file
  */
 
 /**
@@ -80,7 +79,7 @@ class aggregation {
     SUM = 0,       ///< sum reduction
     SUM_OVERFLOW,  ///< sum reduction with overflow detection
     /// @deprecated Use SUM_OVERFLOW instead.
-    SUM_WITH_OVERFLOW = SUM_OVERFLOW,
+    SUM_WITH_OVERFLOW [[deprecated("Use SUM_OVERFLOW instead.")]] = SUM_OVERFLOW,
     PRODUCT,          ///< product reduction
     MIN,              ///< min reduction
     MAX,              ///< max reduction
@@ -223,6 +222,7 @@ std::unique_ptr<Base> make_sum_overflow_aggregation();
 /// @return A SUM_WITH_OVERFLOW aggregation object
 /// @deprecated Use make_sum_overflow_aggregation() instead.
 template <typename Base = aggregation>
+[[deprecated("Use make_sum_overflow_aggregation() instead.")]]
 std::unique_ptr<Base> make_sum_with_overflow_aggregation();
 
 /// Factory to create a PRODUCT aggregation
@@ -675,7 +675,7 @@ std::unique_ptr<Base> make_correlation_aggregation(correlation_type type,
 /**
  * @brief Factory to create a TDIGEST aggregation
  *
- * Produces a tdigest (https://arxiv.org/pdf/1902.04023.pdf) column from input values.
+ * Produces a tdigest (https://arxiv.org/pdf/1902.04023) column from input values.
  * The input aggregation values are expected to be fixed-width numeric types.
  *
  * The tdigest column produced is of the following structure:
@@ -714,7 +714,7 @@ std::unique_ptr<Base> make_tdigest_aggregation(int max_centroids = 1000);
  *
  * Merges the results from a previous aggregation resulting from a `make_tdigest_aggregation`
  * or `make_merge_tdigest_aggregation` to produce a new a tdigest
- * (https://arxiv.org/pdf/1902.04023.pdf) column.
+ * (https://arxiv.org/pdf/1902.04023) column.
  *
  * The tdigest column produced is of the following structure:
  *

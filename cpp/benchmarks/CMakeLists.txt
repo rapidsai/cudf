@@ -1,13 +1,16 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
 
 find_package(Threads REQUIRED)
 
-add_library(cudf_datagen STATIC common/generate_input.cu common/generate_nested_types.cpp)
+add_library(
+  cudf_datagen STATIC common/generate_input.cu common/generate_skewed_data.cpp
+                      common/generate_nested_types.cpp
+)
 target_compile_features(cudf_datagen PUBLIC cxx_std_20 cuda_std_20)
 
 target_compile_options(
@@ -146,19 +149,21 @@ ConfigureNVBench(
 # * join benchmark --------------------------------------------------------------------------------
 ConfigureNVBench(
   JOIN_NVBENCH
-  join/left_join.cu
-  join/conditional_join.cu
-  join/join.cu
-  join/mixed_join.cu
-  join/distinct_join.cu
-  join/filter_join_indices.cu
-  join/generate_input_tables.cu
+  join/conditional_join.cpp
+  join/direct_join.cu
+  join/distinct_join.cpp
+  join/filter_join_indices.cpp
   join/filter_join_indices_jit.cu
-  join/multiplicity_join.cu
-  join/sort_merge_join.cu
-  join/join_heuristics.cu
-  join/key_remap_build.cu
+  join/generate_input_tables.cu
+  join/join.cpp
+  join/join_dictionary.cpp
+  join/join_heuristics.cpp
   join/join_on_int32.cu
+  join/key_remap_build.cpp
+  join/left_join.cpp
+  join/mixed_join.cpp
+  join/multiplicity_join.cpp
+  join/sort_merge_join.cpp
 )
 
 # ##################################################################################################
@@ -387,10 +392,23 @@ ConfigureNVBench(CSV_WRITER_NVBENCH io/csv/csv_writer.cpp)
 ConfigureNVBench(AST_NVBENCH ast/polynomials.cpp ast/transform.cpp)
 
 # ##################################################################################################
+# * LTO Fragments ----------------------------------------------------------------------------
+rtcx_add_embed(cudf_benchmark_fragments)
+add_fragment(cudf_benchmark_fragments FRAGMENT add_f32 SOURCE binaryop/fragments/add_f32.cu)
+add_fragment(cudf_benchmark_fragments FRAGMENT mul_f32 SOURCE binaryop/fragments/mul_f32.cu)
+rtcx_embed(
+  cudf_benchmark_fragments COMPRESSION none OUTPUT_DIRECTORY
+  "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
+)
+
+# ##################################################################################################
 # * binaryop benchmark ----------------------------------------------------------------------------
 ConfigureNVBench(
   BINARYOP_NVBENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.cpp binaryop/polynomials.cpp
+  ${cudf_benchmark_fragments_SOURCE_DIR}/cudf_benchmark_fragments.s
 )
+target_include_directories(BINARYOP_NVBENCH PRIVATE ${cudf_benchmark_fragments_SOURCE_DIR})
+add_dependencies(BINARYOP_NVBENCH cudf_benchmark_fragments)
 
 # ##################################################################################################
 # * transform benchmark
@@ -496,7 +514,7 @@ ConfigureNVBench(
 # ---------------------------------------------------------------------------------
 ConfigureNVBench(
   DICTIONARY_NVBENCH dictionary/encode.cpp dictionary/set_keys.cpp dictionary/sort.cpp
-  dictionary/concatenate.cpp
+  dictionary/concatenate.cpp dictionary/match_keys.cpp
 )
 
 add_custom_target(

@@ -5,7 +5,7 @@
 
 /**
  * @file types.hpp
- * @brief cuDF-IO API type definitions
+ * @brief Type definitions for the cuDF-IO API
  */
 
 #pragma once
@@ -17,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -37,7 +38,6 @@ namespace io {
 /**
  * @addtogroup io_types
  * @{
- * @file
  */
 
 /**
@@ -231,33 +231,12 @@ struct column_name_info {
   std::vector<column_name_info> children;  ///< Child column names
 
   /**
-   * @brief Construct a column name info with a name, optional nullabilty, and no children
-   *
-   * @param _name Column name
-   * @param _is_nullable True if column is nullable
-   * @param _is_binary True if column is binary data
-   */
-  column_name_info(std::string _name,
-                   std::optional<bool> _is_nullable = std::nullopt,
-                   std::optional<bool> _is_binary   = std::nullopt)
-    : name(std::move(_name)), is_nullable(_is_nullable), is_binary(_is_binary)
-  {
-  }
-
-  column_name_info() = default;
-
-  /**
    * @brief Compares two column name info structs for equality
    *
    * @param rhs column name info struct to compare against
    * @return boolean indicating if this and rhs are equal
    */
-  bool operator==(column_name_info const& rhs) const
-  {
-    return ((name == rhs.name) && (is_nullable == rhs.is_nullable) &&
-            (is_binary == rhs.is_binary) && (type_length == rhs.type_length) &&
-            (children == rhs.children));
-  };
+  bool operator==(column_name_info const& rhs) const = default;
 };
 
 /**
@@ -1007,7 +986,7 @@ class reader_column_schema {
    *
    * @param child_span span of child schema objects
    */
-  reader_column_schema(host_span<reader_column_schema> const& child_span)
+  reader_column_schema(std::span<reader_column_schema> const& child_span)
   {
     children.assign(child_span.begin(), child_span.end());
   }

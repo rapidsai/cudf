@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -144,7 +144,7 @@ tokenize_vocabulary::tokenize_vocabulary(cudf::strings_column_view const& input,
     detail::probe_scheme{detail::vocab_hasher{*d_vocabulary}},
     cuco::thread_scope_device,
     detail::cuco_storage{},
-    rmm::mr::polymorphic_allocator<char>{},
+    rmm::mr::polymorphic_allocator<char>{mr},
     stream.value());
 
   // the row index is the token id (value for each key in the map)
@@ -426,7 +426,7 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
     cuda::counting_iterator<int64_t>{0},
     cuda::counting_iterator<int64_t>{chars_size},
     d_tmp_offsets.begin(),
-    [d_marks = d_marks.data()] __device__(auto idx) {
+    [d_marks = d_marks.data()] __device__(auto idx) -> bool {
       if (idx == 0) return true;
       return d_marks[idx] && !d_marks[idx - 1];
     },
