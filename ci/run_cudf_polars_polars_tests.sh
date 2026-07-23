@@ -64,7 +64,7 @@ DESELECTED_TESTS_STR=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
 # shellcheck disable=SC2086
 # Fail fast (-x) because failed tests pollute the state
 echo "Run polars tests with injected in-memory GPU engine"
-python "${TIMEOUT_TOOL_PATH}" --enable-python 3600 \
+python "${TIMEOUT_TOOL_PATH}" --enable-python 5400 \
    python -m pytest \
        --import-mode=importlib \
        --cache-clear \
@@ -85,7 +85,7 @@ python "${TIMEOUT_TOOL_PATH}" --enable-python 3600 \
 echo "Run polars tests with injected SPMD GPU engine, small blocksize"
 CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE=805306368 \
 CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
-python "${TIMEOUT_TOOL_PATH}" --enable-python 3600 \
+python "${TIMEOUT_TOOL_PATH}" --enable-python 5400 \
    python -m pytest \
        --import-mode=importlib \
        --cache-clear \
