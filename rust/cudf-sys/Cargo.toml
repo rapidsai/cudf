@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "cudf-sys"
+description = "Low-level FFI bindings for the cuDF C API (libcudf_c)"
+links = "cudf_c" # expose build variables to downstream crates via "DEP_CUDF_C_*"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[features]
+default = []
+generate-bindings = ["bindgen"]
+doc-only = []
+
+[build-dependencies]
+bindgen = { version = "0.72", optional = true }
+cmake-package = "0.2.0"
+anyhow = "1"
+
+[package.metadata.docs.rs]
+features = ["doc-only"]

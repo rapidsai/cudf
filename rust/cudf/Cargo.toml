@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "cudf"
+description = "Safe Rust bindings for the cuDF GPU DataFrame library"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[features]
+default = []
+doc-only = ["cudf-sys/doc-only"]
+arrow = ["dep:arrow"]
+
+[dependencies]
+cudf-sys = { workspace = true }
+ndarray = "0.15"
+thiserror = "1"
+
+[dependencies.arrow]
+version = "54"
+optional = true
+features = ["ffi"]
+
+[dev-dependencies]
+# add test deps here in later tasks
+
+[package.metadata.docs.rs]
+features = ["doc-only"]
+
+[[example]]
+name = "e2e"
