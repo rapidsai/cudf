@@ -34,8 +34,8 @@ python -c "import libcudf; libcudf.load_library()"
 deactivate
 
 # To test pylibcudf without its optional dependencies, we create a virtual environment
-python -m venv env
-. env/bin/activate
+python -m venv pylibcudf-env
+. pylibcudf-env/bin/activate
 
 rapids-logger "Install pylibcudf and its basic dependencies"
 
