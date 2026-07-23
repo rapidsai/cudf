@@ -182,7 +182,7 @@ void hybrid_scan_reader_impl::setup_compressed_data(
   auto& chunks = pass.chunks;
 
   if (_sparse_page_io) {
-    CUDF_EXPECTS(_has_page_index, "Sparse page I/O requires complete page indexes");
+    CUDF_EXPECTS(_has_offset_index, "Sparse page I/O requires offset indexes");
     CUDF_EXPECTS(_sparse_resident_bytes_per_chunk.size() == chunks.size(),
                  "Sparse resident-byte accounting does not match the logical chunks");
     CUDF_EXPECTS(_sparse_dictionary_present_per_chunk.size() == chunks.size(),
