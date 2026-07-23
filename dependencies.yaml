@@ -1416,6 +1416,8 @@ dependencies:
               cuda_suffixed: "true"
             packages:
               - libkvikio-cu12==26.10.*,>=0.0.0a0
+              # cuda-toolkit before 12.6.3 does not have the `cufile` extra.
+              - nvidia-cufile-cu12
           - matrix:
               cuda: "13.*"
               cuda_suffixed: "true"
