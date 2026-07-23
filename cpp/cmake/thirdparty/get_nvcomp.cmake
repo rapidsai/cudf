@@ -158,8 +158,7 @@ elseif(CUDF_NVCOMP_LINKAGE STREQUAL "AUTO")
   endif()
 else()
   message(
-    FATAL_ERROR
-      "CUDF_NVCOMP_LINKAGE must be AUTO, STATIC, or SHARED; got '${CUDF_NVCOMP_LINKAGE}'"
+    FATAL_ERROR "CUDF_NVCOMP_LINKAGE must be AUTO, STATIC, or SHARED; got '${CUDF_NVCOMP_LINKAGE}'"
   )
 endif()
 
