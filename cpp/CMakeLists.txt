@@ -68,6 +68,14 @@ set(CUDF_BUILD_STATIC_DEPS
 )
 set_property(CACHE CUDF_BUILD_STATIC_DEPS PROPERTY STRINGS "ON" "OFF" "FORCE")
 
+# nvCOMP is also distributed as a shared library by cuDF Java. Allow downstream packages that
+# already ship that library to avoid embedding a second, static copy in libcudf.
+set(CUDF_NVCOMP_LINKAGE
+    "AUTO"
+    CACHE STRING "Link nvCOMP automatically, statically, or dynamically"
+)
+set_property(CACHE CUDF_NVCOMP_LINKAGE PROPERTY STRINGS "AUTO" "STATIC" "SHARED")
+
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 # FORCE mode implies static CUDA runtime

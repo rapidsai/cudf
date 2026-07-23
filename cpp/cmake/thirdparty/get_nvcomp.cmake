@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -136,10 +136,30 @@ if(CUDF_INSTALL_LIBRARY_DEPS)
 endif()
 find_and_configure_nvcomp(${_nvcomp_args})
 
-if(CUDF_DEPS_BUILD_SHARED OR NOT TARGET nvcomp::nvcomp_static)
-  set(CUDF_nvcomp_TARGET nvcomp::nvcomp)
-else()
+if(NOT DEFINED CUDF_NVCOMP_LINKAGE)
+  set(CUDF_NVCOMP_LINKAGE "AUTO")
+endif()
+
+if(CUDF_NVCOMP_LINKAGE STREQUAL "STATIC")
+  if(NOT TARGET nvcomp::nvcomp_static)
+    message(FATAL_ERROR "CUDF_NVCOMP_LINKAGE=STATIC but nvcomp::nvcomp_static is unavailable")
+  endif()
   set(CUDF_nvcomp_TARGET nvcomp::nvcomp_static)
+elseif(CUDF_NVCOMP_LINKAGE STREQUAL "SHARED")
+  if(NOT TARGET nvcomp::nvcomp)
+    message(FATAL_ERROR "CUDF_NVCOMP_LINKAGE=SHARED but nvcomp::nvcomp is unavailable")
+  endif()
+  set(CUDF_nvcomp_TARGET nvcomp::nvcomp)
+elseif(CUDF_NVCOMP_LINKAGE STREQUAL "AUTO")
+  if(CUDF_DEPS_BUILD_SHARED OR NOT TARGET nvcomp::nvcomp_static)
+    set(CUDF_nvcomp_TARGET nvcomp::nvcomp)
+  else()
+    set(CUDF_nvcomp_TARGET nvcomp::nvcomp_static)
+  endif()
+else()
+  message(
+    FATAL_ERROR "CUDF_NVCOMP_LINKAGE must be AUTO, STATIC, or SHARED; got '${CUDF_NVCOMP_LINKAGE}'"
+  )
 endif()
 
 # Per-thread default stream
