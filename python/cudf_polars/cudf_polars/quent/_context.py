@@ -25,7 +25,6 @@ from cudf_polars.quent._types import (
     Processor,
     Query,
     QueryGroup,
-    Statistics,
     ThreadPool,
 )
 from cudf_polars.utils.config import get_total_device_memory
@@ -475,10 +474,8 @@ class QuentContext:
 
         if result is not None:
             output_capacity_bytes = result._size_bytes()
-            output_rows = result.num_rows
         else:
             output_capacity_bytes = 0
-            output_rows = 0
         if ir_type.is_io_node:
             quent_processor = quent_ir_execution_context.get_or_declare_processor(
                 thread_ident=threading.get_ident(),
@@ -492,17 +489,9 @@ class QuentContext:
             )
         quent_ir_execution_context.logger.emit(quent_task.exit())
 
-        # We emit a Statistics event here, despite knowing it'll be overwritten
-        # by the node-level Statistics later.
-        quent_ir_execution_context.logger.emit(
-            quent_task.statistics(
-                statistics=Statistics(
-                    input_bytes=sum(frame._size_bytes() for frame in frames),
-                    output_bytes=output_capacity_bytes,
-                    output_rows=output_rows,
-                ),
-            )
-        )
+        # TODO: Figure out how to emit some chunk/task-level statistics.
+        # We can't do it directly on the Task object, because that (seems to)
+        # break operator-level aggregation like duration_s.
 
 
 def declare_worker_resources(
