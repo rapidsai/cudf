@@ -752,6 +752,9 @@ class StreamingExecutor:
         Options controlling the logical join-domain prefilter rewrite. See
         :class:`~cudf_polars.utils.config.JoinFilterPushdownOptions` for more.
         ``None`` disables the rewrite.
+
+        Enable through environment variables with
+        ``CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN=1``.
     max_io_threads
         Maximum number of IO threads. Default is 4.
         This controls the parallelism of IO operations when reading data.
@@ -1102,7 +1105,7 @@ class ConfigOptions(Generic[ExecutorType]):
                 )
                 if user_join_filter_pushdown is None:
                     env_join_filter_pushdown = os.environ.get(
-                        "CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN", "1"
+                        "CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN", "0"
                     )
                     if not _bool_converter(env_join_filter_pushdown):
                         user_executor_options["join_filter_pushdown"] = None
