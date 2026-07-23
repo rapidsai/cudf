@@ -7,13 +7,16 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
+#include <string>
 #include <string_view>
 
 /**
@@ -104,6 +107,54 @@ namespace io::parquet::experimental {
   column_view const& variant_column,
   std::string_view path,
   data_type desired_type,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Encode a STRING column as a scalar VARIANT column.
+ *
+ * Each non-null string is encoded as a VARIANT scalar value: a short_string blob (1 header byte +
+ * payload) for strings shorter than 64 bytes, or a long_string primitive blob (1 header + 4-byte
+ * LE length + payload) for longer strings. The metadata blob for every row is the minimal
+ * empty-dictionary encoding `{0x01, 0x00, 0x00}` (version 1, 0 keys). Null input rows produce
+ * null VARIANT struct rows.
+ *
+ * @param strings STRING column to encode
+ * @param stream CUDA stream
+ * @param mr Device memory resource
+ * @return VARIANT column: `STRUCT<list<uint8>, list<uint8>>` (metadata child, value child)
+ *
+ * @throws std::invalid_argument if `strings` is not a STRING column
+ */
+[[nodiscard]] std::unique_ptr<column> encode_strings_to_variant(
+  column_view const& strings,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Encode a table as a VARIANT object column, one row per VARIANT.
+ *
+ * Each table row is encoded as a VARIANT object with one field per column. The shared metadata
+ * blob stores column names as a sorted UTF-8 key dictionary (version 1, offset_size chosen to
+ * fit the total key-string length). Null column values are encoded as VARIANT null primitives.
+ *
+ * Supported column types: `INT8`, `INT16`, `INT32`, `INT64`, `STRING`, and columns whose type is
+ * `EMPTY` (treated as all-null). Other types throw. Tables must have fewer than 256 columns.
+ * Total encoded output must be < 2 GiB.
+ *
+ * @param input Table to encode (typically produced by `cudf::io::read_json`)
+ * @param column_names Column name for each column in `input`; must satisfy
+ *                     `column_names.size() == input.num_columns()`
+ * @param stream CUDA stream
+ * @param mr Device memory resource
+ * @return VARIANT column: `STRUCT<list<uint8>, list<uint8>>` (metadata child, value child)
+ *
+ * @throws std::invalid_argument if any column has an unsupported type, if the table has ≥ 256
+ *         columns, or if `column_names.size() != input.num_columns()`
+ */
+[[nodiscard]] std::unique_ptr<column> encode_variant(
+  cudf::table_view const& input,
+  cudf::host_span<std::string const> column_names,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
