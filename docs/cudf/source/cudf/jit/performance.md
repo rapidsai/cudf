@@ -25,15 +25,33 @@ JIT compilation is useful for workloads whose optimization policies—such as me
 
 JIT compilation is most beneficial for long-running, high-throughput workloads that can amortize compilation overhead across many executions. The specialized code generated for a specific workload can provide significant performance improvements.
 
-Compilation overhead can still be substantial, especially for complex expressions. For example, compiling a transform kernel with a cold PCH cache can take up to 900 ms, whereas compiling the same kernel with a hot PCH cache can take 80 ms. We continue to optimize the JIT compilation path, but workload design should account for the trade-off between compilation latency and execution performance.
+Compilation overhead can still be substantial, especially for complex expressions. We continue to optimize the JIT compilation path, but workload design should account for the trade-off between compilation latency and execution performance. The next section explains how cache state affects that latency.
 
 Workloads that require low cold-start latency may favor precompiled kernels over JIT compilation.
 
-## Performance Considerations
+## How Caching Affects JIT Performance
 
-When benchmarking JIT workloads, it is important to consider the following factors:
+JIT latency depends on whether compiled kernels and precompiled headers are already cached. Establish the cache state before comparing compilation or execution times.
 
-- **Cold versus hot runs**: A cold run compiles a kernel that has not yet been cached, whereas a hot run reuses a cached kernel. Cold runs can be significantly slower because JIT compilation includes parsing and resolving C++ code, generating PTX, and compiling the PTX into machine code. Determine whether the workload can tolerate cold-run latency or run long enough to amortize it. Benchmarks should include both cold and hot runs to characterize the workload accurately.
+### Cold and Hot Runs
+
+A cold run compiles a kernel that has not yet been cached, whereas a hot run reuses a cached kernel. Cold runs can be significantly slower because JIT compilation includes parsing and resolving C++ code, generating PTX, and compiling the PTX into machine code. Determine whether the workload can tolerate cold-run latency or run long enough to amortize it. Benchmarks should include both cold and hot runs to characterize the workload accurately.
+
+### Precompiled Header Cache
+
+libcudf uses precompiled headers (PCHs) to speed up CUDA JIT compilation. PCHs are fully resolved ASTs of the CUDA C++ headers. They eliminate the need to parse and resolve that code during each JIT compilation. The details of this representation are internal to NVRTC; they are neither exposed to users nor portable across compilers.
+
+PCHs are currently generated during the first cold JIT compilation of a kernel, so the first request always uses a cold PCH cache. The generated PCHs are cached and reused for subsequent kernel compilations. Consequently, the first cold compilation is slower because it incurs the full cost of CUDA C++ frontend compilation.
+
+For example, compiling a transform kernel with a cold PCH cache can take up to 900 ms, whereas compiling the same kernel with a hot PCH cache can take 80 ms.
+
+<img src="https://private-user-images.githubusercontent.com/26050398/551726508-08e7f29f-6d0c-4936-98f3-71a70ad95f4b.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3ODI3MDM5NzYsIm5iZiI6MTc4MjcwMzY3NiwicGF0aCI6Ii8yNjA1MDM5OC81NTE3MjY1MDgtMDhlN2YyOWYtNmQwYy00OTM2LTk4ZjMtNzFhNzBhZDk1ZjRiLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNjA2MjklMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjYwNjI5VDAzMjc1NlomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTY1MjQ4MGFiYzJhMjk0ZTNkMjQ1NzBlNTQ4NWUzZTA2NTEzZDg5ZDg5NjdjNTc5MDQwYzkzZjhkNTFhOTRmNmQmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JnJlc3BvbnNlLWNvbnRlbnQtdHlwZT1pbWFnZSUyRnBuZyJ9.aH8C2EUYszUF49I1EHZhr3qXoEUJqaFEFFxcIzwu168"/>
+
+NVRTC's PCH cache is **process-local** and is not shared across processes. Therefore, PCHs generated while compiling a kernel in one process are unavailable to other processes. This limitation can reduce performance in multiprocess environments that compile the same kernel in several processes. Preparing NVRTC PCHs ahead of time would eliminate this cold-cache overhead.
+
+## Benchmarking JIT Performance
+
+After establishing the cache state, consider the workload's latency requirements, arithmetic intensity, and reuse pattern:
 
 - **Latency requirements**: Workloads with strict latency requirements may need precompiled kernels or the AST interpreter instead of JIT compilation. Prewarming a JIT kernel can reduce cold-start latency, but it may be infeasible when the workload has a combinatorial number of possible code paths or when AOT compilation is expensive.
 
@@ -41,45 +59,45 @@ When benchmarking JIT workloads, it is important to consider the following facto
 
 - **Amortization of JIT compilation overhead**: Determine the break-even point at which repeated execution offsets the compilation cost. This point depends primarily on the number of rows processed and how often the kernel is reused.
 
-<!-- TODO -->
-
-## How Precompiled Headers Affect JIT Performance
-
-libcudf uses precompiled headers (PCHs) to speed up CUDA JIT compilation. PCHs are fully resolved ASTs of the CUDA C++ headers. They eliminate the need to parse and resolve that code during each JIT compilation. The details of this representation are internal to NVRTC; they are neither exposed to users nor portable across compilers.
-
-PCHs are currently generated during the first cold JIT compilation of a kernel, so the first request always uses a cold PCH cache. The generated PCHs are cached and reused for subsequent kernel compilations. Consequently, the first cold compilation is slower because it incurs the full cost of CUDA C++ frontend compilation.
-
-<img src="https://private-user-images.githubusercontent.com/26050398/551726508-08e7f29f-6d0c-4936-98f3-71a70ad95f4b.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3ODI3MDM5NzYsIm5iZiI6MTc4MjcwMzY3NiwicGF0aCI6Ii8yNjA1MDM5OC81NTE3MjY1MDgtMDhlN2YyOWYtNmQwYy00OTM2LTk4ZjMtNzFhNzBhZDk1ZjRiLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNjA2MjklMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjYwNjI5VDAzMjc1NlomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTY1MjQ4MGFiYzJhMjk0ZTNkMjQ1NzBlNTQ4NWUzZTA2NTEzZDg5ZDg5NjdjNTc5MDQwYzkzZjhkNTFhOTRmNmQmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JnJlc3BvbnNlLWNvbnRlbnQtdHlwZT1pbWFnZSUyRnBuZyJ9.aH8C2EUYszUF49I1EHZhr3qXoEUJqaFEFFxcIzwu168"/>
-
-NVRTC's PCH cache is **process-local** and is not shared across processes. Therefore, PCHs generated while compiling a kernel in one process are unavailable to other processes. This limitation can reduce performance in multiprocess environments that compile the same kernel in several processes. Preparing NVRTC PCHs ahead of time would eliminate this cold-cache overhead.
-
 ## JIT Performance Tuning Options
 
-### `LIBCUDF_KERNEL_CACHE_PATH:path`
+Use the following environment variables and APIs to control cache behavior, select JIT execution, and collect diagnostics.
+
+### Kernel Cache Controls
+
+#### `LIBCUDF_KERNEL_CACHE_PATH:path`
 
 This environment variable sets the location of the libcudf JIT kernel cache. In a multiprocess container environment, such as a Presto multi-container executor, set it to a shared location so that processes can reuse compiled kernels. If the variable is unset, libcudf attempts to find a suitable, accessible filesystem path for compilation artifacts and kernels.
 
-### `LIBCUDF_JIT_ENABLED:bool`
-
-This environment variable tells libcudf subsystems to prefer JIT compilation for expression evaluation. For example, it applies to the Parquet reader post-filter subsystem, `compute_column`, and other functions that accept an `AST` tree. JIT evaluation can significantly improve the performance of expressions with high arithmetic intensity.
-
-### `LIBCUDF_KERNEL_CACHE_PRELOAD:bool`
+#### `LIBCUDF_KERNEL_CACHE_PRELOAD:bool`
 
 This environment variable controls whether libcudf preloads previously compiled kernels from the kernel cache into memory (`cuLibrary`). Preloading eliminates kernel-loading overhead from hot benchmark measurements.
 
-### `LIBCUDF_KERNEL_CACHE_DISABLED:bool`
+#### `LIBCUDF_KERNEL_CACHE_DISABLED:bool`
 
 This environment variable disables caching of libcudf kernel artifacts, ensuring that benchmarked JIT compilations use the cold-cache path. For fully cold-cache measurements, use it with `LIBCUDF_JIT_DISABLE_CUDA_CACHE` to disable cuDF's CUDA code-generation cache.
 
-### `LIBCUDF_KERNEL_CACHE_CLEAR:bool`
+#### `LIBCUDF_KERNEL_CACHE_CLEAR:bool`
 
 This environment variable removes all kernel artifacts from libcudf's JIT kernel cache.
 
-### `LIBCUDF_JIT_DISABLE_CUDA_CACHE:bool`
+#### `LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS:integer`
+
+This environment variable limits the number of kernels cached by each process. Use it to control the cache memory footprint in multiprocess environments or to disable kernel caching for benchmarks.
+
+### JIT and CUDA Code-Generation Controls
+
+#### `LIBCUDF_JIT_ENABLED:bool`
+
+This environment variable tells libcudf subsystems to prefer JIT compilation for expression evaluation. For example, it applies to the Parquet reader post-filter subsystem, `compute_column`, and other functions that accept an `AST` tree. JIT evaluation can significantly improve the performance of expressions with high arithmetic intensity.
+
+#### `LIBCUDF_JIT_DISABLE_CUDA_CACHE:bool`
 
 This environment variable disables cuDF's CUDA code-generation cache, including PTX and CUBIN generation after CUDA frontend processing.
 
-### `LIBCUDF_JIT_VERBOSE:bool`
+### Diagnostics
+
+#### `LIBCUDF_JIT_VERBOSE:bool`
 
 This environment variable makes libcudf print verbose JIT compilation information for debugging and benchmarking, including:
 
@@ -87,7 +105,7 @@ This environment variable makes libcudf print verbose JIT compilation informatio
 - NVRTC include headers
 - NVRTC compilation flags
 
-### `LIBCUDF_JIT_DUMP_TRACE:bool`
+#### `LIBCUDF_JIT_DUMP_TRACE:bool`
 
 This environment variable writes a text JIT compilation trace to the command line for debugging and performance analysis. The trace includes:
 
@@ -95,22 +113,20 @@ This environment variable writes a text JIT compilation trace to the command lin
 - Optimization passes and their times
 - NVRTC passes and their times
 
-### `LIBCUDF_JIT_DUMP_TIME_PROFILE:bool`
+#### `LIBCUDF_JIT_DUMP_TIME_PROFILE:bool`
 
 This environment variable produces a Perfetto JSON trace instead of a text trace. The output is named `libcudf_kernel_${kernel_name}_trace.json` (for example, `libcudf_kernel_transform_trace.json` or `libcudf_kernel_filter_join_indices_trace.json`) and is written to the current working directory. Open the file with Chrome's tracing tool or the Perfetto UI.
 
-### `LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS:integer`
+### Programmatic Cache Controls
 
-This environment variable limits the number of kernels cached by each process. Use it to control the cache memory footprint in multiprocess environments or to disable kernel caching for benchmarks.
-
-### `cudf::enable_jit_cache(bool)`
+#### `cudf::enable_jit_cache(bool)`
 
 This function enables or disables the libcudf JIT kernel cache. Disable the cache for cold-cache benchmarks, and combine it with `LIBCUDF_JIT_DISABLE_CUDA_CACHE` for fully cold-cache measurements. It is the programmatic equivalent of `LIBCUDF_KERNEL_CACHE_DISABLED`.
 
-### `cudf::enable_cuda_cache(bool)`
+#### `cudf::enable_cuda_cache(bool)`
 
 This function enables or disables cuDF's CUDA code-generation cache. Disable the cache to ensure that benchmarked JIT compilations use the cold code-generation path. It is the programmatic equivalent of `LIBCUDF_JIT_DISABLE_CUDA_CACHE`.
 
-### `cudf::clear_jit_cache()`
+#### `cudf::clear_jit_cache()`
 
 This function removes all artifacts from libcudf's JIT kernel cache. Use it with `cudf::enable_cuda_cache(false)` for fully cold-cache benchmark measurements. It is the programmatic equivalent of `LIBCUDF_KERNEL_CACHE_CLEAR`.

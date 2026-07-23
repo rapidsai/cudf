@@ -21,23 +21,13 @@ Combining AST analysis with source generation produces code that is difficult to
 
 The information captured by Row IR can also reduce memory bandwidth and memory usage. For example, if a null-aware operator produces a valid output even when its inputs are nullable, the surrounding kernel can avoid allocating a null mask for that output. Identifying this optimization requires reasoning about both the global and local attributes of the expression.
 
-## What Row IR Is Not
-
-It is also helpful to be explicit about what Row IR is not:
-
-- It is not designed for the aggressive code restructuring and transformations associated with optimizing compilers. Frontends such as Velox handle common subexpression elimination (CSE) and other optimizations. Row IR has a narrower role: it is libcudf's semantic lowering layer for AST-driven JIT execution. This focus keeps the representation centered on the questions cuDF must answer before runtime compilation begins.
-- It is not a general-purpose GPU IR in the LLVM, NVVM, or PTX sense.
-- It is not the representation consumed by nvJitLink.
-- It is not a public API for authoring JIT code. This restriction allows the implementation to evolve without breaking user code.
-- It is not a replacement for source-based JIT authoring.
-
 ## How Row IR Works
 
 Row IR represents an SSA-form program as a directed acyclic graph of low-level, row-wise operations. Each node performs exactly one operation, produces zero or one value, and propagates attributes to downstream nodes. These attributes allow Row IR to select correct and efficient kernel configurations.
 
-Row IR code generation proceeds through three phases:
+Row IR processes an expression in three phases. Construction builds the graph, instantiation and resolution propagate types and attributes, and code generation emits CUDA code. The following sections trace these phases in order:
 
-### Construction
+### 1. Construction
 
 The IR consists of the following node types:
 
@@ -86,7 +76,7 @@ node setter0{output_reference{0}, magnitude};
 
 Row IR is progressively lowered, and its types and attributes are resolved during instantiation.
 
-### Instantiation and Resolution
+### 2. Instantiation and Resolution
 
 During this phase, the following information is determined and propagated between nodes:
 
@@ -124,7 +114,7 @@ graph TD
     G["function: set_output 0<br/>type: f32<br/>nullable: false<br/>fallible: false"]
 ```
 
-### Code Generation
+### 3. Code Generation
 
 During this phase, the fully lowered IR is converted to CUDA code. Once all node attributes are resolved and the kernel scope is determined, the code generator can emit an optimized CUDA kernel.
 
@@ -171,3 +161,13 @@ This analysis prevents resource overallocation and provides predictable performa
 3. **Maintainability:** Separates construction, resolution, and code generation.
 4. **Extensibility:** Allows new operations and attributes to be added without disrupting existing code paths.
 5. **Performance:** Enables data-driven optimization decisions before emitting CUDA code.
+
+## Scope and Non-Goals
+
+Row IR is intentionally narrow in scope:
+
+- It is not designed for the aggressive code restructuring and transformations associated with optimizing compilers. Frontends such as Velox handle common subexpression elimination (CSE) and other optimizations. Row IR has a narrower role: it is libcudf's semantic lowering layer for AST-driven JIT execution. This focus keeps the representation centered on the questions cuDF must answer before runtime compilation begins.
+- It is not a general-purpose GPU IR in the LLVM, NVVM, or PTX sense.
+- It is not the representation consumed by nvJitLink.
+- It is not a public API for authoring JIT code. This restriction allows the implementation to evolve without breaking user code.
+- It is not a replacement for source-based JIT authoring.
