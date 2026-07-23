@@ -615,7 +615,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - &cmake_ver cmake>=4.0
-          - &ninja ninja
+          - ninja
   build_all:
     common:
       - output_types: conda
@@ -1241,11 +1241,11 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-        # TODO: Remove after https://github.com/rapidsai/build-planning/issues/301 is resolved.
-        - numba>=0.60.0,<0.65.0
+          # TODO: Remove after https://github.com/rapidsai/build-planning/issues/301 is resolved.
+          - numba>=0.60.0,<0.65.0
       - output_types: [conda]
         packages:
-        - &numba_cuda numba-cuda>=0.22.2
+          - &numba_cuda numba-cuda>=0.22.2
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -1360,7 +1360,7 @@ dependencies:
     common:
       - output_types: [conda, pyproject]
         packages:
-          - &cudf_kafka_unsuffixed cudf_kafka==26.10.*,>=0.0.0a0
+          - cudf_kafka==26.10.*,>=0.0.0a0
   depends_on_cupy:
     common:
       - output_types: conda
