@@ -1,24 +1,32 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
-#include <cudf/detail/cuco_helpers.hpp>
-#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/row_operator/hashing.cuh>
+#include <cudf/hashing.hpp>
+#include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/polymorphic_allocator.hpp>
+#include <rmm/resource_ref.hpp>
 
+#include <cuco/extent.cuh>
+#include <cuco/probing_scheme.cuh>
 #include <cuco/static_set.cuh>
-#include <cuda/functional>
-#include <cuda/std/iterator>
+#include <cuco/storage.cuh>
+#include <cuda/atomic>
+
+#include <cstdint>
+#include <limits>
 
 namespace cudf::detail {
 
@@ -38,18 +46,42 @@ auto constexpr reduction_init_value(duplicate_keep_option keep)
   }
 }
 
-template <typename RowEqual>
-using distinct_set_t =
-  cuco::static_set<size_type,
-                   cuco::extent<int64_t>,
-                   cuda::thread_scope_device,
-                   RowEqual,
-                   cuco::linear_probing<
-                     1,
-                     cudf::detail::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
-                                                                cudf::nullate::DYNAMIC>>,
-                   rmm::mr::polymorphic_allocator<char>,
-                   cuco::storage<1>>;
+CUDF_HIDDEN void initialize_reduction_results(size_type* results,
+                                              size_type num_rows,
+                                              duplicate_keep_option keep,
+                                              rmm::cuda_stream_view stream);
+
+CUDF_HIDDEN size_type copy_reduction_results(size_type const* results,
+                                             size_type num_rows,
+                                             size_type* output,
+                                             duplicate_keep_option keep,
+                                             rmm::cuda_stream_view stream);
+
+struct distinct_precomputed_hash {
+  CUDF_HOST_DEVICE constexpr distinct_precomputed_hash(hash_value_type const* hashes)
+    : _hashes{hashes}
+  {
+  }
+
+  __device__ __forceinline__ hash_value_type operator()(size_type i) const noexcept
+  {
+    return _hashes[i];
+  }
+
+ private:
+  hash_value_type const* _hashes;
+};
+
+template <typename RowEqual,
+          typename RowHash = cudf::detail::row::hash::
+            device_row_hasher<cudf::hashing::detail::default_hash, cudf::nullate::DYNAMIC>>
+using distinct_set_t = cuco::static_set<size_type,
+                                        cuco::extent<int64_t>,
+                                        cuda::thread_scope_device,
+                                        RowEqual,
+                                        cuco::linear_probing<1, RowHash>,
+                                        rmm::mr::polymorphic_allocator<char>,
+                                        cuco::storage<1>>;
 
 /**
  * @brief Perform a reduction on groups of rows that are compared equal and returns output indices
@@ -70,7 +102,7 @@ using distinct_set_t =
  * the `reduction_init_value()` function. Then, the reduction result for each row group is written
  * into the output array at the index of an unspecified row in the group.
  *
- * @tparam RowEqual The type of row equality comparator
+ * @tparam Set The type of the auxiliary set
  *
  * @param set The auxiliary set to perform reduction
  * @param num_rows The number of all input rows
@@ -79,10 +111,30 @@ using distinct_set_t =
  * @param mr Device memory resource used to allocate the returned vector
  * @return A device_uvector containing the output indices
  */
-template <typename RowEqual>
-rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
+template <typename Set>
+rmm::device_uvector<size_type> reduce_by_row_keep_any(Set& set,
+                                                      size_type num_rows,
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::device_async_resource_ref mr);
+
+template <typename Set>
+rmm::device_uvector<size_type> reduce_by_row_keep_first_last_none(
+  Set& set,
+  size_type num_rows,
+  duplicate_keep_option keep,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+template <typename Set>
+rmm::device_uvector<size_type> reduce_by_row(Set& set,
                                              size_type num_rows,
                                              duplicate_keep_option keep,
                                              rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr);
+                                             rmm::device_async_resource_ref mr)
+{
+  if (keep == duplicate_keep_option::KEEP_ANY) {
+    return reduce_by_row_keep_any(set, num_rows, stream, mr);
+  }
+  return reduce_by_row_keep_first_last_none(set, num_rows, keep, stream, mr);
+}
 }  // namespace cudf::detail
