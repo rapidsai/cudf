@@ -8246,19 +8246,17 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
             ]
 
-        # Assemble the final index
-        new_index_columns = [*repeated_index._columns, *tiled_index]
-        index_names = [*self.index.names, *unique_named_levels.names]
-        new_index = MultiIndex._from_data(dict(enumerate(new_index_columns)))
-        new_index.names = index_names
-        # Attach codes/levels eagerly, matching how pandas' stack builds the
-        # result MultiIndex, so a later unstack can restore the original
+        # Assemble the final index — build levels/codes first so the
+        # MultiIndex can be constructed in one step via _simple_new.
+        # Codes/levels are attached eagerly, matching how pandas' stack builds
+        # the result MultiIndex, so a later unstack can restore the original
         # row/column order (lazy materialization would sort the levels):
         # the original index contributes its own levels/codes (repeated);
         # a flat original index and the tiled stacked level(s) get
         # appearance-order factorization.
-        new_levels = []
-        new_codes = []
+        index_names = [*self.index.names, *unique_named_levels.names]
+        new_levels: list[cudf.Index] = []
+        new_codes: list[ColumnBase] = []
         n_tile = len(unique_named_levels)
         if isinstance(self.index, MultiIndex):
             src = self.index._maybe_materialize_codes_and_levels()
@@ -8285,8 +8283,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             code, cats = factorize(Index._from_column(tiled_col))
             new_codes.append(as_column(code).astype(np.dtype(np.int64)))
             new_levels.append(cats)
-        new_index._levels = new_levels
-        new_index._codes = new_codes
+        new_index_columns = [*repeated_index._columns, *tiled_index]
+        new_index = MultiIndex._simple_new(
+            ColumnAccessor(dict(enumerate(new_index_columns))),
+            new_levels,
+            new_codes,
+            pd.core.indexes.frozen.FrozenList(index_names),
+        )
 
         # Compute the column indices that serves as the input for
         # `interleave_columns`
@@ -8319,7 +8322,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 # reorder via codes), so the stacked columns can be zipped
                 # 1:1 with those keys when assembling the result.
                 for _, grpdf in column_idx_df.groupby(
-                    by=unnamed_level_values, sort=False
+                    by=unnamed_level_values, sort=False, dropna=False
                 ):
                     # When stacking part of the levels, some combinations
                     # of keys may not be present in this group but can be
@@ -8397,7 +8400,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 # build the labels from levels/codes to preserve scalar
                 # types: iterating a MultiIndex materializes e.g. an int64
                 # level containing a missing entry as float
-                keys: Any = [
+                keys: list[tuple[Any, ...]] = [
                     tuple(
                         unnamed_level_values.levels[j][c]
                         if c != -1
@@ -8429,24 +8432,18 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
 
         if not future_stack and dropna:
-            # dropna would gather the index and discard the eagerly
-            # attached appearance-order codes/levels; compute the row mask
-            # explicitly so the codes can be subset alongside (pandas keeps
-            # the full pre-drop levels through dropna).
+            # Compute the row mask explicitly so the eagerly-attached
+            # codes can be subset alongside the data; pandas keeps the full
+            # pre-drop level set through dropna.
+            # _apply_boolean_mask propagates pre-set levels/codes on the
+            # index automatically.
             if isinstance(result, Series):
                 keep = result.notna()
             else:
                 keep = ~result.isna().all(axis=1)
-            keep_col = keep._column
-            dropped = result._apply_boolean_mask(
-                BooleanMask(keep_col, len(result))
+            return result._apply_boolean_mask(
+                BooleanMask(keep._column, len(result))
             )
-            if isinstance(dropped.index, MultiIndex):
-                dropped.index._levels = new_levels
-                dropped.index._codes = [
-                    code.apply_boolean_mask(keep_col) for code in new_codes
-                ]
-            return dropped
         else:
             return result
 

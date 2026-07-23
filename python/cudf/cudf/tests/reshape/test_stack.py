@@ -184,7 +184,7 @@ def test_df_stack_int_level_names_resolved_positionally():
 def test_df_stack_out_of_bounds_level_raises(level):
     columns = pd.MultiIndex.from_tuples([("a", "x"), ("b", "y")])
     gdf = cudf.DataFrame([[1, 2]], columns=columns)
-    with pytest.raises(IndexError):
+    with pytest.raises(IndexError, match="Too many levels"):
         gdf.stack(level=level)
 
 
@@ -193,7 +193,7 @@ def test_df_stack_duplicate_level_name_raises():
         [("a", "x"), ("b", "y")], names=["c", "c"]
     )
     gdf = cudf.DataFrame([[1, 2]], columns=columns)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="occurs multiple times"):
         gdf.stack(level="c")
 
 
