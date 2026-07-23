@@ -14,20 +14,10 @@ from cudf.testing import assert_eq
     "level",
     [
         0,
-        pytest.param(
-            1,
-            marks=pytest.mark.xfail(
-                reason="Categorical column indexes not supported"
-            ),
-        ),
+        1,
         2,
         "foo",
-        pytest.param(
-            "bar",
-            marks=pytest.mark.xfail(
-                reason="Categorical column indexes not supported"
-            ),
-        ),
+        "bar",
         "baz",
         [],
         pytest.param(
