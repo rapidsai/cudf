@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,6 +14,8 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <limits>
+#include <type_traits>
 #include <utility>
 
 namespace CUDF_EXPORT cudf {
@@ -51,10 +53,13 @@ class CompactProtocolReader {
   template <typename T>
   T get_varint() noexcept
   {
+    static_assert(std::is_unsigned_v<T>,
+                  "get_varint requires an unsigned T: the shift guard assumes T has no sign bit");
     T v = 0;
     for (uint32_t l = 0;; l += 7) {
       T c = getb();
-      v |= (c & 0x7f) << l;
+      // Shifts >= the width of T are undefined; an overlong varint's bits fall outside v anyway.
+      if (l < std::numeric_limits<T>::digits) { v |= (c & 0x7f) << l; }
       if (c < 0x80) { break; }
     }
     return v;
