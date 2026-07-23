@@ -481,7 +481,7 @@ void decode_page_headers_impl(pass_intermediate_data& pass,
   }
   // If offset index is present, collect data ptrs for all pages and launch the accelerated decode
   // page headers kernel
-  else if (data_source_type == page_data_source_type::OFFSET_INDEX) {
+  else if constexpr (data_source_type == page_data_source_type::OFFSET_INDEX) {
     auto host_page_locations =
       cudf::detail::make_pinned_vector_async<uint8_t*>(unsorted_pages.size(), stream);
     auto curr_page_idx = 0;
