@@ -1,0 +1,13 @@
+RequestLine,CombinedLog
+"GET / HTTP/1.1","203.0.113.10 - alice [05/Jul/2026:14:32:10 +0000] ""GET / HTTP/1.1"" 200 512 ""https://example.com/"" ""Mozilla/5.0 (X11; Linux x86_64)"""
+"GET /api/v1/orders/123?expand=items HTTP/1.1","198.51.100.24 - bob [05/Jul/2026:14:32:11 +0000] ""GET /api/v1/orders/123?expand=items HTTP/1.1"" 200 1532 ""https://example.com/cart"" ""Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36"""
+"POST /api/v1/login HTTP/2.0","192.0.2.35 - - [05/Jul/2026:14:32:12 +0000] ""POST /api/v1/login HTTP/2.0"" 401 96 ""-"" ""curl/8.8.0"""
+"PUT /api/v1/users/8675309 HTTP/1.1","203.0.113.47 - carol [05/Jul/2026:14:32:13 +0000] ""PUT /api/v1/users/8675309 HTTP/1.1"" 204 0 ""https://admin.example.com/users"" ""Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0"""
+"DELETE /api/v1/sessions/current HTTP/1.1","198.51.100.58 - dave [05/Jul/2026:14:32:14 +0000] ""DELETE /api/v1/sessions/current HTTP/1.1"" 202 48 ""https://example.com/settings"" ""Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X)"""
+"PATCH /api/v2/catalog/items/42?locale=en-GB HTTP/2.0","192.0.2.69 - erin [05/Jul/2026:14:32:15 +0000] ""PATCH /api/v2/catalog/items/42?locale=en-GB HTTP/2.0"" 200 2048 ""https://admin.example.com/catalog"" ""Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:127.0) Firefox/127.0"""
+"GET /assets/app.8f31c2.js HTTP/1.1","203.0.113.71 - - [05/Jul/2026:14:32:16 +0000] ""GET /assets/app.8f31c2.js HTTP/1.1"" 304 0 ""https://example.com/dashboard"" ""Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) Chrome/126.0 Mobile"""
+"HEAD /healthz HTTP/1.1","198.51.100.82 - probe [05/Jul/2026:14:32:17 +0000] ""HEAD /healthz HTTP/1.1"" 200 0 ""-"" ""kube-probe/1.30"""
+"OPTIONS /api/v1/orders HTTP/2.0","192.0.2.93 - - [05/Jul/2026:14:32:18 +0000] ""OPTIONS /api/v1/orders HTTP/2.0"" 204 0 ""https://shop.example.net/"" ""Mozilla/5.0 (X11; Fedora; Linux x86_64) Chrome/126.0"""
+"POST /graphql?operation=Checkout HTTP/2.0","203.0.113.104 - frank [05/Jul/2026:14:32:19 +0000] ""POST /graphql?operation=Checkout HTTP/2.0"" 200 8192 ""https://shop.example.net/checkout"" ""ShopMobile/6.4.1 (iOS 17.5; Scale/3.00)"""
+"GET /search?q=gpu+dataframes&page=2 HTTP/1.1","198.51.100.115 - grace [05/Jul/2026:14:32:20 +0000] ""GET /search?q=gpu+dataframes&page=2 HTTP/1.1"" 200 16384 ""https://www.example.org/"" ""Googlebot/2.1 (+http://www.google.com/bot.html)"""
+"POST /events/batch HTTP/1.1","192.0.2.126 - service [05/Jul/2026:14:32:21 +0000] ""POST /events/batch HTTP/1.1"" 503 128 ""-"" ""telemetry-agent/3.12.0 linux/amd64"""
