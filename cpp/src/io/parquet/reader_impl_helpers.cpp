@@ -57,8 +57,15 @@ std::size_t derive_pass_read_limit(std::size_t chunk_read_limit)
   return pass_read_limit;
 }
 
-size_type find_colchunk_iter_offset(RowGroup const& row_group, size_type schema_idx)
+size_type find_colchunk_iter_offset(RowGroup const& row_group,
+                                    size_type schema_idx,
+                                    std::optional<size_type> cached_offset)
 {
+  if (cached_offset.has_value() and cached_offset.value() >= 0 and
+      std::cmp_less(cached_offset.value(), row_group.columns.size()) and
+      row_group.columns[cached_offset.value()].schema_idx == schema_idx) {
+    return cached_offset.value();
+  }
   auto const& colchunk_iter =
     std::find_if(row_group.columns.begin(), row_group.columns.end(), [schema_idx](auto const& col) {
       return col.schema_idx == schema_idx;
@@ -719,14 +726,11 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
     auto const max_def_level = schema.max_definition_level;
     auto const max_rep_level = schema.max_repetition_level;
 
-    // If any columns lack the page indexes then just return without modifying the
-    // row_group_info.
-    if (not col_chunk.offset_index.has_value() or not col_chunk.column_index.has_value()) {
-      return;
-    }
+    // Continue if a column chunk does not have an offset index. This is because the decode
+    // paths can use column-index-derived information only together with offset index data.
+    if (not col_chunk.offset_index.has_value()) { continue; }
 
     auto const& offset_index = col_chunk.offset_index.value();
-    auto const& column_index = col_chunk.column_index.value();
 
     auto& chunk_info     = chunks[col_idx];
     auto const num_pages = offset_index.page_locations.size();
@@ -751,18 +755,23 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
       }
     }
 
+    auto const* column_index =
+      col_chunk.column_index.has_value() ? &col_chunk.column_index.value() : nullptr;
+
     // Use the definition_level_histogram to get num_valid and num_null. For now, these are
     // only ever used for byte array columns. The repetition_level_histogram might be
     // necessary to determine the total number of values in the page if the
     // definition_level_histogram is absent.
     //
     // In the future we might want the full histograms saved in the `column_info` struct.
-    int64_t const* const def_hist = column_index.definition_level_histogram.has_value()
-                                      ? column_index.definition_level_histogram.value().data()
-                                      : nullptr;
-    int64_t const* const rep_hist = column_index.repetition_level_histogram.has_value()
-                                      ? column_index.repetition_level_histogram.value().data()
-                                      : nullptr;
+    int64_t const* const def_hist =
+      column_index != nullptr && column_index->definition_level_histogram.has_value()
+        ? column_index->definition_level_histogram.value().data()
+        : nullptr;
+    int64_t const* const rep_hist =
+      column_index != nullptr && column_index->repetition_level_histogram.has_value()
+        ? column_index->repetition_level_histogram.value().data()
+        : nullptr;
 
     for (size_t pg_idx = 0; pg_idx < num_pages; pg_idx++) {
       auto const& page_loc = offset_index.page_locations[pg_idx];
@@ -777,8 +786,8 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
       page_info pg_info{.location = page_loc, .num_rows = num_rows};
 
       // check to see if we already have null counts for each page
-      if (column_index.null_counts.has_value()) {
-        pg_info.num_nulls = column_index.null_counts.value()[pg_idx];
+      if (column_index != nullptr && column_index->null_counts.has_value()) {
+        pg_info.num_nulls = column_index->null_counts.value()[pg_idx];
       }
 
       // save variable length byte info if present
@@ -820,24 +829,30 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
         }
       }
 
-      // If none of the ifs above triggered, then we have neither histogram (likely the writer
-      // doesn't produce them, the r:0 d:1 case should have been handled above). The column index
-      // doesn't give us value counts, so we'll have to rely on the page headers. If the histogram
-      // info is missing or insufficient, then just return without modifying the row_group_info.
-      if (not pg_info.num_nulls.has_value() or not pg_info.num_valid.has_value()) { return; }
-
-      // Like above, if using older page indexes that lack size info, then return without modifying
-      // the row_group_info.
-      // TODO: cudf will still set the per-page var_bytes to '0' even for all null pages. Need to
-      // check the behavior of other implementations (once there are some). Some may not set the
-      // var bytes for all null pages, so check the `null_pages` field on the column index.
-      if (schema.type == Type::BYTE_ARRAY and not pg_info.var_bytes_size.has_value()) { return; }
+      // If column-index metadata is insufficient to derive all value information, leave those
+      // fields unset. Later decoding derives the missing values from page headers and levels, and
+      // scans string data when its byte size is unavailable.
 
       chunk_info.pages.push_back(std::move(pg_info));
     }
   }
 
   rg_info.column_chunks = std::move(chunks);
+}
+
+bool aggregate_reader_metadata::has_offset_index(
+  std::span<row_group_info const> row_groups,
+  std::span<input_column_info const> input_columns) const
+{
+  for (auto const& rg_info : row_groups) {
+    auto const& row_group = per_file_metadata[rg_info.source_index].row_groups[rg_info.index];
+    for (auto const& input_column : input_columns) {
+      auto const schema_idx      = map_schema_index(input_column.schema_idx, rg_info.source_index);
+      auto const colchunk_offset = find_colchunk_iter_offset(row_group, schema_idx);
+      if (not row_group.columns[colchunk_offset].offset_index.has_value()) { return false; }
+    }
+  }
+  return true;
 }
 
 void aggregate_reader_metadata::initialize_internals(bool use_arrow_schema,
@@ -1227,8 +1242,9 @@ ColumnChunkMetaData const& aggregate_reader_metadata::get_column_metadata(size_t
   // Map schema index to the provided source file index
   schema_idx = map_schema_index(schema_idx, src_idx);
 
-  auto const& row_group = per_file_metadata[src_idx].row_groups[row_group_index];
-  return row_group.columns[find_colchunk_iter_offset(row_group, schema_idx)].meta_data;
+  auto const& row_group      = per_file_metadata[src_idx].row_groups[row_group_index];
+  auto const colchunk_offset = find_colchunk_iter_offset(row_group, schema_idx);
+  return row_group.columns[colchunk_offset].meta_data;
 }
 
 std::vector<std::unordered_map<std::string, int64_t>>

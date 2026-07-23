@@ -115,10 +115,9 @@ void hybrid_scan_reader_impl::prepare_row_groups(
                       _file_itm_data.num_rows_per_source.cend(),
                       _file_itm_data.exclusive_sum_num_rows_per_source.begin());
 
-  // check for page indexes
-  _has_page_index = std::all_of(_file_itm_data.row_groups.cbegin(),
-                                _file_itm_data.row_groups.cend(),
-                                [](auto const& row_group) { return row_group.has_page_index(); });
+  // Check for offset indexes.
+  _has_offset_index =
+    _extended_metadata->has_offset_index(_file_itm_data.row_groups, _input_columns);
 
   if (_file_itm_data.global_num_rows > 0 && not _file_itm_data.row_groups.empty() &&
       not _input_columns.empty()) {
@@ -183,13 +182,13 @@ void hybrid_scan_reader_impl::setup_compressed_data(
   pass.has_compressed_data = setup_column_chunks(column_chunk_data);
 
   // Process dataset chunk pages into output columns
-  auto const total_pages = _has_page_index ? count_page_headers_with_pgidx(chunks, _stream)
-                                           : count_page_headers(chunks, _stream);
+  auto const total_pages = _has_offset_index ? count_page_headers_with_pgidx(chunks, _stream)
+                                             : count_page_headers(chunks, _stream);
   if (total_pages <= 0) { return; }
   rmm::device_uvector<PageInfo> unsorted_pages(total_pages, _stream);
 
   // decoding of column/page information
-  parquet::detail::decode_page_headers(pass, unsorted_pages, _has_page_index, _stream);
+  parquet::detail::decode_page_headers(pass, unsorted_pages, _has_offset_index, _stream);
   CUDF_EXPECTS(pass.page_offsets.size() - 1 == static_cast<size_t>(_input_columns.size()),
                "Encountered page_offsets / num_columns mismatch");
 }
