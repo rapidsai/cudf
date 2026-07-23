@@ -93,9 +93,12 @@ cdef class HybridScanMetadata:
         HybridScanMetadata
         """
         cdef HybridScanMetadata self = HybridScanMetadata.__new__(HybridScanMetadata)
+        cdef const uint8_t* footer_ptr = <const uint8_t*>0
+        if len(footer_bytes) > 0:
+            footer_ptr = &footer_bytes[0]
         with nogil:
             self.c_obj = make_unique[cpp_hybrid_scan_metadata](
-                host_span[const_uint8_t](&footer_bytes[0], len(footer_bytes)),
+                host_span[const_uint8_t](footer_ptr, len(footer_bytes)),
                 options.c_obj
             )
         return self
@@ -153,9 +156,12 @@ cdef class HybridScanReader:
     """
 
     def __init__(self, const uint8_t[::1] footer_bytes, ParquetReaderOptions options):
+        cdef const uint8_t* footer_ptr = <const uint8_t*>0
+        if len(footer_bytes) > 0:
+            footer_ptr = &footer_bytes[0]
         with nogil:
             self.c_obj = make_unique[cpp_hybrid_scan_reader](
-                host_span[const_uint8_t](&footer_bytes[0], len(footer_bytes)),
+                host_span[const_uint8_t](footer_ptr, len(footer_bytes)),
                 options.c_obj
             )
 
@@ -240,9 +246,12 @@ cdef class HybridScanReader:
         page_index_bytes : Buffer
             Parquet page index buffer bytes
         """
+        cdef const uint8_t* page_index_ptr = <const uint8_t*>0
+        if len(page_index_bytes) > 0:
+            page_index_ptr = &page_index_bytes[0]
         with nogil:
             self.c_obj.get()[0].setup_page_index(
-                host_span[const_uint8_t](&page_index_bytes[0], len(page_index_bytes))
+                host_span[const_uint8_t](page_index_ptr, len(page_index_bytes))
             )
 
     def all_row_groups(self, ParquetReaderOptions options):
@@ -349,8 +358,9 @@ cdef class HybridScanReader:
         """
         cdef vector[size_type] indices_vec = row_group_indices
         cdef pair[vector[byte_range_info], vector[byte_range_info]] ranges
+        cdef cpp_hybrid_scan_reader* reader_ptr = self.c_obj.get()
         with nogil:
-            ranges = move(self.c_obj.get()[0].secondary_filters_byte_ranges(
+            ranges = move(reader_ptr.secondary_filters_byte_ranges(
                 std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj
             ))
