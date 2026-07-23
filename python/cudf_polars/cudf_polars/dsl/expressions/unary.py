@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any, ClassVar, TypeGuard, assert_never
+from typing import TYPE_CHECKING, Any, ClassVar, TypeGuard, assert_never, cast
 
 import polars as pl
 
@@ -129,6 +129,8 @@ class UnaryFunction(Expr):
             "pct_change",
             "rank",
             "reinterpret",
+            "repeat",
+            "repeat_by",
             "replace",
             "replace_strict",
             "round",
@@ -228,6 +230,14 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
                 )
+        if self.name == "repeat":
+            n_expr = children[1]
+            if (
+                isinstance(n_expr, Literal)
+                and n_expr.value is not None
+                and n_expr.value < 0
+            ):
+                raise pl.exceptions.InvalidOperationError("n must not be negative")
         if self.name == "replace" and not all(
             isinstance(child, (Literal, LiteralColumn)) for child in self.children[1:]
         ):
@@ -1237,6 +1247,94 @@ class UnaryFunction(Expr):
                     )
 
             return Column(ranked, dtype=self.dtype)
+        elif self.name == "repeat":
+            value_expr, n_expr = self.children
+            repeat_col = value_expr.evaluate(df, context=context)
+            if isinstance(n_expr, Literal):
+                # A negative literal count is rejected in __init__.
+                rep_count: int = n_expr.value
+            else:
+                rep_count = cast(
+                    "int",
+                    (
+                        n_expr.evaluate(df, context=context)
+                        .obj_scalar(stream=df.stream)
+                        .to_py(stream=df.stream)
+                    ),
+                )
+                if rep_count < 0:
+                    raise pl.exceptions.InvalidOperationError("n must not be negative")
+            return Column(
+                plc.filling.repeat(
+                    plc.Table([repeat_col.obj]),
+                    rep_count,
+                    stream=df.stream,
+                ).columns()[0],
+                dtype=self.dtype,
+            )
+        elif self.name == "repeat_by":
+            repeat_by_col, count_column = (
+                child.evaluate(df, context=context) for child in self.children
+            )
+            min_count = cast(
+                "int | None",
+                plc.reduce.reduce(
+                    count_column.obj,
+                    plc.aggregation.min(),
+                    count_column.dtype.plc_type,
+                    stream=df.stream,
+                ).to_py(stream=df.stream),
+            )
+            if min_count is not None and min_count < 0:
+                raise pl.exceptions.InvalidOperationError("n must not be negative")
+            count_column = count_column.astype(DataType(pl.Int32()), stream=df.stream)
+            if count_column.null_count > 0:
+                repeat_count = Column(
+                    plc.replace.replace_nulls(
+                        count_column.obj,
+                        plc.Scalar.from_py(
+                            0, count_column.dtype.plc_type, stream=df.stream
+                        ),
+                        stream=df.stream,
+                    ),
+                    dtype=count_column.dtype,
+                )
+            else:
+                repeat_count = count_column
+            repeated = plc.filling.repeat(
+                plc.Table([repeat_by_col.obj]), repeat_count.obj, stream=df.stream
+            ).columns()[0]
+            offsets = plc.reduce.scan(
+                repeat_count.obj,
+                plc.aggregation.sum(),
+                plc.reduce.ScanType.INCLUSIVE,
+                stream=df.stream,
+            )
+            offsets = plc.concatenate.concatenate(
+                [
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(0, offsets.type(), stream=df.stream),
+                        1,
+                        stream=df.stream,
+                    ),
+                    offsets,
+                ],
+                stream=df.stream,
+            )
+            return Column(
+                plc.Column(
+                    self.dtype.plc_type,
+                    repeat_by_col.size,
+                    None,
+                    plc.null_mask.copy_bitmask(count_column.obj, stream=df.stream)
+                    if count_column.null_count > 0
+                    else None,
+                    count_column.null_count,
+                    0,
+                    [offsets, repeated],
+                ),
+                dtype=self.dtype,
+            )
         elif self.name == "top_k":
             column = self.children[0].evaluate(df, context=context)
             (reverse,) = self.options
