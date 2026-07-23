@@ -800,10 +800,25 @@ CUDF_KERNEL void __launch_bounds__(block_size)
           case BOOLEAN:
           case BYTE: s->vals.u8[nz_idx] = column.element<uint8_t>(row); break;
           case TIMESTAMP: {
-            int64_t ts          = column.element<int64_t>(row);
-            int32_t ts_scale    = cudf::detail::powers_of_ten[9 - min(s->chunk.scale, 9)];
-            int64_t seconds     = ts / ts_scale;
-            int64_t nanos       = (ts - seconds * ts_scale);
+            auto const ts       = column.element<int64_t>(row);
+            auto const ts_scale = cudf::detail::powers_of_ten[9 - min(s->chunk.scale, 9)];
+            auto seconds        = ts / ts_scale;
+            auto nanos          = (ts - seconds * ts_scale);
+            // Integer division truncates toward zero, so a negative timestamp with a fractional
+            // part produces a negative remainder here. The ORC SECONDARY stream is unsigned and the
+            // Apache ORC reference implementation expects a non-negative nanos value, so normalize
+            // the remainder to be non-negative. See https://github.com/rapidsai/cudf/issues/19350.
+            if (nanos < 0) {
+              nanos += ts_scale;
+              // On read, Apache ORC (and the libcudf reader) subtracts one second for a negative
+              // timestamp only when the stored nanos are >= 1 ms; see the borrow logic in the
+              // reader and Apache ORC-306/ORC-763. For a sub-millisecond remainder the reader does
+              // not borrow, so the writer must carry that borrow itself to keep the value (and
+              // interop with Apache readers) correct.
+              if (nanos * cudf::detail::powers_of_ten[min(s->chunk.scale, 9)] < 1'000'000) {
+                seconds -= 1;
+              }
+            }
             s->vals.i64[nz_idx] = seconds - orc_utc_epoch;
             if (nanos != 0) {
               // Trailing zeroes are encoded in the lower 3-bits
