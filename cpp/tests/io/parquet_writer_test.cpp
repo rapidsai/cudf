@@ -2207,7 +2207,8 @@ make_byte_stream_split_table(bool as_struct)
     // make as a nested struct
     if (as_struct) {
       auto valids                  = cudf::test::iterators::valids_at_multiples_of(2);
-      auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
+      auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+        valids, valids + num_rows, cudf::get_current_device_resource_ref());
 
       std::vector<std::unique_ptr<cudf::column>> table_cols;
       table_cols.push_back(

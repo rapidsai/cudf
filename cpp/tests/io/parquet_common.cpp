@@ -185,7 +185,8 @@ std::unique_ptr<cudf::column> make_parquet_list_list_col(
     child_offsets_size, child_offsets.release(), child_data.release(), 0, rmm::device_buffer{});
 
   int offsets_size             = static_cast<cudf::column_view>(offsets).size() - 1;
-  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + offsets_size);
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+    valids, valids + offsets_size, cudf::get_current_device_resource_ref());
   return include_validity
            ? cudf::make_lists_column(
                offsets_size, offsets.release(), std::move(child), null_count, std::move(null_mask))
@@ -567,7 +568,8 @@ std::unique_ptr<cudf::column> make_parquet_list_col(std::mt19937& engine,
     auto valids = random_validity(engine);
     auto values_col =
       cudf::test::fixed_width_column_wrapper<T>(values.begin(), values.end(), valids);
-    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+      valids, valids + num_rows, cudf::get_current_device_resource_ref());
 
     auto col = cudf::make_lists_column(
       num_rows, offsets_col.release(), values_col.release(), null_count, std::move(null_mask));
@@ -645,7 +647,8 @@ std::unique_ptr<cudf::column> make_parquet_string_list_col(std::mt19937& engine,
   if (include_validity) {
     auto valids     = random_validity(engine);
     auto values_col = cudf::test::strings_column_wrapper(values.begin(), values.end(), valids);
-    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+      valids, valids + num_rows, cudf::get_current_device_resource_ref());
 
     auto col = cudf::make_lists_column(
       num_rows, offsets_col.release(), values_col.release(), null_count, std::move(null_mask));

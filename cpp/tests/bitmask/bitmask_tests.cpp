@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf_test/base_fixture.hpp>
@@ -433,13 +433,15 @@ TEST_F(CopyBitmaskTest, TestZeroOffset)
   for (auto& m : validity_bit) {
     m = this->generate();
   }
-  auto input_mask =
-    std::get<0>(cudf::test::detail::make_null_mask(validity_bit.begin(), validity_bit.end()));
+  auto input_mask = std::get<0>(cudf::test::detail::make_null_mask(
+    validity_bit.begin(), validity_bit.end(), cudf::get_current_device_resource_ref()));
 
-  int begin_bit         = 0;
-  int end_bit           = 800;
-  auto gold_splice_mask = std::get<0>(cudf::test::detail::make_null_mask(
-    validity_bit.begin() + begin_bit, validity_bit.begin() + end_bit));
+  int begin_bit = 0;
+  int end_bit   = 800;
+  auto gold_splice_mask =
+    std::get<0>(cudf::test::detail::make_null_mask(validity_bit.begin() + begin_bit,
+                                                   validity_bit.begin() + end_bit,
+                                                   cudf::get_current_device_resource_ref()));
 
   auto splice_mask = cudf::copy_bitmask(
     static_cast<cudf::bitmask_type const*>(input_mask.data()), begin_bit, end_bit);
@@ -456,13 +458,15 @@ TEST_F(CopyBitmaskTest, TestNonZeroOffset)
   for (auto& m : validity_bit) {
     m = this->generate();
   }
-  auto input_mask =
-    std::get<0>(cudf::test::detail::make_null_mask(validity_bit.begin(), validity_bit.end()));
+  auto input_mask = std::get<0>(cudf::test::detail::make_null_mask(
+    validity_bit.begin(), validity_bit.end(), cudf::get_current_device_resource_ref()));
 
-  int begin_bit         = 321;
-  int end_bit           = 998;
-  auto gold_splice_mask = std::get<0>(cudf::test::detail::make_null_mask(
-    validity_bit.begin() + begin_bit, validity_bit.begin() + end_bit));
+  int begin_bit = 321;
+  int end_bit   = 998;
+  auto gold_splice_mask =
+    std::get<0>(cudf::test::detail::make_null_mask(validity_bit.begin() + begin_bit,
+                                                   validity_bit.begin() + end_bit,
+                                                   cudf::get_current_device_resource_ref()));
 
   auto splice_mask = cudf::copy_bitmask(
     static_cast<cudf::bitmask_type const*>(input_mask.data()), begin_bit, end_bit);
@@ -481,8 +485,8 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorContiguous)
   for (auto& m : validity_bit) {
     m = this->generate();
   }
-  auto [gold_mask, null_count] =
-    cudf::test::detail::make_null_mask(validity_bit.begin(), validity_bit.end());
+  auto [gold_mask, null_count] = cudf::test::detail::make_null_mask(
+    validity_bit.begin(), validity_bit.end(), cudf::get_current_device_resource_ref());
 
   rmm::device_buffer copy_mask{gold_mask, cudf::get_default_stream()};
   cudf::column original{t,
@@ -523,15 +527,17 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorDiscontiguous)
   for (auto& m : validity_bit) {
     m = this->generate();
   }
-  auto gold_mask =
-    std::get<0>(cudf::test::detail::make_null_mask(validity_bit.begin(), validity_bit.end()));
+  auto gold_mask = std::get<0>(cudf::test::detail::make_null_mask(
+    validity_bit.begin(), validity_bit.end(), cudf::get_current_device_resource_ref()));
   std::vector<cudf::size_type> split{0, 104, 128, 152, 311, 491, 583, 734, 760, num_elements};
 
   std::vector<cudf::column> cols;
   std::vector<cudf::column_view> views;
   for (unsigned i = 0; i < split.size() - 1; i++) {
-    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
-      validity_bit.begin() + split[i], validity_bit.begin() + split[i + 1]);
+    auto [null_mask, null_count] =
+      cudf::test::detail::make_null_mask(validity_bit.begin() + split[i],
+                                         validity_bit.begin() + split[i + 1],
+                                         cudf::get_current_device_resource_ref());
     cols.emplace_back(
       t,
       split[i + 1] - split[i],
@@ -569,8 +575,8 @@ TEST_F(MergeBitmaskTest, TestBitmaskAnd)
   EXPECT_EQ(result3_null_count, gold_null_count);
 
   auto odd_indices = cudf::test::iterators::nulls_at_multiples_of(2);
-  auto odd =
-    std::get<0>(cudf::test::detail::make_null_mask(odd_indices, odd_indices + input2.num_rows()));
+  auto odd         = std::get<0>(cudf::test::detail::make_null_mask(
+    odd_indices, odd_indices + input2.num_rows(), cudf::get_current_device_resource_ref()));
 
   EXPECT_EQ(nullptr, result1_mask.data());
   CUDF_TEST_EXPECT_EQUAL_BUFFERS(
@@ -608,8 +614,8 @@ TEST_F(MergeBitmaskTest, TestSegmentedBitmaskAndSingleSegment)
     EXPECT_EQ(result_masks.size(), 1);
     EXPECT_EQ(result_null_count[0], 3);
     auto odd_indices = cudf::test::iterators::nulls_at_multiples_of(2);
-    auto const odd =
-      std::get<0>(cudf::test::detail::make_null_mask(odd_indices, odd_indices + num_rows));
+    auto const odd   = std::get<0>(cudf::test::detail::make_null_mask(
+      odd_indices, odd_indices + num_rows, cudf::get_current_device_resource_ref()));
     CUDF_TEST_EXPECT_EQUAL_BUFFERS(
       result_masks[0]->data(), odd.data(), cudf::num_bitmask_words(num_rows));
   }
@@ -623,8 +629,8 @@ TEST_F(MergeBitmaskTest, TestSegmentedBitmaskAndSingleSegment)
     EXPECT_EQ(result_masks.size(), 1);
     EXPECT_EQ(result_null_count[0], 3);
     auto odd_indices = cudf::test::iterators::nulls_at_multiples_of(2);
-    auto const odd =
-      std::get<0>(cudf::test::detail::make_null_mask(odd_indices, odd_indices + num_rows));
+    auto const odd   = std::get<0>(cudf::test::detail::make_null_mask(
+      odd_indices, odd_indices + num_rows, cudf::get_current_device_resource_ref()));
     CUDF_TEST_EXPECT_EQUAL_BUFFERS(
       result_masks[0]->data(), odd.data(), cudf::num_bitmask_words(num_rows));
   }
@@ -664,8 +670,8 @@ TEST_F(MergeBitmaskTest, TestSegmentedBitmaskAndMultipleSegments)
     EXPECT_EQ(result_null_count[0], 3);
     EXPECT_EQ(result_null_count[1], 0);
     auto odd_indices = cudf::test::iterators::nulls_at_multiples_of(2);
-    auto const odd =
-      std::get<0>(cudf::test::detail::make_null_mask(odd_indices, odd_indices + num_rows));
+    auto const odd   = std::get<0>(cudf::test::detail::make_null_mask(
+      odd_indices, odd_indices + num_rows, cudf::get_current_device_resource_ref()));
     CUDF_TEST_EXPECT_EQUAL_BUFFERS(
       result_masks[0]->data(), odd.data(), cudf::num_bitmask_words(num_rows));
     CUDF_TEST_EXPECT_EQUAL_BUFFERS(result_masks[1]->data(),
@@ -693,8 +699,8 @@ TEST_F(MergeBitmaskTest, TestBitmaskOr)
   EXPECT_EQ(result3_null_count, 0);
 
   auto all_but_index3 = cudf::test::iterators::null_at(3);
-  auto null3          = std::get<0>(
-    cudf::test::detail::make_null_mask(all_but_index3, all_but_index3 + input2.num_rows()));
+  auto null3          = std::get<0>(cudf::test::detail::make_null_mask(
+    all_but_index3, all_but_index3 + input2.num_rows(), cudf::get_current_device_resource_ref()));
 
   EXPECT_EQ(nullptr, result1_mask.data());
   CUDF_TEST_EXPECT_EQUAL_BUFFERS(
