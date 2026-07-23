@@ -479,11 +479,11 @@ void decode_page_headers_impl(pass_intermediate_data& pass,
       error_code.data(),
       stream);
   }
-  // If offset index is present, collect data ptrs for all pages and launch the accelerated decode
+  // If offset index is present, collect data spans for all pages and launch the accelerated decode
   // page headers kernel
-  else if (data_source_type == page_data_source_type::OFFSET_INDEX) {
-    auto host_page_locations =
-      cudf::detail::make_pinned_vector_async<uint8_t*>(unsorted_pages.size(), stream);
+  else if constexpr (data_source_type == page_data_source_type::OFFSET_INDEX) {
+    auto host_page_data = cudf::detail::make_pinned_vector_async<cudf::device_span<uint8_t const>>(
+      unsorted_pages.size(), stream);
     auto curr_page_idx = 0;
 
     std::for_each(pass.chunks.begin(), pass.chunks.end(), [&](auto const& chunk) {
@@ -501,9 +501,11 @@ void decode_page_headers_impl(pass_intermediate_data& pass,
         CUDF_EXPECTS(std::cmp_less(chunk.h_chunk_info->dictionary_offset.value(),
                                    chunk.h_chunk_info->pages.front().location.offset),
                      "Encountered dictionary page located beyond the first data page");
-        host_page_locations[curr_page_idx] = data_ptr;
+        auto const dictionary_size = chunk.h_chunk_info->dictionary_size.value();
+        CUDF_EXPECTS(dictionary_size >= 0, "Encountered invalid dictionary page size");
+        host_page_data[curr_page_idx] = {data_ptr, static_cast<std::size_t>(dictionary_size)};
         ++curr_page_idx;
-        data_ptr += chunk.h_chunk_info->dictionary_size.value();
+        data_ptr += dictionary_size;
       }
 
       // Data pages
@@ -511,31 +513,34 @@ void decode_page_headers_impl(pass_intermediate_data& pass,
                      std::cmp_equal(chunk.h_chunk_info->pages.size(), chunk.num_data_pages),
                    "Encountered invalid sized data page information in the page index");
       auto const num_data_pages = chunk.num_data_pages;
-      std::for_each(cuda::counting_iterator<int32_t>{0},
-                    cuda::counting_iterator{num_data_pages},
-                    [&](auto const page_idx) {
-                      host_page_locations[curr_page_idx] = data_ptr;
-                      ++curr_page_idx;
-                      if (page_idx < num_data_pages - 1) {
-                        data_ptr += chunk.h_chunk_info->pages[page_idx + 1].location.offset -
-                                    chunk.h_chunk_info->pages[page_idx].location.offset;
-                      }
-                    });
+      std::for_each(
+        cuda::counting_iterator<int32_t>{0},
+        cuda::counting_iterator{num_data_pages},
+        [&](auto const page_idx) {
+          auto const page_size = chunk.h_chunk_info->pages[page_idx].location.compressed_page_size;
+          CUDF_EXPECTS(page_size >= 0, "Encountered invalid data page size");
+          host_page_data[curr_page_idx] = {data_ptr, static_cast<std::size_t>(page_size)};
+          ++curr_page_idx;
+          if (page_idx < num_data_pages - 1) {
+            data_ptr += chunk.h_chunk_info->pages[page_idx + 1].location.offset -
+                        chunk.h_chunk_info->pages[page_idx].location.offset;
+          }
+        });
     });
 
-    // Check if we have data ptrs for all input pages
+    // Check if we have data spans for all input pages
     CUDF_EXPECTS(std::cmp_equal(curr_page_idx, unsorted_pages.size()),
                  "Expected page offsets to match total pages");
 
-    // Copy page data ptrs to device
-    auto page_locations = cudf::detail::make_device_uvector_async(
-      host_page_locations, stream, cudf::get_current_device_resource_ref());
+    // Copy page data spans to device
+    auto page_data = cudf::detail::make_device_uvector_async(
+      host_page_data, stream, cudf::get_current_device_resource_ref());
 
     // Accelerated decode page headers, one thread per page
-    decode_page_headers_using_page_index(
+    decode_page_headers_from_page_data(
       device_span<ColumnChunkDesc const>(pass.chunks.device_ptr(), pass.chunks.size()),
       unsorted_pages,
-      page_locations.begin(),
+      page_data,
       device_span<size_type const>(chunk_page_offsets.data(), chunk_page_offsets.size()),
       error_code.data(),
       stream);
