@@ -373,29 +373,54 @@ __device__ device_span<uint8_t const> locate_object_field(device_span<uint8_t co
 // exact width types (not e.g. __int128) since those are the only variant primitive int headers.
 template <typename T>
 constexpr bool is_variant_int =
-  cuda::std::is_same_v<T, int8_t> || cuda::std::is_same_v<T, int16_t> ||
-  cuda::std::is_same_v<T, int32_t> || cuda::std::is_same_v<T, int64_t>;
+  cudf::is_integral_not_bool<T>() && cudf::is_signed<T>() && !cuda::std::is_same_v<T, __int128_t>;
 
-// The output types a VARIANT value can be cast to: the fixed-width signed integers plus strings.
+// The fixed-width primitive types (signed integers and floats) a VARIANT value can be decoded into.
+template <typename T>
+constexpr bool is_variant_primitive = is_variant_int<T> || cudf::is_floating_point<T>();
+
+// The output types a VARIANT value can be cast to: the fixed-width signed integers, floats, and
+// strings.
 template <typename T>
 constexpr bool is_variant_castable =
-  is_variant_int<T> || cuda::std::is_same_v<T, cudf::string_view>;
+  is_variant_primitive<T> || cuda::std::is_same_v<T, cudf::string_view>;
 
-// Variant primitive ints: basic_type == primitive, value_header maps INT{8,16,32,64}.
+// Maps a fixed-width output type to the VARIANT primitive type header id that encodes it.
 template <typename T>
-__device__ inline cuda::std::optional<T> decode_int(device_span<uint8_t const> enc)
+  requires(is_variant_primitive<T>)
+__device__ constexpr primitive_type primitive_type_for()
 {
-  static_assert(is_variant_int<T>, "decode_int: T must be int8_t, int16_t, int32_t, or int64_t");
+  if constexpr (cuda::std::is_same_v<T, int8_t>) {
+    return primitive_type::int8;
+  } else if constexpr (cuda::std::is_same_v<T, int16_t>) {
+    return primitive_type::int16;
+  } else if constexpr (cuda::std::is_same_v<T, int32_t>) {
+    return primitive_type::int32;
+  } else if constexpr (cuda::std::is_same_v<T, int64_t>) {
+    return primitive_type::int64;
+  } else if constexpr (cuda::std::is_same_v<T, float>) {
+    return primitive_type::float32;
+  } else if constexpr (cuda::std::is_same_v<T, double>) {
+    return primitive_type::float64;
+  } else {
+    CUDF_UNREACHABLE("primitive_type_for: T is not a supported variant primitive type");
+    return primitive_type::null;
+  }
+}
 
+/**
+ * @brief Decode a single VARIANT value blob into a fixed-width primitive of type `T`.
+ *
+ * Requires `basic_type == primitive` and a value header whose physical type id matches `T` exactly.
+ */
+template <typename T>
+__device__ inline cuda::std::optional<T> decode_primitive(device_span<uint8_t const> enc)
+{
   if (cuda::std::cmp_less(enc.size(), 1 + sizeof(T))) { return cuda::std::nullopt; }
 
-  constexpr primitive_type expected = cuda::std::is_same_v<T, int8_t>    ? primitive_type::int8
-                                      : cuda::std::is_same_v<T, int16_t> ? primitive_type::int16
-                                      : cuda::std::is_same_v<T, int32_t> ? primitive_type::int32
-                                                                         : primitive_type::int64;
-  uint8_t const value_metadata      = enc[0];
+  uint8_t const value_metadata = enc[0];
   if (variant_basic_type(value_metadata) != basic_type::primitive ||
-      variant_value_header(value_metadata) != static_cast<uint8_t>(expected)) {
+      variant_value_header(value_metadata) != static_cast<uint8_t>(primitive_type_for<T>())) {
     return cuda::std::nullopt;
   }
   return cudf::io::unaligned_load<T>(enc.data() + 1);
@@ -506,15 +531,16 @@ CUDF_KERNEL __launch_bounds__(block_size) void locate_variant_fields_kernel(
 }
 
 /**
- * @brief Per-row kernel: decode each VARIANT value blob into an integer of type `T`.
+ * @brief Per-row kernel: decode each VARIANT value blob into a fixed-width primitive of type `T`.
  *
  * Writes the decoded value to `d_output[row]` for non-null rows whose blob is a variant primitive
- * int whose physical type id matches `T` exactly (e.g. an int16 value does not decode into an
- * int32 output; there is no widening). Rows that are null, or whose value is not an exact-width
- * match for `T`, are marked null in `d_null_mask` with an output of 0.
+ * whose physical type id matches `T` exactly (e.g. an int16 value does not decode into an int32
+ * output, and a float32 value does not decode into a float64 output; there is no widening). Rows
+ * that are null, or whose value is not an exact-width match for `T`, are marked null in
+ * `d_null_mask` with an output of 0.
  */
 template <typename T>
-CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_int_kernel(
+CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_primitive_kernel(
   cudf::lists_column_device_view values, device_span<T> d_output, bitmask_type* d_null_mask)
 {
   auto const num_rows = static_cast<size_type>(d_output.size());
@@ -533,7 +559,7 @@ CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_int_kernel(
     device_span<uint8_t const> const val{val_child.data<uint8_t>() + val_begin,
                                          static_cast<std::size_t>(val_end - val_begin)};
 
-    auto const decoded = decode_int<T>(val);
+    auto const decoded = decode_primitive<T>(val);
     if (decoded.has_value()) {
       d_output[row] = *decoded;
     } else {
@@ -607,12 +633,12 @@ struct cast_variant_fn {
 
   template <typename T>
   std::unique_ptr<column> operator()()
-    requires(is_variant_int<T>)
+    requires(is_variant_primitive<T>)
   {
     rmm::device_buffer data{num_rows * sizeof(T), stream, mr};
 
     auto grid = cudf::detail::grid_1d{num_rows, block_size};
-    cast_variant_int_kernel<T><<<grid.num_blocks, block_size, 0, stream.value()>>>(
+    cast_variant_primitive_kernel<T><<<grid.num_blocks, block_size, 0, stream.value()>>>(
       values, {static_cast<T*>(data.data()), static_cast<std::size_t>(num_rows)}, d_null_mask);
     CUDF_CUDA_TRY(cudaGetLastError());
 

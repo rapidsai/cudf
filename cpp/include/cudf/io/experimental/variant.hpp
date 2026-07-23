@@ -71,13 +71,15 @@ namespace io::parquet::experimental {
  * `desired_type`.
  *
  * @param values `list<uint8>` column of VARIANT-encoded value bytes
- * @param desired_type Target cuDF type (`STRING` or `INT8`/`INT16`/`INT32`/`INT64`)
+ * @param desired_type Target cuDF type (`STRING`, `INT8`/`INT16`/`INT32`/`INT64`, or
+ *        `FLOAT32`/`FLOAT64`)
  * @param stream CUDA stream
  * @param mr Device memory resource
  * @return Typed column decoded from the VARIANT value blobs
  *
  * @throws std::invalid_argument if `values` is not a `list<uint8>` column, or if `desired_type`
- *         is not one of the supported types (`STRING` or `INT8`/`INT16`/`INT32`/`INT64`)
+ *         is not one of the supported types (`STRING`, `INT8`/`INT16`/`INT32`/`INT64`, or
+ *         `FLOAT32`/`FLOAT64`)
  */
 [[nodiscard]] std::unique_ptr<column> cast_variant(
   column_view const& values,
@@ -93,7 +95,8 @@ namespace io::parquet::experimental {
  *
  * @param variant_column Struct column (VARIANT materialization)
  * @param path JSONPath-like path string (see `get_variant_field` for syntax)
- * @param desired_type Target type: `STRING` or `INT8`/`INT16`/`INT32`/`INT64`
+ * @param desired_type Target type: `STRING`, `INT8`/`INT16`/`INT32`/`INT64`, or
+ *        `FLOAT32`/`FLOAT64`
  * @param stream CUDA stream
  * @param mr Device memory resource
  * @return Column of `desired_type`
