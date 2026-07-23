@@ -28,11 +28,12 @@ def main() -> None:
 
     # TODO: switch to the Rust TPC-DS generator
     conn = duckdb.connect()
-    conn.execute(f"INSTALL tpcds; LOAD tpcds; CALL dsdgen(sf={args.scale});")
+    conn.execute("INSTALL tpcds")
+    conn.execute("LOAD tpcds")
+    conn.execute("CALL dsdgen(sf=$1)", [args.scale])
     for table in conn.execute("SHOW TABLES").df()["name"]:
-        conn.execute(
-            f"COPY {table} TO '{args.output_dir}/{table}.parquet' (FORMAT PARQUET)"
-        )
+        path = f"{args.output_dir}/{table}.parquet"
+        conn.execute(f"COPY {table} TO $1 (FORMAT PARQUET)", [path])
 
 
 if __name__ == "__main__":

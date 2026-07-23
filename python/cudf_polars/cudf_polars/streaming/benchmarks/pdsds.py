@@ -76,6 +76,7 @@ class PDSDSQueries(metaclass=PDSDSQueriesMeta):
 
     q_impl: str
     name: str = "pdsds"
+    num_queries: int = 99
 
 
 class PDSDSPolarsQueries(PDSDSQueries):
@@ -333,7 +334,7 @@ class PDSDSDuckDBQueries(PDSDSQueries):
 
 
 if __name__ == "__main__":
-    parser = build_parser(num_queries=99)
+    parser = build_parser(num_queries=PDSDSQueries.num_queries)
     args = parse_args(parser=parser)
     if args.frontend not in _CPU_ENGINES:
         os.environ["POLARS_MAX_THREADS"] = os.environ.get("POLARS_MAX_THREADS", "1")

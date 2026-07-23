@@ -121,6 +121,7 @@ class PDSHQueries:
     """PDS-H query definitions."""
 
     name: str = "pdsh"
+    num_queries: int = 22
     EXPECTED_CASTS = EXPECTED_CASTS
     EXPECTED_CASTS_DECIMAL = EXPECTED_CASTS_DECIMAL
     EXPECTED_CASTS_TIMESTAMP = EXPECTED_CASTS_TIMESTAMP
@@ -1802,7 +1803,7 @@ class PDSHDuckDBQueries:
 
 
 if __name__ == "__main__":
-    parser = build_parser(num_queries=22)
+    parser = build_parser(num_queries=PDSHQueries.num_queries)
     args = parse_args(parser=parser)
     if args.frontend not in _CPU_ENGINES:
         os.environ["POLARS_MAX_THREADS"] = os.environ.get("POLARS_MAX_THREADS", "1")

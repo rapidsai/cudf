@@ -10,6 +10,8 @@ import pytest
 
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.engine.spmd import SPMDEngine
+from cudf_polars.streaming.benchmarks.pdsds import PDSDSPolarsQueries
+from cudf_polars.streaming.benchmarks.pdsh import PDSHQueries
 from cudf_polars.streaming.benchmarks.utils import (
     RunOptions,
     ValidationMethod,
@@ -57,17 +59,15 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     _add_dataset_args(adapter)  # type: ignore[arg-type]
 
 
-_TPC_QUERY_COUNTS = {"tpch": 22, "tpcds": 99}
-
-
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     if "q_id" not in metafunc.fixturenames:
         return
-    num_queries = next(
-        (v for k, v in _TPC_QUERY_COUNTS.items() if k in metafunc.function.__name__),
-        None,
-    )
-    if num_queries is None:
+    name = metafunc.function.__name__
+    if "tpch" in name:
+        num_queries = PDSHQueries.num_queries
+    elif "tpcds" in name:
+        num_queries = PDSDSPolarsQueries.num_queries
+    else:
         return
     metafunc.parametrize(
         "q_id",

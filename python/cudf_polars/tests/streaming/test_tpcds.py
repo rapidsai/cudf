@@ -54,9 +54,13 @@ def tpcds_data_dir(
     scale = request.config.getoption("scale") or 1.0
     data_dir = tmp_path_factory.mktemp("tpcds")
     conn = duckdb.connect()
-    conn.execute(f"INSTALL tpcds; LOAD tpcds; CALL dsdgen(sf={scale});")
+    conn.execute("INSTALL tpcds")
+    conn.execute("LOAD tpcds")
+    conn.execute("CALL dsdgen(sf=$1)", [scale])
     for table in conn.execute("SHOW TABLES").df()["name"]:
-        conn.execute(f"COPY {table} TO '{data_dir}/{table}.parquet' (FORMAT PARQUET)")
+        conn.execute(
+            f"COPY {table} TO $1 (FORMAT PARQUET)", [f"{data_dir}/{table}.parquet"]
+        )
     return str(data_dir)
 
 

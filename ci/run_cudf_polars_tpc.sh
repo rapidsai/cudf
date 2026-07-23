@@ -45,7 +45,7 @@ rapids-logger "Generating TPC-H data at SF=1"
 
 export TPCH_DATA_DIR
 TPCH_DATA_DIR=$(mktemp -d)
-tpchgen-cli parquet -s 1 --parts=4 --output-dir="${TPCH_DATA_DIR}"
+python3 "$(dirname "$0")/generate_tpch_data.py" --scale 1 --output-dir "${TPCH_DATA_DIR}"
 
 rapids-logger "Generating TPC-DS data at SF=1"
 
