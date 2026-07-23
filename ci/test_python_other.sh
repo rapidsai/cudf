@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -42,11 +42,20 @@ timeout 30m ./ci/run_custreamz_pytests.sh \
   --cov-report=term
 
 rapids-logger "pytest cudf-polars"
+# Avoid oversubscribing the CPU: NJOBS pytest-xdist workers each get nproc/NJOBS Polars threads
+NJOBS=4
+NPROC=$(nproc)
+export POLARS_MAX_THREADS=$(( NPROC / NJOBS > 0 ? NPROC / NJOBS : 1 ))
+export OMP_NUM_THREADS=${POLARS_MAX_THREADS}
+export RAY_worker_num_grpc_internal_threads=1
+export RAY_core_worker_num_server_call_thread=1
+echo "n-jobs=${NJOBS}, n-proc=${NPROC}, polars-max-threads=${POLARS_MAX_THREADS}"
+
 ./ci/run_cudf_polars_pytests.sh \
   -vv \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml" \
-  --numprocesses=4 \
-  --dist=worksteal \
+  --numprocesses=${NJOBS} \
+  --dist=loadgroup \
   --cov-config=./pyproject.toml \
   --cov=cudf_polars \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-polars-coverage.xml" \
