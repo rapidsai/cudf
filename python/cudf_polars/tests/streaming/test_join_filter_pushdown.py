@@ -916,7 +916,59 @@ def test_target_prefilter_rewrites_only_selected_self_join_edge(
     filtered_semis = find_joins(filtered, "Semi")
     assert len(filtered_semis) == 1
     assert not find_joins(unfiltered, "Semi")
-    assert any(filtered_semis[0].children[0] is node for node in traversal([source_ir]))
+    # The shared node is a valid insertion point, but its children are not:
+    # Only this consumer should be wrapped by the semi-join.
+    assert filtered_semis[0].children[0] is source_ir
+    assert_gpu_result_equal(query, engine=engine, check_row_order=False)
+
+
+def test_internal_prefilter_rewrites_shared_subplan_once(
+    engine: SPMDEngine,
+) -> None:
+    domain = (
+        pl.LazyFrame(
+            {
+                "domain_key": [1, 99],
+                "active": [True, False],
+            }
+        )
+        .filter("active")
+        .select("domain_key")
+    )
+    target = pl.LazyFrame(
+        {
+            "target_key": [i % 10 for i in range(20)],
+            "value": range(20),
+        }
+    )
+    shared = domain.join(
+        target,
+        left_on="domain_key",
+        right_on="target_key",
+    )
+    query = shared.join(shared, on="domain_key", suffix="_right")
+    translated = Translator(query._ldf.visit(), engine).translate_ir()
+
+    assert isinstance(translated, Join)
+    shared_cache = translated.children[0]
+    assert isinstance(shared_cache, Cache)
+    assert translated.children[1] is shared_cache
+    original_shared = shared_cache.children[0]
+    assert isinstance(original_shared, Join)
+    target_ir = dataframe_scan(original_shared, "target_key")
+
+    optimized = optimize_with_stats(
+        translated,
+        ConfigOptions.from_polars_engine(engine),
+        StatsCollector(),
+    )
+
+    assert isinstance(optimized, Join)
+    rewritten_left, rewritten_right = optimized.children
+    assert rewritten_left is rewritten_right
+    assert rewritten_left is not original_shared
+    (internal_semi,) = find_joins(rewritten_left, "Semi")
+    assert internal_semi.children[0] is target_ir
     assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
