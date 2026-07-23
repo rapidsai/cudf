@@ -23,6 +23,7 @@ dependencies:
 - cuda-nvcc
 - cuda-nvrtc-dev
 - cuda-nvtx-dev
+- cuda-profiler-api
 - cuda-sanitizer-api
 - cuda-version=13.3
 - cupy>=14.0.1,!=14.1.0
