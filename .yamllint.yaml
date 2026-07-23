@@ -1,0 +1,25 @@
+extends: default
+
+rules:
+  anchors:
+    forbid-undeclared-aliases: true
+    forbid-duplicated-anchors: true
+    forbid-unused-anchors: true
+  braces:
+    forbid: false
+    min-spaces-inside: 0
+    # allow 1 space for jinja templating in conda recipes
+    max-spaces-inside: 1
+    min-spaces-inside-empty: -1
+    max-spaces-inside-empty: -1
+  brackets: enable
+  comments: disable
+  comments-indentation: disable
+  document-start: disable
+  line-length: disable
+  truthy:
+    allowed-values: ['false', 'true']
+    # having problematic value in keys is rare... and also
+    # GitHub Actions' choie of 'on:' triggers this check
+    # ref: https://github.com/adrienverge/yamllint/issues/430
+    check-keys: false
