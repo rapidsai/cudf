@@ -993,27 +993,6 @@ dependencies:
           - packaging
           - polars>=1.35,<1.43
           - typing_extensions>=4.0.0
-    specific:
-      - output_types: [conda]
-        matrices:
-          - matrix:
-            packages:
-              - kvikio==26.10.*,>=0.0.0a0
-      - output_types: [requirements, pyproject]
-        matrices:
-          - matrix:
-              cuda: "12.*"
-              cuda_suffixed: "true"
-            packages:
-              - kvikio-cu12==26.10.*,>=0.0.0a0
-          - matrix:
-              cuda: "13.*"
-              cuda_suffixed: "true"
-            packages:
-              - kvikio-cu13==26.10.*,>=0.0.0a0
-          - matrix:
-            packages:
-              - kvikio==26.10.*,>=0.0.0a0
   run_cudf_polars_dask:
     common:
       - output_types: [conda, requirements, pyproject]

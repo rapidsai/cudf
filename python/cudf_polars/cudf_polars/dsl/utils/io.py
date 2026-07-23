@@ -9,7 +9,10 @@ import contextlib
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-import kvikio
+try:  # pragma: no cover; kvikio is optional
+    import kvikio
+except ImportError:
+    kvikio = None
 
 import pylibcudf as plc
 
@@ -88,6 +91,8 @@ class CachedParquetInfo:
     def remote_handle(self) -> Any:
         """Return the kvikio handle for this file."""
         if not self._remote_handle:
+            if kvikio is None:  # pragma: no cover
+                raise ImportError("kvikio is required for hybrid scan prefetching")
             if plc.io.SourceInfo._is_remote_uri(self.path):
                 self._remote_handle.append(
                     kvikio.RemoteFile.open(self.path, nbytes=self.size)
@@ -122,7 +127,9 @@ def _prefetch_parquet_footers_for_paths(paths: list[str]) -> list[CachedParquetI
     sizes: list[int | None] = []
 
     for path in paths:
-        if plc.io.SourceInfo._is_remote_uri(path):  # pragma: no cover
+        if kvikio is not None and plc.io.SourceInfo._is_remote_uri(
+            path
+        ):  # pragma: no cover
             # We're OK to use `kvikio.RemoteFile.open` here. It does make an HTTP HEAD
             # request for S3/HTTP endpoints, but that's the entire reason we're running
             # this code. So long as it makes just *one* HTTP request, there's no advantage
