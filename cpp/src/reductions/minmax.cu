@@ -1,16 +1,16 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/copy.hpp>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/reduction/detail/reduction_functions.hpp>
@@ -130,6 +130,98 @@ struct create_minmax_with_nulls {
 };
 
 /**
+ * @brief Functor to copy a minmax_pair result to individual scalar instances.
+ *
+ * @tparam T type of the data
+ * @tparam ResultType result type to assign min, max to minmax_pair<T>
+ */
+template <typename T, typename ResultType = minmax_pair<T>>
+struct assign_min_max {
+  __device__ void operator()()
+  {
+    *min_data = result->min_val;
+    *max_data = result->max_val;
+  }
+
+  ResultType* result;
+  T* min_data;
+  T* max_data;
+};
+
+/**
+ * @brief Computes a minmax_pair<T> reduction directly over a dictionary column's decoded key
+ * values, i.e. `keys[indices[i]]` for each row `i`.
+ *
+ * @tparam T The dictionary's key type
+ */
+template <typename T>
+auto reduce_dictionary(column_view const& col, rmm::cuda_stream_view stream)
+{
+  auto d_dictionary = column_device_view::create(col, stream);
+  if (col.has_nulls()) {
+    auto pair_to_minmax = thrust::make_transform_iterator(
+      cudf::dictionary::detail::make_dictionary_pair_iterator<T>(*d_dictionary, true),
+      create_minmax_with_nulls<T>{});
+    return reduce_device(pair_to_minmax, col.size(), minmax_binary_op<T>{}, stream);
+  } else {
+    auto col_to_minmax = thrust::make_transform_iterator(
+      cudf::dictionary::detail::make_dictionary_iterator<T>(*d_dictionary), create_minmax<T>{});
+    return reduce_device(col_to_minmax, col.size(), minmax_binary_op<T>{}, stream);
+  }
+}
+
+/**
+ * @brief Dispatch functor for minmax operation on a dictionary column, dispatched on the
+ * dictionary's key type.
+ */
+struct minmax_dictionary_functor {
+  template <typename T>
+  static constexpr bool is_supported()
+  {
+    return !cudf::is_dictionary<T>() && !std::is_same_v<T, cudf::list_view> &&
+           !std::is_same_v<T, cudf::struct_view>;
+  }
+
+  template <typename T>
+  std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
+    column_view const& col, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+    requires(is_supported<T>() and !std::is_same_v<T, cudf::string_view>)
+  {
+    using storage_type  = device_storage_type_t<T>;
+    auto dev_result     = reduce_dictionary<storage_type>(col, stream);
+    using ScalarType    = cudf::scalar_type_t<T>;
+    auto const key_type = dictionary_column_view(col).keys().type();
+    auto minimum        = make_fixed_width_scalar(key_type, stream, mr);
+    auto maximum        = make_fixed_width_scalar(key_type, stream, mr);
+    cudf::detail::device_single_thread(
+      assign_min_max<storage_type>{dev_result.data(),
+                                   static_cast<ScalarType*>(minimum.get())->data(),
+                                   static_cast<ScalarType*>(maximum.get())->data()},
+      stream);
+    return {std::move(minimum), std::move(maximum)};
+  }
+
+  template <typename T>
+  std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
+    column_view const& col, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+    requires(std::is_same_v<T, cudf::string_view>)
+  {
+    auto dev_result        = reduce_dictionary<cudf::string_view>(col, stream);
+    auto const host_result = dev_result.value(stream);
+    return {std::make_unique<string_scalar>(host_result.min_val, true, stream, mr),
+            std::make_unique<string_scalar>(host_result.max_val, true, stream, mr)};
+  }
+
+  template <typename T>
+  std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
+    column_view const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
+    requires(!is_supported<T>())
+  {
+    CUDF_FAIL("dictionary key type not supported for minmax() operation");
+  }
+};
+
+/**
  * @brief Dispatch functor for minmax operation.
  *
  * This uses the reduce function to compute the min and max values
@@ -159,25 +251,6 @@ struct minmax_functor {
       return reduce_device(col_to_minmax, col.size(), minmax_binary_op<T>{}, stream);
     }
   }
-
-  /**
-   * @brief Functor to copy a minmax_pair result to individual scalar instances.
-   *
-   * @tparam T type of the data
-   * @tparam ResultType result type to assign min, max to minmax_pair<T>
-   */
-  template <typename T, typename ResultType = minmax_pair<T>>
-  struct assign_min_max {
-    __device__ void operator()()
-    {
-      *min_data = result->min_val;
-      *max_data = result->max_val;
-    }
-
-    ResultType* result;
-    T* min_data;
-    T* max_data;
-  };
 
   template <typename T>
   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
@@ -223,15 +296,8 @@ struct minmax_functor {
     cudf::column_view const& col, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
     requires(cudf::is_dictionary<T>())
   {
-    // computes minimum and maximum on the dictionary indices as dictionary32 values
-    auto d_indices     = reduce<T>(col, stream);
-    auto const indices = d_indices.value(stream);
-    // use these values to slice the keys column (add 1 for complete inclusion)
-    auto keys = cudf::detail::slice(dictionary_column_view(col).keys(),
-                                    {indices.min_val.value(), indices.max_val.value() + 1},
-                                    stream)
-                  .front();
-    return type_dispatcher(keys.type(), minmax_functor{}, keys, stream, mr);
+    auto const keys_type = dictionary_column_view(col).keys().type();
+    return type_dispatcher(keys_type, minmax_dictionary_functor{}, col, stream, mr);
   }
 
   template <typename T>
