@@ -376,10 +376,11 @@ constexpr bool is_variant_int =
   cuda::std::is_same_v<T, int8_t> || cuda::std::is_same_v<T, int16_t> ||
   cuda::std::is_same_v<T, int32_t> || cuda::std::is_same_v<T, int64_t>;
 
-// The output types a VARIANT value can be cast to: the fixed-width signed integers plus strings.
+// The output types a VARIANT value can be cast to: the fixed-width signed integers, bool, and
+// strings.
 template <typename T>
 constexpr bool is_variant_castable =
-  is_variant_int<T> || cuda::std::is_same_v<T, cudf::string_view>;
+  is_variant_int<T> || cuda::std::is_same_v<T, bool> || cuda::std::is_same_v<T, cudf::string_view>;
 
 // Variant primitive ints: basic_type == primitive, value_header maps INT{8,16,32,64}.
 template <typename T>
@@ -399,6 +400,23 @@ __device__ inline cuda::std::optional<T> decode_int(device_span<uint8_t const> e
     return cuda::std::nullopt;
   }
   return cudf::io::unaligned_load<T>(enc.data() + 1);
+}
+
+/**
+ * @brief Decode a single VARIANT value blob into a bool.
+ *
+ * Boolean values carry no payload: the distinction between true and false is encoded entirely in
+ * the primitive type header (`boolean_true` vs `boolean_false`).
+ */
+__device__ inline cuda::std::optional<bool> decode_bool(device_span<uint8_t const> enc)
+{
+  if (enc.size() < 1) { return cuda::std::nullopt; }
+  uint8_t const value_metadata = enc[0];
+  if (variant_basic_type(value_metadata) != basic_type::primitive) { return cuda::std::nullopt; }
+  auto const value_header = variant_value_header(value_metadata);
+  if (value_header == static_cast<uint8_t>(primitive_type::boolean_true)) { return true; }
+  if (value_header == static_cast<uint8_t>(primitive_type::boolean_false)) { return false; }
+  return cuda::std::nullopt;
 }
 
 __device__ device_span<uint8_t const> resolve_path(device_span<uint8_t const> meta,
@@ -544,6 +562,42 @@ CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_int_kernel(
 }
 
 /**
+ * @brief Per-row kernel: decode each VARIANT value blob into a bool.
+ *
+ * Boolean values are encoded as a single-byte `primitive_type::boolean_true` or
+ * `primitive_type::boolean_false` header with no payload. Rows that are null, or whose value is
+ * not a boolean primitive, are marked null in `d_null_mask` with an output of false.
+ */
+CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_bool_kernel(
+  cudf::lists_column_device_view values, device_span<bool> d_output, bitmask_type* d_null_mask)
+{
+  auto const num_rows = static_cast<size_type>(d_output.size());
+  auto const tid      = cudf::detail::grid_1d::global_thread_id<block_size>();
+  auto const stride   = cudf::detail::grid_1d::grid_stride<block_size>();
+
+  for (auto row = tid; row < num_rows; row += stride) {
+    if (!cudf::bit_is_set(d_null_mask, row)) {
+      d_output[row] = false;
+      continue;
+    }
+
+    auto const val_begin = values.offset_at(row);
+    auto const val_end   = values.offset_at(row + 1);
+    auto const val_child = values.child();
+    device_span<uint8_t const> const val{val_child.data<uint8_t>() + val_begin,
+                                         static_cast<std::size_t>(val_end - val_begin)};
+
+    auto const decoded = decode_bool(val);
+    if (decoded.has_value()) {
+      d_output[row] = *decoded;
+    } else {
+      d_output[row] = false;
+      cudf::clear_bit(d_null_mask, row);
+    }
+  }
+}
+
+/**
  * @brief Strings-children functor: decode each VARIANT value blob into a string.
  *
  * Used with `make_strings_children`, so it runs in two passes. On the sizing pass (`d_chars ==
@@ -614,6 +668,26 @@ struct cast_variant_fn {
     auto grid = cudf::detail::grid_1d{num_rows, block_size};
     cast_variant_int_kernel<T><<<grid.num_blocks, block_size, 0, stream.value()>>>(
       values, {static_cast<T*>(data.data()), static_cast<std::size_t>(num_rows)}, d_null_mask);
+    CUDF_CUDA_TRY(cudaGetLastError());
+
+    auto const null_count =
+      num_rows - cudf::detail::count_set_bits(d_null_mask, 0, num_rows, stream);
+    return std::make_unique<column>(desired_type,
+                                    num_rows,
+                                    std::move(data),
+                                    null_count > 0 ? std::move(null_mask) : rmm::device_buffer{},
+                                    null_count);
+  }
+
+  template <typename T>
+  std::unique_ptr<column> operator()()
+    requires(cuda::std::is_same_v<T, bool>)
+  {
+    rmm::device_buffer data{num_rows * sizeof(bool), stream, mr};
+
+    auto grid = cudf::detail::grid_1d{num_rows, block_size};
+    cast_variant_bool_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
+      values, {static_cast<bool*>(data.data()), static_cast<std::size_t>(num_rows)}, d_null_mask);
     CUDF_CUDA_TRY(cudaGetLastError());
 
     auto const null_count =
