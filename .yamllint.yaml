@@ -13,9 +13,19 @@ rules:
     min-spaces-inside-empty: -1
     max-spaces-inside-empty: -1
   brackets: enable
+  colons:
+    max-spaces-before: 0
+    max-spaces-after: 1
+  commas:
+    max-spaces-before: 0
+    min-spaces-after: 1
+    max-spaces-after: 1
   comments: disable
   comments-indentation: disable
+  document-end: disable
   document-start: disable
+  key-duplicates:
+    forbid-duplicated-merge-keys: true
   line-length: disable
   truthy:
     allowed-values: ['false', 'true']
