@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "cuda/std/__utility/cmp.h"
 #include "error.hpp"
 #include "io/utilities/block_utils.cuh"
 #include "parquet_gpu.hpp"
@@ -749,12 +750,16 @@ struct decode_from_page_data_fn {
   __device__ void operator()(size_type page_idx) const noexcept
   {
     auto const num_chunks = static_cast<cudf::size_type>(colchunks.size());
-    auto const chunk_idx  = static_cast<cudf::size_type>(
+
+    // Binary search the column chunk index for this page
+    auto const chunk_idx = static_cast<cudf::size_type>(
       cuda::std::distance(
         chunk_page_offsets.begin(),
         thrust::upper_bound(
           thrust::seq, chunk_page_offsets.begin(), chunk_page_offsets.end(), page_idx)) -
       1);
+
+    // Check if the chunk index is valid.
     if (chunk_idx < 0 or chunk_idx >= num_chunks) {
       set_error(static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN),
                 error_code);
@@ -763,23 +768,23 @@ struct decode_from_page_data_fn {
 
     byte_stream_s bs{};
     bs.ck = colchunks[chunk_idx];
+    // Clear the logical page descriptor.
     zero_out_page_header_info(&bs);
 
-    auto const page_span = page_data[page_idx];
-    if (page_span.empty()) {
-      // Initialize the logical page descriptor. Page-index fields are populated by
-      // fill_in_page_info().
-      bs.page.chunk_idx      = chunk_idx;
-      bs.page.src_col_schema = bs.ck.src_col_schema;
-      pages[page_idx]        = bs.page;
-      return;
-    }
-
-    bs.base = bs.cur       = page_span.data();
-    bs.end                 = page_span.data() + page_span.size();
     bs.page.chunk_idx      = chunk_idx;
     bs.page.src_col_schema = bs.ck.src_col_schema;
 
+    // bs.page.chunk_row not computed here and will be filled in later by
+    // `fill_in_page_info()`.
+
+    // Return if empty page span (pruned page)
+    auto const page_span = page_data[page_idx];
+    if (page_span.empty()) {
+      pages[page_idx] = bs.page;
+      return;
+    }
+
+    // Parsed page must be valid and not empty
     if (not parse_valid_page_header(&bs)) {
       set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_HEADER),
                 error_code);
@@ -790,11 +795,16 @@ struct decode_from_page_data_fn {
                 error_code);
       return;
     }
-
     switch (bs.page_type) {
-      case PageType::DATA_PAGE: bs.page.num_rows = bs.page.num_input_values; break;
+      case PageType::DATA_PAGE:
+        // this computation is only valid for flat schemas. for nested schemas,
+        // they will be recomputed in the preprocess step by examining repetition and
+        // definition levels
+        bs.page.num_rows = bs.page.num_input_values;
+        break;
       case PageType::DATA_PAGE_V2:
         bs.page.flags |= PAGEINFO_FLAGS_V2;
+        // V2 only uses RLE, so it was removed from the header
         bs.page.definition_level_encoding = Encoding::RLE;
         bs.page.repetition_level_encoding = Encoding::RLE;
         break;
@@ -805,8 +815,8 @@ struct decode_from_page_data_fn {
         return;
     }
 
-    if (bs.page.compressed_page_size < 0 or
-        static_cast<size_t>(bs.end - bs.cur) != static_cast<size_t>(bs.page.compressed_page_size)) {
+    // Ensure we read the entire page.
+    if (cuda::std::cmp_not_equal(bs.end - bs.cur, bs.page.compressed_page_size)) {
       set_error(static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN),
                 error_code);
       return;
@@ -814,7 +824,9 @@ struct decode_from_page_data_fn {
 
     bs.page.page_data   = const_cast<uint8_t*>(bs.cur);
     bs.page.kernel_mask = kernel_mask_for_page(bs.page, bs.ck);
-    pages[page_idx]     = bs.page;
+
+    // Copy over the page info from byte stream
+    pages[page_idx] = bs.page;
   }
 };
 
@@ -942,8 +954,6 @@ void decode_page_headers_from_page_data(
   kernel_error::pointer error_code,
   rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(page_data.size() == pages.size(),
-               "Page span count must match the number of logical pages");
   CUDF_EXPECTS(chunk_page_offsets.size() == chunks.size() + 1,
                "Chunk page offsets must cover all chunks");
   thrust::for_each(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
