@@ -6,11 +6,19 @@
 
 #include <cudf/detail/join/filtered_join.cuh>
 #include <cudf/table/table_view.hpp>
-#include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/memory_resource.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/resource_ref.hpp>
+
+#include <cstdint>
+#include <memory>
+
+namespace cudf::detail::row::equality {
+class preprocessed_table;
+}
 
 namespace cudf {
 
@@ -44,30 +52,31 @@ class distinct_filtered_join : public filtered_join {
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr);
 
-  /**
-   * @brief Core implementation for querying the hash table
-   *
-   * Performs the actual hash table query operation for both semi and anti joins
-   * using set semantics.
-   *
-   * @tparam CGSize CUDA cooperative group size
-   * @tparam Ref Reference type for the hash table
-   * @param left The left table to probe the hash table with
-   * @param preprocessed_left Preprocessed left table for row operators
-   * @param kind The kind of join to perform
-   * @param query_ref Reference to the hash table for querying
-   * @param stream CUDA stream on which to perform operations
-   * @param mr Memory resource for allocations
-   * @return Device vector of indices representing the join result
-   */
-  template <int32_t CGSize, typename Ref>
-  std::unique_ptr<rmm::device_uvector<cudf::size_type>> query_right_table(
+  // Queries the hash table for every left row and writes the matches to contains_map.
+  template <int32_t CGSize, typename Iterator, typename Ref>
+  void query_right_table(cudf::table_view const& left,
+                         Iterator left_iter,
+                         Ref query_ref,
+                         cudf::device_span<bool> contains_map,
+                         rmm::cuda_stream_view stream);
+
+  void query_right_table_primitive(
     cudf::table_view const& left,
-    std::shared_ptr<cudf::detail::row::equality::preprocessed_table> preprocessed_left,
-    join_kind kind,
-    Ref query_ref,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr);
+    std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_left,
+    cudf::device_span<bool> contains_map,
+    rmm::cuda_stream_view stream);
+
+  void query_right_table_flat(
+    cudf::table_view const& left,
+    std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_left,
+    cudf::device_span<bool> contains_map,
+    rmm::cuda_stream_view stream);
+
+  void query_right_table_nested(
+    cudf::table_view const& left,
+    std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_left,
+    cudf::device_span<bool> contains_map,
+    rmm::cuda_stream_view stream);
 
  public:
   /**
