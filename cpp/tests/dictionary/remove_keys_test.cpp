@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,6 +9,7 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/dictionary/update_keys.hpp>
 #include <cudf/utilities/error.hpp>
@@ -105,6 +106,54 @@ TEST_F(DictionaryRemoveKeysTest, WithNull)
   }
 }
 
+TEST_F(DictionaryRemoveKeysTest, DuplicateKeys)
+{
+  auto input = cudf::test::dictionary_column_wrapper<std::string>(
+    {"eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa"});
+
+  // set_keys with a duplicate "ccc" — position 3 is unreferenced
+  auto dup_keys        = cudf::test::strings_column_wrapper{"aaa", "ccc", "eee", "ccc"};
+  auto const with_dups = cudf::dictionary::set_keys(input, dup_keys);
+
+  // remove "ccc" — both the indexed occurrence at position 1 and the unreferenced
+  // duplicate at position 3 must be dropped
+  auto del_keys = cudf::test::strings_column_wrapper{"ccc"};
+  auto const result =
+    cudf::dictionary::remove_keys(cudf::dictionary_column_view(with_dups->view()), del_keys);
+
+  EXPECT_EQ(cudf::dictionary_column_view(result->view()).keys_size(), 2);
+
+  auto expected = cudf::test::strings_column_wrapper(
+    {"eee", "aaa", "", "", "", "", "", "eee", "aaa"}, {1, 1, 0, 0, 0, 0, 0, 1, 1});
+  auto const decoded = cudf::dictionary::decode(result->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(decoded->view(), expected);
+}
+
+TEST_F(DictionaryRemoveKeysTest, RemoveUnusedAfterDuplicateSetKeys)
+{
+  auto input = cudf::test::dictionary_column_wrapper<std::string>(
+    {"eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa"});
+
+  // force duplicate keys
+  auto new_keys        = cudf::test::strings_column_wrapper{"aaa", "ccc", "eee", "ccc"};
+  auto const with_dups = cudf::dictionary::set_keys(input, new_keys);
+  cudf::dictionary_column_view dups_view(with_dups->view());
+
+  // keys are stored in the order given, duplicate included
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(dups_view.keys(), new_keys);
+
+  // remove_unused_keys should drop the unreferenced second "ccc" at position 3
+  auto const cleaned      = cudf::dictionary::remove_unused_keys(dups_view);
+  auto const cleaned_view = cudf::dictionary_column_view(cleaned->view());
+
+  EXPECT_EQ(cleaned_view.keys_size(), 3);
+
+  auto expected_decoded = cudf::test::strings_column_wrapper(
+    {"eee", "aaa", "", "", "ccc", "ccc", "ccc", "eee", "aaa"}, {1, 1, 0, 0, 1, 1, 1, 1, 1});
+  auto const decoded = cudf::dictionary::decode(cleaned_view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(decoded->view(), expected_decoded);
+}
+
 TEST_F(DictionaryRemoveKeysTest, Errors)
 {
   cudf::test::fixed_width_column_wrapper<int64_t> input{1, 2, 3};
@@ -114,4 +163,82 @@ TEST_F(DictionaryRemoveKeysTest, Errors)
   EXPECT_THROW(cudf::dictionary::remove_keys(dictionary->view(), del_keys), cudf::data_type_error);
   cudf::test::fixed_width_column_wrapper<int64_t> null_keys{{1, 2, 3}, {true, false, true}};
   EXPECT_THROW(cudf::dictionary::remove_keys(dictionary->view(), null_keys), cudf::logic_error);
+}
+
+TEST_F(DictionaryRemoveKeysTest, RemoveDuplicateKeysStrings)
+{
+  // Build a dictionary with intentionally duplicate keys via set_keys.
+  // keys = ["aaa", "ccc", "eee", "ccc"] (position 1 and 3 are both "ccc")
+  // indices point into that key set
+  auto input =
+    cudf::test::dictionary_column_wrapper<std::string>({"eee", "aaa", "ccc", "ccc", "eee", "aaa"});
+  auto dup_keys        = cudf::test::strings_column_wrapper{"aaa", "ccc", "eee", "ccc"};
+  auto const with_dups = cudf::dictionary::set_keys(input, dup_keys);
+  cudf::dictionary_column_view dv(with_dups->view());
+  EXPECT_EQ(dv.keys_size(), 4);  // confirm we have duplicates
+
+  auto const result = cudf::dictionary::remove_duplicate_keys(dv);
+  cudf::dictionary_column_view rv(result->view());
+
+  // Unique keys in first-occurrence order: "aaa"(0), "ccc"(1), "eee"(3) → ["aaa","ccc","eee"]
+  EXPECT_EQ(rv.keys_size(), 3);
+  cudf::test::strings_column_wrapper expected_keys{"aaa", "ccc", "eee"};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(rv.keys(), expected_keys);
+
+  // Decoded values must match
+  cudf::test::strings_column_wrapper expected_decoded{"eee", "aaa", "ccc", "ccc", "eee", "aaa"};
+  auto const decoded = cudf::dictionary::decode(rv);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(decoded->view(), expected_decoded);
+}
+
+TEST_F(DictionaryRemoveKeysTest, RemoveDuplicateKeysIntegers)
+{
+  // keys = [10, 20, 10, 30] (10 appears at positions 0 and 2)
+  // All indices pointing to position 2 must be remapped to position 0 after dedup
+  cudf::test::fixed_width_column_wrapper<int32_t> keys_col{10, 20, 10, 30};
+  cudf::test::fixed_width_column_wrapper<int32_t> indices_col{2, 0, 3, 1, 2, 0};
+  auto with_dups = cudf::make_dictionary_column(
+    keys_col.release(), indices_col.release(), rmm::device_buffer{}, 0);
+  cudf::dictionary_column_view dv(with_dups->view());
+  EXPECT_EQ(dv.keys_size(), 4);
+
+  auto const result = cudf::dictionary::remove_duplicate_keys(dv);
+  cudf::dictionary_column_view rv(result->view());
+
+  EXPECT_EQ(rv.keys_size(), 3);
+  cudf::test::fixed_width_column_wrapper<int32_t> expected_keys{10, 20, 30};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(rv.keys(), expected_keys);
+
+  cudf::test::fixed_width_column_wrapper<int32_t> expected_decoded{10, 10, 30, 20, 10, 10};
+  auto const decoded = cudf::dictionary::decode(rv);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(decoded->view(), expected_decoded);
+}
+
+TEST_F(DictionaryRemoveKeysTest, RemoveDuplicateKeysNoDuplicates)
+{
+  // When no duplicates exist the output should be equivalent to the input
+  auto input        = cudf::test::dictionary_column_wrapper<std::string>({"b", "a", "c", "a", "b"});
+  auto const result = cudf::dictionary::remove_duplicate_keys(cudf::dictionary_column_view(input));
+  auto const decoded = cudf::dictionary::decode(cudf::dictionary_column_view(result->view()));
+  cudf::test::strings_column_wrapper expected{"b", "a", "c", "a", "b"};
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(decoded->view(), expected);
+}
+
+TEST_F(DictionaryRemoveKeysTest, RemoveDuplicateKeysWithNullRows)
+{
+  // Null rows in the parent must be preserved; no new nulls are introduced
+  auto input = cudf::test::dictionary_column_wrapper<std::string>(
+    {"eee", "aaa", "ccc", "ccc", "eee"}, {true, true, false, true, true});
+  auto dup_keys        = cudf::test::strings_column_wrapper{"aaa", "ccc", "eee", "ccc"};
+  auto const with_dups = cudf::dictionary::set_keys(input, dup_keys);
+  cudf::dictionary_column_view dv(with_dups->view());
+
+  auto const result = cudf::dictionary::remove_duplicate_keys(dv);
+  cudf::dictionary_column_view rv(result->view());
+  EXPECT_EQ(rv.keys_size(), 3);
+
+  cudf::test::strings_column_wrapper expected_decoded({"eee", "aaa", "", "ccc", "eee"},
+                                                      {true, true, false, true, true});
+  auto const decoded = cudf::dictionary::decode(rv);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(decoded->view(), expected_decoded);
 }

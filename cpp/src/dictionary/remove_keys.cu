@@ -9,7 +9,9 @@
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
+#include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/valid_if.cuh>
+#include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/dictionary/update_keys.hpp>
@@ -194,6 +196,22 @@ std::unique_ptr<column> remove_unused_keys(dictionary_column_view const& diction
   return remove_keys_fn(dictionary_column, key_matcher, stream, mr);
 }
 
+std::unique_ptr<column> remove_duplicate_keys(dictionary_column_view const& input,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr)
+{
+  // deduplicate keys
+  auto unique_keys = cudf::detail::stable_distinct(table_view{{input.keys()}},
+                                                   {0},
+                                                   duplicate_keep_option::KEEP_FIRST,
+                                                   null_equality::EQUAL,
+                                                   nan_equality::ALL_EQUAL,
+                                                   stream,
+                                                   cudf::get_current_device_resource_ref());
+  // set_keys then remaps all indices into this compacted key set in a single pass
+  return detail::set_keys(input, unique_keys->get_column(0).view(), stream, mr);
+}
+
 }  // namespace detail
 
 // external APIs
@@ -213,6 +231,14 @@ std::unique_ptr<column> remove_unused_keys(dictionary_column_view const& diction
 {
   CUDF_FUNC_RANGE();
   return detail::remove_unused_keys(dictionary_column, stream, mr);
+}
+
+std::unique_ptr<column> remove_duplicate_keys(dictionary_column_view const& dictionary_column,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::remove_duplicate_keys(dictionary_column, stream, mr);
 }
 
 }  // namespace dictionary
