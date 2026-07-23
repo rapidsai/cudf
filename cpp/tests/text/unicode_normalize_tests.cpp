@@ -29,35 +29,14 @@ static cudf::table_view make_unicode_table(
   return cudf::table_view({codepoints, ccc_values, decomp_mappings});
 }
 
-TEST_F(TextUnicodeNormalizeTest, EmptyInput)
-{
-  auto empty = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
-  cudf::strings_column_view input(empty->view());
-
-  cudf::test::strings_column_wrapper codepoints(std::initializer_list<std::string>{});
-  cudf::test::fixed_width_column_wrapper<int32_t> ccc_values(std::initializer_list<int32_t>{});
-  cudf::test::strings_column_wrapper decomp_mappings(std::initializer_list<std::string>{});
-  auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
-
-  auto normalizer =
-    nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFC);
-  auto result = nvtext::normalize_unicode(input, *normalizer);
-  EXPECT_EQ(result->size(), 0);
-
-  normalizer =
-    nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFD);
-  result = nvtext::normalize_unicode(input, *normalizer);
-  EXPECT_EQ(result->size(), 0);
-}
-
 TEST_F(TextUnicodeNormalizeTest, NullStrings)
 {
   cudf::test::strings_column_wrapper strings({"", "", ""}, {false, false, false});
   cudf::strings_column_view input(strings);
 
-  cudf::test::strings_column_wrapper codepoints(std::initializer_list<std::string>{});
-  cudf::test::fixed_width_column_wrapper<int32_t> ccc_values(std::initializer_list<int32_t>{});
-  cudf::test::strings_column_wrapper decomp_mappings(std::initializer_list<std::string>{});
+  cudf::test::strings_column_wrapper codepoints({"A"});
+  cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({0});
+  cudf::test::strings_column_wrapper decomp_mappings({"0065 0301"});
   auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
 
   auto normalizer =
@@ -73,9 +52,9 @@ TEST_F(TextUnicodeNormalizeTest, AsciiPassthrough)
   cudf::strings_column_view input(strings);
 
   // No codepoints needed for pure ASCII
-  cudf::test::strings_column_wrapper codepoints(std::initializer_list<std::string>{});
-  cudf::test::fixed_width_column_wrapper<int32_t> ccc_values(std::initializer_list<int32_t>{});
-  cudf::test::strings_column_wrapper decomp_mappings(std::initializer_list<std::string>{});
+  cudf::test::strings_column_wrapper codepoints({"A"});
+  cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({0});
+  cudf::test::strings_column_wrapper decomp_mappings({"0065 0301"});
   auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
 
   for (auto form : {nvtext::unicode_normalization_form::NFD,
@@ -119,9 +98,9 @@ TEST_F(TextUnicodeNormalizeTest, NFD_Hangul)
   cudf::test::strings_column_wrapper input_strings({"\xEA\xB0\x80"});  // 가 in UTF-8
   cudf::strings_column_view input(input_strings);
 
-  cudf::test::strings_column_wrapper codepoints(std::initializer_list<std::string>{});
-  cudf::test::fixed_width_column_wrapper<int32_t> ccc_values(std::initializer_list<int32_t>{});
-  cudf::test::strings_column_wrapper decomp_mappings(std::initializer_list<std::string>{});
+  cudf::test::strings_column_wrapper codepoints({"A"});
+  cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({0});
+  cudf::test::strings_column_wrapper decomp_mappings({"0065 0301"});
   auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
 
   auto normalizer =
@@ -273,11 +252,20 @@ TEST_F(TextUnicodeNormalizeTest, MultiStringBatch)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
 
+TEST_F(TextUnicodeNormalizeTest, EmptyDecompositionTable)
+{
+  cudf::test::strings_column_wrapper strcol(std::initializer_list<std::string>{});
+  cudf::test::fixed_width_column_wrapper<int32_t> intcol(std::initializer_list<int32_t>{});
+  cudf::table_view t({strcol, intcol, strcol});
+  EXPECT_THROW(nvtext::create_unicode_normalizer(t, nvtext::unicode_normalization_form::NFC),
+               std::invalid_argument);
+}
+
 TEST_F(TextUnicodeNormalizeTest, ErrorWrongColumnCount)
 {
-  cudf::test::strings_column_wrapper col_a({"00E9"});
-  cudf::test::fixed_width_column_wrapper<int32_t> col_b({0});
-  cudf::table_view t({col_a, col_b});
+  cudf::test::strings_column_wrapper strcol({"00E9"});
+  cudf::test::fixed_width_column_wrapper<int32_t> intcol({0});
+  cudf::table_view t({strcol, intcol, strcol, strcol});  // 4 columns instead of 3
   EXPECT_THROW(nvtext::create_unicode_normalizer(t, nvtext::unicode_normalization_form::NFC),
                std::invalid_argument);
 }

@@ -11,7 +11,6 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-//! NVText APIs
 namespace CUDF_EXPORT nvtext {
 /**
  * @addtogroup nvtext_normalize
@@ -39,7 +38,7 @@ enum class unicode_normalization_form {
  * Database `UnicodeData.txt` file, loaded by the caller as a cudf table
  * (e.g. via `cudf::io::read_csv`).
  *
- * The `unicode_data` table must contain exactly three STRING or INT32 columns
+ * The `unicode_data` table must contain exactly three columns
  * in the following order, corresponding to fields from `UnicodeData.txt`:
  *   - column[0]: STRING  Code point values as uppercase hex strings (e.g. "00C9")
  *   - column[1]: INT32   Canonical_Combining_Class (CCC) values in range [0, 254]
@@ -48,14 +47,15 @@ enum class unicode_normalization_form {
  *                        such as `<compat>`, `<font>`, `<wide>`, etc.
  *
  * The typical caller workflow is:
- * @code{.python}
- * unicode_table = cudf.read_csv(
- *     "UnicodeData.txt",
- *     sep=";", header=None, usecols=[0, 3, 5],
- *     dtype={0: "str", 1: "int32", 2: "str"},
- * )
- * normalizer = nvtext.create_unicode_normalizer(unicode_table, NFKC)
- * result     = nvtext.normalize_unicode(input_strings, normalizer)
+ * @code{.cpp}
+ *  cudf::io::csv_reader_options in_opts =
+ *   cudf::io::csv_reader_options::builder(cudf::io::source_info("UnicodeData.txt"))
+ *    .delimiter(';').header(-1)
+ *    .use_cols_indexes({0, 3, 5})
+ *    .dtypes({dtype<cudf::string_view>(), dtype<int32_t>(), dtype<cudf::string_view>()});
+ *  auto const ud = cudf::io::read_csv(in_opts);
+ *  auto normalizer = nvtext::create_unicode_normalizer(ud.tbl->view(), NFKC);
+ *  auto result = nvtext::normalize_unicode(input_strings, *normalizer);
  * @endcode
  *
  * Decomposition of Hangul syllables (U+AC00..U+D7A3) is performed
