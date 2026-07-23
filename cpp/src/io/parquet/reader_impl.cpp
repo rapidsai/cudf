@@ -14,7 +14,9 @@
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
+#include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/io/parquet_schema.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -260,6 +262,14 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   // launch string decoder for byte-stream-split encoded list columns
   if (BitAnd(kernel_mask, decode_kernel_mask::STRING_STREAM_SPLIT_LIST) != 0) {
     decode_data(decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
+  }
+
+  // launch dict-index-as-int32 decoder for flat columns
+  // TODO: extend the Parquet-dict → DICTIONARY32 transcode to nested and list string columns by
+  // adding DICT_INT32_NESTED / DICT_INT32_LIST launches here. Only flat string columns are
+  // transcoded today; nested/list columns fall back to the normal decode path.
+  if (BitAnd(kernel_mask, decode_kernel_mask::DICT_INT32) != 0) {
+    decode_data(decode_kernel_mask::DICT_INT32);
   }
 
   // launch delta byte array decoder
@@ -515,11 +525,24 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
              options.is_enabled_use_jit_filter(),
              options.is_enabled_case_sensitive_names(),
              options.is_enabled_prepend_source_index_column(),
-             options.is_enabled_prepend_row_index_column()},
+             options.is_enabled_prepend_row_index_column(),
+             options.is_enabled_output_dict_columns()},
     _sources{std::move(sources)},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
 {
+  // The direct parquet-dict → DICTIONARY32 transcode fast path only supports single-pass,
+  // non-chunked reads. Splitting rowgroups across passes/subpasses would require aligning
+  // dictionary keys across passes, which are not supported yet. In that scenario, we silently
+  // skip the fast path in `prepare_dict_transcode` and still produce DICTIONARY32 output
+  // via the post-hoc `dictionary::detail::encode` fallback in `finalize_output`.
+  if (_options.output_dict_columns and (chunk_read_limit != 0 or pass_read_limit != 0)) {
+    CUDF_LOG_WARN(
+      "output_dict_columns: the direct parquet-dict transcode fast path is disabled for chunked / "
+      "multi-pass reads (non-zero chunk_read_limit or pass_read_limit); falling back to encoding "
+      "DICTIONARY32 columns at the output.");
+  }
+
   // Open and parse the source dataset metadata
   CUDF_EXPECTS(file_metadatas.empty() or file_metadatas.size() == _sources.size(),
                "Encountered a mismatch in the number of provided data sources and metadatas");
@@ -686,6 +709,12 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
   auto& subpass         = *pass.subpass;
   auto const& read_info = subpass.output_chunk_read_info[subpass.current_output_chunk];
 
+  // If the caller asked for direct parquet-dict → DICTIONARY32 transcode, detect per-column
+  // eligibility and mutate `_output_buffers` / `subpass.pages` before we allocate column buffers
+  // or dispatch decode kernels. This has to happen before `preprocess_chunk_strings` /
+  // `allocate_columns` because those branch on `subpass.kernel_mask` and on `out_buf.type`.
+  bool const dict_transcode_active = prepare_dict_transcode(mode);
+
   // computes:
   // PageNestingInfo::batch_size for each level of nesting, for each page, taking row bounds into
   // account. PageInfo::skipped_values, which tells us where to start decoding in the input to
@@ -707,6 +736,11 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
 
   // Allocate memory buffers for the output columns.
   allocate_columns(mode, read_info.skip_rows, read_info.num_rows);
+
+  // Zero-init the INT32 index buffers of dict-transcoded columns before launching decode, so
+  // that null positions (which the DICT_INT32 kernel does not write to) carry well-defined
+  // indices in the produced DICTIONARY32 output.
+  if (dict_transcode_active) { zero_init_dict_transcoded_index_buffers(); }
 
   // Parse data into the output buffers.
   decode_page_data(mode, read_info.skip_rows, read_info.num_rows);
@@ -734,6 +768,12 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
       out_columns.emplace_back(make_column(_output_buffers[i], nullptr, metadata, _stream));
     }
   }
+
+  // For any columns that were selected for direct parquet-dict → DICTIONARY32 transcode in
+  // `prepare_dict_transcode`, the entries in `out_columns` are currently INT32 indices columns.
+  // Assemble them into DICTIONARY32 columns here by attaching per-chunk keys; concatenate
+  // remaps indices to the unified keys child.
+  if (dict_transcode_active) { assemble_dict_transcoded_columns(out_columns); }
 
   out_columns =
     cudf::structs::detail::enforce_null_consistency(std::move(out_columns), _stream, _mr);
@@ -907,6 +947,17 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
   }
 
   apply_decimal_width_cast(out_columns);
+
+  if (_options.output_dict_columns) {
+    // For columns that were not eligible for the direct transcode fast path, fall back to a
+    // post-hoc `dictionary::detail::encode`.
+    for (auto& col : out_columns) {
+      if (col and col->type().id() == type_id::STRING) {
+        col =
+          cudf::dictionary::detail::encode(col->view(), data_type{type_id::INT32}, _stream, _mr);
+      }
+    }
+  }
 
   if (!_output_metadata) {
     populate_metadata(out_metadata);
