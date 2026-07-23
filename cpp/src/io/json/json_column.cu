@@ -28,7 +28,6 @@
 #include <cuda/std/utility>
 #include <thrust/for_each.h>
 #include <thrust/gather.h>
-#include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/transform.h>
@@ -113,7 +112,7 @@ reduce_to_column_tree(tree_meta_t const& tree,
   rmm::device_uvector<NodeIndexT> unique_col_ids(num_columns, stream);
   rmm::device_uvector<size_type> max_row_offsets(num_columns, stream);
   auto ordered_row_offsets =
-    thrust::make_permutation_iterator(row_offsets.begin(), ordered_node_ids.begin());
+    cuda::make_permutation_iterator(row_offsets.begin(), ordered_node_ids.begin());
   thrust::reduce_by_key(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                         sorted_col_ids.begin(),
                         sorted_col_ids.end(),
@@ -129,7 +128,7 @@ reduce_to_column_tree(tree_meta_t const& tree,
     rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     sorted_col_ids.begin(),
     sorted_col_ids.end(),
-    thrust::make_permutation_iterator(tree.node_categories.begin(), ordered_node_ids.begin()),
+    cuda::make_permutation_iterator(tree.node_categories.begin(), ordered_node_ids.begin()),
     unique_col_ids.begin(),
     column_categories.begin(),
     cuda::std::equal_to<size_type>(),
@@ -168,10 +167,10 @@ reduce_to_column_tree(tree_meta_t const& tree,
   thrust::copy_n(
     rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     thrust::make_zip_iterator(
-      thrust::make_permutation_iterator(tree.node_levels.begin(), unique_node_ids.begin()),
-      thrust::make_permutation_iterator(tree.parent_node_ids.begin(), unique_node_ids.begin()),
-      thrust::make_permutation_iterator(tree.node_range_begin.begin(), unique_node_ids.begin()),
-      thrust::make_permutation_iterator(tree.node_range_end.begin(), unique_node_ids.begin())),
+      cuda::make_permutation_iterator(tree.node_levels.begin(), unique_node_ids.begin()),
+      cuda::make_permutation_iterator(tree.parent_node_ids.begin(), unique_node_ids.begin()),
+      cuda::make_permutation_iterator(tree.node_range_begin.begin(), unique_node_ids.begin()),
+      cuda::make_permutation_iterator(tree.node_range_end.begin(), unique_node_ids.begin())),
     unique_node_ids.size(),
     thrust::make_zip_iterator(column_levels.begin(),
                               parent_col_ids.begin(),

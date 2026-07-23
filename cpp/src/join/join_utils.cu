@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -23,7 +23,6 @@
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
 #include <cuda/std/tuple>
-#include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
@@ -134,7 +133,7 @@ VectorPair finalize_full_join(VectorPair&& indices,
   // (left_out_tail, right_out_tail) in a single CUB DeviceSelect pass.
   auto zip_tail =
     thrust::make_zip_iterator(left_out->data() + match_total, right_out->data() + match_total);
-  auto out_iter = thrust::make_transform_output_iterator(zip_tail, to_no_match_pair{});
+  auto out_iter = cuda::make_transform_output_iterator(zip_tail, to_no_match_pair{});
 
   auto const new_end =
     cudf::detail::copy_if(cuda::counting_iterator<size_type>{0},
