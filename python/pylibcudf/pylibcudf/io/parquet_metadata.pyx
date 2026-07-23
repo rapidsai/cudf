@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from libc.stdint cimport uint8_t
@@ -458,7 +458,7 @@ cdef class FileMetaData:
 
     See Also
     --------
-    read_parquet_footers
+    pylibcudf.io.parquet_metadata.read_parquet_footers
         Read one ``FileMetaData`` per source directly from
         :class:`pylibcudf.io.types.SourceInfo`.
     """

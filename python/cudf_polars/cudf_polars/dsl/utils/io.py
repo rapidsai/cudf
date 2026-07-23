@@ -152,10 +152,11 @@ def _prefetch_parquet_footers_for_paths(paths: list[str]) -> list[CachedParquetI
         CachedParquetInfo(path, size, file_metadata)
         for path, size, file_metadata in zip(paths, sizes, metadata, strict=True)
     ]
-    # Open kvikio handles eagerly on the main thread before any prefetch workers
-    # start, so all splits sharing a file get the same handle without races.
-    for info in infos:
-        info.remote_handle()
+    if kvikio is not None:
+        # Open kvikio handles eagerly on the main thread before any prefetch workers
+        # start, so all splits sharing a file get the same handle without races.
+        for info in infos:
+            info.remote_handle()
     return infos
 
 
