@@ -962,8 +962,8 @@ def _pivot(
         Position of each source row's key within ``columns_labels``.
     promote_ints_on_missing : bool
         Promote integer source columns to float64 when the reshape
-        introduces missing cells, as pandas' unstack does. Only the
-        unstack path wants this: pivot_table/crosstab fill missing
+        introduces missing cells, as pandas' unstack does. The unstack
+        and pivot paths want this; pivot_table/crosstab fill missing
         cells afterwards and keep the integer dtype.
     """
     column_labels = columns_labels.to_pandas().to_flat_index()
@@ -1224,7 +1224,12 @@ def pivot(
     columns_labels, columns_idx = column_data._encode()
     index_labels, index_idx = index_data._encode()
     result = _pivot(
-        selection, index_labels, index_idx, columns_labels, columns_idx
+        selection,
+        index_labels,
+        index_idx,
+        columns_labels,
+        columns_idx,
+        promote_ints_on_missing=True,
     )
     result._attrs = data.attrs
 
@@ -1430,7 +1435,7 @@ def _unstack(
             promote_ints_on_missing=promote_ints_on_missing,
         )
         result._attrs = df.attrs
-        if is_scalar(level):
+        if is_scalar(level) and result._data.multiindex:
             # pandas keeps unused categories of the removed level
             # ("removed_level_full", pandas GH 17845) in
             # result.columns.levels even though no columns are created
@@ -1438,19 +1443,18 @@ def _unstack(
             _, level_idx = df.index._level_to_ca_label(level)
             full_level = df.index.levels[level_idx].to_pandas()
             pdi = result._data.to_pandas_index
-            if isinstance(pdi, pd.MultiIndex):
-                level_values = pdi.get_level_values(-1)
-                new_codes = full_level.get_indexer(level_values)
-                # -1 codes for NA labels are pandas' canonical missing
-                # representation; only bail out when a non-NA label failed
-                # to map into the full level
-                if ((new_codes >= 0) | pd.isna(level_values)).all():
-                    result._data.to_pandas_index = pd.MultiIndex(
-                        levels=[*pdi.levels[:-1], full_level],
-                        codes=[*pdi.codes[:-1], new_codes],
-                        names=pdi.names,
-                        verify_integrity=False,
-                    )
+            level_values = pdi.get_level_values(-1)
+            new_codes = full_level.get_indexer(level_values)
+            # -1 codes for NA labels are pandas' canonical missing
+            # representation; only bail out when a non-NA label failed
+            # to map into the full level
+            if ((new_codes >= 0) | pd.isna(level_values)).all():
+                result._data.to_pandas_index = pd.MultiIndex(
+                    levels=[*pdi.levels[:-1], full_level],
+                    codes=[*pdi.codes[:-1], new_codes],
+                    names=pdi.names,
+                    verify_integrity=False,
+                )
         if result.index.nlevels == 1:
             result.index = result.index.get_level_values(result.index.names[0])
         return result
