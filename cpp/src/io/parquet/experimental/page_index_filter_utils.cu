@@ -119,6 +119,9 @@ std::pair<std::vector<size_type>, size_type> compute_page_row_offsets(
                       row_group, schema_idx, colchunk_iter_offset);
                     auto const& colchunk_iter =
                       row_group.columns.begin() + colchunk_iter_offset.value();
+                    CUDF_EXPECTS(colchunk_iter->offset_index.has_value(),
+                                 "Offset index not found for column chunk",
+                                 std::invalid_argument);
                     auto const& offset_index       = colchunk_iter->offset_index.value();
                     auto const row_group_num_pages = offset_index.page_locations.size();
                     std::for_each(cuda::counting_iterator<std::size_t>{0},
