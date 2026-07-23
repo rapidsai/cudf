@@ -90,6 +90,7 @@ from cudf_polars.dsl.ir import (
 from cudf_polars.dsl.tracing import Scope, log
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
+    collect_refcount,
     post_traversal,
     reuse_if_unchanged,
     traversal,
@@ -206,6 +207,7 @@ class PlanFacts:
     source_facts: Mapping[IR, SourceFacts]
     selective_nodes: frozenset[IR]
     column_lineages: Mapping[ColumnRef, ColumnLineage]
+    refcounts: Mapping[IR, int]
 
 
 class _RewriteState(TypedDict):
@@ -237,6 +239,7 @@ def analyze_plan(ir: IR, stats: StatsCollector) -> PlanFacts:
     source_nodes: dict[IR, frozenset[IR]] = {}
     selective_nodes: set[IR] = set()
     column_lineages: dict[ColumnRef, ColumnLineage] = {}
+    refcounts = collect_refcount([ir])
 
     for node in post_traversal([ir]):
         if isinstance(node, (Scan, DataFrameScan)):
@@ -308,24 +311,30 @@ def analyze_plan(ir: IR, stats: StatsCollector) -> PlanFacts:
         source_facts=source_facts,
         selective_nodes=frozenset(selective_nodes),
         column_lineages=column_lineages,
+        refcounts=refcounts,
     )
 
 
-def blocks_pushdown(node: IR) -> bool:
+def blocks_pushdown(node: IR, facts: PlanFacts) -> bool:
     """
     Return whether a node blocks filter pushdown.
 
     Parameters
     ----------
     node
-        Node to check
+        Node to check.
+    facts
+        Facts about the plan.
 
     Returns
     -------
     bool
         True if a semijoin cannot be pushed past this node, otherwise False.
     """
-    return (
+    # TODO: Need better cost model to handle nodes that are shared. Pushing
+    # a filter into a shared node will typically mean that it is no longer
+    # shared, since the same filter will not come from every consumer.
+    return facts.refcounts[node] > 1 or (
         # TODO: Distinct and Rolling only block pushdown in some
         # circumstances, but we'd need to make the logic more complicated:
         # - We can push through distinct if the filter applies to the columns
@@ -370,7 +379,7 @@ def semijoin_pushdown_candidates(
         yield lineage.column, path
         source = lineage.source
         source_child_index = lineage.source_child_index
-        if blocks_pushdown(lineage.column.node) or source is None:
+        if blocks_pushdown(lineage.column.node, facts) or source is None:
             return
         assert source_child_index is not None
         path = (*path, source_child_index)
@@ -810,7 +819,7 @@ def _smallest_node_containing_all(
         producer = make_producer(node, bound_columns, path, facts)
         if producer is not None:
             producers.append(producer)
-        if blocks_pushdown(node):
+        if blocks_pushdown(node, facts):
             break
         source_child_index = lineages[0].source_child_index
         if source_child_index is None or any(

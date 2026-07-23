@@ -693,6 +693,7 @@ def test_composite_domain_columns_follow_renames(engine: SPMDEngine) -> None:
         source_facts=analyzed.source_facts,
         selective_nodes=analyzed.selective_nodes,
         column_lineages=analyzed.column_lineages,
+        refcounts=analyzed.refcounts,
     )
     producer = _smallest_node_containing_all(
         renamed, ("domain_key", "domain_constraint"), facts
