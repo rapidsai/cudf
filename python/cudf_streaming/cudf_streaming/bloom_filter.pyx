@@ -18,6 +18,7 @@ from rapidsmpf.streaming._detail.libcoro_spawn_task cimport cpp_set_py_future
 from rapidsmpf.streaming.chunks.utils cimport py_deleter
 from rapidsmpf.streaming.core.channel cimport Channel, cpp_Channel
 from rapidsmpf.streaming.core.context cimport Context, cpp_Context
+from rapidsmpf.streaming.core.cancellation import (await_cpp_future, shutdown_channels)
 
 import asyncio
 
@@ -208,7 +209,11 @@ cdef class BloomFilter:
                 cpp_set_py_future,
                 move(cpp_OwningWrapper(<void*><PyObject*>ret, py_deleter)),
             )
-        await ret
+        # Note: multi-rank, if we get an exception we can't cancel the
+        # in-progress AllReduce, so this might still hang.
+        await await_cpp_future(
+            ret, on_cancel=lambda: shutdown_channels(ctx, ch_in, ch_out)
+        )
 
     async def apply(
         self,
@@ -248,4 +253,6 @@ cdef class BloomFilter:
                 cpp_set_py_future,
                 move(cpp_OwningWrapper(<void*><PyObject*>ret, py_deleter)),
             )
-        await ret
+        await await_cpp_future(
+            ret, on_cancel=lambda: shutdown_channels(ctx, bloom_filter, ch_in, ch_out)
+        )
