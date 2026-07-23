@@ -712,24 +712,7 @@ void decode_page_headers(cudf::device_span<ColumnChunkDesc const> chunks,
                          rmm::cuda_stream_view stream);
 
 /**
- * @brief Decode page headers from specified page locations from the page index
- *
- * @param[in] chunks Device span of column chunks
- * @param[out] pages Device span of pages
- * @param[in] page_locations List of page locations
- * @param[in] chunk_page_offsets List of running count of page locations per column chunk
- * @param[out] error_code Error code for kernel failures
- * @param[in] stream CUDA stream to use
- */
-void decode_page_headers_using_page_index(cudf::device_span<ColumnChunkDesc const> chunks,
-                                          cudf::device_span<PageInfo> pages,
-                                          uint8_t** page_locations,
-                                          cudf::device_span<size_type const> chunk_page_offsets,
-                                          kernel_error::pointer error_code,
-                                          rmm::cuda_stream_view stream);
-
-/**
- * @brief Decode specified page headers from corresponding page data spans.
+ * @brief Decode page headers from corresponding specified page data spans.
  *
  * Empty spans initialize the corresponding logical page descriptor but are not decoded.
  *

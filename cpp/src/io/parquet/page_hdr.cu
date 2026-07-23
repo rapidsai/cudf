@@ -521,46 +521,6 @@ void __forceinline__ __device__ zero_out_page_header_info(byte_stream_s* bs)
 }
 
 /**
- * @brief Decode a page header from an initialized byte stream.
- *
- * @param bs Byte stream
- * @param chunk_idx Index of the chunk containing the page
- * @param page Pointer to the page info to decode
- * @param error_code Pointer to the error code for kernel failures
- */
-__device__ void decode_page_header(byte_stream_s* bs,
-                                   cudf::size_type chunk_idx,
-                                   PageInfo* page,
-                                   kernel_error::pointer error_code)
-{
-  bs->page.chunk_idx      = chunk_idx;
-  bs->page.src_col_schema = bs->ck.src_col_schema;
-
-  if (not parse_valid_page_header(bs)) {
-    set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_HEADER), error_code);
-    return;
-  }
-  if (not is_supported_encoding(bs->page.encoding)) {
-    set_error(static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING),
-              error_code);
-    return;
-  }
-
-  switch (bs->page_type) {
-    case PageType::DATA_PAGE: bs->page.num_rows = bs->page.num_input_values; break;
-    case PageType::DATA_PAGE_V2:
-      bs->page.flags |= PAGEINFO_FLAGS_V2;
-      bs->page.definition_level_encoding = Encoding::RLE;
-      bs->page.repetition_level_encoding = Encoding::RLE;
-      break;
-    case PageType::DICTIONARY_PAGE: bs->page.flags |= PAGEINFO_FLAGS_DICTIONARY; break;
-    default:
-      set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_TYPE), error_code);
-      return;
-  }
-}
-
-/**
  * @brief Kernel for outputting page headers from the specified column chunks
  *
  * @param[in] chunks Device span of column chunks
@@ -777,54 +737,6 @@ CUDF_KERNEL void __launch_bounds__(count_page_headers_block_size)
 }
 
 /**
- * @brief Functor to decode page headers from specified page locations
- */
-struct decode_using_page_index_fn {
-  cudf::device_span<ColumnChunkDesc const> colchunks;
-  cudf::device_span<PageInfo> pages;
-  cudf::device_span<size_type const> chunk_page_offsets;
-  uint8_t** page_locations;
-  kernel_error::pointer error_code;
-
-  __device__ void operator()(size_type page_idx) const noexcept
-  {
-    auto const num_chunks = static_cast<cudf::size_type>(colchunks.size());
-    auto const chunk_idx  = static_cast<cudf::size_type>(
-      cuda::std::distance(
-        chunk_page_offsets.begin(),
-        thrust::upper_bound(
-          thrust::seq, chunk_page_offsets.begin(), chunk_page_offsets.end(), page_idx)) -
-      1);
-    if (chunk_idx < 0 or chunk_idx >= num_chunks) {
-      set_error(static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN),
-                error_code);
-      return;
-    }
-
-    byte_stream_s bs{};
-    bs.ck   = colchunks[chunk_idx];
-    bs.base = bs.cur = page_locations[page_idx];
-    bs.end           = bs.ck.compressed_data + bs.ck.compressed_size;
-    // Check if byte stream pointers are valid.
-    if (bs.end < bs.cur) {
-      set_error(static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN),
-                error_code);
-      return;
-    }
-    // Clear page header info before writing known fields
-    zero_out_page_header_info(&bs);
-
-    decode_page_header(&bs, chunk_idx, &pages[page_idx], error_code);
-
-    bs.page.page_data   = const_cast<uint8_t*>(bs.cur);
-    bs.page.kernel_mask = kernel_mask_for_page(bs.page, bs.ck);
-
-    // Copy the page info to the output span
-    pages[page_idx] = bs.page;
-  }
-};
-
-/**
  * @brief Functor to decode specified page headers from corresponding page data spans
  */
 struct decode_from_page_data_fn {
@@ -863,10 +775,35 @@ struct decode_from_page_data_fn {
       return;
     }
 
-    bs.base = bs.cur = page_span.data();
-    bs.end           = page_span.data() + page_span.size();
+    bs.base = bs.cur       = page_span.data();
+    bs.end                 = page_span.data() + page_span.size();
+    bs.page.chunk_idx      = chunk_idx;
+    bs.page.src_col_schema = bs.ck.src_col_schema;
 
-    decode_page_header(&bs, chunk_idx, &pages[page_idx], error_code);
+    if (not parse_valid_page_header(&bs)) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_HEADER),
+                error_code);
+      return;
+    }
+    if (not is_supported_encoding(bs.page.encoding)) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING),
+                error_code);
+      return;
+    }
+
+    switch (bs.page_type) {
+      case PageType::DATA_PAGE: bs.page.num_rows = bs.page.num_input_values; break;
+      case PageType::DATA_PAGE_V2:
+        bs.page.flags |= PAGEINFO_FLAGS_V2;
+        bs.page.definition_level_encoding = Encoding::RLE;
+        bs.page.repetition_level_encoding = Encoding::RLE;
+        break;
+      case PageType::DICTIONARY_PAGE: bs.page.flags |= PAGEINFO_FLAGS_DICTIONARY; break;
+      default:
+        set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_TYPE),
+                  error_code);
+        return;
+    }
 
     if (bs.page.compressed_page_size < 0 or
         static_cast<size_t>(bs.end - bs.cur) != static_cast<size_t>(bs.page.compressed_page_size)) {
@@ -995,25 +932,6 @@ void decode_page_headers(cudf::device_span<ColumnChunkDesc const> chunks,
   decode_page_headers_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(
     chunks, chunk_pages, error_code);
   CUDF_CUDA_TRY(cudaGetLastError());
-}
-
-void decode_page_headers_using_page_index(cudf::device_span<ColumnChunkDesc const> chunks,
-                                          cudf::device_span<PageInfo> pages,
-                                          uint8_t** page_locations,
-                                          cudf::device_span<size_type const> chunk_page_offsets,
-                                          kernel_error::pointer error_code,
-                                          rmm::cuda_stream_view stream)
-{
-  CUDF_EXPECTS(chunk_page_offsets.size() == chunks.size() + 1,
-               "Chunk page offsets must cover all chunks");
-  thrust::for_each(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                   cuda::counting_iterator<cudf::size_type>{0},
-                   cuda::counting_iterator{static_cast<cudf::size_type>(pages.size())},
-                   decode_using_page_index_fn{.colchunks          = chunks,
-                                              .pages              = pages,
-                                              .chunk_page_offsets = chunk_page_offsets,
-                                              .page_locations     = page_locations,
-                                              .error_code         = error_code});
 }
 
 void decode_page_headers_from_page_data(
