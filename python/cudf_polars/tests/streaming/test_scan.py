@@ -3,29 +3,41 @@
 
 from __future__ import annotations
 
+import asyncio
 import math
+from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, cast
 
 import pytest
 
 import polars as pl
 
+from rapidsmpf.streaming.chunks.arbitrary import ArbitraryChunk
+from rapidsmpf.streaming.core.message import Message
+
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.ir import (
-    Empty,
+    DataFrameScan,
     IRExecutionContext,
     Scan,
+    Union,
 )
 from cudf_polars.dsl.utils.io import (
     CachedParquetInfo,
-    prefetch_parquet_file_metadata_for_ir,
 )
 from cudf_polars.engine.options import StreamingOptions
+from cudf_polars.streaming.actor_graph.io import (
+    MetadataMessagePayload,
+    ParquetMetadataCache,
+    collect_metadata_scans,
+    recv_prefetched_parquet_metadata_handler,
+)
 from cudf_polars.streaming.base import (
     DataSourceInfo,
     IOPartitionFlavor,
     IOPartitionPlan,
+    PartitionInfo,
     StatsCollector,
 )
 from cudf_polars.streaming.io import (
@@ -51,6 +63,7 @@ if TYPE_CHECKING:
     import pylibcudf as plc
 
     import cudf_polars.engine.core
+    from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.core import StreamingEngine
 
 
@@ -62,6 +75,16 @@ def df():
             "y": ["cat", "dog", "fish"] * 1_000,
             "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 600,
         }
+    )
+
+
+@pytest.fixture
+def prefetch_file_metadata_engine(
+    streaming_engine_factory: Callable[..., StreamingEngine],
+):
+    """Streaming Engine fixture with parquet metadata prefetching enabled."""
+    return streaming_engine_factory(
+        StreamingOptions(parquet_options={"prefetch_file_metadata": True}),
     )
 
 
@@ -123,32 +146,61 @@ def test_scan_parquet_prefetch_file_metadata(
     assert_gpu_result_equal(pl.scan_parquet(tmp_path), engine=streaming_engine)
 
 
-def test_prefetch_file_metadata_non_parquet_scan(df, streaming_engine_factory) -> None:
-    streaming_engine = streaming_engine_factory(
-        StreamingOptions(parquet_options={"prefetch_file_metadata": True}),
-    )
-    assert_gpu_result_equal(df.lazy().select("x"), engine=streaming_engine)
+@pytest.mark.timeout(90)
+def test_scan_parquet_prefetch_metadata_shared_scan_paths(
+    tmp_path: Path,
+    df: pl.DataFrame,
+    prefetch_file_metadata_engine: StreamingEngine,
+):
+    # The spmd-small case creates *many* partitions with the length-3000 df.
+    # A smaller dataframe gives us sufficient test coverage, and runs much faster.
+    if (
+        prefetch_file_metadata_engine.config["executor_options"][
+            "max_rows_per_partition"
+        ]
+        == SMALL_MAX_ROWS_PER_PARTITION
+    ):
+        df = df.head(40)
+
+    make_partitioned_source(df, tmp_path, "parquet", n_files=2)
+    scan = pl.scan_parquet(tmp_path)
+    query = pl.concat([scan.select("x"), scan.select("x")])
+    assert_gpu_result_equal(query, engine=prefetch_file_metadata_engine)
 
 
-def test_prefetch_parquet_file_metadata_no_parquet_scans() -> None:
-    result = prefetch_parquet_file_metadata_for_ir(
-        Empty({}), py_executor=None, stats=None
+def test_scan_parquet_prefetch_metadata_disjoint_scan_paths(
+    tmp_path: Path,
+    prefetch_file_metadata_engine: StreamingEngine,
+):
+    left = pl.DataFrame({"x": [1, 2, 3]})
+    right = pl.DataFrame({"x": [4, 5, 6]})
+    left.write_parquet(tmp_path / "left.parquet")
+    right.write_parquet(tmp_path / "right.parquet")
+
+    query = pl.concat(
+        [
+            pl.scan_parquet(tmp_path / "left.parquet"),
+            pl.scan_parquet(tmp_path / "right.parquet"),
+        ]
     )
-    assert result == {}
+    assert_gpu_result_equal(query, engine=prefetch_file_metadata_engine)
+
+
+def test_prefetch_file_metadata_non_parquet_scan(
+    df: pl.DataFrame, prefetch_file_metadata_engine: StreamingEngine
+) -> None:
+    assert_gpu_result_equal(df.lazy().select("x"), engine=prefetch_file_metadata_engine)
 
 
 def test_prefetch_file_metadata_select_fast_count(
     df: pl.DataFrame,
-    streaming_engine_factory: Callable[..., StreamingEngine],
+    prefetch_file_metadata_engine: StreamingEngine,
     tmp_path: Path,
 ) -> None:
-    streaming_engine = streaming_engine_factory(
-        StreamingOptions(parquet_options={"prefetch_file_metadata": True}),
-    )
     source = tmp_path / "data.parquet"
     df.write_parquet(source)
     q = pl.scan_parquet(source).select(pl.len())
-    assert_gpu_result_equal(q, engine=streaming_engine)
+    assert_gpu_result_equal(q, engine=prefetch_file_metadata_engine)
 
 
 # ---------------------------------------------------------------------------
@@ -450,19 +502,15 @@ def test_split_scan_do_evaluate_missing_prefetch_metadata() -> None:
 
 
 def test_prefetch_file_metadata_join(
-    tmp_path: Path, streaming_engine_factory: Callable[..., StreamingEngine]
+    tmp_path: Path, prefetch_file_metadata_engine: StreamingEngine
 ) -> None:
     p1 = tmp_path / "f1.parquet"
     p2 = tmp_path / "f2.parquet"
     pl.DataFrame({"k": [1, 2, 3], "a": [4, 5, 6]}).write_parquet(p1)
     pl.DataFrame({"k": [1, 2, 3], "b": [7, 8, 9]}).write_parquet(p2)
 
-    engine = streaming_engine_factory(
-        StreamingOptions(parquet_options={"prefetch_file_metadata": True}),
-    )
-
     q = pl.scan_parquet(p1).join(pl.scan_parquet(p2), on="k")
-    q.collect(engine=engine)
+    q.collect(engine=prefetch_file_metadata_engine)
 
 
 def _make_cached_parquet_info(
@@ -481,7 +529,7 @@ def _make_cached_parquet_info(
 
 
 def test_prefetch_file_metadata_with_cached_scan_parent_nodes(
-    tmp_path: Path, streaming_engine_factory: Callable[..., StreamingEngine]
+    tmp_path: Path, prefetch_file_metadata_engine: StreamingEngine
 ) -> None:
     # Regression test for replace not replacing StreamingScan nodes with their prefetched variants.
     source = tmp_path / "data.parquet"
@@ -492,16 +540,35 @@ def test_prefetch_file_metadata_with_cached_scan_parent_nodes(
         }
     ).write_parquet(source)
 
-    engine = streaming_engine_factory(
-        StreamingOptions(parquet_options={"prefetch_file_metadata": True}),
-    )
-
     cached_scan = pl.scan_parquet(source).cache()
     left = cached_scan.group_by("k").agg(pl.col("v").sum().alias("sum_v"))
     right = cached_scan.group_by("k").agg(pl.len().alias("n"))
     q = left.join(right, on="k").sort("k")
 
-    assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=prefetch_file_metadata_engine)
+
+
+def test_with_prefetched_metadata() -> None:
+    base = _make_parquet_scan(["a.parquet"])
+    info = _make_cached_parquet_info(base.paths)
+
+    dfs = DataFrameScan(base.schema, pl.DataFrame({"x": [1]})._df, None)
+    assert dfs.with_prefetched_metadata(info) == dfs._non_child_args
+    assert dfs.with_prefetched_metadata(None) == dfs._non_child_args
+
+    split = SplitScan(base.schema, base, base.paths, 0, 4, base.parquet_options, None)
+    assert split.with_prefetched_metadata(None) == split._non_child_args
+    assert split.with_prefetched_metadata(info) == (
+        *split._non_child_args[:-1],
+        info,
+    )
+
+    fused = FusedScan(base.schema, base, base.paths, base.parquet_options, None)
+    assert fused.with_prefetched_metadata(None) == fused._non_child_args
+    assert fused.with_prefetched_metadata(info) == (
+        *fused._non_child_args[:-1],
+        info,
+    )
 
 
 def test_fused_scan_identity_equality() -> None:
@@ -648,6 +715,16 @@ def _make_config(target: int) -> ConfigOptions:
     return ConfigOptions.from_polars_engine(engine)
 
 
+def _make_prefetch_config(target: int) -> ConfigOptions:
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={"target_partition_size": target},
+        parquet_options={"prefetch_file_metadata": True},
+    )
+    return ConfigOptions.from_polars_engine(engine)
+
+
 @pytest.mark.parametrize(
     "file_size,n_paths,expected_factor,expected_flavor",
     [
@@ -674,3 +751,144 @@ def test_scan_partition_plan_nearest(
     plan = scan_partition_plan(scan, FooStats(scan, file_size), _make_config(10))
     assert plan.factor == expected_factor
     assert plan.flavor == expected_flavor
+
+
+def test_collect_metadata_scans_one_actor_per_streaming_scan() -> None:
+    parquet_options = ParquetOptions(prefetch_file_metadata=True)
+    paths = [f"part.{i}.parquet" for i in range(6)]
+    base_scan = _make_parquet_scan(paths, parquet_options)
+    plan = IOPartitionPlan(9, IOPartitionFlavor.SPLIT_FILES)
+    partition_count = plan.factor * len(paths)
+    streaming_scan = expand_scan_for_rank(
+        base_scan,
+        plan,
+        partition_count,
+        rank=0,
+        nranks=1,
+        parquet_options=parquet_options,
+    )
+    assert len(streaming_scan.scans) == partition_count
+    assert len({tuple(scan.paths) for scan in streaming_scan.scans}) == len(paths)
+
+    config_options = _make_prefetch_config(873_630_000)
+    partition_info: dict[IR, PartitionInfo] = {
+        streaming_scan: PartitionInfo(count=partition_count, io_plan=plan),
+    }
+    metadata_scans = collect_metadata_scans(
+        streaming_scan,
+        partition_info=partition_info,
+        config_options=config_options,
+        nranks=1,
+    )
+    assert metadata_scans == [streaming_scan]
+
+
+def test_collect_metadata_scans_union_disjoint_paths() -> None:
+    parquet_options = ParquetOptions(prefetch_file_metadata=True)
+    plan = IOPartitionPlan(1, IOPartitionFlavor.FUSED_FILES)
+    left = expand_scan_for_rank(
+        _make_parquet_scan(["left.parquet"], parquet_options),
+        plan,
+        1,
+        rank=0,
+        nranks=1,
+        parquet_options=parquet_options,
+    )
+    right = expand_scan_for_rank(
+        _make_parquet_scan(["right.parquet"], parquet_options),
+        plan,
+        1,
+        rank=0,
+        nranks=1,
+        parquet_options=parquet_options,
+    )
+    union = Union(left.schema, None, False, left, right)  # noqa: FBT003
+    config_options = _make_prefetch_config(10_000)
+    partition_info: dict[IR, PartitionInfo] = {
+        left: PartitionInfo(count=1, io_plan=plan),
+        right: PartitionInfo(count=1, io_plan=plan),
+        union: PartitionInfo(count=2),
+    }
+    metadata_scans = collect_metadata_scans(
+        union,
+        partition_info=partition_info,
+        config_options=config_options,
+        nranks=1,
+    )
+    assert metadata_scans == [left, right]
+
+
+def test_collect_metadata_scans_skips_empty_rank() -> None:
+    parquet_options = ParquetOptions(prefetch_file_metadata=True)
+    plan = IOPartitionPlan(3, IOPartitionFlavor.SINGLE_READ)
+    paths = ["a.parquet", "b.parquet", "c.parquet"]
+    streaming_scan = expand_scan_for_rank(
+        _make_parquet_scan(paths, parquet_options),
+        plan,
+        1,
+        rank=1,
+        nranks=2,
+        parquet_options=parquet_options,
+    )
+    assert len(streaming_scan.scans) == 0
+    config_options = _make_prefetch_config(10_000)
+    partition_info: dict[IR, PartitionInfo] = {
+        streaming_scan: PartitionInfo(count=0, io_plan=plan),
+    }
+    metadata_scans = collect_metadata_scans(
+        streaming_scan,
+        partition_info=partition_info,
+        config_options=config_options,
+        nranks=2,
+    )
+    assert metadata_scans == []
+
+
+def test_recv_prefetched_parquet_metadata_handler_errors() -> None:
+    with pytest.raises(
+        AssertionError, match=r"Missing parquet metadata message for paths: .*"
+    ):
+        recv_prefetched_parquet_metadata_handler(None, ("file.parquet",))
+
+    msg = Message(
+        0,
+        ArbitraryChunk(
+            MetadataMessagePayload(
+                group_key=("file.parquet",),
+                cached_parquet_info=[
+                    # We don't use file_metadata, so just lie about it.
+                    CachedParquetInfo(path="file.parquet", size=10, file_metadata=None)  # type: ignore[arg-type]
+                ],
+            )
+        ),
+    )
+    with pytest.raises(
+        AssertionError,
+        match=r"Unexpected parquet metadata key on scan input channel. .*",
+    ):
+        recv_prefetched_parquet_metadata_handler(msg, ("file2.parquet",))
+
+
+def test_parquet_metadata_cache_dedupes_identical_paths() -> None:
+    fetch_count = 0
+
+    def mock_fetch(paths: list[str], stats: StatsCollector) -> list[CachedParquetInfo]:
+        nonlocal fetch_count
+        fetch_count += 1
+        return _make_cached_parquet_info(paths)
+
+    cache = ParquetMetadataCache(StatsCollector(), fetch=mock_fetch)
+    paths = ["a.parquet", "b.parquet"]
+
+    async def run() -> list[list[CachedParquetInfo]]:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            ir_context = IRExecutionContext(executor)
+            async with asyncio.TaskGroup() as tg:
+                first = tg.create_task(cache.get(paths, ir_context))
+                second = tg.create_task(cache.get(paths, ir_context))
+            return [first.result(), second.result()]
+
+    results = asyncio.run(run())
+    assert fetch_count == 1
+    assert results[0] == results[1]
+    assert [info.path for info in results[0]] == paths

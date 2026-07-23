@@ -5,10 +5,13 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import functools
 import io
 import math
-from typing import TYPE_CHECKING, Any, cast
+import reprlib
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, TypeAlias, cast
 
 import polars as pl
 
@@ -16,6 +19,8 @@ import pylibcudf as plc
 from cudf_streaming.channel_metadata import ChannelMetadata
 from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
+from rapidsmpf.streaming.chunks.arbitrary import ArbitraryChunk
+from rapidsmpf.streaming.core.channel import Channel
 from rapidsmpf.streaming.core.memory_reserve_or_wait import (
     reserve_memory,
 )
@@ -30,6 +35,8 @@ from cudf_polars.dsl.ir import (
     _prepare_parquet_predicate,
 )
 from cudf_polars.dsl.to_ast import to_parquet_filter
+from cudf_polars.dsl.traversal import traversal
+from cudf_polars.dsl.utils.io import prefetch_cached_parquet_info_for_paths
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
 )
@@ -58,13 +65,13 @@ from cudf_polars.streaming.io import (
 from cudf_polars.streaming.rank_aware_source import RankAwareSource
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, MutableMapping, Sequence
 
     from rapidsmpf.communicator.communicator import Communicator
-    from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext, Scan
+    from cudf_polars.dsl.utils.io import CachedParquetInfo
     from cudf_polars.streaming.actor_graph.core import SubNetGenerator
     from cudf_polars.streaming.actor_graph.tracing import ActorTracer
     from cudf_polars.streaming.base import (
@@ -73,7 +80,91 @@ if TYPE_CHECKING:
         StatsCollector,
     )
     from cudf_polars.streaming.io import FusedScan, SplitScan
-    from cudf_polars.utils.config import ParquetOptions
+    from cudf_polars.utils.config import ConfigOptions, ParquetOptions
+
+
+MetadataChannel: TypeAlias = Channel[ArbitraryChunk["MetadataMessagePayload"]]
+MetadataChannelByScan: TypeAlias = dict[StreamingScan, MetadataChannel]
+
+
+@dataclass(frozen=True)
+class MetadataMessagePayload:
+    """Parquet metadata payload sent to scan actors."""
+
+    group_key: tuple[str, ...]
+    cached_parquet_info: list[CachedParquetInfo]
+
+
+class ParquetMetadataCache:
+    """
+    Query-scoped cache for prefetched parquet metadata.
+
+    Coordinates footer reads across concurrent metadata prefetch actors so each
+    distinct ``scan.paths`` tuple is fetched at most once per query/rank.
+    """
+
+    def __init__(
+        self,
+        stats: StatsCollector,
+        fetch: Callable[
+            [list[str], StatsCollector], list[CachedParquetInfo]
+        ] = prefetch_cached_parquet_info_for_paths,
+    ) -> None:
+        self._stats = stats
+        self._cached_by_key: dict[tuple[str, ...], list[CachedParquetInfo]] = {}
+        self._pending_by_key: dict[
+            tuple[str, ...], asyncio.Future[list[CachedParquetInfo]]
+        ] = {}
+        self._lock = asyncio.Lock()
+        self._fetch = fetch
+
+    async def get(
+        self,
+        paths: list[str],
+        ir_context: IRExecutionContext,
+    ) -> list[CachedParquetInfo]:
+        """
+        Return cached parquet metadata for ``paths``, fetching on first use.
+
+        Concurrent callers with identical ``paths`` share a single in-flight fetch.
+        """
+        key = tuple(paths)
+        async with self._lock:
+            if key in self._cached_by_key:
+                return self._cached_by_key[key]
+            if key in self._pending_by_key:
+                future = self._pending_by_key[key]
+                should_fetch = False
+            else:
+                loop = asyncio.get_running_loop()
+                future = loop.create_future()
+                self._pending_by_key[key] = future
+                should_fetch = True
+
+        if should_fetch:
+            try:
+                result = await ir_context.to_thread(
+                    self._fetch,
+                    list(key),
+                    self._stats,
+                )
+            except BaseException as exc:
+                async with self._lock:
+                    self._pending_by_key.pop(key, None)
+                    if not future.done():
+                        if isinstance(exc, asyncio.CancelledError):
+                            future.cancel()
+                        else:
+                            future.set_exception(exc)
+                raise
+            async with self._lock:
+                self._cached_by_key[key] = result
+                self._pending_by_key.pop(key)
+                if not future.done():
+                    future.set_result(result)
+            return result
+
+        return await future
 
 
 class Lineariser:
@@ -200,7 +291,7 @@ async def dataframescan_node(
         )
 
         # Build list of IR slices to read
-        ir_slices = []
+        ir_slices: list[DataFrameScan] = []
         # Partial workaround for
         # https://github.com/pola-rs/polars/issues/23214 If a struct column
         # has nulls and is sliced then polars exports invalid validity
@@ -516,11 +607,12 @@ def _(
 
 async def read_chunk(
     context: Context,
-    scan: IR,
+    scan: DataFrameScan | SplitScan | FusedScan,
     seq_num: int,
     ch_out: Channel[TableChunk],
     ir_context: IRExecutionContext,
     estimated_chunk_bytes: int,
+    cached_parquet_info: list[CachedParquetInfo] | None = None,
     tracer: ActorTracer | None = None,
 ) -> None:
     """
@@ -541,17 +633,25 @@ async def read_chunk(
     estimated_chunk_bytes
         Estimated size of the chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
+    cached_parquet_info
+        Optional prefetched parquet metadata for parquet scans.
     tracer
         The actor tracer for collecting runtime statistics.
     """
+    args = scan.with_prefetched_metadata(cached_parquet_info)
+
+    # Help mypy with the type inference of the scan.do_evaluate method.
+    # DataFrameScan, SplitScan, and FusedScan have different signatures for the
+    # do_evaluate method, but we promise that calling with `args` is fine.
+    do_evaluate: Callable[..., DataFrame] = scan.do_evaluate
     with opaque_memory_usage(
         await reserve_memory(
             context, size=estimated_chunk_bytes, net_memory_delta=estimated_chunk_bytes
         )
     ):
         df = await ir_context.to_thread(
-            scan.do_evaluate,
-            *scan._non_child_args,
+            do_evaluate,
+            *args,
             context=ir_context,
         )
     chunk = TableChunk.from_pylibcudf_table(
@@ -564,11 +664,117 @@ async def read_chunk(
 
 
 @define_actor()
+async def parquet_metadata_prefetch_node(
+    context: Context,
+    ir_context: IRExecutionContext,
+    ir: StreamingScan,
+    ch_out: Channel[ArbitraryChunk[MetadataMessagePayload]],
+    metadata_cache: ParquetMetadataCache,
+) -> None:
+    """
+    Fetch parquet metadata for each scan task and send it to the paired scan actor.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf context.
+    ir_context
+        The execution context for the IR node. Prefetching is offloaded to a thread from
+        its thread pool.
+    ir
+        The StreamingScan node. This actor will send one a message per scan task in this
+        streaming scan node.
+    ch_out
+        The output channel. The Scan actor generated for this StreamingScan node will
+        read messages from this channel.
+    metadata_cache
+        Shared query-scoped cache for prefetched parquet metadata.
+
+    Notes
+    -----
+    This actor emits one message per SplitScan / FusedScan in the streaming scan.
+    The messages are sent in the order of the scans.
+    """
+    async with shutdown_on_error(context, ch_out, trace_ir=ir, ir_context=ir_context):
+        for scan in ir.scans:
+            scan = cast("SplitScan | FusedScan", scan)
+            key = tuple[str, ...](scan.paths)
+            cached_parquet_info = await metadata_cache.get(list(key), ir_context)
+            payload = MetadataMessagePayload(
+                group_key=key,
+                cached_parquet_info=cached_parquet_info,
+            )
+            await ch_out.send_metadata(
+                context,
+                Message(0, ArbitraryChunk(payload)),
+            )
+        await ch_out.drain(context)
+
+
+def _start_metadata_receiver(
+    context: Context,
+    ch_metadata: Channel[ArbitraryChunk[MetadataMessagePayload]],
+    scans: Sequence[SplitScan | FusedScan],
+) -> tuple[list[asyncio.Future[list[CachedParquetInfo]]], asyncio.Task[None]]:
+    """
+    Receive metadata messages sequentially and expose one Future per scan task.
+
+    A single receiver task preserves channel order while allowing concurrent
+    producers to await only the metadata for their assigned task index.
+    """
+    loop = asyncio.get_running_loop()
+    futures = [loop.create_future() for _ in range(len(scans))]
+
+    async def _receive() -> None:
+        try:
+            for task_idx, scan in enumerate(scans):
+                msg = await ch_metadata.recv_metadata(context)
+                cached = recv_prefetched_parquet_metadata_handler(
+                    msg, tuple(scan.paths)
+                )
+                futures[task_idx].set_result(cached)
+        except BaseException as exc:
+            # Propagate the failure (including cancellation / premature stop) to
+            # every unfinished future so downstream awaiters fail fast instead of
+            # hanging on metadata that will never arrive.
+            for future in futures:
+                if not future.done():
+                    if isinstance(exc, asyncio.CancelledError):
+                        future.cancel()
+                    else:
+                        future.set_exception(exc)
+            raise
+
+    receiver_task = asyncio.create_task(_receive())
+    return futures, receiver_task
+
+
+def recv_prefetched_parquet_metadata_handler(
+    msg: Message[ArbitraryChunk[MetadataMessagePayload]] | None,
+    group_key: tuple[str, ...],
+) -> list[CachedParquetInfo]:
+    """Synchronous handler for prefetched parquet metadata messages."""
+    if msg is None:
+        raise AssertionError(
+            f"Missing parquet metadata message for paths: {reprlib.repr(group_key)}"
+        )
+    payload = ArbitraryChunk[MetadataMessagePayload].from_message(msg).release()
+    if payload.group_key != group_key:
+        difference = set(group_key) ^ set(payload.group_key)
+        raise AssertionError(
+            "Unexpected parquet metadata key on scan input channel. "
+            f"{reprlib.repr(difference)}"
+        )
+    return payload.cached_parquet_info
+
+
+@define_actor()
 async def scan_node(
     context: Context,
     ir: StreamingScan,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
+    ch_metadata: Channel[ArbitraryChunk[MetadataMessagePayload]] | None,
     *,
     num_producers: int,
     estimated_chunk_bytes: int,
@@ -586,81 +792,118 @@ async def scan_node(
         The execution context for the IR node.
     ch_out
         The output Channel[TableChunk].
+    ch_metadata
+        Optional channel carrying prefetched parquet metadata messages, one
+        per `SplitScan`/`FusedScan` in `ir.scans` order.
     num_producers
         The number of producers to use for the scan node.
     estimated_chunk_bytes
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
     """
-    scans: Sequence[SplitScan] | Sequence[FusedScan] = ir.scans
-
-    async with shutdown_on_error(
-        context, ch_out, trace_ir=ir, ir_context=ir_context
-    ) as tracer:
-        # Send basic metadata
-        await send_metadata(
-            ch_out,
-            context,
-            ChannelMetadata(local_count=len(scans)),
+    scans = cast("Sequence[SplitScan | FusedScan]", ir.scans)
+    metadata_futures: list[asyncio.Future[list[CachedParquetInfo]]] | None = None
+    _metadata_receiver_task: asyncio.Task[None] | None = None
+    if ch_metadata is not None:
+        metadata_futures, _metadata_receiver_task = _start_metadata_receiver(
+            context, ch_metadata, scans
         )
 
-        # If there is nothing to scan, drain the channel and return
-        if len(scans) == 0:
-            await ch_out.drain(context)
-            return
+    async def cached_parquet_info_for_task(
+        task_idx: int,
+    ) -> list[CachedParquetInfo] | None:
+        if metadata_futures is None:
+            return None
+        return await metadata_futures[task_idx]
 
-        # If there is only one scan or one producer, we can
-        # skip the lineariser and read the chunks directly
-        if len(scans) == 1 or num_producers == 1:
-            for seq_num, scan in enumerate(scans):
-                await read_chunk(
-                    context,
-                    scan,
-                    seq_num,
-                    ch_out,
-                    ir_context,
-                    estimated_chunk_bytes,
-                    tracer=tracer,
-                )
-            await ch_out.drain(context)
-            return
+    shutdown_channels: list[Channel[Any]] = [ch_out]
+    if ch_metadata is not None:
+        shutdown_channels.append(ch_metadata)
 
-        # Use Lineariser to ensure ordered delivery
-        num_producers = min(num_producers, len(scans))
-        lineariser = Lineariser(context, ch_out, num_producers)
-
-        # Assign tasks to producers using round-robin
-        producer_tasks: list[list[tuple[int, SplitScan | FusedScan]]] = [
-            [] for _ in range(num_producers)
-        ]
-        for task_idx, scan in enumerate(scans):
-            producer_id = task_idx % num_producers
-            # mypy resolves __iter__ on union-of-sequences to the common base (IR)
-            producer_tasks[producer_id].append((task_idx, scan))  # type: ignore[arg-type]
-
-        async def _producer(producer_id: int, ch_out: Channel) -> None:
-            for task_idx, scan in producer_tasks[producer_id]:
-                await read_chunk(
-                    context,
-                    scan,
-                    task_idx,
-                    ch_out,
-                    ir_context,
-                    estimated_chunk_bytes,
-                    tracer=tracer,
-                )
-            await ch_out.drain(context)
-
-        async with (
-            shutdown_on_error(context, *lineariser.input_channels, trace_ir=ir),
-        ):
-            await gather_in_task_group(
-                lineariser.drain(),
-                *(
-                    _producer(i, ch_in)
-                    for i, ch_in in enumerate(lineariser.input_channels)
-                ),
+    try:
+        async with shutdown_on_error(
+            context,
+            *shutdown_channels,
+            trace_ir=ir,
+            ir_context=ir_context,
+        ) as tracer:
+            # Send basic metadata
+            await send_metadata(
+                ch_out,
+                context,
+                ChannelMetadata(local_count=len(scans)),
             )
+
+            # If there is nothing to scan, drain the channel and return
+            if len(scans) == 0:
+                await ch_out.drain(context)
+                return
+
+            # If there is only one scan or one producer, we can
+            # skip the lineariser and read the chunks directly
+            if len(scans) == 1 or num_producers == 1:
+                for seq_num, scan in enumerate(scans):
+                    cached_parquet_info = await cached_parquet_info_for_task(seq_num)
+                    await read_chunk(
+                        context,
+                        scan,
+                        seq_num,
+                        ch_out,
+                        ir_context,
+                        estimated_chunk_bytes,
+                        cached_parquet_info,
+                        tracer=tracer,
+                    )
+                await ch_out.drain(context)
+                return
+
+            # Use Lineariser to ensure ordered delivery
+            num_producers = min(num_producers, len(scans))
+            lineariser = Lineariser(context, ch_out, num_producers)
+
+            # Assign tasks to producers using round-robin
+            producer_tasks: list[list[tuple[int, SplitScan | FusedScan]]] = [
+                [] for _ in range(num_producers)
+            ]
+            for task_idx, scan in enumerate(scans):
+                producer_id = task_idx % num_producers
+                producer_tasks[producer_id].append((task_idx, scan))
+
+            async def _producer(producer_id: int, ch_out: Channel) -> None:
+                for task_idx, scan in producer_tasks[producer_id]:
+                    cached_parquet_info = await cached_parquet_info_for_task(task_idx)
+                    await read_chunk(
+                        context,
+                        scan,
+                        task_idx,
+                        ch_out,
+                        ir_context,
+                        estimated_chunk_bytes,
+                        cached_parquet_info,
+                        tracer=tracer,
+                    )
+                await ch_out.drain(context)
+
+            async with (
+                shutdown_on_error(context, *lineariser.input_channels, trace_ir=ir),
+            ):
+                await gather_in_task_group(
+                    lineariser.drain(),
+                    *(
+                        _producer(i, ch_in)
+                        for i, ch_in in enumerate(lineariser.input_channels)
+                    ),
+                )
+    finally:
+        # Always finalize the background metadata receiver, even on early
+        # return or failure, so it is never left orphaned.
+        if _metadata_receiver_task is not None:
+            _metadata_receiver_task.cancel()
+            # Awaiting also retrieves any exception the receiver raised (already
+            # surfaced to producers via the per-task futures), avoiding a stray
+            # "Task exception was never retrieved" warning.
+            with contextlib.suppress(BaseException):
+                await _metadata_receiver_task
 
 
 def make_rapidsmpf_read_parquet_node(
@@ -835,6 +1078,7 @@ def _(
                 ir,
                 rec.state["ir_context"],
                 ch_out,
+                rec.state["metadata_channel_by_scan"].get(ir),
                 num_producers=num_producers,
                 estimated_chunk_bytes=(
                     plan.estimated_chunk_bytes or executor.target_partition_size
@@ -974,3 +1218,40 @@ def _(
     ]
 
     return nodes, channels
+
+
+def collect_metadata_scans(
+    ir: IR,
+    *,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    config_options: ConfigOptions,
+    nranks: int,
+) -> list[StreamingScan]:
+    """Return non-native parquet StreamingScan nodes that need metadata prefetch."""
+    if not config_options.parquet_options.prefetch_file_metadata:
+        return []
+
+    metadata_scans: list[StreamingScan] = []
+    for node in traversal([ir]):
+        if not isinstance(node, StreamingScan):
+            continue
+        if node.base_scan.typ != "parquet":
+            continue
+        if not node.scans:
+            continue
+        node_partition_info = partition_info[node]
+        assert node_partition_info.io_plan is not None, (
+            "Scan node must have a partition plan"
+        )
+        use_native = can_use_native_parquet_node(
+            node.base_scan,
+            plan=node_partition_info.io_plan,
+            count=node_partition_info.count,
+            nranks=nranks,
+            parquet_options=config_options.parquet_options,
+            config_options=config_options,
+        )
+        if use_native:
+            continue
+        metadata_scans.append(node)
+    return metadata_scans

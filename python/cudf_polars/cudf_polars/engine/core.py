@@ -28,10 +28,6 @@ from rapidsmpf.streaming.core.actor import run_actor_network
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IRExecutionContext
-from cudf_polars.dsl.utils.io import (
-    attach_cached_parquet_metadata,
-    prefetch_parquet_file_metadata_for_ir,
-)
 from cudf_polars.quent._plan import build_plan
 from cudf_polars.streaming.actor_graph.collectives import ReserveOpIDs
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
@@ -777,14 +773,6 @@ def evaluate_on_rank(
     ir_context = IRExecutionContext(
         py_executor, get_cuda_stream=ctx.br().stream_pool.get_stream, query_id=query_id
     )
-
-    if config_options.parquet_options.prefetch_file_metadata:
-        cached_parquet_info_map = prefetch_parquet_file_metadata_for_ir(
-            ir,
-            ir_context.py_executor,
-            stats=stats,
-        )
-        attach_cached_parquet_metadata(ir, cached_parquet_info_map)
 
     with ReserveOpIDs(ir, config_options) as collective_id_map:
         return execute_ir_on_rank(
