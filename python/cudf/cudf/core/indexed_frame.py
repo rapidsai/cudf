@@ -4818,23 +4818,32 @@ class IndexedFrame(Frame):
         names: Hashable | Sequence[Hashable] | None = None,
     ):
         """Shared path for DataFrame.reset_index and Series.reset_index."""
-        if allow_duplicates is not False:
-            raise NotImplementedError(
-                "allow_duplicates is not currently supported."
-            )
-        elif names is not None:
+        if names is not None:
             raise NotImplementedError("names is not currently supported.")
         if level is not None:
-            if (
-                isinstance(level, int)
-                and level > 0
-                and not isinstance(self.index, MultiIndex)
-            ):
-                raise IndexError(
-                    f"Too many levels: Index has only 1 level, not {level + 1}"
-                )
             if not isinstance(level, (tuple, list)):
                 level = (level,)
+            nlevels = self.index.nlevels
+            for lv in level:
+                if isinstance(lv, int):
+                    lv_norm = lv + nlevels if lv < 0 else lv
+                    if lv_norm >= nlevels:
+                        if nlevels == 1:
+                            raise IndexError(
+                                f"Too many levels: Index has only 1 level, "
+                                f"not {lv_norm + 1}"
+                            )
+                        else:
+                            raise IndexError(
+                                f"Too many levels: Index has only {nlevels} "
+                                f"levels, not {lv_norm + 1}"
+                            )
+                elif not isinstance(self.index, MultiIndex):
+                    if lv != self.index.name:
+                        raise KeyError(
+                            f"Requested level ({lv}) does not match index "
+                            f"name ({self.index.name})"
+                        )
         _check_duplicate_level_names(level, self.index.names)
 
         index = self.index._new_index_for_reset_index(level, self.index.name)
@@ -4843,19 +4852,45 @@ class IndexedFrame(Frame):
         if drop:
             return self._data, index
 
-        new_column_data = {}
+        new_column_items = []
         for name, col in self.index._columns_for_reset_index(level):
             if name == "index" and "index" in self._data:
                 name = "level_0"
-            name = (
-                tuple(
-                    name if i == col_level else col_fill
-                    for i in range(self._data.nlevels)
-                )
-                if self._data.multiindex
-                else name
+            if self._data.multiindex:
+                nlevels = self._data.nlevels
+                if isinstance(name, tuple):
+                    if len(name) > nlevels:
+                        raise ValueError(
+                            "Item must have length equal to number of levels."
+                        )
+                    elif len(name) < nlevels:
+                        if col_fill is None:
+                            raise ValueError(
+                                f"col_fill=None is incompatible with "
+                                f"incomplete column name {name}"
+                            )
+                        name = (
+                            (col_fill,) * col_level
+                            + tuple(name)
+                            + (col_fill,) * (nlevels - col_level - len(name))
+                        )
+                    # else len == nlevels: use as-is
+                else:
+                    name = tuple(
+                        name if i == col_level else col_fill
+                        for i in range(nlevels)
+                    )
+            new_column_items.append((name, col))
+        if allow_duplicates is not False:
+            raise NotImplementedError(
+                "allow_duplicates is not currently supported."
             )
-            new_column_data[name] = col
+        seen = set(self._data.keys())
+        for name, _ in new_column_items:
+            if name in seen:
+                raise ValueError(f"cannot insert {name!r}, already exists")
+            seen.add(name)
+        new_column_data = dict(new_column_items)
         # This is to match pandas where the new data columns are always
         # inserted to the left of existing data columns.
         label_dtype = None
@@ -4874,7 +4909,7 @@ class IndexedFrame(Frame):
             ColumnAccessor(
                 {**new_column_data, **self._data},
                 self._data.multiindex,
-                self._data._level_names,
+                self._data.level_names,
                 label_dtype=label_dtype,
             ),
             index,
