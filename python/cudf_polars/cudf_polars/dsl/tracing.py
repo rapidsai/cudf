@@ -49,6 +49,7 @@ if TYPE_CHECKING:
 
     import cudf_polars.containers
     from cudf_polars.dsl import ir
+    from cudf_polars.dsl.ir import IRExecutionContext
 
 
 class Scope(enum.StrEnum):
@@ -168,7 +169,8 @@ def log_do_evaluate(
             *args: P.args,
             **kwargs: P.kwargs,
         ) -> cudf_polars.containers.DataFrame:
-            # do this just once
+            from cudf_polars.quent._types import Task
+
             pynvml.nvmlInit()
             maybe_handle = get_device_handle()
             pid = _getpid()
@@ -179,6 +181,27 @@ def log_do_evaluate(
             frames: list[cudf_polars.containers.DataFrame] = (
                 list(args) + [v for k, v in kwargs.items() if k != "context"]
             )[cls._n_non_child_args :]  # type: ignore[assignment]
+
+            # And the kwonly 'context' argument has the IR execution context.
+            ir_execution_context: IRExecutionContext = kwargs["context"]  # type: ignore[assignment]
+            # assert ir_execution_context.tracer is not None
+            if ir_execution_context.quent_ir_execution_context is not None:
+                quent_task = Task.from_ir(
+                    cls, ir_execution_context.quent_ir_execution_context
+                )
+            else:
+                quent_task = None
+
+            if (
+                quent_task is not None
+                and ir_execution_context.quent_ir_execution_context is not None
+            ):
+                ir_execution_context.quent_ir_execution_context.context._emit_task_begin_events(
+                    cls,
+                    quent_task,
+                    ir_execution_context.quent_ir_execution_context,
+                    input_frames_bytes=sum(frame._size_bytes() for frame in frames),
+                )
 
             before_start = time.monotonic_ns()
             before = make_snapshot(
@@ -191,7 +214,34 @@ def log_do_evaluate(
             # argument, followed by the method-specific arguments, and returns a DataFrame.
 
             start = time.monotonic_ns()
-            result = func(cls, *args, **kwargs)
+            try:
+                result = func(cls, *args, **kwargs)
+            except Exception:  # pragma: no cover;
+                if (
+                    quent_task is not None
+                    and ir_execution_context.quent_ir_execution_context is not None
+                ):
+                    ir_execution_context.quent_ir_execution_context.context._emit_task_end_events(
+                        cls,
+                        quent_task,
+                        ir_execution_context.quent_ir_execution_context,
+                        frames,
+                        None,
+                    )
+                raise
+            else:
+                if (
+                    quent_task is not None
+                    and ir_execution_context.quent_ir_execution_context is not None
+                ):
+                    # TODO: This should emit some Chunk-level statistics (duration, rows, bytes, schema, etc.)
+                    ir_execution_context.quent_ir_execution_context.context._emit_task_end_events(
+                        cls,
+                        quent_task,
+                        ir_execution_context.quent_ir_execution_context,
+                        frames,
+                        result,
+                    )
             stop = time.monotonic_ns()
 
             after_start = time.monotonic_ns()
@@ -214,6 +264,13 @@ def log_do_evaluate(
                 }
             )
             log.info("Execute IR", **record)
+
+            if (tracer := ir_execution_context.tracer) is not None:
+                # ActorTracer.send updates row_count and chunk_count
+                tracer.input_bytes += sum(frame._size_bytes() for frame in frames)
+                tracer.output_bytes += result._size_bytes()
+                # TODO: Emit some chunk-level statistics. Might need a custom Quent
+                # schema for that.
 
             return result
 

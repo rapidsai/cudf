@@ -18,6 +18,7 @@ from rapidsmpf.bootstrap import is_running_with_rrun
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 
 import cudf_polars.quent
+import cudf_polars.quent._context
 from cudf_polars.engine.core import _find_memory_error
 from cudf_polars.engine.hardware_binding import HardwareBindingPolicy
 from cudf_polars.engine.options import StreamingOptions
@@ -456,7 +457,7 @@ def test_reset_rejects_construction_time_engine_options(
 
 def test_quent_context_user_provided(spmd_engine: SPMDEngine) -> None:
     # Ensure that the user-provided quent context is used if provided
-    quent_context = cudf_polars.quent.QuentContext(
+    quent_context = cudf_polars.quent._context.QuentContext(
         engine=cudf_polars.quent.Engine(
             id=uuid.uuid4(),
             implementation=cudf_polars.quent.Implementation(

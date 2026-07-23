@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, Any
 from rapidsmpf.streaming.core.leaf_actor import pull_from_channel
 
 import cudf_polars.dsl.tracing
+import cudf_polars.quent._context
+import cudf_polars.quent._types
 from cudf_polars.dsl.ir import (
     DataFrameScan,
     Join,
@@ -94,6 +96,17 @@ def evaluate_logical_plan(
                     engine_id=engine_id,
                     worker_id=engine._quent_worker.id,
                     quent_logger=engine._quent_logger,
+                    # The engine owns these engine-scoped Quent resources; the
+                    # per-collect config must forward them so query evaluation
+                    # reuses them instead of re-declaring per collect.
+                    processor_registry=engine._processor_registry,
+                    thread_pool_id=(
+                        engine._quent_thread_pool.id
+                        if engine._quent_thread_pool is not None
+                        else None
+                    ),
+                    device_memory=engine._device_memory,
+                    disk_to_device_channel=engine._disk_to_device_channel,
                 ),
             ),
         )
@@ -219,6 +232,8 @@ def generate_network(
     ir_context: IRExecutionContext,
     collective_id_map: dict[IR, list[int]],
     metadata_collector: list[ChannelMetadata] | None,
+    quent_operator_map: dict[IR, cudf_polars.quent._types.Operator] | None = None,
+    local_quent_context: cudf_polars.quent._context.LocalQuentContext | None = None,
 ) -> tuple[list[Any], DeferredMessages]:
     """
     Translate the IR graph to a RapidsMPF streaming network.
@@ -245,6 +260,12 @@ def generate_network(
         The list to collect the final metadata.
         This list will be mutated when the network is executed.
         If None, metadata will not be collected.
+    quent_operator_map
+        Mapping from IR nodes to their Quent operators, or ``None`` when tracing
+        is disabled.
+    local_quent_context
+        The local Quent context for this rank, or ``None`` when tracing is
+        disabled.
 
     Returns
     -------
@@ -277,6 +298,8 @@ def generate_network(
         "max_io_threads": max_io_threads_local,
         "stats": stats,
         "collective_id_map": collective_id_map,
+        "quent_operator_map": quent_operator_map,
+        "quent_execution_context": local_quent_context,
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state

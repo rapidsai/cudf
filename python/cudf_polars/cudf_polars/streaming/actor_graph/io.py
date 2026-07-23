@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import functools
 import io
 import math
@@ -32,6 +33,7 @@ from cudf_polars.dsl.ir import (
 from cudf_polars.dsl.to_ast import to_parquet_filter
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
+    ir_context_for_node,
 )
 from cudf_polars.streaming.actor_graph.nodes import (
     define_actor,
@@ -280,7 +282,9 @@ async def dataframescan_node(
             await ch_out.drain(context)
 
         async with (
-            shutdown_on_error(context, *lineariser.input_channels, trace_ir=ir),
+            shutdown_on_error(
+                context, *lineariser.input_channels, trace_ir=ir, ir_context=ir_context
+            ),
         ):
             await gather_in_task_group(
                 lineariser.drain(),
@@ -302,7 +306,7 @@ def _(
     estimated_chunk_bytes = config_options.executor.target_partition_size
 
     context = rec.state["context"]
-    ir_context = rec.state["ir_context"]
+    ir_context = ir_context_for_node(rec, ir)
     channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
     nodes: dict[IR, list[Any]] = {
         ir: [
@@ -498,7 +502,7 @@ def _(
     ir: PythonScan, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     context = rec.state["context"]
-    ir_context = rec.state["ir_context"]
+    ir_context = ir_context_for_node(rec, ir)
     channels: dict[IR, ChannelManager] = {ir: ChannelManager(context)}
     nodes: dict[IR, list[Any]] = {
         ir: [
@@ -549,6 +553,9 @@ async def read_chunk(
             context, size=estimated_chunk_bytes, net_memory_delta=estimated_chunk_bytes
         )
     ):
+        if ir_context.tracer is None:
+            ir_context = dataclasses.replace(ir_context, tracer=tracer)
+            assert ir_context.tracer is not None
         df = await ir_context.to_thread(
             scan.do_evaluate,
             *scan._non_child_args,
@@ -598,6 +605,7 @@ async def scan_node(
         context, ch_out, trace_ir=ir, ir_context=ir_context
     ) as tracer:
         # Send basic metadata
+        ir_context = dataclasses.replace(ir_context, tracer=tracer)
         await send_metadata(
             ch_out,
             context,
@@ -652,7 +660,9 @@ async def scan_node(
             await ch_out.drain(context)
 
         async with (
-            shutdown_on_error(context, *lineariser.input_channels, trace_ir=ir),
+            shutdown_on_error(
+                context, *lineariser.input_channels, trace_ir=ir, ir_context=ir_context
+            ),
         ):
             await gather_in_task_group(
                 lineariser.drain(),
@@ -780,6 +790,7 @@ def _(
     parquet_options = config_options.parquet_options
     partition_info = rec.state["partition_info"][ir]
     num_producers = rec.state["max_io_threads"]
+    ir_context = ir_context_for_node(rec, ir)
     channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
 
     assert partition_info.io_plan is not None, "Scan node must have a partition plan"
@@ -825,7 +836,7 @@ def _(
                 # Just estimate the local count as well.
                 local_count=math.ceil(partition_info.count / rec.state["comm"].nranks),
             ),
-            rec.state["ir_context"],
+            ir_context,
         )
         nodes[ir] = [native_node, metadata_node]
     else:
@@ -833,7 +844,7 @@ def _(
             scan_node(
                 rec.state["context"],
                 ir,
-                rec.state["ir_context"],
+                ir_context,
                 ch_out,
                 num_producers=num_producers,
                 estimated_chunk_bytes=(
@@ -960,12 +971,13 @@ def _(
     """Generate network for StreamingSink node."""
     nodes, channels = process_children(ir, rec)
     channels[ir] = ChannelManager(rec.state["context"])
+    ir_context = ir_context_for_node(rec, ir)
     nodes[ir] = [
         sink_node(
             rec.state["context"],
             rec.state["comm"],
             ir,
-            rec.state["ir_context"],
+            ir_context,
             channels[ir.children[0]].reserve_output_slot(),
             channels[ir].reserve_input_slot(),
             rec.state["partition_info"][ir],

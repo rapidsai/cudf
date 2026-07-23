@@ -224,3 +224,10 @@ def test_serialization_roundtrip(polars_tbl):
     res = DataFrame.deserialize(header, frames, stream=stream)
 
     assert_frame_equal(df.to_polars(), res.to_polars())
+
+
+def test_size_bytes():
+    stream = get_cuda_stream()
+    df = pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    df = DataFrame.from_polars(df, stream=stream)
+    assert df._size_bytes() == df.to_polars().estimated_size()

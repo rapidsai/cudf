@@ -68,6 +68,7 @@ except ImportError:
 try:
     import cudf_polars.dsl.tracing
     import cudf_polars.quent
+    import cudf_polars.quent._context
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.dsl.tracing import Scope
     from cudf_polars.dsl.translate import Translator
@@ -745,7 +746,7 @@ def get_executor_options(
         run_config.streaming_options.to_executor_options()
     )
     executor_options["max_io_threads"] = run_config.max_io_threads
-    executor_options["quent_context"] = cudf_polars.quent.QuentContext(
+    executor_options["quent_context"] = cudf_polars.quent._context.QuentContext(
         engine=cudf_polars.quent.Engine(id=run_config.run_id)
     )
 
@@ -1552,13 +1553,15 @@ def setup_logging(query_id: int, iteration: int) -> None:
 def _write_quent_traces(
     engine: StreamingEngine, run_id: uuid.UUID, *, collect_traces: bool
 ) -> None:
-    """Write collected Quent events to logs/{run_id}.ndjson."""
+    """Write collected Quent events to logs/<run_id>/ directory export layout."""
     if not (_HAS_STRUCTLOG or collect_traces):
         return
 
+    from cudf_polars.quent._export import write_quent_export
+
     quent_logs = list(engine._quent_events)
 
-    # The quent UI currently requires the filename to match the engine's ID.
+    # The quent UI currently requires the context directory to match the engine's ID.
     for log in quent_logs:
         if log.get("data", {}).get("Engine", {}).get("Init") and log.get("id") != str(
             run_id
@@ -1570,13 +1573,11 @@ def _write_quent_traces(
             warnings.warn(msg, stacklevel=2)
 
     logs_dir = Path("logs")
-    logs_dir.mkdir(parents=True, exist_ok=True)
-    output_path = logs_dir / f"{run_id}.ndjson"
-    with output_path.open("w") as f:
-        for log in quent_logs:
-            f.write(json.dumps(log))
-            f.write("\n")
-    print(f"Wrote {len(quent_logs)} Quent trace events to {output_path}")
+    output_path = write_quent_export(quent_logs, logs_dir, run_id)
+    print(
+        f"Wrote {len(quent_logs)} Quent trace events to {output_path} "
+        f"(directory export layout)"
+    )
 
 
 def _consolidate_logs(

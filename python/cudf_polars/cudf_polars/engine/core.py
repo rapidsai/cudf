@@ -32,7 +32,7 @@ from cudf_polars.dsl.utils.io import (
     attach_cached_parquet_metadata,
     prefetch_parquet_file_metadata_for_ir,
 )
-from cudf_polars.quent._plan import build_plan
+from cudf_polars.quent._plan import build_plan, build_quent_operator_map
 from cudf_polars.streaming.actor_graph.collectives import ReserveOpIDs
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.core import generate_network
@@ -54,8 +54,8 @@ if TYPE_CHECKING:
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.context import Context
 
-    import cudf_polars.quent
     import cudf_polars.quent._logging
+    import cudf_polars.quent._types
     from cudf_polars.dsl.ir import IR
     from cudf_polars.dsl.translate import Translator
     from cudf_polars.quent._context import LocalQuentContext
@@ -461,6 +461,9 @@ def execute_ir_on_rank(
     config_options: ConfigOptions[StreamingExecutor],
     stats: StatsCollector,
     collective_id_map: dict[IR, list[int]],
+    *,
+    quent_operator_map: dict[IR, cudf_polars.quent._types.Operator] | None = None,
+    local_quent_context: LocalQuentContext | None = None,
 ) -> tuple[DataFrame, list[ChannelMetadata]]:
     """
     Execute a Polars IR query on a single rank's GPU.
@@ -487,6 +490,12 @@ def execute_ir_on_rank(
         Statistics collector.
     collective_id_map
         Mapping from IR nodes to their pre-allocated collective operation IDs.
+    quent_operator_map
+        Mapping from IR nodes to their Quent operators, or ``None`` when tracing
+        is disabled.
+    local_quent_context
+        The local Quent context for this rank, or ``None`` when tracing is
+        disabled.
 
     Returns
     -------
@@ -507,6 +516,8 @@ def execute_ir_on_rank(
         ir_context=ir_context,
         collective_id_map=collective_id_map,
         metadata_collector=metadata_collector,
+        quent_operator_map=quent_operator_map,
+        local_quent_context=local_quent_context,
     )
 
     try:
@@ -733,6 +744,19 @@ def evaluate_on_rank(
         Collected channel metadata.
     """
     stats = allgather_stats(comm, ctx.br(), ir, config_options, py_executor)
+    # ``get_stable_plan_id`` is a deterministic function of the IR
+    # structure, so every rank derives the same logical plan ID for a
+    # given query (only rank 0 emits the declaration, but physical plans
+    # on every rank reference it as their parent). It is *not* unique
+    # across collects, though: re-running an identical query would reuse
+    # the same plan ID under a different parent query. Namespacing by the
+    # per-collect ``query_id`` (which is identical across ranks but unique
+    # per collect) keeps the cross-rank agreement while making the plan ID
+    # unique per collect.
+    logical_plan_id = uuid.uuid5(query_id, str(ir.get_stable_plan_id()))
+
+    physical_op_by_id: dict[str, cudf_polars.quent._types.Operator] | None = None
+    quent_operator_map: dict[IR, cudf_polars.quent._types.Operator] | None = None
 
     lowering, node_map = lower_ir_graph_with_node_map(
         ir, config_options, stats, rank=comm.rank, nranks=comm.nranks
@@ -740,13 +764,15 @@ def evaluate_on_rank(
     optimized = lowering.optimized
     ir = lowering.lowered
     partition_info = lowering.partition_info
+    # TODO: figure out if we emit anything about optimized.
+
     if config_options.executor.quent_context is not None:
         assert local_quent_context is not None
-        logical_plan_id = optimized.get_stable_plan_id()
+        # logical_plan_id = optimized.get_stable_plan_id()
         plan, ops, ports, logical_op_by_id = build_plan(
             optimized,
             config_options,
-            query=local_quent_context.context.query,
+            query=local_quent_context.query,
             plan_id=logical_plan_id,
             worker=local_quent_context.worker,
             instance_name="logical",
@@ -764,7 +790,7 @@ def evaluate_on_rank(
     if config_options.executor.quent_context is not None:
         assert local_quent_context is not None
         physical_plan_id = uuid.uuid4()
-        local_quent_context.context._emit_physical_plan_events(
+        physical_op_by_id = local_quent_context.context._emit_physical_plan_events(
             local_quent_context.logger,
             ir,
             config_options,
@@ -774,6 +800,7 @@ def evaluate_on_rank(
             node_map=node_map,
             logical_op_by_id=logical_op_by_id,
         )
+        quent_operator_map = build_quent_operator_map(ir, physical_op_by_id)
     ir_context = IRExecutionContext(
         py_executor, get_cuda_stream=ctx.br().stream_pool.get_stream, query_id=query_id
     )
@@ -796,6 +823,8 @@ def evaluate_on_rank(
             config_options,
             stats,
             collective_id_map,
+            quent_operator_map=quent_operator_map,
+            local_quent_context=local_quent_context,
         )
 
 

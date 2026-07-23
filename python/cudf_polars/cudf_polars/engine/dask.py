@@ -49,7 +49,14 @@ from cudf_polars.engine.persisted_result import (
     PersistedBackend,
     execute_persisted_query,
 )
-from cudf_polars.quent._context import LocalQuentContext
+from cudf_polars.quent._context import (
+    LocalQuentContext,
+    ProcessorRegistry,
+    declare_network_channels,
+    declare_worker_resources,
+    finalize_network_channels,
+    finalize_worker_resources,
+)
 from cudf_polars.unstable import unstable
 from cudf_polars.utils.config import DaskContext, MemoryResourceConfig
 
@@ -64,6 +71,7 @@ if TYPE_CHECKING:
     from cudf_polars.engine.core import T
     from cudf_polars.engine.options import StreamingOptions
     from cudf_polars.engine.persisted_result import PersistedQueryResult
+    from cudf_polars.quent._context import QuentContext
     from cudf_polars.streaming.parallel import ConfigOptions
     from cudf_polars.utils.config import StreamingExecutor
 
@@ -130,7 +138,15 @@ class _WorkerContext:
     quent_logger: cudf_polars.quent._logging.QuentLogger | None
     quent_worker: cudf_polars.quent._types.Worker
     statistics: Statistics
-    mr: RmmResourceAdaptor | None = None  # set after `Context` is built (below).
+    mr: RmmResourceAdaptor | None = None
+    device_memory: cudf_polars.quent._types.Memory | None = None
+    disk_to_device_channel: cudf_polars.quent._types.Channel | None = None
+    thread_pool: cudf_polars.quent._types.ThreadPool | None = None
+    processor_registry: ProcessorRegistry | None = None
+    network: cudf_polars.quent._types.Network | None = None
+    link_channels: dict[int, cudf_polars.quent._types.Channel] = dataclasses.field(
+        default_factory=dict
+    )
 
 
 def _worker_evaluate_persisted(
@@ -236,7 +252,7 @@ def _setup_root(
     dask_worker: distributed.Worker | None = None,
     engine_id: uuid.UUID,
     worker_id: uuid.UUID,
-    quent_context: cudf_polars.quent.QuentContext | None,
+    quent_context: QuentContext | None,
 ) -> bytes:
     """
     Initialize the root rank on one Dask worker.
@@ -326,7 +342,7 @@ def _setup_worker(
     worker_ids: list[uuid.UUID],
     engine_id: uuid.UUID,
     num_py_executors: int,
-    quent_context: cudf_polars.quent.QuentContext | None,
+    quent_context: QuentContext | None,
     dask_worker: distributed.Worker | None = None,
 ) -> None:
     """
@@ -412,11 +428,33 @@ def _setup_worker(
     )
 
     if quent_context is not None:
-        quent_logger: cudf_polars.quent._logging.QuentLogger | None = (
-            cudf_polars.quent._logging.QuentLogger()
-        )
+        quent_logger = cudf_polars.quent._logging.QuentLogger()
     else:
         quent_logger = None
+
+    device_memory = None
+    disk_to_device_channel = None
+    thread_pool = None
+    processor_registry = None
+    network = None
+    link_channels: dict[int, cudf_polars.quent._types.Channel] = {}
+    if quent_logger is not None:
+        processor_registry = ProcessorRegistry()
+        device_memory, disk_to_device_channel, thread_pool = declare_worker_resources(
+            quent_logger,
+            instance_suffix=f"rank-{comm.rank}",
+            engine_id=engine_id,
+            worker_id=worker_id,
+        )
+        # Inter-rank network topology is engine-scoped: declare it once here
+        # alongside the other worker resources (a no-op for single-rank runs).
+        network, link_channels = declare_network_channels(
+            quent_logger,
+            rank=comm.rank,
+            nranks=comm.nranks,
+            engine_id=engine_id,
+            device_memory=device_memory,
+        )
 
     mp_ctx = _WorkerContext(
         comm=comm,
@@ -426,6 +464,12 @@ def _setup_worker(
         mr=mr,
         quent_worker=quent_worker,
         quent_logger=quent_logger,
+        device_memory=device_memory,
+        disk_to_device_channel=disk_to_device_channel,
+        thread_pool=thread_pool,
+        processor_registry=processor_registry,
+        network=network,
+        link_channels=link_channels,
         statistics=statistics,
     )
     setattr(dask_worker, attr, mp_ctx)
@@ -455,6 +499,19 @@ def _teardown_worker(
     traces = []
     if mp_ctx is not None:
         if mp_ctx.quent_worker is not None and mp_ctx.quent_logger is not None:
+            if mp_ctx.processor_registry is not None:
+                mp_ctx.processor_registry._emit_processor_exit_events(
+                    mp_ctx.quent_logger
+                )
+            finalize_network_channels(
+                mp_ctx.quent_logger, link_channels=mp_ctx.link_channels
+            )
+            if mp_ctx.device_memory is not None:
+                finalize_worker_resources(
+                    mp_ctx.quent_logger,
+                    device_memory=mp_ctx.device_memory,
+                    disk_to_device_channel=mp_ctx.disk_to_device_channel,
+                )
             mp_ctx.quent_logger.emit(mp_ctx.quent_worker._exit())
             traces = mp_ctx.quent_logger.drain()
 
@@ -569,7 +626,7 @@ def _worker_evaluate(
     uid: str,
     collect_metadata: bool = False,
     query_id: uuid.UUID,
-    quent_context: cudf_polars.quent.QuentContext | None = None,
+    quent_context: QuentContext | None = None,
     dask_worker: distributed.Worker | None = None,
 ) -> tuple[int, pl.DataFrame, list[ChannelMetadata] | None]:
     """
@@ -614,10 +671,20 @@ def _worker_evaluate(
     local_quent_context: LocalQuentContext | None = None
     if quent_context is not None:
         assert mp_ctx.quent_logger is not None
+        assert mp_ctx.device_memory is not None
+        assert mp_ctx.thread_pool is not None
+        assert mp_ctx.processor_registry is not None
         local_quent_context = LocalQuentContext(
             context=quent_context,
+            query=quent_context.query_for(query_id),
             worker=mp_ctx.quent_worker,
             logger=mp_ctx.quent_logger,
+            thread_pool_id=mp_ctx.thread_pool.id,
+            processor_registry=mp_ctx.processor_registry,
+            device_memory=mp_ctx.device_memory,
+            disk_to_device_channel=mp_ctx.disk_to_device_channel,
+            network=mp_ctx.network,
+            link_channels=mp_ctx.link_channels,
         )
     # evaluate_on_rank always collects metadata internally so we can read
     # metadata[-1].duplicated to decide whether to suppress this rank's output.
@@ -702,8 +769,9 @@ def evaluate_pipeline_dask_mode(
     if quent_context is not None:
         quent_logger = dask_context.quent_logger
         assert quent_logger is not None
+        query = quent_context.query_for(query_id)
         quent_context._emit_query_group_events(quent_logger)
-        quent_context._emit_query_events(quent_logger)
+        quent_context._emit_query_events(quent_logger, query)
 
     worker_config = config_options.drop_unserializable()
     result_map = dask_context.client.run(
@@ -725,7 +793,7 @@ def evaluate_pipeline_dask_mode(
     if quent_context is not None:
         quent_logger = dask_context.quent_logger
         assert quent_logger is not None
-        quent_context._emit_query_exit_events(quent_logger)
+        quent_context._emit_query_exit_events(quent_logger, query)
 
     ranked.sort(key=lambda p: p[0])
     dfs = [df for _, df in ranked]
@@ -832,9 +900,7 @@ class DaskEngine(StreamingEngine):
         executor_options = executor_options or {}
         engine_options = engine_options or {}
 
-        quent_context: cudf_polars.quent.QuentContext | None = executor_options.get(
-            "quent_context"
-        )
+        quent_context: QuentContext | None = executor_options.get("quent_context")
         if quent_context is not None:
             self._quent_logger = cudf_polars.quent._logging.QuentLogger()
         else:
@@ -1118,9 +1184,9 @@ class DaskEngine(StreamingEngine):
         ctx = self._dask_context
         self._dask_context = None
         exceptions: list[Exception] = []
-        quent_context: cudf_polars.quent.QuentContext | None = self.config[
-            "executor_options"
-        ].get("quent_context")
+        quent_context: QuentContext | None = self.config["executor_options"].get(
+            "quent_context"
+        )
         try:
             # Teardown emits Worker.exit, then we drain all buffered events
             # (including the exit event) from workers.
