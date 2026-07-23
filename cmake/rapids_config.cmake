@@ -6,7 +6,7 @@
 # =============================================================================
 
 set(rapids-cmake-repo PointKernel/rapids-cmake)
-set(rapids-cmake-branch bump-nvbench-5061a4f)
+set(rapids-cmake-branch e43e542bd6490fbe76cd32acc58aba2a1ef27332)
 
 file(READ "${CMAKE_CURRENT_LIST_DIR}/../VERSION" _rapids_version)
 if(_rapids_version MATCHES [[^([0-9][0-9])\.([0-9][0-9])\.([0-9][0-9])]])
