@@ -744,23 +744,33 @@ def evaluate_on_rank(
         Collected channel metadata.
     """
     stats = allgather_stats(comm, ctx.br(), ir, config_options, py_executor)
+    # ``get_stable_plan_id`` is a deterministic function of the IR
+    # structure, so every rank derives the same logical plan ID for a
+    # given query (only rank 0 emits the declaration, but physical plans
+    # on every rank reference it as their parent). It is *not* unique
+    # across collects, though: re-running an identical query would reuse
+    # the same plan ID under a different parent query. Namespacing by the
+    # per-collect ``query_id`` (which is identical across ranks but unique
+    # per collect) keeps the cross-rank agreement while making the plan ID
+    # unique per collect.
+    logical_plan_id = uuid.uuid5(query_id, str(ir.get_stable_plan_id()))
 
     physical_op_by_id: dict[str, cudf_polars.quent._types.Operator] | None = None
     quent_operator_map: dict[IR, cudf_polars.quent._types.Operator] | None = None
+
+    lowering, node_map = lower_ir_graph_with_node_map(
+        ir, config_options, stats, rank=comm.rank, nranks=comm.nranks
+    )
+    optimized = lowering.optimized
+    ir = lowering.lowered
+    partition_info = lowering.partition_info
+    # TODO: figure out if we emit anything about optimized.
+
     if config_options.executor.quent_context is not None:
         assert local_quent_context is not None
-        # ``get_stable_plan_id`` is a deterministic function of the IR
-        # structure, so every rank derives the same logical plan ID for a
-        # given query (only rank 0 emits the declaration, but physical plans
-        # on every rank reference it as their parent). It is *not* unique
-        # across collects, though: re-running an identical query would reuse
-        # the same plan ID under a different parent query. Namespacing by the
-        # per-collect ``query_id`` (which is identical across ranks but unique
-        # per collect) keeps the cross-rank agreement while making the plan ID
-        # unique per collect.
-        logical_plan_id = uuid.uuid5(query_id, str(ir.get_stable_plan_id()))
+        # logical_plan_id = optimized.get_stable_plan_id()
         plan, ops, ports, logical_op_by_id = build_plan(
-            ir,
+            optimized,
             config_options,
             query=local_quent_context.query,
             plan_id=logical_plan_id,
@@ -773,10 +783,6 @@ def evaluate_on_rank(
             local_quent_context.context._emit_plan_declarations(
                 local_quent_context.logger, plan, ops, ports
             )
-
-    ir, partition_info, node_map = lower_ir_graph_with_node_map(
-        ir, config_options, stats, rank=comm.rank, nranks=comm.nranks
-    )
 
     if comm.rank == 0:
         log_query_plan(ir, config_options)
