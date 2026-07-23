@@ -338,8 +338,6 @@ def to_parquet_filter(
         partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_AND),
         can_handle_filters,
     )
-    if not cant_handle_exprs:
-        return combined, None
     residual = reduce(
         lambda a, b: expr.BinOp(
             b.dtype, plc.binaryop.BinaryOperator.NULL_LOGICAL_AND, a, b
