@@ -14,6 +14,11 @@
 
 #include <nvbench/nvbench.cuh>
 
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
 // Benchmarks decoding pages written with an explicitly requested column encoding. The writer's
 // defaults never choose the DELTA_* encodings, so `parquet_read_decode` does not exercise their
 // decode kernels; this benchmark covers them (with PLAIN as the baseline encoding).

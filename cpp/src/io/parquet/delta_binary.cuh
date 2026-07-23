@@ -9,6 +9,8 @@
 
 #include <cudf/detail/utilities/assert.cuh>
 
+#include <climits>
+
 namespace cudf::io::parquet::detail {
 
 // DELTA_XXX encoding support
@@ -32,16 +34,16 @@ namespace cudf::io::parquet::detail {
 // packed using the same encoding as the RLE/Bit-Packing Hybrid encoder.
 
 // The DELTA_BINARY_PACKED spec requires the number of values in a mini-block to be a multiple of
-// 32. That this equals the warp size is a coincidence the decoders below depend on: they produce
-// values in warp_size-wide passes, so warp_size must divide every spec-valid mini-block size.
+// 32. The decoders rely on the coincidence that this also equals warp size; they produce values
+// in warp_size-wide passes, so it must divide every spec-valid mini-block size.
 constexpr int delta_mini_block_size_multiple = 32;
-static_assert(delta_mini_block_size_multiple % cudf::detail::warp_size == 0);
+static_assert(delta_mini_block_size_multiple % cudf::detail::warp_size == 0,
+              "warp_size must divide the DELTA mini-block size multiple; the pass-based decoders "
+              "assume warp_size divides every spec-valid mini-block size");
 
-// The decoders produce values in warp_size-wide passes (see decode_next_pass), so mini-blocks of
-// any size decode with a fixed-size rolling buffer. The decode loops produce up to two passes per
-// iteration: pages whose mini-blocks hold at least two passes keep the two-pass batch the loops
-// have always used, and running several passes back to back amortizes the per-iteration
-// synchronization.
+// The decode loops produce up to two (warp_size-wide) passes per iteration: pages whose
+// mini-blocks hold at least two passes keep the two-pass batch the loops have always used, and
+// running several passes back to back amortizes the per-iteration synchronization.
 constexpr int delta_max_batch_size = 2 * cudf::detail::warp_size;
 
 // The rolling buffer must hold two batches in flight (the consumer drains one batch while the
@@ -103,8 +105,7 @@ struct delta_binary_decoder {
 
   uint32_t values_per_mb;      // block_size / mini_block_count, must be multiple of 32
   uint32_t current_value_idx;  // current value index, initialized to 0 at start of block
-  uint32_t cur_pass;           // current warp_size-wide pass within the mini-block, used by
-                               // decode_next_pass for pipelined single-pass decoding
+  uint32_t cur_pass;           // current pass within the mini-block
 
   zigzag128_t cur_min_delta;     // min delta for the block
   uint32_t cur_mb;               // index of the current mini-block within the block
@@ -214,12 +215,12 @@ struct delta_binary_decoder {
 
     // just set pointer to start of next mini_block
     if (cur_mb < mini_block_count - 1) {
-      cur_mb_start += cur_bitwidths[cur_mb] * values_per_mb / 8;
+      cur_mb_start += cur_bitwidths[cur_mb] * values_per_mb / CHAR_BIT;
       cur_mb++;
     }
     // out of mini-blocks, start a new block
     else {
-      block_start = cur_mb_start + cur_bitwidths[cur_mb] * values_per_mb / 8;
+      block_start = cur_mb_start + cur_bitwidths[cur_mb] * values_per_mb / CHAR_BIT;
       init_mini_block(is_decode);
     }
   }
@@ -275,7 +276,7 @@ struct delta_binary_decoder {
     uint32_t const mb_bits = cur_bitwidths[cur_mb];
 
     // position at the end of this pass's values since the following calculates negative indexes
-    auto const d_start = cur_mb_start + (pass + 1) * (warp_size * mb_bits / 8);
+    auto const d_start = cur_mb_start + (pass + 1) * (warp_size * mb_bits / CHAR_BIT);
 
     // unpack deltas. modified from version in decode_dictionary_indices(), but
     // that one only unpacks up to bitwidths of 24. simplified some since this
@@ -285,16 +286,18 @@ struct delta_binary_decoder {
     // looping version is just as fast and easier to read.
     zigzag128_t delta = 0;
     if (lane_id + current_value_idx < value_count) {
+      // ofs is non-positive, so the arithmetic shift and mask compute the byte offset and leading
+      // bit position as floored division/modulo by CHAR_BIT (a plain / and % would round toward 0)
       int32_t ofs      = (lane_id - warp_size) * mb_bits;
       uint8_t const* p = d_start + (ofs >> 3);
       ofs &= 7;
       if (p < block_end) {
-        uint32_t c = 8 - ofs;  // 0 - 7 bits
+        uint32_t c = CHAR_BIT - ofs;  // 0 - 7 bits
         delta      = (*p++) >> ofs;
 
         while (c < mb_bits && p < block_end) {
           delta |= static_cast<zigzag128_t>(*p++) << c;
-          c += 8;
+          c += CHAR_BIT;
         }
         delta &= (static_cast<zigzag128_t>(1) << mb_bits) - 1;
       }

@@ -5,11 +5,17 @@
 
 #pragma once
 
+#include <cudf/io/parquet_schema.hpp>
+
+#include <src/io/parquet/compact_protocol_writer.hpp>
+
 #include <algorithm>
 #include <cassert>
+#include <climits>
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <string_view>
 #include <vector>
 
 // Builders for single-page Parquet files with DELTA-family encodings, used to test mini-block
@@ -17,111 +23,120 @@
 // pyarrow and arrow-rs at most 64, while the format allows any multiple of 32). Callers pass
 // the column values plus the DELTA block geometry (block_size, mini_block_count) and get back
 // the complete file bytes.
+//
+// The file footer is serialized with cudf's production CompactProtocolWriter. cudf has no
+// host-side page-header serializer (production writes page headers on the GPU), so the handful of
+// page-header fields are emitted directly through the same production Thrift field primitives
+// (put_field_header/put_int/put_byte) rather than reimplementing varint/zigzag encoding. Only the
+// DELTA-encoded page body -- the part under test, which no stock writer emits -- is built by hand.
 
 // ---------------------------------------------------------------------------------------------
-// minimal thrift compact-protocol writer (just what the page header and footer need)
+// Parquet metadata (page header + footer) serialization via the production compact protocol writer
 // ---------------------------------------------------------------------------------------------
-struct thrift_compact_writer {
-  static constexpr uint8_t t_bool_true  = 1;
-  static constexpr uint8_t t_bool_false = 2;
-  static constexpr uint8_t t_i32        = 5;
-  static constexpr uint8_t t_i64        = 6;
-  static constexpr uint8_t t_binary     = 8;
-  static constexpr uint8_t t_list       = 9;
-  static constexpr uint8_t t_struct     = 12;
+namespace parquet_delta_test {
 
-  std::vector<uint8_t> buf;
+// Emits the fields of a Parquet PageHeader through the production CompactProtocolFieldWriter
+// primitives. Thrift field ids restart at 0 inside each nested struct, so a nested struct is
+// bracketed by begin_struct()/end_struct().
+class page_header_serializer {
+  cudf::io::parquet::detail::CompactProtocolWriter writer;
+  cudf::io::parquet::detail::CompactProtocolFieldWriter fields;
+  int prev_field = 0;
 
-  void uvarint(uint64_t v)
+ public:
+  explicit page_header_serializer(std::vector<uint8_t>& out) : writer(&out), fields(writer) {}
+
+  void i32(int field, int32_t value)
   {
-    while (true) {
-      uint8_t const b = v & 0x7f;
-      v >>= 7;
-      if (v) {
-        buf.push_back(b | 0x80);
-      } else {
-        buf.push_back(b);
-        return;
-      }
-    }
+    fields.put_field_header(field, prev_field, cudf::io::parquet::FieldType::I32);
+    fields.put_int(value);
+    prev_field = field;
   }
 
-  void zigzag(int64_t v)
+  void boolean(int field, bool value)
   {
-    uvarint((static_cast<uint64_t>(v) << 1) ^ static_cast<uint64_t>(v >> 63));
+    fields.put_field_header(field,
+                            prev_field,
+                            value ? cudf::io::parquet::FieldType::BOOLEAN_TRUE
+                                  : cudf::io::parquet::FieldType::BOOLEAN_FALSE);
+    prev_field = field;
   }
 
-  int field(int prev_id, int field_id, uint8_t type_id)
+  // open a nested struct field; pass the returned id to end_struct() to close it
+  [[nodiscard]] int begin_struct(int field)
   {
-    int const delta = field_id - prev_id;
-    if (delta >= 1 && delta <= 15) {
-      buf.push_back(static_cast<uint8_t>((delta << 4) | type_id));
-    } else {
-      buf.push_back(type_id);
-      zigzag(field_id);
-    }
-    return field_id;
+    fields.put_field_header(field, prev_field, cudf::io::parquet::FieldType::STRUCT);
+    prev_field = 0;  // Thrift field ids restart at 0 inside the nested struct
+    return field;
   }
 
-  int i32(int prev_id, int field_id, int64_t val)
+  void end_struct(int field)
   {
-    int const p = field(prev_id, field_id, t_i32);
-    zigzag(val);
-    return p;
+    fields.put_byte(uint8_t{0});  // struct stop byte
+    prev_field = field;
   }
 
-  int i64(int prev_id, int field_id, int64_t val)
-  {
-    int const p = field(prev_id, field_id, t_i64);
-    zigzag(val);
-    return p;
-  }
-
-  int boolean(int prev_id, int field_id, bool val)
-  {
-    return field(prev_id, field_id, val ? t_bool_true : t_bool_false);
-  }
-
-  int binary(int prev_id, int field_id, std::string_view data)
-  {
-    int const p = field(prev_id, field_id, t_binary);
-    raw_binary(data);
-    return p;
-  }
-
-  void list_header(int size, uint8_t elem_type)
-  {
-    if (size < 15) {
-      buf.push_back(static_cast<uint8_t>((size << 4) | elem_type));
-    } else {
-      buf.push_back(0xf0 | elem_type);
-      uvarint(size);
-    }
-  }
-
-  void stop() { buf.push_back(0); }
-  void raw_i32(int64_t val) { zigzag(val); }
-  void raw_binary(std::string_view data)
-  {
-    uvarint(data.size());
-    buf.insert(buf.end(), data.begin(), data.end());
-  }
+  void stop() { fields.put_byte(uint8_t{0}); }
 };
 
-// parquet format constants used by the builders
-namespace parquet_delta_test {
-constexpr int type_int64             = 2;
-constexpr int type_byte_array        = 6;
-constexpr int rep_optional           = 1;
-constexpr int rep_repeated           = 2;
-constexpr int converted_utf8         = 0;
-constexpr int converted_list         = 3;
-constexpr int enc_rle                = 3;
-constexpr int enc_delta_binary       = 5;
-constexpr int enc_delta_length_ba    = 6;
-constexpr int enc_delta_ba           = 7;
-constexpr int page_type_data_page    = 0;
-constexpr int page_type_data_page_v2 = 3;
+// serialize a V1 data page header for a flat REQUIRED column (no repetition/definition levels)
+inline std::vector<uint8_t> serialize_data_page_header(int num_values,
+                                                       cudf::io::parquet::Encoding encoding,
+                                                       int64_t page_size)
+{
+  namespace pq = cudf::io::parquet;
+  std::vector<uint8_t> out;
+  page_header_serializer ph(out);
+  ph.i32(1, static_cast<int32_t>(pq::PageType::DATA_PAGE));
+  ph.i32(2, static_cast<int32_t>(page_size));  // uncompressed_page_size
+  ph.i32(3, static_cast<int32_t>(page_size));  // compressed_page_size
+  auto const data_page_header = ph.begin_struct(5);
+  ph.i32(1, num_values);
+  ph.i32(2, static_cast<int32_t>(encoding));
+  ph.i32(3, static_cast<int32_t>(pq::Encoding::RLE));  // definition level encoding (no levels)
+  ph.i32(4, static_cast<int32_t>(pq::Encoding::RLE));  // repetition level encoding (no levels)
+  ph.end_struct(data_page_header);
+  ph.stop();
+  return out;
+}
+
+// serialize a V2 data page header (the LIST builders carry bit-packed repetition/definition levels)
+inline std::vector<uint8_t> serialize_data_page_header_v2(int num_values,
+                                                          int num_nulls,
+                                                          int num_rows,
+                                                          cudf::io::parquet::Encoding encoding,
+                                                          int64_t definition_levels_byte_length,
+                                                          int64_t repetition_levels_byte_length,
+                                                          int64_t page_size)
+{
+  namespace pq = cudf::io::parquet;
+  std::vector<uint8_t> out;
+  page_header_serializer ph(out);
+  ph.i32(1, static_cast<int32_t>(pq::PageType::DATA_PAGE_V2));
+  ph.i32(2, static_cast<int32_t>(page_size));
+  ph.i32(3, static_cast<int32_t>(page_size));
+  auto const data_page_header_v2 = ph.begin_struct(8);
+  ph.i32(1, num_values);
+  ph.i32(2, num_nulls);
+  ph.i32(3, num_rows);
+  ph.i32(4, static_cast<int32_t>(encoding));
+  ph.i32(5, static_cast<int32_t>(definition_levels_byte_length));
+  ph.i32(6, static_cast<int32_t>(repetition_levels_byte_length));
+  ph.boolean(7, false);  // is_compressed
+  ph.end_struct(data_page_header_v2);
+  ph.stop();
+  return out;
+}
+
+// serialize a FileMetaData footer with the production CompactProtocolWriter
+inline std::vector<uint8_t> serialize_footer(cudf::io::parquet::FileMetaData const& file_metadata)
+{
+  std::vector<uint8_t> out;
+  cudf::io::parquet::detail::CompactProtocolWriter writer(&out);
+  writer.write(file_metadata);
+  return out;
+}
+
 }  // namespace parquet_delta_test
 
 // ---------------------------------------------------------------------------------------------
@@ -220,78 +235,62 @@ inline std::vector<uint8_t> encode_delta_binary_packed(std::vector<int64_t> cons
 // ---------------------------------------------------------------------------------------------
 
 // V1 data page + footer around `body` for a single REQUIRED flat column "a"
-inline std::vector<uint8_t> wrap_single_page_parquet(
-  std::vector<uint8_t> const& body, int num_values, int physical_type, int encoding, bool utf8)
+inline std::vector<uint8_t> wrap_single_page_parquet(std::vector<uint8_t> const& body,
+                                                     int num_values,
+                                                     cudf::io::parquet::Type physical_type,
+                                                     cudf::io::parquet::Encoding encoding,
+                                                     bool utf8)
 {
-  namespace pq = parquet_delta_test;
+  namespace pq = cudf::io::parquet;
 
-  thrift_compact_writer ph;
-  int p = ph.i32(0, 1, pq::page_type_data_page);
-  p     = ph.i32(p, 2, body.size());                        // uncompressed_page_size
-  p     = ph.i32(p, 3, body.size());                        // compressed_page_size
-  p     = ph.field(p, 5, thrift_compact_writer::t_struct);  // data_page_header
-  int d = ph.i32(0, 1, num_values);
-  d     = ph.i32(d, 2, encoding);
-  d     = ph.i32(d, 3, pq::enc_rle);  // definition level encoding (no levels: REQUIRED)
-  d     = ph.i32(d, 4, pq::enc_rle);  // repetition level encoding
-  ph.stop();
-  ph.stop();
+  auto const page_header =
+    parquet_delta_test::serialize_data_page_header(num_values, encoding, body.size());
 
-  int const data_page_offset = 4;
-  auto const chunk_size      = static_cast<int64_t>(ph.buf.size() + body.size());
+  int const data_page_offset = 4;  // immediately after the leading "PAR1" magic
+  auto const chunk_size      = static_cast<int64_t>(page_header.size() + body.size());
 
-  thrift_compact_writer fm;
-  int f = fm.i32(0, 1, 1);                                // version
-  f     = fm.field(f, 2, thrift_compact_writer::t_list);  // schema
-  fm.list_header(2, thrift_compact_writer::t_struct);
-  {  // root: group "schema" with one child
-    int r = fm.binary(0, 4, "schema");
-    r     = fm.i32(r, 5, 1);
-    fm.stop();
-  }
-  {  // required column "a"
-    int c = fm.i32(0, 1, physical_type);
-    c     = fm.i32(c, 3, 0);  // repetition_type REQUIRED
-    c     = fm.binary(c, 4, "a");
-    if (utf8) { c = fm.i32(c, 6, pq::converted_utf8); }
-    fm.stop();
-  }
-  f = fm.i64(f, 3, num_values);                       // num_rows
-  f = fm.field(f, 4, thrift_compact_writer::t_list);  // row_groups
-  fm.list_header(1, thrift_compact_writer::t_struct);
-  fm.field(0, 1, thrift_compact_writer::t_list);  // RowGroup.columns
-  fm.list_header(1, thrift_compact_writer::t_struct);
-  int cc = fm.i64(0, 2, data_page_offset);                    // ColumnChunk.file_offset
-  cc     = fm.field(cc, 3, thrift_compact_writer::t_struct);  // ColumnChunk.meta_data
-  {
-    int cm = fm.i32(0, 1, physical_type);
-    cm     = fm.field(cm, 2, thrift_compact_writer::t_list);  // encodings
-    fm.list_header(2, thrift_compact_writer::t_i32);
-    fm.raw_i32(pq::enc_rle);
-    fm.raw_i32(encoding);
-    cm = fm.field(cm, 3, thrift_compact_writer::t_list);  // path_in_schema
-    fm.list_header(1, thrift_compact_writer::t_binary);
-    fm.raw_binary("a");
-    cm = fm.i32(cm, 4, 0);  // codec UNCOMPRESSED
-    cm = fm.i64(cm, 5, num_values);
-    cm = fm.i64(cm, 6, chunk_size);  // total_uncompressed_size
-    cm = fm.i64(cm, 7, chunk_size);  // total_compressed_size
-    cm = fm.i64(cm, 9, data_page_offset);
-    fm.stop();
-  }
-  fm.stop();                 // ColumnChunk
-  fm.i64(1, 2, chunk_size);  // RowGroup.total_byte_size
-  fm.i64(2, 3, num_values);  // RowGroup.num_rows
-  fm.stop();                 // RowGroup
-  fm.stop();                 // FileMetaData
+  pq::FileMetaData file_metadata;
+  file_metadata.version  = 1;
+  file_metadata.num_rows = num_values;
+
+  // schema: root group with a single REQUIRED leaf "a". The metadata structs are built in place
+  // (emplace_back + reference) so that structs holding std::optional members are never copied
+  // through an initializer_list, which trips GCC's -Wmaybe-uninitialized on the empty optionals.
+  file_metadata.schema.reserve(2);
+  auto& root           = file_metadata.schema.emplace_back();
+  root.name            = "schema";
+  root.num_children    = 1;
+  root.repetition_type = pq::FieldRepetitionType::UNSPECIFIED;  // the root carries no repetition
+  auto& col            = file_metadata.schema.emplace_back();
+  col.type             = physical_type;
+  col.repetition_type  = pq::FieldRepetitionType::REQUIRED;
+  col.name             = "a";
+  if (utf8) { col.converted_type = pq::ConvertedType::UTF8; }
+
+  auto& row_group              = file_metadata.row_groups.emplace_back();
+  row_group.total_byte_size    = chunk_size;
+  row_group.num_rows           = num_values;
+  auto& chunk                  = row_group.columns.emplace_back();
+  chunk.file_offset            = data_page_offset;
+  auto& meta                   = chunk.meta_data;
+  meta.type                    = physical_type;
+  meta.encodings               = {pq::Encoding::RLE, encoding};
+  meta.path_in_schema          = {"a"};
+  meta.codec                   = pq::Compression::UNCOMPRESSED;
+  meta.num_values              = num_values;
+  meta.total_uncompressed_size = chunk_size;
+  meta.total_compressed_size   = chunk_size;
+  meta.data_page_offset        = data_page_offset;
+
+  auto const footer = parquet_delta_test::serialize_footer(file_metadata);
 
   std::vector<uint8_t> out;
   auto append = [&out](auto const& bytes) { out.insert(out.end(), bytes.begin(), bytes.end()); };
   out.insert(out.end(), {'P', 'A', 'R', '1'});
-  append(ph.buf);
+  append(page_header);
   append(body);
-  append(fm.buf);
-  auto const flen = static_cast<uint32_t>(fm.buf.size());
+  append(footer);
+  auto const flen = static_cast<uint32_t>(footer.size());
   for (int i = 0; i < 4; i++) {
     out.push_back((flen >> (8 * i)) & 0xff);
   }
@@ -307,8 +306,8 @@ inline std::vector<uint8_t> build_delta_binary_parquet(std::vector<int64_t> cons
   auto const body = encode_delta_binary_packed(values, block_size, mini_block_count);
   return wrap_single_page_parquet(body,
                                   values.size(),
-                                  parquet_delta_test::type_int64,
-                                  parquet_delta_test::enc_delta_binary,
+                                  cudf::io::parquet::Type::INT64,
+                                  cudf::io::parquet::Encoding::DELTA_BINARY_PACKED,
                                   false);
 }
 
@@ -343,15 +342,20 @@ inline std::vector<int64_t> delta_test_int64_values(int n, uint64_t seed = 101)
 // string encodings
 // ---------------------------------------------------------------------------------------------
 
-// alphanumeric strings with lengths varying in [1, max_length]; with shared_prefixes, each
-// string keeps a random-length prefix of its predecessor so the DELTA_BYTE_ARRAY prefix-length
-// stream also has varying non-zero deltas
+// strings mixing ASCII and valid non-ASCII UTF-8 sequences, with lengths varying in
+// [1, max_length]; with shared_prefixes, each string keeps a random-length prefix of its
+// predecessor so the DELTA_BYTE_ARRAY prefix-length stream also has varying non-zero deltas. The
+// multi-byte code points exercise the byte-wise length/prefix/suffix reconstruction paths.
 inline std::vector<std::string> delta_test_strings(int n,
                                                    bool shared_prefixes,
                                                    uint64_t seed     = 201,
                                                    size_t max_length = 20)
 {
   constexpr char alphabet[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  // 2- and 3-byte UTF-8 code points (e-acute, n-tilde, u-umlaut, euro, CJK, lambda) written as
+  // explicit bytes so the encoding does not depend on the compiler's execution character set
+  constexpr std::string_view utf8_tokens[] = {
+    "\xc3\xa9", "\xc3\xb1", "\xc3\xbc", "\xe2\x82\xac", "\xe4\xb8\xad", "\xce\xbb"};
   std::vector<std::string> out;
   out.reserve(n);
   std::string prev;
@@ -363,7 +367,18 @@ inline std::vector<std::string> delta_test_strings(int n,
       s               = prev.substr(0, keep);
     }
     while (s.size() < length) {
-      s += alphabet[delta_test_rand(seed) % (sizeof(alphabet) - 1)];
+      auto const r         = delta_test_rand(seed);
+      auto const remaining = length - s.size();
+      // roughly one position in four appends a multi-byte token when it fits; the rest stay ASCII.
+      // appending only whole tokens that fit keeps the byte length exactly `length`.
+      if (remaining >= 2 && r % 4 == 0) {
+        auto const& token = utf8_tokens[(r >> 2) % (sizeof(utf8_tokens) / sizeof(utf8_tokens[0]))];
+        if (token.size() <= remaining) {
+          s += token;
+          continue;
+        }
+      }
+      s += alphabet[r % (sizeof(alphabet) - 1)];
     }
     out.push_back(s);
     prev = std::move(s);
@@ -386,8 +401,8 @@ inline std::vector<uint8_t> build_delta_length_byte_array_parquet(
   }
   return wrap_single_page_parquet(body,
                                   strings.size(),
-                                  parquet_delta_test::type_byte_array,
-                                  parquet_delta_test::enc_delta_length_ba,
+                                  cudf::io::parquet::Type::BYTE_ARRAY,
+                                  cudf::io::parquet::Encoding::DELTA_LENGTH_BYTE_ARRAY,
                                   true);
 }
 
@@ -417,8 +432,8 @@ inline std::vector<uint8_t> build_delta_byte_array_parquet(std::vector<std::stri
   body.insert(body.end(), suffix_bytes.begin(), suffix_bytes.end());
   return wrap_single_page_parquet(body,
                                   strings.size(),
-                                  parquet_delta_test::type_byte_array,
-                                  parquet_delta_test::enc_delta_ba,
+                                  cudf::io::parquet::Type::BYTE_ARRAY,
+                                  cudf::io::parquet::Encoding::DELTA_BYTE_ARRAY,
                                   true);
 }
 
@@ -477,111 +492,82 @@ inline list_levels compute_list_levels(std::vector<size_t> const& sizes)
 
 // V2 data page + footer around the encoded `values` of a single list column "col" of leaf
 // "element" with the given physical type and encoding
-inline std::vector<uint8_t> wrap_single_page_list_parquet(list_levels const& levels,
-                                                          int num_rows,
-                                                          std::vector<uint8_t> const& values,
-                                                          int leaf_physical_type,
-                                                          int encoding,
-                                                          bool utf8)
+inline std::vector<uint8_t> wrap_single_page_list_parquet(
+  list_levels const& levels,
+  int num_rows,
+  std::vector<uint8_t> const& values,
+  cudf::io::parquet::Type leaf_physical_type,
+  cudf::io::parquet::Encoding encoding,
+  bool utf8)
 {
-  namespace pq = parquet_delta_test;
+  namespace pq = cudf::io::parquet;
 
   auto const num_values = static_cast<int>(levels.rep.size());
   auto const rep        = encode_levels_bit_packed(levels.rep, 1);  // max_rep_level 1
   auto const dfn        = encode_levels_bit_packed(levels.def, 2);  // max_def_level 3
   auto const page_size  = static_cast<int64_t>(rep.size() + dfn.size() + values.size());
 
-  thrift_compact_writer ph;
-  int p = ph.i32(0, 1, pq::page_type_data_page_v2);
-  p     = ph.i32(p, 2, page_size);
-  p     = ph.i32(p, 3, page_size);
-  p     = ph.field(p, 8, thrift_compact_writer::t_struct);  // data_page_header_v2
-  int d = ph.i32(0, 1, num_values);
-  d     = ph.i32(d, 2, levels.num_nulls);
-  d     = ph.i32(d, 3, num_rows);
-  d     = ph.i32(d, 4, encoding);
-  d     = ph.i32(d, 5, dfn.size());  // definition_levels_byte_length
-  d     = ph.i32(d, 6, rep.size());  // repetition_levels_byte_length
-  d     = ph.boolean(d, 7, false);   // is_compressed
-  ph.stop();
-  ph.stop();
+  auto const page_header = parquet_delta_test::serialize_data_page_header_v2(
+    num_values, levels.num_nulls, num_rows, encoding, dfn.size(), rep.size(), page_size);
 
   int const data_page_offset = 4;
-  auto const chunk_size      = static_cast<int64_t>(ph.buf.size()) + page_size;
+  auto const chunk_size      = static_cast<int64_t>(page_header.size()) + page_size;
 
-  thrift_compact_writer fm;
-  int f = fm.i32(0, 1, 2);                                // version
-  f     = fm.field(f, 2, thrift_compact_writer::t_list);  // schema
-  fm.list_header(4, thrift_compact_writer::t_struct);
-  {  // root: group "schema" with one child
-    int r = fm.binary(0, 4, "schema");
-    r     = fm.i32(r, 5, 1);
-    fm.stop();
-  }
-  {  // optional group "col", converted/logical type LIST, one child
-    int c = fm.i32(0, 3, pq::rep_optional);
-    c     = fm.binary(c, 4, "col");
-    c     = fm.i32(c, 5, 1);
-    c     = fm.i32(c, 6, pq::converted_list);
-    c     = fm.field(c, 10, thrift_compact_writer::t_struct);  // logicalType
-    fm.field(0, 3, thrift_compact_writer::t_struct);           //   LIST (empty struct)
-    fm.stop();
-    fm.stop();
-    fm.stop();
-  }
-  {  // repeated group "list" with one child
-    int g = fm.i32(0, 3, pq::rep_repeated);
-    g     = fm.binary(g, 4, "list");
-    g     = fm.i32(g, 5, 1);
-    fm.stop();
-  }
-  {  // optional leaf "element"
-    int e = fm.i32(0, 1, leaf_physical_type);
-    e     = fm.i32(e, 3, pq::rep_optional);
-    e     = fm.binary(e, 4, "element");
-    if (utf8) { e = fm.i32(e, 6, pq::converted_utf8); }
-    fm.stop();
-  }
-  f = fm.i64(f, 3, num_rows);
-  f = fm.field(f, 4, thrift_compact_writer::t_list);  // row_groups
-  fm.list_header(1, thrift_compact_writer::t_struct);
-  fm.field(0, 1, thrift_compact_writer::t_list);  // RowGroup.columns
-  fm.list_header(1, thrift_compact_writer::t_struct);
-  int cc = fm.i64(0, 2, data_page_offset);
-  cc     = fm.field(cc, 3, thrift_compact_writer::t_struct);  // meta_data
-  {
-    int cm = fm.i32(0, 1, leaf_physical_type);
-    cm     = fm.field(cm, 2, thrift_compact_writer::t_list);  // encodings
-    fm.list_header(2, thrift_compact_writer::t_i32);
-    fm.raw_i32(pq::enc_rle);
-    fm.raw_i32(encoding);
-    cm = fm.field(cm, 3, thrift_compact_writer::t_list);  // path_in_schema
-    fm.list_header(3, thrift_compact_writer::t_binary);
-    fm.raw_binary("col");
-    fm.raw_binary("list");
-    fm.raw_binary("element");
-    cm = fm.i32(cm, 4, 0);           // codec UNCOMPRESSED
-    cm = fm.i64(cm, 5, num_values);  // num_values counts level entries incl. empties
-    cm = fm.i64(cm, 6, chunk_size);
-    cm = fm.i64(cm, 7, chunk_size);
-    cm = fm.i64(cm, 9, data_page_offset);
-    fm.stop();
-  }
-  fm.stop();                 // ColumnChunk
-  fm.i64(1, 2, chunk_size);  // RowGroup.total_byte_size
-  fm.i64(2, 3, num_rows);    // RowGroup.num_rows
-  fm.stop();                 // RowGroup
-  fm.stop();                 // FileMetaData
+  pq::FileMetaData file_metadata;
+  file_metadata.version  = 2;
+  file_metadata.num_rows = num_rows;
+
+  // schema: root -> optional LIST group "col" -> repeated group "list" -> optional leaf "element".
+  // The metadata structs are built in place (emplace_back + reference) so that structs holding
+  // std::optional members are never copied through an initializer_list, which trips GCC's
+  // -Wmaybe-uninitialized on the empty optionals.
+  file_metadata.schema.reserve(4);
+  auto& root                 = file_metadata.schema.emplace_back();
+  root.name                  = "schema";
+  root.num_children          = 1;
+  root.repetition_type       = pq::FieldRepetitionType::UNSPECIFIED;
+  auto& list_col             = file_metadata.schema.emplace_back();
+  list_col.repetition_type   = pq::FieldRepetitionType::OPTIONAL;
+  list_col.name              = "col";
+  list_col.num_children      = 1;
+  list_col.converted_type    = pq::ConvertedType::LIST;
+  list_col.logical_type      = pq::LogicalType{pq::LogicalType::LIST};
+  auto& list_group           = file_metadata.schema.emplace_back();
+  list_group.repetition_type = pq::FieldRepetitionType::REPEATED;
+  list_group.name            = "list";
+  list_group.num_children    = 1;
+  auto& element              = file_metadata.schema.emplace_back();
+  element.type               = leaf_physical_type;
+  element.repetition_type    = pq::FieldRepetitionType::OPTIONAL;
+  element.name               = "element";
+  if (utf8) { element.converted_type = pq::ConvertedType::UTF8; }
+
+  auto& row_group              = file_metadata.row_groups.emplace_back();
+  row_group.total_byte_size    = chunk_size;
+  row_group.num_rows           = num_rows;
+  auto& chunk                  = row_group.columns.emplace_back();
+  chunk.file_offset            = data_page_offset;
+  auto& meta                   = chunk.meta_data;
+  meta.type                    = leaf_physical_type;
+  meta.encodings               = {pq::Encoding::RLE, encoding};
+  meta.path_in_schema          = {"col", "list", "element"};
+  meta.codec                   = pq::Compression::UNCOMPRESSED;
+  meta.num_values              = num_values;  // counts level entries incl. empties
+  meta.total_uncompressed_size = chunk_size;
+  meta.total_compressed_size   = chunk_size;
+  meta.data_page_offset        = data_page_offset;
+
+  auto const footer = parquet_delta_test::serialize_footer(file_metadata);
 
   std::vector<uint8_t> out;
   auto append = [&out](auto const& bytes) { out.insert(out.end(), bytes.begin(), bytes.end()); };
   out.insert(out.end(), {'P', 'A', 'R', '1'});
-  append(ph.buf);
+  append(page_header);
   append(rep);
   append(dfn);
   append(values);
-  append(fm.buf);
-  auto const flen = static_cast<uint32_t>(fm.buf.size());
+  append(footer);
+  auto const flen = static_cast<uint32_t>(footer.size());
   for (int i = 0; i < 4; i++) {
     out.push_back((flen >> (8 * i)) & 0xff);
   }
@@ -602,8 +588,8 @@ inline std::vector<uint8_t> build_delta_binary_list_parquet(
   return wrap_single_page_list_parquet(compute_list_levels(sizes),
                                        lists.size(),
                                        values,
-                                       parquet_delta_test::type_int64,
-                                       parquet_delta_test::enc_delta_binary,
+                                       cudf::io::parquet::Type::INT64,
+                                       cudf::io::parquet::Encoding::DELTA_BINARY_PACKED,
                                        false);
 }
 
@@ -626,8 +612,8 @@ inline std::vector<uint8_t> build_delta_length_byte_array_list_parquet(
   return wrap_single_page_list_parquet(compute_list_levels(sizes),
                                        lists.size(),
                                        body,
-                                       parquet_delta_test::type_byte_array,
-                                       parquet_delta_test::enc_delta_length_ba,
+                                       cudf::io::parquet::Type::BYTE_ARRAY,
+                                       cudf::io::parquet::Encoding::DELTA_LENGTH_BYTE_ARRAY,
                                        true);
 }
 
@@ -661,8 +647,8 @@ inline std::vector<uint8_t> build_delta_byte_array_list_parquet(
   return wrap_single_page_list_parquet(compute_list_levels(sizes),
                                        lists.size(),
                                        body,
-                                       parquet_delta_test::type_byte_array,
-                                       parquet_delta_test::enc_delta_ba,
+                                       cudf::io::parquet::Type::BYTE_ARRAY,
+                                       cudf::io::parquet::Encoding::DELTA_BYTE_ARRAY,
                                        true);
 }
 
