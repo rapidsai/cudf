@@ -125,10 +125,10 @@ __device__ void transform(float* arg0, float arg1, float arg2)
 {
   float input0      = arg1;
   float input1      = arg2;
-  float x_square    = cudf::ops::mul(input0, input0);
-  float y_square    = cudf::ops::mul(input1, input1);
-  float dot_product = cudf::ops::add(x_square, y_square);
-  float magnitude   = cudf::ops::sqrt(dot_product);
+  float x_square    = cudf::detail::ops::mul(input0, input0);
+  float y_square    = cudf::detail::ops::mul(input1, input1);
+  float dot_product = cudf::detail::ops::add(x_square, y_square);
+  float magnitude   = cudf::detail::ops::sqrt(dot_product);
   *arg0             = magnitude;
 }
 
