@@ -226,7 +226,8 @@ filtered_join::filtered_join(cudf::table_view const& right,
     _nulls_equal{compare_nulls},
     _right{right},
     _preprocessed_right{cudf::detail::row::equality::preprocessed_table::create(_right, stream)},
-    _bucket_storage{cuco::extent<std::size_t>{compute_bucket_storage_size(right, load_factor)},
+    _bucket_storage{cuco::extent<std::size_t>{
+                      compute_bucket_storage_size(right, checked_load_factor(load_factor))},
                     rmm::mr::polymorphic_allocator<char>{std::move(mr)},
                     stream.value()}
 {

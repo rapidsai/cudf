@@ -167,7 +167,7 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& right,
     _right{right},
     _preprocessed_right{cudf::detail::row::equality::preprocessed_table::create(_right, stream)},
     _hash_table{cuco::extent{static_cast<std::size_t>(right.num_rows())},
-                load_factor,
+                checked_load_factor(load_factor),
                 cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(),
                                            rhs_index_type{cudf::JoinNoMatch}}},
                 always_not_equal{},
@@ -179,10 +179,6 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& right,
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(0 != this->_right.num_columns(), "Hash join right table is empty");
-  CUDF_EXPECTS(load_factor > 0 && load_factor <= 1,
-               "Invalid load factor: must be greater than 0 and less than or equal to 1.",
-               std::invalid_argument);
-
   size_type const right_table_num_rows{_right.num_rows()};
 
   if (right_table_num_rows == 0) { return; }
