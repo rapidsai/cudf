@@ -1244,21 +1244,6 @@ target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_
 # https://github.com/NVIDIA/cccl/pull/2844
 target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1)
 
-# Specify the target module library dependencies
-target_link_libraries(
-  cudf
-  PUBLIC CCCL::CCCL $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
-  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
-          $<BUILD_LOCAL_INTERFACE:cuco::cuco>
-          ZLIB::ZLIB
-          ${CUDF_nvcomp_TARGET}
-          kvikio::kvikio
-          ${CUDF_nanoarrow_TARGET}
-          zstd
-          $<BUILD_LOCAL_INTERFACE:xxhash>
-          rtcx::rtcx
-)
-
 # When rmm is a static library being absorbed via whole-archive, strip nvtx3 from its public
 # interface. We bundle nvtx3 headers directly into cudf's install tree, so consumers get them from
 # cudf's include path without needing the nvtx3 target or find_dependency(nvtx3).
@@ -1280,7 +1265,7 @@ endif()
 # dependencies and export set metadata into cudf's interface.
 set(_absorbed_deps rmm rapids_logger)
 foreach(_dep IN LISTS _absorbed_deps)
-  set(_dep_link "${_dep}::${_dep}")
+  get_target_property(_dep_link "${_dep}::${_dep}" NAME)
   get_target_property(_target_type ${_dep_link} TYPE)
   if(NOT BUILD_SHARED_LIBS OR NOT _target_type STREQUAL "STATIC_LIBRARY")
     # If not building a shared library, or the dependency is not a static library, link normally.
@@ -1313,6 +1298,13 @@ foreach(_dep IN LISTS _absorbed_deps)
     cudf PRIVATE "$<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,${_dep_link}>>"
   )
 
+  # nvcomp_static has done a WHOLE_ARCHIVE on rmm and rapids_logger itself. Therefore it needs to
+  # come after our WHOLE_ARCHIVE otherwise we will get duplicate symbols for rmm and/or
+  # rapids_logger
+  if(TARGET nvcomp::nvcomp_static)
+    target_link_libraries(${_dep_link} INTERFACE nvcomp::nvcomp_static)
+  endif()
+
   # Merge the absorbed library's export set metadata into cudf-exports so the installed config has
   # find_dependency() calls for all transitive deps (e.g. nvtx3, CUDAToolkit from rmm).
   foreach(_mode build install)
@@ -1340,6 +1332,19 @@ foreach(_dep IN LISTS _absorbed_deps)
     endforeach()
   endforeach()
 endforeach()
+
+# Specify the target module library dependencies We do this after all the WHOLE_ARCHIVES to protect
+# against any of these libraries ever adding a rapids_logger / rmm hidden dependency
+target_link_libraries(
+  cudf
+  PUBLIC CCCL::CCCL $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> $<BUILD_LOCAL_INTERFACE:cuco::cuco> ZLIB::ZLIB
+          kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd $<BUILD_LOCAL_INTERFACE:xxhash> rtcx::rtcx
+)
+
+if(CUDF_DEPS_BUILD_SHARED OR NOT TARGET nvcomp::nvcomp_static)
+  target_link_libraries(cudf PRIVATE nvcomp::nvcomp)
+endif()
 
 # Add Conda library, and include paths if specified
 if(TARGET conda_env)
