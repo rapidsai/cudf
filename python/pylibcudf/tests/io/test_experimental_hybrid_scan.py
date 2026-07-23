@@ -80,8 +80,7 @@ def simple_parquet_options(
     its own independent copy.
     """
     # SourceInfo doesn't accept BytesIO, but that's fine for this test.
-    # type: ignore[arg-type]
-    source = plc.io.SourceInfo([io.BytesIO(simple_parquet_bytes)])
+    source = plc.io.SourceInfo([io.BytesIO(simple_parquet_bytes)])  # type: ignore[arg-type]
     return plc.io.parquet.ParquetReaderOptions.builder(source).build()
 
 
@@ -349,7 +348,7 @@ def test_hybrid_scan_materialize_columns(
     filter_data = [
         plc.gpumemoryview(
             rmm.DeviceBuffer.to_device(
-                simple_parquet_bytes[r.offset: r.offset + r.size],
+                simple_parquet_bytes[r.offset : r.offset + r.size],
                 plc.utils._get_stream(stream),
             )
         )
@@ -384,7 +383,7 @@ def test_hybrid_scan_materialize_columns(
     payload_data = [
         plc.gpumemoryview(
             rmm.DeviceBuffer.to_device(
-                simple_parquet_bytes[r.offset: r.offset + r.size],
+                simple_parquet_bytes[r.offset : r.offset + r.size],
                 plc.utils._get_stream(stream),
             )
         )
@@ -475,7 +474,7 @@ def test_hybrid_scan_single_step_materialize(
     all_columns_data = [
         plc.gpumemoryview(
             rmm.DeviceBuffer.to_device(
-                simple_parquet_bytes[r.offset: r.offset + r.size],
+                simple_parquet_bytes[r.offset : r.offset + r.size],
                 plc.utils._get_stream(stream),
             )
         )
@@ -557,7 +556,7 @@ def test_hybrid_scan_has_next_table_chunk(
     filter_data = [
         plc.gpumemoryview(
             rmm.DeviceBuffer.to_device(
-                simple_parquet_bytes[r.offset: r.offset + r.size],
+                simple_parquet_bytes[r.offset : r.offset + r.size],
                 plc.utils._get_stream(),
             )
         )
@@ -627,7 +626,7 @@ def test_hybrid_scan_chunked_reading(
     filter_data = [
         plc.gpumemoryview(
             rmm.DeviceBuffer.to_device(
-                simple_parquet_bytes[r.offset: r.offset + r.size],
+                simple_parquet_bytes[r.offset : r.offset + r.size],
                 plc.utils._get_stream(stream),
             )
         )
@@ -718,7 +717,7 @@ def test_hybrid_scan_metadata_with_page_index(
     """Test that page index setup enables page-level filtering.
 
     This test mirrors the C++ page-index filter tests. It verifies that:
-    1. Before setup_page_index(), page-statistics pruning falls back toall-true row mask
+    1. Before setup_page_index(), page-statistics pruning falls back to all-true row mask
     2. After fetching page index bytes and calling setup_page_index(),
        the page index is available and page-level operations work correctly
     """
@@ -765,7 +764,7 @@ def test_hybrid_scan_metadata_with_page_index(
     # Fetch page index bytes from the parquet file
     simple_parquet_mv = memoryview(simple_parquet_bytes)
     page_index_mv = simple_parquet_mv[
-        page_index_byte_range.offset: page_index_byte_range.offset
+        page_index_byte_range.offset : page_index_byte_range.offset
         + page_index_byte_range.size
     ]
 
