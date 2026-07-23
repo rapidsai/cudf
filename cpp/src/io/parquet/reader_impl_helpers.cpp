@@ -726,11 +726,11 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
     auto const max_def_level = schema.max_definition_level;
     auto const max_rep_level = schema.max_repetition_level;
 
+    // Continue if a column chunk does not have an offset index. This is because the decode
+    // paths can use column-index-derived information only together with offset index data.
     if (not col_chunk.offset_index.has_value()) { continue; }
 
     auto const& offset_index = col_chunk.offset_index.value();
-    auto const* column_index =
-      col_chunk.column_index.has_value() ? &col_chunk.column_index.value() : nullptr;
 
     auto& chunk_info     = chunks[col_idx];
     auto const num_pages = offset_index.page_locations.size();
@@ -754,6 +754,9 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
           offset_index.page_locations[0].offset - col_chunk.meta_data.data_page_offset;
       }
     }
+
+    auto const* column_index =
+      col_chunk.column_index.has_value() ? &col_chunk.column_index.value() : nullptr;
 
     // Use the definition_level_histogram to get num_valid and num_null. For now, these are
     // only ever used for byte array columns. The repetition_level_histogram might be
@@ -826,13 +829,9 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
         }
       }
 
-      // If none of the ifs above triggered, then we have neither histogram (likely the writer
-      // doesn't produce them, the r:0 d:1 case should have been handled above). The column index
-      // doesn't give us value counts, so we'll have to rely on the page headers. If the histogram
-      // info is missing or insufficient, page locations remain usable but the values remain unset.
-      // TODO: cudf will still set the per-page var_bytes to '0' even for all null pages. Need to
-      // check the behavior of other implementations (once there are some). Some may not set the
-      // var bytes for all null pages, so check the `null_pages` field on the column index.
+      // If column-index metadata is insufficient to derive all value information, leave those
+      // fields unset. Later decoding derives the missing values from page headers and levels, and
+      // scans string data when its byte size is unavailable.
 
       chunk_info.pages.push_back(std::move(pg_info));
     }
