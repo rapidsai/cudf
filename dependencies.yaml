@@ -815,6 +815,7 @@ dependencies:
         packages:
           - cuda-cudart-dev
           - cuda-cupti-dev
+          - cuda-profiler-api
           - cuda-nvrtc-dev
           - cuda-nvtx-dev
           - cuda-sanitizer-api
