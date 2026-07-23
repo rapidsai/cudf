@@ -356,8 +356,7 @@ def _read_with_hybrid_scan(
         # the page index for all files, which may be too expensive.
         row_mask = reader.build_all_true_row_mask(row_group_indices, stream=stream)
 
-        if prefetched is not None:
-            assert prefetched.filter_host is not None
+        if prefetched is not None and prefetched.filter_host is not None:
             filter_chunks = copy_host_ranges_to_device(
                 prefetched.filter_host,
                 prefetched.filter_ranges,

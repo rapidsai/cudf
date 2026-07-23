@@ -103,6 +103,9 @@ cdef class gpumemoryview:
         start, stop, step = index.indices(self.nbytes)
         if step != 1:
             raise ValueError("gpumemoryview only supports step=1 slices")
-        return _make_subview(self, self.ptr + start, stop - start)
+        length = stop - start
+        if length <= 0:
+            return _make_subview(self, self.ptr + start, 0)
+        return _make_subview(self, self.ptr + start, length)
 
     __hash__ = None
