@@ -35,6 +35,7 @@ dependencies:
 - flatbuffers==24.3.25
 - fsspec>=0.6.0
 - gcc_linux-aarch64=14.*
+- gdb
 - hypothesis>=6.131.7
 - identify>=2.5.20
 - include-what-you-use==0.24.0
@@ -46,10 +47,10 @@ dependencies:
 - libkvikio==26.10.*,>=0.0.0a0
 - libnvcomp-dev==5.2.0.10
 - libnvjitlink-dev
-- librapidsmpf==26.8.*,>=0.0.0a0
+- librapidsmpf==26.10.*,>=0.0.0a0
 - librdkafka<2.15.0a0
 - librmm==26.10.*,>=0.0.0a0
-- libucxx==0.51.*,>=0.0.0a0
+- libucxx==0.52.*,>=0.0.0a0
 - make
 - matplotlib-base<3.11
 - mmh3
@@ -76,6 +77,7 @@ dependencies:
 - pandoc
 - polars>=1.35,<1.43
 - pre-commit
+- psutil
 - pyarrow>=19.0.0,<24
 - pytables
 - pytest-benchmark
@@ -83,7 +85,6 @@ dependencies:
 - pytest-cov
 - pytest-httpserver
 - pytest-rerunfailures!=16.0.0
-- pytest-timeout
 - pytest-xdist
 - pytest<9.1.0
 - python-calamine
@@ -112,7 +113,7 @@ dependencies:
 - structlog
 - sysroot_linux-aarch64==2.28
 - typing_extensions>=4.0.0
-- ucxx==0.51.*,>=0.0.0a0
+- ucxx==0.52.*,>=0.0.0a0
 - xlrd
 - xlsxwriter
 - zlib>=1.2.13
