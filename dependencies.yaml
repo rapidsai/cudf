@@ -410,6 +410,14 @@ files:
       - test_python_common
       - test_python_cudf_polars
       - cudf_polars_trace
+  py_tpch_cudf_polars:
+    output: pyproject
+    pyproject_dir: python/cudf_polars
+    extras:
+      table: project.optional-dependencies
+      key: tpch
+    includes:
+      - test_cudf_polars_tpch
   py_trace_cudf_polars:
     output: pyproject
     pyproject_dir: python/cudf_polars

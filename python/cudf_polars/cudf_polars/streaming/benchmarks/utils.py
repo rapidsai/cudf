@@ -73,24 +73,6 @@ except ImportError:
     pynvml = None
 
 
-def _is_blackwell_gpu() -> bool:
-    """Return True if any visible GPU is Blackwell (SM 10.x+) architecture."""
-    # TODO: switch to cuda.core.system for GPU arch detection once available;
-    # see https://github.com/rapidsai/cudf/pull/22305
-    if pynvml is None:
-        return False
-    try:
-        pynvml.nvmlInit()
-        for i in range(pynvml.nvmlDeviceGetCount()):
-            handle = pynvml.nvmlDeviceGetHandleByIndex(i)
-            major, _ = pynvml.nvmlDeviceGetCudaComputeCapability(handle)
-            if major >= 10:
-                return True
-    except Exception:
-        pass
-    return False
-
-
 try:
     import cudf_polars.dsl.tracing
     import cudf_polars.quent

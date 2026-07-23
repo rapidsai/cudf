@@ -38,6 +38,9 @@ rapids-pip-retry install \
     "$(echo "${CUDF_STREAMING_WHEELHOUSE}"/cudf_streaming_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
     -r "${TPCH_REQUIREMENTS}"
 
+rapids-logger "Check GPU usage"
+nvidia-smi
+
 rapids-logger "Generating TPC-H data at SF=1"
 
 export TPCH_DATA_DIR
