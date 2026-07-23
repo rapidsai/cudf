@@ -1298,9 +1298,9 @@ foreach(_dep IN LISTS _absorbed_deps)
     cudf PRIVATE "$<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,${_dep_link}>>"
   )
 
-  # nvcomp_static has done a WHOLE_ARCHIVE on rmm and rapids_logger itself.
-  # Therefore it needs to come after our WHOLE_ARCHIVE otherwise we will
-  # get duplicate symbols for rmm and/or rapids_logger
+  # nvcomp_static has done a WHOLE_ARCHIVE on rmm and rapids_logger itself. Therefore it needs to
+  # come after our WHOLE_ARCHIVE otherwise we will get duplicate symbols for rmm and/or
+  # rapids_logger
   if(TARGET nvcomp::nvcomp_static)
     target_link_libraries(${_dep_link} INTERFACE nvcomp::nvcomp_static)
   endif()
@@ -1333,21 +1333,13 @@ foreach(_dep IN LISTS _absorbed_deps)
   endforeach()
 endforeach()
 
-# Specify the target module library dependencies
-# We do this after all the WHOLE_ARCHIVES to protect against
-# any of these libraries ever adding a rapids_logger / rmm hidden
-# dependency
+# Specify the target module library dependencies We do this after all the WHOLE_ARCHIVES to protect
+# against any of these libraries ever adding a rapids_logger / rmm hidden dependency
 target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
-  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
-          $<BUILD_LOCAL_INTERFACE:cuco::cuco>
-          ZLIB::ZLIB
-          kvikio::kvikio
-          ${CUDF_nanoarrow_TARGET}
-          zstd
-          $<BUILD_LOCAL_INTERFACE:xxhash>
-          rtcx::rtcx
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> $<BUILD_LOCAL_INTERFACE:cuco::cuco> ZLIB::ZLIB
+          kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd $<BUILD_LOCAL_INTERFACE:xxhash> rtcx::rtcx
 )
 
 if(CUDF_DEPS_BUILD_SHARED OR NOT TARGET nvcomp::nvcomp_static)
