@@ -684,6 +684,13 @@ std::vector<parquet::FileMetaData> read_parquet_footers(
   return detail_parquet::read_parquet_footers(sources);
 }
 
+parquet_metadata::column_chunk_metadata columnchunk_metadata(
+  std::vector<parquet::FileMetaData>&& parquet_metadatas)
+{
+  CUDF_FUNC_RANGE();
+  return detail_parquet::columnchunk_metadata(std::move(parquet_metadatas));
+}
+
 /**
  * @copydoc cudf::io::merge_row_group_metadata
  */

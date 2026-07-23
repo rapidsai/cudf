@@ -1203,4 +1203,18 @@ std::vector<parquet::FileMetaData> read_parquet_footers(
     .get_parquet_metadatas();
 }
 
+parquet_metadata::column_chunk_metadata columnchunk_metadata(
+  std::vector<parquet::FileMetaData>&& parquet_metadatas)
+{
+  // Do not use arrow schema when only reading the parquet footer metadata.
+  constexpr auto use_arrow_schema = false;
+
+  // We need schema index mappings when sources may have mismatched schemas.
+  constexpr auto has_cols_from_mismatched_srcs = true;
+
+  return aggregate_reader_metadata(
+           std::move(parquet_metadatas), use_arrow_schema, has_cols_from_mismatched_srcs)
+    .get_column_chunk_metadata();
+}
+
 }  // namespace cudf::io::parquet::detail

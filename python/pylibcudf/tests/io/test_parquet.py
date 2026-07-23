@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 import io
 import os
+from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -492,6 +493,35 @@ def test_file_metadata_row_groups_and_column_chunks() -> None:
                 == pa_col_chunk.total_compressed_size
             )
             assert meta_data.path_in_schema[-1] == pa_col_chunk.path_in_schema
+
+
+@pytest.mark.parametrize("num_files", [1, 3])
+def test_columnchunk_metadata_from_file_footers(
+    tmp_path: Path, num_files: int
+) -> None:
+    table = pa.table(
+        {
+            "a": list(range(10)),
+            "b": [x * 10 for x in range(10)],
+        }
+    )
+
+    parquet_paths = []
+    for i in range(num_files):
+        parquet_path = tmp_path / f"columnchunk-metadata-{i}.parquet"
+        write_table(table, parquet_path, row_group_size=5)
+        parquet_paths.append(parquet_path)
+
+    source_info = plc.io.SourceInfo(parquet_paths)
+    got = plc.io.parquet_metadata.read_parquet_metadata(
+        source_info
+    ).columnchunk_metadata()
+
+    assert set(got) == {"a", "b"}
+    assert len(got["a"]) == num_files * 2
+    assert len(got["b"]) == num_files * 2
+    assert all(size > 0 for size in got["a"])
+    assert all(size > 0 for size in got["b"])
 
 
 def test_file_metadata_wrappers_not_directly_constructible() -> None:

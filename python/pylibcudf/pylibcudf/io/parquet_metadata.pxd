@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from pylibcudf.io.types cimport SourceInfo
@@ -96,3 +96,4 @@ cdef class RowGroup:
 
 cpdef ParquetMetadata read_parquet_metadata(SourceInfo src_info)
 cpdef list read_parquet_footers(SourceInfo src_info)
+cpdef dict columnchunk_metadata(list parquet_metadatas)
