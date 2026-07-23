@@ -835,30 +835,25 @@ dependencies:
               use_cuda_wheels: "true"
             packages:
               - cuda-toolkit[nvcc,nvrtc]==12.*
+              # cuda-toolkit before 12.6.3 does not have the `cufile` extra.
+              - nvidia-cufile-cu12
+              # We always want nvJitLink >= whatever minor version was available in the build environment
+              # nvJitLink tends to follow the CTK's minor versions, but check at https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html
+              #
+              # ref: https://github.com/rapidsai/cudf/pull/20873
+              - nvidia-nvjitlink-cu12>=12.9,<13
           - matrix:
               cuda: "13.*"
               cuda_suffixed: "true"
               use_cuda_wheels: "true"
             packages:
-              - cuda-toolkit[nvcc,nvrtc]==13.*
-          # We always want nvJitLink >= whatever minor version was available in the build environment
-          # nvJitLink tends to follow the CTK's minor versions, but check at https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html
-          #
-          # ref: https://github.com/rapidsai/cudf/pull/20873
-          - matrix:
-              cuda: "12.9"
-              use_cuda_wheels: "true"
-            packages:
-              - nvidia-nvjitlink-cu12>=12.9,<13
-          - matrix:
-              cuda: "13.*"
-              use_cuda_wheels: "true"
-            packages:
+              - cuda-toolkit[cufile,nvcc,nvrtc]==13.*
               - &nvjitlink_cu13 nvidia-nvjitlink>=13.3,<14
           # if no matching matrix selectors passed, list the CUDA 13 requirement
           # (just as a source of documentation, as this populates pyproject.toml in source control)
           - matrix:
             packages:
+              - cuda-toolkit[cufile,nvcc,nvrtc]==13.*
               - *nvjitlink_cu13
   cuda_static:
     common:
@@ -1407,8 +1402,6 @@ dependencies:
               cuda_suffixed: "true"
             packages:
               - libkvikio-cu12==26.10.*,>=0.0.0a0
-              # cuda-toolkit before 12.6.3 does not have the `cufile` extra.
-              - nvidia-cufile-cu12
           - matrix:
               cuda: "13.*"
               cuda_suffixed: "true"
