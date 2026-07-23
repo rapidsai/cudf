@@ -32,27 +32,6 @@ using parquet::detail::input_column_info;
 using parquet::detail::row_group_info;
 
 /**
- * @brief Checks whether column indexes are present for selected columns.
- */
-[[nodiscard]] bool has_column_index(std::span<metadata_base const> file_metadatas,
-                                    std::span<std::vector<size_type> const> row_group_indices,
-                                    std::span<size_type const> schema_indices);
-
-/**
- * @brief Checks whether offset indexes are present for selected columns.
- */
-[[nodiscard]] bool has_offset_index(std::span<metadata_base const> file_metadatas,
-                                    std::span<std::vector<size_type> const> row_group_indices,
-                                    std::span<size_type const> schema_indices);
-
-/**
- * @brief Checks whether column and offset indexes are present for selected columns.
- */
-[[nodiscard]] bool has_page_index(std::span<metadata_base const> file_metadatas,
-                                  std::span<std::vector<size_type> const> row_group_indices,
-                                  std::span<size_type const> schema_indices);
-
-/**
  * @brief Class for parsing dataset metadata
  */
 struct metadata : public metadata_base {
@@ -68,6 +47,19 @@ struct metadata : public metadata_base {
 
 class aggregate_reader_metadata : public aggregate_reader_metadata_base {
  private:
+  /**
+   * @brief Check whether selected columns have column and offset indexes
+   *
+   * Schema indices are mapped to each source before locating the column chunks.
+   *
+   * @param row_group_indices Row group indices, one vector per source
+   * @param schema_indices Schema indices from the first source
+   * @return A pair indicating column-index and offset-index presence, respectively
+   */
+  [[nodiscard]] std::pair<bool, bool> page_index_presence(
+    std::span<std::vector<size_type> const> row_group_indices,
+    std::span<size_type const> schema_indices) const;
+
   /**
    * @brief Filters the row groups using dictionary pages
    *

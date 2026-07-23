@@ -157,6 +157,7 @@ struct page_index_info {
   int32_t num_nulls;
   int32_t num_valids;
   int32_t str_bytes;
+  int32_t has_value_info;
 };
 
 /**
@@ -168,17 +169,19 @@ struct copy_page_info {
 
   __device__ constexpr void operator()(size_type idx)
   {
-    auto& pg                = pages[idx];
-    auto const& pi          = page_indexes[idx];
-    pg.num_rows             = pi.num_rows;
-    pg.chunk_row            = pi.chunk_row;
-    pg.has_page_index       = true;
-    pg.num_nulls            = pi.num_nulls;
-    pg.num_valids           = pi.num_valids;
-    pg.str_bytes_from_index = pi.str_bytes;
-    pg.str_bytes            = pi.str_bytes;
-    pg.start_val            = 0;
-    pg.end_val              = pg.num_valids;
+    auto& pg          = pages[idx];
+    auto const& pi    = page_indexes[idx];
+    pg.num_rows       = pi.num_rows;
+    pg.chunk_row      = pi.chunk_row;
+    pg.has_value_info = pi.has_value_info != 0;
+    pg.start_val      = 0;
+    if (pg.has_value_info) {
+      pg.num_nulls            = pi.num_nulls;
+      pg.num_valids           = pi.num_valids;
+      pg.str_bytes_from_index = pi.str_bytes;
+      pg.str_bytes            = pi.str_bytes;
+      pg.end_val              = pg.num_valids;
+    }
   }
 };
 

@@ -280,12 +280,16 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
     size_t start_row       = 0;
     page_count += chunk.num_dict_pages;
     for (size_t p = 0; p < chunk_info.pages.size(); p++, page_count++) {
-      auto& page      = page_indexes[page_count];
-      page.num_rows   = chunk_info.pages[p].num_rows;
-      page.chunk_row  = start_row;
-      page.num_nulls  = chunk_info.pages[p].num_nulls.value_or(0);
-      page.num_valids = chunk_info.pages[p].num_valid.value_or(0);
-      page.str_bytes  = chunk_info.pages[p].var_bytes_size.value_or(0);
+      auto& page          = page_indexes[page_count];
+      page.num_rows       = chunk_info.pages[p].num_rows;
+      page.chunk_row      = start_row;
+      page.num_nulls      = chunk_info.pages[p].num_nulls.value_or(0);
+      page.num_valids     = chunk_info.pages[p].num_valid.value_or(0);
+      page.str_bytes      = chunk_info.pages[p].var_bytes_size.value_or(0);
+      page.has_value_info = static_cast<int32_t>(
+        (chunk_info.pages[p].num_nulls.has_value() and chunk_info.pages[p].num_valid.has_value() and
+         (chunk.physical_type != Type::BYTE_ARRAY or
+          chunk_info.pages[p].var_bytes_size.has_value())));
 
       start_row += page.num_rows;
     }

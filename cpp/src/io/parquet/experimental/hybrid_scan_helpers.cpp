@@ -100,68 +100,7 @@ namespace {
            : byte_range_info{};
 }
 
-std::pair<bool, bool> compute_page_index_presence(
-  std::span<metadata_base const> file_metadatas,
-  std::span<std::vector<size_type> const> row_group_indices,
-  std::span<size_type const> schema_indices)
-{
-  auto has_column = true;
-  auto has_offset = true;
-
-  auto file_metadata_iter = file_metadatas.begin();
-  for (auto const& rg_indices : row_group_indices) {
-    auto const& file_metadata = *file_metadata_iter++;
-    std::vector<std::optional<size_type>> cached_offsets(schema_indices.size());
-    for (auto const rg_index : rg_indices) {
-      auto const& row_group   = file_metadata.row_groups[rg_index];
-      auto cached_offset_iter = cached_offsets.begin();
-      for (auto const schema_idx : schema_indices) {
-        auto& colchunk_offset = *cached_offset_iter++;
-        colchunk_offset =
-          parquet::detail::find_colchunk_iter_offset(row_group, schema_idx, colchunk_offset);
-        auto const has_colchunk = colchunk_offset.has_value();
-        auto const has_column_index =
-          has_colchunk and row_group.columns[colchunk_offset.value()].column_index.has_value();
-        auto const has_offset_index =
-          has_colchunk and row_group.columns[colchunk_offset.value()].offset_index.has_value();
-        if (has_column_index and has_offset_index) {
-          auto const& col_chunk = row_group.columns[colchunk_offset.value()];
-          CUDF_EXPECTS(col_chunk.column_index->min_values.size() ==
-                         col_chunk.offset_index->page_locations.size(),
-                       "Column index and offset index page counts must match");
-        }
-        has_column &= has_column_index;
-        has_offset &= has_offset_index;
-      }
-    }
-  }
-  return {has_column, has_offset};
-}
-
 }  // namespace
-
-bool has_column_index(std::span<metadata_base const> file_metadatas,
-                      std::span<std::vector<size_type> const> row_group_indices,
-                      std::span<size_type const> schema_indices)
-{
-  return compute_page_index_presence(file_metadatas, row_group_indices, schema_indices).first;
-}
-
-bool has_offset_index(std::span<metadata_base const> file_metadatas,
-                      std::span<std::vector<size_type> const> row_group_indices,
-                      std::span<size_type const> schema_indices)
-{
-  return compute_page_index_presence(file_metadatas, row_group_indices, schema_indices).second;
-}
-
-bool has_page_index(std::span<metadata_base const> file_metadatas,
-                    std::span<std::vector<size_type> const> row_group_indices,
-                    std::span<size_type const> schema_indices)
-{
-  auto const [has_column, has_offset] =
-    compute_page_index_presence(file_metadatas, row_group_indices, schema_indices);
-  return has_column and has_offset;
-}
 
 metadata::metadata(cudf::host_span<uint8_t const> footer_bytes)
 {
@@ -248,6 +187,43 @@ std::vector<text::byte_range_info> aggregate_reader_metadata::page_index_byte_ra
                  });
 
   return page_index_byte_ranges;
+}
+
+std::pair<bool, bool> aggregate_reader_metadata::page_index_presence(
+  std::span<std::vector<size_type> const> row_group_indices,
+  std::span<size_type const> schema_indices) const
+{
+  CUDF_EXPECTS(row_group_indices.size() == per_file_metadata.size(),
+               "Row group indices must be provided for every source");
+  auto has_column = true;
+  auto has_offset = true;
+
+  for (size_type src_idx = 0; std::cmp_less(src_idx, row_group_indices.size()); ++src_idx) {
+    auto const& file_metadata = per_file_metadata[src_idx];
+    for (auto const schema_idx : schema_indices) {
+      auto const mapped_schema_idx = map_schema_index(schema_idx, src_idx);
+      std::optional<size_type> colchunk_offset;
+      for (auto const rg_index : row_group_indices[src_idx]) {
+        auto const& row_group = file_metadata.row_groups[rg_index];
+        colchunk_offset =
+          parquet::detail::find_colchunk_iter_offset(row_group, mapped_schema_idx, colchunk_offset);
+        auto const has_colchunk = colchunk_offset.has_value();
+        auto const has_column_index =
+          has_colchunk and row_group.columns[colchunk_offset.value()].column_index.has_value();
+        auto const has_offset_index =
+          has_colchunk and row_group.columns[colchunk_offset.value()].offset_index.has_value();
+        if (has_column_index and has_offset_index) {
+          auto const& col_chunk = row_group.columns[colchunk_offset.value()];
+          CUDF_EXPECTS(col_chunk.column_index->min_values.size() ==
+                         col_chunk.offset_index->page_locations.size(),
+                       "Column index and offset index page counts must match");
+        }
+        has_column &= has_column_index;
+        has_offset &= has_offset_index;
+      }
+    }
+  }
+  return {has_column, has_offset};
 }
 
 std::vector<FileMetaData> aggregate_reader_metadata::parquet_metadatas() const

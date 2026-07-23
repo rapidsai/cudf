@@ -568,8 +568,8 @@ class reader_impl {
 
   bool _strings_to_categorical = false;
 
-  // are there usable page indexes available
-  bool _has_page_index = false;
+  // are offset indexes available for selected row groups
+  bool _has_offset_index = false;
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 

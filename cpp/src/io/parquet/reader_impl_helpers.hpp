@@ -75,11 +75,6 @@ struct row_group_info {
 
   // Optional metadata pulled from the column and offset indexes, if present.
   std::optional<std::vector<column_chunk_info>> column_chunks;
-
-  /**
-   * @brief Indicates the presence of page-level indexes.
-   */
-  [[nodiscard]] bool has_page_index() const { return column_chunks.has_value(); }
 };
 
 /**
@@ -421,7 +416,24 @@ class aggregate_reader_metadata {
   aggregate_reader_metadata(aggregate_reader_metadata&&)                 = default;
   aggregate_reader_metadata& operator=(aggregate_reader_metadata&&)      = default;
 
+  /**
+   * @brief Get the row group object
+   *
+   * @param row_group_index Index of the row group
+   * @param src_idx Index of the source to get the row group from
+   * @return Const reference to the row group object
+   */
   [[nodiscard]] RowGroup const& get_row_group(size_type row_group_index, size_type src_idx) const;
+
+  /**
+   * @brief Check if all row groups have an offset index
+   *
+   * @param row_groups Span of row group objects
+   * @param input_columns Span of input column objects
+   * @return True if all row groups have an offset index
+   */
+  [[nodiscard]] bool has_offset_index(std::span<row_group_info const> row_groups,
+                                      std::span<input_column_info const> input_columns) const;
 
   /**
    * @brief Get Parquet file metadatas

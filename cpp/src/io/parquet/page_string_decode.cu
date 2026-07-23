@@ -520,7 +520,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
 
   if (t == 0) {
     // don't clobber these if they're already computed from the index
-    if (!pp->has_page_index) {
+    if (!pp->has_value_info) {
       pp->num_nulls  = 0;
       pp->num_valids = 0;
     }
@@ -553,7 +553,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
 
   // if we have size info, then we only need to do this for bounds pages
-  if (pp->has_page_index && !is_bounds_pg) { return; }
+  if (pp->has_value_info && !is_bounds_pg) { return; }
 
   // Zero out everything and return early if the page is pruned
   if (not page_mask.empty() and not page_mask[page_idx]) {
@@ -646,7 +646,7 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size)
       is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
 
     // if we have size info, then we only need to do this for bounds pages
-    if (pp->has_page_index && !is_bounds_pg) {
+    if (pp->has_value_info && !is_bounds_pg) {
       // check if we need to store values from the index
       if (t == 0 && is_page_contained(s->page, s->col.start_row, min_row, num_rows)) {
         pp->str_bytes = pp->str_bytes_from_index;
@@ -728,7 +728,7 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
     is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
 
   // if we have size info, then we only need to do this for bounds pages
-  if (pp->has_page_index && !is_bounds_pg) {
+  if (pp->has_value_info && !is_bounds_pg) {
     // check if we need to store values from the index
     if (t == 0 && is_page_contained(s->page, s->col.start_row, min_row, num_rows)) {
       pp->str_bytes = pp->str_bytes_from_index;
@@ -842,7 +842,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
 
   // if we have size info, then we only need to do this for bounds pages
-  if (pp->has_page_index && !is_bounds_pg) {
+  if (pp->has_value_info && !is_bounds_pg) {
     // check if we need to store values from the index
     if (t == 0 && is_page_contained(s->page, s->col.start_row, min_row, num_rows)) {
       pp->str_bytes = pp->str_bytes_from_index;

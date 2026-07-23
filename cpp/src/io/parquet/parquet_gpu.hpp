@@ -374,7 +374,7 @@ struct PageInfo {
   Encoding definition_level_encoding;  // Encoding used for definition levels (data page)
   Encoding repetition_level_encoding;  // Encoding used for repetition levels (data page)
   bool is_compressed;                  // Whether the page is compressed (V2 header)
-  bool has_page_index;  // true if str_bytes, num_valids, etc are derivable from page indexes
+  bool has_value_info;  // true if str_bytes, num_valids, etc are derivable from page indexes
 };
 
 // forward declaration

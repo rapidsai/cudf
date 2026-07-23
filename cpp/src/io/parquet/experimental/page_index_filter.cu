@@ -896,8 +896,10 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
     return build_all_true_row_mask(row_group_indices, stream, mr);
   }
 
-  // We need both column and offset index to be present for each participating column
-  if (not has_page_index(per_file_metadata, row_group_indices, stats_column_schemas)) {
+  // We need both column and offset indexes to be present for each participating column.
+  auto const [has_column_index, has_offset_index] =
+    page_index_presence(row_group_indices, stats_column_schemas);
+  if (not(has_column_index and has_offset_index)) {
     CUDF_LOG_WARN(
       "Encountered missing Parquet column or offset index for one or more "
       "page-statistics filter columns; skipping page-statistics pruning");
@@ -1026,7 +1028,9 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     });
 
   // Mapping a row mask to data pages only requires page row locations from the offset index.
-  if (not has_offset_index(per_file_metadata, row_group_indices, column_schema_indices)) {
+  auto const has_offset_index =
+    page_index_presence(row_group_indices, column_schema_indices).second;
+  if (not has_offset_index) {
     CUDF_LOG_WARN(
       "Encountered missing Parquet offset index for one or more output columns. Skipping page "
       "pruning.");
