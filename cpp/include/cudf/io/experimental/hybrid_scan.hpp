@@ -74,7 +74,8 @@ enum class use_data_page_mask : bool {
  * auto reader_b = std::make_unique<parquet::experimental::hybrid_scan_reader>(*metadata);
  * @endcode
  *
- * @note The metadata is immutable once constructed. Readers sharing one instance must read disjoint
+ * @note The metadata is immutable after `setup_page_index()` has been called (or immediately after
+ * construction if page index setup is skipped). Readers sharing one instance must read disjoint
  * row-group ranges of the same single file; such reads do not mutate the shared metadata, so they
  * may run concurrently. This handle does not support multi-source (multi-file) metadata.
  */

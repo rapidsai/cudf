@@ -379,8 +379,7 @@ def _read_with_hybrid_scan(
             stream=stream,
         )
 
-        if prefetched is not None:
-            assert prefetched.payload_host is not None
+        if prefetched is not None and prefetched.payload_host is not None:
             payload_chunks = copy_host_ranges_to_device(
                 prefetched.payload_host,
                 prefetched.payload_ranges,
@@ -485,7 +484,7 @@ class SplitScan(IR):
         "total_splits",
         "parquet_options",
     )
-    _n_non_child_args = 14
+    _n_non_child_args = 15
     base_scan: Scan
     """Scan operation this node is based on."""
     paths: list[str]

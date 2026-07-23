@@ -824,6 +824,7 @@ cdef class HybridScanReader:
 
         self._stream = _get_stream(stream)
         self.mr = _get_memory_resource(mr)
+        self._filter_chunk_data = column_chunk_data
 
         cdef column_view mask_view = row_mask.view()
         with nogil:
@@ -862,6 +863,7 @@ cdef class HybridScanReader:
             c_result = move(self.c_obj.get()[0].materialize_filter_columns_chunk(
                 mask_view
             ))
+        self._filter_chunk_data = None
         return TableWithMetadata.from_libcudf(
             c_result, self._stream, self.mr
         )
@@ -909,6 +911,7 @@ cdef class HybridScanReader:
 
         self._stream = _get_stream(stream)
         self.mr = _get_memory_resource(mr)
+        self._payload_chunk_data = column_chunk_data
 
         cdef column_view mask_view = row_mask.view()
         with nogil:
@@ -947,6 +950,7 @@ cdef class HybridScanReader:
             c_result = move(self.c_obj.get()[0].materialize_payload_columns_chunk(
                 mask_view
             ))
+        self._payload_chunk_data = None
         return TableWithMetadata.from_libcudf(
             c_result, self._stream, self.mr
         )

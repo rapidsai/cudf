@@ -93,7 +93,7 @@ cdef class gpumemoryview:
         return self.nbytes
 
     def __len__(self):
-        return self.obj.__cuda_array_interface__["shape"][0]
+        return self.cai["shape"][0]
 
     def __getitem__(self, index):
         if not isinstance(index, slice):

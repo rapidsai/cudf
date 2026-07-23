@@ -235,6 +235,8 @@ fetch_byte_ranges_to_device_async_impl(
       // Total buffer size required for column chunks of this source
       auto const buffer_size = std::accumulate(
         byte_ranges.begin(), byte_ranges.end(), std::size_t{0}, [](auto acc, auto const& range) {
+          CUDF_EXPECTS(range.offset() >= 0 and range.size() >= 0,
+                       "Byte range offset and size must be non-negative");
           return acc + range.size();
         });
 
