@@ -1,17 +1,17 @@
 # CUDA Kernel Authoring for JIT Compilation
 
-This document explains the mental model for how to develop CUDA kernels for JIT compilation in libcudf. It is intended for developers who are familiar with CUDA programming and want to write custom kernels that can be JIT compiled at runtime.
+This document presents the mental model for developing CUDA kernels that libcudf compiles just in time (JIT). It is intended for developers familiar with CUDA programming who want to write custom kernels that can be compiled at runtime.
 
-Kernel specialization in cuDF is of two types:
+cuDF supports two types of kernel specialization:
 
-- Kernel Configuration Specialization: this determines the physical shape of the kernel, i.e: memory layout, nullability, vectorization, input types, output types, etc. It directly affects bandwidth usage, memory access patterns, and register usage of the kernel.
-- Kernel User-Defined-Function (UDF) Specialization: this determines the logical behaviour of the kernel, i.e: the operations performed, the computation logic, etc. It directly affects the number of instructions, instruction-level parallelism, register pressure, and instruction-level optimizations of the kernel.
+- **Kernel configuration specialization** determines the kernel's physical shape, including its memory layout, nullability, vectorization, and input and output types. It directly affects bandwidth usage, memory access patterns, and register usage.
+- **Kernel user-defined function (UDF) specialization** determines the operations and computational logic of the kernel. It directly affects instruction count, instruction-level parallelism, register pressure, and compiler optimization opportunities.
 
 ## 1. Kernel Template Construction
 
-The kernel source template is a CUDA source code which is templatized to allow for kernel instantiation and specialization.
+A kernel source template is CUDA source code parameterized to support runtime instantiation and specialization.
 
-An illustrative kernel source template for a binary operation kernel that takes a single input column and produces a single output column is shown below:
+The following example shows a binary-operation kernel source template that accepts input columns and produces a single output column:
 
 ```cpp
 // file: binary_op_kernel.cu
@@ -43,16 +43,16 @@ extern "C" __device__ void cudf_kernel_entry(column_device_view const* inputs,
 
 A few things to note:
 
-- The kernel template `binary_op_kernel` is templatized on the input and output types, allowing for instantiation and specialization of the kernel across each input and output type combination.
-- The `cudf_kernel_entry` function is the scope-independent entry point for the kernel, which is used to reference the kernel entry point and allows the entry point to be referenced independently of the kernel's template parameters as it is not tied to a complex mangling scheme.
-- The `CUDF_KERNEL_INSTANCE` macro is used to instantiate/specialize the kernel for each input and output type combination and it is not known or resolved until runtime, this represents the kernel configuration specialization.
-- The `GENERIC_TRANSFORM_OP` macro is used to instantiate/specialize the kernel for each UDF and it is not known or resolved until runtime, representing the kernel UDF specialization.
+- The `binary_op_kernel` template is parameterized by the input and output types, enabling it to be instantiated and specialized for each type combination.
+- The `cudf_kernel_entry` function provides a scope-independent kernel entry point. Because its name does not depend on template parameters, callers can reference it without relying on complex name mangling.
+- The `CUDF_KERNEL_INSTANCE` macro selects the input and output type specialization at runtime and represents kernel configuration specialization.
+- The `GENERIC_TRANSFORM_OP` macro selects the UDF specialization at runtime and represents kernel UDF specialization.
 
-## 2. Source Embedding & Registration
+## 2. Source Embedding and Registration
 
-The kernel source template above is embedded into the libcudf binary as a compressed string literal. This allows for the kernel source template to be specialized at runtime and compiled into a kernel for execution on the GPU. The kernel source templates are registered and embedded into libcudf through the CMake function `rtcx_embed_includes` provided by librtcx.
+The kernel source template above is embedded in the libcudf binary as a compressed string literal. Embedding the source allows it to be specialized at runtime and compiled into a kernel for GPU execution. The `rtcx_embed_includes` CMake function provided by librtcx registers and embeds kernel source templates in libcudf.
 
-e.g.
+For example:
 
 ```cmake
 rtcx_embed_includes(
@@ -70,14 +70,13 @@ rtcx_embed_includes(
 )
 ```
 
-## 3. Kernel Runtime Reflection & Specialization
+## 3. Kernel Runtime Reflection and Specialization
 
-At runtime, the kernel is instantiated and specialized by the user based on runtime reflection of runtime arguments. This means runtime values/arguments are used to determine the kernel's type and configuration.
-This primarily involves mapping runtime input and output types to the kernel template's type parameters, which allows for the kernel to be specialized for the specific input and output types at runtime.
+At runtime, users instantiate and specialize the kernel by reflecting on the runtime arguments. The argument values determine the kernel's types and configuration. This process maps the runtime input and output types to the corresponding template parameters, producing a specialization for the specific type combination.
 
-e.g.
+For example:
 
-<!-- construct mermaid diagram to better illustrate this -->
+<!-- Add a Mermaid diagram to illustrate this process. -->
 
 ```cpp
 // reflection based on runtime parameters
@@ -90,13 +89,13 @@ std::string reflect_binary_op_kernel(data_type lhs_type /* = type_id::INT32 */,
 // #define CUDF_KERNEL_INSTANCE binary_op_kernel<int32_t, float, false, float>
 ```
 
-Note: The mapping to the kernel instance can be more sophisticated and include policies like: optimal kernel configurations, memory layouts, vectorization policies, architecture-specific optimizations etc. which can be determined at runtime based on the input and output types and their properties.
+The mapping can also incorporate policies for kernel configuration, memory layout, vectorization, and architecture-specific optimization. These policies can be selected at runtime based on the properties of the input and output types.
 
 ## 4. UDF Specialization
 
-At runtime, the User-Defined Function (UDF) is resolved to CUDA code and specializes the `GENERIC_TRANSFORM_OP` macro in the kernel template. This allows for the kernel's generated binary code to be specialized for the specific UDF at runtime, allowing for register & instruction optimizations and inlining of the UDF into the kernel's generated binary code.
+At runtime, the user-defined function (UDF) is resolved to CUDA code and used to specialize the `GENERIC_TRANSFORM_OP` macro in the kernel template. This specialization allows the compiler to optimize the generated binary for the specific UDF, including inlining and register- and instruction-level optimizations.
 
-e.g.
+For example:
 
 ```cpp
 // runtime UDF
@@ -108,8 +107,7 @@ __device__ void transform(float* out, int lhs, float rhs) { *out = (lhs + rhs) *
 
 ## 5. Kernel Execution
 
-The compiled kernel can be launched on the GPU using the corresponding kernel handle and the kernel's arguments.
-Given that the kernel uses a static entry point, it is recommended that the kernel's arguments are type-erased and non-dependent on the kernel's template parameters. This allows for the kernel to be launched independently of the kernel's template parameters.
+The compiled kernel can be launched on the GPU using its handle and arguments. Because the kernel uses a static entry point, its arguments should be type-erased and independent of its template parameters. This design allows the kernel to be launched without knowing those parameters.
 
 ```cpp
 auto kernel_instance = "binary_op_kernel<int32_t, float, false, float>";
@@ -122,30 +120,26 @@ size_type n                               = ...;
 kernel.launch_with({grid_size}, {block_size}, 0, stream, inputs, outputs, n);
 ```
 
-`cudf::get_udf_kernel` is responsible for generating the specialized CUDA kernel source code, compiling the kernel, caching it, and returning a handle (`cudf::kernel`) to the compiled kernel.
+`cudf::get_udf_kernel` generates the specialized CUDA source, compiles and caches the kernel, and returns a handle (`cudf::kernel`) to the compiled kernel.
 
-<!-- Generate NVIDIA-style diagram to illustrate the entire flow -->
+<!-- Add an NVIDIA-style diagram illustrating the complete flow. -->
 
-NOTE: As of 26.06 PTX UDFs are supported by converting them to CUDA C++ code by using the `asm` CUDA directive. This still pays the full CUDA C++ frontend compilation cost.
+As of version 26.06, PTX UDFs are supported by converting them to CUDA C++ with the `asm` directive. This approach still incurs the full cost of CUDA C++ frontend compilation.
 
 ## LTO JIT Model
 
-The compilation model described so far is the CUDA source based JIT compilation model. While it is convenient it has a number of downsides:
+The model described so far uses source-based CUDA JIT compilation. Although convenient, it has several drawbacks:
 
-- **High compilation times**: Majority of the JIT compilation time is spent on the CUDA C++ frontend. The kernel's translation unit contains a non-trivial amount of code from cuDF and its dependencies that are processed on every compilation request. Most of the contents of the preprocessed translation unit are redundant but still get processed anyway.
-- **Correctness**: Source based JIT compilation is difficult to guarantee compilation correctness for because the code is not compiled until at runtime.
+- **High compilation time**: Most JIT compilation time is spent in the CUDA C++ frontend. The kernel's translation unit contains a substantial amount of code from cuDF and its dependencies that must be processed for every compilation request, even though much of the preprocessed translation unit is redundant.
+- **Correctness**: Because source-based JIT code is not compiled until runtime, compilation correctness cannot be verified ahead of time.
 
-Link-time-Optimization (LTO) JIT helps solve both problems. LTO JIT is similar to the C++ translation unit linking process.
+Link-time optimization (LTO) JIT addresses both issues and resembles the C++ translation-unit linking process.
 
-LTO JIT allows users to define functions in separate translation units and link them at runtime.
-For example, the translation unit above can be compiled and shipped as-is without defining the `transform` function.
-This effectively reduces the runtime work solely to JIT-linking as no time is spent on the CUDA C++ frontend provided both the kernel and the UDF have been compiled Ahead-of-Time (AOT).
-Just like CUDA Source-Based JIT, LTO JIT allows users to extend the behaviour of cuDF's kernels and implement new functionality but with the upside of faster JIT times and better AOT correctness checks.
-The CUDA source code is compiled to a binary program representation called LTO IR.
+LTO JIT allows users to define functions in separate translation units and link them at runtime. For example, the translation unit above can be compiled and distributed without defining the `transform` function. If both the kernel and the UDF are compiled ahead of time (AOT), runtime work is limited to JIT linking, bypassing the CUDA C++ frontend. Like source-based CUDA JIT, LTO JIT allows users to extend cuDF kernels and implement new functionality while providing shorter JIT compilation times and stronger AOT correctness checks. CUDA source is compiled into LTO IR, a binary program representation.
 
 ### 1. Kernel Template Construction
 
-An LTO-compatible binary operation kernel template will be defined as:
+An LTO-compatible binary-operation kernel template can be defined as follows:
 
 ```cpp
 // file: binary_op_kernel.cu
@@ -179,16 +173,14 @@ extern "C" __device__ void cudf_kernel_entry(column_device_view const* inputs,
 
 A few things to note:
 
-- The kernel template above is same as the CUDA source based kernel template with the addition of an external linkage `transform` function
-- `CUDF_UDF_TYPE` specifies the function signature for `transform` that will match the `binary_op_kernel`
+- The kernel template is the same as the source-based CUDA JIT template, except that it declares `transform` with external linkage.
+- `CUDF_UDF_TYPE` specifies the function signature that `transform` must match.
 
-### 2. Kernel Compilation, Embedding & Registration
+### 2. Kernel Compilation, Embedding, and Registration
 
-A compiled unit of CUDA code is called a *fragment*.
-A compiled kernel to be linked later is called a *kernel fragment* (e.g. `binary_op_kernel`)
-A compiled UDF to be linked later to a kernel is called a *UDF fragment* (e.g. `transform`)
+A compiled unit of CUDA code is called a *fragment*. A kernel compiled for later linking is called a *kernel fragment* (for example, `binary_op_kernel`). A UDF that will later be linked with a kernel is called a *UDF fragment* (for example, `transform`).
 
-You can compile and embed an instance of the kernel above using the `add_fragment` helper function
+You can compile and embed an instance of the kernel above with the `add_fragment` helper function:
 
 ```cmake
 add_fragment(
@@ -209,8 +201,7 @@ add_fragment(
 )
 ```
 
-A user can compile and embed their UDF using the same helper function.
-Provided they have a UDF:
+Users can compile and embed their UDFs with the same helper function. For example, consider the following UDF:
 
 ```cpp
 // file: user_udf.cu
@@ -220,7 +211,7 @@ extern "C" __device__ void transform(float* out, int32_t lhs, int32_t rhs)
 }
 ```
 
-The UDF above can be registered by the user into their translation unit with:
+Users can then register this UDF in their translation unit as follows:
 
 ```cmake
 add_fragment(user_fragments FRAGMENT user_udf SOURCE user_udf.cu)
@@ -228,7 +219,7 @@ add_fragment(user_fragments FRAGMENT user_udf SOURCE user_udf.cu)
 
 ### 3. Kernel Execution
 
-The pre-compiled fragments can be linked and executed at runtime using `cudf::get_lto_linked_kernel`:
+The precompiled fragments can be linked and executed at runtime with `cudf::get_lto_linked_kernel`:
 
 ```cpp
 #include <cudf_fragments.hpp>
@@ -248,9 +239,9 @@ kernel.launch_with({grid_size}, {block_size}, 0, stream, inputs, outputs, n);
 
 ### 4. Hybrid JIT Model
 
-cuDF uses a hybrid of the CUDA JIT and LTO JIT models for the generic multi-output multi-input transform kernels.
+cuDF combines CUDA JIT and LTO JIT for generic transform kernels that support multiple inputs and outputs.
 
-An example cuDF transform kernel is:
+The following is an example cuDF transform kernel:
 
 ```cpp
 template <template <typename... I> Inputs, template <typename... O> Outputs>
@@ -259,5 +250,4 @@ extern "C" __device__ void transform_kernel(column_device_view const* inputs,
                                             size_type n);
 ```
 
-This kernel has M inputs and N outputs. Each input and output would span ~30 element types (`int32`, `float32`, `decimal32`, etc.). Pre-compiling for all kernel configurations will increase compilation time and bloat binary size severely.
-This necessitates an hybrid approach: Some commonly used kernel fragments are pre-compiled Ahead-Of-Time while the rest are compiled and cached at JIT time.
+This kernel has M inputs and N outputs, each of which can support approximately 30 element types (`int32`, `float32`, `decimal32`, and others). Precompiling every kernel configuration would severely increase compilation time and binary size. This combinatorial space requires a hybrid approach: commonly used kernel fragments are precompiled ahead of time (AOT), while the remaining fragments are compiled and cached at runtime.
