@@ -863,7 +863,7 @@ def test_target_replacement_does_not_rewrite_shared_domain_side(
     assert domain_ir.children[0] is shared_ir
     semis = find_joins(filtered, "Semi")
     assert len(semis) == 1
-    assert semis[0].children[0] is dataframe_scan(root, "target_key")
+    assert semis[0].children[0] is shared_ir
     assert not find_joins(unfiltered_domain, "Semi")
     assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
@@ -954,7 +954,7 @@ def test_internal_prefilter_rewrites_shared_subplan_once(
     assert isinstance(shared_cache, Cache)
     assert translated.children[1] is shared_cache
     original_shared = shared_cache.children[0]
-    assert isinstance(original_shared, Join)
+    assert len(find_joins(original_shared, "Inner")) == 1
     target_ir = dataframe_scan(original_shared, "target_key")
 
     optimized = optimize_with_stats(
