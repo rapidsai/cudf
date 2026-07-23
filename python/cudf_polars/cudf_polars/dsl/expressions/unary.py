@@ -132,6 +132,7 @@ class UnaryFunction(Expr):
             "repeat_by",
             "replace",
             "replace_strict",
+            "reverse",
             "round",
             "round_sig_figs",
             "search_sorted",
@@ -197,12 +198,6 @@ class UnaryFunction(Expr):
 
         if self.name not in UnaryFunction._supported_fns:
             raise NotImplementedError(f"Unary function {name=}")  # pragma: no cover
-        if self.name in UnaryFunction._supported_cum_aggs:
-            (reverse,) = self.options
-            if reverse:
-                raise NotImplementedError(
-                    "reverse=True is not supported for cumulative aggregations"
-                )
         if self.name == "index_of" and plc.traits.is_nested(children[0].dtype.plc_type):
             raise NotImplementedError("index_of on nested types is not supported")
         if self.name == "fill_null_with_strategy" and self.options[1] not in {0, None}:
@@ -1321,6 +1316,12 @@ class UnaryFunction(Expr):
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
                 dtype=self.dtype,
             )
+        elif self.name == "reverse":
+            column = self.children[0].evaluate(df, context=context)
+            return Column(
+                plc.copying.reverse(column.obj, stream=df.stream),
+                dtype=self.dtype,
+            )
         elif self.name == "reinterpret":
             column = self.children[0].evaluate(df, context=context)
             return column.astype(self.dtype, stream=df.stream)
@@ -1550,6 +1551,8 @@ class UnaryFunction(Expr):
             )
         elif self.name in UnaryFunction._supported_cum_aggs:
             column = self.children[0].evaluate(df, context=context)
+            (reverse,) = self.options
+            # https://github.com/rapidsai/cudf/issues/23208 for a native reverse scan
             if self.name == "cum_count":
                 # cum_count is the cumulative count of non-null values.
                 counts = plc.unary.cast(
@@ -1557,16 +1560,24 @@ class UnaryFunction(Expr):
                     self.dtype.plc_type,
                     stream=df.stream,
                 )
-                return Column(
-                    plc.reduce.scan(
-                        counts,
-                        plc.aggregation.sum(),
-                        plc.reduce.ScanType.INCLUSIVE,
-                        stream=df.stream,
-                    ),
-                    dtype=self.dtype,
+                if reverse:
+                    # A reverse cumulative aggregation is a forward one over
+                    # the reversed column, reversed back into place.
+                    counts = plc.copying.reverse(counts, stream=df.stream)
+                result = plc.reduce.scan(
+                    counts,
+                    plc.aggregation.sum(),
+                    plc.reduce.ScanType.INCLUSIVE,
+                    stream=df.stream,
                 )
+                if reverse:
+                    result = plc.copying.reverse(result, stream=df.stream)
+                return Column(result, dtype=self.dtype)
             plc_col = column.obj
+            if reverse:
+                # A reverse cumulative aggregation is a forward one over the
+                # reversed column, reversed back into place.
+                plc_col = plc.copying.reverse(plc_col, stream=df.stream)
             col_type = column.dtype.plc_type
             # cum_sum casts
             # Int8, UInt8, Int16, UInt16 -> Int64 for overflow prevention
@@ -1607,12 +1618,12 @@ class UnaryFunction(Expr):
             elif self.name == "cum_max":
                 agg = plc.aggregation.max()
 
-            return Column(
-                plc.reduce.scan(
-                    plc_col, agg, plc.reduce.ScanType.INCLUSIVE, stream=df.stream
-                ),
-                dtype=self.dtype,
+            result = plc.reduce.scan(
+                plc_col, agg, plc.reduce.ScanType.INCLUSIVE, stream=df.stream
             )
+            if reverse:
+                result = plc.copying.reverse(result, stream=df.stream)
+            return Column(result, dtype=self.dtype)
         raise NotImplementedError(
             f"Unimplemented unary function {self.name=}"
         )  # pragma: no cover; init trips first
