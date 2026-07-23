@@ -99,6 +99,15 @@ void setup_page_indexes(cudf::io::parquet::experimental::hybrid_scan_multifile c
   rmm::device_async_resource_ref mr);
 
 /**
+ * @brief Fetches per-source byte ranges and returns per-source and flattened spans
+ */
+[[nodiscard]] multisource_device_data fetch_multisource_device_data(
+  multifile_inputs const& inputs,
+  std::vector<std::vector<cudf::io::text::byte_range_info>> const& byte_ranges_per_source,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+/**
  * @brief Concatenate a vector of tables and return the resultant table
  *
  * @param tables Vector of tables to concatenate

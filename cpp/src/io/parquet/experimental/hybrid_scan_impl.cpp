@@ -24,8 +24,11 @@
 #include <cuda/iterator>
 #include <thrust/host_vector.h>
 
+#include <algorithm>
 #include <iterator>
+#include <limits>
 #include <numeric>
+#include <tuple>
 #include <utility>
 
 namespace cudf::io::parquet::experimental::detail {
@@ -216,6 +219,8 @@ std::size_t hybrid_scan_reader_impl::total_rows_in_row_groups(
 
 void hybrid_scan_reader_impl::reset_column_selection()
 {
+  CUDF_EXPECTS(not _pending_payload_page_io_plan.has_value(),
+               "Cannot reset column selection while a payload page I/O plan is pending");
   _is_all_columns_selected     = false;
   _is_filter_columns_selected  = false;
   _is_payload_columns_selected = false;
@@ -241,6 +246,8 @@ void hybrid_scan_reader_impl::prepare_materialization(read_columns_mode read_col
                                                       rmm::cuda_stream_view stream,
                                                       rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(not _pending_payload_page_io_plan.has_value(),
+               "Pending payload page I/O plan must be consumed by its setup overload");
   reset_internal_state();
   initialize_options(options, num_sources, stream, mr);
   select_columns(read_columns_mode, options);
@@ -495,6 +502,264 @@ hybrid_scan_reader_impl::payload_column_chunks_byte_ranges(
   return get_input_column_chunk_byte_ranges(row_group_indices);
 }
 
+std::vector<std::vector<byte_range_info>>
+hybrid_scan_reader_impl::payload_column_chunks_byte_ranges(
+  std::span<std::vector<size_type> const> row_group_indices,
+  cudf::column_view const& row_mask,
+  use_data_page_mask mask_data_pages,
+  parquet_reader_options const& options,
+  rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(row_group_indices.size() == _extended_metadata->get_num_sources(),
+               "Row group source count must match the number of input sources");
+  CUDF_EXPECTS(std::cmp_equal(row_mask.size(), total_rows_in_row_groups(row_group_indices)),
+               "Row mask must span across all input row groups");
+  CUDF_EXPECTS(row_mask.null_count() == 0,
+               "Row mask must not have any nulls when planning payload pages");
+  CUDF_EXPECTS(not _pending_payload_page_io_plan.has_value(),
+               "The previous payload page I/O plan has not been consumed");
+
+  select_columns(read_columns_mode::PAYLOAD_COLUMNS, options);
+
+  auto column_schemas = std::vector<int>{};
+  column_schemas.reserve(_input_columns.size());
+  std::transform(_input_columns.begin(),
+                 _input_columns.end(),
+                 std::back_inserter(column_schemas),
+                 [](auto const& col) { return col.schema_idx; });
+
+  auto make_full_chunk_plan = [&]() {
+    auto [flat_ranges, source_map] = get_input_column_chunk_byte_ranges(row_group_indices);
+    auto source_ranges = std::vector<std::vector<byte_range_info>>(row_group_indices.size());
+    CUDF_EXPECTS(flat_ranges.size() == source_map.size(),
+                 "Column chunk range source map is invalid");
+    for (std::size_t i = 0; i < flat_ranges.size(); ++i) {
+      CUDF_EXPECTS(std::cmp_less(source_map[i], source_ranges.size()),
+                   "Column chunk range has an invalid source index");
+      source_ranges[source_map[i]].push_back(flat_ranges[i]);
+    }
+
+    _pending_payload_page_io_plan = payload_page_io_plan{
+      .sparse                       = false,
+      .mask_data_pages              = mask_data_pages,
+      .row_group_indices            = {row_group_indices.begin(), row_group_indices.end()},
+      .column_schema_indices        = column_schemas,
+      .source_ranges                = source_ranges,
+      .page_mappings                = {},
+      .resident_bytes_per_chunk     = {},
+      .dictionary_present_per_chunk = {},
+      .data_page_mask               = {}};
+    return source_ranges;
+  };
+
+  if (mask_data_pages == use_data_page_mask::NO or row_mask.is_empty()) {
+    return make_full_chunk_plan();
+  }
+
+  // Sparse page planning only requires offset-index topology. Value counts and variable-width
+  // sizes can be derived from each retained page after it is fetched.
+  auto indexes_complete = true;
+  for (std::size_t source_idx = 0; source_idx < row_group_indices.size(); ++source_idx) {
+    for (auto const row_group_idx : row_group_indices[source_idx]) {
+      auto const& row_group = _extended_metadata->get_row_group(row_group_idx, source_idx);
+      for (auto const schema_idx : column_schemas) {
+        auto const candidate_it = std::find_if(
+          row_group.columns.begin(), row_group.columns.end(), [schema_idx](auto const& candidate) {
+            return candidate.schema_idx == schema_idx;
+          });
+        if (candidate_it == row_group.columns.end() or
+            not candidate_it->offset_index.has_value()) {
+          indexes_complete = false;
+          break;
+        }
+        auto const& candidate = *candidate_it;
+        auto const& oi = candidate.offset_index.value();
+        auto const num_pages = oi.page_locations.size();
+        auto const index_vector_sizes_valid =
+          not oi.unencoded_byte_array_data_bytes.has_value() or
+          oi.unencoded_byte_array_data_bytes->size() == num_pages;
+        auto const dictionary_offsets_valid =
+          candidate.meta_data.dictionary_page_offset <= 0 or
+          candidate.meta_data.data_page_offset > candidate.meta_data.dictionary_page_offset;
+        auto const page_rows_valid =
+          num_pages > 0 and oi.page_locations.front().first_row_index == 0 and
+          std::is_sorted(oi.page_locations.begin(),
+                         oi.page_locations.end(),
+                         [](auto const& lhs, auto const& rhs) {
+                           return lhs.first_row_index < rhs.first_row_index;
+                         }) and
+          std::all_of(
+            oi.page_locations.begin(), oi.page_locations.end(), [&](auto const& location) {
+              return location.first_row_index >= 0 and
+                     std::cmp_less_equal(location.first_row_index, row_group.num_rows);
+            });
+        if (num_pages == 0 or not index_vector_sizes_valid or not page_rows_valid or
+            candidate.meta_data.data_page_offset <= 0 or not dictionary_offsets_valid or
+            std::any_of(
+              oi.page_locations.begin(), oi.page_locations.end(), [](auto const& location) {
+                return location.offset < 0 or location.compressed_page_size <= 0;
+              })) {
+          indexes_complete = false;
+          break;
+        }
+      }
+      if (not indexes_complete) { break; }
+    }
+    if (not indexes_complete) { break; }
+  }
+  if (not indexes_complete) { return make_full_chunk_plan(); }
+
+  auto data_page_mask = _extended_metadata->compute_data_page_mask(
+    row_mask, row_group_indices, _input_columns, 0, stream);
+  // An empty mask is the established representation for "all pages retained".
+  if (data_page_mask.empty()) { return make_full_chunk_plan(); }
+
+  auto const num_columns = _input_columns.size();
+  auto const num_row_groups =
+    std::accumulate(row_group_indices.begin(),
+                    row_group_indices.end(),
+                    std::size_t{0},
+                    [](auto sum, auto const& groups) { return sum + groups.size(); });
+  auto const num_chunks = num_row_groups * num_columns;
+  auto chunk_masks      = std::vector<std::vector<uint8_t>>(num_chunks);
+
+  // Translate the column-major mask into source-major/row-group-major chunk slots once.
+  std::size_t mask_idx = 0;
+  for (std::size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+    std::size_t row_group_ordinal = 0;
+    for (std::size_t source_idx = 0; source_idx < row_group_indices.size(); ++source_idx) {
+      for (auto const row_group_idx : row_group_indices[source_idx]) {
+        auto const& row_group = _extended_metadata->get_row_group(row_group_idx, source_idx);
+        auto const schema_idx = column_schemas[col_idx];
+        auto const col        = std::find_if(
+          row_group.columns.begin(), row_group.columns.end(), [schema_idx](auto const& candidate) {
+            return candidate.schema_idx == schema_idx;
+          });
+        CUDF_EXPECTS(col != row_group.columns.end(), "Selected payload column is missing");
+        auto const page_count = col->offset_index->page_locations.size();
+        CUDF_EXPECTS(mask_idx + page_count <= data_page_mask.size(),
+                     "Computed data page mask is incomplete");
+        auto& mask = chunk_masks[row_group_ordinal * num_columns + col_idx];
+        mask.reserve(page_count);
+        std::transform(data_page_mask.begin() + mask_idx,
+                       data_page_mask.begin() + mask_idx + page_count,
+                       std::back_inserter(mask),
+                       [](bool retained) { return static_cast<uint8_t>(retained); });
+        mask_idx += page_count;
+        ++row_group_ordinal;
+      }
+    }
+  }
+  // compute_data_page_mask currently leaves unused trailing entries after the logical
+  // column-major page mask. Preserve the established consumer behavior by discarding them here.
+  data_page_mask.resize(mask_idx);
+
+  struct exact_request {
+    int64_t offset;
+    int64_t size;
+    std::size_t mapping_idx;
+  };
+  auto exact_requests     = std::vector<std::vector<exact_request>>(row_group_indices.size());
+  auto page_mappings      = std::vector<page_range_mapping>{};
+  auto resident_bytes     = std::vector<std::size_t>(num_chunks, 0);
+  auto dictionary_present = std::vector<uint8_t>(num_chunks, 0);
+
+  std::size_t row_group_ordinal = 0;
+  for (std::size_t source_idx = 0; source_idx < row_group_indices.size(); ++source_idx) {
+    for (auto const row_group_idx : row_group_indices[source_idx]) {
+      auto const& row_group = _extended_metadata->get_row_group(row_group_idx, source_idx);
+      for (std::size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+        auto const chunk_idx  = row_group_ordinal * num_columns + col_idx;
+        auto const schema_idx = column_schemas[col_idx];
+        auto const col        = std::find_if(
+          row_group.columns.begin(), row_group.columns.end(), [schema_idx](auto const& candidate) {
+            return candidate.schema_idx == schema_idx;
+          });
+        CUDF_EXPECTS(col != row_group.columns.end(), "Selected payload column is missing");
+        auto const& page_locations = col->offset_index->page_locations;
+        auto const& retained       = chunk_masks[chunk_idx];
+        CUDF_EXPECTS(retained.size() == page_locations.size(),
+                     "Data page mask does not match the offset index");
+        auto const any_retained =
+          std::any_of(retained.begin(), retained.end(), [](auto value) { return value != 0; });
+
+        std::optional<std::pair<int64_t, int64_t>> dictionary_range;
+        if (col->meta_data.dictionary_page_offset > 0) {
+          auto const offset = col->meta_data.dictionary_page_offset;
+          auto const size   = col->meta_data.data_page_offset - offset;
+          if (size > 0) { dictionary_range = std::pair{offset, size}; }
+        } else if (col->meta_data.data_page_offset < page_locations.front().offset) {
+          auto const offset = col->meta_data.data_page_offset;
+          dictionary_range =
+            std::pair{offset, page_locations.front().offset - col->meta_data.data_page_offset};
+        }
+
+        auto add_mapping = [&](bool fetched, int64_t offset, int64_t size) {
+          CUDF_EXPECTS(
+            offset >= 0 and size > 0 and offset <= std::numeric_limits<int64_t>::max() - size,
+            "Indexed page byte range is invalid");
+          auto const mapping_idx = page_mappings.size();
+          page_mappings.push_back(
+            page_range_mapping{.source_idx   = static_cast<size_type>(source_idx),
+                               .range_idx    = 0,
+                               .range_offset = 0,
+                               .size         = fetched ? static_cast<std::size_t>(size) : 0,
+                               .fetched      = fetched});
+          if (fetched) {
+            exact_requests[source_idx].push_back(exact_request{offset, size, mapping_idx});
+            resident_bytes[chunk_idx] += static_cast<std::size_t>(size);
+          }
+        };
+
+        if (dictionary_range.has_value() and any_retained) {
+          add_mapping(true, dictionary_range->first, dictionary_range->second);
+          dictionary_present[chunk_idx] = 1;
+        }
+        for (std::size_t page_idx = 0; page_idx < page_locations.size(); ++page_idx) {
+          auto const& location = page_locations[page_idx];
+          add_mapping(retained[page_idx] != 0,
+                      location.offset,
+                      static_cast<int64_t>(location.compressed_page_size));
+        }
+      }
+      ++row_group_ordinal;
+    }
+  }
+
+  auto source_ranges = std::vector<std::vector<byte_range_info>>(row_group_indices.size());
+  for (std::size_t source_idx = 0; source_idx < exact_requests.size(); ++source_idx) {
+    auto& requests = exact_requests[source_idx];
+    std::stable_sort(requests.begin(), requests.end(), [](auto const& lhs, auto const& rhs) {
+      return std::tie(lhs.offset, lhs.size) < std::tie(rhs.offset, rhs.size);
+    });
+    for (auto const& request : requests) {
+      auto& ranges = source_ranges[source_idx];
+      if (ranges.empty() or request.offset > ranges.back().offset() + ranges.back().size()) {
+        ranges.emplace_back(request.offset, request.size);
+      } else {
+        auto const end =
+          std::max(ranges.back().offset() + ranges.back().size(), request.offset + request.size);
+        ranges.back() = byte_range_info{ranges.back().offset(), end - ranges.back().offset()};
+      }
+      auto& mapping        = page_mappings[request.mapping_idx];
+      mapping.range_idx    = ranges.size() - 1;
+      mapping.range_offset = static_cast<std::size_t>(request.offset - ranges.back().offset());
+    }
+  }
+
+  _pending_payload_page_io_plan =
+    payload_page_io_plan{.sparse            = true,
+                         .mask_data_pages   = mask_data_pages,
+                         .row_group_indices = {row_group_indices.begin(), row_group_indices.end()},
+                         .column_schema_indices        = std::move(column_schemas),
+                         .source_ranges                = source_ranges,
+                         .page_mappings                = std::move(page_mappings),
+                         .resident_bytes_per_chunk     = std::move(resident_bytes),
+                         .dictionary_present_per_chunk = std::move(dictionary_present),
+                         .data_page_mask               = std::move(data_page_mask)};
+  return source_ranges;
+}
+
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
 hybrid_scan_reader_impl::all_column_chunks_byte_ranges(
   std::span<std::vector<size_type> const> row_group_indices, parquet_reader_options const& options)
@@ -712,6 +977,125 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
   prepare_data(read_mode::CHUNKED_READ, row_group_indices, column_chunk_data, data_page_mask);
 }
 
+void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
+  std::size_t chunk_read_limit,
+  std::size_t pass_read_limit,
+  std::span<std::vector<size_type> const> row_group_indices,
+  cudf::column_view const& row_mask,
+  use_data_page_mask mask_data_pages,
+  std::span<std::vector<cudf::device_span<uint8_t const>> const> page_data_per_source,
+  parquet_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_EXPECTS(_pending_payload_page_io_plan.has_value(),
+               "No pending payload page I/O plan to consume");
+  // Consume first so a failed setup cannot accidentally reuse stale pointer/range mappings.
+  auto plan = std::move(_pending_payload_page_io_plan.value());
+  _pending_payload_page_io_plan.reset();
+
+  CUDF_EXPECTS(plan.mask_data_pages == mask_data_pages,
+               "Payload setup page-mask option does not match its pending plan");
+  auto const setup_row_groups =
+    std::vector<std::vector<size_type>>{row_group_indices.begin(), row_group_indices.end()};
+  CUDF_EXPECTS(plan.row_group_indices == setup_row_groups,
+               "Payload setup row groups do not match the pending page I/O plan");
+
+  reset_column_selection();
+  select_columns(read_columns_mode::PAYLOAD_COLUMNS, options);
+  auto selected_schemas = std::vector<int>{};
+  selected_schemas.reserve(_input_columns.size());
+  std::transform(_input_columns.begin(),
+                 _input_columns.end(),
+                 std::back_inserter(selected_schemas),
+                 [](auto const& col) { return col.schema_idx; });
+  CUDF_EXPECTS(selected_schemas == plan.column_schema_indices,
+               "Payload column selection does not match the pending page I/O plan");
+
+  CUDF_EXPECTS(page_data_per_source.size() == plan.source_ranges.size(),
+               "Fetched payload source count does not match the pending plan");
+  for (std::size_t source_idx = 0; source_idx < page_data_per_source.size(); ++source_idx) {
+    CUDF_EXPECTS(page_data_per_source[source_idx].size() == plan.source_ranges[source_idx].size(),
+                 "Fetched payload range count does not match the pending plan");
+    for (std::size_t range_idx = 0; range_idx < page_data_per_source[source_idx].size();
+         ++range_idx) {
+      auto const& data  = page_data_per_source[source_idx][range_idx];
+      auto const& range = plan.source_ranges[source_idx][range_idx];
+      CUDF_EXPECTS(std::cmp_equal(data.size(), range.size()),
+                   "Fetched payload span size does not match its planned byte range");
+      CUDF_EXPECTS(data.size() == 0 or data.data() != nullptr,
+                   "Fetched payload span has a null data pointer");
+    }
+  }
+
+  if (not plan.sparse) {
+    auto flat_chunk_data = std::vector<cudf::device_span<uint8_t const>>{};
+    auto const span_count =
+      std::accumulate(page_data_per_source.begin(),
+                      page_data_per_source.end(),
+                      std::size_t{0},
+                      [](auto sum, auto const& spans) { return sum + spans.size(); });
+    flat_chunk_data.reserve(span_count);
+    for (auto const& source_data : page_data_per_source) {
+      flat_chunk_data.insert(flat_chunk_data.end(), source_data.begin(), source_data.end());
+    }
+    setup_chunking_for_payload_columns(chunk_read_limit,
+                                       pass_read_limit,
+                                       row_group_indices,
+                                       row_mask,
+                                       mask_data_pages,
+                                       flat_chunk_data,
+                                       options,
+                                       stream,
+                                       mr);
+    return;
+  }
+
+  CUDF_EXPECTS(std::cmp_equal(row_mask.size(), total_rows_in_row_groups(row_group_indices)),
+               "Row mask must span across all input row groups");
+  CUDF_EXPECTS(row_mask.null_count() == 0,
+               "Row mask must not have any nulls when materializing payload column");
+
+  prepare_materialization(
+    read_columns_mode::PAYLOAD_COLUMNS, row_group_indices.size(), options, stream, mr);
+
+  _input_pass_read_limit   = pass_read_limit;
+  _output_chunk_read_limit = chunk_read_limit;
+
+  // Preserve the existing all-rows-pruned setup path. An all-false page plan has no byte ranges.
+  if (are_all_rows_pruned(row_mask, stream)) {
+    auto const empty_row_groups =
+      std::vector<std::vector<size_type>>(row_group_indices.size(), std::vector<size_type>{});
+    prepare_data(read_mode::CHUNKED_READ, empty_row_groups, {}, {});
+    _file_itm_data.num_input_row_groups = count_row_groups(row_group_indices);
+    return;
+  }
+
+  _sparse_page_spans.clear();
+  _sparse_page_spans.reserve(plan.page_mappings.size());
+  for (auto const& mapping : plan.page_mappings) {
+    if (not mapping.fetched) {
+      _sparse_page_spans.emplace_back();
+      continue;
+    }
+    CUDF_EXPECTS(std::cmp_less(mapping.source_idx, page_data_per_source.size()),
+                 "Sparse page mapping has an invalid source index");
+    auto const& source_data = page_data_per_source[mapping.source_idx];
+    CUDF_EXPECTS(mapping.range_idx < source_data.size(),
+                 "Sparse page mapping has an invalid range index");
+    auto const& range_data = source_data[mapping.range_idx];
+    CUDF_EXPECTS(mapping.range_offset <= range_data.size() and
+                   mapping.size <= range_data.size() - mapping.range_offset,
+                 "Sparse page mapping exceeds its fetched range");
+    _sparse_page_spans.emplace_back(range_data.data() + mapping.range_offset, mapping.size);
+  }
+  _sparse_resident_bytes_per_chunk     = std::move(plan.resident_bytes_per_chunk);
+  _sparse_dictionary_present_per_chunk = std::move(plan.dictionary_present_per_chunk);
+  _sparse_page_io                      = true;
+
+  prepare_data(read_mode::CHUNKED_READ, row_group_indices, {}, plan.data_page_mask);
+}
+
 table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns_chunk(
   cudf::column_view const& row_mask)
 {
@@ -877,11 +1261,15 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _row_mask_offset   = 0;
   _file_itm_data     = file_intermediate_data{};
   _file_preprocessed = false;
-  _has_page_index    = false;
+  _has_offset_index  = false;
   _pass_itm_data.reset();
   _pass_page_mask.clear();
   _subpass_page_mask.reset();
   _output_metadata.reset();
+  _sparse_page_spans.clear();
+  _sparse_resident_bytes_per_chunk.clear();
+  _sparse_dictionary_present_per_chunk.clear();
+  _sparse_page_io = false;
 
   _options.timestamp_type = cudf::data_type{};
   _options.decimal_width  = type_id::EMPTY;
@@ -1214,9 +1602,6 @@ void hybrid_scan_reader_impl::set_pass_page_mask(std::span<bool const> data_page
     cuda::counting_iterator{_input_columns.size()},
     [&](auto col_idx) {
       for (std::size_t chunk_idx = col_idx; chunk_idx < chunks.size(); chunk_idx += num_columns) {
-        // Insert a true value for each dictionary page
-        if (chunks[chunk_idx].num_dict_pages > 0) { _pass_page_mask.push_back(true); }
-
         // Number of data pages in this column chunk
         auto const num_data_pages_this_col_chunk = chunks[chunk_idx].num_data_pages;
 
@@ -1224,6 +1609,16 @@ void hybrid_scan_reader_impl::set_pass_page_mask(std::span<bool const> data_page
         CUDF_EXPECTS(
           data_page_mask.size() >= num_inserted_data_pages + num_data_pages_this_col_chunk,
           "Encountered invalid data page mask size");
+
+        // Sparse chunks omit dictionaries when every data page is pruned. The contiguous path
+        // retains its existing conservative dictionary behavior.
+        if (chunks[chunk_idx].num_dict_pages > 0) {
+          auto const chunk_has_retained_page = std::any_of(
+            data_page_mask.begin() + num_inserted_data_pages,
+            data_page_mask.begin() + num_inserted_data_pages + num_data_pages_this_col_chunk,
+            [](bool retained) { return retained; });
+          _pass_page_mask.push_back(_sparse_page_io ? chunk_has_retained_page : true);
+        }
 
         // Insert page mask for this column chunk
         _pass_page_mask.insert(

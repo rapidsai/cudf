@@ -38,10 +38,7 @@ void hybrid_scan_reader_impl::handle_chunking(
   // if this is our first time in here, setup the first pass.
   if (!_pass_itm_data) {
     // setup the next pass
-    setup_next_pass(column_chunk_data);
-
-    // Must be called as soon as we create the pass
-    set_pass_page_mask(data_page_mask);
+    setup_next_pass(column_chunk_data, data_page_mask);
   }
 
   auto& pass = *_pass_itm_data;
@@ -78,7 +75,8 @@ void hybrid_scan_reader_impl::handle_chunking(
 }
 
 void hybrid_scan_reader_impl::setup_next_pass(
-  std::span<cudf::device_span<uint8_t const> const> column_chunk_data)
+  std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
+  host_span<bool const> data_page_mask)
 {
   auto const num_passes = _file_itm_data.num_passes();
   CUDF_EXPECTS(num_passes == 1,
@@ -122,6 +120,9 @@ void hybrid_scan_reader_impl::setup_next_pass(
     // Setup page information for the chunk (which we can access without decompressing)
     setup_compressed_data(column_chunk_data);
 
+    // Establish the logical mask before malformed-page checks, size estimation, or subpass setup.
+    set_pass_page_mask(data_page_mask);
+
     // detect malformed columns.
     // - we have seen some cases in the wild where we have a row group containing N
     //   rows, but the total number of rows in the pages for column X is != N. while it
@@ -158,7 +159,7 @@ void hybrid_scan_reader_impl::setup_next_pass(
     // if we are doing subpass reading, generate more accurate num_row estimates for list columns.
     // this helps us to generate more accurate subpass splits.
     if (pass.has_compressed_data && _input_pass_read_limit != 0) {
-      if (_has_page_index) {
+      if (_has_offset_index) {
         generate_list_column_row_counts(is_estimate_row_counts::NO);
       } else {
         generate_list_column_row_counts(is_estimate_row_counts::YES);
