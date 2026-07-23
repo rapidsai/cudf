@@ -766,19 +766,22 @@ struct decode_from_page_data_fn {
       return;
     }
 
+    auto const page_span = page_data[page_idx];
+
     byte_stream_s bs{};
-    bs.ck = colchunks[chunk_idx];
+    bs.ck   = colchunks[chunk_idx];
+    bs.base = bs.cur = page_span.data();
+    bs.end           = page_span.data() + page_span.size();
+
     // Clear the logical page descriptor.
     zero_out_page_header_info(&bs);
 
     bs.page.chunk_idx      = chunk_idx;
     bs.page.src_col_schema = bs.ck.src_col_schema;
-
     // bs.page.chunk_row not computed here and will be filled in later by
     // `fill_in_page_info()`.
 
     // Return if empty page span (pruned page)
-    auto const page_span = page_data[page_idx];
     if (page_span.empty()) {
       pages[page_idx] = bs.page;
       return;
