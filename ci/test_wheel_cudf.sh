@@ -22,17 +22,20 @@ RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
 
-# To test pylibcudf without its optional dependencies, we create a virtual environment
-python -m venv env
-. env/bin/activate
+python -m venv libcudf-env
+. libcudf-env/bin/activate
 
-# Verify libcudf's runtime dependencies before pylibcudf's test extra can install them.
 rapids-pip-retry install \
     -v \
     --prefer-binary \
     --constraint "${PIP_CONSTRAINT}" \
     "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
 python -c "import libcudf; libcudf.load_library()"
+deactivate
+
+# To test pylibcudf without its optional dependencies, we create a virtual environment
+python -m venv env
+. env/bin/activate
 
 rapids-logger "Install pylibcudf and its basic dependencies"
 
