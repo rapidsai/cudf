@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -33,17 +33,41 @@ namespace io::parquet::detail {
  */
 class CompactProtocolReader {
  public:
-  explicit CompactProtocolReader(uint8_t const* base = nullptr, size_t len = 0) { init(base, len); }
+  explicit CompactProtocolReader(uint8_t const* base         = nullptr,
+                                 size_t len                  = 0,
+                                 throw_if_type_mismatch mode = throw_if_type_mismatch::YES)
+    : m_throw_if_type_mismatch(mode)
+  {
+    init(base, len);
+  }
   void init(uint8_t const* base, size_t len)
   {
     m_base = m_cur = base;
     m_end          = base + len;
+    m_overread     = false;
   }
   [[nodiscard]] ptrdiff_t bytecount() const noexcept { return m_cur - m_base; }
-  unsigned int getb() noexcept { return (m_cur < m_end) ? *m_cur++ : 0; }
+  // True if a wire-type/schema-type mismatch must be rejected (default YES); false means skip it
+  // per Thrift forward-compat (NO), which the spark-rapids footer facade uses.
+  [[nodiscard]] bool should_throw_on_type_mismatch() const noexcept
+  {
+    return m_throw_if_type_mismatch == throw_if_type_mismatch::YES;
+  }
+  // A read at end-of-buffer sets the sticky overread flag (checked in read(FileMetaData*)) and
+  // yields 0, keeping the hot parse path noexcept.
+  unsigned int getb() noexcept
+  {
+    if (m_cur < m_end) { return *m_cur++; }
+    m_overread = true;
+    return 0;
+  }
   void skip_bytes(size_t bytecnt) noexcept
   {
-    bytecnt = std::min(bytecnt, (size_t)(m_end - m_cur));
+    size_t const avail = m_end - m_cur;
+    if (bytecnt > avail) {
+      m_overread = true;
+      bytecnt    = avail;
+    }
     m_cur += bytecnt;
   }
 
@@ -137,12 +161,18 @@ class CompactProtocolReader {
   uint8_t const* m_base = nullptr;
   uint8_t const* m_cur  = nullptr;
   uint8_t const* m_end  = nullptr;
+  // Sticky flag: a required read was attempted past end-of-buffer (truncated/corrupt input).
+  bool m_overread = false;
+  // Reject (`YES`) vs skip (`NO`) a struct field whose wire type mismatches the schema type.
+  throw_if_type_mismatch m_throw_if_type_mismatch = throw_if_type_mismatch::YES;
 
   friend class parquet_field_string;
   friend class parquet_field_string_list;
   friend class parquet_field_binary;
   friend class parquet_field_binary_list;
   friend class parquet_field_struct_blob;
+  template <typename T, FieldType EXPECTED_ELEM_TYPE>
+  friend class parquet_field_list;
   template <typename T>
   friend class parquet_field_struct_list;
 };

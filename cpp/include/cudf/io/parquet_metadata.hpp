@@ -14,7 +14,9 @@
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/span.hpp>
 
+#include <cstdint>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -293,6 +295,38 @@ parquet_metadata read_parquet_metadata(source_info const& src_info);
  */
 std::vector<parquet::FileMetaData> read_parquet_footers(
   std::span<std::unique_ptr<cudf::io::datasource> const> sources);
+
+/**
+ * @brief Deserialize a Parquet footer (`FileMetaData`) from Thrift-compact-encoded bytes
+ *
+ * @ingroup io_readers
+ *
+ * @note Stops at the footer struct terminator, so trailing frame bytes (e.g. a footer-length word
+ * or magic) are accepted and ignored rather than validated
+ *
+ * @throws cudf::logic_error If the footer is truncated or corrupt within the struct, caught by the
+ * reader's overread guard and per-field bounds checks
+ *
+ * @param footer_bytes Thrift-compact-encoded Parquet `FileMetaData` (footer) bytes
+ * @param mode `throw_if_type_mismatch::YES` (default) rejects a field whose wire type mismatches
+ * the schema type; `throw_if_type_mismatch::NO` skips it (Thrift forward-compat)
+ *
+ * @return The deserialized `FileMetaData`
+ */
+parquet::FileMetaData read_parquet_footer_bytes(
+  host_span<uint8_t const> footer_bytes,
+  parquet::throw_if_type_mismatch mode = parquet::throw_if_type_mismatch::YES);
+
+/**
+ * @brief Serialize a Parquet footer (`FileMetaData`) to Thrift-compact-encoded bytes
+ *
+ * @ingroup io_writers
+ *
+ * @param metadata The `FileMetaData` (footer) to serialize
+ *
+ * @return The Thrift-compact-encoded bytes
+ */
+std::vector<uint8_t> write_parquet_footer_bytes(parquet::FileMetaData const& metadata);
 
 /** @} */  // end of group
 }  // namespace io
