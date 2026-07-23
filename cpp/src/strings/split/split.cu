@@ -253,8 +253,9 @@ std::unique_ptr<table> split(strings_column_view const& input,
   auto const non_null_count = input.size() - input.null_count();
   if (non_null_count > 0 &&
       (input.chars_size(stream) / non_null_count) < AVG_CHAR_BYTES_THRESHOLD) {
+    auto tmp_mr            = cudf::get_current_device_resource_ref();
     auto [offsets, tokens] = split_per_string_helper<true>(
-      input, delimiter.value(stream), max_tokens, stream, cudf::get_current_device_resource_ref());
+      *d_strings, delimiter.value(stream), max_tokens, stream, tmp_mr);
     return build_table_from_tokens(input, std::move(offsets), std::move(tokens), stream, mr);
   }
 
@@ -286,8 +287,9 @@ std::unique_ptr<table> rsplit(strings_column_view const& input,
   auto const non_null_count = input.size() - input.null_count();
   if (non_null_count > 0 &&
       (input.chars_size(stream) / non_null_count) < AVG_CHAR_BYTES_THRESHOLD) {
+    auto tmp_mr            = cudf::get_current_device_resource_ref();
     auto [offsets, tokens] = split_per_string_helper<false>(
-      input, delimiter.value(stream), max_tokens, stream, cudf::get_current_device_resource_ref());
+      *d_strings, delimiter.value(stream), max_tokens, stream, tmp_mr);
     return build_table_from_tokens(input, std::move(offsets), std::move(tokens), stream, mr);
   }
 

@@ -20,6 +20,7 @@
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -569,14 +570,14 @@ struct backward_extract_fn {
  */
 template <bool Forward>
 std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split_per_string_helper(
-  strings_column_view const& input,
+  column_device_view const& d_strings,
   string_view const d_delimiter,
   size_type const max_tokens,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto d_strings           = column_device_view::create(input.parent(), stream);
-  auto const strings_count = input.size();
+  CUDF_EXPECTS(d_delimiter.size_bytes() > 0, "unexpected delimiter");
+  auto const strings_count = d_strings.size();
   auto const mr_ref        = cudf::get_current_device_resource_ref();
   auto const zero_iter     = cuda::counting_iterator<size_type>{0};
 
@@ -585,7 +586,7 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
                     zero_iter,
                     zero_iter + strings_count,
                     token_counts.begin(),
-                    token_count_fn{*d_strings, d_delimiter, max_tokens});
+                    token_count_fn{d_strings, d_delimiter, max_tokens});
 
   auto [offsets, total_tokens] =
     cudf::detail::make_offsets_child_column(token_counts.begin(), token_counts.end(), stream, mr);
@@ -597,12 +598,12 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
       thrust::for_each_n(rmm::exec_policy_nosync(stream, mr_ref),
                          zero_iter,
                          strings_count,
-                         forward_extract_fn{*d_strings, d_delimiter, d_offsets, tokens.data()});
+                         forward_extract_fn{d_strings, d_delimiter, d_offsets, tokens.data()});
     } else {
       thrust::for_each_n(rmm::exec_policy_nosync(stream, mr_ref),
                          zero_iter,
                          strings_count,
-                         backward_extract_fn{*d_strings, d_delimiter, d_offsets, tokens.data()});
+                         backward_extract_fn{d_strings, d_delimiter, d_offsets, tokens.data()});
     }
   }
   return {std::move(offsets), std::move(tokens)};

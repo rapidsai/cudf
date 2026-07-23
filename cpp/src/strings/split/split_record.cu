@@ -85,8 +85,9 @@ std::unique_ptr<column> split_record_per_string_fn(strings_column_view const& in
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
   }
 
-  auto [offsets, tokens] = split_per_string_helper<Forward>(
-    input, d_delimiter, max_tokens, stream, cudf::get_current_device_resource_ref());
+  auto d_strings = column_device_view::create(input.parent(), stream);
+  auto [offsets, tokens] =
+    split_per_string_helper<Forward>(*d_strings, d_delimiter, max_tokens, stream, mr);
   CUDF_EXPECTS(tokens.size() < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "Size of output exceeds the column size limit",
                std::overflow_error);
