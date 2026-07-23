@@ -829,6 +829,18 @@ dependencies:
           - matrix:
               use_cuda_wheels: "false"
             packages:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+              use_cuda_wheels: "true"
+            packages:
+              - cuda-toolkit[nvcc,nvrtc]==12.*
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+              use_cuda_wheels: "true"
+            packages:
+              - cuda-toolkit[nvcc,nvrtc]==13.*
           # We always want nvJitLink >= whatever minor version was available in the build environment
           # nvJitLink tends to follow the CTK's minor versions, but check at https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html
           #
@@ -963,27 +975,6 @@ dependencies:
           - nvtx>=0.2.1
           - packaging
           - rich
-    specific:
-      - output_types: [requirements, pyproject]
-        matrices:
-          # if use_cuda_wheels=false is provided, do not add dependencies on any CUDA wheels
-          # (e.g. for DLFW and pip devcontainers)
-          - matrix:
-              use_cuda_wheels: "false"
-            packages:
-          - matrix:
-              cuda: "12.*"
-              cuda_suffixed: "true"
-              use_cuda_wheels: "true"
-            packages:
-              - cuda-toolkit[nvcc,nvrtc]==12.*
-          - matrix:
-              cuda: "13.*"
-              cuda_suffixed: "true"
-              use_cuda_wheels: "true"
-            packages:
-              - cuda-toolkit[nvcc,nvrtc]==13.*
-          - {matrix: null, packages: []}
   run_cudf_polars:
     common:
       - output_types: [conda, requirements, pyproject]
