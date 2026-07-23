@@ -65,6 +65,7 @@ set_output 0 %magnitude
 The equivalent node-construction code is:
 
 ```cpp
+using namespace cudf::detail::row_ir;
 node getter0{input_reference{0}};
 node getter1{input_reference{1}};
 node x_square{opcode::MUL, {getter0, getter0}};
@@ -121,7 +122,7 @@ During this phase, the fully lowered IR is converted to CUDA code. Once all node
 For a CUDA function target, the code generator emits the following equivalent code:
 
 ```cpp
-__device__ void transform(float* arg0, float arg1, float arg2)
+__device__ int transform(float* arg0, float arg1, float arg2)
 {
   float input0      = arg1;
   float input1      = arg2;
@@ -130,6 +131,7 @@ __device__ void transform(float* arg0, float arg1, float arg2)
   float dot_product = cudf::detail::ops::add(x_square, y_square);
   float magnitude   = cudf::detail::ops::sqrt(dot_product);
   *arg0             = magnitude;
+  return 0;
 }
 
 __global__ void transform_kernel(mutable_column_device_view const* outputs,

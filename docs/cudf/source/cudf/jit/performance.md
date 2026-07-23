@@ -43,10 +43,6 @@ libcudf uses precompiled headers (PCHs) to speed up CUDA JIT compilation. PCHs a
 
 PCHs are currently generated during the first cold JIT compilation of a kernel, so the first request always uses a cold PCH cache. The generated PCHs are cached and reused for subsequent kernel compilations. Consequently, the first cold compilation is slower because it incurs the full cost of CUDA C++ frontend compilation.
 
-For example, compiling a transform kernel with a cold PCH cache can take up to 900 ms, whereas compiling the same kernel with a hot PCH cache can take 80 ms.
-
-<img src="https://private-user-images.githubusercontent.com/26050398/551726508-08e7f29f-6d0c-4936-98f3-71a70ad95f4b.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3ODI3MDM5NzYsIm5iZiI6MTc4MjcwMzY3NiwicGF0aCI6Ii8yNjA1MDM5OC81NTE3MjY1MDgtMDhlN2YyOWYtNmQwYy00OTM2LTk4ZjMtNzFhNzBhZDk1ZjRiLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNjA2MjklMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjYwNjI5VDAzMjc1NlomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTY1MjQ4MGFiYzJhMjk0ZTNkMjQ1NzBlNTQ4NWUzZTA2NTEzZDg5ZDg5NjdjNTc5MDQwYzkzZjhkNTFhOTRmNmQmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JnJlc3BvbnNlLWNvbnRlbnQtdHlwZT1pbWFnZSUyRnBuZyJ9.aH8C2EUYszUF49I1EHZhr3qXoEUJqaFEFFxcIzwu168"/>
-
 NVRTC's PCH cache is **process-local** and is not shared across processes. Therefore, PCHs generated while compiling a kernel in one process are unavailable to other processes. This limitation can reduce performance in multiprocess environments that compile the same kernel in several processes. Preparing NVRTC PCHs ahead of time would eliminate this cold-cache overhead.
 
 ## Benchmarking JIT Performance

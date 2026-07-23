@@ -82,8 +82,6 @@ At runtime, users instantiate and specialize the kernel by reflecting on the run
 
 For example:
 
-<!-- Add a Mermaid diagram to illustrate this process. -->
-
 ```cpp
 // reflection based on runtime parameters
 std::string reflect_binary_op_kernel(data_type lhs_type /* = type_id::INT32 */,
@@ -105,10 +103,13 @@ For example:
 
 ```cpp
 // runtime UDF
-__device__ void transform(float* out, int lhs, float rhs) { *out = (lhs + rhs) * 0.5F; }
+__device__ int transform(float* out, int lhs, float rhs) { 
+    *out = (lhs + rhs) * 0.5F;
+    return 0;
+}
 
 // Kernel UDF specialization (substituted during call to `cudf::get_udf_kernel`)
-// #define GENERIC_TRANSFORM_OP(...) transform(__VA_AGS__)
+// #define GENERIC_TRANSFORM_OP(...) transform(__VA_ARGS__)
 ```
 
 ### 5. Launch the Kernel
@@ -127,8 +128,6 @@ kernel.launch_with({grid_size}, {block_size}, 0, stream, inputs, outputs, n);
 ```
 
 `cudf::get_udf_kernel` generates the specialized CUDA source, compiles and caches the kernel, and returns a handle (`cudf::kernel`) to the compiled kernel.
-
-<!-- Add an NVIDIA-style diagram illustrating the complete flow. -->
 
 As of version 26.06, PTX UDFs are supported by converting them to CUDA C++ with the `asm` directive. This approach still incurs the full cost of CUDA C++ frontend compilation.
 
@@ -164,7 +163,7 @@ __device__ void binary_op_kernel(column_device_view const* inputs,
 
   for (auto i = start; i < n; i += stride) {
     transform(&output->element<OutputType>(i),
-              inputs[0]->element<LhsTypee>(i),
+              inputs[0]->element<LhsType>(i),
               inputs[1]->element<RhsType>(i * RhsIsScalar));
   }
 }
@@ -194,7 +193,7 @@ add_fragment(
   cudf_fragments
   FRAGMENT
   # Fragment instance identifier
-  binary_op_kernel_i32_float_false_float
+  binary_op_kernel_float_int32_float
   SOURCE
   # Location of the CUDA source code
   binary_op_kernel.cu
@@ -203,7 +202,7 @@ add_fragment(
   "binary_op_kernel<int32_t, float, false, float>"
   UDF_TYPE
   # Matching UDF type
-  "int(float *, int32_t, int32_t)"
+  "int(float *, int32_t, float)"
 )
 ```
 
@@ -211,9 +210,10 @@ Users can compile and embed their UDFs with the same helper function. For exampl
 
 ```cpp
 // file: user_udf.cu
-extern "C" __device__ void transform(float* out, int32_t lhs, int32_t rhs)
+extern "C" __device__ int transform(float* out, int32_t lhs, float rhs)
 {
   *out = (lhs + rhs) * 0.5F;
+  return 0;
 }
 ```
 
@@ -232,10 +232,10 @@ The precompiled fragments can be linked and executed at runtime with `cudf::get_
 #include <user_fragments.hpp>
 
 auto kernel_range =
-  cudf_fragments::file_ranges[cudf_fragments::binary_op_kernel_i32_float_false_float];
-std::span kernel_fragment = cudf_fragments::files.subspan(range[0], range[1]);
+  cudf_fragments::file_ranges[cudf_fragments::binary_op_kernel_float_int32_float];
+std::span kernel_fragment = cudf_fragments::files.subspan(kernel_range[0], kernel_range[1]);
 auto udf_range            = user_fragments::file_ranges[user_fragments::user_udf];
-auto udf_fragment         = user_fragments::files.subspan(range[0], range[1]);
+auto udf_fragment         = user_fragments::files.subspan(udf_range[0], udf_range[1]);
 auto kernel = cudf::get_lto_linked_kernel("binary_op_kernel", {}, {kernel_fragment, udf_fragment});
 column_device_view const* inputs          = ...;
 mutable_column_device_view const* outputs = ...;
@@ -250,7 +250,8 @@ cuDF combines CUDA JIT and LTO JIT for generic transform kernels that support mu
 The following is an example cuDF transform kernel:
 
 ```cpp
-template <template <typename... I> Inputs, template <typename... O> Outputs>
+template <template <typename... I> class Inputs,
+          template <typename... O> class Outputs>
 extern "C" __device__ void transform_kernel(column_device_view const* inputs,
                                             mutable_column_device_view const* output,
                                             size_type n);
