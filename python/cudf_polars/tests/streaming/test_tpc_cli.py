@@ -5,7 +5,12 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 from cudf_polars.streaming.benchmarks.pdsds import PDSDSPolarsQueries
 from cudf_polars.streaming.benchmarks.pdsh import PDSHQueries
@@ -42,7 +47,7 @@ def test_tpch_cli_parse(query_id: int) -> None:
 
 
 @pytest.mark.parametrize("query_id", [1, PDSDSPolarsQueries.num_queries])
-def test_tpcds_cli_parse(query_id: int, tmp_path: pytest.TempPath) -> None:
+def test_tpcds_cli_parse(query_id: int, tmp_path: Path) -> None:
     args = parse_args(
         [
             str(query_id),
