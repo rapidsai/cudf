@@ -32,3 +32,5 @@ cdef class HybridScanReader:
     cdef unique_ptr[cpp_hybrid_scan_reader] c_obj
     cdef Stream _stream
     cdef DeviceMemoryResource mr
+    cdef object _filter_chunk_data
+    cdef object _payload_chunk_data
