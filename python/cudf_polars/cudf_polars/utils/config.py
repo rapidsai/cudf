@@ -286,7 +286,7 @@ class ParquetOptions:
         default_factory=_make_default_factory(
             f"{_env_prefix}__PREFETCH_FILE_METADATA",
             _bool_converter,
-            default=False,
+            default=True,
         )
     )
     use_jit_filter: bool = dataclasses.field(
