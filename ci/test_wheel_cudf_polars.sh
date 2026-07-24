@@ -43,10 +43,13 @@ FAILED=()
 # Avoid oversubscribing the CPU: NJOBS pytest-xdist workers each get nproc/NJOBS Polars threads
 NJOBS=4
 NPROC=$(nproc)
-export POLARS_MAX_THREADS=$(( NPROC / NJOBS > 0 ? NPROC / NJOBS : 1 ))
+export LIBCUDF_NUM_HOST_WORKERS=2
 export OMP_NUM_THREADS=${POLARS_MAX_THREADS}
-export RAY_worker_num_grpc_internal_threads=1
-export RAY_core_worker_num_server_call_thread=1
+export POLARS_MAX_THREADS=$(( NPROC / NJOBS > 0 ? NPROC / NJOBS : 1 ))
+export RAY_core_worker_num_server_call_thread=2
+export RAY_prestart_worker_first_driver=0
+export RAY_worker_num_grpc_internal_threads=2
+
 echo "n-jobs=${NJOBS}, n-proc=${NPROC}, polars-max-threads=${POLARS_MAX_THREADS}"
 
 for version in "${VERSIONS[@]}"; do
