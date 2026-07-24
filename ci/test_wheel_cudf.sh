@@ -30,7 +30,7 @@ rapids-pip-retry install \
     --prefer-binary \
     --constraint "${PIP_CONSTRAINT}" \
     "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
-python -c "import libcudf; libcudf.load_library()"
+python -c "import libcudf; assert libcudf.load_library() is not None"
 deactivate
 
 # To test pylibcudf without its optional dependencies, we create a virtual environment
