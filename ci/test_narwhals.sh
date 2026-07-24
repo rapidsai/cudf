@@ -24,7 +24,7 @@ rapids-logger "pytest narwhals"
 NARWHALS_VERSION=$(python -c "import narwhals; print(narwhals.__version__)")
 git clone https://github.com/narwhals-dev/narwhals.git --depth=1 -b "v${NARWHALS_VERSION}" narwhals
 pushd narwhals
-rapids-pip-retry install -U -e .
+rapids-pip-retry install -U -e . --no-build-isolation
 
 rapids-logger "Check narwhals versions"
 python -c "import narwhals; print(narwhals.show_versions())"
@@ -37,7 +37,6 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
     --cache-clear \
     -p xdist \
     -p env \
-    -p no:pytest_benchmark \
     -p narwhals_cudf_test_plugin \
     --numprocesses=8 \
     --dist=worksteal \
@@ -55,7 +54,6 @@ NARWHALS_POLARS_GPU=1 \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-narwhals.xml" \
     -p xdist \
     -p env \
-    -p no:pytest_benchmark \
     -p narwhals_cudf_polars_test_plugin \
     --numprocesses=8 \
     --dist=worksteal \
@@ -72,7 +70,6 @@ NARWHALS_DEFAULT_CONSTRUCTORS=pandas \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-pandas-narwhals.xml" \
     -p xdist \
     -p env \
-    -p no:pytest_benchmark \
     -p narwhals_cudf_pandas_test_plugin \
     --numprocesses=8 \
     --dist=worksteal

@@ -26,18 +26,15 @@ Identify a directory that contains the Narwhals repository to install it into th
 
 Ensure the Narwhals Git source tree is checked-out to the target upgrade version before installing.
 
+[Recent](https://github.com/narwhals-dev/narwhals/issues/3811) Narwhals versions use the `uv_build` build backend, so the editable install requires `uv` and `uv-build` in the environment and must be run with `--no-build-isolation`.
+
 For example, to clone Narwhals and install it in a fictional, conda development environment named "cudf-dev"
 ```bash
 NARWHALS_VERSION="v2.24.0"
 git clone https://github.com/narwhals-dev/narwhals.git --single-branch --branch $NARWHALS_VERSION /tmp/narwhals
 cd /tmp/narwhals
-conda run -n cudf-dev pip install -U -e .
-```
-
-[Recent](https://github.com/narwhals-dev/narwhals/issues/3811) Narwhals versions use the `uv_build` build backend. If the editable install fails with `RuntimeError: uv-build was not properly installed`, install the build tools and disable build isolation:
-```bash
 conda run -n cudf-dev pip install uv uv-build
-conda run -n cudf-dev pip install -e . --no-build-isolation
+conda run -n cudf-dev pip install -U -e . --no-build-isolation
 ```
 
 ## Step 3. Iterate and classify test failures from `pytest` invocations in `ci/test_narwhals.sh`
