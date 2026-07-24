@@ -27,8 +27,8 @@ inline constexpr cudf::size_type device_find_if_small_input_threshold = 1'000'00
  * @brief Check if a predicate is true for any element in a device-accessible range using
  * `cub::DeviceFind::FindIf`
  *
- * @tparam Predicate **[inferred]** Type of the unary predicate
- * @tparam InputIterator **[inferred]** Type of device-accessible input iterator
+ * @tparam Predicate Type of the unary predicate
+ * @tparam InputIterator Type of device-accessible input iterator
  *
  * @param begin Device-accessible iterator to start of input values
  * @param end Device-accessible iterator to end of input values
@@ -45,7 +45,8 @@ bool device_find_if(InputIterator begin,
   auto const num_items = cuda::std::distance(begin, end);
   if (num_items == 0) { return false; }
 
-  using offset_type = cub::detail::choose_offset_t<decltype(num_items)>;
+  using offset_type =
+    cuda::std::conditional_t<(sizeof(num_items) <= 4), uint32_t, unsigned long long>;
 
   auto result =
     cudf::detail::device_scalar<offset_type>(stream, cudf::get_current_device_resource_ref());
