@@ -51,11 +51,7 @@ from cudf_polars.engine.persisted_result import (
 )
 from cudf_polars.quent._context import (
     LocalQuentContext,
-    ProcessorRegistry,
-    declare_network_channels,
-    declare_worker_resources,
-    finalize_network_channels,
-    finalize_worker_resources,
+    WorkerResources,
 )
 from cudf_polars.unstable import unstable
 from cudf_polars.utils.config import DaskContext, MemoryResourceConfig
@@ -139,14 +135,7 @@ class _WorkerContext:
     quent_worker: cudf_polars.quent._types.Worker
     statistics: Statistics
     mr: RmmResourceAdaptor | None = None
-    device_memory: cudf_polars.quent._types.Memory | None = None
-    disk_to_device_channel: cudf_polars.quent._types.Channel | None = None
-    thread_pool: cudf_polars.quent._types.ThreadPool | None = None
-    processor_registry: ProcessorRegistry | None = None
-    network: cudf_polars.quent._types.Network | None = None
-    link_channels: dict[int, cudf_polars.quent._types.Channel] = dataclasses.field(
-        default_factory=dict
-    )
+    worker_resources: WorkerResources | None = None
 
 
 def _worker_evaluate_persisted(
@@ -429,32 +418,18 @@ def _setup_worker(
 
     if quent_context is not None:
         quent_logger = cudf_polars.quent._logging.QuentLogger()
-    else:
-        quent_logger = None
-
-    device_memory = None
-    disk_to_device_channel = None
-    thread_pool = None
-    processor_registry = None
-    network = None
-    link_channels: dict[int, cudf_polars.quent._types.Channel] = {}
-    if quent_logger is not None:
-        processor_registry = ProcessorRegistry()
-        device_memory, disk_to_device_channel, thread_pool = declare_worker_resources(
-            quent_logger,
+        worker_resources = WorkerResources.build(
             instance_suffix=f"rank-{comm.rank}",
             engine_id=engine_id,
             worker_id=worker_id,
-        )
-        # Inter-rank network topology is engine-scoped: declare it once here
-        # alongside the other worker resources (a no-op for single-rank runs).
-        network, link_channels = declare_network_channels(
-            quent_logger,
             rank=comm.rank,
             nranks=comm.nranks,
-            engine_id=engine_id,
-            device_memory=device_memory,
         )
+        quent_logger.emit(quent_worker._init())
+        worker_resources.declare(quent_logger)
+    else:
+        quent_logger = None
+        worker_resources = None
 
     mp_ctx = _WorkerContext(
         comm=comm,
@@ -464,17 +439,10 @@ def _setup_worker(
         mr=mr,
         quent_worker=quent_worker,
         quent_logger=quent_logger,
-        device_memory=device_memory,
-        disk_to_device_channel=disk_to_device_channel,
-        thread_pool=thread_pool,
-        processor_registry=processor_registry,
-        network=network,
-        link_channels=link_channels,
+        worker_resources=worker_resources,
         statistics=statistics,
     )
     setattr(dask_worker, attr, mp_ctx)
-    if mp_ctx.quent_logger is not None:
-        mp_ctx.quent_logger.emit(quent_worker._init())
 
 
 def _teardown_worker(
@@ -498,20 +466,9 @@ def _teardown_worker(
     mp_ctx: _WorkerContext | None = getattr(dask_worker, attr, None)
     traces = []
     if mp_ctx is not None:
-        if mp_ctx.quent_worker is not None and mp_ctx.quent_logger is not None:
-            if mp_ctx.processor_registry is not None:
-                mp_ctx.processor_registry._emit_processor_exit_events(
-                    mp_ctx.quent_logger
-                )
-            finalize_network_channels(
-                mp_ctx.quent_logger, link_channels=mp_ctx.link_channels
-            )
-            if mp_ctx.device_memory is not None:
-                finalize_worker_resources(
-                    mp_ctx.quent_logger,
-                    device_memory=mp_ctx.device_memory,
-                    disk_to_device_channel=mp_ctx.disk_to_device_channel,
-                )
+        if mp_ctx.quent_logger is not None:
+            if mp_ctx.worker_resources is not None:
+                mp_ctx.worker_resources.finalize(mp_ctx.quent_logger)
             mp_ctx.quent_logger.emit(mp_ctx.quent_worker._exit())
             traces = mp_ctx.quent_logger.drain()
 
@@ -670,21 +627,14 @@ def _worker_evaluate(
         raise RuntimeError("_setup_worker must be called before _worker_evaluate")
     local_quent_context: LocalQuentContext | None = None
     if quent_context is not None:
+        assert mp_ctx.worker_resources is not None
         assert mp_ctx.quent_logger is not None
-        assert mp_ctx.device_memory is not None
-        assert mp_ctx.thread_pool is not None
-        assert mp_ctx.processor_registry is not None
         local_quent_context = LocalQuentContext(
             context=quent_context,
             query=quent_context.query_for(query_id),
             worker=mp_ctx.quent_worker,
             logger=mp_ctx.quent_logger,
-            thread_pool_id=mp_ctx.thread_pool.id,
-            processor_registry=mp_ctx.processor_registry,
-            device_memory=mp_ctx.device_memory,
-            disk_to_device_channel=mp_ctx.disk_to_device_channel,
-            network=mp_ctx.network,
-            link_channels=mp_ctx.link_channels,
+            worker_resources=mp_ctx.worker_resources,
         )
     # evaluate_on_rank always collects metadata internally so we can read
     # metadata[-1].duplicated to decide whether to suppress this rank's output.

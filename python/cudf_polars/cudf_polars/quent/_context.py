@@ -68,7 +68,6 @@ class ProcessorRegistry:
     def __init__(self) -> None:
         self._processors: dict[int, Processor] = {}
         self._lock = threading.Lock()
-        self._closed = False
 
     def get_or_declare_processor(
         self, logger: QuentLogger, thread_ident: int, pool_id: uuid.UUID
@@ -415,9 +414,9 @@ class QuentContext:
             quent_ir_execution_context.logger.emit(
                 quent_task.loading(
                     use_thread=quent_processor,
-                    use_channel=quent_ir_execution_context.disk_to_device_channel,
+                    use_channel=quent_ir_execution_context.worker_resources.disk_to_device_channel,
                     channel_capacity_bytes=input_frames_bytes,
-                    use_memory=quent_ir_execution_context.device_memory,
+                    use_memory=quent_ir_execution_context.worker_resources.device_memory,
                     memory_capacity_bytes=input_frames_bytes,
                 )
             )
@@ -425,7 +424,7 @@ class QuentContext:
             quent_ir_execution_context.logger.emit(
                 quent_task.computing(
                     use_thread=quent_processor,
-                    use_memory=quent_ir_execution_context.device_memory,
+                    use_memory=quent_ir_execution_context.worker_resources.device_memory,
                     input_bytes=input_frames_bytes,
                     memory_capacity_bytes=input_frames_bytes,
                 )
@@ -483,7 +482,7 @@ class QuentContext:
             quent_ir_execution_context.logger.emit(
                 quent_task.computing(
                     use_thread=quent_processor,
-                    use_memory=quent_ir_execution_context.device_memory,
+                    use_memory=quent_ir_execution_context.worker_resources.device_memory,
                     memory_capacity_bytes=output_capacity_bytes,
                 )
             )
@@ -494,89 +493,116 @@ class QuentContext:
         # break operator-level aggregation like duration_s.
 
 
-def declare_worker_resources(
-    logger: QuentLogger,
-    *,
-    instance_suffix: str,
-    engine_id: uuid.UUID,
-    worker_id: uuid.UUID,
-) -> tuple[Memory, Channel, ThreadPool]:
-    """
-    Declare per-worker Quent resources and emit their lifecycle events.
+@dataclasses.dataclass(kw_only=True)
+class WorkerResources:
+    """A simple container for per-worker Quent resources."""
 
-    Returns device memory, disk-to-device channel, and thread pool handles.
-    """
-    device_memory = Memory(
-        instance_name=f"{instance_suffix} device memory",
-        resource_type_name="memory",
-        parent_group_id=engine_id,
-    )
-    filesystem = Memory(
-        instance_name=f"{instance_suffix} filesystem",
-        resource_type_name="filesystem",
-        parent_group_id=worker_id,
-    )
-    disk_to_device_channel = Channel(
-        instance_name=f"{instance_suffix} disk -> device",
-        resource_type_name="DiskToDevice",
-        parent_group_id=worker_id,
-        source=filesystem,
-        target=device_memory,
-    )
-    thread_pool = ThreadPool(worker_id=worker_id)
-    device_memory_capacity = get_total_device_memory() or 0
-    logger.emit(device_memory.initializing())
-    logger.emit(device_memory.operating(device_memory_capacity))
-    logger.emit(filesystem.initializing())
-    # Filesystem capacity is unknown; declare as unbounded.
-    logger.emit(filesystem.operating(None))
-    logger.emit(disk_to_device_channel.initializing())
-    # Channel capacity is a rate bound; unbounded when unknown.
-    logger.emit(disk_to_device_channel.operating(None))
-    logger.emit(thread_pool.declare())
-    return device_memory, disk_to_device_channel, thread_pool
+    thread_pool: ThreadPool
+    processor_registry: ProcessorRegistry
+    device_memory: Memory
+    filesystem: Memory
+    disk_to_device_channel: Channel
+    device_memory_capacity: int
+    network: Network
+    link_channels: dict[int, Channel]
 
+    @classmethod
+    def build(
+        cls,
+        instance_suffix: str,
+        engine_id: uuid.UUID,
+        worker_id: uuid.UUID,
+        rank: int,
+        nranks: int,
+    ) -> Self:
+        processor_registry = ProcessorRegistry()
+        device_memory = Memory(
+            instance_name=f"{instance_suffix} device memory",
+            resource_type_name="memory",
+            parent_group_id=engine_id,
+        )
+        filesystem = Memory(
+            instance_name=f"{instance_suffix} filesystem",
+            resource_type_name="filesystem",
+            parent_group_id=worker_id,
+        )
+        disk_to_device_channel = Channel(
+            instance_name=f"{instance_suffix} disk -> device",
+            resource_type_name="DiskToDevice",
+            parent_group_id=worker_id,
+            source=filesystem,
+            target=device_memory,
+        )
+        thread_pool = ThreadPool(worker_id=worker_id)
 
-def finalize_worker_resources(
-    logger: QuentLogger,
-    *,
-    device_memory: Memory,
-    disk_to_device_channel: Channel | None,
-) -> None:
-    """Emit finalizing/exit events for per-worker Quent resources."""
-    if disk_to_device_channel is not None:
-        logger.emit(disk_to_device_channel.finalizing())
-        logger.emit(disk_to_device_channel.exit())
-        logger.emit(disk_to_device_channel.source.finalizing())
-        logger.emit(disk_to_device_channel.source.exit())
-    logger.emit(device_memory.finalizing())
-    logger.emit(device_memory.exit())
+        network, link_channels = declare_network_channels(
+            rank=rank,
+            nranks=nranks,
+            engine_id=engine_id,
+            device_memory=device_memory,
+        )
+
+        return cls(
+            processor_registry=processor_registry,
+            device_memory=device_memory,
+            filesystem=filesystem,
+            disk_to_device_channel=disk_to_device_channel,
+            thread_pool=thread_pool,
+            device_memory_capacity=get_total_device_memory() or 0,
+            network=network,
+            link_channels=link_channels,
+        )
+
+    def declare(self, logger: QuentLogger) -> None:
+        logger.emit(self.device_memory.initializing())
+        logger.emit(self.device_memory.operating(self.device_memory_capacity))
+        logger.emit(self.filesystem.initializing())
+        # Filesystem capacity is unknown; declare as unbounded.
+        logger.emit(self.filesystem.operating(None))
+        logger.emit(self.disk_to_device_channel.initializing())
+        # Channel capacity is a rate bound; unbounded when unknown.
+        logger.emit(self.disk_to_device_channel.operating(None))
+        logger.emit(self.thread_pool.declare())
+
+        logger.emit(self.network.declare())
+        for link in self.link_channels.values():
+            logger.emit(link.initializing())
+            logger.emit(link.operating(None))
+
+    def finalize(self, logger: QuentLogger) -> None:
+        self.processor_registry._emit_processor_exit_events(logger)
+
+        logger.emit(self.disk_to_device_channel.finalizing())
+        logger.emit(self.disk_to_device_channel.exit())
+        logger.emit(self.disk_to_device_channel.source.finalizing())
+        logger.emit(self.disk_to_device_channel.source.exit())
+        logger.emit(self.device_memory.finalizing())
+        logger.emit(self.device_memory.exit())
+
+        # network
+        for link in self.link_channels.values():
+            logger.emit(link.finalizing())
+            logger.emit(link.exit())
 
 
 def declare_network_channels(
-    logger: QuentLogger,
     *,
     rank: int,
     nranks: int,
     engine_id: uuid.UUID,
     device_memory: Memory,
-) -> tuple[Network | None, dict[int, Channel]]:
+) -> tuple[Network, dict[int, Channel]]:
     """
-    Declare engine-scoped network link channels for inter-rank communication.
+    Build engine-scoped network link channels for inter-rank communication.
 
-    Creates a Network resource group and one Channel per remote rank, emitting
-    their lifecycle events to the quent logger. This is engine/worker-scoped:
-    the inter-rank topology is fixed for the lifetime of the engine, so it is
-    declared once at worker setup rather than per query.
+    Creates a ``Network`` resource group and one ``Channel`` per remote
+    rank. Does not emit lifecycle events; the caller is responsible for
+    declaring them (see ``WorkerResources.declare``).
 
-    Returns ``(None, {})`` for single-rank runs, which have no inter-rank
-    communication.
+    For single-rank runs the returned ``Network`` has no link channels, since
+    there is no inter-rank communication.
     """
-    if nranks <= 1:
-        return None, {}
-
     network = Network(engine_id=engine_id)
-    logger.emit(network.declare())
 
     link_channels: dict[int, Channel] = {}
     for target_rank in range(nranks):
@@ -589,22 +615,9 @@ def declare_network_channels(
             source=device_memory,
             target=device_memory,
         )
-        logger.emit(link.initializing())
-        logger.emit(link.operating(None))
         link_channels[target_rank] = link
 
     return network, link_channels
-
-
-def finalize_network_channels(
-    logger: QuentLogger,
-    *,
-    link_channels: dict[int, Channel],
-) -> None:
-    """Emit finalizing/exit events for engine-scoped network link channels."""
-    for link in link_channels.values():
-        logger.emit(link.finalizing())
-        logger.emit(link.exit())
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -615,42 +628,32 @@ class LocalQuentContext:
     This can contain non-serializable objects (like a ``QuentLogger``)
     and entities that are only valid on the local rank.
 
-    The ``processor_registry`` is engine/worker-scoped and outlives
-    individual queries. It is injected by the backend that owns the
-    ``ThreadPoolExecutor``.
-
     The ``query`` is per-collect: each ``.collect()`` derives a fresh
     :class:`Query` from its unique ``query_id`` (see
     :meth:`QuentContext.query_for`), rather than reusing the shared
     ``context.query``.
 
-    The ``device_memory``, ``disk_to_device_channel``, ``network``, and
-    ``link_channels`` resources are all engine/worker-scoped: they are declared
-    once at worker setup (see :func:`declare_worker_resources` and
-    :func:`declare_network_channels`) and injected into each per-collect
-    context, rather than being declared per query.
+    The ``worker_resources`` (device memory, disk-to-device channel, network,
+    link channels, thread pool, and processor registry) are engine/worker-scoped:
+    they are declared once at worker setup via :class:`WorkerResources` and
+    injected into each per-collect context, rather than being declared per query.
     """
 
     context: QuentContext
     query: Query
     worker: Worker
     logger: QuentLogger
-    thread_pool_id: uuid.UUID
-    processor_registry: ProcessorRegistry
-    device_memory: Memory
-    disk_to_device_channel: Channel | None = None
-    network: Network | None = None
-    link_channels: dict[int, Channel] = dataclasses.field(default_factory=dict)
+    worker_resources: WorkerResources
 
     def get_or_declare_processor(
         self,
         thread_ident: int,
     ) -> Processor:
         """Get (or declare a new) Quent Processor for a CPU thread."""
-        return self.processor_registry.get_or_declare_processor(
+        return self.worker_resources.processor_registry.get_or_declare_processor(
             self.logger,
             thread_ident=thread_ident,
-            pool_id=self.thread_pool_id,
+            pool_id=self.worker_resources.thread_pool.id,
         )
 
 
@@ -671,10 +674,5 @@ class QuentIRExecutionContext(LocalQuentContext):
             query=execution_context.query,
             worker=execution_context.worker,
             logger=execution_context.logger,
-            thread_pool_id=execution_context.thread_pool_id,
-            processor_registry=execution_context.processor_registry,
-            device_memory=execution_context.device_memory,
-            disk_to_device_channel=execution_context.disk_to_device_channel,
-            network=execution_context.network,
-            link_channels=execution_context.link_channels,
+            worker_resources=execution_context.worker_resources,
         )

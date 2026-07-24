@@ -23,8 +23,7 @@ from cudf_polars.quent._context import (
     ProcessorRegistry,
     QuentContext,
     QuentIRExecutionContext,
-    declare_network_channels,
-    finalize_network_channels,
+    WorkerResources,
 )
 from cudf_polars.quent._plan import build_plan, port_names_for_node
 from cudf_polars.quent._types import (
@@ -74,15 +73,17 @@ def _make_quent_ir_execution_context(
     context = QuentContext()
     engine_id = context.engine.id
     worker_id = uuid.uuid4()
-    pool_id = uuid.uuid4()
+    worker_resources = WorkerResources.build(
+        instance_suffix="test",
+        engine_id=engine_id,
+        worker_id=worker_id,
+        rank=0,
+        nranks=1,
+    )
     if disk_to_device_channel is not None:
-        device_memory = disk_to_device_channel.target
-    else:
-        device_memory = Memory(
-            instance_name="device",
-            resource_type_name="memory",
-            parent_group_id=engine_id,
-        )
+        worker_resources.disk_to_device_channel = disk_to_device_channel
+        worker_resources.device_memory = disk_to_device_channel.target
+        worker_resources.filesystem = disk_to_device_channel.source
     operator_id = operator_id or uuid.uuid4()
     query = context.query_for(uuid.uuid4())
     plan = Plan(
@@ -104,10 +105,7 @@ def _make_quent_ir_execution_context(
         query=query,
         worker=Worker(id=worker_id, engine=context.engine, instance_name="rank-0"),
         logger=logger,
-        thread_pool_id=pool_id,
-        processor_registry=ProcessorRegistry(),
-        device_memory=device_memory,
-        disk_to_device_channel=disk_to_device_channel,
+        worker_resources=worker_resources,
     )
     quent_ir_execution_context = QuentIRExecutionContext.from_execution_context(
         local_context, operator
@@ -728,37 +726,32 @@ def test_processor_registry_concurrent_first_use_declares_once() -> None:
 def test_processor_registry_reused_across_quent_contexts() -> None:
     pytest.importorskip("structlog")
     logger = cudf_polars.quent._logging.QuentLogger()
-    registry = ProcessorRegistry()
-    pool_id = uuid.uuid4()
     thread_ident = 99
 
     context_a = QuentContext()
     context_b = QuentContext()
+    # Share a single WorkerResources so both contexts reuse the same
+    # processor registry / thread pool.
+    worker_resources = WorkerResources.build(
+        instance_suffix="test",
+        engine_id=context_a.engine.id,
+        worker_id=uuid.uuid4(),
+        rank=0,
+        nranks=1,
+    )
     local_a = LocalQuentContext(
         context=context_a,
         query=context_a.query_for(uuid.uuid4()),
         worker=Worker(id=uuid.uuid4(), engine=context_a.engine, instance_name="rank-0"),
         logger=logger,
-        thread_pool_id=pool_id,
-        processor_registry=registry,
-        device_memory=Memory(
-            instance_name="device",
-            resource_type_name="memory",
-            parent_group_id=context_a.engine.id,
-        ),
+        worker_resources=worker_resources,
     )
     local_b = LocalQuentContext(
         context=context_b,
         query=context_b.query_for(uuid.uuid4()),
         worker=Worker(id=uuid.uuid4(), engine=context_b.engine, instance_name="rank-0"),
         logger=logger,
-        thread_pool_id=pool_id,
-        processor_registry=registry,
-        device_memory=Memory(
-            instance_name="device",
-            resource_type_name="memory",
-            parent_group_id=context_b.engine.id,
-        ),
+        worker_resources=worker_resources,
     )
 
     processor_a = local_a.get_or_declare_processor(thread_ident=thread_ident)
@@ -945,28 +938,43 @@ def test_network_declare_serialization() -> None:
     }
 
 
-def test_declare_network_channels_single_rank(device_memory: Memory) -> None:
+def test_declare_network_channels_single_rank() -> None:
     pytest.importorskip("structlog")
     logger = cudf_polars.quent._logging.QuentLogger()
-
-    network, link_channels = declare_network_channels(
-        logger,
+    worker_resources = WorkerResources.build(
+        instance_suffix="test",
+        engine_id=uuid.uuid4(),
+        worker_id=uuid.uuid4(),
         rank=0,
         nranks=1,
-        engine_id=uuid.uuid4(),
-        device_memory=device_memory,
+    )
+    worker_resources.declare(logger)
+    assert worker_resources.link_channels == {}
+    events = _drained_events(logger)
+    network_events = [event for event in events if "Network" in event["data"]]
+    assert len(network_events) == 1
+    assert (
+        network_events[0]["data"]["Network"]["Declaration"]["instance_name"]
+        == "Network"
     )
 
-    assert network is None
-    assert link_channels == {}
-    assert _drained_events(logger) == []
+    channel_events = [event for event in events if "Channel" in event["data"]]
+    network_channels = [
+        event
+        for event in channel_events
+        if event["data"]["Channel"]["seq"] == 0
+        and event["data"]["Channel"]["state"]["ChannelInitializing"][
+            "resource_type_name"
+        ]
+        == "Link"
+    ]
+    assert len(network_channels) == 0
 
 
 @pytest.mark.parametrize(
     "rank,nranks,expected_targets", [(0, 3, [1, 2]), (1, 3, [0, 2])]
 )
 def test_declare_network_channels_multi_rank(
-    device_memory: Memory,
     rank: int,
     nranks: int,
     expected_targets: list[int],
@@ -975,60 +983,48 @@ def test_declare_network_channels_multi_rank(
     logger = cudf_polars.quent._logging.QuentLogger()
     engine_id = uuid.uuid4()
 
-    network, link_channels = declare_network_channels(
-        logger,
+    worker_resources = WorkerResources.build(
+        instance_suffix="test",
+        engine_id=engine_id,
+        worker_id=uuid.uuid4(),
         rank=rank,
         nranks=nranks,
-        engine_id=engine_id,
-        device_memory=device_memory,
     )
+    worker_resources.declare(logger)
 
-    assert network is not None
-    assert set(link_channels) == set(expected_targets)
-    for target_rank, link in link_channels.items():
+    assert worker_resources.network is not None
+    assert set(worker_resources.link_channels) == set(expected_targets)
+    for target_rank, link in worker_resources.link_channels.items():
         assert link.instance_name == f"rank-{rank} -> rank-{target_rank}"
         assert link.resource_type_name == "Link"
-        assert link.parent_group_id == network.id
-        assert link.source is device_memory
-        assert link.target is device_memory
+        assert link.parent_group_id == worker_resources.network.id
+        assert link.source is worker_resources.device_memory
+        assert link.target is worker_resources.device_memory
+
+    worker_resources.finalize(logger)
 
     events = _drained_events(logger)
     network_events = [event for event in events if "Network" in event["data"]]
     channel_events = [event for event in events if "Channel" in event["data"]]
+    network_channel_ids = {
+        event["id"]
+        for event in channel_events
+        if event["data"]["Channel"]["seq"] == 0
+        and event["data"]["Channel"]["state"]["ChannelInitializing"][
+            "resource_type_name"
+        ]
+        == "Link"
+    }
+
+    network_channel_events = [
+        event for event in channel_events if event["id"] in network_channel_ids
+    ]
     assert len(network_events) == 1
     assert network_events[0]["data"]["Network"]["Declaration"][
         "parent_group_id"
     ] == str(engine_id)
-    assert len(channel_events) == len(expected_targets) * 2
-
-
-def test_finalize_network_channels(device_memory: Memory) -> None:
-    pytest.importorskip("structlog")
-    logger = cudf_polars.quent._logging.QuentLogger()
-    link_channels = {
-        target_rank: Channel(
-            instance_name=f"rank-0 -> rank-{target_rank}",
-            resource_type_name="Link",
-            parent_group_id=uuid.uuid4(),
-            source=device_memory,
-            target=device_memory,
-        )
-        for target_rank in (1, 2)
-    }
-
-    finalize_network_channels(logger, link_channels=link_channels)
-
-    events = _drained_events(logger)
-    finalizing_events = [
-        event
-        for event in events
-        if event["data"]["Channel"]["state"] == {"ChannelFinalizing": None}
-    ]
-    exit_events = [
-        event for event in events if event["data"]["Channel"]["state"] == "Exit"
-    ]
-    assert len(finalizing_events) == 2
-    assert len(exit_events) == 2
+    # One event for Initializing, Operating, Finalizing, and Exit
+    assert len(network_channel_events) == len(expected_targets) * 4
 
 
 def test_emit_task_events_computing_node() -> None:

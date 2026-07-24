@@ -51,12 +51,8 @@ from cudf_polars.engine.persisted_result import (
 )
 from cudf_polars.quent._context import (
     LocalQuentContext,
-    ProcessorRegistry,
     QuentContext,
-    declare_network_channels,
-    declare_worker_resources,
-    finalize_network_channels,
-    finalize_worker_resources,
+    WorkerResources,
 )
 from cudf_polars.quent._types import Worker
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
@@ -82,7 +78,6 @@ if TYPE_CHECKING:
     from cudf_polars.engine.core import T
     from cudf_polars.engine.options import StreamingOptions
     from cudf_polars.engine.persisted_result import PersistedQueryResult
-    from cudf_polars.quent._types import Channel, Memory, Network, ThreadPool
     from cudf_polars.streaming.parallel import ConfigOptions
     from cudf_polars.utils.config import StreamingExecutor
 
@@ -138,13 +133,12 @@ def evaluate_pipeline_spmd_mode(
     if quent_context is not None:
         quent_logger = config_options.executor.spmd_context.quent_logger
         assert quent_logger is not None
+        assert spmd_context.worker_resources is not None
+
         query = quent_context.query_for(query_id)
         quent_context._emit_query_group_events(quent_logger)
         quent_context._emit_query_events(quent_logger, query)
         worker_id = config_options.executor.spmd_context.worker_id
-        assert spmd_context.processor_registry is not None
-        assert spmd_context.thread_pool_id is not None
-        assert spmd_context.device_memory is not None
         local_quent_context = LocalQuentContext(
             context=quent_context,
             query=query,
@@ -154,12 +148,7 @@ def evaluate_pipeline_spmd_mode(
                 instance_name=f"rank-{comm.rank}",
             ),
             logger=quent_logger,
-            thread_pool_id=spmd_context.thread_pool_id,
-            processor_registry=spmd_context.processor_registry,
-            device_memory=spmd_context.device_memory,
-            disk_to_device_channel=spmd_context.disk_to_device_channel,
-            network=spmd_context.network,
-            link_channels=spmd_context.link_channels,
+            worker_resources=spmd_context.worker_resources,
         )
 
     df, metadata = evaluate_on_rank(
@@ -476,12 +465,6 @@ class SPMDEngine(StreamingEngine):
         self._comm: Communicator | None = comm
         self._ctx: Context | None = None
         self._py_executor: ThreadPoolExecutor | None = None
-        self._processor_registry: ProcessorRegistry | None = None
-        self._quent_thread_pool: ThreadPool | None = None
-        self._device_memory: Memory | None = None
-        self._disk_to_device_channel: Channel | None = None
-        self._network: Network | None = None
-        self._link_channels: dict[int, Channel] = {}
 
         self._store_uid = uuid.uuid4().hex
         exit_stack = contextlib.ExitStack()
@@ -516,32 +499,21 @@ class SPMDEngine(StreamingEngine):
                 instance_name=f"rank-{self.rank}",  # relies on self.comm
             )
 
+            worker_resources: WorkerResources | None = None
             if quent_context is not None:
                 assert self._quent_logger is not None
                 self._quent_logger.emit(self._quent_worker._init())
-                self._processor_registry = ProcessorRegistry()
-                # Device memory, the disk->device channel, and the thread pool
-                # are all engine-scoped: they live for the lifetime of the
-                # engine's `py_executor`, not any single query. Declaring them
-                # once here (rather than per collect) means a single
-                # init/finalize pair per engine.
-                (
-                    self._device_memory,
-                    self._disk_to_device_channel,
-                    self._quent_thread_pool,
-                ) = declare_worker_resources(
-                    self._quent_logger,
+
+                worker_resources = WorkerResources.build(
                     instance_suffix=f"rank-{self.rank}",
                     engine_id=engine_id,
                     worker_id=self._quent_worker.id,
-                )
-                self._network, self._link_channels = declare_network_channels(
-                    self._quent_logger,
                     rank=comm.rank,
                     nranks=comm.nranks,
-                    engine_id=engine_id,
-                    device_memory=self._device_memory,
                 )
+                worker_resources.declare(self._quent_logger)
+
+            self._worker_resources = worker_resources
 
             # Register after `_cleanup_ctx` so on teardown (LIFO) the
             # executor shuts down first. `wait=True` is safe because
@@ -568,16 +540,7 @@ class SPMDEngine(StreamingEngine):
                         quent_logger=self._quent_logger,
                         context=self._ctx,
                         py_executor=self._py_executor,
-                        processor_registry=self._processor_registry,
-                        thread_pool_id=(
-                            self._quent_thread_pool.id
-                            if self._quent_thread_pool is not None
-                            else None
-                        ),
-                        device_memory=self._device_memory,
-                        disk_to_device_channel=self._disk_to_device_channel,
-                        network=self._network,
-                        link_channels=self._link_channels,
+                        worker_resources=self._worker_resources,
                     ),
                 },
                 engine_options={
@@ -721,16 +684,7 @@ class SPMDEngine(StreamingEngine):
                     engine_id=engine_id,
                     worker_id=self._quent_worker.id,
                     quent_logger=self._quent_logger,
-                    processor_registry=self._processor_registry,
-                    thread_pool_id=(
-                        self._quent_thread_pool.id
-                        if self._quent_thread_pool is not None
-                        else None
-                    ),
-                    device_memory=self._device_memory,
-                    disk_to_device_channel=self._disk_to_device_channel,
-                    network=self._network,
-                    link_channels=self._link_channels,
+                    worker_resources=self._worker_resources,
                 ),
             },
             engine_options={
@@ -874,18 +828,8 @@ class SPMDEngine(StreamingEngine):
         )
 
         if self._quent_logger is not None:
-            if quent_context is not None:
-                assert self._processor_registry is not None
-                self._processor_registry._emit_processor_exit_events(self._quent_logger)
-                finalize_network_channels(
-                    self._quent_logger, link_channels=self._link_channels
-                )
-                if self._device_memory is not None:
-                    finalize_worker_resources(
-                        self._quent_logger,
-                        device_memory=self._device_memory,
-                        disk_to_device_channel=self._disk_to_device_channel,
-                    )
+            if self._worker_resources is not None:
+                self._worker_resources.finalize(self._quent_logger)
             self._quent_logger.emit(self._quent_worker._exit())
         if quent_context is not None:
             assert self._quent_logger is not None
