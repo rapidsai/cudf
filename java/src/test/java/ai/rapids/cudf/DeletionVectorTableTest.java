@@ -40,7 +40,7 @@ class DeletionVectorTableTest extends CudfTestBase {
     byte[] bitmapData = TableTestUtils.arrayFrom(DELETED_ROWS_FILE1);
     try (HostMemoryBufferArray array = TableTestUtils.buffersFrom(data);
          HostMemoryBufferArray bitmapArray = TableTestUtils.buffersFrom(new byte[][] { bitmapData })) {
-      DeletionVectorInfo dvInfo = new DeletionVectorInfo(bitmapArray.buffers[0], null, null);
+      DeletionVectorInfo dvInfo = new DeletionVectorInfo(bitmapArray.buffers[0], false, null, null);
       try (Table table = DeletionVector.readParquet(opts, array.buffers, new DeletionVectorInfo[] { dvInfo })) {
         long rows = table.getRowCount();
         assertEquals(1000 - DELETED_ROWS_COUNT1, rows);
@@ -59,7 +59,7 @@ class DeletionVectorTableTest extends CudfTestBase {
          HostMemoryBufferArray bitmapArray = TableTestUtils.buffersFrom(new byte[][] { bitmapData })) {
       long[] rowGroupOffsets = Arrays.stream(rowGroups[0]).mapToLong(i -> i * 10000L).toArray();
       int[] rowGroupNumRows = Arrays.stream(rowGroups[0]).map(i -> 10000).toArray();
-      DeletionVectorInfo dvInfo = new DeletionVectorInfo(bitmapArray.buffers[0], rowGroupOffsets, rowGroupNumRows);
+      DeletionVectorInfo dvInfo = new DeletionVectorInfo(bitmapArray.buffers[0], false, rowGroupOffsets, rowGroupNumRows);
       try (Table table = DeletionVector.readParquet(opts, array.buffers, rowGroups, new DeletionVectorInfo[] { dvInfo })) {
         long rows = table.getRowCount();
         assertEquals(20000 - DELETED_ROWS_COUNT2_RGS_1_AND_3, rows);
@@ -76,7 +76,7 @@ class DeletionVectorTableTest extends CudfTestBase {
     try (HostMemoryBufferArray array = TableTestUtils.buffersFrom(data);
          HostMemoryBufferArray bitmapArray = TableTestUtils.buffersFrom(new byte[][] { bitmapData })) {
       ParquetOptions opts = ParquetOptions.DEFAULT;
-      DeletionVectorInfo dvInfo = new DeletionVectorInfo(bitmapArray.buffers[0], null, null);
+      DeletionVectorInfo dvInfo = new DeletionVectorInfo(bitmapArray.buffers[0], false, null, null);
       try (ParquetChunkedReader reader = DeletionVector.newParquetChunkedReader(240000, 0, opts, array.buffers,
               new DeletionVectorInfo[] { dvInfo })) {
         int numChunks = 0;
@@ -104,7 +104,7 @@ class DeletionVectorTableTest extends CudfTestBase {
       ParquetOptions opts = ParquetOptions.DEFAULT;
       long[] rowGroupOffsets = Arrays.stream(rowGroups[0]).mapToLong(i -> i * 10000L).toArray();
       int[] rowGroupNumRows = Arrays.stream(rowGroups[0]).map(i -> 10000).toArray();
-      DeletionVectorInfo dvInfo = new DeletionVectorInfo(bitmapArray.buffers[0], rowGroupOffsets, rowGroupNumRows);
+      DeletionVectorInfo dvInfo = new DeletionVectorInfo(bitmapArray.buffers[0], false, rowGroupOffsets, rowGroupNumRows);
       try (ParquetChunkedReader reader = DeletionVector.newParquetChunkedReader(120000, 0, opts, array.buffers,
         rowGroups, new DeletionVectorInfo[] { dvInfo })) {
         int numChunks = 0;
@@ -132,7 +132,7 @@ class DeletionVectorTableTest extends CudfTestBase {
       ParquetOptions opts = ParquetOptions.DEFAULT;
       long[] rowGroupOffsets = new long[] { 30000L, 10000L };
       int[] rowGroupNumRows = new int[] { 10000, 10000 };
-      DeletionVectorInfo dvInfo = new DeletionVectorInfo(bitmapArray.buffers[0], rowGroupOffsets, rowGroupNumRows);
+      DeletionVectorInfo dvInfo = new DeletionVectorInfo(bitmapArray.buffers[0], false, rowGroupOffsets, rowGroupNumRows);
       try (ParquetChunkedReader reader = DeletionVector.newParquetChunkedReader(120000, 0, opts, new String[] {
               TEST_FILE2.getAbsolutePath(),
               TEST_FILE2.getAbsolutePath()
