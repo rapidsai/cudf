@@ -111,3 +111,9 @@ def test_sum_horizontal_mixed_dtypes(engine: pl.GPUEngine) -> None:
     df = pl.LazyFrame({"a": [1, 2, None], "b": [1.5, None, 3.5]})
     q = df.select(pl.sum_horizontal("a", "b"))
     assert_gpu_result_equal(q, engine=engine, check_exact=False)
+
+
+def test_sum_horizontal_string_unsupported(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": ["x", None], "b": ["y", "z"]})
+    q = df.select(pl.sum_horizontal("a", "b"))
+    assert_ir_translation_raises(q, engine, NotImplementedError)

@@ -233,20 +233,6 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"{self.name} is not supported for dtype {self.dtype.id().name}"
                 )
-        if self.name == "mean_horizontal":
-            for op in (
-                plc.binaryop.BinaryOperator.ADD,
-                plc.binaryop.BinaryOperator.DIV,
-            ):
-                if not plc.binaryop.is_supported_operation(
-                    self.dtype.plc_type,
-                    self.dtype.plc_type,
-                    self.dtype.plc_type,
-                    op,
-                ):
-                    raise NotImplementedError(
-                        f"{self.name} is not supported for dtype {self.dtype.id().name}"
-                    )
         if self.name == "sum_horizontal" and not plc.binaryop.is_supported_operation(
             self.dtype.plc_type,
             self.dtype.plc_type,

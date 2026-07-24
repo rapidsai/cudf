@@ -137,6 +137,7 @@ def pytest_report_header(config: pytest.Config) -> str:
 
 
 EXPECTED_FAILURES: Mapping[str, str] = {
+    "tests/unit/datatypes/test_decimal.py::test_decimal_horizontal_20482": "pylibcudf.Scalar.from_py doesn't support int to decimal type",
     "tests/unit/io/test_csv.py::test_read_csv_only_loads_selected_columns": "Memory usage won't be correct due to GPU",
     "tests/unit/io/test_delta.py::test_scan_delta_version": "Need to expose hive partitioning",
     "tests/unit/io/test_delta.py::test_scan_delta_relative": "Need to expose hive partitioning",
