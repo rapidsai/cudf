@@ -782,7 +782,7 @@ CUDF_KERNEL void __launch_bounds__(128)
           page_g.dict_rle_bits =
             ck_g.dict_rle_bits;  // Conservatively set to the chunk-wide bit width
           page_g.max_hdr_size = max_data_page_hdr_size;  // Max size excluding statistics
-          // Only reserve spacefor statistics if they will actually be written to the page header.
+          // Only reserve space for statistics if actually writing them to the page header
           if (ck_g.stats and write_page_stats) {
             uint32_t stats_hdr_len = 16;
             if (col_g.stats_dtype == dtype_string || col_g.stats_dtype == dtype_byte_array) {
