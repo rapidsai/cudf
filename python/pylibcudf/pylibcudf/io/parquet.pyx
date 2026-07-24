@@ -1,9 +1,9 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from cython.operator cimport dereference
 import warnings
 
-from libc.stdint cimport int64_t, uint8_t
+from libc.stdint cimport int32_t, int64_t, uint8_t
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr, make_unique
@@ -46,6 +46,7 @@ from pylibcudf.libcudf.io.types cimport (
     statistics_freq,
     table_with_metadata,
 )
+from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport size_type, type_id
 from pylibcudf.table cimport Table
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
@@ -250,7 +251,7 @@ cdef class ParquetReaderOptions:
 
         Parameters
         ----------
-        col_names : list
+        col_indices : list
             List of top-level column indices
 
         Returns
@@ -261,6 +262,24 @@ cdef class ParquetReaderOptions:
         for idx in col_indices:
             vec.push_back(idx)
         self.c_obj.set_column_indices(vec)
+
+    cpdef void set_column_field_ids(self, list column_field_ids):
+        """
+        Sets Parquet field IDs of the columns/fields to be read.
+
+        Parameters
+        ----------
+        column_field_ids : list
+            List of Parquet field IDs
+
+        Returns
+        -------
+        None
+        """
+        cdef vector[int32_t] vec
+        for field_id in column_field_ids:
+            vec.push_back(field_id)
+        self.c_obj.set_column_field_ids(vec)
 
     cpdef void set_filter(self, Expression filter):
         """
@@ -464,7 +483,7 @@ cdef class ParquetReaderOptionsBuilder:
 
         Parameters
         ----------
-        col_names : list[int]
+        col_indices : list[int]
             List of top-level column indices
 
         Returns
@@ -475,6 +494,25 @@ cdef class ParquetReaderOptionsBuilder:
         for idx in col_indices:
             vec.push_back(idx)
         self.c_obj.column_indices(vec)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder column_field_ids(self, list column_field_ids):
+        """
+        Sets Parquet field IDs of the columns/fields to be read.
+
+        Parameters
+        ----------
+        column_field_ids : list[int]
+            List of Parquet field IDs
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        cdef vector[int32_t] vec
+        for field_id in column_field_ids:
+            vec.push_back(field_id)
+        self.c_obj.column_field_ids(vec)
         return self
 
     cpdef ParquetReaderOptionsBuilder use_jit_filter(self, bool use_jit_filter):
@@ -741,8 +779,9 @@ cdef class ChunkedParquetWriter:
                 partitions.push_back(
                     partition_info(part[0], part[1])
                 )
+        cdef table_view c_table = table.view()
         with nogil:
-            self.c_obj.get()[0].write(table.view(), partitions)
+            self.c_obj.get()[0].write(c_table, partitions)
 
     @staticmethod
     def from_options(ChunkedParquetWriterOptions options, object stream = None):

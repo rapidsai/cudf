@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Tests for StreamingOptions."""
 
@@ -83,6 +83,11 @@ def test_executor_options_sink_to_directory_absent_when_unspecified() -> None:
     assert "sink_to_directory" not in StreamingOptions().to_executor_options()
 
 
+def test_executor_options_join_filter_pushdown_disabled() -> None:
+    result = StreamingOptions(join_filter_pushdown=None).to_executor_options()
+    assert result["join_filter_pushdown"] is None
+
+
 # ---------------------------------------------------------------------------
 # to_engine_options
 # ---------------------------------------------------------------------------
@@ -93,11 +98,8 @@ def test_engine_options_empty_when_all_unspecified() -> None:
 
 
 def test_engine_options_includes_set_fields() -> None:
-    result = StreamingOptions(
-        raise_on_fail=True, cuda_stream_policy="pool"
-    ).to_engine_options()
+    result = StreamingOptions(raise_on_fail=True).to_engine_options()
     assert result["raise_on_fail"] is True
-    assert result["cuda_stream_policy"] == "pool"
     assert "log" not in result
 
 
@@ -281,21 +283,6 @@ def test_from_argparse_dynamic_planning() -> None:
             argparse.Namespace(dynamic_planning=False)
         ).dynamic_planning
         is None
-    )
-
-
-def test_from_argparse_stream_policy() -> None:
-    assert isinstance(
-        StreamingOptions._from_argparse(
-            argparse.Namespace(stream_policy="auto")
-        ).cuda_stream_policy,
-        Unspecified,
-    )
-    assert (
-        StreamingOptions._from_argparse(
-            argparse.Namespace(stream_policy="pool")
-        ).cuda_stream_policy
-        == "pool"
     )
 
 

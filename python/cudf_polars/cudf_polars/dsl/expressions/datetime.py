@@ -28,6 +28,15 @@ if TYPE_CHECKING:
 __all__ = ["TemporalFunction"]
 
 
+_unit_to_nanoseconds_conversion = {
+    plc.TypeId.DURATION_NANOSECONDS: 1,
+    plc.TypeId.DURATION_MICROSECONDS: 1_000,
+    plc.TypeId.DURATION_MILLISECONDS: 1_000_000,
+    plc.TypeId.DURATION_SECONDS: 1_000_000_000,
+    plc.TypeId.DURATION_DAYS: 86_400_000_000_000,
+}
+
+
 class TemporalFunction(Expr):
     class Name(IntEnum):
         """Internal and picklable representation of polars' `TemporalFunction`."""
@@ -114,8 +123,25 @@ class TemporalFunction(Expr):
         "ns": plc.datetime.RoundingFrequency.NANOSECOND,
     }
 
+    # Number of nanoseconds represented by one unit of each ``total_*`` component.
+    _TOTAL_COMPONENT_NANOSECONDS: ClassVar[dict[Name, int]] = {
+        Name.TotalDays: 86_400_000_000_000,
+        Name.TotalHours: 3_600_000_000_000,
+        Name.TotalMinutes: 60_000_000_000,
+        Name.TotalSeconds: 1_000_000_000,
+        Name.TotalMilliseconds: 1_000_000,
+        Name.TotalMicroseconds: 1_000,
+        Name.TotalNanoseconds: 1,
+    }
+    # Divisor used to derive the century/millennium from the calendar year:
+    # ``(year - 1) // divisor + 1`` (floor division, matching polars).
+    _CENTURY_MILLENNIUM_DIVISOR: ClassVar[dict[Name, int]] = {
+        Name.Millennium: 1_000,
+        Name.Century: 100,
+    }
     _valid_ops: ClassVar[set[Name]] = {
         *_COMPONENT_MAP.keys(),
+        Name.Round,
         Name.IsLeapYear,
         Name.OrdinalDay,
         Name.ToString,
@@ -126,6 +152,11 @@ class TemporalFunction(Expr):
         Name.TimeStamp,
         Name.CastTimeUnit,
         Name.Truncate,
+        Name.Date,
+        Name.DaysInMonth,
+        Name.Quarter,
+        *_CENTURY_MILLENNIUM_DIVISOR.keys(),
+        *_TOTAL_COMPONENT_NANOSECONDS.keys(),
     }
 
     def __init__(
@@ -146,12 +177,15 @@ class TemporalFunction(Expr):
             self.children[0].dtype.plc_type
         ):
             raise NotImplementedError("ToString is not supported on duration types")
-        elif self.name is TemporalFunction.Name.Truncate:
+        elif self.name in {
+            TemporalFunction.Name.Truncate,
+            TemporalFunction.Name.Round,
+        }:
             every = cast("Literal", self.children[1]).value
             match = re.fullmatch(r"(\d+)(ns|us|ms|s|m|h|d)", every)
             if match is None or int(match.group(1)) != 1:
                 # https://github.com/rapidsai/cudf/issues/18654 to support non-1 buckets
-                raise NotImplementedError(f"Unsupported truncate bucket: {every!r}")
+                raise NotImplementedError(f"Unsupported bucket: {every!r}")
             self.options = (self._TRUNCATE_FREQ_MAP[match.group(2)],)
 
     def do_evaluate(
@@ -159,6 +193,34 @@ class TemporalFunction(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         columns = [child.evaluate(df, context=context) for child in self.children]
+        if self.name in self._TOTAL_COMPONENT_NANOSECONDS:
+            (column,) = columns
+            source_ns = _unit_to_nanoseconds_conversion[column.obj.type().id()]
+            target_ns = self._TOTAL_COMPONENT_NANOSECONDS[self.name]
+            # Reinterpret the duration's integer tick count as int64.
+            casted = column.astype(self.dtype, stream=df.stream)
+            if source_ns >= target_ns:
+                # Coarser (or equal) storage unit: exact integer multiply.
+                op = plc.binaryop.BinaryOperator.MUL
+                factor = source_ns // target_ns
+            else:
+                # Finer storage unit: integer divide. libcudf (like polars)
+                # truncates toward zero for signed integer division.
+                op = plc.binaryop.BinaryOperator.DIV
+                factor = target_ns // source_ns
+            if factor == 1:
+                # Storage unit already matches the requested unit.
+                return casted
+            result = plc.binaryop.binary_operation(
+                casted.obj,
+                plc.Scalar.from_py(
+                    factor, plc.DataType(plc.TypeId.INT64), stream=df.stream
+                ),
+                op,
+                self.dtype.plc_type,
+                stream=df.stream,
+            )
+            return Column(result, dtype=self.dtype)
         if self.name is TemporalFunction.Name.TimeStamp:
             (column,) = columns
             (time_unit,) = self.options
@@ -167,6 +229,16 @@ class TemporalFunction(Expr):
             return column.astype(
                 DataType(pl.Datetime(time_unit)), stream=df_stream
             ).astype(self.dtype, stream=df_stream)
+        elif self.name is TemporalFunction.Name.Round:
+            (column, _) = columns
+            return Column(
+                plc.datetime.round_datetimes(
+                    column.obj,
+                    self.options[0],
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
         elif self.name is TemporalFunction.Name.Truncate:
             (column, _) = columns
             return Column(
@@ -174,6 +246,69 @@ class TemporalFunction(Expr):
                     column.obj,
                     self.options[0],
                     stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name is TemporalFunction.Name.Date:
+            (column,) = columns
+            # Casting the timestamp to TIMESTAMP_DAYS (the storage of ``pl.Date``)
+            # drops the sub-day component.
+            return Column(
+                plc.unary.cast(column.obj, self.dtype.plc_type, stream=df.stream),
+                dtype=self.dtype,
+            )
+        elif self.name is TemporalFunction.Name.DaysInMonth:
+            (column,) = columns
+            return Column(
+                plc.datetime.days_in_month(column.obj, stream=df.stream),
+                dtype=DataType(pl.Int16()),
+            ).astype(self.dtype, stream=df.stream)
+        elif self.name is TemporalFunction.Name.Quarter:
+            (column,) = columns
+            return Column(
+                plc.datetime.extract_quarter(column.obj, stream=df.stream),
+                dtype=DataType(pl.Int16()),
+            ).astype(self.dtype, stream=df.stream)
+        elif self.name in self._CENTURY_MILLENNIUM_DIVISOR:
+            (column,) = columns
+            int32 = plc.DataType(plc.TypeId.INT32)
+            # YEAR extraction yields INT16; cast up so the arithmetic (and the
+            # INT32 output polars produces) does not overflow or need promotion.
+            year = plc.unary.cast(
+                plc.datetime.extract_datetime_component(
+                    column.obj,
+                    plc.datetime.DatetimeComponent.YEAR,
+                    stream=df.stream,
+                ),
+                int32,
+                stream=df.stream,
+            )
+            # polars computes ``(year - 1) // divisor + 1`` using floor division;
+            one = plc.expressions.Literal(
+                plc.Scalar.from_py(1, int32, stream=df.stream)
+            )
+            predicate = plc.expressions.Operation(
+                plc.expressions.ASTOperator.ADD,
+                plc.expressions.Operation(
+                    plc.expressions.ASTOperator.FLOOR_DIV,
+                    plc.expressions.Operation(
+                        plc.expressions.ASTOperator.SUB,
+                        plc.expressions.ColumnReference(0),
+                        one,
+                    ),
+                    plc.expressions.Literal(
+                        plc.Scalar.from_py(
+                            self._CENTURY_MILLENNIUM_DIVISOR[self.name],
+                            int32,
+                            stream=df.stream,
+                        )
+                    ),
+                ),
+                one,
+            )
+            return Column(
+                plc.transform.compute_column(
+                    plc.Table([year]), predicate, stream=df.stream
                 ),
                 dtype=self.dtype,
             )
@@ -257,7 +392,6 @@ class TemporalFunction(Expr):
                 self.dtype.plc_type,
                 stream=df.stream,
             )
-
             return Column(result, dtype=self.dtype)
         elif self.name is TemporalFunction.Name.MonthEnd:
             (column,) = columns

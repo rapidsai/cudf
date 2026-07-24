@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -61,8 +61,13 @@ test_get_level \
 "
 
 # test_dtypes: narwhals' dtype mapping changed with polars 1.40 (reports Object where the test expects Int8).
+# test_len_over_2369: cudf now routes transform("size") to the group-level size
+#   (https://github.com/rapidsai/cudf/issues/18491 is fixed), so narwhals' own
+#   xfail for the cudf constructor is stale and the test strict-XPASSes; deselect
+#   until narwhals removes the xfail.
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF=" \
 test_dtypes or \
+test_len_over_2369[cudf] or \
 test_to_numpy[cudf] or \
 test_fill_null_strategies_with_limit_as_none[cudf] or \
 test_fill_null_series_limit_as_none[cudf] or \
@@ -122,6 +127,9 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
 # test_dtypes: narwhals' dtype mapping changed with polars 1.40 (reports Object where the test expects Int8).
 # test_namespace_len[polars[lazy]]: len() row count lost in zero-column streaming chunks
 #   (https://github.com/rapidsai/cudf/issues/21428).
+# test_explode_*[polars[lazy]-*]: polars 1.42 emits a DeprecationWarning when explode() is called
+#   without empty_as_null=True; narwhals 2.16.0 doesn't pass the kwarg yet, so filterwarnings=error
+#   turns this into a failure. Remove once narwhals is updated.
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS=" \
 test_dtypes or \
 test_namespace_len[polars[lazy]] or \
@@ -131,7 +139,8 @@ test_to_datetime_tz_aware[polars[lazy]-None] or \
 test_truncate[polars[lazy]-1ns-expected0] or \
 test_truncate_multiples[polars[lazy]-2ns-expected0] or \
 ((test_nested_structures and polars and lazy) and (value0 or value1 or value3 or value4 or value6 or value7)) or \
-(test_series_from_iterable and pandas) \
+(test_series_from_iterable and pandas) or \
+(test_explode and polars and lazy) \
 "
 
 rapids-logger "Run narwhals tests for cuDF Polars"
@@ -159,7 +168,6 @@ rapids-logger "Run narwhals tests for cuDF Pandas"
 # test_is_finite_expr & test_is_finite_series: https://github.com/rapidsai/cudf/issues/18257
 # test_maybe_convert_dtypes_pandas: https://github.com/rapidsai/cudf/issues/14149
 # test_log_dtype_pandas: cudf is promoting the type to float64
-# test_len_over_2369: It fails during fallback. The error is 'DataFrame' object has no attribute 'to_frame'
 # test_all_ignore_nulls, test_allh_kleene, and test_anyh_kleene: https://github.com/rapidsai/cudf/issues/19417
 # test_offset_by_date_pandas: https://github.com/rapidsai/cudf/issues/19418
 # test_select_boolean_cols and test_select_boolean_cols_multi_group_by: https://github.com/rapidsai/cudf/issues/19421
@@ -169,7 +177,6 @@ test_is_finite_expr or \
 test_is_finite_series or \
 test_maybe_convert_dtypes_pandas or \
 test_log_dtype_pandas or \
-test_len_over_2369 or \
 test_all_ignore_nulls or \
 test_allh_kleene or \
 test_anyh_kleene or \

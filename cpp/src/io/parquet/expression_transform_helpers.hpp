@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -222,15 +222,18 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
    * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
    */
   std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override;
+
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
    */
   std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
+
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
    */
   std::reference_wrapper<ast::expression const> visit(
     ast::column_name_reference const& expr) override;
+
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
    */
@@ -312,6 +315,33 @@ class equality_literals_collector : public ast::detail::expression_transformer {
 };
 
 /**
+ * @brief Offsets every column referencein an expression by the specified value
+ *
+ */
+class offset_column_references : public named_to_reference_converter {
+ public:
+  offset_column_references(std::optional<std::reference_wrapper<ast::expression const>> expr,
+                           size_type offset);
+
+  // Use `visit` overloads from named_to_reference_converter
+  using named_to_reference_converter::visit;
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(
+    ast::column_name_reference const& expr) override;
+
+ private:
+  size_type _offset{0};
+};
+
+/**
  * @brief Maps indices of (all or selected) columns to their names
  *
  * @param options Parquet reader options
@@ -321,7 +351,7 @@ class equality_literals_collector : public ast::detail::expression_transformer {
  */
 [[nodiscard]] std::unordered_map<cudf::size_type, std::string> map_column_indices_to_names(
   cudf::io::parquet_reader_options const& options,
-  std::vector<SchemaElement> const& schema_tree,
+  std::span<SchemaElement const> schema_tree,
   bool case_sensitive_names);
 
 /**

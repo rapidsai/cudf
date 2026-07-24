@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -106,6 +106,31 @@ TEST_F(FromArrowHostDeviceTest, EmptyTable)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table, got_cudf_table->view());
 }
 
+TEST_F(FromArrowHostDeviceTest, ZeroColumnsWithRows)
+{
+  constexpr cudf::size_type num_rows = 5;
+
+  nanoarrow::UniqueSchema input_schema;
+  ArrowSchemaInit(input_schema.get());
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 0));
+
+  nanoarrow::UniqueArray input_array;
+  NANOARROW_THROW_NOT_OK(ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
+  input_array->length     = num_rows;
+  input_array->null_count = 0;
+  NANOARROW_THROW_NOT_OK(
+    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
+
+  ArrowDeviceArray input;
+  memcpy(&input.array, input_array.get(), sizeof(ArrowArray));
+  input.device_id   = -1;
+  input.device_type = ARROW_DEVICE_CPU;
+
+  auto got_cudf_table = cudf::from_arrow_host(input_schema.get(), &input);
+  EXPECT_EQ(got_cudf_table->num_columns(), 0);
+  EXPECT_EQ(got_cudf_table->num_rows(), num_rows);
+}
+
 TEST_F(FromArrowHostDeviceTest, DateTimeTable)
 {
   auto data = std::vector<int64_t>{1, 2, 3, 4, 5, 6};
@@ -162,7 +187,7 @@ TYPED_TEST(FromArrowHostDeviceTestDurationsTest, DurationTable)
   auto col  = cudf::test::fixed_width_column_wrapper<T>(data, cuda::constant_iterator<bool>(true));
 
   cudf::table_view expected_table_view({col});
-  const ArrowTimeUnit time_unit = [&] {
+  ArrowTimeUnit const time_unit = [&] {
     switch (cudf::type_to_id<TypeParam>()) {
       case cudf::type_id::DURATION_SECONDS: return NANOARROW_TIME_UNIT_SECOND;
       case cudf::type_id::DURATION_MILLISECONDS: return NANOARROW_TIME_UNIT_MILLI;

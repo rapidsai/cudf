@@ -8,7 +8,17 @@
 
 #include <cuda/std/cstdint>
 
+/**
+ * @file
+ * @brief Error codes for libcudf operations.
+ */
+
 namespace CUDF_EXPORT cudf {
+
+/**
+ * @addtogroup utility_error
+ * @{
+ */
 
 /**
  * @brief An enumeration of error codes that can occur during operations.
@@ -33,5 +43,7 @@ enum class [[nodiscard]] errc : cuda::std::int8_t {
     default: return "UNKNOWN_ERROR";
   }
 }
+
+/** @} */
 
 }  // namespace CUDF_EXPORT cudf

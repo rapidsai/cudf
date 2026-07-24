@@ -1,8 +1,10 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
+
+TIMEOUT_TOOL_PATH="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/timeout_with_stack.py
 
 # Support invoking run_cudf_polars_pytests.sh outside the script directory
 # Assumption, polars has been cloned in the root of the repo.
@@ -31,6 +33,7 @@ DESELECTED_TESTS=(
     "tests/unit/io/test_write.py::test_write_async[read_parquet-<lambda>]" # kvikio file creation error in CI
     "tests/unit/io/test_write.py::test_write_async[<lambda>-<lambda>0]" # kvikio file creation error in CI
     "tests/unit/io/test_write.py::test_write_async[<lambda>-<lambda>2]" # kvikio file creation error in CI
+    "tests/unit/operations/test_random.py::test_shuffle_group_by_reseed" # https://github.com/rapidsai/cudf/issues/22964
 )
 
 if [[ $(arch) == "aarch64" ]]; then
@@ -59,17 +62,18 @@ DESELECTED_TESTS_STR=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
 # Don't quote the `DESELECTED_...` variable because `pytest` can't handle
 # multiple quoted arguments inline
 # shellcheck disable=SC2086
+# Fail fast (-x) because failed tests pollute the state
 echo "Run polars tests with injected in-memory GPU engine"
-python -m pytest \
-       -vv \
+python "${TIMEOUT_TOOL_PATH}" --enable-python 3600 \
+   python -m pytest \
        --import-mode=importlib \
        --cache-clear \
+       -x \
        -m "" \
        -p cudf_polars.testing.inject_gpu_engine \
        -n 4 \
        --dist=worksteal \
        --tb=native \
-       --timeout=240 \
        --durations 10 --durations-min 10 \
        -ra \
        $DESELECTED_TESTS_STR \
@@ -81,16 +85,18 @@ python -m pytest \
 echo "Run polars tests with injected SPMD GPU engine, small blocksize"
 CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE=805306368 \
 CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
-    python -m pytest \
+python "${TIMEOUT_TOOL_PATH}" --enable-python 3600 \
+   python -m pytest \
        --import-mode=importlib \
        --cache-clear \
+       -x \
+       -v \
        -m "" \
        -p cudf_polars.testing.inject_gpu_engine \
        -W ignore::ResourceWarning \
        -n 4 \
        --dist=worksteal \
        --tb=native \
-       --timeout=240 \
        --durations 10 --durations-min 10 \
        -ra \
        $DESELECTED_TESTS_STR \
