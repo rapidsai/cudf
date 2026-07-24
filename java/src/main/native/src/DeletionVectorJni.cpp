@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -178,8 +178,12 @@ Java_ai_rapids_cudf_DeletionVector_readParquet(JNIEnv* env,
     cudf::io::parquet_reader_options opts = make_parquet_reader_options(
       env, filter_col_names, col_binary_read, row_groups, std::move(source), unit);
 
-    auto dv_info = make_deletion_vector_info(
-      env, serialized_roaring64, deletion_vector_row_counts, row_group_offsets, row_group_num_rows, are_retention_vectors);
+    auto dv_info = make_deletion_vector_info(env,
+                                             serialized_roaring64,
+                                             deletion_vector_row_counts,
+                                             row_group_offsets,
+                                             row_group_num_rows,
+                                             are_retention_vectors);
 
     auto tbl = cudf::io::parquet::experimental::read_parquet(opts, *dv_info).tbl;
     return cudf::jni::convert_table_for_return(env, tbl);
@@ -269,8 +273,12 @@ Java_ai_rapids_cudf_DeletionVector_createParquetChunkedReader(JNIEnv* env,
     cudf::io::parquet_reader_options opts = make_parquet_reader_options(
       env, filter_col_names, col_binary_read, row_groups, std::move(source), unit);
 
-    auto dv_info = make_deletion_vector_info(
-      env, serialized_roaring64, deletion_vector_row_counts, row_group_offsets, row_group_num_rows, are_retention_vectors);
+    auto dv_info = make_deletion_vector_info(env,
+                                             serialized_roaring64,
+                                             deletion_vector_row_counts,
+                                             row_group_offsets,
+                                             row_group_num_rows,
+                                             are_retention_vectors);
 
     // Create the chunked reader with pass read limit and multiple deletion vectors
     auto reader = new cudf::io::parquet::experimental::chunked_parquet_reader(
