@@ -24,8 +24,8 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/aligned.hpp>
-#include <rmm/mr/aligned_resource_adaptor.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/mr/aligned_resource_adaptor.hpp>
 
 #include <algorithm>
 #include <array>
@@ -34,7 +34,6 @@
 #include <memory>
 #include <numeric>
 #include <utility>
-#include <numeric>
 #include <vector>
 
 namespace {

@@ -215,12 +215,12 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    *
    * @return A pair of vectors containing bloom filter byte ranges and corresponding source indices
    */
-   [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
-                           std::vector<cudf::size_type>>
-   bloom_filters_byte_ranges(std::span<std::vector<size_type> const> row_group_indices,
-                             std::span<data_type const> output_dtypes,
-                             std::span<cudf::size_type const> output_column_schemas,
-                             std::reference_wrapper<ast::expression const> filter);
+  [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
+                          std::vector<cudf::size_type>>
+  bloom_filters_byte_ranges(std::span<std::vector<size_type> const> row_group_indices,
+                            std::span<data_type const> output_dtypes,
+                            std::span<cudf::size_type const> output_column_schemas,
+                            std::reference_wrapper<ast::expression const> filter);
 
   /**
    * @brief Get the dictionary page byte ranges, one per column chunk with (in)equality predicate
