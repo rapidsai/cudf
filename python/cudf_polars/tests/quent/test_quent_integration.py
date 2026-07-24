@@ -13,6 +13,7 @@ import polars as pl
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from typing import Any
 
     from cudf_polars.engine.core import StreamingEngine
     from cudf_polars.quent import QuentContext
@@ -26,6 +27,7 @@ pytest.importorskip("structlog")
 def engine_with_quent_context(
     request: pytest.FixtureRequest,
     quent_context: QuentContext,
+    ray_init_options: dict[str, Any],
 ) -> Iterator[StreamingEngine]:
     """
     A streaming engine configured with a quent context from the 'quent_context'
@@ -44,7 +46,12 @@ def engine_with_quent_context(
         import cudf_polars.engine.ray
 
         engine = cudf_polars.engine.ray.RayEngine(
-            executor_options={"quent_context": quent_context}
+            num_ranks=1,
+            engine_options={"allow_gpu_sharing": True},
+            executor_options={
+                "quent_context": quent_context,
+            },
+            ray_init_options=ray_init_options,
         )
     elif backend == "dask":
         pytest.importorskip("distributed")
