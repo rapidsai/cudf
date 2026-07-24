@@ -163,7 +163,7 @@ class UnaryFunction(Expr):
         "min_horizontal": plc.binaryop.BinaryOperator.NULL_MIN,
     }
     _supported_horizontal_fns = frozenset(
-        {"max_horizontal", "mean_horizontal", "min_horizontal"}
+        {"max_horizontal", "mean_horizontal", "min_horizontal", "sum_horizontal"}
     )
     _supported_math_fns = frozenset(
         {
@@ -247,6 +247,15 @@ class UnaryFunction(Expr):
                     raise NotImplementedError(
                         f"{self.name} is not supported for dtype {self.dtype.id().name}"
                     )
+        if self.name == "sum_horizontal" and not plc.binaryop.is_supported_operation(
+            self.dtype.plc_type,
+            self.dtype.plc_type,
+            self.dtype.plc_type,
+            plc.binaryop.BinaryOperator.ADD,
+        ):
+            raise NotImplementedError(
+                f"{self.name} is not supported for dtype {self.dtype.id().name}"
+            )
         if self.name == "mode" and not POLARS_VERSION_LT_136:
             (maintain_order,) = self.options
             if maintain_order:
@@ -1554,6 +1563,39 @@ class UnaryFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
+        elif self.name == "sum_horizontal":
+            (ignore_nulls,) = self.options
+            columns = [
+                col.obj
+                for col in broadcast(
+                    *(
+                        child.evaluate(df, context=context).astype(
+                            self.dtype, stream=df.stream
+                        )
+                        for child in self.children
+                    ),
+                    target_length=df.num_rows,
+                    stream=df.stream,
+                )
+            ]
+            if ignore_nulls:
+                # Treat nulls as the additive identity so that a row is only
+                # null when Polars would produce null (never, for sum).
+                zero = plc.Scalar.from_py(0, self.dtype.plc_type, stream=df.stream)
+                columns = [
+                    plc.replace.replace_nulls(col, zero, stream=df.stream)
+                    for col in columns
+                ]
+            result = columns[0]
+            for other in columns[1:]:
+                result = plc.binaryop.binary_operation(
+                    result,
+                    other,
+                    plc.binaryop.BinaryOperator.ADD,
+                    self.dtype.plc_type,
+                    stream=df.stream,
+                )
+            return Column(result, dtype=self.dtype)
         elif self.name == "extend_constant":
             column = self.children[0].evaluate(df, context=context)
             value_expr = self.children[1]
