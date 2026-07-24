@@ -1301,6 +1301,13 @@ foreach(_dep IN LISTS _absorbed_deps)
     cudf PRIVATE "$<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,${_dep_link}>>"
   )
 
+  # nvcomp_static has done a WHOLE_ARCHIVE on rmm and rapids_logger itself. Therefore it needs to
+  # come after our WHOLE_ARCHIVE otherwise we will get duplicate symbols for rmm and/or
+  # rapids_logger
+  if(TARGET nvcomp::nvcomp_static)
+    target_link_libraries(${_dep_link} INTERFACE nvcomp::nvcomp_static)
+  endif()
+
   # Merge the absorbed library's export set metadata into cudf-exports so the installed config has
   # find_dependency() calls for all transitive deps (e.g. nvtx3, CUDAToolkit from rmm).
   foreach(_mode build install)
