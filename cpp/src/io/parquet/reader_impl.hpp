@@ -351,6 +351,17 @@ class reader_impl {
                                                 size_t num_rows);
 
   /**
+   * @brief Fill in string and list offsets for rows covered by pruned data pages.
+   *
+   * @param skip_rows Offset of the first row in the table chunk
+   * @param num_rows Number of rows in the table chunk
+   * @param initial_str_offsets Initial offsets used to construct large nested strings
+   */
+  void fill_pruned_offsets(size_t skip_rows,
+                           size_t num_rows,
+                           cudf::device_span<size_t> initial_str_offsets);
+
+  /**
    * @brief Creates file-wide parquet chunk information.
    *
    * Creates information about all chunks in the file, storing it in

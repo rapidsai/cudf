@@ -755,6 +755,7 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
       }
     }
 
+    // Populate additional value-count metadata if column index is also available.
     auto const* column_index =
       col_chunk.column_index.has_value() ? &col_chunk.column_index.value() : nullptr;
 
@@ -765,11 +766,11 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
     //
     // In the future we might want the full histograms saved in the `column_info` struct.
     int64_t const* const def_hist =
-      column_index != nullptr && column_index->definition_level_histogram.has_value()
+      column_index != nullptr and column_index->definition_level_histogram.has_value()
         ? column_index->definition_level_histogram.value().data()
         : nullptr;
     int64_t const* const rep_hist =
-      column_index != nullptr && column_index->repetition_level_histogram.has_value()
+      column_index != nullptr and column_index->repetition_level_histogram.has_value()
         ? column_index->repetition_level_histogram.value().data()
         : nullptr;
 
@@ -786,7 +787,7 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
       page_info pg_info{.location = page_loc, .num_rows = num_rows};
 
       // check to see if we already have null counts for each page
-      if (column_index != nullptr && column_index->null_counts.has_value()) {
+      if (column_index != nullptr and column_index->null_counts.has_value()) {
         pg_info.num_nulls = column_index->null_counts.value()[pg_idx];
       }
 

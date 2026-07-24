@@ -818,6 +818,7 @@ add_library(
   src/io/parquet/writer_impl.cu
   src/io/parquet/writer_impl_helpers.cpp
   src/io/parquet/decode_fixed.cu
+  src/io/parquet/decode_pruned_pages.cu
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
   src/io/text/byte_range_info.cpp
@@ -881,12 +882,8 @@ add_library(
   src/join/key_remapping.cu
   src/join/mark_join.cu
   src/join/mixed_join.cu
-  src/join/mixed_join_kernel.cu
-  src/join/mixed_join_kernel_nulls.cu
   src/join/mixed_join_kernels_semi.cu
   src/join/mixed_join_semi.cu
-  src/join/mixed_join_size_kernel.cu
-  src/join/mixed_join_size_kernel_nulls.cu
   src/join/sort_merge_join.cu
   src/json/json_path.cu
   src/lists/contains.cu

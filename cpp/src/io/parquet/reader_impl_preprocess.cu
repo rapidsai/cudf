@@ -35,6 +35,7 @@
 #include <algorithm>
 #include <limits>
 #include <numeric>
+#include <utility>
 #include <vector>
 
 namespace cudf::io::parquet::detail {
@@ -51,7 +52,14 @@ inline bool is_treat_fixed_length_as_string(cuda::std::optional<LogicalType> con
 }
 
 struct set_str_bytes_all {
-  __device__ void operator()(PageInfo& p) { p.str_bytes_all = p.str_bytes; }
+  device_span<PageInfo> pages;
+  device_span<bool const> page_mask;
+
+  __device__ void operator()(size_type index) const
+  {
+    pages[index].str_bytes_all =
+      page_mask.empty() or page_mask[index] ? pages[index].str_bytes : int32_t{0};
+  }
 };
 
 }  // namespace
@@ -854,9 +862,9 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
     }
     // set str_bytes_all
     thrust::for_each(rmm::exec_policy_nosync(_stream, cudf::get_current_device_resource_ref()),
-                     subpass.pages.device_begin(),
-                     subpass.pages.device_end(),
-                     set_str_bytes_all{});
+                     cuda::counting_iterator<size_type>(0),
+                     cuda::counting_iterator<size_type>(subpass.pages.size()),
+                     set_str_bytes_all{subpass.pages, subpass_page_mask_span()});
   }
 
   // retrieve pages back
@@ -1096,6 +1104,29 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
     cudf::host_span<cudf::device_span<cudf::bitmask_type> const>{nullmask_bufs}, _stream);
   cudf::detail::batched_memset<cudf::bitmask_type>(
     pinned_nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);
+}
+
+void reader_impl::fill_pruned_offsets(size_t skip_rows,
+                                      size_t num_rows,
+                                      cudf::device_span<size_t> initial_str_offsets)
+{
+  // Return early if there are no pruned pages
+  auto const page_mask = subpass_page_mask_span();
+  if (page_mask.is_empty() or
+      std::all_of(page_mask.host_begin(), page_mask.host_end(), cuda::std::identity{})) {
+    return;
+  }
+
+  auto const& pass    = *_pass_itm_data;
+  auto const& subpass = *pass.subpass;
+  auto const pages    = device_span<PageInfo>{subpass.pages.device_ptr(), subpass.pages.size()};
+  auto const chunks =
+    device_span<ColumnChunkDesc const>{pass.chunks.device_ptr(), pass.chunks.size()};
+  auto const device_page_mask = static_cast<device_span<bool const>>(page_mask);
+
+  // Set offsets for pruned string and list pages.
+  parquet::detail::fill_pruned_offsets(
+    pages, chunks, device_page_mask, initial_str_offsets, skip_rows, num_rows, _stream);
 }
 
 cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()

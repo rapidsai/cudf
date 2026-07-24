@@ -531,7 +531,7 @@ void __forceinline__ __device__ zero_out_page_header_info(byte_stream_s* bs)
 CUDF_KERNEL
 void __launch_bounds__(decode_page_headers_block_size)
   decode_page_headers_kernel(device_span<ColumnChunkDesc const> chunks,
-                             chunk_page_info* chunk_pages,
+                             device_span<chunk_page_info> chunk_pages,
                              kernel_error::pointer error_code)
 {
   auto constexpr num_warps_per_block = decode_page_headers_block_size / cudf::detail::warp_size;
@@ -740,7 +740,7 @@ CUDF_KERNEL void __launch_bounds__(count_page_headers_block_size)
 /**
  * @brief Functor to decode specified page headers from corresponding page data spans
  */
-struct decode_page_headers_with_pgidx_fn {
+struct decode_from_page_data_fn {
   cudf::device_span<ColumnChunkDesc const> colchunks;
   cudf::device_span<PageInfo> pages;
   cudf::device_span<cudf::device_span<uint8_t const> const> page_data;
@@ -781,7 +781,7 @@ struct decode_page_headers_with_pgidx_fn {
     // bs.page.chunk_row not computed here and will be filled in later by
     // `fill_in_page_info()`.
 
-    // Return if empty page span (pruned page).
+    // Return if empty page span (pruned page)
     if (page_span.empty()) {
       pages[page_idx] = bs.page;
       return;
@@ -927,12 +927,14 @@ void count_page_headers(cudf::detail::hostdevice_span<ColumnChunkDesc> chunks,
 }
 
 void decode_page_headers(cudf::device_span<ColumnChunkDesc const> chunks,
-                         chunk_page_info* chunk_pages,
+                         cudf::device_span<chunk_page_info> chunk_pages,
                          kernel_error::pointer error_code,
                          rmm::cuda_stream_view stream)
 {
   static_assert(decode_page_headers_block_size % cudf::detail::warp_size == 0,
                 "Block size for decode page headers kernel must be a multiple of warp size");
+  CUDF_EXPECTS(chunk_pages.size() == chunks.size(),
+               "Chunk page info must contain one entry per chunk");
 
   auto const num_chunks              = static_cast<cudf::size_type>(chunks.size());
   auto constexpr num_warps_per_block = decode_page_headers_block_size / cudf::detail::warp_size;
@@ -947,7 +949,7 @@ void decode_page_headers(cudf::device_span<ColumnChunkDesc const> chunks,
   CUDF_CUDA_TRY(cudaGetLastError());
 }
 
-void decode_page_headers_with_pgidx(
+void decode_page_headers_from_page_data(
   cudf::device_span<ColumnChunkDesc const> chunks,
   cudf::device_span<PageInfo> pages,
   cudf::device_span<cudf::device_span<uint8_t const> const> page_data,
@@ -955,18 +957,16 @@ void decode_page_headers_with_pgidx(
   kernel_error::pointer error_code,
   rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(page_data.size() == pages.size(),
-               "Page span count must match the number of logical pages");
   CUDF_EXPECTS(chunk_page_offsets.size() == chunks.size() + 1,
                "Chunk page offsets must cover all chunks");
   thrust::for_each(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    cuda::counting_iterator<cudf::size_type>{0},
                    cuda::counting_iterator{static_cast<cudf::size_type>(pages.size())},
-                   decode_page_headers_with_pgidx_fn{.colchunks          = chunks,
-                                                     .pages              = pages,
-                                                     .page_data          = page_data,
-                                                     .chunk_page_offsets = chunk_page_offsets,
-                                                     .error_code         = error_code});
+                   decode_from_page_data_fn{.colchunks          = chunks,
+                                            .pages              = pages,
+                                            .page_data          = page_data,
+                                            .chunk_page_offsets = chunk_page_offsets,
+                                            .error_code         = error_code});
 }
 
 void build_string_dictionary_index(ColumnChunkDesc* chunks,

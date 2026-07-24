@@ -272,6 +272,7 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
 {
   auto const num_pages = pages.size();
   auto page_indexes    = cudf::detail::make_pinned_vector_async<page_index_info>(num_pages, stream);
+  std::fill(page_indexes.begin(), page_indexes.end(), page_index_info{});
 
   for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
     auto const& chunk = chunks[c];
@@ -410,10 +411,32 @@ cudf::detail::hostdevice_vector<PageInfo> sort_pages(device_span<PageInfo const>
   return pass_pages;
 }
 
-void decode_page_headers(pass_intermediate_data& pass,
-                         device_span<PageInfo> unsorted_pages,
-                         bool has_page_index,
-                         rmm::cuda_stream_view stream)
+namespace {
+
+/**
+ * @brief Page data source type
+ */
+enum class page_data_source_type : uint8_t {
+  COLUMN_CHUNKS = 0,
+  OFFSET_INDEX  = 1,
+  PAGE_SPANS    = 2,
+};
+
+/**
+ * @brief Dispatch decode page headers base on the type of page data source
+ *
+ * @tparam data_source_type Type of page data source
+ *
+ * @param pass Struct containing pass information
+ * @param unsorted_pages Device span of page information to decode
+ * @param page_data Host span of page data spans (only used for PAGE_SPANS source)
+ * @param stream Stream to use
+ */
+template <page_data_source_type data_source_type>
+void decode_page_headers_impl(pass_intermediate_data& pass,
+                              device_span<PageInfo> unsorted_pages,
+                              host_span<cudf::device_span<uint8_t const> const> page_data,
+                              rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
 
@@ -443,9 +466,22 @@ void decode_page_headers(pass_intermediate_data& pass,
 
   kernel_error error_code(stream);
 
-  // If page index is present, collect data spans for all pages and launch the accelerated decode
+  if constexpr (data_source_type == page_data_source_type::PAGE_SPANS) {
+    CUDF_EXPECTS(page_data.size() == unsorted_pages.size(),
+                 "Page span count must match the number of logical pages");
+    auto device_page_data = cudf::detail::make_device_uvector_async(
+      page_data, stream, cudf::get_current_device_resource_ref());
+    decode_page_headers_from_page_data(
+      device_span<ColumnChunkDesc const>(pass.chunks.device_ptr(), pass.chunks.size()),
+      unsorted_pages,
+      device_page_data,
+      device_span<size_type const>(chunk_page_offsets.data(), chunk_page_offsets.size()),
+      error_code.data(),
+      stream);
+  }
+  // If offset index is present, collect data spans for all pages and launch the accelerated decode
   // page headers kernel
-  if (has_page_index) {
+  else if constexpr (data_source_type == page_data_source_type::OFFSET_INDEX) {
     auto host_page_data = cudf::detail::make_pinned_vector_async<cudf::device_span<uint8_t const>>(
       unsorted_pages.size(), stream);
     auto curr_page_idx = 0;
@@ -501,7 +537,7 @@ void decode_page_headers(pass_intermediate_data& pass,
       host_page_data, stream, cudf::get_current_device_resource_ref());
 
     // Accelerated decode page headers, one thread per page
-    decode_page_headers_with_pgidx(
+    decode_page_headers_from_page_data(
       device_span<ColumnChunkDesc const>(pass.chunks.device_ptr(), pass.chunks.size()),
       unsorted_pages,
       page_data,
@@ -509,10 +545,10 @@ void decode_page_headers(pass_intermediate_data& pass,
       error_code.data(),
       stream);
   } else {
-    // (Slow) decode page headers, one warp (lane) per pages of a chunk
+    // (Slow) decode page headers, one warp (lane) per pages of a column chunk
     decode_page_headers(
       device_span<ColumnChunkDesc const>(pass.chunks.device_ptr(), pass.chunks.size()),
-      d_chunk_page_info.begin(),
+      device_span<chunk_page_info>(d_chunk_page_info.data(), d_chunk_page_info.size()),
       error_code.data(),
       stream);
   }
@@ -528,7 +564,10 @@ void decode_page_headers(pass_intermediate_data& pass,
     }
   }
 
-  if (has_page_index) { fill_in_page_info(pass.chunks, unsorted_pages, stream); }
+  if (data_source_type == page_data_source_type::OFFSET_INDEX or
+      data_source_type == page_data_source_type::PAGE_SPANS) {
+    fill_in_page_info(pass.chunks, unsorted_pages, stream);
+  }
 
   // compute max bytes needed for level data
   auto level_bit_size = cudf::detail::make_counting_transform_iterator(
@@ -583,6 +622,30 @@ void decode_page_headers(pass_intermediate_data& pass,
   pass.pages.device_to_host_async(stream);
   pass.chunks.device_to_host_async(stream);
   stream.synchronize();
+}
+
+}  // namespace
+
+void decode_page_headers(pass_intermediate_data& pass,
+                         device_span<PageInfo> unsorted_pages,
+                         bool has_offset_index,
+                         rmm::cuda_stream_view stream)
+{
+  if (has_offset_index) {
+    decode_page_headers_impl<page_data_source_type::OFFSET_INDEX>(pass, unsorted_pages, {}, stream);
+  } else {
+    decode_page_headers_impl<page_data_source_type::COLUMN_CHUNKS>(
+      pass, unsorted_pages, {}, stream);
+  }
+}
+
+void decode_page_headers(pass_intermediate_data& pass,
+                         device_span<PageInfo> unsorted_pages,
+                         host_span<cudf::device_span<uint8_t const> const> page_data,
+                         rmm::cuda_stream_view stream)
+{
+  decode_page_headers_impl<page_data_source_type::PAGE_SPANS>(
+    pass, unsorted_pages, page_data, stream);
 }
 
 }  // namespace cudf::io::parquet::detail
