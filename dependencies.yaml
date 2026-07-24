@@ -1735,7 +1735,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - narwhals==2.16.0
+          - narwhals==2.24.0
   cudf_polars_trace:
     common:
       - output_types: [conda, requirements, pyproject]
