@@ -26,7 +26,8 @@ rapids-pip-retry install \
     -v \
     --prefer-binary \
     --constraint "${PIP_CONSTRAINT}" \
-    "$(echo "${LIBCUDF_STREAMING_WHEELHOUSE}"/libcudf_streaming_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
+    "$(echo "${LIBCUDF_STREAMING_WHEELHOUSE}"/libcudf_streaming_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
+    "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
 python -c "import libcudf_streaming; libcudf_streaming.load_library()"
 deactivate
 
