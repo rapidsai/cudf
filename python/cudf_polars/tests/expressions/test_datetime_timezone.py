@@ -90,6 +90,18 @@ def test_replace_time_zone_from_empty_table_zone(engine, utc_frame):
     assert_gpu_result_equal(q, engine=engine)
 
 
+def test_replace_time_zone_to_empty_table_zone(engine, naive_frame):
+    q = naive_frame.select(pl.col("a").dt.replace_time_zone("Etc/GMT"))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_replace_time_zone_from_empty_table_zone_to_other(engine, utc_frame):
+    q = utc_frame.with_columns(pl.col("a").dt.convert_time_zone("Etc/GMT")).select(
+        pl.col("a").dt.replace_time_zone("Europe/Amsterdam")
+    )
+    assert_gpu_result_equal(q, engine=engine)
+
+
 @pytest.mark.parametrize("ambiguous", ["earliest", "latest", "null"])
 def test_replace_time_zone_ambiguous(engine, ambiguous):
     q = pl.LazyFrame(
