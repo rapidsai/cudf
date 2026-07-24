@@ -17,6 +17,7 @@
 #include <rmm/resource_ref.hpp>
 
 #include <memory>
+#include <utility>
 #include <vector>
 
 /**
@@ -156,20 +157,36 @@ class hybrid_scan_multifile {
     rmm::cuda_stream_view stream) const;
 
   /**
-   * @brief Get byte ranges of bloom filters and dictionary pages (secondary filters) for row group
-   *        pruning
+   * @brief Get byte ranges of bloom filters for row group pruning
    *
    * @note Device buffers for bloom filter byte ranges must be allocated using a 32 byte
    *       aligned memory resource
    *
    * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param options Parquet reader options
-   * @return Pair of vectors of byte ranges of column chunk with bloom filters and dictionary
-   *         pages subject to filter predicate
+   * @return A pair of vectors containing bloom filter byte ranges and corresponding source indices
    */
-  [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>>
-  secondary_filters_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                                parquet_reader_options const& options) const;
+  [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<size_type>>
+  bloom_filters_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                            parquet_reader_options const& options) const;
+
+  /**
+   * @brief Filter the row groups using column chunk bloom filters
+   *
+   * @note The `bloom_filter_data` device spans must point to 32-byte aligned addresses
+   *
+   * @param bloom_filter_data Flattened device spans of bloom filters returned in the same order as
+   *        `bloom_filters_byte_ranges`
+   * @param row_group_indices Input row group indices
+   * @param options Parquet reader options
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return Vectors of filtered per-source row group indices, one per source
+   */
+  [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_bloom_filters(
+    cudf::host_span<cudf::device_span<uint8_t const> const> bloom_filter_data,
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Builds a boolean survival column of size equal to the total number of rows in the row
