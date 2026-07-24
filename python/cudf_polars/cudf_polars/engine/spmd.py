@@ -823,14 +823,15 @@ class SPMDEngine(StreamingEngine):
         # quent traces before that.
         # Clear the references only after shutdown completes.
 
-        quent_context: QuentContext | None = self.config["executor_options"].get(
-            "quent_context"
-        )
-
         if self._quent_logger is not None:
             if self._worker_resources is not None:
                 self._worker_resources.finalize(self._quent_logger)
             self._quent_logger.emit(self._quent_worker._exit())
+
+        quent_context: QuentContext | None = self.config["executor_options"].get(
+            "quent_context"
+        )
+
         if quent_context is not None:
             assert self._quent_logger is not None
             quent_context._emit_engine_exit_events(self._quent_logger)

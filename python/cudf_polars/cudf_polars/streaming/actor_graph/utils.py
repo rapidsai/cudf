@@ -12,7 +12,7 @@ import struct
 import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import reduce
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
@@ -292,11 +292,10 @@ async def shutdown_on_error(
     ir_type = type(trace_ir).__name__
     tracer = ActorTracer(ir_id, ir_type)
     contextvars = {"actor_ir_id": ir_id, "actor_ir_type": ir_type}
-    import dataclasses
 
     if ir_context is not None:
         contextvars["cudf_polars_query_id"] = str(ir_context.query_id)
-        ir_context = dataclasses.replace(ir_context, tracer=tracer)
+        ir_context = replace(ir_context, tracer=tracer)
 
     with cudf_polars.dsl.tracing.bound_contextvars(**contextvars):
         start = time.monotonic_ns()
