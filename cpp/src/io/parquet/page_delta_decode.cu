@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -582,8 +582,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // if this is a bounds page and nested, then we need to skip up front. non-nested will work
   // its way through the page.
-  int string_pos          = has_repetition ? s->page.start_val : 0;
-  auto const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
+  int string_pos = has_repetition ? s->page.start_val : 0;
+  auto const is_bounds_pg =
+    is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
   if (is_bounds_pg && string_pos > 0) { dba->skip(use_char_ll); }
 
   while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
@@ -789,7 +790,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   // if this is a bounds page, then we need to decode up to the first mini-block
   // that has a value we need, and set string_offset to the position of the first value in the
   // string data block.
-  auto const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
+  auto const is_bounds_pg =
+    is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
   if (is_bounds_pg && s->page.start_val > 0) {
     if (warp.meta_group_rank() == 0) {
       // string_off is only valid on thread 0

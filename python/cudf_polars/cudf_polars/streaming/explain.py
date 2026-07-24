@@ -123,8 +123,10 @@ def explain_query(
     if physical:
         with cm:
             stats = collect_statistics(ir, config, executor)
-        lowered_ir, partition_info = lower_ir_graph(ir, config, stats)
-        return _repr_ir_tree(lowered_ir, partition_info, stats=stats, config=config)
+        lowered = lower_ir_graph(ir, config, stats)
+        return _repr_ir_tree(
+            lowered.lowered, lowered.partition_info, stats=stats, config=config
+        )
     else:
         if config.executor.name == "streaming":
             # Include row-count statistics for the logical plan
@@ -150,7 +152,9 @@ def collect_partition_plan(
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         stats = collect_statistics(ir, config, executor)
-    lowered_ir, partition_info = lower_ir_graph(ir, config, stats)
+    lowered = lower_ir_graph(ir, config, stats)
+    lowered_ir = lowered.lowered
+    partition_info = lowered.partition_info
 
     seen: set[tuple] = set()
     rows: list[PartitionPlanRow] = []
@@ -755,7 +759,9 @@ class SerializablePlan:
         if lowered:
             with cm:
                 stats = collect_statistics(ir, config_options, executor)
-            ir, partition_info_d = lower_ir_graph(ir, config_options, stats)
+            lowering = lower_ir_graph(ir, config_options, stats)
+            ir = lowering.lowered
+            partition_info_d = lowering.partition_info
             partition_info_dict = {}
 
         nodes: dict[str, SerializableIRNode] = {}

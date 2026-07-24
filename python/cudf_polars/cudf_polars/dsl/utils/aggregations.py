@@ -321,7 +321,7 @@ def decompose_single_agg(
         new_children = [child] if not is_quantile else [child, agg.children[1]]
         named_expr = named_expr.reconstruct(agg.reconstruct(new_children))
 
-        if agg.name == "sum":
+        if agg.name in {"sum", "product"}:
             col = (
                 expr.Cast(
                     agg.dtype,
@@ -339,8 +339,10 @@ def decompose_single_agg(
             # - ROLLING: sum(all-null window) => null; sum(empty window) => 0 (fill only if empty)
             #
             # Must post-process because libcudf returns null for both empty and all-null windows/groups
+            # product uses an identity of 1 (empty/all-null product is 1 in polars).
+            identity = 1 if agg.name == "product" else 0
             return [(named_expr, True)], expr.NamedExpr(
-                name, replace_nulls(col, 0, is_top=is_top)
+                name, replace_nulls(col, identity, is_top=is_top)
             )
         elif agg.name in {"mean", "median", "quantile", "std", "var"}:
             post_agg_col: expr.Expr = expr.Col(

@@ -725,7 +725,8 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
     }
 
     stream.synchronize();  // Async D2H copy must finish before returning host vec
-    return std::pair{std::make_unique<table>(std::move(output_cols)), std::move(partition_offsets)};
+    return std::pair{std::make_unique<table>(std::move(output_cols), num_rows),
+                     std::move(partition_offsets)};
   } else {
     // Compute a scatter map from input to output such that the output rows are
     // sorted by partition number

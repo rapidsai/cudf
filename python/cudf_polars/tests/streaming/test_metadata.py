@@ -699,6 +699,163 @@ def test_remap_partitioning_order_scheme_drops_key(spmd_engine):
     assert result.inter_rank is None
 
 
+def test_remap_partitioning_order_scheme_adds_alias_ordering(spmd_engine):
+    q = pl.LazyFrame({"a": [1], "b": [2], "c": [3]})
+    engine = pl.GPUEngine(executor="in-memory", raise_on_fail=True)
+    child = Translator(q._ldf.visit(), engine).translate_ir()
+    alias = expr.NamedExpr("a_alias", expr.Col(child.schema["a"], "a"))
+    hstack = HStack(
+        {**child.schema, "a_alias": child.schema["a"]},
+        (alias,),
+        should_broadcast=True,
+        df=child,
+    )
+    part = Partitioning(
+        inter_rank=_make_order_scheme(
+            spmd_engine.context, key_indices=(0,), strict=True
+        ),
+        local="inherit",
+    )
+
+    result = maybe_remap_partitioning(hstack, part)
+
+    assert result is not None
+    assert isinstance(result.inter_rank, OrderScheme)
+    assert [o.keys[0].column_index for o in result.inter_rank.orderings] == [0, 3]
+    assert [o.strict_boundaries for o in result.inter_rank.orderings] == [True, True]
+
+
+@pytest.mark.parametrize(
+    "frequency,expected",
+    [
+        ("1ms", [1_000_000, 2_000_000]),
+        ("1us", [1_234_000, 2_345_000]),
+    ],
+)
+def test_remap_partitioning_order_scheme_adds_truncated_ordering(
+    spmd_engine, frequency, expected
+):
+    engine = pl.GPUEngine(executor="in-memory", raise_on_fail=True)
+    hstack = Translator(
+        pl.LazyFrame({"DateTime": [1]})
+        .with_columns(
+            pl.col("DateTime")
+            .cast(pl.Datetime("ns"))
+            .dt.truncate(frequency)
+            .cast(pl.Int64)
+            .alias("ts_bucket")
+        )
+        ._ldf.visit(),
+        engine,
+    ).translate_ir()
+    assert isinstance(hstack, HStack)
+    part = Partitioning(
+        inter_rank=_make_order_scheme(
+            spmd_engine.context,
+            key_indices=(0,),
+            values=(1_234_567, 2_345_678),
+            strict=True,
+        ),
+        local="inherit",
+    )
+
+    result = maybe_remap_partitioning(hstack, part, context=spmd_engine.context)
+
+    assert result is not None
+    assert isinstance(result.inter_rank, OrderScheme)
+    orderings = result.inter_rank.orderings
+    assert [o.keys[0].column_index for o in orderings] == [0, 1]
+    assert [o.strict_boundaries for o in orderings] == [True, False]
+
+    boundaries = orderings[1].get_boundaries(spmd_engine.context.br())
+    boundary_df = DataFrame.from_table(
+        boundaries.table_view(),
+        ["ts_bucket"],
+        [hstack.schema["ts_bucket"]],
+        boundaries.stream,
+    ).to_polars()
+    assert boundary_df["ts_bucket"].to_list() == expected
+
+
+def test_remap_partitioning_order_scheme_truncates_prefix_key(spmd_engine):
+    engine = pl.GPUEngine(executor="in-memory", raise_on_fail=True)
+    hstack = Translator(
+        pl.LazyFrame({"venue": [1], "DateTime": [1]})
+        .with_columns(
+            pl.col("DateTime")
+            .cast(pl.Datetime("ns"))
+            .dt.truncate("1ms")
+            .cast(pl.Int64)
+            .alias("ts_bucket")
+        )
+        ._ldf.visit(),
+        engine,
+    ).translate_ir()
+    assert isinstance(hstack, HStack)
+    part = Partitioning(
+        inter_rank=_make_order_scheme(
+            spmd_engine.context,
+            key_indices=(0, 1),
+            values=(1_234_567, 2_345_678),
+            strict=True,
+        ),
+        local="inherit",
+    )
+
+    result = maybe_remap_partitioning(hstack, part, context=spmd_engine.context)
+
+    assert result is not None
+    assert isinstance(result.inter_rank, OrderScheme)
+    orderings = result.inter_rank.orderings
+    assert [
+        tuple(key.column_index for key in ordering.keys) for ordering in orderings
+    ] == [(0, 1), (0, 2)]
+    assert [o.strict_boundaries for o in orderings] == [True, False]
+
+    boundaries = orderings[1].get_boundaries(spmd_engine.context.br())
+    boundary_df = DataFrame.from_table(
+        boundaries.table_view(),
+        ["venue", "ts_bucket"],
+        [hstack.schema["venue"], hstack.schema["ts_bucket"]],
+        boundaries.stream,
+    ).to_polars()
+    assert boundary_df["venue"].to_list() == [1_234_567, 2_345_678]
+    assert boundary_df["ts_bucket"].to_list() == [1_000_000, 2_000_000]
+
+
+def test_remap_partitioning_order_scheme_ignores_unordered_truncate(spmd_engine):
+    engine = pl.GPUEngine(executor="in-memory", raise_on_fail=True)
+    hstack = Translator(
+        pl.LazyFrame({"venue": [1], "DateTime": [1]})
+        .with_columns(
+            pl.col("DateTime")
+            .cast(pl.Datetime("ns"))
+            .dt.truncate("1ms")
+            .cast(pl.Int64)
+            .alias("ts_bucket")
+        )
+        ._ldf.visit(),
+        engine,
+    ).translate_ir()
+    assert isinstance(hstack, HStack)
+    part = Partitioning(
+        inter_rank=_make_order_scheme(
+            spmd_engine.context,
+            key_indices=(0,),
+            strict=True,
+        ),
+        local="inherit",
+    )
+
+    result = maybe_remap_partitioning(hstack, part, context=spmd_engine.context)
+
+    assert result is not None
+    assert isinstance(result.inter_rank, OrderScheme)
+    orderings = result.inter_rank.orderings
+    assert [o.keys[0].column_index for o in orderings] == [0]
+    assert [o.strict_boundaries for o in orderings] == [True]
+
+
 @pytest.mark.parametrize(
     "by,descending,nulls_last",
     [

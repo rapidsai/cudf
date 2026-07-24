@@ -881,8 +881,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Create a deep copy of the column while replacing the null mask. The resultant null mask is the
-   * bitwise merge of null masks in the columns given as arguments.
-   * The result will be sanitized to not contain any non-empty nulls in case of nested types
+   * bitwise {@code mergeOp} of null masks in the columns given as arguments, AND-ed with this column's
+   * existing null mask.
+   *
+   * For STRUCT columns the new mask is also pushed down into every descendant column, to
+   * stay consistent with the parent. For LIST/STRING columns the resultant offsets are
+   * sanitized to not contain any non-empty nulls.
+   *
+   * If {@code columns} is empty, this column's null mask is dropped entirely (every row is
+   * treated as valid).
    *
    * @param mergeOp binary operator (BITWISE_AND and BITWISE_OR only)
    * @param columns array of columns whose null masks are merged, must have identical number of rows.
@@ -3330,7 +3337,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Applies a JSONPath string to an incoming strings column where each row in the column
    * is a valid json string.  The output is returned by row as a strings column.
    *
-   * For reference, https://tools.ietf.org/id/draft-goessner-dispatch-jsonpath-00.html
+   * For reference, https://datatracker.ietf.org/doc/id/draft-goessner-dispatch-jsonpath-00.html
    * Note: Only implements the operators: $ . [] *
    *
    * @param path The JSONPath string to be applied to each row
@@ -3348,7 +3355,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Applies a JSONPath string to an incoming strings column where each row in the column
    * is a valid json string.  The output is returned by row as a strings column.
    *
-   * For reference, https://tools.ietf.org/id/draft-goessner-dispatch-jsonpath-00.html
+   * For reference, https://datatracker.ietf.org/doc/id/draft-goessner-dispatch-jsonpath-00.html
    * Note: Only implements the operators: $ . [] *
    *
    * @param path The JSONPath string to be applied to each row

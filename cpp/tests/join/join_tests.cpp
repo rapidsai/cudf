@@ -28,6 +28,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <cuco/utility/error.hpp>
 
@@ -2311,6 +2312,29 @@ TEST_F(JoinTest, HashJoinLargeOutputSize)
     tview, cudf::nullable_join::NO, cudf::null_equality::UNEQUAL, desired_load_factor);
   std::size_t output_size = hash_join.inner_join_size(tview);
   EXPECT_EQ(col_size * col_size, output_size);
+}
+
+TEST_F(JoinTest, HashJoinMemoryResource)
+{
+  CVector cols0;
+  cols0.emplace_back(column_wrapper<int32_t>{{3, 1, 2, 0, 2}}.release());
+  Table t0(std::move(cols0));
+
+  CVector cols1;
+  cols1.emplace_back(column_wrapper<int32_t>{{2, 2, 0, 4, 3}}.release());
+  Table t1(std::move(cols1));
+
+  auto mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+
+  cudf::hash_join hash_join(t1, cudf::null_equality::EQUAL, cudf::get_default_stream(), mr);
+
+  EXPECT_GT(mr.get_bytes_counter().peak, 0);
+
+  auto result = hash_join.inner_join(t0);
+  column_wrapper<int32_t> col_gold_0{{0, 2, 2, 3, 4, 4}};
+  column_wrapper<int32_t> col_gold_1{{4, 0, 1, 2, 0, 1}};
+  auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
 TEST_F(JoinTest, HashJoinInnerMatchContext)

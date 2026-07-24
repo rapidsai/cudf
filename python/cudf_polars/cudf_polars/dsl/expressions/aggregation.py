@@ -114,10 +114,14 @@ class Agg(Expr):
             )
         elif name in {"first", "last", "item", "first_non_null"}:
             req = None
+        elif name == "implode":
+            req = plc.aggregation.collect_list(plc.types.NullPolicy.INCLUDE)
         elif name == "mean":
             req = plc.aggregation.mean()
         elif name == "sum":
             req = plc.aggregation.sum()
+        elif name == "product":
+            req = plc.aggregation.product()
         elif name == "std":
             # TODO: handle nans
             req = plc.aggregation.std(ddof=options)
@@ -172,7 +176,15 @@ class Agg(Expr):
             op = partial(op, propagate_nans=options)
         elif name == "count":
             op = partial(op, include_nulls=options)
-        elif name in {"sum", "first", "last", "item", "first_non_null"}:
+        elif name in {
+            "sum",
+            "product",
+            "first",
+            "last",
+            "item",
+            "first_non_null",
+            "implode",
+        }:
             pass
         else:
             raise NotImplementedError(
@@ -189,11 +201,13 @@ class Agg(Expr):
             "first",
             "first_non_null",
             "item",
+            "implode",
             "last",
             "mean",
             "m2",
             "merge_m2",
             "sum",
+            "product",
             "count",
             "std",
             "var",
@@ -280,6 +294,20 @@ class Agg(Expr):
             )
         return self._reduce(column, request=plc.aggregation.sum(), stream=stream)
 
+    def _product(self, column: Column, stream: Stream) -> Column:
+        if column.size == 0 or column.null_count == column.size:
+            # The product of an empty or all-null column is 1 in polars.
+            return Column(
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(1, self.dtype.plc_type, stream=stream),
+                    1,
+                    stream=stream,
+                ),
+                name=column.name,
+                dtype=self.dtype,
+            )
+        return self._reduce(column, request=plc.aggregation.product(), stream=stream)
+
     def _min(self, column: Column, *, propagate_nans: bool, stream: Stream) -> Column:
         nan_count = column.nan_count(stream=stream)
         if propagate_nans and nan_count > 0:
@@ -354,6 +382,28 @@ class Agg(Expr):
             )
         return Column(
             plc_result,
+            name=column.name,
+            dtype=self.dtype,
+        )
+
+    def _implode(self, column: Column, stream: Stream) -> Column:
+        size_type = plc.DataType(plc.TypeId.INT32)
+        offsets = plc.filling.sequence(
+            2,
+            plc.Scalar.from_py(0, size_type, stream=stream),
+            plc.Scalar.from_py(column.size, size_type, stream=stream),
+            stream=stream,
+        )
+        return Column(
+            plc.Column(
+                self.dtype.plc_type,
+                1,
+                None,
+                None,
+                0,
+                0,
+                [offsets, column.obj],
+            ),
             name=column.name,
             dtype=self.dtype,
         )

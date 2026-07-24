@@ -24,7 +24,6 @@ from cudf_polars.testing.engine_utils import is_streaming_engine
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_140,
-    POLARS_VERSION_LT_141,
 )
 
 
@@ -135,6 +134,21 @@ def test_groupby(engine: pl.GPUEngine, df: pl.LazyFrame, maintain_order, keys, e
         sort_keys = list(q.collect_schema().keys())[: len(keys)]
         q = q.sort(*sort_keys)
 
+    assert_gpu_result_equal(q, engine=engine, check_exact=False)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [pl.Int8, pl.Int32, pl.Int64, pl.UInt16, pl.Float64],
+)
+def test_groupby_product_all_null_1(engine: pl.GPUEngine, dtype: pl.DataType) -> None:
+    lf = pl.LazyFrame(
+        {
+            "key": [1, 1, 2, 2, 3, 3, 3],
+            "value": pl.Series([2, 3, 4, None, None, None, None], dtype=dtype),
+        }
+    )
+    q = lf.group_by("key").agg(pl.col("value").product()).sort("key")
     assert_gpu_result_equal(q, engine=engine, check_exact=False)
 
 
@@ -706,17 +720,10 @@ def test_groupby_literal_agg(engine: pl.GPUEngine):
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-def test_groupby_empty_keys_raises(engine: pl.GPUEngine, request):
+def test_groupby_empty_keys_raises(engine: pl.GPUEngine):
     df = pl.LazyFrame({"x": [1, 2, 3]})
     q = df.group_by([]).agg(pl.len())
     if POLARS_VERSION_LT_140:
         assert_ir_translation_raises(q, engine, NotImplementedError)
     else:
-        if not POLARS_VERSION_LT_141 and is_streaming_engine(engine):
-            request.applymarker(
-                pytest.mark.xfail(
-                    reason="len() row count lost in zero-column streaming chunks "
-                    "(https://github.com/rapidsai/cudf/issues/21428)"
-                )
-            )
         assert_gpu_result_equal(q, engine=engine)

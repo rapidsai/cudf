@@ -114,6 +114,7 @@ enum class decode_error : kernel_error::value_type {
   INVALID_PAGE_TYPE              = 0x200,
   INVALID_PAGE_HEADER            = 0x400,
   INVALID_BYTE_STREAM_SPLIT_SIZE = 0x800,
+  STRING_DATA_OVERRUN            = 0x1000,
 };
 
 /**
@@ -981,6 +982,7 @@ void decode_delta_length_byte_array(cudf::detail::hostdevice_span<PageInfo> page
  * @param[in] page_mask Boolean vector indicating which pages need to be processed
  * @param[in] min_row Minimum row index to read
  * @param[in] num_rows Number of rows to read starting from min_row
+ * @param[out] error_code Error code to set if string data is corrupted
  * @param[in] stream CUDA stream to use
  */
 void preprocess_string_offsets(cudf::detail::hostdevice_span<PageInfo> pages,
@@ -989,6 +991,7 @@ void preprocess_string_offsets(cudf::detail::hostdevice_span<PageInfo> pages,
                                cudf::device_span<bool const> page_mask,
                                size_t min_row,
                                size_t num_rows,
+                               kernel_error::pointer error_code,
                                rmm::cuda_stream_view stream);
 
 /**

@@ -21,6 +21,11 @@
 #include <utility>
 #include <vector>
 
+/**
+ * @file
+ * @brief Class definitions for grouping and aggregating values within groups of rows.
+ */
+
 namespace CUDF_EXPORT cudf {
 //! `groupby` APIs
 namespace groupby {
@@ -34,8 +39,6 @@ struct sort_groupby_helper;
 /**
  * @addtogroup aggregation_groupby
  * @{
- * @file
- * @brief Class definitions for grouping and aggregating values within groups of rows.
  */
 
 /**

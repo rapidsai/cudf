@@ -317,6 +317,65 @@ def test_sort_slice_over_union_of_duplicated_streams(
     assert_gpu_result_equal(lf, engine=spmd_engine, check_row_order=False)
 
 
+def test_execute_duplicated_result_present_on_all_ranks(
+    spmd_engine: SPMDEngine,
+) -> None:
+    """A duplicated (broadcast) execute() result must be whole on every rank."""
+
+    lf1 = (
+        pl.LazyFrame({"name": ["alice"], "score": [1.0]})
+        .group_by("name")
+        .agg(pl.col("score").sum())
+    )
+    lf2 = (
+        pl.LazyFrame({"name": ["bob"], "score": [2.0]})
+        .group_by("name")
+        .agg(pl.col("score").sum())
+    )
+    lf = pl.concat([lf1, lf2]).sort("score").head(10)
+
+    result = spmd_engine.execute(lf)
+    local = result.lazy().collect(engine=spmd_engine).sort("name")
+
+    # The full duplicated output is present on this rank, whatever its index.
+    assert local["name"].to_list() == ["alice", "bob"]
+    assert local["score"].to_list() == [1.0, 2.0]
+
+
+def test_execute_duplicated_result_chained_into_distributed_agg(
+    spmd_engine: SPMDEngine,
+) -> None:
+    """Chaining a duplicated execute() result into a distributed aggregate must
+    not double-count the duplicates.
+
+    The persisted result is duplicated (identical on every rank), so a re-scan
+    must re-advertise ``duplicated`` for the downstream global sum. Without that,
+    every rank contributes its copy and the total is inflated by ``nranks``.
+    """
+    lf1 = (
+        pl.LazyFrame({"name": ["alice"], "score": [1.0]})
+        .group_by("name")
+        .agg(pl.col("score").sum())
+    )
+    lf2 = (
+        pl.LazyFrame({"name": ["bob"], "score": [2.0]})
+        .group_by("name")
+        .agg(pl.col("score").sum())
+    )
+    duplicated = pl.concat([lf1, lf2]).sort("score").head(10)
+
+    result = spmd_engine.execute(duplicated)
+    total = (
+        result.lazy()
+        .select(pl.col("score").sum().alias("total"))
+        .collect(engine=spmd_engine)
+    )
+
+    # 1.0 + 2.0 = 3.0, independent of nranks (would be 3.0 * nranks if the
+    # duplicated partitions were treated as distinct).
+    assert total["total"].to_list() == [3.0]
+
+
 def test_reset_keeps_comm_alive(comm: Communicator) -> None:
     """``_reset`` must not rebuild the communicator."""
     with SPMDEngine(
