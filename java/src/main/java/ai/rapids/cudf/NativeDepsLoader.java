@@ -558,7 +558,6 @@ public class NativeDepsLoader {
   private static final class ChunkManifest {
     private static final String FORMAT_VERSION_KEY = "format.version";
     private static final String LIBRARY_SIZE_KEY = "library.size";
-    private static final String LIBRARY_CRC32_KEY = "library.crc32";
     private static final String CHUNK_SIZE_KEY = "chunk.size";
     private static final String CHUNK_COUNT_KEY = "chunk.count";
 
@@ -598,7 +597,6 @@ public class NativeDepsLoader {
             "Invalid native dependency chunk count in %s: expected %d but found %d",
             resource, expectedChunkCount, chunkCountLong));
       }
-      parseCrc32(properties, LIBRARY_CRC32_KEY, resource);
       int chunkCount = (int) chunkCountLong;
       long[] chunkCrc32 = new long[chunkCount];
       for (int i = 0; i < chunkCount; i++) {

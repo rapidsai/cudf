@@ -101,8 +101,6 @@ class NativeDepsLoaderExtractionTest {
     String mappedName = "libconcurrent.so";
     byte[] expected = "0123456789abcdef".getBytes(StandardCharsets.UTF_8);
     int chunkSize = 4;
-    CRC32 crc = new CRC32();
-    crc.update(expected);
     Map<String, byte[]> resources = new HashMap<>();
     String resourceRoot = "/native/" + mappedName;
     StringBuilder chunkCrcProperties = new StringBuilder();
@@ -118,10 +116,9 @@ class NativeDepsLoaderExtractionTest {
     String manifest = String.format(Locale.ROOT,
         "format.version=1%n"
             + "library.size=%d%n"
-            + "library.crc32=%08x%n"
             + "chunk.size=%d%n"
             + "chunk.count=%d%n",
-        expected.length, crc.getValue(), chunkSize, expected.length / chunkSize)
+        expected.length, chunkSize, expected.length / chunkSize)
         + chunkCrcProperties;
     resources.put(resourceRoot + ".chunks.properties",
         manifest.getBytes(StandardCharsets.ISO_8859_1));
@@ -332,16 +329,13 @@ class NativeDepsLoaderExtractionTest {
           Locale.ROOT, "chunk.%05d.crc32=%08x%n", i, crcValue));
     }
 
-    CRC32 crc = new CRC32();
-    crc.update(contents);
     long manifestCount = countOverride == null ? chunkCount : countOverride;
     String manifest = String.format(Locale.ROOT,
         "format.version=%s%n"
             + "library.size=%d%n"
-            + "library.crc32=%08x%n"
             + "chunk.size=%d%n"
             + "chunk.count=%d%n",
-        version, contents.length, crc.getValue(), chunkSize, manifestCount)
+        version, contents.length, chunkSize, manifestCount)
         + chunkCrcProperties;
     Files.write(resourceDir.resolve(mappedName + ".chunks.properties"),
         manifest.getBytes(StandardCharsets.ISO_8859_1));
