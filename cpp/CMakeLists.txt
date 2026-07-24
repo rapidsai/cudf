@@ -1345,9 +1345,7 @@ target_link_libraries(
           kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd $<BUILD_LOCAL_INTERFACE:xxhash> rtcx::rtcx
 )
 
-if(CUDF_DEPS_BUILD_SHARED OR NOT TARGET nvcomp::nvcomp_static)
-  target_link_libraries(cudf PRIVATE nvcomp::nvcomp)
-endif()
+target_link_libraries(cudf PRIVATE ${CUDF_nvcomp_TARGET})
 
 # Add Conda library, and include paths if specified
 if(TARGET conda_env)
