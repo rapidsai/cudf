@@ -559,8 +559,9 @@ fetch_bloom_filters_to_device_impl(
       }
       auto const [header_bytes, bitset_bytes] = header_info.value();
       if (bitset_bytes % bloom_filter_block_bytes != 0) {
-        CUDF_LOG_WARN(
-          "Encountered a bloom filter bitset size that is not a multiple of 32 bytes. Skipping");
+        CUDF_LOG_WARN(std::format(
+          "Encountered a bloom filter bitset size that is not a multiple of {} bytes. Skipping",
+          bloom_filter_block_bytes));
         push_empty_filter();
         return;
       }
@@ -631,9 +632,11 @@ fetch_bloom_filters_to_device_impl(
 
   // One batched copy (entries with a null source or zero size are ignored by the batch API)
   if (total_device_size != 0) {
-    std::scoped_lock<std::mutex> lock(device_read_mutex());
-    CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(
-      copy_dsts.data(), copy_srcs.data(), copy_sizes.data(), total_filters, stream));
+    {
+      std::scoped_lock<std::mutex> lock(device_read_mutex());
+      CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(
+        copy_dsts.data(), copy_srcs.data(), copy_sizes.data(), total_filters, stream));
+    }
     stream.synchronize();
   }
 
