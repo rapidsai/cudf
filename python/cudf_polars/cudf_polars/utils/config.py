@@ -788,7 +788,7 @@ class StreamingExecutor:
         This controls the parallelism of IO operations when reading data.
     num_prefetch_workers
         Number of prefetch worker threads for the hybrid scan prefetch pipeline.
-        When ``None`` (default), uses one worker per split.
+        Default is 2. Set to ``None`` to use one worker per split.
     spill_to_pinned_memory
         Whether RapidsMPF should spill to pinned host memory when available,
         or use regular pageable host memory. Pinned host memory offers higher
@@ -865,7 +865,7 @@ class StreamingExecutor:
     )
     num_prefetch_workers: int | None = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__NUM_PREFETCH_WORKERS", int, default=None
+            f"{_env_prefix}__NUM_PREFETCH_WORKERS", int, default=2
         )
     )
     spill_to_pinned_memory: bool = dataclasses.field(
