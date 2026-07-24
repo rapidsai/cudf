@@ -128,7 +128,7 @@ std::string encoding_to_string(Encoding encoding);
  *
  * @param pass The struct containing pass information
  * @param unsorted_pages Device span of page information to decode
- * @param has_offset_index Boolean indicating if the page index is available
+ * @param has_offset_index Boolean indicating if the offset index is available
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void decode_page_headers(pass_intermediate_data& pass,
