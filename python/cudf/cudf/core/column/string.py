@@ -29,6 +29,7 @@ from cudf.core.column.column import (
     pylibcudf_result_dtype_policy,
     same_dtype_policy,
 )
+from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
@@ -39,11 +40,14 @@ from cudf.utils.dtypes import (
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
-from cudf.utils.temporal import infer_format
+from cudf.utils.temporal import (
+    infer_format,
+    raise_if_datetime_seconds_out_of_bounds,
+)
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping
+    from collections.abc import Callable, Iterable, Mapping, Sequence
 
     import cupy as cp
 
@@ -204,11 +208,11 @@ class StringColumn(ColumnBase, Scannable):
         if min_count > 0 and col.valid_count < min_count:
             return pd.NA
 
-        return (
-            0
-            if len(col) == 0
-            else col.join_strings("", None).element_indexing(0)
-        )
+        if len(col) == 0:
+            # pandas sums an empty/all-null object series to the numeric
+            # identity 0; genuine string dtypes concatenate to "".
+            return 0 if self.dtype == np.dtype("object") else ""
+        return col.join_strings("", None).element_indexing(0)
 
     def any(
         self, skipna: bool = True, min_count: int = 0, **kwargs: Any
@@ -227,12 +231,13 @@ class StringColumn(ColumnBase, Scannable):
         self, skipna: bool = True, min_count: int = 0, **kwargs: Any
     ) -> ScalarLike:
         """Check if all string values are truthy (non-empty)."""
-        if skipna and self.null_count == self.size:
-            return True
-        elif not skipna and self.has_nulls():
-            # pandas 3 treats the NaN null sentinel as truthy, matching
-            # numpy semantics, so all(skipna=False) returns True when all
-            # values are null.
+        if self.null_count == self.size:
+            # With skipna=True nulls are dropped, so all-null is vacuously
+            # True. pandas 3 treats the NaN null sentinel as truthy,
+            # matching numpy semantics, so all(skipna=False) is True too.
+            # A partially-null column must NOT short-circuit here: the
+            # result depends on the truthiness of the non-null strings
+            # (e.g. all([NaN, ""], skipna=False) is False).
             return True
         raise NotImplementedError("`all` not implemented for `StringColumn`")
 
@@ -268,8 +273,18 @@ class StringColumn(ColumnBase, Scannable):
             )
 
         cast_func: Callable[[plc.Column, plc.DataType], plc.Column]
+        data = self
         if dtype.kind in {"i", "u"}:
-            if not self.is_all_integer():
+            if data.str_contains("_").any():
+                # Python (PEP 515) allows underscores between digits in
+                # integer literals (e.g. "123_1" == 1231) but libcudf does
+                # not. Strip only the valid underscores so invalid ones
+                # (e.g. "_12", "12_", "1__2") still fail like pandas.
+                # Two passes: the first can skip an underscore whose
+                # neighboring digit was consumed by a previous match.
+                data = data.replace_with_backrefs(r"(\d)_(\d)", r"\1\2")
+                data = data.replace_with_backrefs(r"(\d)_(\d)", r"\1\2")
+            if not data.is_all_integer():
                 raise ValueError(
                     "Could not convert strings to integer "
                     "type due to presence of non-integer values."
@@ -285,11 +300,11 @@ class StringColumn(ColumnBase, Scannable):
         else:
             raise ValueError(f"dtype must be a numerical type, not {dtype}")
         plc_dtype = dtype_to_pylibcudf_type(dtype)
-        with self.access(mode="read", scope="internal"):
+        with data.access(mode="read", scope="internal"):
             return cast(
                 "cudf.core.column.numerical.NumericalColumn",
                 ColumnBase.create(
-                    cast_func(self.plc_column, plc_dtype), dtype
+                    cast_func(data.plc_column, plc_dtype), dtype
                 ),
             )
 
@@ -328,6 +343,33 @@ class StringColumn(ColumnBase, Scannable):
             valid = valid_ts | is_nat
             if not valid.all():
                 raise ValueError(f"Column contains invalid data for {format=}")
+
+            if isinstance(dtype, np.dtype):
+                target_unit = np.datetime_data(dtype)[0]
+            elif isinstance(dtype, pd.DatetimeTZDtype):
+                target_unit = dtype.unit
+            else:
+                target_unit = dtype.pyarrow_dtype.unit
+            if target_unit != "s" and len(without_nat):
+                # libcudf parses directly into int64 values of the
+                # target unit and silently wraps on overflow
+                # (see https://github.com/rapidsai/cudf/issues/23247).
+                # Parse to seconds first (which cannot realistically
+                # overflow) and reject values whose whole-second part
+                # falls outside the target unit's range, like pandas
+                # does. This double parse can be removed once libcudf
+                # detects the overflow itself.
+                with without_nat.access(mode="read", scope="internal"):
+                    seconds = ColumnBase.create(
+                        plc.strings.convert.convert_datetime.to_timestamps(
+                            without_nat.plc_column,
+                            dtype_to_pylibcudf_type(np.dtype("datetime64[s]")),
+                            format,
+                        ),
+                        np.dtype("datetime64[s]"),
+                    )
+                lo, hi = seconds.minmax()
+                raise_if_datetime_seconds_out_of_bounds(lo, hi, target_unit)
 
             casting_func = plc.strings.convert.convert_datetime.to_timestamps
             add_back_nat = is_nat.any()
@@ -396,6 +438,18 @@ class StringColumn(ColumnBase, Scannable):
                 )
             return cast("Self", ColumnBase.create(self.plc_column, dtype))
         return self
+
+    def _process_values_for_isin(
+        self, values: Sequence | ColumnBase
+    ) -> tuple[ColumnBase, ColumnBase]:
+        lhs, rhs = super()._process_values_for_isin(values)
+        if lhs.dtype != rhs.dtype and is_dtype_obj_string(rhs.dtype):
+            # Strings of any dtype flavor (object, pd.StringDtype with
+            # python/pyarrow storage and NaN/NA na_value, pd.ArrowDtype
+            # string) hold comparable values; align rhs with lhs's dtype
+            # so ColumnBase.isin does not treat them as disjoint types.
+            rhs = rhs.astype(lhs.dtype)
+        return lhs, rhs
 
     @property
     def values(self) -> cp.ndarray:
