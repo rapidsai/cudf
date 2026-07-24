@@ -133,8 +133,6 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   cudf::type_id,
   [](auto value) {
-    // type_to_name cannot dispatch on EMPTY since it has no corresponding C++ type.
-    if (value == cudf::type_id::EMPTY) { return std::string{"EMPTY"}; }
     return cudf::type_to_name(cudf::data_type{value});
   },
   [](auto) { return std::string{}; })
