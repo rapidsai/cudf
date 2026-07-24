@@ -19,6 +19,10 @@ namespace cudf_streaming::detail {
 
 /**
  * @brief A bloom filter, used for approximate set membership queries.
+ *
+ * @note All methods of this class launch work on the streams provided. It is the caller's
+ * responsibility to ensure that data are valid to read/write on that stream as
+ * appropriate.
  */
 struct device_bloom_filter {
   /**
@@ -28,12 +32,8 @@ struct device_bloom_filter {
    * @param seed Seed used for hashing each value.
    * @param storage Storage to view as a bloom filter, must be appropriately
    * initialized.
-   * @param stream CUDA stream for device operations.
    */
-  device_bloom_filter(std::size_t num_blocks,
-                      std::uint64_t seed,
-                      void* storage,
-                      rmm::cuda_stream_view stream);
+  device_bloom_filter(std::size_t num_blocks, std::uint64_t seed, void* storage);
 
   /**
    * @brief Create a read-only filter.
@@ -41,14 +41,12 @@ struct device_bloom_filter {
    * @param num_blocks Number of blocks in the filter.
    * @param seed Seed used for hashing each value.
    * @param storage View of storage, must be appropriately initialized.
-   * @param stream CUDA stream for device operations.
    *
    * @return A const-qualified bloom filter viewing the underlying storage.
    */
   static device_bloom_filter const view(std::size_t num_blocks,
                                         std::uint64_t seed,
-                                        void const* storage,
-                                        rmm::cuda_stream_view stream);
+                                        void const* storage);
 
   /**
    * @brief Create uninitialized storage for a filter.
@@ -99,11 +97,6 @@ struct device_bloom_filter {
                                                    rmm::device_async_resource_ref mr) const;
 
   /**
-   * @brief @return The stream the underlying storage is valid on.
-   */
-  [[nodiscard]] rmm::cuda_stream_view stream() const noexcept;
-
-  /**
    * @brief @return Pointer to the underlying storage.
    */
   [[nodiscard]] void* data() noexcept;
@@ -127,10 +120,9 @@ struct device_bloom_filter {
   [[nodiscard]] static std::size_t fitting_num_blocks(std::size_t l2size) noexcept;
 
  private:
-  std::size_t num_blocks_;        ///< Number of blocks used in the filter.
-  std::uint64_t seed_;            ///< Seed used when hashing values.
-  void* storage_;                 ///< Backing storage.
-  rmm::cuda_stream_view stream_;  ///< Stream storage is valid on.
+  std::size_t num_blocks_;  ///< Number of blocks used in the filter.
+  std::uint64_t seed_;      ///< Seed used when hashing values.
+  void* storage_;           ///< Backing storage.
 };
 
 }  // namespace cudf_streaming::detail
