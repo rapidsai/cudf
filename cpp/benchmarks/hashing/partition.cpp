@@ -15,6 +15,7 @@
 #include <nvbench/nvbench.cuh>
 
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <numeric>
 #include <optional>
@@ -219,19 +220,23 @@ void bench_hash_partition_partition_count(nvbench::state& state)
  */
 void bench_hash_partition_equal_input_size(nvbench::state& state)
 {
-  auto const target_input_bytes = state.get_int64("target_input_bytes");
+  auto const target_input_bytes = static_cast<std::size_t>(state.get_int64("target_input_bytes"));
   auto const num_columns        = static_cast<cudf::size_type>(state.get_int64("num_columns"));
   auto const num_partitions     = static_cast<cudf::size_type>(state.get_int64("num_partitions"));
-  auto const row_width          = static_cast<std::int64_t>(num_columns) * sizeof(std::int64_t);
+  auto const row_width          = static_cast<std::size_t>(num_columns) * sizeof(std::int64_t);
 
   if (target_input_bytes % row_width != 0) {
     state.skip("target_input_bytes must be divisible by the row width");
     return;
   }
-  auto const num_rows = static_cast<cudf::size_type>(target_input_bytes / row_width);
-  auto input          = make_input_table({cudf::type_id::INT64},
+  auto const num_rows = target_input_bytes / row_width;
+  if (num_rows > static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
+    state.skip("number of rows exceeds cudf::size_type");
+    return;
+  }
+  auto input = make_input_table({cudf::type_id::INT64},
                                 std::vector<cudf::type_id>(num_columns - 1, cudf::type_id::INT64),
-                                num_rows);
+                                static_cast<cudf::size_type>(num_rows));
   run_hash_partition(state, *input, {0}, num_partitions);
 }
 
