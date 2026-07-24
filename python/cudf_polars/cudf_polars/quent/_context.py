@@ -532,12 +532,20 @@ class WorkerResources:
         )
         thread_pool = ThreadPool(worker_id=worker_id)
 
-        network, link_channels = declare_network_channels(
-            rank=rank,
-            nranks=nranks,
-            engine_id=engine_id,
-            device_memory=device_memory,
-        )
+        # Network / Link Channels
+        network = Network(engine_id=engine_id)
+        link_channels: dict[int, Channel] = {}
+        for target_rank in range(nranks):
+            if target_rank == rank:
+                continue
+            link = Channel(
+                instance_name=f"rank-{rank} -> rank-{target_rank}",
+                resource_type_name="Link",
+                parent_group_id=network.id,
+                source=device_memory,
+                target=device_memory,
+            )
+            link_channels[target_rank] = link
 
         return cls(
             processor_registry=processor_registry,
@@ -576,45 +584,10 @@ class WorkerResources:
         logger.emit(self.device_memory.finalizing())
         logger.emit(self.device_memory.exit())
 
-        # network
+        # Network / Link Channels
         for link in self.link_channels.values():
             logger.emit(link.finalizing())
             logger.emit(link.exit())
-
-
-def declare_network_channels(
-    *,
-    rank: int,
-    nranks: int,
-    engine_id: uuid.UUID,
-    device_memory: Memory,
-) -> tuple[Network, dict[int, Channel]]:
-    """
-    Build engine-scoped network link channels for inter-rank communication.
-
-    Creates a ``Network`` resource group and one ``Channel`` per remote
-    rank. Does not emit lifecycle events; the caller is responsible for
-    declaring them (see ``WorkerResources.declare``).
-
-    For single-rank runs the returned ``Network`` has no link channels, since
-    there is no inter-rank communication.
-    """
-    network = Network(engine_id=engine_id)
-
-    link_channels: dict[int, Channel] = {}
-    for target_rank in range(nranks):
-        if target_rank == rank:
-            continue
-        link = Channel(
-            instance_name=f"rank-{rank} -> rank-{target_rank}",
-            resource_type_name="Link",
-            parent_group_id=network.id,
-            source=device_memory,
-            target=device_memory,
-        )
-        link_channels[target_rank] = link
-
-    return network, link_channels
 
 
 @dataclasses.dataclass(kw_only=True)
