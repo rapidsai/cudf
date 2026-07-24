@@ -459,7 +459,7 @@ class TemporalFunction(Expr):
                 raise ValueError("TemporalFunction required")
             return getattr(cls, name)
 
-    __slots__ = ("ambiguous_scalar", "name", "options")
+    __slots__ = ("ambiguous_scalar", "name", "options", "tzif_dirs")
     _non_child = ("dtype", "name", "options")
     _COMPONENT_MAP: ClassVar[dict[Name, plc.datetime.DatetimeComponent]] = {
         Name.Year: plc.datetime.DatetimeComponent.YEAR,
@@ -534,6 +534,7 @@ class TemporalFunction(Expr):
         self.children = children
         self.is_pointwise = True
         self.ambiguous_scalar = None
+        self.tzif_dirs: tuple[str | None, str | None] = (None, None)
         if self.name not in self._valid_ops:
             raise NotImplementedError(f"Temporal function {self.name}")
         if self.name is TemporalFunction.Name.ToString and plc.traits.is_duration(
@@ -570,7 +571,7 @@ class TemporalFunction(Expr):
                         "(zoneinfo.TZPATH)"
                     )
                 tzif_dirs.append(tzif_dir)
-            self.options = (*self.options, *tzif_dirs)
+            self.tzif_dirs = (tzif_dirs[0], tzif_dirs[1])
         elif self.name in {
             TemporalFunction.Name.Truncate,
             TemporalFunction.Name.Round,
@@ -604,7 +605,7 @@ class TemporalFunction(Expr):
             ).time_zone
             to_zone = self.options[0]
             non_existent = self.options[1]
-            from_dir, to_dir = self.options[-2], self.options[-1]
+            from_dir, to_dir = self.tzif_dirs
             stream = df.stream
             same_zone = from_zone == to_zone or (from_dir is None and to_dir is None)
             if same_zone and (from_dir is None or self.ambiguous_scalar == "raise"):
