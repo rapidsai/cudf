@@ -1046,7 +1046,6 @@ def test_emit_task_events_computing_node() -> None:
         Filter,
         task,
         quent_ir_execution_context,
-        [],
         result,
     )
 
@@ -1082,7 +1081,6 @@ def test_emit_task_events_io_node(disk_to_device_channel: Channel) -> None:
         DataFrameScan,
         task,
         quent_ir_execution_context,
-        [],
         result,
     )
 

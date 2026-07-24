@@ -435,7 +435,6 @@ class QuentContext:
         ir_type: type[IR],
         quent_task: Task,
         quent_ir_execution_context: QuentIRExecutionContext,
-        frames: list[DataFrame],
         result: DataFrame | None,
     ) -> None:
         """
@@ -452,8 +451,6 @@ class QuentContext:
             The Quent Task to emit events for.
         quent_ir_execution_context: QuentIRExecutionContext
             The Quent IR execution context.
-        frames
-            The input dataframes passed to the IR node.
         result
             The output dataframe returned from the IR node. This will be ``None``
             if an exception was raised while evaluating the IR node.
