@@ -786,6 +786,9 @@ class StreamingExecutor:
     max_io_threads
         Maximum number of IO threads. Default is 4.
         This controls the parallelism of IO operations when reading data.
+    num_prefetch_workers
+        Number of prefetch worker threads for the hybrid scan prefetch pipeline.
+        When ``None`` (default), uses one worker per split.
     spill_to_pinned_memory
         Whether RapidsMPF should spill to pinned host memory when available,
         or use regular pageable host memory. Pinned host memory offers higher
@@ -858,6 +861,11 @@ class StreamingExecutor:
     max_io_threads: int = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__MAX_IO_THREADS", int, default=4
+        )
+    )
+    num_prefetch_workers: int | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__NUM_PREFETCH_WORKERS", int, default=None
         )
     )
     spill_to_pinned_memory: bool = dataclasses.field(
@@ -952,6 +960,10 @@ class StreamingExecutor:
             raise TypeError("client_device_threshold must be a float")
         if not isinstance(self.max_io_threads, int):
             raise TypeError("max_io_threads must be an int")
+        if self.num_prefetch_workers is not None and not isinstance(
+            self.num_prefetch_workers, int
+        ):
+            raise TypeError("num_prefetch_workers must be an int or None")
         if not isinstance(self.spill_to_pinned_memory, bool):
             raise TypeError("spill_to_pinned_memory must be bool")
         if not isinstance(self.num_py_executors, int):

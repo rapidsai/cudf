@@ -604,6 +604,7 @@ async def scan_node(
     ch_out: Channel[TableChunk],
     *,
     num_producers: int,
+    num_prefetch_workers: int | None,
     estimated_chunk_bytes: int,
 ) -> None:
     """
@@ -621,6 +622,9 @@ async def scan_node(
         The output Channel[TableChunk].
     num_producers
         The number of producers to use for the scan node.
+    num_prefetch_workers
+        The number of prefetch workers for the hybrid scan prefetch pipeline.
+        When ``None``, uses one worker per split.
     estimated_chunk_bytes
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
@@ -640,7 +644,9 @@ async def scan_node(
     prefetcher: HybridScanPrefetchExecutor | None = (
         HybridScanPrefetchExecutor.from_scans(
             list(scans),  # type: ignore[arg-type]
-            num_workers=num_producers,
+            num_workers=num_prefetch_workers
+            if num_prefetch_workers is not None
+            else len(scans),
             context=context,
         )
         if use_prefetch
@@ -891,6 +897,7 @@ def _(
                 rec.state["ir_context"],
                 ch_out,
                 num_producers=num_producers,
+                num_prefetch_workers=executor.num_prefetch_workers,
                 estimated_chunk_bytes=(
                     plan.estimated_chunk_bytes or executor.target_partition_size
                 ),
