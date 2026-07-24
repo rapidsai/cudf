@@ -1263,7 +1263,7 @@ endif()
 # their symbols are available to downstream users linking to libcudf.so without needing to link
 # against them directly. Public absorbed dependencies still promote their public transitive
 # dependencies and export set metadata into cudf's interface.
-set(_absorbed_deps rmm rapids_logger spdlog)
+set(_absorbed_deps rmm rapids_logger)
 foreach(_dep IN LISTS _absorbed_deps)
   if(NOT TARGET "${_dep}::${_dep}")
     continue()
@@ -1301,13 +1301,6 @@ foreach(_dep IN LISTS _absorbed_deps)
     cudf PRIVATE "$<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,${_dep_link}>>"
   )
 
-  # nvcomp_static has done a WHOLE_ARCHIVE on rmm and rapids_logger itself. Therefore it needs to
-  # come after our WHOLE_ARCHIVE otherwise we will get duplicate symbols for rmm and/or
-  # rapids_logger
-  if(TARGET nvcomp::nvcomp_static)
-    target_link_libraries(${_dep_link} INTERFACE nvcomp::nvcomp_static)
-  endif()
-
   # Merge the absorbed library's export set metadata into cudf-exports so the installed config has
   # find_dependency() calls for all transitive deps (e.g. nvtx3, CUDAToolkit from rmm).
   foreach(_mode build install)
@@ -1344,6 +1337,18 @@ target_link_libraries(
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> $<BUILD_LOCAL_INTERFACE:cuco::cuco> ZLIB::ZLIB
           kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd $<BUILD_LOCAL_INTERFACE:xxhash> rtcx::rtcx
 )
+
+if(TARGET spdlog::spdlog)
+  get_target_property(_spdlog_link spdlog::spdlog NAME)
+  get_target_property(_spdlog_type ${_spdlog_link} TYPE)
+  if(BUILD_SHARED_LIBS AND _spdlog_type STREQUAL "STATIC_LIBRARY")
+    target_link_libraries(
+      cudf PRIVATE "$<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,${_spdlog_link}>>"
+    )
+  else()
+    target_link_libraries(cudf PRIVATE ${_spdlog_link})
+  endif()
+endif()
 
 target_link_libraries(cudf PRIVATE ${CUDF_nvcomp_TARGET})
 
