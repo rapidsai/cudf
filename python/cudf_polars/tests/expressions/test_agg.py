@@ -16,6 +16,7 @@ from cudf_polars.testing.asserts import (
 )
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_136,
+    POLARS_VERSION_LT_137,
 )
 
 
@@ -131,6 +132,32 @@ def test_product(engine: pl.GPUEngine, data, dtype):
     df = pl.LazyFrame({"a": pl.Series(data, dtype=dtype)})
     q = df.select(pl.col("a").product())
     assert_gpu_result_equal(q, engine=engine, check_exact=False)
+
+
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_137, reason="polars 1.37.0 introduced max_by and min_by"
+)
+@pytest.mark.parametrize("expr", ["max_by", "min_by"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, 2, 2, None, 3, 1], "b": [5, 4, 3, 2, 1, 6]},
+        {"a": [1, 2, 3, 4], "b": [5, None, 3, None]},
+        {"a": [10, 20, 30, 40], "b": [1, 5, 5, 2]},
+        {"a": [None, None, None], "b": [None, None, None]},
+        {"a": [7], "b": [3]},
+        {"a": [], "b": []},
+    ],
+)
+def test_max_min_by(engine: pl.GPUEngine, expr: str, data) -> None:
+    df = pl.LazyFrame(
+        {
+            "a": pl.Series(data["a"], dtype=pl.Int64),
+            "b": pl.Series(data["b"], dtype=pl.Int64),
+        }
+    )
+    q = df.select(getattr(pl.col("a"), expr)("b"))
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_implode(engine: pl.GPUEngine) -> None:
