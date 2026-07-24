@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Dispatching for the RapidsMPF streaming runtime."""
 
@@ -13,14 +13,15 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.streaming.chunks.arbitrary import ArbitraryChunk
+    from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
+    from cudf_polars.streaming.actor_graph.io import MetadataMessagePayload
     from cudf_polars.streaming.actor_graph.utils import ChannelManager
-    from cudf_polars.streaming.base import (
-        PartitionInfo,
-        StatsCollector,
-    )
+    from cudf_polars.streaming.base import PartitionInfo, StatsCollector
+    from cudf_polars.streaming.io import StreamingScan
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
@@ -58,6 +59,11 @@ class GenState(TypedDict):
         Statistics collector.
     collective_id_map
         The mapping of IR nodes to lists of collective IDs.
+    metadata_scans
+        Non-native parquet StreamingScan nodes that need metadata prefetch.
+    metadata_channel_by_scan
+        Mapping from each eligible StreamingScan node to its single metadata
+        input channel.
     """
 
     context: Context
@@ -69,6 +75,10 @@ class GenState(TypedDict):
     max_io_threads: int
     stats: StatsCollector
     collective_id_map: dict[IR, list[int]]
+    metadata_scans: list[StreamingScan]
+    metadata_channel_by_scan: dict[
+        StreamingScan, Channel[ArbitraryChunk[MetadataMessagePayload]]
+    ]
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[

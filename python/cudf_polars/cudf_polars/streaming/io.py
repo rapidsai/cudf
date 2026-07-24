@@ -273,6 +273,15 @@ class SplitScan(IR):
             self.parquet_options,
         )
 
+    def with_prefetched_metadata(
+        self,
+        cached_parquet_info: list[CachedParquetInfo] | None,
+    ) -> tuple[Any, ...]:
+        """Return ``do_evaluate`` args, substituting prefetched parquet metadata when provided."""
+        if cached_parquet_info is None:
+            return self._non_child_args
+        return (*self._non_child_args[:-1], cached_parquet_info)
+
     @classmethod
     def do_evaluate(
         cls,
@@ -440,6 +449,15 @@ class FusedScan(IR):
             tuple(self.paths),
             self.parquet_options,
         )
+
+    def with_prefetched_metadata(
+        self,
+        cached_parquet_info: list[CachedParquetInfo] | None,
+    ) -> tuple[Any, ...]:
+        """Return ``do_evaluate`` args, substituting prefetched parquet metadata when provided."""
+        if cached_parquet_info is None:
+            return self._non_child_args
+        return (*self._non_child_args[:-1], cached_parquet_info)
 
     @classmethod
     def do_evaluate(

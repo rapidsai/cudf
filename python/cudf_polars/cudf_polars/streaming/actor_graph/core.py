@@ -19,6 +19,11 @@ from cudf_polars.dsl.ir import (
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.streaming.actor_graph.dispatch import FanoutInfo
+from cudf_polars.streaming.actor_graph.io import (
+    ParquetMetadataCache,
+    collect_metadata_scans,
+    parquet_metadata_prefetch_node,
+)
 from cudf_polars.streaming.actor_graph.nodes import (
     generate_ir_sub_network_wrapper,
     metadata_drain_node,
@@ -265,6 +270,16 @@ def generate_network(
     # Get max_io_threads from config (default: 2)
     max_io_threads_global = config_options.executor.max_io_threads
     max_io_threads_local = max(1, max_io_threads_global // max(1, num_io_nodes))
+    metadata_scans = collect_metadata_scans(
+        ir,
+        partition_info=partition_info,
+        config_options=config_options,
+        nranks=comm.nranks,
+    )
+    metadata_channel_by_scan = {
+        scan: context.create_channel() for scan in metadata_scans
+    }
+    metadata_cache = ParquetMetadataCache(stats)
 
     # Generate the network
     state: GenState = {
@@ -277,12 +292,24 @@ def generate_network(
         "max_io_threads": max_io_threads_local,
         "stats": stats,
         "collective_id_map": collective_id_map,
+        "metadata_scans": metadata_scans,
+        "metadata_channel_by_scan": metadata_channel_by_scan,
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state
     )
     nodes_dict, channels = mapper(ir)
     ch_out = channels[ir].reserve_output_slot()
+    metadata_nodes = [
+        parquet_metadata_prefetch_node(
+            context,
+            ir_context,
+            scan,
+            metadata_channel_by_scan[scan],
+            metadata_cache,
+        )
+        for scan in metadata_scans
+    ]
 
     # Add node to drain metadata before pull_from_channel
     # (since pull_from_channel doesn't handle metadata messages)
@@ -302,6 +329,7 @@ def generate_network(
 
     # Flatten the nodes dictionary into a list for run_actor_network
     nodes: list[Any] = [node for node_list in nodes_dict.values() for node in node_list]
+    nodes.extend(metadata_nodes)
     nodes.extend([drain_node, output_node])
 
     # Return network and output hook
