@@ -537,7 +537,8 @@ class reader_impl {
   named_to_reference_converter _expr_conv{std::nullopt, table_metadata{}, true};
 
   std::vector<std::unique_ptr<datasource>> _sources;
-  std::unique_ptr<aggregate_reader_metadata> _metadata;
+  // shared so experimental hybrid scan readers can share one copy across single-file readers
+  std::shared_ptr<aggregate_reader_metadata> _metadata;
 
   // Number of sources
   size_t _num_sources{0};

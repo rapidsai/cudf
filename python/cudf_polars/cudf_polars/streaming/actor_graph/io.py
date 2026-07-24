@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import functools
 import io
 import math
@@ -30,6 +31,7 @@ from cudf_polars.dsl.ir import (
     _prepare_parquet_predicate,
 )
 from cudf_polars.dsl.to_ast import to_parquet_filter
+from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
 )
@@ -51,10 +53,12 @@ from cudf_polars.streaming.actor_graph.utils import (
 from cudf_polars.streaming.io import (
     StreamingScan,
     StreamingSink,
+    _evaluate_with_prefetch,
     _prepare_sink_directory,
     _sink_to_file,
     can_use_native_parquet_node,
 )
+from cudf_polars.streaming.prefetch import HybridScanPrefetchExecutor
 from cudf_polars.streaming.rank_aware_source import RankAwareSource
 
 if TYPE_CHECKING:
@@ -72,7 +76,7 @@ if TYPE_CHECKING:
         PartitionInfo,
         StatsCollector,
     )
-    from cudf_polars.streaming.io import FusedScan, SplitScan
+    from cudf_polars.streaming.io import FusedScan, PrefetchedByteRanges, SplitScan
     from cudf_polars.utils.config import ParquetOptions
 
 
@@ -514,6 +518,20 @@ def _(
     return nodes, channels
 
 
+def evaluate_with_prefetch(
+    scan: SplitScan,
+    prefetcher: HybridScanPrefetchExecutor,
+    task_idx: int,
+    *,
+    context: IRExecutionContext,
+) -> DataFrame:
+    """Evaluate a scan using parquet byte ranges prefetched into pinned host memory."""
+    prefetched: PrefetchedByteRanges | None = prefetcher.result(task_idx)
+    if prefetched is None:
+        return scan.do_evaluate(*scan._non_child_args, context=context)
+    return _evaluate_with_prefetch(scan, prefetched, context=context)
+
+
 async def read_chunk(
     context: Context,
     scan: IR,
@@ -522,6 +540,8 @@ async def read_chunk(
     ir_context: IRExecutionContext,
     estimated_chunk_bytes: int,
     tracer: ActorTracer | None = None,
+    *,
+    prefetcher: HybridScanPrefetchExecutor | None = None,
 ) -> None:
     """
     Read a chunk from disk and send it to the output channel.
@@ -543,23 +563,36 @@ async def read_chunk(
         with block spilling to avoid thrashing.
     tracer
         The actor tracer for collecting runtime statistics.
+    prefetcher
+        Optional prefetch pipeline. When set, retrieves the prefetched
+        I/O result before evaluating.
     """
     with opaque_memory_usage(
         await reserve_memory(
             context, size=estimated_chunk_bytes, net_memory_delta=estimated_chunk_bytes
         )
     ):
-        df = await ir_context.to_thread(
-            scan.do_evaluate,
-            *scan._non_child_args,
-            context=ir_context,
+        if prefetcher is not None:
+            df = await ir_context.to_thread(
+                evaluate_with_prefetch,
+                scan,  # type: ignore[arg-type]
+                prefetcher,
+                seq_num,
+                context=ir_context,
+            )
+        else:
+            df = await ir_context.to_thread(
+                scan.do_evaluate,
+                *scan._non_child_args,
+                context=ir_context,
+            )
+    with nvtx_annotate_cudf_polars(message="TableChunk.from_pylibcudf_table"):
+        chunk = TableChunk.from_pylibcudf_table(
+            df.table,
+            df.stream,
+            exclusive_view=True,
+            br=context.br(),
         )
-    chunk = TableChunk.from_pylibcudf_table(
-        df.table,
-        df.stream,
-        exclusive_view=True,
-        br=context.br(),
-    )
     await send_chunk(context, ch_out, chunk, seq_num, tracer=tracer)
 
 
@@ -571,6 +604,7 @@ async def scan_node(
     ch_out: Channel[TableChunk],
     *,
     num_producers: int,
+    num_prefetch_workers: int | None,
     estimated_chunk_bytes: int,
 ) -> None:
     """
@@ -588,79 +622,106 @@ async def scan_node(
         The output Channel[TableChunk].
     num_producers
         The number of producers to use for the scan node.
+    num_prefetch_workers
+        The number of prefetch workers for the hybrid scan prefetch pipeline.
+        When ``None``, uses one worker per split.
     estimated_chunk_bytes
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
     """
     scans: Sequence[SplitScan] | Sequence[FusedScan] = ir.scans
 
-    async with shutdown_on_error(
-        context, ch_out, trace_ir=ir, ir_context=ir_context
-    ) as tracer:
-        # Send basic metadata
-        await send_metadata(
-            ch_out,
-            context,
-            ChannelMetadata(local_count=len(scans)),
+    first = scans[0] if scans else None
+    use_prefetch = (
+        first is not None
+        and ir.scan_type == "split"
+        and first.parquet_options.use_hybrid_scan
+        and first.parquet_options.prefetch_file_metadata
+        and first.cached_parquet_info is not None
+        and first.base_scan.predicate is not None
+        and context.br().pinned_mr is not None
+    )
+    prefetcher: HybridScanPrefetchExecutor | None = (
+        HybridScanPrefetchExecutor.from_scans(
+            list(scans),  # type: ignore[arg-type]
+            num_workers=num_prefetch_workers
+            if num_prefetch_workers is not None
+            else len(scans),
+            context=context,
         )
-
-        # If there is nothing to scan, drain the channel and return
-        if len(scans) == 0:
-            await ch_out.drain(context)
-            return
-
-        # If there is only one scan or one producer, we can
-        # skip the lineariser and read the chunks directly
-        if len(scans) == 1 or num_producers == 1:
-            for seq_num, scan in enumerate(scans):
-                await read_chunk(
-                    context,
-                    scan,
-                    seq_num,
-                    ch_out,
-                    ir_context,
-                    estimated_chunk_bytes,
-                    tracer=tracer,
-                )
-            await ch_out.drain(context)
-            return
-
-        # Use Lineariser to ensure ordered delivery
-        num_producers = min(num_producers, len(scans))
-        lineariser = Lineariser(context, ch_out, num_producers)
-
-        # Assign tasks to producers using round-robin
-        producer_tasks: list[list[tuple[int, SplitScan | FusedScan]]] = [
-            [] for _ in range(num_producers)
-        ]
-        for task_idx, scan in enumerate(scans):
-            producer_id = task_idx % num_producers
-            # mypy resolves __iter__ on union-of-sequences to the common base (IR)
-            producer_tasks[producer_id].append((task_idx, scan))  # type: ignore[arg-type]
-
-        async def _producer(producer_id: int, ch_out: Channel) -> None:
-            for task_idx, scan in producer_tasks[producer_id]:
-                await read_chunk(
-                    context,
-                    scan,
-                    task_idx,
-                    ch_out,
-                    ir_context,
-                    estimated_chunk_bytes,
-                    tracer=tracer,
-                )
-            await ch_out.drain(context)
-
-        async with (
-            shutdown_on_error(context, *lineariser.input_channels, trace_ir=ir),
-        ):
-            await gather_in_task_group(
-                lineariser.drain(),
-                *(
-                    _producer(i, ch_in)
-                    for i, ch_in in enumerate(lineariser.input_channels)
-                ),
+        if use_prefetch
+        else None
+    )
+    with prefetcher or contextlib.nullcontext():
+        async with shutdown_on_error(
+            context, ch_out, trace_ir=ir, ir_context=ir_context
+        ) as tracer:
+            # Send basic metadata
+            await send_metadata(
+                ch_out,
+                context,
+                ChannelMetadata(local_count=len(scans)),
             )
+
+            # If there is nothing to scan, drain the channel and return
+            if len(scans) == 0:
+                await ch_out.drain(context)
+                return
+
+            # If there is only one scan or one producer, we can
+            # skip the lineariser and read the chunks directly
+            if len(scans) == 1 or num_producers == 1:
+                for seq_num, scan in enumerate(scans):
+                    await read_chunk(
+                        context,
+                        scan,
+                        seq_num,
+                        ch_out,
+                        ir_context,
+                        estimated_chunk_bytes,
+                        tracer=tracer,
+                        prefetcher=prefetcher,
+                    )
+                await ch_out.drain(context)
+                return
+
+            # Use Lineariser to ensure ordered delivery
+            num_producers = min(num_producers, len(scans))
+            lineariser = Lineariser(context, ch_out, num_producers)
+
+            # Assign tasks to producers using round-robin
+            producer_tasks: list[list[tuple[int, SplitScan | FusedScan]]] = [
+                [] for _ in range(num_producers)
+            ]
+            for task_idx, scan in enumerate(scans):
+                producer_id = task_idx % num_producers
+                # mypy resolves __iter__ on union-of-sequences to the common base (IR)
+                producer_tasks[producer_id].append((task_idx, scan))  # type: ignore[arg-type]
+
+            async def _producer(producer_id: int, ch_out: Channel) -> None:
+                for task_idx, scan in producer_tasks[producer_id]:
+                    await read_chunk(
+                        context,
+                        scan,
+                        task_idx,
+                        ch_out,
+                        ir_context,
+                        estimated_chunk_bytes,
+                        tracer=tracer,
+                        prefetcher=prefetcher,
+                    )
+                await ch_out.drain(context)
+
+            async with (
+                shutdown_on_error(context, *lineariser.input_channels, trace_ir=ir),
+            ):
+                await gather_in_task_group(
+                    lineariser.drain(),
+                    *(
+                        _producer(i, ch_in)
+                        for i, ch_in in enumerate(lineariser.input_channels)
+                    ),
+                )
 
 
 def make_rapidsmpf_read_parquet_node(
@@ -836,6 +897,7 @@ def _(
                 rec.state["ir_context"],
                 ch_out,
                 num_producers=num_producers,
+                num_prefetch_workers=executor.num_prefetch_workers,
                 estimated_chunk_bytes=(
                     plan.estimated_chunk_bytes or executor.target_partition_size
                 ),

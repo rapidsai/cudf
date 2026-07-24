@@ -6,8 +6,13 @@ from __future__ import annotations
 
 import concurrent.futures
 import contextlib
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
+
+try:  # pragma: no cover; kvikio is optional
+    import kvikio
+except ImportError:
+    kvikio = None
 
 import pylibcudf as plc
 
@@ -46,6 +51,55 @@ class CachedParquetInfo:
     path: str
     size: int | None
     file_metadata: plc.io.parquet_metadata.FileMetaData
+    # Keyed by id(base_scan): otherwise we cannot distinguish two Scan nodes
+    # that reference the same file but carry different predicates or column
+    # selections. Splits of the same Scan share a single entry. compare=False
+    # excludes them from equality and hashing so two instances for the same
+    # file compare equal regardless of cache state.
+    # HybridScanMetadata is shared across splits of the same Scan node.
+    # HybridScanReader is not cached: it holds mutable per-read state and is not
+    # thread-safe, so each producer thread creates its own reader from the shared metadata.
+    _hybrid_scan_metadata: dict[int, plc.io.experimental.HybridScanMetadata] = field(
+        default_factory=dict, compare=False, repr=False
+    )
+    _remote_handle: list[Any] = field(default_factory=list, compare=False, repr=False)
+
+    def hybrid_scan_metadata(
+        self,
+        base_scan_id: int,
+        options: plc.io.parquet.ParquetReaderOptions,
+    ) -> plc.io.experimental.HybridScanMetadata:
+        """Return a HybridScanMetadata shared across splits of the same Scan node."""
+        metadata = self._hybrid_scan_metadata.get(base_scan_id)
+        if metadata is None:
+            metadata = plc.io.experimental.HybridScanMetadata.from_parquet_metadata(
+                self.file_metadata, options
+            )
+            self._hybrid_scan_metadata.setdefault(base_scan_id, metadata)
+            metadata = self._hybrid_scan_metadata[base_scan_id]
+        return metadata
+
+    def hybrid_scan_reader(
+        self,
+        base_scan_id: int,
+        options: plc.io.parquet.ParquetReaderOptions,
+    ) -> plc.io.experimental.HybridScanReader:
+        """Return a fresh HybridScanReader borrowing the shared metadata for this Scan node."""
+        metadata = self.hybrid_scan_metadata(base_scan_id, options)
+        return plc.io.experimental.HybridScanReader.from_metadata(metadata)
+
+    def remote_handle(self) -> Any:
+        """Return the kvikio handle for this file."""
+        if not self._remote_handle:
+            if kvikio is None:  # pragma: no cover
+                raise ImportError("kvikio is required for hybrid scan prefetching")
+            if plc.io.SourceInfo._is_remote_uri(self.path):
+                self._remote_handle.append(
+                    kvikio.RemoteFile.open(self.path, nbytes=self.size)
+                )
+            else:
+                self._remote_handle.append(kvikio.CuFile(self.path))
+        return self._remote_handle[0]
 
 
 @nvtx_annotate_cudf_polars(message="fetch_parquet_footers_for_paths")
@@ -72,15 +126,10 @@ def _prefetch_parquet_footers_for_paths(paths: list[str]) -> list[CachedParquetI
     # For now, we'll just use kvikio to explicitly get the size.
     sizes: list[int | None] = []
 
-    try:  # pragma: no cover; kvikio is optional
-        import kvikio
-    except ImportError:
-        kvikio = None
-
     for path in paths:
-        if (
-            paths and kvikio is not None and plc.io.SourceInfo._is_remote_uri(path)
-        ):  # pragma: no cover; kvikio is optional
+        if kvikio is not None and plc.io.SourceInfo._is_remote_uri(
+            path
+        ):  # pragma: no cover
             # We're OK to use `kvikio.RemoteFile.open` here. It does make an HTTP HEAD
             # request for S3/HTTP endpoints, but that's the entire reason we're running
             # this code. So long as it makes just *one* HTTP request, there's no advantage
@@ -99,10 +148,16 @@ def _prefetch_parquet_footers_for_paths(paths: list[str]) -> list[CachedParquetI
         )
     )
 
-    return [
+    infos = [
         CachedParquetInfo(path, size, file_metadata)
         for path, size, file_metadata in zip(paths, sizes, metadata, strict=True)
     ]
+    if kvikio is not None:
+        # Open kvikio handles eagerly on the main thread before any prefetch workers
+        # start, so all splits sharing a file get the same handle without races.
+        for info in infos:
+            info.remote_handle()
+    return infos
 
 
 @nvtx_annotate_cudf_polars(message="prefetch_parquet_file_metadata_for_ir")

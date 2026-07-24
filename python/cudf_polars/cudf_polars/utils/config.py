@@ -233,6 +233,19 @@ class ParquetOptions:
         Whether to use the native rapidsmpf node for parquet reading.
         This option is only used by the streaming executor.
         Default is False.
+    use_hybrid_scan
+        Whether to use the two-pass ``HybridScanReader`` for ``SplitScan``
+        tasks when a predicate can be pushed down to a parquet filter.
+        Default is False.
+    hybrid_scan_stats_pruning
+        Whether to apply row-group stats and bloom-filter pruning before the
+        first pass of a hybrid scan. When ``True`` (default), row groups are
+        filtered via ``filter_row_groups_with_stats`` and
+        ``filter_row_groups_with_bloom_filters`` before any data is read.
+        Set to ``False`` to skip all pre-first-pass pruning and read every
+        row group assigned to this split, which is useful for benchmarking
+        the two-pass read overhead in isolation.
+        Only has effect when ``use_hybrid_scan`` is ``True``.
     prefetch_file_metadata
         Whether to prefetch parquet file metadata and pass it through
         `parquet_metadatas` to avoid rereading file footers.
@@ -282,11 +295,25 @@ class ParquetOptions:
             default=False,
         )
     )
+    use_hybrid_scan: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_HYBRID_SCAN",
+            _bool_converter,
+            default=False,
+        )
+    )
     prefetch_file_metadata: bool = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__PREFETCH_FILE_METADATA",
             _bool_converter,
             default=False,
+        )
+    )
+    hybrid_scan_stats_pruning: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__HYBRID_SCAN_STATS_PRUNING",
+            _bool_converter,
+            default=True,
         )
     )
     use_jit_filter: bool = dataclasses.field(
@@ -312,6 +339,10 @@ class ParquetOptions:
             raise TypeError("max_row_group_samples must be an int")
         if not isinstance(self.use_rapidsmpf_native, bool):
             raise TypeError("use_rapidsmpf_native must be a bool")
+        if not isinstance(self.use_hybrid_scan, bool):
+            raise TypeError("use_hybrid_scan must be a bool")
+        if not isinstance(self.hybrid_scan_stats_pruning, bool):
+            raise TypeError("hybrid_scan_stats_pruning must be a bool")
         if not isinstance(self.prefetch_file_metadata, bool):
             raise TypeError("prefetch_file_metadata must be a bool")
 
@@ -755,6 +786,9 @@ class StreamingExecutor:
     max_io_threads
         Maximum number of IO threads. Default is 4.
         This controls the parallelism of IO operations when reading data.
+    num_prefetch_workers
+        Number of prefetch worker threads for the hybrid scan prefetch pipeline.
+        When ``None`` (default), uses one worker per split.
     spill_to_pinned_memory
         Whether RapidsMPF should spill to pinned host memory when available,
         or use regular pageable host memory. Pinned host memory offers higher
@@ -827,6 +861,11 @@ class StreamingExecutor:
     max_io_threads: int = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__MAX_IO_THREADS", int, default=4
+        )
+    )
+    num_prefetch_workers: int | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__NUM_PREFETCH_WORKERS", int, default=None
         )
     )
     spill_to_pinned_memory: bool = dataclasses.field(
@@ -921,6 +960,10 @@ class StreamingExecutor:
             raise TypeError("client_device_threshold must be a float")
         if not isinstance(self.max_io_threads, int):
             raise TypeError("max_io_threads must be an int")
+        if self.num_prefetch_workers is not None and not isinstance(
+            self.num_prefetch_workers, int
+        ):
+            raise TypeError("num_prefetch_workers must be an int or None")
         if not isinstance(self.spill_to_pinned_memory, bool):
             raise TypeError("spill_to_pinned_memory must be bool")
         if not isinstance(self.num_py_executors, int):

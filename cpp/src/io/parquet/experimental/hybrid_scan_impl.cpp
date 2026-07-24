@@ -98,7 +98,7 @@ hybrid_scan_reader_impl::hybrid_scan_reader_impl(
   cudf::host_span<cudf::host_span<uint8_t const> const> footer_bytes,
   parquet_reader_options const& options)
 {
-  _metadata = std::make_unique<aggregate_reader_metadata>(
+  _metadata = std::make_shared<aggregate_reader_metadata>(
     footer_bytes, options.is_enabled_use_arrow_schema(), has_cols_from_mismatched_sources(options));
 
   _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
@@ -108,9 +108,17 @@ hybrid_scan_reader_impl::hybrid_scan_reader_impl(
   cudf::host_span<FileMetaData const> parquet_metadatas, parquet_reader_options const& options)
 {
   _metadata =
-    std::make_unique<aggregate_reader_metadata>(parquet_metadatas,
+    std::make_shared<aggregate_reader_metadata>(parquet_metadatas,
                                                 options.is_enabled_use_arrow_schema(),
                                                 has_cols_from_mismatched_sources(options));
+  _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
+}
+
+hybrid_scan_reader_impl::hybrid_scan_reader_impl(
+  std::shared_ptr<aggregate_reader_metadata> metadata)
+{
+  CUDF_EXPECTS(metadata != nullptr, "Shared parquet metadata must not be null");
+  _metadata          = std::move(metadata);
   _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
 }
 
