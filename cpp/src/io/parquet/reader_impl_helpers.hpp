@@ -77,9 +77,9 @@ struct row_group_info {
   std::optional<std::vector<column_chunk_info>> column_chunks;
 
   /**
-   * @brief Indicates the presence of page-level indexes.
+   * @brief Indicates the presence of page-level offset indexes.
    */
-  [[nodiscard]] bool has_page_index() const { return column_chunks.has_value(); }
+  [[nodiscard]] bool has_offset_index() const { return column_chunks.has_value(); }
 };
 
 /**
