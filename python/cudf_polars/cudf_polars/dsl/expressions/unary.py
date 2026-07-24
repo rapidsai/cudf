@@ -15,6 +15,7 @@ import pylibcudf as plc
 from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
+from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.utils import dtypes, sorting
 from cudf_polars.utils.versions import POLARS_VERSION_LT_136
 
@@ -157,6 +158,10 @@ class UnaryFunction(Expr):
             "cum_sum",
         }
     )
+    _horizontal_fold_ops: ClassVar[dict[str, plc.binaryop.BinaryOperator]] = {
+        "max_horizontal": plc.binaryop.BinaryOperator.NULL_MAX,
+    }
+    _supported_horizontal_fns = frozenset({"max_horizontal"})
     _supported_math_fns = frozenset(
         {
             "cot",
@@ -170,6 +175,7 @@ class UnaryFunction(Expr):
         _supported_misc_fns,
         _supported_cum_aggs,
         _supported_math_fns,
+        _supported_horizontal_fns,
         _OP_MAPPING.keys(),
     )
     _pointwise_fns = frozenset(
@@ -188,7 +194,7 @@ class UnaryFunction(Expr):
             "to_physical",
             "truncate",
         }
-    ).union(_supported_math_fns, _OP_MAPPING.keys())
+    ).union(_supported_horizontal_fns, _supported_math_fns, _OP_MAPPING.keys())
 
     def __init__(
         self, dtype: DataType, name: str, options: tuple[Any, ...], *children: Expr
@@ -213,6 +219,17 @@ class UnaryFunction(Expr):
             raise NotImplementedError(
                 "Filling null values with limit specified is not yet supported."
             )
+        if self.name == "max_horizontal":
+            op = UnaryFunction._horizontal_fold_ops[self.name]
+            if not plc.binaryop.is_supported_operation(
+                self.dtype.plc_type,
+                self.dtype.plc_type,
+                self.dtype.plc_type,
+                op,
+            ):
+                raise NotImplementedError(
+                    f"{self.name} is not supported for dtype {self.dtype.id().name}"
+                )
         if self.name == "mode" and not POLARS_VERSION_LT_136:
             (maintain_order,) = self.options
             if maintain_order:
@@ -1423,6 +1440,27 @@ class UnaryFunction(Expr):
                     stream=df.stream,
                 )
             return Column(clamped, dtype=self.dtype)
+        elif self.name == "max_horizontal":
+            op = UnaryFunction._horizontal_fold_ops[self.name]
+            columns = [
+                col.obj
+                for col in broadcast(
+                    *(
+                        child.evaluate(df, context=context).astype(
+                            self.dtype, stream=df.stream
+                        )
+                        for child in self.children
+                    ),
+                    target_length=df.num_rows,
+                    stream=df.stream,
+                )
+            ]
+            result = columns[0]
+            for other in columns[1:]:
+                result = plc.binaryop.binary_operation(
+                    result, other, op, self.dtype.plc_type, stream=df.stream
+                )
+            return Column(result, dtype=self.dtype)
         elif self.name == "extend_constant":
             column = self.children[0].evaluate(df, context=context)
             value_expr = self.children[1]
