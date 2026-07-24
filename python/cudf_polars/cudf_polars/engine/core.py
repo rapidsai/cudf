@@ -768,7 +768,6 @@ def evaluate_on_rank(
 
     if config_options.executor.quent_context is not None:
         assert local_quent_context is not None
-        # logical_plan_id = optimized.get_stable_plan_id()
         plan, ops, ports, logical_op_by_id = build_plan(
             optimized,
             config_options,

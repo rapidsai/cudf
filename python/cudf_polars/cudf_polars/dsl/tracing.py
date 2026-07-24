@@ -184,7 +184,7 @@ def log_do_evaluate(
 
             # And the kwonly 'context' argument has the IR execution context.
             ir_execution_context: IRExecutionContext = kwargs["context"]  # type: ignore[assignment]
-            # assert ir_execution_context.tracer is not None
+
             if ir_execution_context.quent_ir_execution_context is not None:
                 quent_task = Task.from_ir(
                     cls, ir_execution_context.quent_ir_execution_context
@@ -269,8 +269,6 @@ def log_do_evaluate(
                 # ActorTracer.send updates row_count and chunk_count
                 tracer.input_bytes += sum(frame._size_bytes() for frame in frames)
                 tracer.output_bytes += result._size_bytes()
-                # TODO: Emit some chunk-level statistics. Might need a custom Quent
-                # schema for that.
 
             return result
 
