@@ -40,30 +40,10 @@ _TIMESTAMP_TO_DURATION = {
 }
 
 
-def _is_utc_like(zone: str | None) -> bool:
-    """Whether a time zone has a constant zero UTC offset requiring no lookup."""
-    return zone is None or zone == "UTC"
-
-
-def _time_zone(dtype: DataType) -> str | None:
-    """Return the time zone of a ``Datetime`` :class:`DataType`."""
-    return cast("pl.Datetime", dtype.polars_type).time_zone
-
-
-def _tzif_dir(zone_name: str) -> str | None:
-    """Return the ``zoneinfo.TZPATH`` directory containing ``zone_name``."""
-    for search_path in zoneinfo.TZPATH:
-        if (Path(search_path) / zone_name).is_file():
-            return search_path
-    return None
-
-
 def _tz_transition_columns(
-    zone_name: str, stream: Stream
+    zone_name: str, tzif_dir: str, stream: Stream
 ) -> tuple[plc.Column, plc.Column] | None:
     """Return the (transition times, UTC offsets) columns for ``zone_name``."""
-    tzif_dir = _tzif_dir(zone_name)
-    assert tzif_dir is not None
     table = plc.io.timezone.make_timezone_transition_table(
         tzif_dir, zone_name, stream=stream
     )
@@ -74,97 +54,50 @@ def _tz_transition_columns(
     return transition_times, offsets
 
 
-def _slice_column(
-    column: plc.Column, start: int, stop: int, stream: Stream
-) -> plc.Column:
-    (result,) = plc.copying.slice(column, [start, stop], stream=stream)
-    return result
-
-
-def _offset_index(
-    positions: plc.Column, shift: int, size: int, stream: Stream
-) -> plc.Column:
-    index_type = positions.type()
-    shifted = plc.binaryop.binary_operation(
-        positions,
-        plc.Scalar.from_py(shift, index_type, stream=stream),
-        plc.binaryop.BinaryOperator.SUB,
-        index_type,
-        stream=stream,
-    )
-    return plc.replace.clamp(
-        shifted,
-        plc.Scalar.from_py(0, index_type, stream=stream),
-        plc.Scalar.from_py(size - 1, index_type, stream=stream),
-        stream=stream,
-    )
-
-
-def _gather_offset(
-    offsets: plc.Column, index: plc.Column, duration_type: plc.DataType, stream: Stream
-) -> plc.Column:
-    (gathered,) = plc.copying.gather(
-        plc.Table([offsets]),
-        index,
-        plc.copying.OutOfBoundsPolicy.DONT_CHECK,
-        stream=stream,
-    ).columns()
-    return plc.unary.cast(gathered, duration_type, stream=stream)
-
-
-def _upper_bound(
-    haystack: plc.Column, needles: plc.Column, stream: Stream
-) -> plc.Column:
-    return plc.search.upper_bound(
-        plc.Table([haystack]),
-        plc.Table([needles]),
-        [plc.types.Order.ASCENDING],
-        [plc.types.NullOrder.BEFORE],
-        stream=stream,
-    )
-
-
 def _local_wall_clock(
-    column: plc.Column, from_zone: str | None, stream: Stream
+    column: plc.Column, from_zone: str | None, tzif_dir: str | None, stream: Stream
 ) -> plc.Column:
     """Convert UTC timestamps to naive wall-clock timestamps in ``from_zone``."""
-    if _is_utc_like(from_zone):
+    if tzif_dir is None:
         return column
-    data = _tz_transition_columns(cast("str", from_zone), stream)
+    data = _tz_transition_columns(cast("str", from_zone), tzif_dir, stream)
     if data is None:
         return column
     transition_times, offsets = data
     unit = column.type()
     duration_type = plc.DataType(_TIMESTAMP_TO_DURATION[unit.id()])
     seconds = plc.unary.cast(column, _SECONDS_TIMESTAMP, stream=stream)
-    index = _offset_index(
-        _upper_bound(transition_times, seconds, stream), 1, offsets.size(), stream
+    positions = plc.search.upper_bound(
+        plc.Table([transition_times]),
+        plc.Table([seconds]),
+        [plc.types.Order.ASCENDING],
+        [plc.types.NullOrder.BEFORE],
+        stream=stream,
     )
-    offset = _gather_offset(offsets, index, duration_type, stream)
+    index_type = positions.type()
+    shifted = plc.binaryop.binary_operation(
+        positions,
+        plc.Scalar.from_py(1, index_type, stream=stream),
+        plc.binaryop.BinaryOperator.SUB,
+        index_type,
+        stream=stream,
+    )
+    index = plc.replace.clamp(
+        shifted,
+        plc.Scalar.from_py(0, index_type, stream=stream),
+        plc.Scalar.from_py(offsets.size() - 1, index_type, stream=stream),
+        stream=stream,
+    )
+    (gathered,) = plc.copying.gather(
+        plc.Table([offsets]),
+        index,
+        plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+        stream=stream,
+    ).columns()
+    offset = plc.unary.cast(gathered, duration_type, stream=stream)
     return plc.binaryop.binary_operation(
         column, offset, plc.binaryop.BinaryOperator.ADD, unit, stream=stream
     )
-
-
-def _all_false(size: int, stream: Stream) -> plc.Column:
-    false = plc.Scalar.from_py(False, plc.DataType(plc.TypeId.BOOL8), stream=stream)  # noqa: FBT003
-    return plc.Column.from_scalar(false, size, stream=stream)
-
-
-def _in_windows(
-    values: plc.Column, begin: plc.Column, end: plc.Column, stream: Stream
-) -> plc.Column:
-    if begin.size() == 0:
-        return _all_false(values.size(), stream)
-    labels = plc.labeling.label_bins(
-        values,
-        begin,
-        plc.labeling.Inclusive.YES,
-        end,
-        plc.labeling.Inclusive.NO,
-        stream=stream,
-    )
-    return plc.unary.is_valid(labels, stream=stream)
 
 
 def _ambiguous_nonexistent(
@@ -175,9 +108,9 @@ def _ambiguous_nonexistent(
 ) -> tuple[plc.Column, plc.Column]:
     """Return boolean masks for ambiguous and non-existent wall-clock times."""
     size = offsets.size()
-    new_transitions = _slice_column(transition_times, 1, size, stream)
-    new_offsets = _slice_column(offsets, 1, size, stream)
-    old_offsets = _slice_column(offsets, 0, size - 1, stream)
+    (new_transitions,) = plc.copying.slice(transition_times, [1, size], stream=stream)
+    (new_offsets,) = plc.copying.slice(offsets, [1, size], stream=stream)
+    (old_offsets,) = plc.copying.slice(offsets, [0, size - 1], stream=stream)
     clock_new = plc.binaryop.binary_operation(
         new_transitions,
         new_offsets,
@@ -193,19 +126,33 @@ def _ambiguous_nonexistent(
         stream=stream,
     )
     bool_type = plc.DataType(plc.TypeId.BOOL8)
+    false = plc.Scalar.from_py(False, bool_type, stream=stream)  # noqa: FBT003
+    n = local_seconds.size()
+
     ambiguous_cond = plc.binaryop.binary_operation(
         clock_new, clock_old, plc.binaryop.BinaryOperator.LESS, bool_type, stream=stream
     )
-    is_ambiguous = _in_windows(
-        local_seconds,
-        plc.stream_compaction.apply_boolean_mask(
-            plc.Table([clock_new]), ambiguous_cond, stream=stream
-        ).columns()[0],
-        plc.stream_compaction.apply_boolean_mask(
-            plc.Table([clock_old]), ambiguous_cond, stream=stream
-        ).columns()[0],
-        stream,
-    )
+    (ambiguous_begin,) = plc.stream_compaction.apply_boolean_mask(
+        plc.Table([clock_new]), ambiguous_cond, stream=stream
+    ).columns()
+    (ambiguous_end,) = plc.stream_compaction.apply_boolean_mask(
+        plc.Table([clock_old]), ambiguous_cond, stream=stream
+    ).columns()
+    if ambiguous_begin.size() == 0:
+        is_ambiguous = plc.Column.from_scalar(false, n, stream=stream)
+    else:
+        is_ambiguous = plc.unary.is_valid(
+            plc.labeling.label_bins(
+                local_seconds,
+                ambiguous_begin,
+                plc.labeling.Inclusive.YES,
+                ambiguous_end,
+                plc.labeling.Inclusive.NO,
+                stream=stream,
+            ),
+            stream=stream,
+        )
+
     nonexistent_cond = plc.binaryop.binary_operation(
         clock_new,
         clock_old,
@@ -213,48 +160,27 @@ def _ambiguous_nonexistent(
         bool_type,
         stream=stream,
     )
-    is_nonexistent = _in_windows(
-        local_seconds,
-        plc.stream_compaction.apply_boolean_mask(
-            plc.Table([clock_old]), nonexistent_cond, stream=stream
-        ).columns()[0],
-        plc.stream_compaction.apply_boolean_mask(
-            plc.Table([clock_new]), nonexistent_cond, stream=stream
-        ).columns()[0],
-        stream,
-    )
-    return is_ambiguous, is_nonexistent
-
-
-def _reduce_any(mask: plc.Column, stream: Stream) -> bool:
-    return bool(
-        plc.reduce.reduce(
-            mask,
-            plc.aggregation.any(),
-            plc.DataType(plc.TypeId.BOOL8),
+    (nonexistent_begin,) = plc.stream_compaction.apply_boolean_mask(
+        plc.Table([clock_old]), nonexistent_cond, stream=stream
+    ).columns()
+    (nonexistent_end,) = plc.stream_compaction.apply_boolean_mask(
+        plc.Table([clock_new]), nonexistent_cond, stream=stream
+    ).columns()
+    if nonexistent_begin.size() == 0:
+        is_nonexistent = plc.Column.from_scalar(false, n, stream=stream)
+    else:
+        is_nonexistent = plc.unary.is_valid(
+            plc.labeling.label_bins(
+                local_seconds,
+                nonexistent_begin,
+                plc.labeling.Inclusive.YES,
+                nonexistent_end,
+                plc.labeling.Inclusive.NO,
+                stream=stream,
+            ),
             stream=stream,
-        ).to_py(stream=stream)
-    )
-
-
-def _string_equals(column: plc.Column, value: str, stream: Stream) -> plc.Column:
-    return plc.binaryop.binary_operation(
-        column,
-        plc.Scalar.from_py(value, plc.DataType(plc.TypeId.STRING), stream=stream),
-        plc.binaryop.BinaryOperator.EQUAL,
-        plc.DataType(plc.TypeId.BOOL8),
-        stream=stream,
-    )
-
-
-def _logical_and(left: plc.Column, right: plc.Column, stream: Stream) -> plc.Column:
-    return plc.binaryop.binary_operation(
-        left,
-        right,
-        plc.binaryop.BinaryOperator.LOGICAL_AND,
-        plc.DataType(plc.TypeId.BOOL8),
-        stream=stream,
-    )
+        )
+    return is_ambiguous, is_nonexistent
 
 
 def _apply_ambiguous(
@@ -266,9 +192,14 @@ def _apply_ambiguous(
     null_scalar: plc.Scalar,
     stream: Stream,
 ) -> plc.Column:
+    bool_type = plc.DataType(plc.TypeId.BOOL8)
     if ambiguous_scalar is not None:
         if ambiguous_scalar == "raise":
-            if _reduce_any(is_ambiguous, stream):
+            if bool(
+                plc.reduce.reduce(
+                    is_ambiguous, plc.aggregation.any(), bool_type, stream=stream
+                ).to_py(stream=stream)
+            ):
                 raise ComputeError(
                     "datetime is ambiguous in the given time zone. Please use "
                     "`ambiguous` to tell how it should be localized."
@@ -283,32 +214,59 @@ def _apply_ambiguous(
         return plc.copying.copy_if_else(
             null_scalar, utc_latest, is_ambiguous, stream=stream
         )
-    if _reduce_any(
-        _logical_and(
-            is_ambiguous, _string_equals(ambiguous_column, "raise", stream), stream
+    string_type = plc.DataType(plc.TypeId.STRING)
+    is_raise = plc.binaryop.binary_operation(
+        is_ambiguous,
+        plc.binaryop.binary_operation(
+            ambiguous_column,
+            plc.Scalar.from_py("raise", string_type, stream=stream),
+            plc.binaryop.BinaryOperator.EQUAL,
+            bool_type,
+            stream=stream,
         ),
-        stream,
+        plc.binaryop.BinaryOperator.LOGICAL_AND,
+        bool_type,
+        stream=stream,
+    )
+    if bool(
+        plc.reduce.reduce(
+            is_raise, plc.aggregation.any(), bool_type, stream=stream
+        ).to_py(stream=stream)
     ):
         raise ComputeError(
             "datetime is ambiguous in the given time zone. Please use `ambiguous` "
             "to tell how it should be localized."
         )
+    is_earliest = plc.binaryop.binary_operation(
+        is_ambiguous,
+        plc.binaryop.binary_operation(
+            ambiguous_column,
+            plc.Scalar.from_py("earliest", string_type, stream=stream),
+            plc.binaryop.BinaryOperator.EQUAL,
+            bool_type,
+            stream=stream,
+        ),
+        plc.binaryop.BinaryOperator.LOGICAL_AND,
+        bool_type,
+        stream=stream,
+    )
     result = plc.copying.copy_if_else(
-        utc_earliest,
-        utc_latest,
-        _logical_and(
-            is_ambiguous, _string_equals(ambiguous_column, "earliest", stream), stream
+        utc_earliest, utc_latest, is_earliest, stream=stream
+    )
+    is_null = plc.binaryop.binary_operation(
+        is_ambiguous,
+        plc.binaryop.binary_operation(
+            ambiguous_column,
+            plc.Scalar.from_py("null", string_type, stream=stream),
+            plc.binaryop.BinaryOperator.EQUAL,
+            bool_type,
+            stream=stream,
         ),
+        plc.binaryop.BinaryOperator.LOGICAL_AND,
+        bool_type,
         stream=stream,
     )
-    return plc.copying.copy_if_else(
-        null_scalar,
-        result,
-        _logical_and(
-            is_ambiguous, _string_equals(ambiguous_column, "null", stream), stream
-        ),
-        stream=stream,
-    )
+    return plc.copying.copy_if_else(null_scalar, result, is_null, stream=stream)
 
 
 def _apply_nonexistent(
@@ -319,7 +277,14 @@ def _apply_nonexistent(
     stream: Stream,
 ) -> plc.Column:
     if non_existent == "raise":
-        if _reduce_any(is_nonexistent, stream):
+        if bool(
+            plc.reduce.reduce(
+                is_nonexistent,
+                plc.aggregation.any(),
+                plc.DataType(plc.TypeId.BOOL8),
+                stream=stream,
+            ).to_py(stream=stream)
+        ):
             raise ComputeError(
                 "datetime is non-existent in the given time zone. You may be able "
                 "to use `non_existent='null'` to return `null` in this case."
@@ -331,13 +296,14 @@ def _apply_nonexistent(
 def _localize(
     local: plc.Column,
     to_zone: str,
+    tzif_dir: str,
     ambiguous_scalar: str | None,
     ambiguous_column: plc.Column,
     non_existent: str,
     stream: Stream,
 ) -> plc.Column:
     """Interpret naive wall-clock timestamps as local times in ``to_zone``."""
-    data = _tz_transition_columns(to_zone, stream)
+    data = _tz_transition_columns(to_zone, tzif_dir, stream)
     if data is None:
         return local
     transition_times, offsets = data
@@ -352,19 +318,60 @@ def _localize(
         _SECONDS_TIMESTAMP,
         stream=stream,
     )
-    positions = _upper_bound(local_transitions, local_seconds, stream)
-    offset_latest = _gather_offset(
-        offsets, _offset_index(positions, 1, size, stream), duration_type, stream
+    positions = plc.search.upper_bound(
+        plc.Table([local_transitions]),
+        plc.Table([local_seconds]),
+        [plc.types.Order.ASCENDING],
+        [plc.types.NullOrder.BEFORE],
+        stream=stream,
     )
+    index_type = positions.type()
+    lower = plc.Scalar.from_py(0, index_type, stream=stream)
+    upper = plc.Scalar.from_py(size - 1, index_type, stream=stream)
+    index_latest = plc.replace.clamp(
+        plc.binaryop.binary_operation(
+            positions,
+            plc.Scalar.from_py(1, index_type, stream=stream),
+            plc.binaryop.BinaryOperator.SUB,
+            index_type,
+            stream=stream,
+        ),
+        lower,
+        upper,
+        stream=stream,
+    )
+    (gathered_latest,) = plc.copying.gather(
+        plc.Table([offsets]),
+        index_latest,
+        plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+        stream=stream,
+    ).columns()
+    offset_latest = plc.unary.cast(gathered_latest, duration_type, stream=stream)
     utc = plc.binaryop.binary_operation(
         local, offset_latest, plc.binaryop.BinaryOperator.SUB, unit, stream=stream
     )
     is_ambiguous, is_nonexistent = _ambiguous_nonexistent(
         transition_times, offsets, local_seconds, stream
     )
-    offset_earliest = _gather_offset(
-        offsets, _offset_index(positions, 2, size, stream), duration_type, stream
+    index_earliest = plc.replace.clamp(
+        plc.binaryop.binary_operation(
+            positions,
+            plc.Scalar.from_py(2, index_type, stream=stream),
+            plc.binaryop.BinaryOperator.SUB,
+            index_type,
+            stream=stream,
+        ),
+        lower,
+        upper,
+        stream=stream,
     )
+    (gathered_earliest,) = plc.copying.gather(
+        plc.Table([offsets]),
+        index_earliest,
+        plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+        stream=stream,
+    ).columns()
+    offset_earliest = plc.unary.cast(gathered_earliest, duration_type, stream=stream)
     utc_earliest = plc.binaryop.binary_operation(
         local, offset_earliest, plc.binaryop.BinaryOperator.SUB, unit, stream=stream
     )
@@ -539,14 +546,31 @@ class TemporalFunction(Expr):
             ambiguous = self.children[1]
             if isinstance(ambiguous, Literal):
                 self.ambiguous_scalar = ambiguous.value
-            from_zone = _time_zone(self.children[0].dtype)
+            from_zone = cast(
+                "pl.Datetime", self.children[0].dtype.polars_type
+            ).time_zone
             to_zone = self.options[0]
+            tzif_dirs: list[str | None] = []
             for zone in (from_zone, to_zone):
-                if not _is_utc_like(zone) and _tzif_dir(cast("str", zone)) is None:
+                if zone is None or zone == "UTC":
+                    # Normalize to not needing a tzif_dir lookup.
+                    tzif_dirs.append(None)
+                    continue
+                tzif_dir = next(
+                    (
+                        search_path
+                        for search_path in zoneinfo.TZPATH
+                        if (Path(search_path) / zone).is_file()
+                    ),
+                    None,
+                )
+                if tzif_dir is None:
                     raise NotImplementedError(
                         f"Time zone {zone!r} not found in system time zone data "
                         "(zoneinfo.TZPATH)"
                     )
+                tzif_dirs.append(tzif_dir)
+            self.options = (*self.options, *tzif_dirs)
         elif self.name in {
             TemporalFunction.Name.Truncate,
             TemporalFunction.Name.Round,
@@ -575,16 +599,15 @@ class TemporalFunction(Expr):
             )
         if self.name is TemporalFunction.Name.ReplaceTimeZone:
             column, ambiguous = columns
-            from_zone = _time_zone(self.children[0].dtype)
+            from_zone = cast(
+                "pl.Datetime", self.children[0].dtype.polars_type
+            ).time_zone
             to_zone = self.options[0]
             non_existent = self.options[1]
+            from_dir, to_dir = self.options[-2], self.options[-1]
             stream = df.stream
-            same_zone = from_zone == to_zone or (
-                _is_utc_like(from_zone) and _is_utc_like(to_zone)
-            )
-            if same_zone and (
-                _is_utc_like(from_zone) or self.ambiguous_scalar == "raise"
-            ):
+            same_zone = from_zone == to_zone or (from_dir is None and to_dir is None)
+            if same_zone and (from_dir is None or self.ambiguous_scalar == "raise"):
                 return Column(
                     column.obj,
                     dtype=self.dtype,
@@ -593,13 +616,14 @@ class TemporalFunction(Expr):
                     null_order=column.null_order,
                     name=column.name,
                 )
-            local = _local_wall_clock(column.obj, from_zone, stream)
-            if _is_utc_like(to_zone):
+            local = _local_wall_clock(column.obj, from_zone, from_dir, stream)
+            if to_dir is None:
                 return Column(local, dtype=self.dtype)
             return Column(
                 _localize(
                     local,
                     to_zone,
+                    to_dir,
                     self.ambiguous_scalar,
                     ambiguous.obj,
                     non_existent,
