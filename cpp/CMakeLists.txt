@@ -1263,7 +1263,7 @@ endif()
 # their symbols are available to downstream users linking to libcudf.so without needing to link
 # against them directly. Public absorbed dependencies still promote their public transitive
 # dependencies and export set metadata into cudf's interface.
-set(_absorbed_deps rmm rapids_logger spdlog)
+set(_absorbed_deps rmm rapids_logger)
 foreach(_dep IN LISTS _absorbed_deps)
   if(NOT TARGET "${_dep}::${_dep}")
     continue()
@@ -1335,6 +1335,18 @@ foreach(_dep IN LISTS _absorbed_deps)
     endforeach()
   endforeach()
 endforeach()
+
+if(TARGET spdlog::spdlog)
+  get_target_property(_spdlog_link spdlog::spdlog NAME)
+  get_target_property(_spdlog_type ${_spdlog_link} TYPE)
+  if(BUILD_SHARED_LIBS AND _spdlog_type STREQUAL "STATIC_LIBRARY")
+    target_link_libraries(
+      cudf PRIVATE "$<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,${_spdlog_link}>>"
+    )
+  else()
+    target_link_libraries(cudf PRIVATE ${_spdlog_link})
+  endif()
+endif()
 
 # Specify the target module library dependencies We do this after all the WHOLE_ARCHIVES to protect
 # against any of these libraries ever adding a rapids_logger / rmm hidden dependency
