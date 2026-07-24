@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Topology-aware hardware binding."""
 
@@ -58,7 +58,7 @@ class HardwareBindingPolicy:
     """
 
     skip_under_rrun: bool = True
-    enabled: bool = True
+    enabled: bool = False
     enable_once: bool = True
     raise_on_fail: bool = False
     cpu: bool = True
