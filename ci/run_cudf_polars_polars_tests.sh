@@ -6,7 +6,7 @@ set -euo pipefail
 
 TIMEOUT_TOOL_PATH="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/timeout_with_stack.py
 
-# Support invoking run_cudf_polars_pytests.sh outside the script directory
+# Support invoking from outside the script directory
 # Assumption, polars has been cloned in the root of the repo.
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../polars/
 
@@ -90,7 +90,6 @@ python "${TIMEOUT_TOOL_PATH}" --enable-python 3600 \
        --import-mode=importlib \
        --cache-clear \
        -x \
-       -v \
        -m "" \
        -p cudf_polars.testing.inject_gpu_engine \
        -W ignore::ResourceWarning \

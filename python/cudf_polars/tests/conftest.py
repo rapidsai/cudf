@@ -392,18 +392,24 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
     )
 
 
+@pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(
     session: pytest.Session, config: pytest.Config, items: list[pytest.Item]
 ):
     """Apply ``skip_on_streaming_engine`` markers to streaming engine items."""
     for item in items:
+        callspec = getattr(item, "callspec", None)
+        engine_param = (
+            callspec.params.get("_engine_param") if callspec is not None else None
+        )
+        if engine_param is not None and engine_param != "in-memory":
+            # Group streaming engines by engine type so that running with
+            # --dist=loadgroup schedules the same engine on the same xdist
+            # worker.
+            item.add_marker(pytest.mark.xdist_group(engine_param))
         marker = item.get_closest_marker("skip_on_streaming_engine")
         if marker is None:
             continue
-        callspec = getattr(item, "callspec", None)
-        if callspec is None:
-            continue
-        engine_param = callspec.params.get("_engine_param")
         if engine_param is None or engine_param == "in-memory":
             continue
         engine_filter = marker.kwargs.get("engine")
