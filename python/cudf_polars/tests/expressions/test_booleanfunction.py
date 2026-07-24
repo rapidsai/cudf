@@ -352,9 +352,8 @@ def test_boolean_is_sorted(
     "expr",
     [
         pl.sum_horizontal("a", "b"),
-        pl.min_horizontal("a", "b"),
     ],
-    ids=["sum_horizontal", "min_horizontal"],
+    ids=["sum_horizontal"],
 )
 def test_numeric_horizontal_unsupported(engine: pl.GPUEngine, expr: pl.Expr) -> None:
     df = pl.LazyFrame({"a": [1, 2, 3], "b": [4, 5, 6]})

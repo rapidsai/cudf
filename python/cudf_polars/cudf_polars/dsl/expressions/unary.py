@@ -160,8 +160,11 @@ class UnaryFunction(Expr):
     )
     _horizontal_fold_ops: ClassVar[dict[str, plc.binaryop.BinaryOperator]] = {
         "max_horizontal": plc.binaryop.BinaryOperator.NULL_MAX,
+        "min_horizontal": plc.binaryop.BinaryOperator.NULL_MIN,
     }
-    _supported_horizontal_fns = frozenset({"max_horizontal", "mean_horizontal"})
+    _supported_horizontal_fns = frozenset(
+        {"max_horizontal", "mean_horizontal", "min_horizontal"}
+    )
     _supported_math_fns = frozenset(
         {
             "cot",
@@ -219,7 +222,7 @@ class UnaryFunction(Expr):
             raise NotImplementedError(
                 "Filling null values with limit specified is not yet supported."
             )
-        if self.name == "max_horizontal":
+        if self.name in UnaryFunction._horizontal_fold_ops:
             op = UnaryFunction._horizontal_fold_ops[self.name]
             if not plc.binaryop.is_supported_operation(
                 self.dtype.plc_type,
@@ -1454,7 +1457,7 @@ class UnaryFunction(Expr):
                     stream=df.stream,
                 )
             return Column(clamped, dtype=self.dtype)
-        elif self.name == "max_horizontal":
+        elif self.name in UnaryFunction._horizontal_fold_ops:
             op = UnaryFunction._horizontal_fold_ops[self.name]
             columns = [
                 col.obj
