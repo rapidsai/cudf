@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -104,6 +104,8 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   // initialize the rest of the elements
   d_prog->_max_insts = insts_count;
   d_prog->_prog_size = memsize + sizeof(reprog_device);
+  d_prog->_empty_match_possible =
+    (h_prog.compute_match_flags() == cudf::strings::detail::match_flags::EMPTY_MATCH);
 
   // copy flat prog to device memory
   cudf::detail::cuda_memcpy_async<u_char>(*d_buffer, h_buffer, stream);
@@ -114,6 +116,7 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
     delete d_buffer;
   };
 
+  stream.synchronize();  // wait for h_buffer to finish copying
   return std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>(d_prog, deleter);
 }
 
@@ -145,7 +148,7 @@ void reprog_device::set_working_memory(void* buffer, int32_t thread_count, int32
 {
   _buffer       = buffer;
   _thread_count = thread_count;
-  _max_insts    = _max_insts > 0 ? _max_insts : _insts_count;
+  _max_insts    = max_insts > 0 ? max_insts : _insts_count;
 }
 
 int32_t reprog_device::compute_shared_memory_size() const
@@ -153,7 +156,7 @@ int32_t reprog_device::compute_shared_memory_size() const
   return _prog_size < MAX_SHARED_MEM ? static_cast<int32_t>(_prog_size) : 0;
 }
 
-std::size_t compute_working_memory_size(int32_t num_threads, int32_t insts_count)
+std::size_t reprog_device::compute_working_memory_size(int32_t num_threads, int32_t insts_count)
 {
   return relist::alloc_size(insts_count, num_threads) * 2;
 }

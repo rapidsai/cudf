@@ -4,7 +4,6 @@
 from typing import Any, Self
 
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
-from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.io.types import (
     CompressionType,
@@ -16,6 +15,7 @@ from pylibcudf.io.types import (
 )
 from pylibcudf.table import Table
 from pylibcudf.types import DataType
+from pylibcudf.utils import CudaStreamLike
 
 class OrcReaderOptions:
     def set_num_rows(self, nrows: int) -> None: ...
@@ -34,7 +34,7 @@ class OrcReaderOptionsBuilder:
 
 def read_orc(
     options: OrcReaderOptions,
-    stream: Stream | None = None,
+    stream: CudaStreamLike | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> TableWithMetadata: ...
 
@@ -59,7 +59,7 @@ class ParsedOrcStatistics:
 
 def read_parsed_orc_statistics(
     source_info: SourceInfo,
-    stream: Stream | None = None,
+    stream: CudaStreamLike | None = None,
 ) -> ParsedOrcStatistics: ...
 
 class OrcWriterOptions:
@@ -79,7 +79,7 @@ class OrcWriterOptionsBuilder:
     def build(self) -> OrcWriterOptions: ...
 
 def write_orc(
-    options: OrcWriterOptions, stream: Stream | None = None
+    options: OrcWriterOptions, stream: CudaStreamLike | None = None
 ) -> None: ...
 def is_supported_read_orc(compression: CompressionType) -> bool: ...
 def is_supported_write_orc(compression: CompressionType) -> bool: ...
@@ -90,7 +90,7 @@ class OrcChunkedWriter:
     def write(self, table: Table) -> None: ...
     @staticmethod
     def from_options(
-        options: ChunkedOrcWriterOptions, stream: Stream | None = None
+        options: ChunkedOrcWriterOptions, stream: CudaStreamLike | None = None
     ) -> OrcChunkedWriter: ...
 
 class ChunkedOrcWriterOptions:

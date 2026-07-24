@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -12,6 +12,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <span>
 #include <vector>
 
 namespace cudf {
@@ -145,14 +146,14 @@ cudf::size_type null_count(bitmask_type const* bitmask,
  * @copydoc cudf::segmented_valid_count
  */
 std::vector<size_type> segmented_valid_count(bitmask_type const* bitmask,
-                                             host_span<size_type const> indices,
+                                             std::span<size_type const> indices,
                                              rmm::cuda_stream_view stream);
 
 /**
  * @copydoc cudf::segmented_null_count
  */
 std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
-                                            host_span<size_type const> indices,
+                                            std::span<size_type const> indices,
                                             rmm::cuda_stream_view stream);
 
 /**

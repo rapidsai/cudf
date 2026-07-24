@@ -37,8 +37,6 @@
 
 #include <cuda/iterator>
 #include <cuda/std/tuple>
-#include <thrust/iterator/discard_iterator.h>
-#include <thrust/iterator/zip_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
@@ -131,6 +129,7 @@ struct replace_nulls_column_kernel_forwarder {
 
     replace<<<grid.num_blocks, BLOCK_SIZE, 0, stream.value()>>>(
       *device_in, *device_replacement, *device_out, valid_count);
+    CUDF_CUDA_TRY(cudaGetLastError());
 
     if (output_view.nullable()) {
       output->set_null_count(output->size() - valid_counter.value(stream));
@@ -273,11 +272,11 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
   auto device_in = cudf::column_device_view::create(input, stream);
   auto index     = cuda::counting_iterator<cudf::size_type>{0};
   auto valid_it  = cudf::detail::make_validity_iterator(*device_in);
-  auto in_begin  = thrust::make_zip_iterator(cuda::std::make_tuple(index, valid_it));
+  auto in_begin  = cuda::make_zip_iterator(cuda::std::make_tuple(index, valid_it));
 
   rmm::device_uvector<cudf::size_type> gather_map(input.size(), stream);
-  auto gm_begin = thrust::make_zip_iterator(
-    cuda::std::make_tuple(gather_map.begin(), thrust::make_discard_iterator()));
+  auto gm_begin = cuda::make_zip_iterator(
+    cuda::std::make_tuple(gather_map.begin(), cuda::make_discard_iterator()));
 
   auto func = cudf::detail::replace_policy_functor();
   if (replace_policy == cudf::replace_policy::PRECEDING) {

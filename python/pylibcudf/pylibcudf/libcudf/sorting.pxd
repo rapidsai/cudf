@@ -17,7 +17,7 @@ from pylibcudf.libcudf.types cimport (
     null_order,
     size_type
 )
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
@@ -26,7 +26,7 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
         table_view source_table,
         vector[order] column_order,
         vector[null_order] null_precedence,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -34,7 +34,7 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
         table_view source_table,
         vector[order] column_order,
         vector[null_order] null_precedence,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -45,7 +45,7 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
         null_policy null_handling,
         null_order null_precedence,
         bool percentage,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -53,7 +53,7 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
         const table_view& table,
         vector[order] column_order,
         vector[null_order] null_precedence,
-        cuda_stream_view stream
+        cudaStream_t stream
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[table] segmented_sort_by_key(
@@ -62,7 +62,7 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
         const column_view& segment_offsets,
         vector[order] column_order,
         vector[null_order] null_precedence,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -72,7 +72,7 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
         const column_view& segment_offsets,
         vector[order] column_order,
         vector[null_order] null_precedence,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -81,7 +81,7 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
         const table_view& keys,
         vector[order] column_order,
         vector[null_order] null_precedence,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -90,7 +90,7 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
         const table_view& keys,
         vector[order] column_order,
         vector[null_order] null_precedence,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -98,7 +98,7 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
         table_view source_table,
         vector[order] column_order,
         vector[null_order] null_precedence,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -106,7 +106,7 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
         table_view source_table,
         vector[order] column_order,
         vector[null_order] null_precedence,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -114,7 +114,7 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
         const column_view& col,
         size_type k,
         order sort_order,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -122,6 +122,6 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
         const column_view& col,
         size_type k,
         order sort_order,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler

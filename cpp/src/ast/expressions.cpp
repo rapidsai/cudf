@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "jit/row_ir.hpp"
@@ -34,6 +34,32 @@ operation::operation(ast_operator op, expression const& left, expression const& 
 cudf::size_type literal::accept(detail::expression_parser& visitor) const
 {
   return visitor.visit(*this);
+}
+
+cudf::data_type column_reference::get_data_type(table_view const& table) const
+{
+  CUDF_EXPECTS(get_column_index() >= 0 && get_column_index() < table.num_columns(),
+               "column index out of range",
+               std::out_of_range);
+  return table.column(get_column_index()).type();
+}
+
+cudf::data_type column_reference::get_data_type(table_view const& left_table,
+                                                table_view const& right_table) const
+{
+  auto const table = [&] {
+    if (get_table_source() == table_reference::LEFT) {
+      return left_table;
+    } else if (get_table_source() == table_reference::RIGHT) {
+      return right_table;
+    } else {
+      CUDF_FAIL("Column reference data type cannot be determined from unknown table.");
+    }
+  }();
+  CUDF_EXPECTS(get_column_index() >= 0 && get_column_index() < table.num_columns(),
+               "column index out of range",
+               std::out_of_range);
+  return table.column(get_column_index()).type();
 }
 
 cudf::size_type column_reference::accept(detail::expression_parser& visitor) const
@@ -80,25 +106,24 @@ bool operation::may_evaluate_null(table_view const& left,
                      });
 };
 
-cudf::size_type detail::filter_predicate::accept(detail::expression_parser& visitor) const
+cudf::size_type detail::predicate::accept(detail::expression_parser& visitor) const
 {
-  CUDF_FAIL(
-    "filter_predicate is an internal expression and should not be visited by expression_parser",
-    std::invalid_argument);
+  CUDF_FAIL("predicate is an internal expression and should not be visited by expression_parser",
+            std::invalid_argument);
 }
 
-std::reference_wrapper<expression const> detail::filter_predicate::accept(
+std::reference_wrapper<expression const> detail::predicate::accept(
   detail::expression_transformer& visitor) const
 {
   CUDF_FAIL(
-    "filter_predicate is an internal expression and should not be visited by "
+    "predicate is an internal expression and should not be visited by "
     "expression_transformer",
     std::invalid_argument);
 }
 
-bool detail::filter_predicate::may_evaluate_null(table_view const& left,
-                                                 table_view const& right,
-                                                 rmm::cuda_stream_view stream) const
+bool detail::predicate::may_evaluate_null(table_view const& left,
+                                          table_view const& right,
+                                          rmm::cuda_stream_view stream) const
 {
   return false;
 }
@@ -135,7 +160,7 @@ std::unique_ptr<cudf::detail::row_ir::node> column_name_reference::accept(
     std::invalid_argument);
 }
 
-std::unique_ptr<cudf::detail::row_ir::node> detail::filter_predicate::accept(
+std::unique_ptr<cudf::detail::row_ir::node> detail::predicate::accept(
   cudf::detail::row_ir::ast_converter& converter) const
 {
   return converter.add_ir_node(*this);

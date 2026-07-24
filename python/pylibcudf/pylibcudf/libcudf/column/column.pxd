@@ -11,7 +11,7 @@ from pylibcudf.libcudf.column.column_view cimport (
 from pylibcudf.libcudf.types cimport data_type, size_type
 
 from rmm.librmm.device_buffer cimport device_buffer
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
@@ -25,13 +25,13 @@ cdef extern from "cudf/column/column.hpp" namespace "cudf" nogil:
         column() except +libcudf_exception_handler
         column(
             const column& other,
-            cuda_stream_view stream,
+            cudaStream_t stream,
             device_async_resource_ref mr
         ) except +libcudf_exception_handler
 
         column(
             column_view view,
-            cuda_stream_view stream,
+            cudaStream_t stream,
             device_async_resource_ref mr
         ) except +libcudf_exception_handler
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -67,18 +67,18 @@ column_views_to_device(std::span<ColumnView const> views,
   }
 
   rmm::device_uvector<DeviceView> device_array{handles.size(), stream, mr};
-  cudf::detail::cuda_memcpy_async<DeviceView>(device_array, host_array, stream);
+  cudf::detail::cuda_memcpy<DeviceView>(device_array, host_array, stream);
 
   return std::make_tuple(std::move(handles), std::move(device_array));
 }
 
-std::vector<std::string> input_type_names(
-  std::span<std::variant<column_view, scalar_column_view> const> views);
+kernel get_udf_kernel(std::string const& source_file,
+                      std::string const& kernel_name,
+                      std::string const& cuda_source);
 
-jitify2::Kernel get_udf_kernel(jitify2::PreprocessedProgramData const& preprocessed_program_data,
-                               std::string const& kernel_name,
-                               std::string const& cuda_source,
-                               std::vector<std::string> const& extra_options = {});
+rtcx::blob get_udf_kernel_fragment(std::string const& source_file,
+                                   std::string const& kernel_name,
+                                   std::string const& udf_type);
 
 }  // namespace jit
 }  // namespace cudf

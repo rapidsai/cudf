@@ -7,7 +7,7 @@ from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.types cimport size_type
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
@@ -18,7 +18,7 @@ cdef extern from "nvtext/stemmer.hpp" namespace "nvtext" nogil:
 
     cdef unique_ptr[column] porter_stemmer_measure(
         const column_view & strings,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -26,12 +26,12 @@ cdef extern from "nvtext/stemmer.hpp" namespace "nvtext" nogil:
         column_view source_strings,
         letter_type ltype,
         size_type character_index,
-        cuda_stream_view stream) except +libcudf_exception_handler
+        cudaStream_t stream) except +libcudf_exception_handler
 
     cdef unique_ptr[column] is_letter(
         column_view source_strings,
         letter_type ltype,
         column_view indices,
-        cuda_stream_view stream) except +libcudf_exception_handler
+        cudaStream_t stream) except +libcudf_exception_handler
 
 ctypedef int32_t underlying_type_t_letter_type

@@ -26,8 +26,6 @@
 
 namespace cudf::groupby::detail::hash {
 
-namespace {
-
 /**
  * @brief Compute and return an array mapping each input row to its corresponding key index in
  * the input keys table.
@@ -157,8 +155,6 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_s
                                             mr);
   return {std::move(dense_results), std::move(unique_keys)};
 }
-
-}  // namespace
 
 template <typename SetType>
 std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_global_memory_aggs(

@@ -4,6 +4,7 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
@@ -88,6 +89,8 @@ static void BM_transform(nvbench::state& state)
   state.add_global_memory_reads<key_type>(static_cast<std::size_t>(num_rows) * (tree_levels + 1));
   state.add_global_memory_writes<key_type>(num_rows);
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     cudf::transform_extended(inputs,
                              code,
@@ -99,6 +102,9 @@ static void BM_transform(nvbench::state& state)
                              cudf::output_nullability::PRESERVE,
                              launch.get_stream().get_stream());
   });
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 #define AST_TRANSFORM_BENCHMARK_DEFINE(name, key_type, tree_type, reuse_columns, nullable) \

@@ -315,5 +315,6 @@ void compute_shared_memory_aggs(cudf::size_type grid_size,
     d_agg_kinds,
     shmem_agg_size,
     offsets_size);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 }  // namespace cudf::groupby::detail::hash

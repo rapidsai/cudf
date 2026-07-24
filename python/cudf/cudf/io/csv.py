@@ -1,9 +1,9 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import csv
 import itertools
-import warnings
 from collections.abc import Collection, Mapping
 from io import BytesIO, StringIO
 from typing import TYPE_CHECKING, cast
@@ -76,19 +76,11 @@ def read_csv(
     quoting: int = 0,
     doublequote: bool = True,
     comment: str | None = None,
-    delim_whitespace: bool = False,
     byte_range: list[int] | tuple[int, int] | None = None,
     storage_options=None,
     bytes_per_thread: int | None = None,
 ) -> DataFrame:
     """{docstring}"""
-
-    if delim_whitespace is not False:
-        warnings.warn(
-            "The 'delim_whitespace' keyword in pd.read_csv is deprecated and "
-            "will be removed in a future version. Use ``sep='\\s+'`` instead",
-            FutureWarning,
-        )
 
     if bytes_per_thread is None:
         bytes_per_thread = ioutils._BYTES_PER_THREAD_DEFAULT
@@ -109,7 +101,6 @@ def read_csv(
     _validate_args(
         delimiter,
         sep,
-        delim_whitespace,
         decimal,
         thousands,
         nrows,
@@ -186,7 +177,9 @@ def read_csv(
             else:
                 dtype = cudf_dtype(dtype)
             cudf_dtypes = dtype
-            cast(list, plc_dtypes).append(_get_plc_data_type_from_dtype(dtype))
+            cast("list", plc_dtypes).append(
+                _get_plc_data_type_from_dtype(dtype)
+            )
         elif isinstance(dtype, Collection):
             for index, col_dtype in enumerate(dtype):
                 if (
@@ -197,8 +190,8 @@ def read_csv(
                     hex_cols.append(index)
                 else:
                     col_dtype = cudf_dtype(col_dtype)
-                cudf_dtypes.append(col_dtype)
-                plc_dtypes.append(_get_plc_data_type_from_dtype(col_dtype))
+                cudf_dtypes.append(col_dtype)  # type: ignore[union-attr]  # (collection branch keeps dtype accumulators as lists)
+                plc_dtypes.append(_get_plc_data_type_from_dtype(col_dtype))  # type: ignore[union-attr]  # (collection branch keeps dtype accumulators as lists)
         else:
             raise ValueError(
                 "dtype should be a scalar/str/list-like/dict-like"
@@ -229,7 +222,6 @@ def read_csv(
         .lineterminator(str(lineterminator))
         .quotechar(quotechar)
         .decimal(decimal)
-        .delim_whitespace(delim_whitespace)
         .skipinitialspace(skipinitialspace)
         .skip_blank_lines(skip_blank_lines)
         .doublequote(doublequote)
@@ -362,11 +354,15 @@ def to_csv(
     index: bool = True,
     encoding=None,
     compression=None,
+    quoting: int | None = None,
     lineterminator: str = "\n",
     chunksize: int | None = None,
     storage_options=None,
 ):
     """{docstring}"""
+
+    if quoting is None:
+        quoting = csv.QUOTE_MINIMAL
 
     if not isinstance(sep, str):
         raise TypeError(f'"sep" must be string, not {type(sep).__name__}')
@@ -383,6 +379,21 @@ def to_csv(
     if compression:
         error_msg = "Writing compressed csv is not currently supported in cudf"
         raise NotImplementedError(error_msg)
+
+    if quoting not in (csv.QUOTE_MINIMAL, csv.QUOTE_NONE):
+        raise NotImplementedError(
+            f"quoting={quoting} is not supported. "
+            "Only csv.QUOTE_MINIMAL (0) and csv.QUOTE_NONE (3) are supported."
+        )
+
+    if (
+        quoting == csv.QUOTE_NONE
+        and header
+        and index
+        and len(df) == 0
+        and len(df._column_names) == 0
+    ):
+        raise csv.Error("single empty field record must be quoted")
 
     return_as_string = False
     if path_or_buf is None:
@@ -437,6 +448,7 @@ def to_csv(
                 lineterminator=lineterminator,
                 rows_per_chunk=rows_per_chunk,
                 index=index,
+                quoting=quoting,
             )
     else:
         _plc_write_csv(
@@ -448,6 +460,7 @@ def to_csv(
             lineterminator=lineterminator,
             rows_per_chunk=rows_per_chunk,
             index=index,
+            quoting=quoting,
         )
 
     if return_as_string:
@@ -464,6 +477,7 @@ def _plc_write_csv(
     lineterminator: str = "\n",
     rows_per_chunk: int = 8,
     index: bool = True,
+    quoting: int = csv.QUOTE_MINIMAL,
 ) -> None:
     iter_columns = (
         itertools.chain(table.index._columns, table._columns)
@@ -494,6 +508,12 @@ def _plc_write_csv(
                 for name in all_names
             ]
         try:
+            # Map csv.QUOTE_* to QuoteStyle
+            quote_style = (
+                plc.io.types.QuoteStyle.NONE
+                if quoting == csv.QUOTE_NONE
+                else plc.io.types.QuoteStyle.MINIMAL
+            )
             plc.io.csv.write_csv(
                 (
                     plc.io.csv.CsvWriterOptions.builder(
@@ -507,6 +527,7 @@ def _plc_write_csv(
                     .inter_column_delimiter(str(sep))
                     .true_value("True")
                     .false_value("False")
+                    .quoting(quote_style)
                     .build()
                 )
             )
@@ -520,7 +541,6 @@ def _plc_write_csv(
 def _validate_args(
     delimiter: str | None,
     sep: str,
-    delim_whitespace: bool,
     decimal: str,
     thousands: str | None,
     nrows: int | None,
@@ -528,12 +548,6 @@ def _validate_args(
     byte_range: list[int] | tuple[int, int] | None,
     skiprows: int,
 ) -> None:
-    if delim_whitespace:
-        if delimiter is not None:
-            raise ValueError("cannot set both delimiter and delim_whitespace")
-        if sep != ",":
-            raise ValueError("cannot set both sep and delim_whitespace")
-
     # Alias sep -> delimiter.
     actual_delimiter = delimiter if delimiter else sep
 

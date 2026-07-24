@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,12 +16,13 @@
 namespace cudf {
 namespace jit {
 
-template <int32_t Index, typename Column, typename Element, bool AsScalar>
+template <int32_t Index, typename Column, typename Element, bool AsScalar, int32_t TableIndex>
 struct column_accessor {
-  static constexpr int32_t index = Index;
-  using column_type              = Column;
-  using element_type             = Element;
-  using optional_element_type    = cuda::std::optional<element_type>;
+  static constexpr int32_t index       = Index;
+  static constexpr int32_t table_index = TableIndex;
+  using column_type                    = Column;
+  using element_type                   = Element;
+  using optional_element_type          = cuda::std::optional<element_type>;
 
   static constexpr bool as_scalar = AsScalar;
 
@@ -44,7 +45,7 @@ struct column_accessor {
     return reinterpret_cast<column_type const&>(cols[index]);
   }
 
-  static __device__ element_type element(auto const* __restrict__ cols, size_type row)
+  static __device__ auto element(auto const* __restrict__ cols, size_type row)
   {
     return column(cols).template element<element_type>(map_index(row));
   }
@@ -59,8 +60,7 @@ struct column_accessor {
     return column(cols).is_valid(map_index(row));
   }
 
-  static __device__ optional_element_type nullable_element(auto const* __restrict__ cols,
-                                                           size_type row)
+  static __device__ auto nullable_element(auto const* __restrict__ cols, size_type row)
   {
     return column(cols).template nullable_element<element_type>(map_index(row));
   }

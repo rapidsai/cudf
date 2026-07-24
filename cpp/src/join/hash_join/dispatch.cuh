@@ -42,7 +42,7 @@ class pair_equal {
 };
 
 /**
- * @brief Extracts the build-side row index from a cuco hash table slot.
+ * @brief Extracts the right-side row index from a cuco hash table slot.
  */
 struct output_fn {
   __device__ constexpr cudf::size_type operator()(
@@ -75,34 +75,34 @@ class primitive_pair_equal {
 
 template <typename Fn>
 decltype(auto) dispatch_join_comparator(
-  table_view const& build_table,
-  table_view const& probe_table,
-  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_build,
-  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_probe,
+  table_view const& right_table,
+  table_view const& left_table,
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_right,
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_left,
   bool has_nulls,
   null_equality compare_nulls,
   Fn&& fn)
 {
-  auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
+  auto const left_nulls = cudf::nullate::DYNAMIC{has_nulls};
 
-  if (cudf::detail::is_primitive_row_op_compatible(build_table)) {
-    auto const d_hasher = cudf::detail::row::primitive::row_hasher{probe_nulls, preprocessed_probe};
+  if (cudf::detail::is_primitive_row_op_compatible(right_table)) {
+    auto const d_hasher = cudf::detail::row::primitive::row_hasher{left_nulls, preprocessed_left};
     auto const d_equal  = cudf::detail::row::primitive::row_equality_comparator{
-      probe_nulls, preprocessed_probe, preprocessed_build, compare_nulls};
+      left_nulls, preprocessed_left, preprocessed_right, compare_nulls};
     return std::forward<Fn>(fn)(primitive_pair_equal{d_equal}, d_hasher);
   }
 
   auto const d_hasher =
-    cudf::detail::row::hash::row_hasher{preprocessed_probe}.device_hasher(probe_nulls);
+    cudf::detail::row::hash::row_hasher{preprocessed_left}.device_hasher(left_nulls);
   auto const row_comparator =
-    cudf::detail::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
+    cudf::detail::row::equality::two_table_comparator{preprocessed_left, preprocessed_right};
 
-  if (cudf::detail::has_nested_columns(probe_table)) {
-    auto const d_equal = row_comparator.equal_to<true>(probe_nulls, compare_nulls);
+  if (cudf::detail::has_nested_columns(left_table)) {
+    auto const d_equal = row_comparator.equal_to<true>(left_nulls, compare_nulls);
     return std::forward<Fn>(fn)(pair_equal{d_equal}, d_hasher);
   }
 
-  auto const d_equal = row_comparator.equal_to<false>(probe_nulls, compare_nulls);
+  auto const d_equal = row_comparator.equal_to<false>(left_nulls, compare_nulls);
   return std::forward<Fn>(fn)(pair_equal{d_equal}, d_hasher);
 }
 

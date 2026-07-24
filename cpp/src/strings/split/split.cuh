@@ -525,6 +525,7 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
       util::div_rounding_up_safe(chars_bytes, static_cast<int64_t>(bytes_per_thread)), block_size);
     count_delimiters_kernel<DelimiterFn, block_size, bytes_per_thread>
       <<<num_blocks, block_size, 0, stream.value()>>>(delimiter_fn, chars_bytes, d_count.data());
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   // Create a vector of every delimiter position in the chars column.

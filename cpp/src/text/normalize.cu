@@ -518,6 +518,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
     parameters->aux_table.data(),
     parameters->do_lower_case,
     d_normalized.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   // This removes space added around any special tokens in the form of [ttt].
   // An alternate approach is to do a multi-replace of '[ ttt ]' with '[ttt]' right
@@ -526,6 +527,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   if (!special_tokens.empty()) {
     special_tokens_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       d_normalized.data(), chars_size, special_tokens, parameters->do_lower_case);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   // Use segmented-reduce over the non-zero codepoints to get the size of the output rows

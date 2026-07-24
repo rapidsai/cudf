@@ -26,13 +26,11 @@ def test_profile_basic() -> None:
     assert_frame_equal(result, q.collect(engine="in-memory"), check_row_order=False)
 
 
-@pytest.mark.parametrize("cluster", ["single", "distributed"])
-def test_profile_streaming_raises(cluster: str) -> None:
+def test_profile_streaming_raises(spmd_engine) -> None:
     df = pl.LazyFrame({"a": [1, 2, 3, 4]})
     q = df.sort("a").group_by("a").len()
-    engine = pl.GPUEngine(executor="streaming", executor_options={"cluster": cluster})
     with pytest.raises(
         NotImplementedError,
         match=r"profile\(\) is not supported with the streaming executor.",
     ):
-        q.profile(engine=engine)
+        q.profile(engine=spmd_engine)

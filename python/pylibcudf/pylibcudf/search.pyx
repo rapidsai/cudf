@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -6,6 +6,8 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 from pylibcudf.libcudf cimport search as cpp_search
 from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport null_order, order
 from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
@@ -13,6 +15,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from .column cimport Column
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["contains", "lower_bound", "upper_bound"]
 
@@ -21,7 +24,7 @@ cpdef Column lower_bound(
     Table needles,
     list column_order,
     list null_precedence,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Find smallest indices in haystack where needles may be inserted to retain order.
@@ -52,19 +55,22 @@ cpdef Column lower_bound(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    cdef table_view c_haystack = haystack.view()
+    cdef table_view c_needles = needles.view()
     with nogil:
         c_result = cpp_search.lower_bound(
-            haystack.view(),
-            needles.view(),
+            c_haystack,
+            c_needles,
             c_orders,
             c_null_precedence,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column upper_bound(
@@ -72,7 +78,7 @@ cpdef Column upper_bound(
     Table needles,
     list column_order,
     list null_precedence,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Find largest indices in haystack where needles may be inserted to retain order.
@@ -103,23 +109,26 @@ cpdef Column upper_bound(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    cdef table_view c_haystack = haystack.view()
+    cdef table_view c_needles = needles.view()
     with nogil:
         c_result = cpp_search.upper_bound(
-            haystack.view(),
-            needles.view(),
+            c_haystack,
+            c_needles,
             c_orders,
             c_null_precedence,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column contains(
-    Column haystack, Column needles, Stream stream=None, DeviceMemoryResource mr=None
+    Column haystack, Column needles, object stream=None, DeviceMemoryResource mr=None
 ):
     """Check whether needles are present in haystack.
 
@@ -143,14 +152,17 @@ cpdef Column contains(
     """
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    cdef column_view c_haystack = haystack.view()
+    cdef column_view c_needles = needles.view()
     with nogil:
         c_result = cpp_search.contains(
-            haystack.view(),
-            needles.view(),
-            stream.view(),
+            c_haystack,
+            c_needles,
+            _cs,
             mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)

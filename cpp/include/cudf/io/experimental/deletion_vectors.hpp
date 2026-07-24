@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,13 +13,17 @@
 
 #include <queue>
 
+/**
+ * @file
+ * @brief APIs for applying Delta Lake style deletion vectors when reading Parquet data.
+ */
+
 namespace CUDF_EXPORT cudf {
 namespace io::parquet::experimental {
 
 /**
  * @addtogroup io_readers
  * @{
- * @file
  */
 
 /**

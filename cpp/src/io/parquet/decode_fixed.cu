@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "page_data.cuh"
@@ -182,8 +182,15 @@ __device__ inline void decode_fixed_width_split_values(
   int const leaf_level_index = s->col.max_nesting_depth - 1;
   auto const data_out        = s->nesting_info[leaf_level_index].data_out;
 
-  Type const dtype      = s->col.physical_type;
-  auto const data_len   = cuda::std::distance(s->data_start, s->data_end);
+  Type const dtype    = s->col.physical_type;
+  auto const data_len = cuda::std::distance(s->data_start, s->data_end);
+
+  // Check malformed BYTE_STREAM_SPLIT pages
+  if (s->dtype_len_in <= 0 or data_len <= 0) {
+    if (t == 0) { s->set_error_code(decode_error::INVALID_BYTE_STREAM_SPLIT_SIZE); }
+    return;
+  }
+
   auto const num_values = data_len / s->dtype_len_in;
 
   int const skipped_leaf_values = s->page.skipped_leaf_values;
@@ -704,7 +711,7 @@ __device__ int update_validity_and_row_indices_lists(int32_t target_value_count,
         // and we have a valid data_out pointer, it implies this is a list column, so
         // emit an offset.
         if (in_nesting_bounds && ni.data_out != nullptr) {
-          const auto& next_ni = s->nesting_info[d_idx + 1];
+          auto const& next_ni = s->nesting_info[d_idx + 1];
           int const idx       = ni.value_count + thread_value_count;
           cudf::size_type const ofs =
             next_ni.value_count + next_thread_value_count + next_ni.page_start_value;
@@ -1008,19 +1015,11 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
   if (!(BitAnd(pages[page_idx].kernel_mask, kernel_mask_t))) { return; }
 
+  // Exit early if the page is pruned
+  if (page_mask.size() > 0 and not page_mask[page_idx]) { return; }
+
   // must come after the kernel mask check
   [[maybe_unused]] null_count_back_copier _{s, t};
-
-  // Exit super early for simple types if the page does not need to be decoded
-  if constexpr (not has_lists_t and not has_strings_t and not has_nesting_t) {
-    if (not page_mask[page_idx]) {
-      pp->num_nulls  = pp->nesting[0].batch_size;
-      pp->num_valids = 0;
-      // Set s->nesting info = nullptr to bypass `null_count_back_copier` at return
-      s->nesting_info = nullptr;
-      return;
-    }
-  }
 
   // Setup local page info
   if (!setup_local_page_info(s,
@@ -1030,23 +1029,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
                              num_rows,
                              mask_filter{kernel_mask_t},
                              page_processing_stage::DECODE)) {
-    return;
-  }
-
-  // Write list and/or string offsets and exit if the page does not need to be decoded
-  if (not page_mask[page_idx]) {
-    //  Update offsets for all list depth levels
-    if constexpr (has_lists_t) { update_list_offsets_for_pruned_pages<decode_block_size_t>(s); }
-    // Update string offsets or write string sizes for small and large strings respectively
-    if constexpr (has_strings_t) {
-      update_string_offsets_for_pruned_pages<decode_block_size_t, has_lists_t>(
-        s, initial_str_offsets, pages[page_idx]);
-    }
-    // Must be set after computing above list and string offsets
-    pp->num_nulls = pp->nesting[s->col.max_nesting_depth - 1].batch_size;
-    if constexpr (not has_lists_t) { pp->num_nulls -= s->first_row; }
-    pp->num_valids = 0;
-
     return;
   }
 
@@ -1074,7 +1056,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   rle_stream<uint32_t, decode_block_size_t, rolling_buf_size> dict_stream{dict_runs};
   if constexpr (has_dict_t) {
     dict_stream.init(
-      s->dict_bits, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
+      block, s->dict_bits, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
   }
 
   // Use dictionary stream memory for bools
@@ -1082,7 +1064,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   bool bools_are_rle_stream = (s->dict_run == 0);
   if constexpr (has_bools_t) {
     if (bools_are_rle_stream) {
-      bool_stream.init(1, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
+      bool_stream.init(
+        block, 1, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
     }
   }
   block.sync();
@@ -1289,6 +1272,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                                                      initial_str_offsets,
                                                      page_string_offset_indices,
                                                      error_code);
+      CUDF_CUDA_TRY(cudaGetLastError());
     } else {
       decode_page_data_generic<uint16_t, decode_block_size, mask>
         <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
@@ -1299,6 +1283,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                                                      initial_str_offsets,
                                                      page_string_offset_indices,
                                                      error_code);
+      CUDF_CUDA_TRY(cudaGetLastError());
     }
   };
 

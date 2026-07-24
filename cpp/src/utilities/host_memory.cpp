@@ -1,10 +1,9 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "io/utilities/getenv_or.hpp"
-
+#include <cudf/detail/utilities/getenv_or.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
@@ -12,13 +11,16 @@
 #include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/cuda_device.hpp>
+#include <rmm/detail/aligned.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <algorithm>
 #include <atomic>
+#include <cassert>
 #include <cstdlib>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
@@ -27,6 +29,51 @@
 namespace cudf {
 
 namespace {
+
+// Inlined from RMM internals after public MR definitions moved to source files:
+// https://github.com/rapidsai/rmm/pull/2416
+void* aligned_host_allocate(std::size_t bytes, std::size_t alignment)
+{
+  assert(rmm::is_supported_alignment(alignment));
+
+  // allocate memory for bytes, plus potential alignment correction,
+  // plus store of the correction offset
+  std::size_t padded_allocation_size{bytes + alignment + sizeof(std::ptrdiff_t)};
+  char* const original = static_cast<char*>(::operator new(padded_allocation_size));
+
+  // account for storage of offset immediately prior to the aligned pointer
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+  void* aligned{original + sizeof(std::ptrdiff_t)};
+
+  // std::align modifies `aligned` to point to the first aligned location
+  std::align(alignment, bytes, aligned, padded_allocation_size);
+
+  // Compute the offset between the original and aligned pointers
+  std::ptrdiff_t const offset = static_cast<char*>(aligned) - original;
+
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+  *(static_cast<std::ptrdiff_t*>(aligned) - 1) = offset;
+
+  return aligned;
+}
+
+void aligned_host_deallocate(void* ptr,
+                             [[maybe_unused]] std::size_t bytes,
+                             [[maybe_unused]] std::size_t alignment) noexcept
+{
+  assert(rmm::is_supported_alignment(alignment));
+
+  if (ptr != nullptr) {
+    // Get offset from the location immediately prior to the aligned pointer
+    // NOLINTNEXTLINE
+    std::ptrdiff_t const offset = *(reinterpret_cast<std::ptrdiff_t*>(ptr) - 1);
+
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    void* const original = static_cast<char*>(ptr) - offset;
+
+    ::operator delete(original);
+  }
+}
 
 class pinned_pool_with_fallback_memory_resource {
   using upstream_mr    = rmm::mr::pinned_host_memory_resource;
@@ -92,6 +139,8 @@ class pinned_pool_with_fallback_memory_resource {
                  std::size_t bytes,
                  std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
   {
+    if (max_pool_size_ == 0) { return upstream_mr_.allocate(stream, bytes, alignment); }
+
     try {
       return pool_->allocate(stream, bytes, alignment);
     } catch (...) {
@@ -114,6 +163,11 @@ class pinned_pool_with_fallback_memory_resource {
                   std::size_t bytes,
                   std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
   {
+    if (max_pool_size_ == 0) {
+      upstream_mr_.deallocate(stream, ptr, bytes, alignment);
+      return;
+    }
+
     bool is_fallback{false};
     {
       std::shared_lock lock(fallback_->mutex);
@@ -213,8 +267,7 @@ class new_delete_memory_resource {
   void* allocate_sync(std::size_t bytes, std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
   {
     try {
-      return rmm::detail::aligned_host_allocate(
-        bytes, alignment, [](std::size_t size) { return ::operator new(size); });
+      return aligned_host_allocate(bytes, alignment);
     } catch (std::bad_alloc const& e) {
       CUDF_FAIL("Failed to allocate memory: " + std::string{e.what()}, rmm::out_of_memory);
     }
@@ -231,8 +284,7 @@ class new_delete_memory_resource {
                        std::size_t bytes,
                        std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
   {
-    rmm::detail::aligned_host_deallocate(
-      ptr, bytes, alignment, [](void* ptr) { ::operator delete(ptr); });
+    aligned_host_deallocate(ptr, bytes, alignment);
   }
 
   void deallocate([[maybe_unused]] cuda::stream_ref stream,
@@ -283,7 +335,8 @@ bool config_default_pinned_memory_resource(pinned_mr_options const& opts)
 CUDF_EXPORT auto& kernel_pinned_copy_threshold()
 {
   // use cudaMemcpyAsync for all pinned copies
-  static std::atomic<size_t> threshold = getenv_or("LIBCUDF_KERNEL_PINNED_COPY_THRESHOLD", 0);
+  static std::atomic<size_t> threshold =
+    cudf::detail::getenv_or("LIBCUDF_KERNEL_PINNED_COPY_THRESHOLD", 0);
   return threshold;
 }
 
@@ -297,7 +350,8 @@ size_t get_kernel_pinned_copy_threshold() { return kernel_pinned_copy_threshold(
 CUDF_EXPORT auto& allocate_host_as_pinned_threshold()
 {
   // use pageable memory for all host allocations
-  static std::atomic<size_t> threshold = getenv_or("LIBCUDF_ALLOCATE_HOST_AS_PINNED_THRESHOLD", 0);
+  static std::atomic<size_t> threshold =
+    cudf::detail::getenv_or("LIBCUDF_ALLOCATE_HOST_AS_PINNED_THRESHOLD", 0);
   return threshold;
 }
 

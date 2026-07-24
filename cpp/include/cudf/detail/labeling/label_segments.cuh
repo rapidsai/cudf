@@ -7,6 +7,7 @@
 
 #include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -68,7 +69,10 @@ void label_segments(InputIterator offsets_begin,
   // When the output array is not empty, always fill it with `0` value first.
   using OutputType = cuda::std::iter_value_t<OutputIterator>;
   thrust::uninitialized_fill(
-    rmm::exec_policy_nosync(stream), label_begin, label_end, OutputType{0});
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    label_begin,
+    label_end,
+    OutputType{0});
 
   // If the offsets array has no more than 2 offset values, there will be at max 1 segment.
   // In such cases, the output will just be an array of all `0` values (which we already filled).
@@ -77,7 +81,7 @@ void label_segments(InputIterator offsets_begin,
   // very large segment.
   if (cuda::std::distance(offsets_begin, offsets_end) <= 2) { return; }
 
-  thrust::for_each(rmm::exec_policy_nosync(stream),
+  thrust::for_each(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    offsets_begin + 1,  // exclude the first offset value
                    offsets_end - 1,    // exclude the last offset value
                    [num_labels = static_cast<cuda::std::iter_value_t<InputIterator>>(num_labels),
@@ -94,7 +98,10 @@ void label_segments(InputIterator offsets_begin,
                      // output.
                      if (dst_idx < num_labels) { atomicAdd(&output[dst_idx], OutputType{1}); }
                    });
-  thrust::inclusive_scan(rmm::exec_policy_nosync(stream), label_begin, label_end, label_begin);
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                         label_begin,
+                         label_end,
+                         label_begin);
 }
 
 /**
@@ -137,7 +144,10 @@ void labels_to_offsets(InputIterator labels_begin,
   // Always fill the entire output array with `0` value regardless of the input.
   using OutputType = cuda::std::iter_value_t<OutputIterator>;
   thrust::uninitialized_fill(
-    rmm::exec_policy_nosync(stream), offsets_begin, offsets_end, OutputType{0});
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    offsets_begin,
+    offsets_end,
+    OutputType{0});
 
   // If there is not any label value, we will have zero segment or all empty segments. We should
   // terminate from here because:
@@ -176,7 +186,7 @@ void labels_to_offsets(InputIterator labels_begin,
   // Scatter segment sizes into the end position of their corresponding segment indices.
   // Given the example above, we scatter [4, 2, 4] by the scatter map [0, 1, 4], resulting
   // output = [4, 2, 0, 0, 4, 0].
-  thrust::scatter(rmm::exec_policy_nosync(stream),
+  thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   list_sizes.begin(),
                   list_sizes.begin() + num_non_empty_segments,
                   list_indices.begin(),
@@ -184,8 +194,10 @@ void labels_to_offsets(InputIterator labels_begin,
 
   // Generate offsets from sizes.
   // Given the example above, the final output is [0, 4, 6, 6, 6, 10].
-  thrust::exclusive_scan(
-    rmm::exec_policy_nosync(stream), offsets_begin, offsets_end, offsets_begin);
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                         offsets_begin,
+                         offsets_end,
+                         offsets_begin);
 }
 
 }  // namespace cudf::detail

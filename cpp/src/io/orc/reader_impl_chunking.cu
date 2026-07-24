@@ -25,6 +25,7 @@
 #include <thrust/scan.h>
 
 #include <algorithm>
+#include <numeric>
 #include <tuple>
 
 namespace cudf::io::orc::detail {
@@ -527,6 +528,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
     CUDF_CUDA_TRY(
       cudf::detail::memcpy_async(dev_dst, host_buffer->data(), host_buffer->size(), _stream));
   }
+  _stream.synchronize();
 
   for (auto& task : device_read_tasks) {  // if there were device reads
     CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");

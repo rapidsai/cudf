@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1139,6 +1139,28 @@ TEST_F(OrcWriterTest, SlicedValidMask)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(tbl, result.tbl->view());
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
+}
+
+TEST_F(OrcReaderTest, ZeroColumnsPreservesRowCount)
+{
+  GTEST_SKIP() << "Zero-column / N-row ORC reads are not yet supported. See "
+                  "https://github.com/rapidsai/cudf/issues/22935).";
+
+  constexpr cudf::size_type num_rows = 8;
+  cudf::test::fixed_width_column_wrapper<int32_t> col{0, 1, 2, 3, 4, 5, 6, 7};
+  cudf::table_view input{{col}};
+
+  auto filepath = temp_env->get_temp_filepath("OrcZeroColumns.orc");
+  cudf::io::write_orc(cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, input));
+
+  // Project no columns: the result should be (num_rows, 0), not (0, 0).
+  auto in_opts = cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath})
+                   .columns(std::vector<std::string>{})
+                   .build();
+  auto result = cudf::io::read_orc(in_opts);
+
+  EXPECT_EQ(result.tbl->view().num_columns(), 0);
+  EXPECT_EQ(result.tbl->view().num_rows(), num_rows);
 }
 
 TEST_F(OrcReaderTest, SingleInputs)
@@ -2350,9 +2372,9 @@ TEST_F(OrcReaderTest, DeviceReadAsyncThrows)
   try {
     cudf::io::read_orc(read_args);
     // Test passes if no exception is thrown
-  } catch (const cudf::test::AsyncException&) {
+  } catch (cudf::test::AsyncException const&) {
     // Test passes if AsyncException is thrown (expected test exception)
-  } catch (const std::exception& e) {
+  } catch (std::exception const& e) {
     // Test fails if any other exception is thrown
     FAIL() << "Unexpected exception thrown: " << e.what();
   }
@@ -2374,9 +2396,9 @@ TEST_F(OrcReaderTest, DeviceWriteAsyncThrows)
   try {
     cudf::io::write_orc(write_args);
     // Test passes if no exception is thrown
-  } catch (const cudf::test::AsyncException&) {
+  } catch (cudf::test::AsyncException const&) {
     // Test passes if AsyncException is thrown (expected test exception)
-  } catch (const std::exception& e) {
+  } catch (std::exception const& e) {
     // Test fails if any other exception is thrown
     FAIL() << "Unexpected exception thrown: " << e.what();
   }

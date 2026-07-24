@@ -187,6 +187,10 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
 
   // Going through all the columns of a given record
   while (col < column_flags.size() && field_start < row_end) {
+    // In delim_whitespace mode, collapse leading delimiter runs so leading whitespace does
+    // not produce empty fields (matches pandas behavior).
+    field_start = cudf::io::gpu::skip_leading_delimiter_run(field_start, row_end, opts);
+    if (field_start >= row_end) break;
     auto next_delimiter = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
 
     // Checking if this is a column that the user wants --- user can filter columns
@@ -333,7 +337,12 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
   int actual_col  = 0;
 
   while (col < column_flags.size() && field_start < row_end) {
-    auto next_delimiter = cudf::io::gpu::seek_field_end(next_field, row_end, options);
+    // In delim_whitespace mode, collapse leading delimiter runs so leading whitespace does
+    // not produce empty fields (matches pandas behavior).
+    field_start = cudf::io::gpu::skip_leading_delimiter_run(field_start, row_end, options);
+    if (field_start >= row_end) break;
+    next_field          = field_start;
+    auto next_delimiter = cudf::io::gpu::seek_field_end(field_start, row_end, options);
 
     if (column_flags[col] & column_parse::enabled) {
       // check if the entire field is a NaN string - consistent with pandas
@@ -727,7 +736,8 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
         ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_NONE);
       }
     } else {
-      if (cur <= end && cur == data_end) {
+      bool const is_last_chunk = data_end_off <= data.size();
+      if (is_last_chunk && cur <= end && cur == data_end) {
         // Add a newline at data end (need the extra row offset to infer length of previous row)
         ctx = make_char_context(ROW_CTX_EOF, ROW_CTX_EOF, ROW_CTX_EOF, 1, 1, 1);
       } else {
@@ -844,6 +854,7 @@ cudf::detail::host_vector<column_type_histogram> detect_column_types(
 
   data_type_detection<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, column_flags, row_starts, d_stats);
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   return cudf::detail::make_host_vector(d_stats, stream);
 }
@@ -873,6 +884,7 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                                                                     valids,
                                                                     valid_counts,
                                                                     is_quoted_flags);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 uint32_t __host__ gather_row_offsets(parse_options_view const& options,
@@ -908,6 +920,7 @@ uint32_t __host__ gather_row_offsets(parse_options_view const& options,
     (options.quotechar) ? options.quotechar : 0x100,
     /*(options.escapechar) ? options.escapechar :*/ 0x100,
     (options.comment) ? options.comment : 0x100);
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   return dim_grid;
 }

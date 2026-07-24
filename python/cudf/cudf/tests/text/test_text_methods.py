@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import random
@@ -529,7 +529,7 @@ def test_character_tokenize_series():
     assert_eq(expected, actual)
 
     sr = cudf.Series([""])
-    expected = cudf.Series([], dtype="object")
+    expected = cudf.Series([], dtype="str")
 
     actual = sr.str.character_tokenize()
     assert_eq(expected, actual)
@@ -645,7 +645,7 @@ def test_character_tokenize_index():
     assert_eq(expected, actual)
 
     sr = cudf.Index([""])
-    expected = cudf.Index([], dtype="object")
+    expected = cudf.Index([], dtype="str")
 
     actual = sr.str.character_tokenize()
     assert_eq(expected, actual)
@@ -723,7 +723,7 @@ def test_text_replace_tokens_error_cases():
 
     with pytest.raises(
         ValueError,
-        match="targets and replacements should be same size"
+        match=r"targets and replacements should be same size"
         " sequences unless replacements is a string.",
     ):
         sr.str.replace_tokens(["a"], ["me", "ki"])

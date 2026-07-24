@@ -1,35 +1,39 @@
-Welcome to the cuDF documentation!
-==================================
+NVIDIA cuDF Documentation
+=========================
 
-.. figure:: _static/RAPIDS-logo-purple.png
-    :width: 300px
-    :align: center
+**NVIDIA cuDF** (pronounced "KOO-dee-eff") is a GPU-accelerated library for tabular
+data processing. It is part of the `RAPIDS <https://rapids.ai/>`_ suite of
+libraries and is composed of multiple sub-projects:
 
-**cuDF** (pronounced "KOO-dee-eff") is a Python GPU DataFrame library (built
-on the `Apache Arrow <https://arrow.apache.org/>`_ columnar memory format)
-for loading, joining, aggregating, filtering, and otherwise manipulating data.
-cuDF also provides a pandas-like API that will be familiar to data engineers
-& data scientists, so they can use it to easily accelerate their workflows
-without going into the details of CUDA programming.
+.. list-table::
+   :header-rows: 1
+   :widths: 20 80
 
-``cudf.pandas`` is built on cuDF and accelerates pandas code on the
-GPU.  It supports 100% of the pandas API, using the GPU for
-supported operations, and automatically falling back to pandas for
-other operations.
-
-.. figure:: _static/duckdb-benchmark-groupby-join.png
-    :width: 750px
-    :align: center
-
-    Results of the `Database-like ops benchmark <https://duckdblabs.github.io/db-benchmark/>`_ including `cudf.pandas`. See details `here <cudf_pandas/benchmarks.html>`_.
+   * - Library
+     - Description
+   * - `cudf <cudf/index.html>`_
+     - A Python library providing a `pandas <https://pandas.pydata.org/>`_-like DataFrame API and a zero-code change accelerator, `cudf.pandas <cudf_pandas/index.html>`_, for existing pandas code.
+   * - `cudf-polars <cudf_polars/index.html>`_
+     - A Python library providing a GPU engine for `Polars <https://pola.rs/>`_.
+   * - `dask-cudf <https://docs.rapids.ai/api/dask-cudf/stable/>`_
+     - A Python library providing a GPU backend for `Dask <https://www.dask.org/>`_ DataFrames.
+   * - `libcudf <libcudf/index.html>`_
+     - A CUDA C++ library with `Apache Arrow <https://arrow.apache.org/>`_ compliant data structures and fundamental algorithms for tabular data.
+   * - `pylibcudf <pylibcudf/index.html>`_
+     - A Python library providing `Cython <https://cython.org/>`_ bindings for libcudf.
 
 .. toctree::
    :maxdepth: 1
-   :caption: Contents:
+   :caption: Libraries
 
-   user_guide/index
+   cudf/index
    cudf_pandas/index
    cudf_polars/index
+   libcudf/index
    pylibcudf/index
-   libcudf_docs/index
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Development
+
    developer_guide/index

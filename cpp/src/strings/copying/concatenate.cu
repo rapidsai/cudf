@@ -67,7 +67,7 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
   CUDF_FUNC_RANGE();
   // Assemble contiguous array of device views
   auto [device_view_owners, device_views_ptr] =
-    contiguous_copy_column_device_views<column_device_view>(views, stream);
+    create_column_device_views<column_device_view>(views, stream);
 
   // Compute the partition offsets and size of offset column
   // Note: Using 64-bit size_t so we can detect overflow of 32-bit size_type
@@ -251,6 +251,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
       itr_new_offsets,
       reinterpret_cast<bitmask_type*>(null_mask.data()),
       d_valid_count.data());
+    CUDF_CUDA_TRY(cudaGetLastError());
 
     if (has_nulls) { null_count = strings_count - d_valid_count.value(stream); }
   }
@@ -268,6 +269,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                                             static_cast<size_type>(columns.size()),
                                                             total_bytes,
                                                             d_new_chars);
+      CUDF_CUDA_TRY(cudaGetLastError());
     } else {
       // Memcpy each input chars column (more efficient for very large strings)
       for (auto column = columns.begin(); column != columns.end(); ++column) {

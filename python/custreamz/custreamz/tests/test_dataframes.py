@@ -619,7 +619,7 @@ def test_windowing_n(func, n, getter):
 
 
 @pytest.mark.parametrize("func", [lambda x: x.sum(), lambda x: x.mean()])
-@pytest.mark.parametrize("value", ["10h", "1d"])
+@pytest.mark.parametrize("value", ["10h", "1D"])
 @pytest.mark.parametrize("getter", [lambda df: df, lambda df: df.x])
 @pytest.mark.parametrize(
     "grouper", [lambda a: "y", lambda a: a.index, lambda a: ["y"]]
@@ -843,7 +843,7 @@ def test_rolling_aggs_with_start_state(stream):
     )
 
     stream = Stream()
-    example = cudf.DataFrame({"name": [], "amount": []})
+    example = cudf.DataFrame({"name": [], "amount": []}, dtype="float64")
     sdf = DataFrame(stream, example=example)
     output1 = (
         sdf.rolling(2, with_state=True, start=output0[-1][0])

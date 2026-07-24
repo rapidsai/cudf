@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp cimport bool
@@ -8,7 +8,6 @@ from pylibcudf.libcudf.rolling cimport (
     bounded_closed, bounded_open, current_row, rolling_request, unbounded
 )
 from pylibcudf.libcudf.types cimport null_order, order, size_type
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from .aggregation cimport Aggregation
@@ -63,7 +62,7 @@ cpdef Table grouped_range_rolling_window(
     PrecedingRangeWindowType preceding,
     FollowingRangeWindowType following,
     list requests,
-    Stream stream = *,
+    object stream = *,
     DeviceMemoryResource mr = *,
 )
 
@@ -73,7 +72,7 @@ cpdef Column rolling_window(
     WindowType following_window,
     size_type min_periods,
     Aggregation agg,
-    Stream stream = *,
+    object stream = *,
     DeviceMemoryResource mr = *,
 )
 
@@ -86,6 +85,6 @@ cpdef tuple make_range_windows(
     null_order null_order,
     PrecedingRangeWindowType preceding,
     FollowingRangeWindowType following,
-    Stream stream = *,
+    object stream = *,
     DeviceMemoryResource mr = *,
 )

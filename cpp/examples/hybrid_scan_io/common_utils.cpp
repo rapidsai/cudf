@@ -6,8 +6,7 @@
 #include "common_utils.hpp"
 
 #include <cudf/ast/expressions.hpp>
-#include <cudf/io/parquet.hpp>
-#include <cudf/join/filtered_join.hpp>
+#include <cudf/table/equality.hpp>
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -69,30 +68,10 @@ void check_tables_equal(cudf::table_view const& lhs_table,
                         cudf::table_view const& rhs_table,
                         rmm::cuda_stream_view stream)
 {
-  try {
-    // Left anti-join the original and transcoded tables identical tables should not throw an
-    // exception and return an empty indices vector
-    cudf::filtered_join join_obj(lhs_table, cudf::null_equality::EQUAL, stream);
-    auto const indices = join_obj.anti_join(rhs_table, stream);
-    // No exception thrown, check indices
-    auto const tables_equal = indices->size() == 0;
-    if (tables_equal) {
-      std::cout << "Tables identical: " << std::boolalpha << tables_equal << "\n\n";
-    } else {
-      // Helper to write parquet data for inspection
-      auto const write_parquet =
-        [](cudf::table_view table, std::string filepath, rmm::cuda_stream_view stream) {
-          auto sink_info = cudf::io::sink_info(filepath);
-          auto opts      = cudf::io::parquet_writer_options::builder(sink_info, table).build();
-          cudf::io::write_parquet(opts, stream);
-        };
-      write_parquet(lhs_table, "lhs_table.parquet", stream);
-      write_parquet(rhs_table, "rhs_table.parquet", stream);
-      throw std::logic_error("Tables identical: false\n\n");
-    }
-  } catch (std::exception& e) {
-    std::cout << e.what() << std::endl;
-  }
+  auto const tables_equal =
+    cudf::tables_equal(lhs_table, rhs_table, cudf::null_equality::EQUAL, stream);
+  std::cout << "Tables identical: " << std::boolalpha << tables_equal << "\n\n";
+  if (not tables_equal) { throw std::logic_error("Table equality check failed"); }
 }
 
 std::vector<io_source> extract_input_sources(std::string const& paths,

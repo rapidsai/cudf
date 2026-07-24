@@ -4,6 +4,7 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 #include <benchmarks/common/nvtx_ranges.hpp>
 
 #include <cudf/column/column.hpp>
@@ -53,6 +54,8 @@ static void BM_transform_polynomials(nvbench::state& state)
                  std::back_inserter(inputs),
                  [](auto& col) -> cudf::transform_input { return cudf::scalar_column_view(*col); });
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     // computes polynomials: (((ax + b)x + c)x + d)x + e... = ax**4 + bx**3 + cx**2 + dx + e....
 
@@ -89,6 +92,9 @@ static void BM_transform_polynomials(nvbench::state& state)
                              cudf::output_nullability::PRESERVE,
                              launch.get_stream().get_stream());
   });
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 #define TRANSFORM_POLYNOMIALS_BENCHMARK_DEFINE(name, key_type)                         \

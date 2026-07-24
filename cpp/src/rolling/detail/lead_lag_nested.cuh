@@ -29,7 +29,6 @@
 #include <vector>
 
 namespace cudf::detail {
-namespace {
 
 /**
  * @brief Predicate to find indices at which LEAD/LAG evaluated to null.
@@ -58,8 +57,6 @@ is_null_index_predicate_impl<GatherMapIter> is_null_index_predicate(size_type in
 {
   return is_null_index_predicate_impl<GatherMapIter>{input_size, gather};
 }
-
-}  // namespace
 
 /**
  * @brief Helper function to calculate LEAD/LAG for nested-type input columns.

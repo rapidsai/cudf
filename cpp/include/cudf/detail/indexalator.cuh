@@ -122,7 +122,7 @@ struct input_indexalator : base_normalator<input_indexalator, cudf::size_type> {
  * Example output iterator usage.
  * @code
  *  auto result_itr = indexalator_factory::create_output_iterator(indices->mutable_view());
- *  thrust::lower_bound(rmm::exec_policy_nosync(stream),
+ *  thrust::lower_bound(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
  *                      input->begin<Element>(),
  *                      input->end<Element>(),
  *                      values->begin<Element>(),

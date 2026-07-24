@@ -21,6 +21,24 @@ else
     exit 1
 fi
 
-# Ensure that benchmarks are runnable
-# Run a small nvbench benchmark
-./STRINGS_NVBENCH --profile --benchmark 0 --devices 0
+EXITCODE=0
+# Run all nvbench benchmarks with --profile and rmm_mode=cuda
+for bench in *_NVBENCH; do
+  if [[ -x "$bench" && -f "$bench" ]]; then
+    start_time=$(date +%s)
+    echo "Running $bench with --profile..."
+    "./$bench" --profile --devices 0 -q --rmm_mode cuda
+    SUITEERROR=$?
+    end_time=$(date +%s)
+    duration=$((end_time - start_time))
+    if (( SUITEERROR == 0 )); then
+      echo "Benchmark $bench passed in $duration seconds"
+    else
+      echo "Benchmark $bench failed in $duration seconds: $SUITEERROR"
+      EXITCODE=$SUITEERROR
+    fi
+  fi
+done
+
+echo "Test script exiting with value: $EXITCODE"
+exit ${EXITCODE}

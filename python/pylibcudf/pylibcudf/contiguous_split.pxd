@@ -32,13 +32,13 @@ cdef class HostBuffer:
 
 cdef class PackedColumns:
     cdef unique_ptr[packed_columns] c_obj
-    cdef Stream stream
+    cdef object stream
     cdef DeviceMemoryResource mr
 
     @staticmethod
     cdef PackedColumns from_libcudf(
         unique_ptr[packed_columns] data,
-        Stream stream,
+        object stream,
         DeviceMemoryResource mr
     )
     cpdef tuple release(self)
@@ -58,10 +58,10 @@ cdef class ChunkedPack:
 
 cpdef PackedColumns pack(Table input)
 
-cpdef Table unpack(PackedColumns input, Stream stream=*)
+cpdef Table unpack(PackedColumns input, object stream = *)
 
 cpdef Table unpack_from_memoryviews(
     memoryview metadata,
     object gpu_data,
-    Stream stream=*,
+    object stream = *,
 )

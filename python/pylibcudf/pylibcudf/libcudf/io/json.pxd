@@ -11,7 +11,7 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.types cimport data_type, size_type
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
@@ -158,7 +158,7 @@ cdef extern from "cudf/io/json.hpp" namespace "cudf::io" nogil:
 
     cdef cudf_io_types.table_with_metadata read_json(
         json_reader_options &options,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -240,7 +240,7 @@ cdef extern from "cudf/io/json.hpp" namespace "cudf::io" nogil:
 
     cdef cudf_io_types.table_with_metadata write_json(
         json_writer_options &options,
-        cuda_stream_view stream
+        cudaStream_t stream
     ) except +libcudf_exception_handler
 
     cdef bool is_supported_write_json(

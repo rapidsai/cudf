@@ -1,5 +1,5 @@
 /*
- *  SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION
+ *  SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *  SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,7 +26,7 @@ namespace detail {
 /*! \p rmm_host_allocator is a CUDA-specific host memory allocator
  *  that employs \c a `cudf::host_async_resource_ref` for allocation.
  *
- *  \see https://en.cppreference.com/w/cpp/memory/allocator
+ *  \see https://en.cppreference.com/cpp/memory/allocator
  */
 template <typename T>
 class rmm_host_allocator;
@@ -34,7 +34,7 @@ class rmm_host_allocator;
 /*! \p rmm_host_allocator is a CUDA-specific host memory allocator
  *  that employs \c an `cudf::host_async_resource_ref` for allocation.
  *
- *  \see https://en.cppreference.com/w/cpp/memory/allocator
+ *  \see https://en.cppreference.com/cpp/memory/allocator
  */
 template <>
 class rmm_host_allocator<void> {
@@ -62,7 +62,7 @@ class rmm_host_allocator<void> {
  * this reference and therefore it is the user's responsibility to ensure its lifetime for the
  * duration of the lifetime of the \p rmm_host_allocator.
  *
- *  \see https://en.cppreference.com/w/cpp/memory/allocator
+ *  \see https://en.cppreference.com/cpp/memory/allocator
  */
 template <typename T>
 class rmm_host_allocator {
@@ -152,7 +152,7 @@ class rmm_host_allocator {
    *  with this \c rmm_host_allocator.
    *
    *  @param p A \c pointer to the previously allocated memory.
-   *  @param cnt Number of objects that werepreviously allocated.
+   *  @param cnt Number of objects that were previously allocated.
    *  @note This method does not invoke \p value_type's destructor.
    *        It is the responsibility of the caller to destroy
    *        the objects stored at \p p.

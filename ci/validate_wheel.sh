@@ -21,13 +21,21 @@ PYDISTCHECK_ARGS=(
 if [[ "${package_dir}" == "python/libcudf" ]]; then
     if [[ "${RAPIDS_CUDA_MAJOR}" == "12" ]]; then
         PYDISTCHECK_ARGS+=(
-            --max-allowed-size-compressed '675M'
+            --max-allowed-size-compressed '700M'
         )
     else
         PYDISTCHECK_ARGS+=(
-            --max-allowed-size-compressed '325M'
+            --max-allowed-size-compressed '350M'
         )
     fi
+elif [[ "${package_dir}" == "python/libcudf_streaming" ]]; then
+    PYDISTCHECK_ARGS+=(
+        --max-allowed-size-compressed '100M'
+    )
+elif [[ "${package_dir}" == "python/cudf_streaming" ]]; then
+    PYDISTCHECK_ARGS+=(
+        --max-allowed-size-compressed '75M'
+    )
 elif [[ "${package_dir}" != "python/cudf" ]] && \
      [[ "${package_dir}" != "python/cudf_polars" ]] && \
      [[ "${package_dir}" != "python/dask_cudf" ]] && \

@@ -6,7 +6,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
@@ -63,6 +63,6 @@ cdef extern from "cudf/io/text/multibyte_split.hpp" \
         data_chunk_source source,
         string delimiter,
         parse_options options,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler

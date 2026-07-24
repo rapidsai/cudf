@@ -6,7 +6,7 @@ from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
@@ -20,7 +20,7 @@ cdef extern from "cudf/round.hpp" namespace "cudf" nogil:
         const column_view& input,
         int32_t decimal_places,
         rounding_method method,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -28,6 +28,6 @@ cdef extern from "cudf/round.hpp" namespace "cudf" nogil:
         const column_view& input,
         int32_t decimal_places,
         rounding_method method,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -96,7 +96,7 @@ std::unique_ptr<scalar> make_struct_scalar(table_view const& data,
   return std::make_unique<struct_scalar>(data, true, stream, mr);
 }
 
-std::unique_ptr<scalar> make_struct_scalar(host_span<column_view const> data,
+std::unique_ptr<scalar> make_struct_scalar(std::span<column_view const> data,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
 {
