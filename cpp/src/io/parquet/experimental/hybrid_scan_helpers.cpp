@@ -610,10 +610,10 @@ aggregate_reader_metadata::dictionary_pages_byte_ranges(
                             // dictionary_page_offset is 0, so check to see if the data_page_offset
                             // does not match the first offset in the offset index.  If they don't
                             // match, then data_page_offset points to the dictionary page.
-                            auto const offset_index = col_chunk.offset_index;
-                            auto const num_pages    = offset_index.has_value()
-                                                        ? offset_index->page_locations.size()
-                                                        : size_type{0};
+                            auto const& offset_index = col_chunk.offset_index;
+                            auto const num_pages     = offset_index.has_value()
+                                                         ? offset_index->page_locations.size()
+                                                         : size_type{0};
                             if (num_pages > 0 and col_meta.data_page_offset <
                                                     offset_index->page_locations[0].offset) {
                               dictionary_offset = col_meta.data_page_offset;
