@@ -1265,11 +1265,14 @@ endif()
 # dependencies and export set metadata into cudf's interface.
 set(_absorbed_deps rmm rapids_logger spdlog)
 foreach(_dep IN LISTS _absorbed_deps)
+  if(NOT TARGET "${_dep}::${_dep}")
+    continue()
+  endif()
   get_target_property(_dep_link "${_dep}::${_dep}" NAME)
   get_target_property(_target_type ${_dep_link} TYPE)
   if(NOT BUILD_SHARED_LIBS OR NOT _target_type STREQUAL "STATIC_LIBRARY")
     # If not building a shared library, or the dependency is not a static library, link normally.
-    target_link_libraries(cudf PUBLIC $<TARGET_NAME_IF_EXISTS:${_dep_link}>)
+    target_link_libraries(cudf PUBLIC ${_dep_link})
     continue()
   endif()
 
