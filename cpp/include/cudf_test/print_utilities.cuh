@@ -9,7 +9,6 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/traits.hpp>
 
-
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
@@ -19,8 +18,6 @@
 
 namespace CUDF_EXPORT cudf {
 namespace test::print {
-
-
 
 constexpr int32_t hex_tag = 0;
 

@@ -132,9 +132,7 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
 
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   cudf::type_id,
-  [](auto value) {
-    return cudf::type_to_name(cudf::data_type{value});
-  },
+  [](auto value) { return cudf::type_to_name(cudf::data_type{value}); },
   [](auto) { return std::string{}; })
 
 enum class converts_strings : bool { YES, NO };
