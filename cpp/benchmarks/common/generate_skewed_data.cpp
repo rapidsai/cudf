@@ -158,7 +158,6 @@ std::unique_ptr<cudf::column> create_skewed_string_column(cudf::size_type num_ro
 {
   CUDF_EXPECTS(num_rows >= 0, "num_rows must be at least 0");
   CUDF_EXPECTS(short_length >= 16, "short_length must be at least 16");
-  CUDF_EXPECTS(long_tail_length >= 1024, "long tail length must be at least 1024");
   CUDF_EXPECTS(short_string_pct >= 0 && short_string_pct <= 100,
                "short_string_pct must be in the range [0, 100]");
   CUDF_EXPECTS(hit_rate >= 0 && hit_rate <= 100, "hit_rate must be in the range [0, 100]");

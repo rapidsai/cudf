@@ -27,13 +27,9 @@
 
 namespace {
 
-constexpr cudf::size_type skewed_template_width{16};
-constexpr cudf::size_type minimum_generated_long_length{1024};
-constexpr int64_t target_input_bytes{160 * 1024 * 1024};
-
-cudf::size_type round_up_to_template(cudf::size_type n)
+cudf::size_type round_up_to_template(cudf::size_type n, cudf::size_type template_width)
 {
-  return ((n + skewed_template_width - 1) / skewed_template_width) * skewed_template_width;
+  return ((n + template_width - 1) / template_width) * template_width;
 }
 
 /**
@@ -46,14 +42,16 @@ cudf::size_type round_up_to_template(cudf::size_type n)
 std::unique_ptr<cudf::column> make_skewed_benchmark_column(cudf::size_type num_rows,
                                                            cudf::size_type short_length,
                                                            cudf::size_type long_tail_length,
+                                                           cudf::size_type template_width,
                                                            double long_string_pct,
                                                            int32_t hit_rate)
 {
-  auto const gen_short = std::max(skewed_template_width, round_up_to_template(short_length));
-  auto gen_long = std::max(minimum_generated_long_length, round_up_to_template(long_tail_length));
-  if (gen_long <= gen_short) { gen_long = gen_short + skewed_template_width; }
+  auto const gen_short =
+    std::max(template_width, round_up_to_template(short_length, template_width));
+  auto gen_long = std::max(template_width, round_up_to_template(long_tail_length, template_width));
+  if (gen_long <= gen_short) { gen_long = gen_short + template_width; }
 
-  auto const short_string_pct = static_cast<cudf::size_type>(100.0 - long_string_pct);
+  auto const short_string_pct = static_cast<int32_t>(100.0 - long_string_pct);
   auto col = create_skewed_string_column(num_rows, gen_short, gen_long, short_string_pct, hit_rate);
   if (gen_short == short_length && gen_long == long_tail_length) { return col; }
 
@@ -98,32 +96,36 @@ struct mean_length_config {
  */
 cudf::size_type long_length_for_mean(cudf::size_type mean_length,
                                      cudf::size_type short_length,
-                                     double long_string_pct)
+                                     double long_string_pct,
+                                     cudf::size_type template_width)
 {
   auto const long_fraction = long_string_pct / 100.0;
   auto const long_length   = (mean_length - ((1.0 - long_fraction) * short_length)) / long_fraction;
   return static_cast<cudf::size_type>(
-           std::round(long_length / static_cast<double>(skewed_template_width))) *
-         skewed_template_width;
+           std::round(long_length / static_cast<double>(template_width))) *
+         template_width;
 }
 
 /**
  * @brief Build a uniform or skewed configuration with approximately constant total input bytes.
  */
-mean_length_config make_mean_length_config(cudf::size_type mean_length, double long_string_pct)
+mean_length_config make_mean_length_config(cudf::size_type mean_length,
+                                           double long_string_pct,
+                                           cudf::size_type template_width,
+                                           int64_t input_bytes)
 {
   constexpr cudf::size_type minimum_rows{1024};
-  constexpr cudf::size_type skewed_short_length{16};
 
-  auto const short_length = long_string_pct == 0.0 ? mean_length : skewed_short_length;
+  auto const short_length = long_string_pct == 0.0 ? mean_length : template_width;
   auto const long_tail_length =
-    long_string_pct == 0.0 ? mean_length + skewed_template_width
-                           : long_length_for_mean(mean_length, short_length, long_string_pct);
+    long_string_pct == 0.0
+      ? mean_length + template_width
+      : long_length_for_mean(mean_length, short_length, long_string_pct, template_width);
   auto const long_fraction = long_string_pct / 100.0;
   auto const actual_mean =
     ((1.0 - long_fraction) * short_length) + (long_fraction * long_tail_length);
   auto const num_rows =
-    std::max(minimum_rows, static_cast<cudf::size_type>(target_input_bytes / actual_mean));
+    std::max(minimum_rows, static_cast<cudf::size_type>(input_bytes / actual_mean));
 
   return {num_rows, short_length, long_tail_length, long_string_pct};
 }
@@ -240,13 +242,17 @@ static void bench_find_string_skewed_by_mean(nvbench::state& state)
 {
   auto const mean_length     = static_cast<cudf::size_type>(state.get_int64("mean_length"));
   auto const long_string_pct = static_cast<double>(state.get_int64("long_string_pct"));
+  auto const template_width  = static_cast<cudf::size_type>(state.get_int64("template_width"));
+  auto const input_bytes     = state.get_int64("input_bytes");
   auto const hit_rate        = static_cast<int32_t>(state.get_int64("hit_rate"));
-  auto const config          = make_mean_length_config(mean_length, long_string_pct);
+  auto const config =
+    make_mean_length_config(mean_length, long_string_pct, template_width, input_bytes);
 
   auto const stream = cudf::get_default_stream();
   auto const col    = make_skewed_benchmark_column(config.num_rows,
                                                 config.short_length,
                                                 config.long_tail_length,
+                                                template_width,
                                                 config.long_string_pct,
                                                 hit_rate);
   auto const input  = cudf::strings_column_view(col->view());
@@ -269,4 +275,6 @@ NVBENCH_BENCH(bench_find_string_skewed_by_mean)
                   {32, 34, 36, 38, 40, 42, 44, 46,  48,  50,  52,  54,  56,  58,  60,  62,  64, 66,
                    68, 70, 72, 74, 76, 80, 96, 112, 128, 144, 160, 176, 192, 208, 224, 240, 256})
   .add_int64_axis("long_string_pct", {0, 1, 10})
+  .add_int64_axis("template_width", {16})
+  .add_int64_axis("input_bytes", {160 * 1024 * 1024})
   .add_int64_axis("hit_rate", {0});
