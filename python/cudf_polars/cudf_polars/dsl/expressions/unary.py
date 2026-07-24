@@ -108,6 +108,7 @@ class UnaryFunction(Expr):
     }
     _supported_misc_fns = frozenset(
         {
+            "approx_n_unique",
             "argwhere",
             "as_struct",
             "arg_max",
@@ -888,6 +889,23 @@ class UnaryFunction(Expr):
                 is_sorted=plc.types.Sorted.YES,
                 order=order,
                 null_order=null_order,
+            )
+        elif self.name == "approx_n_unique":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            sketch = plc.reduce.ApproxDistinctCount(
+                plc.Table([column.obj]),
+                null_handling=plc.types.NullPolicy.INCLUDE,
+                nan_handling=plc.types.NanPolicy.NAN_IS_VALID,
+                stream=df.stream,
+            )
+            nunique = sketch.estimate(stream=df.stream)
+            return Column(
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(nunique, self.dtype.plc_type, stream=df.stream),
+                    1,
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
             )
         elif self.name == "value_counts":
             (sort, _, _, normalize) = self.options
