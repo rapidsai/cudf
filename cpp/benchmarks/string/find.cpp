@@ -27,6 +27,10 @@
 
 namespace {
 
+// create_skewed_string_column requires long_tail_length >= 1024; generate at least that size
+// then slice down to the requested lengths for the mean-length sweep.
+constexpr cudf::size_type minimum_generated_long_length{1024};
+
 cudf::size_type round_up_to_template(cudf::size_type n, cudf::size_type template_width)
 {
   return ((n + template_width - 1) / template_width) * template_width;
@@ -36,8 +40,9 @@ cudf::size_type round_up_to_template(cudf::size_type n, cudf::size_type template
  * @brief Build skewed input, rounding lengths up to the generator's template width and then
  * slicing down to the requested lengths when needed.
  *
- * The generator requires lengths that are multiples of 16. Callers may request arbitrary lengths
- * (e.g. uniform mean=52); this helper generates at the next valid size and truncates.
+ * The generator requires lengths that are multiples of 16 and long_tail_length >= 1024.
+ * Callers may request shorter lengths (e.g. uniform mean=52); this helper generates at the
+ * next valid size and truncates.
  */
 std::unique_ptr<cudf::column> make_skewed_benchmark_column(cudf::size_type num_rows,
                                                            cudf::size_type short_length,
@@ -48,7 +53,8 @@ std::unique_ptr<cudf::column> make_skewed_benchmark_column(cudf::size_type num_r
 {
   auto const gen_short =
     std::max(template_width, round_up_to_template(short_length, template_width));
-  auto gen_long = std::max(template_width, round_up_to_template(long_tail_length, template_width));
+  auto gen_long = std::max(minimum_generated_long_length,
+                           round_up_to_template(long_tail_length, template_width));
   if (gen_long <= gen_short) { gen_long = gen_short + template_width; }
 
   auto const short_string_pct = static_cast<int32_t>(100.0 - long_string_pct);
