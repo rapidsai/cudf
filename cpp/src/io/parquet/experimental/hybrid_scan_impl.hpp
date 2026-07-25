@@ -292,6 +292,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    *
    * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param total_row_groups Total number of row groups across all sources
+   * @param options Reader options, used to determine which columns will be read
    * @param pass_read_limit Memory limit to read and decompress row
    * group data
    *
@@ -301,6 +302,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   [[nodiscard]] std::pair<std::vector<std::vector<cudf::size_type>>, std::vector<cudf::size_type>>
   construct_row_group_passes(cudf::host_span<std::vector<size_type> const> row_group_indices,
                              std::size_t total_row_groups,
+                             parquet_reader_options const& options,
                              std::size_t pass_read_limit) const;
 
   /**

@@ -610,15 +610,24 @@ class aggregate_reader_metadata {
   [[nodiscard]] std::vector<std::string> get_pandas_index_names() const;
 
   /**
-   * @brief Computes the compressed size, the number of rows, and the maximum number of leaf values
-   * in the specified row group, over all of its columns
+   * @brief Computes the pass sizing properties of a row group, scoped to the selected columns
+   *
+   * Only the column chunks belonging to @p selected_schema_indices contribute to the returned
+   * compressed size and maximum leaf value count. This yields a far tighter memory estimate than
+   * sizing the row group over its entire schema when only a subset of a wide schema is being read.
    *
    * @param rg The row group
+   * @param start_row Global start row of this row group
+   * @param source_index Index of the data source this row group belongs to
+   * @param selected_schema_indices Schema indices of the selected leaf columns
    *
-   * @return A tuple of row group compressed size, number of rows, and maximum leaf values
+   * @return Pass sizing properties of the row group
    */
-  [[nodiscard]] std::tuple<size_t, size_t, size_t> get_row_group_properties(
-    RowGroup const& rg) const;
+  [[nodiscard]] row_group_pass_size_info get_row_group_pass_size_info(
+    RowGroup const& rg,
+    size_t start_row,
+    size_type source_index,
+    host_span<size_type const> selected_schema_indices) const;
 
   /**
    * @brief Filters the row groups using stats and bloom filters based on predicate filter

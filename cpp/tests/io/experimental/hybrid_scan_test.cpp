@@ -1206,7 +1206,8 @@ TEST_F(HybridScanTest, RowGroupPassesMatchesChunkedReader)
       *footer_buffer, options);
 
     auto const all_row_groups = reader->all_row_groups(options);
-    auto const passes         = reader->construct_row_group_passes(all_row_groups, pass_read_limit);
+    auto const passes =
+      reader->construct_row_group_passes(all_row_groups, options, pass_read_limit);
 
     for (auto const& pass_row_groups : passes) {
       auto const chunk_byte_ranges =
@@ -1218,7 +1219,15 @@ TEST_F(HybridScanTest, RowGroupPassesMatchesChunkedReader)
       reader->setup_chunking_for_all_columns(
         0, pass_read_limit, pass_row_groups, col_data, options, stream, mr);
 
+      // Pass planning must not disturb an in-flight chunked materialization.
+      // `materialize_all_columns_chunk()` does not re-select columns, so a planner call that
+      // mutated the reader's column selection would silently swap this loop onto a single column.
+      auto const probe_options =
+        cudf::io::parquet_reader_options::builder().column_indices({0}).build();
+
       while (reader->has_next_table_chunk()) {
+        static_cast<void>(
+          reader->construct_row_group_passes(pass_row_groups, probe_options, pass_read_limit));
         auto chunk = reader->materialize_all_columns_chunk();
         hybrid_scan_tables.push_back(std::move(chunk.tbl));
       }

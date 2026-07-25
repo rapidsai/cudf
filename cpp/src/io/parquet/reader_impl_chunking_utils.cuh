@@ -788,7 +788,8 @@ struct row_group_pass_data {
  * and row count thresholds.
  *
  * The sizes in @p row_group_sizes are expected to be scoped to the columns selected for reading;
- * see `make_row_group_pass_size_info()`.
+ * see `make_row_group_pass_size_info()` and
+ * `aggregate_reader_metadata::get_row_group_pass_size_info()`.
  *
  * @param row_group_sizes Span of per-row-group pass sizing properties
  * @param comp_read_limit Maximum compressed bytes per pass

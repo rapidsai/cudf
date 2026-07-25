@@ -364,8 +364,9 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_HybridScanReader_constructRow
     auto const pass_limit = checked_size_t(env, pass_read_limit, "pass_read_limit");
     auto* wrapper         = reinterpret_cast<hybrid_scan_reader_wrapper*>(handle);
     auto holder           = make_row_group_span(env, j_row_groups);
-    auto passes           = wrapper->reader->construct_row_group_passes(holder.span(), pass_limit);
-    jclass int_array_cls  = env->FindClass("[I");
+    auto passes =
+      wrapper->reader->construct_row_group_passes(holder.span(), wrapper->options, pass_limit);
+    jclass int_array_cls = env->FindClass("[I");
     if (int_array_cls == nullptr) { return nullptr; }
     auto outer = env->NewObjectArray(passes.size(), int_array_cls, nullptr);
     if (outer == nullptr) { return nullptr; }

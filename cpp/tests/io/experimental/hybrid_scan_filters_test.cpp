@@ -13,6 +13,7 @@
 #include <cudf/io/parquet_io_utils.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/stream_compaction.hpp>
+#include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -1621,6 +1622,85 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
   }
 }
 
+// Pass construction must size each row group by the columns the reader options actually select.
+// Projecting a single column out of a wide file should therefore need strictly fewer passes than
+// reading every column under the same `pass_read_limit`.
+TEST_F(HybridScanFiltersTest, RowGroupPassesUseSelectedColumnsOnly)
+{
+  auto constexpr num_columns = 8;
+  auto constexpr num_rg      = 10;
+  auto constexpr rows_per_rg = 5'000;
+
+  auto values       = cuda::counting_iterator(0);
+  auto columns      = std::vector<std::unique_ptr<cudf::column>>{};
+  auto column_names = std::vector<std::string>{};
+  for (int c = 0; c < num_columns; c++) {
+    cudf::test::fixed_width_column_wrapper<int32_t> col(values, values + rows_per_rg);
+    columns.emplace_back(col.release());
+    column_names.emplace_back("col_" + std::to_string(c));
+  }
+  auto const chunk_table = cudf::table(std::move(columns));
+
+  auto metadata = cudf::io::table_input_metadata{chunk_table.view()};
+  for (int c = 0; c < num_columns; c++) {
+    metadata.column_metadata[c].set_name(column_names[c]);
+  }
+
+  auto const parquet_filepath =
+    temp_env->get_temp_filepath("RowGroupPassesSelectedColumns.parquet");
+  {
+    // Uncompressed and undictionaried so that column chunk sizes are predictable
+    auto opts =
+      cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{parquet_filepath})
+        .metadata(std::move(metadata))
+        .compression(cudf::io::compression_type::NONE)
+        .dictionary_policy(cudf::io::dictionary_policy::NEVER)
+        .build();
+    auto writer = cudf::io::chunked_parquet_writer(opts);
+    for (int i = 0; i < num_rg; ++i) {
+      writer.write(chunk_table.view());
+    }
+    writer.close();
+  }
+
+  auto const all_columns_options = cudf::io::parquet_reader_options::builder().build();
+  auto const one_column_options =
+    cudf::io::parquet_reader_options::builder().column_names({column_names[0]}).build();
+
+  auto datasource          = cudf::io::datasource::create(parquet_filepath);
+  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
+  auto reader              = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
+    *footer_buffer, all_columns_options);
+
+  auto const all_row_groups = reader->all_row_groups(all_columns_options);
+  EXPECT_EQ(static_cast<int>(all_row_groups.size()), num_rg);
+
+  // Each column chunk is 5'000 * sizeof(int32_t) == 20'000 bytes (plus a small page header), so a
+  // row group is ~160'000 bytes over all 8 columns. The pass budget is
+  // `pass_read_limit * input_limit_compression_reserve` == 60'000 bytes, which one row group of
+  // all columns already exceeds, but which fits two row groups of a single column.
+  auto constexpr pass_read_limit = std::size_t{200'000};
+
+  auto const all_column_passes =
+    reader->construct_row_group_passes(all_row_groups, all_columns_options, pass_read_limit);
+  auto const one_column_passes =
+    reader->construct_row_group_passes(all_row_groups, one_column_options, pass_read_limit);
+
+  // One row group per pass over all columns; two row groups per pass for a single column.
+  EXPECT_EQ(all_column_passes.size(), static_cast<std::size_t>(num_rg));
+  EXPECT_EQ(one_column_passes.size(), static_cast<std::size_t>(num_rg) / 2);
+
+  // Both partitions must still cover every row group exactly once, in order
+  for (auto const& passes : {all_column_passes, one_column_passes}) {
+    std::vector<cudf::size_type> flattened;
+    for (auto const& pass : passes) {
+      EXPECT_GT(pass.size(), 0);
+      flattened.insert(flattened.end(), pass.begin(), pass.end());
+    }
+    EXPECT_EQ(flattened, all_row_groups);
+  }
+}
+
 TEST_F(HybridScanFiltersTest, RowGroupPasses)
 {
   auto constexpr num_rg      = 10;
@@ -1656,14 +1736,14 @@ TEST_F(HybridScanFiltersTest, RowGroupPasses)
 
   // No pass read limit. All row groups in a single pass
   {
-    auto passes = reader->construct_row_group_passes(all_row_groups, 0);
+    auto passes = reader->construct_row_group_passes(all_row_groups, options, 0);
     EXPECT_EQ(passes.size(), 1);
     EXPECT_EQ(passes.front(), all_row_groups);
   }
 
   // Small pass limit would result in each row group in its own pass
   {
-    auto passes = reader->construct_row_group_passes(all_row_groups, 1);
+    auto passes = reader->construct_row_group_passes(all_row_groups, options, 1);
     EXPECT_EQ(passes.size(), all_row_groups.size());
     auto zipped = cuda::make_zip_iterator(passes.begin(), all_row_groups.begin());
     std::for_each(zipped, zipped + passes.size(), [&](auto const& iter) {
@@ -1676,7 +1756,7 @@ TEST_F(HybridScanFiltersTest, RowGroupPasses)
 
   // All passes should cover all row groups and be consecutive
   {
-    auto passes = reader->construct_row_group_passes(all_row_groups, 1'024);
+    auto passes = reader->construct_row_group_passes(all_row_groups, options, 1'024);
     std::vector<cudf::size_type> flattened;
     for (auto const& pass : passes) {
       EXPECT_GT(pass.size(), 0);

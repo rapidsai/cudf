@@ -1346,7 +1346,7 @@ auto chunked_read_projected(std::string const& filepath,
                             std::size_t input_limit)
 {
   auto builder = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
-  if (not columns.empty()) { builder.columns(columns); }
+  if (not columns.empty()) { builder.column_names(columns); }
   auto const read_opts = builder.build();
   auto reader          = cudf::io::chunked_parquet_reader(output_limit, input_limit, read_opts);
 
@@ -1372,15 +1372,15 @@ auto chunked_read_projected(std::string const& filepath,
 TEST_F(ParquetChunkedReaderInputLimitTest, ProjectedColumnsShrinkPasses)
 {
   constexpr int num_columns = 16;
-  constexpr int num_rows    = 500'000;
+  constexpr int num_rows    = 125'000;
 
   auto const filepath = temp_env->get_temp_filepath("projected_columns_shrink_passes.parquet");
 
-  auto const iter   = cuda::counting_iterator<int64_t>{0};
+  auto const iter   = cuda::counting_iterator<int32_t>{0};
   auto columns      = std::vector<std::unique_ptr<cudf::column>>{};
   auto column_names = std::vector<std::string>{};
   for (int c = 0; c < num_columns; c++) {
-    auto col = cudf::test::fixed_width_column_wrapper<int64_t>(iter, iter + num_rows);
+    auto col = cudf::test::fixed_width_column_wrapper<int32_t>(iter, iter + num_rows);
     columns.emplace_back(col.release());
     column_names.emplace_back("col_" + std::to_string(c));
   }
@@ -1398,12 +1398,14 @@ TEST_F(ParquetChunkedReaderInputLimitTest, ProjectedColumnsShrinkPasses)
       .metadata(std::move(metadata))
       .compression(cudf::io::compression_type::NONE)
       .dictionary_policy(cudf::io::dictionary_policy::NEVER)
-      .row_group_size_rows(20'000)
+      .row_group_size_rows(5'000)
       .build());
 
-  // Sized so that a pass holds several row groups' worth of one column, but well under a single
-  // row group's worth of all 16 columns.
-  constexpr std::size_t pass_read_limit = 32ul * 1024 * 1024;
+  // 25 row groups, each column chunk 5'000 * sizeof(int32_t) == 20'000 bytes, so a row group is
+  // ~320'000 bytes over all 16 columns. The pass budget is
+  // `pass_read_limit * input_limit_compression_reserve` == ~400'000 bytes: one row group per pass
+  // for the full read, but twenty row groups per pass for a single column.
+  constexpr std::size_t pass_read_limit = 1'333'334;
 
   auto const [all_cols, all_cols_chunks] = chunked_read_projected(filepath, {}, 0, pass_read_limit);
   auto const [one_col, one_col_chunks] =

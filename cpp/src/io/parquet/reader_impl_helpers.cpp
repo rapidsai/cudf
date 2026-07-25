@@ -1384,27 +1384,29 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
   return names;
 }
 
-std::tuple<size_t, size_t, size_t> aggregate_reader_metadata::get_row_group_properties(
-  RowGroup const& row_group) const
+row_group_pass_size_info aggregate_reader_metadata::get_row_group_pass_size_info(
+  RowGroup const& row_group,
+  size_t start_row,
+  size_type source_index,
+  host_span<size_type const> selected_schema_indices) const
 {
-  auto const compressed_size = std::transform_reduce(
-    row_group.columns.cbegin(),
-    row_group.columns.cend(),
-    size_t{0},
-    std::plus<>(),
-    [](auto const& colchunk) { return colchunk.meta_data.total_compressed_size; });
+  size_t compressed_size = 0;
+  size_t max_leaf_values = 0;
 
-  size_t const max_leaf_values =
-    row_group.columns.empty()
-      ? 0
-      : std::max_element(row_group.columns.cbegin(),
-                         row_group.columns.cend(),
-                         [](auto const& a, auto const& b) {
-                           return a.meta_data.num_values < b.meta_data.num_values;
-                         })
-          ->meta_data.num_values;
+  // Only the selected leaf columns are read into device memory, so only their column chunks
+  // contribute to the memory footprint of a pass.
+  for (auto const schema_idx : selected_schema_indices) {
+    auto const mapped_schema_idx = map_schema_index(schema_idx, source_index);
+    auto const& col_meta =
+      row_group.columns[find_colchunk_iter_offset(row_group, mapped_schema_idx)].meta_data;
+    compressed_size += col_meta.total_compressed_size;
+    max_leaf_values = std::max(max_leaf_values, static_cast<size_t>(col_meta.num_values));
+  }
 
-  return {compressed_size, static_cast<size_t>(row_group.num_rows), max_leaf_values};
+  return {.start_row       = start_row,
+          .num_rows        = static_cast<size_t>(row_group.num_rows),
+          .compressed_size = compressed_size,
+          .max_leaf_values = max_leaf_values};
 }
 
 std::tuple<int64_t,
