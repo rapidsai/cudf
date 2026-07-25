@@ -725,6 +725,8 @@ size_type count_descendants(column_view parent);
  * @throws cudf::logic_error if the specified cast is not possible, i.e.,
  * `is_bit_castable(input.type(), type)` is false.
  *
+ * @ingroup utility_types
+ *
  * @param input The `column_view` to cast from
  * @param type The `data_type` to cast to
  * @return New `column_view` wrapping the same data as `input` but cast to `type`
@@ -747,6 +749,8 @@ column_view bit_cast(column_view const& input, data_type type);
  *
  * @throws cudf::logic_error if the specified cast is not possible, i.e.,
  * `is_bit_castable(input.type(), type)` is false.
+ *
+ * @ingroup utility_types
  *
  * @param input The `mutable_column_view` to cast from
  * @param type The `data_type` to cast to
