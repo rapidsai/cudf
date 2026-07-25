@@ -25,7 +25,7 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
 from statistics import mean
-from typing import TYPE_CHECKING, Any, Literal
+from typing import IO, TYPE_CHECKING, Any, Literal
 
 import nvtx
 
@@ -33,13 +33,20 @@ import polars as pl
 
 __all__: list[str] = [
     "COUNT_DTYPE",
+    "FailedRecord",
     "QueryResult",
+    "QueryRunResult",
     "RunConfig",
+    "RunOptions",
+    "SuccessRecord",
+    "ValidationMethod",
+    "_add_dataset_args",
     "build_parser",
     "get_data",
     "parse_args",
     "run_duckdb",
     "run_polars",
+    "run_polars_query",
 ]
 
 # The dtype for count() aggregations depends on the presence
@@ -64,6 +71,7 @@ try:
     import pynvml
 except ImportError:
     pynvml = None
+
 
 try:
     import cudf_polars.dsl.tracing
@@ -90,7 +98,7 @@ if TYPE_CHECKING:
     from cudf_polars.engine.options import StreamingOptions
     from cudf_polars.streaming.explain import SerializablePlan
 
-POLARS_VALIDATION_OPTIONS = {
+POLARS_VALIDATION_OPTIONS: dict[str, Any] = {
     "check_row_order": True,
     "check_column_order": True,
     "check_dtypes": True,
@@ -100,11 +108,52 @@ POLARS_VALIDATION_OPTIONS = {
 }
 
 
-def get_validation_options(args: Any) -> dict[str, Any]:
-    """Get validation options dict from parsed arguments."""
+@dataclasses.dataclass(kw_only=True)
+class RunOptions:
+    """
+    Options controlling a benchmark run, decoupled from argparse.
+
+    Construct directly for programmatic / test callers, or use
+    :meth:`from_args` to build from a parsed :class:`argparse.Namespace`.
+    """
+
+    debug: bool = False
+    explain: bool = False
+    explain_logical: bool = False
+    explain_partition_plan: bool = False
+    print_plans: bool = False
+    print_results: bool = False
+    summarize: bool = False
+    output: IO[str] | None = None
+    output_expected_directory: Path | None = None
+    results_directory: Path | None = None
+    validation_abs_tol: float = POLARS_VALIDATION_OPTIONS["abs_tol"]
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> RunOptions:
+        """Create a RunOptions from a parsed argparse.Namespace."""
+        return cls(
+            debug=getattr(args, "debug", False),
+            explain=getattr(args, "explain", False),
+            explain_logical=getattr(args, "explain_logical", False),
+            explain_partition_plan=getattr(args, "explain_partition_plan", False),
+            print_plans=getattr(args, "print_plans", False),
+            print_results=getattr(args, "print_results", False),
+            summarize=getattr(args, "summarize", False),
+            output=getattr(args, "output", None),
+            output_expected_directory=getattr(args, "output_expected_directory", None),
+            results_directory=getattr(args, "results_directory", None),
+            validation_abs_tol=getattr(
+                args, "validation_abs_tol", POLARS_VALIDATION_OPTIONS["abs_tol"]
+            ),
+        )
+
+
+def get_validation_options(run_options: RunOptions) -> dict[str, Any]:
+    """Get validation options dict from RunOptions."""
     return {
         **POLARS_VALIDATION_OPTIONS,
-        "abs_tol": args.validation_abs_tol,
+        "abs_tol": run_options.validation_abs_tol,
     }
 
 
@@ -590,14 +639,14 @@ class RunConfig:
             validation_method = ValidationMethod(
                 expected_source="duckdb-disk",
                 comparison_method="polars",
-                comparison_options=get_validation_options(args),
+                comparison_options=get_validation_options(RunOptions.from_args(args)),
                 expected_location=args.validate_directory,
             )
         elif args.validate_against is not None:
             validation_method = ValidationMethod(
                 args.validate_against,
                 comparison_method="polars",
-                comparison_options=get_validation_options(args),
+                comparison_options=get_validation_options(RunOptions.from_args(args)),
                 expected_location=None,
             )
         else:
@@ -623,7 +672,7 @@ class RunConfig:
             query_set=name,
             dataset_path=path,
             scale_factor=scale_factor,
-            suffix=args.suffix,
+            suffix=args.suffix if args.suffix is not None else ".parquet",
             qualification=args.qualification,
             frontend=args.frontend,
             iterations=args.iterations,
@@ -755,7 +804,7 @@ def get_executor_options(
 def print_query_plan(
     q_id: int,
     q: pl.LazyFrame,
-    args: argparse.Namespace,
+    run_options: RunOptions,
     run_config: RunConfig,
     engine: None | pl.GPUEngine = None,
     *,
@@ -764,15 +813,15 @@ def print_query_plan(
     """Print the query plan."""
     logical_plan = plan = None
     if run_config.frontend == "polars-cpu":
-        if args.explain_logical:
+        if run_options.explain_logical:
             logical_plan = q.explain()
-        if args.explain:
+        if run_options.explain:
             plan = q.show_graph(engine="streaming", plan_stage="physical")
     elif CUDF_POLARS_AVAILABLE:
         assert isinstance(engine, pl.GPUEngine)
-        if args.explain_logical:
+        if run_options.explain_logical:
             logical_plan = explain_query(q, engine, physical=False)
-        if args.explain and run_config.frontend in _STREAMING_FRONTENDS:
+        if run_options.explain and run_config.frontend in _STREAMING_FRONTENDS:
             plan = explain_query(q, engine)
     else:
         raise RuntimeError(
@@ -813,7 +862,7 @@ def execute_query(
     i: int,
     q: pl.LazyFrame,
     run_config: RunConfig,
-    args: argparse.Namespace,
+    run_options: RunOptions,
     engine: None | pl.GPUEngine = None,
 ) -> tuple[pl.DataFrame, float]:
     """Execute a query with NVTX annotation."""
@@ -832,7 +881,7 @@ def execute_query(
 
         elif CUDF_POLARS_AVAILABLE:
             assert isinstance(engine, pl.GPUEngine)
-            if args.debug:
+            if run_options.debug:
                 translator = Translator(q._ldf.visit(), engine)
                 ir = translator.translate_ir()
                 context = IRExecutionContext()
@@ -941,7 +990,7 @@ def run_polars_query_iteration(
     iteration: int,
     q: pl.LazyFrame,
     run_config: RunConfig,
-    args: argparse.Namespace,
+    run_options: RunOptions,
     engine: pl.GPUEngine | None,
     expected: pl.DataFrame | None,
     query_result: Any,
@@ -949,7 +998,9 @@ def run_polars_query_iteration(
     result_casts: list[pl.Expr] | None = None,
 ) -> SuccessRecord:
     """Run a single query iteration. Caller must wrap in try/except."""
-    result, duration = execute_query(q_id, iteration, q, run_config, args, engine)
+    result, duration = execute_query(
+        q_id, iteration, q, run_config, run_options, engine
+    )
 
     if expected is not None and prepare_validation_result is not None:
         result = prepare_validation_result(result)
@@ -971,16 +1022,16 @@ def run_polars_query_iteration(
             limit=query_result.limit,
             nulls_last=query_result.nulls_last,
             sort_keys=query_result.sort_keys,
-            **get_validation_options(args),
+            **get_validation_options(run_options),
         )
     else:
         validation_result = None
 
-    if args.print_results:
+    if run_options.print_results:
         print(result)
 
-    if args.results_directory is not None and iteration == 0:
-        results_dir = Path(args.results_directory)
+    if run_options.results_directory is not None and iteration == 0:
+        results_dir = Path(run_options.results_directory)
         results_dir.mkdir(parents=True, exist_ok=True)
         output_path = results_dir / f"q_{q_id:02d}.parquet"
         result.write_parquet(output_path)
@@ -998,7 +1049,7 @@ def run_polars_query(
     q_id: int,
     benchmark: Any,
     run_config: RunConfig,
-    args: argparse.Namespace,
+    run_options: RunOptions,
     engine: pl.GPUEngine | None,
     numeric_type: str,
     date_type: str,
@@ -1008,16 +1059,18 @@ def run_polars_query(
     query_result: QueryResult = getattr(benchmark, f"q{q_id}")(run_config)
     q = query_result.frame
 
-    print_query_plan(q_id, q, args, run_config, engine, print_plans=args.print_plans)
+    print_query_plan(
+        q_id, q, run_options, run_config, engine, print_plans=run_options.print_plans
+    )
     plan = None
-    if (args.explain or args.explain_logical) and engine is not None:
+    if (run_options.explain or run_options.explain_logical) and engine is not None:
         from cudf_polars.streaming.explain import serialize_query
 
         plan = serialize_query(q, engine)
 
     part_plan_rows = []
     if (
-        getattr(args, "explain_partition_plan", False)
+        run_options.explain_partition_plan
         and engine is not None
         and run_config.frontend in _STREAMING_FRONTENDS
     ):
@@ -1055,11 +1108,11 @@ def run_polars_query(
             case baseline:
                 raise ValueError(f"Invalid baseline: {baseline}")
 
-    if args.output_expected_directory is not None:
+    if run_options.output_expected_directory is not None:
         assert expected is not None, (
             "Expected result must be computed before writing to disk."
         )
-        expected_dir = Path(args.output_expected_directory)
+        expected_dir = Path(run_options.output_expected_directory)
         expected_dir.mkdir(parents=True, exist_ok=True)
         expected.write_parquet(expected_dir / f"q_{q_id:02d}.parquet")
 
@@ -1068,7 +1121,7 @@ def run_polars_query(
     validation_failed = False
     record: SuccessRecord | FailedRecord
 
-    for i in range(args.iterations):
+    for i in range(run_config.iterations):
         if _HAS_STRUCTLOG and run_config.collect_traces:
             setup_logging(q_id, i)
             if isinstance(engine, StreamingEngine):
@@ -1090,7 +1143,7 @@ def run_polars_query(
                 iteration=i,
                 q=q,
                 run_config=run_config,
-                args=args,
+                run_options=run_options,
                 engine=engine,
                 expected=expected,
                 query_result=query_result,
@@ -1136,7 +1189,7 @@ def run_polars_query(
 
 def _run_query_loop(
     benchmark: Any,
-    args: argparse.Namespace,
+    run_options: RunOptions,
     run_config: RunConfig,
     engine: pl.GPUEngine | None,
     numeric_type: str,
@@ -1155,6 +1208,11 @@ def _run_query_loop(
     query_failures: list[tuple[int, int]] = []
     all_partition_plan_rows: list = []
 
+    # lukewarm: drop once before query 1 so the run starts from a known cold
+    # state, then let the cache warm naturally across queries and iterations.
+    if run_config.io_mode == "lukewarm":
+        drop_file_page_cache_recursively(run_config.dataset_path)
+
     for q_id in run_config.queries:
         if engine is not None:
             quent_context = engine.config["executor_options"].get("quent_context")
@@ -1168,21 +1226,29 @@ def _run_query_loop(
                     )
                 )
 
+        known_failures: dict[int, str] = {
+            **getattr(benchmark, "EXPECTED_FAILURES_TPCDS", {}),
+            **getattr(benchmark, "EXPECTED_FAILURES_TPCH", {}),
+        }
+
         try:
             result = run_polars_query(
                 q_id=q_id,
                 benchmark=benchmark,
                 run_config=run_config,
-                args=args,
+                run_options=run_options,
                 engine=engine,
                 numeric_type=numeric_type,
                 date_type=date_type,
                 prepare_validation_result=prepare_validation_result,
             )
         except Exception:
-            print(f"❌ query={q_id} failed (setup or execution)!")
+            if q_id in known_failures:
+                print(f"⚠️  query={q_id} failed (known issue): {known_failures[q_id]}")
+            else:
+                print(f"❌ query={q_id} failed (setup or execution)!")
+                query_failures.append((q_id, -1))
             print(traceback.format_exc())
-            query_failures.append((q_id, -1))
             record = FailedRecord(
                 query=q_id,
                 iteration=-1,
@@ -1198,12 +1264,24 @@ def _run_query_loop(
         records[q_id] = result.query_records
         if result.plan is not None:
             plans[q_id] = result.plan
-        query_failures.extend(result.iteration_failures)
+        for iteration_failure in result.iteration_failures:
+            if iteration_failure[0] in known_failures:
+                print(
+                    f"⚠️  query={iteration_failure[0]} iteration {iteration_failure[1]} failed "
+                    f"(known issue): {known_failures[iteration_failure[0]]}"
+                )
+            else:
+                query_failures.append(iteration_failure)
         if result.validation_failed:
-            validation_failures.append(q_id)
+            if q_id in known_failures:
+                print(
+                    f"⚠️  query={q_id} failed validation (known issue): {known_failures[q_id]}"
+                )
+            else:
+                validation_failures.append(q_id)
         all_partition_plan_rows.extend(result.partition_plan_rows)
 
-    if all_partition_plan_rows and getattr(args, "explain_partition_plan", False):
+    if all_partition_plan_rows and run_options.explain_partition_plan:
         from cudf_polars.streaming.explain import format_partition_plan_table
 
         print(format_partition_plan_table(all_partition_plan_rows), flush=True)
@@ -1212,14 +1290,14 @@ def _run_query_loop(
 
 
 def _finalize_benchmark_run(
-    args: argparse.Namespace,
+    run_options: RunOptions,
     run_config: RunConfig,
     validation_failures: list[int],
     query_failures: list[tuple[int, int]],
     engine: StreamingEngine | None,
 ) -> None:
     """Summarize, serialize, and exit after a benchmark run."""
-    if args.summarize:
+    if run_options.summarize:
         run_config.summarize()
     if (
         run_config.validation_method is not None
@@ -1232,10 +1310,16 @@ def _finalize_benchmark_run(
                 f"{len(validation_failures)} queries failed validation: "
                 f"{sorted(set(validation_failures))}"
             )
+        elif query_failures:
+            print(
+                f"⚠️  {len({q for q, _ in query_failures})} queries failed to run; "
+                "validation was skipped."
+            )
         else:
             print("✅ All validated queries passed.")
-    args.output.write(json.dumps(run_config.serialize(engine=engine)))
-    args.output.write("\n")
+    if run_options.output is not None:
+        run_options.output.write(json.dumps(run_config.serialize(engine=engine)))
+        run_options.output.write("\n")
     sys.exit(1 if (query_failures or validation_failures) else 0)
 
 
@@ -1247,9 +1331,10 @@ def run_polars_cpu(
     date_type: str,
 ) -> None:
     """Run benchmark queries using the Polars CPU streaming engine."""
+    run_options = RunOptions.from_args(args)
     records, plans, validation_failures, query_failures = _run_query_loop(
         benchmark,
-        args,
+        run_options,
         run_config,
         engine=None,
         numeric_type=numeric_type,
@@ -1257,7 +1342,7 @@ def run_polars_cpu(
     )
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
     _finalize_benchmark_run(
-        args, run_config, validation_failures, query_failures, engine=None
+        run_options, run_config, validation_failures, query_failures, engine=None
     )
 
 
@@ -1270,6 +1355,7 @@ def run_polars_in_memory(
     date_type: str,
 ) -> None:
     """Run benchmark queries using a single-process GPU in-memory engine."""
+    run_options = RunOptions.from_args(args)
     engine_options = {
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
@@ -1281,7 +1367,7 @@ def run_polars_in_memory(
     )
     records, plans, validation_failures, query_failures = _run_query_loop(
         benchmark,
-        args,
+        run_options,
         run_config,
         engine=engine,
         numeric_type=numeric_type,
@@ -1290,7 +1376,7 @@ def run_polars_in_memory(
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
     run_config = _consolidate_logs(run_config, engine=None)
     _finalize_benchmark_run(
-        args, run_config, validation_failures, query_failures, engine=None
+        run_options, run_config, validation_failures, query_failures, engine=None
     )
 
 
@@ -1305,6 +1391,7 @@ def run_polars_spmd(
     """Run benchmark queries using SPMD execution via the ``rrun`` launcher."""
     from cudf_polars.engine.spmd import SPMDEngine
 
+    run_options = RunOptions.from_args(args)
     executor_options = get_executor_options(run_config, benchmark=benchmark)
     # "cluster" is reserved — SPMDEngine sets it
     executor_options.pop("cluster", None)
@@ -1336,7 +1423,7 @@ def run_polars_spmd(
         run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
         records, plans, validation_failures, query_failures = _run_query_loop(
             benchmark,
-            args,
+            run_options,
             run_config,
             engine,
             numeric_type,
@@ -1357,7 +1444,7 @@ def run_polars_spmd(
             collect_traces=run_config.collect_traces,
         )
     _finalize_benchmark_run(
-        args, run_config, validation_failures, query_failures, engine=engine
+        run_options, run_config, validation_failures, query_failures, engine=engine
     )
 
 
@@ -1372,6 +1459,7 @@ def run_polars_ray(
     """Run benchmark queries using Ray actor-based distributed execution."""
     from cudf_polars.engine.ray import RayEngine
 
+    run_options = RunOptions.from_args(args)
     executor_options = get_executor_options(run_config, benchmark=benchmark)
     # "cluster" is reserved — RayEngine sets it
     executor_options.pop("cluster", None)
@@ -1395,7 +1483,7 @@ def run_polars_ray(
         run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
         records, plans, validation_failures, query_failures = _run_query_loop(
             benchmark,
-            args,
+            run_options,
             run_config,
             engine,
             numeric_type,
@@ -1410,7 +1498,7 @@ def run_polars_ray(
         collect_traces=run_config.collect_traces,
     )
     _finalize_benchmark_run(
-        args, run_config, validation_failures, query_failures, engine=engine
+        run_options, run_config, validation_failures, query_failures, engine=engine
     )
 
 
@@ -1427,6 +1515,7 @@ def run_polars_dask(
 
     from cudf_polars.engine.dask import DaskEngine
 
+    run_options = RunOptions.from_args(args)
     executor_options = get_executor_options(run_config, benchmark=benchmark)
     # "cluster" is reserved — DaskEngine sets it
     executor_options.pop("cluster", None)
@@ -1456,7 +1545,7 @@ def run_polars_dask(
         ) as engine:
             run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
             records, plans, validation_failures, query_failures = _run_query_loop(
-                benchmark, args, run_config, engine, numeric_type, date_type
+                benchmark, run_options, run_config, engine, numeric_type, date_type
             )
             run_config = dataclasses.replace(
                 run_config, records=dict(records), plans=plans
@@ -1472,7 +1561,7 @@ def run_polars_dask(
         if dask_client is not None:
             dask_client.close()
     _finalize_benchmark_run(
-        args, run_config, validation_failures, query_failures, engine=engine
+        run_options, run_config, validation_failures, query_failures, engine=engine
     )
 
 
@@ -1774,14 +1863,22 @@ def execute_duckdb_query(
                 f"CREATE OR REPLACE VIEW {name} AS "
                 f"SELECT * FROM parquet_scan('{pattern}');"
             )
-        return conn.execute(query).pl()
+        result = conn.sql(query).pl()
+        assert isinstance(result, pl.DataFrame)
+        return result
 
 
 def run_duckdb(duckdb_queries_cls: Any, args: argparse.Namespace) -> None:
     """Run the benchmark with DuckDB."""
     vars(args).update({"query_set": duckdb_queries_cls.name})
+    run_options = RunOptions.from_args(args)
     run_config = RunConfig.from_args(args)
     records: defaultdict[int, list[SuccessRecord | FailedRecord]] = defaultdict(list)
+
+    # lukewarm: drop once before query 1 so the run starts from a known cold
+    # state, then let the cache warm naturally across queries and iterations.
+    if run_config.io_mode == "lukewarm":
+        drop_file_page_cache_recursively(run_config.dataset_path)
 
     for q_id in run_config.queries:
         try:
@@ -1805,7 +1902,7 @@ def run_duckdb(duckdb_queries_cls: Any, args: argparse.Namespace) -> None:
         print(f"DuckDB Executing: {q_id}")
         records[q_id] = []
 
-        for i in range(args.iterations):
+        for i in range(run_config.iterations):
             if run_config.io_mode == "cold":
                 drop_file_page_cache_recursively(run_config.dataset_path)
             t0 = time.time()
@@ -1818,21 +1915,22 @@ def run_duckdb(duckdb_queries_cls: Any, args: argparse.Namespace) -> None:
             )
             t1 = time.time()
             record = SuccessRecord(query=q_id, iteration=i, duration=t1 - t0)
-            if args.print_results:
+            if run_options.print_results:
                 print(result)
             print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")
             records[q_id].append(record)
-            if i == 0 and args.output_expected_directory is not None:
-                expected_dir = Path(args.output_expected_directory)
+            if i == 0 and run_options.output_expected_directory is not None:
+                expected_dir = Path(run_options.output_expected_directory)
                 expected_dir.mkdir(parents=True, exist_ok=True)
                 result.write_parquet(expected_dir / f"q_{q_id:02d}.parquet")
 
     run_config = dataclasses.replace(run_config, records=dict(records))
-    if args.summarize:
+    if run_options.summarize:
         run_config.summarize()
 
-    args.output.write(json.dumps(run_config.serialize(engine=None)))
-    args.output.write("\n")
+    if run_options.output is not None:
+        run_options.output.write(json.dumps(run_config.serialize(engine=None)))
+        run_options.output.write("\n")
 
 
 def check_input_data_type(
@@ -1901,24 +1999,8 @@ def _query_type(num_queries: int) -> Any:
     return parse
 
 
-def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
-    """Build the argument parser for PDS-H/PDS-DS benchmarks."""
-    from cudf_polars.engine.options import StreamingOptions
-
-    parser = argparse.ArgumentParser(
-        prog="Cudf-Polars PDS-H/PDS-DS Benchmarks",
-        formatter_class=argparse.RawTextHelpFormatter,
-    )
-    parser.add_argument(
-        "query",
-        type=_query_type(num_queries),
-        help=textwrap.dedent("""\
-            Query to run. One of the following:
-            - A single number (e.g. 11)
-            - A comma-separated list of query numbers (e.g. 1,3,7)
-            - A range of query numbers (e.g. 1-11,23-34)
-            - The string 'all' to run all queries (1 through 22)"""),
-    )
+def _add_dataset_args(parser: argparse.ArgumentParser) -> None:
+    """Register dataset path and format arguments on *parser*."""
     parser.add_argument(
         "--path",
         type=str,
@@ -1947,11 +2029,50 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     parser.add_argument(
         "--suffix",
         type=str,
-        default=".parquet",
+        default=None,
         help=textwrap.dedent("""\
             File suffix for input table files.
             Default: .parquet"""),
     )
+    parser.add_argument(
+        "--io-mode",
+        dest="io_mode",
+        default="lukewarm",
+        choices=["cold", "lukewarm", "hot"],
+        help=textwrap.dedent("""\
+            Cache state control for each timed iteration:
+                - cold     : Drop Linux page cache before each iteration (requires kvikio)
+                - lukewarm : Drop once before the first query, then let cache warm naturally (default)
+                - hot      : One untimed warmup iteration to populate cache before measured runs"""),
+    )
+    parser.add_argument(
+        "--validation-abs-tol",
+        dest="validation_abs_tol",
+        type=float,
+        default=POLARS_VALIDATION_OPTIONS["abs_tol"],
+        help=f"Absolute tolerance for validation comparisons (default: {POLARS_VALIDATION_OPTIONS['abs_tol']}).",
+    )
+
+
+def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
+    """Build the argument parser for PDS-H/PDS-DS benchmarks."""
+    from cudf_polars.engine.options import StreamingOptions
+
+    parser = argparse.ArgumentParser(
+        prog="Cudf-Polars PDS-H/PDS-DS Benchmarks",
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+    parser.add_argument(
+        "query",
+        type=_query_type(num_queries),
+        help=textwrap.dedent("""\
+            Query to run. One of the following:
+            - A single number (e.g. 11)
+            - A comma-separated list of query numbers (e.g. 1,3,7)
+            - A range of query numbers (e.g. 1-11,23-34)
+            - The string 'all' to run all queries (1 through 22)"""),
+    )
+    _add_dataset_args(parser)
     parser.add_argument(
         "--frontend",
         required=True,
@@ -1990,17 +2111,6 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         default=1,
         type=int,
         help="Number of times to run the same query.",
-    )
-    parser.add_argument(
-        "--io-mode",
-        dest="io_mode",
-        default="lukewarm",
-        choices=["cold", "lukewarm", "hot"],
-        help=textwrap.dedent("""\
-            Cache state control for each timed iteration:
-                - cold     : Drop Linux page cache before each iteration (requires kvikio)
-                - lukewarm : No cache manipulation; OS cache state unchanged (default)
-                - hot      : One untimed warmup iteration to populate cache before measured runs"""),
     )
     parser.add_argument(
         "--collect-traces",
@@ -2103,12 +2213,6 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="Optional directory to write expected results as parquet files.",
-    )
-    parser.add_argument(
-        "--validation-abs-tol",
-        type=float,
-        default=0.01,
-        help="Absolute tolerance for assert_frame_equal validation. Default: 0.01",
     )
     parser.add_argument(
         "--extra-info",
