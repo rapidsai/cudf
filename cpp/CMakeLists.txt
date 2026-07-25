@@ -1295,17 +1295,13 @@ foreach(_dep IN LISTS _absorbed_deps)
     target_include_directories(cudf PUBLIC ${_dep_includes})
   endif()
 
-  # Wrap with WHOLE_ARCHIVE + BUILD_INTERFACE so the static lib is absorbed into libcudf.so and
-  # hidden from the installed interface.
-  target_link_libraries(
-    cudf PRIVATE "$<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,${_dep_link}>>"
-  )
-
-  # nvcomp_static has done a WHOLE_ARCHIVE on rmm and rapids_logger itself. Therefore it needs to
-  # come after our WHOLE_ARCHIVE otherwise we will get duplicate symbols for rmm and/or
-  # rapids_logger
-  if(TARGET nvcomp::nvcomp_static)
-    target_link_libraries(${_dep_link} INTERFACE nvcomp::nvcomp_static)
+  # nvcomp_static already whole-archives rmm and rapids_logger.
+  if(NOT CUDF_nvcomp_TARGET STREQUAL "nvcomp::nvcomp_static")
+    # Wrap with WHOLE_ARCHIVE + BUILD_INTERFACE so the static lib is absorbed into libcudf.so and
+    # hidden from the installed interface.
+    target_link_libraries(
+      cudf PRIVATE "$<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,${_dep_link}>>"
+    )
   endif()
 
   # Merge the absorbed library's export set metadata into cudf-exports so the installed config has
