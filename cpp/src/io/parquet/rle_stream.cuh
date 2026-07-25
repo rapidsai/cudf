@@ -337,37 +337,39 @@ struct rle_stream {
     }
   }
 
-  __device__ inline int decode_next_ring(int t, int count)
+  template <typename Group>
+  __device__ inline int decode_next_ring(Group const& group, int count)
   {
     int const output_count = min(count, total_values - cur_values);
 
-    int const warp_id        = t / cudf::detail::warp_size;
+    auto const warp          = cg::tiled_partition<cudf::detail::warp_size>(group);
+    int const warp_id        = warp.meta_group_rank();
     int const warp_decode_id = warp_id - 1;
-    int const warp_lane      = t % cudf::detail::warp_size;
+    int const warp_lane      = warp.thread_rank();
 
     __shared__ int values_processed_shared;
     __shared__ int decode_index_shared;
     __shared__ int fill_index_shared;
-    if (t == 0) {
+    cg::invoke_one(group, [&]() {
       values_processed_shared = 0;
       decode_index_shared     = decode_index;
       fill_index_shared       = fill_index;
-    }
+    });
 
-    __syncthreads();
+    group.sync();
 
     fill_index = fill_index_shared;
 
     do {
       // protect against threads advancing past the end of this loop
       // and updating shared variables.
-      __syncthreads();
+      group.sync();
 
       // warp 0 reads ahead and fills `runs` array to be decoded by remaining warps.
       if (warp_id == 0) {
         // fill the next set of runs. fill_runs will generally be the bottleneck for any
         // kernel that uses an rle_stream.
-        if (warp_lane == 0) {
+        cg::invoke_one(warp, [&]() {
           fill_run_batch();
           if (decode_index == -1) {
             // first time, set it to the beginning of the buffer (rolled)
@@ -375,7 +377,7 @@ struct rle_stream {
             decode_index_shared = decode_index;
           }
           fill_index_shared = fill_index;
-        }
+        });
       }
       // remaining warps decode the runs, starting on the second iteration of this. the pipeline of
       // runs is also persistent across calls to decode_next, so on the second call to decode_next,
@@ -410,8 +412,8 @@ struct rle_stream {
                                              level_bits,
                                              warp_lane);
 
-          __syncwarp();
-          if (warp_lane == 0) {
+          warp.sync();
+          cg::invoke_one(warp, [&]() {
             // after writing this batch, are we at the end of the output buffer?
             auto const at_end = ((last_run_pos + batch_len - cur_values) == output_count);
 
@@ -425,10 +427,10 @@ struct rle_stream {
               decode_index_shared = run_index + 1;
             }
             run.remaining = remaining;
-          }
+          });
         }
       }
-      __syncthreads();
+      group.sync();
       decode_index = decode_index_shared;
       fill_index   = fill_index_shared;
     } while (values_processed_shared < output_count);
@@ -703,7 +705,7 @@ struct rle_stream {
     if constexpr (use_chunked_expand) {
       return decode_next_chunked(cg::this_thread_block(), count);
     } else {
-      return decode_next_ring(t, count);
+      return decode_next_ring(cg::this_thread_block(), count);
     }
   }
 
