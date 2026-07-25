@@ -19,6 +19,8 @@
 
 namespace cudf::io::parquet::detail {
 
+namespace cg = cooperative_groups;
+
 template <int num_threads>
 __device__ constexpr int rle_stream_required_run_buffer_size()
 {
@@ -159,7 +161,7 @@ struct rle_run {
 // Controls the number of run headers parsed per chunk in the chunked-expand path.
 // SMEM cost is (2 * max_runs_per_chunk + 1) * 4 bytes. Increasing max_runs_per_chunk reduces the
 // number of outer-loop iterations in decode_next_chunked (each with a serial
-// header-parse phase and a __syncthreads() at the end), but competes with occupancy in
+// header-parse phase and a group.sync() at the end), but competes with occupancy in
 // preprocess_levels_kernel.
 //
 // 1024 was chosen empirically for sm_80+. Sweeps of {256, 512, 1024, 2048,
@@ -452,7 +454,8 @@ struct rle_stream {
    * and resume it as slot 0 of the next invocation without re-parsing its
    * header (cur has already advanced past the payload).
    */
-  __device__ inline int decode_next_chunked(int t, int count)
+  template <typename Group>
+  __device__ inline int decode_next_chunked(Group const& group, int count)
   {
     int const output_count = min(count, total_values - cur_values);
 
@@ -472,9 +475,10 @@ struct rle_stream {
     __shared__ int s_chunk_total;  // sum of run lengths in this chunk (run_prefix_end)
     __shared__ int s_base_out;     // absolute output pos where this chunk starts
 
-    int const lane          = t & 31;
-    int const warp          = t >> 5;
-    int constexpr num_warps = num_rle_stream_decode_threads / cudf::detail::warp_size;
+    auto const warp         = cg::tiled_partition<cudf::detail::warp_size>(group);
+    int const lane          = warp.thread_rank();
+    int const warp_id       = warp.meta_group_rank();
+    int const num_warps     = warp.meta_group_size();
     int const value_width   = cudf::util::div_rounding_up_unsafe(level_bits, 8);
     // Bit mask used to extract a single level from a bit-packed literal-run
     // payload word. Invariant across the whole call; hoisted out of the
@@ -488,11 +492,12 @@ struct rle_stream {
     // values or run out of encoded input.
     while (out_pos_total < out_end) {
       // ----- Phase 1: single-thread run-header parse ------------------
-      // Thread 0 walks the encoded stream, decoding VLQ run headers and
-      // filling chunk_out_off / chunk_meta. The other threads wait at the
-      // __syncthreads() below. This is cheap because it is bounded by
-      // max_runs_per_chunk headers and header parsing is inherently serial.
-      if (t == 0) {
+      // One thread (via cg::invoke_one) walks the encoded stream, decoding
+      // VLQ run headers and filling chunk_out_off / chunk_meta. The other
+      // threads wait at the group.sync() below. This is cheap because it is
+      // bounded by max_runs_per_chunk headers and header parsing is
+      // inherently serial.
+      cg::invoke_one(group, [&]() {
         int run_prefix_end    = 0;
         int num_runs          = 0;
         int out_base          = out_pos_total;
@@ -567,8 +572,8 @@ struct rle_stream {
         s_chunk_runs  = num_runs;
         s_chunk_total = run_prefix_end;
         s_base_out    = out_base;
-      }
-      __syncthreads();
+      });
+      group.sync();
 
       // ----- Phase 2: cooperative expand ------------------------------
       // All warps see the same chunk_out_off / chunk_meta tables. We split
@@ -582,7 +587,7 @@ struct rle_stream {
       if (chunk_runs == 0) { break; }
 
       int const per = cudf::util::div_rounding_up_safe(chunk_total, num_warps);
-      int const lo  = warp * per;
+      int const lo  = warp_id * per;
       int const hi  = min(lo + per, chunk_total);
       if (lo < hi) {
         // Binary-search chunk_out_off to find the first run that intersects
@@ -617,7 +622,7 @@ struct rle_stream {
           if (run_desc & (1u << 31)) {
             int const payload_off  = run_desc & 0x7fffffff;
             uint8_t const* payload = s_start + payload_off;
-            for (int p = out_lo + lane; p < out_hi; p += 32) {
+            for (int p = out_lo + lane; p < out_hi; p += warp.size()) {
               int const local       = (p - run_start_out) + run_payload_off;
               int bitpos            = local * level_bits;
               uint8_t const* source = payload + (bitpos >> 3);
@@ -658,14 +663,14 @@ struct rle_stream {
               }
             }
             level_t const fill = static_cast<level_t>(level_val);
-            for (int q = base_out + out_lo + lane; q < base_out + out_hi; q += 32) {
+            for (int q = base_out + out_lo + lane; q < base_out + out_hi; q += warp.size()) {
               output[rolling_index<max_output_values>(q)] = fill;
             }
           }
         }
       }
       // Barrier before rewriting the shared tables on the next iteration.
-      __syncthreads();
+      group.sync();
 
       out_pos_total = base_out + chunk_total;
     }
@@ -696,7 +701,7 @@ struct rle_stream {
       return output_count;
     }
     if constexpr (use_chunked_expand) {
-      return decode_next_chunked(t, count);
+      return decode_next_chunked(cg::this_thread_block(), count);
     } else {
       return decode_next_ring(t, count);
     }
