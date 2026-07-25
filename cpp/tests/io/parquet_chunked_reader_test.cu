@@ -1339,6 +1339,85 @@ TEST_F(ParquetChunkedReaderInputLimitConstrainedTest, MixedColumns)
 struct ParquetChunkedReaderInputLimitTest : public cudf::test::BaseFixture {};
 
 namespace {
+// Reads a file through the chunked reader, optionally projecting a subset of columns.
+auto chunked_read_projected(std::string const& filepath,
+                            std::vector<std::string> const& columns,
+                            std::size_t output_limit,
+                            std::size_t input_limit)
+{
+  auto builder = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  if (not columns.empty()) { builder.columns(columns); }
+  auto const read_opts = builder.build();
+  auto reader          = cudf::io::chunked_parquet_reader(output_limit, input_limit, read_opts);
+
+  auto num_chunks = 0;
+  auto out_tables = std::vector<std::unique_ptr<cudf::table>>{};
+  do {
+    auto chunk = reader.read_chunk();
+    ++num_chunks;
+    out_tables.emplace_back(std::move(chunk.tbl));
+  } while (reader.has_next());
+
+  auto out_tviews = std::vector<cudf::table_view>{};
+  for (auto const& tbl : out_tables) {
+    out_tviews.emplace_back(tbl->view());
+  }
+  return std::pair(cudf::concatenate(out_tviews), num_chunks);
+}
+}  // namespace
+
+// Pass construction must size each row group by the columns actually being read. Projecting a
+// single column out of a wide file should therefore need far fewer passes - and so produce far
+// fewer output chunks - than reading every column under the same `pass_read_limit`.
+TEST_F(ParquetChunkedReaderInputLimitTest, ProjectedColumnsShrinkPasses)
+{
+  constexpr int num_columns = 16;
+  constexpr int num_rows    = 500'000;
+
+  auto const filepath = temp_env->get_temp_filepath("projected_columns_shrink_passes.parquet");
+
+  auto const iter   = cuda::counting_iterator<int64_t>{0};
+  auto columns      = std::vector<std::unique_ptr<cudf::column>>{};
+  auto column_names = std::vector<std::string>{};
+  for (int c = 0; c < num_columns; c++) {
+    auto col = cudf::test::fixed_width_column_wrapper<int64_t>(iter, iter + num_rows);
+    columns.emplace_back(col.release());
+    column_names.emplace_back("col_" + std::to_string(c));
+  }
+  auto const input_table = cudf::table(std::move(columns));
+
+  auto metadata = cudf::io::table_input_metadata{input_table.view()};
+  for (int c = 0; c < num_columns; c++) {
+    metadata.column_metadata[c].set_name(column_names[c]);
+  }
+
+  // Many small row groups so that the pass builder has boundaries to choose between, and no
+  // dictionary encoding so that column chunk sizes are predictable.
+  cudf::io::write_parquet(
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, input_table.view())
+      .metadata(std::move(metadata))
+      .compression(cudf::io::compression_type::NONE)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER)
+      .row_group_size_rows(20'000)
+      .build());
+
+  // Sized so that a pass holds several row groups' worth of one column, but well under a single
+  // row group's worth of all 16 columns.
+  constexpr std::size_t pass_read_limit = 32ul * 1024 * 1024;
+
+  auto const [all_cols, all_cols_chunks] = chunked_read_projected(filepath, {}, 0, pass_read_limit);
+  auto const [one_col, one_col_chunks] =
+    chunked_read_projected(filepath, {column_names[0]}, 0, pass_read_limit);
+
+  // The projected read must not be split more finely than the full read.
+  EXPECT_LT(one_col_chunks, all_cols_chunks);
+
+  // ...and it must still return the right data.
+  CUDF_TEST_EXPECT_TABLES_EQUAL(all_cols->view(), input_table.view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(one_col->view(), cudf::table_view{{input_table.view().column(0)}});
+}
+
+namespace {
 struct offset_gen {
   int const group_size;
   __device__ int operator()(int i) { return i * group_size; }

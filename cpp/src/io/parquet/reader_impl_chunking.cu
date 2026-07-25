@@ -543,8 +543,15 @@ void reader_impl::compute_input_passes(read_mode mode)
       ? static_cast<size_t>(_input_pass_read_limit * input_limit_compression_reserve)
       : std::numeric_limits<std::size_t>::max();
 
+  // Size each row group by the column chunks we are actually going to read.
+  // `create_global_chunk_info()` has already built one `ColumnChunkDesc` per (row group, selected
+  // input column), so this is an exact measure of the compressed bytes a pass will hold rather than
+  // an estimate over the whole row group.
+  auto const row_group_sizes =
+    make_row_group_pass_size_info(row_groups_info, _file_itm_data.chunks, _input_columns.size());
+
   auto pass_data =
-    compute_row_group_passes(row_groups_info, comp_read_limit, _file_itm_data.global_skip_rows);
+    compute_row_group_passes(row_group_sizes, comp_read_limit, _file_itm_data.global_skip_rows);
 
   _file_itm_data.input_pass_row_group_offsets = std::move(pass_data.pass_row_group_offsets);
   _file_itm_data.input_pass_start_row_count   = std::move(pass_data.pass_start_row_counts);

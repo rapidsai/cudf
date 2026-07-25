@@ -70,8 +70,6 @@ struct row_group_info {
   size_t source_start_row;     // file-local start row of this row group within its source file
   size_t unadjusted_num_rows;  // number of unadjusted rows in the row group
   size_type source_index;      // file index.
-  size_t compressed_size;      // compressed size of the row group
-  size_t max_leaf_values;      // maximum number of leaf values in the row group
 
   // Optional metadata pulled from the column and offset indexes, if present.
   std::optional<std::vector<column_chunk_info>> column_chunks;
@@ -80,6 +78,20 @@ struct row_group_info {
    * @brief Indicates the presence of page-level offset indexes.
    */
   [[nodiscard]] bool has_offset_index() const { return column_chunks.has_value(); }
+};
+
+/**
+ * @brief Per-row-group inputs to read pass partitioning.
+ *
+ * Unlike `row_group_info`, the sizes here are scoped to the columns actually selected for
+ * reading, so they model the memory a pass will really occupy rather than the size of the
+ * entire row group.
+ */
+struct row_group_pass_size_info {
+  size_t start_row;        // global start row of this row group
+  size_t num_rows;         // unadjusted number of rows in this row group
+  size_t compressed_size;  // compressed size of the selected columns in this row group
+  size_t max_leaf_values;  // maximum number of leaf values over the selected columns
 };
 
 /**
@@ -598,15 +610,14 @@ class aggregate_reader_metadata {
   [[nodiscard]] std::vector<std::string> get_pandas_index_names() const;
 
   /**
-   * @brief Computes the compressed and total size, the number of rows, and the maximum number of
-   * leaf values in the specified row group
+   * @brief Computes the compressed size, the number of rows, and the maximum number of leaf values
+   * in the specified row group, over all of its columns
    *
-   * @param row_group The row group
+   * @param rg The row group
    *
-   * @return A tuple of row group compressed size, total size, number of rows, and maximum leaf
-   * values
+   * @return A tuple of row group compressed size, number of rows, and maximum leaf values
    */
-  [[nodiscard]] std::tuple<size_t, size_t, size_t, size_t> get_row_group_properties(
+  [[nodiscard]] std::tuple<size_t, size_t, size_t> get_row_group_properties(
     RowGroup const& rg) const;
 
   /**
