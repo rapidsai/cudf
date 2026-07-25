@@ -895,12 +895,8 @@ def _columnchunk_metadata_from_footers(
 ) -> dict[str, list[int]]:
     columnchunk_metadata: dict[str, list[int]] = {}
     for fmd in footers:
-        for rg in fmd.row_groups:
-            for col in rg.columns:
-                name = ".".join(col.meta_data.path_in_schema)
-                columnchunk_metadata.setdefault(name, []).append(
-                    col.meta_data.total_uncompressed_size
-                )
+        for name, uncompressed_sizes in fmd.columnchunk_metadata.items():
+            columnchunk_metadata.setdefault(name, []).extend(uncompressed_sizes)
     return columnchunk_metadata
 
 
@@ -987,7 +983,7 @@ class ParquetMetadata:
             row_count = num_rows_per_sampled_file * self.total_file_count
 
         num_row_groups_per_sampled_file = [
-            len(fmd.row_groups) for fmd in sample_footers
+            len(fmd.row_group_num_rows) for fmd in sample_footers
         ]
         rowgroup_offsets_per_file = list(
             itertools.accumulate(num_row_groups_per_sampled_file, initial=0)
