@@ -339,7 +339,6 @@ struct rle_stream {
   {
     int const output_count = min(count, total_values - cur_values);
 
-    // otherwise, full decode.
     int const warp_id        = t / cudf::detail::warp_size;
     int const warp_decode_id = warp_id - 1;
     int const warp_lane      = t % cudf::detail::warp_size;
@@ -469,14 +468,14 @@ struct rle_stream {
     // Payload offset within run slot 0: non-zero only when continuing a run
     // that was split across two decode_next_chunked calls.
     __shared__ int s_run0_payload_offset;
-    __shared__ int s_chunk_runs;   // number of runs parsed in this chunk (n)
-    __shared__ int s_chunk_total;  // sum of run lengths in this chunk (co)
+    __shared__ int s_chunk_runs;   // number of runs parsed in this chunk (num_runs)
+    __shared__ int s_chunk_total;  // sum of run lengths in this chunk (run_prefix_end)
     __shared__ int s_base_out;     // absolute output pos where this chunk starts
 
     int const lane          = t & 31;
     int const warp          = t >> 5;
     int constexpr num_warps = num_rle_stream_decode_threads / cudf::detail::warp_size;
-    int const value_width   = (level_bits + 7) >> 3;
+    int const value_width   = cudf::util::div_rounding_up_unsafe(level_bits, 8);
     // Bit mask used to extract a single level from a bit-packed literal-run
     // payload word. Invariant across the whole call; hoisted out of the
     // phase-2 expand loop to keep it out of the hot register set.
@@ -494,8 +493,8 @@ struct rle_stream {
       // __syncthreads() below. This is cheap because it is bounded by
       // max_runs_per_chunk headers and header parsing is inherently serial.
       if (t == 0) {
-        int co                = 0;
-        int n                 = 0;
+        int run_prefix_end    = 0;
+        int num_runs          = 0;
         int out_base          = out_pos_total;
         chunk_out_off_v[0]    = 0;
         s_run0_payload_offset = 0;
@@ -507,14 +506,14 @@ struct rle_stream {
         if (partial_run_meta != -1) {
           int const remaining   = partial_run_total - partial_run_done;
           int const room        = out_end - out_base;
-          int const cnt         = min(remaining, room);
+          int const run_len     = min(remaining, room);
           chunk_meta_v[0]       = partial_run_meta;
-          chunk_out_off_v[1]    = cnt;
+          chunk_out_off_v[1]    = run_len;
           s_run0_payload_offset = partial_run_done;
-          n                     = 1;
-          co                    = cnt;
-          if (cnt < remaining) {
-            partial_run_done += cnt;
+          num_runs              = 1;
+          run_prefix_end        = run_len;
+          if (run_len < remaining) {
+            partial_run_done += run_len;
           } else {
             partial_run_meta = -1;
           }
@@ -522,29 +521,29 @@ struct rle_stream {
 
         // Parse up to max_runs_per_chunk headers, stopping early if the output range
         // fills up or the encoded stream is exhausted.
-        while (n < max_runs_per_chunk && (out_base + co) < out_end && cur < end) {
+        while (num_runs < max_runs_per_chunk && (out_base + run_prefix_end) < out_end && cur < end) {
           uint32_t const level_run = get_vlq32(cur, end);
 
           // Parquet RLE header format: LSB selects the encoding.
           //   bit 0 = 1  -> literal (bit-packed) run of `groups*8` values
           //   bit 0 = 0  -> RLE run of `level_run >> 1` copies of one value
-          // The high bit of `meta` distinguishes the two at expand time.
+          // The high bit of `run_desc` distinguishes the two at expand time.
           //
           // Assumption: (cur - s_start) fits in 31 bits, i.e. the encoded
           // level stream for a single Parquet page is < 2 GiB. This is
           // guaranteed by the Parquet format in practice (page payloads are
           // orders of magnitude smaller than 2 GiB) and is independent of
           // max_runs_per_chunk.
-          int cnt;
-          int meta;
+          int run_len;
+          int run_desc;
           if (level_run & 1u) {
             int const groups = level_run >> 1;
-            cnt              = groups * 8;
-            meta             = static_cast<int>(cur - s_start) | (1u << 31);
+            run_len          = groups * 8;
+            run_desc         = static_cast<int>(cur - s_start) | (1u << 31);
             cur += groups * level_bits;
           } else {
-            cnt  = level_run >> 1;
-            meta = static_cast<int>(cur - s_start);
+            run_len  = level_run >> 1;
+            run_desc = static_cast<int>(cur - s_start);
             cur += value_width;
           }
 
@@ -553,20 +552,20 @@ struct rle_stream {
           // Note `cur` has already been advanced past the *full* payload
           // above, which is what we want - the resumed call reads the
           // payload out of s_start via the saved meta offset.
-          int const room = out_end - (out_base + co);
-          if (cnt > room) {
-            partial_run_meta  = meta;
-            partial_run_total = cnt;
+          int const room = out_end - (out_base + run_prefix_end);
+          if (run_len > room) {
+            partial_run_meta  = run_desc;
+            partial_run_total = run_len;
             partial_run_done  = room;
-            cnt               = room;
+            run_len           = room;
           }
-          co += cnt;
-          chunk_meta_v[n]      = meta;
-          chunk_out_off_v[++n] = co;
+          run_prefix_end += run_len;
+          chunk_meta_v[num_runs]      = run_desc;
+          chunk_out_off_v[++num_runs] = run_prefix_end;
           if (partial_run_meta != -1) { break; }
         }
-        s_chunk_runs  = n;
-        s_chunk_total = co;
+        s_chunk_runs  = num_runs;
+        s_chunk_total = run_prefix_end;
         s_base_out    = out_base;
       }
       __syncthreads();
@@ -582,41 +581,44 @@ struct rle_stream {
 
       if (chunk_runs == 0) { break; }
 
-      int const per = (chunk_total + num_warps - 1) / num_warps;
+      int const per = cudf::util::div_rounding_up_safe(chunk_total, num_warps);
       int const lo  = warp * per;
       int const hi  = min(lo + per, chunk_total);
       if (lo < hi) {
         // Binary-search chunk_out_off to find the first run that intersects
         // this warp's slice, then iterate forward until we pass `hi`.
-        int const a = static_cast<int>(
-                        cuda::std::upper_bound(
-                          chunk_out_off_v.begin(), chunk_out_off_v.begin() + chunk_runs + 1, lo) -
-                        chunk_out_off_v.begin()) -
-                      1;
-        for (int r = a; r < chunk_runs && chunk_out_off_v[r] < hi; ++r) {
-          int const r_lo   = chunk_out_off_v[r];
-          int const r_hi   = chunk_out_off_v[r + 1];
-          int const seg_lo = max(r_lo, lo);
-          int const seg_hi = min(r_hi, hi);
-          int const meta   = chunk_meta_v[r];
+        int const first_run_idx = static_cast<int>(
+                                   cuda::std::upper_bound(
+                                     chunk_out_off_v.begin(),
+                                     chunk_out_off_v.begin() + chunk_runs + 1,
+                                     lo) -
+                                   chunk_out_off_v.begin()) -
+                                 1;
+        for (int run_idx = first_run_idx; run_idx < chunk_runs && chunk_out_off_v[run_idx] < hi;
+             ++run_idx) {
+          int const run_start_out = chunk_out_off_v[run_idx];
+          int const run_end_out   = chunk_out_off_v[run_idx + 1];
+          int const out_lo        = max(run_start_out, lo);
+          int const out_hi        = min(run_end_out, hi);
+          int const run_desc      = chunk_meta_v[run_idx];
           // For slot 0 of a resumed partial run add the already-emitted offset
           // so we read from the correct position in the payload.
-          int const run_payload_off = (r == 0) ? run0_payload_offset : 0;
+          int const run_payload_off = (run_idx == 0) ? run0_payload_offset : 0;
 
-          // Two expand kernels, selected by the meta top-bit:
+          // Two expand kernels, selected by the run_desc top-bit:
           //   literal (bit 31 set) -> each output position needs its own
           //     bit-field extract from the packed payload.
           //   RLE    (bit 31 clear) -> single value read once, broadcast
-          //     across [seg_lo, seg_hi) by all lanes.
+          //     across [out_lo, out_hi) by all lanes.
           // Note that we don't pay any divergence cost here since all threads
-          // in the warp are processing the same run (meta), but we do lose
+          // in the warp are processing the same run (run_desc), but we do lose
           // some occupancy due to carrying around the local registers needed
           // for both branches.
-          if (meta & (1u << 31)) {
-            int const payload_off  = meta & 0x7fffffff;
+          if (run_desc & (1u << 31)) {
+            int const payload_off  = run_desc & 0x7fffffff;
             uint8_t const* payload = s_start + payload_off;
-            for (int p = seg_lo + lane; p < seg_hi; p += 32) {
-              int const local       = (p - r_lo) + run_payload_off;
+            for (int p = out_lo + lane; p < out_hi; p += 32) {
+              int const local       = (p - run_start_out) + run_payload_off;
               int bitpos            = local * level_bits;
               uint8_t const* source = payload + (bitpos >> 3);
               bitpos &= 7;
@@ -641,8 +643,8 @@ struct rle_stream {
           } else {
             // RLE run: read the single repeated value once from s_start,
             // assembling up to 4 payload bytes into `level_val` based on
-            // level_bits, then broadcast it across [seg_lo, seg_hi).
-            uint8_t const* vptr = s_start + (meta & 0x7fffffff);
+            // level_bits, then broadcast it across [out_lo, out_hi).
+            uint8_t const* vptr = s_start + (run_desc & 0x7fffffff);
             uint32_t level_val  = vptr[0];
             if constexpr (sizeof(level_t) > 1) {
               if (level_bits > 8) {
@@ -656,7 +658,7 @@ struct rle_stream {
               }
             }
             level_t const fill = static_cast<level_t>(level_val);
-            for (int q = base_out + seg_lo + lane; q < base_out + seg_hi; q += 32) {
+            for (int q = base_out + out_lo + lane; q < base_out + out_hi; q += 32) {
               output[rolling_index<max_output_values>(q)] = fill;
             }
           }
