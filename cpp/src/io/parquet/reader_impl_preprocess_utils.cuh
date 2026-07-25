@@ -128,7 +128,7 @@ std::string encoding_to_string(Encoding encoding);
  *
  * @param pass The struct containing pass information
  * @param unsorted_pages Device span of page information to decode
- * @param has_offset_index Boolean indicating if the page index is available
+ * @param has_offset_index Boolean indicating if the offset index is available
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void decode_page_headers(pass_intermediate_data& pass,
@@ -172,7 +172,7 @@ struct page_index_info {
   int32_t num_nulls;
   int32_t num_valids;
   int32_t str_bytes;
-  int32_t has_value_info;
+  bool has_value_info;
 };
 
 /**
@@ -188,7 +188,7 @@ struct copy_page_info {
     auto const& pi    = page_indexes[idx];
     pg.num_rows       = pi.num_rows;
     pg.chunk_row      = pi.chunk_row;
-    pg.has_value_info = pi.has_value_info != 0;
+    pg.has_value_info = pi.has_value_info;
     pg.start_val      = 0;
     if (pg.has_value_info) {
       pg.num_nulls            = pi.num_nulls;

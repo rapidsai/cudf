@@ -37,8 +37,8 @@ rapidsmpf::streaming::Actor bloom_filter::build(
   auto storage =
     cudf_streaming::detail::device_bloom_filter::storage(num_filter_blocks_, filter_stream, mr);
   RAPIDSMPF_CUDA_TRY(cudaMemsetAsync(storage->data(), 0, storage->size(), filter_stream));
-  auto filter = cudf_streaming::detail::device_bloom_filter(
-    num_filter_blocks_, seed_, storage->data(), filter_stream);
+  auto filter =
+    cudf_streaming::detail::device_bloom_filter(num_filter_blocks_, seed_, storage->data());
   rapidsmpf::CudaEvent build_event;
   build_event.record(filter_stream);
   while (!ch_out->is_shutdown()) {
@@ -48,6 +48,14 @@ rapidsmpf::streaming::Actor bloom_filter::build(
     chunk      = co_await chunk.make_available(
       ctx_,
       -rapidsmpf::safe_cast<std::int64_t>(chunk.data_alloc_size(rapidsmpf::MemoryType::DEVICE)));
+
+    // Reservation for the hash values in add.
+    auto res = co_await ctx_->memory(rapidsmpf::MemoryType::DEVICE)
+                 ->reserve_or_wait(rapidsmpf::safe_cast<std::size_t>(chunk.table_view().num_rows())
+                                     // TODO: no magic numbers: the hashing algorithm in
+                                     // `add` below returns an int64 column.
+                                     * sizeof(std::int64_t),
+                                   0);
     // Filter is allocated on `filter_stream`, but we run the additions on the chunk's
     // stream. The addition modifies global memory but we can safely launch two
     // kernels doing that concurrently because the updates are atomic.
@@ -67,9 +75,9 @@ rapidsmpf::streaming::Actor bloom_filter::build(
       [num_blocks = num_filter_blocks_, seed = seed_](rapidsmpf::Buffer const* left,
                                                       rapidsmpf::Buffer* right) {
         right->write_access([&](std::byte* out_bytes, rmm::cuda_stream_view stream) {
-          auto const in = cudf_streaming::detail::device_bloom_filter::view(
-            num_blocks, seed, left->data(), stream);
-          cudf_streaming::detail::device_bloom_filter(num_blocks, seed, out_bytes, stream)
+          auto const in =
+            cudf_streaming::detail::device_bloom_filter::view(num_blocks, seed, left->data());
+          cudf_streaming::detail::device_bloom_filter(num_blocks, seed, out_bytes)
             .merge(in, stream);
         });
       });
@@ -95,7 +103,7 @@ rapidsmpf::streaming::Actor bloom_filter::apply(
   auto stream = storage.stream();
   rapidsmpf::CudaEvent event;
   auto filter =
-    cudf_streaming::detail::device_bloom_filter(num_filter_blocks_, seed_, storage.data(), stream);
+    cudf_streaming::detail::device_bloom_filter(num_filter_blocks_, seed_, storage.data());
   auto meta = co_await ch_in->receive_metadata();
   if (!meta.empty()) { co_await ch_out->send_metadata(std::move(meta)); }
   while (!ch_out->is_shutdown()) {
