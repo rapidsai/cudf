@@ -615,7 +615,7 @@ TYPED_TEST(QuantileFixedPointTest, TestSomeElementsInvalid)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto const scale    = scale_type{-3};
+  auto const scale = scale_type{-3};
   auto const input = fp_wrapper{{1, 2, 3, 4, 5}, {1, 0, 1, 0, 1}, scale};
   // q=0.25 selects index 1, which is null; q=0.5 selects index 2, which is valid
   auto const expected = fp_wrapper{{0, 3}, {false, true}, scale};
@@ -654,7 +654,6 @@ TYPED_TEST(QuantileFixedPointTest, TestSingleElement)
   auto const result = cudf::quantile(input, {0.0, 0.5, 1.0}, cudf::interpolation::LINEAR);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
-
 
 }  // anonymous namespace
 
