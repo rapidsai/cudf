@@ -477,11 +477,11 @@ struct rle_stream {
     __shared__ int s_chunk_total;  // sum of run lengths in this chunk (run_prefix_end)
     __shared__ int s_base_out;     // absolute output pos where this chunk starts
 
-    auto const warp         = cg::tiled_partition<cudf::detail::warp_size>(group);
-    int const lane          = warp.thread_rank();
-    int const warp_id       = warp.meta_group_rank();
-    int const num_warps     = warp.meta_group_size();
-    int const value_width   = cudf::util::div_rounding_up_unsafe(level_bits, 8);
+    auto const warp       = cg::tiled_partition<cudf::detail::warp_size>(group);
+    int const lane        = warp.thread_rank();
+    int const warp_id     = warp.meta_group_rank();
+    int const num_warps   = warp.meta_group_size();
+    int const value_width = cudf::util::div_rounding_up_unsafe(level_bits, 8);
     // Bit mask used to extract a single level from a bit-packed literal-run
     // payload word. Invariant across the whole call; hoisted out of the
     // phase-2 expand loop to keep it out of the hot register set.
@@ -528,7 +528,8 @@ struct rle_stream {
 
         // Parse up to max_runs_per_chunk headers, stopping early if the output range
         // fills up or the encoded stream is exhausted.
-        while (num_runs < max_runs_per_chunk && (out_base + run_prefix_end) < out_end && cur < end) {
+        while (num_runs < max_runs_per_chunk && (out_base + run_prefix_end) < out_end &&
+               cur < end) {
           uint32_t const level_run = get_vlq32(cur, end);
 
           // Parquet RLE header format: LSB selects the encoding.
@@ -592,65 +593,62 @@ struct rle_stream {
       int const lo  = warp_id * per;
       int const hi  = min(lo + per, chunk_total);
       if (lo < hi) {
-        // Binary-search chunk_out_off to find the first run that intersects
-        // this warp's slice, then iterate forward until we pass `hi`.
-        int const first_run_idx = static_cast<int>(
-                                   cuda::std::upper_bound(
-                                     chunk_out_off_v.begin(),
-                                     chunk_out_off_v.begin() + chunk_runs + 1,
-                                     lo) -
-                                   chunk_out_off_v.begin()) -
-                                 1;
-        for (int run_idx = first_run_idx; run_idx < chunk_runs && chunk_out_off_v[run_idx] < hi;
-             ++run_idx) {
+        // Per-lane expand (Paul's design): each lane owns output positions
+        //   p = lo + lane, lo + lane + 32, lo + lane + 64, ...
+        // and finds its own run. run_idx starts by binary-search on the
+        // lane's first p, then advances forward by linear walk (usually 0
+        // steps when still in the same run). Across all 32 lanes the linear
+        // walks amortize to <= (num_runs_in_slice / 32) warp cycles total.
+        //
+        // This keeps all 32 lanes writing on every iteration, instead of the
+        // per-run loop where only lanes 0..(run_len-1) do useful work on
+        // short runs.
+        int p = lo + lane;
+        int run_idx =
+          static_cast<int>(cuda::std::upper_bound(
+                             chunk_out_off_v.begin(), chunk_out_off_v.begin() + chunk_runs + 1, p) -
+                           chunk_out_off_v.begin()) -
+          1;
+        while (p < hi) {
+          // Linear walk forward: no iterations if we're still in the same
+          // run (long run case), 1+ iterations only when p crosses one or
+          // more short-run boundaries.
+          while (run_idx < chunk_runs && chunk_out_off_v[run_idx + 1] <= p) {
+            ++run_idx;
+          }
           int const run_start_out = chunk_out_off_v[run_idx];
-          int const run_end_out   = chunk_out_off_v[run_idx + 1];
-          int const out_lo        = max(run_start_out, lo);
-          int const out_hi        = min(run_end_out, hi);
           int const run_desc      = chunk_meta_v[run_idx];
-          // For slot 0 of a resumed partial run add the already-emitted offset
-          // so we read from the correct position in the payload.
+          // Slot 0 of a resumed partial run carries a payload offset so we
+          // read from the correct position in the (already-consumed) payload.
           int const run_payload_off = (run_idx == 0) ? run0_payload_offset : 0;
 
-          // Two expand kernels, selected by the run_desc top-bit:
-          //   literal (bit 31 set) -> each output position needs its own
-          //     bit-field extract from the packed payload.
-          //   RLE    (bit 31 clear) -> single value read once, broadcast
-          //     across [out_lo, out_hi) by all lanes.
-          // Note that we don't pay any divergence cost here since all threads
-          // in the warp are processing the same run (run_desc), but we do lose
-          // some occupancy due to carrying around the local registers needed
-          // for both branches.
           if (run_desc & (1u << 31)) {
+            // Literal (bit-packed) run: bit-field extract for this lane's p.
             int const payload_off  = run_desc & 0x7fffffff;
             uint8_t const* payload = s_start + payload_off;
-            for (int p = out_lo + lane; p < out_hi; p += warp.size()) {
-              int const local       = (p - run_start_out) + run_payload_off;
-              int bitpos            = local * level_bits;
-              uint8_t const* source = payload + (bitpos >> 3);
-              bitpos &= 7;
-              uint32_t level_val = 0;
-              if (source < end) { level_val = source[0]; }
+            int const local        = (p - run_start_out) + run_payload_off;
+            int bitpos             = local * level_bits;
+            uint8_t const* source  = payload + (bitpos >> 3);
+            bitpos &= 7;
+            uint32_t level_val = 0;
+            if (source < end) { level_val = source[0]; }
+            ++source;
+            if (level_bits > 8 - bitpos && source < end) {
+              level_val |= static_cast<uint32_t>(source[0]) << 8;
               ++source;
-              if (level_bits > 8 - bitpos && source < end) {
-                level_val |= static_cast<uint32_t>(source[0]) << 8;
+              if (level_bits > 16 - bitpos && source < end) {
+                level_val |= static_cast<uint32_t>(source[0]) << 16;
                 ++source;
-                if (level_bits > 16 - bitpos && source < end) {
-                  level_val |= static_cast<uint32_t>(source[0]) << 16;
-                  ++source;
-                  if (level_bits > 24 - bitpos && source < end) {
-                    level_val |= static_cast<uint32_t>(source[0]) << 24;
-                  }
+                if (level_bits > 24 - bitpos && source < end) {
+                  level_val |= static_cast<uint32_t>(source[0]) << 24;
                 }
               }
-              level_val = (level_val >> bitpos) & level_mask;
-              output[rolling_index<max_output_values>(base_out + p)] =
-                static_cast<level_t>(level_val);
             }
+            level_val = (level_val >> bitpos) & level_mask;
+            output[rolling_index<max_output_values>(base_out + p)] =
+              static_cast<level_t>(level_val);
           } else {
-            // RLE run: read the single repeated value once from s_start,
-            // assembling up to 4 payload bytes into `level_val` based on
-            // level_bits, then broadcast it across [out_lo, out_hi).
+            // RLE run: read the single repeated value from s_start.
             uint8_t const* vptr = s_start + (run_desc & 0x7fffffff);
             uint32_t level_val  = vptr[0];
             if constexpr (sizeof(level_t) > 1) {
@@ -664,11 +662,10 @@ struct rle_stream {
                 }
               }
             }
-            level_t const fill = static_cast<level_t>(level_val);
-            for (int q = base_out + out_lo + lane; q < base_out + out_hi; q += warp.size()) {
-              output[rolling_index<max_output_values>(q)] = fill;
-            }
+            output[rolling_index<max_output_values>(base_out + p)] =
+              static_cast<level_t>(level_val);
           }
+          p += warp.size();
         }
       }
       // Barrier before rewriting the shared tables on the next iteration.
