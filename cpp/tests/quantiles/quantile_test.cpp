@@ -10,6 +10,7 @@
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/copying.hpp>
 #include <cudf/quantiles.hpp>
 #include <cudf/types.hpp>
 
@@ -576,6 +577,84 @@ TYPED_TEST(QuantileFixedPointTest, TestRealInterpolation)
   auto const result = cudf::quantile(input, {0.5}, cudf::interpolation::LINEAR);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
+
+TYPED_TEST(QuantileFixedPointTest, TestEmpty)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const scale    = scale_type{-3};
+  auto const input    = fp_wrapper{{}, scale};
+  auto const expected = fp_wrapper{{0, 0}, {false, false}, scale};
+
+  auto const result = cudf::quantile(input, {0.5, 0.25}, cudf::interpolation::LINEAR);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(QuantileFixedPointTest, TestAllElementsInvalid)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const scale    = scale_type{-3};
+  auto const input    = fp_wrapper{{1, 2, 3, 4, 5}, {0, 0, 0, 0, 0}, scale};
+  auto const expected = fp_wrapper{{0}, {false}, scale};
+
+  auto const result = cudf::quantile(input, {0.5}, cudf::interpolation::LINEAR);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(QuantileFixedPointTest, TestSomeElementsInvalid)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const scale    = scale_type{-3};
+  auto const input = fp_wrapper{{1, 2, 3, 4, 5}, {1, 0, 1, 0, 1}, scale};
+  // q=0.25 selects index 1, which is null; q=0.5 selects index 2, which is valid
+  auto const expected = fp_wrapper{{0, 3}, {false, true}, scale};
+
+  auto const result = cudf::quantile(input, {0.25, 0.5}, cudf::interpolation::LINEAR);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(QuantileFixedPointTest, TestSlicedInput)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const scale    = scale_type{-2};
+  auto const full     = fp_wrapper{{1, 2, 3, 4, 5, 6, 7}, scale};
+  auto const sliced   = cudf::slice(full, {2, 7})[0];
+  auto const expected = fp_wrapper{{5}, scale};
+
+  auto const result = cudf::quantile(sliced, {0.5}, cudf::interpolation::LINEAR);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(QuantileFixedPointTest, TestSingleElement)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const scale    = scale_type{-2};
+  auto const input    = fp_wrapper{{7}, scale};
+  auto const expected = fp_wrapper{{7, 7, 7}, scale};
+
+  auto const result = cudf::quantile(input, {0.0, 0.5, 1.0}, cudf::interpolation::LINEAR);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 
 }  // anonymous namespace
 
