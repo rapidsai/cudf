@@ -6,11 +6,14 @@
 #include "cudf_jni_apis.hpp"
 #include "jni_cccl_any_resource.hpp"
 
+#include <cudf/logger.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/aligned.hpp>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/error.hpp>
 #include <rmm/mr/aligned_resource_adaptor.hpp>
 #include <rmm/mr/arena_memory_resource.hpp>
 #include <rmm/mr/cuda_async_memory_resource.hpp>
@@ -24,14 +27,27 @@
 #include <rmm/resource_ref.hpp>
 
 #include <cuda/memory_resource>
+#include <cuda_runtime_api.h>
 
+#include <sys/mman.h>
+#include <unistd.h>
+
+#include <algorithm>
 #include <atomic>
+#include <cerrno>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <ctime>
 #include <fstream>
 #include <iostream>
 #include <limits>
 #include <mutex>
+#include <string>
+#include <system_error>
+#include <thread>
 #include <unordered_map>
+#include <vector>
 
 namespace {
 
@@ -511,6 +527,227 @@ class java_event_handler_memory_resource {
 };
 static_assert(
   cuda::mr::resource_with<java_event_handler_memory_resource, cuda::mr::device_accessible>);
+
+inline void log_system_error_noexcept(char const* operation,
+                                      int error,
+                                      bool warning = false) noexcept
+{
+  try {
+    if (warning) {
+      CUDF_LOG_WARN(
+        "%s failed for parallel pinned allocation: %s", operation, std::strerror(error));
+    } else {
+      CUDF_LOG_ERROR(
+        "%s failed for parallel pinned allocation: %s", operation, std::strerror(error));
+    }
+  } catch (...) {
+    // Logging must not mask the original exception or escape a noexcept cleanup path.
+  }
+}
+
+inline void log_cuda_error_noexcept(char const* operation, cudaError_t error) noexcept
+{
+  try {
+    CUDF_LOG_ERROR("%s failed for parallel pinned allocation: %s %s; retaining the mapping",
+                   operation,
+                   cudaGetErrorName(error),
+                   cudaGetErrorString(error));
+  } catch (...) {
+    // Logging must not escape a noexcept cleanup path.
+  }
+}
+
+/**
+ * @brief Pinned host resource that parallelizes the first touch of its backing pages.
+ *
+ * cudaHostAlloc faults and pins a large allocation in one call. This resource instead mmaps
+ * anonymous memory and then spawns threads to touch the pages to handle page faults concurrently.
+ * After the pages are physically backed the allocation is registered with CUDA. The RMM pool using
+ * this upstream resource is otherwise unchanged.
+ */
+class parallel_init_pinned_host_memory_resource final {
+ public:
+  explicit parallel_init_pinned_host_memory_resource(std::size_t initialization_threads)
+    : initialization_threads_{initialization_threads}
+  {
+    CUDF_EXPECTS(initialization_threads_ > 0,
+                 "parallel initialization thread count must be positive",
+                 rmm::logic_error);
+  }
+
+  void* allocate([[maybe_unused]] cuda::stream_ref stream,
+                 std::size_t bytes,
+                 std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
+  {
+    return allocate_sync(bytes, alignment);
+  }
+
+  void deallocate([[maybe_unused]] cuda::stream_ref stream,
+                  void* ptr,
+                  std::size_t bytes,
+                  std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
+  {
+    deallocate_sync(ptr, bytes, alignment);
+  }
+
+  [[nodiscard]] void* allocate_sync(std::size_t bytes,
+                                    std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
+  {
+    if (bytes == 0) { return nullptr; }
+    CUDF_EXPECTS(alignment != 0 && (alignment & (alignment - 1)) == 0,
+                 "pinned allocation alignment must be a power of two",
+                 rmm::bad_alloc);
+    CUDF_EXPECTS(alignment <= system_page_size(),
+                 "pinned allocation alignment cannot exceed the system page size",
+                 rmm::bad_alloc);
+
+    // Round the pool size up so that it is page-aligned.
+    auto const mapping_bytes = page_aligned_size(bytes);
+    void* allocation =
+      ::mmap(nullptr, mapping_bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (allocation == MAP_FAILED) {
+      auto const error = errno;
+      auto const message =
+        std::string{"mmap failed for parallel pinned allocation: "} + std::strerror(error);
+      if (error == ENOMEM) { throw rmm::out_of_memory{message}; }
+      throw std::system_error(error, std::generic_category(), message);
+    }
+
+    try {
+      // Mark these pages as DONTFORK so that if the JVM is forked during a DMA
+      // the pages are not moved from underneath it due to copy on write semantics.
+      if (::madvise(allocation, mapping_bytes, MADV_DONTFORK) != 0) {
+        auto const error = errno;
+        throw std::system_error(error, std::generic_category(), "madvise(MADV_DONTFORK) failed");
+      }
+      // Concurrently pre-touch the pages to back the virtual range with physical memory.
+      touch_pages(allocation, mapping_bytes, initialization_threads_);
+      // Pin and register the host memory range with CUDA.
+      RMM_CUDA_TRY_ALLOC(cudaHostRegister(allocation, mapping_bytes, cudaHostRegisterDefault),
+                         mapping_bytes);
+      return allocation;
+    } catch (...) {
+      if (::munmap(allocation, mapping_bytes) != 0) {
+        log_system_error_noexcept("munmap while rolling back", errno);
+      }
+      throw;
+    }
+  }
+
+  void deallocate_sync(
+    void* ptr,
+    std::size_t bytes,
+    [[maybe_unused]] std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
+  {
+    if (ptr == nullptr) { return; }
+    auto const mapping_bytes = page_aligned_size_noexcept(bytes);
+    if (mapping_bytes == 0) {
+      log_system_error_noexcept("page alignment during deallocation", EOVERFLOW);
+      return;
+    }
+    auto const status = cudaHostUnregister(ptr);
+    if (status != cudaSuccess) {
+      cudaGetLastError();
+      log_cuda_error_noexcept("cudaHostUnregister", status);
+      return;
+    }
+    if (::munmap(ptr, mapping_bytes) != 0) { log_system_error_noexcept("munmap", errno); }
+  }
+
+  [[nodiscard]] bool operator==(
+    [[maybe_unused]] parallel_init_pinned_host_memory_resource const& other) const noexcept
+  {
+    return true;
+  }
+
+  friend void get_property(parallel_init_pinned_host_memory_resource const&,
+                           cuda::mr::device_accessible) noexcept
+  {
+  }
+
+  friend void get_property(parallel_init_pinned_host_memory_resource const&,
+                           cuda::mr::host_accessible) noexcept
+  {
+  }
+
+ private:
+  static std::size_t system_page_size()
+  {
+    static std::size_t const page_size = [] {
+      long const value = ::sysconf(_SC_PAGESIZE);
+      if (value <= 0) {
+        throw std::system_error(errno, std::generic_category(), "sysconf(_SC_PAGESIZE) failed");
+      }
+      return static_cast<std::size_t>(value);
+    }();
+    return page_size;
+  }
+
+  static std::size_t page_aligned_size(std::size_t bytes)
+  {
+    auto const page_size = system_page_size();
+    CUDF_EXPECTS(bytes <= std::numeric_limits<std::size_t>::max() - (page_size - 1),
+                 "pinned allocation size overflows page alignment",
+                 rmm::bad_alloc);
+    return ((bytes + page_size - 1) / page_size) * page_size;
+  }
+
+  static std::size_t page_aligned_size_noexcept(std::size_t bytes) noexcept
+  {
+    try {
+      return page_aligned_size(bytes);
+    } catch (...) {
+      return 0;
+    }
+  }
+
+  static void touch_pages(void* allocation, std::size_t bytes, std::size_t requested_threads)
+  {
+    auto const page_size    = system_page_size();
+    auto const page_count   = bytes / page_size;
+    auto const thread_count = std::min(requested_threads, page_count);
+
+    std::vector<std::thread> workers;
+    workers.reserve(thread_count);
+    // Importantly the counter is volatile so that the writes are not compiled away.
+    auto* const base      = static_cast<std::uint8_t volatile*>(allocation);
+    std::size_t next_page = 0;
+
+    // Note that these threads are not affinity bound, so these pages could be
+    // placed across NUMA nodes. This is not necessarily bad for performance but
+    // it does differ from cudaHostAlloc which typically inherits the calling thread's NUMA node.
+    try {
+      for (std::size_t worker_index = 0; worker_index < thread_count; ++worker_index) {
+        auto const pages_for_worker =
+          page_count / thread_count + (worker_index < page_count % thread_count ? 1 : 0);
+        auto const first_page = next_page;
+        next_page += pages_for_worker;
+        workers.emplace_back([base, first_page, pages_for_worker, page_size]() {
+          for (std::size_t page = 0; page < pages_for_worker; ++page) {
+            base[(first_page + page) * page_size] = 0;
+          }
+        });
+      }
+      for (auto& worker : workers) {
+        worker.join();
+      }
+    } catch (...) {
+      for (auto& worker : workers) {
+        if (worker.joinable()) { worker.join(); }
+      }
+      throw;
+    }
+  }
+
+  std::size_t initialization_threads_;
+};
+
+static_assert(cuda::mr::synchronous_resource_with<parallel_init_pinned_host_memory_resource,
+                                                  cuda::mr::device_accessible,
+                                                  cuda::mr::host_accessible>);
+static_assert(cuda::mr::resource_with<parallel_init_pinned_host_memory_resource,
+                                      cuda::mr::device_accessible,
+                                      cuda::mr::host_accessible>);
 
 inline auto& prior_cudf_pinned_mr()
 {
@@ -1063,6 +1300,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newPinnedPoolMemoryResource(JNIE
     cudf::jni::auto_set_device(env);
     auto pool =
       new rmm::mr::pool_memory_resource(rmm::mr::pinned_host_memory_resource{}, init, max);
+    return reinterpret_cast<jlong>(pool);
+  }
+  JNI_CATCH(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newParallelPinnedPoolMemoryResource(
+  JNIEnv* env, jclass clazz, jlong pool_size, jint initialization_threads)
+{
+  JNI_ARG_CHECK(env, pool_size > 0, "pool size must be positive", 0);
+  JNI_ARG_CHECK(env, initialization_threads > 0, "parallel init thread count must be positive", 0);
+  JNI_TRY
+  {
+    cudf::jni::auto_set_device(env);
+    auto pool = new rmm::mr::pool_memory_resource(
+      parallel_init_pinned_host_memory_resource{static_cast<std::size_t>(initialization_threads)},
+      static_cast<std::size_t>(pool_size),
+      static_cast<std::size_t>(pool_size));
     return reinterpret_cast<jlong>(pool);
   }
   JNI_CATCH(env, 0);

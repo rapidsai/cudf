@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -31,6 +31,51 @@ class PinnedMemoryPoolTest extends CudfTestBase {
     PinnedMemoryPool.initialize(1024*1024*500L);
     assertTrue(PinnedMemoryPool.isInitialized());
     PinnedMemoryPool.shutdown();
+    assertFalse(PinnedMemoryPool.isInitialized());
+  }
+
+  @Test
+  void initWithParallelFirstTouch() {
+    final long poolSize = 16L * 1024 * 1024;
+    assertFalse(PinnedMemoryPool.isInitialized());
+    PinnedMemoryPool.initialize(poolSize, 0, true,
+        PinnedMemoryPool.InitializationMode.PARALLEL_FIRST_TOUCH, 4);
+    assertTrue(PinnedMemoryPool.isInitialized());
+    assertEquals(poolSize, PinnedMemoryPool.getTotalPoolSizeBytes());
+
+    try (HostMemoryBuffer buffer = PinnedMemoryPool.tryAllocate(poolSize)) {
+      assertNotNull(buffer);
+      buffer.setByte(0, (byte) 0x5a);
+      assertEquals((byte) 0x5a, buffer.getByte(0));
+      assertNull(PinnedMemoryPool.tryAllocate(1));
+    }
+
+    long fallbackPtr = Rmm.allocFromFallbackPinnedPool(1024);
+    Rmm.freeFromFallbackPinnedPool(fallbackPtr, 1024);
+  }
+
+  @Test
+  void initParallelPoolWithNonPageAlignedSize() {
+    final long poolSize = 16L * 1024 * 1024 + 256;
+    PinnedMemoryPool.initialize(poolSize, 0, true,
+        PinnedMemoryPool.InitializationMode.PARALLEL_FIRST_TOUCH, 4);
+    assertEquals(poolSize, PinnedMemoryPool.getTotalPoolSizeBytes());
+
+    try (HostMemoryBuffer buffer = PinnedMemoryPool.tryAllocate(poolSize)) {
+      assertNotNull(buffer);
+      buffer.setByte(poolSize - 1, (byte) 0x5a);
+      assertEquals((byte) 0x5a, buffer.getByte(poolSize - 1));
+      assertNull(PinnedMemoryPool.tryAllocate(1));
+    }
+  }
+
+  @Test
+  void validateParallelInitializationArguments() {
+    assertThrows(NullPointerException.class,
+        () -> PinnedMemoryPool.initialize(16L * 1024 * 1024, 0, false, null, 4));
+    assertThrows(IllegalArgumentException.class,
+        () -> PinnedMemoryPool.initialize(16L * 1024 * 1024, 0, false,
+            PinnedMemoryPool.InitializationMode.PARALLEL_FIRST_TOUCH, 0));
     assertFalse(PinnedMemoryPool.isInitialized());
   }
 
