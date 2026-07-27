@@ -63,6 +63,8 @@ def test_rolling_datetime(engine):
         pl.col("x").rank(method="dense", descending=True).over("g"),
         pl.col("x").rank(method="min").over("g", "g2"),
         pl.col("x").cum_sum().over("g", order_by="s"),
+        pl.col("x").shift(1).over("g", order_by="s"),
+        pl.col("x").shift(-1, fill_value=0).over("g", order_by="s"),
         pl.when((pl.col("x") % 2) == 0)
         .then(None)
         .otherwise(pl.col("x"))
@@ -78,6 +80,8 @@ def test_rolling_datetime(engine):
         "rank_dense",
         "rank_min_multi_key",
         "cum_sum_order_by",
+        "shift_order_by",
+        "shift_fill_order_by",
         "fill_null_forward",
     ],
 )
@@ -105,6 +109,20 @@ def test_over_cum_sum_fill_null_per_partition(engine, strategy):
     )
     expr = pl.col("x").cum_sum().fill_null(strategy=strategy).over("g", order_by="s")
     assert_gpu_result_equal(df.select(expr), engine=engine, check_row_order=True)
+
+
+def test_over_shift_without_order_by_single_rank(spmd_engine_factory) -> None:
+    engine = spmd_engine_factory(
+        StreamingOptions(max_rows_per_partition=2, fallback_mode="raise"),
+    )
+    df = pl.LazyFrame(
+        {
+            "g": [1, 1, 2, 2, 2, 1],
+            "x": [1, 2, 3, 4, 5, 6],
+        }
+    )
+    q = df.select(pl.col("x").shift(1).over("g"))
+    assert_gpu_result_equal(q, engine=engine, check_row_order=True)
 
 
 @pytest.mark.parametrize(
@@ -231,8 +249,15 @@ def test_over_mixed_keys(streaming_engine_factory) -> None:
         pl.len().over("g"),
         pl.col("x").rank(method="dense").over("g"),
         pl.col("x").cum_sum().over("g", order_by="s"),
+        pl.col("x").shift(1).over("g", order_by="s"),
     ],
-    ids=["scalar_sum", "scalar_len", "nonscalar_rank", "nonscalar_cum_sum"],
+    ids=[
+        "scalar_sum",
+        "scalar_len",
+        "nonscalar_rank",
+        "nonscalar_cum_sum",
+        "nonscalar_shift",
+    ],
 )
 @pytest.mark.parametrize("max_rows_per_partition", [1, 2])
 def test_over_many_partitions(
@@ -283,8 +308,9 @@ def test_over_empty_input(streaming_engine_factory, expr) -> None:
     [
         pl.col("x").sum().over("g"),
         pl.col("x").rank(method="dense").over("g"),
+        pl.col("x").shift(1).over("g", order_by="x"),
     ],
-    ids=["scalar_sum", "nonscalar_rank"],
+    ids=["scalar_sum", "nonscalar_rank", "nonscalar_shift"],
 )
 def test_over_already_partitioned(streaming_engine_factory, expr) -> None:
     # broadcast_limit=0 disables broadcast joins entirely. Therefore, we should

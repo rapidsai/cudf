@@ -141,3 +141,15 @@ def _contains_cum_sum_without_order_by(exprs: Sequence[Expr]) -> bool:
             if isinstance(v, UnaryFunction) and v.name == "cum_sum":
                 return True
     return False
+
+
+def _contains_shift_without_order_by(exprs: Sequence[Expr]) -> bool:
+    """Return True for shift(...) over a window without explicit ordering."""
+    for e in traversal(exprs):
+        if not (isinstance(e, GroupedWindow) and not e.options[1]):
+            continue
+        for ne in e.named_aggs:
+            v = ne.value
+            if isinstance(v, UnaryFunction) and v.name in {"shift", "shift_and_fill"}:
+                return True
+    return False

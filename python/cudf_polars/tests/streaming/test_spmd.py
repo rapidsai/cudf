@@ -494,12 +494,13 @@ _CROSS_RANK_KEYS = [
 
 
 @pytest.mark.parametrize(
-    "expr,is_scalar",
+    "expr,expected",
     [
-        (pl.col("x").sum().over("g").alias("result"), True),
-        (pl.col("x").rank(method="dense").over("g").alias("result"), False),
+        (pl.col("x").sum().over("g").alias("result"), "sum"),
+        (pl.col("x").rank(method="dense").over("g").alias("result"), "rank"),
+        (pl.col("x").shift(1).over("g", order_by="x").alias("result"), "shift"),
     ],
-    ids=["scalar_sum", "nonscalar_rank"],
+    ids=["scalar_sum", "nonscalar_rank", "nonscalar_shift"],
 )
 @pytest.mark.parametrize(
     "cross_rank",
@@ -507,10 +508,9 @@ _CROSS_RANK_KEYS = [
     ids=["same_rank", "cross_rank"],
 )
 def test_over_multirank(
-    request: pytest.FixtureRequest,
     comm: Communicator,
     expr: pl.Expr,
-    is_scalar: bool,  # noqa: FBT001
+    expected: str,
     cross_rank: bool,  # noqa: FBT001
 ) -> None:
     """over() correctness in multi-rank SPMD mode, same-rank and cross-rank cases.
@@ -530,11 +530,7 @@ def test_over_multirank(
         rank = engine.rank
         nranks = engine.nranks
         if nranks != 2:
-            request.applymarker(
-                pytest.mark.skip(
-                    reason="key assignments are probed for exactly 2 ranks"
-                )
-            )
+            pytest.skip("key assignments are probed for exactly 2 ranks")
         keys = _CROSS_RANK_KEYS if cross_rank else _SAME_RANK_KEYS
         g = keys[rank]
         xs = [rank * 3 + 1, rank * 3 + 2, rank * 3 + 3]
@@ -559,14 +555,42 @@ def test_over_multirank(
             assert grp.shape == (3, 3), f"rank {r} group has wrong row count"
             expected_xs = [r * 3 + 1, r * 3 + 2, r * 3 + 3]
             assert grp["x"].to_list() == expected_xs
-            if is_scalar:
+            if expected == "sum":
                 assert grp["result"].to_list() == [sum(expected_xs)] * 3
-            else:
+            elif expected == "rank":
                 assert grp["result"].to_list() == [1, 2, 3]
+            else:
+                assert grp["result"].to_list() == [None, *expected_xs[:-1]]
+
+
+def test_over_shift_without_order_by_multirank_raises(comm: Communicator) -> None:
+    with SPMDEngine(
+        comm=comm,
+        executor_options={
+            "max_rows_per_partition": 2,
+            "dynamic_planning": {},
+            "fallback_mode": "raise",
+        },
+    ) as engine:
+        if engine.nranks < 2:
+            pytest.skip("requires multiple ranks")
+
+        rank = engine.rank
+        lf = pl.LazyFrame(
+            {
+                "g": [0, 0, 0],
+                "x": [rank * 3 + 1, rank * 3 + 2, rank * 3 + 3],
+            }
+        )
+        q = lf.select(pl.col("x").shift(1).over("g"))
+        with pytest.raises(
+            NotImplementedError,
+            match=r"shift\(\) over a window without order_by",
+        ):
+            q.collect(engine=engine)
 
 
 def test_over_nonscalar_duplicated_input(
-    request: pytest.FixtureRequest,
     comm: Communicator,
 ) -> None:
     """Non-scalar over() on duplicated=True input produces correct row count and values.
@@ -586,11 +610,7 @@ def test_over_nonscalar_duplicated_input(
         rank = engine.rank
         nranks = engine.nranks
         if nranks != 2:
-            request.applymarker(
-                pytest.mark.skip(
-                    reason="key assignments are probed for exactly 2 ranks"
-                )
-            )
+            pytest.skip("key assignments are probed for exactly 2 ranks")
 
         coarse_g = _SAME_RANK_KEYS[rank]
         fine_gs = [rank * 3 + 1, rank * 3 + 2, rank * 3 + 3]
