@@ -95,7 +95,7 @@ namespace {
     return int64_t{0};
   }();
 
-  return std::cmp_greater(min_offset, 0) and std::cmp_greater(max_offset, min_offset)
+  return min_offset > 0 and max_offset > min_offset
            ? byte_range_info{min_offset, max_offset - min_offset}
            : byte_range_info{};
 }
