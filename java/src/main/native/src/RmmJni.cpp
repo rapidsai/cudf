@@ -43,7 +43,6 @@
 #include <iostream>
 #include <limits>
 #include <mutex>
-#include <optional>
 #include <string>
 #include <system_error>
 #include <thread>
@@ -561,10 +560,10 @@ inline void log_cuda_error_noexcept(char const* operation, cudaError_t error) no
 /**
  * @brief Pinned host resource that parallelizes the first touch of its backing pages.
  *
- * cudaHostAlloc faults and pins a large allocation in one call. This resource instead mmaps
- * anonymous memory and then spawns threads to touch the pages to handle page faults concurrently.
- * After the pages are physically backed the allocation is registered with CUDA. The RMM pool using
- * this upstream resource is otherwise unchanged.
+ * In cudaHostAlloc, the CUDA driver faults and pins the whole allocation. This resource instead
+ * mmaps anonymous memory and then spawns threads to touch the pages to handle page faults
+ * concurrently. After the pages are physically backed the allocation is then registered with CUDA.
+ * The RMM pool using this upstream resource is otherwise unchanged.
  */
 class parallel_init_pinned_host_memory_resource final {
  public:
@@ -641,18 +640,14 @@ class parallel_init_pinned_host_memory_resource final {
     [[maybe_unused]] std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
   {
     if (ptr == nullptr) { return; }
-    auto const mapping_bytes = page_aligned_size_noexcept(bytes);
-    if (!mapping_bytes.has_value()) {
-      log_system_error_noexcept("page alignment during deallocation", EOVERFLOW);
-      return;
-    }
     auto const status = cudaHostUnregister(ptr);
     if (status != cudaSuccess) {
       cudaGetLastError();
       log_cuda_error_noexcept("cudaHostUnregister", status);
       return;
     }
-    if (::munmap(ptr, *mapping_bytes) != 0) { log_system_error_noexcept("munmap", errno); }
+    // munmap always unmaps whole pages, so we can pass the unaligned bytes here.
+    if (::munmap(ptr, bytes) != 0) { log_system_error_noexcept("munmap", errno); }
   }
 
   [[nodiscard]] bool operator==(
@@ -691,15 +686,6 @@ class parallel_init_pinned_host_memory_resource final {
                  "pinned allocation size overflows page alignment",
                  rmm::bad_alloc);
     return ((bytes + page_size - 1) / page_size) * page_size;
-  }
-
-  static std::optional<std::size_t> page_aligned_size_noexcept(std::size_t bytes) noexcept
-  {
-    try {
-      return page_aligned_size(bytes);
-    } catch (...) {
-      return std::nullopt;
-    }
   }
 
   static void touch_pages(void* allocation, std::size_t bytes, std::size_t requested_threads)
