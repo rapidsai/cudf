@@ -38,8 +38,7 @@ class PinnedMemoryPoolTest extends CudfTestBase {
   void initWithParallelFirstTouch() {
     final long poolSize = 16L * 1024 * 1024;
     assertFalse(PinnedMemoryPool.isInitialized());
-    PinnedMemoryPool.initialize(poolSize, 0, true,
-        PinnedMemoryPool.InitializationMode.PARALLEL_FIRST_TOUCH, 4);
+    PinnedMemoryPool.initialize(poolSize, 0, true, 4);
     assertTrue(PinnedMemoryPool.isInitialized());
     assertEquals(poolSize, PinnedMemoryPool.getTotalPoolSizeBytes());
 
@@ -57,8 +56,7 @@ class PinnedMemoryPoolTest extends CudfTestBase {
   @Test
   void initParallelPoolWithNonPageAlignedSize() {
     final long poolSize = 16L * 1024 * 1024 + 256;
-    PinnedMemoryPool.initialize(poolSize, 0, true,
-        PinnedMemoryPool.InitializationMode.PARALLEL_FIRST_TOUCH, 4);
+    PinnedMemoryPool.initialize(poolSize, 0, true, 4);
     assertEquals(poolSize, PinnedMemoryPool.getTotalPoolSizeBytes());
 
     try (HostMemoryBuffer buffer = PinnedMemoryPool.tryAllocate(poolSize)) {
@@ -70,12 +68,9 @@ class PinnedMemoryPoolTest extends CudfTestBase {
   }
 
   @Test
-  void validateParallelInitializationArguments() {
-    assertThrows(NullPointerException.class,
-        () -> PinnedMemoryPool.initialize(16L * 1024 * 1024, 0, false, null, 4));
+  void validateInitializationArguments() {
     assertThrows(IllegalArgumentException.class,
-        () -> PinnedMemoryPool.initialize(16L * 1024 * 1024, 0, false,
-            PinnedMemoryPool.InitializationMode.PARALLEL_FIRST_TOUCH, 0));
+        () -> PinnedMemoryPool.initialize(16L * 1024 * 1024, 0, false, 0));
     assertFalse(PinnedMemoryPool.isInitialized());
   }
 

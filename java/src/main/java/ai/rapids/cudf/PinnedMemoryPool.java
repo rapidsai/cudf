@@ -22,21 +22,6 @@ import java.util.concurrent.Future;
 public final class PinnedMemoryPool implements AutoCloseable {
   private static final Logger log = LoggerFactory.getLogger(PinnedMemoryPool.class);
 
-  /**
-   * Selects how the pinned pool's backing memory is initialized.
-   */
-  public enum InitializationMode {
-    /**
-     * Use RMM's default pinned host memory resource.
-     */
-    DEFAULT,
-
-    /**
-     * Fault anonymous pages concurrently before registering them with CUDA.
-     */
-    PARALLEL_FIRST_TOUCH
-  }
-
   // These static fields should only ever be accessed when class-synchronized.
   // Do NOT use singleton_ directly!  Use the getSingleton accessor instead.
   private static volatile PinnedMemoryPool singleton_ = null;
@@ -135,7 +120,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
    * @param setCudfPinnedPoolMemoryResource true if this pinned pool should be used by cuDF for pinned memory
    */
   public static synchronized void initialize(long poolSize, int gpuId, boolean setCudfPinnedPoolMemoryResource) {
-    initialize(poolSize, gpuId, setCudfPinnedPoolMemoryResource, InitializationMode.DEFAULT, 1);
+    initialize(poolSize, gpuId, setCudfPinnedPoolMemoryResource, 1);
   }
 
   /**
@@ -144,16 +129,15 @@ public final class PinnedMemoryPool implements AutoCloseable {
    * @param poolSize size of the pool to initialize.
    * @param gpuId gpu id to set to get memory pool from, -1 means to use default
    * @param setCudfPinnedPoolMemoryResource true if this pinned pool should be used by cuDF for pinned memory
-   * @param initializationMode how the pool's backing memory should be initialized
-   * @param parallelInitializationThreads number of initialization threads used by {@link InitializationMode#PARALLEL_FIRST_TOUCH},
-   *                                      ignored for {@link InitializationMode#DEFAULT}
+   * @param initializationThreads number of threads used to initialize the pool's backing memory.
+   *                              A value of 1 uses RMM's default pinned host memory resource.
+   *                              Values greater than 1 fault anonymous pages concurrently before
+   *                              registering them with CUDA.
    */
   public static synchronized void initialize(long poolSize, int gpuId, boolean setCudfPinnedPoolMemoryResource,
-      InitializationMode initializationMode, int parallelInitializationThreads) {
-    Objects.requireNonNull(initializationMode, "initializationMode");
-    if (initializationMode == InitializationMode.PARALLEL_FIRST_TOUCH &&
-        parallelInitializationThreads <= 0) {
-      throw new IllegalArgumentException("Parallel initialization thread count must be positive");
+      int initializationThreads) {
+    if (initializationThreads <= 0) {
+      throw new IllegalArgumentException("Initialization thread count must be positive");
     }
     if (isInitialized()) {
       throw new IllegalStateException("Can only initialize the pool once.");
@@ -165,7 +149,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
     });
     initFuture = initService.submit(() ->
         new PinnedMemoryPool(poolSize, gpuId, setCudfPinnedPoolMemoryResource,
-            initializationMode, parallelInitializationThreads));
+            initializationThreads));
     initService.shutdown();
   }
 
@@ -243,21 +227,16 @@ public final class PinnedMemoryPool implements AutoCloseable {
   }
 
   private PinnedMemoryPool(long poolSize, int gpuId, boolean setCudfPinnedPoolMemoryResource,
-      InitializationMode initializationMode, int parallelInitializationThreads) {
+      int initializationThreads) {
     if (gpuId > -1) {
       // set the gpu device to use
       Cuda.setDevice(gpuId);
       Cuda.freeZero();
     }
-    switch (initializationMode) {
-      case DEFAULT:
-        this.poolHandle = Rmm.newPinnedPoolMemoryResource(poolSize, poolSize);
-        break;
-      case PARALLEL_FIRST_TOUCH:
-        this.poolHandle = Rmm.newParallelPinnedPoolMemoryResource(poolSize, parallelInitializationThreads);
-        break;
-      default:
-        throw new IllegalArgumentException("Unsupported pinned pool initialization mode: " + initializationMode);
+    if (initializationThreads == 1) {
+      this.poolHandle = Rmm.newPinnedPoolMemoryResource(poolSize, poolSize);
+    } else {
+      this.poolHandle = Rmm.newParallelPinnedPoolMemoryResource(poolSize, initializationThreads);
     }
     if (setCudfPinnedPoolMemoryResource) {
       Rmm.setCudfPinnedPoolMemoryResource(this.poolHandle);
