@@ -108,7 +108,13 @@ def _get_combined_index(indexes, intersect: bool = False, sort=None):
     else:
         index = indexes[0]
         if sort is None:
-            sort = not is_dtype_obj_string(index.dtype)
+            # pandas keeps string and categorical unions in order of
+            # appearance (a categorical union decategorizes, so sorting it
+            # here would order lexically rather than by category).
+            sort = not (
+                is_dtype_obj_string(index.dtype)
+                or isinstance(index.dtype, CategoricalDtype)
+            )
         for other in indexes[1:]:
             index = index.union(other, sort=False)
 

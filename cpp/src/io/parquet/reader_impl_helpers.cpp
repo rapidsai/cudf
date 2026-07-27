@@ -719,14 +719,10 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
     auto const max_def_level = schema.max_definition_level;
     auto const max_rep_level = schema.max_repetition_level;
 
-    // If any columns lack the page indexes then just return without modifying the
-    // row_group_info.
-    if (not col_chunk.offset_index.has_value() or not col_chunk.column_index.has_value()) {
-      return;
-    }
+    // Return early if any columns lack the offset index.
+    if (not col_chunk.offset_index.has_value()) { return; }
 
     auto const& offset_index = col_chunk.offset_index.value();
-    auto const& column_index = col_chunk.column_index.value();
 
     auto& chunk_info     = chunks[col_idx];
     auto const num_pages = offset_index.page_locations.size();
@@ -751,18 +747,24 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
       }
     }
 
+    // Populate additional value-count metadata if column index is also available.
+    auto const* column_index =
+      col_chunk.column_index.has_value() ? &col_chunk.column_index.value() : nullptr;
+
     // Use the definition_level_histogram to get num_valid and num_null. For now, these are
     // only ever used for byte array columns. The repetition_level_histogram might be
     // necessary to determine the total number of values in the page if the
     // definition_level_histogram is absent.
     //
     // In the future we might want the full histograms saved in the `column_info` struct.
-    int64_t const* const def_hist = column_index.definition_level_histogram.has_value()
-                                      ? column_index.definition_level_histogram.value().data()
-                                      : nullptr;
-    int64_t const* const rep_hist = column_index.repetition_level_histogram.has_value()
-                                      ? column_index.repetition_level_histogram.value().data()
-                                      : nullptr;
+    int64_t const* const def_hist =
+      column_index != nullptr and column_index->definition_level_histogram.has_value()
+        ? column_index->definition_level_histogram.value().data()
+        : nullptr;
+    int64_t const* const rep_hist =
+      column_index != nullptr and column_index->repetition_level_histogram.has_value()
+        ? column_index->repetition_level_histogram.value().data()
+        : nullptr;
 
     for (size_t pg_idx = 0; pg_idx < num_pages; pg_idx++) {
       auto const& page_loc = offset_index.page_locations[pg_idx];
@@ -777,8 +779,8 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
       page_info pg_info{.location = page_loc, .num_rows = num_rows};
 
       // check to see if we already have null counts for each page
-      if (column_index.null_counts.has_value()) {
-        pg_info.num_nulls = column_index.null_counts.value()[pg_idx];
+      if (column_index != nullptr and column_index->null_counts.has_value()) {
+        pg_info.num_nulls = column_index->null_counts.value()[pg_idx];
       }
 
       // save variable length byte info if present
@@ -819,19 +821,6 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
           pg_info.num_valid     = num_values - pg_info.num_nulls.value();
         }
       }
-
-      // If none of the ifs above triggered, then we have neither histogram (likely the writer
-      // doesn't produce them, the r:0 d:1 case should have been handled above). The column index
-      // doesn't give us value counts, so we'll have to rely on the page headers. If the histogram
-      // info is missing or insufficient, then just return without modifying the row_group_info.
-      if (not pg_info.num_nulls.has_value() or not pg_info.num_valid.has_value()) { return; }
-
-      // Like above, if using older page indexes that lack size info, then return without modifying
-      // the row_group_info.
-      // TODO: cudf will still set the per-page var_bytes to '0' even for all null pages. Need to
-      // check the behavior of other implementations (once there are some). Some may not set the
-      // var bytes for all null pages, so check the `null_pages` field on the column index.
-      if (schema.type == Type::BYTE_ARRAY and not pg_info.var_bytes_size.has_value()) { return; }
 
       chunk_info.pages.push_back(std::move(pg_info));
     }
@@ -1974,10 +1963,12 @@ aggregate_reader_metadata::select_columns(
       // Check the schema elements to be equal except their number of children as we only care about
       // the specific column paths in the schema trees. Raise an invalid_argument error if the
       // schema elements don't match.
-      CUDF_EXPECTS(equal_to_except_num_children(src_schema_elem, dst_schema_elem),
-                   "Encountered mismatching SchemaElement properties for a column in "
-                   "the selected path",
-                   std::invalid_argument);
+      CUDF_EXPECTS(
+        equal_to_except_num_children(src_schema_elem, dst_schema_elem),
+        std::format(
+          "Encountered mismatching data type or schema across the Parquet sources for column '{}'",
+          src_schema_elem.name),
+        std::invalid_argument);
 
       // Get the schema_idx_map for this data source (pfm)
       auto& schema_idx_map = schema_idx_maps[src_idx - 1];
@@ -1989,9 +1980,12 @@ aggregate_reader_metadata::select_columns(
       if (src_schema_elem.is_stub()) {
         // Check if dst_schema_elem is also a stub i.e. has num_children == 1 that we didn't
         // previously check. Raise an invalid_argument error if dst_schema_elem is not a stub.
-        CUDF_EXPECTS(dst_schema_elem.is_stub(),
-                     "Encountered mismatching schemas for stub.",
-                     std::invalid_argument);
+        CUDF_EXPECTS(
+          dst_schema_elem.is_stub(),
+          std::format(
+            "Encountered mismatching nested structure across the Parquet sources for column '{}'",
+            src_schema_elem.name),
+          std::invalid_argument);
         auto const child_col_name_info = col_name_info ? &col_name_info->children[0] : nullptr;
         return map_column(child_col_name_info,
                           src_schema_elem.children_idx[0],
@@ -2002,19 +1996,24 @@ aggregate_reader_metadata::select_columns(
       // The path ends here. If this is a list/struct col (has children), then map all its children
       // which must be identical.
       if (col_name_info == nullptr or col_name_info->children.empty()) {
-        // Check the number of children to be equal to be mapped. An out_of_range error if the
-        // number of children isn't equal.
-        CUDF_EXPECTS(src_schema_elem.num_children == dst_schema_elem.num_children,
-                     "Encountered mismatching number of children for a "
-                     "column in the selected path",
-                     std::out_of_range);
+        // Check the number of children to be equal to be mapped.
+        CUDF_EXPECTS(
+          src_schema_elem.num_children == dst_schema_elem.num_children,
+          std::format(
+            "Encountered mismatching number of children across Parquet sources for column '{}'",
+            src_schema_elem.name),
+          std::invalid_argument);
 
         for (auto const& child_idx : src_schema_elem.children_idx) {
           auto const dst_child_idx = schema_lookup.find_target_schema_child(
             src_schema_idx, dst_schema_idx, get_schema(child_idx).name, src_idx);
-          CUDF_EXPECTS(dst_child_idx != -1,
-                       "Encountered mismatching schema tree depths across data sources",
-                       std::out_of_range);
+          CUDF_EXPECTS(
+            dst_child_idx != -1,
+            std::format(
+              "Encountered missing nested column '{}' across Parquet sources for column '{}'",
+              get_schema(child_idx).name,
+              src_schema_elem.name),
+            std::invalid_argument);
           map_column(nullptr, child_idx, dst_child_idx, src_idx);
         }
       }
@@ -2023,14 +2022,18 @@ aggregate_reader_metadata::select_columns(
       else {
         for (auto const& child_col_name_info : col_name_info->children) {
           // Ensure that each named child column exists in the destination schema tree for the
-          // paths to align up. An out_of_range error otherwise.
+          // paths to align up.
           auto const src_child_idx =
             schema_lookup.find_schema_child_by_name(src_schema_idx, child_col_name_info.name);
           auto const dst_child_idx = schema_lookup.find_target_schema_child(
             src_schema_idx, dst_schema_idx, child_col_name_info.name, src_idx);
-          CUDF_EXPECTS(dst_child_idx != -1,
-                       "Encountered mismatching schema tree depths across data sources",
-                       std::out_of_range);
+          CUDF_EXPECTS(
+            dst_child_idx != -1,
+            std::format(
+              "Encountered missing nested column '{}' across Parquet sources for column '{}'",
+              child_col_name_info.name,
+              src_schema_elem.name),
+            std::invalid_argument);
           map_column(&child_col_name_info, src_child_idx, dst_child_idx, src_idx);
         }
       }
@@ -2099,9 +2102,10 @@ aggregate_reader_metadata::select_columns(
               valid_path.full_path, selected_path, case_sensitive_names);
           });
         // Ensure that selected path matches a path in all_paths
-        CUDF_EXPECTS(found_path != all_paths.end() or ignore_missing_columns,
-                     "Encountered non-existent column in selected path",
-                     std::invalid_argument);
+        CUDF_EXPECTS(
+          found_path != all_paths.end() or ignore_missing_columns,
+          std::format("Encountered non-existent column '{}' in the selected path", selected_path),
+          std::invalid_argument);
         if (found_path != all_paths.end()) {
           // Use the file's actual path (preserving original case) for the valid_selected_paths
           valid_selected_paths.push_back({found_path->full_path, found_path->schema_idx});
@@ -2188,13 +2192,14 @@ aggregate_reader_metadata::select_columns(
             cuda::counting_iterator{static_cast<size_t>(1)},
             cuda::counting_iterator{per_file_metadata.size()},
             [&](auto const src_idx) {
-              // Ensure that each top level column exists in the destination schema
-              // tree. An out_of_range error is thrown otherwise.
+              // Ensure that each top level column exists in the destination schema tree.
               auto const dst_col_schema_idx =
                 schema_lookup.find_target_schema_child(root_idx, root_idx, col.name, src_idx);
-              CUDF_EXPECTS(dst_col_schema_idx != -1,
-                           "Encountered mismatching schema tree depths across data sources",
-                           std::out_of_range);
+              CUDF_EXPECTS(
+                dst_col_schema_idx != -1,
+                std::format("Encountered missing top-level column '{}' across Parquet sources",
+                            col.name),
+                std::invalid_argument);
               map_column(&col, top_level_col_schema_idx, dst_col_schema_idx, src_idx);
             });
         }

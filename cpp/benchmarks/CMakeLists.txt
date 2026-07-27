@@ -150,6 +150,7 @@ ConfigureNVBench(
 ConfigureNVBench(
   JOIN_NVBENCH
   join/conditional_join.cpp
+  join/direct_join.cu
   join/distinct_join.cpp
   join/filter_join_indices.cpp
   join/filter_join_indices_jit.cu
