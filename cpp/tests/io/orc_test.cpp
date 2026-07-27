@@ -1874,6 +1874,67 @@ TEST_F(OrcWriterTest, EmptyRowGroup)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
+// Stripes spanning several rowgroups, with compression disabled so that the writer does not pad
+// the per-rowgroup streams to a block alignment. Both are needed to cover the case where the
+// encoded output happens to be exactly as large as the writer sized it for.
+TEST_F(OrcWriterTest, MultiRowgroupStripeUncompressed)
+{
+  constexpr auto num_rows = 5 * 10'000 + 7;  // several rowgroups, the last one partial
+
+  auto const ints = random_values<int32_t>(num_rows);
+  int32_col int_col(ints.begin(), ints.end());
+  auto str_elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return "v" + std::to_string(i % 137); });
+  str_col string_col(str_elements, str_elements + num_rows);
+  table_view expected({int_col, string_col});
+
+  auto filepath = temp_env->get_temp_filepath("MultiRowgroupStripeUncompressed.orc");
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .compression(cudf::io::compression_type::NONE);
+  cudf::io::write_orc(out_opts);
+
+  // The rowgroups have to end up in one stripe for this to test what it means to.
+  EXPECT_EQ(read_orc_metadata(cudf::io::source_info{filepath}).num_stripes(), 1);
+
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_orc(in_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+// Null-free floating point columns are written to the data stream unencoded, so the writer hands
+// the encoder a region it does not write to. Spans several rowgroups so that those regions are
+// laid out with the rest of the encoded data rather than on their own.
+TEST_F(OrcWriterTest, MultiRowgroupPassthroughFloats)
+{
+  constexpr auto num_rows = 3 * 10'000 + 1;
+
+  auto const floats  = random_values<float>(num_rows);
+  auto const doubles = random_values<double>(num_rows);
+  float32_col float_col(floats.begin(), floats.end());
+  float64_col double_col(doubles.begin(), doubles.end());
+  // A nullable column alongside them, so the stripe also holds encoded (non-pass-through) streams.
+  auto const ints = random_values<int32_t>(num_rows);
+  auto mask = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3 != 0; });
+  int32_col int_col(ints.begin(), ints.end(), mask);
+  table_view expected({float_col, double_col, int_col});
+
+  for (auto const compression :
+       {cudf::io::compression_type::NONE, cudf::io::compression_type::SNAPPY}) {
+    auto filepath = temp_env->get_temp_filepath("MultiRowgroupPassthroughFloats.orc");
+    cudf::io::orc_writer_options out_opts =
+      cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+        .compression(compression);
+    cudf::io::write_orc(out_opts);
+
+    cudf::io::orc_reader_options in_opts =
+      cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
+    auto result = cudf::io::read_orc(in_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+  }
+}
+
 TEST_F(OrcWriterTest, NoNullsAsNonNullable)
 {
   auto valids = cudf::test::iterators::no_nulls();

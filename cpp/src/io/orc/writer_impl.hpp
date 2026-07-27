@@ -104,14 +104,46 @@ struct file_segmentation {
  * non-owning views in `data`. The encoder output is split across two arenas by
  * whether `gather_stripes` is certain to copy the region into `gathered_buffer`,
  * so that `transient_buffer` can be released as soon as gathering completes.
+ * `encode_columns` predicts that split and `gather_stripes` refines it by
+ * measuring what the encoder wrote, so the two arenas are not simply a function
+ * of the stripe layout.
  */
 struct encoded_data {
   rmm::device_uvector<uint8_t> persistent_buffer;       // regions that may be read in place
   rmm::device_uvector<uint8_t> transient_buffer;        // regions always copied out by the gather
   rmm::device_uvector<uint8_t> gathered_buffer;         // arena for gather_stripes output
   std::vector<std::vector<device_span<uint8_t>>> data;  // [stripe][strm_id] views
-  std::vector<std::vector<bool>> must_gather;           // entry lives in `transient_buffer`
   hostdevice_2dvector<encoder_chunk_streams> streams;   // streams of encoded data, per chunk
+};
+
+/**
+ * @brief Set of encoded regions placed in `encoded_data::transient_buffer`.
+ *
+ * `gather_stripes` has to copy every region in the set into
+ * `encoded_data::gathered_buffer` before it can release that arena.
+ */
+class transient_regions {
+ public:
+  transient_regions(size_t num_stripes, size_t num_streams)
+    : _num_streams{num_streams}, _flags(num_stripes * num_streams, false)
+  {
+  }
+
+  void insert(size_t stripe_id, size_t strm_id) { _flags[index(stripe_id, strm_id)] = true; }
+
+  [[nodiscard]] bool contains(size_t stripe_id, size_t strm_id) const
+  {
+    return _flags[index(stripe_id, strm_id)];
+  }
+
+ private:
+  [[nodiscard]] size_t index(size_t stripe_id, size_t strm_id) const
+  {
+    return stripe_id * _num_streams + strm_id;
+  }
+
+  size_t _num_streams;
+  std::vector<bool> _flags;
 };
 
 /**
