@@ -8,6 +8,7 @@ import copy
 import itertools
 import textwrap
 import warnings
+from collections import Counter
 from collections.abc import Mapping
 from typing import (
     TYPE_CHECKING,
@@ -4748,7 +4749,7 @@ class IndexedFrame(Frame):
                 plc.Table([col.plc_column for col in cols]),
                 mask_col.plc_column,
             )
-            return self._from_columns_like_self(
+            result = self._from_columns_like_self(
                 [
                     ColumnBase.create(col, dtype)
                     for col, dtype in zip(
@@ -4758,6 +4759,17 @@ class IndexedFrame(Frame):
                 column_names=self._column_names,
                 index_names=self.index.names if keep_index else None,
             )
+        if (
+            keep_index
+            and isinstance(self.index, MultiIndex)
+            and self.index._levels is not None
+        ):
+            result.index._levels = self.index._levels
+            result.index._codes = [
+                code.apply_boolean_mask(boolean_mask.column)
+                for code in self.index._codes
+            ]
+        return result
 
     def _pandas_repr_compatible(self, nan_rep=None) -> Self:
         """Return Self but with columns prepared for a pandas-like repr."""
@@ -7175,6 +7187,23 @@ class IndexedFrame(Frame):
             normalize_token(self.index),
             normalize_token(self.hash_values().to_numpy()),
         ]
+
+
+def _check_duplicate_level_names(specified, level_names):
+    """Raise if any of `specified` has duplicates in `level_names`."""
+    if specified is None:
+        return
+    if len(set(level_names)) == len(level_names):
+        return
+    duplicates = {key for key, val in Counter(level_names).items() if val > 1}
+
+    duplicates_specified = [spec for spec in specified if spec in duplicates]
+    if not len(duplicates_specified) == 0:
+        # Note: pandas raises first encountered duplicates, cuDF raises all.
+        raise ValueError(
+            f"The names {duplicates_specified} occurs multiple times, use a"
+            " level number"
+        )
 
 
 @_performance_tracking
