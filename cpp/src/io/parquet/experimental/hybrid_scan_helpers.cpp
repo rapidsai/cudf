@@ -220,6 +220,7 @@ std::pair<bool, bool> aggregate_reader_metadata::page_index_presence(
         }
         has_column &= has_column_index;
         has_offset &= has_offset_index;
+        if (not has_column and not has_offset) { return {false, false}; }
       }
     }
   }
