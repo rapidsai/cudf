@@ -68,6 +68,9 @@ trap set_exitcode ERR
 set +e
 
 rapids-logger "Run polars tests"
+export POLARS_MAX_THREADS=2
+export POLARS_ASYNC_THREAD_COUNT=2
+export POLARS_MAX_BLOCKING_THREAD_COUNT=4
 ./ci/run_cudf_polars_polars_tests.sh
 
 trap ERR

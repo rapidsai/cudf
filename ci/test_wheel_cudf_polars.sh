@@ -40,6 +40,10 @@ set +e
 PASSED=()
 FAILED=()
 
+export POLARS_MAX_THREADS=2
+export POLARS_ASYNC_THREAD_COUNT=2
+export POLARS_MAX_BLOCKING_THREAD_COUNT=4
+
 for version in "${VERSIONS[@]}"; do
     rapids-logger "Testing cudf_polars with polars ${version}.*"
 

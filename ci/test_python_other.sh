@@ -42,6 +42,9 @@ timeout 30m ./ci/run_custreamz_pytests.sh \
   --cov-report=term
 
 rapids-logger "pytest cudf-polars"
+export POLARS_MAX_THREADS=2
+export POLARS_ASYNC_THREAD_COUNT=2
+export POLARS_MAX_BLOCKING_THREAD_COUNT=4
 # Fail fast (-x) rather than trying to continue because failed tests pollute the state
 ./ci/run_cudf_polars_pytests.sh \
   -x \
