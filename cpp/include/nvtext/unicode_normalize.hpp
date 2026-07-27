@@ -38,16 +38,22 @@ enum class unicode_normalization_form {
  * Database `UnicodeData.txt` file, loaded by the caller as a cudf table
  * (e.g. via `cudf::io::read_csv`).
  *
- * The `unicode_data` table must contain exactly three columns
- * in the following order, corresponding to fields from `UnicodeData.txt`:
+ * The file is published by the Unicode Consortium and can be downloaded from:
+ * https://unicode.org/Public/15.1.0/ucd/UnicodeData.txt
+ * It is a semicolon-delimited file with 15 fields per row.  The three fields
+ * required by this API are field 0 (code point hex), field 3 (CCC), and
+ * field 5 (decomposition mapping).
+ *
+ * The `unicode_data` table must contain exactly three columns in the following
+ * order, corresponding to the fields above:
  *   - column[0]: STRING  Code point values as uppercase hex strings (e.g. "00C9")
  *   - column[1]: INT32   Canonical_Combining_Class (CCC) values in range [0, 254]
  *   - column[2]: STRING  Decomposition_Mapping field; empty string for identity
  *                        mappings, optionally prefixed with a compatibility tag
  *                        such as `<compat>`, `<font>`, `<wide>`, etc.
  *
- * The typical caller workflow is:
  * @code{.cpp}
+ *  // typical workflow
  *  cudf::io::csv_reader_options in_opts =
  *   cudf::io::csv_reader_options::builder(cudf::io::source_info("UnicodeData.txt"))
  *    .delimiter(';').header(-1)
@@ -64,6 +70,9 @@ enum class unicode_normalization_form {
  *
  * Composition exclusions (singletons, non-starter decompositions, and the
  * ~70 Unicode-specified explicit exclusions) are computed internally.
+ *
+ * During each call to nvtext::normalize_unicode, the amount of temporary
+ * required is approximately 12× the input data size.
  */
 struct unicode_normalizer {
   /**

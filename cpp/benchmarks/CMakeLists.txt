@@ -430,6 +430,7 @@ ConfigureNVBench(
   text/ngrams.cpp
   text/normalize.cpp
   text/replace.cpp
+  text/unicode_normalize.cpp
   text/subword.cpp
   text/tokenize.cpp
   text/vocab.cpp

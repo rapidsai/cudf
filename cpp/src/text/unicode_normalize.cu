@@ -9,9 +9,12 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
+#include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/converters.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
@@ -28,16 +31,13 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cub/cub.cuh>
 #include <cuda/functional>
 #include <cuda/std/span>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/reduce.h>
 #include <thrust/remove.h>
-#include <thrust/scan.h>
 #include <thrust/scatter.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
@@ -83,6 +83,36 @@ struct scatter_ccc_fn {
     uint32_t const cp = d_codepoints[idx];
     if (cp <= MAX_CODEPOINT) {
       ccc_table[cp] = static_cast<uint8_t>(ccc_col.element<int32_t>(idx));
+    }
+  }
+};
+
+/**
+ * Set one bit in the NFC/NFKC quick-check bitset for each codepoint that is
+ * not stable under NFC or NFKC normalization:
+ *
+ *  - Compatibility decompositions (mapping starts with '<'): unstable under NFKC.
+ *  - Singleton canonical decompositions (exactly one canonical token, e.g.
+ *    U+212B ANGSTROM SIGN → U+00C5): unstable under NFC because the codepoint
+ *    decomposes to a different codepoint that does not recompose back to itself.
+ *
+ * One invocation per UnicodeData.txt row.
+ */
+struct scatter_compat_flag_fn {
+  cudf::column_device_view decomp_map;
+  cuda::std::span<uint32_t const> d_codepoints;
+  cuda::std::span<int32_t const> d_counts;           // token count per row (apply_compat-aware)
+  cuda::std::span<cudf::bitmask_type> compat_flags;  // bitset: 1 bit per codepoint
+
+  __device__ void operator()(cudf::size_type idx) const
+  {
+    auto const sv        = decomp_map.element<cudf::string_view>(idx);
+    bool const is_compat = sv.size_bytes() > 0 && sv.data()[0] == '<';
+    // Flag if compat decomp OR singleton canonical decomp (NFC-unstable)
+    if (!is_compat && d_counts[idx] != 1) { return; }
+    uint32_t const cp = d_codepoints[idx];
+    if (cp <= MAX_CODEPOINT) {
+      cudf::set_bit_unsafe(compat_flags.data(), static_cast<cudf::size_type>(cp));
     }
   }
 };
@@ -179,11 +209,10 @@ struct build_comp_table_fn {
     // apply_compat=false: skip compatibility mappings (<tag> prefix)
     uint32_t tokens[2] = {0, 0};
     int32_t tok        = 0;
-    for_each_decomp_token(decomp_map.element<cudf::string_view>(idx),
-                          /*apply_compat=*/false,
-                          [&tokens, &tok](char const* ptr, cudf::size_type size) {
-                            if (tok < 2) { tokens[tok++] = hex_to_cp(ptr, size); }
-                          });
+    auto fn            = [&tokens, &tok](char const* ptr, cudf::size_type size) {
+      if (tok < 2) { tokens[tok++] = hex_to_cp(ptr, size); }
+    };
+    for_each_decomp_token(decomp_map.element<cudf::string_view>(idx), false, fn);
     if (tok < 2) { return; }
     auto const composed  = d_codepoints[idx];
     auto const starter   = tokens[0];
@@ -201,6 +230,168 @@ struct build_comp_table_fn {
   }
 };
 
+}  // namespace
+}  // namespace detail
+
+// Named struct rather than a lambda: __device__ extended lambdas are not
+// permitted inside constructors.
+struct is_zero_comp_key {
+  __device__ bool operator()(uint64_t k) const { return k == uint64_t{0}; }
+};
+
+struct unicode_normalizer::unicode_normalizer_impl {
+  rmm::device_uvector<uint32_t> decomp_offsets;  // size DECOMP_OFFSETS_SIZE
+  rmm::device_uvector<uint32_t> decomp_table;    // flat replacement codepoints
+  rmm::device_uvector<uint8_t> ccc_table;        // size CODEPOINT_TABLE_SIZE
+  rmm::device_uvector<cudf::bitmask_type> compat_decomp_flags;
+  rmm::device_uvector<uint64_t> comp_keys;    // sorted (starter<<32|combining)
+  rmm::device_uvector<uint32_t> comp_values;  // parallel composed codepoints
+  unicode_normalization_form form;
+
+  unicode_normalizer_impl(rmm::device_uvector<uint32_t>&& decomp_offsets,
+                          rmm::device_uvector<uint32_t>&& decomp_table,
+                          rmm::device_uvector<uint8_t>&& ccc_table,
+                          rmm::device_uvector<cudf::bitmask_type>&& compat_decomp_flags,
+                          rmm::device_uvector<uint64_t>&& comp_keys,
+                          rmm::device_uvector<uint32_t>&& comp_values,
+                          unicode_normalization_form form)
+    : decomp_offsets(std::move(decomp_offsets)),
+      decomp_table(std::move(decomp_table)),
+      ccc_table(std::move(ccc_table)),
+      compat_decomp_flags(std::move(compat_decomp_flags)),
+      comp_keys(std::move(comp_keys)),
+      comp_values(std::move(comp_values)),
+      form(form)
+  {
+  }
+};
+
+unicode_normalizer::unicode_normalizer(cudf::table_view const& unicode_data,
+                                       unicode_normalization_form form,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
+{
+  CUDF_EXPECTS(unicode_data.num_columns() == 3,
+               "unicode_data table must have exactly 3 columns",
+               std::invalid_argument);
+  CUDF_EXPECTS(unicode_data.column(0).type().id() == cudf::type_id::STRING,
+               "unicode_data column[0] must be STRING",
+               std::invalid_argument);
+  CUDF_EXPECTS(unicode_data.column(1).type().id() == cudf::type_id::INT32,
+               "unicode_data column[1] must be INT32",
+               std::invalid_argument);
+  CUDF_EXPECTS(unicode_data.column(2).type().id() == cudf::type_id::STRING,
+               "unicode_data column[2] must be STRING",
+               std::invalid_argument);
+  CUDF_EXPECTS(!cudf::has_nulls(unicode_data),
+               "unicode_data table must not contain nulls",
+               std::invalid_argument);
+
+  cudf::size_type const num_rows = unicode_data.num_rows();
+  CUDF_EXPECTS(num_rows > 0, "unicode_data table must not be empty", std::invalid_argument);
+
+  auto codepoints_col =
+    cudf::strings::detail::hex_to_integers(cudf::strings_column_view(unicode_data.column(0)),
+                                           cudf::data_type{cudf::type_id::UINT32},
+                                           stream,
+                                           cudf::get_current_device_resource_ref());
+  auto d_codepoints = cuda::std::span<uint32_t const>(codepoints_col->view().data<uint32_t>(),
+                                                      static_cast<std::size_t>(num_rows));
+
+  auto const d_ccc_col    = cudf::column_device_view::create(unicode_data.column(1), stream);
+  auto const d_decomp_map = cudf::column_device_view::create(unicode_data.column(2), stream);
+  bool const apply_compat =
+    (form == unicode_normalization_form::NFKD || form == unicode_normalization_form::NFKC);
+  auto const policy   = rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref());
+  auto const row_iter = thrust::make_counting_iterator(cudf::size_type{0});
+
+  // Build CCC table
+  auto ccc_table = rmm::device_uvector<uint8_t>(detail::CODEPOINT_TABLE_SIZE, stream, mr);
+  thrust::uninitialized_fill(policy, ccc_table.begin(), ccc_table.end(), uint8_t{0});
+  thrust::for_each_n(
+    policy, row_iter, num_rows, detail::scatter_ccc_fn{*d_ccc_col, d_codepoints, ccc_table});
+
+  // Count decomposition tokens per row
+  auto d_counts        = rmm::device_uvector<int32_t>(num_rows, stream);
+  auto count_tokens_fn = detail::count_decomp_tokens_fn{*d_decomp_map, apply_compat};
+  thrust::transform(policy, row_iter, row_iter + num_rows, d_counts.begin(), count_tokens_fn);
+
+  // Build NFC/NFKC quick-check bitset: flag compat decompositions (NFKC-unstable)
+  // and singleton canonical decompositions like U+212B → U+00C5 (NFC-unstable).
+  auto compat_decomp_flags = rmm::device_uvector<cudf::bitmask_type>(
+    cudf::num_bitmask_words(detail::CODEPOINT_TABLE_SIZE), stream, mr);
+  thrust::uninitialized_fill(
+    policy, compat_decomp_flags.begin(), compat_decomp_flags.end(), uint32_t{0});
+  auto scatter_compat_fn =
+    detail::scatter_compat_flag_fn{*d_decomp_map, d_codepoints, d_counts, compat_decomp_flags};
+  thrust::for_each_n(policy, row_iter, num_rows, scatter_compat_fn);
+
+  // Build codepoint-indexed decomp offsets
+  auto decomp_offsets = rmm::device_uvector<uint32_t>(detail::DECOMP_OFFSETS_SIZE, stream, mr);
+  thrust::uninitialized_fill(policy, decomp_offsets.begin(), decomp_offsets.end(), uint32_t{0});
+  // Scatter per-row token counts to the codepoint-indexed positions, then
+  // exclusive-scan to get start offsets. The extra sentinel slot at
+  // MAX_CODEPOINT+1 accumulates the total via the scan.
+  thrust::scatter(
+    policy, d_counts.begin(), d_counts.end(), d_codepoints.begin(), decomp_offsets.begin());
+  auto const total_decomp_size = cudf::detail::sizes_to_offsets(
+    decomp_offsets.begin(), decomp_offsets.end(), decomp_offsets.begin(), 0, stream);
+
+  // Fill decomp_table
+  auto decomp_table    = rmm::device_uvector<uint32_t>(total_decomp_size, stream, mr);
+  auto write_tokens_fn = detail::write_decomp_tokens_fn{
+    *d_decomp_map, apply_compat, d_codepoints, decomp_offsets, decomp_table};
+  thrust::for_each_n(policy, row_iter, num_rows, write_tokens_fn);
+
+  if (form != unicode_normalization_form::NFC && form != unicode_normalization_form::NFKC) {
+    _impl = std::make_unique<unicode_normalizer_impl>(std::move(decomp_offsets),
+                                                      std::move(decomp_table),
+                                                      std::move(ccc_table),
+                                                      std::move(compat_decomp_flags),
+                                                      rmm::device_uvector<uint64_t>(0, stream, mr),
+                                                      rmm::device_uvector<uint32_t>(0, stream, mr),
+                                                      form);
+    return;
+  }
+
+  // Build composition table (NFC/NFKC only)
+  auto d_comp_keys    = rmm::device_uvector<uint64_t>(num_rows, stream, mr);
+  auto d_comp_values  = rmm::device_uvector<uint32_t>(num_rows, stream, mr);
+  auto build_table_fn = detail::build_comp_table_fn{
+    *d_decomp_map, d_codepoints, d_counts, ccc_table, d_comp_keys, d_comp_values};
+  thrust::for_each_n(policy, row_iter, num_rows, build_table_fn);
+
+  thrust::remove_if(
+    policy, d_comp_values.begin(), d_comp_values.end(), d_comp_keys.begin(), is_zero_comp_key{});
+  auto const end_itr = thrust::remove(policy, d_comp_keys.begin(), d_comp_keys.end(), uint64_t{0});
+  auto const comp_size = cuda::std::distance(d_comp_keys.begin(), end_itr);
+  d_comp_keys.resize(comp_size, stream);
+  d_comp_values.resize(comp_size, stream);
+
+  thrust::sort_by_key(policy, d_comp_keys.begin(), d_comp_keys.end(), d_comp_values.begin());
+
+  _impl = std::make_unique<unicode_normalizer_impl>(std::move(decomp_offsets),
+                                                    std::move(decomp_table),
+                                                    std::move(ccc_table),
+                                                    std::move(compat_decomp_flags),
+                                                    std::move(d_comp_keys),
+                                                    std::move(d_comp_values),
+                                                    form);
+}
+
+unicode_normalizer::~unicode_normalizer() {}
+
+std::unique_ptr<unicode_normalizer> create_unicode_normalizer(cudf::table_view const& unicode_data,
+                                                              unicode_normalization_form form,
+                                                              rmm::cuda_stream_view stream,
+                                                              rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return std::make_unique<unicode_normalizer>(unicode_data, form, stream, mr);
+}
+
+namespace detail {
+namespace {
 /**
  * Transitively decompose a single Unicode codepoint and invoke `fn` with the result.
  * Runs the full NFD/NFKD ping-pong expansion loop.  The `fn` is called as
@@ -388,162 +579,63 @@ struct compose_fn {
   }
 };
 
-}  // anonymous namespace
-}  // namespace detail
+/**
+ * NFC/NFKC quick-check predicate.
+ *
+ * Returns true for the first byte of any UTF-8 sequence whose codepoint has
+ * a non-zero CCC (i.e. is a combining mark).  Used with thrust::any_of over
+ * the raw input chars: if no such byte exists, every codepoint is a starter
+ * and the column is already in NFC/NFKC form — the full pipeline can be skipped.
+ */
+struct nfc_quick_check_fn {
+  cuda::std::span<char const> chars;
+  cuda::std::span<uint8_t const> ccc_table;
+  cuda::std::span<cudf::bitmask_type const> compat_flags;  // empty → NFC (skip compat check)
 
-// Named struct rather than a lambda: __device__ extended lambdas are not
-// permitted inside constructors.
-struct is_zero_comp_key {
-  __device__ bool operator()(uint64_t k) const { return k == uint64_t{0}; }
-};
-
-struct unicode_normalizer::unicode_normalizer_impl {
-  rmm::device_uvector<uint32_t> decomp_offsets;  // size DECOMP_OFFSETS_SIZE
-  rmm::device_uvector<uint32_t> decomp_table;    // flat replacement codepoints
-  rmm::device_uvector<uint8_t> ccc_table;        // size CODEPOINT_TABLE_SIZE
-  rmm::device_uvector<uint64_t> comp_keys;       // sorted (starter<<32|combining)
-  rmm::device_uvector<uint32_t> comp_values;     // parallel composed codepoints
-  unicode_normalization_form form;
-
-  unicode_normalizer_impl(rmm::device_uvector<uint32_t>&& decomp_offsets,
-                          rmm::device_uvector<uint32_t>&& decomp_table,
-                          rmm::device_uvector<uint8_t>&& ccc_table,
-                          rmm::device_uvector<uint64_t>&& comp_keys,
-                          rmm::device_uvector<uint32_t>&& comp_values,
-                          unicode_normalization_form form)
-    : decomp_offsets(std::move(decomp_offsets)),
-      decomp_table(std::move(decomp_table)),
-      ccc_table(std::move(ccc_table)),
-      comp_keys(std::move(comp_keys)),
-      comp_values(std::move(comp_values)),
-      form(form)
+  __device__ bool operator()(int64_t idx) const
   {
+    if (!cudf::strings::detail::is_begin_utf8_char(chars[idx])) { return false; }
+    auto ch = static_cast<cudf::char_utf8>(chars[idx]);
+    if (ch > 0x7F) { cudf::strings::detail::to_char_utf8(chars.data() + idx, ch); }
+    auto const cp = cudf::strings::detail::utf8_to_codepoint(ch);
+    if (cp > MAX_CODEPOINT) { return false; }
+    if (ccc_table[cp] > 0) { return true; }
+    return !compat_flags.empty() &&
+           cudf::bit_is_set(compat_flags.data(), static_cast<cudf::size_type>(cp));
   }
 };
 
-unicode_normalizer::unicode_normalizer(cudf::table_view const& unicode_data,
-                                       unicode_normalization_form form,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
-{
-  CUDF_EXPECTS(unicode_data.num_columns() == 3,
-               "unicode_data table must have exactly 3 columns",
-               std::invalid_argument);
-  CUDF_EXPECTS(unicode_data.column(0).type().id() == cudf::type_id::STRING,
-               "unicode_data column[0] must be STRING",
-               std::invalid_argument);
-  CUDF_EXPECTS(unicode_data.column(1).type().id() == cudf::type_id::INT32,
-               "unicode_data column[1] must be INT32",
-               std::invalid_argument);
-  CUDF_EXPECTS(unicode_data.column(2).type().id() == cudf::type_id::STRING,
-               "unicode_data column[2] must be STRING",
-               std::invalid_argument);
-  CUDF_EXPECTS(!cudf::has_nulls(unicode_data),
-               "unicode_data table must not contain nulls",
-               std::invalid_argument);
+/**
+ * Output codepoints to UTF-8 bytes.
+ */
+struct output_fn {
+  uint32_t* d_cps;
+  int64_t* d_scp;
+  cudf::size_type* d_sizes{};
+  char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets{};
 
-  cudf::size_type const num_rows = unicode_data.num_rows();
-  CUDF_EXPECTS(num_rows > 0, "unicode_data table must not be empty", std::invalid_argument);
-
-  auto codepoints_col =
-    cudf::strings::detail::hex_to_integers(cudf::strings_column_view(unicode_data.column(0)),
-                                           cudf::data_type{cudf::type_id::UINT32},
-                                           stream,
-                                           cudf::get_current_device_resource_ref());
-  auto d_codepoints = cuda::std::span<uint32_t const>(codepoints_col->view().data<uint32_t>(),
-                                                      static_cast<std::size_t>(num_rows));
-
-  auto const d_ccc_col    = cudf::column_device_view::create(unicode_data.column(1), stream);
-  auto const d_decomp_map = cudf::column_device_view::create(unicode_data.column(2), stream);
-  bool const apply_compat =
-    (form == unicode_normalization_form::NFKD || form == unicode_normalization_form::NFKC);
-  auto const policy   = rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref());
-  auto const row_iter = thrust::make_counting_iterator(cudf::size_type{0});
-
-  // Build CCC table
-  auto ccc_table = rmm::device_uvector<uint8_t>(detail::CODEPOINT_TABLE_SIZE, stream, mr);
-  thrust::fill(policy, ccc_table.begin(), ccc_table.end(), uint8_t{0});
-  thrust::for_each_n(
-    policy, row_iter, num_rows, detail::scatter_ccc_fn{*d_ccc_col, d_codepoints, ccc_table});
-
-  // Count decomposition tokens per row
-  auto d_counts = rmm::device_uvector<int32_t>(num_rows, stream);
-  thrust::transform(policy,
-                    row_iter,
-                    row_iter + num_rows,
-                    d_counts.begin(),
-                    detail::count_decomp_tokens_fn{*d_decomp_map, apply_compat});
-
-  // Build codepoint-indexed decomp offsets
-  auto decomp_offsets = rmm::device_uvector<uint32_t>(detail::DECOMP_OFFSETS_SIZE, stream, mr);
-  thrust::fill(policy, decomp_offsets.begin(), decomp_offsets.end(), uint32_t{0});
-  // Scatter per-row token counts to the codepoint-indexed positions, then
-  // exclusive-scan to get start offsets. The extra sentinel slot at
-  // MAX_CODEPOINT+1 accumulates the total via the scan.
-  thrust::scatter(
-    policy, d_counts.begin(), d_counts.end(), d_codepoints.begin(), decomp_offsets.begin());
-  thrust::exclusive_scan(
-    policy, decomp_offsets.begin(), decomp_offsets.end(), decomp_offsets.begin());
-
-  // Total decomp entries = sum of all per-row counts.
-  uint32_t const total_decomp_size =
-    thrust::reduce(policy, d_counts.begin(), d_counts.end(), uint32_t{0});
-
-  // Fill decomp_table
-  auto decomp_table = rmm::device_uvector<uint32_t>(total_decomp_size, stream, mr);
-  auto tokens_fn    = detail::write_decomp_tokens_fn{
-    *d_decomp_map, apply_compat, d_codepoints, decomp_offsets, decomp_table};
-  thrust::for_each_n(policy, row_iter, num_rows, tokens_fn);
-
-  if (form != unicode_normalization_form::NFC && form != unicode_normalization_form::NFKC) {
-    _impl = std::make_unique<unicode_normalizer_impl>(std::move(decomp_offsets),
-                                                      std::move(decomp_table),
-                                                      std::move(ccc_table),
-                                                      rmm::device_uvector<uint64_t>(0, stream, mr),
-                                                      rmm::device_uvector<uint32_t>(0, stream, mr),
-                                                      form);
-    return;
+  __device__ void operator()(cudf::size_type idx) const
+  {
+    auto const cp_start   = d_scp[idx];
+    auto const cp_end     = d_scp[idx + 1];
+    cudf::size_type bytes = 0;
+    auto d_output         = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    for (int64_t i = cp_start; i < cp_end; ++i) {
+      auto const cp = d_cps[i];
+      if (cp == 0) { continue; }
+      auto const utf8 = cudf::strings::detail::codepoint_to_utf8(cp);
+      bytes += cudf::strings::detail::bytes_in_char_utf8(utf8);
+      if (d_output != nullptr) {
+        cudf::strings::detail::from_char_utf8(utf8, d_output);
+        d_output += cudf::strings::detail::bytes_in_char_utf8(utf8);
+      }
+    }
+    if (d_sizes) { d_sizes[idx] = bytes; }
   }
+};
 
-  // Build composition table (NFC/NFKC only)
-  auto d_comp_keys   = rmm::device_uvector<uint64_t>(num_rows, stream, mr);
-  auto d_comp_values = rmm::device_uvector<uint32_t>(num_rows, stream, mr);
-  thrust::fill(policy, d_comp_keys.begin(), d_comp_keys.end(), uint64_t{0});
-  thrust::fill(policy, d_comp_values.begin(), d_comp_values.end(), uint32_t{0});
-
-  auto build_table_fn = detail::build_comp_table_fn{
-    *d_decomp_map, d_codepoints, d_counts, ccc_table, d_comp_keys, d_comp_values};
-  thrust::for_each_n(policy, row_iter, num_rows, build_table_fn);
-
-  thrust::remove_if(
-    policy, d_comp_values.begin(), d_comp_values.end(), d_comp_keys.begin(), is_zero_comp_key{});
-  auto const end_itr = thrust::remove(policy, d_comp_keys.begin(), d_comp_keys.end(), uint64_t{0});
-  auto const comp_size = cuda::std::distance(d_comp_keys.begin(), end_itr);
-  d_comp_keys.resize(comp_size, stream);
-  d_comp_values.resize(comp_size, stream);
-
-  thrust::sort_by_key(policy, d_comp_keys.begin(), d_comp_keys.end(), d_comp_values.begin());
-
-  _impl = std::make_unique<unicode_normalizer_impl>(std::move(decomp_offsets),
-                                                    std::move(decomp_table),
-                                                    std::move(ccc_table),
-                                                    std::move(d_comp_keys),
-                                                    std::move(d_comp_values),
-                                                    form);
-}
-
-unicode_normalizer::~unicode_normalizer() {}
-
-std::unique_ptr<unicode_normalizer> create_unicode_normalizer(cudf::table_view const& unicode_data,
-                                                              unicode_normalization_form form,
-                                                              rmm::cuda_stream_view stream,
-                                                              rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return std::make_unique<unicode_normalizer>(unicode_data, form, stream, mr);
-}
-
-namespace detail {
+}  // namespace
 
 std::unique_ptr<cudf::column> normalize_unicode(cudf::strings_column_view const& input,
                                                 unicode_normalizer const& normalizer,
@@ -554,128 +646,86 @@ std::unique_ptr<cudf::column> normalize_unicode(cudf::strings_column_view const&
 
   auto const [first_offset, last_offset] =
     cudf::strings::detail::get_first_and_last_offset(input, stream);
-  int64_t const chars_size      = last_offset - first_offset;
-  char const* const d_raw_chars = input.chars_begin(stream) + first_offset;
-
+  auto const chars_size = last_offset - first_offset;
   if (chars_size == 0) { return std::make_unique<cudf::column>(input.parent(), stream, mr); }
 
-  auto const& p        = *normalizer._impl;
-  auto const policy    = rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref());
-  auto const byte_iter = thrust::make_counting_iterator(int64_t{0});
-  auto chars_span = cuda::std::span<char const>(d_raw_chars, static_cast<std::size_t>(chars_size));
+  auto const& p          = *normalizer._impl;
+  auto const policy      = rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref());
+  auto const byte_iter   = thrust::make_counting_iterator(int64_t{0});
+  auto const d_raw_chars = input.chars_begin(stream) + first_offset;
+  auto chars_span        = cuda::std::span<char const>(d_raw_chars, chars_size);
 
-  // Decomposition: 1st pass count output codepoints per input byte
-  auto d_expanded_sizes = rmm::device_uvector<int32_t>(chars_size, stream);
-  thrust::fill(policy, d_expanded_sizes.begin(), d_expanded_sizes.end(), int32_t{0});
+  // NFC/NFKC quick check: if no codepoint in the input has CCC > 0 (no combining
+  // marks anywhere), every codepoint is already a canonical starter and the column
+  // is already in NFC/NFKC form — return a copy without running the full pipeline.
+  if (p.form == unicode_normalization_form::NFC || p.form == unicode_normalization_form::NFKC) {
+    auto nfc_qc_fn = detail::nfc_quick_check_fn{chars_span, p.ccc_table, p.compat_decomp_flags};
+    if (!cudf::detail::any_of(byte_iter, byte_iter + chars_size, nfc_qc_fn, stream)) {
+      return std::make_unique<cudf::column>(input.parent(), stream, mr);
+    }
+  }
+
+  // Decomposition: first count output codepoints per input byte
+  auto expanded_sizes = rmm::device_uvector<int32_t>(chars_size, stream);
+  thrust::uninitialized_fill(policy, expanded_sizes.begin(), expanded_sizes.end(), int32_t{0});
   auto size_fn = detail::decompose_size_fn{chars_span, p.decomp_offsets, p.decomp_table};
-  thrust::transform(policy, byte_iter, byte_iter + chars_size, d_expanded_sizes.begin(), size_fn);
+  thrust::transform(policy, byte_iter, byte_iter + chars_size, expanded_sizes.begin(), size_fn);
 
   // Exclusive scan to get per-byte output positions
-  auto d_out_positions = rmm::device_uvector<uint32_t>(chars_size, stream);
-  thrust::exclusive_scan(
-    policy, d_expanded_sizes.begin(), d_expanded_sizes.end(), d_out_positions.begin());
-  // Total output codepoints = sum of all per-byte expansion counts
-  int64_t const total_cps =
-    thrust::reduce(policy, d_expanded_sizes.begin(), d_expanded_sizes.end(), int64_t{0});
-
-  auto d_cps = rmm::device_uvector<uint32_t>(total_cps, stream);
-  auto d_ccc = rmm::device_uvector<uint8_t>(total_cps, stream);
-  thrust::fill(policy, d_cps.begin(), d_cps.end(), uint32_t{0});
+  auto out_positions   = rmm::device_uvector<uint32_t>(chars_size, stream);
+  auto const total_cps = cudf::detail::sizes_to_offsets(
+    expanded_sizes.begin(), expanded_sizes.end(), out_positions.begin(), 0, stream);
 
   // Fill codepoints and CCCs at pre-scanned positions
+  auto cps = rmm::device_uvector<uint32_t>(total_cps, stream);
+  auto ccc = rmm::device_uvector<uint8_t>(total_cps, stream);
+  thrust::fill(policy, cps.begin(), cps.end(), uint32_t{0});
   auto decomp_fill_fn = detail::decompose_fill_fn{
-    chars_span, p.decomp_offsets, p.decomp_table, p.ccc_table, d_out_positions, d_cps, d_ccc};
+    chars_span, p.decomp_offsets, p.decomp_table, p.ccc_table, out_positions, cps, ccc};
   thrust::for_each_n(policy, byte_iter, chars_size, decomp_fill_fn);
 
   // Build per-string codepoint offset boundaries
-  auto d_str_cp_offsets = rmm::device_uvector<int64_t>(input.size() + 1, stream);
+  auto str_cp_offsets = rmm::device_uvector<int64_t>(input.size() + 1, stream);
   {
     auto const input_char_offsets =
       cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
-    auto const* const d_out_pos = d_out_positions.data();
-    auto const* const d_exp_sz  = d_expanded_sizes.data();
-    int64_t const first         = first_offset;
-    thrust::transform(
-      policy,
-      input_char_offsets,
-      input_char_offsets + input.size() + 1,
-      d_str_cp_offsets.begin(),
-      cuda::proclaim_return_type<int64_t>([d_out_pos, d_exp_sz, first] __device__(int64_t offset) {
-        auto const local = offset - first;
-        if (local <= 0) { return 0L; }
-        return static_cast<int64_t>(d_out_pos[local - 1]) + d_exp_sz[local - 1];
-      }));
+    auto const d_out_pos   = out_positions.data();
+    auto const d_exp_sizes = expanded_sizes.data();
+    int64_t const first    = first_offset;
+    thrust::transform(policy,
+                      input_char_offsets,
+                      input_char_offsets + input.size() + 1,
+                      str_cp_offsets.begin(),
+                      cuda::proclaim_return_type<int64_t>(
+                        [d_out_pos, d_exp_sizes, first] __device__(int64_t offset) {
+                          auto const local = offset - first;
+                          if (local <= 0) { return 0L; }
+                          return static_cast<int64_t>(d_out_pos[local - 1]) +
+                                 d_exp_sizes[local - 1];
+                        }));
   }
+  expanded_sizes.release();
+  out_positions.release();
+
+  auto const row_iter = thrust::make_counting_iterator(cudf::size_type{0});
+  auto const d_cps    = cps.data();
+  auto const d_scp    = str_cp_offsets.data();
 
   // Canonical Reorder
-  thrust::for_each_n(policy,
-                     thrust::make_counting_iterator(cudf::size_type{0}),
-                     input.size(),
-                     detail::reorder_fn{d_cps, d_ccc, d_str_cp_offsets});
-
+  thrust::for_each_n(policy, row_iter, input.size(), detail::reorder_fn{cps, ccc, str_cp_offsets});
   // Canonical Composition (NFC/NFKC only)
   if (!p.comp_keys.is_empty()) {
-    thrust::for_each_n(
-      policy,
-      thrust::make_counting_iterator(cudf::size_type{0}),
-      input.size(),
-      detail::compose_fn{d_cps, d_ccc, d_str_cp_offsets, p.comp_keys, p.comp_values});
+    auto fn = detail::compose_fn{cps, ccc, str_cp_offsets, p.comp_keys, p.comp_values};
+    thrust::for_each_n(policy, row_iter, input.size(), fn);
   }
+  ccc.release();
 
-  // UTF-8 Encode (two-pass)
-  auto const cp_iter = thrust::make_counting_iterator(int64_t{0});
-  // compute UTF-8 byte sizes per codepoint slot
-  auto d_byte_sizes = rmm::device_uvector<int32_t>(total_cps, stream);
-  thrust::transform(policy,
-                    cp_iter,
-                    cp_iter + total_cps,
-                    d_byte_sizes.begin(),
-                    cuda::proclaim_return_type<int32_t>([d_cps_ptr = d_cps.data()] __device__(
-                                                          int64_t idx) -> int32_t {
-                      uint32_t const cp = d_cps_ptr[idx];
-                      if (cp == 0u) return 0;
-                      auto const utf8 = cudf::strings::detail::codepoint_to_utf8(cp);
-                      return static_cast<int32_t>(cudf::strings::detail::bytes_in_char_utf8(utf8));
-                    }));
-
-  auto d_byte_offsets = rmm::device_uvector<int64_t>(total_cps, stream);
-  thrust::exclusive_scan(
-    policy, d_byte_sizes.begin(), d_byte_sizes.end(), d_byte_offsets.begin(), int64_t{0});
-
-  // Per-string output byte sizes via segmented reduce over codepoint ranges
-  auto output_sizes = rmm::device_uvector<cudf::size_type>(input.size(), stream);
-  {
-    auto const d_in        = d_byte_sizes.data();
-    auto const d_str_cp    = d_str_cp_offsets.data();
-    std::size_t temp_bytes = 0;
-    auto out_data          = output_sizes.data();
-    cub::DeviceSegmentedReduce::Sum(
-      nullptr, temp_bytes, d_in, out_data, input.size(), d_str_cp, d_str_cp + 1, stream.value());
-    auto tmp = rmm::device_buffer{temp_bytes, stream};
-    cub::DeviceSegmentedReduce::Sum(
-      tmp.data(), temp_bytes, d_in, out_data, input.size(), d_str_cp, d_str_cp + 1, stream.value());
-  }
-
-  auto [offsets_col, total_bytes_out] = cudf::strings::detail::make_offsets_child_column(
-    output_sizes.begin(), output_sizes.end(), stream, mr);
-  auto chars_buf = rmm::device_uvector<char>(total_bytes_out, stream, mr);
-
-  // 2nd pass write UTF-8 bytes
-  thrust::for_each_n(policy,
-                     cp_iter,
-                     total_cps,
-                     [d_cps          = d_cps.data(),
-                      d_byte_offsets = d_byte_offsets.data(),
-                      chars_buf      = chars_buf.data()] __device__(int64_t idx) {
-                       auto const cp = d_cps[idx];
-                       if (cp == 0u) { return; }
-                       auto const utf8 = cudf::strings::detail::codepoint_to_utf8(cp);
-                       cudf::strings::detail::from_char_utf8(utf8, chars_buf + d_byte_offsets[idx]);
-                     });
-
+  auto output_fn = detail::output_fn{d_cps, d_scp};
+  auto [offsets_column, chars] =
+    cudf::strings::detail::make_strings_children(output_fn, input.size(), stream, mr);
   return cudf::make_strings_column(input.size(),
-                                   std::move(offsets_col),
-                                   chars_buf.release(),
+                                   std::move(offsets_column),
+                                   chars.release(),
                                    input.null_count(),
                                    cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
