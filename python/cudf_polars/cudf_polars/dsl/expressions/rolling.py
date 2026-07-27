@@ -587,17 +587,13 @@ class GroupedWindow(Expr):
         df: DataFrame,
         _: plc.groupby.GroupBy,
     ) -> tuple[list[str], list[DataType], list[plc.Table]]:
-        shift_named = op.named_exprs
-        order_index = op.order_index
-        assert order_index is not None
-
         plc_cols: list[plc.Column] = []
         offsets: list[int] = []
         fill_scalars: list[plc.Scalar] = []
         out_names: list[str] = []
         out_dtypes: list[DataType] = []
 
-        for ne in shift_named:
+        for ne in op.named_exprs:
             shift_expr = ne.value
             assert isinstance(shift_expr, expr.UnaryFunction)
             data_expr, offset_expr = shift_expr.children[:2]
@@ -624,16 +620,16 @@ class GroupedWindow(Expr):
                     )
                 )
 
+        assert op.order_index is not None
         val_cols = plc.copying.gather(
             plc.Table(plc_cols),
-            order_index,
+            op.order_index,
             plc.copying.OutOfBoundsPolicy.NULLIFY,
             stream=df.stream,
         ).columns()
 
-        local_grouper = op.local_grouper
-        assert isinstance(local_grouper, plc.groupby.GroupBy)
-        shifted_tbl = local_grouper.shift(
+        assert isinstance(op.local_grouper, plc.groupby.GroupBy)
+        shifted_tbl = op.local_grouper.shift(
             plc.Table(val_cols), offsets, fill_scalars, stream=df.stream
         )[1]
         return (
