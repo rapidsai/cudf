@@ -290,11 +290,11 @@ struct delta_byte_array_decoder {
 
   // dump strings before start_val to temp buf. decodes one warp_size-wide pass per round, so
   // any mini-block size is supported. called by all threads in a thread block.
-  __device__ void skip(bool use_char_ll)
+  __device__ void skip(bool use_char_ll,
+                       cg::thread_block const& block,
+                       cg::thread_block_tile<cudf::detail::warp_size, cg::thread_block> const& warp)
   {
     using cudf::detail::warp_size;
-    int const t       = threadIdx.x;
-    int const lane_id = t % warp_size;
 
     // is this even necessary? return if asking to skip the whole block.
     if (start_val >= prefixes.num_encoded_values(true)) { return; }
@@ -304,22 +304,22 @@ struct delta_byte_array_decoder {
       // warp 0 decodes a pass of prefixes and warp 1 a pass of suffixes. this will potentially
       // decode past start_val, and those values stay resident in the rolling buffers for the
       // decode loop that follows.
-      auto* const db = t < warp_size ? &prefixes : &suffixes;
-      if (t < 2 * warp_size) { db->decode_next_pass(t < warp_size ? 0 : 1); }
-      __syncthreads();
+      auto* const db = warp.meta_group_rank() == 0 ? &prefixes : &suffixes;
+      if (warp.meta_group_rank() < 2) { db->decode_next_pass(warp); }
+      block.sync();
 
       // warp 0 reconstructs this round's skipped strings into the temp scratch (the helpers
       // preserve the round's last string past the scratch area for the next round's prefixes)
-      if (t < warp_size) {
+      if (warp.meta_group_rank() == 0) {
         auto const num_to_decode = min(static_cast<uint32_t>(warp_size), start_val - skip_pos);
         if (use_char_ll) {
-          calculate_string_values_cp(temp_buf, skip_pos, num_to_decode, lane_id);
+          calculate_string_values_cp(temp_buf, skip_pos, num_to_decode, warp.thread_rank());
         } else {
-          calculate_string_values(temp_buf, skip_pos, num_to_decode, lane_id);
+          calculate_string_values(temp_buf, skip_pos, num_to_decode, warp.thread_rank());
         }
       }
       skip_pos += warp_size;
-      __syncthreads();
+      block.sync();
     }
   }
 };
@@ -417,7 +417,7 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
 
   // if skipped_leaf_values is non-zero, then we need to decode up to the first mini-block
   // that has a value we need.
-  if (is_skip_resume) { db->skip_values(skipped_leaf_values); }
+  if (is_skip_resume) { db->skip_values(skipped_leaf_values, block, warp); }
 
   while (s->error == 0 &&
          (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
@@ -447,8 +447,8 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
       for (uint32_t i = 0; i < passes_per_batch; i++) {
         // make lane 0's state updates from the previous pass visible to the whole warp; the
         // block-wide sync below covers the last pass of the iteration
-        if (i > 0) { __syncwarp(); }
-        db->decode_next_pass(0);
+        if (i > 0) { warp.sync(); }
+        db->decode_next_pass(warp);
       }
     } else if (src_pos < target_pos) {
       // warp 2
@@ -634,7 +634,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                    : min(prefix_db->values_per_mb, static_cast<uint32_t>(delta_max_batch_size));
   uint32_t const passes_per_batch = batch_size / cudf::detail::warp_size;
 
-  if (is_skip_resume) { dba->skip(use_char_ll); }
+  if (is_skip_resume) { dba->skip(use_char_ll, block, warp); }
 
   while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
     uint32_t target_pos;
@@ -662,14 +662,14 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       for (uint32_t i = 0; i < passes_per_batch; i++) {
         // make lane 0's state updates from the previous pass visible to the whole warp; the
         // block-wide sync below covers the last pass of the iteration
-        if (i > 0) { __syncwarp(); }
-        prefix_db->decode_next_pass(0);
+        if (i > 0) { warp.sync(); }
+        prefix_db->decode_next_pass(warp);
       }
     } else if (warp.meta_group_rank() == 2) {
       // warp 2
       for (uint32_t i = 0; i < passes_per_batch; i++) {
-        if (i > 0) { __syncwarp(); }
-        suffix_db->decode_next_pass(1);
+        if (i > 0) { warp.sync(); }
+        suffix_db->decode_next_pass(warp);
       }
     } else if (warp.meta_group_rank() == 3 and src_pos < target_pos) {
       // warp 3
@@ -861,7 +861,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   if (is_skip_resume) {
     if (warp.meta_group_rank() == 0) {
       // string_off is only valid on thread 0
-      auto const string_off = db->skip_values_and_sum(s->page.start_val);
+      auto const string_off = db->skip_values_and_sum(s->page.start_val, warp);
       // Threads in the warp might diverge and read in skip_values_and_sum
       // after lane 0 reinits below.
       warp.sync();
@@ -906,8 +906,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       for (uint32_t i = 0; i < passes_per_batch; i++) {
         // make lane 0's state updates from the previous pass visible to the whole warp; the
         // block-wide sync below covers the last pass of the iteration
-        if (i > 0) { __syncwarp(); }
-        db->decode_next_pass(0);
+        if (i > 0) { warp.sync(); }
+        db->decode_next_pass(warp);
       }
     } else if (warp.meta_group_rank() == 2 && src_pos < target_pos) {
       // warp 2

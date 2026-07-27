@@ -13,6 +13,7 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/strings/detail/gather.cuh>
 
+#include <cooperative_groups/reduce.h>
 #include <cuda/functional>
 #include <cuda/std/utility>
 #include <thrust/transform_scan.h>
@@ -410,22 +411,20 @@ __device__ cuda::std::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const
                                                                    int end_value)
 {
   using cudf::detail::warp_size;
-  using WarpReduce = cub::WarpReduce<uleb128_t>;
-
-  __shared__ typename WarpReduce::TempStorage temp_storage[2];
 
   __shared__ __align__(16) delta_binary_decoder prefixes;
   __shared__ __align__(16) delta_binary_decoder suffixes;
 
+  auto const block  = cg::this_thread_block();
+  auto const warp   = cg::tiled_partition<cudf::detail::warp_size>(block);
   int const t       = threadIdx.x;
-  int const lane_id = t % warp_size;
-  int const warp_id = t / warp_size;
+  int const lane_id = warp.thread_rank();
 
   if (t == 0) {
     auto const* suffix_start = prefixes.find_end_of_block(data, end);
     suffixes.init_binary_block(suffix_start, end);
   }
-  __syncthreads();
+  block.sync();
 
   // two warps will traverse the prefixes and suffixes and sum them up
   auto const db = t < warp_size ? &prefixes : t < 2 * warp_size ? &suffixes : nullptr;
@@ -441,14 +440,14 @@ __device__ cuda::std::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const
     uleb128_t lane_max = 0;
     while (db->current_value_idx < end_value &&
            db->current_value_idx < db->num_encoded_values(true)) {
-      if (not db->advance_past_first_value(lane_id)) { break; }
+      if (not db->advance_past_first_value(warp)) { break; }
 
       // decode one warp_size-wide pass at a time and read it back immediately: a whole
       // mini-block is only fully resident in the rolling buffer while it fits, but a single
       // pass always is
       uint32_t const num_pass = db->values_per_mb / warp_size;
       for (uint32_t p = 0; p < num_pass; p++) {
-        db->calc_mini_block_pass(p, lane_id, warp_id);
+        db->calc_mini_block_pass(p, warp);
 
         // get per lane sum for this pass
         uint32_t const idx = db->current_value_idx + p * warp_size + lane_id;
@@ -462,21 +461,19 @@ __device__ cuda::std::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const
       }
 
       if (lane_id == 0) { db->setup_next_mini_block(true); }
-      __syncwarp();
+      warp.sync();
     }
 
-    // get sum for warp.
-    // note: warp_sum will only be valid on lane 0.
-    auto const warp_sum = WarpReduce(temp_storage[warp_id]).Sum(lane_sum);
-    __syncwarp();
-    auto const warp_max = WarpReduce(temp_storage[warp_id]).Reduce(lane_max, cuda::maximum{});
+    // get sum and max for warp (valid on all lanes; only lane 0 is consumed below).
+    auto const warp_sum = cg::reduce(warp, lane_sum, cg::plus<uleb128_t>{});
+    auto const warp_max = cg::reduce(warp, lane_max, cg::greater<uleb128_t>{});
 
     if (lane_id == 0) {
       total_bytes += warp_sum;
       max_len = warp_max;
     }
   }
-  __syncthreads();
+  block.sync();
 
   // now sum up total_bytes from the two warps
   auto const final_bytes =
@@ -697,11 +694,10 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
                                                 size_t num_rows)
 {
   using cudf::detail::warp_size;
-  using WarpReduce = cub::WarpReduce<uleb128_t>;
-  __shared__ typename WarpReduce::TempStorage temp_storage;
   __shared__ __align__(16) page_state_s state_g;
   __shared__ __align__(16) delta_binary_decoder string_lengths;
 
+  auto const warp       = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
   page_state_s* const s = &state_g;
   int const page_idx    = blockIdx.x;
   int const t           = threadIdx.x;
@@ -755,7 +751,7 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
     auto const end_value   = pp->end_val;
 
     if (t == 0) { string_lengths.init_binary_block(s->data_start, s->data_end); }
-    __syncwarp();
+    warp.sync();
 
     size_t total_bytes = 0;
 
@@ -767,14 +763,14 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
     uleb128_t lane_sum = 0;
     while (string_lengths.current_value_idx < end_value &&
            string_lengths.current_value_idx < string_lengths.num_encoded_values(true)) {
-      if (not string_lengths.advance_past_first_value(t)) { break; }
+      if (not string_lengths.advance_past_first_value(warp)) { break; }
 
       // decode one warp_size-wide pass at a time and read it back immediately: a whole
       // mini-block is only fully resident in the rolling buffer while it fits, but a single
       // pass always is
       uint32_t const num_pass = string_lengths.values_per_mb / warp_size;
       for (uint32_t p = 0; p < num_pass; p++) {
-        string_lengths.calc_mini_block_pass(p, t, 0);
+        string_lengths.calc_mini_block_pass(p, warp);
 
         // get per lane sum for this pass
         uint32_t const idx = string_lengths.current_value_idx + p * warp_size + t;
@@ -784,12 +780,12 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
       }
 
       if (t == 0) { string_lengths.setup_next_mini_block(true); }
-      __syncwarp();
+      warp.sync();
     }
 
     // get sum for warp.
     // note: warp_sum will only be valid on lane 0.
-    auto const warp_sum = WarpReduce(temp_storage).Sum(lane_sum);
+    auto const warp_sum = cg::reduce(warp, lane_sum, cg::plus<uleb128_t>{});
 
     if (t == 0) {
       total_bytes += warp_sum;
