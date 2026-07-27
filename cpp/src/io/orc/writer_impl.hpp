@@ -16,6 +16,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -98,17 +99,21 @@ struct file_segmentation {
 /**
  * @brief ORC per-chunk streams of encoded data.
  *
- * The encoded buffers for every (stripe, stream) pair are packed into two arena
- * allocations rather than one `device_uvector` per pair: `encoded_buffer` holds
- * the raw encoder output, and `gathered_buffer` holds the contiguous gather
- * destination produced by `gather_stripes`. The `data` field exposes
- * non-owning device_span<uint8_t> views into whichever arena currently owns
- * each (stripe, stream) entry.
+ * The encoded buffers for every (stripe, stream) pair are packed into arena
+ * allocations rather than one `device_uvector` per pair. The encoder output is
+ * split across two arenas by whether `gather_stripes` is certain to copy the
+ * region into `gathered_buffer`: `transient_buffer` holds only such regions, so
+ * it is released as soon as gathering completes, while `persistent_buffer` holds
+ * the regions that may be read in place and must outlive the gather. The `data`
+ * field exposes non-owning device_span<uint8_t> views into whichever arena owns
+ * each (stripe, stream) entry, and `must_gather` records the split.
  */
 struct encoded_data {
-  rmm::device_uvector<uint8_t> encoded_buffer;          // arena for raw encoded streams
+  rmm::device_uvector<uint8_t> persistent_buffer;       // regions that may be read in place
+  rmm::device_uvector<uint8_t> transient_buffer;        // regions always copied out by the gather
   rmm::device_uvector<uint8_t> gathered_buffer;         // arena for gather_stripes output
   std::vector<std::vector<device_span<uint8_t>>> data;  // [stripe][strm_id] views
+  std::vector<std::vector<bool>> must_gather;           // entry lives in `transient_buffer`
   hostdevice_2dvector<encoder_chunk_streams> streams;   // streams of encoded data, per chunk
 };
 
