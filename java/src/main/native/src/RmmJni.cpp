@@ -43,6 +43,7 @@
 #include <iostream>
 #include <limits>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <system_error>
 #include <thread>
@@ -641,7 +642,7 @@ class parallel_init_pinned_host_memory_resource final {
   {
     if (ptr == nullptr) { return; }
     auto const mapping_bytes = page_aligned_size_noexcept(bytes);
-    if (mapping_bytes == 0) {
+    if (!mapping_bytes.has_value()) {
       log_system_error_noexcept("page alignment during deallocation", EOVERFLOW);
       return;
     }
@@ -651,7 +652,7 @@ class parallel_init_pinned_host_memory_resource final {
       log_cuda_error_noexcept("cudaHostUnregister", status);
       return;
     }
-    if (::munmap(ptr, mapping_bytes) != 0) { log_system_error_noexcept("munmap", errno); }
+    if (::munmap(ptr, *mapping_bytes) != 0) { log_system_error_noexcept("munmap", errno); }
   }
 
   [[nodiscard]] bool operator==(
@@ -692,30 +693,32 @@ class parallel_init_pinned_host_memory_resource final {
     return ((bytes + page_size - 1) / page_size) * page_size;
   }
 
-  static std::size_t page_aligned_size_noexcept(std::size_t bytes) noexcept
+  static std::optional<std::size_t> page_aligned_size_noexcept(std::size_t bytes) noexcept
   {
     try {
       return page_aligned_size(bytes);
     } catch (...) {
-      return 0;
+      return std::nullopt;
     }
   }
 
   static void touch_pages(void* allocation, std::size_t bytes, std::size_t requested_threads)
   {
+    // Partition by the system page size. If huge pages are enabled this may touch more
+    // than necessary, but ensures all pages are touched.
     auto const page_size    = system_page_size();
     auto const page_count   = bytes / page_size;
     auto const thread_count = std::min(requested_threads, page_count);
 
     std::vector<std::thread> workers;
     workers.reserve(thread_count);
-    // Importantly the counter is volatile so that the writes are not compiled away.
+    // Importantly the bytes are volatile so that the writes are not compiled away.
     auto* const base      = static_cast<std::uint8_t volatile*>(allocation);
     std::size_t next_page = 0;
 
     // Note that these threads are not affinity bound, so these pages could be
-    // placed across NUMA nodes. This is not necessarily bad for performance but
-    // it does differ from cudaHostAlloc which typically inherits the calling thread's NUMA node.
+    // placed across NUMA nodes. This differs from cudaHostAlloc which typically
+    // inherits the calling thread's NUMA node.
     try {
       for (std::size_t worker_index = 0; worker_index < thread_count; ++worker_index) {
         auto const pages_for_worker =
