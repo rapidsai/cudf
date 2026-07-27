@@ -941,14 +941,9 @@ encoded_data encode_columns(orc_table_view const& orc_table,
   hostdevice_2dvector<encoder_chunk_streams> chunk_streams(
     num_columns, segmentation.num_rowgroups(), stream);
 
-  // Pass 1: compute per-rowgroup stream lengths and per-(stripe, strm_id) sizes.
-  // The encoded buffers for every (stripe, stream) pair are packed into a single
-  // arena allocation, so accumulate the total here and assign offsets later.
-  //
-  // Also record whether a region's size is a strict upper bound on what the encoder will write.
-  // Some estimates below are exact (dictionary data, string char counts, decimal chunk sizes)
-  // while `rle_stream_size` is a worst case; `gather_stripes` uses this to decide which arena a
-  // region belongs to, see the comment on the partitioning below.
+  // Pass 1: compute per-rowgroup stream lengths and per-(stripe, strm_id) sizes, along with
+  // whether a size is a strict upper bound on what the encoder will write. Offsets into the
+  // arenas are assigned below.
   auto const num_streams = streams.size();
   std::vector<std::vector<size_t>> stripe_strm_sizes(segmentation.num_stripes(),
                                                      std::vector<size_t>(num_streams, 0));
@@ -969,7 +964,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
         if (strm_id < 0) { continue; }
 
         size_t stripe_size = 0;
-        // Alignment padding is slack in itself, for every rowgroup of the region.
+        // Alignment padding is slack in itself, in every rowgroup of the region.
         bool has_slack = uncomp_block_align > 1;
         std::for_each(stripe.cbegin(), stripe.cend(), [&](auto rg_idx) {
 #if defined(__GNUC__) && (__GNUC__ >= 14)
@@ -990,8 +985,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
                 (strm_type == CI_DICTIONARY)
                   ? stripe_dict.char_count
                   : (((stripe_dict.entry_count + 0x1ff) >> 9) * (512 * 4 + 2));
-              // The dictionary data is exactly `char_count` bytes; the dictionary lengths are
-              // RLE-encoded, so their size is a worst case.
+              // `char_count` is exact; the RLE-encoded lengths are a worst case.
               has_slack |= strm_type != CI_DICTIONARY;
             } else {
               strm.lengths[strm_type] = 0;
@@ -1020,18 +1014,11 @@ encoded_data encode_columns(orc_table_view const& orc_table,
     }
   }
 
-  // `gather_stripes` compacts a (stripe, stream) region into a tightly sized buffer when its
-  // chunks are not already contiguous, and reads it in place otherwise. Regions that are certain
-  // to be compacted go into a separate arena, so that it can be freed as soon as gathering
-  // completes instead of staying pinned for the lifetime of the encoded data by the regions that
-  // are read in place. A region is certain to be compacted when its stripe spans several
-  // rowgroups (so the chunks of a stream are laid out with gaps between them) and its size is a
-  // strict upper bound (so at least one of those gaps is non-empty).
-  //
-  // Mispredicting is safe in both directions. A region wrongly placed in the transient arena is
-  // compacted anyway, because that arena is gathered unconditionally. A region wrongly left in
-  // the persistent arena is compacted if `gather_stripes` measures a gap, and only costs the
-  // retained upper-bound allocation it would have freed.
+  // Regions that `gather_stripes` is certain to compact go into their own arena, so it can be
+  // freed as soon as gathering completes rather than staying pinned by the regions read in place.
+  // A region is certain to be compacted when its stripe spans several rowgroups (so its chunks
+  // are laid out with gaps) and its size is an upper bound (so a gap is non-empty). Guessing
+  // wrong either way is safe, and only costs a copy or a retained allocation.
   auto const is_transient = [&](size_t stripe_id, size_t strm_id) {
     return segmentation.stripes[stripe_id].size > 1 and stripe_strm_has_slack[stripe_id][strm_id];
   };
@@ -1201,11 +1188,9 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
         CUDF_EXPECTS(allocated_stripe_size >= actual_stripe_size,
                      "Internal ORC writer error: insufficient allocation size for encoded data");
 
-        // Compact a region whenever its chunks are not already contiguous, which is the case
-        // exactly when the encoder wrote less than the upper bound the region was sized for.
-        // Regions in `transient_buffer` are compacted unconditionally, so that arena can be
-        // released below; `encode_columns` only places a region there when it is expected to have
-        // a gap anyway, so this rarely forces a copy that would not have happened.
+        // Compact when the chunks are not already contiguous, i.e. when the encoder wrote less
+        // than the region was sized for. Regions in `transient_buffer` are compacted regardless,
+        // so that arena can be released below.
         bool const gathered = (stripe.size > 1 and (enc_data->must_gather[stripe.id][stream_id] or
                                                     allocated_stripe_size > actual_stripe_size));
         gather_meta[stripe.id][stream_id] = {actual_stripe_size, gathered};
@@ -1213,8 +1198,8 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
     }
   }
 
-  // Verify the invariant the release relies on, over the arena membership recorded by
-  // `encode_columns` rather than the loop above, which only visits stream types below CI_INDEX.
+  // Verify the invariant the release relies on. Uses the membership recorded by `encode_columns`,
+  // because the loop above only visits stream types below CI_INDEX.
   for (size_t s = 0; s < segmentation.num_stripes() and all_transient_gathered; ++s) {
     for (size_t strm_id = 0; strm_id < num_streams_in_data; ++strm_id) {
       if (enc_data->must_gather[s][strm_id] and not gather_meta[s][strm_id].gathered) {
@@ -1292,9 +1277,9 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
     }
   }
 
-  // Hold the gathered arena for lifetime management, and release the arena whose regions have all
-  // been copied into it. `persistent_buffer` stays alive: some of its regions are read in place,
-  // via the per-rowgroup data_ptrs that still point into it.
+  // Hold the gathered arena for lifetime management, and release the arena it copied from.
+  // `persistent_buffer` stays alive: some of its regions are read in place, via per-rowgroup
+  // data_ptrs that still point into it.
   enc_data->gathered_buffer = std::move(gather_buffer);
   if (all_transient_gathered) {
     enc_data->transient_buffer = rmm::device_uvector<uint8_t>{0, stream};

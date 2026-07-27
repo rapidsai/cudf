@@ -100,13 +100,10 @@ struct file_segmentation {
  * @brief ORC per-chunk streams of encoded data.
  *
  * The encoded buffers for every (stripe, stream) pair are packed into arena
- * allocations rather than one `device_uvector` per pair. The encoder output is
- * split across two arenas by whether `gather_stripes` is certain to copy the
- * region into `gathered_buffer`: `transient_buffer` holds only such regions, so
- * it is released as soon as gathering completes, while `persistent_buffer` holds
- * the regions that may be read in place and must outlive the gather. The `data`
- * field exposes non-owning device_span<uint8_t> views into whichever arena owns
- * each (stripe, stream) entry, and `must_gather` records the split.
+ * allocations rather than one `device_uvector` per pair, and exposed as
+ * non-owning views in `data`. The encoder output is split across two arenas by
+ * whether `gather_stripes` is certain to copy the region into `gathered_buffer`,
+ * so that `transient_buffer` can be released as soon as gathering completes.
  */
 struct encoded_data {
   rmm::device_uvector<uint8_t> persistent_buffer;       // regions that may be read in place
