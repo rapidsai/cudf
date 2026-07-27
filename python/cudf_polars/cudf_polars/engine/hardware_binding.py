@@ -58,7 +58,7 @@ class HardwareBindingPolicy:
     """
 
     skip_under_rrun: bool = True
-    enabled: bool = False
+    enabled: bool = True
     enable_once: bool = True
     raise_on_fail: bool = False
     cpu: bool = True

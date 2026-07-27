@@ -104,7 +104,6 @@ def _body_bind_called_once() -> None:
         assert mock_bind.call_count == 1
 
 
-@pytest.mark.skip(reason="TODO: revert")
 def test_bind_called_once(timeout_seconds: int) -> None:
     """bind() is called exactly once even when bind_to_gpu() is called twice."""
     _run_in_subprocess(_body_bind_called_once, timeout_seconds)
@@ -136,7 +135,6 @@ def _body_bind_falls_back_to_gpu_0() -> None:
         ]
 
 
-@pytest.mark.skip(reason="TODO: revert")
 def test_bind_falls_back_to_gpu_0(timeout_seconds: int) -> None:
     """When bind() raises RuntimeError, falls back to gpu_id=0."""
     _run_in_subprocess(_body_bind_falls_back_to_gpu_0, timeout_seconds)
@@ -158,7 +156,6 @@ def _body_bind_raise_on_fail_propagates_exception() -> None:
             bind_to_gpu(HardwareBindingPolicy(raise_on_fail=True))
 
 
-@pytest.mark.skip(reason="TODO: revert")
 def test_bind_raise_on_fail_propagates_exception(timeout_seconds: int) -> None:
     """raise_on_fail=True lets RuntimeError from bind() propagate."""
     _run_in_subprocess(_body_bind_raise_on_fail_propagates_exception, timeout_seconds)
@@ -212,7 +209,6 @@ def _body_bind_thread_safe(timeout_seconds: int) -> None:
         assert mock_bind.call_count == 1
 
 
-@pytest.mark.skip(reason="TODO: revert")
 def test_bind_thread_safe(timeout_seconds: int) -> None:
     """Concurrent calls from multiple threads result in exactly one bind() call."""
     _run_in_subprocess(
@@ -230,7 +226,6 @@ def _body_bind_done_flag_set() -> None:
         assert hardware_binding._bind_done
 
 
-@pytest.mark.skip(reason="TODO: revert")
 def test_bind_done_flag_set(timeout_seconds: int) -> None:
     """_bind_done is True after bind_to_gpu() succeeds."""
     _run_in_subprocess(_body_bind_done_flag_set, timeout_seconds)
@@ -267,7 +262,6 @@ def _body_bind_enable_once_false() -> None:
         assert mock_bind.call_count == 2
 
 
-@pytest.mark.skip(reason="TODO: revert")
 def test_bind_enable_once_false(timeout_seconds: int) -> None:
     """enable_once=False allows repeated bind() calls."""
     _run_in_subprocess(_body_bind_enable_once_false, timeout_seconds)
