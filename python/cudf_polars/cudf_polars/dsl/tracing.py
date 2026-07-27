@@ -189,19 +189,15 @@ def log_do_evaluate(
                 quent_task = Task.from_ir(
                     cls, ir_execution_context.quent_ir_execution_context
                 )
-            else:
-                quent_task = None
-
-            if (
-                quent_task is not None
-                and ir_execution_context.quent_ir_execution_context is not None
-            ):
                 ir_execution_context.quent_ir_execution_context.context._emit_task_begin_events(
                     cls,
                     quent_task,
                     ir_execution_context.quent_ir_execution_context,
                     input_frames_bytes=sum(frame._size_bytes() for frame in frames),
                 )
+
+            else:
+                quent_task = None
 
             before_start = time.monotonic_ns()
             before = make_snapshot(

@@ -841,7 +841,7 @@ class Task:
     @classmethod
     def from_ir(
         cls, ir_type: type[IR], quent_ir_execution_context: QuentIRExecutionContext
-    ) -> Self | None:
+    ) -> Self:
         """
         Build an operator-scoped Quent Task from an IR execution context.
 
