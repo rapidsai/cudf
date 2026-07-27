@@ -33,6 +33,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/numeric>
 #include <cuda/std/cstring>
 #include <cuda/std/limits>
 #include <cuda/std/optional>
@@ -266,7 +267,7 @@ __device__ cuda::std::optional<size_type> find_key_in_metadata(device_span<uint8
 
   auto const offsets_start = pos;
   auto const offsets_bytes = (static_cast<uint64_t>(num_entries.value()) + 1) * offset_size;
-  if (offsets_bytes > static_cast<uint64_t>(meta_len - offsets_start)) {
+  if (cuda::std::cmp_greater(offsets_bytes, meta_len - offsets_start)) {
     return cuda::std::nullopt;
   }
 
@@ -369,6 +370,64 @@ __device__ device_span<uint8_t const> locate_object_field(device_span<uint8_t co
   return val.subspan(values_base + match_start, value_len.value());
 }
 
+// Parse an array value header and return the sub-span of the element at `index` (0-based) within
+// `val`. Returns an empty span if `val` is not an array (`basic_type != array`), if `index` is out
+// of bounds, or if the encoded data is truncated.
+//
+// Array layout per the Variant spec:
+//   byte 0: header (basic_type=array in low 2 bits; value_header in high 6 bits)
+//     value_header bits: (offset_size - 1) in bits 0-1, is_large in bit 2, bits 3-5 unused
+//   num_elements: 1 byte if !is_large else 4 bytes (little-endian)
+//   offsets:      (num_elements + 1) entries, each `offset_size` bytes, relative to the end of
+//                 offsets
+//   values:       concatenated element blobs
+//
+// Array element offsets are monotonically increasing, so the element length is taken directly from
+// the offset delta (o1 - o0) rather than from the element's own header.
+__device__ device_span<uint8_t const> locate_array_element(device_span<uint8_t const> value,
+                                                           size_type index)
+{
+  if (index < 0) { return {}; }
+
+  auto const value_size = static_cast<size_type>(value.size());
+  if (value_size < 1) { return {}; }
+  uint8_t const value_metadata = value[0];
+  if (variant_basic_type(value_metadata) != basic_type::array) { return {}; }
+
+  int const value_header = variant_value_header(value_metadata);
+  [[maybe_unused]] auto const [offset_size, _, num_elements_size] =
+    decode_object_array_header(value_header, false);
+
+  size_type position            = 1;
+  auto const num_elements_value = narrow_cast(read_uint64(value, position, num_elements_size));
+  if (!num_elements_value.has_value()) { return {}; }
+  auto const num_elements = num_elements_value.value();
+  if (index >= num_elements) { return {}; }
+  position += num_elements_size;
+
+  size_type const offsets_start = position;
+  // Computed in 64-bit because (num_elements + 1) * offset_size can exceed the signed `size_type`
+  // range (which would be UB); the check below then rejects any array that overruns the value blob.
+  auto const offsets_bytes = (static_cast<uint64_t>(num_elements) + 1) * offset_size;
+  if (cuda::std::cmp_greater(offsets_bytes, value_size - offsets_start)) { return {}; }
+  size_type const values_base = offsets_start + static_cast<size_type>(offsets_bytes);
+  auto const values_extent    = value_size - values_base;
+
+  auto const start_offset_pos = offsets_start + static_cast<uint64_t>(index) * offset_size;
+  auto const end_offset_pos   = offsets_start + (static_cast<uint64_t>(index) + 1) * offset_size;
+  if (cuda::std::cmp_greater(end_offset_pos + offset_size, value_size)) { return {}; }
+
+  auto const start_offset = read_uint64(value, start_offset_pos, offset_size);
+  auto const end_offset   = read_uint64(value, end_offset_pos, offset_size);
+  if (!start_offset.has_value() || !end_offset.has_value()) { return {}; }
+  auto const element_start = *start_offset;
+  auto const element_end   = *end_offset;
+  if (element_end < element_start || cuda::std::cmp_greater(element_end, values_extent)) {
+    return {};
+  }
+  return value.subspan(values_base + element_start, element_end - element_start);
+}
+
 // The fixed-width signed integers a VARIANT value can be cast to: INT{8,16,32,64}.  Matches the
 // exact width types (not e.g. __int128) since those are the only variant primitive int headers.
 template <typename T>
@@ -401,18 +460,56 @@ __device__ inline cuda::std::optional<T> decode_int(device_span<uint8_t const> e
   return cudf::io::unaligned_load<T>(enc.data() + 1);
 }
 
+// Parse an array-index step token of the form "[<N>]" into its zero-based index. Returns nullopt
+// for any malformed token or an index that does not fit in `size_type` (such an index is out of
+// range for any array, so the caller treats it as a missing element).
+__device__ cuda::std::optional<size_type> parse_index_step(cudf::string_view step)
+{
+  auto const step_size  = step.size_bytes();
+  auto const* step_data = step.data();
+  if (step_size < 3 || step_data[0] != '[' || step_data[step_size - 1] != ']') {
+    return cuda::std::nullopt;
+  }
+
+  // Accumulate directly in `size_type`; the checked-arithmetic helpers reject the token if the
+  // running value overflows, which means the index is out of range for any array and the caller
+  // treats it as a missing element.
+  size_type index = 0;
+  for (size_type k = 1; k < step_size - 1; ++k) {
+    char const c = step_data[k];
+    if (c < '0' || c > '9') { return cuda::std::nullopt; }
+    if (cuda::mul_overflow(index, index, size_type{10}) ||
+        cuda::add_overflow(index, index, static_cast<size_type>(c - '0'))) {
+      return cuda::std::nullopt;
+    }
+  }
+  return index;
+}
+
+// Walk a path of object-key or array-index steps level by level starting at `val` and return
+// the span of the final value (subspan of `val`). Returns an empty span on failure.
+//
+// Each path step is encoded in the `path` strings column as either:
+//   - "<name>"  -> descend into an object by dictionary key, or
+//   - "[<N>]"   -> descend into an array by zero-based integer index.
+// The step kind is inferred from the first byte (`'['` means index).
 __device__ device_span<uint8_t const> resolve_path(device_span<uint8_t const> meta,
                                                    device_span<uint8_t const> val,
                                                    column_device_view path)
 {
   device_span<uint8_t const> sub_val = val;
   for (size_type i = 0; i < path.size(); ++i) {
-    auto const name = path.element<cudf::string_view>(i);
+    auto const step = path.element<cudf::string_view>(i);
 
-    auto const field_id = find_key_in_metadata(meta, name);
-    if (!field_id.has_value()) { return {}; }
-
-    sub_val = locate_object_field(sub_val, field_id.value());
+    if (step.size_bytes() >= 1 && step.data()[0] == '[') {
+      auto const index = parse_index_step(step);
+      if (!index.has_value()) { return {}; }
+      sub_val = locate_array_element(sub_val, index.value());
+    } else {
+      auto const field_id = find_key_in_metadata(meta, step);
+      if (!field_id.has_value()) { return {}; }
+      sub_val = locate_object_field(sub_val, field_id.value());
+    }
     if (sub_val.empty()) { return {}; }
   }
   return sub_val;
