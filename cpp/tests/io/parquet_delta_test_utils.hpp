@@ -24,60 +24,13 @@
 // the column values plus the DELTA block geometry (block_size, mini_block_count) and get back
 // the complete file bytes.
 //
-// The file footer is serialized with cudf's production CompactProtocolWriter. cudf has no
-// host-side page-header serializer (production writes page headers on the GPU), so the handful of
-// page-header fields are emitted directly through the same production Thrift field primitives
-// (put_field_header/put_int/put_byte) rather than reimplementing varint/zigzag encoding. Only the
-// DELTA-encoded page body -- the part under test, which no stock writer emits -- is built by hand.
+// Both the page header and the file footer are serialized with cudf's production
+// CompactProtocolWriter (the same CompactProtocolWriter::write() overloads the writer uses), so
+// only the DELTA-encoded page body -- the part under test, which no stock writer emits -- is built
+// by hand.
 
-// ---------------------------------------------------------------------------------------------
 // Parquet metadata (page header + footer) serialization via the production compact protocol writer
-// ---------------------------------------------------------------------------------------------
 namespace parquet_delta_test {
-
-// Emits the fields of a Parquet PageHeader through the production CompactProtocolFieldWriter
-// primitives. Thrift field ids restart at 0 inside each nested struct, so a nested struct is
-// bracketed by begin_struct()/end_struct().
-class page_header_serializer {
-  cudf::io::parquet::detail::CompactProtocolWriter writer;
-  cudf::io::parquet::detail::CompactProtocolFieldWriter fields;
-  int prev_field = 0;
-
- public:
-  explicit page_header_serializer(std::vector<uint8_t>& out) : writer(&out), fields(writer) {}
-
-  void i32(int field, int32_t value)
-  {
-    fields.put_field_header(field, prev_field, cudf::io::parquet::FieldType::I32);
-    fields.put_int(value);
-    prev_field = field;
-  }
-
-  void boolean(int field, bool value)
-  {
-    fields.put_field_header(field,
-                            prev_field,
-                            value ? cudf::io::parquet::FieldType::BOOLEAN_TRUE
-                                  : cudf::io::parquet::FieldType::BOOLEAN_FALSE);
-    prev_field = field;
-  }
-
-  // open a nested struct field; pass the returned id to end_struct() to close it
-  [[nodiscard]] int begin_struct(int field)
-  {
-    fields.put_field_header(field, prev_field, cudf::io::parquet::FieldType::STRUCT);
-    prev_field = 0;  // Thrift field ids restart at 0 inside the nested struct
-    return field;
-  }
-
-  void end_struct(int field)
-  {
-    fields.put_byte(uint8_t{0});  // struct stop byte
-    prev_field = field;
-  }
-
-  void stop() { fields.put_byte(uint8_t{0}); }
-};
 
 // serialize a V1 data page header for a flat REQUIRED column (no repetition/definition levels)
 inline std::vector<uint8_t> serialize_data_page_header(int num_values,
@@ -85,18 +38,16 @@ inline std::vector<uint8_t> serialize_data_page_header(int num_values,
                                                        int64_t page_size)
 {
   namespace pq = cudf::io::parquet;
+  pq::PageHeader ph;
+  ph.type                                       = pq::PageType::DATA_PAGE;
+  ph.uncompressed_page_size                     = static_cast<int32_t>(page_size);
+  ph.compressed_page_size                       = static_cast<int32_t>(page_size);
+  ph.data_page_header.num_values                = num_values;
+  ph.data_page_header.encoding                  = encoding;
+  ph.data_page_header.definition_level_encoding = pq::Encoding::RLE;  // no levels
+  ph.data_page_header.repetition_level_encoding = pq::Encoding::RLE;  // no levels
   std::vector<uint8_t> out;
-  page_header_serializer ph(out);
-  ph.i32(1, static_cast<int32_t>(pq::PageType::DATA_PAGE));
-  ph.i32(2, static_cast<int32_t>(page_size));  // uncompressed_page_size
-  ph.i32(3, static_cast<int32_t>(page_size));  // compressed_page_size
-  auto const data_page_header = ph.begin_struct(5);
-  ph.i32(1, num_values);
-  ph.i32(2, static_cast<int32_t>(encoding));
-  ph.i32(3, static_cast<int32_t>(pq::Encoding::RLE));  // definition level encoding (no levels)
-  ph.i32(4, static_cast<int32_t>(pq::Encoding::RLE));  // repetition level encoding (no levels)
-  ph.end_struct(data_page_header);
-  ph.stop();
+  pq::detail::CompactProtocolWriter{&out}.write(ph);
   return out;
 }
 
@@ -110,21 +61,20 @@ inline std::vector<uint8_t> serialize_data_page_header_v2(int num_values,
                                                           int64_t page_size)
 {
   namespace pq = cudf::io::parquet;
+  pq::PageHeader ph;
+  ph.type                          = pq::PageType::DATA_PAGE_V2;
+  ph.uncompressed_page_size        = static_cast<int32_t>(page_size);
+  ph.compressed_page_size          = static_cast<int32_t>(page_size);
+  auto& v2                         = ph.data_page_header_v2;
+  v2.num_values                    = num_values;
+  v2.num_nulls                     = num_nulls;
+  v2.num_rows                      = num_rows;
+  v2.encoding                      = encoding;
+  v2.definition_levels_byte_length = static_cast<int32_t>(definition_levels_byte_length);
+  v2.repetition_levels_byte_length = static_cast<int32_t>(repetition_levels_byte_length);
+  v2.is_compressed                 = false;
   std::vector<uint8_t> out;
-  page_header_serializer ph(out);
-  ph.i32(1, static_cast<int32_t>(pq::PageType::DATA_PAGE_V2));
-  ph.i32(2, static_cast<int32_t>(page_size));
-  ph.i32(3, static_cast<int32_t>(page_size));
-  auto const data_page_header_v2 = ph.begin_struct(8);
-  ph.i32(1, num_values);
-  ph.i32(2, num_nulls);
-  ph.i32(3, num_rows);
-  ph.i32(4, static_cast<int32_t>(encoding));
-  ph.i32(5, static_cast<int32_t>(definition_levels_byte_length));
-  ph.i32(6, static_cast<int32_t>(repetition_levels_byte_length));
-  ph.boolean(7, false);  // is_compressed
-  ph.end_struct(data_page_header_v2);
-  ph.stop();
+  pq::detail::CompactProtocolWriter{&out}.write(ph);
   return out;
 }
 
@@ -139,9 +89,7 @@ inline std::vector<uint8_t> serialize_footer(cudf::io::parquet::FileMetaData con
 
 }  // namespace parquet_delta_test
 
-// ---------------------------------------------------------------------------------------------
 // DELTA_BINARY_PACKED stream encoder
-// ---------------------------------------------------------------------------------------------
 
 // pack values (padded with 0 up to `count`) at `width` bits each, LSB-first, consecutively --
 // the same layout the RLE/bit-packing hybrid and the delta mini-blocks use
@@ -230,9 +178,7 @@ inline std::vector<uint8_t> encode_delta_binary_packed(std::vector<int64_t> cons
   return out;
 }
 
-// ---------------------------------------------------------------------------------------------
 // single-page file assembly
-// ---------------------------------------------------------------------------------------------
 
 // V1 data page + footer around `body` for a single REQUIRED flat column "a"
 inline std::vector<uint8_t> wrap_single_page_parquet(std::vector<uint8_t> const& body,
@@ -311,9 +257,7 @@ inline std::vector<uint8_t> build_delta_binary_parquet(std::vector<int64_t> cons
                                   false);
 }
 
-// ---------------------------------------------------------------------------------------------
 // deterministic test data (self-contained splitmix64 so results never vary across platforms)
-// ---------------------------------------------------------------------------------------------
 inline uint64_t delta_test_rand(uint64_t& state)
 {
   state += 0x9e3779b97f4a7c15ull;
@@ -338,9 +282,7 @@ inline std::vector<int64_t> delta_test_int64_values(int n, uint64_t seed = 101)
   return out;
 }
 
-// ---------------------------------------------------------------------------------------------
 // string encodings
-// ---------------------------------------------------------------------------------------------
 
 // strings mixing ASCII and valid non-ASCII UTF-8 sequences, with lengths varying in
 // [1, max_length]; with shared_prefixes, each string keeps a random-length prefix of its
@@ -437,11 +379,9 @@ inline std::vector<uint8_t> build_delta_byte_array_parquet(std::vector<std::stri
                                   true);
 }
 
-// ---------------------------------------------------------------------------------------------
 // LIST<INT64>: one optional list column "col" of optional int64 "element" (max_def_level 3,
 // max_rep_level 1), no null lists or elements -- empty lists only. Emitted as a single
 // uncompressed V2 data page whose rep/def levels are RLE/bit-packed hybrid runs.
-// ---------------------------------------------------------------------------------------------
 
 // encode `levels` at `width` bits as one bit-packed hybrid run (padded to a multiple of 8)
 inline std::vector<uint8_t> encode_levels_bit_packed(std::vector<int> const& levels, int width)

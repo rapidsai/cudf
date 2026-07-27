@@ -344,10 +344,6 @@ ConfigureTest(
   io/parquet_test.cpp
   io/parquet_v2_test.cpp
   io/parquet_writer_test.cpp
-  # parquet_reader_test.cpp assembles DELTA test files with the production CompactProtocolWriter,
-  # whose detail-namespace symbols libcudf does not export; compile the writer into the test so
-  # those symbols resolve at link time (see parquet_delta_test_utils.hpp).
-  ${CUDF_SOURCE_DIR}/src/io/parquet/compact_protocol_writer.cpp
   GPUS 1
   PERCENT 100
 )

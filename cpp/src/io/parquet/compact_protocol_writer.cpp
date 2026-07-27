@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -260,6 +260,55 @@ size_t CompactProtocolWriter::write(SortingColumn const& sc)
   c.field_int(1, sc.column_idx);
   c.field_bool(2, sc.descending);
   c.field_bool(3, sc.nulls_first);
+  return c.value();
+}
+
+size_t CompactProtocolWriter::write(DataPageHeader const& d)
+{
+  CompactProtocolFieldWriter c(*this);
+  c.field_int(1, d.num_values);
+  c.field_int(2, static_cast<int32_t>(d.encoding));
+  c.field_int(3, static_cast<int32_t>(d.definition_level_encoding));
+  c.field_int(4, static_cast<int32_t>(d.repetition_level_encoding));
+  return c.value();
+}
+
+size_t CompactProtocolWriter::write(DictionaryPageHeader const& d)
+{
+  CompactProtocolFieldWriter c(*this);
+  c.field_int(1, d.num_values);
+  c.field_int(2, static_cast<int32_t>(d.encoding));
+  return c.value();
+}
+
+size_t CompactProtocolWriter::write(DataPageHeaderV2 const& d)
+{
+  CompactProtocolFieldWriter c(*this);
+  c.field_int(1, d.num_values);
+  c.field_int(2, d.num_nulls);
+  c.field_int(3, d.num_rows);
+  c.field_int(4, static_cast<int32_t>(d.encoding));
+  c.field_int(5, d.definition_levels_byte_length);
+  c.field_int(6, d.repetition_levels_byte_length);
+  c.field_bool(7, d.is_compressed);
+  return c.value();
+}
+
+size_t CompactProtocolWriter::write(PageHeader const& p)
+{
+  CompactProtocolFieldWriter c(*this);
+  c.field_int(1, static_cast<int32_t>(p.type));
+  c.field_int(2, p.uncompressed_page_size);
+  c.field_int(3, p.compressed_page_size);
+  // Exactly one page-specific header is set, selected by `type`; field ids (5/7/8) match
+  // CompactProtocolReader::read(PageHeader) and the GPU encoder in gpuEncodePageHeaders.
+  switch (p.type) {
+    case PageType::DATA_PAGE: c.field_struct(5, p.data_page_header); break;
+    case PageType::DICTIONARY_PAGE: c.field_struct(7, p.dictionary_page_header); break;
+    case PageType::DATA_PAGE_V2: c.field_struct(8, p.data_page_header_v2); break;
+    default:
+      CUDF_FAIL("Trying to write an invalid PageType " + std::to_string(static_cast<int>(p.type)));
+  }
   return c.value();
 }
 
