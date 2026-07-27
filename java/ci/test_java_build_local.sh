@@ -143,6 +143,12 @@ record_step_end() {
 
 parse_args "$@"
 
+# Mirror GHA's GITHUB_REF locally so the container distinguishes SNAPSHOT from release-tag builds.
+if [[ -z "${GITHUB_REF:-}" ]]; then
+  GITHUB_REF="$(git -C "${SCRIPT_DIR}" symbolic-ref HEAD 2>/dev/null || true)"
+fi
+export GITHUB_REF
+
 require_arg --work-dir "${WORK_DIR}"
 
 mkdir -p "${WORK_DIR}"

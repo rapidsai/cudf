@@ -72,12 +72,14 @@ inside the container.
 
 This walks every subdirectory of `--jars-dir` (each subdir name IS the
 classifier), gathers the per-classifier JAR, one shared sources jar, one
-shared javadoc jar, and the shared POM, derives the artifact version from
-the JAR filenames (requiring a single unique version across subdirs), and
+shared javadoc jar, the shared POM, and seeds an unclassified primary JAR
+as a copy of the `cuda12` classifier. Derives the artifact version from
+the JAR filenames (requiring a single unique version across subdirs) and
 lays them out as:
 
 ```
 /tmp/maven-repo/ai/rapids/cudf/26.08.0-SNAPSHOT/
+    cudf-26.08.0-SNAPSHOT.jar
     cudf-26.08.0-SNAPSHOT-cuda12.jar
     cudf-26.08.0-SNAPSHOT-cuda13.jar
     cudf-26.08.0-SNAPSHOT-sources.jar
@@ -89,6 +91,22 @@ The set of classifiers is whatever subdirectories are present under
 `--jars-dir`. For a local `x86_64`-only run, populate `/tmp/jars/cuda12/`
 and `/tmp/jars/cuda13/`. For the full four-way release build, add
 `/tmp/jars/cuda12-arm64/` and `/tmp/jars/cuda13-arm64/`.
+
+### Release Tag vs SNAPSHOT versioning
+
+Release tag CI runs (`GITHUB_REF=refs/tags/vYY.MM.PP`) produce release-versioned
+JARs (`cudf-26.08.0-*.jar`). All other runs produce `-SNAPSHOT`. Gated by
+[`rapids-is-release-build`](https://github.com/rapidsai/gha-tools/blob/main/tools/rapids-is-release-build).
+`GITHUB_REF` is required. `test_java_build_local.sh` defaults it to the current
+branch.
+
+To rehearse the release path locally:
+
+    GITHUB_REF=refs/tags/vYY.MM.PP ./java/ci/test_java_build_local.sh
+
+Rewrites `java/pom.xml` in place. Restore with `git checkout java/pom.xml`.
+
+### GitHub Actions
 
 In GitHub Actions (`.github/workflows/build.yaml`), the `java-build` matrix job
 runs Steps 1-2 per (CUDA x arch) entry and uploads each classifier subdir as a

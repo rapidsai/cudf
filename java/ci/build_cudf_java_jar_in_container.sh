@@ -107,6 +107,14 @@ fi
 cd "${REPO_ROOT}/java"
 
 CUDF_VERSION="$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout "${BUILD_ARG[@]}")"
+
+# Release tag builds strip -SNAPSHOT and rewrite the POM so packaged artifacts
+# carry the release version. Non-release builds keep -SNAPSHOT.
+if rapids-is-release-build 2>/dev/null; then
+  CUDF_VERSION="${CUDF_VERSION%-SNAPSHOT}"
+  mvn -B versions:set -DnewVersion="${CUDF_VERSION}" -DgenerateBackupPoms=false "${BUILD_ARG[@]}"
+fi
+
 rapids-logger "Packaging cuDF Java JAR version ${CUDF_VERSION} (libcudf: ${CUDF_INSTALL_DIR})"
 
 # The `clean` goal is intentionally omitted: /repo/java/target is a
