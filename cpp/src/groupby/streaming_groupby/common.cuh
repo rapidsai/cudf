@@ -6,11 +6,11 @@
 #pragma once
 
 #include "groupby/hash/helpers.cuh"
+#include "row_operator/multi_table_comparators.cuh"
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/row_operator/hashing.cuh>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/table/table.hpp>
@@ -213,34 +213,6 @@ struct update_transient_target_indices_fn {
     if (target_indices[i] >= max_distinct_keys) { target_indices[i] = *(base + slot_offsets[i]); }
   }
 };
-
-template <bool has_nested_columns>
-auto build_cross_comparators(
-  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_batch,
-  std::vector<std::shared_ptr<cudf::detail::row::equality::preprocessed_table>> const&
-    preprocessed_batches,
-  cudf::nullate::DYNAMIC has_null,
-  rmm::cuda_stream_view stream)
-{
-  using eq_t = cudf::detail::row::equality::device_row_comparator<
-    has_nested_columns,
-    cudf::nullate::DYNAMIC,
-    cudf::detail::row::equality::nan_equal_physical_equality_comparator>;
-
-  auto const n       = static_cast<size_type>(preprocessed_batches.size());
-  auto const temp_mr = cudf::get_current_device_resource_ref();
-
-  std::vector<eq_t> h_eqs;
-  h_eqs.reserve(n);
-  for (size_type k = 0; k < n; ++k) {
-    auto const cross_cmp = cudf::detail::row::equality::two_table_comparator{
-      preprocessed_batch, preprocessed_batches[k]};
-    auto const adapter = cross_cmp.equal_to<has_nested_columns>(has_null, null_equality::EQUAL);
-    h_eqs.push_back(adapter.comparator);
-  }
-
-  return cudf::detail::make_device_uvector_async(h_eqs, stream, temp_mr);
-}
 
 /// The impl struct for streaming_groupby. Defined in impl.cu.
 struct streaming_groupby::impl {

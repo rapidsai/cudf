@@ -13,6 +13,7 @@
 #include <cudf/join/streaming_hash_join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/statistics_resource_adaptor.hpp>
@@ -30,9 +31,9 @@ using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
 using join_match = std::tuple<size_type, size_type, size_type>;
 
-std::vector<join_match> to_sorted_host_matches(rmm::device_uvector<size_type> const& left_indices,
-                                               rmm::device_uvector<size_type> const& batch_indices,
-                                               rmm::device_uvector<size_type> const& row_indices,
+std::vector<join_match> to_sorted_host_matches(cudf::device_span<size_type const> left_indices,
+                                               cudf::device_span<size_type const> batch_indices,
+                                               cudf::device_span<size_type const> row_indices,
                                                rmm::cuda_stream_view stream)
 {
   auto const h_left  = cudf::detail::make_host_vector(left_indices, stream);

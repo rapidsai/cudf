@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "join/join_common_utils.cuh"
+#include "row_operator/multi_table_comparators.cuh"
 #include "streaming_hash_join.hpp"
 
 #include <cudf/detail/iterator.cuh>
@@ -11,8 +13,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/row_operator/hashing.cuh>
-#include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/hashing/detail/xxhash_32.cuh>
+#include <cudf/detail/row_operator/primitive_row_operators.cuh>
 #include <cudf/join/streaming_hash_join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
@@ -20,15 +21,14 @@
 #include <cudf/utilities/prefetch.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
-#include <rmm/exec_policy.hpp>
 #include <rmm/mr/polymorphic_allocator.hpp>
 
+#include <cuco/hash_functions.cuh>
 #include <cuco/pair.cuh>
 #include <cuco/static_multiset.cuh>
 #include <cuda/iterator>
 #include <cuda/std/functional>
 #include <cuda/std/tuple>
-#include <thrust/transform.h>
 
 #include <bit>
 #include <limits>
@@ -54,14 +54,6 @@ size_type checked_batch_count(size_type batches)
   CUDF_EXPECTS(
     batches > 0, "streaming_hash_join requires max_num_batches > 0.", std::invalid_argument);
   return batches;
-}
-
-double checked_load_factor(double load_factor)
-{
-  CUDF_EXPECTS(load_factor > 0.0 && load_factor <= 1.0,
-               "streaming_hash_join requires load_factor in (0, 1].",
-               std::invalid_argument);
-  return load_factor;
 }
 
 /**
@@ -137,7 +129,7 @@ struct masked_hasher2 {
   }
 
   hash_value_type hash_mask;
-  cudf::hashing::detail::XXHash_32<hash_value_type> hash;
+  cuco::xxhash_32<hash_value_type> hash;
 };
 
 using probing_scheme  = cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, masked_hasher1, masked_hasher2>;
@@ -172,15 +164,6 @@ struct probe_pair_fn {
   }
 };
 
-struct row_is_valid {
-  bitmask_type const* row_bitmask;
-
-  __device__ bool operator()(size_type row_index) const noexcept
-  {
-    return cudf::bit_is_set(row_bitmask, row_index);
-  }
-};
-
 template <typename RowEqual>
 struct n_table_pair_equal {
   RowEqual const* comparators;
@@ -209,40 +192,6 @@ struct decode_slot_fn {
     return {layout.batch_id(slot.first), slot.second};
   }
 };
-
-template <bool has_nested>
-auto build_probe_comparators(
-  std::shared_ptr<row::equality::preprocessed_table> const& preprocessed_left,
-  std::vector<std::shared_ptr<row::equality::preprocessed_table>> const& preprocessed_right,
-  nullate::DYNAMIC has_nulls,
-  null_equality compare_nulls,
-  rmm::cuda_stream_view stream)
-{
-  using equality_type =
-    row::equality::device_row_comparator<has_nested,
-                                         nullate::DYNAMIC,
-                                         row::equality::nan_equal_physical_equality_comparator>;
-
-  std::vector<equality_type> host_comparators;
-  host_comparators.reserve(preprocessed_right.size());
-  for (auto const& right : preprocessed_right) {
-    auto const comparator = row::equality::two_table_comparator{preprocessed_left, right};
-    host_comparators.push_back(
-      comparator.equal_to<has_nested>(has_nulls, compare_nulls).comparator);
-  }
-  return cudf::detail::make_device_uvector_async(
-    host_comparators, stream, cudf::get_current_device_resource_ref());
-}
-
-std::vector<column_view> select_columns(table_view const& table, std::span<size_type const> indices)
-{
-  std::vector<column_view> columns;
-  columns.reserve(indices.size());
-  for (auto const index : indices) {
-    columns.push_back(table.column(index));
-  }
-  return columns;
-}
 
 }  // namespace
 
@@ -323,8 +272,7 @@ struct streaming_hash_join::impl {
                  "streaming_hash_join: cumulative inserted rows would exceed total_right_rows.",
                  std::invalid_argument);
 
-    auto key_columns = select_columns(right_partition, right_key_indices);
-    table_view keys{key_columns};
+    auto const keys = right_partition.select(right_key_indices);
     if (!right_key_tables.empty()) {
       CUDF_EXPECTS(cudf::have_same_types(right_key_tables.front(), keys),
                    "streaming_hash_join: inserted key schema does not match prior partitions.",
@@ -338,22 +286,29 @@ struct streaming_hash_join::impl {
     auto const batch_rows = keys.num_rows();
 
     if (batch_rows > 0) {
-      auto const nulls       = nullate::DYNAMIC{has_nulls};
-      auto const row_hasher  = row::hash::row_hasher{preprocessed}.device_hasher(nulls);
-      auto const input_begin = cudf::detail::make_counting_transform_iterator(
-        0, build_pair_fn{row_hasher, layout, batch_id});
+      auto const nulls = nullate::DYNAMIC{has_nulls};
+      auto insert_rows = [&](auto const& row_hasher) {
+        auto const input_begin = cudf::detail::make_counting_transform_iterator(
+          0, build_pair_fn{row_hasher, layout, batch_id});
 
-      if (compare_nulls == null_equality::EQUAL || !nullable(keys)) {
-        hash_table.insert_async(input_begin, input_begin + batch_rows, stream.value());
+        if (compare_nulls == null_equality::EQUAL || !nullable(keys)) {
+          hash_table.insert_async(input_begin, input_begin + batch_rows, stream.value());
+        } else {
+          auto const row_bitmask =
+            cudf::detail::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first;
+          hash_table.insert_if_async(
+            input_begin,
+            input_begin + batch_rows,
+            cuda::counting_iterator<size_type>{0},
+            row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask.data())},
+            stream.value());
+        }
+      };
+
+      if (cudf::detail::is_primitive_row_op_compatible(keys)) {
+        insert_rows(row::primitive::row_hasher{nulls, preprocessed});
       } else {
-        auto const row_bitmask =
-          cudf::detail::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first;
-        hash_table.insert_if_async(
-          input_begin,
-          input_begin + batch_rows,
-          cuda::counting_iterator<size_type>{0},
-          row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask.data())},
-          stream.value());
+        insert_rows(row::hash::row_hasher{preprocessed}.device_hasher(nulls));
       }
     }
 
@@ -362,19 +317,36 @@ struct streaming_hash_join::impl {
     inserted_rows += batch_rows;
   }
 
-  template <bool has_nested>
+  template <bool has_nested, bool use_primitive>
   auto probe(table_view const& left,
              std::optional<std::size_t> output_size,
              rmm::cuda_stream_view stream,
              rmm::device_async_resource_ref output_mr) const
   {
-    auto const temp_mr     = cudf::get_current_device_resource_ref();
     auto preprocessed_left = row::equality::preprocessed_table::create(left, stream);
-    auto comparators       = build_probe_comparators<has_nested>(
-      preprocessed_left, preprocessed_right, nullate::DYNAMIC{has_nulls}, compare_nulls, stream);
-    auto const equality = n_table_pair_equal{comparators.data(), layout};
-    auto const row_hasher =
-      row::hash::row_hasher{preprocessed_left}.device_hasher(nullate::DYNAMIC{has_nulls});
+    auto comparators       = [&] {
+      if constexpr (use_primitive) {
+        return row::equality::make_device_primitive_row_comparators(preprocessed_left,
+                                                                    preprocessed_right,
+                                                                    nullate::DYNAMIC{has_nulls},
+                                                                    compare_nulls,
+                                                                    stream);
+      } else {
+        return row::equality::make_device_row_comparators<has_nested>(preprocessed_left,
+                                                                      preprocessed_right,
+                                                                      nullate::DYNAMIC{has_nulls},
+                                                                      compare_nulls,
+                                                                      stream);
+      }
+    }();
+    auto const equality   = n_table_pair_equal{comparators.data(), layout};
+    auto const row_hasher = [&] {
+      if constexpr (use_primitive) {
+        return row::primitive::row_hasher{nullate::DYNAMIC{has_nulls}, preprocessed_left};
+      } else {
+        return row::hash::row_hasher{preprocessed_left}.device_hasher(nullate::DYNAMIC{has_nulls});
+      }
+    }();
     auto const input_begin =
       cudf::detail::make_counting_transform_iterator(0, probe_pair_fn{row_hasher, layout});
 
@@ -391,7 +363,6 @@ struct streaming_hash_join::impl {
       std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, output_mr);
     auto row_indices =
       std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, output_mr);
-    rmm::device_uvector<slot_type> build_slots(join_size, stream, temp_mr);
 
     if (join_size > 0) {
       cudf::prefetch::detail::prefetch(*left_indices, stream);
@@ -399,19 +370,15 @@ struct streaming_hash_join::impl {
       cudf::prefetch::detail::prefetch(*row_indices, stream);
       auto const probe_output =
         cuda::transform_output_iterator{left_indices->begin(), extract_index_fn{}};
+      auto const build_output = cuda::transform_output_iterator{
+        cuda::zip_iterator(batch_indices->begin(), row_indices->begin()), decode_slot_fn{layout}};
       hash_table.retrieve(input_begin,
                           input_begin + left.num_rows(),
                           equality,
                           hash_table.hash_function(),
                           probe_output,
-                          build_slots.begin(),
+                          build_output,
                           stream.value());
-
-      thrust::transform(rmm::exec_policy_nosync(stream, temp_mr),
-                        build_slots.begin(),
-                        build_slots.end(),
-                        cuda::zip_iterator(batch_indices->begin(), row_indices->begin()),
-                        decode_slot_fn{layout});
     }
 
     return std::pair{std::move(left_indices),
@@ -426,15 +393,7 @@ struct streaming_hash_join::impl {
     CUDF_EXPECTS(!right_key_tables.empty(),
                  "streaming_hash_join: inner_join called before any insert().",
                  std::logic_error);
-    CUDF_EXPECTS(left.num_columns() == right_key_tables.front().num_columns(),
-                 "Mismatch in number of columns to be joined on",
-                 std::invalid_argument);
-    CUDF_EXPECTS(cudf::have_same_types(left, right_key_tables.front()),
-                 "Mismatch in joining column data types",
-                 cudf::data_type_error);
-    CUDF_EXPECTS(has_nulls || !cudf::has_nested_nulls(left),
-                 "Left table has nulls while right table was not hashed with null check.",
-                 std::invalid_argument);
+    validate_hash_join_probe(right_key_tables.front(), left, has_nulls);
 
     if (left.num_rows() == 0 || inserted_rows == 0) {
       return std::pair{
@@ -442,8 +401,11 @@ struct streaming_hash_join::impl {
         std::pair{std::make_unique<rmm::device_uvector<size_type>>(0, stream, output_mr),
                   std::make_unique<rmm::device_uvector<size_type>>(0, stream, output_mr)}};
     }
-    return has_nested_keys ? probe<true>(left, output_size, stream, output_mr)
-                           : probe<false>(left, output_size, stream, output_mr);
+    if (cudf::detail::is_primitive_row_op_compatible(left)) {
+      return probe<false, true>(left, output_size, stream, output_mr);
+    }
+    return has_nested_keys ? probe<true, false>(left, output_size, stream, output_mr)
+                           : probe<false, false>(left, output_size, stream, output_mr);
   }
 };
 
