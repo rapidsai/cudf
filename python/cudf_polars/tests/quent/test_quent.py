@@ -18,10 +18,10 @@ import cudf_polars.quent._logging
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import DataFrameScan, Filter
 from cudf_polars.dsl.translate import Translator
+from cudf_polars.quent import QuentContext
 from cudf_polars.quent._context import (
     LocalQuentContext,
     ProcessorRegistry,
-    QuentContext,
     QuentIRExecutionContext,
     WorkerResources,
 )
