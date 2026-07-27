@@ -953,38 +953,6 @@ rmm::device_uvector<size_t> compute_level_decode_sizes(device_span<ColumnChunkDe
   return level_decode_sizes;
 }
 
-std::vector<row_group_size_info> compute_row_group_size_info(
-  std::span<row_group_info const> row_groups_info,
-  std::span<ColumnChunkDesc const> chunks,
-  size_t num_input_columns)
-{
-  CUDF_EXPECTS(chunks.size() == row_groups_info.size() * num_input_columns,
-               "Mismatch between the number of column chunk descriptors and row groups");
-
-  std::vector<row_group_size_info> row_group_sizes;
-  row_group_sizes.reserve(row_groups_info.size());
-
-  std::transform(cuda::counting_iterator<size_t>(0),
-                 cuda::counting_iterator<size_t>(row_groups_info.size()),
-                 std::back_inserter(row_group_sizes),
-                 [&](auto const rg_idx) {
-                   auto const& rg_info     = row_groups_info[rg_idx];
-                   auto const chunks_begin = chunks.begin() + (rg_idx * num_input_columns);
-                   auto const chunks_end   = chunks_begin + num_input_columns;
-                   size_t compressed_size  = 0;
-                   size_t max_leaf_values  = 0;
-                   std::for_each(chunks_begin, chunks_end, [&](auto const& chunk) {
-                     compressed_size += chunk.compressed_size;
-                     max_leaf_values = std::max(max_leaf_values, chunk.num_values);
-                   });
-                   return row_group_size_info{.unadjusted_num_rows = rg_info.unadjusted_num_rows,
-                                              .compressed_size     = compressed_size,
-                                              .max_leaf_values     = max_leaf_values};
-                 });
-
-  return row_group_sizes;
-}
-
 row_group_pass_data compute_row_group_passes(std::span<row_group_size_info const> row_group_sizes,
                                              std::size_t comp_read_limit,
                                              int64_t skip_rows)

@@ -797,17 +797,4 @@ row_group_pass_data compute_row_group_passes(std::span<row_group_size_info const
                                              std::size_t comp_read_limit,
                                              int64_t skip_rows);
 
-/**
- * @brief Computes row group size information from already-built column chunk descriptors
- *
- * @param row_groups_info Span of row group metadata
- * @param chunks Column chunk descriptors for the selected columns of every row group
- * @param num_input_columns Number of selected (leaf) input columns
- * @return Row group size information, one entry per row group
- */
-std::vector<row_group_size_info> compute_row_group_size_info(
-  std::span<row_group_info const> row_groups_info,
-  std::span<ColumnChunkDesc const> chunks,
-  size_t num_input_columns);
-
 }  // namespace cudf::io::parquet::detail

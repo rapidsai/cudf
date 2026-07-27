@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <functional>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -436,6 +437,22 @@ class aggregate_reader_metadata {
   [[nodiscard]] RowGroup const& get_row_group(size_type row_group_index, size_type src_idx) const;
 
   /**
+   * @brief Computes row group size information over selected columns
+   *
+   * When `input_columns` is specified, computes the compressed size and maximum leaf value count
+   * over only those columns. Otherwise, over all columns in the row group.
+   *
+   * @param row_group_index Index of the row group within its source
+   * @param src_idx Index of the input source
+   * @param input_columns Optional selected leaf columns
+   * @return Row group size information
+   */
+  [[nodiscard]] row_group_size_info get_row_group_size_info(
+    size_type row_group_index,
+    size_type src_idx,
+    std::optional<std::span<input_column_info const>> input_columns) const;
+
+  /**
    * @brief Get Parquet file metadatas
    *
    * @return Parquet file metadatas
@@ -612,17 +629,6 @@ class aggregate_reader_metadata {
    * @param names List of column names to load, where index column name(s) will be added
    */
   [[nodiscard]] std::vector<std::string> get_pandas_index_names() const;
-
-  /**
-   * @brief Computes the compressed size, the number of rows, and the maximum number of leaf values
-   * in the specified row group over all of its columns
-   *
-   * @param row_group Input row group
-   *
-   * @return A tuple of row group compressed size, number of rows, and maximum leaf values
-   */
-  [[nodiscard]] std::tuple<size_t, size_t, size_t> get_row_group_properties(
-    RowGroup const& row_group) const;
 
   /**
    * @brief Filters the row groups using stats and bloom filters based on predicate filter

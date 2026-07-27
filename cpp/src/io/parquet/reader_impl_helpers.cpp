@@ -1209,6 +1209,35 @@ RowGroup const& aggregate_reader_metadata::get_row_group(size_type row_group_ind
   return per_file_metadata[src_idx].row_groups[row_group_index];
 }
 
+row_group_size_info aggregate_reader_metadata::get_row_group_size_info(
+  size_type row_group_index,
+  size_type src_idx,
+  std::optional<std::span<input_column_info const>> input_columns) const
+{
+  auto const& row_group = get_row_group(row_group_index, src_idx);
+
+  auto size_info =
+    row_group_size_info{.unadjusted_num_rows = static_cast<size_t>(row_group.num_rows)};
+
+  if (input_columns.has_value()) {
+    for (auto const& column : *input_columns) {
+      auto const& column_metadata =
+        get_column_metadata(row_group_index, src_idx, column.schema_idx);
+      size_info.compressed_size += column_metadata.total_compressed_size;
+      size_info.max_leaf_values =
+        std::max(size_info.max_leaf_values, static_cast<size_t>(column_metadata.num_values));
+    }
+  } else {
+    for (auto const& column_chunk : row_group.columns) {
+      size_info.compressed_size += column_chunk.meta_data.total_compressed_size;
+      size_info.max_leaf_values =
+        std::max(size_info.max_leaf_values, static_cast<size_t>(column_chunk.meta_data.num_values));
+    }
+  }
+
+  return size_info;
+}
+
 ColumnChunkMetaData const& aggregate_reader_metadata::get_column_metadata(size_type row_group_index,
                                                                           size_type src_idx,
                                                                           int schema_idx) const
@@ -1382,29 +1411,6 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
     }
   }
   return names;
-}
-
-std::tuple<size_t, size_t, size_t> aggregate_reader_metadata::get_row_group_properties(
-  RowGroup const& row_group) const
-{
-  auto const compressed_size = std::transform_reduce(
-    row_group.columns.cbegin(),
-    row_group.columns.cend(),
-    size_t{0},
-    std::plus<>(),
-    [](auto const& colchunk) { return colchunk.meta_data.total_compressed_size; });
-
-  size_t const max_leaf_values =
-    row_group.columns.empty()
-      ? 0
-      : std::max_element(row_group.columns.cbegin(),
-                         row_group.columns.cend(),
-                         [](auto const& a, auto const& b) {
-                           return a.meta_data.num_values < b.meta_data.num_values;
-                         })
-          ->meta_data.num_values;
-
-  return {compressed_size, static_cast<size_t>(row_group.num_rows), max_leaf_values};
 }
 
 std::tuple<int64_t,

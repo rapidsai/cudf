@@ -543,9 +543,16 @@ void reader_impl::compute_input_passes(read_mode mode)
       ? static_cast<size_t>(_input_pass_read_limit * input_limit_compression_reserve)
       : std::numeric_limits<std::size_t>::max();
 
-  // Compute size information for each row group by the column chunks we are actually going to read
-  auto const row_group_sizes =
-    compute_row_group_size_info(row_groups_info, _file_itm_data.chunks, _input_columns.size());
+  // Compute size information for each row group by the columns we are actually going to read.
+  auto row_group_sizes = std::vector<row_group_size_info>{};
+  row_group_sizes.reserve(row_groups_info.size());
+  std::transform(row_groups_info.cbegin(),
+                 row_groups_info.cend(),
+                 std::back_inserter(row_group_sizes),
+                 [&](auto const& row_group) {
+                   return _metadata->get_row_group_size_info(
+                     row_group.index, row_group.source_index, _input_columns);
+                 });
 
   auto pass_data =
     compute_row_group_passes(row_group_sizes, comp_read_limit, _file_itm_data.global_skip_rows);

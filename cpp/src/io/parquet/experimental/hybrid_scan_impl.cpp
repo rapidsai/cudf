@@ -809,14 +809,11 @@ hybrid_scan_reader_impl::construct_row_group_passes(
                 cuda::counting_iterator<cudf::size_type>(row_group_indices.size()),
                 [&](auto const source_index) {
                   for (auto const rg_index : row_group_indices[source_index]) {
-                    auto const& row_group =
-                      _extended_metadata->get_row_group(rg_index, source_index);
-                    auto const [compressed_size, num_rows, max_leaf_values] =
-                      _extended_metadata->get_row_group_properties(row_group);
                     row_group_ids.emplace_back(rg_index, source_index);
-                    row_group_sizes.push_back({.unadjusted_num_rows = num_rows,
-                                               .compressed_size     = compressed_size,
-                                               .max_leaf_values     = max_leaf_values});
+                    // TODO(mh): Compute the row group size information over the selected columns
+                    // instead
+                    row_group_sizes.push_back(_extended_metadata->get_row_group_size_info(
+                      rg_index, source_index, std::nullopt));
                   }
                 });
 
