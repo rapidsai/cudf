@@ -34,33 +34,39 @@
 // read under three modes, selected by the `mode` axis, so the transcode path can be judged against
 // both a lower and an upper reference:
 //
-//   - "materialize_string": reader default; the column materializes as STRING. The cheapest possible
+//   - "materialize_string": reader default; the column materializes as STRING. The cheapest
+//   possible
 //                      read (no dictionary built); serves as the lower-bound reference.
 //   - "materialize_string_and_encode_dict": materialize as STRING, then `cudf::dictionary::encode`
 //                      to DICTIONARY32. The pre-existing way to obtain a dictionary column and the
 //                      fair apples-to-apples baseline the transcode fast path aims to beat.
 //   - "direct_dict_transcode": `output_dict_columns=true`; the reader keeps the dictionary
-//                      representation and emits DICTIONARY32 directly, skipping string materialization.
+//                      representation and emits DICTIONARY32 directly, skipping string
+//                      materialization.
 //
-// Both "materialize_string_and_encode_dict" and "direct_dict_transcode" produce DICTIONARY32 output,
-// so their times and peak memory are directly comparable; "materialize_string" shows the floor cost
-// of just decoding. A relative comparison table (materialize_string_and_encode_dict = 100%%) is
-// printed at program exit (see comparison_collector).
+// Both "materialize_string_and_encode_dict" and "direct_dict_transcode" produce DICTIONARY32
+// output, so their times and peak memory are directly comparable; "materialize_string" shows the
+// floor cost of just decoding. A relative comparison table (materialize_string_and_encode_dict =
+// 100%%) is printed at program exit (see comparison_collector).
 //
 // The sweep varies cardinality, rows per row group, and rows per data page at a fixed table size
 // (kept modest so the sweep stays light for local/CI runs). A single column (num_cols == 1) is used
-// so a row group can hold as many distinct values as possible: the writer picks the dictionary index
-// bit width per row group from the distinct values it contains, capped at MAX_DICT_BITS (24).
+// so a row group can hold as many distinct values as possible: the writer picks the dictionary
+// index bit width per row group from the distinct values it contains, capped at MAX_DICT_BITS (24).
 // Cardinality therefore ranges up to 2^24, the point at which 24-bit indices are required. At high
 // distinct-per-row-group counts the writer may abandon dictionary encoding (indices exceed 24 bits,
-// or plain encoding is smaller); when that leaves the column ineligible for transcode, that state is
-// skipped rather than measured.
+// or plain encoding is smaller); when that leaves the column ineligible for transcode, that state
+// is skipped rather than measured.
 
 namespace {
 
 constexpr cudf::size_type num_cols = 1;
 
-enum class bench_mode { materialize_string, materialize_string_and_encode_dict, direct_dict_transcode };
+enum class bench_mode {
+  materialize_string,
+  materialize_string_and_encode_dict,
+  direct_dict_transcode
+};
 
 [[nodiscard]] bench_mode parse_mode(std::string const& mode)
 {
@@ -86,8 +92,9 @@ enum class bench_mode { materialize_string, materialize_string_and_encode_dict, 
 // nvbench invokes the benchmark once per axis combination, prints its own results table, and omits
 // skipped states from it; there is also no cross-state hook, so a single invocation cannot group
 // the three modes of a configuration together. This collector accumulates each run's CPU/GPU mean
-// time (and any direct_dict_transcode skip reason), keyed by every setting except `mode`, and prints
-// one row per configuration from its destructor -- i.e. at program exit, after nvbench's own output
+// time (and any direct_dict_transcode skip reason), keyed by every setting except `mode`, and
+// prints one row per configuration from its destructor -- i.e. at program exit, after nvbench's own
+// output
 // -- with all three modes in fixed order (materialize_string, materialize_string_and_encode_dict,
 // direct_dict_transcode) so each configuration is
 // grouped and ordered regardless of nvbench's state ordering or its omission of skipped states.
@@ -125,7 +132,7 @@ class comparison_collector {
                    ? r.materialize_string_and_encode_dict
                    : ((mode == bench_mode::direct_dict_transcode) ? r.direct_dict_transcode
                                                                   : r.materialize_string);
-    slot = mode_timing{cpu_ms, gpu_ms, true};
+    slot       = mode_timing{cpu_ms, gpu_ms, true};
   }
 
   // Record that direct_dict_transcode was skipped for a configuration, with a short reason shown in
@@ -167,7 +174,8 @@ class comparison_collector {
       std::snprintf(buf.data(), buf.size(), "%.3f", v);
       return std::string{buf.data()};
     };
-    // Timing cell: the value if the mode ran, else the skip reason (direct_dict_transcode only) or "-".
+    // Timing cell: the value if the mode ran, else the skip reason (direct_dict_transcode only) or
+    // "-".
     auto const cell =
       [&](mode_timing const& t, double mode_timing::* field, std::string const& note) {
         if (t.present) { return num(t.*field); }
@@ -189,27 +197,23 @@ class comparison_collector {
       };
 
     for (auto const& [key, r] : _rows) {
-      std::printf("| %lld | %d | %lld | %lld | %lld | %s | %s | %s | %s | %s | %s | %s | %s |\n",
-                  static_cast<long long>(key.cardinality),
-                  approx_dict_bits(key.cardinality, key.row_group_size_rows),
-                  static_cast<long long>(key.data_size >> 20),
-                  static_cast<long long>(key.row_group_size_rows),
-                  static_cast<long long>(key.max_page_size_rows),
-                  cell(r.materialize_string, &mode_timing::cpu_ms, std::string{}).c_str(),
-                  cell(r.materialize_string_and_encode_dict, &mode_timing::cpu_ms, std::string{}).c_str(),
-                  cell(r.direct_dict_transcode, &mode_timing::cpu_ms, r.direct_dict_transcode_note)
-                    .c_str(),
-                  cell(r.materialize_string, &mode_timing::gpu_ms, std::string{}).c_str(),
-                  cell(r.materialize_string_and_encode_dict, &mode_timing::gpu_ms, std::string{})
-                    .c_str(),
-                  cell(r.direct_dict_transcode, &mode_timing::gpu_ms, r.direct_dict_transcode_note)
-                    .c_str(),
-                  speedup(
-                    r.materialize_string_and_encode_dict, r.direct_dict_transcode, &mode_timing::cpu_ms)
-                    .c_str(),
-                  speedup(
-                    r.materialize_string_and_encode_dict, r.direct_dict_transcode, &mode_timing::gpu_ms)
-                    .c_str());
+      std::printf(
+        "| %lld | %d | %lld | %lld | %lld | %s | %s | %s | %s | %s | %s | %s | %s |\n",
+        static_cast<long long>(key.cardinality),
+        approx_dict_bits(key.cardinality, key.row_group_size_rows),
+        static_cast<long long>(key.data_size >> 20),
+        static_cast<long long>(key.row_group_size_rows),
+        static_cast<long long>(key.max_page_size_rows),
+        cell(r.materialize_string, &mode_timing::cpu_ms, std::string{}).c_str(),
+        cell(r.materialize_string_and_encode_dict, &mode_timing::cpu_ms, std::string{}).c_str(),
+        cell(r.direct_dict_transcode, &mode_timing::cpu_ms, r.direct_dict_transcode_note).c_str(),
+        cell(r.materialize_string, &mode_timing::gpu_ms, std::string{}).c_str(),
+        cell(r.materialize_string_and_encode_dict, &mode_timing::gpu_ms, std::string{}).c_str(),
+        cell(r.direct_dict_transcode, &mode_timing::gpu_ms, r.direct_dict_transcode_note).c_str(),
+        speedup(r.materialize_string_and_encode_dict, r.direct_dict_transcode, &mode_timing::cpu_ms)
+          .c_str(),
+        speedup(r.materialize_string_and_encode_dict, r.direct_dict_transcode, &mode_timing::gpu_ms)
+          .c_str());
     }
     std::printf("\n");
   }
@@ -277,9 +281,9 @@ void BM_parquet_read_dict_transcode(nvbench::state& state)
     cudf::io::parquet_reader_options::builder(source_sink.make_source_info())
       .output_dict_columns(mode == bench_mode::direct_dict_transcode);
 
-  // Perform the full work for the selected mode: read, and for `materialize_string_and_encode_dict` additionally encode
-  // each STRING column to DICTIONARY32. Returns the resulting table so it can be reused for both
-  // the outside-the-timed-region verification and the timed measurement.
+  // Perform the full work for the selected mode: read, and for `materialize_string_and_encode_dict`
+  // additionally encode each STRING column to DICTIONARY32. Returns the resulting table so it can
+  // be reused for both the outside-the-timed-region verification and the timed measurement.
   auto const run_mode = [&]() -> std::unique_ptr<cudf::table> {
     auto result = cudf::io::read_parquet(read_opts);
     if (mode == bench_mode::materialize_string_and_encode_dict) {
@@ -294,10 +298,9 @@ void BM_parquet_read_dict_transcode(nvbench::state& state)
   };
 
   // Verification (outside the timed region, run for every mode so warm-up is symmetric). For
-  // `direct_dict_transcode`, the writer may have fallen back to plain encoding at high cardinality /
-  // large row
-  // groups, leaving the column ineligible for the fast path; in that case skip the state rather
-  // than silently measuring the plain path or aborting the whole sweep.
+  // `direct_dict_transcode`, the writer may have fallen back to plain encoding at high cardinality
+  // / large row groups, leaving the column ineligible for the fast path; in that case skip the
+  // state rather than silently measuring the plain path or aborting the whole sweep.
   {
     auto const probe = run_mode();
     // Bind the table_view to a local: `probe->view()` returns a temporary, so calling it separately
@@ -313,15 +316,15 @@ void BM_parquet_read_dict_transcode(nvbench::state& state)
     auto const actual_type_id = static_cast<int>(probe_view.column(0).type().id());
     if (mode == bench_mode::materialize_string) {
       if (not all_of_type(cudf::type_id::STRING)) {
-        state.skip("materialize_string produced unexpected type_id=" + std::to_string(actual_type_id) +
-                   " (expected STRING=" + std::to_string(static_cast<int>(cudf::type_id::STRING)) +
-                   ")");
+        state.skip(
+          "materialize_string produced unexpected type_id=" + std::to_string(actual_type_id) +
+          " (expected STRING=" + std::to_string(static_cast<int>(cudf::type_id::STRING)) + ")");
         return;
       }
     } else if (mode == bench_mode::materialize_string_and_encode_dict) {
       if (not all_of_type(cudf::type_id::DICTIONARY32)) {
-        state.skip("materialize_string_and_encode_dict produced unexpected type_id=" + std::to_string(actual_type_id) +
-                   " (expected DICTIONARY32=" +
+        state.skip("materialize_string_and_encode_dict produced unexpected type_id=" +
+                   std::to_string(actual_type_id) + " (expected DICTIONARY32=" +
                    std::to_string(static_cast<int>(cudf::type_id::DICTIONARY32)) + ")");
         return;
       }
@@ -364,8 +367,8 @@ void BM_parquet_read_dict_transcode(nvbench::state& state)
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 
-  // Record this run for the end-of-program direct_dict_transcode-vs-materialize_string_and_encode_dict
-  // comparison table. Times are
+  // Record this run for the end-of-program
+  // direct_dict_transcode-vs-materialize_string_and_encode_dict comparison table. Times are
   // reported by nvbench in seconds; store as milliseconds.
   g_comparison_collector.record(run_settings{cardinality,
                                              static_cast<std::int64_t>(data_size),
@@ -391,7 +394,8 @@ NVBENCH_BENCH(BM_parquet_read_dict_transcode)
   // per-state runtime scale with this).
   .add_int64_axis("data_size", {std::int64_t{512} << 20})
   // Rows per row group: small (many row groups -> stresses per-row-group key concatenation),
-  // default (1M), and very large (>= 2^24 so a single row group can reach the 24-bit dict boundary).
+  // default (1M), and very large (>= 2^24 so a single row group can reach the 24-bit dict
+  // boundary).
   .add_int64_axis("row_group_size_rows", {100'000, 1'000'000, 20'000'000})
   // Rows per data page: small and large (page size is a second-order factor for this benchmark).
   .add_int64_axis("max_page_size_rows", {20'000, 1'000'000})

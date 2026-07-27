@@ -746,11 +746,6 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
   // Allocate memory buffers for the output columns.
   allocate_columns(mode, read_info.skip_rows, read_info.num_rows);
 
-  // Zero-init the INT32 index buffers of dict-transcoded columns before launching decode, so
-  // that null positions (which the DICT_INT32 kernel does not write to) carry well-defined
-  // indices in the produced DICTIONARY32 output.
-  if (dict_transcode_active) { zero_init_dict_transcoded_index_buffers(); }
-
   // Parse data into the output buffers.
   decode_page_data(mode, read_info.skip_rows, read_info.num_rows);
 

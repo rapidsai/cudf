@@ -9,6 +9,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/batched_memset.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -340,13 +341,28 @@ void reader_impl::assemble_dict_transcoded_columns(
                        return size_type{0};
                      });
 
-      // Grab ownership of the decoded INT32 indices column. Its buffer is shared (aliased) by
-      // every per-chunk DICTIONARY32 view below via the parent view's offset/size, so it must
-      // stay alive until the per-column concatenate/assembly completes.
       auto& indices_col = out_columns[out_idx];
       CUDF_EXPECTS(indices_col != nullptr and indices_col->type().id() == type_id::INT32,
                    "Expected INT32 indices column for dict-transcoded flat string column");
       auto indices_owner = std::move(indices_col);
+
+      // Single row group fast path: keys are already unique (one dict page), no dedup needed.
+      // Take ownership of the decoded INT32 indices buffer directly (zero copy), skipping the
+      // offset/null-count/segment-view work that is only needed for multi-chunk concatenation.
+      if (chunk_indices.size() == 1) {
+        auto const& chunk = pass.chunks[chunk_indices[0]];
+        out_columns[out_idx] =
+          cudf::make_dictionary_column(make_keys_column_from_index_pairs(
+                                         chunk.str_dict_index, chunk_key_counts[0], _stream, _mr),
+                                       std::move(indices_owner),
+                                       _stream,
+                                       _mr);
+        return;
+      }
+
+      // Multi-row-group path: the indices buffer is shared (aliased) by per-chunk DICTIONARY32
+      // views below via the parent's offset/size, so it must stay alive until concatenate
+      // completes.
       column_view const indices_view{indices_owner->view()};
 
       // Per-chunk boundaries along the row axis: chunk k occupies rows
@@ -362,6 +378,21 @@ void reader_impl::assemble_dict_transcoded_columns(
       CUDF_EXPECTS(chunk_row_offsets.back() == indices_view.size(),
                    "Row counts on pass chunks must sum to the indices column size");
 
+      // Pre-compute null counts for all segments in a single kernel launch. Building the
+      // column_views below requires a per-segment null count, and calling null_count(begin, end)
+      // inside the loop would launch one kernel per chunk. Batch them here instead.
+      std::vector<size_type> seg_null_counts(chunk_indices.size(), 0);
+      if (indices_view.nullable()) {
+        std::vector<size_type> indices_pairs;
+        indices_pairs.reserve(chunk_indices.size() * 2);
+        for (size_t k = 0; k < chunk_indices.size(); ++k) {
+          indices_pairs.push_back(chunk_row_offsets[k]);
+          indices_pairs.push_back(chunk_row_offsets[k + 1]);
+        }
+        seg_null_counts =
+          cudf::detail::segmented_null_count(indices_view.null_mask(), indices_pairs, _stream);
+      }
+
       // Build a DICTIONARY32 *view* for every chunk without copying the decoded indices. Each
       // view's keys child is this chunk's own STRING keys column (which must be materialized from
       // the parquet dictionary page), while its indices child aliases the shared, already-decoded
@@ -375,45 +406,36 @@ void reader_impl::assemble_dict_transcoded_columns(
       // `cudf::detail::concatenate` rewrites indices against the unified, deduplicated keys.
       std::vector<std::unique_ptr<column>> seg_keys_owners(chunk_indices.size());
       std::vector<column_view> dict_segment_views(chunk_indices.size());
-      std::transform(cuda::counting_iterator<size_t>{0},
-                     cuda::counting_iterator{chunk_indices.size()},
-                     dict_segment_views.begin(),
-                     [&](size_t k) {
-                       auto const chunk_idx = chunk_indices[k];
-                       auto const& chunk    = pass.chunks[chunk_idx];
+      std::transform(
+        cuda::counting_iterator<size_t>{0},
+        cuda::counting_iterator{chunk_indices.size()},
+        dict_segment_views.begin(),
+        [&](size_t k) {
+          auto const chunk_idx = chunk_indices[k];
+          auto const& chunk    = pass.chunks[chunk_idx];
 
-                       seg_keys_owners[k] = make_keys_column_from_index_pairs(
-                         chunk.str_dict_index, chunk_key_counts[k], _stream, _mr);
+          seg_keys_owners[k] = make_keys_column_from_index_pairs(
+            chunk.str_dict_index, chunk_key_counts[k], _stream, get_current_device_resource_ref());
 
-                       auto const seg_begin = chunk_row_offsets[k];
-                       auto const seg_end   = chunk_row_offsets[k + 1];
-                       auto const seg_rows  = seg_end - seg_begin;
-                       auto const seg_null_count =
-                         indices_view.null_count(seg_begin, seg_end, _stream);
-                       return column_view{data_type{type_id::DICTIONARY32},
-                                          seg_rows,
-                                          nullptr,  // dictionary parent holds no data
-                                          indices_view.null_mask(),  // shared with indices_view
-                                          seg_null_count,
-                                          seg_begin,  // reslices shared indices child + null mask
-                                          {indices_view, seg_keys_owners[k]->view()}};
-                     });
+          auto const seg_begin = chunk_row_offsets[k];
+          auto const seg_end   = chunk_row_offsets[k + 1];
+          auto const seg_rows  = seg_end - seg_begin;
+          return column_view{data_type{type_id::DICTIONARY32},
+                             seg_rows,
+                             nullptr,                   // dictionary parent holds no data
+                             indices_view.null_mask(),  // shared with indices_view
+                             seg_null_counts[k],
+                             seg_begin,  // reslices shared indices child + null mask
+                             {indices_view, seg_keys_owners[k]->view()}};
+        });
 
-      // Materialize the final DICTIONARY32 column for this input column.
-      if (dict_segment_views.size() == 1) {
-        // Single row group: the parquet dictionary page keys are already unique, so no dedup is
-        // needed. Take ownership of the decoded INT32 indices buffer directly (zero copy).
-        out_columns[out_idx] = cudf::make_dictionary_column(
-          std::move(seg_keys_owners.front()), std::move(indices_owner), _stream, _mr);
-      } else {
-        // `cudf::detail::concatenate` deduplicates + sorts keys and recomputes indices. This is
-        // required today because DICTIONARY32 keys are assumed unique and sorted. When
-        // https://github.com/rapidsai/cudf/pull/22839 lands and relaxes that constraint, this
-        // could be replaced with a cheaper path: plain-concatenate the per-chunk keys columns
-        // (keeping cross-chunk duplicates) and offset-shift each chunk's row-group-local indices
-        // by the running total of prior chunks' key counts, avoiding the dedup/sort entirely.
-        out_columns[out_idx] = cudf::detail::concatenate(dict_segment_views, _stream, _mr);
-      }
+      // `cudf::detail::concatenate` deduplicates + sorts keys and recomputes indices. This is
+      // required today because DICTIONARY32 keys are assumed unique and sorted. When
+      // https://github.com/rapidsai/cudf/pull/22839 lands and relaxes that constraint, this
+      // could be replaced with a cheaper path: plain-concatenate the per-chunk keys columns
+      // (keeping cross-chunk duplicates) and offset-shift each chunk's row-group-local indices
+      // by the running total of prior chunks' key counts, avoiding the dedup/sort entirely.
+      out_columns[out_idx] = cudf::detail::concatenate(dict_segment_views, _stream, _mr);
     });
 }
 
