@@ -9,6 +9,8 @@ from libcpp.span cimport span as std_span
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+from cuda.bindings.cyruntime cimport cudaStream_t
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
@@ -209,16 +211,17 @@ cdef class HybridScanReader:
             Filtered row group indices
         """
         cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         cdef vector[size_type] indices_vec = row_group_indices
-        cdef vector[size_type] filtered = (
-            self.c_obj.get()[0].filter_row_groups_with_stats(
+        cdef vector[size_type] filtered
+        with nogil:
+            filtered = self.c_obj.get()[0].filter_row_groups_with_stats(
                 std_span[const_size_type](
                     indices_vec.data(), indices_vec.size()
                 ),
                 options.c_obj,
-                _stream.view().value()
+                _cs
             )
-        )
         return list(filtered)
 
     def secondary_filters_byte_ranges(
@@ -282,19 +285,21 @@ cdef class HybridScanReader:
         """
         cdef vector[device_span[const_uint8_t]] spans_vec
         cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         for span in dictionary_page_data:
             spans_vec.push_back(_get_device_span(span))
 
         cdef vector[size_type] indices_vec = row_group_indices
 
-        cdef vector[size_type] filtered = \
-            self.c_obj.get()[0].filter_row_groups_with_dictionary_pages(
+        cdef vector[size_type] filtered
+        with nogil:
+            filtered = self.c_obj.get()[0].filter_row_groups_with_dictionary_pages(
                 std_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
                 ),
                 std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj,
-                _stream.view().value()
+                _cs
             )
         return list(filtered)
 
@@ -325,19 +330,21 @@ cdef class HybridScanReader:
         """
         cdef vector[device_span[const_uint8_t]] spans_vec
         cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         for span in bloom_filter_data:
             spans_vec.push_back(_get_device_span(span))
 
         cdef vector[size_type] indices_vec = row_group_indices
 
-        cdef vector[size_type] filtered = \
-            self.c_obj.get()[0].filter_row_groups_with_bloom_filters(
+        cdef vector[size_type] filtered
+        with nogil:
+            filtered = self.c_obj.get()[0].filter_row_groups_with_bloom_filters(
                 std_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
                 ),
                 std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj,
-                _stream.view().value()
+                _cs
             )
         return list(filtered)
 
@@ -368,12 +375,14 @@ cdef class HybridScanReader:
         """
         cdef vector[size_type] indices_vec = row_group_indices
         cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
-        cdef unique_ptr[column] c_result = \
-            self.c_obj.get()[0].build_row_mask_with_page_index_stats(
+        cdef unique_ptr[column] c_result
+        with nogil:
+            c_result = self.c_obj.get()[0].build_row_mask_with_page_index_stats(
                 std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj,
-                _stream.view().value(),
+                _cs,
                 mr.get_mr()
             )
         return Column.from_libcudf(move(c_result), _stream, mr)
@@ -443,13 +452,15 @@ cdef class HybridScanReader:
 
         cdef vector[device_span[const_uint8_t]] spans_vec
         cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
         for span in column_chunk_data:
             spans_vec.push_back(_get_device_span(span))
 
         cdef mutable_column_view mask_view = row_mask.mutable_view()
-        cdef table_with_metadata c_result = \
-            self.c_obj.get()[0].materialize_filter_columns(
+        cdef table_with_metadata c_result
+        with nogil:
+            c_result = self.c_obj.get()[0].materialize_filter_columns(
                 std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 std_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
@@ -457,7 +468,7 @@ cdef class HybridScanReader:
                 mask_view,
                 mask_data_pages,
                 options.c_obj,
-                _stream.view().value(),
+                _cs,
                 mr.get_mr()
             )
         return TableWithMetadata.from_libcudf(c_result, _stream, mr)
@@ -527,13 +538,15 @@ cdef class HybridScanReader:
 
         cdef vector[device_span[const_uint8_t]] spans_vec
         cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
         for span in column_chunk_data:
             spans_vec.push_back(_get_device_span(span))
 
         cdef column_view mask_view = row_mask.view()
-        cdef table_with_metadata c_result = \
-            self.c_obj.get()[0].materialize_payload_columns(
+        cdef table_with_metadata c_result
+        with nogil:
+            c_result = self.c_obj.get()[0].materialize_payload_columns(
                 std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 std_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
@@ -541,7 +554,7 @@ cdef class HybridScanReader:
                 mask_view,
                 mask_data_pages,
                 options.c_obj,
-                _stream.view().value(),
+                _cs,
                 mr.get_mr()
             )
         return TableWithMetadata.from_libcudf(c_result, _stream, mr)
@@ -605,17 +618,19 @@ cdef class HybridScanReader:
 
         cdef vector[device_span[const_uint8_t]] spans_vec
         cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
         for span in column_chunk_data:
             spans_vec.push_back(_get_device_span(span))
-        cdef table_with_metadata c_result = \
-            self.c_obj.get()[0].materialize_all_columns(
+        cdef table_with_metadata c_result
+        with nogil:
+            c_result = self.c_obj.get()[0].materialize_all_columns(
                 std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 std_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
                 ),
                 options.c_obj,
-                _stream.view().value(),
+                _cs,
                 mr.get_mr()
             )
         return TableWithMetadata.from_libcudf(c_result, _stream, mr)
@@ -663,21 +678,23 @@ cdef class HybridScanReader:
 
         self._stream = _get_stream(stream)
         self.mr = _get_memory_resource(mr)
+        cdef cudaStream_t _cs = self._stream.view().value()
 
         cdef column_view mask_view = row_mask.view()
-        self.c_obj.get()[0].setup_chunking_for_filter_columns(
-            chunk_read_limit,
-            pass_read_limit,
-            std_span[const_size_type](indices_vec.data(), indices_vec.size()),
-            mask_view,
-            mask_data_pages,
-            std_span[const_device_span_const_uint8_t](
-                <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
-            ),
-            options.c_obj,
-            self._stream.view().value(),
-            self.mr.get_mr()
-        )
+        with nogil:
+            self.c_obj.get()[0].setup_chunking_for_filter_columns(
+                chunk_read_limit,
+                pass_read_limit,
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                mask_view,
+                mask_data_pages,
+                std_span[const_device_span_const_uint8_t](
+                    <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
+                ),
+                options.c_obj,
+                _cs,
+                self.mr.get_mr()
+            )
 
     def materialize_filter_columns_chunk(
         self,
@@ -695,8 +712,9 @@ cdef class HybridScanReader:
             Table chunk of materialized filter columns and metadata
         """
         cdef mutable_column_view mask_view = row_mask.mutable_view()
-        cdef table_with_metadata c_result = \
-            self.c_obj.get()[0].materialize_filter_columns_chunk(
+        cdef table_with_metadata c_result
+        with nogil:
+            c_result = self.c_obj.get()[0].materialize_filter_columns_chunk(
                 mask_view
             )
         return TableWithMetadata.from_libcudf(
@@ -746,21 +764,23 @@ cdef class HybridScanReader:
 
         self._stream = _get_stream(stream)
         self.mr = _get_memory_resource(mr)
+        cdef cudaStream_t _cs = self._stream.view().value()
 
         cdef column_view mask_view = row_mask.view()
-        self.c_obj.get()[0].setup_chunking_for_payload_columns(
-            chunk_read_limit,
-            pass_read_limit,
-            std_span[const_size_type](indices_vec.data(), indices_vec.size()),
-            mask_view,
-            mask_data_pages,
-            std_span[const_device_span_const_uint8_t](
-                <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
-            ),
-            options.c_obj,
-            self._stream.view().value(),
-            self.mr.get_mr()
-        )
+        with nogil:
+            self.c_obj.get()[0].setup_chunking_for_payload_columns(
+                chunk_read_limit,
+                pass_read_limit,
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                mask_view,
+                mask_data_pages,
+                std_span[const_device_span_const_uint8_t](
+                    <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
+                ),
+                options.c_obj,
+                _cs,
+                self.mr.get_mr()
+            )
 
     def materialize_payload_columns_chunk(
         self,
@@ -778,8 +798,9 @@ cdef class HybridScanReader:
             Table chunk of materialized payload columns and metadata
         """
         cdef column_view mask_view = row_mask.view()
-        cdef table_with_metadata c_result = \
-            self.c_obj.get()[0].materialize_payload_columns_chunk(
+        cdef table_with_metadata c_result
+        with nogil:
+            c_result = self.c_obj.get()[0].materialize_payload_columns_chunk(
                 mask_view
             )
         return TableWithMetadata.from_libcudf(
