@@ -585,13 +585,15 @@ class GroupedWindow(Expr):
         self,
         op: ShiftOp,
         df: DataFrame,
-        grouper: plc.groupby.GroupBy,
+        _: plc.groupby.GroupBy,
     ) -> tuple[list[str], list[DataType], list[plc.Table]]:
         shift_named = op.named_exprs
         order_index = op.order_index
+        assert order_index is not None
 
-        data_exprs: list[expr.Expr] = []
+        plc_cols: list[plc.Column] = []
         offsets: list[int] = []
+        fill_scalars: list[plc.Scalar] = []
         out_names: list[str] = []
         out_dtypes: list[DataType] = []
 
@@ -603,46 +605,37 @@ class GroupedWindow(Expr):
             offset = offset_expr.value
             assert isinstance(offset, int)
 
-            data_exprs.append(data_expr)
+            plc_col = data_expr.evaluate(df, context=ExecutionContext.FRAME).obj
+            plc_cols.append(plc_col)
             offsets.append(offset)
             out_names.append(ne.name)
             out_dtypes.append(shift_expr.dtype)
-
-        plc_cols = [
-            e.evaluate(df, context=ExecutionContext.FRAME).obj for e in data_exprs
-        ]
-        val_cols = (
-            plc.copying.gather(
-                plc.Table(plc_cols),
-                order_index,
-                plc.copying.OutOfBoundsPolicy.NULLIFY,
-                stream=df.stream,
-            ).columns()
-            if order_index is not None
-            else plc_cols
-        )
-
-        fill_scalars: list[plc.Scalar] = []
-        for ne, val_col in zip(shift_named, val_cols, strict=True):
-            shift_expr = ne.value
-            assert isinstance(shift_expr, expr.UnaryFunction)
             if shift_expr.name == "shift":
                 fill_scalars.append(
-                    plc.Scalar.from_py(None, val_col.type(), stream=df.stream)
+                    plc.Scalar.from_py(None, plc_col.type(), stream=df.stream)
                 )
             else:
+                assert shift_expr.name == "shift_and_fill"
                 fill_expr = shift_expr.children[2]
                 assert isinstance(fill_expr, expr.Literal)
                 fill_scalars.append(
                     plc.Scalar.from_py(
-                        fill_expr.value, val_col.type(), stream=df.stream
+                        fill_expr.value, plc_col.type(), stream=df.stream
                     )
                 )
 
-        local_grouper = op.local_grouper or grouper
-        _, shifted_tbl = local_grouper.shift(
+        val_cols = plc.copying.gather(
+            plc.Table(plc_cols),
+            order_index,
+            plc.copying.OutOfBoundsPolicy.NULLIFY,
+            stream=df.stream,
+        ).columns()
+
+        local_grouper = op.local_grouper
+        assert isinstance(local_grouper, plc.groupby.GroupBy)
+        shifted_tbl = local_grouper.shift(
             plc.Table(val_cols), offsets, fill_scalars, stream=df.stream
-        )
+        )[1]
         return (
             out_names,
             out_dtypes,
@@ -1218,6 +1211,7 @@ class GroupedWindow(Expr):
                     else False,
                     grouper=grouper,
                     stream=df.stream,
+                    require_sorted_groups=True,
                 )
             )
             names, dtypes, tables = self._apply_unary_op(
