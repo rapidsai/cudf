@@ -119,7 +119,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::bloom_filters_byte_ranges
    */
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<size_type>>
-  bloom_filters_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
+  bloom_filters_byte_ranges(std::span<std::vector<size_type> const> row_group_indices,
                             parquet_reader_options const& options);
 
   /**

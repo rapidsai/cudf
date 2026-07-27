@@ -23,10 +23,6 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/aligned.hpp>
-#include <rmm/device_buffer.hpp>
-#include <rmm/mr/aligned_resource_adaptor.hpp>
-
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -37,8 +33,6 @@
 #include <vector>
 
 namespace {
-
-auto constexpr bloom_filter_alignment = rmm::CUDA_ALLOCATION_ALIGNMENT;
 
 /**
  * @brief Copy fixed-width column data to a host vector
@@ -554,8 +548,7 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithBloomFiltersRealData)
 {
   auto constexpr num_sources = 32;
   auto const stream          = cudf::get_default_stream();
-  auto aligned_mr = rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource_ref(),
-                                                      bloom_filter_alignment);
+  auto const mr              = cudf::get_current_device_resource_ref();
 
   // Embedded copy of cuDF's committed bloom-filter fixture (cuDF cannot write bloom filters, and
   // cuDF tests avoid committed data files). Source:
@@ -691,7 +684,7 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithBloomFiltersRealData)
 
   auto options      = cudf::io::parquet_reader_options::builder().filter(filter).build();
   auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_multifile>(
-    cudf::host_span<cudf::host_span<uint8_t const> const>{inputs.footer_byte_spans}, options);
+    inputs.footer_byte_spans, options);
 
   auto const input_row_group_indices = reader->all_row_groups(options);
   ASSERT_EQ(input_row_group_indices.size(), num_sources);
@@ -723,7 +716,7 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithBloomFiltersRealData)
   // Bloom filters must be fetched with `fetch_bloom_filters_to_device`
   [[maybe_unused]] auto [bloom_buffers, bloom_data_per_source] =
     cudf::io::parquet::fetch_bloom_filters_to_device(
-      inputs.datasource_refs, ranges_per_source, stream, aligned_mr);
+      inputs.datasource_refs, ranges_per_source, stream, mr);
   for (auto const& per_source : bloom_data_per_source) {
     ASSERT_EQ(per_source.size(), 1);
   }

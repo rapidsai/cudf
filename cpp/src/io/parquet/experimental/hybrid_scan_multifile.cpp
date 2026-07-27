@@ -79,7 +79,7 @@ std::vector<std::vector<size_type>> hybrid_scan_multifile::filter_row_groups_wit
 
 std::pair<std::vector<text::byte_range_info>, std::vector<size_type>>
 hybrid_scan_multifile::bloom_filters_byte_ranges(
-  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  std::span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options) const
 {
   CUDF_FUNC_RANGE();
@@ -87,8 +87,8 @@ hybrid_scan_multifile::bloom_filters_byte_ranges(
 }
 
 std::vector<std::vector<size_type>> hybrid_scan_multifile::filter_row_groups_with_bloom_filters(
-  cudf::host_span<cudf::device_span<uint8_t const> const> bloom_filter_data,
-  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  std::span<cudf::device_span<uint8_t const> const> bloom_filter_data,
+  std::span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream) const
 {
