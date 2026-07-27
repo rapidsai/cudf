@@ -548,7 +548,7 @@ void reader_impl::compute_input_passes(read_mode mode)
   // input column), so this is an exact measure of the compressed bytes a pass will hold rather than
   // an estimate over the whole row group.
   auto const row_group_sizes =
-    make_row_group_pass_size_info(row_groups_info, _file_itm_data.chunks, _input_columns.size());
+    compute_row_group_size_info(row_groups_info, _file_itm_data.chunks, _input_columns.size());
 
   auto pass_data =
     compute_row_group_passes(row_group_sizes, comp_read_limit, _file_itm_data.global_skip_rows);

@@ -667,24 +667,19 @@ class hybrid_scan_reader {
    *
    * Note that the `pass_read_limit` is a hint, not an absolute limit - if a single row group
    * cannot fit within the limit given, it will still constitute a pass. The compressed row group
-   * size is estimated over only the columns selected for reading by @p options - the union of the
-   * projected payload columns and the filter columns. The union is used because this call cannot
-   * know whether the caller will use the two-stage filter/payload materialization flow or read all
-   * columns in one go, and the latter needs the full footprint.
+   * size is estimated over all columns in each row group (not just the columns selected for
+   * reading), for conservative estimates.
    *
    * @throws std::invalid_argument if no row group indices in the input
    *
    * @param row_group_indices Input row group indices
-   * @param options Reader options used to determine the columns that will be read
    * @param pass_read_limit Memory limit to read and decompress row group data, `0` if there is
    * no limit (single pass)
    *
    * @return Vector of vectors of row group indices, one per constructed pass
    */
   [[nodiscard]] std::vector<std::vector<cudf::size_type>> construct_row_group_passes(
-    std::span<cudf::size_type const> row_group_indices,
-    parquet_reader_options const& options,
-    std::size_t pass_read_limit) const;
+    std::span<cudf::size_type const> row_group_indices, std::size_t pass_read_limit) const;
 
   /**
    * @brief Check if there is any parquet data left to read for the current setup

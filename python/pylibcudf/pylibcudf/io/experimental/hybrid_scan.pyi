@@ -139,7 +139,6 @@ class HybridScanReader:
     def construct_row_group_passes(
         self,
         row_group_indices: list[int],
-        options: ParquetReaderOptions,
         pass_read_limit: int,
     ) -> list[list[int]]: ...
     def has_next_table_chunk(self) -> bool: ...

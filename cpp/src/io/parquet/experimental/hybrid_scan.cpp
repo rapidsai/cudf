@@ -368,9 +368,7 @@ table_with_metadata hybrid_scan_reader::materialize_all_columns_chunk() const
 }
 
 std::vector<std::vector<cudf::size_type>> hybrid_scan_reader::construct_row_group_passes(
-  std::span<cudf::size_type const> row_group_indices,
-  parquet_reader_options const& options,
-  std::size_t pass_read_limit) const
+  std::span<cudf::size_type const> row_group_indices, std::size_t pass_read_limit) const
 {
   CUDF_FUNC_RANGE();
 
@@ -383,8 +381,7 @@ std::vector<std::vector<cudf::size_type>> hybrid_scan_reader::construct_row_grou
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
 
   return _impl
-    ->construct_row_group_passes(
-      input_row_group_indices, total_row_groups, options, pass_read_limit)
+    ->construct_row_group_passes(input_row_group_indices, total_row_groups, pass_read_limit)
     .first;
 }
 

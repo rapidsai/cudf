@@ -64,9 +64,9 @@ struct column_chunk_info {
  * @brief The row_group_info class
  */
 struct row_group_info {
-  size_type index;  // row group index within a file. aggregate_reader_metadata::get_row_group() is
-                    // called with index and source_index
-  size_t start_row;
+  size_type index;   // row group index within a file. aggregate_reader_metadata::get_row_group() is
+                     // called with index and source_index
+  size_t start_row;  // global start row of this row group
   size_t source_start_row;     // file-local start row of this row group within its source file
   size_t unadjusted_num_rows;  // number of unadjusted rows in the row group
   size_type source_index;      // file index.
@@ -81,17 +81,12 @@ struct row_group_info {
 };
 
 /**
- * @brief Per-row-group inputs to read pass partitioning.
- *
- * Unlike `row_group_info`, the sizes here are scoped to the columns actually selected for
- * reading, so they model the memory a pass will really occupy rather than the size of the
- * entire row group.
+ * @brief Row group size information for pass partitioning.
  */
-struct row_group_pass_size_info {
-  size_t start_row;        // global start row of this row group
-  size_t num_rows;         // unadjusted number of rows in this row group
-  size_t compressed_size;  // compressed size of the selected columns in this row group
-  size_t max_leaf_values;  // maximum number of leaf values over the selected columns
+struct row_group_size_info {
+  size_t unadjusted_num_rows;  // number of unadjusted rows in this row group
+  size_t compressed_size;      // compressed size of the selected columns in this row group
+  size_t max_leaf_values;      // maximum number of leaf values over the selected columns
 };
 
 /**
@@ -610,24 +605,15 @@ class aggregate_reader_metadata {
   [[nodiscard]] std::vector<std::string> get_pandas_index_names() const;
 
   /**
-   * @brief Computes the pass sizing properties of a row group, scoped to the selected columns
+   * @brief Computes the compressed size, the number of rows, and the maximum number of leaf values
+   * in the specified row group over all of its columns
    *
-   * Only the column chunks belonging to @p selected_schema_indices contribute to the returned
-   * compressed size and maximum leaf value count. This yields a far tighter memory estimate than
-   * sizing the row group over its entire schema when only a subset of a wide schema is being read.
+   * @param row_group Input row group
    *
-   * @param rg The row group
-   * @param start_row Global start row of this row group
-   * @param source_index Index of the data source this row group belongs to
-   * @param selected_schema_indices Schema indices of the selected leaf columns
-   *
-   * @return Pass sizing properties of the row group
+   * @return A tuple of row group compressed size, number of rows, and maximum leaf values
    */
-  [[nodiscard]] row_group_pass_size_info get_row_group_pass_size_info(
-    RowGroup const& rg,
-    size_t start_row,
-    size_type source_index,
-    host_span<size_type const> selected_schema_indices) const;
+  [[nodiscard]] std::tuple<size_t, size_t, size_t> get_row_group_properties(
+    RowGroup const& row_group) const;
 
   /**
    * @brief Filters the row groups using stats and bloom filters based on predicate filter

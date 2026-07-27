@@ -787,36 +787,27 @@ struct row_group_pass_data {
  * @brief Partition row groups into passes based on compressed size, leaf value count,
  * and row count thresholds.
  *
- * The sizes in @p row_group_sizes are expected to be scoped to the columns selected for reading;
- * see `make_row_group_pass_size_info()` and
- * `aggregate_reader_metadata::get_row_group_pass_size_info()`.
- *
- * @param row_group_sizes Span of per-row-group pass sizing properties
+ * @param row_group_sizes Span of row group size information
  * @param comp_read_limit Maximum compressed bytes per pass
  * @param skip_rows Number of leading rows to skip (affects the effective size of the first row
  * group)
  * @return A row_group_pass_data containing pass boundary offsets and cumulative row counts
  */
-row_group_pass_data compute_row_group_passes(
-  cudf::host_span<row_group_pass_size_info const> row_group_sizes,
-  std::size_t comp_read_limit,
-  int64_t skip_rows);
+row_group_pass_data compute_row_group_passes(std::span<row_group_size_info const> row_group_sizes,
+                                             std::size_t comp_read_limit,
+                                             int64_t skip_rows);
 
 /**
- * @brief Computes per-row-group pass sizing properties from already-built column chunk descriptors
- *
- * @p chunks is expected to be laid out as `[row_group][input_column]`, i.e. the layout produced by
- * `reader_impl::create_global_chunk_info()`. Because those descriptors only exist for the selected
- * columns, the resulting sizes are exact rather than estimated.
+ * @brief Computes row group size information from already-built column chunk descriptors
  *
  * @param row_groups_info Span of row group metadata
  * @param chunks Column chunk descriptors for the selected columns of every row group
  * @param num_input_columns Number of selected (leaf) input columns
- * @return Per-row-group pass sizing properties, one entry per row group
+ * @return Row group size information, one entry per row group
  */
-std::vector<row_group_pass_size_info> make_row_group_pass_size_info(
-  cudf::host_span<row_group_info const> row_groups_info,
-  cudf::host_span<ColumnChunkDesc const> chunks,
+std::vector<row_group_size_info> compute_row_group_size_info(
+  std::span<row_group_info const> row_groups_info,
+  std::span<ColumnChunkDesc const> chunks,
   size_t num_input_columns);
 
 }  // namespace cudf::io::parquet::detail

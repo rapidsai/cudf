@@ -170,7 +170,6 @@ cdef extern from "cudf/io/experimental/hybrid_scan.hpp" \
 
         vector[vector[size_type]] construct_row_group_passes(
             std_span[const_size_type] row_group_indices,
-            const parquet_reader_options& options,
             size_t pass_read_limit,
         ) except +libcudf_exception_handler
 

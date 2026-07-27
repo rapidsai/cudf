@@ -781,7 +781,6 @@ std::pair<std::vector<std::vector<cudf::size_type>>, std::vector<cudf::size_type
 hybrid_scan_reader_impl::construct_row_group_passes(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   std::size_t total_row_groups,
-  parquet_reader_options const& options,
   std::size_t pass_read_limit) const
 {
   CUDF_EXPECTS(
@@ -801,52 +800,23 @@ hybrid_scan_reader_impl::construct_row_group_passes(
   CUDF_EXPECTS(
     pass_read_limit > 0, "Pass read limit must be greater than 0", std::invalid_argument);
 
-  // Resolve the columns that will be read. This mirrors the `ALL_COLUMNS` case of
-  // `select_columns()` but resolves into locals rather than into the reader's own selection state:
-  // this is a planning call that may be made at any point, including while a chunked
-  // materialization is in flight, and `materialize_*_chunk()` do not re-select columns.
-  //
-  // `ALL_COLUMNS` - the union of the projected payload columns and the filter columns - is the
-  // right footprint because this call cannot know whether the caller will use the two-stage
-  // filter/payload flow or `setup_chunking_for_all_columns()`, and the latter needs the full
-  // footprint.
-  auto const selection_options   = make_column_selection_options(options);
-  auto const select_column_names = get_column_projection(options);
-  auto filter_only_columns_names = std::optional<std::vector<std::string>>{};
-  if (options.get_filter().has_value() and select_column_names.has_value()) {
-    filter_only_columns_names = parquet::detail::get_column_names_in_expression(
-      options.get_filter(), *select_column_names, options, _extended_metadata->get_schema_tree());
-  }
-  // Note: this also populates the metadata's schema index maps, which `map_schema_index()` below
-  // relies on for sources with mismatched schemas. Doing so is idempotent.
-  auto const selected_columns = std::get<0>(
-    _metadata->select_columns(select_column_names, filter_only_columns_names, selection_options));
-
-  auto selected_schema_indices = std::vector<size_type>{};
-  selected_schema_indices.reserve(selected_columns.size());
-  std::transform(selected_columns.begin(),
-                 selected_columns.end(),
-                 std::back_inserter(selected_schema_indices),
-                 [](auto const& col) { return col.schema_idx; });
-
-  // Row group (index, source index) pairs, flattened across sources, parallel to `row_group_sizes`
   auto row_group_ids   = std::vector<std::pair<size_type, size_type>>{};
-  auto row_group_sizes = std::vector<cudf::io::parquet::detail::row_group_pass_size_info>{};
+  auto row_group_sizes = std::vector<cudf::io::parquet::detail::row_group_size_info>{};
   row_group_ids.reserve(total_row_groups);
   row_group_sizes.reserve(total_row_groups);
 
-  size_t start_row = 0;
   std::for_each(cuda::counting_iterator<cudf::size_type>(0),
                 cuda::counting_iterator<cudf::size_type>(row_group_indices.size()),
                 [&](auto const source_index) {
                   for (auto const rg_index : row_group_indices[source_index]) {
                     auto const& row_group =
                       _extended_metadata->get_row_group(rg_index, source_index);
-                    auto const rg_size = _extended_metadata->get_row_group_pass_size_info(
-                      row_group, start_row, source_index, selected_schema_indices);
-                    start_row += rg_size.num_rows;
+                    auto const [compressed_size, num_rows, max_leaf_values] =
+                      _extended_metadata->get_row_group_properties(row_group);
                     row_group_ids.emplace_back(rg_index, source_index);
-                    row_group_sizes.push_back(rg_size);
+                    row_group_sizes.push_back({.unadjusted_num_rows = num_rows,
+                                               .compressed_size     = compressed_size,
+                                               .max_leaf_values     = max_leaf_values});
                   }
                 });
 

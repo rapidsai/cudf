@@ -953,40 +953,41 @@ rmm::device_uvector<size_t> compute_level_decode_sizes(device_span<ColumnChunkDe
   return level_decode_sizes;
 }
 
-std::vector<row_group_pass_size_info> make_row_group_pass_size_info(
-  cudf::host_span<row_group_info const> row_groups_info,
-  cudf::host_span<ColumnChunkDesc const> chunks,
+std::vector<row_group_size_info> compute_row_group_size_info(
+  std::span<row_group_info const> row_groups_info,
+  std::span<ColumnChunkDesc const> chunks,
   size_t num_input_columns)
 {
   CUDF_EXPECTS(chunks.size() == row_groups_info.size() * num_input_columns,
                "Mismatch between the number of column chunk descriptors and row groups");
 
-  std::vector<row_group_pass_size_info> row_group_sizes;
+  std::vector<row_group_size_info> row_group_sizes;
   row_group_sizes.reserve(row_groups_info.size());
 
-  for (size_t rg_idx = 0; rg_idx < row_groups_info.size(); rg_idx++) {
-    auto const& rgi         = row_groups_info[rg_idx];
-    auto const chunks_begin = chunks.begin() + (rg_idx * num_input_columns);
-    auto const chunks_end   = chunks_begin + num_input_columns;
-    size_t compressed_size  = 0;
-    size_t max_leaf_values  = 0;
-    std::for_each(chunks_begin, chunks_end, [&](auto const& chunk) {
-      compressed_size += chunk.compressed_size;
-      max_leaf_values = std::max(max_leaf_values, chunk.num_values);
-    });
-    row_group_sizes.push_back({.start_row       = rgi.start_row,
-                               .num_rows        = rgi.unadjusted_num_rows,
-                               .compressed_size = compressed_size,
-                               .max_leaf_values = max_leaf_values});
-  }
+  std::transform(cuda::counting_iterator<size_t>(0),
+                 cuda::counting_iterator<size_t>(row_groups_info.size()),
+                 std::back_inserter(row_group_sizes),
+                 [&](auto const rg_idx) {
+                   auto const& rg_info     = row_groups_info[rg_idx];
+                   auto const chunks_begin = chunks.begin() + (rg_idx * num_input_columns);
+                   auto const chunks_end   = chunks_begin + num_input_columns;
+                   size_t compressed_size  = 0;
+                   size_t max_leaf_values  = 0;
+                   std::for_each(chunks_begin, chunks_end, [&](auto const& chunk) {
+                     compressed_size += chunk.compressed_size;
+                     max_leaf_values = std::max(max_leaf_values, chunk.num_values);
+                   });
+                   return row_group_size_info{.unadjusted_num_rows = rg_info.unadjusted_num_rows,
+                                              .compressed_size     = compressed_size,
+                                              .max_leaf_values     = max_leaf_values};
+                 });
 
   return row_group_sizes;
 }
 
-row_group_pass_data compute_row_group_passes(
-  cudf::host_span<row_group_pass_size_info const> row_group_sizes,
-  std::size_t comp_read_limit,
-  int64_t skip_rows)
+row_group_pass_data compute_row_group_passes(std::span<row_group_size_info const> row_group_sizes,
+                                             std::size_t comp_read_limit,
+                                             int64_t skip_rows)
 {
   auto constexpr max_rows_per_pass =
     static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max());
@@ -1006,9 +1007,13 @@ row_group_pass_data compute_row_group_passes(
 
     // We must use the effective size of the first row group we are reading to accurately calculate
     // the first non-zero `input_pass_start_row_count` unless we are reading only one row group
-    auto const row_group_rows = (skip_rows and row_group_sizes.size() > 1)
-                                  ? (rgi.start_row + rgi.num_rows - skip_rows)
-                                  : rgi.num_rows;
+    auto row_group_rows = rgi.unadjusted_num_rows;
+    if (row_group_sizes.size() > 1) {
+      CUDF_EXPECTS(std::cmp_greater_equal(rgi.unadjusted_num_rows, skip_rows),
+                   "Row groups must contribute non-negative effective rows",
+                   std::invalid_argument);
+      row_group_rows -= skip_rows;
+    }
 
     auto const compressed_rg_size    = rgi.compressed_size;
     auto const row_group_leaf_values = rgi.max_leaf_values;
@@ -1030,7 +1035,7 @@ row_group_pass_data compute_row_group_passes(
       // We always need to include at least one row group, so end the pass at the end of the current
       // row group
       if (cur_rg_start == cur_rg_index) {
-        CUDF_EXPECTS(std::cmp_less_equal(rgi.num_rows, max_rows_per_pass),
+        CUDF_EXPECTS(std::cmp_less_equal(rgi.unadjusted_num_rows, max_rows_per_pass),
                      "Number of rows in each row group must be smaller than the column size limit");
         result.pass_row_group_offsets.push_back(cur_rg_index + 1);
         result.pass_start_row_counts.push_back(cur_row_count + row_group_rows);
