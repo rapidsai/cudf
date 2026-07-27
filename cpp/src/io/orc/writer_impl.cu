@@ -63,10 +63,12 @@
 
 namespace cudf::io::orc::detail {
 
-// Alignment of every non-empty region within the encoded and gathered arenas. Matches what RMM
-// guaranteed for the per-region device_uvector allocations the arenas replaced -- the ORC encoder
-// kernels and downstream compressors rely on natural alignment, and uncomp_block_align is 1 for
-// some codecs, so the per-rowgroup alignment fix-up alone is not enough.
+// Alignment of every non-empty region within the encoded and gathered arenas. Compression is what
+// requires it: `gather_stripes` compacts the per-rowgroup chunks without re-applying the codec
+// alignment that `encode_columns` gave them, so a gathered region's base is the pointer the
+// compressor receives, and it has to satisfy `compress_required_chunk_alignment` (checked in
+// `encode_columns`). RMM's allocation alignment is what the per-region allocations these arenas
+// replaced provided, so using it keeps every downstream access at least as aligned as before.
 constexpr size_t region_alignment = rmm::CUDA_ALLOCATION_ALIGNMENT;
 
 template <typename T>
@@ -1025,6 +1027,9 @@ std::pair<encoded_data, transient_regions> encode_columns(orc_table_view const& 
   // A region is certain to be compacted when its stripe spans several rowgroups (so its chunks
   // are laid out with gaps) and its size is an upper bound (so a gap is non-empty). Guessing
   // wrong either way is safe, and only costs a copy or a retained allocation.
+  CUDF_EXPECTS(region_alignment >= uncomp_block_align,
+               "Internal ORC writer error: arena regions are not aligned enough for the codec");
+
   transient_regions transient{segmentation.num_stripes(), num_streams};
   std::vector<size_t> region_offsets(segmentation.num_stripes() * num_streams, 0);
   size_t persistent_arena_size = 0;
