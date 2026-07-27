@@ -759,6 +759,7 @@ fetch_byte_ranges_to_device(cudf::io::datasource& datasource,
   return {std::move(buffers), std::move(spans)};
 }
 
+std::pair<std::vector<rmm::device_buffer>, std::vector<cudf::device_span<uint8_t const>>>
 fetch_bloom_filters_to_device(
   cudf::io::datasource& datasource,
   cudf::host_span<cudf::io::text::byte_range_info const> bloom_filter_byte_ranges,
