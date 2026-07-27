@@ -605,6 +605,7 @@ async def scan_node(
     *,
     num_producers: int,
     num_prefetch_workers: int | None,
+    prefetch_backend: str | None,
     estimated_chunk_bytes: int,
 ) -> None:
     """
@@ -625,6 +626,9 @@ async def scan_node(
     num_prefetch_workers
         The number of prefetch workers for the hybrid scan prefetch pipeline.
         When ``None``, uses one worker per split.
+    prefetch_backend
+        ``"kvikio"`` or ``"cucascade"``. Must be set when hybrid scan prefetch
+        is enabled.
     estimated_chunk_bytes
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
@@ -639,7 +643,8 @@ async def scan_node(
         and first.parquet_options.prefetch_file_metadata
         and first.cached_parquet_info is not None
         and first.base_scan.predicate is not None
-        and context.br().pinned_mr is not None
+        and prefetch_backend is not None
+        and (prefetch_backend == "cucascade" or context.br().pinned_mr is not None)
     )
     prefetcher: HybridScanPrefetchExecutor | None = (
         HybridScanPrefetchExecutor.from_scans(
@@ -648,6 +653,7 @@ async def scan_node(
             if num_prefetch_workers is not None
             else len(scans),
             context=context,
+            prefetch_backend=prefetch_backend,  # type: ignore[arg-type]
         )
         if use_prefetch
         else None
@@ -898,6 +904,7 @@ def _(
                 ch_out,
                 num_producers=num_producers,
                 num_prefetch_workers=executor.num_prefetch_workers,
+                prefetch_backend=parquet_options.prefetch_backend,
                 estimated_chunk_bytes=(
                     plan.estimated_chunk_bytes or executor.target_partition_size
                 ),

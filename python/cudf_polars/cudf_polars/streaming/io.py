@@ -231,6 +231,9 @@ class PrefetchedByteRanges:
     payload_buf: PinnedBuffer | None = dataclasses.field(
         default=None, compare=False, repr=False
     )
+    datasource: plc.io.datasource.Datasource | None = dataclasses.field(
+        default=None, compare=False, repr=False
+    )
 
     @classmethod
     def empty(cls) -> PrefetchedByteRanges:
@@ -250,12 +253,12 @@ class PrefetchedByteRanges:
 
 
 def _fetch_byte_ranges(
-    paths: list[str],
+    source: list[str] | list[plc.io.datasource.Datasource],
     byte_ranges: list[plc.io.text.ByteRangeInfo],
     stream: Stream,
 ) -> list[plc.gpumemoryview]:
     return plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
-        plc.io.SourceInfo(paths), byte_ranges, stream=stream
+        plc.io.SourceInfo(source), byte_ranges, stream=stream
     )
 
 
@@ -356,7 +359,11 @@ def _read_with_hybrid_scan(
         # the page index for all files, which may be too expensive.
         row_mask = reader.build_all_true_row_mask(row_group_indices, stream=stream)
 
-        if prefetched is not None and prefetched.filter_host is not None:
+        if prefetched is not None and prefetched.datasource is not None:
+            filter_chunks = _fetch_byte_ranges(
+                [prefetched.datasource], prefetched.filter_ranges, stream
+            )
+        elif prefetched is not None and prefetched.filter_host is not None:
             filter_chunks = copy_host_ranges_to_device(
                 prefetched.filter_host,
                 prefetched.filter_ranges,
@@ -378,7 +385,11 @@ def _read_with_hybrid_scan(
             stream=stream,
         )
 
-        if prefetched is not None and prefetched.payload_host is not None:
+        if prefetched is not None and prefetched.datasource is not None:
+            payload_chunks = _fetch_byte_ranges(
+                [prefetched.datasource], prefetched.payload_ranges, stream
+            )
+        elif prefetched is not None and prefetched.payload_host is not None:
             payload_chunks = copy_host_ranges_to_device(
                 prefetched.payload_host,
                 prefetched.payload_ranges,

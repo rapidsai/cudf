@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
@@ -310,6 +311,20 @@ class datasource {
                                                 rmm::cuda_stream_view stream)
   {
     CUDF_FAIL("datasource classes that support device_read_async must override it.");
+  }
+
+  /**
+   * @brief Hint the datasource about byte ranges that will be read soon.
+   *
+   * Implementations may use this to start prefetching data asynchronously.
+   * The default is a no-op; subclasses that support advisory prefetch override it.
+   *
+   * @param ranges Byte ranges that will be read.
+   * @param dev_id Preferred CUDA device id for staging, or ``std::nullopt`` for no preference.
+   */
+  virtual void fadvise(cudf::host_span<cudf::io::text::byte_range_info const> ranges,
+                       std::optional<int> dev_id) noexcept
+  {
   }
 
   /**

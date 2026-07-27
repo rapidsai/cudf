@@ -249,6 +249,10 @@ class ParquetOptions:
     prefetch_file_metadata
         Whether to prefetch parquet file metadata and pass it through
         `parquet_metadatas` to avoid rereading file footers.
+    prefetch_backend
+        IO backend for hybrid scan prefetching. Must be set explicitly when
+        ``use_hybrid_scan`` is ``True`` and ``prefetch_file_metadata`` is ``True``.
+        ``"kvikio"`` or ``"cucascade"`` (requires the ``cucascade`` package).
     use_jit_filter
         Whether to use JIT compilation for post-read filtering in Parquet scans.
         When enabled, filter predicates are JIT-compiled to CUDA kernels for
@@ -316,6 +320,11 @@ class ParquetOptions:
             default=True,
         )
     )
+    prefetch_backend: str | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__PREFETCH_BACKEND", str, default=None
+        )
+    )
     use_jit_filter: bool = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__USE_JIT_FILTER",
@@ -345,6 +354,14 @@ class ParquetOptions:
             raise TypeError("hybrid_scan_stats_pruning must be a bool")
         if not isinstance(self.prefetch_file_metadata, bool):
             raise TypeError("prefetch_file_metadata must be a bool")
+        if self.prefetch_backend is not None and self.prefetch_backend not in (
+            "kvikio",
+            "cucascade",
+        ):
+            raise ValueError(
+                f"prefetch_backend must be 'kvikio' or 'cucascade', "
+                f"got {self.prefetch_backend!r}"
+            )
 
         if self.use_rapidsmpf_native and self.prefetch_file_metadata:
             raise NotImplementedError(

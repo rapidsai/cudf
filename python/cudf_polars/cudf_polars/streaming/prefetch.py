@@ -6,9 +6,17 @@ from __future__ import annotations
 
 import asyncio
 import ctypes
+import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Self
+
+import cuda.bindings.runtime as cudart
+
+try:  # pragma: no cover; cucascade is optional
+    import cucascade
+except ImportError:
+    cucascade = None
 
 import pylibcudf as plc
 from rapidsmpf.memory.buffer import MemoryType
@@ -97,34 +105,27 @@ def pread_ranges(
     return buf.array, futures, buf
 
 
-def prefetch_scan_byte_ranges(
+def _plan_hybrid_scan_prefetch(
     scan: SplitScan,
     stream: Stream,
-    pinned_mr: PinnedMemoryResource,
-    context: Context,
-    loop: asyncio.AbstractEventLoop,
 ) -> PrefetchedByteRanges | None:
     """
-    Run stats and bloom pruning for one SplitScan and issue async reads.
+    Prune row groups and compute filter/payload byte ranges for one split.
 
     Parameters
     ----------
     scan
-        The split scan task to prefetch.
+        The split scan to plan.
     stream
-        CUDA stream used for filter expression compilation.
-    pinned_mr
-        Pinned memory resource to allocate host buffers from.
-    context
-        rapidsmpf context used for pinned memory reservation.
-    loop
-        Event loop used to submit the reservation coroutine from a worker thread.
+        CUDA stream used for filter expression compilation and stats pruning.
 
     Returns
     -------
     PrefetchedByteRanges | None
-        None when the split cannot use the hybrid-scan path, signalling
-        the producer to fall back to SplitScan.do_evaluate.
+        ``None`` if this split cannot use hybrid scan (missing metadata or
+        predicate). :meth:`PrefetchedByteRanges.empty` if all row groups were
+        pruned away. Otherwise a result with ``filter_ranges`` and
+        ``payload_ranges`` set.
     """
     cached_info = scan.cached_parquet_info
     if cached_info is None:
@@ -199,23 +200,66 @@ def prefetch_scan_byte_ranges(
             row_group_indices, options
         )
 
-    handle = cached_info[0].remote_handle()
-    filter_bytes = sum(r.size for r in filter_ranges)
-    payload_bytes = sum(r.size for r in payload_ranges)
-    with nvtx_annotate_cudf_polars(
-        message=f"pread_filter_and_payload [{scan.split_index + 1}/{scan.total_splits}]:filter={filter_bytes}B,payload={payload_bytes}B"
-    ):
-        filter_host, filter_futures, filter_buf = pread_ranges(
-            handle, filter_ranges, pinned_mr, stream, context, loop
-        )
-        payload_host, payload_futures, payload_buf = pread_ranges(
-            handle, payload_ranges, pinned_mr, stream, context, loop
-        )
-
     return PrefetchedByteRanges(
         row_group_indices=row_group_indices,
         filter_ranges=filter_ranges,
         payload_ranges=payload_ranges,
+        filter_host=None,
+        payload_host=None,
+    )
+
+
+def prefetch_scan_byte_ranges(
+    scan: SplitScan,
+    stream: Stream,
+    pinned_mr: PinnedMemoryResource,
+    context: Context,
+    loop: asyncio.AbstractEventLoop,
+) -> PrefetchedByteRanges | None:
+    """
+    Run stats and bloom pruning for one SplitScan and prefetch byte ranges.
+
+    Parameters
+    ----------
+    scan
+        The split scan task to prefetch.
+    stream
+        CUDA stream used for filter expression compilation.
+    pinned_mr
+        Pinned memory resource to allocate host buffers from.
+    context
+        rapidsmpf context.
+    loop
+        Event loop for the calling async context.
+
+    Returns
+    -------
+    PrefetchedByteRanges | None
+        None when the split cannot use the hybrid-scan path, signalling
+        the producer to fall back to SplitScan.do_evaluate.
+    """
+    planned = _plan_hybrid_scan_prefetch(scan, stream)
+    if planned is None or not planned.row_group_indices:
+        return planned
+
+    assert scan.cached_parquet_info is not None
+    handle = scan.cached_parquet_info[0].remote_handle()
+    filter_bytes = sum(r.size for r in planned.filter_ranges)
+    payload_bytes = sum(r.size for r in planned.payload_ranges)
+    with nvtx_annotate_cudf_polars(
+        message=f"pread_filter_and_payload [{scan.split_index + 1}/{scan.total_splits}]:filter={filter_bytes}B,payload={payload_bytes}B"
+    ):
+        filter_host, filter_futures, filter_buf = pread_ranges(
+            handle, planned.filter_ranges, pinned_mr, stream, context, loop
+        )
+        payload_host, payload_futures, payload_buf = pread_ranges(
+            handle, planned.payload_ranges, pinned_mr, stream, context, loop
+        )
+
+    return PrefetchedByteRanges(
+        row_group_indices=planned.row_group_indices,
+        filter_ranges=planned.filter_ranges,
+        payload_ranges=planned.payload_ranges,
         filter_host=filter_host,
         payload_host=payload_host,
         filter_futures=filter_futures,
@@ -225,28 +269,83 @@ def prefetch_scan_byte_ranges(
     )
 
 
-# TODO: Replace with a cucascade::io::datasource that accepts fadvise() hints
-# issued before evaluation, so pre-reading is driven by the datasource layer
-# rather than a separate host-pinned executor.
-class HybridScanPrefetchExecutor:
-    """Prefetch executor for SplitScan tasks."""
+def fadvise_scan_byte_ranges(
+    scan: SplitScan,
+    stream: Stream,
+    datasource_cache: dict[str, Any],
+    dev_id: int,
+) -> PrefetchedByteRanges | None:
+    """
+    Run stats and bloom pruning for one SplitScan and prefetch byte ranges.
 
-    _thread_local: threading.local = threading.local()
+    Parameters
+    ----------
+    scan
+        The split scan task to prefetch.
+    stream
+        CUDA stream used for filter expression compilation.
+    datasource_cache
+        Per-query cache mapping file path to its open datasource.
+    dev_id
+        CUDA device id for staging.
+
+    Returns
+    -------
+    PrefetchedByteRanges | None
+        None when the split cannot use the hybrid-scan path, signalling
+        the producer to fall back to SplitScan.do_evaluate.
+    """
+    planned = _plan_hybrid_scan_prefetch(scan, stream)
+    if planned is None or not planned.row_group_indices:
+        return planned
+
+    datasource = datasource_cache[scan.paths[0]].duplicate()
+
+    all_ranges = [
+        (r.offset, r.size) for r in planned.filter_ranges + planned.payload_ranges
+    ]
+    filter_bytes = sum(r.size for r in planned.filter_ranges)
+    payload_bytes = sum(r.size for r in planned.payload_ranges)
+    with nvtx_annotate_cudf_polars(
+        message=f"fadvise [{scan.split_index + 1}/{scan.total_splits}]:filter={filter_bytes}B,payload={payload_bytes}B"
+    ):
+        datasource.fadvise(all_ranges, dev_id)
+
+    return PrefetchedByteRanges(
+        row_group_indices=planned.row_group_indices,
+        filter_ranges=planned.filter_ranges,
+        payload_ranges=planned.payload_ranges,
+        filter_host=None,
+        payload_host=None,
+        datasource=datasource,
+    )
+
+
+class HybridScanPrefetchExecutor:
+    """
+    Prefetch executor for SplitScan tasks.
+
+    Submits prefetch work for all splits upfront. Use as a context manager.
+    """
+
+    thread_local: threading.local = threading.local()
 
     @staticmethod
-    def _init_stream() -> None:
-        # One stream per thread, reused across all tasks that thread picks up.
-        # PinnedBuffer holds a reference to the stream and uses it in __del__
-        # for deallocation, so the stream must outlive any buffer the thread creates.
-        HybridScanPrefetchExecutor._thread_local.stream = Stream()
+    def init_stream() -> None:
+        """Initialise a per-thread CUDA stream."""
+        HybridScanPrefetchExecutor.thread_local.stream = Stream()
 
     def __init__(
         self,
         futures: list[Future[PrefetchedByteRanges | None]],
         executor: ThreadPoolExecutor,
-    ):
+        engine: Any = None,
+        datasource_cache: dict[str, Any] | None = None,
+    ) -> None:
         self.futures = futures
-        self._executor = executor
+        self.executor = executor
+        self.engine = engine
+        self.datasource_cache = datasource_cache or {}
 
     @classmethod
     def from_scans(
@@ -254,6 +353,7 @@ class HybridScanPrefetchExecutor:
         scans: list[SplitScan],
         num_workers: int,
         context: Context,
+        prefetch_backend: str,
     ) -> Self:
         """
         Submit prefetch tasks for all scans.
@@ -265,7 +365,9 @@ class HybridScanPrefetchExecutor:
         num_workers
             Number of background worker threads.
         context
-            rapidsmpf context. ``context.br().pinned_mr`` must not be ``None``.
+            rapidsmpf context.
+        prefetch_backend
+            ``"kvikio"`` or ``"cucascade"``.
 
         Returns
         -------
@@ -274,28 +376,73 @@ class HybridScanPrefetchExecutor:
         Raises
         ------
         ValueError
-            If ``context.br().pinned_mr`` is ``None``.
+            If pinned memory is required but not available.
+        ImportError
+            If ``prefetch_backend`` is ``"cucascade"`` and the ``cucascade``
+            package is not installed.
         """
-        pinned_mr = context.br().pinned_mr
-        if pinned_mr is None:
-            raise ValueError(
-                "HybridScanPrefetchExecutor requires a PinnedMemoryResource; "
-                "enable pinned memory via --pinned-memory."
-            )
-        loop = asyncio.get_running_loop()
         executor = ThreadPoolExecutor(
             max_workers=num_workers,
-            initializer=cls._init_stream,
+            initializer=cls.init_stream,
             thread_name_prefix="hybrid-prefetch",
         )
 
-        def _task(s: SplitScan) -> PrefetchedByteRanges | None:
-            return prefetch_scan_byte_ranges(
-                s, cls._thread_local.stream, pinned_mr, context, loop
-            )
+        if prefetch_backend == "cucascade":
+            if cucascade is None:
+                raise ImportError(
+                    "prefetch_backend='cucascade' requires the cucascade package"
+                )
+            first_path = scans[0].paths[0] if scans else ""
+            # TODO: replace with cucascade.RestEngine.from_environment() once
+            # cuCascade exposes a factory that reads standard AWS env vars directly.
+            if plc.io.SourceInfo._is_remote_uri(first_path):
+                engine = cucascade.RestEngine(
+                    access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", ""),
+                    secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
+                    session_token=os.environ.get("AWS_SESSION_TOKEN", ""),
+                    region=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
+                    endpoint=os.environ.get("AWS_ENDPOINT_URL", ""),
+                )
+            else:
+                engine = cucascade.UringEngine()
 
-        futures = [executor.submit(_task, scan) for scan in scans]
-        return cls(futures, executor)
+            _, dev_id = cudart.cudaGetDevice()
+
+            datasource_cache: dict[str, Any] = {}
+            for scan in scans:
+                path = scan.paths[0]
+                if path not in datasource_cache:
+                    datasource_cache[path] = engine.open(path)
+
+            def task(s: SplitScan) -> PrefetchedByteRanges | None:
+                return fadvise_scan_byte_ranges(
+                    s, cls.thread_local.stream, datasource_cache, dev_id
+                )
+
+        else:
+            datasource_cache = {}
+            pinned_mr = context.br().pinned_mr
+            if pinned_mr is None:
+                raise ValueError(
+                    "HybridScanPrefetchExecutor requires a PinnedMemoryResource; "
+                    "enable pinned memory via --pinned-memory."
+                )
+            loop = asyncio.get_running_loop()
+
+            def task(s: SplitScan) -> PrefetchedByteRanges | None:
+                return prefetch_scan_byte_ranges(
+                    s, cls.thread_local.stream, pinned_mr, context, loop
+                )
+
+        futures = [executor.submit(task, scan) for scan in scans]
+        return cls(
+            futures,
+            executor,
+            engine=engine if prefetch_backend == "cucascade" else None,
+            datasource_cache=datasource_cache
+            if prefetch_backend == "cucascade"
+            else None,
+        )
 
     def __enter__(self) -> Self:
         """Enter the context manager."""
@@ -303,8 +450,11 @@ class HybridScanPrefetchExecutor:
 
     def __exit__(self, *args: Any) -> None:
         """Shut down the thread pool, cancelling pending futures."""
-        self._executor.shutdown(cancel_futures=True, wait=False)
+        self.executor.shutdown(cancel_futures=True, wait=True)
+        self.futures.clear()
+        self.datasource_cache.clear()
+        self.engine = None
 
     def result(self, task_idx: int) -> PrefetchedByteRanges | None:
-        """Block until the tasks' prefetch result is ready and return it."""
+        """Block until the prefetch result for ``task_idx`` is ready."""
         return self.futures[task_idx].result()
