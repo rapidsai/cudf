@@ -16,6 +16,7 @@
 #include <iterator>
 #include <memory>
 #include <span>
+#include <vector>
 
 namespace cudf::detail::row::equality {
 namespace comparator_detail {
@@ -25,14 +26,19 @@ auto make_device_comparators(std::span<std::shared_ptr<preprocessed_table> const
                              Factory factory,
                              rmm::cuda_stream_view stream)
 {
-  auto host_comparators =
-    cudf::detail::make_empty_pinned_vector<Equality>(preprocessed_rhs.size(), stream);
+  using allocator_type  = cudf::detail::rmm_host_allocator<Equality>;
+  auto host_comparators = std::vector<Equality, allocator_type>{
+    allocator_type{cudf::get_pinned_memory_resource(), stream}};
+  host_comparators.reserve(preprocessed_rhs.size());
   std::transform(preprocessed_rhs.begin(),
                  preprocessed_rhs.end(),
                  std::back_inserter(host_comparators),
                  factory);
   return cudf::detail::make_device_uvector_async(
-    host_comparators, stream, cudf::get_current_device_resource_ref());
+    cudf::host_span<Equality const>{
+      host_comparators.data(), host_comparators.size(), /*is_device_accessible=*/true},
+    stream,
+    cudf::get_current_device_resource_ref());
 }
 
 }  // namespace comparator_detail
