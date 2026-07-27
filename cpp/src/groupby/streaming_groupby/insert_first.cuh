@@ -45,7 +45,9 @@ size_type streaming_groupby::impl::probe_and_insert_first_batch(
   auto const batch_self_cmp = cudf::detail::row::equality::self_comparator{preprocessed_batch};
   auto batch_self_eq        = batch_self_cmp.equal_to<has_nested>(has_null, null_equality::EQUAL);
 
-  // Store the state-heavy comparator once rather than inlining a copy into each CUB agent item.
+  // This device buffer is intentional: invoking the primitive row comparator indirectly prevents
+  // NVCC from inlining its expensive template graph into the CUB kernel, reducing build time and
+  // binary size.
   rmm::device_buffer d_batch_self_eq(sizeof(batch_self_eq), stream, temp_mr);
   auto* const d_batch_self_eq_ptr = static_cast<decltype(batch_self_eq)*>(d_batch_self_eq.data());
   cudf::detail::cuda_memcpy_async(
