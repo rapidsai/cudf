@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -490,14 +490,149 @@ TEST_F(ExtractVariantFieldTest, SyntaxErrors)
 {
   auto col    = wrap_single_variant(build_metadata({}), enc_int32(1));
   auto stream = cudf::test::get_default_stream();
-  // Only object-key descent is supported — array indexing, bracket steps, and quoted keys should
-  // throw, alongside malformed paths.
-  for (auto const* bad : {"$..a", "$.a[0]", "$.a[", "$.a[]", "$.", "$['x']", "$.a[*]"}) {
+  // Object-key descent and array-index steps are supported; wildcards, quoted keys, negative
+  // indices, out-of-range indices, and other malformed bracket forms must throw.
+  for (auto const* bad : {"$..a",
+                          "$.a[",
+                          "$.a[]",
+                          "$.",
+                          "$['x']",
+                          "$.a[*]",
+                          "$.a[-1]",
+                          "$.a[+1]",
+                          "$.a[ 1]",
+                          "$.a[01x]",
+                          "$.a[1",
+                          "$.a[99999999999999999999]"}) {
     EXPECT_THROW(
       static_cast<void>(cudf::io::parquet::experimental::get_variant_field(col, bad, stream)),
       std::invalid_argument)
       << "path that should have thrown: " << bad;
   }
+}
+
+TEST_F(ExtractVariantFieldTest, ApacheArrayPrimitiveIndexing)
+{
+  // array_primitive encodes the int8 array [2, 1, 5, 9]; index into it via "[N]" steps.
+  auto col       = make_apache_variant(avf::array_primitive);
+  auto stream    = cudf::test::get_default_stream();
+  auto const i8  = cudf::data_type{cudf::type_id::INT8};
+  auto const get = [&](char const* path) {
+    return cudf::io::parquet::experimental::extract_variant_field(col, path, i8, stream);
+  };
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*get("$[0]"),
+                                 cudf::test::fixed_width_column_wrapper<int8_t>{int8_t{2}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*get("$[2]"),
+                                 cudf::test::fixed_width_column_wrapper<int8_t>{int8_t{5}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*get("$[3]"),
+                                 cudf::test::fixed_width_column_wrapper<int8_t>{int8_t{9}});
+
+  // Leading zeros are allowed
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*get("$[00]"),
+                                 cudf::test::fixed_width_column_wrapper<int8_t>{int8_t{2}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*get("$[01]"),
+                                 cudf::test::fixed_width_column_wrapper<int8_t>{int8_t{1}});
+
+  // Out-of-bounds index resolves to null.
+  cudf::test::fixed_width_column_wrapper<int8_t> const null_expected({0}, {false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*get("$[4]"), null_expected);
+
+  // Exercise 2-, 3-, and 4-byte offsets with a four-byte element count.
+  for (uint8_t offset_size = 2; offset_size <= 4; ++offset_size) {
+    auto const value_header = static_cast<uint8_t>(0x04 | (offset_size - 1));
+    std::vector<uint8_t> value{static_cast<uint8_t>(0x03 | (value_header << 2)), 1, 0, 0, 0};
+    value.insert(value.end(), offset_size, 0);  // offsets[0]
+    value.push_back(2);                         // offsets[1]
+    value.insert(value.end(), offset_size - 1, 0);
+    value.insert(value.end(), {0x0c, 42});  // INT8(42)
+
+    auto wide_col = wrap_single_variant(build_metadata({}), value);
+    auto got = cudf::io::parquet::experimental::extract_variant_field(wide_col, "$[0]", i8, stream);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got,
+                                   cudf::test::fixed_width_column_wrapper<int8_t>{int8_t{42}});
+  }
+}
+
+TEST_F(ExtractVariantFieldTest, ArrayIndexingTypeMismatchAndBounds)
+{
+  // array_primitive is the int8 array [2, 1, 5, 9]. An object-key step against an array, an
+  // out-of-bounds index, and an index step against a non-array element all resolve to null.
+  auto col      = make_apache_variant(avf::array_primitive);
+  auto stream   = cudf::test::get_default_stream();
+  auto const i8 = cudf::data_type{cudf::type_id::INT8};
+  cudf::test::fixed_width_column_wrapper<int8_t> const null_expected({0}, {false});
+
+  // Object-key descent into an array value: no such key -> null.
+  auto key_on_array =
+    cudf::io::parquet::experimental::extract_variant_field(col, "$.foo", i8, stream);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*key_on_array, null_expected);
+
+  // Index step against a primitive element (after first descending into it): non-array -> null.
+  auto index_on_primitive =
+    cudf::io::parquet::experimental::extract_variant_field(col, "$[0][0]", i8, stream);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*index_on_primitive, null_expected);
+}
+
+TEST_F(ExtractVariantFieldTest, EmptyArrayIndexing)
+{
+  auto col      = make_apache_variant(avf::array_empty);
+  auto stream   = cudf::test::get_default_stream();
+  auto const i8 = cudf::data_type{cudf::type_id::INT8};
+  cudf::test::fixed_width_column_wrapper<int8_t> const null_expected({0}, {false});
+
+  for (auto const* path : {"$[0]", "$[1]"}) {
+    SCOPED_TRACE(std::string{"path: "} + path);
+    auto got = cudf::io::parquet::experimental::extract_variant_field(col, path, i8, stream);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, null_expected);
+  }
+
+  // Truncated counts/tables, decreasing offsets, and offsets beyond the values region yield null.
+  for (auto const& value : std::vector<std::vector<uint8_t>>{{0x13},
+                                                             {0x03, 0x01, 0x00},
+                                                             {0x03, 0x01, 0x02, 0x01, 0x0c, 42},
+                                                             {0x03, 0x01, 0x00, 0x03, 0x0c, 42}}) {
+    auto malformed_col = wrap_single_variant(build_metadata({}), value);
+    auto got =
+      cudf::io::parquet::experimental::extract_variant_field(malformed_col, "$[0]", i8, stream);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, null_expected);
+  }
+}
+
+TEST_F(ExtractVariantFieldTest, MixedObjectArrayTraversal)
+{
+  // array_nested encodes:
+  //   [ {id:1, thing:{names:["Contrarian","Spider"]}},
+  //     null,
+  //     {id:2, names:["Apple","Ray",null], type:"if"} ]
+  auto col    = make_apache_variant(avf::array_nested);
+  auto stream = cudf::test::get_default_stream();
+
+  auto const check_str = [&](char const* path, char const* expected) {
+    SCOPED_TRACE(std::string{"path: "} + path);
+    auto got = cudf::io::parquet::experimental::extract_variant_field(
+      col, path, cudf::data_type{cudf::type_id::STRING}, stream);
+    cudf::test::strings_column_wrapper const expected_col({expected});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected_col);
+  };
+  auto const check_null = [&](char const* path) {
+    SCOPED_TRACE(std::string{"path: "} + path);
+    auto got = cudf::io::parquet::experimental::extract_variant_field(
+      col, path, cudf::data_type{cudf::type_id::STRING}, stream);
+    cudf::test::strings_column_wrapper const null_col({""}, {false});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, null_col);
+  };
+
+  check_str("$[2].type", "if");
+  check_str("$[0].thing.names[0]", "Contrarian");
+  check_str("$[0].thing.names[1]", "Spider");
+  check_str("$[2].names[0]", "Apple");
+  check_str("$[2].names[1]", "Ray");
+
+  check_null("$[1].id");        // element 1 is a JSON null
+  check_null("$[0].name");      // element 0 has no "name" key (it has "thing")
+  check_null("$[2].names[2]");  // third name is null
+  check_null("$[2].names[3]");  // out-of-bounds array index
 }
 
 TEST_F(ExtractVariantFieldTest, LargeDictionaryAndObjectScan)
