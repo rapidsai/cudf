@@ -696,9 +696,19 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithBloomFiltersRealData)
   auto const input_row_group_indices = reader->all_row_groups(options);
   ASSERT_EQ(input_row_group_indices.size(), num_sources);
 
-  auto const [bloom_byte_ranges, bloom_source_map] =
+  auto const bloom_ranges_and_source_map =
     reader->bloom_filters_byte_ranges(input_row_group_indices, options);
-  ASSERT_EQ(bloom_byte_ranges.size(), static_cast<size_t>(num_sources));
+  auto const& [bloom_byte_ranges, bloom_source_map] = bloom_ranges_and_source_map;
+
+  // One byte range per (row group, bloom filter column) pair across all sources. Only
+  // `r_reason_desc` carries an equality predicate, so there is a single bloom filter column.
+  auto constexpr num_bloom_filter_columns = 1;
+  auto const total_row_groups =
+    std::accumulate(input_row_group_indices.begin(),
+                    input_row_group_indices.end(),
+                    std::size_t{0},
+                    [](auto sum, auto const& rgs) { return sum + rgs.size(); });
+  ASSERT_EQ(bloom_byte_ranges.size(), total_row_groups * num_bloom_filter_columns);
   ASSERT_EQ(bloom_byte_ranges.size(), bloom_source_map.size());
   std::vector<cudf::size_type> expected_source_map(num_sources);
   std::iota(expected_source_map.begin(), expected_source_map.end(), 0);
@@ -707,15 +717,13 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithBloomFiltersRealData)
     return r.is_empty();
   }));
 
-  std::vector<std::vector<byte_range_info>> ranges_per_source(num_sources);
-  for (size_t i = 0; i < bloom_byte_ranges.size(); ++i) {
-    ASSERT_LT(bloom_source_map[i], num_sources);
-    ranges_per_source[bloom_source_map[i]].push_back(bloom_byte_ranges[i]);
-  }
-  auto [bloom_buffers, bloom_data_per_source, bloom_tasks] =
-    cudf::io::parquet::fetch_byte_ranges_to_device_async(
+  auto const ranges_per_source =
+    group_byte_ranges_by_source(bloom_ranges_and_source_map, inputs.datasources.size());
+
+  // Bloom filters must be fetched with `fetch_bloom_filters_to_device`
+  [[maybe_unused]] auto [bloom_buffers, bloom_data_per_source] =
+    cudf::io::parquet::fetch_bloom_filters_to_device(
       inputs.datasource_refs, ranges_per_source, stream, aligned_mr);
-  bloom_tasks.get();
   for (auto const& per_source : bloom_data_per_source) {
     ASSERT_EQ(per_source.size(), 1);
   }

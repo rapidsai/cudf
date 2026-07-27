@@ -636,6 +636,13 @@ aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
   // Compute total number of input row groups
   auto const total_row_groups = compute_total_row_groups(row_group_indices);
 
+  // Ensure there is one bloom filter data span per eligible column in each row group
+  CUDF_EXPECTS(bloom_filter_data.size() ==
+                 static_cast<std::size_t>(total_row_groups) * bloom_filter_col_schemas.size(),
+               "Bloom filter data size must match the number of row groups times the number of "
+               "columns with bloom filters and an equality predicate",
+               std::invalid_argument);
+
   // Transform bloom filter data to cuda::std::byte type for apply_bloom_filters
   std::vector<cudf::device_span<cuda::std::byte const>> transformed_bloom_filter_data;
   transformed_bloom_filter_data.reserve(bloom_filter_data.size());
