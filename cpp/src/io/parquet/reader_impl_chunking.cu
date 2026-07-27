@@ -543,10 +543,7 @@ void reader_impl::compute_input_passes(read_mode mode)
       ? static_cast<size_t>(_input_pass_read_limit * input_limit_compression_reserve)
       : std::numeric_limits<std::size_t>::max();
 
-  // Size each row group by the column chunks we are actually going to read.
-  // `create_global_chunk_info()` has already built one `ColumnChunkDesc` per (row group, selected
-  // input column), so this is an exact measure of the compressed bytes a pass will hold rather than
-  // an estimate over the whole row group.
+  // Compute size information for each row group by the column chunks we are actually going to read
   auto const row_group_sizes =
     compute_row_group_size_info(row_groups_info, _file_itm_data.chunks, _input_columns.size());
 
