@@ -350,11 +350,13 @@ struct rle_stream {
     __shared__ int values_processed_shared;
     __shared__ int decode_index_shared;
     __shared__ int fill_index_shared;
-    cg::invoke_one(group, [&]() {
+    // Do not use cg::invoke_one here: rle_stream member state is per-thread,
+    // so persistent state must be owned by a stable, well-defined thread.
+    if (group.thread_rank() == 0) {
       values_processed_shared = 0;
       decode_index_shared     = decode_index;
       fill_index_shared       = fill_index;
-    });
+    }
 
     group.sync();
 
@@ -369,7 +371,9 @@ struct rle_stream {
       if (warp_id == 0) {
         // fill the next set of runs. fill_runs will generally be the bottleneck for any
         // kernel that uses an rle_stream.
-        cg::invoke_one(warp, [&]() {
+        // Do not use cg::invoke_one here: fill_run_batch() advances per-thread
+        // stream cursors, so the ring producer must always be lane 0.
+        if (warp_lane == 0) {
           fill_run_batch();
           if (decode_index == -1) {
             // first time, set it to the beginning of the buffer (rolled)
@@ -377,7 +381,7 @@ struct rle_stream {
             decode_index_shared = decode_index;
           }
           fill_index_shared = fill_index;
-        });
+        }
       }
       // remaining warps decode the runs, starting on the second iteration of this. the pipeline of
       // runs is also persistent across calls to decode_next, so on the second call to decode_next,
@@ -413,7 +417,7 @@ struct rle_stream {
                                              warp_lane);
 
           warp.sync();
-          cg::invoke_one(warp, [&]() {
+          if (warp_lane == 0) {
             // after writing this batch, are we at the end of the output buffer?
             auto const at_end = ((last_run_pos + batch_len - cur_values) == output_count);
 
@@ -427,7 +431,7 @@ struct rle_stream {
               decode_index_shared = run_index + 1;
             }
             run.remaining = remaining;
-          });
+          }
         }
       }
       group.sync();
@@ -494,12 +498,14 @@ struct rle_stream {
     // values or run out of encoded input.
     while (out_pos_total < out_end) {
       // ----- Phase 1: single-thread run-header parse ------------------
-      // One thread (via cg::invoke_one) walks the encoded stream, decoding
-      // VLQ run headers and filling chunk_out_off / chunk_meta. The other
-      // threads wait at the group.sync() below. This is cheap because it is
-      // bounded by max_runs_per_chunk headers and header parsing is
+      // Thread 0 walks the encoded stream, decoding VLQ run headers and
+      // filling chunk_out_off / chunk_meta. Do not use cg::invoke_one here:
+      // it may choose different threads across calls, but cur and partial_run_*
+      // are per-thread rle_stream state that must persist on thread 0.
+      // The other threads wait at the group.sync() below. This is cheap because
+      // it is bounded by max_runs_per_chunk headers and header parsing is
       // inherently serial.
-      cg::invoke_one(group, [&]() {
+      if (group.thread_rank() == 0) {
         int run_prefix_end    = 0;
         int num_runs          = 0;
         int out_base          = out_pos_total;
@@ -575,7 +581,7 @@ struct rle_stream {
         s_chunk_runs  = num_runs;
         s_chunk_total = run_prefix_end;
         s_base_out    = out_base;
-      });
+      }
       group.sync();
 
       // ----- Phase 2: cooperative expand ------------------------------
