@@ -8,7 +8,6 @@ import copy
 import itertools
 import textwrap
 import warnings
-from collections import Counter
 from collections.abc import Mapping
 from typing import (
     TYPE_CHECKING,
@@ -4818,33 +4817,20 @@ class IndexedFrame(Frame):
         names: Hashable | Sequence[Hashable] | None = None,
     ):
         """Shared path for DataFrame.reset_index and Series.reset_index."""
-        if names is not None:
+        if allow_duplicates is not False:
+            raise NotImplementedError(
+                "allow_duplicates is not currently supported."
+            )
+        elif names is not None:
             raise NotImplementedError("names is not currently supported.")
         if level is not None:
             if not isinstance(level, (tuple, list)):
                 level = (level,)
-            nlevels = self.index.nlevels
-            for lv in level:
-                if isinstance(lv, int):
-                    lv_norm = lv + nlevels if lv < 0 else lv
-                    if lv_norm >= nlevels:
-                        if nlevels == 1:
-                            raise IndexError(
-                                f"Too many levels: Index has only 1 level, "
-                                f"not {lv_norm + 1}"
-                            )
-                        else:
-                            raise IndexError(
-                                f"Too many levels: Index has only {nlevels} "
-                                f"levels, not {lv_norm + 1}"
-                            )
-                elif not isinstance(self.index, MultiIndex):
-                    if lv != self.index.name:
-                        raise KeyError(
-                            f"Requested level ({lv}) does not match index "
-                            f"name ({self.index.name})"
-                        )
-        _check_duplicate_level_names(level, self.index.names)
+            # Normalize to level numbers, which also validates the labels
+            # (out of bounds, unknown name, ambiguous duplicate name).
+            level = tuple(
+                self.index._level_index_from_level(lv) for lv in level
+            )
 
         index = self.index._new_index_for_reset_index(level, self.index.name)
         if index is None:
@@ -4881,14 +4867,10 @@ class IndexedFrame(Frame):
                         for i in range(nlevels)
                     )
             new_column_items.append((name, col))
-        if allow_duplicates is not False:
-            raise NotImplementedError(
-                "allow_duplicates is not currently supported."
-            )
         seen = set(self._data.keys())
         for name, _ in new_column_items:
             if name in seen:
-                raise ValueError(f"cannot insert {name!r}, already exists")
+                raise ValueError(f"cannot insert {name}, already exists")
             seen.add(name)
         new_column_data = dict(new_column_items)
         # This is to match pandas where the new data columns are always
@@ -7193,23 +7175,6 @@ class IndexedFrame(Frame):
             normalize_token(self.index),
             normalize_token(self.hash_values().to_numpy()),
         ]
-
-
-def _check_duplicate_level_names(specified, level_names):
-    """Raise if any of `specified` has duplicates in `level_names`."""
-    if specified is None:
-        return
-    if len(set(level_names)) == len(level_names):
-        return
-    duplicates = {key for key, val in Counter(level_names).items() if val > 1}
-
-    duplicates_specified = [spec for spec in specified if spec in duplicates]
-    if not len(duplicates_specified) == 0:
-        # Note: pandas raises first encountered duplicates, cuDF raises all.
-        raise ValueError(
-            f"The names {duplicates_specified} occurs multiple times, use a"
-            " level number"
-        )
 
 
 @_performance_tracking
