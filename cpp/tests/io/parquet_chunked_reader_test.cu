@@ -518,6 +518,96 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
   }
 }
 
+// Regression test for an out-of-bounds write in the Parquet string-offset preprocessing
+// (preprocess_string_offsets_kernel / compute_page_offset_count). For plain-encoded (non-
+// dictionary) list<string> columns, a single list row can span multiple data pages, producing
+// data pages that contain 0 rows. When a subpass row-boundary fell exactly on such a 0-row page,
+// the host-side offset-buffer sizing skipped the page while the decode-side kernels still wrote
+// its offsets, writing one element past the end of the string offset buffer.
+//
+// This test induces page-spanning list rows (0-row pages) and reads across subpass boundaries
+// that land on them, using both chunked reads and skip_rows/num_rows windows. It validates output
+// correctness and is especially effective under compute-sanitizer (memcheck).
+TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithPlainListOfStringSpanningPages)
+{
+  auto constexpr num_rows   = 2'000;
+  auto constexpr giant_row  = 1'000;
+  auto constexpr giant_size = 40'000;  // list length of the page-spanning row
+  auto constexpr small_size = 3;
+
+  // Build a list<string> column where one row is large enough to span many small data pages.
+  std::vector<cudf::size_type> list_sizes(num_rows, small_size);
+  list_sizes[giant_row] = giant_size;
+
+  std::vector<cudf::size_type> offsets(num_rows + 1, 0);
+  for (int i = 0; i < num_rows; ++i) {
+    offsets[i + 1] = offsets[i] + list_sizes[i];
+  }
+  auto const num_children = offsets.back();
+
+  // Distinct strings so the writer uses PLAIN (not dictionary) encoding.
+  std::vector<std::string> child_strings(num_children);
+  for (int i = 0; i < num_children; ++i) {
+    child_strings[i] = "str_" + std::to_string(i);
+  }
+
+  auto child_col   = strings_col(child_strings.begin(), child_strings.end()).release();
+  auto offsets_col = int32s_col(offsets.begin(), offsets.end()).release();
+  auto list_col    = cudf::make_lists_column(
+    num_rows, std::move(offsets_col), std::move(child_col), 0, rmm::device_buffer{});
+
+  std::vector<std::unique_ptr<cudf::column>> cols;
+  cols.push_back(std::move(list_col));
+  auto const expected = std::make_unique<cudf::table>(std::move(cols));
+
+  // Write plain-encoded (no dictionary, no delta/v2) with small pages so the giant row spans
+  // multiple pages, forcing 0-row continuation pages.
+  auto const filepath = temp_env->get_temp_filepath("chunked_plain_list_string_spanning.parquet");
+  auto const write_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected->view())
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER)
+      .write_v2_headers(false)
+      .compression(cudf::io::compression_type::NONE)
+      .max_page_size_bytes(4 * 1024)
+      .max_page_size_rows(128)
+      .build();
+  cudf::io::write_parquet(write_opts);
+
+  // Full read baseline.
+  {
+    auto const opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).build();
+    auto const result = cudf::io::read_parquet(opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
+  }
+
+  // Chunked reads with small byte limits create subpass boundaries that can fall on the giant
+  // row's 0-row pages.
+  for (auto const output_limit : std::vector<std::size_t>{1, 1'000, 50'000, 500'000}) {
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), *result);
+  }
+
+  // Non-chunked reads whose skip_rows/num_rows window starts or ends inside the page-spanning
+  // row, so the subpass boundary lands on a 0-row page (both the start- and end-boundary cases).
+  auto const check_bounds = [&](cudf::size_type skip, cudf::size_type num) {
+    auto const opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+                        .skip_rows(skip)
+                        .num_rows(num)
+                        .build();
+    auto const result = cudf::io::read_parquet(opts);
+    auto const expected_slice =
+      cudf::slice(expected->view(), std::vector<cudf::size_type>{skip, skip + num});
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_slice.front(), result.tbl->view());
+  };
+
+  for (cudf::size_type skip = giant_row - 2; skip <= giant_row + 2; ++skip) {
+    for (cudf::size_type end = giant_row - 1; end <= giant_row + 3; ++end) {
+      if (end > skip && end <= num_rows) { check_bounds(skip, end - skip); }
+    }
+  }
+}
+
 TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStringPrecise)
 {
   auto constexpr num_rows = 60'000;

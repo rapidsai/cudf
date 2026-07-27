@@ -1141,6 +1141,28 @@ TEST_F(OrcWriterTest, SlicedValidMask)
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
+TEST_F(OrcReaderTest, ZeroColumnsPreservesRowCount)
+{
+  GTEST_SKIP() << "Zero-column / N-row ORC reads are not yet supported. See "
+                  "https://github.com/rapidsai/cudf/issues/22935).";
+
+  constexpr cudf::size_type num_rows = 8;
+  cudf::test::fixed_width_column_wrapper<int32_t> col{0, 1, 2, 3, 4, 5, 6, 7};
+  cudf::table_view input{{col}};
+
+  auto filepath = temp_env->get_temp_filepath("OrcZeroColumns.orc");
+  cudf::io::write_orc(cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, input));
+
+  // Project no columns: the result should be (num_rows, 0), not (0, 0).
+  auto in_opts = cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath})
+                   .columns(std::vector<std::string>{})
+                   .build();
+  auto result = cudf::io::read_orc(in_opts);
+
+  EXPECT_EQ(result.tbl->view().num_columns(), 0);
+  EXPECT_EQ(result.tbl->view().num_rows(), num_rows);
+}
+
 TEST_F(OrcReaderTest, SingleInputs)
 {
   srand(31533);

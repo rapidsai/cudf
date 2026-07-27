@@ -855,6 +855,12 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
   // Return if empty row group indices
   if (row_group_indices.empty()) { return cudf::make_empty_column(cudf::type_id::BOOL8); }
 
+  // TODO(#22900): remove this guard once this path maps schema indices per source. It currently
+  // reuses one source's schema index for every source, so it is correct only when schemas match.
+  CUDF_EXPECTS(schema_idx_maps.empty(),
+               "Page index statistics filtering does not support mismatched Parquet schemas yet",
+               std::invalid_argument);
+
   // Check if we have page index for all columns in all row groups
   auto const has_page_index = compute_has_page_index(per_file_metadata, row_group_indices);
 
@@ -1006,6 +1012,12 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     CUDF_LOG_WARN("Encountered missing Parquet page index for one or more output columns");
     return thrust::host_vector<bool>(0, stream);
   }
+
+  // TODO(#22900): remove this guard once this path maps schema indices per source. It currently
+  // reuses one source's schema index for every source, so it is correct only when schemas match.
+  CUDF_EXPECTS(schema_idx_maps.empty(),
+               "Data page masking does not support mismatched Parquet schemas yet",
+               std::invalid_argument);
 
   // Collect column schema indices from the input columns.
   auto column_schema_indices = std::vector<size_type>(input_columns.size());

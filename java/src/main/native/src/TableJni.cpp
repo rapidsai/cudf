@@ -4755,7 +4755,7 @@ Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv* env,
         0);
     }
 
-    auto keys = input_table->select(key_indices);
+    auto keys = key_indices.empty() ? cudf::table_view{} : input_table->select(key_indices);
     auto null_handling =
       jignore_null_keys ? cudf::null_policy::EXCLUDE : cudf::null_policy::INCLUDE;
     auto keys_are_sorted = jkey_sorted ? cudf::sorted::YES : cudf::sorted::NO;

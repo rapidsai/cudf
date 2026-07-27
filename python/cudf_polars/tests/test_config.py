@@ -30,6 +30,8 @@ from cudf_polars.utils.config import (
     Cluster,
     ConfigOptions,
     DynamicPlanningOptions,
+    InMemoryExecutor,
+    JoinFilterPushdownOptions,
     MemoryResourceConfig,
     StreamingExecutor,
 )
@@ -613,6 +615,9 @@ def test_dynamic_planning_defaults() -> None:
     assert config.executor.dynamic_planning.join_prefilter_threshold == 0.5
     assert config.executor.dynamic_planning.join_prefilter_max_key_columns == 1
     assert not config.executor.dynamic_planning.join_prefilter_trace
+    assert config.executor.join_filter_pushdown is not None
+    assert config.executor.join_filter_pushdown.threshold == 0.5
+    assert not config.executor.join_filter_pushdown.trace
 
 
 def test_dynamic_planning_disabled_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -652,6 +657,31 @@ def test_join_prefilter_options_from_env(monkeypatch: pytest.MonkeyPatch) -> Non
     assert config.executor.dynamic_planning.join_prefilter_threshold == 0.25
     assert config.executor.dynamic_planning.join_prefilter_max_key_columns is None
     assert config.executor.dynamic_planning.join_prefilter_trace
+    assert config.executor.join_filter_pushdown is not None
+    assert config.executor.join_filter_pushdown.threshold == 0.5
+    assert not config.executor.join_filter_pushdown.trace
+
+
+def test_join_filter_pushdown_options_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN__THRESHOLD", "0.125"
+    )
+    monkeypatch.setenv("CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN__TRACE", "1")
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.join_filter_pushdown is not None
+    assert config.executor.join_filter_pushdown.threshold == 0.125
+    assert config.executor.join_filter_pushdown.trace
+
+
+def test_join_filter_pushdown_disabled_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN", "0")
+    monkeypatch.setenv("CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN__TRACE", "1")
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.join_filter_pushdown is None
 
 
 @pytest.mark.parametrize("value, expected", [("none", None), ("null", None), ("2", 2)])
@@ -746,6 +776,65 @@ def test_validate_join_prefilter_trace() -> None:
         )
 
 
+def test_validate_join_filter_pushdown_options() -> None:
+    with pytest.raises(TypeError, match="threshold must be"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"join_filter_pushdown": {"threshold": "bad"}},
+            )
+        )
+    with pytest.raises(ValueError, match="threshold must be between"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"join_filter_pushdown": {"threshold": 1.5}},
+            )
+        )
+    with pytest.raises(TypeError, match="trace must be"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"join_filter_pushdown": {"trace": "bad"}},
+            )
+        )
+
+
+def test_validate_join_filter_pushdown_type() -> None:
+    with pytest.raises(
+        TypeError,
+        match="join_filter_pushdown must be a JoinFilterPushdownOptions instance",
+    ):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"join_filter_pushdown": object()},
+            )
+        )
+
+
+def test_join_filter_pushdown_from_instance() -> None:
+    options = JoinFilterPushdownOptions(threshold=0.25, trace=True)
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            executor_options={"join_filter_pushdown": options},
+        )
+    )
+    assert config.executor.join_filter_pushdown is options
+
+
+def test_join_filter_pushdown_disabled_from_options() -> None:
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            executor_options={"join_filter_pushdown": None},
+        )
+    )
+    assert config.executor.join_filter_pushdown is None
+    assert hash(config) == hash(config)
+
+
 def test_dynamic_planning_from_instance() -> None:
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
@@ -825,3 +914,8 @@ def test_dask_sink_to_directory_false_raises() -> None:
         ValueError, match="The dask cluster requires sink_to_directory=True"
     ):
         StreamingExecutor(cluster=Cluster.DASK, sink_to_directory=False)
+
+
+def test_in_memory_executor_drop_unserializable() -> None:
+    executor = InMemoryExecutor()
+    assert executor.drop_unserializable() is executor

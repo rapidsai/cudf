@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,6 +15,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <cuco/utility/error.hpp>
 
@@ -89,6 +91,54 @@ TEST_F(DistinctJoinTest, IntegerInnerJoin)
   auto constexpr gold_size = size / 2;
   auto gold                = cudf::sequence(gold_size, init, cudf::numeric_scalar<int32_t>{2});
   this->compare_to_reference(right_table, left_table, result, cudf::table_view{{gold->view()}});
+}
+
+TEST_F(DistinctJoinTest, MemoryResource)
+{
+  column_wrapper<int32_t> col0_0{{1, 2, 3, 4, 5}};
+  strcol_wrapper col0_1({"s0", "s0", "s3", "s4", "s5"});
+  column_wrapper<int32_t> col0_2{{9, 9, 9, 9, 9}};
+
+  column_wrapper<int32_t> col1_0{{1, 2, 3, 4, 9}};
+  strcol_wrapper col1_1({"s0", "s0", "s0", "s4", "s4"});
+  column_wrapper<int32_t> col1_2{{9, 9, 9, 0, 9}};
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols0.push_back(col0_2.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+  cols1.push_back(col1_2.release());
+
+  Table right(std::move(cols0));
+  Table left(std::move(cols1));
+
+  auto mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+
+  auto distinct_join = cudf::distinct_hash_join{
+    right.view(), cudf::null_equality::EQUAL, 0.5, cudf::get_default_stream(), mr};
+
+  EXPECT_GT(mr.get_bytes_counter().peak, 0);
+
+  auto result = distinct_join.inner_join(left.view());
+
+  column_wrapper<int32_t> col_gold_0{{1, 2}};
+  strcol_wrapper col_gold_1({"s0", "s0"});
+  column_wrapper<int32_t> col_gold_2{{9, 9}};
+  column_wrapper<int32_t> col_gold_3{{1, 2}};
+  strcol_wrapper col_gold_4({"s0", "s0"});
+  column_wrapper<int32_t> col_gold_5{{9, 9}};
+  CVector cols_gold;
+  cols_gold.push_back(col_gold_0.release());
+  cols_gold.push_back(col_gold_1.release());
+  cols_gold.push_back(col_gold_2.release());
+  cols_gold.push_back(col_gold_3.release());
+  cols_gold.push_back(col_gold_4.release());
+  cols_gold.push_back(col_gold_5.release());
+  Table gold(std::move(cols_gold));
+
+  this->compare_to_reference(right.view(), left.view(), result, gold.view());
 }
 
 TEST_F(DistinctJoinTest, InnerJoinNoNulls)

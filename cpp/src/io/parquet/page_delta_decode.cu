@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -317,6 +317,10 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
   auto const block      = cg::this_thread_block();
   auto const warp       = cg::tiled_partition<cudf::detail::warp_size>(block);
   auto* const db        = &db_state;
+
+  // Exit early if the page is pruned
+  if (page_mask.size() > 0 and not page_mask[page_idx]) { return; }
+
   [[maybe_unused]] null_count_back_copier _{s, static_cast<int>(block.thread_rank())};
 
   // Setup local page info
@@ -336,17 +340,6 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
 
   // Capture initial valid_map_offset before any processing that might modify it
   int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
-
-  // Write list offsets and exit if the page does not need to be decoded
-  if (not page_mask[page_idx]) {
-    auto& page = pages[page_idx];
-    // Update offsets for all list depth levels
-    if (has_repetition) { update_list_offsets_for_pruned_pages<decode_delta_binary_block_size>(s); }
-    page.num_nulls = page.nesting[s->col.max_nesting_depth - 1].batch_size;
-    page.num_nulls -= has_repetition ? 0 : s->first_row;
-    page.num_valids = 0;
-    return;
-  }
 
   // copying logic from gpuDecodePageData.
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
@@ -478,6 +471,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   auto* const prefix_db = &db_state.prefixes;
   auto* const suffix_db = &db_state.suffixes;
   auto* const dba       = &db_state;
+  if (page_mask.size() > 0 and not page_mask[page_idx]) { return; }
   [[maybe_unused]] null_count_back_copier _{s, static_cast<int>(block.thread_rank())};
 
   if (!setup_local_page_info(s,
@@ -503,28 +497,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // Capture initial valid_map_offset before any processing that might modify it
   int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
-
-  // Write list/string offsets and exit if the page does not need to be decoded
-  if (not page_mask[page_idx]) {
-    auto page = &pages[page_idx];
-    // Update list offsets and string offsets or sizes depending on the large-string property
-    if (has_repetition) {
-      // Update list offsets
-      update_list_offsets_for_pruned_pages<decode_block_size>(s);
-      // Update string offsets or sizes
-      update_string_offsets_for_pruned_pages<decode_block_size, true>(
-        s, initial_str_offsets, pages[page_idx]);
-    } else {
-      // Update string offsets or sizes
-      update_string_offsets_for_pruned_pages<decode_block_size, false>(
-        s, initial_str_offsets, pages[page_idx]);
-    }
-    page->num_nulls = page->nesting[s->col.max_nesting_depth - 1].batch_size;
-    page->num_nulls -= has_repetition ? 0 : s->first_row;
-    page->num_valids = 0;
-
-    return;
-  }
 
   // choose a character parallel string copy when the average string is longer than a warp
   auto const use_char_ll = (s->page.str_bytes / s->page.num_valids) > cudf::detail::warp_size;
@@ -582,8 +554,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // if this is a bounds page and nested, then we need to skip up front. non-nested will work
   // its way through the page.
-  int string_pos          = has_repetition ? s->page.start_val : 0;
-  auto const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
+  int string_pos = has_repetition ? s->page.start_val : 0;
+  auto const is_bounds_pg =
+    is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
   if (is_bounds_pg && string_pos > 0) { dba->skip(use_char_ll); }
 
   while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
@@ -703,6 +676,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   auto const block      = cg::this_thread_block();
   auto const warp       = cg::tiled_partition<cudf::detail::warp_size>(block);
   auto* const db        = &db_state;
+  if (page_mask.size() > 0 and not page_mask[page_idx]) { return; }
   [[maybe_unused]] null_count_back_copier _{s, static_cast<int>(block.thread_rank())};
 
   auto const mask = decode_kernel_mask::DELTA_LENGTH_BA;
@@ -729,28 +703,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // Capture initial valid_map_offset before any processing that might modify it
   int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
-
-  // Write list/string offsets and exit if the page does not need to be decoded
-  if (not page_mask[page_idx]) {
-    auto page = &pages[page_idx];
-    // Update list offsets and string offsets or sizes depending on the large-string property
-    if (has_repetition) {
-      // Update list offsets
-      update_list_offsets_for_pruned_pages<decode_block_size>(s);
-      // Update string offsets or sizes
-      update_string_offsets_for_pruned_pages<decode_block_size, true>(
-        s, initial_str_offsets, pages[page_idx]);
-    } else {
-      // Update string offsets or sizes
-      update_string_offsets_for_pruned_pages<decode_block_size, false>(
-        s, initial_str_offsets, pages[page_idx]);
-    }
-    page->num_nulls = page->nesting[s->col.max_nesting_depth - 1].batch_size;
-    page->num_nulls -= has_repetition ? 0 : s->first_row;
-    page->num_valids = 0;
-
-    return;
-  }
 
   // copying logic from gpuDecodePageData.
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
@@ -789,7 +741,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   // if this is a bounds page, then we need to decode up to the first mini-block
   // that has a value we need, and set string_offset to the position of the first value in the
   // string data block.
-  auto const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
+  auto const is_bounds_pg =
+    is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
   if (is_bounds_pg && s->page.start_val > 0) {
     if (warp.meta_group_rank() == 0) {
       // string_off is only valid on thread 0

@@ -16,13 +16,16 @@
 
 #include <memory>
 
+/**
+ * @file
+ * @brief Class and APIs for remapping join keys to unique integer IDs
+ */
+
 namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup column_join
  * @{
- * @file
- * @brief Class and APIs for remapping join keys to unique integer IDs
  */
 
 /**
