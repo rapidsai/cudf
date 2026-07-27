@@ -470,7 +470,7 @@ class QuentContext:
 
         if result is not None:
             output_capacity_bytes = result._size_bytes()
-        else:
+        else:  # pragma: no cover;
             output_capacity_bytes = 0
         if ir_type.is_io_node:
             quent_processor = quent_ir_execution_context.get_or_declare_processor(
