@@ -1334,18 +1334,21 @@ TEST_F(ParquetChunkedReaderInputLimitTest, ProjectedColumnsReducePasses)
   constexpr int num_columns        = 16;
   constexpr int num_rows           = 2'000;
   constexpr int rows_per_row_group = num_rows / 2;
+  auto const filepath              = temp_env->get_temp_filepath("ProjectedColumnPasses.parquet");
 
-  auto const filepath = temp_env->get_temp_filepath("ProjectedColumnPasses.parquet");
-
-  auto const iter   = cuda::counting_iterator<int32_t>{0};
-  auto columns      = std::vector<std::unique_ptr<cudf::column>>{};
-  auto column_names = std::vector<std::string>{};
-  for (int c = 0; c < num_columns; c++) {
-    columns.emplace_back(
-      cudf::test::fixed_width_column_wrapper<int32_t>(iter, iter + num_rows).release());
-  }
-
+  // Input table
+  auto columns = std::vector<std::unique_ptr<cudf::column>>{};
+  std::transform(cuda::counting_iterator<int>{0},
+                 cuda::counting_iterator<int>{num_columns},
+                 std::back_inserter(columns),
+                 [](int c) {
+                   return cudf::test::fixed_width_column_wrapper<int32_t>(
+                            cuda::counting_iterator{0}, cuda::counting_iterator{num_rows})
+                     .release();
+                 });
   auto const input_table = cudf::table(std::move(columns));
+
+  // Write table to parquet
   cudf::io::write_parquet(
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, input_table.view())
       .metadata(cudf::io::table_input_metadata{input_table.view()})
@@ -1359,15 +1362,14 @@ TEST_F(ParquetChunkedReaderInputLimitTest, ProjectedColumnsReducePasses)
   // row group per pass when all columns are read but more than one for single column read.
   constexpr std::size_t pass_read_limit = 100'000;
 
-  auto const all_columns_options =
+  auto const all_columns =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).build();
-  auto const [all_cols, all_cols_chunks] = chunked_read(all_columns_options, 0, pass_read_limit);
+  auto const [all_cols, all_cols_chunks] = chunked_read(all_columns, 0, pass_read_limit);
 
-  auto const one_column_options =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
-      .column_indices({0})
-      .build();
-  auto const [one_col, one_col_chunks] = chunked_read(one_column_options, 0, pass_read_limit);
+  auto const one_column = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+                            .column_indices({0})
+                            .build();
+  auto const [one_col, one_col_chunks] = chunked_read(one_column, 0, pass_read_limit);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(all_cols->view(), input_table.view());
   CUDF_TEST_EXPECT_TABLES_EQUAL(one_col->view(), cudf::table_view{{input_table.view().column(0)}});
