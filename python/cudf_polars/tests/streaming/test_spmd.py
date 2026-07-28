@@ -588,13 +588,15 @@ def test_over_input_order_without_order_by_multirank(
             pytest.skip("requires multiple ranks")
 
         rank = engine.rank
+        local_xs = [rank * 3 + 1, rank * 3 + 2, rank * 3 + 3]
         lf = pl.LazyFrame(
             {
                 "g": [0, 0, 0],
-                "x": [rank * 3 + 1, rank * 3 + 2, rank * 3 + 3],
+                "x": local_xs,
             }
         )
         local_result = lf.select(pl.col("x"), expr).collect(engine=engine)
+        assert local_result["x"].to_list() == local_xs
 
         with reserve_op_id() as op_id:
             global_result = allgather_polars_dataframe(
