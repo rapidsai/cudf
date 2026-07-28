@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "join/join_common_utils.hpp"
+
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/join/distinct_filtered_join.cuh>
 #include <cudf/detail/join/filtered_join.cuh>
