@@ -64,7 +64,7 @@ class CachedParquetInfo:
     )
     _remote_handle: list[Any] = field(default_factory=list, compare=False, repr=False)
 
-    def hybrid_scan_metadata(
+    def hybrid_scan_metadata(  # pragma: no cover; only called from thread pool workers where coverage.py does not trace
         self,
         base_scan_id: int,
         options: plc.io.parquet.ParquetReaderOptions,
@@ -79,7 +79,7 @@ class CachedParquetInfo:
             metadata = self._hybrid_scan_metadata[base_scan_id]
         return metadata
 
-    def hybrid_scan_reader(
+    def hybrid_scan_reader(  # pragma: no cover; only called from thread pool workers where coverage.py does not trace
         self,
         base_scan_id: int,
         options: plc.io.parquet.ParquetReaderOptions,
@@ -88,10 +88,10 @@ class CachedParquetInfo:
         metadata = self.hybrid_scan_metadata(base_scan_id, options)
         return plc.io.experimental.HybridScanReader.from_metadata(metadata)
 
-    def remote_handle(self) -> Any:
+    def remote_handle(self) -> Any:  # pragma: no cover; requires kvikio
         """Return the kvikio handle for this file."""
         if not self._remote_handle:
-            if kvikio is None:  # pragma: no cover
+            if kvikio is None:
                 raise ImportError("kvikio is required for hybrid scan prefetching")
             if plc.io.SourceInfo._is_remote_uri(self.path):
                 self._remote_handle.append(
@@ -152,7 +152,7 @@ def _prefetch_parquet_footers_for_paths(paths: list[str]) -> list[CachedParquetI
         CachedParquetInfo(path, size, file_metadata)
         for path, size, file_metadata in zip(paths, sizes, metadata, strict=True)
     ]
-    if kvikio is not None:
+    if kvikio is not None:  # pragma: no cover; requires kvikio
         # Open kvikio handles eagerly on the main thread before any prefetch workers
         # start, so all splits sharing a file get the same handle without races.
         for info in infos:

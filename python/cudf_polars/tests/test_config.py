@@ -297,6 +297,7 @@ def test_validate_cluster() -> None:
         "sink_to_directory",
         "client_device_threshold",
         "max_io_threads",
+        "num_prefetch_workers",
         "spill_to_pinned_memory",
         "num_py_executors",
     ],
@@ -458,6 +459,7 @@ def test_fallback_mode_default(monkeypatch: pytest.MonkeyPatch) -> None:
         "max_row_group_samples",
         "use_rapidsmpf_native",
         "prefetch_file_metadata",
+        "hybrid_scan_stats_pruning",
         "use_jit_filter",
     ],
 )
