@@ -36,6 +36,7 @@
 #include <thrust/transform.h>
 
 #include <algorithm>
+#include <bit>
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
@@ -317,13 +318,21 @@ partition_column_groups group_columns(table_view const& input)
   partition_column_groups groups;
   for (size_type index = 0; index < input.num_columns(); ++index) {
     auto const& column = input.column(index);
-    if (cudf::is_fixed_width(column.type()) &&
-        cudf::size_of(column.type()) <= static_cast<size_type>(sizeof(std::uint64_t))) {
-      groups.fixed_width_indices.push_back(index);
-      groups.max_element_width = std::max(groups.max_element_width, cudf::size_of(column.type()));
-    } else {
-      groups.variable_width_indices.push_back(index);
+
+    // The staged kernel dispatches by physical storage width. Accept the power-of-two widths
+    // up to its largest supported word, uint4.
+    if (cudf::is_fixed_width(column.type())) {
+      auto const width = cudf::size_of(column.type());
+      if (std::has_single_bit(width) && width <= sizeof(uint4)) {
+        groups.fixed_width_indices.push_back(index);
+        groups.max_element_width =
+          std::max(groups.max_element_width, static_cast<size_type>(width));
+        continue;
+      }
     }
+
+    // Materialize variable-width and unsupported fixed-width columns with gather.
+    groups.variable_width_indices.push_back(index);
   }
   return groups;
 }
@@ -584,55 +593,26 @@ CUDF_KERNEL void copy_fixed_width_columns(fixed_width_column_descriptor const* d
   // offsets.
   for (size_type column_index = 0; column_index < num_columns; ++column_index) {
     auto const descriptor = descriptors[column_index];
+    /** @brief Copies one descriptor using its physical storage-word type. */
+    auto const copy_column = [&]<typename Word>() {
+      copy_partitioned_values(block,
+                              reinterpret_cast<Word const*>(descriptor.input),
+                              reinterpret_cast<Word*>(descriptor.output),
+                              reinterpret_cast<Word*>(payload),
+                              local_slots,
+                              num_rows,
+                              num_partitions,
+                              rows_per_thread,
+                              local_partition_offsets,
+                              global_partition_offsets);
+    };
+
     switch (descriptor.element_width) {
-      case 1:
-        copy_partitioned_values(block,
-                                reinterpret_cast<std::uint8_t const*>(descriptor.input),
-                                reinterpret_cast<std::uint8_t*>(descriptor.output),
-                                reinterpret_cast<std::uint8_t*>(payload),
-                                local_slots,
-                                num_rows,
-                                num_partitions,
-                                rows_per_thread,
-                                local_partition_offsets,
-                                global_partition_offsets);
-        break;
-      case 2:
-        copy_partitioned_values(block,
-                                reinterpret_cast<std::uint16_t const*>(descriptor.input),
-                                reinterpret_cast<std::uint16_t*>(descriptor.output),
-                                reinterpret_cast<std::uint16_t*>(payload),
-                                local_slots,
-                                num_rows,
-                                num_partitions,
-                                rows_per_thread,
-                                local_partition_offsets,
-                                global_partition_offsets);
-        break;
-      case 4:
-        copy_partitioned_values(block,
-                                reinterpret_cast<std::uint32_t const*>(descriptor.input),
-                                reinterpret_cast<std::uint32_t*>(descriptor.output),
-                                reinterpret_cast<std::uint32_t*>(payload),
-                                local_slots,
-                                num_rows,
-                                num_partitions,
-                                rows_per_thread,
-                                local_partition_offsets,
-                                global_partition_offsets);
-        break;
-      case 8:
-        copy_partitioned_values(block,
-                                reinterpret_cast<std::uint64_t const*>(descriptor.input),
-                                reinterpret_cast<std::uint64_t*>(descriptor.output),
-                                reinterpret_cast<std::uint64_t*>(payload),
-                                local_slots,
-                                num_rows,
-                                num_partitions,
-                                rows_per_thread,
-                                local_partition_offsets,
-                                global_partition_offsets);
-        break;
+      case 1: copy_column.template operator()<std::uint8_t>(); break;
+      case 2: copy_column.template operator()<std::uint16_t>(); break;
+      case 4: copy_column.template operator()<std::uint32_t>(); break;
+      case 8: copy_column.template operator()<std::uint64_t>(); break;
+      case 16: copy_column.template operator()<uint4>(); break;
       default: CUDF_UNREACHABLE("Unsupported element width in fixed-width partition copy");
     }
   }
@@ -1004,7 +984,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition_staged_scatt
       auto output             = cudf::make_fixed_width_column(
         source.type(), source.size(), mask_state::UNALLOCATED, stream, mr);
       auto output_view         = output->mutable_view();
-      auto const element_width = cudf::size_of(source.type());
+      auto const element_width = static_cast<size_type>(cudf::size_of(source.type()));
 
       host_descriptors[descriptor_index] =
         fixed_width_column_descriptor{static_cast<std::uint8_t const*>(source.head()) +
@@ -1182,13 +1162,14 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> dispatch_partition_imp
   auto const scatter_layout = detail::partition_metadata::pick_layout(
     num_partitions, SCATTER_BLOCK_SIZE * SCATTER_ROWS_PER_THREAD);
   auto const scatter_histogram_bytes = static_cast<std::size_t>(num_partitions) * sizeof(size_type);
-  auto const scatter_max_smem_bytes  = []<typename PartitionMetadataView>() {
-    return std::min(configure_dynamic_shared_memory(
-                      &compute_row_partition_numbers<Hasher, Partitioner, PartitionMetadataView>,
-                      SCATTER_BLOCK_SIZE),
-                    configure_dynamic_shared_memory(
-                      &compute_row_output_locations<PartitionMetadataView>, SCATTER_BLOCK_SIZE));
-  };
+  auto const scatter_max_smem_bytes =
+    []<typename PartitionMetadataView>(cuda::std::type_identity<PartitionMetadataView>) {
+      return std::min(configure_dynamic_shared_memory(
+                        &compute_row_partition_numbers<Hasher, Partitioner, PartitionMetadataView>,
+                        SCATTER_BLOCK_SIZE),
+                      configure_dynamic_shared_memory(
+                        &compute_row_output_locations<PartitionMetadataView>, SCATTER_BLOCK_SIZE));
+    };
 
   if (staged_scatter_layout == detail::partition_metadata::layout::PACKED32) {
     auto packed_metadata = rmm::device_uvector<std::uint32_t>(num_rows, stream);
@@ -1226,8 +1207,9 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> dispatch_partition_imp
                                     stream,
                                     mr);
   } else if (scatter_layout == detail::partition_metadata::layout::PACKED32 &&
-             scatter_histogram_bytes <= scatter_max_smem_bytes.template
-                                        operator()<detail::partition_metadata::packed_view>()) {
+             scatter_histogram_bytes <=
+               scatter_max_smem_bytes(
+                 cuda::std::type_identity<detail::partition_metadata::packed_view>{})) {
     auto packed_metadata = rmm::device_uvector<std::uint32_t>(num_rows, stream);
     auto const partition_bits =
       detail::partition_metadata::ceil_log2(static_cast<std::uint64_t>(num_partitions));
@@ -1235,8 +1217,9 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> dispatch_partition_imp
       device_span<std::uint32_t>{packed_metadata}, partition_bits};
     return partition_scatter(
       input, num_rows, num_partitions, hasher, partitioner, metadata, stream, mr);
-  } else if (scatter_histogram_bytes <= scatter_max_smem_bytes.template
-                                        operator()<detail::partition_metadata::default_view>()) {
+  } else if (scatter_histogram_bytes <=
+             scatter_max_smem_bytes(
+               cuda::std::type_identity<detail::partition_metadata::default_view>{})) {
     auto row_partitions        = rmm::device_uvector<size_type>(num_rows, stream);
     auto row_partition_offsets = rmm::device_uvector<size_type>(num_rows, stream);
     auto const metadata        = detail::partition_metadata::default_view{
