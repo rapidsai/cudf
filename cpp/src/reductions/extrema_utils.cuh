@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,6 +8,7 @@
 #include "nested_types_extrema_utils.cuh"
 
 #include <cudf/aggregation.hpp>
+#include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -121,10 +122,24 @@ class arg_minmax_dispatcher {
                                           rmm::cuda_stream_view stream) const
     requires(cudf::is_numeric<ElementType>())  // integer + floating point numbers
   {
+    using Op = std::conditional_t<K == aggregation::ARGMIN,
+                                  reduction::detail::op::min,
+                                  reduction::detail::op::max>;
+    if (is_dictionary(input.type())) {
+      auto const d_dict = column_device_view::create(input, stream);
+      using KeyType     = ElementType;  // dispatch is on the key type
+      if (input.has_nulls()) {
+        auto const transformer = Op{}.template get_null_replacing_element_transformer<KeyType>();
+        auto const pair_itr =
+          cudf::dictionary::detail::make_dictionary_pair_iterator<KeyType>(*d_dict, true);
+        auto const it = thrust::make_transform_iterator(pair_itr, transformer);
+        return find_extremum_idx(it, input.size(), stream);
+      } else {
+        auto const it = cudf::dictionary::detail::make_dictionary_iterator<KeyType>(*d_dict);
+        return find_extremum_idx(it, input.size(), stream);
+      }
+    }
     if (input.has_nulls()) {
-      using Op               = std::conditional_t<K == aggregation::ARGMIN,
-                                                  reduction::detail::op::min,
-                                                  reduction::detail::op::max>;
       auto const d_input     = column_device_view::create(input, stream);
       auto const transformer = Op{}.template get_null_replacing_element_transformer<ElementType>();
       auto const it =
@@ -150,9 +165,7 @@ class arg_minmax_dispatcher {
                                                    rmm::device_async_resource_ref mr) const
     requires(is_supported<ElementType>())
   {
-    auto const& values =
-      is_dictionary(input.type()) ? dictionary_column_view(input).get_indices_annotated() : input;
-    auto const idx = find_arg_minmax<ElementType>(values, stream);
+    auto const idx = find_arg_minmax<ElementType>(input, stream);
     return make_fixed_width_scalar<size_type>(idx, stream, mr);
   }
 
