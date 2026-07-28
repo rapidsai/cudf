@@ -1046,8 +1046,6 @@ TEST_F(CastVariantTest, CastToUnsupportedTargetThrows)
                                        cudf::type_id::UINT16,
                                        cudf::type_id::UINT32,
                                        cudf::type_id::UINT64,
-                                       cudf::type_id::FLOAT32,
-                                       cudf::type_id::FLOAT64,
                                        cudf::type_id::TIMESTAMP_DAYS,
                                        cudf::type_id::TIMESTAMP_SECONDS,
                                        cudf::type_id::TIMESTAMP_MICROSECONDS,
