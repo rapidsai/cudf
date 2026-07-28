@@ -63,12 +63,7 @@
 
 namespace cudf::io::orc::detail {
 
-// Alignment of every non-empty extent within the encoded and gathered arenas. Compression is what
-// requires it: `gather_stripes` compacts the per-rowgroup chunks without re-applying the codec
-// alignment that `encode_columns` gave them, so a gathered extent's base is the pointer the
-// compressor receives, and it has to satisfy `compress_required_chunk_alignment` (checked in
-// `encode_columns`). RMM's allocation alignment is what the per-stream allocations these arenas
-// replaced provided, so using it keeps every downstream access at least as aligned as before.
+// Alignment of every non-empty extent within the encoded and gathered arenas.
 constexpr size_t extent_alignment = rmm::CUDA_ALLOCATION_ALIGNMENT;
 
 template <typename T>
@@ -949,9 +944,8 @@ std::pair<encoded_data, transient_extents> encode_columns(orc_table_view const& 
   hostdevice_2dvector<encoder_chunk_streams> chunk_streams(
     num_columns, segmentation.num_rowgroups(), stream);
 
-  // Pass 1: compute per-rowgroup stream lengths and per-(stripe, strm_id) sizes, along with
-  // whether a size is a strict upper bound on what the encoder will write. Offsets into the
-  // arenas are assigned below. Per-extent data is indexed `stripe_id * num_streams + strm_id`.
+  // Compute per-rowgroup stream lengths and per-(stripe, strm_id) extent sizes, along with
+  // whether an extent size may exceed what the encoder ends up writing.
   auto const num_streams = streams.size();
   auto const extent_idx  = [num_streams](size_t stripe_id, size_t strm_id) {
     return stripe_id * num_streams + strm_id;
@@ -1022,14 +1016,11 @@ std::pair<encoded_data, transient_extents> encode_columns(orc_table_view const& 
     }
   }
 
-  // Extents that `gather_stripes` is certain to compact go into their own arena, so it can be
-  // freed as soon as gathering completes rather than staying pinned by the extents read in place.
-  // An extent is certain to be compacted when its stripe spans several rowgroups (so its chunks
-  // are laid out with gaps) and its size is an upper bound (so a gap is non-empty). Guessing
-  // wrong either way is safe, and only costs a copy or a retained allocation.
   CUDF_EXPECTS(extent_alignment >= uncomp_block_align,
                "Internal ORC writer error: arena extents are not aligned enough for the codec");
 
+  // Extents that `gather_stripes` is certain to compact go into `transient_buffer`, so that arena
+  // can be freed as soon as gathering completes.
   transient_extents transient{segmentation.num_stripes(), num_streams};
   std::vector<size_t> extent_offsets(segmentation.num_stripes() * num_streams, 0);
   size_t persistent_arena_size = 0;
@@ -1052,8 +1043,7 @@ std::pair<encoded_data, transient_extents> encode_columns(orc_table_view const& 
   rmm::device_uvector<uint8_t> persistent_buffer(persistent_arena_size, stream);
   rmm::device_uvector<uint8_t> transient_buffer(transient_arena_size, stream);
 
-  // Zero-size extents keep a null pointer, matching the empty per-stream device_uvector they
-  // replaced; a null `data_ptrs` entry selects the pass-through path in the encoder kernels.
+  // Zero-size extents keep a null pointer, matching the empty device_uvector they replaced.
   std::vector<std::vector<device_span<uint8_t>>> encoded_views(
     segmentation.num_stripes(), std::vector<device_span<uint8_t>>(num_streams));
   for (size_t s = 0; s < segmentation.num_stripes(); ++s) {
@@ -1066,9 +1056,7 @@ std::pair<encoded_data, transient_extents> encode_columns(orc_table_view const& 
     }
   }
 
-  // Pass 2: write per-chunk data_ptrs and apply alignment fix-up. The lengths
-  // computed in pass 1 (now stored in `chunk_streams[col_idx][rg_idx].lengths`)
-  // are read here as-is.
+  // Write per-chunk data_ptrs and apply alignment fix-up.
   for (auto const& stripe : segmentation.stripes) {
     for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
       for (int strm_type = 0; strm_type < CI_NUM_STREAMS; ++strm_type) {
