@@ -14,7 +14,6 @@
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
-#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
@@ -27,28 +26,33 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cooperative_groups.h>
 #include <cub/block/block_scan.cuh>
 #include <cub/device/device_histogram.cuh>
 #include <cuda/atomic>
-#include <cuda/devices>
 #include <cuda/iterator>
 #include <cuda/std/type_traits>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
+#include <algorithm>
+#include <cstdint>
+#include <limits>
 #include <stdexcept>
+#include <utility>
+#include <vector>
 
 namespace cudf {
 namespace {
-// Launch configuration for optimized hash partition
-constexpr size_type OPTIMIZED_BLOCK_SIZE                     = 512;
-constexpr size_type OPTIMIZED_ROWS_PER_THREAD                = 8;
-constexpr size_type ELEMENTS_PER_THREAD                      = 2;
-constexpr size_type THRESHOLD_FOR_OPTIMIZED_PARTITION_KERNEL = 1024;
+namespace cg = cooperative_groups;
 
-// Launch configuration for fallback hash partition
-constexpr size_type FALLBACK_BLOCK_SIZE      = 256;
-constexpr size_type FALLBACK_ROWS_PER_THREAD = 1;
+// Staged-scatter launch configuration
+constexpr size_type STAGED_SCATTER_BLOCK_SIZE = 1024;
+constexpr size_type PREFERRED_ROWS_PER_THREAD = 8;
+
+// Scatter launch configuration
+constexpr size_type SCATTER_BLOCK_SIZE      = 256;
+constexpr size_type SCATTER_ROWS_PER_THREAD = 1;
 
 /**
  * @brief  Functor to map a hash value to a particular 'bin' or partition number
@@ -285,232 +289,519 @@ CUDF_KERNEL void compute_row_output_locations(PartitionMetadataView partition_me
 }
 
 /**
- * @brief Move one column from the input table to the hashed table.
- *
- * @param[in] input_iter Iterator over the input column data
- * @param[out] output_buf Preallocated data buffer of the column in the output
- * table
- * @param[in] num_rows The number of rows in each column
- * @param[in] num_partitions The number of partitions to divide the rows into
- * @param[in] partition_metadata Partition number and CTA-local offset for each row
- * @param[in] block_partition_sizes Array that holds the size of each partition
- * for each block
- * @param[in] scanned_block_partition_sizes The scan of block_partition_sizes
+ * @brief Describes one fixed-width column copied by the staged-scatter kernel.
  */
-template <typename InputIter, typename DataType, typename PartitionMetadataView>
-CUDF_KERNEL void copy_block_partitions(InputIter input_iter,
-                                       DataType* __restrict__ output_buf,
-                                       size_type const num_rows,
-                                       size_type const num_partitions,
-                                       PartitionMetadataView partition_metadata,
-                                       size_type const* __restrict__ block_partition_sizes,
-                                       size_type const* __restrict__ scanned_block_partition_sizes)
-{
-  extern __shared__ char shared_memory[];
-  auto block_output = reinterpret_cast<DataType*>(shared_memory);
-  auto partition_offset_shared =
-    reinterpret_cast<size_type*>(block_output + OPTIMIZED_BLOCK_SIZE * OPTIMIZED_ROWS_PER_THREAD);
-  auto partition_offset_global = partition_offset_shared + num_partitions + 1;
-
-  using BlockScan = cub::BlockScan<size_type, OPTIMIZED_BLOCK_SIZE>;
-  __shared__ typename BlockScan::TempStorage temp_storage;
-
-  // use ELEMENTS_PER_THREAD=2 to support up to 1024 partitions
-  size_type temp_histo[ELEMENTS_PER_THREAD];
-
-  for (int i = 0; i < ELEMENTS_PER_THREAD; ++i) {
-    if (ELEMENTS_PER_THREAD * threadIdx.x + i < num_partitions) {
-      temp_histo[i] =
-        block_partition_sizes[blockIdx.x + (ELEMENTS_PER_THREAD * threadIdx.x + i) * gridDim.x];
-    } else {
-      temp_histo[i] = 0;
-    }
-  }
-
-  __syncthreads();
-
-  BlockScan(temp_storage).InclusiveSum(temp_histo, temp_histo);
-
-  __syncthreads();
-
-  if (threadIdx.x == 0) { partition_offset_shared[0] = 0; }
-
-  // Calculate the offset in shared memory of each partition in this thread
-  // block
-  for (int i = 0; i < ELEMENTS_PER_THREAD; ++i) {
-    if (ELEMENTS_PER_THREAD * threadIdx.x + i < num_partitions) {
-      partition_offset_shared[ELEMENTS_PER_THREAD * threadIdx.x + i + 1] = temp_histo[i];
-    }
-  }
-
-  // Fetch the offset in the output buffer of each partition in this thread
-  // block
-  for (thread_index_type ipartition = threadIdx.x; ipartition < num_partitions;
-       ipartition += blockDim.x) {
-    partition_offset_global[ipartition] =
-      scanned_block_partition_sizes[ipartition * gridDim.x + blockIdx.x];
-  }
-
-  __syncthreads();
-
-  // Fetch the input data to shared memory
-  for (auto tid = cudf::detail::grid_1d::global_thread_id(); tid < num_rows;
-       tid += cudf::detail::grid_1d::grid_stride()) {
-    auto const row_number = static_cast<size_type>(tid);
-    size_type ipartition;
-    size_type partition_offset;
-    partition_metadata.load(row_number, ipartition, partition_offset);
-
-    block_output[partition_offset_shared[ipartition] + partition_offset] = input_iter[row_number];
-  }
-
-  __syncthreads();
-
-  // Copy data from shared memory to output using 32 threads for each partition
-  constexpr int nthreads_partition = 32;
-  static_assert(OPTIMIZED_BLOCK_SIZE % nthreads_partition == 0,
-                "BLOCK_SIZE must be divisible by number of threads");
-
-  for (size_type ipartition = threadIdx.x / nthreads_partition; ipartition < num_partitions;
-       ipartition += OPTIMIZED_BLOCK_SIZE / nthreads_partition) {
-    size_type const nelements_partition =
-      partition_offset_shared[ipartition + 1] - partition_offset_shared[ipartition];
-
-    for (size_type row_offset = threadIdx.x % nthreads_partition; row_offset < nelements_partition;
-         row_offset += nthreads_partition) {
-      output_buf[partition_offset_global[ipartition] + row_offset] =
-        block_output[partition_offset_shared[ipartition] + row_offset];
-    }
-  }
-}
-
-template <typename InputIter, typename OutputIter, typename PartitionMetadataView>
-void copy_block_partitions_impl(InputIter const input,
-                                OutputIter output,
-                                size_type num_rows,
-                                size_type num_partitions,
-                                PartitionMetadataView partition_metadata,
-                                size_type const* block_partition_sizes,
-                                size_type const* scanned_block_partition_sizes,
-                                size_type grid_size,
-                                rmm::cuda_stream_view stream)
-{
-  // We need 3 chunks of shared memory:
-  // 1. BLOCK_SIZE * ROWS_PER_THREAD elements of size_type for copying to output
-  // 2. num_partitions + 1 elements of size_type for per-block partition offsets
-  // 3. num_partitions + 1 elements of size_type for global partition offsets
-  int const smem = OPTIMIZED_BLOCK_SIZE * OPTIMIZED_ROWS_PER_THREAD * sizeof(*output) +
-                   (num_partitions + 1) * sizeof(size_type) * 2;
-
-  copy_block_partitions<<<grid_size, OPTIMIZED_BLOCK_SIZE, smem, stream.value()>>>(
-    input,
-    output,
-    num_rows,
-    num_partitions,
-    partition_metadata,
-    block_partition_sizes,
-    scanned_block_partition_sizes);
-  CUDF_CUDA_TRY(cudaGetLastError());
-}
-
-template <typename PartitionMetadataView>
-rmm::device_uvector<size_type> compute_gather_map(size_type num_rows,
-                                                  size_type num_partitions,
-                                                  PartitionMetadataView partition_metadata,
-                                                  size_type const* block_partition_sizes,
-                                                  size_type const* scanned_block_partition_sizes,
-                                                  size_type grid_size,
-                                                  rmm::cuda_stream_view stream)
-{
-  auto sequence = cuda::counting_iterator<cudf::size_type>{0};
-  rmm::device_uvector<size_type> gather_map(num_rows, stream);
-
-  copy_block_partitions_impl(sequence,
-                             gather_map.begin(),
-                             num_rows,
-                             num_partitions,
-                             partition_metadata,
-                             block_partition_sizes,
-                             scanned_block_partition_sizes,
-                             grid_size,
-                             stream);
-
-  return gather_map;
-}
-
-struct copy_block_partitions_dispatcher {
-  template <typename DataType>
-  constexpr static bool is_copy_block_supported()
-  {
-    // The shared-memory used for fixed-width types in the copy_block_partitions_impl function
-    // will be too large for any DataType greater than int64_t.
-    return is_fixed_width<DataType>() && (sizeof(DataType) <= sizeof(int64_t));
-  }
-
-  template <typename DataType,
-            typename PartitionMetadataView,
-            CUDF_ENABLE_IF(is_copy_block_supported<DataType>())>
-  std::unique_ptr<column> operator()(column_view const& input,
-                                     size_type const num_partitions,
-                                     PartitionMetadataView partition_metadata,
-                                     size_type const* block_partition_sizes,
-                                     size_type const* scanned_block_partition_sizes,
-                                     size_type grid_size,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
-  {
-    rmm::device_buffer output(input.size() * sizeof(DataType), stream, mr);
-
-    copy_block_partitions_impl(input.data<DataType>(),
-                               static_cast<DataType*>(output.data()),
-                               input.size(),
-                               num_partitions,
-                               partition_metadata,
-                               block_partition_sizes,
-                               scanned_block_partition_sizes,
-                               grid_size,
-                               stream);
-
-    return std::make_unique<column>(
-      input.type(), input.size(), std::move(output), rmm::device_buffer{}, 0);
-  }
-
-  template <typename DataType,
-            typename PartitionMetadataView,
-            CUDF_ENABLE_IF(not is_copy_block_supported<DataType>())>
-  std::unique_ptr<column> operator()(column_view const& input,
-                                     size_type const num_partitions,
-                                     PartitionMetadataView partition_metadata,
-                                     size_type const* block_partition_sizes,
-                                     size_type const* scanned_block_partition_sizes,
-                                     size_type grid_size,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
-  {
-    // Use move_to_output_buffer to create an equivalent gather map
-    auto gather_map = compute_gather_map(input.size(),
-                                         num_partitions,
-                                         partition_metadata,
-                                         block_partition_sizes,
-                                         scanned_block_partition_sizes,
-                                         grid_size,
-                                         stream);
-
-    auto gather_table = cudf::detail::gather(cudf::table_view({input}),
-                                             gather_map,
-                                             out_of_bounds_policy::DONT_CHECK,
-                                             cudf::negative_index_policy::NOT_ALLOWED,
-                                             stream,
-                                             mr);
-    return std::move(gather_table->release().front());
-  }
+struct fixed_width_column_descriptor {
+  std::uint8_t const* input;  ///< Start of the sliced input column data
+  std::uint8_t* output;       ///< Start of the output column data
+  size_type element_width;    ///< Element width in bytes
 };
 
 /**
- * @brief Hash-partition using global memory when partition count exceeds shared memory capacity.
+ * @brief Groups payload columns by the operation used to materialize them.
+ */
+struct partition_column_groups {
+  std::vector<size_type> fixed_width_indices;     ///< Columns handled by the staged-scatter kernel
+  std::vector<size_type> variable_width_indices;  ///< Columns materialized with gather
+  size_type max_element_width{};                  ///< Widest staged-scatter element in bytes
+};
+
+/**
+ * @brief Groups payload columns for copying fixed-width columns together or gathering.
+ *
+ * @param input Input table whose columns will be materialized
+ * @return Fixed-width and variable-width column indices and the maximum element width
+ */
+partition_column_groups group_columns(table_view const& input)
+{
+  partition_column_groups groups;
+  for (size_type index = 0; index < input.num_columns(); ++index) {
+    auto const& column = input.column(index);
+    if (cudf::is_fixed_width(column.type()) &&
+        cudf::size_of(column.type()) <= static_cast<size_type>(sizeof(std::uint64_t))) {
+      groups.fixed_width_indices.push_back(index);
+      groups.max_element_width = std::max(groups.max_element_width, cudf::size_of(column.type()));
+    } else {
+      groups.variable_width_indices.push_back(index);
+    }
+  }
+  return groups;
+}
+
+/**
+ * @brief Returns a row's index within its CTA-local row tile.
+ *
+ * @param iteration Grid-stride iteration processed by the current thread
+ * @return CTA-local row index
+ */
+__device__ size_type local_row_index(size_type iteration)
+{
+  return iteration * static_cast<size_type>(blockDim.x) + static_cast<size_type>(threadIdx.x);
+}
+
+/**
+ * @brief Returns the global row processed by a thread in a grid-stride iteration.
+ *
+ * @param iteration Grid-stride iteration processed by the current thread
+ * @return Global input row index
+ */
+__device__ thread_index_type global_row_index(size_type iteration)
+{
+  return cudf::detail::grid_1d::global_thread_id() +
+         static_cast<thread_index_type>(iteration) * cudf::detail::grid_1d::grid_stride();
+}
+
+/**
+ * @brief Computes exclusive CTA-local offsets from one CTA's partition counts.
+ *
+ * Produces `local_partition_offsets[p]` as the sum of the counts for partitions preceding `p`.
+ *
+ * @param block Cooperative group representing the CTA
+ * @param block_partition_sizes Partition-major counts for all CTAs
+ * @param[out] local_partition_offsets Exclusive partition offsets for this CTA
+ * @param num_partitions Number of partitions
+ */
+__device__ void scan_partition_counts(cg::thread_block const& block,
+                                      size_type const* block_partition_sizes,
+                                      size_type* local_partition_offsets,
+                                      size_type num_partitions)
+{
+  using block_scan = cub::BlockScan<size_type, STAGED_SCATTER_BLOCK_SIZE>;
+  __shared__ typename block_scan::TempStorage scan_storage;
+  __shared__ size_type tile_prefix;
+
+  if (block.thread_rank() == 0) {
+    local_partition_offsets[0] = 0;  // Initialize start of offset array
+    tile_prefix                = 0;
+  }
+  block.sync();
+
+  // Process one partition per thread and carry the total across CTA-sized tiles.
+  for (size_type tile = 0; tile < num_partitions; tile += STAGED_SCATTER_BLOCK_SIZE) {
+    auto const partition = tile + static_cast<size_type>(block.thread_rank());
+    auto const count =
+      partition < num_partitions
+        ? block_partition_sizes[static_cast<std::size_t>(partition) * gridDim.x + blockIdx.x]
+        : size_type{0};
+    auto const prefix = tile_prefix;
+    size_type partition_end;
+    size_type tile_total;
+    block_scan(scan_storage).InclusiveSum(count, partition_end, tile_total);
+
+    if (partition < num_partitions) {
+      local_partition_offsets[partition + 1] = prefix + partition_end;
+    }
+    if (block.thread_rank() == 0) { tile_prefix = prefix + tile_total; }
+    block.sync();
+  }
+}
+
+/**
+ * @brief Prepares the shared routing state used to copy partitioned values.
+ *
+ * @tparam PartitionMetadataView Device-accessible partition metadata view
+ * @param block Cooperative group representing the CTA
+ * @param num_rows Number of input rows
+ * @param num_partitions Number of partitions
+ * @param rows_per_thread Number of grid-stride iterations per thread
+ * @param partition_metadata Partition and CTA-local offset for every row
+ * @param block_partition_sizes Partition counts for every CTA
+ * @param scanned_block_partition_sizes Exclusive prefix sum of CTA partition counts in
+ * partition-major order; each entry is the global output offset for one CTA partition
+ * @param[out] local_slots CTA-local destination slot for every row
+ * @param[out] local_partition_offsets CTA-local partition offsets
+ * @param[out] global_partition_offsets Output offset for each CTA partition
+ */
+template <typename PartitionMetadataView>
+__device__ void prepare_partition_copy(cg::thread_block const& block,
+                                       size_type num_rows,
+                                       size_type num_partitions,
+                                       size_type rows_per_thread,
+                                       PartitionMetadataView partition_metadata,
+                                       size_type const* block_partition_sizes,
+                                       size_type const* scanned_block_partition_sizes,
+                                       size_type* local_slots,
+                                       size_type* local_partition_offsets,
+                                       size_type* global_partition_offsets)
+{
+  scan_partition_counts(block, block_partition_sizes, local_partition_offsets, num_partitions);
+
+  // Load this CTA's global output start for each partition.
+  for (size_type partition = block.thread_rank(); partition < num_partitions;
+       partition += block.size()) {
+    global_partition_offsets[partition] =
+      scanned_block_partition_sizes[static_cast<std::size_t>(partition) * gridDim.x + blockIdx.x];
+  }
+
+  // Convert each row's partition-local offset into its slot in the CTA payload buffer.
+  for (size_type iteration = 0; iteration < rows_per_thread; ++iteration) {
+    auto const global_row = global_row_index(iteration);
+    if (global_row < static_cast<thread_index_type>(num_rows)) {
+      auto const row = static_cast<size_type>(global_row);
+      size_type partition;
+      size_type offset;
+      partition_metadata.load(row, partition, offset);
+      local_slots[local_row_index(iteration)] = local_partition_offsets[partition] + offset;
+    }
+  }
+  block.sync();
+}
+
+/**
+ * @brief Copies values through a CTA-local partitioned payload buffer.
+ *
+ * @tparam InputIterator Random-access iterator over input values
+ * @tparam OutputIterator Random-access iterator over partitioned output values
+ * @tparam Word Shared-memory value type
+ * @param block Cooperative group representing the CTA
+ * @param input Input values in row order
+ * @param output Output values in partitioned row order
+ * @param payload Shared-memory payload buffer
+ * @param local_slots CTA-local destination slot for every row
+ * @param num_rows Number of input rows
+ * @param num_partitions Number of partitions
+ * @param rows_per_thread Number of grid-stride iterations per thread
+ * @param local_partition_offsets CTA-local partition offsets
+ * @param global_partition_offsets Output offset for each CTA partition
+ */
+template <typename InputIterator, typename OutputIterator, typename Word>
+__device__ void copy_partitioned_values(cg::thread_block const& block,
+                                        InputIterator input,
+                                        OutputIterator output,
+                                        Word* payload,
+                                        size_type const* local_slots,
+                                        size_type num_rows,
+                                        size_type num_partitions,
+                                        size_type rows_per_thread,
+                                        size_type const* local_partition_offsets,
+                                        size_type const* global_partition_offsets)
+{
+  for (size_type iteration = 0; iteration < rows_per_thread; ++iteration) {
+    auto const global_row = global_row_index(iteration);
+    if (global_row < static_cast<thread_index_type>(num_rows)) {
+      auto const row                                   = static_cast<size_type>(global_row);
+      payload[local_slots[local_row_index(iteration)]] = input[row];
+    }
+  }
+  block.sync();
+
+  auto const thread_rank = static_cast<size_type>(block.thread_rank());
+  auto const block_size  = static_cast<size_type>(block.size());
+  for (size_type partition = thread_rank / cudf::detail::warp_size; partition < num_partitions;
+       partition += block_size / cudf::detail::warp_size) {
+    auto const partition_size =
+      local_partition_offsets[partition + 1] - local_partition_offsets[partition];
+    for (size_type offset = thread_rank % cudf::detail::warp_size; offset < partition_size;
+         offset += cudf::detail::warp_size) {
+      output[global_partition_offsets[partition] + offset] =
+        payload[local_partition_offsets[partition] + offset];
+    }
+  }
+  block.sync();
+}
+
+/**
+ * @brief Byte offsets within the staged-scatter dynamic shared-memory buffer.
+ *
+ * The buffer contains the partitioned payload, one destination slot per CTA row, one local
+ * offset per partition plus the terminal offset, and one global offset per partition.
+ */
+struct staged_scatter_smem {
+  CUDF_HOST_DEVICE constexpr staged_scatter_smem(size_type num_partitions,
+                                                 size_type rows_per_thread,
+                                                 size_type element_width)
+  {
+    auto const rows_per_block =
+      static_cast<std::size_t>(STAGED_SCATTER_BLOCK_SIZE) * rows_per_thread;
+    local_slots_offset             = rows_per_block * element_width;
+    local_partition_offsets_offset = local_slots_offset + rows_per_block * sizeof(size_type);
+    global_partition_offsets_offset =
+      local_partition_offsets_offset +
+      (static_cast<std::size_t>(num_partitions) + 1) * sizeof(size_type);
+    bytes = global_partition_offsets_offset +
+            static_cast<std::size_t>(num_partitions) * sizeof(size_type);
+  }
+
+  std::size_t local_slots_offset;               ///< Byte offset of the CTA-local row slots
+  std::size_t local_partition_offsets_offset;   ///< Byte offset of the CTA-local partition offsets
+  std::size_t global_partition_offsets_offset;  ///< Byte offset of the global partition offsets
+  std::size_t bytes;                            ///< Total dynamic shared-memory size in bytes
+};
+
+/**
+ * @brief Copies the fixed-width payload columns described by `descriptors` in one kernel launch.
+ *
+ * Each CTA computes the partitioned output position of every row it owns. For each descriptor, it
+ * stages the column values in partition order in shared memory and writes each partition as a
+ * contiguous output range. The row-to-output mapping is computed once and reused across columns.
+ *
+ * @tparam PartitionMetadataView Device-accessible partition metadata view
+ * @param descriptors Fixed-width input/output column descriptors
+ * @param num_columns Number of descriptors
+ * @param num_rows Number of input rows
+ * @param num_partitions Number of partitions
+ * @param rows_per_thread Number of grid-stride iterations per thread
+ * @param max_element_width Widest descriptor element in bytes
+ * @param partition_metadata Partition and CTA-local offset for every row
+ * @param block_partition_sizes Partition counts for every CTA
+ * @param scanned_block_partition_sizes Exclusive prefix sum of CTA partition counts in
+ * partition-major order; each entry is the global output offset for one CTA partition
+ */
+template <typename PartitionMetadataView>
+CUDF_KERNEL void copy_fixed_width_columns(fixed_width_column_descriptor const* descriptors,
+                                          size_type num_columns,
+                                          size_type num_rows,
+                                          size_type num_partitions,
+                                          size_type rows_per_thread,
+                                          size_type max_element_width,
+                                          PartitionMetadataView partition_metadata,
+                                          size_type const* block_partition_sizes,
+                                          size_type const* scanned_block_partition_sizes)
+{
+  extern __shared__ __align__(16)
+    std::uint8_t shared_memory[];  // align to the maximum supported element width
+  auto const smem   = staged_scatter_smem{num_partitions, rows_per_thread, max_element_width};
+  auto* payload     = shared_memory;
+  auto* local_slots = reinterpret_cast<size_type*>(shared_memory + smem.local_slots_offset);
+  auto* local_partition_offsets =
+    reinterpret_cast<size_type*>(shared_memory + smem.local_partition_offsets_offset);
+  auto* global_partition_offsets =
+    reinterpret_cast<size_type*>(shared_memory + smem.global_partition_offsets_offset);
+
+  auto const block = cg::this_thread_block();
+  prepare_partition_copy(block,
+                         num_rows,
+                         num_partitions,
+                         rows_per_thread,
+                         partition_metadata,
+                         block_partition_sizes,
+                         scanned_block_partition_sizes,
+                         local_slots,
+                         local_partition_offsets,
+                         global_partition_offsets);
+
+  // Copy each column through the shared payload buffer, reusing the row slots and partition
+  // offsets.
+  for (size_type column_index = 0; column_index < num_columns; ++column_index) {
+    auto const descriptor = descriptors[column_index];
+    switch (descriptor.element_width) {
+      case 1:
+        copy_partitioned_values(block,
+                                reinterpret_cast<std::uint8_t const*>(descriptor.input),
+                                reinterpret_cast<std::uint8_t*>(descriptor.output),
+                                reinterpret_cast<std::uint8_t*>(payload),
+                                local_slots,
+                                num_rows,
+                                num_partitions,
+                                rows_per_thread,
+                                local_partition_offsets,
+                                global_partition_offsets);
+        break;
+      case 2:
+        copy_partitioned_values(block,
+                                reinterpret_cast<std::uint16_t const*>(descriptor.input),
+                                reinterpret_cast<std::uint16_t*>(descriptor.output),
+                                reinterpret_cast<std::uint16_t*>(payload),
+                                local_slots,
+                                num_rows,
+                                num_partitions,
+                                rows_per_thread,
+                                local_partition_offsets,
+                                global_partition_offsets);
+        break;
+      case 4:
+        copy_partitioned_values(block,
+                                reinterpret_cast<std::uint32_t const*>(descriptor.input),
+                                reinterpret_cast<std::uint32_t*>(descriptor.output),
+                                reinterpret_cast<std::uint32_t*>(payload),
+                                local_slots,
+                                num_rows,
+                                num_partitions,
+                                rows_per_thread,
+                                local_partition_offsets,
+                                global_partition_offsets);
+        break;
+      case 8:
+        copy_partitioned_values(block,
+                                reinterpret_cast<std::uint64_t const*>(descriptor.input),
+                                reinterpret_cast<std::uint64_t*>(descriptor.output),
+                                reinterpret_cast<std::uint64_t*>(payload),
+                                local_slots,
+                                num_rows,
+                                num_partitions,
+                                rows_per_thread,
+                                local_partition_offsets,
+                                global_partition_offsets);
+        break;
+      default: CUDF_UNREACHABLE("Unsupported element width in fixed-width partition copy");
+    }
+  }
+}
+
+/**
+ * @brief Computes an output-to-input gather map with coalesced partition writes.
+ *
+ * @tparam PartitionMetadataView Device-accessible partition metadata view
+ * @param num_rows Number of input rows
+ * @param num_partitions Number of partitions
+ * @param rows_per_thread Number of grid-stride iterations per thread
+ * @param partition_metadata Partition and CTA-local offset for every row
+ * @param block_partition_sizes Partition counts for every CTA
+ * @param scanned_block_partition_sizes Exclusive prefix sum of CTA partition counts in
+ * partition-major order; each entry is the global output offset for one CTA partition
+ * @param[out] gather_map Output-to-input row mapping
+ */
+template <typename PartitionMetadataView>
+CUDF_KERNEL void compute_gather_map(size_type num_rows,
+                                    size_type num_partitions,
+                                    size_type rows_per_thread,
+                                    PartitionMetadataView partition_metadata,
+                                    size_type const* block_partition_sizes,
+                                    size_type const* scanned_block_partition_sizes,
+                                    size_type* gather_map)
+{
+  extern __shared__ __align__(16) std::uint8_t shared_memory[];
+  auto const smem   = staged_scatter_smem{num_partitions, rows_per_thread, sizeof(size_type)};
+  auto* payload     = reinterpret_cast<size_type*>(shared_memory);
+  auto* local_slots = reinterpret_cast<size_type*>(shared_memory + smem.local_slots_offset);
+  auto* local_partition_offsets =
+    reinterpret_cast<size_type*>(shared_memory + smem.local_partition_offsets_offset);
+  auto* global_partition_offsets =
+    reinterpret_cast<size_type*>(shared_memory + smem.global_partition_offsets_offset);
+
+  auto const block = cg::this_thread_block();
+  prepare_partition_copy(block,
+                         num_rows,
+                         num_partitions,
+                         rows_per_thread,
+                         partition_metadata,
+                         block_partition_sizes,
+                         scanned_block_partition_sizes,
+                         local_slots,
+                         local_partition_offsets,
+                         global_partition_offsets);
+
+  copy_partitioned_values(block,
+                          cuda::counting_iterator<size_type>{0},
+                          gather_map,
+                          payload,
+                          local_slots,
+                          num_rows,
+                          num_partitions,
+                          rows_per_thread,
+                          local_partition_offsets,
+                          global_partition_offsets);
+}
+
+/**
+ * @brief Configures a kernel for maximum dynamic shared memory and returns its launch capacity.
+ *
+ * This opts the kernel specialization into the device's maximum dynamic shared
+ * memory for subsequent launches before occupancy is evaluated. CUDA and configuration failures
+ * are propagated. A zero result indicates that the requested CTA size is not supported by this
+ * kernel specialization.
+ *
+ * @tparam Kernel CUDA kernel pointer type
+ * @param kernel Kernel whose dynamic shared-memory limit is configured and queried
+ * @param block_size Requested CTA size
+ * @return Available dynamic shared memory in bytes, or zero when the CTA cannot launch
+ */
+template <typename Kernel>
+std::size_t configure_dynamic_shared_memory(Kernel kernel, size_type block_size)
+{
+  cudaFuncAttributes attributes{};
+  CUDF_CUDA_TRY(cudaFuncGetAttributes(&attributes, reinterpret_cast<void const*>(kernel)));
+  if (attributes.maxThreadsPerBlock < block_size) { return 0; }
+
+  int device{};
+  CUDF_CUDA_TRY(cudaGetDevice(&device));
+  int opt_in_limit{};
+  CUDF_CUDA_TRY(
+    cudaDeviceGetAttribute(&opt_in_limit, cudaDevAttrMaxSharedMemoryPerBlockOptin, device));
+
+  auto const statically_allocated = static_cast<std::size_t>(attributes.sharedSizeBytes);
+  CUDF_EXPECTS(statically_allocated <= static_cast<std::size_t>(opt_in_limit),
+               "Kernel static shared memory exceeds the device opt-in limit");
+  auto const max_dynamic_shared_memory =
+    static_cast<std::size_t>(opt_in_limit) - statically_allocated;
+
+  CUDF_CUDA_TRY(cudaFuncSetAttribute(reinterpret_cast<void const*>(kernel),
+                                     cudaFuncAttributeMaxDynamicSharedMemorySize,
+                                     static_cast<int>(max_dynamic_shared_memory)));
+
+  int active_blocks{};
+  CUDF_CUDA_TRY(
+    cudaOccupancyMaxActiveBlocksPerMultiprocessor(&active_blocks, kernel, block_size, 0));
+  if (active_blocks == 0) { return 0; }
+
+  std::size_t available{};
+  CUDF_CUDA_TRY(cudaOccupancyAvailableDynamicSMemPerBlock(&available, kernel, 1, block_size));
+  return std::min(available, max_dynamic_shared_memory);
+}
+
+/**
+ * @brief Returns the maximum rows per thread supported by the staged-scatter path.
+ *
+ * @tparam Hasher Device row hasher type
+ * @tparam Partitioner Hash-to-partition mapping type
+ * @tparam PartitionMetadataView Device-accessible partition metadata view
+ * @param num_partitions Number of partitions
+ * @param input Table whose columns will be materialized
+ * @param column_groups Fixed-width and variable-width column groups
+ * @return Rows per thread, or 0 when a required kernel cannot launch
+ */
+template <typename Hasher, typename Partitioner, typename PartitionMetadataView>
+size_type staged_rows_per_thread(size_type num_partitions,
+                                 table_view const& input,
+                                 partition_column_groups const& column_groups)
+{
+  auto const histogram_bytes = static_cast<std::size_t>(num_partitions) * sizeof(size_type);
+  auto const metadata_kernel =
+    &compute_row_partition_numbers<Hasher, Partitioner, PartitionMetadataView>;
+  // Metadata generation requires one shared counter for every partition.
+  if (histogram_bytes >
+      configure_dynamic_shared_memory(metadata_kernel, STAGED_SCATTER_BLOCK_SIZE)) {
+    return 0;
+  }
+
+  auto const max_rows_per_thread = [num_partitions](
+                                     auto kernel, size_type element_width, size_type upper_bound) {
+    auto const available_smem_bytes =
+      configure_dynamic_shared_memory(kernel, STAGED_SCATTER_BLOCK_SIZE);
+    auto const fixed_smem_bytes = staged_scatter_smem{num_partitions, 0, element_width}.bytes;
+    if (fixed_smem_bytes >= available_smem_bytes) { return size_type{0}; }
+
+    auto const bytes_per_iteration =
+      staged_scatter_smem{num_partitions, 1, element_width}.bytes - fixed_smem_bytes;
+    return std::min(
+      upper_bound,
+      static_cast<size_type>((available_smem_bytes - fixed_smem_bytes) / bytes_per_iteration));
+  };
+
+  auto rows_per_thread = PREFERRED_ROWS_PER_THREAD;
+  // Staged payloads must fit using the widest fixed-width element.
+  if (!column_groups.fixed_width_indices.empty()) {
+    rows_per_thread = max_rows_per_thread(&copy_fixed_width_columns<PartitionMetadataView>,
+                                          column_groups.max_element_width,
+                                          std::numeric_limits<size_type>::max());
+    if (rows_per_thread == 0) { return 0; }
+  }
+
+  // Variable-width payloads and validity masks require a gather map built from the routing data.
+  if (!column_groups.variable_width_indices.empty() || has_nested_nulls(input)) {
+    rows_per_thread = max_rows_per_thread(
+      &compute_gather_map<PartitionMetadataView>, sizeof(size_type), rows_per_thread);
+    if (rows_per_thread == 0) { return 0; }
+  }
+
+  return rows_per_thread;
+}
+
+/**
+ * @brief Hash-partitions by building row destinations in global memory and scattering the input.
  */
 template <typename Hasher>
-std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table_global_memory(
+std::pair<std::unique_ptr<table>, std::vector<size_type>> partition_global_scatter(
   table_view const& input,
   size_type num_rows,
   size_type num_partitions,
@@ -610,178 +901,355 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table_g
 }
 
 /**
- * @brief Hash-partitions a table using a selected hasher and partition-metadata view.
+ * @brief Partitions a table by reusing each row's destination while copying its columns.
+ *
+ * Fixed-width columns are copied together using the CTA-local row mapping. Remaining columns and
+ * validity masks are materialized using gather maps built from the same partition metadata.
  *
  * @tparam PartitionMetadataView Device-accessible partition metadata view type
  * @tparam Hasher Device-callable row hasher type
+ * @tparam Partitioner Hash-to-partition mapping type
  * @param input Table whose rows are reordered into partitions
  * @param num_rows Number of rows to partition
  * @param num_partitions Number of output partitions
  * @param hasher Row hasher used to select partitions
+ * @param partitioner Functor that maps row hashes to partition identifiers
  * @param partition_metadata Device-accessible partition metadata view
+ * @param rows_per_thread Grid-stride iterations processed by each thread
+ * @param column_groups Fixed-width and variable-width column groups
  * @param stream CUDA stream used for device operations
  * @param mr Device memory resource used for output allocations
  * @return Partitioned table and the starting offset of each partition
  */
-template <typename PartitionMetadataView, typename Hasher>
-std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table_impl(
+template <typename PartitionMetadataView, typename Hasher, typename Partitioner>
+std::pair<std::unique_ptr<table>, std::vector<size_type>> partition_staged_scatter(
   table_view const& input,
   size_type num_rows,
   size_type num_partitions,
   Hasher hasher,
+  Partitioner partitioner,
   PartitionMetadataView partition_metadata,
+  size_type rows_per_thread,
+  partition_column_groups const& column_groups,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  bool const use_optimization{num_partitions <= THRESHOLD_FOR_OPTIMIZED_PARTITION_KERNEL};
-  auto const block_size = use_optimization ? OPTIMIZED_BLOCK_SIZE : FALLBACK_BLOCK_SIZE;
-  auto const rows_per_thread =
-    use_optimization ? OPTIMIZED_ROWS_PER_THREAD : FALLBACK_ROWS_PER_THREAD;
-  auto const rows_per_block = block_size * rows_per_thread;
+  auto const grid_size = static_cast<size_type>(
+    cudf::detail::grid_1d{num_rows, STAGED_SCATTER_BLOCK_SIZE, rows_per_thread}.num_blocks);
+  auto const histogram_bytes = static_cast<std::size_t>(num_partitions) * sizeof(size_type);
+  auto const num_cta_partition_counts =
+    static_cast<std::size_t>(grid_size) * static_cast<std::size_t>(num_partitions);
 
-  std::size_t const grid_size = util::div_rounding_up_safe(num_rows, rows_per_block);
-
-  // Array to hold the size of each partition computed by each block
-  //  i.e., { {block0 partition0 size, block1 partition0 size, ...},
-  //          {block0 partition1 size, block1 partition1 size, ...},
-  //          ...
-  //          {block0 partition(num_partitions-1) size, block1
-  //          partition(num_partitions -1) size, ...} }
-  auto block_partition_sizes = rmm::device_uvector<size_type>(grid_size * num_partitions, stream);
-
+  // The metadata CTA owns every row it visits. Its histogram records how many rows it contributes
+  // to each partition, and each row stores its offset within that CTA-local partition.
+  auto block_partition_sizes = rmm::device_uvector<size_type>(num_cta_partition_counts, stream);
   auto scanned_block_partition_sizes =
-    rmm::device_uvector<size_type>(grid_size * num_partitions, stream);
-
-  // The partition starts are copied asynchronously after scanning the block counts. Keep the
-  // destination pinned so output materialization can overlap with the device-to-host copy.
+    rmm::device_uvector<size_type>(num_cta_partition_counts, stream);
   auto host_partition_offsets =
     cudf::detail::make_pinned_vector_async<size_type>(num_partitions + 1, stream);
   host_partition_offsets[num_partitions] = num_rows;
 
-  // If the number of partitions is a power of two, we can compute the partition
-  // number of each row more efficiently with bitwise operations
-  if (is_power_two(num_partitions)) {
-    // Determines how the mapping between hash value and partition number is
-    // computed
-    using partitioner_type = bitwise_partitioner<hash_value_type>;
+  compute_row_partition_numbers<<<grid_size,
+                                  STAGED_SCATTER_BLOCK_SIZE,
+                                  histogram_bytes,
+                                  stream.value()>>>(
+    hasher, num_partitions, partitioner, partition_metadata, block_partition_sizes.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
 
-    // Computes which partition each row belongs to by hashing the row and
-    // performing a partitioning operator on the hash value. Also computes the
-    // number of rows in each partition for each thread block.
-    compute_row_partition_numbers<<<grid_size,
-                                    block_size,
-                                    num_partitions * sizeof(size_type),
-                                    stream.value()>>>(hasher,
-                                                      num_partitions,
-                                                      partitioner_type(num_partitions),
-                                                      partition_metadata,
-                                                      block_partition_sizes.data());
-    CUDF_CUDA_TRY(cudaGetLastError());
-  } else {
-    // Determines how the mapping between hash value and partition number is
-    // computed
-    using partitioner_type = modulo_partitioner<hash_value_type>;
-
-    // Computes which partition each row belongs to by hashing the row and
-    // performing a partitioning operator on the hash value. Also computes the
-    // number of rows in each partition for each thread block.
-    compute_row_partition_numbers<<<grid_size,
-                                    block_size,
-                                    num_partitions * sizeof(size_type),
-                                    stream.value()>>>(hasher,
-                                                      num_partitions,
-                                                      partitioner_type(num_partitions),
-                                                      partition_metadata,
-                                                      block_partition_sizes.data());
-    CUDF_CUDA_TRY(cudaGetLastError());
-  }
-
-  // Counts are partition-major: all block counts for partition 0, followed by all block counts
-  // for partition 1, and so on. One exclusive scan therefore provides both kinds of offsets:
-  //   scanned[p * grid_size + block] locates that block's rows within the final output, while
-  //   scanned[p * grid_size] is the global start of partition p.
+  // Counts are partition-major: all CTA counts for partition 0, then all CTA counts for partition
+  // 1, and so on. The scan therefore provides both each CTA's output offset and every partition's
+  // global start.
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          block_partition_sizes.begin(),
                          block_partition_sizes.end(),
-                         scanned_block_partition_sizes.data());
+                         scanned_block_partition_sizes.begin());
 
-  // Copy the first block offset for each partition to the host. The source pitch skips all block
-  // offsets for one partition, while the destination pitch advances by one partition offset.
+  // Copy the first CTA offset for every partition. The source pitch skips one partition's
+  // complete set of CTA offsets, while the destination advances by one element.
   CUDF_CUDA_TRY(cudaMemcpy2DAsync(host_partition_offsets.data(),
                                   sizeof(size_type),
                                   scanned_block_partition_sizes.data(),
-                                  grid_size * sizeof(size_type),
+                                  static_cast<std::size_t>(grid_size) * sizeof(size_type),
                                   sizeof(size_type),
                                   num_partitions,
                                   cudaMemcpyDeviceToHost,
                                   stream.value()));
 
-  // When the number of partitions is less than a threshold, we can apply an
-  // optimization using shared memory to copy values to the output buffer.
-  // Otherwise, fallback to using scatter.
-  if (use_optimization) {
-    std::vector<std::unique_ptr<column>> output_cols(input.num_columns());
+  std::vector<std::unique_ptr<column>> output_columns(input.num_columns());
+  auto const make_gather_map = [&] {
+    rmm::device_uvector<size_type> gather_map(num_rows, stream);
+    auto const shared_memory =
+      staged_scatter_smem{num_partitions, rows_per_thread, sizeof(size_type)}.bytes;
+    compute_gather_map<<<grid_size, STAGED_SCATTER_BLOCK_SIZE, shared_memory, stream.value()>>>(
+      num_rows,
+      num_partitions,
+      rows_per_thread,
+      partition_metadata,
+      block_partition_sizes.data(),
+      scanned_block_partition_sizes.data(),
+      gather_map.data());
+    CUDF_CUDA_TRY(cudaGetLastError());
+    return gather_map;
+  };
 
-    // Copy input to output by partition per column
-    std::transform(input.begin(), input.end(), output_cols.begin(), [&](auto const& col) {
-      return cudf::type_dispatcher<dispatch_storage_type>(col.type(),
-                                                          copy_block_partitions_dispatcher{},
-                                                          col,
-                                                          num_partitions,
-                                                          partition_metadata,
-                                                          block_partition_sizes.data(),
-                                                          scanned_block_partition_sizes.data(),
-                                                          grid_size,
-                                                          stream,
-                                                          mr);
-    });
+  if (!column_groups.fixed_width_indices.empty()) {
+    auto host_descriptors = cudf::detail::make_pinned_vector_async<fixed_width_column_descriptor>(
+      column_groups.fixed_width_indices.size(), stream);
 
-    if (has_nested_nulls(input)) {
-      // Use copy_block_partitions to compute a gather map
-      auto gather_map = compute_gather_map(num_rows,
-                                           num_partitions,
-                                           partition_metadata,
-                                           block_partition_sizes.data(),
-                                           scanned_block_partition_sizes.data(),
-                                           grid_size,
-                                           stream);
+    for (std::size_t descriptor_index = 0;
+         descriptor_index < column_groups.fixed_width_indices.size();
+         ++descriptor_index) {
+      auto const column_index = column_groups.fixed_width_indices[descriptor_index];
+      auto const& source      = input.column(column_index);
+      auto output             = cudf::make_fixed_width_column(
+        source.type(), source.size(), mask_state::UNALLOCATED, stream, mr);
+      auto output_view         = output->mutable_view();
+      auto const element_width = cudf::size_of(source.type());
 
-      // Handle bitmask using gather to take advantage of ballot_sync
-      detail::gather_bitmask(
-        input, gather_map.begin(), output_cols, detail::gather_bitmask_op::DONT_CHECK, stream, mr);
+      host_descriptors[descriptor_index] =
+        fixed_width_column_descriptor{static_cast<std::uint8_t const*>(source.head()) +
+                                        static_cast<std::size_t>(source.offset()) * element_width,
+                                      static_cast<std::uint8_t*>(output_view.head()),
+                                      element_width};
+      output_columns[column_index] = std::move(output);
     }
 
-    stream.synchronize();  // Async D2H copy must finish before returning host vec
-    auto partition_offsets =
-      std::vector<size_type>(host_partition_offsets.begin(), host_partition_offsets.end());
-    return std::pair{std::make_unique<table>(std::move(output_cols), num_rows),
-                     std::move(partition_offsets)};
-  } else {
-    // Compute a scatter map from input to output such that the output rows are
-    // sorted by partition number
-    auto row_output_locations = rmm::device_uvector<size_type>(num_rows, stream);
-    auto scanned_block_partition_sizes_ptr{scanned_block_partition_sizes.data()};
-    compute_row_output_locations<<<grid_size,
-                                   block_size,
-                                   num_partitions * sizeof(size_type),
-                                   stream.value()>>>(partition_metadata,
-                                                     row_output_locations.data(),
-                                                     num_partitions,
-                                                     scanned_block_partition_sizes_ptr);
+    auto device_descriptors = rmm::device_uvector<fixed_width_column_descriptor>(
+      host_descriptors.size(), stream, cudf::get_current_device_resource_ref());
+    cudf::detail::cuda_memcpy_async<fixed_width_column_descriptor>(
+      device_descriptors, host_descriptors, stream);
+
+    auto const copy_shared_memory =
+      staged_scatter_smem{num_partitions, rows_per_thread, column_groups.max_element_width}.bytes;
+    copy_fixed_width_columns<<<grid_size,
+                               STAGED_SCATTER_BLOCK_SIZE,
+                               copy_shared_memory,
+                               stream.value()>>>(device_descriptors.data(),
+                                                 device_descriptors.size(),
+                                                 num_rows,
+                                                 num_partitions,
+                                                 rows_per_thread,
+                                                 column_groups.max_element_width,
+                                                 partition_metadata,
+                                                 block_partition_sizes.data(),
+                                                 scanned_block_partition_sizes.data());
     CUDF_CUDA_TRY(cudaGetLastError());
+  }
 
-    // Use the resulting scatter map to materialize the output
-    auto output = detail::scatter(input, row_output_locations, input, stream, mr);
+  // Preserve the existing behavior until the reusable hybrid gather map is added: unsupported
+  // columns build and consume their maps independently.
+  for (auto const column_index : column_groups.variable_width_indices) {
+    auto gather_map = make_gather_map();
+    auto gathered   = cudf::detail::gather(cudf::table_view{{input.column(column_index)}},
+                                         gather_map,
+                                         out_of_bounds_policy::DONT_CHECK,
+                                         negative_index_policy::NOT_ALLOWED,
+                                         stream,
+                                         mr);
+    output_columns[column_index] = std::move(gathered->release().front());
+  }
 
-    stream.synchronize();  // Async D2H copy must finish before returning host vec
-    auto partition_offsets =
-      std::vector<size_type>(host_partition_offsets.begin(), host_partition_offsets.end());
-    return std::pair{std::move(output), std::move(partition_offsets)};
+  if (has_nested_nulls(input)) {
+    auto gather_map = make_gather_map();
+    detail::gather_bitmask(
+      input, gather_map.begin(), output_columns, detail::gather_bitmask_op::DONT_CHECK, stream, mr);
+  }
+
+  stream.synchronize();  // Async descriptor and partition-offset copies must complete
+  auto partition_offsets =
+    std::vector<size_type>(host_partition_offsets.begin(), host_partition_offsets.end());
+  return {std::make_unique<table>(std::move(output_columns), num_rows),
+          std::move(partition_offsets)};
+}
+
+/**
+ * @brief Partitions a table by scattering each input row to its computed output location.
+ *
+ * @tparam PartitionMetadataView Device-accessible partition metadata view type
+ * @tparam Hasher Device-callable row hasher type
+ * @tparam Partitioner Hash-to-partition mapping type
+ * @param input Table whose rows are reordered into partitions
+ * @param num_rows Number of rows to partition
+ * @param num_partitions Number of output partitions
+ * @param hasher Row hasher used to select partitions
+ * @param partitioner Functor that maps row hashes to partition identifiers
+ * @param partition_metadata Device-accessible partition metadata view
+ * @param stream CUDA stream used for device operations
+ * @param mr Device memory resource used for output allocations
+ * @return Partitioned table and the starting offset of each partition
+ */
+template <typename PartitionMetadataView, typename Hasher, typename Partitioner>
+std::pair<std::unique_ptr<table>, std::vector<size_type>> partition_scatter(
+  table_view const& input,
+  size_type num_rows,
+  size_type num_partitions,
+  Hasher hasher,
+  Partitioner partitioner,
+  PartitionMetadataView partition_metadata,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  auto const grid_size = static_cast<size_type>(
+    cudf::detail::grid_1d{num_rows, SCATTER_BLOCK_SIZE, SCATTER_ROWS_PER_THREAD}.num_blocks);
+  auto const histogram_bytes = static_cast<std::size_t>(num_partitions) * sizeof(size_type);
+  auto const num_cta_partition_counts =
+    static_cast<std::size_t>(grid_size) * static_cast<std::size_t>(num_partitions);
+
+  // The metadata CTA owns every row it visits. Its histogram records how many rows it contributes
+  // to each partition, and each row stores its offset within that CTA-local partition.
+  auto block_partition_sizes = rmm::device_uvector<size_type>(num_cta_partition_counts, stream);
+  auto scanned_block_partition_sizes =
+    rmm::device_uvector<size_type>(num_cta_partition_counts, stream);
+  auto host_partition_offsets =
+    cudf::detail::make_pinned_vector_async<size_type>(num_partitions + 1, stream);
+  host_partition_offsets[num_partitions] = num_rows;
+
+  compute_row_partition_numbers<<<grid_size, SCATTER_BLOCK_SIZE, histogram_bytes, stream.value()>>>(
+    hasher, num_partitions, partitioner, partition_metadata, block_partition_sizes.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
+
+  // Counts are partition-major: all CTA counts for partition 0, then all CTA counts for partition
+  // 1, and so on. The scan therefore provides both each CTA's output offset and every partition's
+  // global start.
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                         block_partition_sizes.begin(),
+                         block_partition_sizes.end(),
+                         scanned_block_partition_sizes.begin());
+
+  // Copy the first CTA offset for every partition. The source pitch skips one partition's
+  // complete set of CTA offsets, while the destination advances by one element.
+  CUDF_CUDA_TRY(cudaMemcpy2DAsync(host_partition_offsets.data(),
+                                  sizeof(size_type),
+                                  scanned_block_partition_sizes.data(),
+                                  static_cast<std::size_t>(grid_size) * sizeof(size_type),
+                                  sizeof(size_type),
+                                  num_partitions,
+                                  cudaMemcpyDeviceToHost,
+                                  stream.value()));
+
+  auto row_output_locations = rmm::device_uvector<size_type>(num_rows, stream);
+  compute_row_output_locations<<<grid_size, SCATTER_BLOCK_SIZE, histogram_bytes, stream.value()>>>(
+    partition_metadata,
+    row_output_locations.data(),
+    num_partitions,
+    scanned_block_partition_sizes.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
+
+  auto output = detail::scatter(input, row_output_locations, input, stream, mr);
+  stream.synchronize();  // Async partition-offset copy must complete
+  auto partition_offsets =
+    std::vector<size_type>(host_partition_offsets.begin(), host_partition_offsets.end());
+  return {std::move(output), std::move(partition_offsets)};
+}
+
+/**
+ * @brief Partitions rows using the first supported execution path.
+ *
+ * Packed metadata is attempted first using the rows per CTA selected for that exact kernel
+ * specialization. When staged scatter is unavailable, the function tries shared-memory scatter
+ * before using the global-memory implementation.
+ *
+ * @tparam Hasher Device-callable row hasher type
+ * @tparam Partitioner Hash-to-partition mapping type
+ * @param input Table whose rows are reordered into partitions
+ * @param num_rows Number of rows to partition
+ * @param num_partitions Number of output partitions
+ * @param hasher Row hasher used to select partitions
+ * @param partitioner Functor that maps row hashes to partition identifiers
+ * @param stream CUDA stream used for device operations
+ * @param mr Device memory resource used for output allocations
+ * @return Partitioned table and the starting offset of each partition
+ */
+template <typename Hasher, typename Partitioner>
+std::pair<std::unique_ptr<table>, std::vector<size_type>> dispatch_partition_impl(
+  table_view const& input,
+  size_type num_rows,
+  size_type num_partitions,
+  Hasher hasher,
+  Partitioner partitioner,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  auto const column_groups = group_columns(input);
+  auto const packed_rows_per_thread =
+    staged_rows_per_thread<Hasher, Partitioner, detail::partition_metadata::packed_view>(
+      num_partitions, input, column_groups);
+  auto const staged_scatter_layout =
+    packed_rows_per_thread ? detail::partition_metadata::pick_layout(
+                               num_partitions, STAGED_SCATTER_BLOCK_SIZE * packed_rows_per_thread)
+                           : detail::partition_metadata::layout::DEFAULT;
+
+  auto const scatter_layout = detail::partition_metadata::pick_layout(
+    num_partitions, SCATTER_BLOCK_SIZE * SCATTER_ROWS_PER_THREAD);
+  auto const scatter_histogram_bytes = static_cast<std::size_t>(num_partitions) * sizeof(size_type);
+  auto const scatter_max_smem_bytes  = []<typename PartitionMetadataView>() {
+    return std::min(configure_dynamic_shared_memory(
+                      &compute_row_partition_numbers<Hasher, Partitioner, PartitionMetadataView>,
+                      SCATTER_BLOCK_SIZE),
+                    configure_dynamic_shared_memory(
+                      &compute_row_output_locations<PartitionMetadataView>, SCATTER_BLOCK_SIZE));
+  };
+
+  if (staged_scatter_layout == detail::partition_metadata::layout::PACKED32) {
+    auto packed_metadata = rmm::device_uvector<std::uint32_t>(num_rows, stream);
+    auto const partition_bits =
+      detail::partition_metadata::ceil_log2(static_cast<std::uint64_t>(num_partitions));
+    auto const metadata = detail::partition_metadata::packed_view{
+      device_span<std::uint32_t>{packed_metadata}, partition_bits};
+    return partition_staged_scatter(input,
+                                    num_rows,
+                                    num_partitions,
+                                    hasher,
+                                    partitioner,
+                                    metadata,
+                                    packed_rows_per_thread,
+                                    column_groups,
+                                    stream,
+                                    mr);
+  } else if (auto default_rows_per_thread =
+               staged_rows_per_thread<Hasher,
+                                      Partitioner,
+                                      detail::partition_metadata::default_view>(
+                 num_partitions, input, column_groups)) {
+    auto row_partitions        = rmm::device_uvector<size_type>(num_rows, stream);
+    auto row_partition_offsets = rmm::device_uvector<size_type>(num_rows, stream);
+    auto const metadata        = detail::partition_metadata::default_view{
+      device_span<size_type>{row_partitions}, device_span<size_type>{row_partition_offsets}};
+    return partition_staged_scatter(input,
+                                    num_rows,
+                                    num_partitions,
+                                    hasher,
+                                    partitioner,
+                                    metadata,
+                                    default_rows_per_thread,
+                                    column_groups,
+                                    stream,
+                                    mr);
+  } else if (scatter_layout == detail::partition_metadata::layout::PACKED32 &&
+             scatter_histogram_bytes <= scatter_max_smem_bytes.template
+                                        operator()<detail::partition_metadata::packed_view>()) {
+    auto packed_metadata = rmm::device_uvector<std::uint32_t>(num_rows, stream);
+    auto const partition_bits =
+      detail::partition_metadata::ceil_log2(static_cast<std::uint64_t>(num_partitions));
+    auto const metadata = detail::partition_metadata::packed_view{
+      device_span<std::uint32_t>{packed_metadata}, partition_bits};
+    return partition_scatter(
+      input, num_rows, num_partitions, hasher, partitioner, metadata, stream, mr);
+  } else if (scatter_histogram_bytes <= scatter_max_smem_bytes.template
+                                        operator()<detail::partition_metadata::default_view>()) {
+    auto row_partitions        = rmm::device_uvector<size_type>(num_rows, stream);
+    auto row_partition_offsets = rmm::device_uvector<size_type>(num_rows, stream);
+    auto const metadata        = detail::partition_metadata::default_view{
+      device_span<size_type>{row_partitions}, device_span<size_type>{row_partition_offsets}};
+    return partition_scatter(
+      input, num_rows, num_partitions, hasher, partitioner, metadata, stream, mr);
+  } else {
+    return partition_global_scatter(input, num_rows, num_partitions, hasher, stream, mr);
   }
 }
 
 /**
- * @brief Selects a partition-metadata layout and dispatches hash partitioning.
+ * @brief Selects a power-of-two or modulo partitioner before launch selection.
  *
  * @tparam Hasher Device-callable row hasher type
  * @param input Table whose rows are reordered into partitions
@@ -801,40 +1269,13 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> dispatch_hash_partitio
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  // Check whether the per-block shared memory histograms fit in shared memory
-  int dev;
-  CUDF_CUDA_TRY(cudaGetDevice(&dev));
-  auto const fits_in_shared_memory =
-    static_cast<std::size_t>(num_partitions) <
-    cuda::device_attributes::max_shared_memory_per_block(cuda::device_ref{dev}) / sizeof(size_type);
-
-  if (!fits_in_shared_memory) {
-    return hash_partition_table_global_memory(input, num_rows, num_partitions, hasher, stream, mr);
+  if (is_power_two(num_partitions)) {
+    auto const partitioner = bitwise_partitioner<hash_value_type>{num_partitions};
+    return dispatch_partition_impl(
+      input, num_rows, num_partitions, hasher, partitioner, stream, mr);
   }
-
-  bool const use_optimization{num_partitions <= THRESHOLD_FOR_OPTIMIZED_PARTITION_KERNEL};
-  auto const block_size = use_optimization ? OPTIMIZED_BLOCK_SIZE : FALLBACK_BLOCK_SIZE;
-  auto const rows_per_thread =
-    use_optimization ? OPTIMIZED_ROWS_PER_THREAD : FALLBACK_ROWS_PER_THREAD;
-  auto const rows_per_block = block_size * rows_per_thread;
-
-  if (detail::partition_metadata::pick_layout(num_partitions, rows_per_block) ==
-      detail::partition_metadata::layout::PACKED32) {
-    auto storage = rmm::device_uvector<std::uint32_t>(num_rows, stream);
-    auto const partition_bits =
-      detail::partition_metadata::ceil_log2(static_cast<std::uint64_t>(num_partitions));
-    auto const partition_metadata =
-      detail::partition_metadata::packed_view{device_span<std::uint32_t>{storage}, partition_bits};
-    return hash_partition_table_impl(
-      input, num_rows, num_partitions, hasher, partition_metadata, stream, mr);
-  }
-
-  auto partitions               = rmm::device_uvector<size_type>(num_rows, stream);
-  auto offsets                  = rmm::device_uvector<size_type>(num_rows, stream);
-  auto const partition_metadata = detail::partition_metadata::default_view{
-    device_span<size_type>{partitions}, device_span<size_type>{offsets}};
-  return hash_partition_table_impl(
-    input, num_rows, num_partitions, hasher, partition_metadata, stream, mr);
+  auto const partitioner = modulo_partitioner<hash_value_type>{num_partitions};
+  return dispatch_partition_impl(input, num_rows, num_partitions, hasher, partitioner, stream, mr);
 }
 
 /**
@@ -1055,10 +1496,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(
-    keys.num_columns() == 0 || input.num_rows() == keys.num_rows(),
-    "Input table and key table must have same number of rows, or key table should have no columns.",
-    std::invalid_argument);
+  CUDF_EXPECTS(keys.num_columns() == 0 || input.num_rows() == keys.num_rows(),
+               "Input table and key table must have same number of rows, or key table should "
+               "have no columns.",
+               std::invalid_argument);
   switch (hash_function) {
     case (hash_id::HASH_IDENTITY):
       return hash_partition<detail::IdentityHash>(input, keys, num_partitions, seed, stream, mr);

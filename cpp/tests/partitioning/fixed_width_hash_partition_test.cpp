@@ -9,7 +9,6 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/partitioning.hpp>
@@ -29,44 +28,11 @@
 
 namespace {
 
-using cudf::test::dictionary_column_wrapper;
 using cudf::test::fixed_width_column_wrapper;
-using cudf::test::lists_column_wrapper;
 using cudf::test::strings_column_wrapper;
-using cudf::test::structs_column_wrapper;
 
 /** @brief Test fixture for fixed-width hash partitioning. */
 class FixedWidthHashPartitionTest : public cudf::test::BaseFixture {};
-
-/**
- * @brief Typed test fixture covering every fixed-width key type.
- *
- * @tparam T Fixed-width key type under test
- */
-template <typename T>
-class FixedWidthHashPartitionTypeTest : public cudf::test::BaseFixture {};
-
-TYPED_TEST_SUITE(FixedWidthHashPartitionTypeTest, cudf::test::FixedWidthTypes);
-
-TYPED_TEST(FixedWidthHashPartitionTypeTest, CompatibilityAcceptsEveryFixedWidthType)
-{
-  auto column = cudf::make_empty_column(cudf::data_type{cudf::type_to_id<TypeParam>()});
-  EXPECT_TRUE(
-    cudf::detail::is_fixed_width_partition_compatible(cudf::table_view{{column->view()}}));
-}
-
-TEST_F(FixedWidthHashPartitionTest, CompatibilityRejectsComplexAndDictionaryKeys)
-{
-  strings_column_wrapper strings{"a", "b"};
-  lists_column_wrapper<int32_t> lists{{1, 2}, {3}};
-  fixed_width_column_wrapper<int32_t> child{1, 2};
-  structs_column_wrapper structs{{child}};
-  dictionary_column_wrapper<int32_t> dictionary{1, 2};
-
-  for (auto const& column : std::vector<cudf::column_view>{strings, lists, structs, dictionary}) {
-    EXPECT_FALSE(cudf::detail::is_fixed_width_partition_compatible(cudf::table_view{{column}}));
-  }
-}
 
 TEST_F(FixedWidthHashPartitionTest, PartitionMetadataLayoutBoundaries)
 {
@@ -89,20 +55,6 @@ TEST_F(FixedWidthHashPartitionTest, PartitionMetadataRoundTrips)
   EXPECT_EQ(packed_partition, (1 << 20) - 1);
   EXPECT_EQ(packed_offset, (1 << 12) - 1);
   EXPECT_EQ(packed_metadata.partition(0), packed_partition);
-
-  cudf::size_type partition{};
-  cudf::size_type offset{};
-  auto const default_metadata = cudf::detail::partition_metadata::default_view{
-    cudf::device_span<cudf::size_type>{&partition, 1},
-    cudf::device_span<cudf::size_type>{&offset, 1}};
-  auto constexpr max_size = std::numeric_limits<cudf::size_type>::max();
-  default_metadata.store(0, max_size, max_size);
-  cudf::size_type default_partition;
-  cudf::size_type default_offset;
-  default_metadata.load(0, default_partition, default_offset);
-  EXPECT_EQ(default_partition, max_size);
-  EXPECT_EQ(default_offset, max_size);
-  EXPECT_EQ(default_metadata.partition(0), default_partition);
 
   std::uint32_t zero_partition_bits{};
   auto const zero_partition_bits_metadata = cudf::detail::partition_metadata::packed_view{
@@ -151,21 +103,39 @@ void expect_murmur_partitioned(cudf::table_view const& input,
   }
 }
 
+template <typename T>
+class FixedPointHashPartitionTest : public cudf::test::BaseFixture {};
+
+TYPED_TEST_SUITE(FixedPointHashPartitionTest, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointHashPartitionTest, FixedPointKeys)
+{
+  using rep_type = cudf::device_storage_type_t<TypeParam>;
+
+  cudf::test::fixed_point_column_wrapper<rep_type> keys{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+                                                        numeric::scale_type{-2}};
+  fixed_width_column_wrapper<int32_t> payload{9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
+
+  expect_murmur_partitioned(cudf::table_view{{keys, payload}}, {0}, 5, 12345);
+}
+
 TEST_F(FixedWidthHashPartitionTest, MixedWidthsNullableCompositeKeys)
 {
-  constexpr cudf::size_type num_rows = 2053;
-  auto const values                  = cuda::counting_iterator<int32_t>{0};
+  constexpr cudf::size_type owner_rows = 2055;
+  auto const values                    = cuda::counting_iterator<int32_t>{0};
   auto const valid = thrust::make_transform_iterator(values, [](auto row) { return row % 7 != 0; });
 
-  fixed_width_column_wrapper<int8_t, int32_t> bytes(values, values + num_rows);
-  fixed_width_column_wrapper<int32_t> ints(values, values + num_rows, valid);
+  fixed_width_column_wrapper<int8_t, int32_t> bytes(values, values + owner_rows);
+  fixed_width_column_wrapper<int16_t, int32_t> shorts(values, values + owner_rows, valid);
+  fixed_width_column_wrapper<int32_t> ints(values, values + owner_rows);
   cudf::test::fixed_point_column_wrapper<__int128_t> decimal128(
-    values, values + num_rows, numeric::scale_type{-4});
-  fixed_width_column_wrapper<int64_t, int32_t> payload(values, values + num_rows);
+    values, values + owner_rows, numeric::scale_type{-4});
+  fixed_width_column_wrapper<int64_t, int32_t> payload(values, values + owner_rows);
 
-  auto const input = cudf::table_view{{bytes, ints, decimal128, payload}};
-  expect_murmur_partitioned(input, {0, 1, 2}, 16, 12345);
-  expect_murmur_partitioned(input, {0, 1, 2}, 17, 12345);
+  auto const owner  = cudf::table_view{{bytes, shorts, ints, decimal128, payload}};
+  auto const sliced = cudf::slice(owner, {1, owner_rows - 1}).front();
+  expect_murmur_partitioned(sliced, {0, 1, 2, 3}, 16, 12345);
+  expect_murmur_partitioned(sliced, {0, 1, 2, 3}, 17, 12345);
 }
 
 TEST_F(FixedWidthHashPartitionTest, FloatingPointNormalizationAndSlice)
@@ -205,6 +175,24 @@ TEST_F(FixedWidthHashPartitionTest, ExternalIdentityKeys)
       EXPECT_EQ(static_cast<uint32_t>(key_values[source_row]) % num_partitions, partition);
     }
   }
+}
+
+TEST_F(FixedWidthHashPartitionTest, FixedAndVariableWidthPayloads)
+{
+  constexpr cudf::size_type num_rows = 4099;
+  auto const values                  = cuda::counting_iterator<int32_t>{0};
+  auto const strings                 = thrust::make_transform_iterator(
+    values, [](auto value) { return std::string{"value_"} + std::to_string(value); });
+
+  fixed_width_column_wrapper<int32_t> keys(values, values + num_rows);
+  fixed_width_column_wrapper<int8_t, int32_t> bytes(values, values + num_rows);
+  fixed_width_column_wrapper<int64_t, int32_t> longs(values, values + num_rows);
+  cudf::test::fixed_point_column_wrapper<__int128_t> decimal128(
+    values, values + num_rows, numeric::scale_type{-2});
+  strings_column_wrapper string_payload(strings, strings + num_rows);
+
+  expect_murmur_partitioned(
+    cudf::table_view{{keys, bytes, decimal128, string_payload, longs}}, {0}, 2049, 2468);
 }
 
 TEST_F(FixedWidthHashPartitionTest, PartitionOffsetsAcrossBlocksAndEmptyPartitions)
