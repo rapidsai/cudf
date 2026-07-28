@@ -4784,6 +4784,52 @@ def test_parquet_bloom_filters_alignment(datadir, columns, memory_resource):
     assert_eq(expected, read)
 
 
+@pytest.mark.parametrize(
+    "predicate",
+    [
+        [("String", "==", "Hello")],  # present, row group kept
+        [("String", "==", "not-in-this-file")],  # absent, row group pruned
+    ],
+)
+def test_parquet_bloom_filters_length_absent(datadir, predicate):
+    # Reader must recover the bitset in case of absent length field in the header.
+    # Source: apache/parquet-testing (Apache-2.0)
+    fname_len_absent = datadir / "data_index_bloom_encoding_stats.parquet"
+    fname_with_len = datadir / "data_index_bloom_encoding_with_length.parquet"
+
+    expected = pq.read_table(fname_len_absent, filters=predicate)
+    read_len_absent = cudf.read_parquet(
+        fname_len_absent, filters=predicate
+    ).to_arrow()
+    read_with_len = cudf.read_parquet(
+        fname_with_len, filters=predicate
+    ).to_arrow()
+
+    assert_eq(expected, read_len_absent)
+    assert_eq(read_with_len, read_len_absent)
+
+
+@pytest.mark.parametrize(
+    "predicate",
+    [
+        [("r_reason_id", "==", "AAAAAAAABAAAAAAA")],  # no bloom filter
+        [
+            ("r_reason_desc", "==", "Did not like the color"),
+            ("r_reason_id", "==", "AAAAAAAAIAAAAAAA"),
+        ],  # with and without a bloom filter
+    ],
+)
+def test_parquet_bloom_filters_mixed_presence(datadir, predicate):
+    # Source: same data as in bloom_filter_alignment.parquet, 
+    # written with only r_reason_desc having a bloom filter
+    fname = datadir / "bloom_filter_alignment_desc_only.parquet"
+
+    expected = pq.read_table(fname, filters=predicate)
+    read = cudf.read_parquet(fname, filters=predicate).to_arrow()
+
+    assert_eq(expected, read)
+
+
 def test_parquet_reader_unsupported_compression(datadir):
     fname = datadir / "hadoop_lz4_compressed.parquet"
 
