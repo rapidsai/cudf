@@ -63,13 +63,13 @@
 
 namespace cudf::io::orc::detail {
 
-// Alignment of every non-empty region within the encoded and gathered arenas. Compression is what
+// Alignment of every non-empty extent within the encoded and gathered arenas. Compression is what
 // requires it: `gather_stripes` compacts the per-rowgroup chunks without re-applying the codec
-// alignment that `encode_columns` gave them, so a gathered region's base is the pointer the
+// alignment that `encode_columns` gave them, so a gathered extent's base is the pointer the
 // compressor receives, and it has to satisfy `compress_required_chunk_alignment` (checked in
-// `encode_columns`). RMM's allocation alignment is what the per-region allocations these arenas
+// `encode_columns`). RMM's allocation alignment is what the per-stream allocations these arenas
 // replaced provided, so using it keeps every downstream access at least as aligned as before.
-constexpr size_t region_alignment = rmm::CUDA_ALLOCATION_ALIGNMENT;
+constexpr size_t extent_alignment = rmm::CUDA_ALLOCATION_ALIGNMENT;
 
 template <typename T>
 [[nodiscard]] CUDF_HOST_DEVICE constexpr int varint_size(T val)
@@ -858,7 +858,7 @@ struct segmented_valid_cnt_input {
   std::vector<size_type> indices;
 };
 
-std::pair<encoded_data, transient_regions> encode_columns(orc_table_view const& orc_table,
+std::pair<encoded_data, transient_extents> encode_columns(orc_table_view const& orc_table,
                                                           encoder_decimal_info&& dec_chunk_sizes,
                                                           file_segmentation const& segmentation,
                                                           orc_streams const& streams,
@@ -951,13 +951,13 @@ std::pair<encoded_data, transient_regions> encode_columns(orc_table_view const& 
 
   // Pass 1: compute per-rowgroup stream lengths and per-(stripe, strm_id) sizes, along with
   // whether a size is a strict upper bound on what the encoder will write. Offsets into the
-  // arenas are assigned below. Per-region data is indexed `stripe_id * num_streams + strm_id`.
+  // arenas are assigned below. Per-extent data is indexed `stripe_id * num_streams + strm_id`.
   auto const num_streams = streams.size();
-  auto const region_idx  = [num_streams](size_t stripe_id, size_t strm_id) {
+  auto const extent_idx  = [num_streams](size_t stripe_id, size_t strm_id) {
     return stripe_id * num_streams + strm_id;
   };
-  std::vector<size_t> region_sizes(segmentation.num_stripes() * num_streams, 0);
-  std::vector<bool> region_has_slack(segmentation.num_stripes() * num_streams, false);
+  std::vector<size_t> extent_sizes(segmentation.num_stripes() * num_streams, 0);
+  std::vector<bool> extent_has_slack(segmentation.num_stripes() * num_streams, false);
   for (auto const& stripe : segmentation.stripes) {
     for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
       for (int strm_type = 0; strm_type < CI_NUM_STREAMS; ++strm_type) {
@@ -973,7 +973,7 @@ std::pair<encoded_data, transient_regions> encode_columns(orc_table_view const& 
         if (strm_id < 0) { continue; }
 
         size_t stripe_size = 0;
-        // Alignment padding is slack in itself, in every rowgroup of the region.
+        // Alignment padding is slack in itself, in every rowgroup of the extent.
         bool has_slack = uncomp_block_align > 1;
         std::for_each(stripe.cbegin(), stripe.cend(), [&](auto rg_idx) {
 #if defined(__GNUC__) && (__GNUC__ >= 14)
@@ -1016,53 +1016,53 @@ std::pair<encoded_data, transient_regions> encode_columns(orc_table_view const& 
           stripe_size += strm.lengths[strm_type] + uncomp_block_align - 1;
         });
 
-        region_sizes[region_idx(stripe.id, strm_id)]     = stripe_size;
-        region_has_slack[region_idx(stripe.id, strm_id)] = has_slack;
+        extent_sizes[extent_idx(stripe.id, strm_id)]     = stripe_size;
+        extent_has_slack[extent_idx(stripe.id, strm_id)] = has_slack;
       }
     }
   }
 
-  // Regions that `gather_stripes` is certain to compact go into their own arena, so it can be
-  // freed as soon as gathering completes rather than staying pinned by the regions read in place.
-  // A region is certain to be compacted when its stripe spans several rowgroups (so its chunks
+  // Extents that `gather_stripes` is certain to compact go into their own arena, so it can be
+  // freed as soon as gathering completes rather than staying pinned by the extents read in place.
+  // An extent is certain to be compacted when its stripe spans several rowgroups (so its chunks
   // are laid out with gaps) and its size is an upper bound (so a gap is non-empty). Guessing
   // wrong either way is safe, and only costs a copy or a retained allocation.
-  CUDF_EXPECTS(region_alignment >= uncomp_block_align,
-               "Internal ORC writer error: arena regions are not aligned enough for the codec");
+  CUDF_EXPECTS(extent_alignment >= uncomp_block_align,
+               "Internal ORC writer error: arena extents are not aligned enough for the codec");
 
-  transient_regions transient{segmentation.num_stripes(), num_streams};
-  std::vector<size_t> region_offsets(segmentation.num_stripes() * num_streams, 0);
+  transient_extents transient{segmentation.num_stripes(), num_streams};
+  std::vector<size_t> extent_offsets(segmentation.num_stripes() * num_streams, 0);
   size_t persistent_arena_size = 0;
   size_t transient_arena_size  = 0;
   for (size_t s = 0; s < segmentation.num_stripes(); ++s) {
     for (size_t strm_id = 0; strm_id < num_streams; ++strm_id) {
-      auto const idx = region_idx(s, strm_id);
-      if (region_sizes[idx] == 0) { continue; }
-      if (segmentation.stripes[s].size > 1 and region_has_slack[idx]) {
+      auto const idx = extent_idx(s, strm_id);
+      if (extent_sizes[idx] == 0) { continue; }
+      if (segmentation.stripes[s].size > 1 and extent_has_slack[idx]) {
         transient.insert(s, strm_id);
       }
       auto& arena_size =
         transient.contains(s, strm_id) ? transient_arena_size : persistent_arena_size;
-      arena_size          = util::round_up_unsafe<size_t>(arena_size, region_alignment);
-      region_offsets[idx] = arena_size;
-      arena_size += region_sizes[idx];
+      arena_size          = util::round_up_unsafe<size_t>(arena_size, extent_alignment);
+      extent_offsets[idx] = arena_size;
+      arena_size += extent_sizes[idx];
     }
   }
 
   rmm::device_uvector<uint8_t> persistent_buffer(persistent_arena_size, stream);
   rmm::device_uvector<uint8_t> transient_buffer(transient_arena_size, stream);
 
-  // Zero-size regions keep a null pointer, matching the empty per-region device_uvector they
+  // Zero-size extents keep a null pointer, matching the empty per-stream device_uvector they
   // replaced; a null `data_ptrs` entry selects the pass-through path in the encoder kernels.
   std::vector<std::vector<device_span<uint8_t>>> encoded_views(
     segmentation.num_stripes(), std::vector<device_span<uint8_t>>(num_streams));
   for (size_t s = 0; s < segmentation.num_stripes(); ++s) {
     for (size_t strm_id = 0; strm_id < num_streams; ++strm_id) {
-      auto const idx = region_idx(s, strm_id);
-      if (region_sizes[idx] == 0) { continue; }
+      auto const idx = extent_idx(s, strm_id);
+      if (extent_sizes[idx] == 0) { continue; }
       auto& arena = transient.contains(s, strm_id) ? transient_buffer : persistent_buffer;
       encoded_views[s][strm_id] =
-        device_span<uint8_t>{arena.data() + region_offsets[idx], region_sizes[idx]};
+        device_span<uint8_t>{arena.data() + extent_offsets[idx], extent_sizes[idx]};
     }
   }
 
@@ -1144,7 +1144,7 @@ std::pair<encoded_data, transient_regions> encode_columns(orc_table_view const& 
  *
  * @param[in] num_index_streams Total number of index streams
  * @param[in] segmentation stripe and rowgroup ranges
- * @param[in] transient Regions held in `enc_data->transient_buffer`, which must all be gathered
+ * @param[in] transient Extents held in `enc_data->transient_buffer`, which must all be gathered
  * @param[in,out] enc_data ORC per-chunk streams of encoded data
  * @param[in,out] strm_desc List of stream descriptors [stripe][data_stream]
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
@@ -1152,7 +1152,7 @@ std::pair<encoded_data, transient_regions> encode_columns(orc_table_view const& 
  */
 std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
                                               file_segmentation const& segmentation,
-                                              transient_regions const& transient,
+                                              transient_extents const& transient,
                                               encoded_data* enc_data,
                                               hostdevice_2dvector<stripe_stream>* strm_desc,
                                               rmm::cuda_stream_view stream)
@@ -1160,7 +1160,7 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
   if (segmentation.num_stripes() == 0) { return {}; }
 
   auto const num_streams_in_data = enc_data->data[0].size();
-  auto const region_idx          = [num_streams_in_data](size_t stripe_id, size_t strm_id) {
+  auto const extent_idx          = [num_streams_in_data](size_t stripe_id, size_t strm_id) {
     return stripe_id * num_streams_in_data + strm_id;
   };
 
@@ -1193,24 +1193,24 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
                      "Internal ORC writer error: insufficient allocation size for encoded data");
 
         // Compact when the chunks are not already contiguous, i.e. when the encoder wrote less
-        // than the region was sized for. Regions in `transient_buffer` are compacted regardless,
+        // than the extent was sized for. Extents in `transient_buffer` are compacted regardless,
         // so that arena can be released below.
         bool const gathered = (stripe.size > 1 and (transient.contains(stripe.id, stream_id) or
                                                     allocated_stripe_size > actual_stripe_size));
-        gather_meta[region_idx(stripe.id, stream_id)] = {actual_stripe_size, gathered};
+        gather_meta[extent_idx(stripe.id, stream_id)] = {actual_stripe_size, gathered};
       }
     }
   }
 
-  // Every transient region is gathered by construction, since `encode_columns` only makes a
-  // region transient when its stripe spans several rowgroups, which is what the predicate above
+  // Every transient extent is gathered by construction, since `encode_columns` only makes an
+  // extent transient when its stripe spans several rowgroups, which is what the predicate above
   // tests. Check it anyway, because the release below is a use-after-free if it ever stops
   // holding, and the loop above cannot see stream types at or above CI_INDEX.
   for (size_t s = 0; s < segmentation.num_stripes(); ++s) {
     for (size_t strm_id = 0; strm_id < num_streams_in_data; ++strm_id) {
       CUDF_EXPECTS(
-        not transient.contains(s, strm_id) or gather_meta[region_idx(s, strm_id)].gathered,
-        "Internal ORC writer error: transient encoded region was not gathered");
+        not transient.contains(s, strm_id) or gather_meta[extent_idx(s, strm_id)].gathered,
+        "Internal ORC writer error: transient encoded extent was not gathered");
     }
   }
 
@@ -1220,9 +1220,9 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
   size_t gather_total = 0;
   for (size_t s = 0; s < segmentation.num_stripes(); ++s) {
     for (size_t strm_id = 0; strm_id < num_streams_in_data; ++strm_id) {
-      auto const idx = region_idx(s, strm_id);
+      auto const idx = extent_idx(s, strm_id);
       if (!gather_meta[idx].gathered) { continue; }
-      gather_total        = util::round_up_unsafe<size_t>(gather_total, region_alignment);
+      gather_total        = util::round_up_unsafe<size_t>(gather_total, extent_alignment);
       gather_offsets[idx] = gather_total;
       gather_total += gather_meta[idx].actual_size;
     }
@@ -1240,11 +1240,11 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
         auto const stream_id = col_streams[0].ids[k];
         if (stream_id == -1) { continue; }
 
-        auto const idx   = region_idx(stripe.id, stream_id);
+        auto const idx   = extent_idx(stripe.id, stream_id);
         auto const& meta = gather_meta[idx];
         uint8_t* dst_ptr = nullptr;
         if (meta.gathered) {
-          // Non-null even when the region is empty, unlike the empty device_uvector this replaced.
+          // Non-null even when the extent is empty, unlike the empty device_uvector this replaced.
           // `init_batched_memcpy_kernel` repoints the per-rowgroup data_ptrs at this arena, which
           // is what lets `transient_buffer` be released without leaving them dangling.
           dst_ptr           = gather_buffer.data() + gather_offsets[idx];
@@ -1277,13 +1277,13 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
   // spans, so consumers that read enc_data->data observe the post-gather state.
   for (size_t stripe_id = 0; stripe_id < enc_data->data.size(); ++stripe_id) {
     for (size_t stream_id = 0; stream_id < num_streams_in_data; ++stream_id) {
-      auto const idx = region_idx(stripe_id, stream_id);
+      auto const idx = extent_idx(stripe_id, stream_id);
       if (gather_meta[idx].gathered) { enc_data->data[stripe_id][stream_id] = gather_views[idx]; }
     }
   }
 
   // Hold the gathered arena for lifetime management, and release the arena it copied from.
-  // `persistent_buffer` stays alive: some of its regions are read in place, via per-rowgroup
+  // `persistent_buffer` stays alive: some of its extents are read in place, via per-rowgroup
   // data_ptrs that still point into it.
   enc_data->gathered_buffer  = std::move(gather_buffer);
   enc_data->transient_buffer = rmm::device_uvector<uint8_t>{0, stream};
