@@ -1379,10 +1379,10 @@ TEST_F(EncodeVariantTest, MixedFloatAndIntColumns)
     *got_d, cudf::test::fixed_width_column_wrapper<double>({10.1, 20.2, 30.3}));
 }
 
-TEST_F(EncodeVariantTest, FloatEncodeMatchesApacheBytes)
+TEST_F(EncodeVariantTest, ApacheFixtureValuesRoundTrip)
 {
-  // Verify that encode_variant produces the exact bytes from the Apache parquet-testing fixtures
-  // for float32 (1234567936.0f) and float64 (1234567890.1234).
+  // Round-trip the specific float32/float64 values from the Apache parquet-testing fixtures
+  // (1234567936.0f and 1234567890.1234) through encode_variant + extract_variant_field.
   auto const stream = cudf::test::get_default_stream();
 
   cudf::test::fixed_width_column_wrapper<float> f32_col({1234567936.0f});

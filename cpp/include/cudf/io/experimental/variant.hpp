@@ -127,7 +127,7 @@ namespace io::parquet::experimental {
  * @param mr Device memory resource
  * @return VARIANT column: `STRUCT<list<uint8>, list<uint8>>` (metadata child, value child)
  *
- * @throws std::invalid_argument if `strings` is not a STRING column
+ * @throws cudf::logic_error if `input` is not a STRING column
  */
 [[nodiscard]] std::unique_ptr<column> encode_strings_to_variant(
   cudf::strings_column_view const& input,

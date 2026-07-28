@@ -348,6 +348,9 @@ std::pair<std::vector<uint8_t>, std::vector<int32_t>> build_metadata_blob(
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_constant_list_buffers(
   size_type num_rows, size_type M, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(static_cast<int64_t>(num_rows) * M <= std::numeric_limits<size_type>::max(),
+               "metadata size exceeds 2 GiB limit",
+               std::overflow_error);
   auto offsets = make_numeric_column(
     data_type{type_id::INT32}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
   thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
@@ -394,7 +397,8 @@ std::unique_ptr<column> encode_strings_to_variant(cudf::strings_column_view cons
     make_constant_list_buffers(num_rows, k_empty_meta_size, stream, mr);
 
   // ── Value sizes ──
-  rmm::device_uvector<size_type> d_val_sizes(num_rows, stream, mr);
+  rmm::device_uvector<size_type> d_val_sizes(
+    num_rows, stream, cudf::get_current_device_resource_ref());
   {
     cudf::detail::grid_1d grid{num_rows, block_size};
     string_value_sizes_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(*input_dv,
@@ -489,11 +493,11 @@ std::unique_ptr<column> encode_variant(cudf::table_view const& input,
   auto [meta_bytes, sort_order] = build_metadata_blob(column_names);
   auto const M                  = static_cast<size_type>(meta_bytes.size());
 
-  rmm::device_uvector<uint8_t> d_meta_template =
-    cudf::detail::make_device_uvector_async(meta_bytes, stream, mr);
+  rmm::device_uvector<uint8_t> d_meta_template = cudf::detail::make_device_uvector_async(
+    meta_bytes, stream, cudf::get_current_device_resource_ref());
 
-  rmm::device_uvector<int32_t> d_sort_order =
-    cudf::detail::make_device_uvector_async(sort_order, stream, mr);
+  rmm::device_uvector<int32_t> d_sort_order = cudf::detail::make_device_uvector_async(
+    sort_order, stream, cudf::get_current_device_resource_ref());
 
   // ── Column device views on device (via table_device_view) ──
   auto d_table = cudf::table_device_view::create(input, stream);
@@ -502,7 +506,8 @@ std::unique_ptr<column> encode_variant(cudf::table_view const& input,
   auto [meta_offsets_col, meta_data_col] = make_constant_list_buffers(num_rows, M, stream, mr);
 
   // ── Value sizes (pass 1) ──
-  rmm::device_uvector<size_type> d_val_sizes(num_rows, stream, mr);
+  rmm::device_uvector<size_type> d_val_sizes(
+    num_rows, stream, cudf::get_current_device_resource_ref());
   {
     cudf::detail::grid_1d grid{num_rows, block_size};
     object_value_sizes_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
