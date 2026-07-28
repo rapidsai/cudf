@@ -1186,8 +1186,7 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
     }
   }
 
-  // Lay out gather destinations within a single arena, with the same alignment rule as the
-  // encoded arenas.
+  // Lay out gather destinations in a single arena, with the same alignment as the encoded arenas.
   std::vector<size_t> gather_offsets(segmentation.num_stripes() * num_streams_in_data, 0);
   size_t gather_total = 0;
   for (size_t s = 0; s < segmentation.num_stripes(); ++s) {
@@ -1201,7 +1200,7 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
   }
   rmm::device_uvector<uint8_t> gather_buffer(gather_total, stream);
 
-  // Pass 2: build strm_desc entries and record gather destination spans.
+  // Build strm_desc entries and record gather destination spans.
   std::vector<device_span<uint8_t>> gather_views(segmentation.num_stripes() * num_streams_in_data,
                                                  device_span<uint8_t>{});
   std::vector<StripeInformation> stripes(segmentation.num_stripes());
@@ -1254,8 +1253,7 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
     }
   }
 
-  // Hold the gathered arena for lifetime management, and release the arena it copied from. Every
-  // transient extent was gathered above, so nothing points into `transient_buffer` any more.
+  // Hold the gathered arena for lifetime management, and release the arena it copied from.
   enc_data->gathered_buffer  = std::move(gather_buffer);
   enc_data->transient_buffer = rmm::device_uvector<uint8_t>{0, stream};
 
