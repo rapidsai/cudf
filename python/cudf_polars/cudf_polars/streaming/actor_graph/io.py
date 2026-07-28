@@ -654,6 +654,7 @@ async def scan_node(
             else len(scans),
             context=context,
             prefetch_backend=prefetch_backend,  # type: ignore[arg-type]
+            cucascade_pool_capacity=first.parquet_options.cucascade_pool_capacity if first is not None else None,
         )
         if use_prefetch
         else None

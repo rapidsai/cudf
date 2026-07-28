@@ -354,6 +354,7 @@ class HybridScanPrefetchExecutor:
         num_workers: int,
         context: Context,
         prefetch_backend: str,
+        cucascade_pool_capacity: int | None = None,
     ) -> Self:
         """
         Submit prefetch tasks for all scans.
@@ -368,6 +369,8 @@ class HybridScanPrefetchExecutor:
             rapidsmpf context.
         prefetch_backend
             ``"kvikio"`` or ``"cucascade"``.
+        cucascade_pool_capacity
+            Size in bytes of the cuCascade pinned host memory pool.
 
         Returns
         -------
@@ -396,15 +399,22 @@ class HybridScanPrefetchExecutor:
             # TODO: replace with cucascade.RestEngine.from_environment() once
             # cuCascade exposes a factory that reads standard AWS env vars directly.
             if plc.io.SourceInfo._is_remote_uri(first_path):
+                kwargs = {}
+                if cucascade_pool_capacity is not None:
+                    kwargs["pool_capacity"] = cucascade_pool_capacity
                 engine = cucascade.RestEngine(
                     access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", ""),
                     secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
                     session_token=os.environ.get("AWS_SESSION_TOKEN", ""),
                     region=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
                     endpoint=os.environ.get("AWS_ENDPOINT_URL", ""),
+                    **kwargs,
                 )
             else:
-                engine = cucascade.UringEngine()
+                kwargs = {}
+                if cucascade_pool_capacity is not None:
+                    kwargs["pool_capacity"] = cucascade_pool_capacity
+                engine = cucascade.UringEngine(**kwargs)
 
             _, dev_id = cudart.cudaGetDevice()
 

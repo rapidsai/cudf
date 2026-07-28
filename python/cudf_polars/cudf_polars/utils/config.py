@@ -253,6 +253,10 @@ class ParquetOptions:
         IO backend for hybrid scan prefetching. Must be set explicitly when
         ``use_hybrid_scan`` is ``True`` and ``prefetch_file_metadata`` is ``True``.
         ``"kvikio"`` or ``"cucascade"`` (requires the ``cucascade`` package).
+    cucascade_pool_capacity
+        Size in bytes of the pinned host memory pool used by the cuCascade IO
+        engine for bounce buffers. Only used when ``prefetch_backend`` is
+        ``"cucascade"``. When ``None``, uses the cuCascade engine default.
     use_jit_filter
         Whether to use JIT compilation for post-read filtering in Parquet scans.
         When enabled, filter predicates are JIT-compiled to CUDA kernels for
@@ -325,6 +329,11 @@ class ParquetOptions:
             f"{_env_prefix}__PREFETCH_BACKEND", str, default=None
         )
     )
+    cucascade_pool_capacity: int | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__CUCASCADE_POOL_CAPACITY", int, default=None
+        )
+    )
     use_jit_filter: bool = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__USE_JIT_FILTER",
@@ -367,6 +376,10 @@ class ParquetOptions:
             raise NotImplementedError(
                 "'use_rapidsmpf_native=True' does not currently support 'prefetch_file_metadata=True'"
             )
+        if self.cucascade_pool_capacity is not None and not isinstance(
+            self.cucascade_pool_capacity, int
+        ):
+            raise TypeError("cucascade_pool_capacity must be an int or None")
         if not isinstance(self.use_jit_filter, bool):
             raise TypeError("use_jit_filter must be a bool")
 
