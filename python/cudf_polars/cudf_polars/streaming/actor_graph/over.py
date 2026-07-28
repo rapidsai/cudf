@@ -247,7 +247,7 @@ class OriginStamps:
 
 
 def _origin_stamps_for(ir: Over) -> OriginStamps:
-    """Pick stamp column names that do not collide with the schema."""
+    """Pick three stamp column names that do not collide with the schema."""
     names = unique_names((*ir.children[0].schema.keys(), *ir.schema.keys()))
     return OriginStamps(next(names), next(names), next(names))
 
@@ -259,7 +259,7 @@ def _append_origin_stamps(
     stream: Stream,
     br: Any,
 ) -> TableChunk:
-    """Append origin stamp columns to *chunk*."""
+    """Append (chunk_index, position, rank) stamp columns to *chunk*."""
     table = chunk.table_view()
     n_rows = table.num_rows()
     int32 = plc.types.DataType(plc.TypeId.INT32)
@@ -276,14 +276,7 @@ def _append_origin_stamps(
         stream=stream,
     )
     return TableChunk.from_pylibcudf_table(
-        plc.Table(
-            [
-                *table.columns(),
-                chunk_index_col,
-                position_col,
-                rank_col,
-            ]
-        ),
+        plc.Table([*table.columns(), chunk_index_col, position_col, rank_col]),
         stream,
         exclusive_view=False,
         br=br,
@@ -297,8 +290,6 @@ def _sort_by_origin_stamps(
 ) -> plc.Table:
     """Sort stamped rows by original rank and chunk order before window evaluation."""
     columns = table.columns()
-    # Stable sort preserves row order within each origin chunk. The position
-    # stamp is only needed later when reassembling rows into output chunks.
     return plc.sorting.stable_sort_by_key(
         table,
         plc.Table([columns[n_child + 2], columns[n_child]]),
