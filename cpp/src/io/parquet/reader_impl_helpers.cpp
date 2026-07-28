@@ -719,14 +719,10 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
     auto const max_def_level = schema.max_definition_level;
     auto const max_rep_level = schema.max_repetition_level;
 
-    // If any columns lack the page indexes then just return without modifying the
-    // row_group_info.
-    if (not col_chunk.offset_index.has_value() or not col_chunk.column_index.has_value()) {
-      return;
-    }
+    // Return early if any columns lack the offset index.
+    if (not col_chunk.offset_index.has_value()) { return; }
 
     auto const& offset_index = col_chunk.offset_index.value();
-    auto const& column_index = col_chunk.column_index.value();
 
     auto& chunk_info     = chunks[col_idx];
     auto const num_pages = offset_index.page_locations.size();
@@ -751,18 +747,24 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
       }
     }
 
+    // Populate additional value-count metadata if column index is also available.
+    auto const* column_index =
+      col_chunk.column_index.has_value() ? &col_chunk.column_index.value() : nullptr;
+
     // Use the definition_level_histogram to get num_valid and num_null. For now, these are
     // only ever used for byte array columns. The repetition_level_histogram might be
     // necessary to determine the total number of values in the page if the
     // definition_level_histogram is absent.
     //
     // In the future we might want the full histograms saved in the `column_info` struct.
-    int64_t const* const def_hist = column_index.definition_level_histogram.has_value()
-                                      ? column_index.definition_level_histogram.value().data()
-                                      : nullptr;
-    int64_t const* const rep_hist = column_index.repetition_level_histogram.has_value()
-                                      ? column_index.repetition_level_histogram.value().data()
-                                      : nullptr;
+    int64_t const* const def_hist =
+      column_index != nullptr and column_index->definition_level_histogram.has_value()
+        ? column_index->definition_level_histogram.value().data()
+        : nullptr;
+    int64_t const* const rep_hist =
+      column_index != nullptr and column_index->repetition_level_histogram.has_value()
+        ? column_index->repetition_level_histogram.value().data()
+        : nullptr;
 
     for (size_t pg_idx = 0; pg_idx < num_pages; pg_idx++) {
       auto const& page_loc = offset_index.page_locations[pg_idx];
@@ -777,8 +779,8 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
       page_info pg_info{.location = page_loc, .num_rows = num_rows};
 
       // check to see if we already have null counts for each page
-      if (column_index.null_counts.has_value()) {
-        pg_info.num_nulls = column_index.null_counts.value()[pg_idx];
+      if (column_index != nullptr and column_index->null_counts.has_value()) {
+        pg_info.num_nulls = column_index->null_counts.value()[pg_idx];
       }
 
       // save variable length byte info if present
@@ -819,19 +821,6 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
           pg_info.num_valid     = num_values - pg_info.num_nulls.value();
         }
       }
-
-      // If none of the ifs above triggered, then we have neither histogram (likely the writer
-      // doesn't produce them, the r:0 d:1 case should have been handled above). The column index
-      // doesn't give us value counts, so we'll have to rely on the page headers. If the histogram
-      // info is missing or insufficient, then just return without modifying the row_group_info.
-      if (not pg_info.num_nulls.has_value() or not pg_info.num_valid.has_value()) { return; }
-
-      // Like above, if using older page indexes that lack size info, then return without modifying
-      // the row_group_info.
-      // TODO: cudf will still set the per-page var_bytes to '0' even for all null pages. Need to
-      // check the behavior of other implementations (once there are some). Some may not set the
-      // var bytes for all null pages, so check the `null_pages` field on the column index.
-      if (schema.type == Type::BYTE_ARRAY and not pg_info.var_bytes_size.has_value()) { return; }
 
       chunk_info.pages.push_back(std::move(pg_info));
     }
