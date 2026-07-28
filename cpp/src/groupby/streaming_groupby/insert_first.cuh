@@ -7,11 +7,10 @@
 
 #include "common.cuh"
 
-#include <cudf/detail/utilities/cuda_memcpy.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/iterator>
@@ -45,19 +44,15 @@ size_type streaming_groupby::impl::probe_and_insert_first_batch(
   auto const batch_self_cmp = cudf::detail::row::equality::self_comparator{preprocessed_batch};
   auto batch_self_eq        = batch_self_cmp.equal_to<has_nested>(has_null, null_equality::EQUAL);
 
-  // This device buffer is intentional: invoking the primitive row comparator indirectly prevents
+  // This device scalar is intentional: invoking the primitive row comparator indirectly prevents
   // NVCC from inlining its expensive template graph into the CUB kernel, reducing build time and
   // binary size.
-  rmm::device_buffer d_batch_self_eq(sizeof(batch_self_eq), stream, temp_mr);
-  auto* const d_batch_self_eq_ptr = static_cast<decltype(batch_self_eq)*>(d_batch_self_eq.data());
-  cudf::detail::cuda_memcpy_async(
-    cudf::device_span<decltype(batch_self_eq)>{d_batch_self_eq_ptr, 1},
-    cudf::host_span<decltype(batch_self_eq) const>{&batch_self_eq, 1},
-    stream);
+  cudf::detail::device_scalar<decltype(batch_self_eq)> d_batch_self_eq{
+    batch_self_eq, stream, temp_mr};
   auto const hasher       = offset_cache_hasher{batch_hash_cache, _max_distinct_keys};
   auto const set_ref_base = _key_set->ref(cuco::op::insert_and_find).rebind_hash_function(hasher);
   auto const first_batch_cmp = first_batch_comparator{
-    indirect_row_equality<decltype(batch_self_eq)>{d_batch_self_eq_ptr}, _max_distinct_keys};
+    indirect_row_equality<decltype(batch_self_eq)>{d_batch_self_eq.data()}, _max_distinct_keys};
   auto* const base = _key_set->data();
 
   auto const out_end =
