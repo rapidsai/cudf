@@ -125,8 +125,11 @@ def _contains_unsupported_fill_strategy(exprs: Sequence[Expr]) -> bool:
     return False
 
 
-def _contains_cum_sum_without_order_by(exprs: Sequence[Expr]) -> bool:
-    # Returns True for cum_sum(...) or fill_null_with_strategy(cum_sum(...)).
+_INPUT_ORDER_WINDOW_OPS = frozenset({"cum_sum", "shift", "shift_and_fill"})
+
+
+def _contains_input_order_window_without_order_by(exprs: Sequence[Expr]) -> bool:
+    """Return True for implicit input-order-sensitive window expressions."""
     for e in traversal(exprs):
         if not (isinstance(e, GroupedWindow) and not e.options[1]):
             continue
@@ -138,18 +141,6 @@ def _contains_cum_sum_without_order_by(exprs: Sequence[Expr]) -> bool:
                 and isinstance(v.children[0], UnaryFunction)
             ):
                 v = v.children[0]
-            if isinstance(v, UnaryFunction) and v.name == "cum_sum":
-                return True
-    return False
-
-
-def _contains_shift_without_order_by(exprs: Sequence[Expr]) -> bool:
-    """Return True for shift(...) over a window without explicit ordering."""
-    for e in traversal(exprs):
-        if not (isinstance(e, GroupedWindow) and not e.options[1]):
-            continue
-        for ne in e.named_aggs:
-            v = ne.value
-            if isinstance(v, UnaryFunction) and v.name in {"shift", "shift_and_fill"}:
+            if isinstance(v, UnaryFunction) and v.name in _INPUT_ORDER_WINDOW_OPS:
                 return True
     return False

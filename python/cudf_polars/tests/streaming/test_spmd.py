@@ -585,7 +585,7 @@ def test_over_shift_without_order_by_multirank_raises(comm: Communicator) -> Non
         q = lf.select(pl.col("x").shift(1).over("g"))
         with pytest.raises(
             NotImplementedError,
-            match=r"shift\(\) over a window without order_by",
+            match=r"input-order-sensitive window expressions without order_by",
         ):
             q.collect(engine=engine)
 
