@@ -179,7 +179,7 @@ TEST_F(EncodeStringsToVariantTest, EmptyInput)
 {
   cudf::test::strings_column_wrapper input{};
   auto got = cudf::io::parquet::experimental::encode_strings_to_variant(
-    input, cudf::test::get_default_stream());
+    cudf::strings_column_view{input}, cudf::test::get_default_stream());
   EXPECT_EQ(got->type().id(), cudf::type_id::STRUCT);
   EXPECT_EQ(got->size(), 0);
   EXPECT_EQ(got->null_count(), 0);
@@ -188,16 +188,14 @@ TEST_F(EncodeStringsToVariantTest, EmptyInput)
 TEST_F(EncodeStringsToVariantTest, WrongTypeThrows)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> input{1, 2, 3};
-  EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::encode_strings_to_variant(
-                 input, cudf::test::get_default_stream())),
-               std::invalid_argument);
+  EXPECT_THROW(static_cast<void>(cudf::strings_column_view{input}), cudf::logic_error);
 }
 
 TEST_F(EncodeStringsToVariantTest, ShortString)
 {
   cudf::test::strings_column_wrapper input{"hi"};
   auto got = cudf::io::parquet::experimental::encode_strings_to_variant(
-    input, cudf::test::get_default_stream());
+    cudf::strings_column_view{input}, cudf::test::get_default_stream());
 
   EXPECT_EQ(got->size(), 1);
   EXPECT_EQ(got->null_count(), 0);
@@ -214,7 +212,7 @@ TEST_F(EncodeStringsToVariantTest, LongString)
   std::string const s(64, 'x');
   cudf::test::strings_column_wrapper input{s};
   auto got = cudf::io::parquet::experimental::encode_strings_to_variant(
-    input, cudf::test::get_default_stream());
+    cudf::strings_column_view{input}, cudf::test::get_default_stream());
 
   auto const expected_val  = enc_long_string(s);
   auto const expected_meta = std::vector<uint8_t>{0x01, 0x00, 0x00};
@@ -226,7 +224,7 @@ TEST_F(EncodeStringsToVariantTest, NullInputProducesNullStructRow)
 {
   cudf::test::strings_column_wrapper input({"hello", "", "world"}, {true, false, true});
   auto got = cudf::io::parquet::experimental::encode_strings_to_variant(
-    input, cudf::test::get_default_stream());
+    cudf::strings_column_view{input}, cudf::test::get_default_stream());
 
   EXPECT_EQ(got->size(), 3);
   EXPECT_EQ(got->null_count(), 1);
@@ -236,7 +234,7 @@ TEST_F(EncodeStringsToVariantTest, AllNullInput)
 {
   cudf::test::strings_column_wrapper input({"", "", ""}, {false, false, false});
   auto got = cudf::io::parquet::experimental::encode_strings_to_variant(
-    input, cudf::test::get_default_stream());
+    cudf::strings_column_view{input}, cudf::test::get_default_stream());
 
   EXPECT_EQ(got->null_count(), 3);
 }
@@ -248,7 +246,7 @@ TEST_F(EncodeStringsToVariantTest, MultiRowMixedLengths)
 
   cudf::test::strings_column_wrapper input{short_s, long_s};
   auto got = cudf::io::parquet::experimental::encode_strings_to_variant(
-    input, cudf::test::get_default_stream());
+    cudf::strings_column_view{input}, cudf::test::get_default_stream());
 
   EXPECT_EQ(got->size(), 2);
   EXPECT_EQ(got->null_count(), 0);
@@ -266,7 +264,7 @@ TEST_F(EncodeStringsToVariantTest, RoundtripWithCastVariant)
   // encode then decode: cast_variant should recover the original strings
   cudf::test::strings_column_wrapper input{"foo", "bar", "baz"};
   auto variant = cudf::io::parquet::experimental::encode_strings_to_variant(
-    input, cudf::test::get_default_stream());
+    cudf::strings_column_view{input}, cudf::test::get_default_stream());
 
   auto decoded = cudf::io::parquet::experimental::cast_variant(
     val_child(*variant), cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
@@ -279,7 +277,7 @@ TEST_F(EncodeStringsToVariantTest, RoundtripLongStringWithCastVariant)
   std::string const long_s = std::string(128, 'a');
   cudf::test::strings_column_wrapper input{long_s};
   auto variant = cudf::io::parquet::experimental::encode_strings_to_variant(
-    input, cudf::test::get_default_stream());
+    cudf::strings_column_view{input}, cudf::test::get_default_stream());
 
   auto decoded = cudf::io::parquet::experimental::cast_variant(
     val_child(*variant), cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
@@ -307,9 +305,9 @@ TEST_F(EncodeVariantTest, EmptyTable)
 
 TEST_F(EncodeVariantTest, UnsupportedTypeThrows)
 {
-  cudf::test::fixed_width_column_wrapper<float> col{1.0f, 2.0f};
+  cudf::test::fixed_width_column_wrapper<uint64_t> col{1, 2};
   cudf::table_view tbl{{col}};
-  std::vector<std::string> names{"f"};
+  std::vector<std::string> names{"u"};
   EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::encode_variant(
                  tbl, names, cudf::test::get_default_stream())),
                std::invalid_argument);

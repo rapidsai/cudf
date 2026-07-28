@@ -883,3 +883,105 @@ TEST_F(CastVariantTest, EmptyInput)
     EXPECT_EQ(got->null_count(), 0);
   }
 }
+
+struct EncodeVariantTest : public cudf::test::BaseFixture {};
+
+TEST_F(EncodeVariantTest, Float32RoundTrip)
+{
+  auto const stream = cudf::test::get_default_stream();
+
+  cudf::test::fixed_width_column_wrapper<float> floats({1.5f, -2.25f, 3.14159f});
+  cudf::table_view tbl{{floats}};
+  std::vector<std::string> names{"f"};
+
+  auto encoded = cudf::io::parquet::experimental::encode_variant(tbl, names, stream);
+  auto got     = cudf::io::parquet::experimental::extract_variant_field(
+    *encoded, "f", cudf::data_type{cudf::type_id::FLOAT32}, stream);
+
+  cudf::test::fixed_width_column_wrapper<float> expected({1.5f, -2.25f, 3.14159f});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(EncodeVariantTest, Float64RoundTrip)
+{
+  auto const stream = cudf::test::get_default_stream();
+
+  cudf::test::fixed_width_column_wrapper<double> doubles({1.5, -2.25, 3.141592653589793});
+  cudf::table_view tbl{{doubles}};
+  std::vector<std::string> names{"d"};
+
+  auto encoded = cudf::io::parquet::experimental::encode_variant(tbl, names, stream);
+  auto got     = cudf::io::parquet::experimental::extract_variant_field(
+    *encoded, "d", cudf::data_type{cudf::type_id::FLOAT64}, stream);
+
+  cudf::test::fixed_width_column_wrapper<double> expected({1.5, -2.25, 3.141592653589793});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(EncodeVariantTest, FloatNullsRoundTrip)
+{
+  auto const stream = cudf::test::get_default_stream();
+
+  cudf::test::fixed_width_column_wrapper<float> floats({1.0f, 0.0f, -3.5f}, {true, false, true});
+  cudf::table_view tbl{{floats}};
+  std::vector<std::string> names{"f"};
+
+  auto encoded = cudf::io::parquet::experimental::encode_variant(tbl, names, stream);
+  auto got     = cudf::io::parquet::experimental::extract_variant_field(
+    *encoded, "f", cudf::data_type{cudf::type_id::FLOAT32}, stream);
+
+  cudf::test::fixed_width_column_wrapper<float> expected({1.0f, 0.0f, -3.5f}, {true, false, true});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(EncodeVariantTest, MixedFloatAndIntColumns)
+{
+  auto const stream = cudf::test::get_default_stream();
+
+  cudf::test::fixed_width_column_wrapper<int32_t> ints({10, 20, 30});
+  cudf::test::fixed_width_column_wrapper<float> floats({1.5f, 2.5f, 3.5f});
+  cudf::test::fixed_width_column_wrapper<double> doubles({10.1, 20.2, 30.3});
+  cudf::table_view tbl{{ints, floats, doubles}};
+  std::vector<std::string> names{"i", "f", "d"};
+
+  auto encoded = cudf::io::parquet::experimental::encode_variant(tbl, names, stream);
+
+  auto got_i = cudf::io::parquet::experimental::extract_variant_field(
+    *encoded, "i", cudf::data_type{cudf::type_id::INT32}, stream);
+  auto got_f = cudf::io::parquet::experimental::extract_variant_field(
+    *encoded, "f", cudf::data_type{cudf::type_id::FLOAT32}, stream);
+  auto got_d = cudf::io::parquet::experimental::extract_variant_field(
+    *encoded, "d", cudf::data_type{cudf::type_id::FLOAT64}, stream);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got_i,
+                                 cudf::test::fixed_width_column_wrapper<int32_t>({10, 20, 30}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got_f,
+                                 cudf::test::fixed_width_column_wrapper<float>({1.5f, 2.5f, 3.5f}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    *got_d, cudf::test::fixed_width_column_wrapper<double>({10.1, 20.2, 30.3}));
+}
+
+TEST_F(EncodeVariantTest, FloatEncodeMatchesApacheBytes)
+{
+  // Verify that encode_variant produces the exact bytes from the Apache parquet-testing fixtures
+  // for float32 (1234567936.0f) and float64 (1234567890.1234).
+  auto const stream = cudf::test::get_default_stream();
+
+  cudf::test::fixed_width_column_wrapper<float> f32_col({1234567936.0f});
+  cudf::test::fixed_width_column_wrapper<double> f64_col({1234567890.1234});
+  cudf::table_view tbl{{f32_col, f64_col}};
+  std::vector<std::string> names{"float_field", "double_field"};
+
+  auto encoded = cudf::io::parquet::experimental::encode_variant(tbl, names, stream);
+
+  // Extract and cast back — the decoded values must match the originals exactly.
+  auto got_f32 = cudf::io::parquet::experimental::extract_variant_field(
+    *encoded, "float_field", cudf::data_type{cudf::type_id::FLOAT32}, stream);
+  auto got_f64 = cudf::io::parquet::experimental::extract_variant_field(
+    *encoded, "double_field", cudf::data_type{cudf::type_id::FLOAT64}, stream);
+
+  cudf::test::fixed_width_column_wrapper<float> expected_f32({1234567936.0f});
+  cudf::test::fixed_width_column_wrapper<double> expected_f64({1234567890.1234});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got_f32, expected_f32);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got_f64, expected_f64);
+}

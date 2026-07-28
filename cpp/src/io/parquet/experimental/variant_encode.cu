@@ -13,6 +13,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
@@ -45,6 +46,8 @@ constexpr uint8_t k_int8_header        = 0x0c;
 constexpr uint8_t k_int16_header       = 0x10;
 constexpr uint8_t k_int32_header       = 0x14;
 constexpr uint8_t k_int64_header       = 0x18;
+constexpr uint8_t k_float64_header     = 0x1c;  // primitive type 7
+constexpr uint8_t k_float32_header     = 0x38;  // primitive type 14
 constexpr uint8_t k_long_string_header = 0x40;  // primitive type 16
 
 // short_string: basic_type=1, length in bits 2..7 of the value_metadata byte
@@ -72,6 +75,8 @@ __device__ size_type field_encoded_size(column_device_view const& col, size_type
     case type_id::INT16: return 3;
     case type_id::INT32: return 5;
     case type_id::INT64: return 9;
+    case type_id::FLOAT32: return 5;
+    case type_id::FLOAT64: return 9;
     case type_id::STRING: {
       auto const len = static_cast<size_type>(col.element<cudf::string_view>(row).size_bytes());
       return len < 64 ? 1 + len : 5 + len;
@@ -109,6 +114,18 @@ __device__ size_type write_field_value(uint8_t* out, column_device_view const& c
     case type_id::INT64: {
       auto const v = col.element<int64_t>(row);
       out[0]       = k_int64_header;
+      cuda::std::memcpy(out + 1, &v, 8);
+      return 9;
+    }
+    case type_id::FLOAT32: {
+      auto const v = col.element<float>(row);
+      out[0]       = k_float32_header;
+      cuda::std::memcpy(out + 1, &v, 4);
+      return 5;
+    }
+    case type_id::FLOAT64: {
+      auto const v = col.element<double>(row);
+      out[0]       = k_float64_header;
       cuda::std::memcpy(out + 1, &v, 8);
       return 9;
     }
@@ -352,15 +369,11 @@ namespace detail {
 // encode_strings_to_variant
 // ──────────────────────────────────────────────────────────────────────────────
 
-std::unique_ptr<column> encode_strings_to_variant(column_view const& strings,
+std::unique_ptr<column> encode_strings_to_variant(cudf::strings_column_view const& input,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(strings.type().id() == type_id::STRING,
-               "encode_strings_to_variant: input must be a STRING column",
-               std::invalid_argument);
-
-  auto const num_rows = strings.size();
+  auto const num_rows = input.size();
 
   auto make_empty_list = [&] {
     return make_lists_column(
@@ -374,7 +387,7 @@ std::unique_ptr<column> encode_strings_to_variant(column_view const& strings,
     return make_structs_column(0, std::move(ch), 0, {}, stream, mr);
   }
 
-  auto strings_dv = column_device_view::create(strings, stream);
+  auto input_dv = column_device_view::create(input.parent(), stream);
 
   // ── Metadata: constant k_empty_meta_size bytes per row ──
   auto [meta_offsets_col, meta_data_col] =
@@ -384,7 +397,7 @@ std::unique_ptr<column> encode_strings_to_variant(column_view const& strings,
   rmm::device_uvector<size_type> d_val_sizes(num_rows, stream, mr);
   {
     cudf::detail::grid_1d grid{num_rows, block_size};
-    string_value_sizes_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(*strings_dv,
+    string_value_sizes_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(*input_dv,
                                                                                   d_val_sizes);
     CUDF_CUDA_TRY(cudaGetLastError());
   }
@@ -407,7 +420,7 @@ std::unique_ptr<column> encode_strings_to_variant(column_view const& strings,
                                                static_cast<std::size_t>(num_rows + 1)};
     cudf::detail::grid_1d grid{num_rows, block_size};
     string_encode_write_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
-      *strings_dv,
+      *input_dv,
       d_val_offsets,
       val_data_col->mutable_view().data<uint8_t>(),
       meta_data_col->mutable_view().data<uint8_t>());
@@ -415,9 +428,9 @@ std::unique_ptr<column> encode_strings_to_variant(column_view const& strings,
   }
 
   // ── Null mask: propagate from input ──
-  size_type const null_count = strings.null_count();
+  size_type const null_count = input.null_count();
   rmm::device_buffer null_mask =
-    null_count > 0 ? cudf::detail::copy_bitmask(strings, stream, mr) : rmm::device_buffer{};
+    null_count > 0 ? cudf::detail::copy_bitmask(input.parent(), stream, mr) : rmm::device_buffer{};
 
   // ── Assemble STRUCT<list<uint8>, list<uint8>> ──
   auto meta_col =
@@ -452,11 +465,12 @@ std::unique_ptr<column> encode_variant(cudf::table_view const& input,
 
   for (int i = 0; i < N; i++) {
     auto const id = input.column(i).type().id();
-    CUDF_EXPECTS(
-      id == type_id::EMPTY || id == type_id::INT8 || id == type_id::INT16 || id == type_id::INT32 ||
-        id == type_id::INT64 || id == type_id::STRING,
-      "encode_variant: unsupported column type — supported: EMPTY, INT8/16/32/64, STRING",
-      std::invalid_argument);
+    CUDF_EXPECTS(id == type_id::EMPTY || id == type_id::INT8 || id == type_id::INT16 ||
+                   id == type_id::INT32 || id == type_id::INT64 || id == type_id::FLOAT32 ||
+                   id == type_id::FLOAT64 || id == type_id::STRING,
+                 "encode_variant: unsupported column type — supported: EMPTY, INT8/16/32/64, "
+                 "FLOAT32/64, STRING",
+                 std::invalid_argument);
   }
 
   auto make_empty_list = [&] {
@@ -538,12 +552,12 @@ std::unique_ptr<column> encode_variant(cudf::table_view const& input,
 
 }  // namespace detail
 
-std::unique_ptr<column> encode_strings_to_variant(column_view const& strings,
+std::unique_ptr<column> encode_strings_to_variant(cudf::strings_column_view const& input,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::encode_strings_to_variant(strings, stream, mr);
+  return detail::encode_strings_to_variant(input, stream, mr);
 }
 
 std::unique_ptr<column> encode_variant(cudf::table_view const& input,

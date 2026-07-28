@@ -7,6 +7,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -121,7 +122,7 @@ namespace io::parquet::experimental {
  * empty-dictionary encoding `{0x01, 0x00, 0x00}` (version 1, 0 keys). Null input rows produce
  * null VARIANT struct rows.
  *
- * @param strings STRING column to encode
+ * @param input STRING column to encode
  * @param stream CUDA stream
  * @param mr Device memory resource
  * @return VARIANT column: `STRUCT<list<uint8>, list<uint8>>` (metadata child, value child)
@@ -129,7 +130,7 @@ namespace io::parquet::experimental {
  * @throws std::invalid_argument if `strings` is not a STRING column
  */
 [[nodiscard]] std::unique_ptr<column> encode_strings_to_variant(
-  column_view const& strings,
+  cudf::strings_column_view const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
