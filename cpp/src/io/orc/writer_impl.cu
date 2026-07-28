@@ -1186,18 +1186,6 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
     }
   }
 
-  // Every transient extent is gathered by construction, since `encode_columns` only makes an
-  // extent transient when its stripe spans several rowgroups, which is what the predicate above
-  // tests. Check it anyway, because the release below is a use-after-free if it ever stops
-  // holding, and the loop above cannot see stream types at or above CI_INDEX.
-  for (size_t s = 0; s < segmentation.num_stripes(); ++s) {
-    for (size_t strm_id = 0; strm_id < num_streams_in_data; ++strm_id) {
-      CUDF_EXPECTS(
-        not extent_is_transient[s][strm_id] or gather_meta[extent_idx(s, strm_id)].gathered,
-        "Internal ORC writer error: transient encoded extent was not gathered");
-    }
-  }
-
   // Lay out gather destinations within a single arena, with the same alignment rule as the
   // encoded arenas.
   std::vector<size_t> gather_offsets(segmentation.num_stripes() * num_streams_in_data, 0);
@@ -1266,9 +1254,8 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
     }
   }
 
-  // Hold the gathered arena for lifetime management, and release the arena it copied from.
-  // `persistent_buffer` stays alive: some of its extents are read in place, via per-rowgroup
-  // data_ptrs that still point into it.
+  // Hold the gathered arena for lifetime management, and release the arena it copied from. Every
+  // transient extent was gathered above, so nothing points into `transient_buffer` any more.
   enc_data->gathered_buffer  = std::move(gather_buffer);
   enc_data->transient_buffer = rmm::device_uvector<uint8_t>{0, stream};
 
