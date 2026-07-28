@@ -32,6 +32,6 @@ rules:
   truthy:
     allowed-values: ['false', 'true']
     # having problematic value in keys is rare... and also
-    # GitHub Actions' choie of 'on:' triggers this check
+    # GitHub Actions' choice of 'on:' triggers this check
     # ref: https://github.com/adrienverge/yamllint/issues/430
     check-keys: false
