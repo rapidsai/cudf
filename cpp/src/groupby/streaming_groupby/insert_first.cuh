@@ -8,6 +8,7 @@
 #include "common.cuh"
 
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -16,6 +17,9 @@
 
 #include <cuda/iterator>
 #include <thrust/copy.h>
+
+#include <cstddef>
+#include <cstring>
 
 namespace cudf::groupby {
 
@@ -55,11 +59,16 @@ size_type streaming_groupby::impl::probe_and_insert_first_batch(
   // This device buffer is intentional: invoking the primitive row comparator indirectly prevents
   // NVCC from inlining its expensive template graph into the CUB kernel, reducing build time and
   // binary size.
+  auto h_batch_self_eq =
+    cudf::detail::make_pinned_vector_async<std::byte>(sizeof(batch_self_eq), stream);
+  std::memcpy(h_batch_self_eq.data(), &batch_self_eq, sizeof(batch_self_eq));
   rmm::device_buffer d_batch_self_eq(sizeof(batch_self_eq), stream, temp_mr);
   auto* const d_batch_self_eq_ptr = static_cast<decltype(batch_self_eq)*>(d_batch_self_eq.data());
+  cudf::host_span<std::byte const> const h_batch_self_eq_span = h_batch_self_eq;
   cudf::detail::cuda_memcpy_async(
-    cudf::device_span<decltype(batch_self_eq)>{d_batch_self_eq_ptr, 1},
-    cudf::host_span<decltype(batch_self_eq) const>{&batch_self_eq, 1},
+    cudf::device_span<std::byte>{static_cast<std::byte*>(d_batch_self_eq.data()),
+                                 sizeof(batch_self_eq)},
+    h_batch_self_eq_span,
     stream);
   auto const hasher       = offset_cache_hasher{batch_hash_cache, _max_distinct_keys};
   auto const set_ref_base = _key_set->ref(cuco::op::insert_and_find).rebind_hash_function(hasher);
