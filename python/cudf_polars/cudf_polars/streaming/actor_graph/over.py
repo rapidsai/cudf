@@ -305,14 +305,14 @@ def _evaluate_window_with_stamps(
     ir_context: IRExecutionContext,
     stamps: OriginStamps,
     *,
-    preserve_input_order: bool,
+    sort_by_input_order: bool,
 ) -> DataFrame:
     """Evaluate *ir* on the un-stamped portion of *chunk*; reattach stamps after."""
     child_schema = ir.children[0].schema
     stream = ir_context.get_cuda_stream()
     n_child = len(child_schema)
     table = chunk.table_view()
-    if preserve_input_order:
+    if sort_by_input_order:
         table = _sort_by_origin_stamps(table, n_child, stream)
     columns = table.columns()
 
@@ -534,7 +534,7 @@ async def _evaluate_and_route_to_origin(
     num_ranks: int,
     stamps: OriginStamps,
     *,
-    preserve_input_order: bool,
+    sort_by_input_order: bool,
 ) -> None:
     """Window-evaluate each local forward partition, then ship rows back to their origin."""
     async with return_shuffle.inserting() as inserter:
@@ -552,7 +552,7 @@ async def _evaluate_and_route_to_origin(
                 ir,
                 ir_context,
                 stamps,
-                preserve_input_order=preserve_input_order,
+                sort_by_input_order=sort_by_input_order,
             )
             routed, splits = await ir_context.to_thread(
                 _partition_by_origin_rank, evaluated, num_ranks, context.br()
@@ -662,7 +662,7 @@ async def _shuffle_and_reassemble(
     )
 
     ch_replay = context.create_channel()
-    preserve_input_order = _contains_input_order_window_without_order_by(
+    sort_by_input_order = _contains_input_order_window_without_order_by(
         [ne.value for ne in ir.exprs]
     )
     sequence_numbers, _ = await gather_in_task_group(
@@ -688,7 +688,7 @@ async def _shuffle_and_reassemble(
         return_shuffle,
         comm.nranks,
         stamps,
-        preserve_input_order=preserve_input_order,
+        sort_by_input_order=sort_by_input_order,
     )
     await _reassemble_input_chunks(
         context, ch_out, ir_context, return_shuffle, sequence_numbers, ir, tracer
