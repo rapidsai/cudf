@@ -702,9 +702,9 @@ class parallel_init_pinned_host_memory_resource final {
     auto* const base      = static_cast<std::uint8_t volatile*>(allocation);
     std::size_t next_page = 0;
 
-    // Note that these threads are not affinity bound, so these pages could be
-    // placed across NUMA nodes. This differs from cudaHostAlloc which typically
-    // inherits the calling thread's NUMA node.
+    // Note that these threads will inherit the caller's CPU affinity but are not individually
+    // affinity bound. If the calling thread allows it, the resultant pages could span
+    // multiple NUMA nodes.
     try {
       for (std::size_t worker_index = 0; worker_index < thread_count; ++worker_index) {
         auto const pages_for_worker =
