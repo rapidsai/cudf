@@ -474,6 +474,23 @@ def test_shift_over_fill_value(
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("x").shift(pl.col("x2").min()).over("g"),
+        pl.col("x").shift(1, fill_value=pl.col("x2").min()).over("g"),
+    ],
+    ids=["nonliteral_offset", "nonliteral_fill_value"],
+)
+def test_shift_over_nonliteral_args_raises(
+    engine: pl.GPUEngine,
+    df: pl.LazyFrame,
+    expr: pl.Expr,
+) -> None:
+    q = df.select(expr)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
 @pytest.mark.parametrize("n", [1, -1])
 def test_shift_over_without_order_by(
     engine_raise_on_fail: pl.GPUEngine,
