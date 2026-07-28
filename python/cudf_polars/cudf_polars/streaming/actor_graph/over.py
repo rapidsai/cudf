@@ -283,22 +283,6 @@ def _append_origin_stamps(
     )
 
 
-def _sort_by_origin_stamps(
-    table: plc.Table,
-    n_child: int,
-    stream: Stream,
-) -> plc.Table:
-    """Sort stamped rows by original rank and chunk order before window evaluation."""
-    columns = table.columns()
-    return plc.sorting.stable_sort_by_key(
-        table,
-        plc.Table([columns[n_child + 2], columns[n_child]]),
-        [plc.types.Order.ASCENDING] * 2,
-        [plc.types.NullOrder.AFTER] * 2,
-        stream=stream,
-    )
-
-
 def _evaluate_window_with_stamps(
     chunk: TableChunk,
     ir: Over,
@@ -313,7 +297,15 @@ def _evaluate_window_with_stamps(
     n_child = len(child_schema)
     table = chunk.table_view()
     if sort_by_input_order:
-        table = _sort_by_origin_stamps(table, n_child, stream)
+        columns = table.columns()
+        table = plc.sorting.stable_sort_by_key(
+            table,
+            # Sort by (rank, chunk_index)
+            plc.Table([columns[n_child + 2], columns[n_child]]),
+            [plc.types.Order.ASCENDING] * 2,
+            [plc.types.NullOrder.AFTER] * 2,
+            stream=stream,
+        )
     columns = table.columns()
 
     input_df = DataFrame.from_table(
