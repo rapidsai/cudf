@@ -443,6 +443,13 @@ inline std::vector<uint8_t> enc_int64(int64_t v)
   return out;
 }
 
+inline std::vector<uint8_t> enc_float32(float v)
+{
+  std::vector<uint8_t> out{make_variant_primitive(variant_primitive_type::FLOAT32)};
+  append_le(out, std::bit_cast<uint32_t>(v), 4);
+  return out;
+}
+
 inline std::vector<uint8_t> enc_float64(double v)
 {
   std::vector<uint8_t> out{make_variant_primitive(variant_primitive_type::FLOAT64)};
@@ -1034,9 +1041,9 @@ TEST_F(CastVariantTest, EmptyInput)
 
 TEST_F(CastVariantTest, CastToUnsupportedTargetThrows)
 {
-  // cast_variant only supports INT8/16/32/64 and STRING targets. Every other target is rejected at
-  // compile-time dispatch on the requested output type, independent of the input bytes, so a single
-  // well-formed placeholder row triggers the same throw for all of them.
+  // cast_variant supports INT8/16/32/64, FLOAT32/64, and STRING targets. Every other target is
+  // rejected at compile-time dispatch on the requested output type, independent of the input bytes,
+  // so a single well-formed placeholder row triggers the same throw for all of them.
   auto stream = cudf::test::get_default_stream();
   std::vector<uint8_t> const val{make_variant_primitive(variant_primitive_type::NULLVAL)};
   cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
@@ -1064,10 +1071,11 @@ TEST_F(CastVariantTest, CastToUnsupportedTargetThrows)
 TEST_F(CastVariantTest, CastSourceTargetMatrix)
 {
   // Exhaustively covers (source physical type) x (supported target) casts. The supported targets
-  // are INT8/16/32/64 and STRING. Expected behaviour:
-  //   - integer targets: only a source whose physical type has the *exact* same width decodes;
-  //   every
-  //     other source (including narrower/wider ints) yields null — cast_variant does not widen.
+  // are INT8/16/32/64, FLOAT32/64, and STRING. Expected behaviour:
+  //   - integer/float targets: only a source whose physical type has the *exact* same width
+  //   decodes;
+  //     every other source (including narrower/wider types) yields null — cast_variant does not
+  //     widen or convert between ints and floats.
   //   - STRING target: short_string and long_string sources decode; every other source yields null.
   auto const stream = cudf::test::get_default_stream();
 
@@ -1083,6 +1091,7 @@ TEST_F(CastVariantTest, CastSourceTargetMatrix)
     {"int16", enc_int16(1234)},
     {"int32", enc_int32(123456)},
     {"int64", enc_int64(1234567890123456789LL)},
+    {"float32", enc_float32(1.5f)},
     {"float64", enc_float64(2.5)},
     {"short_string", enc_short_string("hi")},
     {"long_string", enc_long_string(std::string(70, 'a'))},
@@ -1112,6 +1121,25 @@ TEST_F(CastVariantTest, CastSourceTargetMatrix)
   check_int_target.template operator()<int16_t>("int16", int16_t{1234});
   check_int_target.template operator()<int32_t>("int32", int32_t{123456});
   check_int_target.template operator()<int64_t>("int64", int64_t{1234567890123456789LL});
+
+  // Float targets: exact-width match only; no int<->float conversion.
+  auto check_float_target = [&]<typename T>(char const* match_label, T match_value) {
+    auto const target = cudf::data_type{cudf::type_to_id<T>()};
+    for (auto const& src : sources) {
+      SCOPED_TRACE(std::string{"float target "} + match_label + ", source " + src.label);
+      auto values = values_of(src.bytes);
+      auto got    = cudf::io::parquet::experimental::cast_variant(values, target, stream);
+      if (std::string_view{src.label} == match_label) {
+        cudf::test::fixed_width_column_wrapper<T> const expected{match_value};
+        CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+      } else {
+        ASSERT_EQ(got->size(), 1);
+        EXPECT_EQ(got->null_count(), 1);
+      }
+    }
+  };
+  check_float_target.template operator()<float>("float32", float{1.5f});
+  check_float_target.template operator()<double>("float64", double{2.5});
 
   // STRING target: short_string and long_string decode; every other source is null.
   auto const string_type = cudf::data_type{cudf::type_id::STRING};
