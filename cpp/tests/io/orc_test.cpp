@@ -1876,17 +1876,26 @@ TEST_F(OrcWriterTest, EmptyRowGroup)
 
 // Stripes spanning several rowgroups, with compression disabled so that the writer does not pad
 // the per-rowgroup streams to a block alignment. Both are needed to cover the case where the
-// encoded output happens to be exactly as large as the writer sized it for.
+// encoded output is exactly as large as the writer sized it for, which is when the writer reads
+// the encoded chunks of a multi-rowgroup stripe in place instead of compacting them first. The
+// column types are the ones whose stream sizes the writer knows exactly up front: dictionary and
+// direct encoded strings, and decimals.
 TEST_F(OrcWriterTest, MultiRowgroupStripeUncompressed)
 {
   constexpr auto num_rows = 5 * 10'000 + 7;  // several rowgroups, the last one partial
 
   auto const ints = random_values<int32_t>(num_rows);
   int32_col int_col(ints.begin(), ints.end());
-  auto str_elements = cudf::detail::make_counting_transform_iterator(
+  auto dict_elements = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return "v" + std::to_string(i % 137); });
-  str_col string_col(str_elements, str_elements + num_rows);
-  table_view expected({int_col, string_col});
+  str_col dict_string_col(dict_elements, dict_elements + num_rows);
+  // Distinct values of varying length, so this column is written without a dictionary.
+  auto direct_elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return std::to_string(i) + std::string(i % 19, 'x'); });
+  str_col direct_string_col(direct_elements, direct_elements + num_rows);
+  auto const decimals = random_values<int64_t>(num_rows);
+  dec64_col decimal_col(decimals.begin(), decimals.end(), numeric::scale_type{-2});
+  table_view expected({int_col, dict_string_col, direct_string_col, decimal_col});
 
   auto filepath = temp_env->get_temp_filepath("MultiRowgroupStripeUncompressed.orc");
   cudf::io::orc_writer_options out_opts =
