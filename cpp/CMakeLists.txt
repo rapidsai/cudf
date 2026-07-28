@@ -1359,6 +1359,8 @@ target_link_libraries(
 
 if(CUDF_DEPS_BUILD_SHARED OR NOT TARGET nvcomp::nvcomp_static)
   target_link_libraries(cudf PRIVATE nvcomp::nvcomp)
+else()
+  target_link_libraries(cudf PRIVATE $<COMPILE_ONLY:${CUDF_nvcomp_TARGET}>)
 endif()
 
 # Add Conda library, and include paths if specified
