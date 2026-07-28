@@ -563,7 +563,19 @@ def test_over_multirank(
                 assert grp["result"].to_list() == [None, *expected_xs[:-1]]
 
 
-def test_over_shift_without_order_by_multirank_raises(comm: Communicator) -> None:
+@pytest.mark.parametrize(
+    "expr,expected",
+    [
+        (pl.col("x").shift(1).over("g").alias("result"), "shift"),
+        (pl.col("x").cum_sum().over("g").alias("result"), "cum_sum"),
+    ],
+    ids=["shift", "cum_sum"],
+)
+def test_over_input_order_without_order_by_multirank(
+    comm: Communicator,
+    expr: pl.Expr,
+    expected: str,
+) -> None:
     with SPMDEngine(
         comm=comm,
         executor_options={
@@ -582,12 +594,24 @@ def test_over_shift_without_order_by_multirank_raises(comm: Communicator) -> Non
                 "x": [rank * 3 + 1, rank * 3 + 2, rank * 3 + 3],
             }
         )
-        q = lf.select(pl.col("x").shift(1).over("g"))
-        with pytest.raises(
-            NotImplementedError,
-            match=r"input-order-sensitive window expressions without order_by",
-        ):
-            q.collect(engine=engine)
+        local_result = lf.select(pl.col("x"), expr).collect(engine=engine)
+
+        with reserve_op_id() as op_id:
+            global_result = allgather_polars_dataframe(
+                engine=engine, local_df=local_result, op_id=op_id
+            ).sort("x")
+
+        xs = list(range(1, 3 * engine.nranks + 1))
+        assert global_result["x"].to_list() == xs
+        if expected == "shift":
+            expected_values = [None, *xs[:-1]]
+        else:
+            total = 0
+            expected_values = []
+            for x in xs:
+                total += x
+                expected_values.append(total)
+        assert global_result["result"].to_list() == expected_values
 
 
 def test_over_nonscalar_duplicated_input(

@@ -86,6 +86,7 @@ from cudf_polars.streaming.actor_graph.utils import (
     shutdown_on_error,
 )
 from cudf_polars.streaming.over import Over, _build_over_groupby_irs
+from cudf_polars.streaming.utils import _contains_input_order_window_without_order_by
 from cudf_polars.utils.cuda_stream import stream_ordered_after
 
 if TYPE_CHECKING:
@@ -229,41 +230,50 @@ class OriginStamps:
         input chunk a row came from.
     position
         Column name for the row's position within its input chunk.
+    sequence_number
+        Column name for the input chunk's sequence number.
     rank
         Column name for the originating rank.
     """
 
     chunk_index: str
     position: str
+    sequence_number: str
     rank: str
 
     dtype: ClassVar[DataType] = DataType(pl.Int32())
 
     @property
-    def names(self) -> tuple[str, str, str]:
+    def names(self) -> tuple[str, str, str, str]:
         """Stamp column names, in the order they are appended to the table."""
-        return (self.chunk_index, self.position, self.rank)
+        return (self.chunk_index, self.position, self.sequence_number, self.rank)
 
 
 def _origin_stamps_for(ir: Over) -> OriginStamps:
-    """Pick three stamp column names that do not collide with the schema."""
+    """Pick stamp column names that do not collide with the schema."""
     names = unique_names((*ir.children[0].schema.keys(), *ir.schema.keys()))
-    return OriginStamps(next(names), next(names), next(names))
+    return OriginStamps(next(names), next(names), next(names), next(names))
 
 
 def _append_origin_stamps(
     chunk: TableChunk,
     chunk_index: int,
+    sequence_number: int,
     origin_rank: int,
     stream: Stream,
     br: Any,
 ) -> TableChunk:
-    """Append (chunk_index, position, rank) stamp columns to *chunk*."""
+    """Append origin stamp columns to *chunk*."""
     table = chunk.table_view()
     n_rows = table.num_rows()
     int32 = plc.types.DataType(plc.TypeId.INT32)
     chunk_index_col = plc.Column.from_scalar(
         plc.Scalar.from_py(chunk_index, int32, stream=stream), n_rows, stream=stream
+    )
+    sequence_number_col = plc.Column.from_scalar(
+        plc.Scalar.from_py(sequence_number, int32, stream=stream),
+        n_rows,
+        stream=stream,
     )
     rank_col = plc.Column.from_scalar(
         plc.Scalar.from_py(origin_rank, int32, stream=stream), n_rows, stream=stream
@@ -275,10 +285,34 @@ def _append_origin_stamps(
         stream=stream,
     )
     return TableChunk.from_pylibcudf_table(
-        plc.Table([*table.columns(), chunk_index_col, position_col, rank_col]),
+        plc.Table(
+            [
+                *table.columns(),
+                chunk_index_col,
+                position_col,
+                sequence_number_col,
+                rank_col,
+            ]
+        ),
         stream,
         exclusive_view=False,
         br=br,
+    )
+
+
+def _sort_by_origin_stamps(
+    table: plc.Table,
+    n_child: int,
+    stream: Stream,
+) -> plc.Table:
+    """Sort stamped rows by original rank, sequence number, and row position."""
+    columns = table.columns()
+    return plc.sorting.stable_sort_by_key(
+        table,
+        plc.Table([columns[n_child + 3], columns[n_child + 2], columns[n_child + 1]]),
+        [plc.types.Order.ASCENDING] * 3,
+        [plc.types.NullOrder.AFTER] * 3,
+        stream=stream,
     )
 
 
@@ -287,12 +321,17 @@ def _evaluate_window_with_stamps(
     ir: Over,
     ir_context: IRExecutionContext,
     stamps: OriginStamps,
+    *,
+    preserve_input_order: bool,
 ) -> DataFrame:
     """Evaluate *ir* on the un-stamped portion of *chunk*; reattach stamps after."""
     child_schema = ir.children[0].schema
     stream = ir_context.get_cuda_stream()
-    columns = chunk.table_view().columns()
     n_child = len(child_schema)
+    table = chunk.table_view()
+    if preserve_input_order:
+        table = _sort_by_origin_stamps(table, n_child, stream)
+    columns = table.columns()
 
     input_df = DataFrame.from_table(
         plc.Table(columns[:n_child]),
@@ -494,6 +533,7 @@ async def _distribute_by_group(
                     _append_origin_stamps,
                     chunk,
                     chunk_index,
+                    msg.sequence_number,
                     comm.rank,
                     ir_context.get_cuda_stream(),
                     context.br(),
@@ -511,6 +551,8 @@ async def _evaluate_and_route_to_origin(
     return_shuffle: ShuffleManager,
     num_ranks: int,
     stamps: OriginStamps,
+    *,
+    preserve_input_order: bool,
 ) -> None:
     """Window-evaluate each local forward partition, then ship rows back to their origin."""
     async with return_shuffle.inserting() as inserter:
@@ -523,7 +565,12 @@ async def _evaluate_and_route_to_origin(
                 extracted, stream, exclusive_view=True, br=context.br()
             )
             evaluated = await ir_context.to_thread(
-                _evaluate_window_with_stamps, partition, ir, ir_context, stamps
+                _evaluate_window_with_stamps,
+                partition,
+                ir,
+                ir_context,
+                stamps,
+                preserve_input_order=preserve_input_order,
             )
             routed, splits = await ir_context.to_thread(
                 _partition_by_origin_rank, evaluated, num_ranks, context.br()
@@ -633,6 +680,9 @@ async def _shuffle_and_reassemble(
     )
 
     ch_replay = context.create_channel()
+    preserve_input_order = _contains_input_order_window_without_order_by(
+        [ne.value for ne in ir.exprs]
+    )
     sequence_numbers, _ = await gather_in_task_group(
         _distribute_by_group(
             context,
@@ -656,6 +706,7 @@ async def _shuffle_and_reassemble(
         return_shuffle,
         comm.nranks,
         stamps,
+        preserve_input_order=preserve_input_order,
     )
     await _reassemble_input_chunks(
         context, ch_out, ir_context, return_shuffle, sequence_numbers, ir, tracer
