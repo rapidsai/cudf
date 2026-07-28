@@ -853,12 +853,14 @@ struct segmented_valid_cnt_input {
   std::vector<size_type> indices;
 };
 
-std::pair<encoded_data, transient_extents> encode_columns(orc_table_view const& orc_table,
-                                                          encoder_decimal_info&& dec_chunk_sizes,
-                                                          file_segmentation const& segmentation,
-                                                          orc_streams const& streams,
-                                                          uint32_t uncomp_block_align,
-                                                          rmm::cuda_stream_view stream)
+// Returns the encoded data, along with a [stripe][strm_id] flag for each extent placed in
+// `encoded_data::transient_buffer`, flattened with `streams.size()` elements per row.
+std::pair<encoded_data, std::vector<uint8_t>> encode_columns(orc_table_view const& orc_table,
+                                                             encoder_decimal_info&& dec_chunk_sizes,
+                                                             file_segmentation const& segmentation,
+                                                             orc_streams const& streams,
+                                                             uint32_t uncomp_block_align,
+                                                             rmm::cuda_stream_view stream)
 {
   auto const num_columns = orc_table.num_columns();
   hostdevice_2dvector<encoder_chunk> chunks(num_columns, segmentation.num_rowgroups(), stream);
@@ -1021,7 +1023,7 @@ std::pair<encoded_data, transient_extents> encode_columns(orc_table_view const& 
 
   // Extents that `gather_stripes` is certain to compact go into `transient_buffer`, so that arena
   // can be freed as soon as gathering completes.
-  transient_extents transient{segmentation.num_stripes(), num_streams};
+  std::vector<uint8_t> extent_is_transient(segmentation.num_stripes() * num_streams, 0);
   std::vector<size_t> extent_offsets(segmentation.num_stripes() * num_streams, 0);
   size_t persistent_arena_size = 0;
   size_t transient_arena_size  = 0;
@@ -1029,11 +1031,8 @@ std::pair<encoded_data, transient_extents> encode_columns(orc_table_view const& 
     for (size_t strm_id = 0; strm_id < num_streams; ++strm_id) {
       auto const idx = extent_idx(s, strm_id);
       if (extent_sizes[idx] == 0) { continue; }
-      if (segmentation.stripes[s].size > 1 and extent_has_slack[idx]) {
-        transient.insert(s, strm_id);
-      }
-      auto& arena_size =
-        transient.contains(s, strm_id) ? transient_arena_size : persistent_arena_size;
+      extent_is_transient[idx] = segmentation.stripes[s].size > 1 and extent_has_slack[idx];
+      auto& arena_size    = extent_is_transient[idx] ? transient_arena_size : persistent_arena_size;
       arena_size          = util::round_up_unsafe<size_t>(arena_size, extent_alignment);
       extent_offsets[idx] = arena_size;
       arena_size += extent_sizes[idx];
@@ -1050,7 +1049,7 @@ std::pair<encoded_data, transient_extents> encode_columns(orc_table_view const& 
     for (size_t strm_id = 0; strm_id < num_streams; ++strm_id) {
       auto const idx = extent_idx(s, strm_id);
       if (extent_sizes[idx] == 0) { continue; }
-      auto& arena = transient.contains(s, strm_id) ? transient_buffer : persistent_buffer;
+      auto& arena = extent_is_transient[idx] ? transient_buffer : persistent_buffer;
       encoded_views[s][strm_id] =
         device_span<uint8_t>{arena.data() + extent_offsets[idx], extent_sizes[idx]};
     }
@@ -1122,7 +1121,7 @@ std::pair<encoded_data, transient_extents> encode_columns(orc_table_view const& 
                        rmm::device_uvector<uint8_t>{0, stream},  // filled by gather_stripes
                        std::move(encoded_views),
                        std::move(chunk_streams)},
-          std::move(transient)};
+          std::move(extent_is_transient)};
 }
 
 // TODO: remove StripeInformation from this function and return strm_desc instead
@@ -1132,7 +1131,8 @@ std::pair<encoded_data, transient_extents> encode_columns(orc_table_view const& 
  *
  * @param[in] num_index_streams Total number of index streams
  * @param[in] segmentation stripe and rowgroup ranges
- * @param[in] transient Extents held in `enc_data->transient_buffer`, which must all be gathered
+ * @param[in] extent_is_transient Marks extents held in `enc_data->transient_buffer`, which must all
+ * be gathered
  * @param[in,out] enc_data ORC per-chunk streams of encoded data
  * @param[in,out] strm_desc List of stream descriptors [stripe][data_stream]
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
@@ -1140,7 +1140,7 @@ std::pair<encoded_data, transient_extents> encode_columns(orc_table_view const& 
  */
 std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
                                               file_segmentation const& segmentation,
-                                              transient_extents const& transient,
+                                              host_2dspan<uint8_t const> extent_is_transient,
                                               encoded_data* enc_data,
                                               hostdevice_2dvector<stripe_stream>* strm_desc,
                                               rmm::cuda_stream_view stream)
@@ -1183,7 +1183,7 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
         // Compact when the chunks are not already contiguous, i.e. when the encoder wrote less
         // than the extent was sized for. Extents in `transient_buffer` are compacted regardless,
         // so that arena can be released below.
-        bool const gathered = (stripe.size > 1 and (transient.contains(stripe.id, stream_id) or
+        bool const gathered = (stripe.size > 1 and (extent_is_transient[stripe.id][stream_id] or
                                                     allocated_stripe_size > actual_stripe_size));
         gather_meta[extent_idx(stripe.id, stream_id)] = {actual_stripe_size, gathered};
       }
@@ -1197,7 +1197,7 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
   for (size_t s = 0; s < segmentation.num_stripes(); ++s) {
     for (size_t strm_id = 0; strm_id < num_streams_in_data; ++strm_id) {
       CUDF_EXPECTS(
-        not transient.contains(s, strm_id) or gather_meta[extent_idx(s, strm_id)].gathered,
+        not extent_is_transient[s][strm_id] or gather_meta[extent_idx(s, strm_id)].gathered,
         "Internal ORC writer error: transient encoded extent was not gathered");
     }
   }
@@ -2515,7 +2515,7 @@ auto convert_table_to_orc_data(table_view const& input,
                                 compression,
                                 write_mode);
 
-  auto [enc_data, transient] = encode_columns(
+  auto [enc_data, extent_is_transient] = encode_columns(
     orc_table, std::move(dec_chunk_sizes), segmentation, streams, block_align, stream);
 
   stripe_dicts.on_encode_complete(stream);
@@ -2527,8 +2527,12 @@ auto convert_table_to_orc_data(table_view const& input,
   auto const num_data_streams       = streams.size() - num_index_streams;
   hostdevice_2dvector<stripe_stream> strm_descs(
     segmentation.num_stripes(), num_data_streams, stream);
-  auto stripes =
-    gather_stripes(num_index_streams, segmentation, transient, &enc_data, &strm_descs, stream);
+  auto stripes = gather_stripes(num_index_streams,
+                                segmentation,
+                                host_2dspan<uint8_t const>{extent_is_transient, streams.size()},
+                                &enc_data,
+                                &strm_descs,
+                                stream);
 
   if (num_rows == 0) {
     return std::tuple{std::move(enc_data),

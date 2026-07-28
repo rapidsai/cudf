@@ -99,14 +99,9 @@ struct file_segmentation {
 /**
  * @brief ORC per-chunk streams of encoded data.
  *
- * Every (stripe, stream) pair is stored in an extent -- an aligned byte range
- * within one of the arenas below -- instead of getting a `device_uvector` of its
- * own, and is exposed as a non-owning view in `data`. The encoder writes into
- * two of the arenas, split by whether `gather_stripes` is certain to copy the
- * extent into `gathered_buffer`, so that `transient_buffer` can be released as
- * soon as gathering completes. `encode_columns` predicts that split and
- * `gather_stripes` refines it by measuring what the encoder wrote, so the two
- * are not simply a function of the stripe layout.
+ * The encoded bytes of each (stripe, stream) pair occupy an aligned byte range (extent) within one
+ * of the arenas below. Streams with size that is not known in advance are written into the
+ * transient arena, which is freed as soon as gathering completes.
  */
 struct encoded_data {
   rmm::device_uvector<uint8_t> persistent_buffer;       // extents that may be read in place
@@ -114,36 +109,6 @@ struct encoded_data {
   rmm::device_uvector<uint8_t> gathered_buffer;         // arena for gather_stripes output
   std::vector<std::vector<device_span<uint8_t>>> data;  // [stripe][strm_id] views
   hostdevice_2dvector<encoder_chunk_streams> streams;   // streams of encoded data, per chunk
-};
-
-/**
- * @brief Set of encoded extents placed in `encoded_data::transient_buffer`.
- *
- * `gather_stripes` has to copy every extent in the set into
- * `encoded_data::gathered_buffer` before it can release that arena.
- */
-class transient_extents {
- public:
-  transient_extents(size_t num_stripes, size_t num_streams)
-    : _num_streams{num_streams}, _flags(num_stripes * num_streams, false)
-  {
-  }
-
-  void insert(size_t stripe_id, size_t strm_id) { _flags[index(stripe_id, strm_id)] = true; }
-
-  [[nodiscard]] bool contains(size_t stripe_id, size_t strm_id) const
-  {
-    return _flags[index(stripe_id, strm_id)];
-  }
-
- private:
-  [[nodiscard]] size_t index(size_t stripe_id, size_t strm_id) const
-  {
-    return stripe_id * _num_streams + strm_id;
-  }
-
-  size_t _num_streams;
-  std::vector<bool> _flags;
 };
 
 /**
