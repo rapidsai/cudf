@@ -64,13 +64,13 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
                            cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
-// Build a lists column from the (offsets, tokens) pair returned by split_per_string_helper.
+// Build a lists column from the (offsets, tokens) pair returned by split_per_row_helper.
 template <bool Forward>
-std::unique_ptr<column> split_record_per_string_fn(strings_column_view const& input,
-                                                   string_view const d_delimiter,
-                                                   size_type const max_tokens,
-                                                   rmm::cuda_stream_view stream,
-                                                   rmm::device_async_resource_ref mr)
+std::unique_ptr<column> split_record_per_row_fn(strings_column_view const& input,
+                                                string_view const d_delimiter,
+                                                size_type const max_tokens,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) {
     return cudf::lists::detail::make_empty_lists_column(data_type{type_id::STRING});
@@ -87,7 +87,7 @@ std::unique_ptr<column> split_record_per_string_fn(strings_column_view const& in
 
   auto d_strings = column_device_view::create(input.parent(), stream);
   auto [offsets, tokens] =
-    split_per_string_helper<Forward>(*d_strings, d_delimiter, max_tokens, stream, mr);
+    split_per_row_helper<Forward>(*d_strings, d_delimiter, max_tokens, stream, mr);
   CUDF_EXPECTS(tokens.size() < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "Size of output exceeds the column size limit",
                std::overflow_error);
@@ -123,7 +123,8 @@ std::unique_ptr<column> split_record(strings_column_view const& input,
   auto const non_null_count = input.size() - input.null_count();
   if (non_null_count == 0 ||
       (input.chars_size(stream) / non_null_count) < AVG_CHAR_BYTES_THRESHOLD) {
-    return split_record_per_string_fn<true>(input, delimiter.value(stream), max_tokens, stream, mr);
+    constexpr bool forward = true;
+    return split_record_per_row_fn<forward>(input, delimiter.value(stream), max_tokens, stream, mr);
   }
   auto tokenizer    = split_tokenizer_fn{*d_strings, delimiter.size(), max_tokens};
   auto delimiter_fn = string_delimiter_fn{delimiter.value(stream)};
@@ -151,8 +152,8 @@ std::unique_ptr<column> rsplit_record(strings_column_view const& input,
   auto const non_null_count = input.size() - input.null_count();
   if (non_null_count == 0 ||
       (input.chars_size(stream) / non_null_count) < AVG_CHAR_BYTES_THRESHOLD) {
-    return split_record_per_string_fn<false>(
-      input, delimiter.value(stream), max_tokens, stream, mr);
+    constexpr bool forward = false;
+    return split_record_per_row_fn<forward>(input, delimiter.value(stream), max_tokens, stream, mr);
   }
   auto tokenizer    = rsplit_tokenizer_fn{*d_strings, delimiter.size(), max_tokens};
   auto delimiter_fn = string_delimiter_fn{delimiter.value(stream)};

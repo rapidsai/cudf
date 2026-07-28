@@ -467,13 +467,11 @@ struct token_count_fn {
   {
     if (d_strings.is_null(idx)) { return 0; }
     auto const d_str    = d_strings.element<string_view>(idx);
-    auto const size     = d_str.size_bytes();
     auto const del_size = d_delimiter.size_bytes();
-    auto const base     = d_str.data();
     size_type count     = 1;
     size_type pos       = 0;
-    while (pos + del_size <= size) {
-      if (d_delimiter.compare(base + pos, del_size) == 0) {
+    while (pos + del_size <= d_str.size_bytes()) {
+      if (d_delimiter.compare(d_str.data() + pos, del_size) == 0) {
         if (++count == max_tokens) { break; }
         pos += del_size;
       } else {
@@ -484,7 +482,7 @@ struct token_count_fn {
   }
 };
 
-// Extract tokens forward (split): scan left-to-right, emit up to token_count tokens.
+// Extract tokens forward-split: scan left-to-right, emit up to token_count tokens.
 struct forward_extract_fn {
   column_device_view const d_strings;
   string_view const d_delimiter;
@@ -522,7 +520,7 @@ struct forward_extract_fn {
   }
 };
 
-// Extract tokens backward (rsplit): scan right-to-left, emit up to token_count tokens.
+// Extract tokens backward-split: scan right-to-left, emit up to token_count tokens.
 struct backward_extract_fn {
   column_device_view const d_strings;
   string_view const d_delimiter;
@@ -563,13 +561,13 @@ struct backward_extract_fn {
 };
 
 /**
- * @brief Per-string pipeline replacing split_helper for the non-whitespace case.
+ * @brief Per-row counterpart of split_helper (non-whitespace only)
  *
  * Three kernel launches: count tokens per string, prefix-sum into offsets, extract tokens.
  * Returns the same (offsets, tokens) pair as split_helper so callers are interchangeable.
  */
 template <bool Forward>
-std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split_per_string_helper(
+std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split_per_row_helper(
   column_device_view const& d_strings,
   string_view const d_delimiter,
   size_type const max_tokens,
@@ -578,15 +576,13 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
 {
   CUDF_EXPECTS(d_delimiter.size_bytes() > 0, "unexpected delimiter");
   auto const strings_count = d_strings.size();
-  auto const mr_ref        = cudf::get_current_device_resource_ref();
-  auto const zero_iter     = cuda::counting_iterator<size_type>{0};
+  auto const temp_mr       = cudf::get_current_device_resource_ref();
+  auto const iota_itr      = cuda::counting_iterator<size_type>{0};
+  auto const policy        = rmm::exec_policy_nosync(stream, temp_mr);
 
   auto token_counts = rmm::device_uvector<size_type>(strings_count, stream);
-  thrust::transform(rmm::exec_policy_nosync(stream, mr_ref),
-                    zero_iter,
-                    zero_iter + strings_count,
-                    token_counts.begin(),
-                    token_count_fn{d_strings, d_delimiter, max_tokens});
+  auto count_fn     = token_count_fn{d_strings, d_delimiter, max_tokens};
+  thrust::transform(policy, iota_itr, iota_itr + strings_count, token_counts.begin(), count_fn);
 
   auto [offsets, total_tokens] =
     cudf::detail::make_offsets_child_column(token_counts.begin(), token_counts.end(), stream, mr);
@@ -595,15 +591,11 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
   auto tokens = rmm::device_uvector<string_index_pair>(total_tokens, stream);
   if (total_tokens > 0) {
     if constexpr (Forward) {
-      thrust::for_each_n(rmm::exec_policy_nosync(stream, mr_ref),
-                         zero_iter,
-                         strings_count,
-                         forward_extract_fn{d_strings, d_delimiter, d_offsets, tokens.data()});
+      auto extract_fn = forward_extract_fn{d_strings, d_delimiter, d_offsets, tokens.data()};
+      thrust::for_each_n(policy, iota_itr, strings_count, extract_fn);
     } else {
-      thrust::for_each_n(rmm::exec_policy_nosync(stream, mr_ref),
-                         zero_iter,
-                         strings_count,
-                         backward_extract_fn{d_strings, d_delimiter, d_offsets, tokens.data()});
+      auto extract_fn = backward_extract_fn{d_strings, d_delimiter, d_offsets, tokens.data()};
+      thrust::for_each_n(policy, iota_itr, strings_count, extract_fn);
     }
   }
   return {std::move(offsets), std::move(tokens)};
