@@ -4820,7 +4820,7 @@ def test_parquet_bloom_filters_length_absent(datadir, predicate):
     ],
 )
 def test_parquet_bloom_filters_mixed_presence(datadir, predicate):
-    # Source: same data as in bloom_filter_alignment.parquet, 
+    # Source: same data as in bloom_filter_alignment.parquet,
     # written with only r_reason_desc having a bloom filter
     fname = datadir / "bloom_filter_alignment_desc_only.parquet"
 
