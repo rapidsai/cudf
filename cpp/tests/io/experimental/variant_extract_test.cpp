@@ -839,6 +839,64 @@ TEST_F(CastVariantTest, ApachePrimitiveBooleans)
 
   cast(avf::primitive_boolean_true, true);
   cast(avf::primitive_boolean_false, false);
+
+  // Null variant value must cast to a null BOOL8, not false.
+  {
+    auto col         = make_apache_variant(avf::primitive_null);
+    auto const value = cudf::structs_column_view{col}.get_sliced_child(1, stream);
+    auto got         = cudf::io::parquet::experimental::cast_variant(
+      value, cudf::data_type{cudf::type_id::BOOL8}, stream);
+    cudf::test::fixed_width_column_wrapper<bool> expected({false}, {false});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+  }
+
+  // Sliced multi-row column exercises grid-stride paths with a non-zero slice offset.
+  {
+    constexpr int num_rows  = 130;
+    constexpr int slice_beg = 2;
+    constexpr int slice_end = 128;
+
+    std::vector<uint8_t> const true_bytes{avf::primitive_boolean_true.value.begin(),
+                                          avf::primitive_boolean_true.value.end()};
+    std::vector<uint8_t> const false_bytes{avf::primitive_boolean_false.value.begin(),
+                                           avf::primitive_boolean_false.value.end()};
+    std::vector<uint8_t> const null_bytes{avf::primitive_null.value.begin(),
+                                          avf::primitive_null.value.end()};
+    std::vector<uint8_t> const meta_bytes{avf::primitive_boolean_true.metadata.begin(),
+                                          avf::primitive_boolean_true.metadata.end()};
+
+    std::vector<std::vector<uint8_t>> metas(num_rows, meta_bytes);
+    std::vector<std::vector<uint8_t>> vals(num_rows);
+    std::vector<bool> exp_vals(num_rows);
+    std::vector<bool> exp_valid(num_rows);
+
+    for (int i = 0; i < num_rows; ++i) {
+      int const pat = i % 3;
+      if (pat == 0) {
+        vals[i]      = true_bytes;
+        exp_vals[i]  = true;
+        exp_valid[i] = true;
+      } else if (pat == 1) {
+        vals[i]      = false_bytes;
+        exp_vals[i]  = false;
+        exp_valid[i] = true;
+      } else {
+        vals[i]      = null_bytes;
+        exp_vals[i]  = false;
+        exp_valid[i] = false;
+      }
+    }
+
+    auto col          = wrap_multi_row_variant(metas, vals);
+    auto const sliced = cudf::slice(col, {slice_beg, slice_end}).front();
+    auto const value  = cudf::structs_column_view{sliced}.get_sliced_child(1, stream);
+    auto got          = cudf::io::parquet::experimental::cast_variant(
+      value, cudf::data_type{cudf::type_id::BOOL8}, stream);
+
+    cudf::test::fixed_width_column_wrapper<bool> expected(
+      exp_vals.begin() + slice_beg, exp_vals.begin() + slice_end, exp_valid.begin() + slice_beg);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+  }
 }
 
 TEST_F(CastVariantTest, ApacheShortString)
