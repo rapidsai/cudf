@@ -2273,6 +2273,11 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
             "(in-memory, dask, ray, spmd)."
         )
 
+    if run_config.collect_traces and not cudf_polars.dsl.tracing.LOG_TRACES:
+        raise ValueError(
+            "--collect-traces is not supported when CUDF_POLARS_LOG_TRACES is not enabled. Set CUDF_POLARS_LOG_TRACES=1 and rerun."
+        )
+
     if run_config.validation_method is not None:
         validate_against = run_config.validation_method.expected_source
         if validate_against == run_config.frontend:
