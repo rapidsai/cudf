@@ -580,7 +580,7 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
   auto const iota_itr      = cuda::counting_iterator<size_type>{0};
   auto const policy        = rmm::exec_policy_nosync(stream, temp_mr);
 
-  auto token_counts = rmm::device_uvector<size_type>(strings_count, stream);
+  auto token_counts = rmm::device_uvector<size_type>(strings_count, stream, temp_mr);
   auto count_fn     = token_count_fn{d_strings, d_delimiter, max_tokens};
   thrust::transform(policy, iota_itr, iota_itr + strings_count, token_counts.begin(), count_fn);
 
@@ -588,7 +588,7 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
     cudf::detail::make_offsets_child_column(token_counts.begin(), token_counts.end(), stream, mr);
   auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
 
-  auto tokens = rmm::device_uvector<string_index_pair>(total_tokens, stream);
+  auto tokens = rmm::device_uvector<string_index_pair>(total_tokens, stream, mr);
   if (total_tokens > 0) {
     if constexpr (Forward) {
       auto extract_fn = forward_extract_fn{d_strings, d_delimiter, d_offsets, tokens.data()};
