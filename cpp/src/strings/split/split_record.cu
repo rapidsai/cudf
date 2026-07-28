@@ -113,8 +113,8 @@ std::unique_ptr<column> split_record(strings_column_view const& input,
   // makes consistent with Pandas
   size_type const max_tokens = maxsplit > 0 ? maxsplit + 1 : std::numeric_limits<size_type>::max();
 
-  auto d_strings = column_device_view::create(input.parent(), stream);
   if (delimiter.size() == 0) {
+    auto d_strings    = column_device_view::create(input.parent(), stream);
     auto tokenizer    = split_ws_tokenizer_fn{*d_strings, max_tokens};
     auto delimiter_fn = whitespace_delimiter_fn{};
     return split_record_fn(input, tokenizer, delimiter_fn, stream, mr);
@@ -126,6 +126,8 @@ std::unique_ptr<column> split_record(strings_column_view const& input,
     constexpr bool forward = true;
     return split_record_per_row_fn<forward>(input, delimiter.value(stream), max_tokens, stream, mr);
   }
+
+  auto d_strings    = column_device_view::create(input.parent(), stream);
   auto tokenizer    = split_tokenizer_fn{*d_strings, delimiter.size(), max_tokens};
   auto delimiter_fn = string_delimiter_fn{delimiter.value(stream)};
   return split_record_fn(input, tokenizer, delimiter_fn, stream, mr);
@@ -142,8 +144,8 @@ std::unique_ptr<column> rsplit_record(strings_column_view const& input,
   // makes consistent with Pandas
   size_type const max_tokens = maxsplit > 0 ? maxsplit + 1 : std::numeric_limits<size_type>::max();
 
-  auto d_strings = column_device_view::create(input.parent(), stream);
   if (delimiter.size() == 0) {
+    auto d_strings    = column_device_view::create(input.parent(), stream);
     auto tokenizer    = rsplit_ws_tokenizer_fn{*d_strings, max_tokens};
     auto delimiter_fn = whitespace_delimiter_fn{};
     return split_record_fn(input, tokenizer, delimiter_fn, stream, mr);
@@ -155,6 +157,8 @@ std::unique_ptr<column> rsplit_record(strings_column_view const& input,
     constexpr bool forward = false;
     return split_record_per_row_fn<forward>(input, delimiter.value(stream), max_tokens, stream, mr);
   }
+
+  auto d_strings    = column_device_view::create(input.parent(), stream);
   auto tokenizer    = rsplit_tokenizer_fn{*d_strings, delimiter.size(), max_tokens};
   auto delimiter_fn = string_delimiter_fn{delimiter.value(stream)};
   return split_record_fn(input, tokenizer, delimiter_fn, stream, mr);
