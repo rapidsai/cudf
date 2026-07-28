@@ -379,13 +379,8 @@ std::unique_ptr<column> encode_strings_to_variant(cudf::strings_column_view cons
   auto const num_rows = input.size();
 
   auto make_empty_list = [&] {
-    return make_lists_column(0,
-                             make_empty_column(type_id::INT32, stream, mr),
-                             make_empty_column(type_id::UINT8, stream, mr),
-                             0,
-                             {},
-                             stream,
-                             mr);
+    return make_lists_column(
+      0, make_empty_column(type_id::INT32), make_empty_column(type_id::UINT8), 0, {});
   };
 
   if (num_rows == 0) {
