@@ -338,6 +338,20 @@ partition_column_groups group_columns(table_view const& input)
 }
 
 /**
+ * @brief Helper function used to decide whether staged-scatter materialization requires a gather
+ * map.
+ *
+ * @param column_groups Fixed-width and gathered column groups
+ * @param fixed_width_input Fixed-width columns handled by staged copying
+ * @return true if gathered columns or fixed-width validity masks require the map
+ */
+bool requires_gather_map(partition_column_groups const& column_groups,
+                         table_view const& fixed_width_input)
+{
+  return !column_groups.variable_width_indices.empty() || has_nulls(fixed_width_input);
+}
+
+/**
  * @brief Returns a row's index within its CTA-local row tile.
  *
  * @param iteration Grid-stride iteration processed by the current thread
@@ -767,8 +781,10 @@ size_type staged_rows_per_thread(size_type num_partitions,
     if (rows_per_thread == 0) { return 0; }
   }
 
-  // Variable-width payloads and validity masks require a gather map built from the routing data.
-  if (!column_groups.variable_width_indices.empty() || has_nested_nulls(input)) {
+  // Variable-width payloads and staged columns containing nulls require a gather map built from
+  // the routing data. All-valid masks can be allocated directly.
+  auto const fixed_width_input = input.select(column_groups.fixed_width_indices);
+  if (requires_gather_map(column_groups, fixed_width_input)) {
     rows_per_thread = max_rows_per_thread(
       &compute_gather_map<PartitionMetadataView>, sizeof(size_type), rows_per_thread);
     if (rows_per_thread == 0) { return 0; }
@@ -914,14 +930,15 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition_staged_scatt
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  // Cover the input with 1,024-thread CTAs using the selected number of rows per thread.
   auto const grid_size = static_cast<size_type>(
     cudf::detail::grid_1d{num_rows, STAGED_SCATTER_BLOCK_SIZE, rows_per_thread}.num_blocks);
   auto const histogram_bytes = static_cast<std::size_t>(num_partitions) * sizeof(size_type);
   auto const num_cta_partition_counts =
     static_cast<std::size_t>(grid_size) * static_cast<std::size_t>(num_partitions);
 
-  // The metadata CTA owns every row it visits. Its histogram records how many rows it contributes
-  // to each partition, and each row stores its offset within that CTA-local partition.
+  // Allocate one count for every CTA/partition pair and pinned storage for the final partition
+  // starts copied back to the host.
   auto block_partition_sizes = rmm::device_uvector<size_type>(num_cta_partition_counts, stream);
   auto scanned_block_partition_sizes =
     rmm::device_uvector<size_type>(num_cta_partition_counts, stream);
@@ -929,6 +946,8 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition_staged_scatt
     cudf::detail::make_pinned_vector_async<size_type>(num_partitions + 1, stream);
   host_partition_offsets[num_partitions] = num_rows;
 
+  // Hash every row and record its partition plus its offset within the CTA-local partition. Each
+  // CTA also writes the partition counts consumed by the prefix scan below.
   compute_row_partition_numbers<<<grid_size,
                                   STAGED_SCATTER_BLOCK_SIZE,
                                   histogram_bytes,
@@ -955,23 +974,16 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition_staged_scatt
                                   cudaMemcpyDeviceToHost,
                                   stream.value()));
 
-  std::vector<std::unique_ptr<column>> output_columns(input.num_columns());
-  auto const make_gather_map = [&] {
-    rmm::device_uvector<size_type> gather_map(num_rows, stream);
-    auto const shared_memory =
-      staged_scatter_smem{num_partitions, rows_per_thread, sizeof(size_type)}.bytes;
-    compute_gather_map<<<grid_size, STAGED_SCATTER_BLOCK_SIZE, shared_memory, stream.value()>>>(
-      num_rows,
-      num_partitions,
-      rows_per_thread,
-      partition_metadata,
-      block_partition_sizes.data(),
-      scanned_block_partition_sizes.data(),
-      gather_map.data());
-    CUDF_CUDA_TRY(cudaGetLastError());
-    return gather_map;
-  };
+  // Split the input into columns copied by the staged kernel and columns materialized by gather.
+  // A gather map is needed only for gathered data or fixed-width masks containing nulls.
+  auto const fixed_width_input    = input.select(column_groups.fixed_width_indices);
+  auto const variable_width_input = input.select(column_groups.variable_width_indices);
+  auto const gather_map_required  = requires_gather_map(column_groups, fixed_width_input);
 
+  // Allocate each staged output and describe its sliced input and output data buffers. All-valid
+  // nullable columns receive their output masks directly and do not require mask gathering.
+  std::vector<std::unique_ptr<column>> fixed_width_outputs;
+  fixed_width_outputs.reserve(column_groups.fixed_width_indices.size());
   if (!column_groups.fixed_width_indices.empty()) {
     auto host_descriptors = cudf::detail::make_pinned_vector_async<fixed_width_column_descriptor>(
       column_groups.fixed_width_indices.size(), stream);
@@ -981,8 +993,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition_staged_scatt
          ++descriptor_index) {
       auto const column_index = column_groups.fixed_width_indices[descriptor_index];
       auto const& source      = input.column(column_index);
-      auto output             = cudf::make_fixed_width_column(
-        source.type(), source.size(), mask_state::UNALLOCATED, stream, mr);
+      auto const output_mask_state =
+        source.nullable() && !source.has_nulls() ? mask_state::ALL_VALID : mask_state::UNALLOCATED;
+      auto output =
+        cudf::make_fixed_width_column(source.type(), source.size(), output_mask_state, stream, mr);
       auto output_view         = output->mutable_view();
       auto const element_width = static_cast<size_type>(cudf::size_of(source.type()));
 
@@ -991,9 +1005,11 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition_staged_scatt
                                         static_cast<std::size_t>(source.offset()) * element_width,
                                       static_cast<std::uint8_t*>(output_view.head()),
                                       element_width};
-      output_columns[column_index] = std::move(output);
+      fixed_width_outputs.push_back(std::move(output));
     }
 
+    // Upload the descriptors once, then copy every staged column in a single kernel launch while
+    // reusing the row destinations and partition offsets.
     auto device_descriptors = rmm::device_uvector<fixed_width_column_descriptor>(
       host_descriptors.size(), stream, cudf::get_current_device_resource_ref());
     cudf::detail::cuda_memcpy_async<fixed_width_column_descriptor>(
@@ -1016,26 +1032,59 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition_staged_scatt
     CUDF_CUDA_TRY(cudaGetLastError());
   }
 
-  // Preserve the existing behavior until the reusable hybrid gather map is added: unsupported
-  // columns build and consume their maps independently.
-  for (auto const column_index : column_groups.variable_width_indices) {
-    auto gather_map = make_gather_map();
-    auto gathered   = cudf::detail::gather(cudf::table_view{{input.column(column_index)}},
+  // Build one output-to-input map shared by all gathered columns and staged validity masks.
+  auto gather_map = rmm::device_uvector<size_type>(gather_map_required ? num_rows : 0, stream);
+  if (gather_map_required) {
+    auto const shared_memory =
+      staged_scatter_smem{num_partitions, rows_per_thread, sizeof(size_type)}.bytes;
+    compute_gather_map<<<grid_size, STAGED_SCATTER_BLOCK_SIZE, shared_memory, stream.value()>>>(
+      num_rows,
+      num_partitions,
+      rows_per_thread,
+      partition_metadata,
+      block_partition_sizes.data(),
+      scanned_block_partition_sizes.data(),
+      gather_map.data());
+    CUDF_CUDA_TRY(cudaGetLastError());
+  }
+
+  // Fixed-width data was copied directly, so use the map only for masks containing nulls.
+  if (has_nulls(fixed_width_input)) {
+    detail::gather_bitmask(fixed_width_input,
+                           gather_map.begin(),
+                           fixed_width_outputs,
+                           detail::gather_bitmask_op::DONT_CHECK,
+                           stream,
+                           mr);
+  }
+
+  // Gather all remaining columns as one table so strings, nested columns, dictionaries, and their
+  // validity masks consume the same output-to-input map.
+  std::vector<std::unique_ptr<column>> variable_width_outputs;
+  if (!column_groups.variable_width_indices.empty()) {
+    auto gathered = cudf::detail::gather(variable_width_input,
                                          gather_map,
                                          out_of_bounds_policy::DONT_CHECK,
                                          negative_index_policy::NOT_ALLOWED,
                                          stream,
                                          mr);
-    output_columns[column_index] = std::move(gathered->release().front());
+
+    variable_width_outputs = gathered->release();
   }
 
-  if (has_nested_nulls(input)) {
-    auto gather_map = make_gather_map();
-    detail::gather_bitmask(
-      input, gather_map.begin(), output_columns, detail::gather_bitmask_op::DONT_CHECK, stream, mr);
+  // Fixed-width and gathered columns were materialized separately. Place each output column back
+  // at its original input column index.
+  std::vector<std::unique_ptr<column>> output_columns(input.num_columns());
+  for (std::size_t index = 0; index < column_groups.fixed_width_indices.size(); ++index) {
+    output_columns[column_groups.fixed_width_indices[index]] =
+      std::move(fixed_width_outputs[index]);
+  }
+  for (std::size_t index = 0; index < column_groups.variable_width_indices.size(); ++index) {
+    output_columns[column_groups.variable_width_indices[index]] =
+      std::move(variable_width_outputs[index]);
   }
 
-  stream.synchronize();  // Async descriptor and partition-offset copies must complete
+  stream.synchronize();
   auto partition_offsets =
     std::vector<size_type>(host_partition_offsets.begin(), host_partition_offsets.end());
   return {std::make_unique<table>(std::move(output_columns), num_rows),

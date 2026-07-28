@@ -28,7 +28,9 @@
 
 namespace {
 
+using cudf::test::dictionary_column_wrapper;
 using cudf::test::fixed_width_column_wrapper;
+using cudf::test::lists_column_wrapper;
 using cudf::test::strings_column_wrapper;
 
 /** @brief Test fixture for fixed-width hash partitioning. */
@@ -193,6 +195,34 @@ TEST_F(FixedWidthHashPartitionTest, FixedAndVariableWidthPayloads)
 
   expect_murmur_partitioned(
     cudf::table_view{{keys, bytes, decimal128, string_payload, longs}}, {0}, 2049, 2468);
+}
+
+TEST_F(FixedWidthHashPartitionTest, HybridPayloadColumnsStayAligned)
+{
+  fixed_width_column_wrapper<int32_t> row_id{0, 1, 2, 3, 4, 5, 6, 7};
+  fixed_width_column_wrapper<int64_t> keys{17, 3, 91, 42, 8, 77, 11, 4};
+  fixed_width_column_wrapper<int16_t> nullable_fixed(
+    {100, 101, 102, 103, 104, 105, 106, 107}, {true, true, true, true, true, true, true, true});
+  strings_column_wrapper first_strings(
+    {"zero", "one", "two", "three", "four", "five", "six", "seven"},
+    {true, false, true, true, false, true, true, true});
+  lists_column_wrapper<int32_t> lists{{0}, {1, 1}, {2}, {3, 3}, {4}, {5, 5}, {6}, {7, 7}};
+  dictionary_column_wrapper<int32_t> dictionary{10, 11, 12, 13, 14, 15, 16, 17};
+  cudf::test::fixed_point_column_wrapper<__int128_t> decimal128(
+    {1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007}, numeric::scale_type{-2});
+  strings_column_wrapper second_strings(
+    {"eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen"},
+    {false, true, true, true, true, false, true, true});
+
+  auto const input = cudf::table_view{
+    {row_id, first_strings, nullable_fixed, lists, keys, dictionary, decimal128, second_strings}};
+  auto [output, offsets] = cudf::hash_partition(input, {4}, 5);
+  auto sorted            = cudf::sort_by_key(output->view(), output->view().select({0}));
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(input, sorted->view());
+  EXPECT_TRUE(output->view().column(2).nullable());
+  EXPECT_EQ(offsets.front(), 0);
+  EXPECT_EQ(offsets.back(), input.num_rows());
 }
 
 TEST_F(FixedWidthHashPartitionTest, PartitionOffsetsAcrossBlocksAndEmptyPartitions)
