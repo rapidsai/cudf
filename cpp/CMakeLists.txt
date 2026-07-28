@@ -1165,12 +1165,13 @@ set_target_properties(
 # and use them.
 set_target_properties(
   cudf
-  PROPERTIES EXPORT_PROPERTIES
-             "CUDF_CXX_FLAGS;CUDF_CUDA_FLAGS;CUDF_CXX_DEFINITIONS;CUDF_CUDA_DEFINITIONS"
-             CUDF_CXX_FLAGS "${CUDF_CXX_FLAGS}"
-             CUDF_CUDA_FLAGS "${CUDF_CUDA_FLAGS}"
-             CUDF_CXX_DEFINITIONS "${CUDF_CXX_DEFINITIONS}"
-             CUDF_CUDA_DEFINITIONS "${CUDF_CUDA_DEFINITIONS}"
+  PROPERTIES
+    EXPORT_PROPERTIES
+    "CUDF_CXX_FLAGS;CUDF_CUDA_FLAGS;CUDF_CXX_DEFINITIONS;CUDF_CUDA_DEFINITIONS;CUDF_STATIC_LINKED_PROJECTS"
+    CUDF_CXX_FLAGS "${CUDF_CXX_FLAGS}"
+    CUDF_CUDA_FLAGS "${CUDF_CUDA_FLAGS}"
+    CUDF_CXX_DEFINITIONS "${CUDF_CXX_DEFINITIONS}"
+    CUDF_CUDA_DEFINITIONS "${CUDF_CUDA_DEFINITIONS}"
 )
 
 # Note: This must come before the target_compile_options below so that the function can modify the
@@ -1301,12 +1302,17 @@ foreach(_dep IN LISTS _absorbed_deps)
   target_link_libraries(
     cudf PRIVATE "$<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,${_dep_link}>>"
   )
+  set_property(
+    TARGET cudf
+    APPEND
+    PROPERTY CUDF_STATIC_LINKED_PROJECTS "${_dep_link}"
+  )
 
   # nvcomp_static has done a WHOLE_ARCHIVE on rmm and rapids_logger itself. Therefore it needs to
   # come after our WHOLE_ARCHIVE otherwise we will get duplicate symbols for rmm and/or
   # rapids_logger
   if(TARGET nvcomp::nvcomp_static)
-    target_link_libraries(${_dep_link} INTERFACE nvcomp::nvcomp_static)
+    target_link_libraries(${_dep_link} INTERFACE $<BUILD_LOCAL_INTERFACE:nvcomp::nvcomp_static>)
     set(_absorbed_nvcomp TRUE)
   endif()
 
@@ -1345,6 +1351,11 @@ if(TARGET spdlog::spdlog)
     target_link_libraries(
       cudf PRIVATE "$<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,${_spdlog_link}>>"
     )
+    set_property(
+      TARGET cudf
+      APPEND
+      PROPERTY CUDF_STATIC_LINKED_PROJECTS "${_spdlog_link}"
+    )
   else()
     target_link_libraries(cudf PRIVATE ${_spdlog_link})
   endif()
@@ -1361,6 +1372,13 @@ target_link_libraries(
 
 if(NOT _absorbed_nvcomp)
   target_link_libraries(cudf PRIVATE ${CUDF_nvcomp_TARGET})
+  if(${CUDF_nvcomp_TARGET} STREQUAL "nvcomp::nvcomp_static")
+    set_property(
+      TARGET cudf
+      APPEND
+      PROPERTY CUDF_STATIC_LINKED_PROJECTS "nvcomp"
+    )
+  endif()
 endif()
 
 # Add Conda library, and include paths if specified

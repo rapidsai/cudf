@@ -273,7 +273,14 @@ else()
   target_link_libraries(cudfjni PUBLIC cudf::cudf)
 endif()
 
-target_link_libraries(cudfjni PRIVATE nvtx3::nvtx3-cpp $<COMPILE_ONLY:nvcomp::nvcomp_static>)
+get_target_property(cudf_static_linked_projects cudf::cudf STATIC_LINKED_PROJECTS)
+if(nvcomp IN_LIST cudf_static_linked_projects)
+  target_link_libraries(cudfjni PRIVATE $<COMPILE_ONLY:nvcomp::nvcomp_static>)
+else()
+  target_link_libraries(cudfjni PRIVATE nvcomp::nvcomp)
+endif()
+
+target_link_libraries(cudfjni PRIVATE nvtx3::nvtx3-cpp)
 
 # ##################################################################################################
 # * cudart options --------------------------------------------------------------------------------
