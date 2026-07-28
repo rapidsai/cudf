@@ -157,7 +157,7 @@ def test_over_shift_without_order_by_single_rank(spmd_engine_factory) -> None:
     ],
 )
 def test_over_fill_null_over_window_fails_translation(engine, expr):
-    df = pl.LazyFrame({"g": [1, 1, 2, 2, 2, 1], "x": [1.0, 2, 3, 4, 5, 6]})
+    df = pl.LazyFrame({"g": [1, 1, 2, 2, 2, 1], "x": [1.0, None, 3, 4, None, 6]})
     assert_ir_translation_raises(df.select(expr), engine, NotImplementedError)
 
 
