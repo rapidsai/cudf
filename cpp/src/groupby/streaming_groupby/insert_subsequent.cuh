@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -36,8 +36,8 @@ size_type streaming_groupby::impl::probe_and_insert_subsequent(
   auto const set_ref_base   = _key_set->ref(cuco::op::insert_and_find).rebind_hash_function(hasher);
   auto* const base          = _key_set->data();
 
-  auto d_cross_eqs = cudf::detail::row::equality::make_device_row_comparators<has_nested>(
-    preprocessed_batch, _preprocessed_batches, has_null, cudf::null_equality::EQUAL, stream);
+  auto d_cross_eqs = build_cross_comparators<has_nested>(
+    preprocessed_batch, _preprocessed_batches, has_null, stream);
   auto const comparator =
     n_table_comparator{batch_self_eq, d_cross_eqs.data(), _key_loc->data(), _max_distinct_keys};
 

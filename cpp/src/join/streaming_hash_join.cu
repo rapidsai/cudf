@@ -4,7 +4,6 @@
  */
 
 #include "join/join_common_utils.cuh"
-#include "row_operator/multi_table_comparators.cuh"
 #include "streaming_hash_join.hpp"
 
 #include <cudf/detail/iterator.cuh>
@@ -14,11 +13,13 @@
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/join/streaming_hash_join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/prefetch.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/mr/polymorphic_allocator.hpp>
@@ -30,8 +31,11 @@
 #include <cuda/std/functional>
 #include <cuda/std/tuple>
 
+#include <algorithm>
 #include <bit>
+#include <iterator>
 #include <limits>
+#include <memory>
 #include <span>
 #include <stdexcept>
 #include <utility>
@@ -41,6 +45,66 @@ namespace cudf::detail {
 namespace {
 
 using slot_type = cuco::pair<hash_value_type, size_type>;
+
+template <typename Equality, typename Factory>
+auto make_device_comparators(
+  std::span<std::shared_ptr<row::equality::preprocessed_table> const> preprocessed_right,
+  Factory factory,
+  rmm::cuda_stream_view stream)
+{
+  using allocator_type  = cudf::detail::rmm_host_allocator<Equality>;
+  auto host_comparators = std::vector<Equality, allocator_type>{
+    allocator_type{cudf::get_pinned_memory_resource(), stream}};
+  host_comparators.reserve(preprocessed_right.size());
+  std::transform(preprocessed_right.begin(),
+                 preprocessed_right.end(),
+                 std::back_inserter(host_comparators),
+                 factory);
+  return cudf::detail::make_device_uvector_async(
+    cudf::host_span<Equality const>{
+      host_comparators.data(), host_comparators.size(), /*is_device_accessible=*/true},
+    stream,
+    cudf::get_current_device_resource_ref());
+}
+
+template <bool has_nested>
+auto make_device_row_comparators(
+  std::shared_ptr<row::equality::preprocessed_table> const& preprocessed_left,
+  std::span<std::shared_ptr<row::equality::preprocessed_table> const> preprocessed_right,
+  nullate::DYNAMIC has_nulls,
+  null_equality compare_nulls,
+  rmm::cuda_stream_view stream)
+{
+  using equality_type =
+    row::equality::device_row_comparator<has_nested,
+                                         nullate::DYNAMIC,
+                                         row::equality::nan_equal_physical_equality_comparator>;
+
+  return make_device_comparators<equality_type>(
+    preprocessed_right,
+    [&](auto const& right) {
+      auto const comparator = row::equality::two_table_comparator{preprocessed_left, right};
+      return comparator.equal_to<has_nested>(has_nulls, compare_nulls).comparator;
+    },
+    stream);
+}
+
+auto make_device_primitive_row_comparators(
+  std::shared_ptr<row::equality::preprocessed_table> const& preprocessed_left,
+  std::span<std::shared_ptr<row::equality::preprocessed_table> const> preprocessed_right,
+  nullate::DYNAMIC has_nulls,
+  null_equality compare_nulls,
+  rmm::cuda_stream_view stream)
+{
+  using equality_type = row::primitive::row_equality_comparator;
+
+  return make_device_comparators<equality_type>(
+    preprocessed_right,
+    [&](auto const& right) {
+      return equality_type{has_nulls, preprocessed_left, right, compare_nulls};
+    },
+    stream);
+}
 
 std::size_t checked_row_count(size_type rows)
 {
@@ -326,17 +390,17 @@ struct streaming_hash_join::impl {
     auto preprocessed_left = row::equality::preprocessed_table::create(left, stream);
     auto comparators       = [&] {
       if constexpr (use_primitive) {
-        return row::equality::make_device_primitive_row_comparators(preprocessed_left,
-                                                                    preprocessed_right,
-                                                                    nullate::DYNAMIC{has_nulls},
-                                                                    compare_nulls,
-                                                                    stream);
+        return make_device_primitive_row_comparators(preprocessed_left,
+                                                     preprocessed_right,
+                                                     nullate::DYNAMIC{has_nulls},
+                                                     compare_nulls,
+                                                     stream);
       } else {
-        return row::equality::make_device_row_comparators<has_nested>(preprocessed_left,
-                                                                      preprocessed_right,
-                                                                      nullate::DYNAMIC{has_nulls},
-                                                                      compare_nulls,
-                                                                      stream);
+        return make_device_row_comparators<has_nested>(preprocessed_left,
+                                                       preprocessed_right,
+                                                       nullate::DYNAMIC{has_nulls},
+                                                       compare_nulls,
+                                                       stream);
       }
     }();
     auto const equality   = n_table_pair_equal{comparators.data(), layout};
