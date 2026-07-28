@@ -18,6 +18,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <array>
+#include <bit>
 #include <cstdio>
 #include <cstring>
 #include <memory>
