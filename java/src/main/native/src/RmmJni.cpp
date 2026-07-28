@@ -622,7 +622,8 @@ class parallel_init_pinned_host_memory_resource final {
       }
       // Concurrently pre-touch the pages to back the virtual range with physical memory.
       touch_pages(allocation, mapping_bytes, initialization_threads_);
-      // Pin and register the host memory range with CUDA.
+      // Pin and register the host memory range with CUDA. We do this once for the whole range
+      // instead of parallelizing since it contends internally on driver locks.
       RMM_CUDA_TRY_ALLOC(cudaHostRegister(allocation, mapping_bytes, cudaHostRegisterDefault),
                          mapping_bytes);
       return allocation;
