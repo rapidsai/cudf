@@ -371,7 +371,7 @@ __device__ device_span<uint8_t const> locate_array_element(device_span<uint8_t c
   auto const value_size = static_cast<size_type>(value.size());
   if (value_size < 1) { return {}; }
   uint8_t const value_metadata = value[0];
-  if (variant_basic_type(value_metadata) != basic_type::array) { return {}; }
+  if (decode_basic_type(value_metadata) != basic_type::ARRAY) { return {}; }
 
   int const value_header = variant_value_header(value_metadata);
   [[maybe_unused]] auto const [offset_size, _, num_elements_size] =
@@ -429,20 +429,20 @@ template <typename T>
 __device__ constexpr primitive_type primitive_type_for()
 {
   if constexpr (cuda::std::is_same_v<T, int8_t>) {
-    return primitive_type::int8;
+    return primitive_type::INT8;
   } else if constexpr (cuda::std::is_same_v<T, int16_t>) {
-    return primitive_type::int16;
+    return primitive_type::INT16;
   } else if constexpr (cuda::std::is_same_v<T, int32_t>) {
-    return primitive_type::int32;
+    return primitive_type::INT32;
   } else if constexpr (cuda::std::is_same_v<T, int64_t>) {
-    return primitive_type::int64;
+    return primitive_type::INT64;
   } else if constexpr (cuda::std::is_same_v<T, float>) {
-    return primitive_type::float32;
+    return primitive_type::FLOAT32;
   } else if constexpr (cuda::std::is_same_v<T, double>) {
-    return primitive_type::float64;
+    return primitive_type::FLOAT64;
   } else {
     CUDF_UNREACHABLE("primitive_type_for: T is not a supported variant primitive type");
-    return primitive_type::null;
+    return primitive_type::NULLVAL;
   }
 }
 
@@ -457,7 +457,7 @@ __device__ inline cuda::std::optional<T> decode_primitive(device_span<uint8_t co
   if (cuda::std::cmp_less(enc.size(), 1 + sizeof(T))) { return cuda::std::nullopt; }
 
   uint8_t const value_metadata = enc[0];
-  if (variant_basic_type(value_metadata) != basic_type::primitive ||
+  if (decode_basic_type(value_metadata) != basic_type::PRIMITIVE ||
       variant_value_header(value_metadata) != static_cast<uint8_t>(primitive_type_for<T>())) {
     return cuda::std::nullopt;
   }
