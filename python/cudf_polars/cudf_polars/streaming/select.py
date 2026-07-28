@@ -25,7 +25,7 @@ from cudf_polars.streaming.io import StreamingScan
 from cudf_polars.streaming.over import _fuse_over_nodes
 from cudf_polars.streaming.repartition import Repartition
 from cudf_polars.streaming.utils import (
-    _contains_cum_sum_without_order_by,
+    _contains_input_order_window_without_order_by,
     _contains_unsupported_fill_strategy,
     _dynamic_planning_on,
     _lower_ir_fallback,
@@ -414,15 +414,16 @@ def _(
             ),
         )
 
-    if rec.state["nranks"] > 1 and _contains_cum_sum_without_order_by(
+    if rec.state["nranks"] > 1 and _contains_input_order_window_without_order_by(
         [e.value for e in ir.exprs]
     ):
         return _lower_ir_fallback(
             ir.reconstruct([child]),
             rec,
             msg=(
-                "cum_sum() over a window without order_by is not supported across "
-                "multiple ranks; falling back to a single partition."
+                "input-order-sensitive window expressions without order_by are "
+                "not supported across multiple ranks; falling back to a single "
+                "partition."
             ),
         )
 
