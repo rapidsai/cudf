@@ -100,8 +100,8 @@ filtered_join::filtered_join(cudf::table_view const& right,
                              rmm::cuda_stream_view stream,
                              cuda::mr::any_resource<cuda::mr::device_accessible> mr)
   : _right_mode{select_row_operator_mode(right)},
-    _bucket_storage{cuco::extent<std::size_t>{
-                      compute_bucket_storage_size(right.num_rows(), load_factor, _right_mode)},
+    _bucket_storage{cuco::extent<std::size_t>{compute_bucket_storage_size(
+                      right.num_rows(), checked_load_factor(load_factor), _right_mode)},
                     rmm::mr::polymorphic_allocator<char>{std::move(mr)},
                     stream.value()},
     _right{right},
