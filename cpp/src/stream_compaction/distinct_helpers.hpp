@@ -84,32 +84,14 @@ using distinct_set_t = cuco::static_set<size_type,
                                         cuco::storage<1>>;
 
 /**
- * @brief Perform a reduction on groups of rows that are compared equal and returns output indices
- * of the occurrences of the distinct elements based on `keep` parameter.
- *
- * This is essentially a reduce-by-key operation with keys are non-contiguous rows and are compared
- * equal. A hash set is used to find groups of equal rows.
- *
- * Depending on the `keep` parameter, the reduction operation for each row group is:
- * - If `keep == KEEP_ANY` : order does not matter.
- * - If `keep == KEEP_FIRST`: min of row indices in the group.
- * - If `keep == KEEP_LAST`: max of row indices in the group.
- * - If `keep == KEEP_NONE`: count of equivalent rows (group size).
- *
- * Note that this function is not needed when `keep == KEEP_NONE`.
- *
- * At the beginning of the operation, the entire output array is filled with a value given by
- * the `reduction_init_value()` function. Then, the reduction result for each row group is written
- * into the output array at the index of an unspecified row in the group.
+ * @brief Returns one unspecified row index from each group of equal rows.
  *
  * @tparam Set The type of the auxiliary set
- *
- * @param set The auxiliary set to perform reduction
- * @param num_rows The number of all input rows
- * @param keep The parameter to determine what type of reduction to perform
+ * @param set The auxiliary set used to identify groups of equal rows
+ * @param num_rows The number of input rows
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned vector
- * @return A device_uvector containing the output indices
+ * @return A device vector containing one row index from each group
  */
 template <typename Set>
 rmm::device_uvector<size_type> reduce_by_row_keep_any(Set& set,
@@ -117,6 +99,20 @@ rmm::device_uvector<size_type> reduce_by_row_keep_any(Set& set,
                                                       rmm::cuda_stream_view stream,
                                                       rmm::device_async_resource_ref mr);
 
+/**
+ * @brief Returns row indices selected from groups of equal rows according to `keep`.
+ *
+ * `KEEP_FIRST` returns the smallest row index in each group, `KEEP_LAST` returns the largest, and
+ * `KEEP_NONE` returns indices only for singleton groups.
+ *
+ * @tparam Set The type of the auxiliary set
+ * @param set The auxiliary set used to identify groups of equal rows
+ * @param num_rows The number of input rows
+ * @param keep The duplicate selection mode; must not be `KEEP_ANY`
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned vector
+ * @return A device vector containing the selected row indices
+ */
 template <typename Set>
 rmm::device_uvector<size_type> reduce_by_row_keep_first_last_none(
   Set& set,
@@ -125,6 +121,17 @@ rmm::device_uvector<size_type> reduce_by_row_keep_first_last_none(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
+/**
+ * @brief Returns row indices selected from groups of equal rows according to `keep`.
+ *
+ * @tparam Set The type of the auxiliary set
+ * @param set The auxiliary set used to identify groups of equal rows
+ * @param num_rows The number of input rows
+ * @param keep The duplicate selection mode
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned vector
+ * @return A device vector containing the selected row indices
+ */
 template <typename Set>
 rmm::device_uvector<size_type> reduce_by_row(Set& set,
                                              size_type num_rows,

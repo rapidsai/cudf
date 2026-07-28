@@ -17,7 +17,7 @@
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/std/iterator>
-#include <thrust/fill.h>
+#include <thrust/uninitialized_fill.h>
 
 namespace cudf::detail {
 
