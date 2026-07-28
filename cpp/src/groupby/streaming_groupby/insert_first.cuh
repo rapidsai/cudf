@@ -19,9 +19,16 @@
 
 namespace cudf::groupby {
 
+/**
+ * @brief Invokes a row-equality comparator stored in device memory indirectly.
+ *
+ * Prevents the underlying comparator's template graph from being inlined into callers.
+ *
+ * @tparam RowEquality Device-callable row-equality comparator type
+ */
 template <typename RowEquality>
 struct indirect_row_equality {
-  RowEquality const* row_equal;
+  RowEquality const* row_equal;  ///< Non-owning device pointer to the row-equality comparator
 
   __attribute__((noinline)) __device__ bool operator()(size_type lhs, size_type rhs) const noexcept
   {
