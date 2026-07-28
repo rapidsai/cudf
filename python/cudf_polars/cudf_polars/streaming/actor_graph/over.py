@@ -230,35 +230,31 @@ class OriginStamps:
         input chunk a row came from.
     position
         Column name for the row's position within its input chunk.
-    sequence_number
-        Column name for the input chunk's sequence number.
     rank
         Column name for the originating rank.
     """
 
     chunk_index: str
     position: str
-    sequence_number: str
     rank: str
 
     dtype: ClassVar[DataType] = DataType(pl.Int32())
 
     @property
-    def names(self) -> tuple[str, str, str, str]:
+    def names(self) -> tuple[str, str, str]:
         """Stamp column names, in the order they are appended to the table."""
-        return (self.chunk_index, self.position, self.sequence_number, self.rank)
+        return (self.chunk_index, self.position, self.rank)
 
 
 def _origin_stamps_for(ir: Over) -> OriginStamps:
     """Pick stamp column names that do not collide with the schema."""
     names = unique_names((*ir.children[0].schema.keys(), *ir.schema.keys()))
-    return OriginStamps(next(names), next(names), next(names), next(names))
+    return OriginStamps(next(names), next(names), next(names))
 
 
 def _append_origin_stamps(
     chunk: TableChunk,
     chunk_index: int,
-    sequence_number: int,
     origin_rank: int,
     stream: Stream,
     br: Any,
@@ -269,11 +265,6 @@ def _append_origin_stamps(
     int32 = plc.types.DataType(plc.TypeId.INT32)
     chunk_index_col = plc.Column.from_scalar(
         plc.Scalar.from_py(chunk_index, int32, stream=stream), n_rows, stream=stream
-    )
-    sequence_number_col = plc.Column.from_scalar(
-        plc.Scalar.from_py(sequence_number, int32, stream=stream),
-        n_rows,
-        stream=stream,
     )
     rank_col = plc.Column.from_scalar(
         plc.Scalar.from_py(origin_rank, int32, stream=stream), n_rows, stream=stream
@@ -290,7 +281,6 @@ def _append_origin_stamps(
                 *table.columns(),
                 chunk_index_col,
                 position_col,
-                sequence_number_col,
                 rank_col,
             ]
         ),
@@ -305,13 +295,15 @@ def _sort_by_origin_stamps(
     n_child: int,
     stream: Stream,
 ) -> plc.Table:
-    """Sort stamped rows by original rank, sequence number, and row position."""
+    """Sort stamped rows by original rank and chunk order before window evaluation."""
     columns = table.columns()
+    # Stable sort preserves row order within each origin chunk. The position
+    # stamp is only needed later when reassembling rows into output chunks.
     return plc.sorting.stable_sort_by_key(
         table,
-        plc.Table([columns[n_child + 3], columns[n_child + 2], columns[n_child + 1]]),
-        [plc.types.Order.ASCENDING] * 3,
-        [plc.types.NullOrder.AFTER] * 3,
+        plc.Table([columns[n_child + 2], columns[n_child]]),
+        [plc.types.Order.ASCENDING] * 2,
+        [plc.types.NullOrder.AFTER] * 2,
         stream=stream,
     )
 
@@ -533,7 +525,6 @@ async def _distribute_by_group(
                     _append_origin_stamps,
                     chunk,
                     chunk_index,
-                    msg.sequence_number,
                     comm.rank,
                     ir_context.get_cuda_stream(),
                     context.br(),
