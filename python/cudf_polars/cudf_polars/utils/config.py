@@ -257,6 +257,11 @@ class ParquetOptions:
         Size in bytes of the pinned host memory pool used by the cuCascade IO
         engine for bounce buffers. Only used when ``prefetch_backend`` is
         ``"cucascade"``. When ``None``, uses the cuCascade engine default.
+    cucascade_n_reactors
+        Number of IO reactor threads in the cuCascade engine. Controls how many
+        concurrent IO operations the engine can handle. Only used when
+        ``prefetch_backend`` is ``"cucascade"``. When ``None``, uses the
+        cuCascade engine default.
     use_jit_filter
         Whether to use JIT compilation for post-read filtering in Parquet scans.
         When enabled, filter predicates are JIT-compiled to CUDA kernels for
@@ -334,6 +339,11 @@ class ParquetOptions:
             f"{_env_prefix}__CUCASCADE_POOL_CAPACITY", int, default=None
         )
     )
+    cucascade_n_reactors: int | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__CUCASCADE_N_REACTORS", int, default=None
+        )
+    )
     use_jit_filter: bool = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__USE_JIT_FILTER",
@@ -380,6 +390,10 @@ class ParquetOptions:
             self.cucascade_pool_capacity, int
         ):
             raise TypeError("cucascade_pool_capacity must be an int or None")
+        if self.cucascade_n_reactors is not None and not isinstance(
+            self.cucascade_n_reactors, int
+        ):
+            raise TypeError("cucascade_n_reactors must be an int or None")
         if not isinstance(self.use_jit_filter, bool):
             raise TypeError("use_jit_filter must be a bool")
 

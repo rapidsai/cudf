@@ -355,6 +355,7 @@ class HybridScanPrefetchExecutor:
         context: Context,
         prefetch_backend: str,
         cucascade_pool_capacity: int | None = None,
+        cucascade_n_reactors: int | None = None,
     ) -> Self:
         """
         Submit prefetch tasks for all scans.
@@ -371,6 +372,8 @@ class HybridScanPrefetchExecutor:
             ``"kvikio"`` or ``"cucascade"``.
         cucascade_pool_capacity
             Size in bytes of the cuCascade pinned host memory pool.
+        cucascade_n_reactors
+            Number of IO reactor threads in the cuCascade engine.
 
         Returns
         -------
@@ -402,6 +405,8 @@ class HybridScanPrefetchExecutor:
                 kwargs = {}
                 if cucascade_pool_capacity is not None:
                     kwargs["pool_capacity"] = cucascade_pool_capacity
+                if cucascade_n_reactors is not None:
+                    kwargs["n_reactors"] = cucascade_n_reactors
                 engine = cucascade.RestEngine(
                     access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", ""),
                     secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
@@ -414,6 +419,8 @@ class HybridScanPrefetchExecutor:
                 kwargs = {}
                 if cucascade_pool_capacity is not None:
                     kwargs["pool_capacity"] = cucascade_pool_capacity
+                if cucascade_n_reactors is not None:
+                    kwargs["n_reactors"] = cucascade_n_reactors
                 engine = cucascade.UringEngine(**kwargs)
 
             _, dev_id = cudart.cudaGetDevice()
