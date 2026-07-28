@@ -12,6 +12,7 @@ from unittest.mock import patch
 import pytest
 
 import polars as pl
+from polars import polars as plrs  # type: ignore[attr-defined]
 
 import rmm.mr
 from rapidsmpf.bootstrap import is_running_with_rrun
@@ -563,7 +564,24 @@ def test_over_multirank(
                 assert grp["result"].to_list() == [None, *expected_xs[:-1]]
 
 
-def test_over_shift_without_order_by_multirank_raises(comm: Communicator) -> None:
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("x").shift(1).over("g"),
+        pytest.param(
+            pl.col("x").rolling_mean(window_size=2).over("g"),
+            marks=pytest.mark.skipif(
+                not hasattr(plrs._expr_nodes, "RollingFunction"),
+                reason="RollingFunction not available in this polars version",
+            ),
+        ),
+    ],
+    ids=["shift", "fixed_rolling"],
+)
+def test_over_without_order_by_multirank_raises(
+    comm: Communicator,
+    expr: pl.Expr,
+) -> None:
     with SPMDEngine(
         comm=comm,
         executor_options={
@@ -582,7 +600,7 @@ def test_over_shift_without_order_by_multirank_raises(comm: Communicator) -> Non
                 "x": [rank * 3 + 1, rank * 3 + 2, rank * 3 + 3],
             }
         )
-        q = lf.select(pl.col("x").shift(1).over("g"))
+        q = lf.select(expr)
         with pytest.raises(
             NotImplementedError,
             match=r"input-order-sensitive window expressions without order_by",

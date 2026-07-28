@@ -130,6 +130,12 @@ def decompose_single_agg(
             post_col = expr.Cast(agg.dtype, True, post_col)  # noqa: FBT003
 
         return [(named_expr, True)], named_expr.reconstruct(post_col)
+    if isinstance(agg, expr.FixedSizeRollingWindow):
+        if context != ExecutionContext.WINDOW:
+            raise NotImplementedError(
+                "Fixed-size rolling is not supported in groupby or rolling context"
+            )
+        return [(named_expr, True)], named_expr.reconstruct(expr.Col(agg.dtype, name))
     if isinstance(agg, expr.UnaryFunction) and agg.name == "null_count":
         (child,) = agg.children
 

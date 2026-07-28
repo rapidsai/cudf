@@ -37,6 +37,18 @@ def test_fixed_rolling_basic(df, engine: pl.GPUEngine, rolling_fn):
     assert_gpu_result_equal(q, engine=engine)
 
 
+def test_fixed_rolling_mean_over_in_memory(engine_raise_on_fail: pl.GPUEngine):
+    lf = pl.LazyFrame(
+        {
+            "g": ["A", "A", "A", "B", "B", "B"],
+            "idx": [1, 2, 3, 1, 2, 3],
+            "val": [10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
+        }
+    ).sort("g", "idx")
+    q = lf.select(pl.col("val").rolling_mean(window_size=2).over("g").alias("rm"))
+    assert_gpu_result_equal(q, engine=engine_raise_on_fail)
+
+
 @pytest.mark.parametrize("window_size", [1, 2, 4, 8])
 def test_fixed_rolling_sum_window_sizes(df, engine: pl.GPUEngine, window_size):
     q = df.select(pl.col("x").rolling_sum(window_size=window_size))
