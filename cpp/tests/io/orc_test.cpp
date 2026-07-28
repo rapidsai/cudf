@@ -1235,12 +1235,13 @@ TEST_F(OrcReaderTest, MultipleInputs)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
-struct OrcWriterTestDecimal : public OrcWriterTest,
-                              public ::testing::WithParamInterface<std::tuple<int, int>> {};
+struct OrcWriterTestDecimal
+  : public OrcWriterTest,
+    public ::testing::WithParamInterface<std::tuple<int, int, cudf::io::compression_type>> {};
 
 TEST_P(OrcWriterTestDecimal, Decimal64)
 {
-  auto const [num_rows, scale] = GetParam();
+  auto const [num_rows, scale, compression] = GetParam();
 
   // Using int16_t because scale causes values to overflow if they already require 32 bits
   auto const vals = random_values<int32_t>(num_rows);
@@ -1250,7 +1251,8 @@ TEST_P(OrcWriterTestDecimal, Decimal64)
 
   auto filepath = temp_env->get_temp_filepath("Decimal64.orc");
   cudf::io::orc_writer_options out_opts =
-    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, tbl);
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, tbl)
+      .compression(compression);
 
   cudf::io::write_orc(out_opts);
 
@@ -1261,10 +1263,16 @@ TEST_P(OrcWriterTestDecimal, Decimal64)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(tbl.column(0), result.tbl->view().column(0));
 }
 
+// The row counts span stripes of one and of several rowgroups. Decimal data stream sizes are known
+// exactly up front, and without compression the writer does not pad them to a block alignment, so
+// the encoded chunks of a multi-rowgroup stripe come out contiguous and are written from the
+// encoder output as-is rather than being compacted first.
 INSTANTIATE_TEST_CASE_P(OrcWriterTest,
                         OrcWriterTestDecimal,
                         ::testing::Combine(::testing::Values(1, 10000, 10001, 34567),
-                                           ::testing::Values(-2, 0, 2)));
+                                           ::testing::Values(-2, 0, 2),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::NONE)));
 
 TEST_F(OrcWriterTest, Decimal32)
 {
@@ -1867,44 +1875,6 @@ TEST_F(OrcWriterTest, EmptyRowGroup)
   cudf::io::orc_writer_options out_opts =
     cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected);
   cudf::io::write_orc(out_opts);
-
-  cudf::io::orc_reader_options in_opts =
-    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
-  auto result = cudf::io::read_orc(in_opts);
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-}
-
-// Stripes spanning several rowgroups, with compression disabled so that the writer does not pad
-// the per-rowgroup streams to a block alignment. Both are needed to cover the case where the
-// encoded output is exactly as large as the writer sized it for, which is when the writer reads
-// the encoded chunks of a multi-rowgroup stripe in place instead of compacting them first. The
-// column types are the ones whose stream sizes the writer knows exactly up front: dictionary and
-// direct encoded strings, and decimals.
-TEST_F(OrcWriterTest, MultiRowgroupStripeUncompressed)
-{
-  constexpr auto num_rows = 5 * 10'000 + 7;  // several rowgroups, the last one partial
-
-  auto const ints = random_values<int32_t>(num_rows);
-  int32_col int_col(ints.begin(), ints.end());
-  auto dict_elements = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return "v" + std::to_string(i % 137); });
-  str_col dict_string_col(dict_elements, dict_elements + num_rows);
-  // Distinct values of varying length, so this column is written without a dictionary.
-  auto direct_elements = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return std::to_string(i) + std::string(i % 19, 'x'); });
-  str_col direct_string_col(direct_elements, direct_elements + num_rows);
-  auto const decimals = random_values<int64_t>(num_rows);
-  dec64_col decimal_col(decimals.begin(), decimals.end(), numeric::scale_type{-2});
-  table_view expected({int_col, dict_string_col, direct_string_col, decimal_col});
-
-  auto filepath = temp_env->get_temp_filepath("MultiRowgroupStripeUncompressed.orc");
-  cudf::io::orc_writer_options out_opts =
-    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .compression(cudf::io::compression_type::NONE);
-  cudf::io::write_orc(out_opts);
-
-  // The rowgroups have to end up in one stripe for this to test what it means to.
-  EXPECT_EQ(read_orc_metadata(cudf::io::source_info{filepath}).num_stripes(), 1);
 
   cudf::io::orc_reader_options in_opts =
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
