@@ -1357,8 +1357,14 @@ target_link_libraries(
           kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd $<BUILD_LOCAL_INTERFACE:xxhash> rtcx::rtcx
 )
 
-if(CUDF_DEPS_BUILD_SHARED OR NOT TARGET nvcomp::nvcomp_static)
-  target_link_libraries(cudf PRIVATE nvcomp::nvcomp)
+if(CUDF_DEPS_BUILD_SHARED)
+  # When building with shared dependencies we need to have the usage requirement match if we want to
+  # install the headers/libraries
+  if(CUDF_INSTALL_LIBRARY_DEPS)
+    target_link_libraries(cudf PUBLIC nvcomp::nvcomp)
+  else()
+    target_link_libraries(cudf PRIVATE nvcomp::nvcomp)
+  endif()
 else()
   target_link_libraries(cudf PRIVATE $<COMPILE_ONLY:${CUDF_nvcomp_TARGET}>)
 endif()
