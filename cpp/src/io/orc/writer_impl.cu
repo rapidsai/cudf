@@ -853,8 +853,8 @@ struct segmented_valid_cnt_input {
   std::vector<size_type> indices;
 };
 
-// Returns the encoded data, along with a [stripe][strm_id] flag for each extent placed in
-// `encoded_data::transient_buffer`, flattened with `streams.size()` elements per row.
+// Returns the encoded data, along with a [stripe][strm_id] flag per extent, set when the extent is
+// placed in `encoded_data::transient_buffer`. Flattened with `streams.size()` elements per row.
 std::pair<encoded_data, std::vector<uint8_t>> encode_columns(orc_table_view const& orc_table,
                                                              encoder_decimal_info&& dec_chunk_sizes,
                                                              file_segmentation const& segmentation,
@@ -862,6 +862,9 @@ std::pair<encoded_data, std::vector<uint8_t>> encode_columns(orc_table_view cons
                                                              uint32_t uncomp_block_align,
                                                              rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(extent_alignment >= uncomp_block_align,
+               "Internal ORC writer error: arena extents are not aligned enough for the codec");
+
   auto const num_columns = orc_table.num_columns();
   hostdevice_2dvector<encoder_chunk> chunks(num_columns, segmentation.num_rowgroups(), stream);
 
@@ -969,7 +972,7 @@ std::pair<encoded_data, std::vector<uint8_t>> encode_columns(orc_table_view cons
         if (strm_id < 0) { continue; }
 
         size_t stripe_size = 0;
-        // Alignment padding is slack in itself, in every rowgroup of the extent.
+        // Alignment padding leaves a gap after every rowgroup's chunk, so it is slack in itself.
         bool has_slack = uncomp_block_align > 1;
         std::for_each(stripe.cbegin(), stripe.cend(), [&](auto rg_idx) {
 #if defined(__GNUC__) && (__GNUC__ >= 14)
@@ -990,8 +993,8 @@ std::pair<encoded_data, std::vector<uint8_t>> encode_columns(orc_table_view cons
                 (strm_type == CI_DICTIONARY)
                   ? stripe_dict.char_count
                   : (((stripe_dict.entry_count + 0x1ff) >> 9) * (512 * 4 + 2));
-              // `char_count` is exact; the RLE-encoded lengths are a worst case.
-              has_slack |= strm_type != CI_DICTIONARY;
+              // Only the size of RLE-encoded lengths is an estimate
+              has_slack |= (strm_type != CI_DICTIONARY);
             } else {
               strm.lengths[strm_type] = 0;
             }
@@ -1018,9 +1021,6 @@ std::pair<encoded_data, std::vector<uint8_t>> encode_columns(orc_table_view cons
     }
   }
 
-  CUDF_EXPECTS(extent_alignment >= uncomp_block_align,
-               "Internal ORC writer error: arena extents are not aligned enough for the codec");
-
   // Extents that `gather_stripes` is certain to compact go into `transient_buffer`, so that arena
   // can be freed as soon as gathering completes.
   std::vector<uint8_t> extent_is_transient(segmentation.num_stripes() * num_streams, 0);
@@ -1042,12 +1042,12 @@ std::pair<encoded_data, std::vector<uint8_t>> encode_columns(orc_table_view cons
   rmm::device_uvector<uint8_t> persistent_buffer(persistent_arena_size, stream);
   rmm::device_uvector<uint8_t> transient_buffer(transient_arena_size, stream);
 
-  // Zero-size extents keep a null pointer, matching the empty device_uvector they replaced.
   std::vector<std::vector<device_span<uint8_t>>> encoded_views(
     segmentation.num_stripes(), std::vector<device_span<uint8_t>>(num_streams));
   for (size_t s = 0; s < segmentation.num_stripes(); ++s) {
     for (size_t strm_id = 0; strm_id < num_streams; ++strm_id) {
       auto const idx = extent_idx(s, strm_id);
+      // Zero-size extents keep a null pointer, matching the empty device_uvector they replaced.
       if (extent_sizes[idx] == 0) { continue; }
       auto& arena = extent_is_transient[idx] ? transient_buffer : persistent_buffer;
       encoded_views[s][strm_id] =
@@ -1055,7 +1055,7 @@ std::pair<encoded_data, std::vector<uint8_t>> encode_columns(orc_table_view cons
     }
   }
 
-  // Write per-chunk data_ptrs and apply alignment fix-up.
+  // Point each rowgroup's chunk at its place within the extent, rounded up to the codec alignment.
   for (auto const& stripe : segmentation.stripes) {
     for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
       for (int strm_type = 0; strm_type < CI_NUM_STREAMS; ++strm_type) {
@@ -1152,16 +1152,12 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
     return stripe_id * num_streams_in_data + strm_id;
   };
 
-  // Pass 1: compute per-(stripe, stream) actual sizes and decide which need a tight
-  // gathered copy. Streams of single-rowgroup stripes are read in place, to avoid the
-  // overhead of the additional copy. When there are multiple rowgroups, the chunks are
-  // copied anyway to make them contiguous.
+  // Compute per-(stripe, stream) actual sizes and decide which need a gathered copy.
   struct gather_info {
-    size_t actual_size;
-    bool gathered;
+    size_t actual_size{0};
+    bool gathered{false};
   };
-  std::vector<gather_info> gather_meta(segmentation.num_stripes() * num_streams_in_data,
-                                       gather_info{0, false});
+  std::vector<gather_info> gather_meta(segmentation.num_stripes() * num_streams_in_data);
 
   for (auto const& stripe : segmentation.stripes) {
     for (size_t col_idx = 0; col_idx < enc_data->streams.size().first; col_idx++) {

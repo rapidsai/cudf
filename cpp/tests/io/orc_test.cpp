@@ -1263,10 +1263,10 @@ TEST_P(OrcWriterTestDecimal, Decimal64)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(tbl.column(0), result.tbl->view().column(0));
 }
 
-// The row counts span stripes of one and of several rowgroups. Decimal data stream sizes are known
-// exactly up front, and without compression the writer does not pad them to a block alignment, so
-// the encoded chunks of a multi-rowgroup stripe come out contiguous and are written from the
-// encoder output as-is rather than being compacted first.
+// The cases with more than 10000 rows and no compression test the writer's non-compaction path,
+// where encoded streams are written straight from the encoder output, because decimal data stream
+// sizes are known exactly up front and uncompressed streams get no alignment padding, which leaves
+// the chunks of a multi-rowgroup stripe already contiguous.
 INSTANTIATE_TEST_CASE_P(OrcWriterTest,
                         OrcWriterTestDecimal,
                         ::testing::Combine(::testing::Values(1, 10000, 10001, 34567),
