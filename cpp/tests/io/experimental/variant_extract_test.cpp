@@ -1041,8 +1041,7 @@ TEST_F(CastVariantTest, CastToUnsupportedTargetThrows)
   std::vector<uint8_t> const val{make_variant_primitive(variant_primitive_type::NULLVAL)};
   cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
 
-  std::vector<cudf::type_id> const ids{cudf::type_id::BOOL8,
-                                       cudf::type_id::UINT8,
+  std::vector<cudf::type_id> const ids{cudf::type_id::UINT8,
                                        cudf::type_id::UINT16,
                                        cudf::type_id::UINT32,
                                        cudf::type_id::UINT64,
