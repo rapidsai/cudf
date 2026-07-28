@@ -165,7 +165,7 @@ class Operator:
             "parent_operator_ids": [
                 str(operator.id) for operator in self.parent_operators
             ],
-            "instance_name": self.id.hex[:8],
+            "instance_name": f"{self.type_name}-{self.id.hex[:8]}",
             "type_name": self.type_name,
             "custom_attributes": [attr.serialize() for attr in self.custom_attributes],
         }
