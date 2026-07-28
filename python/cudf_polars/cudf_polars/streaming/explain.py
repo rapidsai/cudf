@@ -37,8 +37,9 @@ from cudf_polars.dsl.ir import (
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.streaming.base import IOPartitionFlavor
+from cudf_polars.streaming.filter_hint import PushdownFilterHint
 from cudf_polars.streaming.io import StreamingScan, scan_partition_plan
-from cudf_polars.streaming.parallel import lower_ir_graph
+from cudf_polars.streaming.parallel import lower_ir_graph, optimize_with_stats
 from cudf_polars.streaming.shuffle import Shuffle
 from cudf_polars.streaming.statistics import (
     collect_statistics,
@@ -134,6 +135,7 @@ def explain_query(
             # Include row-count statistics for the logical plan
             with cm:
                 stats = collect_statistics(ir, config, executor)
+            ir = optimize_with_stats(ir, config, stats)
             return _repr_ir_tree(ir, stats=stats)
         else:
             return _repr_ir_tree(ir)
@@ -469,6 +471,17 @@ def _(ir: Join, *, offset: str = "") -> str:
     return _repr_header(offset, f"JOIN {ir.options[0]} {left_on} {right_on}", ir.schema)
 
 
+@_repr_ir.register
+def _(ir: PushdownFilterHint, *, offset: str = "") -> str:
+    target_on = tuple(ne.name for ne in ir.target_on)
+    domain_on = tuple(ne.name for ne in ir.domain_on)
+    return _repr_header(
+        offset,
+        f"PUSHDOWN FILTER HINT {target_on} {domain_on}",
+        ir.schema,
+    )
+
+
 _BinaryOperator = plc.binaryop.BinaryOperator
 _BINOP_SYMBOLS: dict[_BinaryOperator, str] = {
     _BinaryOperator.EQUAL: "==",
@@ -577,6 +590,15 @@ def _(ir: Join) -> dict[str, Serializable]:
         "how": ir.options[0],
         "left_on": [ne.name for ne in ir.left_on],
         "right_on": [ne.name for ne in ir.right_on],
+    }
+
+
+@_serialize_properties.register
+def _(ir: PushdownFilterHint) -> dict[str, Serializable]:
+    return {
+        "target_on": [ne.name for ne in ir.target_on],
+        "domain_on": [ne.name for ne in ir.domain_on],
+        "nulls_equal": ir.nulls_equal,
     }
 
 
@@ -815,4 +837,10 @@ class SerializablePlan:
         """
         config_options = ConfigOptions.from_polars_engine(engine)
         ir = Translator(q._ldf.visit(), engine).translate_ir()
+        if not lowered and config_options.executor.name == "streaming":
+            with concurrent.futures.ThreadPoolExecutor(
+                thread_name_prefix="cudf-polars-explain"
+            ) as executor:
+                stats = collect_statistics(ir, config_options, executor)
+            ir = optimize_with_stats(ir, config_options, stats)
         return cls.from_ir(ir, config_options=config_options, lowered=lowered)

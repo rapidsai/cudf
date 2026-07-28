@@ -12,6 +12,7 @@ from cudf_polars.dsl.ir import ConditionalJoin, Join, Slice
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.streaming.base import PartitionInfo
 from cudf_polars.streaming.dispatch import lower_ir_node
+from cudf_polars.streaming.filter_hint import PushdownFilterHint
 from cudf_polars.streaming.repartition import Repartition
 from cudf_polars.streaming.shuffle import Shuffle
 from cudf_polars.streaming.utils import (
@@ -147,6 +148,15 @@ def _make_bcast_join(
 def _has_non_pointwise_keys(ir: Join) -> bool:
     keys = [ne.value for keys in (ir.left_on, ir.right_on) for ne in keys]
     return not all(expr.is_pointwise for expr in traversal(keys))
+
+
+@lower_ir_node.register(PushdownFilterHint)
+def _(
+    ir: PushdownFilterHint, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    """Discard the optional filter without lowering its domain."""
+    target, _domain = ir.children
+    return rec(target)
 
 
 @lower_ir_node.register(ConditionalJoin)

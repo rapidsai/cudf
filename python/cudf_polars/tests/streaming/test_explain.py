@@ -137,6 +137,42 @@ def test_explain_logical_plan_with_join(tmp_path, df):
     assert "JOIN Inner ('x',) ('x',)" in plan
 
 
+def test_explain_pushdown_filter_hint_is_logical_only():
+    domain = (
+        pl.LazyFrame({"key": [1, 99], "active": [True, False]})
+        .filter("active")
+        .select("key")
+    )
+    target = pl.LazyFrame({"key": [i % 10 for i in range(20)]})
+    query = domain.join(target, on="key")
+    engine = pl.GPUEngine(
+        executor="streaming",
+        raise_on_fail=True,
+        executor_options={"join_filter_pushdown": {"threshold": 0.5}},
+    )
+
+    logical = explain_query(query, engine, physical=False)
+    physical = explain_query(query, engine, physical=True)
+    logical_serialized = serialize_query(query, engine, physical=False)
+    physical_serialized = serialize_query(query, engine, physical=True)
+
+    assert "PUSHDOWN FILTER HINT ('key',) ('key',)" in logical
+    assert "PUSHDOWN FILTER HINT" not in physical
+    assert any(
+        node.type == "PushdownFilterHint"
+        and node.properties
+        == {
+            "target_on": ["key"],
+            "domain_on": ["key"],
+            "nulls_equal": False,
+        }
+        for node in logical_serialized.nodes.values()
+    )
+    assert not any(
+        node.type == "PushdownFilterHint" for node in physical_serialized.nodes.values()
+    )
+
+
 def test_explain_logical_plan_with_sort(tmp_path, df):
     make_partitioned_source(df, tmp_path, fmt="parquet", n_files=2)
 
