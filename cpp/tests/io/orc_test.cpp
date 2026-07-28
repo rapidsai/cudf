@@ -707,6 +707,23 @@ TEST_F(OrcChunkedWriterTest, SimpleTable)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
+TEST_F(OrcChunkedWriterTest, RootStatisticsAccumulateRows)
+{
+  auto table1 = create_random_fixed_table<int>(1, 5, false);
+  auto table2 = create_random_fixed_table<int>(1, 1, false);
+  auto table3 = create_random_fixed_table<int>(1, 0, false);
+
+  auto filepath = temp_env->get_temp_filepath("ChunkedRootStatistics.orc");
+  cudf::io::chunked_orc_writer_options opts =
+    cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{filepath});
+  cudf::io::orc_chunked_writer(opts).write(*table1).write(*table2).write(*table3);
+
+  auto const stats = cudf::io::read_parsed_orc_statistics(cudf::io::source_info{filepath});
+  ASSERT_FALSE(stats.file_stats.empty());
+  ASSERT_TRUE(stats.file_stats.front().number_of_values.has_value());
+  EXPECT_EQ(*stats.file_stats.front().number_of_values, 6);
+}
+
 TEST_F(OrcChunkedWriterTest, LargeTables)
 {
   srand(31337);
@@ -2175,6 +2192,13 @@ TEST_F(OrcReaderTest, SizeTypeRowsOverflow)
     reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}});
   EXPECT_EQ(metadata.num_rows(), total_rows);
   EXPECT_EQ(metadata.num_stripes(), total_rows / 1'000'000);
+
+  auto const stats =
+    cudf::io::read_parsed_orc_statistics(cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}});
+  ASSERT_FALSE(stats.file_stats.empty());
+  ASSERT_TRUE(stats.file_stats.front().number_of_values.has_value());
+  EXPECT_EQ(*stats.file_stats.front().number_of_values, static_cast<uint64_t>(total_rows));
 
   constexpr auto num_rows_to_read = 1'000'000;
   auto const num_rows_to_skip     = metadata.num_rows() - num_rows_to_read;
