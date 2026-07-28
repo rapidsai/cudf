@@ -1261,7 +1261,7 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _row_mask_offset   = 0;
   _file_itm_data     = file_intermediate_data{};
   _file_preprocessed = false;
-  _has_page_index    = false;
+  _has_offset_index  = false;
   _pass_itm_data.reset();
   _pass_page_mask.clear();
   _subpass_page_mask.reset();

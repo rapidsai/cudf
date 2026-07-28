@@ -719,13 +719,10 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
     auto const max_def_level = schema.max_definition_level;
     auto const max_rep_level = schema.max_repetition_level;
 
-    // Page locations and row boundaries only require the offset index. Additional value-count
-    // metadata is populated below when a column index is also available.
+    // Return early if any columns lack the offset index.
     if (not col_chunk.offset_index.has_value()) { return; }
 
     auto const& offset_index = col_chunk.offset_index.value();
-    auto const* column_index =
-      col_chunk.column_index.has_value() ? &col_chunk.column_index.value() : nullptr;
 
     auto& chunk_info     = chunks[col_idx];
     auto const num_pages = offset_index.page_locations.size();
@@ -749,6 +746,10 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
           offset_index.page_locations[0].offset - col_chunk.meta_data.data_page_offset;
       }
     }
+
+    // Populate additional value-count metadata if column index is also available.
+    auto const* column_index =
+      col_chunk.column_index.has_value() ? &col_chunk.column_index.value() : nullptr;
 
     // Use the definition_level_histogram to get num_valid and num_null. For now, these are
     // only ever used for byte array columns. The repetition_level_histogram might be

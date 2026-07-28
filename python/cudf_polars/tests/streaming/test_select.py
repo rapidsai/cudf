@@ -22,7 +22,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
 )
 from cudf_polars.testing.engine_utils import warns_on_spmd
-from cudf_polars.utils.versions import POLARS_VERSION_LT_141
 
 
 @pytest.fixture
@@ -181,13 +180,6 @@ def test_select_mean_with_decimals(engine):
     assert_gpu_result_equal(q, engine=engine)
 
 
-@pytest.mark.xfail(
-    condition=not POLARS_VERSION_LT_141,
-    reason=(
-        "len() row count lost in zero-column streaming chunks "
-        "(https://github.com/rapidsai/cudf/issues/21428)"
-    ),
-)
 def test_select_with_len(streaming_engine_factory):
     engine = streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=3, fallback_mode="warn"),
