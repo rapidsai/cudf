@@ -726,7 +726,7 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
     auto const max_def_level = schema.max_definition_level;
     auto const max_rep_level = schema.max_repetition_level;
 
-    // Continue if a column chunk does not have an offset index. This is because the decode
+    // Skip this column chunk if it does not have an offset index. This is because the decode
     // paths can use column-index-derived information only together with offset index data.
     if (not col_chunk.offset_index.has_value()) { continue; }
 
