@@ -1264,6 +1264,7 @@ endif()
 # against them directly. Public absorbed dependencies still promote their public transitive
 # dependencies and export set metadata into cudf's interface.
 set(_absorbed_deps rmm rapids_logger)
+set(_absorbed_nvcomp FALSE)
 foreach(_dep IN LISTS _absorbed_deps)
   if(NOT TARGET "${_dep}::${_dep}")
     continue()
@@ -1306,6 +1307,7 @@ foreach(_dep IN LISTS _absorbed_deps)
   # rapids_logger
   if(TARGET nvcomp::nvcomp_static)
     target_link_libraries(${_dep_link} INTERFACE nvcomp::nvcomp_static)
+    set(_absorbed_nvcomp TRUE)
   endif()
 
   # Merge the absorbed library's export set metadata into cudf-exports so the installed config has
@@ -1357,16 +1359,8 @@ target_link_libraries(
           kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd $<BUILD_LOCAL_INTERFACE:xxhash> rtcx::rtcx
 )
 
-if(CUDF_DEPS_BUILD_SHARED)
-  # When building with shared dependencies we need to have the usage requirement match if we want to
-  # install the headers/libraries
-  if(CUDF_INSTALL_LIBRARY_DEPS)
-    target_link_libraries(cudf PUBLIC nvcomp::nvcomp)
-  else()
-    target_link_libraries(cudf PRIVATE nvcomp::nvcomp)
-  endif()
-else()
-  target_link_libraries(cudf PRIVATE $<COMPILE_ONLY:${CUDF_nvcomp_TARGET}>)
+if(NOT _absorbed_nvcomp)
+  target_link_libraries(cudf PRIVATE ${CUDF_nvcomp_TARGET})
 endif()
 
 # Add Conda library, and include paths if specified
