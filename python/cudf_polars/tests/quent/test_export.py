@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import uuid
+import zipfile
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -45,8 +46,8 @@ def _buffered_events() -> list[dict[str, Any]]:
     ]
 
 
-def _read_ndjson_lines(path: Path) -> list[dict[str, Any]]:
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+def _read_ndjson_lines(archive: zipfile.ZipFile, path: str) -> list[dict[str, Any]]:
+    return [json.loads(line) for line in archive.read(path).decode().splitlines()]
 
 
 def test_unwrap_event_data() -> None:
@@ -82,65 +83,80 @@ def test_to_export_line_unwraps_payload() -> None:
     }
 
 
-def test_write_quent_export_creates_context_layout(tmp_path: Path) -> None:
+def test_write_quent_export_creates_archive(tmp_path: Path) -> None:
     context_id = uuid.UUID("019dd571-105a-7c53-a15b-713cbdd7666b")
     events = _buffered_events()
 
-    context_dir = write_quent_export(events, tmp_path, context_id)
+    archive_path = write_quent_export(events, tmp_path, context_id)
 
-    assert context_dir == tmp_path / str(context_id)
-    assert (context_dir / SIDECAR_FILE_NAME).exists()
-    assert (
-        json.loads((context_dir / SIDECAR_FILE_NAME).read_text(encoding="utf-8"))
-        == MODEL_QMI
-    )
+    assert archive_path == tmp_path / f"{context_id}.zip"
+    assert zipfile.is_zipfile(archive_path)
 
-    expected_dirs = {"engine", "query_group", "query", "network"}
-    created_dirs = {path.name for path in context_dir.iterdir() if path.is_dir()}
-    assert created_dirs == expected_dirs
+    context_dir = str(context_id)
+    with zipfile.ZipFile(archive_path) as archive:
+        assert (
+            json.loads(archive.read(f"{context_dir}/{SIDECAR_FILE_NAME}")) == MODEL_QMI
+        )
 
-    for entity_dir in expected_dirs:
-        stream_files = list((context_dir / entity_dir).glob(f"*.{EXTENSION}"))
-        assert len(stream_files) == 1
-        lines = _read_ndjson_lines(stream_files[0])
-        assert lines
-        for line in lines:
-            assert "id" in line
-            assert "timestamp" in line
-            assert isinstance(line["data"], dict)
-            assert len(line["data"]) == 1 or "seq" in line["data"]
+        expected_dirs = {"engine", "query_group", "query", "network"}
+        names = archive.namelist()
+        for entity_dir in expected_dirs:
+            stream_files = [
+                name
+                for name in names
+                if name.startswith(f"{context_dir}/{entity_dir}/")
+                and name.endswith(f".{EXTENSION}")
+            ]
+            assert len(stream_files) == 1
+            lines = _read_ndjson_lines(archive, stream_files[0])
+            assert lines
+            for line in lines:
+                assert "id" in line
+                assert "timestamp" in line
+                assert isinstance(line["data"], dict)
+                assert len(line["data"]) == 1 or "seq" in line["data"]
 
 
 def test_write_quent_export_unwraps_buffered_envelopes(tmp_path: Path) -> None:
     context_id = uuid.UUID("019dd571-105a-7c53-a15b-713cbdd7666b")
     events = _buffered_events()
 
-    write_quent_export(events, tmp_path, context_id)
+    archive_path = write_quent_export(events, tmp_path, context_id)
 
-    engine_stream = next((tmp_path / str(context_id) / "engine").glob(f"*.{EXTENSION}"))
-    engine_lines = _read_ndjson_lines(engine_stream)
-    assert engine_lines[0]["data"] == {
-        "Init": {
-            "implementation": {
-                "name": "cudf-polars",
-                "version": engine_lines[0]["data"]["Init"]["implementation"]["version"],
-                "custom_attributes": [],
-            },
-            "instance_name": "cudf-polars-019dd571",
+    with zipfile.ZipFile(archive_path) as archive:
+        context_dir = str(context_id)
+        engine_stream = next(
+            name
+            for name in archive.namelist()
+            if name.startswith(f"{context_dir}/engine/")
+        )
+        engine_lines = _read_ndjson_lines(archive, engine_stream)
+        assert engine_lines[0]["data"] == {
+            "Init": {
+                "implementation": {
+                    "name": "cudf-polars",
+                    "version": engine_lines[0]["data"]["Init"]["implementation"][
+                        "version"
+                    ],
+                    "custom_attributes": [],
+                },
+                "instance_name": "cudf-polars-019dd571",
+            }
         }
-    }
-    assert engine_lines[1]["data"] == {"Exit": None}
+        assert engine_lines[1]["data"] == {"Exit": None}
 
-    network_stream = next(
-        (tmp_path / str(context_id) / "network").glob(f"*.{EXTENSION}")
-    )
-    network_lines = _read_ndjson_lines(network_stream)
-    assert network_lines[0]["data"] == {
-        "Declaration": {
-            "instance_name": "Network",
-            "parent_group_id": str(context_id),
+        network_stream = next(
+            name
+            for name in archive.namelist()
+            if name.startswith(f"{context_dir}/network/")
+        )
+        network_lines = _read_ndjson_lines(archive, network_stream)
+        assert network_lines[0]["data"] == {
+            "Declaration": {
+                "instance_name": "Network",
+                "parent_group_id": str(context_id),
+            }
         }
-    }
 
 
 def test_write_quent_export_rejects_malformed_event(tmp_path: Path) -> None:
@@ -171,7 +187,9 @@ def test_write_quent_traces_benchmark_writer(
         collect_traces=True,
     )
 
-    context_dir = tmp_path / "logs" / str(run_id)
-    assert (context_dir / SIDECAR_FILE_NAME).exists()
-    assert (context_dir / "engine").is_dir()
-    assert (context_dir / "query").is_dir()
+    archive_path = tmp_path / "logs" / f"{run_id}.zip"
+    with zipfile.ZipFile(archive_path) as archive:
+        names = archive.namelist()
+        assert f"{run_id}/{SIDECAR_FILE_NAME}" in names
+        assert any(name.startswith(f"{run_id}/engine/") for name in names)
+        assert any(name.startswith(f"{run_id}/query/") for name in names)

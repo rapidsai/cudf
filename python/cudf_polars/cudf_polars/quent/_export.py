@@ -1,11 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Export Quent events to the filesystem directory layout."""
+"""Export Quent events to an archive."""
 
 from __future__ import annotations
 
 import json
+import zipfile
 from typing import TYPE_CHECKING, Any
 
 from cudf_polars.quent._types import EventName, new_quent_id
@@ -58,7 +59,7 @@ def unwrap_event_data(data: dict[str, Any]) -> tuple[str, Any]:
     """
     Extract the entity name and unwrapped payload from a buffered event.
 
-    Buffered events wrap payloads as ``{"Engine": {...}}``; directory export
+    Buffered events wrap payloads as ``{"Engine": {...}}``; archive export
     stores the payload directly because the entity type is implied by the
     subdirectory name.
     """
@@ -76,7 +77,7 @@ def unwrap_event_data(data: dict[str, Any]) -> tuple[str, Any]:
 
 
 def to_export_line(event: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-    """Convert a buffered event envelope to directory export line format."""
+    """Convert a buffered event envelope to archive export line format."""
     entity_name, payload = unwrap_event_data(event["data"])
     directory = ENTITY_DIRECTORIES[entity_name]
     export_line = {
@@ -87,14 +88,6 @@ def to_export_line(event: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     return directory, export_line
 
 
-def write_sidecar(context_dir: Path, sidecar: dict[str, Any]) -> None:
-    """Atomically write the ``model.qmi`` provenance sidecar."""
-    tmp_path = context_dir / f".{SIDECAR_FILE_NAME}.tmp"
-    final_path = context_dir / SIDECAR_FILE_NAME
-    tmp_path.write_text(json.dumps(sidecar, indent=2) + "\n", encoding="utf-8")
-    tmp_path.replace(final_path)
-
-
 def write_quent_export(
     events: list[dict[str, Any]],
     export_root: Path,
@@ -103,14 +96,14 @@ def write_quent_export(
     sidecar: dict[str, Any] | None = None,
 ) -> Path:
     """
-    Write Quent events to the filesystem export layout.
+    Write Quent events to a ZIP archive.
 
     Parameters
     ----------
     events
         Buffered Quent event envelopes from ``engine._quent_events``.
     export_root
-        Root directory for exported contexts (e.g. ``logs``).
+        Directory for exported archives (e.g. ``logs``).
     context_id
         Context UUID, typically the engine/run id.
     sidecar
@@ -120,25 +113,30 @@ def write_quent_export(
     Returns
     -------
     Path
-        The context directory ``export_root/<context_id>/``.
+        The archive path ``export_root/<context_id>.zip``. The archive contains
+        the Quent export layout under a top-level ``<context_id>/`` directory.
     """
-    context_dir = export_root / str(context_id)
-    context_dir.mkdir(parents=True, exist_ok=True)
-
-    write_sidecar(context_dir, sidecar or MODEL_QMI)
-
     grouped: dict[str, list[dict[str, Any]]] = {}
     for event in events:
         directory, export_line = to_export_line(event)
         grouped.setdefault(directory, []).append(export_line)
 
-    for directory, lines in grouped.items():
-        entity_dir = context_dir / directory
-        entity_dir.mkdir(parents=True, exist_ok=True)
-        stream_path = entity_dir / f"{new_quent_id()}.{EXTENSION}"
-        with stream_path.open("w", encoding="utf-8") as stream_file:
-            for line in lines:
-                stream_file.write(json.dumps(line, separators=(",", ":")))
-                stream_file.write("\n")
+    export_root.mkdir(parents=True, exist_ok=True)
+    archive_path = export_root / f"{context_id}.zip"
+    tmp_path = export_root / f".{context_id}.zip.tmp"
+    context_dir = str(context_id)
 
-    return context_dir
+    with zipfile.ZipFile(
+        tmp_path, mode="w", compression=zipfile.ZIP_DEFLATED
+    ) as archive:
+        archive.writestr(
+            f"{context_dir}/{SIDECAR_FILE_NAME}",
+            json.dumps(MODEL_QMI if sidecar is None else sidecar, indent=2) + "\n",
+        )
+        for directory, lines in grouped.items():
+            stream_path = f"{context_dir}/{directory}/{new_quent_id()}.{EXTENSION}"
+            contents = [json.dumps(line, separators=(",", ":")) for line in lines]
+            archive.writestr(stream_path, "\n".join(contents) + "\n")
+
+    tmp_path.replace(archive_path)
+    return archive_path

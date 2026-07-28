@@ -141,7 +141,13 @@ class NsysRole:
     type: Literal["nsys"] = dataclasses.field(default="nsys", init=False)
 
 
-Role = NightlyRole | NsysRole
+@dataclasses.dataclass
+class QuentRole:
+    type: Literal["quent"] = dataclasses.field(default="quent", init=False)
+    filename: str
+
+
+Role = NightlyRole | NsysRole | QuentRole
 
 
 @dataclasses.dataclass
@@ -648,9 +654,27 @@ class RunConfig:
             roles=roles,
         )
 
-    def serialize(self, engine: StreamingEngine | None) -> dict:
-        """Serialize the run config to a dictionary."""
+    def serialize(
+        self, engine: StreamingEngine | None, quent_archive: Path | None
+    ) -> dict:
+        """
+        Serialize the run config to a dictionary.
+
+        Parameters
+        ----------
+        engine
+            The engine that was used to run the benchmark.
+        quent_archive
+            The path to the Quent archive that was written during the benchmark, if any.
+            This path will be inserted in ``extra_info.quent-archive``.
+        """
         opts = self.streaming_options
+        extra_info = dict(self.extra_info)
+        if quent_archive is not None:
+            extra_info["quent-archive"] = str(quent_archive.absolute())
+        roles = list(self.roles)
+        if quent_archive is not None:
+            roles.append(QuentRole(filename=quent_archive.name))
         result: dict[str, Any] = {
             "engine_name": self.engine_name,
             "queries": self.queries,
@@ -666,7 +690,7 @@ class RunConfig:
             "native_parquet": self.native_parquet,
             "max_io_threads": self.max_io_threads,
             "n_workers": self.n_workers,
-            "extra_info": self.extra_info,
+            "extra_info": extra_info,
             "run_id": str(self.run_id),
             "timestamp": self.timestamp,
             "command_line": self.command_line,
@@ -684,7 +708,7 @@ class RunConfig:
             "validation_method": dataclasses.asdict(self.validation_method)
             if self.validation_method
             else None,
-            "roles": [dataclasses.asdict(r) for r in self.roles],
+            "roles": [dataclasses.asdict(r) for r in roles],
         }
         if engine is not None:
             config_options = ConfigOptions.from_polars_engine(engine)
@@ -1218,6 +1242,7 @@ def _finalize_benchmark_run(
     validation_failures: list[int],
     query_failures: list[tuple[int, int]],
     engine: StreamingEngine | None,
+    quent_archive: Path | None,
 ) -> None:
     """Summarize, serialize, and exit after a benchmark run."""
     if args.summarize:
@@ -1235,7 +1260,9 @@ def _finalize_benchmark_run(
             )
         else:
             print("✅ All validated queries passed.")
-    args.output.write(json.dumps(run_config.serialize(engine=engine)))
+    args.output.write(
+        json.dumps(run_config.serialize(engine=engine, quent_archive=quent_archive))
+    )
     args.output.write("\n")
     sys.exit(1 if (query_failures or validation_failures) else 0)
 
@@ -1258,7 +1285,12 @@ def run_polars_cpu(
     )
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
     _finalize_benchmark_run(
-        args, run_config, validation_failures, query_failures, engine=None
+        args,
+        run_config,
+        validation_failures,
+        query_failures,
+        engine=None,
+        quent_archive=None,
     )
 
 
@@ -1291,7 +1323,12 @@ def run_polars_in_memory(
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
     run_config = _consolidate_logs(run_config, engine=None)
     _finalize_benchmark_run(
-        args, run_config, validation_failures, query_failures, engine=None
+        args,
+        run_config,
+        validation_failures,
+        query_failures,
+        engine=None,
+        quent_archive=None,
     )
 
 
@@ -1352,13 +1389,20 @@ def run_polars_spmd(
         )
 
     if is_rank_0:
-        _write_quent_traces(
+        quent_archive = _write_quent_traces(
             engine=engine,
             run_id=run_config.run_id,
             collect_traces=run_config.collect_traces,
         )
+    else:
+        quent_archive = None
     _finalize_benchmark_run(
-        args, run_config, validation_failures, query_failures, engine=engine
+        args,
+        run_config,
+        validation_failures,
+        query_failures,
+        engine=engine,
+        quent_archive=quent_archive,
     )
 
 
@@ -1405,13 +1449,18 @@ def run_polars_ray(
         run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
         run_config = _consolidate_logs(run_config, engine=engine)
 
-    _write_quent_traces(
+    quent_archive = _write_quent_traces(
         engine=engine,
         run_id=run_config.run_id,
         collect_traces=run_config.collect_traces,
     )
     _finalize_benchmark_run(
-        args, run_config, validation_failures, query_failures, engine=engine
+        args,
+        run_config,
+        validation_failures,
+        query_failures,
+        engine=engine,
+        quent_archive=quent_archive,
     )
 
 
@@ -1464,7 +1513,7 @@ def run_polars_dask(
             )
             run_config = _consolidate_logs(run_config, engine)
 
-        _write_quent_traces(
+        quent_archive = _write_quent_traces(
             engine=engine,
             run_id=run_config.run_id,
             collect_traces=run_config.collect_traces,
@@ -1473,7 +1522,12 @@ def run_polars_dask(
         if dask_client is not None:
             dask_client.close()
     _finalize_benchmark_run(
-        args, run_config, validation_failures, query_failures, engine=engine
+        args,
+        run_config,
+        validation_failures,
+        query_failures,
+        engine=engine,
+        quent_archive=quent_archive,
     )
 
 
@@ -1552,10 +1606,10 @@ def setup_logging(query_id: int, iteration: int) -> None:
 
 def _write_quent_traces(
     engine: StreamingEngine, run_id: uuid.UUID, *, collect_traces: bool
-) -> None:
-    """Write collected Quent events to logs/<run_id>/ directory export layout."""
+) -> Path | None:
+    """Write collected Quent events to a ``logs/<run_id>.zip`` archive."""
     if not (_HAS_STRUCTLOG or collect_traces):
-        return
+        return None
 
     from cudf_polars.quent._export import write_quent_export
 
@@ -1574,10 +1628,8 @@ def _write_quent_traces(
 
     logs_dir = Path("logs")
     output_path = write_quent_export(quent_logs, logs_dir, run_id)
-    print(
-        f"Wrote {len(quent_logs)} Quent trace events to {output_path} "
-        f"(directory export layout)"
-    )
+    print(f"Wrote {len(quent_logs)} Quent trace events to {output_path}")
+    return output_path
 
 
 def _consolidate_logs(
@@ -1832,7 +1884,7 @@ def run_duckdb(duckdb_queries_cls: Any, args: argparse.Namespace) -> None:
     if args.summarize:
         run_config.summarize()
 
-    args.output.write(json.dumps(run_config.serialize(engine=None)))
+    args.output.write(json.dumps(run_config.serialize(engine=None, quent_archive=None)))
     args.output.write("\n")
 
 
