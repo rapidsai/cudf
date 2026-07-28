@@ -18,8 +18,6 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/mr/aligned_resource_adaptor.hpp>
-
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
@@ -319,35 +317,21 @@ aggregate_reader_metadata::filter_row_groups(
             {std::make_optional(num_stats_filtered_row_groups), std::nullopt}};
   }
 
-  // Aligned resource adaptor to allocate bloom filter buffers with
-  auto aligned_mr = rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource_ref(),
-                                                      get_bloom_filter_alignment());
-
   // Read a vector of bloom filter bitset device buffers for all columns with equality
   // predicate(s) across all row groups
-  auto bloom_filter_buffers = read_bloom_filters(sources,
-                                                 bloom_filter_input_row_groups,
-                                                 equality_col_schemas,
-                                                 num_stats_filtered_row_groups,
-                                                 stream,
-                                                 aligned_mr);
+  auto const [bloom_filter_buffers, bloom_filter_data] =
+    read_bloom_filters(sources,
+                       bloom_filter_input_row_groups,
+                       equality_col_schemas,
+                       num_stats_filtered_row_groups,
+                       stream,
+                       cudf::get_current_device_resource_ref());
 
-  // No bloom filter buffers, return early
-  if (bloom_filter_buffers.empty()) {
+  // No bloom filters, return early
+  if (bloom_filter_data.empty()) {
     return {stats_filtered_row_groups,
             {std::make_optional(num_stats_filtered_row_groups), std::nullopt}};
   }
-
-  // Create spans from bloom filter buffers
-  std::vector<cudf::device_span<cuda::std::byte const>> bloom_filter_data;
-  bloom_filter_data.reserve(bloom_filter_buffers.size());
-  std::transform(bloom_filter_buffers.begin(),
-                 bloom_filter_buffers.end(),
-                 std::back_inserter(bloom_filter_data),
-                 [](auto& buffer) {
-                   return cudf::device_span<cuda::std::byte const>(
-                     static_cast<cuda::std::byte const*>(buffer.data()), buffer.size());
-                 });
 
   // Apply bloom filtering on the output row groups from stats filter
   auto const bloom_filtered_row_groups = apply_bloom_filters(bloom_filter_data,
