@@ -7,7 +7,7 @@ Welcome to Dask cuDF's documentation!
 =====================================
 
 **Dask cuDF** (pronounced "DASK KOO-dee-eff") is an extension
-library for the `Dask <https://dask.org>`__ parallel computing
+library for the `Dask <https://www.dask.org/>`__ parallel computing
 framework. When installed, Dask cuDF is automatically registered
 as the ``"cudf"`` dataframe backend for
 `Dask DataFrame <https://docs.dask.org/en/stable/dataframe.html>`__.

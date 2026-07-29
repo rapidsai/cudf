@@ -11,7 +11,7 @@ Please visit [the official documentation page](https://docs.rapids.ai/api/dask-c
 
 ## Installation
 
-See the [RAPIDS install page](https://docs.rapids.ai/install) for the most up-to-date information and commands for installing Dask cuDF and other RAPIDS packages.
+See the [RAPIDS install page](https://docs.rapids.ai/install/) for the most up-to-date information and commands for installing Dask cuDF and other RAPIDS packages.
 
 ## Resources
 
