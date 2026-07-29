@@ -17,7 +17,7 @@
 #include <memory>
 
 namespace cudf::detail::row::equality {
-class preprocessed_table;
+struct preprocessed_table;
 }
 
 namespace cudf {
