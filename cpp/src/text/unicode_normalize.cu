@@ -309,14 +309,12 @@ struct build_comp_table_fn {
   }
 };
 
-}  // namespace
-}  // namespace detail
-
-// Named struct rather than a lambda: __device__ extended lambdas are not
-// permitted inside constructors.
 struct is_zero_comp_key {
   __device__ bool operator()(uint64_t k) const { return k == uint64_t{0}; }
 };
+
+}  // namespace
+}  // namespace detail
 
 struct unicode_normalizer::unicode_normalizer_impl {
   rmm::device_uvector<uint32_t> decomp_offsets;  // size DECOMP_OFFSETS_SIZE
@@ -441,8 +439,9 @@ unicode_normalizer::unicode_normalizer(cudf::table_view const& unicode_data,
     *d_decomp_map, d_codepoints, d_counts, ccc_table, d_comp_keys, d_comp_values};
   thrust::for_each_n(policy, row_iter, num_rows, build_table_fn);
 
+  auto zero_fn = detail::is_zero_comp_key{};
   thrust::remove_if(
-    policy, d_comp_values.begin(), d_comp_values.end(), d_comp_keys.begin(), is_zero_comp_key{});
+    policy, d_comp_values.begin(), d_comp_values.end(), d_comp_keys.begin(), zero_fn);
   auto const end_itr = thrust::remove(policy, d_comp_keys.begin(), d_comp_keys.end(), uint64_t{0});
   auto const comp_size = cuda::std::distance(d_comp_keys.begin(), end_itr);
   d_comp_keys.resize(comp_size, stream);
