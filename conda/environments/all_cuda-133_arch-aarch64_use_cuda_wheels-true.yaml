@@ -17,14 +17,14 @@ dependencies:
 - cmake>=4.0
 - cramjam
 - croaring==4.4.2
-- cuda-bindings>=12.9.2,<13.0
+- cuda-bindings>=13.0.1,<14.0
 - cuda-cudart-dev
 - cuda-cupti-dev
 - cuda-nvcc
 - cuda-nvrtc-dev
 - cuda-nvtx-dev
 - cuda-sanitizer-api
-- cuda-version=12.9
+- cuda-version=13.3
 - cupy>=14.0.1,!=14.1.0
 - cxx-compiler
 - cython>=3.2.2,<3.3.0a0
@@ -91,7 +91,7 @@ dependencies:
 - python-confluent-kafka
 - python-xxhash
 - python>=3.11
-- pytorch>=2.4.0
+- pytorch>=2.10.0
 - pyxlsb
 - rapids-build-backend>=0.4.0,<0.5.0
 - rapids-dask-dependency==26.10.*,>=0.0.0a0
@@ -120,4 +120,4 @@ dependencies:
 - zstandard
 - pip:
   - nvidia-sphinx-theme
-name: all_cuda-129_arch-aarch64
+name: all_cuda-133_arch-aarch64_use_cuda_wheels-true
