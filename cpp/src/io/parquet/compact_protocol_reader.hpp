@@ -8,13 +8,16 @@
 #include "parquet_common.hpp"
 
 #include <cudf/io/parquet_schema.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
 
 #include <cuda/std/bit>
 
 #include <algorithm>
+#include <concepts>
 #include <cstddef>
 #include <limits>
+#include <stdexcept>
 #include <type_traits>
 #include <utility>
 
@@ -39,7 +42,8 @@ class CompactProtocolReader {
   void init(uint8_t const* base, size_t len)
   {
     m_base = m_cur = base;
-    m_end          = base + len;
+    // Guard against `nullptr + len` (undefined) so a zero-length buffer stays fully defined.
+    m_end = base != nullptr ? base + len : base;
   }
   [[nodiscard]] ptrdiff_t bytecount() const noexcept { return m_cur - m_base; }
   unsigned int getb() noexcept { return (m_cur < m_end) ? *m_cur++ : 0; }
@@ -49,17 +53,20 @@ class CompactProtocolReader {
     m_cur += bytecnt;
   }
 
-  // returns a varint encoded integer
-  template <typename T>
-  T get_varint() noexcept
+  // Returns a varint-encoded integer. `T` is constrained to unsigned so `numeric_limits<T>::digits`
+  // is the full value width; a signed `T` would drop the sign bit and misplace the overflow bound.
+  template <std::unsigned_integral T>
+  T get_varint()
   {
-    static_assert(std::is_unsigned_v<T>,
-                  "get_varint requires an unsigned T: the shift guard assumes T has no sign bit");
     T v = 0;
     for (uint32_t l = 0;; l += 7) {
-      T c = getb();
-      // Shifts >= the width of T are undefined; an overlong varint's bits fall outside v anyway.
-      if (l < std::numeric_limits<T>::digits) { v |= (c & 0x7f) << l; }
+      T const c = getb();
+      // Once the shift `l` reaches `T`'s width, shifting this group by `l` is undefined (out of
+      // range): the varint has more groups than `T` can hold, so reject it as overlong/corrupt.
+      CUDF_EXPECTS(l < std::numeric_limits<T>::digits,
+                   "Parquet varint exceeds the width of its target type",
+                   std::overflow_error);
+      v |= (c & 0x7f) << l;
       if (c < 0x80) { break; }
     }
     return v;
@@ -67,7 +74,7 @@ class CompactProtocolReader {
 
   // returns a zigzag encoded signed integer
   template <typename T>
-  T get_zigzag() noexcept
+  T get_zigzag()
   {
     using U   = std::make_unsigned_t<T>;
     U const u = get_varint<U>();
@@ -75,14 +82,14 @@ class CompactProtocolReader {
   }
 
   // thrift spec says to use zigzag i32 for i16 types
-  int32_t get_i16() noexcept { return get_zigzag<int32_t>(); }
-  int32_t get_i32() noexcept { return get_zigzag<int32_t>(); }
-  int64_t get_i64() noexcept { return get_zigzag<int64_t>(); }
+  int32_t get_i16() { return get_zigzag<int32_t>(); }
+  int32_t get_i32() { return get_zigzag<int32_t>(); }
+  int64_t get_i64() { return get_zigzag<int64_t>(); }
 
-  uint32_t get_u32() noexcept { return get_varint<uint32_t>(); }
-  uint64_t get_u64() noexcept { return get_varint<uint64_t>(); }
+  uint32_t get_u32() { return get_varint<uint32_t>(); }
+  uint64_t get_u64() { return get_varint<uint64_t>(); }
 
-  [[nodiscard]] std::pair<uint8_t, uint32_t> get_listh() noexcept
+  [[nodiscard]] std::pair<uint8_t, uint32_t> get_listh()
   {
     uint32_t const c = getb();
     uint32_t sz      = c >> 4;
