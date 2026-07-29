@@ -746,6 +746,7 @@ dependencies:
         matrices:
           - matrix:
               use_cuda_wheels: "false"
+              cuda_suffixed: "*"
             packages:
           - matrix:
               cuda: "12.*"
