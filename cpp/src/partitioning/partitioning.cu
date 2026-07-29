@@ -29,6 +29,7 @@
 #include <cooperative_groups.h>
 #include <cub/block/block_scan.cuh>
 #include <cub/device/device_histogram.cuh>
+#include <cub/thread/thread_load.cuh>
 #include <cuda/atomic>
 #include <cuda/iterator>
 #include <cuda/std/type_traits>
@@ -508,11 +509,12 @@ __device__ void copy_partitioned_values(cg::thread_block const& block,
                                         size_type const* local_partition_offsets,
                                         size_type const* global_partition_offsets)
 {
+  // Input values are consumed once, so avoid retaining their cache lines in L2.
   for (size_type iteration = 0; iteration < rows_per_thread; ++iteration) {
     auto const global_row = global_row_index(iteration);
     if (global_row < static_cast<thread_index_type>(num_rows)) {
       auto const row                                   = static_cast<size_type>(global_row);
-      payload[local_slots[local_row_index(iteration)]] = input[row];
+      payload[local_slots[local_row_index(iteration)]] = cub::ThreadLoad<cub::LOAD_CS>(input + row);
     }
   }
   block.sync();
