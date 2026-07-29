@@ -750,15 +750,18 @@ dependencies:
           - matrix:
               cuda: "12.*"
               use_cuda_wheels: "true"
+              cuda_suffixed: "true"
             packages:
               - nvidia-libnvcomp-cu12==5.2.0.13
           - matrix:
               cuda: "13.*"
               use_cuda_wheels: "true"
+              cuda_suffixed: "true"
             packages:
               - nvidia-libnvcomp-cu13==5.2.0.13
           - matrix:
               use_cuda_wheels: "true"
+              cuda_suffixed: "false"
             packages:
               - nvidia-libnvcomp==5.2.0.13
   rapids_build_skbuild:
