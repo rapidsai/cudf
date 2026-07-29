@@ -9,9 +9,9 @@
 #                        actions/download-artifact step can consume it as if
 #                        java-gather had run here.
 #   java-publish:        exact copy of build.yaml's java-publish job, but
-#                        pinned to the fork branch
-#                        (paul-aiyedun/rapidsai-shared-workflows@paul/add_maven_publish_workflow)
-#                        and gated only on java-fetch-prebuilt so we skip the
+#                        pinned to the head commit of the shared-workflows
+#                        PR under review (rapidsai/shared-workflows#606) and
+#                        gated only on java-fetch-prebuilt so we skip the
 #                        java-build / java-gather chain entirely.
 #
 # Restore the full PR workflow before merging.
@@ -56,7 +56,7 @@ jobs:
     permissions:
       actions: read
       contents: read
-    uses: paul-aiyedun/rapidsai-shared-workflows/.github/workflows/maven-publish.yaml@paul/add_maven_publish_workflow  # zizmor: ignore[unpinned-uses] temporary rehearsal only
+    uses: rapidsai/shared-workflows/.github/workflows/maven-publish.yaml@a4c375f73ce4c71fed2120373039d9a9b895c43c
     secrets:
       GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
       GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
