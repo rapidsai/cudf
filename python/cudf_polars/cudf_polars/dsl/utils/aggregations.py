@@ -98,11 +98,24 @@ def decompose_single_agg(
         "rank",
         "fill_null_with_strategy",
         "cum_sum",
+        "shift",
+        "shift_and_fill",
     }:
         if context != ExecutionContext.WINDOW:
             raise NotImplementedError(
                 f"{agg.name} is not supported in groupby or rolling context"
             )
+        if agg.name in {"shift", "shift_and_fill"}:
+            if not isinstance(agg.children[1], expr.Literal):
+                raise NotImplementedError(
+                    "shift over a window only supports a literal offset"
+                )
+            if agg.name == "shift_and_fill" and not isinstance(
+                agg.children[2], expr.Literal
+            ):
+                raise NotImplementedError(
+                    "shift over a window only supports a literal fill_value"
+                )
         if agg.name == "fill_null_with_strategy" and (
             strategy := agg.options[0]
         ) not in {"forward", "backward"}:
