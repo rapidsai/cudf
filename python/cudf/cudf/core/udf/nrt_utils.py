@@ -47,7 +47,7 @@ def _get_libcudf_rapids_include_dir():
     return None
 
 
-def _append_nvrtc_search_path(search_paths, path):
+def _append_search_path(search_paths, path):
     paths = [p for p in search_paths.split(os.pathsep) if p]
     if path not in paths:
         paths.append(path)
@@ -71,8 +71,8 @@ def nrt_enabled():
     try:
         numba_config.CUDA_ENABLE_NRT = True
         if (include_dir := _get_libcudf_rapids_include_dir()) is not None:
-            numba_config.CUDA_NVRTC_EXTRA_SEARCH_PATHS = (
-                _append_nvrtc_search_path(nvrtc_search_paths, include_dir)
+            numba_config.CUDA_NVRTC_EXTRA_SEARCH_PATHS = _append_search_path(
+                nvrtc_search_paths, include_dir
             )
         yield
     finally:
