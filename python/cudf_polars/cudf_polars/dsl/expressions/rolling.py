@@ -62,6 +62,11 @@ class CumSumOp(UnaryOp):
     pass
 
 
+@dataclass(frozen=True)
+class ShiftOp(UnaryOp):
+    pass
+
+
 def to_request(
     value: expr.Expr, orderby: Column, df: DataFrame
 ) -> plc.rolling.RollingRequest:
@@ -359,7 +364,13 @@ class GroupedWindow(Expr):
                 or (
                     isinstance(named_expr.value, expr.UnaryFunction)
                     and named_expr.value.name
-                    in {"rank", "fill_null_with_strategy", "cum_sum"}
+                    in {
+                        "rank",
+                        "fill_null_with_strategy",
+                        "cum_sum",
+                        "shift",
+                        "shift_and_fill",
+                    }
                 )
             )
         ]
@@ -569,6 +580,64 @@ class GroupedWindow(Expr):
                 result_tables.append(filled)
         return out_names, out_dtypes, result_tables
 
+    @_apply_unary_op.register
+    def _(
+        self,
+        op: ShiftOp,
+        df: DataFrame,
+        _: plc.groupby.GroupBy,
+    ) -> tuple[list[str], list[DataType], list[plc.Table]]:
+        plc_cols: list[plc.Column] = []
+        offsets: list[int] = []
+        fill_scalars: list[plc.Scalar] = []
+        out_names: list[str] = []
+        out_dtypes: list[DataType] = []
+
+        for ne in op.named_exprs:
+            shift_expr = ne.value
+            assert isinstance(shift_expr, expr.UnaryFunction)
+            data_expr, offset_expr = shift_expr.children[:2]
+            assert isinstance(offset_expr, expr.Literal)
+            offset = offset_expr.value
+            assert isinstance(offset, int)
+
+            plc_col = data_expr.evaluate(df, context=ExecutionContext.FRAME).obj
+            plc_cols.append(plc_col)
+            offsets.append(offset)
+            out_names.append(ne.name)
+            out_dtypes.append(shift_expr.dtype)
+            if shift_expr.name == "shift":
+                fill_scalars.append(
+                    plc.Scalar.from_py(None, plc_col.type(), stream=df.stream)
+                )
+            else:
+                assert shift_expr.name == "shift_and_fill"
+                fill_expr = shift_expr.children[2]
+                assert isinstance(fill_expr, expr.Literal)
+                fill_scalars.append(
+                    plc.Scalar.from_py(
+                        fill_expr.value, plc_col.type(), stream=df.stream
+                    )
+                )
+
+        assert op.order_index is not None
+        val_cols = plc.copying.gather(
+            plc.Table(plc_cols),
+            op.order_index,
+            plc.copying.OutOfBoundsPolicy.NULLIFY,
+            stream=df.stream,
+        ).columns()
+
+        assert isinstance(op.local_grouper, plc.groupby.GroupBy)
+        shifted_tbl = op.local_grouper.shift(
+            plc.Table(val_cols), offsets, fill_scalars, stream=df.stream
+        )[1]
+        return (
+            out_names,
+            out_dtypes,
+            [plc.Table([column]) for column in shifted_tbl.columns()],
+        )
+
     def _reorder_to_input(
         self,
         row_id: plc.Column,
@@ -627,6 +696,7 @@ class GroupedWindow(Expr):
             "rank": [],
             "fill_null_with_strategy": [],
             "cum_sum": [],
+            "shift": [],
         }
 
         for ne in self.named_aggs:
@@ -640,6 +710,8 @@ class GroupedWindow(Expr):
                 unary_window_ops["cum_sum"].append(ne)
             elif isinstance(v, expr.UnaryFunction) and v.name in unary_window_ops:
                 unary_window_ops[v.name].append(ne)
+            elif isinstance(v, expr.UnaryFunction) and v.name == "shift_and_fill":
+                unary_window_ops["shift"].append(ne)
             else:
                 reductions.append(ne)
         return reductions, unary_window_ops
@@ -1101,6 +1173,48 @@ class GroupedWindow(Expr):
                     named_exprs=cum_named,
                     order_index=order_index,
                     by_cols_for_scan=cum_sum_by_cols_for_scan,
+                    local_grouper=local,
+                ),
+                df,
+                grouper,
+            )
+            broadcasted_cols.extend(
+                self._reorder_to_input(
+                    row_id,
+                    by_cols,
+                    df.num_rows,
+                    tables,
+                    names,
+                    dtypes,
+                    order_index=order_index,
+                    stream=df.stream,
+                )
+            )
+
+        if shift_named := unary_window_ops["shift"]:
+            order_index, shift_by_cols_for_scan, local = (
+                self._grouped_window_scan_setup(
+                    by_cols,
+                    row_id=row_id,
+                    order_by_col=order_by_col
+                    if self._order_by_expr is not None
+                    else None,
+                    ob_desc=self.options[2]
+                    if self._order_by_expr is not None
+                    else False,
+                    ob_nulls_last=self.options[3]
+                    if self._order_by_expr is not None
+                    else False,
+                    grouper=grouper,
+                    stream=df.stream,
+                    require_sorted_groups=True,
+                )
+            )
+            names, dtypes, tables = self._apply_unary_op(
+                ShiftOp(
+                    named_exprs=shift_named,
+                    order_index=order_index,
+                    by_cols_for_scan=shift_by_cols_for_scan,
                     local_grouper=local,
                 ),
                 df,
