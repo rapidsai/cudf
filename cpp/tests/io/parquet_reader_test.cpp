@@ -5576,51 +5576,51 @@ TEST_F(ParquetReaderTest, NestedMismatchedSchemaColumnValidation)
   }
 }
 
-// CompactProtocolReader::get_varint on crafted byte runs, decoded host-side: malformed varints
-// must decode to defined values (no shift past the width of the result type) and terminate.
+// CompactProtocolReader::get_varint on crafted byte runs, decoded host-side: an overlong varint
+// (value too large for the target type) throws std::overflow_error; a within-width unterminated run
+// terminates cleanly at EOF; well-formed and empty inputs decode to defined values.
 TEST(CompactProtocolReaderVarintTest, OverlongU32)
 {
-  // Six continuation bytes then terminator 0x07: only the groups shifted by 0/7/14/21/28 land
-  // inside a uint32_t, so 0x01 | 0x02<<7 | 0x03<<14 | 0x04<<21 | 0x05<<28 = 0x5080C101; the
-  // 0x86 and 0x07 payloads (shifts 35, 42) contribute nothing.
+  // Six continuation groups: the sixth (shift 35) lies beyond uint32_t's 32 bits, so the value is
+  // too large for the target type and get_varint throws rather than truncating.
   std::vector<uint8_t> const bytes{0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x07};
   cudf::io::parquet::detail::CompactProtocolReader cp(bytes.data(), bytes.size());
-  EXPECT_EQ(cp.get_u32(), 0x5080'C101u);
-  // The whole malformed varint is consumed, terminator included.
-  EXPECT_EQ(cp.bytecount(), static_cast<ptrdiff_t>(bytes.size()));
+  EXPECT_THROW(cp.get_u32(), std::overflow_error);
 }
 
 TEST(CompactProtocolReaderVarintTest, OverlongU64)
 {
-  // Eleven continuation bytes then terminator: the first ten payload groups (shifts 0..63)
-  // accumulate, and at shift 63 only the lowest bit of 0x0B survives. 0x01 | 0x02<<7 |
-  // 0x03<<14 | 0x04<<21 | 0x05<<28 | 0x06<<35 | 0x07<<42 | 0x08<<49 | 0x09<<56 | 1UL<<63
-  // = 0x89101C305080C101; 0x8A (shift 70) and the terminator contribute nothing.
+  // Eleven continuation groups: the eleventh (shift 70) lies beyond uint64_t's 64 bits, so the
+  // value is too large for the target type and get_varint throws rather than truncating.
   std::vector<uint8_t> const bytes{
     0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8B, 0x8A, 0x00};
   cudf::io::parquet::detail::CompactProtocolReader cp(bytes.data(), bytes.size());
-  EXPECT_EQ(cp.get_u64(), 0x8910'1C30'5080'C101UL);
-  EXPECT_EQ(cp.bytecount(), static_cast<ptrdiff_t>(bytes.size()));
+  EXPECT_THROW(cp.get_u64(), std::overflow_error);
 }
 
 TEST(CompactProtocolReaderVarintTest, UnterminatedRunAtEof)
 {
-  // Continuation bytes to end-of-buffer with no terminator: getb() yields 0 at EOF, which ends
-  // the loop — decoding must terminate and return a defined value.
+  // Continuation bytes running to end-of-buffer with no terminator: getb() yields 0 at EOF, which
+  // ends the loop. A run that stays within the target width returns a defined value...
   {
-    // Five 0x7F groups (shifts 0..28) saturate a uint32_t; the shift by 28 keeps only the low
-    // nibble of 0x7F, and the sixth byte (shift 35) contributes nothing.
-    std::vector<uint8_t> const bytes(6, 0xFF);
+    // u32: three 0x7F groups (shifts 0/7/14) then EOF -> 0x1FFFFF, all three bytes consumed.
+    std::vector<uint8_t> const bytes(3, 0xFF);
     cudf::io::parquet::detail::CompactProtocolReader cp(bytes.data(), bytes.size());
-    EXPECT_EQ(cp.get_u32(), 0xFFFF'FFFFu);
+    EXPECT_EQ(cp.get_u32(), 0x1F'FFFFu);
     EXPECT_EQ(cp.bytecount(), static_cast<ptrdiff_t>(bytes.size()));
   }
   {
-    // Ten 0x7F groups (shifts 0..63) saturate a uint64_t; the last two bytes are past the width.
-    std::vector<uint8_t> const bytes(12, 0xFF);
+    // u64: five 0x7F groups (shifts 0..28) then EOF -> 0x7FFFFFFFF.
+    std::vector<uint8_t> const bytes(5, 0xFF);
     cudf::io::parquet::detail::CompactProtocolReader cp(bytes.data(), bytes.size());
-    EXPECT_EQ(cp.get_u64(), 0xFFFF'FFFF'FFFF'FFFFUL);
+    EXPECT_EQ(cp.get_u64(), 0x7'FFFF'FFFFUL);
     EXPECT_EQ(cp.bytecount(), static_cast<ptrdiff_t>(bytes.size()));
+  }
+  {
+    // ...but a run spanning past the width is overlong and throws, terminator or not.
+    std::vector<uint8_t> const bytes(6, 0xFF);
+    cudf::io::parquet::detail::CompactProtocolReader cp(bytes.data(), bytes.size());
+    EXPECT_THROW(cp.get_u32(), std::overflow_error);
   }
 }
 
