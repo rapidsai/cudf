@@ -40,6 +40,7 @@
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -47,9 +48,12 @@ namespace cudf {
 namespace {
 namespace cg = cooperative_groups;
 
-// Staged-scatter launch configuration
-constexpr size_type STAGED_SCATTER_BLOCK_SIZE = 1024;
-constexpr size_type PREFERRED_ROWS_PER_THREAD = 8;
+// A 1,024-thread CTA provides 32 warp-sized groups for flushing partitions concurrently.
+constexpr size_type PREFERRED_STAGED_SCATTER_BLOCK_SIZE = 1024;
+// A 512-thread CTA halves the per-iteration shared-memory footprint when 1,024 threads cannot fit.
+constexpr size_type FALLBACK_STAGED_SCATTER_BLOCK_SIZE = 512;
+// Map-only CTAs process eight rows per thread because they stage no fixed-width payload values.
+constexpr size_type GATHER_MAP_ROWS_PER_THREAD = 8;
 
 // Scatter launch configuration
 constexpr size_type SCATTER_BLOCK_SIZE      = 256;
@@ -185,7 +189,8 @@ template <class row_hasher_t, typename partitioner_type, typename PartitionMetad
 CUDF_KERNEL void compute_row_partition_numbers(row_hasher_t the_hasher,
                                                size_type const num_partitions,
                                                partitioner_type const the_partitioner,
-                                               PartitionMetadataView partition_metadata,
+                                               PartitionMetadataView const __grid_constant__
+                                                 partition_metadata,
                                                size_type* __restrict__ block_partition_sizes)
 {
   // Accumulate histogram of the size of each partition in shared memory
@@ -379,17 +384,19 @@ __device__ thread_index_type global_row_index(size_type iteration)
  *
  * Produces `local_partition_offsets[p]` as the sum of the counts for partitions preceding `p`.
  *
+ * @tparam BlockSize Number of threads in the CTA
  * @param block Cooperative group representing the CTA
  * @param block_partition_sizes Partition-major counts for all CTAs
  * @param[out] local_partition_offsets Exclusive partition offsets for this CTA
  * @param num_partitions Number of partitions
  */
+template <size_type BlockSize>
 __device__ void scan_partition_counts(cg::thread_block const& block,
                                       size_type const* block_partition_sizes,
                                       size_type* local_partition_offsets,
                                       size_type num_partitions)
 {
-  using block_scan = cub::BlockScan<size_type, STAGED_SCATTER_BLOCK_SIZE>;
+  using block_scan = cub::BlockScan<size_type, BlockSize>;
   __shared__ typename block_scan::TempStorage scan_storage;
   __shared__ size_type tile_prefix;
 
@@ -400,7 +407,7 @@ __device__ void scan_partition_counts(cg::thread_block const& block,
   block.sync();
 
   // Process one partition per thread and carry the total across CTA-sized tiles.
-  for (size_type tile = 0; tile < num_partitions; tile += STAGED_SCATTER_BLOCK_SIZE) {
+  for (size_type tile = 0; tile < num_partitions; tile += BlockSize) {
     auto const partition = tile + static_cast<size_type>(block.thread_rank());
     auto const count =
       partition < num_partitions
@@ -422,6 +429,7 @@ __device__ void scan_partition_counts(cg::thread_block const& block,
 /**
  * @brief Prepares the shared routing state used to copy partitioned values.
  *
+ * @tparam BlockSize Number of threads in the CTA
  * @tparam PartitionMetadataView Device-accessible partition metadata view
  * @param block Cooperative group representing the CTA
  * @param num_rows Number of input rows
@@ -435,7 +443,7 @@ __device__ void scan_partition_counts(cg::thread_block const& block,
  * @param[out] local_partition_offsets CTA-local partition offsets
  * @param[out] global_partition_offsets Output offset for each CTA partition
  */
-template <typename PartitionMetadataView>
+template <size_type BlockSize, typename PartitionMetadataView>
 __device__ void prepare_partition_copy(cg::thread_block const& block,
                                        size_type num_rows,
                                        size_type num_partitions,
@@ -447,7 +455,8 @@ __device__ void prepare_partition_copy(cg::thread_block const& block,
                                        size_type* local_partition_offsets,
                                        size_type* global_partition_offsets)
 {
-  scan_partition_counts(block, block_partition_sizes, local_partition_offsets, num_partitions);
+  scan_partition_counts<BlockSize>(
+    block, block_partition_sizes, local_partition_offsets, num_partitions);
 
   // Load this CTA's global output start for each partition.
   for (size_type partition = block.thread_rank(); partition < num_partitions;
@@ -528,14 +537,16 @@ __device__ void copy_partitioned_values(cg::thread_block const& block,
  *
  * The buffer contains the partitioned payload, one destination slot per CTA row, one local
  * offset per partition plus the terminal offset, and one global offset per partition.
+ *
+ * @tparam BlockSize Number of threads in the CTA
  */
+template <size_type BlockSize>
 struct staged_scatter_smem {
   CUDF_HOST_DEVICE constexpr staged_scatter_smem(size_type num_partitions,
                                                  size_type rows_per_thread,
                                                  size_type element_width)
   {
-    auto const rows_per_block =
-      static_cast<std::size_t>(STAGED_SCATTER_BLOCK_SIZE) * rows_per_thread;
+    auto const rows_per_block      = static_cast<std::size_t>(BlockSize) * rows_per_thread;
     local_slots_offset             = rows_per_block * element_width;
     local_partition_offsets_offset = local_slots_offset + rows_per_block * sizeof(size_type);
     global_partition_offsets_offset =
@@ -558,6 +569,7 @@ struct staged_scatter_smem {
  * stages the column values in partition order in shared memory and writes each partition as a
  * contiguous output range. The row-to-output mapping is computed once and reused across columns.
  *
+ * @tparam BlockSize Number of threads in the CTA
  * @tparam PartitionMetadataView Device-accessible partition metadata view
  * @param descriptors Fixed-width input/output column descriptors
  * @param num_columns Number of descriptors
@@ -570,7 +582,7 @@ struct staged_scatter_smem {
  * @param scanned_block_partition_sizes Exclusive prefix sum of CTA partition counts in
  * partition-major order; each entry is the global output offset for one CTA partition
  */
-template <typename PartitionMetadataView>
+template <size_type BlockSize, typename PartitionMetadataView>
 CUDF_KERNEL void copy_fixed_width_columns(fixed_width_column_descriptor const* descriptors,
                                           size_type num_columns,
                                           size_type num_rows,
@@ -583,7 +595,8 @@ CUDF_KERNEL void copy_fixed_width_columns(fixed_width_column_descriptor const* d
 {
   extern __shared__ __align__(16)
     std::uint8_t shared_memory[];  // align to the maximum supported element width
-  auto const smem   = staged_scatter_smem{num_partitions, rows_per_thread, max_element_width};
+  auto const smem =
+    staged_scatter_smem<BlockSize>{num_partitions, rows_per_thread, max_element_width};
   auto* payload     = shared_memory;
   auto* local_slots = reinterpret_cast<size_type*>(shared_memory + smem.local_slots_offset);
   auto* local_partition_offsets =
@@ -592,16 +605,16 @@ CUDF_KERNEL void copy_fixed_width_columns(fixed_width_column_descriptor const* d
     reinterpret_cast<size_type*>(shared_memory + smem.global_partition_offsets_offset);
 
   auto const block = cg::this_thread_block();
-  prepare_partition_copy(block,
-                         num_rows,
-                         num_partitions,
-                         rows_per_thread,
-                         partition_metadata,
-                         block_partition_sizes,
-                         scanned_block_partition_sizes,
-                         local_slots,
-                         local_partition_offsets,
-                         global_partition_offsets);
+  prepare_partition_copy<BlockSize>(block,
+                                    num_rows,
+                                    num_partitions,
+                                    rows_per_thread,
+                                    partition_metadata,
+                                    block_partition_sizes,
+                                    scanned_block_partition_sizes,
+                                    local_slots,
+                                    local_partition_offsets,
+                                    global_partition_offsets);
 
   // Copy each column through the shared payload buffer, reusing the row slots and partition
   // offsets.
@@ -635,6 +648,7 @@ CUDF_KERNEL void copy_fixed_width_columns(fixed_width_column_descriptor const* d
 /**
  * @brief Computes an output-to-input gather map with coalesced partition writes.
  *
+ * @tparam BlockSize Number of threads in the CTA
  * @tparam PartitionMetadataView Device-accessible partition metadata view
  * @param num_rows Number of input rows
  * @param num_partitions Number of partitions
@@ -645,7 +659,7 @@ CUDF_KERNEL void copy_fixed_width_columns(fixed_width_column_descriptor const* d
  * partition-major order; each entry is the global output offset for one CTA partition
  * @param[out] gather_map Output-to-input row mapping
  */
-template <typename PartitionMetadataView>
+template <size_type BlockSize, typename PartitionMetadataView>
 CUDF_KERNEL void compute_gather_map(size_type num_rows,
                                     size_type num_partitions,
                                     size_type rows_per_thread,
@@ -655,7 +669,8 @@ CUDF_KERNEL void compute_gather_map(size_type num_rows,
                                     size_type* gather_map)
 {
   extern __shared__ __align__(16) std::uint8_t shared_memory[];
-  auto const smem   = staged_scatter_smem{num_partitions, rows_per_thread, sizeof(size_type)};
+  auto const smem =
+    staged_scatter_smem<BlockSize>{num_partitions, rows_per_thread, sizeof(size_type)};
   auto* payload     = reinterpret_cast<size_type*>(shared_memory);
   auto* local_slots = reinterpret_cast<size_type*>(shared_memory + smem.local_slots_offset);
   auto* local_partition_offsets =
@@ -664,16 +679,16 @@ CUDF_KERNEL void compute_gather_map(size_type num_rows,
     reinterpret_cast<size_type*>(shared_memory + smem.global_partition_offsets_offset);
 
   auto const block = cg::this_thread_block();
-  prepare_partition_copy(block,
-                         num_rows,
-                         num_partitions,
-                         rows_per_thread,
-                         partition_metadata,
-                         block_partition_sizes,
-                         scanned_block_partition_sizes,
-                         local_slots,
-                         local_partition_offsets,
-                         global_partition_offsets);
+  prepare_partition_copy<BlockSize>(block,
+                                    num_rows,
+                                    num_partitions,
+                                    rows_per_thread,
+                                    partition_metadata,
+                                    block_partition_sizes,
+                                    scanned_block_partition_sizes,
+                                    local_slots,
+                                    local_partition_offsets,
+                                    global_partition_offsets);
 
   copy_partitioned_values(block,
                           cuda::counting_iterator<size_type>{0},
@@ -736,6 +751,7 @@ std::size_t configure_dynamic_shared_memory(Kernel kernel, size_type block_size)
 /**
  * @brief Returns the maximum rows per thread supported by the staged-scatter path.
  *
+ * @tparam BlockSize Number of threads in the staged-scatter CTA
  * @tparam Hasher Device row hasher type
  * @tparam Partitioner Hash-to-partition mapping type
  * @tparam PartitionMetadataView Device-accessible partition metadata view
@@ -744,7 +760,10 @@ std::size_t configure_dynamic_shared_memory(Kernel kernel, size_type block_size)
  * @param column_groups Fixed-width and variable-width column groups
  * @return Rows per thread, or 0 when a required kernel cannot launch
  */
-template <typename Hasher, typename Partitioner, typename PartitionMetadataView>
+template <size_type BlockSize,
+          typename Hasher,
+          typename Partitioner,
+          typename PartitionMetadataView>
 size_type staged_rows_per_thread(size_type num_partitions,
                                  table_view const& input,
                                  partition_column_groups const& column_groups)
@@ -753,31 +772,29 @@ size_type staged_rows_per_thread(size_type num_partitions,
   auto const metadata_kernel =
     &compute_row_partition_numbers<Hasher, Partitioner, PartitionMetadataView>;
   // Metadata generation requires one shared counter for every partition.
-  if (histogram_bytes >
-      configure_dynamic_shared_memory(metadata_kernel, STAGED_SCATTER_BLOCK_SIZE)) {
-    return 0;
-  }
+  if (histogram_bytes > configure_dynamic_shared_memory(metadata_kernel, BlockSize)) { return 0; }
 
   auto const max_rows_per_thread = [num_partitions](
                                      auto kernel, size_type element_width, size_type upper_bound) {
-    auto const available_smem_bytes =
-      configure_dynamic_shared_memory(kernel, STAGED_SCATTER_BLOCK_SIZE);
-    auto const fixed_smem_bytes = staged_scatter_smem{num_partitions, 0, element_width}.bytes;
+    auto const available_smem_bytes = configure_dynamic_shared_memory(kernel, BlockSize);
+    auto const fixed_smem_bytes =
+      staged_scatter_smem<BlockSize>{num_partitions, 0, element_width}.bytes;
     if (fixed_smem_bytes >= available_smem_bytes) { return size_type{0}; }
 
     auto const bytes_per_iteration =
-      staged_scatter_smem{num_partitions, 1, element_width}.bytes - fixed_smem_bytes;
+      staged_scatter_smem<BlockSize>{num_partitions, 1, element_width}.bytes - fixed_smem_bytes;
     return std::min(
       upper_bound,
       static_cast<size_type>((available_smem_bytes - fixed_smem_bytes) / bytes_per_iteration));
   };
 
-  auto rows_per_thread = PREFERRED_ROWS_PER_THREAD;
+  auto rows_per_thread = GATHER_MAP_ROWS_PER_THREAD;
   // Staged payloads must fit using the widest fixed-width element.
   if (!column_groups.fixed_width_indices.empty()) {
-    rows_per_thread = max_rows_per_thread(&copy_fixed_width_columns<PartitionMetadataView>,
-                                          column_groups.max_element_width,
-                                          std::numeric_limits<size_type>::max());
+    rows_per_thread =
+      max_rows_per_thread(&copy_fixed_width_columns<BlockSize, PartitionMetadataView>,
+                          column_groups.max_element_width,
+                          std::numeric_limits<size_type>::max());
     if (rows_per_thread == 0) { return 0; }
   }
 
@@ -786,7 +803,7 @@ size_type staged_rows_per_thread(size_type num_partitions,
   auto const fixed_width_input = input.select(column_groups.fixed_width_indices);
   if (requires_gather_map(column_groups, fixed_width_input)) {
     rows_per_thread = max_rows_per_thread(
-      &compute_gather_map<PartitionMetadataView>, sizeof(size_type), rows_per_thread);
+      &compute_gather_map<BlockSize, PartitionMetadataView>, sizeof(size_type), rows_per_thread);
     if (rows_per_thread == 0) { return 0; }
   }
 
@@ -902,6 +919,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition_global_scatt
  * Fixed-width columns are copied together using the CTA-local row mapping. Remaining columns and
  * validity masks are materialized using gather maps built from the same partition metadata.
  *
+ * @tparam BlockSize Number of threads in the staged-scatter CTA
  * @tparam PartitionMetadataView Device-accessible partition metadata view type
  * @tparam Hasher Device-callable row hasher type
  * @tparam Partitioner Hash-to-partition mapping type
@@ -917,7 +935,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition_global_scatt
  * @param mr Device memory resource used for output allocations
  * @return Partitioned table and the starting offset of each partition
  */
-template <typename PartitionMetadataView, typename Hasher, typename Partitioner>
+template <size_type BlockSize,
+          typename PartitionMetadataView,
+          typename Hasher,
+          typename Partitioner>
 std::pair<std::unique_ptr<table>, std::vector<size_type>> partition_staged_scatter(
   table_view const& input,
   size_type num_rows,
@@ -930,9 +951,9 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition_staged_scatt
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  // Cover the input with 1,024-thread CTAs using the selected number of rows per thread.
-  auto const grid_size = static_cast<size_type>(
-    cudf::detail::grid_1d{num_rows, STAGED_SCATTER_BLOCK_SIZE, rows_per_thread}.num_blocks);
+  // Cover the input with CTAs using the selected number of rows per thread.
+  auto const grid_size =
+    static_cast<size_type>(cudf::detail::grid_1d{num_rows, BlockSize, rows_per_thread}.num_blocks);
   auto const histogram_bytes = static_cast<std::size_t>(num_partitions) * sizeof(size_type);
   auto const num_cta_partition_counts =
     static_cast<std::size_t>(grid_size) * static_cast<std::size_t>(num_partitions);
@@ -948,10 +969,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition_staged_scatt
 
   // Hash every row and record its partition plus its offset within the CTA-local partition. Each
   // CTA also writes the partition counts consumed by the prefix scan below.
-  compute_row_partition_numbers<<<grid_size,
-                                  STAGED_SCATTER_BLOCK_SIZE,
-                                  histogram_bytes,
-                                  stream.value()>>>(
+  compute_row_partition_numbers<<<grid_size, BlockSize, histogram_bytes, stream.value()>>>(
     hasher, num_partitions, partitioner, partition_metadata, block_partition_sizes.data());
   CUDF_CUDA_TRY(cudaGetLastError());
 
@@ -1016,19 +1034,20 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition_staged_scatt
       device_descriptors, host_descriptors, stream);
 
     auto const copy_shared_memory =
-      staged_scatter_smem{num_partitions, rows_per_thread, column_groups.max_element_width}.bytes;
-    copy_fixed_width_columns<<<grid_size,
-                               STAGED_SCATTER_BLOCK_SIZE,
-                               copy_shared_memory,
-                               stream.value()>>>(device_descriptors.data(),
-                                                 device_descriptors.size(),
-                                                 num_rows,
-                                                 num_partitions,
-                                                 rows_per_thread,
-                                                 column_groups.max_element_width,
-                                                 partition_metadata,
-                                                 block_partition_sizes.data(),
-                                                 scanned_block_partition_sizes.data());
+      staged_scatter_smem<BlockSize>{
+        num_partitions, rows_per_thread, column_groups.max_element_width}
+        .bytes;
+    copy_fixed_width_columns<BlockSize, PartitionMetadataView>
+      <<<grid_size, BlockSize, copy_shared_memory, stream.value()>>>(
+        device_descriptors.data(),
+        device_descriptors.size(),
+        num_rows,
+        num_partitions,
+        rows_per_thread,
+        column_groups.max_element_width,
+        partition_metadata,
+        block_partition_sizes.data(),
+        scanned_block_partition_sizes.data());
     CUDF_CUDA_TRY(cudaGetLastError());
   }
 
@@ -1036,15 +1055,16 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition_staged_scatt
   auto gather_map = rmm::device_uvector<size_type>(gather_map_required ? num_rows : 0, stream);
   if (gather_map_required) {
     auto const shared_memory =
-      staged_scatter_smem{num_partitions, rows_per_thread, sizeof(size_type)}.bytes;
-    compute_gather_map<<<grid_size, STAGED_SCATTER_BLOCK_SIZE, shared_memory, stream.value()>>>(
-      num_rows,
-      num_partitions,
-      rows_per_thread,
-      partition_metadata,
-      block_partition_sizes.data(),
-      scanned_block_partition_sizes.data(),
-      gather_map.data());
+      staged_scatter_smem<BlockSize>{num_partitions, rows_per_thread, sizeof(size_type)}.bytes;
+    compute_gather_map<BlockSize, PartitionMetadataView>
+      <<<grid_size, BlockSize, shared_memory, stream.value()>>>(
+        num_rows,
+        num_partitions,
+        rows_per_thread,
+        partition_metadata,
+        block_partition_sizes.data(),
+        scanned_block_partition_sizes.data(),
+        gather_map.data());
     CUDF_CUDA_TRY(cudaGetLastError());
   }
 
@@ -1172,10 +1192,81 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition_scatter(
 }
 
 /**
+ * @brief Allocates partition metadata and runs one staged-scatter configuration.
+ *
+ * @tparam BlockSize Number of threads in each staged-scatter CTA
+ * @tparam PartitionMetadataView Metadata representation used by the staged-scatter kernels
+ * @tparam Hasher Device-callable row hasher type
+ * @tparam Partitioner Hash-to-partition mapping type
+ * @param input Table whose rows are reordered into partitions
+ * @param num_rows Number of rows to partition
+ * @param num_partitions Number of output partitions
+ * @param hasher Row hasher used to select partitions
+ * @param partitioner Functor that maps row hashes to partition identifiers
+ * @param rows_per_thread Number of input rows processed by each thread
+ * @param column_groups Fixed-width and variable-width column groups
+ * @param stream CUDA stream used for device operations
+ * @param mr Device memory resource used for output allocations
+ * @return Partitioned table and the starting offset of each partition
+ */
+template <size_type BlockSize,
+          typename PartitionMetadataView,
+          typename Hasher,
+          typename Partitioner>
+std::pair<std::unique_ptr<table>, std::vector<size_type>> run_staged_scatter(
+  table_view const& input,
+  size_type num_rows,
+  size_type num_partitions,
+  Hasher hasher,
+  Partitioner partitioner,
+  size_type rows_per_thread,
+  partition_column_groups const& column_groups,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  static_assert(std::is_same_v<PartitionMetadataView, detail::partition_metadata::packed_view> ||
+                std::is_same_v<PartitionMetadataView, detail::partition_metadata::default_view>);
+
+  if constexpr (std::is_same_v<PartitionMetadataView, detail::partition_metadata::packed_view>) {
+    auto packed_metadata = rmm::device_uvector<std::uint32_t>(num_rows, stream);
+    auto const partition_bits =
+      detail::partition_metadata::ceil_log2(static_cast<std::uint64_t>(num_partitions));
+    auto const metadata = detail::partition_metadata::packed_view{
+      device_span<std::uint32_t>{packed_metadata}, partition_bits};
+    return partition_staged_scatter<BlockSize>(input,
+                                               num_rows,
+                                               num_partitions,
+                                               hasher,
+                                               partitioner,
+                                               metadata,
+                                               rows_per_thread,
+                                               column_groups,
+                                               stream,
+                                               mr);
+  } else {
+    auto row_partitions        = rmm::device_uvector<size_type>(num_rows, stream);
+    auto row_partition_offsets = rmm::device_uvector<size_type>(num_rows, stream);
+    auto const metadata        = detail::partition_metadata::default_view{
+      device_span<size_type>{row_partitions}, device_span<size_type>{row_partition_offsets}};
+    return partition_staged_scatter<BlockSize>(input,
+                                               num_rows,
+                                               num_partitions,
+                                               hasher,
+                                               partitioner,
+                                               metadata,
+                                               rows_per_thread,
+                                               column_groups,
+                                               stream,
+                                               mr);
+  }
+}
+
+/**
  * @brief Partitions rows using the first supported execution path.
  *
- * Packed metadata is attempted first using the rows per CTA selected for that exact kernel
- * specialization. When staged scatter is unavailable, the function tries shared-memory scatter
+ * Staged scatter first uses packed metadata with the preferred CTA size, then retries that CTA size
+ * with default metadata. A smaller CTA is used only as a shared-memory fallback and always uses
+ * default metadata. When staged scatter is unavailable, the function tries shared-memory scatter
  * before using the global-memory implementation.
  *
  * @tparam Hasher Device-callable row hasher type
@@ -1200,13 +1291,69 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> dispatch_partition_imp
   rmm::device_async_resource_ref mr)
 {
   auto const column_groups = group_columns(input);
-  auto const packed_rows_per_thread =
-    staged_rows_per_thread<Hasher, Partitioner, detail::partition_metadata::packed_view>(
-      num_partitions, input, column_groups);
-  auto const staged_scatter_layout =
-    packed_rows_per_thread ? detail::partition_metadata::pick_layout(
-                               num_partitions, STAGED_SCATTER_BLOCK_SIZE * packed_rows_per_thread)
-                           : detail::partition_metadata::layout::DEFAULT;
+
+  using packed_metadata_view  = detail::partition_metadata::packed_view;
+  using default_metadata_view = detail::partition_metadata::default_view;
+
+  // Prefer the fixed-width-optimized execution shape and packed metadata.
+  if (auto const rows_per_thread =
+        staged_rows_per_thread<PREFERRED_STAGED_SCATTER_BLOCK_SIZE,
+                               Hasher,
+                               Partitioner,
+                               packed_metadata_view>(num_partitions, input, column_groups);
+      rows_per_thread != 0 &&
+      detail::partition_metadata::pick_layout(
+        num_partitions, PREFERRED_STAGED_SCATTER_BLOCK_SIZE * rows_per_thread) ==
+        detail::partition_metadata::layout::PACKED32) {
+    return run_staged_scatter<PREFERRED_STAGED_SCATTER_BLOCK_SIZE, packed_metadata_view>(
+      input,
+      num_rows,
+      num_partitions,
+      hasher,
+      partitioner,
+      rows_per_thread,
+      column_groups,
+      stream,
+      mr);
+  }
+
+  // Use separate partition and offset arrays with the 1,024-thread CTA.
+  if (auto const rows_per_thread =
+        staged_rows_per_thread<PREFERRED_STAGED_SCATTER_BLOCK_SIZE,
+                               Hasher,
+                               Partitioner,
+                               default_metadata_view>(num_partitions, input, column_groups);
+      rows_per_thread != 0) {
+    return run_staged_scatter<PREFERRED_STAGED_SCATTER_BLOCK_SIZE, default_metadata_view>(
+      input,
+      num_rows,
+      num_partitions,
+      hasher,
+      partitioner,
+      rows_per_thread,
+      column_groups,
+      stream,
+      mr);
+  }
+
+  // Use a 512-thread CTA to reduce the staged shared-memory footprint.
+  if (auto const rows_per_thread =
+        staged_rows_per_thread<FALLBACK_STAGED_SCATTER_BLOCK_SIZE,
+                               Hasher,
+                               Partitioner,
+                               default_metadata_view>(num_partitions, input, column_groups);
+      rows_per_thread != 0) {
+    return run_staged_scatter<FALLBACK_STAGED_SCATTER_BLOCK_SIZE, default_metadata_view>(
+      input,
+      num_rows,
+      num_partitions,
+      hasher,
+      partitioner,
+      rows_per_thread,
+      column_groups,
+      stream,
+      mr);
+  }
 
   auto const scatter_layout = detail::partition_metadata::pick_layout(
     num_partitions, SCATTER_BLOCK_SIZE * SCATTER_ROWS_PER_THREAD);
@@ -1220,45 +1367,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> dispatch_partition_imp
                         &compute_row_output_locations<PartitionMetadataView>, SCATTER_BLOCK_SIZE));
     };
 
-  if (staged_scatter_layout == detail::partition_metadata::layout::PACKED32) {
-    auto packed_metadata = rmm::device_uvector<std::uint32_t>(num_rows, stream);
-    auto const partition_bits =
-      detail::partition_metadata::ceil_log2(static_cast<std::uint64_t>(num_partitions));
-    auto const metadata = detail::partition_metadata::packed_view{
-      device_span<std::uint32_t>{packed_metadata}, partition_bits};
-    return partition_staged_scatter(input,
-                                    num_rows,
-                                    num_partitions,
-                                    hasher,
-                                    partitioner,
-                                    metadata,
-                                    packed_rows_per_thread,
-                                    column_groups,
-                                    stream,
-                                    mr);
-  } else if (auto default_rows_per_thread =
-               staged_rows_per_thread<Hasher,
-                                      Partitioner,
-                                      detail::partition_metadata::default_view>(
-                 num_partitions, input, column_groups)) {
-    auto row_partitions        = rmm::device_uvector<size_type>(num_rows, stream);
-    auto row_partition_offsets = rmm::device_uvector<size_type>(num_rows, stream);
-    auto const metadata        = detail::partition_metadata::default_view{
-      device_span<size_type>{row_partitions}, device_span<size_type>{row_partition_offsets}};
-    return partition_staged_scatter(input,
-                                    num_rows,
-                                    num_partitions,
-                                    hasher,
-                                    partitioner,
-                                    metadata,
-                                    default_rows_per_thread,
-                                    column_groups,
-                                    stream,
-                                    mr);
-  } else if (scatter_layout == detail::partition_metadata::layout::PACKED32 &&
-             scatter_histogram_bytes <=
-               scatter_max_smem_bytes(
-                 cuda::std::type_identity<detail::partition_metadata::packed_view>{})) {
+  if (scatter_layout == detail::partition_metadata::layout::PACKED32 &&
+      scatter_histogram_bytes <=
+        scatter_max_smem_bytes(
+          cuda::std::type_identity<detail::partition_metadata::packed_view>{})) {
     auto packed_metadata = rmm::device_uvector<std::uint32_t>(num_rows, stream);
     auto const partition_bits =
       detail::partition_metadata::ceil_log2(static_cast<std::uint64_t>(num_partitions));
