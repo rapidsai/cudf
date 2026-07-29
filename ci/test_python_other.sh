@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -42,8 +42,9 @@ timeout 30m ./ci/run_custreamz_pytests.sh \
   --cov-report=term
 
 rapids-logger "pytest cudf-polars"
+# Fail fast (-x) rather than trying to continue because failed tests pollute the state
 ./ci/run_cudf_polars_pytests.sh \
-  -vv \
+  -x \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml" \
   --numprocesses=4 \
   --dist=worksteal \
