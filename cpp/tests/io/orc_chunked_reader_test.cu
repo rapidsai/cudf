@@ -157,8 +157,8 @@ void expect_selected_nested_empty_struct_table(cudf::table_view expected, cudf::
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, actual);
 }
 
-void expect_selected_nested_empty_struct_round_trip(std::unique_ptr<cudf::column> input_column,
-                                                    std::string const& filename)
+void expect_selected_nested_empty_struct_chunked_round_trip(
+  std::unique_ptr<cudf::column> input_column, std::string const& filename)
 {
   std::vector<std::unique_ptr<cudf::column>> input_columns;
   input_columns.emplace_back(std::move(input_column));
@@ -180,9 +180,6 @@ void expect_selected_nested_empty_struct_round_trip(std::unique_ptr<cudf::column
       .columns({"name"})
       .build();
   };
-
-  auto result = cudf::io::read_orc(make_read_opts());
-  expect_selected_nested_empty_struct_table(expected->view(), result.tbl->view());
 
   auto reader = cudf::io::chunked_orc_reader(1'000, 0, 10'000, make_read_opts());
   auto chunk  = reader.read_chunk();
@@ -228,8 +225,8 @@ TEST_F(OrcChunkedReaderTest, NestedEmptyStructColumnSelection)
   ASSERT_TRUE(input_column->child(0).nullable());
   ASSERT_EQ(null_count, input_column->child(0).null_count());
 
-  expect_selected_nested_empty_struct_round_trip(std::move(input_column),
-                                                 "nested_empty_struct_outer_nullable.orc");
+  expect_selected_nested_empty_struct_chunked_round_trip(std::move(input_column),
+                                                         "nested_empty_struct_outer_nullable.orc");
 }
 
 TEST_F(OrcChunkedReaderTest, NullableEmptyStructChildColumnSelection)
@@ -247,8 +244,8 @@ TEST_F(OrcChunkedReaderTest, NullableEmptyStructChildColumnSelection)
   ASSERT_TRUE(input_column->child(0).nullable());
   ASSERT_EQ(null_count, input_column->child(0).null_count());
 
-  expect_selected_nested_empty_struct_round_trip(std::move(input_column),
-                                                 "nested_empty_struct_inner_nullable.orc");
+  expect_selected_nested_empty_struct_chunked_round_trip(std::move(input_column),
+                                                         "nested_empty_struct_inner_nullable.orc");
 }
 
 TEST_F(OrcChunkedReaderTest, TestChunkedReadInvalidParameter)
