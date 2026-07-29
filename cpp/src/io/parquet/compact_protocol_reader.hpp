@@ -41,6 +41,11 @@ class CompactProtocolReader {
   explicit CompactProtocolReader(uint8_t const* base = nullptr, size_t len = 0) { init(base, len); }
   void init(uint8_t const* base, size_t len)
   {
+    // A null base is valid only for an empty buffer; a positive length would then have no backing
+    // storage. This keeps every later pointer op defined (the empty state has all-null pointers).
+    CUDF_EXPECTS(base != nullptr || len == 0,
+                 "CompactProtocolReader requires a non-null buffer when length is non-zero",
+                 std::invalid_argument);
     m_base = m_cur = base;
     // Guard against `nullptr + len` (undefined) so a zero-length buffer stays fully defined.
     m_end = base != nullptr ? base + len : base;
@@ -61,9 +66,12 @@ class CompactProtocolReader {
     T v = 0;
     for (uint32_t l = 0;; l += 7) {
       T const c = getb();
-      // Once the shift `l` reaches `T`'s width, shifting this group by `l` is undefined (out of
-      // range): the varint has more groups than `T` can hold, so reject it as overlong/corrupt.
-      CUDF_EXPECTS(l < std::numeric_limits<T>::digits,
+      // Reject overlong varints. `l < digits` keeps the shift in range (and guards `max() >> l`);
+      // `c <= max() >> l` then bounds the value, since the shift-count check alone would let the
+      // top group's bits silently wrap past `T`'s width instead of being rejected. `c` is the raw
+      // byte (continuation bit included): comparing it, not the masked payload, only rejects a
+      // boundary continuation byte one group early; correct, since the next group overflows anyway.
+      CUDF_EXPECTS(l < std::numeric_limits<T>::digits && c <= (std::numeric_limits<T>::max() >> l),
                    "Parquet varint exceeds the width of its target type",
                    std::overflow_error);
       v |= (c & 0x7f) << l;

@@ -5598,6 +5598,42 @@ TEST(CompactProtocolReaderVarintTest, OverlongU64)
   EXPECT_THROW(cp.get_u64(), std::overflow_error);
 }
 
+TEST(CompactProtocolReaderVarintTest, OverflowAtWidthBoundaryU32)
+{
+  // Terminating fifth group at shift 28: the shift is within uint32_t's 32 bits, but 0x10 << 28
+  // sets bit 32, so the value overflows the target type. The shift-count check alone would truncate
+  // it to 0; the value check rejects it.
+  std::vector<uint8_t> const bytes{0x80, 0x80, 0x80, 0x80, 0x10};
+  cudf::io::parquet::detail::CompactProtocolReader cp(bytes.data(), bytes.size());
+  EXPECT_THROW(cp.get_u32(), std::overflow_error);
+}
+
+TEST(CompactProtocolReaderVarintTest, OverflowAtWidthBoundaryU64)
+{
+  // Terminating tenth group at shift 63: the shift is within uint64_t's 64 bits, but 0x02 << 63
+  // sets bit 64, so the value overflows the target type and get_varint rejects it.
+  std::vector<uint8_t> const bytes{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x02};
+  cudf::io::parquet::detail::CompactProtocolReader cp(bytes.data(), bytes.size());
+  EXPECT_THROW(cp.get_u64(), std::overflow_error);
+}
+
+TEST(CompactProtocolReaderVarintTest, OverlongSignedThrows)
+{
+  // get_i32/get_i64 forward through get_zigzag to get_varint<U>, so they now propagate
+  // std::overflow_error on an overlong varint instead of being noexcept. Pin that contract with the
+  // same boundary-overflow byte runs the unsigned tests use.
+  {
+    std::vector<uint8_t> const bytes{0x80, 0x80, 0x80, 0x80, 0x10};
+    cudf::io::parquet::detail::CompactProtocolReader cp(bytes.data(), bytes.size());
+    EXPECT_THROW(cp.get_i32(), std::overflow_error);
+  }
+  {
+    std::vector<uint8_t> const bytes{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x02};
+    cudf::io::parquet::detail::CompactProtocolReader cp(bytes.data(), bytes.size());
+    EXPECT_THROW(cp.get_i64(), std::overflow_error);
+  }
+}
+
 TEST(CompactProtocolReaderVarintTest, UnterminatedRunAtEof)
 {
   // Continuation bytes running to end-of-buffer with no terminator: getb() yields 0 at EOF, which
@@ -5668,4 +5704,21 @@ TEST(CompactProtocolReaderVarintTest, EmptyBuffer)
   cudf::io::parquet::detail::CompactProtocolReader cp(bytes.data(), bytes.size());
   EXPECT_EQ(cp.get_u32(), 0u);
   EXPECT_EQ(cp.bytecount(), static_cast<ptrdiff_t>(bytes.size()));
+}
+
+TEST(CompactProtocolReaderVarintTest, NullBufferWithNonZeroLengthThrows)
+{
+  // A null buffer with a positive length has no backing storage; construction rejects it rather
+  // than leaving the reader positioned to read past a null base.
+  EXPECT_THROW(cudf::io::parquet::detail::CompactProtocolReader(nullptr, 4), std::invalid_argument);
+}
+
+TEST(CompactProtocolReaderVarintTest, NullBufferZeroLengthIsDefinedEmpty)
+{
+  // A null buffer with zero length is valid and yields the fully-defined empty state: get_varint
+  // returns 0 without reading past the null base. Constructed with an explicit nullptr so the
+  // null-base branch of init() is covered regardless of std::vector::data()'s empty-buffer value.
+  cudf::io::parquet::detail::CompactProtocolReader cp(nullptr, 0);
+  EXPECT_EQ(cp.get_u32(), 0u);
+  EXPECT_EQ(cp.bytecount(), static_cast<ptrdiff_t>(0));
 }
