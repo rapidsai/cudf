@@ -152,6 +152,7 @@ class TemporalFunction(Expr):
         Name.TimeStamp,
         Name.CastTimeUnit,
         Name.Truncate,
+        Name.Date,
         Name.DaysInMonth,
         Name.Quarter,
         *_CENTURY_MILLENNIUM_DIVISOR.keys(),
@@ -246,6 +247,14 @@ class TemporalFunction(Expr):
                     self.options[0],
                     stream=df.stream,
                 ),
+                dtype=self.dtype,
+            )
+        elif self.name is TemporalFunction.Name.Date:
+            (column,) = columns
+            # Casting the timestamp to TIMESTAMP_DAYS (the storage of ``pl.Date``)
+            # drops the sub-day component.
+            return Column(
+                plc.unary.cast(column.obj, self.dtype.plc_type, stream=df.stream),
                 dtype=self.dtype,
             )
         elif self.name is TemporalFunction.Name.DaysInMonth:
