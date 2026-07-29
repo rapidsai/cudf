@@ -130,10 +130,10 @@ public final class PinnedMemoryPool implements AutoCloseable {
    * @param gpuId gpu id to set to get memory pool from, -1 means to use default
    * @param setCudfPinnedPoolMemoryResource true if this pinned pool should be used by cuDF for pinned memory
    * @param initializationThreads number of threads used to initialize the pool's backing memory.
-   *                              A value of 1 initializes the backing memory using
-   *                              {@code cudaHostAlloc}. Values greater than 1 instead pre-touch
-   *                              pages concurrently before pinning for faster initialization.
-   *                              This does not affect subsequent suballocator behavior.
+   *                              A value of 1 initializes the backing memory using {@code cudaHostAlloc}.
+   *                              Values greater than 1 instead request huge pages and pre-touch pages
+   *                              concurrently before pinning for faster initialization. This does not
+   *                              affect subsequent suballocator behavior.
    */
   public static synchronized void initialize(long poolSize, int gpuId, boolean setCudfPinnedPoolMemoryResource,
       int initializationThreads) {

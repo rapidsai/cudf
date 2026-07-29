@@ -561,9 +561,9 @@ inline void log_cuda_error_noexcept(char const* operation, cudaError_t error) no
  * @brief Pinned host resource that parallelizes the first touch of its backing pages.
  *
  * In cudaHostAlloc, the CUDA driver faults and pins the whole allocation. This resource instead
- * mmaps anonymous memory and then spawns threads to touch the pages to handle page faults
- * concurrently. After the pages are physically backed the allocation is then registered with CUDA.
- * The RMM pool using this upstream resource is otherwise unchanged.
+ * mmaps anonymous memory, requests huge pages, and then spawns threads to touch the pages to handle
+ * page faults concurrently. After the pages are physically backed the allocation is then registered
+ * with CUDA. The RMM pool using this upstream resource is otherwise unchanged.
  */
 class parallel_init_pinned_host_memory_resource final {
  public:
@@ -620,8 +620,15 @@ class parallel_init_pinned_host_memory_resource final {
         auto const error = errno;
         throw std::system_error(error, std::generic_category(), "madvise(MADV_DONTFORK) failed");
       }
+      // Request huge-pages. This is an optimization to reduce page faults by orders of magnitude.
+      // It is safe to do without affecting allocator behavior since RMM never gives the pages back
+      // to the OS, and suballocates purely in user space. Note that mmap guarantees only base-page
+      // alignment so edges may remain backed by base pages.
+      if (::madvise(allocation, mapping_bytes, MADV_HUGEPAGE) != 0) {
+        log_system_error_noexcept("madvise(MADV_HUGEPAGE)", errno, true);
+      }
       // Concurrently pre-touch the pages to back the virtual range with physical memory.
-      touch_pages(allocation, mapping_bytes, initialization_threads_);
+      pretouch_parallel(allocation, mapping_bytes, initialization_threads_);
       // Pin and register the host memory range with CUDA. We do this once for the whole range
       // instead of parallelizing since it contends internally on driver locks.
       RMM_CUDA_TRY_ALLOC(cudaHostRegister(allocation, mapping_bytes, cudaHostRegisterDefault),
@@ -689,39 +696,50 @@ class parallel_init_pinned_host_memory_resource final {
     return ((bytes + page_size - 1) / page_size) * page_size;
   }
 
-  static void touch_pages(void* allocation, std::size_t bytes, std::size_t requested_threads)
+  static void pretouch_parallel(void* allocation, std::size_t bytes, std::size_t requested_threads)
   {
-    // Partition by the system page size. If huge pages are enabled this may touch more
-    // than necessary, but ensures all pages are touched.
+    // Partition by system page size. With huge pages this may touch more than necessary,
+    // but is low overhead (just TLB hits) and ensures all pages are touched if madvise was ignored.
     auto const page_size    = system_page_size();
     auto const page_count   = bytes / page_size;
     auto const thread_count = std::min(requested_threads, page_count);
 
     std::vector<std::thread> workers;
     workers.reserve(thread_count);
+    std::atomic<bool> start_workers{false};
     // Importantly the bytes are volatile so that the writes are not compiled away.
     auto* const base      = static_cast<std::uint8_t volatile*>(allocation);
     std::size_t next_page = 0;
 
     // Note that these threads will inherit the caller's CPU affinity but are not individually
-    // affinity bound. If the calling thread allows it, the resultant pages could span
-    // multiple NUMA nodes.
+    // affinity bound. If the calling thread is not bound to a NUMA node, the resultant pages
+    // could span multiple NUMA nodes.
     try {
       for (std::size_t worker_index = 0; worker_index < thread_count; ++worker_index) {
         auto const pages_for_worker =
           page_count / thread_count + (worker_index < page_count % thread_count ? 1 : 0);
         auto const first_page = next_page;
         next_page += pages_for_worker;
-        workers.emplace_back([base, first_page, pages_for_worker, page_size]() {
+        workers.emplace_back([base, first_page, pages_for_worker, page_size, &start_workers]() {
+          // Wait until every thread starts up before pre-touching. Otherwise, an mmap call
+          // to allocate a thread's stack - which needs the mmap_lock in write mode - can block
+          // waiting on another thread that is already handling a page fault and holding the
+          // mmap_lock for reading. This is especially important with huge pages where page faults
+          // are longer.
+          start_workers.wait(false);
           for (std::size_t page = 0; page < pages_for_worker; ++page) {
             base[(first_page + page) * page_size] = 0;
           }
         });
       }
+      start_workers.store(true);
+      start_workers.notify_all();
       for (auto& worker : workers) {
         worker.join();
       }
     } catch (...) {
+      start_workers.store(true);
+      start_workers.notify_all();
       for (auto& worker : workers) {
         if (worker.joinable()) { worker.join(); }
       }
