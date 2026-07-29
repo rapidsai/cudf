@@ -594,10 +594,21 @@ def test_over_multirank(
                 reason="RollingFunction not available in this polars version",
             ),
         ),
+        pytest.param(
+            pl.col("x")
+            .rolling_mean(window_size=2)
+            .over("g", order_by="t")
+            .alias("result"),
+            "rolling_ordered",
+            marks=pytest.mark.skipif(
+                not hasattr(plrs._expr_nodes, "RollingFunction"),
+                reason="RollingFunction not available in this polars version",
+            ),
+        ),
     ],
-    ids=["shift", "cum_sum", "fixed_rolling"],
+    ids=["shift", "cum_sum", "fixed_rolling", "fixed_rolling_ordered"],
 )
-def test_over_input_order_without_order_by_multirank(
+def test_over_shared_group_ordering_multirank(
     comm: Communicator,
     expr: pl.Expr,
     expected: str,
@@ -614,10 +625,13 @@ def test_over_input_order_without_order_by_multirank(
             pytest.skip("requires multiple ranks")
 
         rank = engine.rank
+        nranks = engine.nranks
         local_xs = [rank * 3 + 1, rank * 3 + 2, rank * 3 + 3]
+        local_ts = [3 * nranks - rank, rank + 1, 2 * nranks - rank]
         lf = pl.LazyFrame(
             {
                 "g": [0, 0, 0],
+                "t": local_ts,
                 "x": local_xs,
             }
         )
@@ -640,6 +654,23 @@ def test_over_input_order_without_order_by_multirank(
             for x in xs:
                 total += x
                 expected_values.append(total)
+        elif expected == "rolling_ordered":
+            ordered_xs = [
+                *(3 * r + 2 for r in range(engine.nranks)),
+                *(3 * r + 3 for r in reversed(range(engine.nranks))),
+                *(3 * r + 1 for r in reversed(range(engine.nranks))),
+            ]
+            values_by_x = dict(
+                zip(
+                    ordered_xs,
+                    [
+                        None,
+                        *((left + right) / 2 for left, right in pairwise(ordered_xs)),
+                    ],
+                    strict=True,
+                )
+            )
+            expected_values = [values_by_x[x] for x in xs]
         else:
             expected_values = [None]
             expected_values.extend((left + right) / 2 for left, right in pairwise(xs))

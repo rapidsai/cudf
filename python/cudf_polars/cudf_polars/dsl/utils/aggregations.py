@@ -17,6 +17,7 @@ import pylibcudf as plc
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.expressions.base import ExecutionContext
+from cudf_polars.dsl.traversal import traversal
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable, Sequence
@@ -24,6 +25,12 @@ if TYPE_CHECKING:
     from cudf_polars.typing import Schema
 
 __all__ = ["apply_pre_evaluation", "decompose_aggs", "decompose_single_agg"]
+
+
+def _contains_fixed_size_rolling_window(value: expr.Expr) -> bool:
+    return any(
+        isinstance(node, expr.FixedSizeRollingWindow) for node in traversal([value])
+    )
 
 
 def replace_nulls(col: expr.Expr, value: Any, *, is_top: bool) -> expr.Expr:
@@ -104,6 +111,10 @@ def decompose_single_agg(
         if context != ExecutionContext.WINDOW:
             raise NotImplementedError(
                 f"{agg.name} is not supported in groupby or rolling context"
+            )
+        if _contains_fixed_size_rolling_window(agg.children[0]):
+            raise NotImplementedError(
+                f"{agg.name} over a window does not support nested fixed-size rolling"
             )
         if agg.name in {"shift", "shift_and_fill"}:
             if not isinstance(agg.children[1], expr.Literal):
