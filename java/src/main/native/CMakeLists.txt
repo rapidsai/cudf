@@ -278,6 +278,15 @@ if(nvcomp IN_LIST cudf_static_linked_projects)
   target_link_libraries(cudfjni PRIVATE $<COMPILE_ONLY:nvcomp::nvcomp_static>)
 else()
   target_link_libraries(cudfjni PRIVATE nvcomp::nvcomp)
+
+  # * install nvcomp for tests
+  add_custom_command(
+    TARGET cudfjni
+    PRE_LINK
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:nvcomp::nvcomp>
+            "${PROJECT_BINARY_DIR}/libnvcomp.so"
+    COMMENT "Copying nvcomp libraries to ${PROJECT_BINARY_DIR}"
+  )
 endif()
 
 target_link_libraries(cudfjni PRIVATE nvtx3::nvtx3-cpp)
