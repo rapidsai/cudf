@@ -6,14 +6,15 @@
 #pragma once
 
 #include <cudf/io/parquet_schema.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <src/io/parquet/compact_protocol_writer.hpp>
 
 #include <algorithm>
-#include <cassert>
 #include <climits>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -109,6 +110,27 @@ inline void bitpack_into(std::vector<uint8_t>& out,
   }
 }
 
+// append `v` to `out` as an unsigned LEB128 varint
+inline void append_uleb128(std::vector<uint8_t>& out, uint64_t v)
+{
+  while (true) {
+    uint8_t const b = v & 0x7f;
+    v >>= 7;
+    if (v) {
+      out.push_back(b | 0x80);
+    } else {
+      out.push_back(b);
+      return;
+    }
+  }
+}
+
+// append `v` to `out` as a zigzag-encoded LEB128 varint
+inline void append_zigzag128(std::vector<uint8_t>& out, int64_t v)
+{
+  append_uleb128(out, (static_cast<uint64_t>(v) << 1) ^ static_cast<uint64_t>(v >> 63));
+}
+
 // complete DELTA_BINARY_PACKED stream: header (block_size, mini_block_count, value count, first
 // value), then per block a zigzag min-delta, one bit-width byte per mini-block, and the
 // bit-packed deltas
@@ -116,28 +138,13 @@ inline std::vector<uint8_t> encode_delta_binary_packed(std::vector<int64_t> cons
                                                        int block_size,
                                                        int mini_block_count)
 {
-  assert(block_size % mini_block_count == 0 && (block_size / mini_block_count) % 32 == 0);
+  CUDF_EXPECTS(block_size % mini_block_count == 0 && (block_size / mini_block_count) % 32 == 0,
+               "DELTA mini-block size (block_size / mini_block_count) must be a multiple of 32");
   std::vector<uint8_t> out;
-  auto uleb = [&out](uint64_t v) {
-    while (true) {
-      uint8_t const b = v & 0x7f;
-      v >>= 7;
-      if (v) {
-        out.push_back(b | 0x80);
-      } else {
-        out.push_back(b);
-        return;
-      }
-    }
-  };
-  auto zz = [&uleb](int64_t v) {
-    uleb((static_cast<uint64_t>(v) << 1) ^ static_cast<uint64_t>(v >> 63));
-  };
-
-  uleb(block_size);
-  uleb(mini_block_count);
-  uleb(values.size());  // total value count, including the first value below
-  zz(values.empty() ? 0 : values.front());
+  append_uleb128(out, block_size);
+  append_uleb128(out, mini_block_count);
+  append_uleb128(out, values.size());  // total value count, including the first value below
+  append_zigzag128(out, values.empty() ? 0 : values.front());
   if (values.size() <= 1) { return out; }
 
   std::vector<int64_t> deltas(values.size() - 1);
@@ -149,7 +156,7 @@ inline std::vector<uint8_t> encode_delta_binary_packed(std::vector<int64_t> cons
   for (size_t bstart = 0; bstart < deltas.size(); bstart += block_size) {
     auto const bend      = std::min(bstart + block_size, deltas.size());
     auto const min_delta = *std::min_element(deltas.begin() + bstart, deltas.begin() + bend);
-    zz(min_delta);
+    append_zigzag128(out, min_delta);
 
     // per mini-block bit widths, then the packed deltas (empty trailing mini-blocks get width 0
     // and no data)
@@ -175,6 +182,22 @@ inline std::vector<uint8_t> encode_delta_binary_packed(std::vector<int64_t> cons
       if (!rel[m].empty()) { bitpack_into(out, rel[m], widths[m], vpm); }
     }
   }
+  return out;
+}
+
+// raw DELTA_BINARY_PACKED header only (block/mini-block geometry, value count, first value), for
+// negative tests that need a geometry encode_delta_binary_packed would reject. The reader validates
+// the geometry in init_binary_block before decoding any deltas, so no mini-block data follows.
+inline std::vector<uint8_t> encode_delta_binary_header(int block_size,
+                                                       int mini_block_count,
+                                                       int64_t value_count,
+                                                       int64_t first_value)
+{
+  std::vector<uint8_t> out;
+  append_uleb128(out, static_cast<uint64_t>(block_size));
+  append_uleb128(out, static_cast<uint64_t>(mini_block_count));
+  append_uleb128(out, static_cast<uint64_t>(value_count));
+  append_zigzag128(out, first_value);
   return out;
 }
 
@@ -388,17 +411,8 @@ inline std::vector<uint8_t> encode_levels_bit_packed(std::vector<int> const& lev
 {
   auto const groups = (levels.size() + 7) / 8;
   std::vector<uint8_t> out;
-  auto header = static_cast<uint64_t>((groups << 1) | 1);
-  while (true) {
-    uint8_t const b = header & 0x7f;
-    header >>= 7;
-    if (header) {
-      out.push_back(b | 0x80);
-    } else {
-      out.push_back(b);
-      break;
-    }
-  }
+  // RLE/bit-pack hybrid run header: LSB set marks a bit-packed run of `groups` 8-value groups
+  append_uleb128(out, (groups << 1) | 1);
   std::vector<uint64_t> vals(levels.begin(), levels.end());
   bitpack_into(out, vals, width, groups * 8);
   return out;
@@ -526,6 +540,51 @@ inline std::vector<uint8_t> build_delta_binary_list_parquet(
   }
   auto const values = encode_delta_binary_packed(leaf_values, block_size, mini_block_count);
   return wrap_single_page_list_parquet(compute_list_levels(sizes),
+                                       lists.size(),
+                                       values,
+                                       cudf::io::parquet::Type::INT64,
+                                       cudf::io::parquet::Encoding::DELTA_BINARY_PACKED,
+                                       false);
+}
+
+// per-value repetition/definition levels for a list column whose leaves may be null (definition
+// level 2). std::nullopt is a null leaf element; an empty inner vector is an empty list (definition
+// level 1). Same LIST<INT64> shape as compute_list_levels (max_def_level 3, max_rep_level 1).
+inline list_levels compute_list_levels_with_leaf_nulls(
+  std::vector<std::vector<std::optional<int64_t>>> const& lists)
+{
+  list_levels out;
+  for (auto const& list : lists) {
+    if (list.empty()) {  // empty list: one level entry, def < max_def, no leaf value
+      out.rep.push_back(0);
+      out.def.push_back(1);
+      out.num_nulls++;
+      continue;
+    }
+    for (size_t j = 0; j < list.size(); j++) {
+      out.rep.push_back(j == 0 ? 0 : 1);
+      out.def.push_back(list[j].has_value() ? 3 : 2);  // 3: leaf present, 2: null leaf element
+      if (not list[j].has_value()) { out.num_nulls++; }
+    }
+  }
+  return out;
+}
+
+// complete file: one LIST<INT64> column whose leaves may be null. Only the non-null leaf values are
+// DELTA_BINARY_PACKED encoded; the null leaves are carried by the definition levels.
+inline std::vector<uint8_t> build_delta_binary_list_with_leaf_nulls_parquet(
+  std::vector<std::vector<std::optional<int64_t>>> const& lists,
+  int block_size,
+  int mini_block_count)
+{
+  std::vector<int64_t> leaf_values;
+  for (auto const& list : lists) {
+    for (auto const& e : list) {
+      if (e.has_value()) { leaf_values.push_back(*e); }
+    }
+  }
+  auto const values = encode_delta_binary_packed(leaf_values, block_size, mini_block_count);
+  return wrap_single_page_list_parquet(compute_list_levels_with_leaf_nulls(lists),
                                        lists.size(),
                                        values,
                                        cudf::io::parquet::Type::INT64,

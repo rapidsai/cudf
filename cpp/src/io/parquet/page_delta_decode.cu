@@ -851,11 +851,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
   bool const is_skip_resume = is_bounds_pg and s->page.start_val > 0;
 
-  // Number of values produced per main-loop iteration (see decode_delta_binary_kernel for why
-  // skip-resume pages must produce a single warp_size pass per iteration).
+  // Only nested pages resume the decoder mid-page; flat pages re-init it below and can keep the
+  // full batch. Mid-page resumption must produce a single warp_size pass per iteration (see
+  // decode_delta_binary_kernel for why).
+  bool const resumes_mid_page = is_skip_resume and has_repetition;
   uint32_t const batch_size =
-    is_skip_resume ? cudf::detail::warp_size
-                   : min(db->values_per_mb, static_cast<uint32_t>(delta_max_batch_size));
+    resumes_mid_page ? cudf::detail::warp_size
+                     : min(db->values_per_mb, static_cast<uint32_t>(delta_max_batch_size));
   uint32_t const passes_per_batch = batch_size / cudf::detail::warp_size;
 
   if (is_skip_resume) {

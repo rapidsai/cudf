@@ -10,6 +10,8 @@
 #include <cooperative_groups/reduce.h>
 #include <cooperative_groups/scan.h>
 
+#include <climits>
+
 namespace cudf::io::parquet::detail {
 
 // DELTA_XXX encoding support
@@ -31,10 +33,6 @@ namespace cudf::io::parquet::detail {
 // per mini-block. While encoding, the lowest delta value is subtracted from all the deltas in the
 // block to ensure that all encoded values are positive. The deltas for each mini-block are bit
 // packed using the same encoding as the RLE/Bit-Packing Hybrid encoder.
-
-// Parquet serializes the bit-packed mini-block deltas as a stream of 8-bit bytes, so a bit count is
-// converted to a byte count by dividing by this.
-constexpr int bits_per_byte = 8;
 
 // The DELTA_BINARY_PACKED spec requires the number of values in a mini-block to be a multiple of
 // 32. The decoders rely on the coincidence that this also equals warp size; they produce values
@@ -211,12 +209,12 @@ struct delta_binary_decoder {
 
     // just set pointer to start of next mini_block
     if (cur_mb < mini_block_count - 1) {
-      cur_mb_start += cur_bitwidths[cur_mb] * values_per_mb / bits_per_byte;
+      cur_mb_start += cur_bitwidths[cur_mb] * values_per_mb / CHAR_BIT;
       cur_mb++;
     }
     // out of mini-blocks, start a new block
     else {
-      block_start = cur_mb_start + cur_bitwidths[cur_mb] * values_per_mb / bits_per_byte;
+      block_start = cur_mb_start + cur_bitwidths[cur_mb] * values_per_mb / CHAR_BIT;
       init_mini_block(is_decode);
     }
   }
@@ -273,7 +271,7 @@ struct delta_binary_decoder {
     uint32_t const mb_bits = cur_bitwidths[cur_mb];
 
     // position at the end of this pass's values since the following calculates negative indexes
-    auto const d_start = cur_mb_start + (pass + 1) * (warp_size * mb_bits / bits_per_byte);
+    auto const d_start = cur_mb_start + (pass + 1) * (warp_size * mb_bits / CHAR_BIT);
 
     // unpack deltas. modified from version in decode_dictionary_indices(), but
     // that one only unpacks up to bitwidths of 24. simplified some since this
@@ -282,20 +280,20 @@ struct delta_binary_decoder {
     // implementation has been replaced with a loop. While this uses more registers, the
     // looping version is just as fast and easier to read.
     zigzag128_t delta = 0;
-    if (lane_id + current_value_idx < value_count) {
+    if (current_value_idx + pass * warp_size + lane_id < value_count) {
       // ofs is non-positive, so the arithmetic shift and mask compute the byte offset and leading
-      // bit position as floored division/modulo by bits_per_byte (a plain / and % would round
+      // bit position as floored division/modulo by CHAR_BIT (a plain / and % would round
       // toward 0)
       int32_t ofs      = (lane_id - warp_size) * mb_bits;
       uint8_t const* p = d_start + (ofs >> 3);
       ofs &= 7;
       if (p < block_end) {
-        uint32_t c = bits_per_byte - ofs;  // 0 - 7 bits
+        uint32_t c = CHAR_BIT - ofs;  // 0 - 7 bits
         delta      = (*p++) >> ofs;
 
         while (c < mb_bits && p < block_end) {
           delta |= static_cast<zigzag128_t>(*p++) << c;
-          c += bits_per_byte;
+          c += CHAR_BIT;
         }
         delta &= (static_cast<zigzag128_t>(1) << mb_bits) - 1;
       }

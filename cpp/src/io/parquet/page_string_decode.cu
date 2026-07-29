@@ -417,7 +417,7 @@ __device__ cuda::std::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const
 
   auto const block  = cg::this_thread_block();
   auto const warp   = cg::tiled_partition<cudf::detail::warp_size>(block);
-  int const t       = threadIdx.x;
+  int const t       = block.thread_rank();
   int const lane_id = warp.thread_rank();
 
   if (t == 0) {
@@ -427,7 +427,8 @@ __device__ cuda::std::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const
   block.sync();
 
   // two warps will traverse the prefixes and suffixes and sum them up
-  auto const db = t < warp_size ? &prefixes : t < 2 * warp_size ? &suffixes : nullptr;
+  auto const warp_id = warp.meta_group_rank();
+  auto const db      = (warp_id == 0) ? &prefixes : warp_id == 1 ? &suffixes : nullptr;
 
   size_t total_bytes = 0;
   uleb128_t max_len  = 0;

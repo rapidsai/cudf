@@ -263,51 +263,52 @@ size_t CompactProtocolWriter::write(SortingColumn const& sc)
   return c.value();
 }
 
-size_t CompactProtocolWriter::write(DataPageHeader const& d)
+size_t CompactProtocolWriter::write(DataPageHeader const& pg_hdr)
 {
   CompactProtocolFieldWriter c(*this);
-  c.field_int(1, d.num_values);
-  c.field_int(2, static_cast<int32_t>(d.encoding));
-  c.field_int(3, static_cast<int32_t>(d.definition_level_encoding));
-  c.field_int(4, static_cast<int32_t>(d.repetition_level_encoding));
+  c.field_int(1, pg_hdr.num_values);
+  c.field_int(2, static_cast<int32_t>(pg_hdr.encoding));
+  c.field_int(3, static_cast<int32_t>(pg_hdr.definition_level_encoding));
+  c.field_int(4, static_cast<int32_t>(pg_hdr.repetition_level_encoding));
   return c.value();
 }
 
-size_t CompactProtocolWriter::write(DictionaryPageHeader const& d)
+size_t CompactProtocolWriter::write(DictionaryPageHeader const& dict_pg_hdr)
 {
   CompactProtocolFieldWriter c(*this);
-  c.field_int(1, d.num_values);
-  c.field_int(2, static_cast<int32_t>(d.encoding));
+  c.field_int(1, dict_pg_hdr.num_values);
+  c.field_int(2, static_cast<int32_t>(dict_pg_hdr.encoding));
   return c.value();
 }
 
-size_t CompactProtocolWriter::write(DataPageHeaderV2 const& d)
+size_t CompactProtocolWriter::write(DataPageHeaderV2 const& pg_hdr_v2)
 {
   CompactProtocolFieldWriter c(*this);
-  c.field_int(1, d.num_values);
-  c.field_int(2, d.num_nulls);
-  c.field_int(3, d.num_rows);
-  c.field_int(4, static_cast<int32_t>(d.encoding));
-  c.field_int(5, d.definition_levels_byte_length);
-  c.field_int(6, d.repetition_levels_byte_length);
-  c.field_bool(7, d.is_compressed);
+  c.field_int(1, pg_hdr_v2.num_values);
+  c.field_int(2, pg_hdr_v2.num_nulls);
+  c.field_int(3, pg_hdr_v2.num_rows);
+  c.field_int(4, static_cast<int32_t>(pg_hdr_v2.encoding));
+  c.field_int(5, pg_hdr_v2.definition_levels_byte_length);
+  c.field_int(6, pg_hdr_v2.repetition_levels_byte_length);
+  c.field_bool(7, pg_hdr_v2.is_compressed);
   return c.value();
 }
 
-size_t CompactProtocolWriter::write(PageHeader const& p)
+size_t CompactProtocolWriter::write(PageHeader const& page_hdr)
 {
   CompactProtocolFieldWriter c(*this);
-  c.field_int(1, static_cast<int32_t>(p.type));
-  c.field_int(2, p.uncompressed_page_size);
-  c.field_int(3, p.compressed_page_size);
+  c.field_int(1, static_cast<int32_t>(page_hdr.type));
+  c.field_int(2, page_hdr.uncompressed_page_size);
+  c.field_int(3, page_hdr.compressed_page_size);
   // Exactly one page-specific header is set, selected by `type`; field ids (5/7/8) match
   // CompactProtocolReader::read(PageHeader) and the GPU encoder in gpuEncodePageHeaders.
-  switch (p.type) {
-    case PageType::DATA_PAGE: c.field_struct(5, p.data_page_header); break;
-    case PageType::DICTIONARY_PAGE: c.field_struct(7, p.dictionary_page_header); break;
-    case PageType::DATA_PAGE_V2: c.field_struct(8, p.data_page_header_v2); break;
+  switch (page_hdr.type) {
+    case PageType::DATA_PAGE: c.field_struct(5, page_hdr.data_page_header); break;
+    case PageType::DICTIONARY_PAGE: c.field_struct(7, page_hdr.dictionary_page_header); break;
+    case PageType::DATA_PAGE_V2: c.field_struct(8, page_hdr.data_page_header_v2); break;
     default:
-      CUDF_FAIL("Trying to write an invalid PageType " + std::to_string(static_cast<int>(p.type)));
+      CUDF_FAIL("Trying to write an invalid PageType " +
+                std::to_string(static_cast<int>(page_hdr.type)));
   }
   return c.value();
 }
