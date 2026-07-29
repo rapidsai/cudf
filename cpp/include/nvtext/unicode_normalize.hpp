@@ -53,15 +53,17 @@ enum class unicode_normalization_form {
  *                        such as `<compat>`, `<font>`, `<wide>`, etc.
  *
  * @code{.cpp}
- *  // typical workflow
- *  cudf::io::csv_reader_options in_opts =
+ * // typical workflow
+ * cudf::io::csv_reader_options in_opts =
  *   cudf::io::csv_reader_options::builder(cudf::io::source_info("UnicodeData.txt"))
  *    .delimiter(';').header(-1)
  *    .use_cols_indexes({0, 3, 5})
- *    .dtypes({dtype<cudf::string_view>(), dtype<int32_t>(), dtype<cudf::string_view>()});
- *  auto const ud = cudf::io::read_csv(in_opts);
- *  auto normalizer = nvtext::create_unicode_normalizer(ud.tbl->view(), NFKC);
- *  auto result = nvtext::normalize_unicode(input_strings, *normalizer);
+ *    .dtypes({cudf::data_type{cudf::type_id::STRING}, cudf::data_type{cudf::type_id::INT32},
+ *             cudf::data_type{cudf::type_id::STRING}});
+ * auto const ud = cudf::io::read_csv(in_opts);
+ * auto normalizer = nvtext::create_unicode_normalizer(ud.tbl->view(), NFKC);
+ * // the following can be called repeatedly on different strings columns with the same normalizer
+ * auto result = nvtext::normalize_unicode(input_strings, *normalizer);
  * @endcode
  *
  * Decomposition of Hangul syllables (U+AC00..U+D7A3) is performed

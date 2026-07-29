@@ -15,13 +15,12 @@
 
 #include <nvbench/nvbench.cuh>
 
-// ---------------------------------------------------------------------------
 // char_type = "precomposed"
 //
 // Latin-1 Supplement precomposed characters (U+00C0–U+00FF subset, 2-byte
 // UTF-8).  All are already NFC/NFKC so NFC/NFKC paths exercise the quick
 // check; NFD/NFKD paths exercise the full decomposition pipeline.
-// ---------------------------------------------------------------------------
+//
 // clang-format off
 static char const PRECOMPOSED_PATTERN[] =
   "\xC3\x80\xC3\x81\xC3\x82\xC3\x83\xC3\x84\xC3\x85"  // À Á Â Ã Ä Å
@@ -38,7 +37,6 @@ static char const PRECOMPOSED_PATTERN[] =
 static auto const PRECOMPOSED_LEN =
   static_cast<cudf::size_type>(sizeof(PRECOMPOSED_PATTERN) - 1);  // 106 bytes, 53 chars
 
-// ---------------------------------------------------------------------------
 // char_type = "mixed"
 //
 // Nine 3-byte UTF-8 codepoints (27 bytes/repeat) covering all sample
@@ -46,7 +44,7 @@ static auto const PRECOMPOSED_LEN =
 // FFI ligature (NFKD compat, multi-char output), Angstrom Sign (NFC singleton
 // canonical decomposition), and halfwidth Katakana (NFKD compat).
 // All four normalization forms trigger the full pipeline on this input.
-// ---------------------------------------------------------------------------
+//
 // clang-format off
 static char const MIXED_PATTERN[] =
   "\xEF\xBC\xA1\xEF\xBC\xA2\xEF\xBC\xA3"  // ＡＢＣ  fullwidth Latin  (U+FF21–FF23)
@@ -57,10 +55,6 @@ static char const MIXED_PATTERN[] =
 // clang-format on
 static auto const MIXED_LEN =
   static_cast<cudf::size_type>(sizeof(MIXED_PATTERN) - 1);  // 27 bytes, 9 chars
-
-// ---------------------------------------------------------------------------
-// Unicode data tables
-// ---------------------------------------------------------------------------
 
 // 53 precomposed Latin-1 chars + 7 combining marks = 60 rows
 static std::unique_ptr<nvtext::unicode_normalizer> make_normalizer_precomposed(
@@ -149,9 +143,6 @@ static std::unique_ptr<nvtext::unicode_normalizer> make_normalizer_mixed(
     cudf::table_view({codepoints, ccc_values, decomp_mappings}), form);
 }
 
-// ---------------------------------------------------------------------------
-// Benchmark
-// ---------------------------------------------------------------------------
 static void bench_unicode_normalize(nvbench::state& state)
 {
   auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
@@ -181,17 +172,17 @@ static void bench_unicode_normalize(nvbench::state& state)
   }
 
   std::vector<std::string> rows(num_rows, row_str);
-  cudf::test::strings_column_wrapper col(rows.begin(), rows.end());
-  cudf::strings_column_view input(col);
+  cudf::test::strings_column_wrapper str_col(rows.begin(), rows.end());
+  auto input_col = str_col.release();
+  cudf::strings_column_view input(input_col->view());
 
   // Normalizer is created once and reused — construction time is not measured.
   auto const normalizer =
     is_mixed ? make_normalizer_mixed(form) : make_normalizer_precomposed(form);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  auto const chars_size = input.chars_size(cudf::get_default_stream());
-  state.add_global_memory_reads<nvbench::int8_t>(chars_size);
-  state.add_global_memory_writes<nvbench::int8_t>(chars_size);
+  state.add_global_memory_reads<nvbench::int8_t>(input_col->alloc_size());
+  state.add_global_memory_writes<nvbench::int8_t>(input_col->alloc_size());
 
   auto const mem_stats_logger = cudf::memory_stats_logger();
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {

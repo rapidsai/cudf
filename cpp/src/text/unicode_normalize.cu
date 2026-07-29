@@ -48,11 +48,9 @@ namespace nvtext {
 namespace detail {
 namespace {
 
-// ---------------------------------------------------------------------------
 // Composition exclusion: ~70 codepoints explicitly excluded from NFC/NFKC
 // composition (Unicode 15, DerivedNormalizationProps.txt).
-// ---------------------------------------------------------------------------
-__device__ __constant__ uint32_t COMPOSITION_EXCLUSIONS[] = {
+__device__ __constant__ cuda::std::array COMPOSITION_EXCLUSIONS{
   0x0958u,  0x0959u,  0x095Au,  0x095Bu,  0x095Cu,  0x095Du,  0x095Eu,  0x095Fu,  0x09DCu,
   0x09DDu,  0x09DFu,  0x0A33u,  0x0A36u,  0x0A59u,  0x0A5Au,  0x0A5Bu,  0x0A5Cu,  0x0A5Eu,
   0x0B5Cu,  0x0B5Du,  0x0F43u,  0x0F4Du,  0x0F52u,  0x0F57u,  0x0F5Cu,  0x0F69u,  0x0F76u,
@@ -64,9 +62,6 @@ __device__ __constant__ uint32_t COMPOSITION_EXCLUSIONS[] = {
   0x1D160u, 0x1D161u, 0x1D162u, 0x1D163u, 0x1D164u, 0x1D1BBu, 0x1D1BCu, 0x1D1BDu, 0x1D1BEu,
   0x1D1BFu, 0x1D1C0u,
 };
-
-constexpr int32_t COMPOSITION_EXCLUSIONS_SIZE =
-  static_cast<int32_t>(sizeof(COMPOSITION_EXCLUSIONS) / sizeof(COMPOSITION_EXCLUSIONS[0]));
 
 /**
  * Scatter CCC values from the CCC column into a codepoint-indexed table.
@@ -119,14 +114,14 @@ struct scatter_compat_flag_fn {
 
 /**
  * Invoke `fn` for each space-separated hex token in a decomp mapping string.
- * Returns immediately for empty strings or, when `apply_compat` is false, for
- * compatibility mappings (strings that begin with '<').  When `apply_compat` is
- * true the leading "<tag> " prefix is consumed before iteration starts.
+ * Returns immediately for empty strings or, when `apply_compat==false`, for
+ * compatibility mappings (strings that begin with '<').  When `apply_compat==true`
+ * the leading "<tag> " prefix is consumed before the iteration starts.
  */
 template <typename Fn>
 __device__ void for_each_decomp_token(cudf::string_view d_str, bool apply_compat, Fn fn)
 {
-  cudf::size_type const size = d_str.size_bytes();
+  auto const size = d_str.size_bytes();
   if (size == 0) { return; }
   char const* const ptr = d_str.data();
   bool const is_compat  = (ptr[0] == '<');
@@ -151,17 +146,16 @@ __device__ void for_each_decomp_token(cudf::string_view d_str, bool apply_compat
 }
 
 /**
- * Count space-separated hex tokens in a decomp mapping string.
- * One invocation per row; result written directly by thrust::transform.
+ * Count space-separated hex tokens in a decomp mapping string. One invocation per row.
  */
 struct count_decomp_tokens_fn {
   cudf::column_device_view decomp_map;
   bool apply_compat;
 
-  __device__ int32_t operator()(cudf::size_type idx) const
+  __device__ cudf::size_type operator()(cudf::size_type idx) const
   {
-    int32_t count = 0;
-    auto fn       = [&count](char const*, cudf::size_type) { ++count; };
+    auto count = cudf::size_type{0};
+    auto fn    = [&count](char const*, cudf::size_type) { ++count; };
     for_each_decomp_token(decomp_map.element<cudf::string_view>(idx), apply_compat, fn);
     return count;
   }
@@ -180,9 +174,9 @@ struct write_decomp_tokens_fn {
 
   __device__ void operator()(cudf::size_type idx) const
   {
-    uint32_t const cp  = d_codepoints[idx];
-    uint32_t write_pos = decomp_cp_offsets[cp];
-    auto fn            = [this, &write_pos](char const* ptr, cudf::size_type size) {
+    auto const cp  = d_codepoints[idx];
+    auto write_pos = decomp_cp_offsets[cp];
+    auto fn        = [this, &write_pos](char const* ptr, cudf::size_type size) {
       decomp_table[write_pos++] = hex_to_cp(ptr, size);
     };
     for_each_decomp_token(decomp_map.element<cudf::string_view>(idx), apply_compat, fn);
@@ -217,10 +211,8 @@ struct build_comp_table_fn {
     auto const composed  = d_codepoints[idx];
     auto const starter   = tokens[0];
     auto const combining = tokens[1];
-    if (thrust::binary_search(thrust::seq,
-                              COMPOSITION_EXCLUSIONS,
-                              COMPOSITION_EXCLUSIONS + COMPOSITION_EXCLUSIONS_SIZE,
-                              composed)) {
+    if (thrust::binary_search(
+          thrust::seq, COMPOSITION_EXCLUSIONS.begin(), COMPOSITION_EXCLUSIONS.end(), composed)) {
       return;
     }
     if (starter > MAX_CODEPOINT || combining > MAX_CODEPOINT) { return; }
@@ -290,11 +282,12 @@ unicode_normalizer::unicode_normalizer(cudf::table_view const& unicode_data,
   cudf::size_type const num_rows = unicode_data.num_rows();
   CUDF_EXPECTS(num_rows > 0, "unicode_data table must not be empty", std::invalid_argument);
 
+  auto temp_mr = cudf::get_current_device_resource_ref();
   auto codepoints_col =
     cudf::strings::detail::hex_to_integers(cudf::strings_column_view(unicode_data.column(0)),
                                            cudf::data_type{cudf::type_id::UINT32},
                                            stream,
-                                           cudf::get_current_device_resource_ref());
+                                           temp_mr);
   auto d_codepoints = cuda::std::span<uint32_t const>(codepoints_col->view().data<uint32_t>(),
                                                       static_cast<std::size_t>(num_rows));
 
@@ -302,7 +295,7 @@ unicode_normalizer::unicode_normalizer(cudf::table_view const& unicode_data,
   auto const d_decomp_map = cudf::column_device_view::create(unicode_data.column(2), stream);
   bool const apply_compat =
     (form == unicode_normalization_form::NFKD || form == unicode_normalization_form::NFKC);
-  auto const policy   = rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref());
+  auto const policy   = rmm::exec_policy_nosync(stream, temp_mr);
   auto const row_iter = thrust::make_counting_iterator(cudf::size_type{0});
 
   // Build CCC table
@@ -312,7 +305,7 @@ unicode_normalizer::unicode_normalizer(cudf::table_view const& unicode_data,
     policy, row_iter, num_rows, detail::scatter_ccc_fn{*d_ccc_col, d_codepoints, ccc_table});
 
   // Count decomposition tokens per row
-  auto d_counts        = rmm::device_uvector<int32_t>(num_rows, stream);
+  auto d_counts        = rmm::device_uvector<cudf::size_type>(num_rows, stream, temp_mr);
   auto count_tokens_fn = detail::count_decomp_tokens_fn{*d_decomp_map, apply_compat};
   thrust::transform(policy, row_iter, row_iter + num_rows, d_counts.begin(), count_tokens_fn);
 
@@ -406,7 +399,7 @@ __device__ void for_each_decomposed_cp(int64_t idx,
                                        Fn fn)
 {
   if (!cudf::strings::detail::is_begin_utf8_char(chars[idx])) { return; }
-  cudf::char_utf8 ch = static_cast<unsigned char>(chars[idx]);  // preserve high order bit
+  cudf::char_utf8 ch = static_cast<unsigned char>(chars[idx]);  // cast preserves high order bit
   if (ch > 0x7F) { cudf::strings::detail::to_char_utf8(chars.data() + idx, ch); }
   uint32_t buf_a[MAX_DECOMP_EXPAND];
   uint32_t buf_b[MAX_DECOMP_EXPAND];
@@ -453,8 +446,8 @@ struct decompose_size_fn {
 
   __device__ int32_t operator()(int64_t idx) const
   {
-    int32_t count = 0;
-    auto fn       = [&count](uint32_t const*, int32_t n) { count = n; };
+    auto count = int32_t{0};
+    auto fn    = [&count](uint32_t const*, int32_t n) { count = n; };
     for_each_decomposed_cp(idx, d_input_chars, decomp_offsets, decomp_table, fn);
     return count;
   }
@@ -650,10 +643,11 @@ std::unique_ptr<cudf::column> normalize_unicode(cudf::strings_column_view const&
   if (chars_size == 0) { return std::make_unique<cudf::column>(input.parent(), stream, mr); }
 
   auto const& p          = *normalizer._impl;
-  auto const policy      = rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref());
+  auto const temp_mr     = cudf::get_current_device_resource_ref();
+  auto const policy      = rmm::exec_policy_nosync(stream, temp_mr);
   auto const byte_iter   = thrust::make_counting_iterator(int64_t{0});
   auto const d_raw_chars = input.chars_begin(stream) + first_offset;
-  auto chars_span        = cuda::std::span<char const>(d_raw_chars, chars_size);
+  auto const chars_span  = cuda::std::span<char const>(d_raw_chars, chars_size);
 
   // NFC/NFKC quick check: if no codepoint in the input has CCC > 0 (no combining
   // marks anywhere), every codepoint is already a canonical starter and the column
@@ -666,26 +660,26 @@ std::unique_ptr<cudf::column> normalize_unicode(cudf::strings_column_view const&
   }
 
   // Decomposition: first count output codepoints per input byte
-  auto expanded_sizes = rmm::device_uvector<int32_t>(chars_size, stream);
+  auto expanded_sizes = rmm::device_uvector<int32_t>(chars_size, stream, temp_mr);
   thrust::uninitialized_fill(policy, expanded_sizes.begin(), expanded_sizes.end(), int32_t{0});
   auto size_fn = detail::decompose_size_fn{chars_span, p.decomp_offsets, p.decomp_table};
   thrust::transform(policy, byte_iter, byte_iter + chars_size, expanded_sizes.begin(), size_fn);
 
   // Exclusive scan to get per-byte output positions
-  auto out_positions   = rmm::device_uvector<uint32_t>(chars_size, stream);
+  auto out_positions   = rmm::device_uvector<uint32_t>(chars_size, stream, temp_mr);
   auto const total_cps = cudf::detail::sizes_to_offsets(
     expanded_sizes.begin(), expanded_sizes.end(), out_positions.begin(), 0, stream);
 
   // Fill codepoints and CCCs at pre-scanned positions
-  auto cps = rmm::device_uvector<uint32_t>(total_cps, stream);
-  auto ccc = rmm::device_uvector<uint8_t>(total_cps, stream);
+  auto cps = rmm::device_uvector<uint32_t>(total_cps, stream, temp_mr);
+  auto ccc = rmm::device_uvector<uint8_t>(total_cps, stream, temp_mr);
   thrust::fill(policy, cps.begin(), cps.end(), uint32_t{0});
   auto decomp_fill_fn = detail::decompose_fill_fn{
     chars_span, p.decomp_offsets, p.decomp_table, p.ccc_table, out_positions, cps, ccc};
   thrust::for_each_n(policy, byte_iter, chars_size, decomp_fill_fn);
 
   // Build per-string codepoint offset boundaries
-  auto str_cp_offsets = rmm::device_uvector<int64_t>(input.size() + 1, stream);
+  auto str_cp_offsets = rmm::device_uvector<int64_t>(input.size() + 1, stream, temp_mr);
   {
     auto const input_char_offsets =
       cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());

@@ -18,18 +18,6 @@
 
 struct TextUnicodeNormalizeTest : public cudf::test::BaseFixture {};
 
-// Helper to build a minimal unicode_data table with three columns:
-//   col[0]: STRING  - hex codepoint strings (e.g. "00E9")
-//   col[1]: INT32   - CCC (canonical combining class) values
-//   col[2]: STRING  - decomposition mapping strings (e.g. "0065 0301")
-static cudf::table_view make_unicode_table(
-  cudf::test::strings_column_wrapper& codepoints,
-  cudf::test::fixed_width_column_wrapper<int32_t>& ccc_values,
-  cudf::test::strings_column_wrapper& decomp_mappings)
-{
-  return cudf::table_view({codepoints, ccc_values, decomp_mappings});
-}
-
 TEST_F(TextUnicodeNormalizeTest, NullStrings)
 {
   cudf::test::strings_column_wrapper strings({"", "", ""}, {false, false, false});
@@ -38,10 +26,10 @@ TEST_F(TextUnicodeNormalizeTest, NullStrings)
   cudf::test::strings_column_wrapper codepoints({"A"});
   cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({0});
   cudf::test::strings_column_wrapper decomp_mappings({"0065 0301"});
-  auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
-
+  auto unicode_data = cudf::table_view({codepoints, ccc_values, decomp_mappings});
   auto normalizer =
     nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFC);
+
   auto result = nvtext::normalize_unicode(input, *normalizer);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, strings);
 }
@@ -61,12 +49,11 @@ TEST_F(TextUnicodeNormalizeTest, MixedNullStrings)
   cudf::test::strings_column_wrapper codepoints({"00E9", "0301"});
   cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({0, 230});
   cudf::test::strings_column_wrapper decomp_mappings({"0065 0301", ""});
-  auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
-
+  auto unicode_data = cudf::table_view({codepoints, ccc_values, decomp_mappings});
   auto normalizer =
     nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFC);
-  auto result = nvtext::normalize_unicode(input, *normalizer);
 
+  auto result = nvtext::normalize_unicode(input, *normalizer);
   cudf::test::strings_column_wrapper expected({"\xC3\xA9", "", "caf\xC3\xA9"}, {true, false, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
@@ -81,7 +68,7 @@ TEST_F(TextUnicodeNormalizeTest, AsciiPassthrough)
   cudf::test::strings_column_wrapper codepoints({"A"});
   cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({0});
   cudf::test::strings_column_wrapper decomp_mappings({"0065 0301"});
-  auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
+  auto unicode_data = cudf::table_view({codepoints, ccc_values, decomp_mappings});
 
   for (auto form : {nvtext::unicode_normalization_form::NFD,
                     nvtext::unicode_normalization_form::NFC,
@@ -105,13 +92,12 @@ TEST_F(TextUnicodeNormalizeTest, NFD_BasicDecomp)
   cudf::test::strings_column_wrapper codepoints({"00E9", "0301"});
   cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({0, 230});
   cudf::test::strings_column_wrapper decomp_mappings({"0065 0301", ""});
-  auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
-
+  auto unicode_data = cudf::table_view({codepoints, ccc_values, decomp_mappings});
   // NFD: é → e + combining acute (U+0065 U+0301)
   auto normalizer =
     nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFD);
-  auto result = nvtext::normalize_unicode(input, *normalizer);
 
+  auto result = nvtext::normalize_unicode(input, *normalizer);
   // Expected: "e" + U+0301 combining acute accent
   cudf::test::strings_column_wrapper expected({"e\xCC\x81"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
@@ -127,12 +113,11 @@ TEST_F(TextUnicodeNormalizeTest, NFD_Hangul)
   cudf::test::strings_column_wrapper codepoints({"A"});
   cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({0});
   cudf::test::strings_column_wrapper decomp_mappings({"0065 0301"});
-  auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
-
+  auto unicode_data = cudf::table_view({codepoints, ccc_values, decomp_mappings});
   auto normalizer =
     nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFD);
-  auto result = nvtext::normalize_unicode(input, *normalizer);
 
+  auto result = nvtext::normalize_unicode(input, *normalizer);
   // Expected: U+1100 (ᄀ) + U+1161 (ᅡ) in UTF-8
   cudf::test::strings_column_wrapper expected({"\xE1\x84\x80\xE1\x85\xA1"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
@@ -151,12 +136,11 @@ TEST_F(TextUnicodeNormalizeTest, NFC_Compose)
   cudf::test::strings_column_wrapper codepoints({"00E9", "0301"});
   cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({0, 230});
   cudf::test::strings_column_wrapper decomp_mappings({"0065 0301", ""});
-  auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
-
+  auto unicode_data = cudf::table_view({codepoints, ccc_values, decomp_mappings});
   auto normalizer =
     nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFC);
-  auto result = nvtext::normalize_unicode(input, *normalizer);
 
+  auto result = nvtext::normalize_unicode(input, *normalizer);
   // Expected: é (U+00E9) in UTF-8
   cudf::test::strings_column_wrapper expected({"\xC3\xA9"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
@@ -174,21 +158,21 @@ TEST_F(TextUnicodeNormalizeTest, NFKD_CompatDecomp)
   cudf::test::strings_column_wrapper codepoints({"FB01"});
   cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({0});
   cudf::test::strings_column_wrapper decomp_mappings({"<compat> 0066 0069"});
-  auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
+  auto unicode_data = cudf::table_view({codepoints, ccc_values, decomp_mappings});
 
   // NFD: ﬁ is unchanged (compatibility decomp not applied)
   auto normalizer_nfd =
     nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFD);
-  auto result_nfd = nvtext::normalize_unicode(input, *normalizer_nfd);
+  auto result = nvtext::normalize_unicode(input, *normalizer_nfd);
   cudf::test::strings_column_wrapper expected_nfd({"\xEF\xAC\x81"});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result_nfd, expected_nfd);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_nfd);
 
   // NFKD: ﬁ → "fi"
   auto normalizer_nfkd =
     nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFKD);
-  auto result_nfkd = nvtext::normalize_unicode(input, *normalizer_nfkd);
+  result = nvtext::normalize_unicode(input, *normalizer_nfkd);
   cudf::test::strings_column_wrapper expected_nfkd({"fi"});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result_nfkd, expected_nfkd);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_nfkd);
 }
 
 TEST_F(TextUnicodeNormalizeTest, NFKC_CompatThenCompose)
@@ -201,12 +185,11 @@ TEST_F(TextUnicodeNormalizeTest, NFKC_CompatThenCompose)
   cudf::test::strings_column_wrapper codepoints({"FB01"});
   cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({0});
   cudf::test::strings_column_wrapper decomp_mappings({"<compat> 0066 0069"});
-  auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
-
+  auto unicode_data = cudf::table_view({codepoints, ccc_values, decomp_mappings});
   auto normalizer =
     nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFKC);
-  auto result = nvtext::normalize_unicode(input, *normalizer);
 
+  auto result = nvtext::normalize_unicode(input, *normalizer);
   cudf::test::strings_column_wrapper expected({"fi"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
@@ -234,12 +217,11 @@ TEST_F(TextUnicodeNormalizeTest, CanonicalReorder)
   cudf::test::strings_column_wrapper codepoints({"0300", "0316"});
   cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({230, 220});
   cudf::test::strings_column_wrapper decomp_mappings({"", ""});
-  auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
-
+  auto unicode_data = cudf::table_view({codepoints, ccc_values, decomp_mappings});
   auto normalizer =
     nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFD);
-  auto result = nvtext::normalize_unicode(input, *normalizer);
 
+  auto result = nvtext::normalize_unicode(input, *normalizer);
   // Expected: 'A' + U+0316 (CCC=220) + U+0300 (CCC=230)
   cudf::test::strings_column_wrapper expected({"A\xCC\x96\xCC\x80"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
@@ -255,9 +237,8 @@ TEST_F(TextUnicodeNormalizeTest, MultiStringBatch)
   //   3: "e\xCC\x81" → "é"       (compose e + acute → U+00E9)
   //   4: "café"       → "café"    (already NFC)
 
-  std::vector<char const*> h_input{"hello", "", nullptr, "e\xCC\x81", "caf\xC3\xA9"};
-  cudf::test::strings_column_wrapper input_strings(
-    h_input.begin(), h_input.end(), std::vector<bool>{true, true, false, true, true}.begin());
+  cudf::test::strings_column_wrapper input_strings({"hello", "", "", "e\xCC\x81", "caf\xC3\xA9"},
+                                                   {true, true, false, true, true});
   cudf::strings_column_view input(input_strings);
 
   // Table: U+00E9 with canonical decomp "0065 0301"
@@ -266,22 +247,15 @@ TEST_F(TextUnicodeNormalizeTest, MultiStringBatch)
   cudf::test::strings_column_wrapper codepoints({"00E9", "0301"});
   cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({0, 230});
   cudf::test::strings_column_wrapper decomp_mappings({"0065 0301", ""});
-  auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
-
+  auto unicode_data = cudf::table_view({codepoints, ccc_values, decomp_mappings});
   auto normalizer =
     nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFC);
-  auto result = nvtext::normalize_unicode(input, *normalizer);
 
-  std::vector<char const*> h_expected{"hello", "", nullptr, "\xC3\xA9", "caf\xC3\xA9"};
-  cudf::test::strings_column_wrapper expected(
-    h_expected.begin(), h_expected.end(), std::vector<bool>{true, true, false, true, true}.begin());
+  auto result = nvtext::normalize_unicode(input, *normalizer);
+  cudf::test::strings_column_wrapper expected({"hello", "", "", "\xC3\xA9", "caf\xC3\xA9"},
+                                              {true, true, false, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
-
-// ---------------------------------------------------------------------------
-// Sliced input column tests: verify correct offset handling when the input
-// strings column does not start at byte offset 0 of the underlying chars buffer.
-// ---------------------------------------------------------------------------
 
 TEST_F(TextUnicodeNormalizeTest, NFD_SlicedInput)
 {
@@ -295,12 +269,11 @@ TEST_F(TextUnicodeNormalizeTest, NFD_SlicedInput)
   cudf::test::strings_column_wrapper codepoints({"00E9", "0301"});
   cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({0, 230});
   cudf::test::strings_column_wrapper decomp_mappings({"0065 0301", ""});
-  auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
-
+  auto unicode_data = cudf::table_view({codepoints, ccc_values, decomp_mappings});
   auto normalizer =
     nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFD);
-  auto result = nvtext::normalize_unicode(input, *normalizer);
 
+  auto result = nvtext::normalize_unicode(input, *normalizer);
   cudf::test::strings_column_wrapper expected({"e\xCC\x81", "cafe\xCC\x81"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
@@ -317,12 +290,11 @@ TEST_F(TextUnicodeNormalizeTest, NFC_SlicedInput)
   cudf::test::strings_column_wrapper codepoints({"00E9", "0301"});
   cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({0, 230});
   cudf::test::strings_column_wrapper decomp_mappings({"0065 0301", ""});
-  auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
-
+  auto unicode_data = cudf::table_view({codepoints, ccc_values, decomp_mappings});
   auto normalizer =
     nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFC);
-  auto result = nvtext::normalize_unicode(input, *normalizer);
 
+  auto result = nvtext::normalize_unicode(input, *normalizer);
   cudf::test::strings_column_wrapper expected({"\xC3\xA9", "caf\xC3\xA9"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
@@ -344,17 +316,19 @@ TEST_F(TextUnicodeNormalizeTest, NFC_SingletonCanonical)
   cudf::test::strings_column_wrapper codepoints({"212B", "00C5", "030A"});
   cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({0, 0, 230});
   cudf::test::strings_column_wrapper decomp_mappings({"00C5", "0041 030A", ""});
-  auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
+  auto unicode_data = cudf::table_view({codepoints, ccc_values, decomp_mappings});
 
   auto nfd =
     nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFD);
   cudf::test::strings_column_wrapper expected_nfd({"A\xCC\x8A"});  // A + U+030A
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*nvtext::normalize_unicode(input, *nfd), expected_nfd);
+  auto result = nvtext::normalize_unicode(input, *nfd);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_nfd);
 
   auto nfc =
     nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFC);
+  result = nvtext::normalize_unicode(input, *nfc);
   cudf::test::strings_column_wrapper expected_nfc({"\xC3\x85"});  // U+00C5
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*nvtext::normalize_unicode(input, *nfc), expected_nfc);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_nfc);
 }
 
 TEST_F(TextUnicodeNormalizeTest, NFC_DecomposedCombining)
@@ -367,12 +341,13 @@ TEST_F(TextUnicodeNormalizeTest, NFC_DecomposedCombining)
   cudf::test::strings_column_wrapper codepoints({"00C5", "030A"});
   cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({0, 230});
   cudf::test::strings_column_wrapper decomp_mappings({"0041 030A", ""});
-  auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
-
+  auto unicode_data = cudf::table_view({codepoints, ccc_values, decomp_mappings});
   auto nfc =
     nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFC);
+
+  auto result = nvtext::normalize_unicode(input, *nfc);
   cudf::test::strings_column_wrapper expected({"\xC3\x85"});  // U+00C5
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*nvtext::normalize_unicode(input, *nfc), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
 
 TEST_F(TextUnicodeNormalizeTest, NFKD_FullwidthToASCII)
@@ -392,13 +367,14 @@ TEST_F(TextUnicodeNormalizeTest, NFKD_FullwidthToASCII)
                                                       "<compat> 0031",
                                                       "<compat> 0032",
                                                       "<compat> 0033"});
-  auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
+  auto unicode_data = cudf::table_view({codepoints, ccc_values, decomp_mappings});
 
   // NFD/NFC: no canonical decomposition → unchanged
   for (auto form :
        {nvtext::unicode_normalization_form::NFD, nvtext::unicode_normalization_form::NFC}) {
     auto normalizer = nvtext::create_unicode_normalizer(unicode_data, form);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*nvtext::normalize_unicode(input, *normalizer), input_strings);
+    auto result     = nvtext::normalize_unicode(input, *normalizer);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, input_strings);
   }
 
   // NFKD/NFKC: compatibility decomposition applied → ASCII
@@ -406,7 +382,8 @@ TEST_F(TextUnicodeNormalizeTest, NFKD_FullwidthToASCII)
   for (auto form :
        {nvtext::unicode_normalization_form::NFKD, nvtext::unicode_normalization_form::NFKC}) {
     auto normalizer = nvtext::create_unicode_normalizer(unicode_data, form);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*nvtext::normalize_unicode(input, *normalizer), expected);
+    auto result     = nvtext::normalize_unicode(input, *normalizer);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 }
 
@@ -422,7 +399,7 @@ TEST_F(TextUnicodeNormalizeTest, NFKD_HalfwidthKatakana)
   cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({0, 0, 0});
   cudf::test::strings_column_wrapper decomp_mappings(
     {"<compat> 30AB", "<compat> 30BF", "<compat> 30CA"});
-  auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
+  auto unicode_data = cudf::table_view({codepoints, ccc_values, decomp_mappings});
 
   // NFKD/NFKC: halfwidth → fullwidth katakana (カタカナ)
   cudf::test::strings_column_wrapper expected(
@@ -430,7 +407,8 @@ TEST_F(TextUnicodeNormalizeTest, NFKD_HalfwidthKatakana)
   for (auto form :
        {nvtext::unicode_normalization_form::NFKD, nvtext::unicode_normalization_form::NFKC}) {
     auto normalizer = nvtext::create_unicode_normalizer(unicode_data, form);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*nvtext::normalize_unicode(input, *normalizer), expected);
+    auto result     = nvtext::normalize_unicode(input, *normalizer);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 }
 
@@ -443,12 +421,13 @@ TEST_F(TextUnicodeNormalizeTest, NFKD_CircledDigit)
   cudf::test::strings_column_wrapper codepoints({"2460"});
   cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({0});
   cudf::test::strings_column_wrapper decomp_mappings({"<compat> 0031"});
-  auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
-
+  auto unicode_data = cudf::table_view({codepoints, ccc_values, decomp_mappings});
   auto normalizer =
     nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFKD);
+
+  auto result = nvtext::normalize_unicode(input, *normalizer);
   cudf::test::strings_column_wrapper expected({"1"});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*nvtext::normalize_unicode(input, *normalizer), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
 
 TEST_F(TextUnicodeNormalizeTest, NFKD_Ligature_FFI)
@@ -460,12 +439,13 @@ TEST_F(TextUnicodeNormalizeTest, NFKD_Ligature_FFI)
   cudf::test::strings_column_wrapper codepoints({"FB03"});
   cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({0});
   cudf::test::strings_column_wrapper decomp_mappings({"<compat> 0066 0066 0069"});
-  auto unicode_data = make_unicode_table(codepoints, ccc_values, decomp_mappings);
-
+  auto unicode_data = cudf::table_view({codepoints, ccc_values, decomp_mappings});
   auto normalizer =
     nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFKD);
+
+  auto result = nvtext::normalize_unicode(input, *normalizer);
   cudf::test::strings_column_wrapper expected({"ffi"});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*nvtext::normalize_unicode(input, *normalizer), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
 
 TEST_F(TextUnicodeNormalizeTest, EmptyDecompositionTable)
