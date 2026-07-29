@@ -1372,7 +1372,7 @@ target_link_libraries(
 
 if(NOT _absorbed_nvcomp)
   target_link_libraries(cudf PRIVATE ${CUDF_nvcomp_TARGET})
-  if(${CUDF_nvcomp_TARGET} STREQUAL "nvcomp::nvcomp_static")
+  if(CUDF_nvcomp_TARGET STREQUAL "nvcomp::nvcomp_static")
     set_property(
       TARGET cudf
       APPEND
