@@ -644,7 +644,7 @@ async def scan_node(
         and first.cached_parquet_info is not None
         and first.base_scan.predicate is not None
         and prefetch_backend is not None
-        and (prefetch_backend == "cucascade" or context.br().pinned_mr is not None)
+        and context.br().pinned_mr is not None
     )
     prefetcher: HybridScanPrefetchExecutor | None = (
         HybridScanPrefetchExecutor.from_scans(

@@ -274,6 +274,9 @@ def fadvise_scan_byte_ranges(
     stream: Stream,
     datasource_cache: dict[str, Any],
     dev_id: int,
+    pinned_mr: PinnedMemoryResource,
+    context: Context,
+    loop: asyncio.AbstractEventLoop,
 ) -> PrefetchedByteRanges | None:
     """
     Run stats and bloom pruning for one SplitScan and prefetch byte ranges.
@@ -288,6 +291,12 @@ def fadvise_scan_byte_ranges(
         Per-query cache mapping file path to its open datasource.
     dev_id
         CUDA device id for staging.
+    pinned_mr
+        Pinned memory resource to allocate host buffers from.
+    context
+        rapidsmpf context.
+    loop
+        Event loop for the calling async context.
 
     Returns
     -------
@@ -301,23 +310,39 @@ def fadvise_scan_byte_ranges(
 
     datasource = datasource_cache[scan.paths[0]].duplicate()
 
+    filter_bytes = sum(r.size for r in planned.filter_ranges)
+    payload_bytes = sum(r.size for r in planned.payload_ranges)
     all_ranges = [
         (r.offset, r.size) for r in planned.filter_ranges + planned.payload_ranges
     ]
-    filter_bytes = sum(r.size for r in planned.filter_ranges)
-    payload_bytes = sum(r.size for r in planned.payload_ranges)
+
     with nvtx_annotate_cudf_polars(
         message=f"fadvise [{scan.split_index + 1}/{scan.total_splits}]:filter={filter_bytes}B,payload={payload_bytes}B"
     ):
         datasource.fadvise(all_ranges, dev_id)
 
+    # TODO: eliminate the extra copy (cuCascade bounce buffer to rapidsmpf PinnedBuffer
+    # to GPU) by having cuCascade expose the staged data as a device buffer directly.
+    filter_buf = PinnedBuffer(pinned_mr, filter_bytes, stream, context, loop)
+    payload_buf = PinnedBuffer(pinned_mr, payload_bytes, stream, context, loop)
+
+    filter_futures = datasource.read_ranges_async(
+        [(r.offset, r.size) for r in planned.filter_ranges], filter_buf.array
+    )
+    payload_futures = datasource.read_ranges_async(
+        [(r.offset, r.size) for r in planned.payload_ranges], payload_buf.array
+    )
+
     return PrefetchedByteRanges(
         row_group_indices=planned.row_group_indices,
         filter_ranges=planned.filter_ranges,
         payload_ranges=planned.payload_ranges,
-        filter_host=None,
-        payload_host=None,
-        datasource=datasource,
+        filter_host=filter_buf.array,
+        payload_host=payload_buf.array,
+        filter_futures=filter_futures,
+        payload_futures=payload_futures,
+        filter_buf=filter_buf,
+        payload_buf=payload_buf,
     )
 
 
@@ -425,6 +450,14 @@ class HybridScanPrefetchExecutor:
 
             _, dev_id = cudart.cudaGetDevice()
 
+            pinned_mr = context.br().pinned_mr
+            if pinned_mr is None:
+                raise ValueError(
+                    "prefetch_backend='cucascade' requires a PinnedMemoryResource; "
+                    "enable pinned memory via --pinned-memory."
+                )
+            loop = asyncio.get_running_loop()
+
             datasource_cache: dict[str, Any] = {}
             for scan in scans:
                 path = scan.paths[0]
@@ -433,7 +466,8 @@ class HybridScanPrefetchExecutor:
 
             def task(s: SplitScan) -> PrefetchedByteRanges | None:
                 return fadvise_scan_byte_ranges(
-                    s, cls.thread_local.stream, datasource_cache, dev_id
+                    s, cls.thread_local.stream, datasource_cache, dev_id,
+                    pinned_mr, context, loop,
                 )
 
         else:

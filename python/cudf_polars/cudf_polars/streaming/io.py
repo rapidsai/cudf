@@ -47,7 +47,12 @@ from cudf_polars.utils.versions import POLARS_VERSION_LT_137
 if TYPE_CHECKING:
     from collections.abc import Hashable, MutableMapping, Sequence
 
-    from kvikio.cufile import IOFuture
+    from typing import Protocol
+
+    class _ReadFuture(Protocol):
+        def get(self) -> int: ...
+
+    IOFuture = _ReadFuture
 
     import pylibcudf.expressions as plc_expr
     from rmm.pylibrmm.stream import Stream
@@ -231,10 +236,6 @@ class PrefetchedByteRanges:
     payload_buf: PinnedBuffer | None = dataclasses.field(
         default=None, compare=False, repr=False
     )
-    datasource: plc.io.datasource.Datasource | None = dataclasses.field(
-        default=None, compare=False, repr=False
-    )
-
     @classmethod
     def empty(cls) -> PrefetchedByteRanges:
         """Return a fully-pruned split with no rows to read."""
@@ -359,11 +360,7 @@ def _read_with_hybrid_scan(
         # the page index for all files, which may be too expensive.
         row_mask = reader.build_all_true_row_mask(row_group_indices, stream=stream)
 
-        if prefetched is not None and prefetched.datasource is not None:
-            filter_chunks = _fetch_byte_ranges(
-                [prefetched.datasource], prefetched.filter_ranges, stream
-            )
-        elif prefetched is not None and prefetched.filter_host is not None:
+        if prefetched is not None and prefetched.filter_host is not None:
             filter_chunks = copy_host_ranges_to_device(
                 prefetched.filter_host,
                 prefetched.filter_ranges,
@@ -385,11 +382,7 @@ def _read_with_hybrid_scan(
             stream=stream,
         )
 
-        if prefetched is not None and prefetched.datasource is not None:
-            payload_chunks = _fetch_byte_ranges(
-                [prefetched.datasource], prefetched.payload_ranges, stream
-            )
-        elif prefetched is not None and prefetched.payload_host is not None:
+        if prefetched is not None and prefetched.payload_host is not None:
             payload_chunks = copy_host_ranges_to_device(
                 prefetched.payload_host,
                 prefetched.payload_ranges,
