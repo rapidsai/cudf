@@ -273,7 +273,7 @@ else()
   target_link_libraries(cudfjni PUBLIC cudf::cudf)
 endif()
 
-get_target_property(cudf_static_linked_projects cudf::cudf STATIC_LINKED_PROJECTS)
+get_target_property(cudf_static_linked_projects cudf::cudf CUDF_STATIC_LINKED_PROJECTS)
 if(nvcomp IN_LIST cudf_static_linked_projects)
   target_link_libraries(cudfjni PRIVATE $<COMPILE_ONLY:nvcomp::nvcomp_static>)
 else()
