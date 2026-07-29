@@ -50,17 +50,102 @@ namespace {
 
 // Composition exclusion: ~70 codepoints explicitly excluded from NFC/NFKC
 // composition (Unicode 15, DerivedNormalizationProps.txt).
+// Must be sorted ascending for thrust::binary_search.
+// 0x2ADC (Supplemental Mathematical Operators) is placed after 0x0FB9 (Tibetan),
+// not adjacent to the Hebrew block where it was previously listed out of order.
 __device__ __constant__ cuda::std::array COMPOSITION_EXCLUSIONS{
-  0x0958u,  0x0959u,  0x095Au,  0x095Bu,  0x095Cu,  0x095Du,  0x095Eu,  0x095Fu,  0x09DCu,
-  0x09DDu,  0x09DFu,  0x0A33u,  0x0A36u,  0x0A59u,  0x0A5Au,  0x0A5Bu,  0x0A5Cu,  0x0A5Eu,
-  0x0B5Cu,  0x0B5Du,  0x0F43u,  0x0F4Du,  0x0F52u,  0x0F57u,  0x0F5Cu,  0x0F69u,  0x0F76u,
-  0x0F78u,  0x0F80u,  0x0F93u,  0x0F9Du,  0x0FA2u,  0x0FA7u,  0x0FACu,  0x0FB9u,  0xFB1Du,
-  0xFB1Fu,  0xFB2Au,  0xFB2Bu,  0xFB2Cu,  0xFB2Du,  0xFB2Eu,  0xFB2Fu,  0xFB30u,  0xFB31u,
-  0xFB32u,  0xFB33u,  0xFB34u,  0xFB35u,  0xFB36u,  0xFB38u,  0xFB39u,  0xFB3Au,  0xFB3Bu,
-  0xFB3Cu,  0xFB3Eu,  0xFB40u,  0xFB41u,  0xFB43u,  0xFB44u,  0xFB46u,  0xFB47u,  0xFB48u,
-  0xFB49u,  0xFB4Au,  0xFB4Bu,  0xFB4Cu,  0xFB4Du,  0xFB4Eu,  0x2ADCu,  0x1D15Eu, 0x1D15Fu,
-  0x1D160u, 0x1D161u, 0x1D162u, 0x1D163u, 0x1D164u, 0x1D1BBu, 0x1D1BCu, 0x1D1BDu, 0x1D1BEu,
-  0x1D1BFu, 0x1D1C0u,
+  // Devanagari
+  0x0958u,
+  0x0959u,
+  0x095Au,
+  0x095Bu,
+  0x095Cu,
+  0x095Du,
+  0x095Eu,
+  0x095Fu,
+  // Bengali
+  0x09DCu,
+  0x09DDu,
+  0x09DFu,
+  // Gurmukhi
+  0x0A33u,
+  0x0A36u,
+  // Gujarati
+  0x0A59u,
+  0x0A5Au,
+  0x0A5Bu,
+  0x0A5Cu,
+  0x0A5Eu,
+  // Oriya
+  0x0B5Cu,
+  0x0B5Du,
+  // Tibetan
+  0x0F43u,
+  0x0F4Du,
+  0x0F52u,
+  0x0F57u,
+  0x0F5Cu,
+  0x0F69u,
+  0x0F76u,
+  0x0F78u,
+  0x0F80u,
+  0x0F93u,
+  0x0F9Du,
+  0x0FA2u,
+  0x0FA7u,
+  0x0FACu,
+  0x0FB9u,
+  // Supplemental Mathematical Operators
+  0x2ADCu,
+  // Hebrew Presentation Forms
+  0xFB1Du,
+  0xFB1Fu,
+  0xFB2Au,
+  0xFB2Bu,
+  0xFB2Cu,
+  0xFB2Du,
+  0xFB2Eu,
+  0xFB2Fu,
+  0xFB30u,
+  0xFB31u,
+  0xFB32u,
+  0xFB33u,
+  0xFB34u,
+  0xFB35u,
+  0xFB36u,
+  0xFB38u,
+  0xFB39u,
+  0xFB3Au,
+  0xFB3Bu,
+  0xFB3Cu,
+  0xFB3Eu,
+  0xFB40u,
+  0xFB41u,
+  0xFB43u,
+  0xFB44u,
+  0xFB46u,
+  0xFB47u,
+  0xFB48u,
+  0xFB49u,
+  0xFB4Au,
+  0xFB4Bu,
+  0xFB4Cu,
+  0xFB4Du,
+  0xFB4Eu,
+  // Musical Symbols
+  0x1D15Eu,
+  0x1D15Fu,
+  0x1D160u,
+  0x1D161u,
+  0x1D162u,
+  0x1D163u,
+  0x1D164u,
+  0x1D1BBu,
+  0x1D1BCu,
+  0x1D1BDu,
+  0x1D1BEu,
+  0x1D1BFu,
+  0x1D1C0u,
 };
 
 /**
@@ -107,7 +192,7 @@ struct scatter_compat_flag_fn {
     if (!is_compat && d_counts[idx] != 1) { return; }
     uint32_t const cp = d_codepoints[idx];
     if (cp <= MAX_CODEPOINT) {
-      cudf::set_bit_unsafe(compat_flags.data(), static_cast<cudf::size_type>(cp));
+      cudf::set_bit(compat_flags.data(), static_cast<cudf::size_type>(cp));
     }
   }
 };
@@ -174,7 +259,8 @@ struct write_decomp_tokens_fn {
 
   __device__ void operator()(cudf::size_type idx) const
   {
-    auto const cp  = d_codepoints[idx];
+    auto const cp = d_codepoints[idx];
+    if (cp > MAX_CODEPOINT) { return; }
     auto write_pos = decomp_cp_offsets[cp];
     auto fn        = [this, &write_pos](char const* ptr, cudf::size_type size) {
       decomp_table[write_pos++] = hex_to_cp(ptr, size);
@@ -208,7 +294,8 @@ struct build_comp_table_fn {
     };
     for_each_decomp_token(decomp_map.element<cudf::string_view>(idx), false, fn);
     if (tok < 2) { return; }
-    auto const composed  = d_codepoints[idx];
+    auto const composed = d_codepoints[idx];
+    if (composed > MAX_CODEPOINT) { return; }
     auto const starter   = tokens[0];
     auto const combining = tokens[1];
     if (thrust::binary_search(
@@ -411,8 +498,12 @@ __device__ void for_each_decomposed_cp(int64_t idx,
     for (int32_t i = 0; i < count_a; ++i) {
       auto const cp = buf_a[i];
       if (cp >= HANGUL_SBASE && cp <= HANGUL_SEND) {
-        count_b += hangul_decompose(cp, buf_b + count_b);
-        expanded = true;
+        if (count_b + 3 <= MAX_DECOMP_EXPAND) {
+          count_b += hangul_decompose(cp, buf_b + count_b);
+          expanded = true;
+        }
+      } else if (cp > MAX_CODEPOINT) {
+        if (count_b < MAX_DECOMP_EXPAND) { buf_b[count_b++] = cp; }  // out-of-range: pass through
       } else {
         auto const start = decomp_offsets[cp];
         auto const end   = decomp_offsets[cp + 1];
@@ -462,7 +553,7 @@ struct decompose_fill_fn {
   cuda::std::span<uint32_t const> decomp_offsets;
   cuda::std::span<uint32_t const> decomp_table;
   cuda::std::span<uint8_t const> ccc_table;
-  cuda::std::span<uint32_t const> d_out_positions;  // exclusive-scan of expanded sizes
+  cuda::std::span<int64_t const> d_out_positions;  // exclusive-scan of expanded sizes
   cuda::std::span<uint32_t> d_out_cps;
   cuda::std::span<uint8_t> d_out_ccc;
 
@@ -542,8 +633,10 @@ struct compose_fn {
       if (d_cps[i] == 0) { continue; }  // already consumed
       uint8_t const ccc = d_ccc[i];
       if (ccc == 0) {
-        // New starter — first try Hangul algorithmic composition
-        if (last_starter >= 0) {
+        // New starter — try Hangul algorithmic composition only if unblocked.
+        // last_class > 0 means an unconsumed non-starter sits between last_starter
+        // and here; UAX #15 D2' requires that to block composition.
+        if (last_starter >= 0 && last_class == 0) {
           uint32_t const composed_hangul = hangul_compose(d_cps[last_starter], d_cps[i]);
           if (composed_hangul != 0) {
             d_cps[last_starter] = composed_hangul;
@@ -575,10 +668,15 @@ struct compose_fn {
 /**
  * NFC/NFKC quick-check predicate.
  *
- * Returns true for the first byte of any UTF-8 sequence whose codepoint has
- * a non-zero CCC (i.e. is a combining mark).  Used with thrust::any_of over
- * the raw input chars: if no such byte exists, every codepoint is a starter
- * and the column is already in NFC/NFKC form — the full pipeline can be skipped.
+ * Returns true for the first byte of any UTF-8 sequence whose codepoint
+ * requires the full normalization pipeline:
+ *   - Non-zero CCC (combining mark): may need reorder or table-based composition.
+ *   - Hangul V jamo (U+1161–U+1175) or T jamo (U+11A8–U+11C2): NFC_QC=Maybe;
+ *     can compose algorithmically with a preceding L or LV syllable.
+ *   - Compat-decomp or singleton-canonical flag: unstable under NFC/NFKC.
+ *
+ * If no such byte exists the column is already in NFC/NFKC form and the
+ * early-return copy path fires.
  */
 struct nfc_quick_check_fn {
   cuda::std::span<char const> chars;
@@ -593,6 +691,9 @@ struct nfc_quick_check_fn {
     auto const cp = cudf::strings::detail::utf8_to_codepoint(ch);
     if (cp > MAX_CODEPOINT) { return false; }
     if (ccc_table[cp] > 0) { return true; }
+    if ((cp >= HANGUL_VBASE && cp <= HANGUL_VEND) || (cp >= HANGUL_TSTART && cp <= HANGUL_TEND)) {
+      return true;
+    }
     return !compat_flags.empty() &&
            cudf::bit_is_set(compat_flags.data(), static_cast<cudf::size_type>(cp));
   }
@@ -660,15 +761,15 @@ std::unique_ptr<cudf::column> normalize_unicode(cudf::strings_column_view const&
   }
 
   // Decomposition: first count output codepoints per input byte
-  auto expanded_sizes = rmm::device_uvector<int32_t>(chars_size, stream, temp_mr);
+  auto expanded_sizes = rmm::device_uvector<int32_t>(chars_size + 1, stream, temp_mr);
   thrust::uninitialized_fill(policy, expanded_sizes.begin(), expanded_sizes.end(), int32_t{0});
   auto size_fn = detail::decompose_size_fn{chars_span, p.decomp_offsets, p.decomp_table};
   thrust::transform(policy, byte_iter, byte_iter + chars_size, expanded_sizes.begin(), size_fn);
 
   // Exclusive scan to get per-byte output positions
-  auto out_positions   = rmm::device_uvector<uint32_t>(chars_size, stream, temp_mr);
+  auto out_positions   = rmm::device_uvector<int64_t>(chars_size + 1, stream, temp_mr);
   auto const total_cps = cudf::detail::sizes_to_offsets(
-    expanded_sizes.begin(), expanded_sizes.end(), out_positions.begin(), 0, stream);
+    expanded_sizes.begin(), expanded_sizes.end(), out_positions.begin(), int64_t{0}, stream);
 
   // Fill codepoints and CCCs at pre-scanned positions
   auto cps = rmm::device_uvector<uint32_t>(total_cps, stream, temp_mr);
@@ -694,8 +795,7 @@ std::unique_ptr<cudf::column> normalize_unicode(cudf::strings_column_view const&
                         [d_out_pos, d_exp_sizes, first] __device__(int64_t offset) {
                           auto const local = offset - first;
                           if (local <= 0) { return 0L; }
-                          return static_cast<int64_t>(d_out_pos[local - 1]) +
-                                 d_exp_sizes[local - 1];
+                          return d_out_pos[local - 1] + d_exp_sizes[local - 1];
                         }));
   }
   expanded_sizes.release();
@@ -708,7 +808,9 @@ std::unique_ptr<cudf::column> normalize_unicode(cudf::strings_column_view const&
   // Canonical Reorder
   thrust::for_each_n(policy, row_iter, input.size(), detail::reorder_fn{cps, ccc, str_cp_offsets});
   // Canonical Composition (NFC/NFKC only)
-  if (!p.comp_keys.is_empty()) {
+  // Run composition for NFC/NFKC regardless of whether the table has entries:
+  // Hangul algorithmic composition is inside compose_fn and requires no table.
+  if (p.form == unicode_normalization_form::NFC || p.form == unicode_normalization_form::NFKC) {
     auto fn = detail::compose_fn{cps, ccc, str_cp_offsets, p.comp_keys, p.comp_values};
     thrust::for_each_n(policy, row_iter, input.size(), fn);
   }

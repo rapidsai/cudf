@@ -146,6 +146,77 @@ TEST_F(TextUnicodeNormalizeTest, NFC_Compose)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
 
+TEST_F(TextUnicodeNormalizeTest, NFC_HangulBlockingRule)
+{
+  // L jamo + U+0300 (CCC=230) + V jamo: the combining mark blocks L+V composition.
+  // NFC must NOT compose U+1100 + U+1161 across the intervening non-starter.
+  // Input:    U+1100 + U+0300 + U+1161  (ᄀ + combining grave + ᅡ)
+  // Expected: unchanged — blocking rule prevents algorithmic Hangul composition.
+  cudf::test::strings_column_wrapper input_strings(
+    {"\xE1\x84\x80\xCC\x80\xE1\x85\xA1"});  // U+1100 + U+0300 + U+1161
+  cudf::strings_column_view input(input_strings);
+
+  cudf::test::strings_column_wrapper codepoints({"0300"});
+  cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({230});
+  cudf::test::strings_column_wrapper decomp_mappings({""});
+  auto unicode_data = cudf::table_view({codepoints, ccc_values, decomp_mappings});
+  auto normalizer =
+    nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFC);
+
+  auto result = nvtext::normalize_unicode(input, *normalizer);
+  cudf::test::strings_column_wrapper expected({"\xE1\x84\x80\xCC\x80\xE1\x85\xA1"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
+}
+
+TEST_F(TextUnicodeNormalizeTest, NFC_CompositionExclusion)
+{
+  // U+2ADC (FORKING) is in the composition exclusion list, so NFC must NOT
+  // compose U+2ADD + U+0338 → U+2ADC even though U+2ADC has a canonical
+  // two-token decomposition.  This exercises the binary search over
+  // COMPOSITION_EXCLUSIONS, which must be sorted for correct results.
+  // Input:    U+2ADD + U+0338  (⫝ + combining long solidus overlay)
+  // Expected: unchanged — exclusion prevents composition.
+  cudf::test::strings_column_wrapper input_strings({"\xE2\xAB\x9D\xCC\xB8"});  // U+2ADD + U+0338
+  cudf::strings_column_view input(input_strings);
+
+  cudf::test::strings_column_wrapper codepoints({"2ADC", "0338"});
+  cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({0, 1});
+  cudf::test::strings_column_wrapper decomp_mappings({"2ADD 0338", ""});
+  auto unicode_data = cudf::table_view({codepoints, ccc_values, decomp_mappings});
+  auto normalizer =
+    nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFC);
+
+  auto result = nvtext::normalize_unicode(input, *normalizer);
+  cudf::test::strings_column_wrapper expected({"\xE2\xAB\x9D\xCC\xB8"});  // unchanged
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
+}
+
+TEST_F(TextUnicodeNormalizeTest, NFC_HangulCompose)
+{
+  // Hangul jamo L (U+1100 ᄀ) + V (U+1161 ᅡ) should compose to U+AC00 (가) under NFC.
+  // V jamo is NFC_QC=Maybe but has CCC=0 and no decomp entry, so the quick-check
+  // predicate must explicitly detect the V/T jamo ranges or the early-return fires
+  // and the composition pass never runs.
+  // Also tests L + V + T: U+1100 + U+1161 + U+11A8 → U+AC01 (각).
+  cudf::test::strings_column_wrapper input_strings(
+    {"\xE1\x84\x80\xE1\x85\xA1",                // ᄀ + ᅡ  (L + V)
+     "\xE1\x84\x80\xE1\x85\xA1\xE1\x86\xA8"});  // ᄀ + ᅡ + ᆨ  (L + V + T)
+  cudf::strings_column_view input(input_strings);
+
+  // No table entries needed: Hangul composition is purely algorithmic.
+  cudf::test::strings_column_wrapper codepoints({"0041"});
+  cudf::test::fixed_width_column_wrapper<int32_t> ccc_values({0});
+  cudf::test::strings_column_wrapper decomp_mappings({""});
+  auto unicode_data = cudf::table_view({codepoints, ccc_values, decomp_mappings});
+  auto normalizer =
+    nvtext::create_unicode_normalizer(unicode_data, nvtext::unicode_normalization_form::NFC);
+
+  auto result = nvtext::normalize_unicode(input, *normalizer);
+  cudf::test::strings_column_wrapper expected({"\xEA\xB0\x80",    // U+AC00 가
+                                               "\xEA\xB0\x81"});  // U+AC01 각
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
+}
+
 TEST_F(TextUnicodeNormalizeTest, NFKD_CompatDecomp)
 {
   // U+FB01 "ﬁ" (fi ligature) has compatibility decomposition: "0066 0069" (fi)

@@ -72,9 +72,6 @@ enum class unicode_normalization_form {
  *
  * Composition exclusions (singletons, non-starter decompositions, and the
  * ~70 Unicode-specified explicit exclusions) are computed internally.
- *
- * During each call to nvtext::normalize_unicode, the amount of temporary
- * required is approximately 12× the input data size.
  */
 struct unicode_normalizer {
   /**
@@ -127,6 +124,9 @@ std::unique_ptr<unicode_normalizer> create_unicode_normalizer(
  * // NFKD: ["é", "fi",  "가", "hello"]
  * // NFKC: ["é",       "fi",  "가",            "hello"]
  * @endcode
+ *
+ * During each call to nvtext::normalize_unicode, the amount of temporary
+ * memory required is approximately 16x the input data size.
  *
  * @param input Strings column to normalize
  * @param normalizer Normalizer object created by nvtext::create_unicode_normalizer
