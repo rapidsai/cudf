@@ -18,6 +18,9 @@ try:  # pragma: no cover; cucascade is optional
 except ImportError:
     cucascade = None
 
+_cucascade_engine: Any | None = None
+_cucascade_engine_lock = threading.Lock()
+
 import pylibcudf as plc
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.streaming.core.memory_reserve_or_wait import reserve_memory
@@ -346,6 +349,37 @@ def fadvise_scan_byte_ranges(
     )
 
 
+def _get_cucascade_engine(
+    path: str,
+    pool_capacity: int | None,
+    n_reactors: int | None,
+) -> Any:
+    global _cucascade_engine
+    if _cucascade_engine is not None:
+        return _cucascade_engine
+    with _cucascade_engine_lock:
+        if _cucascade_engine is None:
+            kwargs: dict[str, Any] = {}
+            if pool_capacity is not None:
+                kwargs["pool_capacity"] = pool_capacity
+            if n_reactors is not None:
+                kwargs["n_reactors"] = n_reactors
+            if plc.io.SourceInfo._is_remote_uri(path):
+                # TODO: replace with cucascade.RestEngine.from_environment() once
+                # cuCascade exposes a factory that reads standard AWS env vars directly.
+                _cucascade_engine = cucascade.RestEngine(
+                    access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", ""),
+                    secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
+                    session_token=os.environ.get("AWS_SESSION_TOKEN", ""),
+                    region=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
+                    endpoint=os.environ.get("AWS_ENDPOINT_URL", ""),
+                    **kwargs,
+                )
+            else:
+                _cucascade_engine = cucascade.UringEngine(**kwargs)
+    return _cucascade_engine
+
+
 class HybridScanPrefetchExecutor:
     """
     Prefetch executor for SplitScan tasks.
@@ -424,29 +458,9 @@ class HybridScanPrefetchExecutor:
                     "prefetch_backend='cucascade' requires the cucascade package"
                 )
             first_path = scans[0].paths[0] if scans else ""
-            # TODO: replace with cucascade.RestEngine.from_environment() once
-            # cuCascade exposes a factory that reads standard AWS env vars directly.
-            if plc.io.SourceInfo._is_remote_uri(first_path):
-                kwargs = {}
-                if cucascade_pool_capacity is not None:
-                    kwargs["pool_capacity"] = cucascade_pool_capacity
-                if cucascade_n_reactors is not None:
-                    kwargs["n_reactors"] = cucascade_n_reactors
-                engine = cucascade.RestEngine(
-                    access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", ""),
-                    secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
-                    session_token=os.environ.get("AWS_SESSION_TOKEN", ""),
-                    region=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
-                    endpoint=os.environ.get("AWS_ENDPOINT_URL", ""),
-                    **kwargs,
-                )
-            else:
-                kwargs = {}
-                if cucascade_pool_capacity is not None:
-                    kwargs["pool_capacity"] = cucascade_pool_capacity
-                if cucascade_n_reactors is not None:
-                    kwargs["n_reactors"] = cucascade_n_reactors
-                engine = cucascade.UringEngine(**kwargs)
+            engine = _get_cucascade_engine(
+                first_path, cucascade_pool_capacity, cucascade_n_reactors
+            )
 
             _, dev_id = cudart.cudaGetDevice()
 
