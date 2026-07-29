@@ -2086,7 +2086,9 @@ def test_to_csv_compression_no_path_error():
         },
         {"a": [1]},
         {"a": []},
+        {},
         {"a": [1, None, 3], "b": ["x", None, "z"]},
+        {"a": [None, None]},
         # highly repetitive strings exercise a large compression ratio
         {"str_col": ["x" * 100] * 500},
     ],
