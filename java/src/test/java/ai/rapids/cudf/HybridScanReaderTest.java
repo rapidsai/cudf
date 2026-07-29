@@ -169,9 +169,9 @@ public class HybridScanReaderTest extends CudfTestBase {
   }
 
   /**
-   * Verifies that materializeFilterColumns(..., usePageLevelPruning=true) falls back 
-   * when invoked without a prior setupPageIndex() call; without page-statistics, 
-   * pruning is unavailable but filter column materialization is valid and still 
+   * Verifies that materializeFilterColumns(..., usePageLevelPruning=true) falls back
+   * when invoked without a prior setupPageIndex() call; without page-statistics,
+   * pruning is unavailable but filter column materialization is valid and still
    * evaluates the filter expression.
    */
   @Test
