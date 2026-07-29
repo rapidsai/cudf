@@ -62,6 +62,23 @@ def test_fixed_rolling_sum_over_casts_to_polars_dtype(
     assert_gpu_result_equal(q, engine=engine_raise_on_fail)
 
 
+def test_fixed_rolling_over_multiple_expressions_share_bounds(
+    engine_raise_on_fail: pl.GPUEngine,
+):
+    lf = pl.LazyFrame(
+        {
+            "g": ["A", "A", "A", "B", "B", "B"],
+            "x": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            "y": [10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
+        }
+    )
+    q = lf.select(
+        pl.col("x").rolling_sum(window_size=2).over("g").alias("x_sum"),
+        pl.col("y").rolling_mean(window_size=2).over("g").alias("y_mean"),
+    )
+    assert_gpu_result_equal(q, engine=engine_raise_on_fail)
+
+
 def test_fixed_rolling_in_groupby_raises(engine: pl.GPUEngine):
     q = (
         pl.LazyFrame({"g": ["A", "A", "B"], "x": [1.0, 2.0, 3.0]})

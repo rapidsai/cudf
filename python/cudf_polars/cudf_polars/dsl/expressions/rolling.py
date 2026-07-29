@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from functools import singledispatchmethod
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -657,13 +657,21 @@ class GroupedWindow(Expr):
         names: list[str] = []
         dtypes: list[DataType] = []
         tables: list[plc.Table] = []
-        sorted_position = plc.filling.sequence(
+        dense_index = plc.filling.sequence(
             df.num_rows,
             plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=df.stream),
             plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=df.stream),
             stream=df.stream,
         )
         group_keys = plc.Table([c.obj for c in op.by_cols_for_scan])
+
+        def get_window_key(ne: expr.NamedExpr) -> tuple[int, int]:
+            rolling_expr = ne.value
+            assert isinstance(rolling_expr, FixedSizeRollingWindow)
+            return rolling_expr.preceding, rolling_expr.following
+
+        window_counts = Counter(get_window_key(ne) for ne in op.named_exprs)
+        window_bounds_cache: dict[tuple[int, int], tuple[plc.Column, plc.Column]] = {}
 
         for ne in op.named_exprs:
             rolling_expr = ne.value
@@ -676,27 +684,40 @@ class GroupedWindow(Expr):
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
                 stream=df.stream,
             ).columns()[0]
-            preceding, following = plc.rolling.make_range_windows(
-                group_keys,
-                sorted_position,
-                plc.types.Order.ASCENDING,
-                plc.types.NullOrder.BEFORE,
-                plc.rolling.BoundedOpen(
-                    plc.Scalar.from_py(
-                        rolling_expr.preceding, plc.types.SIZE_TYPE, stream=df.stream
-                    )
-                ),
-                plc.rolling.BoundedClosed(
-                    plc.Scalar.from_py(
-                        rolling_expr.following, plc.types.SIZE_TYPE, stream=df.stream
-                    )
-                ),
-                stream=df.stream,
+
+            window_key = (rolling_expr.preceding, rolling_expr.following)
+            bounds: tuple[plc.Column, plc.Column] | None = window_bounds_cache.get(
+                window_key
             )
+            if bounds is None:
+                bounds = plc.rolling.make_range_windows(
+                    group_keys,
+                    dense_index,
+                    plc.types.Order.ASCENDING,
+                    plc.types.NullOrder.BEFORE,
+                    plc.rolling.BoundedOpen(
+                        plc.Scalar.from_py(
+                            rolling_expr.preceding,
+                            plc.types.SIZE_TYPE,
+                            stream=df.stream,
+                        )
+                    ),
+                    plc.rolling.BoundedClosed(
+                        plc.Scalar.from_py(
+                            rolling_expr.following,
+                            plc.types.SIZE_TYPE,
+                            stream=df.stream,
+                        )
+                    ),
+                    stream=df.stream,
+                )
+                if window_counts[window_key] > 1:
+                    window_bounds_cache[window_key] = bounds
+
             result = plc.rolling.rolling_window(
                 val_col,
-                preceding,
-                following,
+                bounds[0],
+                bounds[1],
                 rolling_expr.min_periods,
                 rolling_expr._agg_request,
                 stream=df.stream,
