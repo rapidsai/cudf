@@ -1492,7 +1492,6 @@ dependencies:
     common:
       - output_types: [conda, pyproject]
         packages:
-          # rapids-pre-commit-hooks: disable-next-line[verify-dependencies]
           - cudf_kafka==26.10.*,>=0.0.0a0
   depends_on_cupy:
     common:
