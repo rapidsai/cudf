@@ -818,6 +818,7 @@ add_library(
   src/io/parquet/writer_impl.cu
   src/io/parquet/writer_impl_helpers.cpp
   src/io/parquet/decode_fixed.cu
+  src/io/parquet/decode_pruned_pages.cu
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
   src/io/text/byte_range_info.cpp
@@ -854,7 +855,11 @@ add_library(
   src/join/filter_join_indices/filter_join_indices_output_size_kernel_null_complex.cu
   src/join/filter_join_indices/filter_join_indices_output_size_kernel_null_primitive.cu
   src/join/filter_join_indices/filter_join_indices_output_size_kernel_primitive.cu
-  src/join/filtered_join.cu
+  src/join/filtered_join/filtered_join.cu
+  src/join/filtered_join/filtered_join_flat.cu
+  src/join/filtered_join/filtered_join_nested.cu
+  src/join/filtered_join/filtered_join_nested_query.cu
+  src/join/filtered_join/filtered_join_primitive.cu
   src/join/hash_join/finalize_partitioned_full_join.cpp
   src/join/hash_join/full_join_match_context.cpp
   src/join/hash_join/full_join_retrieve.cu
@@ -1416,7 +1421,7 @@ if(CUDF_BUILD_TESTUTIL)
   )
 
   target_link_libraries(
-    cudftestutil INTERFACE $<BUILD_LOCAL_INTERFACE:cuco::cuco> Threads::Threads cudf
+    cudftestutil INTERFACE $<BUILD_LOCAL_INTERFACE:cuco::cuco> Threads::Threads cudf rmm::rmm
                            cudftest_default_stream $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 
