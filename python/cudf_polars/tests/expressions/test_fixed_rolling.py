@@ -9,10 +9,16 @@ import polars as pl
 from polars import polars as plrs  # type: ignore[attr-defined]
 from polars.testing import assert_frame_equal
 
+import pylibcudf as plc
+
+from cudf_polars.containers import DataFrame, DataType
+from cudf_polars.dsl import expr
+from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 pytestmark = pytest.mark.skipif(
     not hasattr(plrs._expr_nodes, "RollingFunction"),
@@ -38,7 +44,7 @@ def test_fixed_rolling_basic(df, engine: pl.GPUEngine, rolling_fn):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_fixed_rolling_mean_over_in_memory(engine_raise_on_fail: pl.GPUEngine):
+def test_fixed_rolling_mean_over_in_memory(in_memory_engine: pl.GPUEngine):
     lf = pl.LazyFrame(
         {
             "g": ["A", "A", "B", "A", "B", "B"],
@@ -49,11 +55,11 @@ def test_fixed_rolling_mean_over_in_memory(engine_raise_on_fail: pl.GPUEngine):
     q = lf.select(
         pl.col("val").rolling_mean(window_size=2).over("g", order_by="idx").alias("rm")
     )
-    assert_gpu_result_equal(q, engine=engine_raise_on_fail)
+    assert_gpu_result_equal(q, engine=in_memory_engine)
 
 
 def test_fixed_rolling_sum_over_casts_to_polars_dtype(
-    engine_raise_on_fail: pl.GPUEngine,
+    in_memory_engine: pl.GPUEngine,
 ):
     lf = pl.LazyFrame(
         {
@@ -62,11 +68,11 @@ def test_fixed_rolling_sum_over_casts_to_polars_dtype(
         }
     )
     q = lf.select(pl.col("x").rolling_sum(window_size=2).over("g").alias("rs"))
-    assert_gpu_result_equal(q, engine=engine_raise_on_fail)
+    assert_gpu_result_equal(q, engine=in_memory_engine)
 
 
 def test_fixed_rolling_over_multiple_expressions_share_bounds(
-    engine_raise_on_fail: pl.GPUEngine,
+    in_memory_engine: pl.GPUEngine,
 ):
     lf = pl.LazyFrame(
         {
@@ -79,7 +85,60 @@ def test_fixed_rolling_over_multiple_expressions_share_bounds(
         pl.col("x").rolling_sum(window_size=2).over("g").alias("x_sum"),
         pl.col("y").rolling_mean(window_size=2).over("g").alias("y_mean"),
     )
-    assert_gpu_result_equal(q, engine=engine_raise_on_fail)
+    assert_gpu_result_equal(q, engine=in_memory_engine)
+
+
+def test_fixed_rolling_over_reuses_bounds_for_same_window():
+    dtype = DataType(pl.Float64())
+    data = pl.DataFrame(
+        {
+            "g": ["A", "A", "A", "B", "B", "B"],
+            "x": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            "y": [10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
+        }
+    )
+    grouped_window = expr.GroupedWindow(
+        dtype,
+        ("groups_to_rows", False, False, False),
+        [
+            expr.NamedExpr(
+                "_x",
+                expr.FixedSizeRollingWindow(
+                    dtype, "mean", 2, 0, 2, (), expr.Col(dtype, "x")
+                ),
+            ),
+            expr.NamedExpr(
+                "_y",
+                expr.FixedSizeRollingWindow(
+                    dtype, "mean", 2, 0, 2, (), expr.Col(dtype, "y")
+                ),
+            ),
+        ],
+        expr.NamedExpr(
+            "out",
+            expr.BinOp(
+                dtype,
+                plc.binaryop.BinaryOperator.ADD,
+                expr.Col(dtype, "_x"),
+                expr.Col(dtype, "_y"),
+            ),
+        ),
+        1,
+        expr.Col(DataType(pl.String()), "g"),
+    )
+
+    stream = get_cuda_stream()
+    result = grouped_window.evaluate(
+        DataFrame.from_polars(data, stream=stream), context=ExecutionContext.FRAME
+    )
+    got = DataFrame([result.rename("out")], stream=stream).to_polars()
+    expected = data.lazy().select(
+        (
+            pl.col("x").rolling_mean(window_size=2).over("g")
+            + pl.col("y").rolling_mean(window_size=2).over("g")
+        ).alias("out")
+    )
+    assert_frame_equal(got, expected.collect())
 
 
 @pytest.mark.parametrize(
@@ -119,15 +178,15 @@ def test_fixed_rolling_over_multiple_expressions_share_bounds(
     ids=["empty", "all_null", "single_row_groups"],
 )
 def test_fixed_rolling_mean_over_edge_cases(
-    engine_raise_on_fail: pl.GPUEngine,
+    in_memory_engine: pl.GPUEngine,
     lf: pl.LazyFrame,
     expected: pl.DataFrame,
 ):
     q = lf.select(
         pl.col("val").rolling_mean(window_size=2).over("g", order_by="idx").alias("rm")
     )
-    assert_gpu_result_equal(q, engine=engine_raise_on_fail)
-    result = q.collect(engine=engine_raise_on_fail)
+    assert_gpu_result_equal(q, engine=in_memory_engine)
+    result = q.collect(engine=in_memory_engine)
     assert_frame_equal(result, expected)
 
 

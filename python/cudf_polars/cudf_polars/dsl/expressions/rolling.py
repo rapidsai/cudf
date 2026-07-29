@@ -685,7 +685,7 @@ class GroupedWindow(Expr):
                 stream=df.stream,
             ).columns()[0]
 
-            window_key = (rolling_expr.preceding, rolling_expr.following)
+            window_key = get_window_key(ne)
             bounds: tuple[plc.Column, plc.Column] | None = window_bounds_cache.get(
                 window_key
             )
