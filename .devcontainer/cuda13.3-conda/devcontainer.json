@@ -43,11 +43,11 @@
       "installnvJPEG": false,
       "pruneStaticLibs": true
     },
-    "ghcr.io/KyleFromNVIDIA/devcontainers/features/rapids-build-utils:specific-matrix-entries": {}
+    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:26.10": {}
   },
   "overrideFeatureInstallOrder": [
     "ghcr.io/rapidsai/devcontainers/features/cuda",
-    "ghcr.io/KyleFromNVIDIA/devcontainers/features/rapids-build-utils"
+    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils"
   ],
   "initializeCommand": [
     "/bin/bash",
