@@ -317,25 +317,6 @@ def engine(
 
 
 @pytest.fixture
-def engine_raise_on_fail() -> pl.GPUEngine:
-    """
-    Return a default :class:`polars.GPUEngine` with ``raise_on_fail=True``.
-
-    Returns
-    -------
-    In-memory engine configured to raise exceptions on failure.
-
-    Notes
-    -----
-    Intended for error-path tests that assert specific exceptions propagate
-    from ``.collect()``. Uses the in-memory executor so errors are not wrapped
-    by a streaming task group.
-    """
-    # TODO: We should be testing with all supported engine variants
-    return pl.GPUEngine(executor="in-memory", raise_on_fail=True)
-
-
-@pytest.fixture
 def timeout_seconds() -> int:
     """
     Conservative timeout for APIs that accept a timeout parameter.
