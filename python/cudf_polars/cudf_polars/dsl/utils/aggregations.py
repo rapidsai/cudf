@@ -27,9 +27,22 @@ if TYPE_CHECKING:
 __all__ = ["apply_pre_evaluation", "decompose_aggs", "decompose_single_agg"]
 
 
+_WINDOW_ONLY_UNARY_FUNCTIONS = frozenset(
+    {"rank", "fill_null_with_strategy", "cum_sum", "shift", "shift_and_fill"}
+)
+
+
 def _contains_fixed_size_rolling_window(value: expr.Expr) -> bool:
     return any(
         isinstance(node, expr.FixedSizeRollingWindow) for node in traversal([value])
+    )
+
+
+def _contains_window_only_unary(value: expr.Expr) -> bool:
+    return any(
+        isinstance(node, expr.UnaryFunction)
+        and node.name in _WINDOW_ONLY_UNARY_FUNCTIONS
+        for node in traversal([value])
     )
 
 
@@ -101,13 +114,7 @@ def decompose_single_agg(
     """
     agg = named_expr.value
     name = named_expr.name
-    if isinstance(agg, expr.UnaryFunction) and agg.name in {
-        "rank",
-        "fill_null_with_strategy",
-        "cum_sum",
-        "shift",
-        "shift_and_fill",
-    }:
+    if isinstance(agg, expr.UnaryFunction) and agg.name in _WINDOW_ONLY_UNARY_FUNCTIONS:
         if context != ExecutionContext.WINDOW:
             raise NotImplementedError(
                 f"{agg.name} is not supported in groupby or rolling context"
@@ -145,6 +152,11 @@ def decompose_single_agg(
         if context != ExecutionContext.WINDOW:
             raise NotImplementedError(
                 "Fixed-size rolling is not supported in groupby or rolling context"
+            )
+        if _contains_window_only_unary(agg.children[0]):
+            raise NotImplementedError(
+                "Fixed-size rolling over a window does not support nested "
+                "window-only unary expressions"
             )
         return [(named_expr, True)], named_expr.reconstruct(expr.Col(agg.dtype, name))
     if isinstance(agg, expr.UnaryFunction) and agg.name == "null_count":

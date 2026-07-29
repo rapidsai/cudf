@@ -167,6 +167,13 @@ def test_fixed_rolling_nested_under_unary_over_raises(
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
+def test_unary_window_nested_under_fixed_rolling_over_raises(engine: pl.GPUEngine):
+    q = pl.LazyFrame({"g": ["A", "A", "A"], "x": [1.0, 2.0, 3.0]}).select(
+        pl.col("x").rank().rolling_mean(window_size=2).over("g").alias("out")
+    )
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
 @pytest.mark.parametrize("window_size", [1, 2, 4, 8])
 def test_fixed_rolling_sum_window_sizes(df, engine: pl.GPUEngine, window_size):
     q = df.select(pl.col("x").rolling_sum(window_size=window_size))
