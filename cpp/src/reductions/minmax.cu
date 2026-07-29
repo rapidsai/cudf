@@ -23,7 +23,6 @@
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
 #include <cuda/std/utility>
-#include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform_reduce.h>
 
 #include <type_traits>
@@ -159,12 +158,12 @@ auto reduce_dictionary(column_view const& col, rmm::cuda_stream_view stream)
 {
   auto d_dictionary = column_device_view::create(col, stream);
   if (col.has_nulls()) {
-    auto pair_to_minmax = thrust::make_transform_iterator(
+    auto pair_to_minmax = cuda::make_transform_iterator(
       cudf::dictionary::detail::make_dictionary_pair_iterator<T>(*d_dictionary, true),
       create_minmax_with_nulls<T>{});
     return reduce_device(pair_to_minmax, col.size(), minmax_binary_op<T>{}, stream);
   } else {
-    auto col_to_minmax = thrust::make_transform_iterator(
+    auto col_to_minmax = cuda::make_transform_iterator(
       cudf::dictionary::detail::make_dictionary_iterator<T>(*d_dictionary), create_minmax<T>{});
     return reduce_device(col_to_minmax, col.size(), minmax_binary_op<T>{}, stream);
   }
@@ -242,12 +241,12 @@ struct minmax_functor {
     auto device_col = column_device_view::create(col, stream);
     // compute minimum and maximum values
     if (col.has_nulls()) {
-      auto pair_to_minmax = thrust::make_transform_iterator(
-        make_pair_iterator<T, true>(*device_col), create_minmax_with_nulls<T>{});
+      auto pair_to_minmax = cuda::make_transform_iterator(
+        cudf::detail::make_pair_iterator<T, true>(*device_col), create_minmax_with_nulls<T>{});
       return reduce_device(pair_to_minmax, col.size(), minmax_binary_op<T>{}, stream);
     } else {
       auto col_to_minmax =
-        thrust::make_transform_iterator(device_col->begin<T>(), create_minmax<T>{});
+        cuda::make_transform_iterator(device_col->begin<T>(), create_minmax<T>{});
       return reduce_device(col_to_minmax, col.size(), minmax_binary_op<T>{}, stream);
     }
   }
