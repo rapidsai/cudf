@@ -501,8 +501,19 @@ _CROSS_RANK_KEYS = [
         (pl.col("x").sum().over("g").alias("result"), "sum"),
         (pl.col("x").rank(method="dense").over("g").alias("result"), "rank"),
         (pl.col("x").shift(1).over("g", order_by="x").alias("result"), "shift"),
+        pytest.param(
+            pl.col("x")
+            .rolling_mean(window_size=2)
+            .over("g", order_by="x")
+            .alias("result"),
+            "rolling",
+            marks=pytest.mark.skipif(
+                not hasattr(plrs._expr_nodes, "RollingFunction"),
+                reason="RollingFunction not available in this polars version",
+            ),
+        ),
     ],
-    ids=["scalar_sum", "nonscalar_rank", "nonscalar_shift"],
+    ids=["scalar_sum", "nonscalar_rank", "nonscalar_shift", "nonscalar_rolling"],
 )
 @pytest.mark.parametrize(
     "cross_rank",
@@ -561,8 +572,13 @@ def test_over_multirank(
                 assert grp["result"].to_list() == [sum(expected_xs)] * 3
             elif expected == "rank":
                 assert grp["result"].to_list() == [1, 2, 3]
-            else:
+            elif expected == "shift":
                 assert grp["result"].to_list() == [None, *expected_xs[:-1]]
+            else:
+                assert grp["result"].to_list() == [
+                    None,
+                    *((left + right) / 2 for left, right in pairwise(expected_xs)),
+                ]
 
 
 @pytest.mark.parametrize(
