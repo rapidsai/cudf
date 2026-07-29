@@ -80,7 +80,7 @@ PYTHON_ARGS_FOR_INSTALL=(
     --no-build-isolation
     --no-deps
     --config-settings="rapidsai.disable-cuda=true"
-    --config-settings="rapidsai.matrix-entry=use_cuda_wheels=false"
+    --config-settings="rapidsai.matrix-entry=cuda=${RAPIDS_CUDA_VERSION};use_cuda_wheels=false"
 )
 
 # Set defaults for vars that may not have been defined externally
