@@ -45,7 +45,7 @@ dependencies:
 - libcufile-dev
 - libcurand-dev
 - libkvikio==26.8.*,>=0.0.0a0
-- libnvcomp-dev==5.2.0.10
+- libnvcomp-dev==5.3.0.16
 - libnvjitlink-dev
 - librapidsmpf==26.8.*,>=0.0.0a0
 - librdkafka<2.15.0a0
