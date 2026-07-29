@@ -41,8 +41,8 @@ import java.util.Arrays;
  * <p>The filter and payload materialization paths accept a boolean that toggles
  * page-level pruning: skips decode of pages the filter (or row mask) proves empty, in
  * exchange for a per-page stats scan and a carried row-mask column. Enable when the
- * workload prunes many pages; on the filter path this requires prior
- * {@link #setupPageIndex(HostMemoryBuffer)}.
+ * workload prunes many pages; requires prior {@link #setupPageIndex(HostMemoryBuffer)} to
+ * provide page-level statistics and avoid falling back to ordinary filtering and decoding.
  *
  * <p>The reader is created with no filter expression installed. Filter-related APIs
  * behave as though nothing has been filtered out unless a filter is first supplied via
@@ -197,8 +197,9 @@ public class HybridScanReader implements AutoCloseable {
 
   /**
    * Materialize the {@code ColumnIndex} / {@code OffsetIndex} structs (collectively, the page
-   * index) from the supplied bytes. Required before any filter or payload materialization
-   * call with {@code usePageLevelPruning == true}.
+   * index) from the supplied bytes. Required before any filter or payload column materialization
+   * with {@code usePageLevelPruning == true} to provide page-level statistics and avoid the
+   * fallback path.
    *
    * @param pageIndexBuffer host-resident page index bytes
    */
@@ -336,7 +337,8 @@ public class HybridScanReader implements AutoCloseable {
    * together as a {@link FilterMaterializationResult}; close it via try-with-resources.
    *
    * <p>Set {@code usePageLevelPruning = true} to skip decompression and decode of pages
-   * the filter proves empty. Requires prior {@link #setupPageIndex(HostMemoryBuffer)}.
+   * the filter proves empty. Requires prior {@link #setupPageIndex(HostMemoryBuffer)} to avoid
+   * fall back path
    *
    * <p>Cost: a per-page stats scan of filter columns and a carried row-mask column.
    * Payoff: pruned pages are skipped entirely, typically the dominant read cost. Enable
@@ -346,8 +348,8 @@ public class HybridScanReader implements AutoCloseable {
    * @param columnChunkData        device buffers holding the filter column chunks, in the
    *                               order returned by {@link #filterColumnChunksByteRanges(int[])}
    * @param usePageLevelPruning    seed the row mask from page-index stats and enable the
-   *                               data page mask; requires prior
-   *                               {@link #setupPageIndex(HostMemoryBuffer)}
+   *                               data page mask; requires prior {@link #setupPageIndex(HostMemoryBuffer)}
+   *                               to avoid the fallback path
    * @return combined filter table and mutated row mask; caller must close this result
    */
   public FilterMaterializationResult materializeFilterColumns(int[] rowGroupIndices,
@@ -383,7 +385,7 @@ public class HybridScanReader implements AutoCloseable {
    * @param rowMask          row mask (read-only)
    * @param usePageLevelPruning  enable the data page mask to skip decode of pages the row
    *                             mask proves empty; requires prior
-   *                             {@link #setupPageIndex(HostMemoryBuffer)}
+   *                             {@link #setupPageIndex(HostMemoryBuffer)} to avoid fall back path
    * @return the materialized payload column table
    */
   public Table materializePayloadColumns(int[] rowGroupIndices,
@@ -432,7 +434,8 @@ public class HybridScanReader implements AutoCloseable {
    * {@link #materializePayloadColumns(int[], DeviceMemoryBuffer[], ColumnVector, boolean)}).
    *
    * <p>Set {@code usePageLevelPruning = true} to skip decompression and decode of pages
-   * the filter proves empty. Requires prior {@link #setupPageIndex(HostMemoryBuffer)}.
+   * the filter proves empty. Requires prior {@link #setupPageIndex(HostMemoryBuffer)} to avoid
+   * fall back path
    *
    * <p>Cost: a per-page stats scan of filter columns and a carried row-mask column.
    * Payoff: pruned pages are skipped entirely, typically the dominant read cost. Enable
@@ -457,8 +460,8 @@ public class HybridScanReader implements AutoCloseable {
    *                               issue a separate chunked run per returned partition.
    * @param rowGroupIndices        row groups to read
    * @param usePageLevelPruning    seed the row mask from page-index stats and enable the
-   *                               data page mask; requires prior
-   *                               {@link #setupPageIndex(HostMemoryBuffer)}
+   *                               data page mask when index metadata is available; requires prior
+   *                               {@link #setupPageIndex(HostMemoryBuffer)} to avoid fall back path
    * @param columnChunkData        device buffers holding the filter column chunks, in the
    *                               order returned by {@link #filterColumnChunksByteRanges(int[])}
    */
@@ -530,7 +533,7 @@ public class HybridScanReader implements AutoCloseable {
    * @param rowMask          row mask (read-only)
    * @param usePageLevelPruning  enable the data page mask to skip decode of pages the row
    *                             mask proves empty; requires prior
-   *                             {@link #setupPageIndex(HostMemoryBuffer)}
+   *                             {@link #setupPageIndex(HostMemoryBuffer)} to avoid fall back path
    * @param columnChunkData  device buffers holding the payload column chunks, in the order
    *                         returned by {@link #payloadColumnChunksByteRanges(int[])}
    */
