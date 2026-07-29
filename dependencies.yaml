@@ -8,7 +8,6 @@ files:
     matrix:
       cuda: ["12.9", "13.3"]
       arch: [x86_64, aarch64]
-      use_cuda_wheels: ["true"]
     includes:
       - build_base
       - build_all
@@ -204,6 +203,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/cudf
     extras:
       table: build-system
@@ -213,6 +213,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/cudf
     extras:
       table: tool.rapids-build-backend
@@ -229,6 +230,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/cudf
     extras:
       table: project
@@ -248,6 +250,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/cudf
     extras:
       table: project.optional-dependencies
@@ -262,6 +265,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/libcudf
     extras:
       table: build-system
@@ -271,6 +275,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/libcudf
     extras:
       table: tool.rapids-build-backend
@@ -287,6 +292,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/libcudf
     extras:
       table: project
@@ -300,6 +306,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/pylibcudf
     extras:
       table: build-system
@@ -309,6 +316,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/pylibcudf
     extras:
       table: tool.rapids-build-backend
@@ -323,6 +331,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/pylibcudf
     extras:
       table: project
@@ -335,6 +344,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/pylibcudf
     extras:
       table: project.optional-dependencies
@@ -345,6 +355,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/pylibcudf
     extras:
       table: project.optional-dependencies
@@ -355,6 +366,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/pylibcudf
     extras:
       table: project.optional-dependencies
@@ -370,6 +382,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/cudf
     extras:
       table: project.optional-dependencies
@@ -380,6 +393,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/cudf
     extras:
       table: project.optional-dependencies
@@ -390,6 +404,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/cudf_polars
     extras:
       table: build-system
@@ -399,6 +414,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/cudf_polars
     extras:
       table: project
@@ -413,6 +429,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/cudf_polars
     extras:
       table: project.optional-dependencies
@@ -423,6 +440,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/cudf_polars
     extras:
       table: project.optional-dependencies
@@ -433,6 +451,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/cudf_polars
     extras:
       table: project.optional-dependencies
@@ -443,6 +462,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/cudf_polars
     extras:
       table: project.optional-dependencies
@@ -457,6 +477,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/cudf_polars
     extras:
       table: project.optional-dependencies
@@ -467,6 +488,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/dask_cudf
     extras:
       table: build-system
@@ -476,6 +498,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/dask_cudf
     extras:
       table: project
@@ -489,6 +512,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/dask_cudf
     extras:
       table: project.optional-dependencies
@@ -504,6 +528,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/cudf_kafka
     extras:
       table: build-system
@@ -513,6 +538,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/cudf_kafka
     extras:
       table: tool.rapids-build-backend
@@ -524,6 +550,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/cudf_kafka
     extras:
       table: project
@@ -533,6 +560,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/cudf_kafka
     extras:
       table: project.optional-dependencies
@@ -544,6 +572,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/custreamz
     extras:
       table: build-system
@@ -553,6 +582,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/custreamz
     extras:
       table: project
@@ -564,6 +594,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/custreamz
     extras:
       table: project.optional-dependencies
@@ -575,6 +606,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/libcudf_streaming
     extras:
       table: build-system
@@ -584,6 +616,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/libcudf_streaming
     extras:
       table: tool.rapids-build-backend
@@ -599,6 +632,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/libcudf_streaming
     extras:
       table: project
@@ -610,6 +644,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/cudf_streaming
     extras:
       table: build-system
@@ -619,6 +654,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/cudf_streaming
     extras:
       table: tool.rapids-build-backend
@@ -639,6 +675,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/cudf_streaming
     extras:
       table: project
@@ -651,6 +688,7 @@ files:
     output: pyproject
     matrix:
       use_cuda_wheels: ["true"]
+      cuda_suffixed: ["false"]
     pyproject_dir: python/cudf_streaming
     extras:
       table: project.optional-dependencies
