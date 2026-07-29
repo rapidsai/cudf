@@ -56,7 +56,7 @@ jobs:
     permissions:
       actions: read
       contents: read
-    uses: paul-aiyedun/rapidsai-shared-workflows/.github/workflows/maven-publish.yaml@paul/add_maven_publish_workflow
+    uses: paul-aiyedun/rapidsai-shared-workflows/.github/workflows/maven-publish.yaml@paul/add_maven_publish_workflow  # zizmor: ignore[unpinned-uses] temporary rehearsal only
     secrets:
       GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
       GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
