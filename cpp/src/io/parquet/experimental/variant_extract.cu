@@ -16,6 +16,7 @@
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/experimental/variant.hpp>
+#include <cudf/io/experimental/variant_spec.hpp>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
@@ -33,6 +34,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/numeric>
 #include <cuda/std/cstring>
 #include <cuda/std/limits>
 #include <cuda/std/optional>
@@ -54,32 +56,10 @@ constexpr int variant_version_v1 = 1;
 constexpr size_type variant_header_bytes = 1;
 
 // Low 2 bits of a value's metadata byte: the basic type.
-enum class basic_type : uint8_t { primitive = 0, short_string = 1, object = 2, array = 3 };
+using basic_type = variant_basic_type;
 
 // For a primitive value, the value_header is the physical type id of the payload.
-enum class primitive_type : uint8_t {
-  null                 = 0,
-  boolean_true         = 1,
-  boolean_false        = 2,
-  int8                 = 3,
-  int16                = 4,
-  int32                = 5,
-  int64                = 6,
-  float64              = 7,
-  decimal4             = 8,
-  decimal8             = 9,
-  decimal16            = 10,
-  date                 = 11,
-  timestamp_micros     = 12,
-  timestamp_ntz_micros = 13,
-  float32              = 14,
-  binary               = 15,
-  long_string          = 16,
-  time_ntz_micros      = 17,
-  timestamp_nanos      = 18,
-  timestamp_ntz_nanos  = 19,
-  uuid                 = 20,
-};
+using primitive_type = variant_primitive_type;
 
 __device__ cuda::std::optional<uint64_t> read_uint64(device_span<uint8_t const> data,
                                                      size_type pos,
@@ -101,7 +81,7 @@ __device__ cuda::std::optional<size_type> narrow_cast(cuda::std::optional<uint64
   return static_cast<size_type>(value.value());
 }
 
-__device__ basic_type variant_basic_type(uint8_t value_metadata)
+__device__ basic_type decode_basic_type(uint8_t value_metadata)
 {
   return static_cast<basic_type>(value_metadata & 0x03);
 }
@@ -165,34 +145,34 @@ __device__ cuda::std::optional<uint64_t> variant_value_length(device_span<uint8_
 {
   if (enc.size() < 1) { return cuda::std::nullopt; }
   auto const value_metadata = enc[0];
-  auto const btype          = variant_basic_type(value_metadata);
+  auto const btype          = decode_basic_type(value_metadata);
   auto const value_header   = variant_value_header(value_metadata);
 
-  if (btype == basic_type::primitive) {
+  if (btype == basic_type::PRIMITIVE) {
     // The leading header byte plus a payload keyed by the physical type id
     uint64_t payload = 0;
     switch (static_cast<primitive_type>(value_header)) {
-      case primitive_type::null:
-      case primitive_type::boolean_true:
-      case primitive_type::boolean_false: break;  // no payload
-      case primitive_type::int8: payload = 1; break;
-      case primitive_type::int16: payload = 2; break;
-      case primitive_type::int32:
-      case primitive_type::date:
-      case primitive_type::float32: payload = 4; break;
-      case primitive_type::int64:
-      case primitive_type::float64:
-      case primitive_type::timestamp_micros:
-      case primitive_type::timestamp_ntz_micros:
-      case primitive_type::time_ntz_micros:
-      case primitive_type::timestamp_nanos:
-      case primitive_type::timestamp_ntz_nanos: payload = 8; break;
-      case primitive_type::decimal4: payload = 1 + 4; break;    // scale + int32
-      case primitive_type::decimal8: payload = 1 + 8; break;    // scale + int64
-      case primitive_type::decimal16: payload = 1 + 16; break;  // scale + int128
-      case primitive_type::uuid: payload = 16; break;
-      case primitive_type::binary:
-      case primitive_type::long_string: {
+      case primitive_type::NULLVAL:
+      case primitive_type::BOOLEAN_TRUE:
+      case primitive_type::BOOLEAN_FALSE: break;  // no payload
+      case primitive_type::INT8: payload = 1; break;
+      case primitive_type::INT16: payload = 2; break;
+      case primitive_type::INT32:
+      case primitive_type::DATE:
+      case primitive_type::FLOAT32: payload = 4; break;
+      case primitive_type::INT64:
+      case primitive_type::FLOAT64:
+      case primitive_type::TIMESTAMP_MICROS:
+      case primitive_type::TIMESTAMP_NTZ_MICROS:
+      case primitive_type::TIME_NTZ_MICROS:
+      case primitive_type::TIMESTAMP_NANOS:
+      case primitive_type::TIMESTAMP_NTZ_NANOS: payload = 8; break;
+      case primitive_type::DECIMAL4: payload = 1 + 4; break;    // scale + int32
+      case primitive_type::DECIMAL8: payload = 1 + 8; break;    // scale + int64
+      case primitive_type::DECIMAL16: payload = 1 + 16; break;  // scale + int128
+      case primitive_type::UUID: payload = 16; break;
+      case primitive_type::BINARY:
+      case primitive_type::LONG_STRING: {
         constexpr int length_prefix_bytes = 4;
         auto const len = read_uint64(enc, variant_header_bytes, length_prefix_bytes);
         if (!len.has_value()) { return cuda::std::nullopt; }
@@ -204,14 +184,14 @@ __device__ cuda::std::optional<uint64_t> variant_value_length(device_span<uint8_
     return variant_header_bytes + payload;
   }
 
-  if (btype == basic_type::short_string) {
+  if (btype == basic_type::SHORT_STRING) {
     // The value header is the payload length, following the header byte.
     return variant_header_bytes + static_cast<uint64_t>(value_header);
   }
 
   // Object / array: the encoded size is the header bytes (metadata byte, element count, optional
   // field-id list, and offset list)
-  bool const is_object = btype == basic_type::object;
+  bool const is_object = btype == basic_type::OBJECT;
   auto const [offset_size, id_size, num_elements_size] =
     decode_object_array_header(value_header, is_object);
 
@@ -266,7 +246,7 @@ __device__ cuda::std::optional<size_type> find_key_in_metadata(device_span<uint8
 
   auto const offsets_start = pos;
   auto const offsets_bytes = (static_cast<uint64_t>(num_entries.value()) + 1) * offset_size;
-  if (offsets_bytes > static_cast<uint64_t>(meta_len - offsets_start)) {
+  if (cuda::std::cmp_greater(offsets_bytes, meta_len - offsets_start)) {
     return cuda::std::nullopt;
   }
 
@@ -321,7 +301,7 @@ __device__ device_span<uint8_t const> locate_object_field(device_span<uint8_t co
   auto const val_len = static_cast<size_type>(val.size());
   if (val_len < 1) { return {}; }
   auto const value_metadata = val[0];
-  if (variant_basic_type(value_metadata) != basic_type::object) { return {}; }
+  if (decode_basic_type(value_metadata) != basic_type::OBJECT) { return {}; }
 
   auto const [offset_size, id_size, num_elements_size] =
     decode_object_array_header(variant_value_header(value_metadata), true);
@@ -369,50 +349,171 @@ __device__ device_span<uint8_t const> locate_object_field(device_span<uint8_t co
   return val.subspan(values_base + match_start, value_len.value());
 }
 
+// Parse an array value header and return the sub-span of the element at `index` (0-based) within
+// `val`. Returns an empty span if `val` is not an array (`basic_type != array`), if `index` is out
+// of bounds, or if the encoded data is truncated.
+//
+// Array layout per the Variant spec:
+//   byte 0: header (basic_type=array in low 2 bits; value_header in high 6 bits)
+//     value_header bits: (offset_size - 1) in bits 0-1, is_large in bit 2, bits 3-5 unused
+//   num_elements: 1 byte if !is_large else 4 bytes (little-endian)
+//   offsets:      (num_elements + 1) entries, each `offset_size` bytes, relative to the end of
+//                 offsets
+//   values:       concatenated element blobs
+//
+// Array element offsets are monotonically increasing, so the element length is taken directly from
+// the offset delta (o1 - o0) rather than from the element's own header.
+__device__ device_span<uint8_t const> locate_array_element(device_span<uint8_t const> value,
+                                                           size_type index)
+{
+  if (index < 0) { return {}; }
+
+  auto const value_size = static_cast<size_type>(value.size());
+  if (value_size < 1) { return {}; }
+  uint8_t const value_metadata = value[0];
+  if (decode_basic_type(value_metadata) != basic_type::ARRAY) { return {}; }
+
+  int const value_header = variant_value_header(value_metadata);
+  [[maybe_unused]] auto const [offset_size, _, num_elements_size] =
+    decode_object_array_header(value_header, false);
+
+  size_type position            = 1;
+  auto const num_elements_value = narrow_cast(read_uint64(value, position, num_elements_size));
+  if (!num_elements_value.has_value()) { return {}; }
+  auto const num_elements = num_elements_value.value();
+  if (index >= num_elements) { return {}; }
+  position += num_elements_size;
+
+  size_type const offsets_start = position;
+  // Computed in 64-bit because (num_elements + 1) * offset_size can exceed the signed `size_type`
+  // range (which would be UB); the check below then rejects any array that overruns the value blob.
+  auto const offsets_bytes = (static_cast<uint64_t>(num_elements) + 1) * offset_size;
+  if (cuda::std::cmp_greater(offsets_bytes, value_size - offsets_start)) { return {}; }
+  size_type const values_base = offsets_start + static_cast<size_type>(offsets_bytes);
+  auto const values_extent    = value_size - values_base;
+
+  auto const start_offset_pos = offsets_start + static_cast<uint64_t>(index) * offset_size;
+  auto const end_offset_pos   = offsets_start + (static_cast<uint64_t>(index) + 1) * offset_size;
+  if (cuda::std::cmp_greater(end_offset_pos + offset_size, value_size)) { return {}; }
+
+  auto const start_offset = read_uint64(value, start_offset_pos, offset_size);
+  auto const end_offset   = read_uint64(value, end_offset_pos, offset_size);
+  if (!start_offset.has_value() || !end_offset.has_value()) { return {}; }
+  auto const element_start = *start_offset;
+  auto const element_end   = *end_offset;
+  if (element_end < element_start || cuda::std::cmp_greater(element_end, values_extent)) {
+    return {};
+  }
+  return value.subspan(values_base + element_start, element_end - element_start);
+}
+
 // The fixed-width signed integers a VARIANT value can be cast to: INT{8,16,32,64}.  Matches the
 // exact width types (not e.g. __int128) since those are the only variant primitive int headers.
 template <typename T>
 constexpr bool is_variant_int =
-  cuda::std::is_same_v<T, int8_t> || cuda::std::is_same_v<T, int16_t> ||
-  cuda::std::is_same_v<T, int32_t> || cuda::std::is_same_v<T, int64_t>;
+  cudf::is_integral_not_bool<T>() && cudf::is_signed<T>() && !cuda::std::is_same_v<T, __int128_t>;
 
-// The output types a VARIANT value can be cast to: the fixed-width signed integers plus strings.
+// The fixed-width primitive types (signed integers and floats) a VARIANT value can be decoded into.
+template <typename T>
+constexpr bool is_variant_primitive = is_variant_int<T> || cudf::is_floating_point<T>();
+
+// The output types a VARIANT value can be cast to: the fixed-width signed integers, floats, and
+// strings.
 template <typename T>
 constexpr bool is_variant_castable =
-  is_variant_int<T> || cuda::std::is_same_v<T, cudf::string_view>;
+  is_variant_primitive<T> || cuda::std::is_same_v<T, cudf::string_view>;
 
-// Variant primitive ints: basic_type == primitive, value_header maps INT{8,16,32,64}.
+// Maps a fixed-width output type to the VARIANT primitive type header id that encodes it.
 template <typename T>
-__device__ inline cuda::std::optional<T> decode_int(device_span<uint8_t const> enc)
+  requires(is_variant_primitive<T>)
+__device__ constexpr primitive_type primitive_type_for()
 {
-  static_assert(is_variant_int<T>, "decode_int: T must be int8_t, int16_t, int32_t, or int64_t");
+  if constexpr (cuda::std::is_same_v<T, int8_t>) {
+    return primitive_type::INT8;
+  } else if constexpr (cuda::std::is_same_v<T, int16_t>) {
+    return primitive_type::INT16;
+  } else if constexpr (cuda::std::is_same_v<T, int32_t>) {
+    return primitive_type::INT32;
+  } else if constexpr (cuda::std::is_same_v<T, int64_t>) {
+    return primitive_type::INT64;
+  } else if constexpr (cuda::std::is_same_v<T, float>) {
+    return primitive_type::FLOAT32;
+  } else if constexpr (cuda::std::is_same_v<T, double>) {
+    return primitive_type::FLOAT64;
+  } else {
+    CUDF_UNREACHABLE("primitive_type_for: T is not a supported variant primitive type");
+    return primitive_type::NULLVAL;
+  }
+}
 
+/**
+ * @brief Decode a single VARIANT value blob into a fixed-width primitive of type `T`.
+ *
+ * Requires `basic_type == primitive` and a value header whose physical type id matches `T` exactly.
+ */
+template <typename T>
+__device__ inline cuda::std::optional<T> decode_primitive(device_span<uint8_t const> enc)
+{
   if (cuda::std::cmp_less(enc.size(), 1 + sizeof(T))) { return cuda::std::nullopt; }
 
-  constexpr primitive_type expected = cuda::std::is_same_v<T, int8_t>    ? primitive_type::int8
-                                      : cuda::std::is_same_v<T, int16_t> ? primitive_type::int16
-                                      : cuda::std::is_same_v<T, int32_t> ? primitive_type::int32
-                                                                         : primitive_type::int64;
-  uint8_t const value_metadata      = enc[0];
-  if (variant_basic_type(value_metadata) != basic_type::primitive ||
-      variant_value_header(value_metadata) != static_cast<uint8_t>(expected)) {
+  uint8_t const value_metadata = enc[0];
+  if (decode_basic_type(value_metadata) != basic_type::PRIMITIVE ||
+      variant_value_header(value_metadata) != static_cast<uint8_t>(primitive_type_for<T>())) {
     return cuda::std::nullopt;
   }
   return cudf::io::unaligned_load<T>(enc.data() + 1);
 }
 
+// Parse an array-index step token of the form "[<N>]" into its zero-based index. Returns nullopt
+// for any malformed token or an index that does not fit in `size_type` (such an index is out of
+// range for any array, so the caller treats it as a missing element).
+__device__ cuda::std::optional<size_type> parse_index_step(cudf::string_view step)
+{
+  auto const step_size  = step.size_bytes();
+  auto const* step_data = step.data();
+  if (step_size < 3 || step_data[0] != '[' || step_data[step_size - 1] != ']') {
+    return cuda::std::nullopt;
+  }
+
+  // Accumulate directly in `size_type`; the checked-arithmetic helpers reject the token if the
+  // running value overflows, which means the index is out of range for any array and the caller
+  // treats it as a missing element.
+  size_type index = 0;
+  for (size_type k = 1; k < step_size - 1; ++k) {
+    char const c = step_data[k];
+    if (c < '0' || c > '9') { return cuda::std::nullopt; }
+    if (cuda::mul_overflow(index, index, size_type{10}) ||
+        cuda::add_overflow(index, index, static_cast<size_type>(c - '0'))) {
+      return cuda::std::nullopt;
+    }
+  }
+  return index;
+}
+
+// Walk a path of object-key or array-index steps level by level starting at `val` and return
+// the span of the final value (subspan of `val`). Returns an empty span on failure.
+//
+// Each path step is encoded in the `path` strings column as either:
+//   - "<name>"  -> descend into an object by dictionary key, or
+//   - "[<N>]"   -> descend into an array by zero-based integer index.
+// The step kind is inferred from the first byte (`'['` means index).
 __device__ device_span<uint8_t const> resolve_path(device_span<uint8_t const> meta,
                                                    device_span<uint8_t const> val,
                                                    column_device_view path)
 {
   device_span<uint8_t const> sub_val = val;
   for (size_type i = 0; i < path.size(); ++i) {
-    auto const name = path.element<cudf::string_view>(i);
+    auto const step = path.element<cudf::string_view>(i);
 
-    auto const field_id = find_key_in_metadata(meta, name);
-    if (!field_id.has_value()) { return {}; }
-
-    sub_val = locate_object_field(sub_val, field_id.value());
+    if (step.size_bytes() >= 1 && step.data()[0] == '[') {
+      auto const index = parse_index_step(step);
+      if (!index.has_value()) { return {}; }
+      sub_val = locate_array_element(sub_val, index.value());
+    } else {
+      auto const field_id = find_key_in_metadata(meta, step);
+      if (!field_id.has_value()) { return {}; }
+      sub_val = locate_object_field(sub_val, field_id.value());
+    }
     if (sub_val.empty()) { return {}; }
   }
   return sub_val;
@@ -424,17 +525,17 @@ __device__ cuda::std::optional<device_span<uint8_t const>> decode_string(
   auto const len = enc.size();
   if (len < 1) { return cuda::std::nullopt; }
   uint8_t const value_metadata = enc[0];
-  auto const btype             = variant_basic_type(value_metadata);
+  auto const btype             = decode_basic_type(value_metadata);
   auto const value_header      = variant_value_header(value_metadata);
 
-  if (btype == basic_type::short_string) {
+  if (btype == basic_type::SHORT_STRING) {
     // Short string: value_header = length
     std::size_t const str_len = value_header;
     if (1 + str_len > len) { return cuda::std::nullopt; }
     return enc.subspan(1, str_len);
   }
-  if (btype == basic_type::primitive &&
-      value_header == static_cast<uint8_t>(primitive_type::long_string)) {
+  if (btype == basic_type::PRIMITIVE &&
+      value_header == static_cast<uint8_t>(primitive_type::LONG_STRING)) {
     // Long string: 1-byte header + 4-byte LE length + char bytes
     constexpr std::size_t long_string_prefix_bytes = 1 + sizeof(uint32_t);
     if (len < long_string_prefix_bytes) { return cuda::std::nullopt; }
@@ -506,15 +607,16 @@ CUDF_KERNEL __launch_bounds__(block_size) void locate_variant_fields_kernel(
 }
 
 /**
- * @brief Per-row kernel: decode each VARIANT value blob into an integer of type `T`.
+ * @brief Per-row kernel: decode each VARIANT value blob into a fixed-width primitive of type `T`.
  *
  * Writes the decoded value to `d_output[row]` for non-null rows whose blob is a variant primitive
- * int whose physical type id matches `T` exactly (e.g. an int16 value does not decode into an
- * int32 output; there is no widening). Rows that are null, or whose value is not an exact-width
- * match for `T`, are marked null in `d_null_mask` with an output of 0.
+ * whose physical type id matches `T` exactly (e.g. an int16 value does not decode into an int32
+ * output, and a float32 value does not decode into a float64 output; there is no widening). Rows
+ * that are null, or whose value is not an exact-width match for `T`, are marked null in
+ * `d_null_mask` with an output of 0.
  */
 template <typename T>
-CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_int_kernel(
+CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_primitive_kernel(
   cudf::lists_column_device_view values, device_span<T> d_output, bitmask_type* d_null_mask)
 {
   auto const num_rows = static_cast<size_type>(d_output.size());
@@ -533,7 +635,7 @@ CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_int_kernel(
     device_span<uint8_t const> const val{val_child.data<uint8_t>() + val_begin,
                                          static_cast<std::size_t>(val_end - val_begin)};
 
-    auto const decoded = decode_int<T>(val);
+    auto const decoded = decode_primitive<T>(val);
     if (decoded.has_value()) {
       d_output[row] = *decoded;
     } else {
@@ -607,12 +709,12 @@ struct cast_variant_fn {
 
   template <typename T>
   std::unique_ptr<column> operator()()
-    requires(is_variant_int<T>)
+    requires(is_variant_primitive<T>)
   {
     rmm::device_buffer data{num_rows * sizeof(T), stream, mr};
 
     auto grid = cudf::detail::grid_1d{num_rows, block_size};
-    cast_variant_int_kernel<T><<<grid.num_blocks, block_size, 0, stream.value()>>>(
+    cast_variant_primitive_kernel<T><<<grid.num_blocks, block_size, 0, stream.value()>>>(
       values, {static_cast<T*>(data.data()), static_cast<std::size_t>(num_rows)}, d_null_mask);
     CUDF_CUDA_TRY(cudaGetLastError());
 
