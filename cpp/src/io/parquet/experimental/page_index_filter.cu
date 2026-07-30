@@ -897,14 +897,12 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
   }
 
   // We need both column and offset indexes to be present for each participating column.
-  if (auto const [has_column_index, has_offset_index] =
-        page_index_presence(row_group_indices, stats_column_schemas);
-      not(has_column_index and has_offset_index)) {
-    CUDF_LOG_WARN(
-      "Encountered missing Parquet column or offset index for one or more "
-      "page-statistics filter columns; skipping page-statistics pruning");
-    return build_all_true_row_mask(row_group_indices, stream, mr);
-  }
+  auto const [has_column_index, has_offset_index] =
+    page_index_presence(row_group_indices, stats_column_schemas);
+  CUDF_EXPECTS(has_column_index and has_offset_index,
+               "Filter column page pruning using page-statistics requires both column and "
+               "offset indexes to be present",
+               std::runtime_error);
 
   // Optimization for single column filter: Directly build the row mask from page statistics
   if (num_columns == 1) {

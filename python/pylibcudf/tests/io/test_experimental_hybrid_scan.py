@@ -717,7 +717,7 @@ def test_hybrid_scan_metadata_with_page_index(
     """Test that page index setup enables page-level filtering.
 
     This test mirrors the C++ page-index filter tests. It verifies that:
-    1. Before setup_page_index(), page-statistics pruning falls back to all-true row mask
+    1. Before setup_page_index(), filter column page pruning using page-statistics will fail
     2. After fetching page index bytes and calling setup_page_index(),
        the page index is available and page-level operations work correctly
     """
@@ -745,17 +745,17 @@ def test_hybrid_scan_metadata_with_page_index(
     )
     assert len(all_row_groups) > 0
 
-    # Missing page indexes disable page-statistics pruning and falls back to an
-    # all-true row mask (no error).
-    row_mask_before = (
+    # Try to use build_row_mask_with_page_index_stats BEFORE setup_page_index
+    # This should raise an error because column and offset indexes are not set up yet
+    try:
         simple_hybrid_scan_reader.build_row_mask_with_page_index_stats(
             all_row_groups, simple_parquet_options
         )
-    )
-    assert row_mask_before is not None
-    assert row_mask_before.size() == num_rows
-    assert row_mask_before.type().id() == plc.types.TypeId.BOOL8
-    assert all(row_mask_before.to_arrow().to_pylist())
+        # If we get here, the test should fail
+        pytest.fail("Expected error when using page index before setup")
+    except RuntimeError:
+        # This is expected - page index not set up yet
+        pass
 
     # Get page index byte range from the reader
     page_index_byte_range = simple_hybrid_scan_reader.page_index_byte_range()

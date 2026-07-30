@@ -760,13 +760,14 @@ TYPED_TEST(PageFilteringWithPageIndexStats, FilterPages)
               expected_surviving_rows);
   };
 
-  // Missing page indexes disable page-statistics pruning and produce an all-true row mask
+  // Calling `test_filter_data_pages_with_stats` before setting up the page index should raise an
+  // error
   {
     auto literal_value     = cudf::numeric_scalar<T>(T{100}, true, stream);
     auto const literal     = cudf::ast::literal(literal_value);
     auto const col_ref     = cudf::ast::column_name_reference("col0");
     auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, literal);
-    test_filter_data_pages_with_stats(filter_expression, num_concat * num_ordered_rows);
+    EXPECT_THROW(test_filter_data_pages_with_stats(filter_expression, 0), std::runtime_error);
   }
 
   // Set up the page index
@@ -845,44 +846,6 @@ TYPED_TEST(PageFilteringWithPageIndexStats, FilterPages)
     // survive
     auto constexpr expected_surviving_rows = 2 * num_concat * page_size_for_ordered_tests;
     test_filter_data_pages_with_stats(filter_expression, expected_surviving_rows);
-  }
-
-  // A missing column or offset index on a filter column disables page-statistics pruning without
-  // failing the read
-  {
-    auto literal_value     = cudf::numeric_scalar<T>(T{100}, true, stream);
-    auto const literal     = cudf::ast::literal(literal_value);
-    auto const col_ref     = cudf::ast::column_name_reference("col0");
-    auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, literal);
-    options.set_filter(filter_expression);
-
-    enum class remove_index_type : bool { COLUMN_INDEX = true, OFFSET_INDEX = false };
-
-    auto const test_partial_page_index = [&](remove_index_type removed_index) {
-      auto metadata = reader->parquet_metadata();
-      for (auto& row_group : metadata.row_groups) {
-        auto& predicate_chunk = row_group.columns.front();
-        if (removed_index == remove_index_type::COLUMN_INDEX) {
-          predicate_chunk.column_index.reset();
-        } else {
-          predicate_chunk.offset_index.reset();
-        }
-      }
-      auto partial_index_reader =
-        cudf::io::parquet::experimental::hybrid_scan_reader(metadata, options);
-      auto const partial_row_groups = partial_index_reader.all_row_groups(options);
-      auto const row_mask           = partial_index_reader.build_row_mask_with_page_index_stats(
-        partial_row_groups, options, stream, mr);
-      auto const host_row_mask = cudf::detail::make_host_vector<bool>(
-        cudf::device_span<bool const>(row_mask->view().data<bool>(),
-                                      static_cast<size_t>(row_mask->view().size())),
-        stream);
-      EXPECT_EQ(std::count(host_row_mask.begin(), host_row_mask.end(), true),
-                num_concat * num_ordered_rows);
-    };
-
-    test_partial_page_index(remove_index_type::COLUMN_INDEX);
-    test_partial_page_index(remove_index_type::OFFSET_INDEX);
   }
 }
 

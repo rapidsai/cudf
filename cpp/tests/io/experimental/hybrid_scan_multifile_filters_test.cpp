@@ -586,18 +586,16 @@ TYPED_TEST(HybridScanMultifilePageIndexRowMaskTest, BuildRowMaskWithPageIndexSta
               expected_surviving_rows);
   };
 
-  // Missing page indexes disable page-statistics pruning and produce an all-true row mask.
+  // Calling the page-index row mask builder before setting up the page index should raise an error.
   {
     auto literal_value     = make_scalar<T>(100, stream);
     auto const literal     = cudf::ast::literal(literal_value);
     auto const col_ref     = cudf::ast::column_name_reference("col0");
     auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, literal);
     options.set_filter(filter_expression);
-    auto const row_mask =
-      reader->build_row_mask_with_page_index_stats(input_row_group_indices, options, stream, mr);
-    auto const host_row_mask = host_row_mask_data<bool>(row_mask->view(), stream);
-    EXPECT_EQ(std::count(host_row_mask.begin(), host_row_mask.end(), true),
-              num_sources * num_ordered_rows);
+    EXPECT_THROW(std::ignore = reader->build_row_mask_with_page_index_stats(
+                   input_row_group_indices, options, stream, mr),
+                 std::runtime_error);
   }
 
   setup_page_indexes(*reader, inputs);

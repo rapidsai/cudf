@@ -169,23 +169,20 @@ public class HybridScanReaderTest extends CudfTestBase {
   }
 
   /**
-   * Verifies that materializeFilterColumns(..., usePageLevelPruning=true) falls back
-   * when invoked without a prior setupPageIndex() call; without page-statistics,
-   * pruning is unavailable but filter column materialization is valid and still
-   * evaluates the filter expression.
+   * Verifies that materializeFilterColumns(..., usePageLevelPruning=true) throws when
+   * invoked without a prior setupPageIndex() call: the page-index metadata must be
+   * materialised before page-level row-mask construction can succeed.
    */
   @Test
-  void testPageIndexStatsWithoutSetupFallback(@TempDir Path tmp)
-      throws IOException {
+  void testPageIndexStatsRequiresSetupPageIndex(@TempDir Path tmp) throws IOException {
     try (OpenReader open = OpenReader.pageIndex(tmp).withFilter("zip_code", BinaryOperator.GREATER, 99999)) {
       HybridScanReader reader = open.reader;
       int[] survived = reader.filterRowGroupsWithStats(reader.allRowGroups());
       DeviceMemoryBuffer[] filterCols = copyRangesToDevice(
           open.file, reader.filterColumnChunksByteRanges(survived));
-      try (HybridScanReader.FilterMaterializationResult filter_columns =
-               reader.materializeFilterColumns(survived, filterCols, true)) {
-        assertEquals(5000L, filter_columns.table().getRowCount(),
-            "Without setupPageIndex(), an all-true mask retains group 2's 5,000 rows");
+      try {
+        assertThrows(CudfException.class, () ->
+            reader.materializeFilterColumns(survived, filterCols, true));
       } finally {
         closeAll(filterCols);
       }
@@ -1331,7 +1328,7 @@ public class HybridScanReaderTest extends CudfTestBase {
    * Includes a low-cardinality {@code num_units} column ({1, 2, 3} cycle) so the writer's
    * ADAPTIVE dictionary policy emits a dictionary; this lets tests exercise the
    * "no page index, dict exists" path (see
-   * {@link #testSecondaryFiltersByteRangesForRowGroupStats}).
+   * {@link #testSecondaryFiltersByteRangesEmptyForRowGroupStats}).
    */
   private static void writeRowGroupStatsParquet(File path) {
     int rows = 100;
