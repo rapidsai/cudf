@@ -999,10 +999,12 @@ TEST_F(CastVariantTest, ApachePrimitiveBooleans)
   }
 
   // Sliced multi-row column exercises grid-stride paths with a non-zero slice offset.
+  // num_rows / slice range is chosen so the sliced window (slice_end - slice_beg = 512)
+  // spans more than one cast_variant_bool_kernel block (block_size = 256).
   {
-    constexpr int num_rows  = 130;
-    constexpr int slice_beg = 2;
-    constexpr int slice_end = 128;
+    constexpr int num_rows  = 516;
+    constexpr int slice_beg = 3;
+    constexpr int slice_end = 515;
 
     std::vector<uint8_t> const true_bytes{avf::primitive_boolean_true.value.begin(),
                                           avf::primitive_boolean_true.value.end()};
