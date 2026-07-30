@@ -262,6 +262,18 @@ class ParquetOptions:
         concurrent IO operations the engine can handle. Only used when
         ``prefetch_backend`` is ``"cucascade"``. When ``None``, uses the
         cuCascade engine default.
+    cucascade_max_connections
+        Maximum concurrent in-flight HTTP connections per reactor in the
+        cuCascade REST engine. Only used when ``prefetch_backend`` is
+        ``"cucascade"``. When ``None``, uses the cuCascade engine default (16).
+    cucascade_chunk_size
+        Maximum bytes per ranged GET request in the cuCascade REST engine.
+        Only used when ``prefetch_backend`` is ``"cucascade"``. When ``None``,
+        uses the cuCascade engine default (8 MiB).
+    cucascade_max_n_chunks
+        Maximum number of destination buffers fused into a single scatter GET
+        in the cuCascade REST engine. Only used when ``prefetch_backend`` is
+        ``"cucascade"``. When ``None``, uses the cuCascade engine default (16).
     use_jit_filter
         Whether to use JIT compilation for post-read filtering in Parquet scans.
         When enabled, filter predicates are JIT-compiled to CUDA kernels for
@@ -344,6 +356,21 @@ class ParquetOptions:
             f"{_env_prefix}__CUCASCADE_N_REACTORS", int, default=None
         )
     )
+    cucascade_max_connections: int | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__CUCASCADE_MAX_CONNECTIONS", int, default=None
+        )
+    )
+    cucascade_chunk_size: int | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__CUCASCADE_CHUNK_SIZE", int, default=None
+        )
+    )
+    cucascade_max_n_chunks: int | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__CUCASCADE_MAX_N_CHUNKS", int, default=None
+        )
+    )
     use_jit_filter: bool = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__USE_JIT_FILTER",
@@ -394,6 +421,18 @@ class ParquetOptions:
             self.cucascade_n_reactors, int
         ):
             raise TypeError("cucascade_n_reactors must be an int or None")
+        if self.cucascade_max_connections is not None and not isinstance(
+            self.cucascade_max_connections, int
+        ):
+            raise TypeError("cucascade_max_connections must be an int or None")
+        if self.cucascade_chunk_size is not None and not isinstance(
+            self.cucascade_chunk_size, int
+        ):
+            raise TypeError("cucascade_chunk_size must be an int or None")
+        if self.cucascade_max_n_chunks is not None and not isinstance(
+            self.cucascade_max_n_chunks, int
+        ):
+            raise TypeError("cucascade_max_n_chunks must be an int or None")
         if not isinstance(self.use_jit_filter, bool):
             raise TypeError("use_jit_filter must be a bool")
 

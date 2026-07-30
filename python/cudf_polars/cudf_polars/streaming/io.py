@@ -274,7 +274,7 @@ def copy_host_ranges_to_device(
     if not total:
         return []
     rng = nvtx.start_range("copy_host_ranges_to_device", domain=CUDF_POLARS_NVTX_DOMAIN)
-    with nvtx_annotate_cudf_polars(message="pread_ranges:wait"):
+    with nvtx_annotate_cudf_polars(message="read_ranges:wait"):
         for f in futures:
             f.get()
     buf = DeviceBuffer(size=total)

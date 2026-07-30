@@ -95,7 +95,7 @@ def pread_ranges(
     buf = PinnedBuffer(pinned_mr, total, stream, context, loop)
     futures = []
     offset = 0
-    with nvtx_annotate_cudf_polars(message=f"pread_ranges:submit:{total}B"):
+    with nvtx_annotate_cudf_polars(message=f"read_ranges:submit:{total}B"):
         for r in ranges:
             futures.append(
                 handle.pread(
@@ -353,6 +353,9 @@ def _get_cucascade_engine(
     path: str,
     pool_capacity: int | None,
     n_reactors: int | None,
+    max_connections: int | None,
+    chunk_size: int | None,
+    max_n_chunks: int | None,
 ) -> Any:
     global _cucascade_engine
     if _cucascade_engine is not None:
@@ -364,6 +367,12 @@ def _get_cucascade_engine(
                 kwargs["pool_capacity"] = pool_capacity
             if n_reactors is not None:
                 kwargs["n_reactors"] = n_reactors
+            if max_connections is not None:
+                kwargs["max_connections"] = max_connections
+            if chunk_size is not None:
+                kwargs["chunk_size"] = chunk_size
+            if max_n_chunks is not None:
+                kwargs["max_n_chunks"] = max_n_chunks
             if plc.io.SourceInfo._is_remote_uri(path):
                 # TODO: replace with cucascade.RestEngine.from_environment() once
                 # cuCascade exposes a factory that reads standard AWS env vars directly.
@@ -415,6 +424,9 @@ class HybridScanPrefetchExecutor:
         prefetch_backend: str,
         cucascade_pool_capacity: int | None = None,
         cucascade_n_reactors: int | None = None,
+        cucascade_max_connections: int | None = None,
+        cucascade_chunk_size: int | None = None,
+        cucascade_max_n_chunks: int | None = None,
     ) -> Self:
         """
         Submit prefetch tasks for all scans.
@@ -459,7 +471,12 @@ class HybridScanPrefetchExecutor:
                 )
             first_path = scans[0].paths[0] if scans else ""
             engine = _get_cucascade_engine(
-                first_path, cucascade_pool_capacity, cucascade_n_reactors
+                first_path,
+                cucascade_pool_capacity,
+                cucascade_n_reactors,
+                cucascade_max_connections,
+                cucascade_chunk_size,
+                cucascade_max_n_chunks,
             )
 
             _, dev_id = cudart.cudaGetDevice()
