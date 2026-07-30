@@ -718,7 +718,8 @@ def test_groupby_quantile_nearest_even_length():
         }
     )
     q = df.group_by("key").agg(
-        pl.col("val").quantile(0.5, interpolation="nearest").alias("q50")
+        pl.col("val").quantile(0.5, interpolation="nearest").alias("q50"),
+        (-pl.col("val")).quantile(0.5, interpolation="nearest").alias("q50_neg"),
     )
     assert_gpu_result_equal(q, check_row_order=False)
 
