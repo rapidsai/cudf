@@ -908,6 +908,27 @@ cdef class CsvWriterOptionsBuilder:
         self.c_obj.compression(comp)
         return self
 
+    cpdef CsvWriterOptionsBuilder compression_block_size(self, size_t size):
+        """Sets the size of the blocks that the output is compressed in
+
+        The output is split into blocks of this size, each compressed into its
+        own frame, so that the codec can compress them in parallel. The block
+        size is independent of ``rows_per_chunk``, and is capped at the maximum
+        input size the codec supports.
+
+        Parameters
+        ----------
+        size : int
+            Compression block size, in bytes. Must be greater than zero.
+
+        Returns
+        -------
+        CsvWriterOptionsBuilder
+            Builder to build CsvWriterOptions
+        """
+        self.c_obj.compression_block_size(size)
+        return self
+
     cpdef CsvWriterOptions build(self):
         """Create a CsvWriterOptions object"""
         cdef CsvWriterOptions csv_options = CsvWriterOptions.__new__(

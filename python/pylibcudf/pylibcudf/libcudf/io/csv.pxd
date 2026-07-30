@@ -338,6 +338,9 @@ cdef extern from "cudf/io/csv.hpp" \
         csv_writer_options_builder& compression(
             cudf_io_types.compression_type comp
         ) except +libcudf_exception_handler
+        csv_writer_options_builder& compression_block_size(
+            size_t size
+        ) except +libcudf_exception_handler
 
         csv_writer_options build() except +libcudf_exception_handler
 
