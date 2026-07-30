@@ -474,10 +474,10 @@ __device__ inline cuda::std::optional<bool> decode_bool(device_span<uint8_t cons
 {
   if (enc.empty()) { return cuda::std::nullopt; }
   uint8_t const value_metadata = enc[0];
-  if (variant_basic_type(value_metadata) != basic_type::primitive) { return cuda::std::nullopt; }
+  if (decode_basic_type(value_metadata) != basic_type::PRIMITIVE) { return cuda::std::nullopt; }
   auto const value_header = variant_value_header(value_metadata);
-  if (value_header == static_cast<uint8_t>(primitive_type::boolean_true)) { return true; }
-  if (value_header == static_cast<uint8_t>(primitive_type::boolean_false)) { return false; }
+  if (value_header == static_cast<uint8_t>(primitive_type::BOOLEAN_TRUE)) { return true; }
+  if (value_header == static_cast<uint8_t>(primitive_type::BOOLEAN_FALSE)) { return false; }
   return cuda::std::nullopt;
 }
 
@@ -564,20 +564,21 @@ __device__ cuda::std::optional<device_span<uint8_t const>> decode_string(
   return cuda::std::nullopt;
 }
 
+__device__ device_span<uint8_t const> list_row_span(cudf::lists_column_device_view const& col,
+                                                    size_type row)
+{
+  auto const begin = col.offset_at(row);
+  auto const end   = col.offset_at(row + 1);
+  return {col.child().data<uint8_t>() + begin, static_cast<std::size_t>(end - begin)};
+}
+
 // Returns the metadata and value list bytes for a given row from device views
 __device__ cuda::std::pair<device_span<uint8_t const>, device_span<uint8_t const>>
 metadata_and_value_at(cudf::lists_column_device_view const& metadata,
                       cudf::lists_column_device_view const& values,
                       size_type row)
 {
-  auto const meta_begin = metadata.offset_at(row);
-  auto const meta_end   = metadata.offset_at(row + 1);
-  auto const val_begin  = values.offset_at(row);
-  auto const val_end    = values.offset_at(row + 1);
-  return {
-    {metadata.child().data<uint8_t>() + meta_begin,
-     static_cast<std::size_t>(meta_end - meta_begin)},
-    {values.child().data<uint8_t>() + val_begin, static_cast<std::size_t>(val_end - val_begin)}};
+  return {list_row_span(metadata, row), list_row_span(values, row)};
 }
 
 constexpr int block_size = 256;
@@ -646,11 +647,7 @@ CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_primitive_kernel(
       continue;
     }
 
-    auto const val_begin = values.offset_at(row);
-    auto const val_end   = values.offset_at(row + 1);
-    auto const val_child = values.child();
-    device_span<uint8_t const> const val{val_child.data<uint8_t>() + val_begin,
-                                         static_cast<std::size_t>(val_end - val_begin)};
+    auto const val = list_row_span(values, row);
 
     auto const decoded = decode_primitive<T>(val);
     if (decoded.has_value()) {
@@ -682,11 +679,7 @@ CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_bool_kernel(
       continue;
     }
 
-    auto const val_begin = values.offset_at(row);
-    auto const val_end   = values.offset_at(row + 1);
-    auto const val_child = values.child();
-    device_span<uint8_t const> const val{val_child.data<uint8_t>() + val_begin,
-                                         static_cast<std::size_t>(val_end - val_begin)};
+    auto const val = list_row_span(values, row);
 
     auto const decoded = decode_bool(val);
     if (decoded.has_value()) {
@@ -720,11 +713,7 @@ struct cast_variant_string_fn {
       return;
     }
 
-    auto const val_begin = d_values.offset_at(row);
-    auto const val_end   = d_values.offset_at(row + 1);
-    auto const val_child = d_values.child();
-    device_span<uint8_t const> const val{val_child.data<uint8_t>() + val_begin,
-                                         static_cast<std::size_t>(val_end - val_begin)};
+    auto const val = list_row_span(d_values, row);
 
     auto const str = decode_string(val);
     if (!str) {
