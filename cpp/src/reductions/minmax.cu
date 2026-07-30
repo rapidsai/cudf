@@ -190,13 +190,10 @@ struct minmax_dictionary_functor {
     auto dev_result     = reduce_dictionary<storage_type>(col, stream);
     using ScalarType    = cudf::scalar_type_t<T>;
     auto const key_type = dictionary_column_view(col).keys().type();
-    auto minimum        = make_fixed_width_scalar(key_type, stream, mr);
-    auto maximum        = make_fixed_width_scalar(key_type, stream, mr);
+    auto minimum        = std::make_unique<ScalarType>(T{}, true, stream, mr);
+    auto maximum        = std::make_unique<ScalarType>(T{}, true, stream, mr);
     cudf::detail::device_single_thread(
-      assign_min_max<storage_type>{dev_result.data(),
-                                   static_cast<ScalarType*>(minimum.get())->data(),
-                                   static_cast<ScalarType*>(maximum.get())->data()},
-      stream);
+      assign_min_max<storage_type>{dev_result.data(), minimum->data(), maximum->data()}, stream);
     return {std::move(minimum), std::move(maximum)};
   }
 
@@ -319,10 +316,13 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
   cudf::column_view const& col, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   if (col.null_count() == col.size()) {
-    // this handles empty and all-null columns
-    // return scalars with valid==false
-    return {make_default_constructed_scalar(col.type(), stream, mr),
-            make_default_constructed_scalar(col.type(), stream, mr)};
+    // this handles empty and all-null columns; return scalars with valid==false.
+    // For dictionary columns use the keys type — DICTIONARY32 has no scalar representation.
+    auto const scalar_type = col.type().id() == type_id::DICTIONARY32
+                               ? dictionary_column_view(col).keys().type()
+                               : col.type();
+    return {make_default_constructed_scalar(scalar_type, stream, mr),
+            make_default_constructed_scalar(scalar_type, stream, mr)};
   }
 
   return type_dispatcher(col.type(), minmax_functor{}, col, stream, mr);

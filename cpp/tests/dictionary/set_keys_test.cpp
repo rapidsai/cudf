@@ -115,6 +115,7 @@ TEST_F(DictionarySetKeysTest, DuplicateKeys)
 
   auto new_keys = cudf::test::strings_column_wrapper{"fff", "eee", "ccc", "aaa", "ccc"};
   auto result   = cudf::dictionary::set_keys(dictionary->view(), new_keys);
+  EXPECT_TRUE(result->null_count() > 0);  // duplicate keys should result in nulls
 
   auto expected = cudf::test::strings_column_wrapper(
     {"eee", "aaa", "", "", "ccc", "ccc", "ccc", "eee", "aaa"}, {1, 1, 0, 0, 1, 1, 1, 1, 1});
