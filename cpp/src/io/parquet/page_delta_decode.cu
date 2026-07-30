@@ -503,6 +503,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // choose a character parallel string copy when the average string is longer than a warp
   auto const use_char_ll =
+    s->setup.page.num_valids > 0 &&
     (s->setup.page.str_bytes / s->setup.page.num_valids) > cudf::detail::warp_size;
 
   // copying logic from decode_page_data.
