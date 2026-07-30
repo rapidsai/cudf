@@ -105,6 +105,10 @@ class streaming_hash_join {
    * views alive until this object is destroyed. The row index stored for each hash-table entry is
    * local to this partition.
    *
+   * This function may be called concurrently from multiple host threads. Batch IDs are assigned
+   * in an unspecified order when calls overlap. All `insert()` calls must return, and the caller
+   * must establish the necessary CUDA stream dependencies, before calling `inner_join()`.
+   *
    * @throws std::invalid_argument if `right_partition`'s schema does not match the schema passed
    *                               to the constructor
    * @throws std::invalid_argument if inserting this partition would push the cumulative row count

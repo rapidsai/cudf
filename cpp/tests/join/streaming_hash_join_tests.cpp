@@ -15,11 +15,18 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/cuda_device.hpp>
+#include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <algorithm>
+#include <atomic>
+#include <exception>
+#include <memory>
+#include <numeric>
 #include <stdexcept>
+#include <thread>
 #include <tuple>
 #include <vector>
 
@@ -85,6 +92,96 @@ TEST_F(StreamingHashJoinTest, MultiplePartitionsReturnBatchLocalIndices)
   std::vector<join_match> const expected{
     {0, 0, 1}, {0, 1, 0}, {0, 2, 0}, {1, 0, 2}, {1, 1, 2}, {1, 2, 1}, {2, 1, 1}};
   EXPECT_EQ(actual, expected);
+}
+
+TEST_F(StreamingHashJoinTest, ConcurrentInsert)
+{
+  auto const stream               = cudf::test::get_default_stream();
+  constexpr size_type num_batches = 16;
+  std::vector<int32_t> values(num_batches);
+  std::iota(values.begin(), values.end(), 0);
+  column_wrapper<int32_t> right(values.begin(), values.end());
+  cudf::table_view const right_view{{right}};
+  std::vector<size_type> slice_indices;
+  slice_indices.reserve(2 * num_batches);
+  for (size_type i = 0; i < num_batches; ++i) {
+    slice_indices.push_back(i);
+    slice_indices.push_back(i + 1);
+  }
+  auto const right_partitions = cudf::slice(right_view, slice_indices);
+  column_wrapper<int32_t> left(values.begin(), values.end());
+
+  std::vector<std::unique_ptr<rmm::cuda_stream>> streams;
+  streams.reserve(num_batches);
+  for (size_type i = 0; i < num_batches; ++i) {
+    streams.push_back(std::make_unique<rmm::cuda_stream>());
+  }
+
+  std::vector<cudf::data_type> const schema{cudf::data_type{cudf::type_id::INT32}};
+  std::vector<size_type> const keys{0};
+  cudf::streaming_hash_join joiner{schema,
+                                   keys,
+                                   /*total_right_rows=*/num_batches,
+                                   /*max_num_batches=*/num_batches,
+                                   cudf::nullable_join::NO,
+                                   cudf::null_equality::EQUAL,
+                                   /*load_factor=*/0.5,
+                                   stream};
+  stream.synchronize();
+
+  auto const device = rmm::get_current_cuda_device();
+  std::vector<std::thread> threads;
+  std::vector<std::exception_ptr> errors(num_batches);
+  std::atomic<size_type> ready{0};
+  std::atomic<bool> start{false};
+  threads.reserve(num_batches);
+  for (size_type i = 0; i < num_batches; ++i) {
+    threads.emplace_back([&, i] {
+      rmm::cuda_set_device_raii const device_guard{device};
+      ready.fetch_add(1, std::memory_order_relaxed);
+      while (!start.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+      }
+      try {
+        joiner.insert(right_partitions[i], streams[i]->view());
+      } catch (...) {
+        errors[i] = std::current_exception();
+      }
+    });
+  }
+  while (ready.load(std::memory_order_relaxed) != num_batches) {
+    std::this_thread::yield();
+  }
+  start.store(true, std::memory_order_release);
+  for (auto& thread : threads) {
+    thread.join();
+  }
+  for (auto const& error : errors) {
+    EXPECT_FALSE(error);
+  }
+  for (auto const& insert_stream : streams) {
+    insert_stream->synchronize();
+  }
+
+  auto [left_indices, right_indices] = joiner.inner_join(cudf::table_view{{left}}, {}, stream);
+  auto& [batch_indices, row_indices] = right_indices;
+  auto const actual = to_sorted_host_matches(*left_indices, *batch_indices, *row_indices, stream);
+  ASSERT_EQ(actual.size(), num_batches);
+  std::vector<size_type> actual_left_indices;
+  std::vector<size_type> actual_batch_indices;
+  actual_left_indices.reserve(num_batches);
+  actual_batch_indices.reserve(num_batches);
+  for (auto const [left_index, batch_index, row_index] : actual) {
+    actual_left_indices.push_back(left_index);
+    actual_batch_indices.push_back(batch_index);
+    EXPECT_EQ(row_index, 0);
+  }
+  std::sort(actual_left_indices.begin(), actual_left_indices.end());
+  std::sort(actual_batch_indices.begin(), actual_batch_indices.end());
+  std::vector<size_type> expected_indices(num_batches);
+  std::iota(expected_indices.begin(), expected_indices.end(), 0);
+  EXPECT_EQ(actual_left_indices, expected_indices);
+  EXPECT_EQ(actual_batch_indices, expected_indices);
 }
 
 TEST_F(StreamingHashJoinTest, MaxNumBatchesCountsEmptyBatches)
