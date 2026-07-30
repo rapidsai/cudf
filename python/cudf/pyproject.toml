@@ -165,10 +165,6 @@ rapids = ["rmm", "pylibcudf"]
 "__init__.py" = ["E402", "F401"]
 
 [tool.numpydoc_validation]
-# See https://numpydoc.readthedocs.io/en/latest/validation.html for the full
-# list of check codes. We enable all semantic checks and disable only the
-# optional/stylistic ones below. Remaining violations are cleaned up
-# incrementally, a few check codes at a time (see cuDF issue #11253).
 checks = [
     "all",   # report all checks, except the ones deselected below
     "ES01",  # extended summary not required for every object
@@ -180,7 +176,6 @@ checks = [
     "SA04",  # description in see also not required
     "SS06",  # allow summaries that span more than a single line
 ]
-# Skip objects that do not benefit from full docstring validation.
 exclude = [
     # Protocol/dunder methods whose behavior is defined by the interface they
     # implement and do not need standalone docstrings.

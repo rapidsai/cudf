@@ -223,11 +223,6 @@ repos:
     rev: v1.9.0
     hooks:
       - id: numpydoc-validation
-        # Validation is configured under [tool.numpydoc_validation] in
-        # python/cudf/pyproject.toml. The whole cudf package is not yet
-        # docstring-clean, so we enforce validation on an explicit allowlist of
-        # already-compliant files and grow it incrementally, one PR at a time,
-        # keeping CI green throughout (see cuDF issue #11253).
         files: |
           (?x)^python/cudf/cudf/(
             options\.py|
