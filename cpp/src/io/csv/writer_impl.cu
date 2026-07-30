@@ -19,6 +19,8 @@
 #include <cudf/detail/fill.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/batched_memcpy.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/codec.hpp>
@@ -48,6 +50,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <numeric>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -80,19 +83,33 @@ void write_to_sink(data_sink* out_sink, device_span<char const> data, rmm::cuda_
 }
 
 /**
- * @brief Compresses device data into a single frame and writes it to the sink.
+ * @brief Clamps the requested compression block size to what the codec accepts.
+ */
+size_t compression_block_size(compression_type compression, size_t requested_size)
+{
+  auto const codec_limit = io::detail::compress_max_allowed_chunk_size(compression);
+  return std::min(requested_size, codec_limit.value_or(requested_size));
+}
+
+/**
+ * @brief Compresses device data and writes it to the sink.
  *
- * Only ZSTD is supported for the CSV writer because it allows concatenated frames,
- * which is required for progressive compression that standard tools can decompress.
+ * Only ZSTD is supported for the CSV writer because it allows concatenated frames, which is
+ * required for progressive compression that standard tools can decompress. Decompressing
+ * concatenated frames yields the concatenation of their payloads, so the data is split into
+ * fixed-size blocks at arbitrary byte offsets, each compressed into its own frame by a single
+ * batched call.
  *
  * @param out_sink Output data sink
  * @param data Uncompressed device data
  * @param compression Compression type (only ZSTD is supported)
+ * @param requested_block_size Size of the blocks the data is split into
  * @param stream CUDA stream
  */
 void write_compressed_to_sink(data_sink* out_sink,
                               device_span<char const> data,
                               compression_type compression,
+                              size_t requested_block_size,
                               rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(compression == compression_type::ZSTD,
@@ -100,37 +117,71 @@ void write_compressed_to_sink(data_sink* out_sink,
                "ZSTD supports concatenated frames which enables progressive compression "
                "compatible with standard decompression tools.");
 
-  auto const max_comp_size = io::detail::max_compressed_size(compression, data.size());
-  rmm::device_uvector<uint8_t> comp_buffer(max_comp_size, stream);
+  if (data.empty()) { return; }
 
-  cudf::detail::hostdevice_vector<device_span<uint8_t const>> inputs(1, stream);
-  inputs[0] =
-    device_span<uint8_t const>{reinterpret_cast<uint8_t const*>(data.data()), data.size()};
+  auto const block_size     = compression_block_size(compression, requested_block_size);
+  auto const num_blocks     = cudf::util::div_rounding_up_safe(data.size(), block_size);
+  auto const max_block_size = io::detail::max_compressed_size(compression, block_size);
+
+  rmm::device_uvector<uint8_t> comp_buffer(num_blocks * max_block_size, stream);
+
+  cudf::detail::hostdevice_vector<device_span<uint8_t const>> inputs(num_blocks, stream);
+  cudf::detail::hostdevice_vector<device_span<uint8_t>> outputs(num_blocks, stream);
+  cudf::detail::hostdevice_vector<io::detail::codec_exec_result> results(num_blocks, stream);
+  for (size_t block = 0; block < num_blocks; ++block) {
+    auto const offset = block * block_size;
+    inputs[block] =
+      device_span<uint8_t const>{reinterpret_cast<uint8_t const*>(data.data()) + offset,
+                                 std::min(block_size, data.size() - offset)};
+    outputs[block] =
+      device_span<uint8_t>{comp_buffer.data() + block * max_block_size, max_block_size};
+    results[block] = io::detail::codec_exec_result{0, io::detail::codec_status::FAILURE};
+  }
   inputs.host_to_device_async(stream);
-
-  cudf::detail::hostdevice_vector<device_span<uint8_t>> outputs(1, stream);
-  outputs[0] = comp_buffer;
   outputs.host_to_device_async(stream);
-
-  cudf::detail::hostdevice_vector<io::detail::codec_exec_result> results(1, stream);
-  results[0] = io::detail::codec_exec_result{0, io::detail::codec_status::FAILURE};
   results.host_to_device_async(stream);
 
   io::detail::compress(compression, inputs, outputs, results, stream);
 
   results.device_to_host(stream);
-  // SKIPPED means the chunk exceeded the codec's maximum input size; the caller can work around
-  // that by writing in smaller chunks, so it gets a distinct message
-  CUDF_EXPECTS(results[0].status != io::detail::codec_status::SKIPPED,
-               "ZSTD compression of CSV data failed because a chunk is too large; "
-               "use a smaller `rows_per_chunk` to reduce the size of each chunk");
-  CUDF_EXPECTS(results[0].status == io::detail::codec_status::SUCCESS,
+  CUDF_EXPECTS(std::all_of(results.begin(),
+                           results.end(),
+                           [](auto const& result) {
+                             return result.status == io::detail::codec_status::SUCCESS;
+                           }),
                "Error in ZSTD compression of CSV data");
 
-  write_to_sink(out_sink,
-                device_span<char const>{reinterpret_cast<char const*>(comp_buffer.data()),
-                                        results[0].bytes_written},
-                stream);
+  // The frames are padded to the maximum compressed block size, so they are packed into a
+  // contiguous buffer to be written as a single frame sequence
+  auto h_sources = cudf::detail::make_host_vector<uint8_t const*>(num_blocks, stream);
+  auto h_dests   = cudf::detail::make_host_vector<uint8_t*>(num_blocks, stream);
+  auto h_sizes   = cudf::detail::make_host_vector<size_t>(num_blocks, stream);
+  size_t total_comp_size{0};
+  rmm::device_uvector<uint8_t> packed_buffer(
+    std::accumulate(results.begin(),
+                    results.end(),
+                    size_t{0},
+                    [](size_t sum, auto const& result) { return sum + result.bytes_written; }),
+    stream);
+  for (size_t block = 0; block < num_blocks; ++block) {
+    h_sources[block] = comp_buffer.data() + block * max_block_size;
+    h_dests[block]   = packed_buffer.data() + total_comp_size;
+    h_sizes[block]   = results[block].bytes_written;
+    total_comp_size += results[block].bytes_written;
+  }
+  auto const d_sources = cudf::detail::make_device_uvector_async(
+    h_sources, stream, cudf::get_current_device_resource_ref());
+  auto const d_dests = cudf::detail::make_device_uvector_async(
+    h_dests, stream, cudf::get_current_device_resource_ref());
+  auto const d_sizes = cudf::detail::make_device_uvector_async(
+    h_sizes, stream, cudf::get_current_device_resource_ref());
+  cudf::detail::batched_memcpy_async(
+    d_sources.begin(), d_dests.begin(), d_sizes.begin(), num_blocks, stream);
+
+  write_to_sink(
+    out_sink,
+    device_span<char const>{reinterpret_cast<char const*>(packed_buffer.data()), total_comp_size},
+    stream);
 }
 
 /**
@@ -139,17 +190,19 @@ void write_compressed_to_sink(data_sink* out_sink,
  * @param out_sink Output data sink
  * @param data Uncompressed device data
  * @param compression Compression type
+ * @param block_size Size of the blocks the data is split into when compressing
  * @param stream CUDA stream
  */
 void write_data_with_compression(data_sink* out_sink,
                                  device_span<char const> data,
                                  compression_type compression,
+                                 size_t block_size,
                                  rmm::cuda_stream_view stream)
 {
   if (compression == compression_type::NONE) {
     write_to_sink(out_sink, data, stream);
   } else {
-    write_compressed_to_sink(out_sink, data, compression, stream);
+    write_compressed_to_sink(out_sink, data, compression, block_size, stream);
   }
 }
 
@@ -427,7 +480,8 @@ void write_chunked_begin(data_sink* out_sink,
       // the compressor operates on device memory, so the header needs to be copied to the device
       auto const d_header = cudf::detail::make_device_uvector_async(
         host_span<char const>{header}, stream, cudf::get_current_device_resource_ref());
-      write_compressed_to_sink(out_sink, d_header, compression, stream);
+      write_compressed_to_sink(
+        out_sink, d_header, compression, options.get_compression_block_size(), stream);
     } else {
       out_sink->host_write(header.data(), header.size());
     }
@@ -485,9 +539,13 @@ void write_chunked(data_sink* out_sink,
   auto const ptr_all_bytes   = static_cast<char const*>(contents_w_nl.data->data());
 
   auto const compression = options.get_compression();
+  auto const block_size  = options.get_compression_block_size();
 
-  write_data_with_compression(
-    out_sink, device_span<char const>{ptr_all_bytes, total_num_bytes}, compression, stream);
+  write_data_with_compression(out_sink,
+                              device_span<char const>{ptr_all_bytes, total_num_bytes},
+                              compression,
+                              block_size,
+                              stream);
 
   // Needs newline at the end, to separate from next chunk
   if (compression != compression_type::NONE) {
@@ -497,6 +555,7 @@ void write_chunked(data_sink* out_sink,
       out_sink,
       device_span<char const>{newline.data(), static_cast<size_t>(newline.size())},
       compression,
+      block_size,
       stream);
   } else if (out_sink->is_device_write_preferred(newline.size())) {
     out_sink->device_write(newline.data(), newline.size(), stream);
