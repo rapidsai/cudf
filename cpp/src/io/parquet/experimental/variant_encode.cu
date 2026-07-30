@@ -303,12 +303,6 @@ std::pair<std::vector<uint8_t>, std::vector<int32_t>> build_metadata_blob(
     return column_names[a] < column_names[b];
   });
 
-  for (int i = 1; i < N; i++) {
-    CUDF_EXPECTS(column_names[sort_order[i]] != column_names[sort_order[i - 1]],
-                 "encode_variant: duplicate column names are not allowed",
-                 std::invalid_argument);
-  }
-
   // Choose offset_size based on total UTF-8 key length
   std::size_t total_key_bytes = 0;
   for (auto const& name : column_names) {
@@ -481,6 +475,19 @@ std::unique_ptr<column> encode_variant(cudf::table_view const& input,
                  "encode_variant: unsupported column type — supported: EMPTY, INT8/16/32/64, "
                  "FLOAT32/64, STRING",
                  std::invalid_argument);
+  }
+
+  {
+    std::vector<int32_t> name_order(N);
+    std::iota(name_order.begin(), name_order.end(), 0);
+    std::stable_sort(name_order.begin(), name_order.end(), [&](int a, int b) {
+      return column_names[a] < column_names[b];
+    });
+    for (int i = 1; i < N; i++) {
+      CUDF_EXPECTS(column_names[name_order[i]] != column_names[name_order[i - 1]],
+                   "encode_variant: duplicate column names are not allowed",
+                   std::invalid_argument);
+    }
   }
 
   auto make_empty_list = [&] {
