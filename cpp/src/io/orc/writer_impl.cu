@@ -862,8 +862,9 @@ std::pair<encoded_data, std::vector<uint8_t>> encode_columns(orc_table_view cons
                                                              uint32_t uncomp_block_align,
                                                              rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(extent_alignment >= uncomp_block_align,
-               "Internal ORC writer error: arena extents are not aligned enough for the codec");
+  CUDF_EXPECTS(uncomp_block_align > 0 and extent_alignment % uncomp_block_align == 0,
+               "Internal ORC writer error: extent alignment is not a multiple of the codec's chunk "
+               "alignment");
 
   auto const num_columns = orc_table.num_columns();
   hostdevice_2dvector<encoder_chunk> chunks(num_columns, segmentation.num_rowgroups(), stream);
