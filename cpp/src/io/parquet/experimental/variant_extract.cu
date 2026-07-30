@@ -436,17 +436,17 @@ constexpr bool is_variant_int =
 
 // The fixed-width primitive types (signed integers and floats) a VARIANT value can be decoded into.
 template <typename T>
-constexpr bool is_variant_primitive = is_variant_int<T> || cudf::is_floating_point<T>();
+constexpr bool is_variant_numerical = is_variant_int<T> || cudf::is_floating_point<T>();
 
 // The output types a VARIANT value can be cast to: the fixed-width signed integers, floats, bool,
 // and strings.
 template <typename T>
-constexpr bool is_variant_castable = is_variant_primitive<T> || cuda::std::is_same_v<T, bool> ||
+constexpr bool is_variant_castable = is_variant_numerical<T> || cuda::std::is_same_v<T, bool> ||
                                      cuda::std::is_same_v<T, cudf::string_view>;
 
 // Maps a fixed-width output type to the VARIANT primitive type header id that encodes it.
 template <typename T>
-  requires(is_variant_primitive<T>)
+  requires(is_variant_numerical<T>)
 __device__ constexpr primitive_type primitive_type_for()
 {
   if constexpr (cuda::std::is_same_v<T, int8_t>) {
@@ -783,7 +783,7 @@ struct cast_variant_fn {
 
   template <typename T>
   std::unique_ptr<column> operator()()
-    requires(is_variant_primitive<T>)
+    requires(is_variant_numerical<T>)
   {
     rmm::device_buffer data{num_rows * sizeof(T), stream, mr};
 
