@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -35,6 +35,14 @@
 
 namespace cudf {
 namespace detail {
+
+double checked_load_factor(double load_factor)
+{
+  CUDF_EXPECTS(load_factor > 0.0 && load_factor <= 1.0,
+               "Invalid load factor: must be greater than 0 and less than or equal to 1.",
+               std::invalid_argument);
+  return load_factor;
+}
 
 VectorPair get_trivial_left_join_indices(table_view const& left,
                                          rmm::cuda_stream_view stream,
