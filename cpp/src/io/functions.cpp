@@ -687,6 +687,8 @@ std::vector<parquet::FileMetaData> read_parquet_footers(
   return detail_parquet::read_parquet_footers(sources);
 }
 
+namespace experimental {
+
 parquet::FileMetaData read_parquet_footer_bytes(host_span<uint8_t const> footer_bytes,
                                                 parquet::throw_if_type_mismatch mode)
 {
@@ -705,6 +707,8 @@ std::vector<uint8_t> write_parquet_footer_bytes(parquet::FileMetaData const& met
   writer.write(metadata);
   return out;
 }
+
+}  // namespace experimental
 
 /**
  * @copydoc cudf::io::merge_row_group_metadata

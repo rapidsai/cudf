@@ -7,6 +7,7 @@
 
 #include "parquet_common.hpp"
 
+#include <cudf/io/parquet_metadata.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/utilities/export.hpp>
 
@@ -43,8 +44,9 @@ class CompactProtocolReader {
   void init(uint8_t const* base, size_t len)
   {
     m_base = m_cur = base;
-    m_end          = base + len;
-    m_overread     = false;
+    // Avoid undefined pointer arithmetic on a null base; a null buffer stays an empty range.
+    m_end      = base != nullptr ? base + len : base;
+    m_overread = false;
   }
   [[nodiscard]] ptrdiff_t bytecount() const noexcept { return m_cur - m_base; }
   // True if a wire-type/schema-type mismatch must be rejected (default YES); false means skip it
@@ -111,6 +113,10 @@ class CompactProtocolReader {
   }
 
   void skip_struct_field(int t, int depth = 0);
+
+  // True if the wire type matches the schema type; on mismatch strict mode throws while lenient
+  // mode (`NO`) skips the value and returns false, leaving the field (and any optional) unset.
+  [[nodiscard]] bool check_field_type(int type, FieldType expected);
 
  public:
   // Generate Thrift structure parsing routines
