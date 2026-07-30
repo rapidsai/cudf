@@ -329,10 +329,10 @@ def fadvise_scan_byte_ranges(
     filter_buf = PinnedBuffer(pinned_mr, filter_bytes, stream, context, loop)
     payload_buf = PinnedBuffer(pinned_mr, payload_bytes, stream, context, loop)
 
-    filter_futures = datasource.read_ranges_async(
+    filter_future = datasource.read_all_ranges_async(
         [(r.offset, r.size) for r in planned.filter_ranges], filter_buf.array
     )
-    payload_futures = datasource.read_ranges_async(
+    payload_future = datasource.read_all_ranges_async(
         [(r.offset, r.size) for r in planned.payload_ranges], payload_buf.array
     )
 
@@ -342,8 +342,8 @@ def fadvise_scan_byte_ranges(
         payload_ranges=planned.payload_ranges,
         filter_host=filter_buf.array,
         payload_host=payload_buf.array,
-        filter_futures=filter_futures,
-        payload_futures=payload_futures,
+        filter_futures=[filter_future],
+        payload_futures=[payload_future],
         filter_buf=filter_buf,
         payload_buf=payload_buf,
     )
