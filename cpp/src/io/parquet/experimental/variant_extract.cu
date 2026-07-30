@@ -472,7 +472,7 @@ __device__ inline cuda::std::optional<T> decode_primitive(device_span<uint8_t co
  */
 __device__ inline cuda::std::optional<bool> decode_bool(device_span<uint8_t const> enc)
 {
-  if (enc.size() < 1) { return cuda::std::nullopt; }
+  if (enc.empty()) { return cuda::std::nullopt; }
   uint8_t const value_metadata = enc[0];
   if (variant_basic_type(value_metadata) != basic_type::primitive) { return cuda::std::nullopt; }
   auto const value_header = variant_value_header(value_metadata);
