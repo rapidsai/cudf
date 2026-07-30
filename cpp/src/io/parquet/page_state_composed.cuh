@@ -9,6 +9,8 @@
 
 namespace cudf::io::parquet::detail {
 
+// Convenience macro to define error methods for page state structs that include a setup state.
+// Cheaper and easier than trying to introduce inheritance or templates for this purpose.
 #define CUDF_PARQUET_PAGE_STATE_ERROR_METHODS                                                  \
   inline __device__ void set_error_code(decode_error err)                                      \
   {                                                                                            \
@@ -21,11 +23,9 @@ namespace cudf::io::parquet::detail {
     ref.store(0, cuda::std::memory_order_release);                                             \
   }
 
-// Composition C: level-only preprocess (RLE level decoding only, no output).
-// Used by: preprocess_levels.
+// Shared memory state struct used by the preprocess_levels kernel.
 // Includes setup (page metadata + error) and stream (level byte ranges + RLE state)
-// because this pass only advances the level streams and never needs nesting,
-// progress, or conversion scratch.
+// which are necessary to advance level streams.
 struct level_scan_state {
   page_decode_setup_state setup;
   page_decode_stream_state stream;
