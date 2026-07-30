@@ -21,8 +21,9 @@ namespace ops {
  * @param a Left operand.
  * @param b Right operand.
  */
-template <cuda::std::integral A, cuda::std::integral B>
+template <typename A, typename B>
 __device__ bool logical_and(A a, B b)
+  requires(!nullable<A> && !nullable<B> && requires { a && b; })
 {
   return a && b;
 }
@@ -35,8 +36,9 @@ __device__ bool logical_and(A a, B b)
  * @param a Left operand.
  * @param b Right operand.
  */
-template <cuda::std::integral A, cuda::std::integral B>
+template <typename A, typename B>
 __device__ bool logical_or(A a, B b)
+  requires(!nullable<A> && !nullable<B> && requires { a || b; })
 {
   return a || b;
 }
@@ -47,8 +49,9 @@ __device__ bool logical_or(A a, B b)
  * @tparam T Value type.
  * @param a Input operand.
  */
-template <cuda::std::integral T>
+template <typename T>
 __device__ bool logical_not(T a)
+  requires(!nullable<T> && requires { !a; })
 {
   return !a;
 }
@@ -61,15 +64,17 @@ __device__ bool logical_not(T a)
  * @param a Left operand.
  * @param b Right operand.
  */
-template <cuda::std::integral A, cuda::std::integral B>
+template <typename A, typename B>
 __device__ bool null_logical_and(A a, B b)
+  requires(!nullable<A> && !nullable<B> && requires { logical_and(a, b); })
 {
   return logical_and(a, b);
 }
 
-template <cuda::std::integral A, cuda::std::integral B>
+template <typename A, typename B>
 __device__ cuda::std::optional<bool> null_logical_and(cuda::std::optional<A> a,
                                                       cuda::std::optional<B> b)
+  requires(!nullable<A> && !nullable<B> && requires { null_logical_and(a.value(), b.value()); })
 {
   if (a.has_value() && b.has_value()) {
     return null_logical_and(a.value(), b.value());
@@ -92,15 +97,17 @@ __device__ cuda::std::optional<bool> null_logical_and(cuda::std::optional<A> a,
  * @param a Left operand.
  * @param b Right operand.
  */
-template <cuda::std::integral A, cuda::std::integral B>
+template <typename A, typename B>
 __device__ bool null_logical_or(A a, B b)
+  requires(!nullable<A> && !nullable<B> && requires { logical_or(a, b); })
 {
   return logical_or(a, b);
 }
 
-template <cuda::std::integral A, cuda::std::integral B>
+template <typename A, typename B>
 __device__ cuda::std::optional<bool> null_logical_or(cuda::std::optional<A> a,
                                                      cuda::std::optional<B> b)
+  requires(!nullable<A> && !nullable<B> && requires { null_logical_or(a.value(), b.value()); })
 {
   if (a.has_value() && b.has_value()) {
     return null_logical_or(a.value(), b.value());

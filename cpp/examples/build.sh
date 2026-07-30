@@ -33,7 +33,7 @@ EXAMPLES_DIR=$(dirname "$(realpath "$0")")
 
 # Set up default libcudf build directory and install prefix if conda build
 if [ "${CONDA_BUILD:-"0"}" == "1" ]; then
-  LIB_BUILD_DIR="${LIB_BUILD_DIR:-${SRC_DIR/cpp/build}}"
+  LIB_BUILD_DIR="${LIB_BUILD_DIR:-${SRC_DIR}/cpp/build}"
   INSTALL_PREFIX="${INSTALL_PREFIX:-${PREFIX}}"
 fi
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -52,7 +52,11 @@ static void bench_slice(nvbench::state& state)
     });
   } else {
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      cudf::strings::slice_strings(input, row_width / 4, row_width / 3, 1, stream);
+      cudf::strings::slice_strings(input,
+                                   std::optional<cudf::size_type>(row_width / 4),
+                                   std::optional<cudf::size_type>(row_width / 3),
+                                   std::optional<cudf::size_type>(1),
+                                   stream);
     });
   }
   state.add_buffer_size(

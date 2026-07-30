@@ -5,7 +5,7 @@
 
 /**
  * @file parquet_metadata.hpp
- * @brief cuDF-IO freeform API
+ * @brief Freeform APIs for Parquet metadata
  */
 
 #pragma once
@@ -24,7 +24,6 @@ namespace io {
 /**
  * @addtogroup io_types
  * @{
- * @file
  */
 
 //! Parquet physical `Type`

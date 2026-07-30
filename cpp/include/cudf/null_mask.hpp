@@ -15,13 +15,16 @@
 #include <span>
 #include <vector>
 
+/**
+ * @file
+ * @brief APIs for managing validity bitmasks
+ */
+
 namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup column_nullmask
  * @{
- * @file
- * @brief APIs for managing validity bitmasks
  */
 
 /**

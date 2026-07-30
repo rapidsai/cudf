@@ -13,6 +13,11 @@
 #include <cudf/contiguous_split.hpp>
 #include <cudf/copying.hpp>
 
+// Size of the serialized table header that precedes the column entries in the
+// packed metadata buffer: version + num_columns + num_rows + pad, four 4-byte fields.
+// Must match `serialized_table_header` in cpp/src/copying/pack.cpp.
+auto constexpr metadata_header_size = 4 * sizeof(cudf::size_type);
+
 struct PackUnpackTest : public cudf::test::BaseFixture {
   void verify_column_metadata(cudf::column_view const& col,
                               cudf::packed_metadata_view::column_view const& meta)
@@ -578,6 +583,21 @@ TEST_F(PackUnpackTest, EmptyTable)
   }
 }
 
+TEST_F(PackUnpackTest, ZeroColumnsWithRows)
+{
+  // A zero-column table with rows survives a pack/unpack round-trip.
+  cudf::table_view t{std::vector<cudf::column_view>{}, 7};
+  auto unpacked = cudf::unpack(cudf::pack(t));
+  EXPECT_EQ(unpacked.num_columns(), 0);
+  EXPECT_EQ(unpacked.num_rows(), 7);
+
+  // A genuinely empty (0, 0) table round-trips to (0, 0).
+  cudf::table_view empty{std::vector<cudf::column_view>{}, 0};
+  auto unpacked_empty = cudf::unpack(cudf::pack(empty));
+  EXPECT_EQ(unpacked_empty.num_columns(), 0);
+  EXPECT_EQ(unpacked_empty.num_rows(), 0);
+}
+
 TEST_F(PackUnpackTest, SlicedEmpty)
 {
   // empty sliced column. this is specifically testing the corner case:
@@ -638,9 +658,8 @@ TEST_F(PackUnpackTest, MetadataViewRejectsTruncatedBuffer)
 
   // Metadata has a table header plus 3 column entries. Remove the last entry so
   // the header still says "3 columns" but only 2 column entries remain.
-  auto constexpr header_size = 2 * sizeof(cudf::size_type);
-  auto const entry_size      = (packed.metadata->size() - header_size) / 3;
-  auto const truncated_size  = packed.metadata->size() - entry_size;
+  auto const entry_size     = (packed.metadata->size() - metadata_header_size) / 3;
+  auto const truncated_size = packed.metadata->size() - entry_size;
 
   auto truncated = std::span<uint8_t const>(packed.metadata->data(), truncated_size);
   EXPECT_THROW(cudf::packed_metadata_view{truncated}, cudf::logic_error);
@@ -653,9 +672,8 @@ TEST_F(PackUnpackTest, MetadataViewRejectsTooLongBuffer)
   cudf::test::fixed_width_column_wrapper<int> col{1, 2, 3};
   auto packed = cudf::pack(cudf::table_view({col}));
 
-  auto constexpr header_size = 2 * sizeof(cudf::size_type);
-  auto const entry_size      = packed.metadata->size() - header_size;  // 1 column entry
-  auto extended              = *packed.metadata;
+  auto const entry_size = packed.metadata->size() - metadata_header_size;  // 1 column entry
+  auto extended         = *packed.metadata;
   extended.resize(packed.metadata->size() + entry_size, 0);
 
   EXPECT_THROW(cudf::packed_metadata_view{extended}, cudf::logic_error);
@@ -677,9 +695,8 @@ TEST_F(PackUnpackTest, MetadataViewRejectsCorruptedChildCount)
 
   // The num_children field is the
   // second-to-last 4-byte value in each entry (before the trailing pad).
-  auto constexpr header_size     = 2 * sizeof(cudf::size_type);
-  auto const entry_size          = (corrupted.size() - header_size) / 3;  // 3 column entries
-  auto const num_children_offset = header_size                            // skip table header
+  auto const entry_size = (corrupted.size() - metadata_header_size) / 3;  // 3 column entries
+  auto const num_children_offset = metadata_header_size                   // skip table header
                                    + entry_size - 2 * sizeof(int32_t);    // num_children in struct
   cudf::size_type bad_children = 10;
   std::memcpy(corrupted.data() + num_children_offset, &bad_children, sizeof(bad_children));
@@ -697,6 +714,61 @@ TEST_F(PackUnpackTest, MetadataRejectsNegativeColumnCount)
   auto constexpr num_columns_offset = sizeof(std::int32_t);
   cudf::size_type const negative    = -1;
   std::memcpy(corrupted.data() + num_columns_offset, &negative, sizeof(negative));
+
+  EXPECT_THROW(cudf::packed_metadata_view{corrupted}, cudf::logic_error);
+  EXPECT_THROW(
+    cudf::unpack(corrupted.data(), reinterpret_cast<uint8_t const*>(packed.gpu_data->data())),
+    cudf::logic_error);
+}
+
+// num_rows follows the leading version and num_columns fields in the header.
+auto constexpr num_rows_offset = 2 * sizeof(std::int32_t);
+
+TEST_F(PackUnpackTest, MetadataRejectsNegativeRowCount)
+{
+  cudf::test::fixed_width_column_wrapper<int> col{1, 2, 3};
+  auto packed = cudf::pack(cudf::table_view({col}));
+
+  auto corrupted                 = *packed.metadata;
+  cudf::size_type const negative = -1;
+  std::memcpy(corrupted.data() + num_rows_offset, &negative, sizeof(negative));
+
+  EXPECT_THROW(cudf::packed_metadata_view{corrupted}, cudf::logic_error);
+  EXPECT_THROW(
+    cudf::unpack(corrupted.data(), reinterpret_cast<uint8_t const*>(packed.gpu_data->data())),
+    cudf::logic_error);
+}
+
+TEST_F(PackUnpackTest, MetadataRejectsRowCountInconsistentWithColumns)
+{
+  cudf::test::fixed_width_column_wrapper<int> col{1, 2, 3};
+  auto packed = cudf::pack(cudf::table_view({col}));
+
+  // The column has 3 rows; a header row count that disagrees must be rejected.
+  auto corrupted              = *packed.metadata;
+  cudf::size_type const wrong = 99;
+  std::memcpy(corrupted.data() + num_rows_offset, &wrong, sizeof(wrong));
+
+  EXPECT_THROW(cudf::packed_metadata_view{corrupted}, cudf::logic_error);
+  EXPECT_THROW(
+    cudf::unpack(corrupted.data(), reinterpret_cast<uint8_t const*>(packed.gpu_data->data())),
+    cudf::logic_error);
+}
+
+TEST_F(PackUnpackTest, MetadataRejectsRowCountInconsistentAcrossColumns)
+{
+  cudf::test::fixed_width_column_wrapper<int> col1{1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<int> col2{4, 5, 6};
+  auto packed = cudf::pack(cudf::table_view({col1, col2}));
+
+  // Leave the header and column 0 at 3 rows but corrupt column 1's size to 4. Validating only
+  // the first column would miss this; every top-level column must match the recorded row count.
+  auto corrupted        = *packed.metadata;
+  auto const entry_size = (corrupted.size() - metadata_header_size) / 2;  // 2 column entries
+  // size is the first field after the 8-byte data_type (two int32s) in each entry.
+  auto const col1_size_offset = metadata_header_size + entry_size + 2 * sizeof(std::int32_t);
+  cudf::size_type const wrong = 4;
+  std::memcpy(corrupted.data() + col1_size_offset, &wrong, sizeof(wrong));
 
   EXPECT_THROW(cudf::packed_metadata_view{corrupted}, cudf::logic_error);
   EXPECT_THROW(
@@ -727,10 +799,9 @@ TEST_F(PackUnpackTest, MetadataRejectsNegativeChildCount)
   auto struct_col = cudf::test::structs_column_wrapper({ints, floats});
   auto packed     = cudf::pack(cudf::table_view({struct_col}));
 
-  auto corrupted                 = *packed.metadata;
-  auto constexpr header_size     = 2 * sizeof(cudf::size_type);
-  auto const entry_size          = (corrupted.size() - header_size) / 3;  // 3 column entries
-  auto const num_children_offset = header_size + entry_size - 2 * sizeof(int32_t);
+  auto corrupted        = *packed.metadata;
+  auto const entry_size = (corrupted.size() - metadata_header_size) / 3;  // 3 column entries
+  auto const num_children_offset = metadata_header_size + entry_size - 2 * sizeof(int32_t);
   cudf::size_type const negative = -1;
   std::memcpy(corrupted.data() + num_children_offset, &negative, sizeof(negative));
 

@@ -23,8 +23,10 @@ from cudf_polars.utils.config import MemoryResourceConfig
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from cudf_polars.quent import QuentContext
     from cudf_polars.utils.config import (
         DynamicPlanningOptions,
+        JoinFilterPushdownOptions,
         ParquetOptions,
     )
 
@@ -247,6 +249,14 @@ class StreamingOptions:
         Env: ``CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING``.
         Default: enabled.
         Category: executor.
+    join_filter_pushdown
+        Config for join filter pushdown optimizations, dict or
+        :class:`~cudf_polars.utils.config.JoinFilterPushdownOptions`. ``None``
+        disables the rewrite.
+        Env: ``CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN`` and
+        ``CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN__*``.
+        Default: enabled.
+        Category: executor.
     sink_to_directory
         Whether multi-partition sink operations should write to a directory
         rather than a single file. The ``spmd``/``ray``/``dask`` engines
@@ -254,6 +264,10 @@ class StreamingOptions:
         Env: ``CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY``.
         Default: ``True`` (forced by the streaming engines).
         Category: executor.
+    quent_context
+        Quent tracing context, or ``None`` to disable tracing.
+        Env: ``CUDF_POLARS__EXECUTOR__QUENT_CONTEXT`` (``true``/``false``).
+        Default: ``None`` (disabled).
     raise_on_fail
         Raise instead of falling back to CPU.
         Default: ``False``.
@@ -341,9 +355,16 @@ class StreamingOptions:
     dynamic_planning: dict[str, Any] | DynamicPlanningOptions | None | Unspecified = (
         _opt("executor")
     )
+    join_filter_pushdown: (
+        dict[str, Any] | JoinFilterPushdownOptions | None | Unspecified
+    ) = _opt("executor")
     sink_to_directory: bool | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY", parse_boolean
     )
+    quent_context: QuentContext | None | Unspecified = _opt(
+        "executor",
+    )
+
     # ---- Engine ----
     raise_on_fail: bool | Unspecified = _opt("engine")
     parquet_options: dict[str, Any] | ParquetOptions | Unspecified = _opt("engine")

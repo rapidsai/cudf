@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_factories.hpp>
@@ -28,8 +28,7 @@ std::unique_ptr<column> xxhash_32(table_view const& input,
                                     stream,
                                     mr);
 
-  // Return early if there's nothing to hash
-  if (input.num_columns() == 0 || input.num_rows() == 0) { return output; }
+  if (input.num_rows() == 0) { return output; }
 
   bool const nullable   = has_nulls(input);
   auto const row_hasher = cudf::detail::row::hash::row_hasher(input, stream);

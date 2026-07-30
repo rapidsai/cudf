@@ -1,6 +1,6 @@
 /**
  * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -60,7 +60,7 @@ struct order_key {
 };
 
 /**
- * @brief Order-based partitioning scheme for sorted/range-partitioned data.
+ * @brief A valid ordering description for sorted/range-partitioned data.
  *
  * Data is partitioned by value ranges based on predetermined boundaries.
  * For N partitions, there are N-1 boundary rows:
@@ -78,17 +78,17 @@ struct order_key {
  * half-open key range (partition keys do not straddle chunk interiors). When false,
  * a chunk may contain keys spanning multiple partitions.
  */
-struct order_scheme {
+struct ordering {
   std::vector<order_key> keys;              ///< Sort keys (column, order, null_order per entry).
   std::shared_ptr<table_chunk> boundaries;  ///< N-1 boundary rows for N partitions.
   /// See struct-level note on `strict_boundaries` semantics.
   bool strict_boundaries{false};
 
-  /// @brief Default constructor. Produces an invalid (empty) scheme.
-  order_scheme() = default;
+  /// @brief Default constructor. Produces an invalid (empty) ordering.
+  ordering() = default;
 
   /**
-   * @brief Construct a validated order_scheme.
+   * @brief Construct a validated ordering.
    *
    * @param keys Non-empty sort keys; size must equal `boundaries->shape().second`.
    * @param boundaries Non-null, device-resident boundary table (N-1 rows for N
@@ -97,34 +97,65 @@ struct order_scheme {
    * @throws std::invalid_argument if `keys` is empty, `boundaries` is null or not
    * device-resident, or `keys.size() != boundaries->shape().second`.
    */
+  ordering(std::vector<order_key> keys,
+           std::shared_ptr<table_chunk> boundaries,
+           bool strict_boundaries = false);
+
+  /**
+   * @brief Return a new ordering with updated key column indices, sharing
+   * boundary rows.
+   *
+   * @param new_keys Replacement sort keys; size must equal
+   * `boundaries->shape().second`.
+   * @return A new ordering with `new_keys` and the same boundaries and
+   * strictness.
+   * @throws std::invalid_argument if `new_keys` is empty or size mismatches
+   * boundaries.
+   */
+  [[nodiscard]] ordering with_keys(std::vector<order_key> new_keys) const;
+
+  /**
+   * @brief Check whether boundary values are aligned with another ordering.
+   *
+   * @param other The ordering to compare against.
+   * @param br Buffer resource used for temporary allocations during comparison.
+   * @return True when both orderings have matching boundary values and
+   * strict_boundaries attributes, and are otherwise compatible (same order and
+   * null_order).
+   */
+  [[nodiscard]] bool boundaries_aligned_with(ordering const& other,
+                                             rapidsmpf::BufferResource& br) const;
+};
+
+/**
+ * @brief Order-based partitioning scheme for sorted/range-partitioned data.
+ *
+ * An order_scheme advertises that the same stream is sorted/range-partitioned
+ * with respect to any individual ordering it contains. Consumers are
+ * responsible for selecting the ordering that is relevant to a particular
+ * operation.
+ */
+struct order_scheme {
+  std::vector<ordering> orderings;  ///< Ordering descriptions valid for the stream.
+
+  /// @brief Default constructor. Produces an invalid (empty) scheme.
+  order_scheme() = default;
+
+  /**
+   * @brief Construct a validated single-ordering order_scheme.
+   *
+   * See `ordering` for parameter semantics.
+   */
   order_scheme(std::vector<order_key> keys,
                std::shared_ptr<table_chunk> boundaries,
                bool strict_boundaries = false);
 
   /**
-   * @brief Return a new order_scheme with updated key column indices, sharing
-   * boundaries.
+   * @brief Construct a validated multi-ordering order_scheme.
    *
-   * The new key count must match the existing boundary column count.
-   *
-   * @param new_keys Replacement sort keys; size must equal
-   * `boundaries->shape().second`.
-   * @return A new order_scheme with `new_keys` and the same `boundaries` and
-   *         `strict_boundaries`.
-   * @throws std::invalid_argument if `new_keys` is empty or size mismatches boundaries.
+   * @param orderings Non-empty sequence of orderings valid for the stream.
    */
-  [[nodiscard]] order_scheme with_keys(std::vector<order_key> new_keys) const;
-
-  /**
-   * @brief Check whether boundary values are aligned with another scheme.
-   *
-   * @param other The order_scheme to compare against.
-   * @param br Buffer resource used for temporary allocations during comparison.
-   * @return True when both schemes have matching boundary values and strict_boundaries
-   * attributes, and the schemes are otherwise compatible (same order and null_order).
-   */
-  [[nodiscard]] bool boundaries_aligned_with(order_scheme const& other,
-                                             rapidsmpf::BufferResource& br) const;
+  explicit order_scheme(std::vector<ordering> orderings);
 };
 
 /**
@@ -180,7 +211,7 @@ struct partitioning_spec {
 
   /**
    * @brief Create a spec for order/range partitioning.
-   * @param o The order scheme to use. `o.keys` must be non-empty; otherwise
+   * @param o The order scheme to use. `o.orderings` must be non-empty; otherwise
    * throws `std::invalid_argument`.
    * @return A partitioning_spec with type ORDER.
    */

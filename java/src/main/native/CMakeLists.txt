@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -170,6 +170,9 @@ add_library(
   src/DeletionVectorJni.cpp
   src/HashJoinJni.cpp
   src/HostMemoryBufferNativeUtilsJni.cpp
+  src/HybridScanReaderJni.cpp
+  src/HybridScanReaderJniInternal.cpp
+  src/HybridScanReaderJniMaterialize.cpp
   src/KeyRemappingJni.cpp
   src/HostUDFWrapperJni.cpp
   src/NvcompJni.cpp
@@ -179,6 +182,7 @@ add_library(
   src/RmmJni.cpp
   src/ScalarJni.cpp
   src/TableJni.cpp
+  src/VariantUtilsJni.cpp
   src/aggregation128_utils.cu
   src/check_nvcomp_output_sizes.cu
   src/maps_column_view.cu

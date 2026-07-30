@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 import polars as pl
+
+from rapidsmpf.bootstrap import get_nranks, is_running_with_rrun
 
 from cudf_polars.testing.engine_utils import (
     ALL_ENGINE_FIXTURE_PARAMS,
@@ -81,8 +83,6 @@ def with_nulls(request: pytest.FixtureRequest):
 @pytest.fixture(autouse=True)
 def _skip_unless_spmd(request: pytest.FixtureRequest) -> None:
     """Skip tests in SPMD multi-rank mode unless marked with ``pytest.mark.spmd``."""
-    from rapidsmpf.bootstrap import get_nranks, is_running_with_rrun
-
     if (
         is_running_with_rrun()
         and get_nranks() > 1
@@ -137,6 +137,11 @@ def _unconfigured_engine(
         yield pl.GPUEngine(executor="in-memory", raise_on_fail=True), None
     else:
         engine: StreamingEngine
+        if _engine_param.engine_name in ("dask", "ray") and is_running_with_rrun():
+            pytest.skip(
+                f"{_engine_param.engine_name} engine cannot be constructed "
+                "inside an rrun cluster"
+            )
         match _engine_param.engine_name:
             case "spmd":
                 from cudf_polars.engine.spmd import SPMDEngine
@@ -285,6 +290,9 @@ def engine(
     """
     Return a :class:`polars.GPUEngine` for each engine variant under test.
 
+    Every variant is configured with ``raise_on_fail=True``, so an unsupported
+    GPU path raises instead of silently falling back to the CPU engine.
+
     Parameters
     ----------
     _unconfigured_engine
@@ -309,7 +317,18 @@ def engine(
 
 
 @pytest.fixture
-def engine_raise_on_fail() -> pl.GPUEngine:
+def in_memory_engine() -> pl.GPUEngine:
+    """
+    Return an in-memory :class:`polars.GPUEngine` with ``raise_on_fail=True``.
+
+    Use this for tests that intentionally exercise in-memory-only behavior
+    instead of the parametrized engine matrix.
+    """
+    return pl.GPUEngine(executor="in-memory", raise_on_fail=True)
+
+
+@pytest.fixture
+def engine_raise_on_fail(in_memory_engine: pl.GPUEngine) -> pl.GPUEngine:
     """
     Return a default :class:`polars.GPUEngine` with ``raise_on_fail=True``.
 
@@ -324,16 +343,13 @@ def engine_raise_on_fail() -> pl.GPUEngine:
     by a streaming task group.
     """
     # TODO: We should be testing with all supported engine variants
-    return pl.GPUEngine(executor="in-memory", raise_on_fail=True)
+    return in_memory_engine
 
 
 @pytest.fixture
 def timeout_seconds() -> int:
     """
     Conservative timeout for APIs that accept a timeout parameter.
-
-    Since pytest-timeout is installed, ensure this value is less than timeout
-    in python/cudf_polars/pyproject.toml.
     """
     return 30
 

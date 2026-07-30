@@ -1,6 +1,6 @@
 /**
  * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "../utils.hpp"
@@ -38,13 +38,18 @@ class StreamingTableChunk : public BaseStreamingFixture,
     auto stream_pool =
       std::make_shared<rmm::cuda_stream_pool>(16, rmm::cuda_stream::flags::non_blocking);
     stream = cudf::get_default_stream();
-    br     = rapidsmpf::BufferResource::create(
-      mr_cuda,                                               // device_mr
-      rapidsmpf::PinnedMemoryResource::make_if_available(),  // pinned_mr
-      memory_limits,                                         // memory_limits
-      std::chrono::milliseconds{1},                          // periodic_spill_check
-      stream_pool,                                           // stream_pool
-      rapidsmpf::Statistics::disabled()                      // statistics
+    // Enable pinned host memory only when supported; otherwise the non-pinned
+    // params still run and the PINNED_HOST cases skip in the test bodies.
+    auto pinned_pool_properties = rapidsmpf::is_pinned_memory_resources_supported()
+                                    ? rapidsmpf::PinnedPoolProperties{}
+                                    : rapidsmpf::PinnedMemoryDisabled;
+    br                          = rapidsmpf::BufferResource::create(
+      mr_cuda,                            // device_mr
+      std::move(pinned_pool_properties),  // pinned_pool_properties
+      memory_limits,                      // memory_limits
+      std::chrono::milliseconds{1},       // periodic_spill_check
+      stream_pool,                        // stream_pool
+      rapidsmpf::Statistics::disabled()   // statistics
     );
     ctx = std::make_shared<rapidsmpf::streaming::Context>(
       options, GlobalEnvironment->comm_->logger(), br);
@@ -473,14 +478,24 @@ TEST_F(StreamingTableChunk, ToPackedDataFromTable)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expect, table_chunk{std::move(packed)}.table_view());
 }
 
-TEST_F(StreamingTableChunk, ToMessageUnalignedSize)
+TEST_P(StreamingTableChunk, ToMessageUnalignedSize)
 {
+  auto const spill_mem_type = GetParam();
+  if (spill_mem_type == rapidsmpf::MemoryType::PINNED_HOST &&
+      !rapidsmpf::is_pinned_memory_resources_supported()) {
+    GTEST_SKIP() << "MemoryType::PINNED_HOST isn't supported on the system.";
+  }
+
   constexpr unsigned int num_rows = 5;
   constexpr std::int64_t seed     = 2025;
   constexpr std::uint64_t seq     = 7;
 
   auto expect = random_table_with_index(seed, num_rows, 0, 5);
-  auto chunk  = std::make_unique<table_chunk>(std::make_unique<cudf::table>(expect), stream);
+  auto const expected_packed_size =
+    cudf::packed_size(expect.view(), stream, rmm::mr::get_current_device_resource_ref());
+  EXPECT_EQ(expect.alloc_size(), 80);
+  EXPECT_EQ(expected_packed_size, 128);
+  auto chunk = std::make_unique<table_chunk>(std::make_unique<cudf::table>(expect), stream);
 
   rapidsmpf::streaming::Message m = to_message(seq, std::move(chunk));
   EXPECT_EQ(m.sequence_number(), seq);
@@ -488,21 +503,21 @@ TEST_F(StreamingTableChunk, ToMessageUnalignedSize)
   EXPECT_TRUE(m.holds<table_chunk>());
   EXPECT_TRUE(m.content_description().spillable());
   EXPECT_EQ(m.content_description().content_size(rapidsmpf::MemoryType::HOST), 0);
-  EXPECT_EQ(m.content_description().content_size(rapidsmpf::MemoryType::DEVICE), 80);
-  EXPECT_EQ(m.copy_cost(), 80);
+  EXPECT_EQ(m.content_description().content_size(rapidsmpf::MemoryType::DEVICE),
+            expected_packed_size);
+  EXPECT_EQ(m.copy_cost(), expected_packed_size);
 
   // Deep copy: device → host.
-  // Note: `m.copy_cost() == 80`, but cudf performs 128-byte aligned allocations.
-  // This means `m.copy_cost()` is not always sufficient; however, table_chunk.copy()
-  // accounts for this alignment internally.
-  auto reservation = br->reserve_or_fail(m.copy_cost(), rapidsmpf::MemoryType::HOST);
+  // The copy cost includes cudf's packed-buffer alignment and is therefore sufficient
+  // before pack() allocates its output.
+  auto reservation                 = br->reserve_or_fail(m.copy_cost(), spill_mem_type);
   rapidsmpf::streaming::Message m2 = m.copy(reservation);
   EXPECT_EQ(reservation.size(), 0);
   EXPECT_FALSE(m2.empty());
   EXPECT_TRUE(m2.holds<table_chunk>());
   EXPECT_TRUE(m2.content_description().spillable());
-  EXPECT_EQ(m2.copy_cost(), 128);
-  EXPECT_EQ(m2.content_description().content_size(rapidsmpf::MemoryType::HOST), 128);
+  EXPECT_EQ(m2.copy_cost(), expected_packed_size);
+  EXPECT_EQ(m2.content_description().content_size(spill_mem_type), expected_packed_size);
   EXPECT_EQ(m2.content_description().content_size(rapidsmpf::MemoryType::DEVICE), 0);
   EXPECT_EQ(m2.sequence_number(), seq);
 }

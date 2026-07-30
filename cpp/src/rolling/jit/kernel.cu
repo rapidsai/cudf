@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -47,7 +47,7 @@ template <typename InType,
           typename FollowingWindowType>
 __device__ void rolling_window_kernel(cudf::size_type nrows,
                                       void const* __restrict__ p_in_col,
-                                      cudf::bitmask_type const* const __restrict__ in_col_valid,
+                                      cudf::bitmask_type const* __restrict__ const in_col_valid,
                                       void* __restrict__ p_out_col,
                                       cudf::bitmask_type* __restrict__ out_col_valid,
                                       cudf::size_type* __restrict__ output_valid_count,

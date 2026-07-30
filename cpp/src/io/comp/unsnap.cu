@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -65,7 +65,7 @@ struct unsnap_state_s {
   uint32_t bytes_left{};           ///< remaining bytes to decompress
   int32_t error{};                 ///< current error status
   uint32_t tstart{};               ///< start time for perf logging
-  volatile unsnap_queue_s q{};     ///< queue for cross-warp communication
+  unsnap_queue_s volatile q{};     ///< queue for cross-warp communication
   device_span<uint8_t const> src;  ///< input for current block
   device_span<uint8_t> dst;        ///< output for current block
 };
@@ -133,7 +133,7 @@ __device__ void snappy_prefetch_bytestream(unsnap_state_s* s, int t)
  *       k_len3lut[k] = v | (n << 4);
  *   }
  */
-static const uint8_t __device__ __constant__ k_len3lut[1 << 10] = {
+static uint8_t const __device__ __constant__ k_len3lut[1 << 10] = {
   0x80, 0x91, 0x80, 0x91, 0x92, 0x91, 0x92, 0x91, 0x80, 0xa3, 0x80, 0xa3, 0x92, 0xa3, 0x92, 0xa3,
   0x94, 0x91, 0x94, 0x91, 0x92, 0x91, 0x92, 0x91, 0x94, 0xa3, 0x94, 0xa3, 0x92, 0xa3, 0x92, 0xa3,
   0x80, 0xa5, 0x80, 0xa5, 0xa6, 0xa5, 0xa6, 0xa5, 0x80, 0xa3, 0x80, 0xa3, 0xa6, 0xa3, 0xa6, 0xa3,
@@ -281,7 +281,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
 
   for (;;) {
     int32_t batch_len;
-    volatile unsnap_batch_s* b;
+    unsnap_batch_s volatile* b;
 
     // Wait for prefetcher
     if (t == 0) {
@@ -313,7 +313,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
       is_long_sym    = ((b0 & ~4) != 0) && (((b0 + 1) & 2) == 0);
       short_sym_mask = ballot(is_long_sym);
       batch_len      = 0;
-      b = reinterpret_cast<volatile unsnap_batch_s*>(shuffle(reinterpret_cast<uintptr_t>(b)));
+      b = reinterpret_cast<unsnap_batch_s volatile*>(shuffle(reinterpret_cast<uintptr_t>(b)));
       if (!(short_sym_mask & 1)) {
         batch_len = shuffle((t == 0) ? (short_sym_mask) ? __ffs(short_sym_mask) - 1 : 32 : 0);
         if (batch_len != 0) {
@@ -509,7 +509,7 @@ __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_s
   int batch               = 0;
 
   do {
-    volatile unsnap_batch_s* b = &s->q.batch[batch * batch_size];
+    unsnap_batch_s volatile* b = &s->q.batch[batch * batch_size];
     int32_t batch_len, blen_t, dist_t;
 
     if (t == 0) {

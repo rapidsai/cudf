@@ -144,7 +144,7 @@ int dispatch_to_arrow_host::operator()<bool>(ArrowArray* out) const
   NANOARROW_RETURN_NOT_OK(populate_validity_bitmap(ArrowArrayValidityBitmap(tmp.get())));
   auto bitmask = detail::bools_to_mask(column, stream, mr);
   NANOARROW_RETURN_NOT_OK(populate_data_buffer(
-    device_span<uint8_t const>(reinterpret_cast<const uint8_t*>(bitmask.first->data()),
+    device_span<uint8_t const>(reinterpret_cast<uint8_t const*>(bitmask.first->data()),
                                bitmask.first->size()),
     ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx)));
 
