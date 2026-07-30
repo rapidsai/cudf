@@ -537,6 +537,30 @@ TEST_F(EncodeVariantTest, RoundtripMultiColumnWithExtractVariant)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded_b, col_b);
 }
 
+TEST_F(EncodeVariantTest, DuplicateColumnNamesThrows)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> col_a{1};
+  cudf::test::fixed_width_column_wrapper<int32_t> col_b{2};
+  cudf::table_view tbl{{col_a, col_b}};
+  std::vector<std::string> names{"a", "a"};
+  EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::encode_variant(
+                 tbl, names, cudf::test::get_default_stream())),
+               std::invalid_argument);
+}
+
+TEST_F(EncodeVariantTest, DuplicateColumnNamesAfterSortThrows)
+{
+  // Names that sort into adjacent positions: ["b", "a", "a"] → sorted ["a", "a", "b"]
+  cudf::test::fixed_width_column_wrapper<int32_t> col_b{1};
+  cudf::test::fixed_width_column_wrapper<int32_t> col_a0{2};
+  cudf::test::fixed_width_column_wrapper<int32_t> col_a1{3};
+  cudf::table_view tbl{{col_b, col_a0, col_a1}};
+  std::vector<std::string> names{"b", "a", "a"};
+  EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::encode_variant(
+                 tbl, names, cudf::test::get_default_stream())),
+               std::invalid_argument);
+}
+
 TEST_F(EncodeVariantTest, LargeStringFieldRoundtrip)
 {
   // Strings longer than 64 bytes must use long_string encoding in the object field
