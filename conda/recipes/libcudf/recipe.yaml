@@ -88,6 +88,7 @@ cache:
       - cuda-cudart-dev
       - cuda-nvrtc-dev
       - cuda-nvtx-dev
+      - cuda-profiler-api
       - cuda-sanitizer-api
       - libcurand-dev
       - libnvjitlink-dev
@@ -366,6 +367,7 @@ outputs:
         - libcurand-dev
         - cuda-cudart-dev
         - croaring ${{ croaring_version }}
+        - cuda-profiler-api
         - cuda-sanitizer-api
       run:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
