@@ -57,10 +57,10 @@ __device__ cuda::std::pair<int, int> page_bounds(
   auto const block = cg::this_thread_block();
   auto const t     = block.thread_rank();
 
-  int const max_depth = s->col.max_nesting_depth;
+  int const max_depth = s->setup.col.max_nesting_depth;
   int const max_def   = s->nesting_info[max_depth - 1].max_def_level;
 
-  auto const pp = &s->page;
+  auto const pp = &s->setup.page;
   // Clamp to decoded level count; for chunked reads we may have decoded fewer values than
   // num_input_values (skip_rows/num_rows), and the level buffers are only that large.
   int const actual_num_values =
@@ -71,8 +71,8 @@ __device__ cuda::std::pair<int, int> page_bounds(
   // can skip all this if we know there are no nulls
   if (max_def == 0 && !is_bounds_pg) {
     if (t == 0) {
-      s->page.num_valids = actual_num_values;
-      s->page.num_nulls  = 0;
+      s->setup.page.num_valids = actual_num_values;
+      s->setup.page.num_nulls  = 0;
     }
     return {0, actual_num_values};
   }
@@ -93,7 +93,7 @@ __device__ cuda::std::pair<int, int> page_bounds(
     __shared__ int end_val_idx;
 
     // need these for skip_rows case
-    auto const page_start_row = s->col.start_row + pp->chunk_row;
+    auto const page_start_row = s->setup.col.start_row + pp->chunk_row;
     auto const max_row        = min_row + num_rows;
     auto const begin_row      = page_start_row >= min_row ? 0 : min_row - page_start_row;
     auto const max_page_rows  = pp->num_rows - begin_row;
@@ -550,7 +550,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   }
 
   bool const is_bounds_pg =
-    is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
+    is_bounds_page(s->setup.page, s->setup.col.start_row, min_row, num_rows, has_repetition);
 
   // if we have size info, then we only need to do this for bounds pages
   if (pp->has_value_info && !is_bounds_pg) { return; }
@@ -572,8 +572,8 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
 
   // need to save num_nulls and num_valids calculated in page_bounds in this page
   if (t == 0) {
-    pp->num_nulls  = s->page.num_nulls;
-    pp->num_valids = s->page.num_valids;
+    pp->num_nulls  = s->setup.page.num_nulls;
+    pp->num_valids = s->setup.page.num_valids;
     pp->start_val  = start_value;
     pp->end_val    = end_value;
   }
@@ -643,12 +643,12 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size)
     }
   } else {
     bool const is_bounds_pg =
-      is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
+      is_bounds_page(s->setup.page, s->setup.col.start_row, min_row, num_rows, has_repetition);
 
     // if we have size info, then we only need to do this for bounds pages
     if (pp->has_value_info && !is_bounds_pg) {
       // check if we need to store values from the index
-      if (t == 0 && is_page_contained(s->page, s->col.start_row, min_row, num_rows)) {
+      if (t == 0 && is_page_contained(s->setup.page, s->setup.col.start_row, min_row, num_rows)) {
         pp->str_bytes = pp->str_bytes_from_index;
       }
       return;
@@ -725,12 +725,12 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size)
   }
 
   bool const is_bounds_pg =
-    is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
+    is_bounds_page(s->setup.page, s->setup.col.start_row, min_row, num_rows, has_repetition);
 
   // if we have size info, then we only need to do this for bounds pages
   if (pp->has_value_info && !is_bounds_pg) {
     // check if we need to store values from the index
-    if (t == 0 && is_page_contained(s->page, s->col.start_row, min_row, num_rows)) {
+    if (t == 0 && is_page_contained(s->setup.page, s->setup.col.start_row, min_row, num_rows)) {
       pp->str_bytes = pp->str_bytes_from_index;
     }
     return;
@@ -839,18 +839,18 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   }
 
   bool const is_bounds_pg =
-    is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
+    is_bounds_page(s->setup.page, s->setup.col.start_row, min_row, num_rows, has_repetition);
 
   // if we have size info, then we only need to do this for bounds pages
   if (pp->has_value_info && !is_bounds_pg) {
     // check if we need to store values from the index
-    if (t == 0 && is_page_contained(s->page, s->col.start_row, min_row, num_rows)) {
+    if (t == 0 && is_page_contained(s->setup.page, s->setup.col.start_row, min_row, num_rows)) {
       pp->str_bytes = pp->str_bytes_from_index;
     }
     return;
   }
 
-  auto const& col  = s->col;
+  auto const& col  = s->setup.col;
   size_t str_bytes = 0;
   // short circuit for FIXED_LEN_BYTE_ARRAY
   if (col.physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
@@ -1319,9 +1319,9 @@ CUDF_KERNEL void preprocess_string_offsets_kernel(
   // We don't know how many values we'll need to read, because we don't know
   // how many nulls we'll skip. So we have to read through the skipped rows.
   // This runs before we know skipped_leaf_values so can't skip for lists either.
-  bool const is_list = (chunk.max_level[level_type::REPETITION] != 0);
-  size_t const num_values_to_process =
-    is_list ? pp->nesting[chunk.max_nesting_depth - 1].batch_size : s->num_rows + s->first_row;
+  bool const is_list                 = (chunk.max_level[level_type::REPETITION] != 0);
+  size_t const num_values_to_process = is_list ? pp->nesting[chunk.max_nesting_depth - 1].batch_size
+                                               : s->setup.num_rows + s->setup.first_row;
 
   if (num_values_to_process == 0) { return; }
 

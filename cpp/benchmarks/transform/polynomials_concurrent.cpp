@@ -12,7 +12,7 @@
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <BS_thread_pool.hpp>
 #include <nvbench/nvbench.cuh>
@@ -39,8 +39,8 @@ static void BM_transform_polynomials_concurrent(nvbench::state& state)
 
   std::vector<std::unique_ptr<cudf::column>> constants;
   std::transform(
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(order + 1),
+    cuda::make_counting_iterator(0),
+    cuda::make_counting_iterator(order + 1),
     std::back_inserter(constants),
     [&](int) { return create_random_column(cudf::type_to_id<key_type>(), row_count{1}, profile); });
 
