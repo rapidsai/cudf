@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,6 +13,7 @@
 #include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -355,7 +356,7 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   size_t size_limit,
   size_t num_columns,
   bool is_first_subpass,
-  bool has_page_index,
+  bool has_offset_index,
   rmm::cuda_stream_view stream)
 {
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
@@ -386,13 +387,17 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   auto iter = cuda::counting_iterator{size_t{0}};
   auto page_row_index =
     cudf::detail::make_counting_transform_iterator(0, get_page_end_row_index{c_info});
-  thrust::transform(
-    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-    iter,
-    iter + num_columns,
-    page_bounds.begin(),
-    get_page_span{
-      page_offsets, chunks, page_row_index, start_row, end_row, is_first_subpass, has_page_index});
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    iter,
+                    iter + num_columns,
+                    page_bounds.begin(),
+                    get_page_span{page_offsets,
+                                  chunks,
+                                  page_row_index,
+                                  start_row,
+                                  end_row,
+                                  is_first_subpass,
+                                  has_offset_index});
 
   // total page count over all columns
   auto page_count_iter   = cuda::make_transform_iterator(page_bounds.begin(), get_span_size{});
@@ -616,13 +621,27 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     start_pos += codec.num_pages;
   }
   // now copy the uncompressed V2 def and rep level data
-  if (not copy_in.empty()) {
+  if (curr_copy_page > 0) {
     auto const d_copy_in = cudf::detail::make_device_uvector_async(
       copy_in, stream, cudf::get_current_device_resource_ref());
     auto const d_copy_out = cudf::detail::make_device_uvector_async(
       copy_out, stream, cudf::get_current_device_resource_ref());
 
-    cudf::io::detail::gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
+    auto const src_iter = cudf::detail::make_counting_transform_iterator(
+      size_type{0},
+      cuda::proclaim_return_type<uint8_t const*>(
+        [inputs = d_copy_in.data()] __device__(size_type i) { return inputs[i].data(); }));
+    auto const dst_iter = cudf::detail::make_counting_transform_iterator(
+      size_type{0},
+      cuda::proclaim_return_type<uint8_t*>(
+        [outputs = d_copy_out.data()] __device__(size_type i) { return outputs[i].data(); }));
+    auto const size_iter = cudf::detail::make_counting_transform_iterator(
+      size_type{0},
+      cuda::proclaim_return_type<size_t>(
+        [inputs = d_copy_in.data(), outputs = d_copy_out.data()] __device__(size_type i) {
+          return inputs[i].size() < outputs[i].size() ? inputs[i].size() : outputs[i].size();
+        }));
+    cudf::detail::batched_memcpy_async(src_iter, dst_iter, size_iter, curr_copy_page, stream);
   }
 
   CUDF_EXPECTS(

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
@@ -375,7 +375,7 @@ std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<scalar const>>
                                                                  mr);
                  });
 
-  return std::make_unique<table>(std::move(result));
+  return std::make_unique<table>(std::move(result), target.num_rows());
 }
 
 std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
@@ -438,21 +438,25 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
                "Type mismatch in input column and target column",
                cudf::data_type_error);
 
-  if (target.num_rows() != 0) {
-    std::vector<std::unique_ptr<column>> out_columns(target.num_columns());
-    std::transform(
-      input.begin(),
-      input.end(),
-      target.begin(),
-      out_columns.begin(),
-      [&boolean_mask, mr, stream](auto const& input_column, auto const& target_column) {
-        return boolean_mask_scatter(input_column, target_column, boolean_mask, stream, mr);
-      });
+  // Build a scatter map of the target row indices selected by the boolean mask, then delegate to
+  // detail::scatter.
+  auto indices         = cudf::make_numeric_column(data_type{type_id::INT32},
+                                           target.num_rows(),
+                                           mask_state::UNALLOCATED,
+                                           stream,
+                                           cudf::get_current_device_resource_ref());
+  auto mutable_indices = indices->mutable_view();
+  thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   mutable_indices.begin<size_type>(),
+                   mutable_indices.end<size_type>(),
+                   0);
 
-    return std::make_unique<table>(std::move(out_columns));
-  } else {
-    return empty_like(target);
-  }
+  auto scatter_map = detail::apply_mask(table_view{{indices->view()}},
+                                        boolean_mask,
+                                        mask_type::RETENTION,
+                                        stream,
+                                        cudf::get_current_device_resource_ref());
+  return detail::scatter(input, scatter_map->get_column(0).view(), target, stream, mr);
 }
 
 std::unique_ptr<table> boolean_mask_scatter(
@@ -492,7 +496,7 @@ std::unique_ptr<table> boolean_mask_scatter(
                        scalar.get(), target_column, boolean_mask, stream, mr);
                    });
 
-    return std::make_unique<table>(std::move(out_columns));
+    return std::make_unique<table>(std::move(out_columns), target.num_rows());
   } else {
     return empty_like(target);
   }

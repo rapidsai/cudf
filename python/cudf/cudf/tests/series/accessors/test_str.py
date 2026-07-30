@@ -8,6 +8,7 @@ from contextlib import nullcontext as does_not_raise
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -2530,6 +2531,19 @@ def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
         assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("pat", [r"(\D)(\d)?", r"(\D)(\d*)"])
+def test_string_extract_nonparticipating_group(pat):
+    # An optional group that does not participate in the match results in
+    # null, while a group that participates with an empty match remains "".
+    s = ["A1", "B2", "C"]
+    gs = cudf.Series(s)
+    ps = pd.Series(s)
+
+    expect = ps.str.extract(pat, expand=True)
+    got = gs.str.extract(pat, expand=True)
+    assert_eq(expect, got)
+
+
 def test_string_extract_named_groups():
     s = ["hello-123", "world-456", "goodbye-789"]
     gs = cudf.Series(s)
@@ -2987,3 +3001,33 @@ def test_string_list_get_access():
     got = got.str.get(1)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data,dtype,inferred",
+    [
+        ([1, 2, 3], "int64", "integer"),
+        ([1, 2, 3], "uint32", "integer"),
+        ([1, 2, 3], pd.ArrowDtype(pa.int64()), "integer"),
+        ([1, 2, 3], pd.Int64Dtype(), "integer"),
+        ([1.0, 2.0, 3.0], "float64", "floating"),
+        ([True, False, True], "bool", "boolean"),
+        (pd.to_datetime(["2020-01-01", "2021-06-15"]), None, "datetime64"),
+        (pd.to_timedelta([1, 2, 3], unit="s"), None, "timedelta64"),
+    ],
+)
+def test_str_accessor_invalid_dtype_message(data, dtype, inferred):
+    # The .str accessor mirrors pandas' inferred-type naming in its error
+    # message (integer/floating/boolean/datetime64/timedelta64) across numpy,
+    # pandas-nullable and arrow-backed dtypes.
+    if dtype is not None:
+        gs = cudf.Series(data, dtype=dtype)
+    else:
+        gs = cudf.Series(data)
+    with pytest.raises(
+        AttributeError,
+        match=re.escape(
+            f"Can only use .str accessor with string values, not {inferred}"
+        ),
+    ):
+        gs.str

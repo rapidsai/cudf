@@ -24,7 +24,6 @@ from cudf_polars.testing.engine_utils import is_streaming_engine
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_140,
-    POLARS_VERSION_LT_141,
 )
 
 
@@ -721,17 +720,10 @@ def test_groupby_literal_agg(engine: pl.GPUEngine):
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-def test_groupby_empty_keys_raises(engine: pl.GPUEngine, request):
+def test_groupby_empty_keys_raises(engine: pl.GPUEngine):
     df = pl.LazyFrame({"x": [1, 2, 3]})
     q = df.group_by([]).agg(pl.len())
     if POLARS_VERSION_LT_140:
         assert_ir_translation_raises(q, engine, NotImplementedError)
     else:
-        if not POLARS_VERSION_LT_141 and is_streaming_engine(engine):
-            request.applymarker(
-                pytest.mark.xfail(
-                    reason="len() row count lost in zero-column streaming chunks "
-                    "(https://github.com/rapidsai/cudf/issues/21428)"
-                )
-            )
         assert_gpu_result_equal(q, engine=engine)
