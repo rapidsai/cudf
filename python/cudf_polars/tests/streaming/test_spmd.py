@@ -6,12 +6,14 @@ from __future__ import annotations
 
 import os
 import uuid
+from itertools import pairwise
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import pytest
 
 import polars as pl
+from polars import polars as plrs  # type: ignore[attr-defined]
 
 import rmm.mr
 from rapidsmpf.bootstrap import is_running_with_rrun
@@ -499,8 +501,19 @@ _CROSS_RANK_KEYS = [
         (pl.col("x").sum().over("g").alias("result"), "sum"),
         (pl.col("x").rank(method="dense").over("g").alias("result"), "rank"),
         (pl.col("x").shift(1).over("g", order_by="x").alias("result"), "shift"),
+        pytest.param(
+            pl.col("x")
+            .rolling_mean(window_size=2)
+            .over("g", order_by="x")
+            .alias("result"),
+            "rolling",
+            marks=pytest.mark.skipif(
+                not hasattr(plrs._expr_nodes, "RollingFunction"),
+                reason="RollingFunction not available in this polars version",
+            ),
+        ),
     ],
-    ids=["scalar_sum", "nonscalar_rank", "nonscalar_shift"],
+    ids=["scalar_sum", "nonscalar_rank", "nonscalar_shift", "nonscalar_rolling"],
 )
 @pytest.mark.parametrize(
     "cross_rank",
@@ -559,11 +572,47 @@ def test_over_multirank(
                 assert grp["result"].to_list() == [sum(expected_xs)] * 3
             elif expected == "rank":
                 assert grp["result"].to_list() == [1, 2, 3]
-            else:
+            elif expected == "shift":
                 assert grp["result"].to_list() == [None, *expected_xs[:-1]]
+            else:
+                assert grp["result"].to_list() == [
+                    None,
+                    *((left + right) / 2 for left, right in pairwise(expected_xs)),
+                ]
 
 
-def test_over_shift_without_order_by_multirank_raises(comm: Communicator) -> None:
+@pytest.mark.parametrize(
+    "expr,expected",
+    [
+        (pl.col("x").shift(1).over("g").alias("result"), "shift"),
+        (pl.col("x").cum_sum().over("g").alias("result"), "cum_sum"),
+        pytest.param(
+            pl.col("x").rolling_mean(window_size=2).over("g").alias("result"),
+            "rolling",
+            marks=pytest.mark.skipif(
+                not hasattr(plrs._expr_nodes, "RollingFunction"),
+                reason="RollingFunction not available in this polars version",
+            ),
+        ),
+        pytest.param(
+            pl.col("x")
+            .rolling_mean(window_size=2)
+            .over("g", order_by="t")
+            .alias("result"),
+            "rolling_ordered",
+            marks=pytest.mark.skipif(
+                not hasattr(plrs._expr_nodes, "RollingFunction"),
+                reason="RollingFunction not available in this polars version",
+            ),
+        ),
+    ],
+    ids=["shift", "cum_sum", "fixed_rolling", "fixed_rolling_ordered"],
+)
+def test_over_shared_group_ordering_multirank(
+    comm: Communicator,
+    expr: pl.Expr,
+    expected: str,
+) -> None:
     with SPMDEngine(
         comm=comm,
         executor_options={
@@ -576,18 +625,56 @@ def test_over_shift_without_order_by_multirank_raises(comm: Communicator) -> Non
             pytest.skip("requires multiple ranks")
 
         rank = engine.rank
+        nranks = engine.nranks
+        local_xs = [rank * 3 + 1, rank * 3 + 2, rank * 3 + 3]
+        local_ts = [3 * nranks - rank, rank + 1, 2 * nranks - rank]
         lf = pl.LazyFrame(
             {
                 "g": [0, 0, 0],
-                "x": [rank * 3 + 1, rank * 3 + 2, rank * 3 + 3],
+                "t": local_ts,
+                "x": local_xs,
             }
         )
-        q = lf.select(pl.col("x").shift(1).over("g"))
-        with pytest.raises(
-            NotImplementedError,
-            match=r"input-order-sensitive window expressions without order_by",
-        ):
-            q.collect(engine=engine)
+        local_result = lf.select(pl.col("x"), expr).collect(engine=engine)
+        assert local_result["x"].to_list() == local_xs
+
+        with reserve_op_id() as op_id:
+            global_result = allgather_polars_dataframe(
+                engine=engine, local_df=local_result, op_id=op_id
+            ).sort("x")
+
+        xs = list(range(1, 3 * engine.nranks + 1))
+        assert global_result["x"].to_list() == xs
+        expected_values: list[float | int | None]
+        if expected == "shift":
+            expected_values = [None, *xs[:-1]]
+        elif expected == "cum_sum":
+            total = 0
+            expected_values = []
+            for x in xs:
+                total += x
+                expected_values.append(total)
+        elif expected == "rolling_ordered":
+            ordered_xs = [
+                *(3 * r + 2 for r in range(engine.nranks)),
+                *(3 * r + 3 for r in reversed(range(engine.nranks))),
+                *(3 * r + 1 for r in reversed(range(engine.nranks))),
+            ]
+            values_by_x = dict(
+                zip(
+                    ordered_xs,
+                    [
+                        None,
+                        *((left + right) / 2 for left, right in pairwise(ordered_xs)),
+                    ],
+                    strict=True,
+                )
+            )
+            expected_values = [values_by_x[x] for x in xs]
+        else:
+            expected_values = [None]
+            expected_values.extend((left + right) / 2 for left, right in pairwise(xs))
+        assert global_result["result"].to_list() == expected_values
 
 
 def test_over_nonscalar_duplicated_input(
