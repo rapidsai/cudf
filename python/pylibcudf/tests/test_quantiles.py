@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -198,7 +198,9 @@ def test_quantiles(
 
 
 def test_quantile_nearest_half_up():
-    pa_array = pa.array([10, 20, 30, 40, 50, 60, 70, 80, 90, 100], type=pa.int64())
+    pa_array = pa.array(
+        [10, 20, 30, 40, 50, 60, 70, 80, 90, 100], type=pa.int64()
+    )
     plc_col = plc.Column.from_arrow(pa_array)
     ordered_indices = plc.Column.from_arrow(
         pc.cast(pc.sort_indices(pa_array), pa.int32())
