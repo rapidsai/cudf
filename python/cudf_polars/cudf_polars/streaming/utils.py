@@ -10,7 +10,12 @@ from functools import reduce
 from itertools import chain
 from typing import TYPE_CHECKING
 
-from cudf_polars.dsl.expr import Col, GroupedWindow, UnaryFunction
+from cudf_polars.dsl.expr import (
+    Col,
+    FixedSizeRollingWindow,
+    GroupedWindow,
+    UnaryFunction,
+)
 from cudf_polars.dsl.ir import Union
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.streaming.base import PartitionInfo
@@ -142,5 +147,7 @@ def _contains_input_order_window_without_order_by(exprs: Sequence[Expr]) -> bool
             ):
                 v = v.children[0]
             if isinstance(v, UnaryFunction) and v.name in _INPUT_ORDER_WINDOW_OPS:
+                return True
+            if isinstance(v, FixedSizeRollingWindow):
                 return True
     return False
