@@ -1037,8 +1037,6 @@ TEST_F(CastVariantTest, UnsupportedTypeThrows)
 {
   // Unsupported target types must throw regardless of whether the input is empty or non-empty.
   auto stream = cudf::test::get_default_stream();
-  std::vector<uint8_t> const val{make_variant_primitive(variant_primitive_type::NULLVAL)};
-  cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
 
   std::vector<cudf::type_id> const ids{cudf::type_id::UINT8,
                                        cudf::type_id::UINT16,
@@ -1055,7 +1053,7 @@ TEST_F(CastVariantTest, UnsupportedTypeThrows)
   // Empty input: the early-return path must still validate the type.
   auto const empty_values =
     cudf::empty_like(cudf::structs_column_view{make_xyz_three_row_variant()}.child(1));
-  for (auto const& id : ids) {
+  for (auto const id : ids) {
     EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::cast_variant(
                    *empty_values, cudf::data_type{id}, stream)),
                  std::invalid_argument)
