@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "join_common_utils.cuh"
@@ -151,36 +151,34 @@ void find_matches_in_hash_table(HashTableType const& hash_table,
 
 distinct_hash_join::distinct_hash_join(cudf::table_view const& right,
                                        cudf::null_equality compare_nulls,
-                                       rmm::cuda_stream_view stream)
-  : distinct_hash_join{right, compare_nulls, CUCO_DESIRED_LOAD_FACTOR, stream}
+                                       rmm::cuda_stream_view stream,
+                                       cuda::mr::any_resource<cuda::mr::device_accessible> mr)
+  : distinct_hash_join{right, compare_nulls, CUCO_DESIRED_LOAD_FACTOR, stream, std::move(mr)}
 {
 }
 
 distinct_hash_join::distinct_hash_join(cudf::table_view const& right,
                                        cudf::null_equality compare_nulls,
                                        double load_factor,
-                                       rmm::cuda_stream_view stream)
+                                       rmm::cuda_stream_view stream,
+                                       cuda::mr::any_resource<cuda::mr::device_accessible> mr)
   : _has_nested_columns{cudf::has_nested_columns(right)},
     _nulls_equal{compare_nulls},
     _right{right},
     _preprocessed_right{cudf::detail::row::equality::preprocessed_table::create(_right, stream)},
     _hash_table{cuco::extent{static_cast<std::size_t>(right.num_rows())},
-                load_factor,
+                checked_load_factor(load_factor),
                 cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(),
                                            rhs_index_type{cudf::JoinNoMatch}}},
                 always_not_equal{},
                 {},
                 cuco::thread_scope_device,
                 cuco_storage_type{},
-                rmm::mr::polymorphic_allocator<char>{},
+                rmm::mr::polymorphic_allocator<char>{std::move(mr)},
                 stream.value()}
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(0 != this->_right.num_columns(), "Hash join right table is empty");
-  CUDF_EXPECTS(load_factor > 0 && load_factor <= 1,
-               "Invalid load factor: must be greater than 0 and less than or equal to 1.",
-               std::invalid_argument);
-
   size_type const right_table_num_rows{_right.num_rows()};
 
   if (right_table_num_rows == 0) { return; }
@@ -408,8 +406,9 @@ distinct_hash_join::~distinct_hash_join() = default;
 distinct_hash_join::distinct_hash_join(cudf::table_view const& right,
                                        null_equality compare_nulls,
                                        double load_factor,
-                                       rmm::cuda_stream_view stream)
-  : _impl{std::make_unique<impl_type>(right, compare_nulls, load_factor, stream)}
+                                       rmm::cuda_stream_view stream,
+                                       cuda::mr::any_resource<cuda::mr::device_accessible> mr)
+  : _impl{std::make_unique<impl_type>(right, compare_nulls, load_factor, stream, std::move(mr))}
 {
 }
 

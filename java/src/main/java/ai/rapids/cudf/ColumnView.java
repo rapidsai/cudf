@@ -3337,7 +3337,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Applies a JSONPath string to an incoming strings column where each row in the column
    * is a valid json string.  The output is returned by row as a strings column.
    *
-   * For reference, https://tools.ietf.org/id/draft-goessner-dispatch-jsonpath-00.html
+   * For reference, https://datatracker.ietf.org/doc/id/draft-goessner-dispatch-jsonpath-00.html
    * Note: Only implements the operators: $ . [] *
    *
    * @param path The JSONPath string to be applied to each row
@@ -3355,7 +3355,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Applies a JSONPath string to an incoming strings column where each row in the column
    * is a valid json string.  The output is returned by row as a strings column.
    *
-   * For reference, https://tools.ietf.org/id/draft-goessner-dispatch-jsonpath-00.html
+   * For reference, https://datatracker.ietf.org/doc/id/draft-goessner-dispatch-jsonpath-00.html
    * Note: Only implements the operators: $ . [] *
    *
    * @param path The JSONPath string to be applied to each row
