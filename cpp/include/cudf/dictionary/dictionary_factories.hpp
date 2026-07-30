@@ -11,12 +11,15 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+/**
+ * @file
+ * @brief Factory functions for constructing dictionary columns.
+ */
+
 namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup column_factories Factories
  * @{
- * @file
- * @brief Factory functions for constructing dictionary columns.
  */
 
 /**
