@@ -44,9 +44,7 @@ struct string_offset_scan_state {
   page_decode_progress_state progress;
   CUDF_PARQUET_PAGE_STATE_ERROR_METHODS
 };
-static_assert(sizeof(string_offset_scan_state) <
-                sizeof(page_decode_setup_state) + sizeof(page_decode_stream_state) +
-                  sizeof(page_decode_progress_state) + sizeof(page_state_s),
+static_assert(sizeof(string_offset_scan_state) < sizeof(page_state_s),
               "string_offset_scan_state did not shrink after removing output conversion state");
 #undef CUDF_PARQUET_PAGE_STATE_ERROR_METHODS
 
