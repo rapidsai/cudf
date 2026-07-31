@@ -673,6 +673,16 @@ struct rle_stream {
     // with no nulls (especially non-nested ones) have all-zero definition
     // levels. Handled here so both decode_next_ring and decode_next_chunked
     // stay focused on the general RLE path.
+    //
+    // The write uses `cur_values + written + t` rather than `written + t` so it
+    // targets the correct ring slots regardless of how many times decode_next
+    // has already been called. No current caller enters this fast path with
+    // cur_values > 0 -- the writer floors dict_rle_bits >= 1 in chunk_dict.cu,
+    // and the REPETITION/DEFINITION decoders in decode_preprocess.cu are
+    // single-call -- so all reachable end-to-end tests still pass with the
+    // simpler `written + t` form. This invariant is preserved defensively so
+    // any future caller that iterates decode_next with level_bits == 0 stays
+    // correct without a silent off-by-one in the ring buffer.
     int const output_count = min(count, total_values - cur_values);
     if (level_bits == 0) {
       int written = 0;
