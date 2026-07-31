@@ -39,10 +39,12 @@
 #include <cstdint>
 #include <cstring>
 #include <ctime>
+#include <exception>
 #include <fstream>
 #include <iostream>
 #include <limits>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <system_error>
 #include <thread>
@@ -529,16 +531,16 @@ static_assert(
   cuda::mr::resource_with<java_event_handler_memory_resource, cuda::mr::device_accessible>);
 
 inline void log_system_error_noexcept(char const* operation,
-                                      int error,
-                                      bool warning = false) noexcept
+                                      std::optional<int> error = std::nullopt,
+                                      bool warning             = false) noexcept
 {
   try {
+    auto const* sep     = error.has_value() ? ": " : "";
+    auto const* err_msg = error.has_value() ? std::strerror(*error) : "";
     if (warning) {
-      CUDF_LOG_WARN(
-        "%s failed for parallel pinned allocation: %s", operation, std::strerror(error));
+      CUDF_LOG_WARN("%s failed for parallel pinned allocation%s%s", operation, sep, err_msg);
     } else {
-      CUDF_LOG_ERROR(
-        "%s failed for parallel pinned allocation: %s", operation, std::strerror(error));
+      CUDF_LOG_ERROR("%s failed for parallel pinned allocation%s%s", operation, sep, err_msg);
     }
   } catch (...) {
     // Logging must not mask the original exception or escape a noexcept cleanup path.
@@ -548,7 +550,7 @@ inline void log_system_error_noexcept(char const* operation,
 inline void log_cuda_error_noexcept(char const* operation, cudaError_t error) noexcept
 {
   try {
-    CUDF_LOG_ERROR("%s failed for parallel pinned allocation: %s %s; retaining the mapping",
+    CUDF_LOG_ERROR("%s failed for parallel pinned allocation: %s %s",
                    operation,
                    cudaGetErrorName(error),
                    cudaGetErrorString(error));
@@ -652,10 +654,15 @@ class parallel_init_pinned_host_memory_resource final {
     if (status != cudaSuccess) {
       cudaGetLastError();
       log_cuda_error_noexcept("cudaHostUnregister", status);
-      return;
     }
-    // munmap always unmaps whole pages, so we can pass the unaligned bytes here.
-    if (::munmap(ptr, bytes) != 0) { log_system_error_noexcept("munmap", errno); }
+    auto const mapping_bytes = page_aligned_size_noexcept(bytes);
+    if (!mapping_bytes.has_value()) {
+      log_system_error_noexcept("page alignment during deallocation");
+    }
+    // Fall back to unmapping the unaligned bytes.
+    if (::munmap(ptr, mapping_bytes.value_or(bytes)) != 0) {
+      log_system_error_noexcept("munmap", errno);
+    }
   }
 
   [[nodiscard]] bool operator==(
@@ -694,6 +701,15 @@ class parallel_init_pinned_host_memory_resource final {
                  "pinned allocation size overflows page alignment",
                  rmm::bad_alloc);
     return ((bytes + page_size - 1) / page_size) * page_size;
+  }
+
+  static std::optional<std::size_t> page_aligned_size_noexcept(std::size_t bytes) noexcept
+  {
+    try {
+      return page_aligned_size(bytes);
+    } catch (...) {
+      return std::nullopt;
+    }
   }
 
   static void pretouch_parallel(void* allocation, std::size_t bytes, std::size_t requested_threads)
@@ -738,12 +754,22 @@ class parallel_init_pinned_host_memory_resource final {
         worker.join();
       }
     } catch (...) {
+      auto const exception = std::current_exception();
       start_workers.store(true);
       start_workers.notify_all();
+      // Try to join every worker; if a join throws leaving a joinable thread, terminate at the end.
+      bool has_unjoined = false;
       for (auto& worker : workers) {
-        if (worker.joinable()) { worker.join(); }
+        if (worker.joinable()) {
+          try {
+            worker.join();
+          } catch (...) {
+            has_unjoined |= worker.joinable();
+          }
+        }
       }
-      throw;
+      if (has_unjoined) { std::terminate(); }
+      std::rethrow_exception(exception);
     }
   }
 
