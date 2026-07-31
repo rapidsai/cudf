@@ -192,8 +192,9 @@ class reader_impl {
    * @brief Detect per-column eligibility for direct Parquet-dict → DICTIONARY32 transcode, and
    * apply the required host-side mutations to `_output_buffers` and `subpass.pages`.
    *
-   * Must be called after `prepare_data()`. Populates `_dict_transcode_eligible` with a bool per input column indicating whether the
-   * column will be assembled as a DICTIONARY32 output later in `assemble_dict_transcoded_columns`.
+   * Must be called after `prepare_data()`. Populates `_dict_transcode_eligible` with a bool per
+   * input column indicating whether the column will be assembled as a DICTIONARY32 output later in
+   * `assemble_dict_transcoded_columns`.
    *
    * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    * @return True if dict transcode is active for this read. False otherwise
@@ -210,7 +211,7 @@ class reader_impl {
 
   /**
    * @brief Assemble DICTIONARY32 output columns for input columns that were marked eligible by
-   * `prepare_dict_transcode`. 
+   * `prepare_dict_transcode`.
    *
    * @param out_columns The output columns vector to transcode in place.
    */

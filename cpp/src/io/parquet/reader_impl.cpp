@@ -538,7 +538,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
     _input_pass_read_limit{pass_read_limit}
 {
   // The direct parquet-dict → DICTIONARY32 transcode fast path only supports single-pass,
-  // non-chunked reads. 
+  // non-chunked reads.
   if (_options.output_dict_columns and (chunk_read_limit != 0 or pass_read_limit != 0)) {
     CUDF_LOG_WARN(
       "output_dict_columns: the direct parquet-dict transcode fast path is disabled for chunked / "

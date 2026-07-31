@@ -345,11 +345,12 @@ class parquet_reader_options {
   /**
    * @brief Returns whether the reader returns flat string columns as DICTIONARY32 encoded columns
    *
-   * When true, the reader outputs STRING columns as DICTIONARY32 encoded columns. A DICTIONARY32 column consists of an INT32 indices
-   * child and a STRING keys child.
+   * When true, the reader outputs STRING columns as DICTIONARY32 encoded columns. A DICTIONARY32
+   * column consists of an INT32 indices child and a STRING keys child.
    *
    * When AST/JIT filters are set, the direct transcode fast path is disabled.
-   * String columns are materialized, then operated on by the filter. The filtered results are then encoded as DICTIONARY32 columns.
+   * String columns are materialized, then operated on by the filter. The filtered results are then
+   * encoded as DICTIONARY32 columns.
    *
    * @return `true` if the reader returns flat string columns as DICTIONARY32 encoded columns
    */
@@ -954,7 +955,8 @@ class parquet_reader_options_builder {
   }
 
   /**
-   * @brief Sets options for enabling/disabling output of DICTIONARY32 columns for flat string columns.
+   * @brief Sets options for enabling/disabling output of DICTIONARY32 columns for flat string
+   * columns.
    *
    * @param val Boolean value whether to output flat string columns as DICTIONARY32 encoded columns
    *

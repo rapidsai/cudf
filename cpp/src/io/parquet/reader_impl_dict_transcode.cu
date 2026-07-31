@@ -252,8 +252,8 @@ void reader_impl::zero_init_dict_transcoded_index_buffers()
   // remap indices below.
   //
   // Only nullable columns need this: the kernel decodes non-nullable columns (max definition level
-  // 0) in DIRECT mode, which writes every output position, so their buffers are fully initialized by
-  // decode.
+  // 0) in DIRECT mode, which writes every output position, so their buffers are fully initialized
+  // by decode.
   if (_pass_itm_data == nullptr) { return; }
   auto const& pass = *_pass_itm_data;
   std::vector<bool> col_nullable(_input_columns.size(), false);
@@ -394,9 +394,9 @@ void reader_impl::assemble_dict_transcoded_columns(
       // Build a per-chunk DICTIONARY32 *view* that aliases the shared decoded INT32 buffer (no
       // copy): keys = this chunk's STRING column, indices = `indices_view`. The row range, null
       // mask, and null count must all live on the *parent* view (via offset/size), not the indices
-      // child, because `get_indices_annotated()` rebuilds the indices from the child's `head()` plus
-      // the parent's offset/size/null_mask -- anything set on the child is ignored. A wrong null
-      // count (e.g. a hardcoded 0) would silently turn nulls into a valid index once
+      // child, because `get_indices_annotated()` rebuilds the indices from the child's `head()`
+      // plus the parent's offset/size/null_mask -- anything set on the child is ignored. A wrong
+      // null count (e.g. a hardcoded 0) would silently turn nulls into a valid index once
       // `cudf::detail::concatenate` remaps the indices against the unified keys.
       std::vector<std::unique_ptr<column>> seg_keys_owners(chunk_indices.size());
       std::vector<column_view> dict_segment_views(chunk_indices.size());
