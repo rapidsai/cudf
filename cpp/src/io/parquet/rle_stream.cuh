@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "io/utilities/block_utils.cuh"
 #include "parquet_gpu.hpp"
 
 #include <cudf/detail/utilities/cuda.cuh>
@@ -363,7 +364,7 @@ struct rle_stream {
 
     fill_index = fill_index_shared;
 
-    do {
+    while (true) {
       // protect against threads advancing past the end of this loop
       // and updating shared variables.
       group.sync();
@@ -387,7 +388,7 @@ struct rle_stream {
       // remaining warps decode the runs, starting on the second iteration of this. the pipeline of
       // runs is also persistent across calls to decode_next, so on the second call to decode_next,
       // this branch will start doing work immediately.
-      // do/while loop (decode_index == -1 means "first iteration", so we should skip decoding)
+      // decode_index == -1 means "first iteration", so we should skip decoding.
       else if (decode_index >= 0 && decode_index + warp_decode_id < fill_index) {
         int const run_index = decode_index + warp_decode_id;
         auto& run           = runs[rolling_index<run_buffer_size>(run_index)];
@@ -438,7 +439,8 @@ struct rle_stream {
       group.sync();
       decode_index = decode_index_shared;
       fill_index   = fill_index_shared;
-    } while (values_processed_shared < output_count);
+      if (values_processed_shared >= output_count) { break; }
+    }
 
     cur_values += values_processed_shared;
 
@@ -601,7 +603,7 @@ struct rle_stream {
       int const lo  = warp_id * per;
       int const hi  = min(lo + per, chunk_total);
       if (lo < hi) {
-        // Per-lane expand (Paul's design): each lane owns output positions
+        // Per-lane expand: each lane owns output positions
         //   p = lo + lane, lo + lane + 32, lo + lane + 64, ...
         // and finds its own run. run_idx starts by binary-search on the
         // lane's first p, then advances forward by linear walk (usually 0
@@ -638,17 +640,23 @@ struct rle_stream {
             int bitpos                 = local * level_bits;
             uint8_t const* source      = payload + (bitpos >> 3);
             bitpos &= 7;
-            uint32_t level_val = 0;
-            if (source < end) { level_val = source[0]; }
-            ++source;
-            if (level_bits > 8 - bitpos && source < end) {
-              level_val |= static_cast<uint32_t>(source[0]) << 8;
-              ++source;
-              if (level_bits > 16 - bitpos && source < end) {
-                level_val |= static_cast<uint32_t>(source[0]) << 16;
-                ++source;
-                if (level_bits > 24 - bitpos && source < end) {
-                  level_val |= static_cast<uint32_t>(source[0]) << 24;
+            uint32_t level_val;
+            if (source + sizeof(uint32_t) <= end) {
+              // Fast path: whole 32-bit field is in-bounds, so one unaligned
+              // load replaces up to four dependent byte reads.
+              level_val = cudf::io::unaligned_load<uint32_t>(source);
+            } else {
+              // Tail path: within the last 4 bytes of the encoded stream, so
+              // fall back to per-byte reads and guard each against `end`.
+              level_val = 0;
+              if (source < end) { level_val = source[0]; }
+              if (level_bits > 8 - bitpos && (source + 1) < end) {
+                level_val |= static_cast<uint32_t>(source[1]) << 8;
+                if (level_bits > 16 - bitpos && (source + 2) < end) {
+                  level_val |= static_cast<uint32_t>(source[2]) << 16;
+                  if (level_bits > 24 - bitpos && (source + 3) < end) {
+                    level_val |= static_cast<uint32_t>(source[3]) << 24;
+                  }
                 }
               }
             }
