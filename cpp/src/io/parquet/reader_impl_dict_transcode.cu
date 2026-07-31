@@ -33,15 +33,12 @@ namespace {
 /**
  * @brief Host-side check for whether a column chunk decodes to a plain string column.
  *
- * Host-side counterpart of `is_string_col` in `parquet_gpu.hpp`. Kept narrow: for direct
- * Parquet-dict → DICTIONARY32 transcode we only accept pure BYTE_ARRAY columns without a
- * DECIMAL logical type and without the strings-to-categorical flag. FIXED_LEN_BYTE_ARRAY is
- * deliberately excluded because it is typically a binary payload.
+ * Host-side counterpart of `is_string_col` in `parquet_gpu.hpp`
  *
  * @param chunk The column chunk descriptor to classify
  * @return True if the chunk is a plain BYTE_ARRAY string chunk eligible for transcode
  */
-[[nodiscard]] bool is_host_byte_array_string_chunk(ColumnChunkDesc const& chunk)
+[[nodiscard]] bool is_byte_array_string_chunk(ColumnChunkDesc const& chunk)
 {
   if (chunk.physical_type != Type::BYTE_ARRAY) { return false; }
   if (chunk.is_strings_to_cat) { return false; }
@@ -52,10 +49,7 @@ namespace {
 }
 
 /**
- * @brief Whether a data-page encoding references a parquet dictionary page.
- *
- * Both PLAIN_DICTIONARY (legacy) and RLE_DICTIONARY are valid encodings for data pages that
- * reference a parquet dictionary page.
+ * @brief Whether a data-page encoding that contains a dictionary page.
  *
  * @param enc The data-page encoding to test
  * @return True if the encoding is a dictionary data-page encoding
@@ -97,7 +91,7 @@ void update_from_chunk(column_eligibility& e, ColumnChunkDesc const& chunk)
 {
   e.has_any_chunk = true;
   if (chunk.max_nesting_depth != 1 or chunk.max_level[level_type::REPETITION] != 0 or
-      not is_host_byte_array_string_chunk(chunk) or chunk.num_dict_pages < 1) {
+      not is_byte_array_string_chunk(chunk) or chunk.num_dict_pages < 1) {
     e.all_chunks_string = false;
   }
 }
@@ -108,12 +102,8 @@ void update_from_chunk(column_eligibility& e, ColumnChunkDesc const& chunk)
  * A column is eligible iff
  *  - the corresponding output buffer is currently typed as STRING (i.e. a flat string column),
  *  - every chunk of that column is a BYTE_ARRAY string chunk with a dictionary page,
- *  - every data page of every chunk of that column uses (PLAIN|RLE)_DICTIONARY encoding,
+ *  - every data page of every chunk of that column uses DICTIONARY encoding,
  *  - the chunk has a flat (non-list, non-nested) schema.
- *
- * We scan host-side `pass.chunks` and `pass.pages` here rather than `subpass.pages` because
- * `subpass.pages` may be a subset. For single-pass single-subpass reads (the only configuration
- * in which `output_dict_columns` is supported), `subpass.pages == pass.pages`.
  *
  * @param pass The pass intermediate data holding host-side chunks and pages
  * @param input_columns The reader's input column descriptors
@@ -158,9 +148,6 @@ void update_from_chunk(column_eligibility& e, ColumnChunkDesc const& chunk)
 /**
  * @brief Build a STRING keys column from a chunk's dictionary entries.
  *
- * Builds a STRING keys column covering the dictionary entries of a single chunk of a single input
- * column. `begin` points into the pass-wide `string_index_pair` buffer.
- *
  * @param begin Pointer to the first `string_index_pair` entry for this chunk's dictionary
  * @param entry_count Number of dictionary entries (keys) for this chunk
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -192,9 +179,7 @@ bool reader_impl::prepare_dict_transcode(read_mode mode)
   // DICTIONARY32 columns via a post-hoc `dictionary::detail::encode` instead.
   if (_output_chunk_read_limit != 0 or _input_pass_read_limit != 0) { return false; }
 
-  // Custom row bounds (`skip_rows` / `num_rows`) slice the decoded output to fewer rows than the
-  // full, unadjusted chunks that `assemble_dict_transcoded_columns` segments by. Skip the fast
-  // path here too and fall back to the post-hoc encode.
+  // Skip the fast path if custom row bounds are in effect.
   if (uses_custom_row_bounds(mode)) { return false; }
 
   // AST/JIT filters evaluate predicates on materialized STRING columns, so the direct transcode
@@ -219,9 +204,7 @@ bool reader_impl::prepare_dict_transcode(read_mode mode)
 
   auto const num_input_cols = _input_columns.size();
 
-  // Change the output buffer type for eligible columns from STRING → INT32. The subsequent
-  // `allocate_columns` call will then allocate an INT32 buffer that the DICT_INT32 kernel can
-  // write directly into.
+  // Change the output buffer type for eligible columns from STRING → INT32.
   std::for_each(
     cuda::counting_iterator<size_t>{0}, cuda::counting_iterator{num_input_cols}, [&](size_t i) {
       if (not _dict_transcode_eligible[i]) { return; }
@@ -230,8 +213,7 @@ bool reader_impl::prepare_dict_transcode(read_mode mode)
     });
 
   // Rewrite per-page `kernel_mask` for eligible columns on the host subpass pages from
-  // STRING_DICT → DICT_INT32, then H2D so the device pages agree. Only the flat variant is
-  // considered here (eligibility requires `max_nesting_depth == 1`).
+  // STRING_DICT → DICT_INT32, then H2D so the device pages agree.
   bool any_rewritten = false;
   std::for_each(subpass.pages.host_begin(), subpass.pages.host_end(), [&](PageInfo& page) {
     if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) != 0) { return; }
@@ -247,9 +229,7 @@ bool reader_impl::prepare_dict_transcode(read_mode mode)
   if (not any_rewritten) { return false; }
 
   // Push the rewritten `kernel_mask`s back to device so subsequent decode kernels dispatch
-  // correctly. The copy is enqueued on `_stream`, so no explicit synchronization is required. The
-  // host source buffer (`subpass.pages`) is owned by the subpass and is neither freed nor
-  // re-mutated before the copy completes.
+  // correctly.
   subpass.pages.host_to_device_async(_stream);
   subpass.kernel_mask = std::transform_reduce(
     subpass.pages.host_begin(),
@@ -273,7 +253,7 @@ void reader_impl::zero_init_dict_transcoded_index_buffers()
   //
   // Only nullable columns need this: the kernel decodes non-nullable columns (max definition level
   // 0) in DIRECT mode, which writes every output position, so their buffers are fully initialized by
-  // decode. This mirrors `is_nullable()` in the decode kernel (max_level[DEFINITION] > 0).
+  // decode.
   if (_pass_itm_data == nullptr) { return; }
   auto const& pass = *_pass_itm_data;
   std::vector<bool> col_nullable(_input_columns.size(), false);
@@ -411,17 +391,13 @@ void reader_impl::assemble_dict_transcoded_columns(
           cudf::detail::segmented_null_count(indices_view.null_mask(), indices_pairs, _stream);
       }
 
-      // Build a DICTIONARY32 *view* for every chunk without copying the decoded indices. Each
-      // view's keys child is this chunk's own STRING keys column (which must be materialized from
-      // the parquet dictionary page), while its indices child aliases the shared, already-decoded
-      // INT32 buffer. We select each chunk's row range via the parent dictionary view's
-      // `offset`/`size` rather than slicing the indices child: `get_indices_annotated()` rebuilds
-      // the indices view from the child's `head()` plus the parent's offset/size, so a sliced
-      // child (carrying its own offset) would be ignored. For the same reason the null mask must
-      // also live on the parent view (sourced from the shared `indices_view`'s mask): the indices
-      // child's own null mask, if it had one, would be ignored by `get_indices_annotated()`, and a
-      // hardcoded null_count of 0 would silently turn nulls into a valid index (0) once
-      // `cudf::detail::concatenate` rewrites indices against the unified, deduplicated keys.
+      // Build a per-chunk DICTIONARY32 *view* that aliases the shared decoded INT32 buffer (no
+      // copy): keys = this chunk's STRING column, indices = `indices_view`. The row range, null
+      // mask, and null count must all live on the *parent* view (via offset/size), not the indices
+      // child, because `get_indices_annotated()` rebuilds the indices from the child's `head()` plus
+      // the parent's offset/size/null_mask -- anything set on the child is ignored. A wrong null
+      // count (e.g. a hardcoded 0) would silently turn nulls into a valid index once
+      // `cudf::detail::concatenate` remaps the indices against the unified keys.
       std::vector<std::unique_ptr<column>> seg_keys_owners(chunk_indices.size());
       std::vector<column_view> dict_segment_views(chunk_indices.size());
       std::transform(
@@ -447,12 +423,7 @@ void reader_impl::assemble_dict_transcoded_columns(
                              {indices_view, seg_keys_owners[k]->view()}};
         });
 
-      // `cudf::detail::concatenate` deduplicates + sorts keys and recomputes indices. This is
-      // required today because DICTIONARY32 keys are assumed unique and sorted. When
-      // https://github.com/rapidsai/cudf/pull/22839 lands and relaxes that constraint, this
-      // could be replaced with a cheaper path: plain-concatenate the per-chunk keys columns
-      // (keeping cross-chunk duplicates) and offset-shift each chunk's row-group-local indices
-      // by the running total of prior chunks' key counts, avoiding the dedup/sort entirely.
+      // `cudf::detail::concatenate` deduplicates + sorts keys and recomputes indices.
       out_columns[out_idx] = cudf::detail::concatenate(dict_segment_views, _stream, _mr);
     });
 }

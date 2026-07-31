@@ -190,26 +190,13 @@ class reader_impl {
 
   /**
    * @brief Detect per-column eligibility for direct Parquet-dict → DICTIONARY32 transcode, and
-   * apply the required host-side mutations to `_output_buffers` and `subpass.pages` so that the
-   * subsequent allocate/decode path produces INT32 indices for eligible columns.
+   * apply the required host-side mutations to `_output_buffers` and `subpass.pages`.
    *
-   * Must be called after `prepare_data()` (so that `pass.chunks`, `pass.pages` and
-   * `subpass.pages` are populated on the host) and before `preprocess_chunk_strings()` /
-   * `allocate_columns()` / `decode_page_data()`.
-   *
-   * Populates `_dict_transcode_eligible` with a bool per input column indicating whether the
+   * Must be called after `prepare_data()`. Populates `_dict_transcode_eligible` with a bool per input column indicating whether the
    * column will be assembled as a DICTIONARY32 output later in `assemble_dict_transcoded_columns`.
    *
-   * The fast path is also skipped when custom row bounds are in effect (see
-   * `uses_custom_row_bounds`): `assemble_dict_transcoded_columns` derives per-chunk row segments
-   * from the full, unadjusted `ColumnChunkDesc::num_rows`, which would not match the decoded
-   * indices column's size once a `skip_rows` / `num_rows` slice is applied. Skipped columns still
-   * get DICTIONARY32 output via the post-hoc `dictionary::detail::encode` fallback in
-   * `finalize_output`.
-   *
    * @param mode Value indicating if the data sources are read all at once or chunk by chunk
-   * @return True if dict transcode is active for this read (eligible columns had output types and
-   * decode masks updated and pushed to the device). False otherwise.
+   * @return True if dict transcode is active for this read. False otherwise
    */
   [[nodiscard]] bool prepare_dict_transcode(read_mode mode);
 
@@ -223,14 +210,9 @@ class reader_impl {
 
   /**
    * @brief Assemble DICTIONARY32 output columns for input columns that were marked eligible by
-   * `prepare_dict_transcode`. Per-chunk keys (from `pass.str_dict_index`) and INT32 indices are
-   * concatenated; `cudf::dictionary::detail::concatenate` remaps indices to deduplicated keys
-   * (indices are not pre-shifted by the reader).
+   * `prepare_dict_transcode`. 
    *
-   * Non-eligible flat STRING columns are left untouched here and are expected to go through the
-   * post-hoc `cudf::dictionary::encode` fallback in `finalize_output`.
-   *
-   * @param out_columns The output columns vector to mutate in place.
+   * @param out_columns The output columns vector to transcode in place.
    */
   void assemble_dict_transcoded_columns(std::vector<std::unique_ptr<column>>& out_columns);
 
@@ -650,8 +632,7 @@ class reader_impl {
   std::size_t _input_pass_read_limit{0};    // input pass memory usage limit in bytes
 
   // Per-input-column flag indicating whether that column was selected for direct
-  // Parquet-dict → DICTIONARY32 transcode in `prepare_dict_transcode()`. Populated before decode
-  // and consumed in `assemble_dict_transcoded_columns()`.
+  // Parquet-dict → DICTIONARY32 transcode.
   std::vector<bool> _dict_transcode_eligible;
 };
 
