@@ -263,7 +263,7 @@ struct rle_stream {
     fill_index   = 0;
     decode_index = -1;  // signals the first iteration. Nothing to decode.
 
-    cudf_assert(stage_capacity >= 0);
+    cudf_assert(stage_capacity >= 0 and stage_capacity <= smem_stage_size);
 
     // If smem staging is active, use cuda::memcpy_async for a
     // block-cooperative global-to-shared copy that automatically dispatches to
@@ -548,6 +548,7 @@ struct rle_stream {
           // guaranteed by the Parquet format in practice (page payloads are
           // orders of magnitude smaller than 2 GiB) and is independent of
           // max_runs_per_chunk.
+          cudf_assert(static_cast<uint64_t>(cur - s_start) < (1ull << 31));
           int run_len;
           int run_desc;
           if (level_run & 1u) {
@@ -655,15 +656,22 @@ struct rle_stream {
               static_cast<level_t>(level_val);
           } else {
             // RLE run: read the single repeated value from s_start.
+            // Guard each byte against `end` to match the literal path, since a
+            // truncated Parquet page can leave `run_desc`'s payload offset
+            // pointing within [s_start, end) while `level_bits > 8` implies
+            // vptr[1..3] may lie past `end`.
             uint8_t const* vptr = s_start + (run_desc & 0x7fffffff);
-            uint32_t level_val  = vptr[0];
+            uint32_t level_val  = 0;
+            if (vptr < end) { level_val = vptr[0]; }
             if constexpr (sizeof(level_t) > 1) {
-              if (level_bits > 8) {
+              if (level_bits > 8 && (vptr + 1) < end) {
                 level_val |= static_cast<uint32_t>(vptr[1]) << 8;
                 if constexpr (sizeof(level_t) > 2) {
-                  if (level_bits > 16) {
+                  if (level_bits > 16 && (vptr + 2) < end) {
                     level_val |= static_cast<uint32_t>(vptr[2]) << 16;
-                    if (level_bits > 24) { level_val |= static_cast<uint32_t>(vptr[3]) << 24; }
+                    if (level_bits > 24 && (vptr + 3) < end) {
+                      level_val |= static_cast<uint32_t>(vptr[3]) << 24;
+                    }
                   }
                 }
               }
@@ -737,6 +745,7 @@ struct rle_stream {
 
   __device__ inline int skip_decode(int t, int count)
   {
+    static_assert(not use_chunked_expand, "skip_decode is not supported by chunked-expand");
     int const output_count = min(count, total_values - cur_values);
 
     // if level_bits == 0, there's nothing to do
