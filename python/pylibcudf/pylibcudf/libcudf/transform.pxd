@@ -29,13 +29,25 @@ from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
     cdef cppclass scalar_column_view:
-        scalar_column_view(const column_view& input)
+        scalar_column_view(
+            const column_view& input
+        ) except +libcudf_exception_handler
 
     cdef cppclass transform_input:
-        transform_input(const column_view& input)
-        transform_input(const scalar_column_view& input)
+        transform_input(
+            const column_view& input
+        ) except +libcudf_exception_handler
+        transform_input(
+            const scalar_column_view& input
+        ) except +libcudf_exception_handler
 
     ctypedef const transform_input const_transform_input
+
+    cdef cppclass transform_output:
+        data_type type
+        output_nullability nullability
+
+    ctypedef const transform_output const_transform_output
 
     cdef pair[unique_ptr[device_buffer], size_type] bools_to_mask (
         const column_view& input,
@@ -63,15 +75,15 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
-    cdef unique_ptr[column] transform(
-        span[const_transform_input] inputs,
-        const string & udf,
-        data_type output_type,
+    cdef unique_ptr[table] transform(
+        const string& udf,
         udf_source_type source_type,
-        optional[void *] user_data,
         null_aware is_null_aware,
+        optional[void*] user_data,
+        span[const_transform_input] inputs,
+        span[const_transform_output] outputs,
+        vector[unique_ptr[column]]&& string_offsets,
         optional[size_type] row_size,
-        output_nullability null_policy,
         cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler

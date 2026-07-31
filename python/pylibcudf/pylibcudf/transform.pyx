@@ -34,6 +34,7 @@ from .utils cimport _get_stream, _get_memory_resource
 from cuda.bindings.cyruntime cimport cudaStream_t
 
 ctypedef const cpp_transform.transform_input const_transform_input
+ctypedef const cpp_transform.transform_output const_transform_output
 
 __all__ = [
     "bools_to_mask",
@@ -333,6 +334,12 @@ cpdef Column transform(
     """
     cdef vector[cpp_transform.transform_input] c_inputs
     cdef unique_ptr[column] c_result
+    cdef unique_ptr[table] c_table_result
+    cdef vector[unique_ptr[column]] c_columns
+    cdef vector[unique_ptr[column]] string_offsets
+    cdef vector[cpp_transform.transform_output] c_outputs
+    cdef cpp_transform.transform_output c_output
+    cdef unique_ptr[cpp_transform.scalar_column_view] c_scalar_input
     cdef string c_transform_udf = transform_udf.encode()
     cdef udf_source_type source_type = (
         udf_source_type.PTX if is_ptx else udf_source_type.CUDA
@@ -366,27 +373,34 @@ cpdef Column transform(
     for input in inputs:
         input_view = (<Column?>input).view()
         if input_view.size() == 1 and input_view.size() != base_size:
+            c_scalar_input.reset(
+                new cpp_transform.scalar_column_view(input_view)
+            )
             c_inputs.push_back(
-                cpp_transform.transform_input(
-                    cpp_transform.scalar_column_view(input_view)
-                )
+                cpp_transform.transform_input(dereference(c_scalar_input))
             )
         else:
             c_inputs.push_back(cpp_transform.transform_input(input_view))
 
+    c_output.type = output_type.c_obj
+    c_output.nullability = c_null_policy
+    c_outputs.push_back(c_output)
+
     with nogil:
-        c_result = cpp_transform.transform(
-            span[const_transform_input](c_inputs.data(), c_inputs.size()),
+        c_table_result = cpp_transform.transform(
             c_transform_udf,
-            output_type.c_obj,
             source_type,
-            user_data,
             c_is_null_aware,
+            user_data,
+            span[const_transform_input](c_inputs.data(), c_inputs.size()),
+            span[const_transform_output](c_outputs.data(), c_outputs.size()),
+            move(string_offsets),
             row_size,
-            c_null_policy,
             _cs,
             mr.get_mr()
         )
+        c_columns = dereference(c_table_result).release()
+        c_result = move(c_columns[0])
 
     return Column.from_libcudf(move(c_result), _stream, mr)
 

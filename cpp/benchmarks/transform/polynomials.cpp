@@ -17,6 +17,7 @@
 #include <nvbench/nvbench.cuh>
 
 #include <algorithm>
+#include <array>
 #include <random>
 
 template <typename key_type>
@@ -82,14 +83,15 @@ static void BM_transform_polynomials(nvbench::state& state)
 
     // clang-format on
 
-    cudf::transform(inputs,
-                    udf,
-                    cudf::data_type{cudf::type_to_id<key_type>()},
+    cudf::transform(udf,
                     cudf::udf_source_type::CUDA,
-                    std::nullopt,
                     cudf::null_aware::NO,
                     std::nullopt,
-                    cudf::output_nullability::PRESERVE,
+                    inputs,
+                    std::array{cudf::transform_output{cudf::data_type{cudf::type_to_id<key_type>()},
+                                                      cudf::output_nullability::PRESERVE}},
+                    {},
+                    std::nullopt,
                     launch.get_stream().get_stream());
   });
 

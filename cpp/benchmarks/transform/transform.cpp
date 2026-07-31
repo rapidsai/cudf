@@ -24,6 +24,7 @@
 #include <nvbench/types.cuh>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -92,14 +93,15 @@ static void BM_transform(nvbench::state& state)
   auto const mem_stats_logger = cudf::memory_stats_logger();
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    cudf::transform(inputs,
-                    code,
-                    cudf::data_type{cudf::type_to_id<key_type>()},
+    cudf::transform(code,
                     cudf::udf_source_type::CUDA,
-                    std::nullopt,
                     cudf::null_aware::NO,
                     std::nullopt,
-                    cudf::output_nullability::PRESERVE,
+                    inputs,
+                    std::array{cudf::transform_output{cudf::data_type{cudf::type_to_id<key_type>()},
+                                                      cudf::output_nullability::PRESERVE}},
+                    {},
+                    std::nullopt,
                     launch.get_stream().get_stream());
   });
 
