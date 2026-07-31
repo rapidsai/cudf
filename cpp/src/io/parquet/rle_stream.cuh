@@ -231,7 +231,20 @@ struct rle_stream {
   int partial_run_total;      // full value count of that run
   int partial_run_done;       // values already emitted from it
 
-  __device__ rle_stream(rle_run* _runs) : runs(_runs) {}
+  // Ring-mode streams need a shared-memory ring buffer of run headers to
+  // coordinate the producer/consumer warps in decode_next_ring. Chunked-expand
+  // streams parse run headers directly into per-chunk shared tables and never
+  // touch `runs`, so we forbid supplying one to catch accidental waste.
+  __device__ rle_stream(rle_run* _runs)
+    requires(!use_chunked_expand)
+    : runs(_runs)
+  {
+  }
+  __device__ rle_stream()
+    requires(use_chunked_expand)
+    : runs(nullptr)
+  {
+  }
 
   __device__ inline bool is_last_decode_warp(int warp_id)
   {

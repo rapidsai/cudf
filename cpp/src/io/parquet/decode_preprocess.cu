@@ -409,17 +409,13 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   // whether or not we have repetition levels (lists)
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
-  // the required number of runs in shared memory we will need to provide the
-  // rle_stream object
-  constexpr int rle_run_buffer_size =
-    rle_stream_required_run_buffer_size<level_decode_block_size>();
-
   // the level stream decoders. max_output_values is max to remove rolling buffer
-  __shared__ rle_run def_runs[rle_run_buffer_size];
-  __shared__ rle_run rep_runs[rle_run_buffer_size];
+  // logic from the decode step. The chunked-expand rle_stream does not need a
+  // shared-memory ring buffer of run headers; it parses runs directly into
+  // per-chunk tables, so we default-construct the decoders here.
   static constexpr int max_output_values = cuda::std::numeric_limits<int>::max();
   using decoder_stream_t = rle_stream_chunked<level_t, level_decode_block_size, max_output_values>;
-  decoder_stream_t decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
+  decoder_stream_t decoders[level_type::NUM_LEVEL_TYPES] = {};
 
   // Shared-memory staging scratch for the encoded level streams. Level streams
   // for a page are usually small (definition/repetition levels are dominated by
