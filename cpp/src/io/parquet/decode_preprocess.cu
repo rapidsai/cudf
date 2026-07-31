@@ -6,6 +6,7 @@
 #include "delta_binary.cuh"
 #include "io/utilities/column_buffer.hpp"
 #include "page_decode.cuh"
+#include "page_state_composed.cuh"
 #include "reader_impl_chunking_utils.cuh"
 
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -390,13 +391,13 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
                            size_t min_row,
                            size_t num_rows)
 {
-  __shared__ __align__(16) page_state_s state_g;
+  __shared__ __align__(16) level_scan_state state_g;
 
-  page_state_s* const s = &state_g;
-  auto const block      = cg::this_thread_block();
-  int const page_idx    = cg::this_grid().block_rank();
-  int const t           = block.thread_rank();
-  PageInfo* pp          = &pages[page_idx];
+  level_scan_state* const s = &state_g;
+  auto const block          = cg::this_thread_block();
+  int const page_idx        = cg::this_grid().block_rank();
+  int const t               = block.thread_rank();
+  PageInfo* pp              = &pages[page_idx];
 
   // Return early if this page is pruned
   if (not page_mask.empty() and not page_mask[page_idx]) { return; }
@@ -448,8 +449,8 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
     block.sync();
     decoders[level_type::REPETITION].init(block,
                                           s->setup.col.level_bits[level_type::REPETITION],
-                                          s->abs_lvl_start[level_type::REPETITION],
-                                          s->abs_lvl_end[level_type::REPETITION],
+                                          s->stream.abs_lvl_start[level_type::REPETITION],
+                                          s->stream.abs_lvl_end[level_type::REPETITION],
                                           rep,
                                           num_to_decode,
                                           stage,
@@ -471,8 +472,8 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
     block.sync();
     decoders[level_type::DEFINITION].init(block,
                                           s->setup.col.level_bits[level_type::DEFINITION],
-                                          s->abs_lvl_start[level_type::DEFINITION],
-                                          s->abs_lvl_end[level_type::DEFINITION],
+                                          s->stream.abs_lvl_start[level_type::DEFINITION],
+                                          s->stream.abs_lvl_end[level_type::DEFINITION],
                                           def,
                                           num_to_decode,
                                           stage,
