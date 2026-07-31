@@ -23,7 +23,6 @@
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
 #include <cuda/std/utility>
-#include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform_reduce.h>
 
 #include <type_traits>
@@ -159,12 +158,12 @@ auto reduce_dictionary(column_view const& col, rmm::cuda_stream_view stream)
 {
   auto d_dictionary = column_device_view::create(col, stream);
   if (col.has_nulls()) {
-    auto pair_to_minmax = thrust::make_transform_iterator(
+    auto pair_to_minmax = cuda::make_transform_iterator(
       cudf::dictionary::detail::make_dictionary_pair_iterator<T>(*d_dictionary, true),
       create_minmax_with_nulls<T>{});
     return reduce_device(pair_to_minmax, col.size(), minmax_binary_op<T>{}, stream);
   } else {
-    auto col_to_minmax = thrust::make_transform_iterator(
+    auto col_to_minmax = cuda::make_transform_iterator(
       cudf::dictionary::detail::make_dictionary_iterator<T>(*d_dictionary), create_minmax<T>{});
     return reduce_device(col_to_minmax, col.size(), minmax_binary_op<T>{}, stream);
   }
@@ -191,13 +190,10 @@ struct minmax_dictionary_functor {
     auto dev_result     = reduce_dictionary<storage_type>(col, stream);
     using ScalarType    = cudf::scalar_type_t<T>;
     auto const key_type = dictionary_column_view(col).keys().type();
-    auto minimum        = make_fixed_width_scalar(key_type, stream, mr);
-    auto maximum        = make_fixed_width_scalar(key_type, stream, mr);
+    auto minimum        = std::make_unique<ScalarType>(T{}, true, stream, mr);
+    auto maximum        = std::make_unique<ScalarType>(T{}, true, stream, mr);
     cudf::detail::device_single_thread(
-      assign_min_max<storage_type>{dev_result.data(),
-                                   static_cast<ScalarType*>(minimum.get())->data(),
-                                   static_cast<ScalarType*>(maximum.get())->data()},
-      stream);
+      assign_min_max<storage_type>{dev_result.data(), minimum->data(), maximum->data()}, stream);
     return {std::move(minimum), std::move(maximum)};
   }
 
@@ -242,12 +238,12 @@ struct minmax_functor {
     auto device_col = column_device_view::create(col, stream);
     // compute minimum and maximum values
     if (col.has_nulls()) {
-      auto pair_to_minmax = thrust::make_transform_iterator(
-        make_pair_iterator<T, true>(*device_col), create_minmax_with_nulls<T>{});
+      auto pair_to_minmax = cuda::make_transform_iterator(
+        cudf::detail::make_pair_iterator<T, true>(*device_col), create_minmax_with_nulls<T>{});
       return reduce_device(pair_to_minmax, col.size(), minmax_binary_op<T>{}, stream);
     } else {
       auto col_to_minmax =
-        thrust::make_transform_iterator(device_col->begin<T>(), create_minmax<T>{});
+        cuda::make_transform_iterator(device_col->begin<T>(), create_minmax<T>{});
       return reduce_device(col_to_minmax, col.size(), minmax_binary_op<T>{}, stream);
     }
   }
@@ -320,10 +316,13 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
   cudf::column_view const& col, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   if (col.null_count() == col.size()) {
-    // this handles empty and all-null columns
-    // return scalars with valid==false
-    return {make_default_constructed_scalar(col.type(), stream, mr),
-            make_default_constructed_scalar(col.type(), stream, mr)};
+    // this handles empty and all-null columns; return scalars with valid==false.
+    // For dictionary columns use the keys type — DICTIONARY32 has no scalar representation.
+    auto const scalar_type = col.type().id() == type_id::DICTIONARY32
+                               ? dictionary_column_view(col).keys().type()
+                               : col.type();
+    return {make_default_constructed_scalar(scalar_type, stream, mr),
+            make_default_constructed_scalar(scalar_type, stream, mr)};
   }
 
   return type_dispatcher(col.type(), minmax_functor{}, col, stream, mr);
