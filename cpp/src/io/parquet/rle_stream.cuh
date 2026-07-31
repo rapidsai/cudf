@@ -223,11 +223,12 @@ struct rle_stream {
   // Chunked-expand cross-call partial-run state.
   // When a run straddles a decode_next_chunked boundary we record its meta,
   // total count, and how many values were already emitted so the next call
-  // can resume from the correct payload offset.  partial_run_meta == -1
-  // means no pending partial run.
-  int partial_run_meta;   // meta word for the split run (-1 = none)
-  int partial_run_total;  // full value count of that run
-  int partial_run_done;   // values already emitted from it
+  // can resume from the correct payload offset.  partial_run_meta ==
+  // no_partial_run means no pending partial run.
+  static constexpr uint32_t no_partial_run = ~0u;
+  uint32_t partial_run_meta;  // meta word for the split run (no_partial_run = none)
+  int partial_run_total;      // full value count of that run
+  int partial_run_done;       // values already emitted from it
 
   __device__ rle_stream(rle_run* _runs) : runs(_runs) {}
 
@@ -288,7 +289,7 @@ struct rle_stream {
     // offsets index into the same memory space that the parse cursor uses.
     s_start = cur;
 
-    partial_run_meta  = -1;
+    partial_run_meta  = no_partial_run;
     partial_run_total = 0;
     partial_run_done  = 0;
   }
@@ -471,9 +472,9 @@ struct rle_stream {
     // `chunk_meta[i]` encodes both the payload offset (into s_start) and,
     // in the top bit, whether the run is literal (1) or RLE (0).
     __shared__ int chunk_out_off[max_runs_per_chunk + 1];
-    __shared__ int chunk_meta[max_runs_per_chunk];
+    __shared__ uint32_t chunk_meta[max_runs_per_chunk];
     cuda::std::span<int> const chunk_out_off_v{chunk_out_off, max_runs_per_chunk + 1};
-    cuda::std::span<int> const chunk_meta_v{chunk_meta, max_runs_per_chunk};
+    cuda::std::span<uint32_t> const chunk_meta_v{chunk_meta, max_runs_per_chunk};
     // Payload offset within run slot 0: non-zero only when continuing a run
     // that was split across two decode_next_chunked calls.
     __shared__ int s_run0_payload_offset;
@@ -516,7 +517,7 @@ struct rle_stream {
         // call. `cur` already points past this run's payload (fully
         // consumed last call), so we do NOT re-parse its header - we just
         // reuse the saved meta and continue emitting values.
-        if (partial_run_meta != -1) {
+        if (partial_run_meta != no_partial_run) {
           int const remaining   = partial_run_total - partial_run_done;
           int const room        = out_end - out_base;
           int const run_len     = min(remaining, room);
@@ -528,7 +529,7 @@ struct rle_stream {
           if (run_len < remaining) {
             partial_run_done += run_len;
           } else {
-            partial_run_meta = -1;
+            partial_run_meta = no_partial_run;
           }
         }
 
@@ -550,15 +551,15 @@ struct rle_stream {
           // max_runs_per_chunk.
           cudf_assert(static_cast<uint64_t>(cur - s_start) < (1ull << 31));
           int run_len;
-          int run_desc;
+          uint32_t run_desc;
           if (level_run & 1u) {
             int const groups = level_run >> 1;
             run_len          = groups * 8;
-            run_desc         = static_cast<int>(cur - s_start) | (1u << 31);
+            run_desc         = static_cast<uint32_t>(cur - s_start) | (1u << 31);
             cur += groups * level_bits;
           } else {
             run_len  = level_run >> 1;
-            run_desc = static_cast<int>(cur - s_start);
+            run_desc = static_cast<uint32_t>(cur - s_start);
             cur += value_width;
           }
 
@@ -577,7 +578,7 @@ struct rle_stream {
           run_prefix_end += run_len;
           chunk_meta_v[num_runs]      = run_desc;
           chunk_out_off_v[++num_runs] = run_prefix_end;
-          if (partial_run_meta != -1) { break; }
+          if (partial_run_meta != no_partial_run) { break; }
         }
         s_chunk_runs  = num_runs;
         s_chunk_total = run_prefix_end;
@@ -624,18 +625,18 @@ struct rle_stream {
             ++run_idx;
           }
           int const run_start_out = chunk_out_off_v[run_idx];
-          int const run_desc      = chunk_meta_v[run_idx];
+          uint32_t const run_desc = chunk_meta_v[run_idx];
           // Slot 0 of a resumed partial run carries a payload offset so we
           // read from the correct position in the (already-consumed) payload.
           int const run_payload_off = (run_idx == 0) ? run0_payload_offset : 0;
 
           if (run_desc & (1u << 31)) {
             // Literal (bit-packed) run: bit-field extract for this lane's p.
-            int const payload_off  = run_desc & 0x7fffffff;
-            uint8_t const* payload = s_start + payload_off;
-            int const local        = (p - run_start_out) + run_payload_off;
-            int bitpos             = local * level_bits;
-            uint8_t const* source  = payload + (bitpos >> 3);
+            uint32_t const payload_off = run_desc & 0x7fffffff;
+            uint8_t const* payload     = s_start + payload_off;
+            int const local            = (p - run_start_out) + run_payload_off;
+            int bitpos                 = local * level_bits;
+            uint8_t const* source      = payload + (bitpos >> 3);
             bitpos &= 7;
             uint32_t level_val = 0;
             if (source < end) { level_val = source[0]; }
