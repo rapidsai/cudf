@@ -356,6 +356,7 @@ def _get_cucascade_engine(
     max_connections: int | None,
     chunk_size: int | None,
     max_n_chunks: int | None,
+    enable_cache: bool = False,
 ) -> Any:
     global _cucascade_engine
     if _cucascade_engine is not None:
@@ -373,6 +374,7 @@ def _get_cucascade_engine(
                 kwargs["chunk_size"] = chunk_size
             if max_n_chunks is not None:
                 kwargs["max_n_chunks"] = max_n_chunks
+            kwargs["enable_cache"] = enable_cache
             if plc.io.SourceInfo._is_remote_uri(path):
                 # TODO: replace with cucascade.RestEngine.from_environment() once
                 # cuCascade exposes a factory that reads standard AWS env vars directly.
@@ -427,6 +429,7 @@ class HybridScanPrefetchExecutor:
         cucascade_max_connections: int | None = None,
         cucascade_chunk_size: int | None = None,
         cucascade_max_n_chunks: int | None = None,
+        cucascade_enable_cache: bool = False,
     ) -> Self:
         """
         Submit prefetch tasks for all scans.
@@ -477,6 +480,7 @@ class HybridScanPrefetchExecutor:
                 cucascade_max_connections,
                 cucascade_chunk_size,
                 cucascade_max_n_chunks,
+                cucascade_enable_cache,
             )
 
             _, dev_id = cudart.cudaGetDevice()

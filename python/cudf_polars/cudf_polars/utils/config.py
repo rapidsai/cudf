@@ -274,6 +274,13 @@ class ParquetOptions:
         Maximum number of destination buffers fused into a single scatter GET
         in the cuCascade REST engine. Only used when ``prefetch_backend`` is
         ``"cucascade"``. When ``None``, uses the cuCascade engine default (16).
+    cucascade_enable_cache
+        Whether to enable cuCascade's internal prefetch cache. When ``True``,
+        :meth:`CuCascadeDatasource.fadvise` queues S3 downloads into cuCascade's
+        internal bounce buffer pool so that subsequent
+        ``host_read_ranges_async_io`` calls may serve from cache rather than
+        fetching from S3. Only used when ``prefetch_backend`` is
+        ``"cucascade"``. Default is ``False``.
     use_jit_filter
         Whether to use JIT compilation for post-read filtering in Parquet scans.
         When enabled, filter predicates are JIT-compiled to CUDA kernels for
@@ -371,6 +378,11 @@ class ParquetOptions:
             f"{_env_prefix}__CUCASCADE_MAX_N_CHUNKS", int, default=None
         )
     )
+    cucascade_enable_cache: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__CUCASCADE_ENABLE_CACHE", _bool_converter, default=False
+        )
+    )
     use_jit_filter: bool = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__USE_JIT_FILTER",
@@ -433,6 +445,8 @@ class ParquetOptions:
             self.cucascade_max_n_chunks, int
         ):
             raise TypeError("cucascade_max_n_chunks must be an int or None")
+        if not isinstance(self.cucascade_enable_cache, bool):
+            raise TypeError("cucascade_enable_cache must be a bool")
         if not isinstance(self.use_jit_filter, bool):
             raise TypeError("use_jit_filter must be a bool")
 

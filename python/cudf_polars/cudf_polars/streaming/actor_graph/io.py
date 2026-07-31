@@ -659,6 +659,7 @@ async def scan_node(
             cucascade_max_connections=first.parquet_options.cucascade_max_connections if first is not None else None,
             cucascade_chunk_size=first.parquet_options.cucascade_chunk_size if first is not None else None,
             cucascade_max_n_chunks=first.parquet_options.cucascade_max_n_chunks if first is not None else None,
+            cucascade_enable_cache=first.parquet_options.cucascade_enable_cache if first is not None else False,
         )
         if use_prefetch
         else None
