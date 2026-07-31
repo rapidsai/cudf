@@ -95,7 +95,7 @@ chunked_hybrid_scan_multifile(cudf::io::source_info const& source_info,
  * @return Tuple of filter and payload tables
  */
 std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>>
-page_level_chunked_hybrid_scan_multifile(
+chunked_sparse_hybrid_scan_multifile(
   cudf::io::source_info const& source_info,
   cudf::ast::operation const& filter_expression,
   std::optional<std::vector<std::string>> const& payload_column_names,

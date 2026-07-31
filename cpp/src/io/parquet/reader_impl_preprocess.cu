@@ -17,7 +17,6 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/batched_memset.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -107,7 +106,8 @@ void reader_impl::build_string_dict_indices()
     rmm::exec_policy_nosync(_stream, cudf::get_current_device_resource_ref()),
     iter,
     iter + pass.chunks.size(),
-    set_str_dict_index_ptr{pass.str_dict_index.data(), str_dict_index_offsets, pass.chunks});
+    set_str_dict_index_ptr{
+      pass.str_dict_index.data(), str_dict_index_offsets, pass.chunks, _sparse_page_io});
 
   // compute the indices
   kernel_error error_code(_stream);
@@ -947,10 +947,6 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
   bool has_lists = false;
   // Validity Buffer is a uint32_t pointer
   std::vector<cudf::device_span<cudf::bitmask_type>> nullmask_bufs;
-  auto const page_mask = subpass_page_mask_span();
-  auto const has_pruned_page =
-    not page_mask.is_empty() and
-    std::any_of(page_mask.host_begin(), page_mask.host_end(), [](bool keep) { return not keep; });
 
   for (auto const& input_col : _input_columns) {
     size_t const max_depth = input_col.nesting_depth();
@@ -974,10 +970,8 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
         CUDF_EXPECTS(out_buf_size <= std::numeric_limits<cudf::size_type>::max(),
                      "Number of rows exceeds cudf's column size limit",
                      std::overflow_error);
-        auto const initialize_offsets = has_pruned_page and (out_buf.type.id() == type_id::STRING or
-                                                             out_buf.type.id() == type_id::LIST);
         out_buf.create_with_mask(
-          out_buf_size, cudf::mask_state::UNINITIALIZED, initialize_offsets, _stream, _mr);
+          out_buf_size, cudf::mask_state::UNINITIALIZED, false, _stream, _mr);
         nullmask_bufs.emplace_back(
           out_buf.null_mask(),
           cudf::util::round_up_safe(out_buf.null_mask_size(), sizeof(cudf::bitmask_type)) /
@@ -1095,11 +1089,8 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
                        std::overflow_error);
           // allocate
           // we're going to start null mask as all valid and then turn bits off if necessary
-          auto const initialize_offsets =
-            has_pruned_page and
-            (out_buf.type.id() == type_id::STRING or out_buf.type.id() == type_id::LIST);
           out_buf.create_with_mask(
-            buffer_size, cudf::mask_state::UNINITIALIZED, initialize_offsets, _stream, _mr);
+            buffer_size, cudf::mask_state::UNINITIALIZED, false, _stream, _mr);
           nullmask_bufs.emplace_back(
             out_buf.null_mask(),
             cudf::util::round_up_safe(out_buf.null_mask_size(), sizeof(cudf::bitmask_type)) /

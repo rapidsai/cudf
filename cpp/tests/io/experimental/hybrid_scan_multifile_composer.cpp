@@ -159,7 +159,7 @@ chunked_hybrid_scan_multifile(cudf::io::source_info const& source_info,
 }
 
 std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>>
-page_level_chunked_hybrid_scan_multifile(
+chunked_sparse_hybrid_scan_multifile(
   cudf::io::source_info const& source_info,
   cudf::ast::operation const& filter_expression,
   std::optional<std::vector<std::string>> const& payload_column_names,
@@ -204,16 +204,14 @@ page_level_chunked_hybrid_scan_multifile(
     filter_tables.push_back(reader.materialize_filter_columns_chunk(row_mask_view).tbl);
   }
 
-  auto const payload_page_ranges = reader.payload_column_chunks_byte_ranges(
-    row_groups, row_mask->view(), use_data_page_mask::YES, options, stream);
+  auto const payload_page_ranges =
+    reader.payload_pages_byte_ranges(row_groups, row_mask->view(), options, stream);
   auto payload_page_data = fetch_multisource_device_data(inputs, payload_page_ranges, stream, mr);
 
   reader.setup_chunking_for_payload_columns(chunk_read_limit,
                                             pass_read_limit,
                                             row_groups,
-                                            row_mask->view(),
-                                            use_data_page_mask::YES,
-                                            payload_page_data.per_source_spans,
+                                            payload_page_data.flat_spans,
                                             options,
                                             stream,
                                             mr);

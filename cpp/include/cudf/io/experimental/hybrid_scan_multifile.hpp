@@ -261,25 +261,26 @@ class hybrid_scan_multifile {
                                     parquet_reader_options const& options) const;
 
   /**
-   * @brief Plan page-level payload byte ranges grouped by source
+   * @brief Get byte ranges of pages of payload columns
    *
-   * When page masking cannot be used, returns the legacy full-column-chunk ranges regrouped by
-   * source. The resulting plan must be consumed exactly once by the matching page-data setup
-   * overload.
+   * Byte ranges are flattened in source, row group, column chunk, and page order. The returned
+   * source map has one source index per byte range. Dictionary pages precede data pages within each
+   * column chunk. Pruned pages are represented by empty byte ranges.
+   *
+   * @throws std::invalid_argument if any selected column chunk does not have a valid offset
+   * index
    *
    * @param row_group_indices Input row group indices, one vector per source
    * @param row_mask Boolean mask spanning the selected row groups
-   * @param mask_data_pages Whether to use the row mask to prune data pages
    * @param options Parquet reader options
    * @param stream CUDA stream used to compute the page mask
-   * @return Byte ranges to fetch, grouped by source
+   * @return Pair of flattened payload page byte ranges and their corresponding source indices
    */
-  [[nodiscard]] std::vector<std::vector<byte_range_info>> payload_column_chunks_byte_ranges(
-    cudf::host_span<std::vector<size_type> const> row_group_indices,
-    cudf::column_view const& row_mask,
-    use_data_page_mask mask_data_pages,
-    parquet_reader_options const& options,
-    rmm::cuda_stream_view stream) const;
+  [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<size_type>>
+  payload_pages_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                            cudf::column_view const& row_mask,
+                            parquet_reader_options const& options,
+                            rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Materialize payload columns and applies the row mask to the output table
@@ -405,17 +406,16 @@ class hybrid_scan_multifile {
     rmm::device_async_resource_ref mr) const;
 
   /**
-   * @brief Setup payload chunking from source-grouped page-level fetch results
+   * @brief Setup chunking information for payload columns and preprocess the input data pages
    *
-   * Consumes the pending plan created by the page-level payload byte-range overload. Each input
-   * span must correspond to the byte range at the same source and range index.
+   * Input page data spans (including empty ones) must have the same shape as the byte ranges
+   * returned by `payload_pages_byte_ranges`. The data page mask is inferred from the data spans.
    *
    * @param chunk_read_limit Maximum bytes returned per output table chunk, or zero
    * @param pass_read_limit Maximum read/decompression memory, or zero
    * @param row_group_indices Input row group indices, one vector per source
-   * @param row_mask Boolean mask spanning the selected row groups
-   * @param mask_data_pages Whether page masking was requested
-   * @param page_data_per_source Fetched device spans grouped by source
+   * @param page_data Flattened device spans of payload page data in the same order as the byte
+   * ranges from `payload_pages_byte_ranges`
    * @param options Parquet reader options
    * @param stream CUDA stream used for preprocessing
    * @param mr Device memory resource used for output table chunks
@@ -424,9 +424,7 @@ class hybrid_scan_multifile {
     std::size_t chunk_read_limit,
     std::size_t pass_read_limit,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
-    cudf::column_view const& row_mask,
-    use_data_page_mask mask_data_pages,
-    cudf::host_span<std::vector<cudf::device_span<uint8_t const>> const> page_data_per_source,
+    cudf::host_span<cudf::device_span<uint8_t const> const> page_data,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const;
