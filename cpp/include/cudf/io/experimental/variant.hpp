@@ -7,6 +7,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/io/experimental/variant_spec.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -106,6 +107,27 @@ namespace io::parquet::experimental {
   column_view const& variant_column,
   std::string_view path,
   data_type desired_type,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Return the logical type of each VARIANT value blob in a `list<uint8>` column.
+ *
+ * Physical integer widths INT8/INT16/INT32/INT64 all map to `long_value`; both string encodings
+ * (short and long) map to `string`. An encoded Variant null (NULLVAL) produces a valid
+ * `null_value` identifier — not a null output row. An input-null row produces an output-null row.
+ * An unrecognized or unknown header produces a null output row.
+ *
+ * @param values `list<uint8>` column of VARIANT-encoded value bytes
+ * @param stream CUDA stream
+ * @param mr Device memory resource
+ * @return `INT32` column of `variant_logical_type` values cast to `int32_t`. A row is null when
+ *         the input row is null or the value header carries an unrecognized type.
+ *
+ * @throws std::invalid_argument if `values` is not a `list<uint8>` column
+ */
+[[nodiscard]] std::unique_ptr<column> get_variant_type_id(
+  column_view const& values,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

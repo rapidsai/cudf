@@ -46,4 +46,28 @@ enum class variant_primitive_type : uint8_t {
   UUID                 = 20,
 };
 
+/**
+ * @brief Logical type of a VARIANT value as returned by get_variant_type_id.
+ *
+ * All four integer widths (INT8/INT16/INT32/INT64) map to long_value. Both string encodings
+ * (SHORT_STRING and LONG_STRING) map to string. The two timestamp-with-timezone encodings map to
+ * timestamp; the two timestamp-without-timezone encodings map to timestamp_ntz.
+ */
+enum class variant_logical_type : uint8_t {
+  object,
+  array,
+  null_value,
+  boolean,
+  long_value,
+  string,
+  double_value,
+  decimal,
+  date,
+  timestamp,
+  timestamp_ntz,
+  float_value,
+  binary,
+  uuid
+};
+
 }  // namespace cudf::io::parquet::experimental

@@ -752,6 +752,69 @@ struct cast_variant_fn {
   }
 };
 
+__device__ cuda::std::optional<variant_logical_type> logical_type_of(device_span<uint8_t const> enc)
+{
+  if (enc.empty()) { return cuda::std::nullopt; }
+  auto const value_metadata = enc[0];
+  auto const btype          = decode_basic_type(value_metadata);
+
+  if (btype == basic_type::SHORT_STRING) { return variant_logical_type::string; }
+  if (btype == basic_type::OBJECT) { return variant_logical_type::object; }
+  if (btype == basic_type::ARRAY) { return variant_logical_type::array; }
+
+  switch (static_cast<primitive_type>(variant_value_header(value_metadata))) {
+    case primitive_type::NULLVAL: return variant_logical_type::null_value;
+    case primitive_type::BOOLEAN_TRUE:
+    case primitive_type::BOOLEAN_FALSE: return variant_logical_type::boolean;
+    case primitive_type::INT8:
+    case primitive_type::INT16:
+    case primitive_type::INT32:
+    case primitive_type::INT64: return variant_logical_type::long_value;
+    case primitive_type::FLOAT64: return variant_logical_type::double_value;
+    case primitive_type::DECIMAL4:
+    case primitive_type::DECIMAL8:
+    case primitive_type::DECIMAL16: return variant_logical_type::decimal;
+    case primitive_type::DATE: return variant_logical_type::date;
+    case primitive_type::TIMESTAMP_MICROS:
+    case primitive_type::TIMESTAMP_NANOS: return variant_logical_type::timestamp;
+    case primitive_type::TIMESTAMP_NTZ_MICROS:
+    case primitive_type::TIMESTAMP_NTZ_NANOS: return variant_logical_type::timestamp_ntz;
+    case primitive_type::FLOAT32: return variant_logical_type::float_value;
+    case primitive_type::BINARY: return variant_logical_type::binary;
+    case primitive_type::LONG_STRING: return variant_logical_type::string;
+    case primitive_type::UUID: return variant_logical_type::uuid;
+    default: return cuda::std::nullopt;
+  }
+}
+
+CUDF_KERNEL __launch_bounds__(block_size) void get_variant_type_id_kernel(
+  cudf::lists_column_device_view values, device_span<int32_t> d_output, bitmask_type* d_null_mask)
+{
+  auto const num_rows = static_cast<size_type>(d_output.size());
+  auto const tid      = cudf::detail::grid_1d::global_thread_id<block_size>();
+  auto const stride   = cudf::detail::grid_1d::grid_stride<block_size>();
+
+  for (auto row = tid; row < num_rows; row += stride) {
+    if (!cudf::bit_is_set(d_null_mask, row)) {
+      d_output[row] = 0;
+      continue;
+    }
+
+    auto const val_begin = values.offset_at(row);
+    auto const val_end   = values.offset_at(row + 1);
+    device_span<uint8_t const> const val{values.child().data<uint8_t>() + val_begin,
+                                         static_cast<std::size_t>(val_end - val_begin)};
+
+    auto const ltype = logical_type_of(val);
+    if (ltype.has_value()) {
+      d_output[row] = static_cast<int32_t>(ltype.value());
+    } else {
+      d_output[row] = 0;
+      cudf::clear_bit(d_null_mask, row);
+    }
+  }
+}
+
 std::unique_ptr<column> build_path_column(cudf::host_span<std::string const> steps,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
@@ -908,6 +971,39 @@ std::unique_ptr<column> cast_variant(column_view const& values,
                                                mr});
 }
 
+std::unique_ptr<column> get_variant_type_id(column_view const& values,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::device_async_resource_ref mr)
+{
+  validate_variant_child(values);
+  size_type const num_rows = values.size();
+  if (num_rows == 0) { return make_empty_column(data_type{type_id::INT32}); }
+
+  auto val_device_view = column_device_view::create(values, stream);
+  cudf::lists_column_device_view val_lists_device_view(*val_device_view);
+
+  auto null_mask    = values.nullable()
+                        ? cudf::detail::copy_bitmask(values, stream, mr)
+                        : cudf::create_null_mask(num_rows, mask_state::ALL_VALID, stream, mr);
+  auto* d_null_mask = static_cast<bitmask_type*>(null_mask.data());
+
+  rmm::device_buffer data{static_cast<std::size_t>(num_rows) * sizeof(int32_t), stream, mr};
+
+  auto grid = cudf::detail::grid_1d{num_rows, block_size};
+  get_variant_type_id_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
+    val_lists_device_view,
+    {static_cast<int32_t*>(data.data()), static_cast<std::size_t>(num_rows)},
+    d_null_mask);
+  CUDF_CUDA_TRY(cudaGetLastError());
+
+  auto const null_count = num_rows - cudf::detail::count_set_bits(d_null_mask, 0, num_rows, stream);
+  return std::make_unique<column>(data_type{type_id::INT32},
+                                  num_rows,
+                                  std::move(data),
+                                  null_count > 0 ? std::move(null_mask) : rmm::device_buffer{},
+                                  null_count);
+}
+
 }  // namespace detail
 
 std::unique_ptr<column> get_variant_field(column_view const& variant_column,
@@ -926,6 +1022,14 @@ std::unique_ptr<column> cast_variant(column_view const& values,
 {
   CUDF_FUNC_RANGE();
   return detail::cast_variant(values, desired_type, stream, mr);
+}
+
+std::unique_ptr<column> get_variant_type_id(column_view const& values,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::get_variant_type_id(values, stream, mr);
 }
 
 std::unique_ptr<column> extract_variant_field(column_view const& variant_column,

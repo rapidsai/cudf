@@ -14,6 +14,7 @@
 #include <cudf/io/experimental/variant.hpp>
 #include <cudf/io/experimental/variant_spec.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -1300,4 +1301,357 @@ TEST_F(InvalidInputShapeTest, CastVariantRejectsMalformedInput)
                    c.column->view(), cudf::data_type{cudf::type_id::INT32}, stream)),
                  std::invalid_argument);
   }
+}
+
+// get_variant_type_id requires a list<uint8> input; every other shape must be rejected with
+// std::invalid_argument.
+TEST_F(InvalidInputShapeTest, GetVariantTypeIdRejectsMalformedInput)
+{
+  auto stream = cudf::test::get_default_stream();
+
+  std::vector<broken_shape> cases;
+  cases.push_back({"input is not a list", scalar_i32()});
+  cases.push_back({"input list has wrong element type (not uint8)", list_i32({1, 2, 3})});
+
+  for (auto const& c : cases) {
+    SCOPED_TRACE(c.label);
+    EXPECT_THROW(static_cast<void>(
+                   cudf::io::parquet::experimental::get_variant_type_id(c.column->view(), stream)),
+                 std::invalid_argument);
+  }
+}
+
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Helper: run get_variant_type_id on the value child of an apache fixture.
+template <std::size_t M, std::size_t V>
+std::unique_ptr<cudf::column> apache_type_id(avf::fixture<M, V> const& fixture)
+{
+  auto const stream = cudf::test::get_default_stream();
+  auto col          = make_apache_variant(fixture);
+  auto const value  = cudf::structs_column_view{col}.get_sliced_child(1, stream);
+  return cudf::io::parquet::experimental::get_variant_type_id(value, stream);
+}
+
+// Build a list<uint8> column from blobs with per-row validity. Rows where valid[i] is false are
+// null at the list level (not an encoded Variant null — those are valid rows with a NULLVAL blob).
+inline std::unique_ptr<cudf::column> make_list_u8_nullable(
+  std::vector<std::vector<uint8_t>> const& blobs, std::vector<bool> const& valid)
+{
+  auto const n = static_cast<cudf::size_type>(blobs.size());
+  std::vector<int32_t> offs(n + 1, 0);
+  std::vector<uint8_t> flat;
+  for (cudf::size_type i = 0; i < n; ++i) {
+    flat.insert(flat.end(), blobs[i].begin(), blobs[i].end());
+    offs[i + 1] = static_cast<int32_t>(flat.size());
+  }
+  auto off_col =
+    cudf::test::fixed_width_column_wrapper<int32_t>(offs.begin(), offs.end()).release();
+  auto dat_col =
+    cudf::test::fixed_width_column_wrapper<uint8_t>(flat.begin(), flat.end()).release();
+  auto const null_count =
+    static_cast<cudf::size_type>(std::count(valid.begin(), valid.end(), false));
+  if (null_count == 0) {
+    return cudf::make_lists_column(n, std::move(off_col), std::move(dat_col), 0, {});
+  }
+  auto const mask_bytes = cudf::bitmask_allocation_size_bytes(n);
+  std::vector<uint32_t> host_mask(mask_bytes / sizeof(uint32_t), 0);
+  for (cudf::size_type i = 0; i < n; ++i) {
+    if (valid[i]) { host_mask[i / 32] |= uint32_t{1} << (i % 32); }
+  }
+  rmm::device_buffer d_mask(host_mask.data(), mask_bytes, cudf::test::get_default_stream());
+  return cudf::make_lists_column(
+    n, std::move(off_col), std::move(dat_col), null_count, std::move(d_mask));
+}
+
+}  // namespace
+
+struct GetVariantTypeIdTest : public cudf::test::BaseFixture {};
+
+using LT = cudf::io::parquet::experimental::variant_logical_type;
+
+// ---------------------------------------------------------------------------
+// Apache fixtures: one test per logical-type category.
+// ---------------------------------------------------------------------------
+
+TEST_F(GetVariantTypeIdTest, NullValue)
+{
+  auto got = apache_type_id(avf::primitive_null);
+  cudf::test::fixed_width_column_wrapper<int32_t> expected{static_cast<int32_t>(LT::null_value)};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(GetVariantTypeIdTest, Boolean)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> const expected{static_cast<int32_t>(LT::boolean)};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*apache_type_id(avf::primitive_boolean_true), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*apache_type_id(avf::primitive_boolean_false), expected);
+}
+
+TEST_F(GetVariantTypeIdTest, LongValueAllIntWidths)
+{
+  // INT8, INT16, INT32, INT64 all map to long_value regardless of physical width.
+  cudf::test::fixed_width_column_wrapper<int32_t> const expected{
+    static_cast<int32_t>(LT::long_value)};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*apache_type_id(avf::primitive_int8), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*apache_type_id(avf::primitive_int16), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*apache_type_id(avf::primitive_int32), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*apache_type_id(avf::primitive_int64), expected);
+}
+
+TEST_F(GetVariantTypeIdTest, StringBothEncodings)
+{
+  // SHORT_STRING and primitive LONG_STRING both map to string.
+  cudf::test::fixed_width_column_wrapper<int32_t> const expected{static_cast<int32_t>(LT::string)};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*apache_type_id(avf::short_string), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*apache_type_id(avf::primitive_string), expected);
+}
+
+TEST_F(GetVariantTypeIdTest, FloatTypes)
+{
+  {
+    auto got = apache_type_id(avf::primitive_float);
+    cudf::test::fixed_width_column_wrapper<int32_t> expected{static_cast<int32_t>(LT::float_value)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+  }
+  {
+    auto got = apache_type_id(avf::primitive_double);
+    cudf::test::fixed_width_column_wrapper<int32_t> expected{
+      static_cast<int32_t>(LT::double_value)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+  }
+}
+
+TEST_F(GetVariantTypeIdTest, Decimal)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> const expected{static_cast<int32_t>(LT::decimal)};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*apache_type_id(avf::primitive_decimal4), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*apache_type_id(avf::primitive_decimal8), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*apache_type_id(avf::primitive_decimal16), expected);
+}
+
+TEST_F(GetVariantTypeIdTest, Date)
+{
+  auto got = apache_type_id(avf::primitive_date);
+  cudf::test::fixed_width_column_wrapper<int32_t> expected{static_cast<int32_t>(LT::date)};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(GetVariantTypeIdTest, TimestampBothNanos)
+{
+  // TIMESTAMP_MICROS and TIMESTAMP_NANOS both map to timestamp.
+  cudf::test::fixed_width_column_wrapper<int32_t> const expected{
+    static_cast<int32_t>(LT::timestamp)};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*apache_type_id(avf::primitive_timestamp), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*apache_type_id(avf::primitive_timestamp_nanos), expected);
+}
+
+TEST_F(GetVariantTypeIdTest, TimestampNtzBothNanos)
+{
+  // TIMESTAMP_NTZ_MICROS and TIMESTAMP_NTZ_NANOS both map to timestamp_ntz.
+  cudf::test::fixed_width_column_wrapper<int32_t> const expected{
+    static_cast<int32_t>(LT::timestamp_ntz)};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*apache_type_id(avf::primitive_timestampntz), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*apache_type_id(avf::primitive_timestampntz_nanos), expected);
+}
+
+TEST_F(GetVariantTypeIdTest, Binary)
+{
+  auto got = apache_type_id(avf::primitive_binary);
+  cudf::test::fixed_width_column_wrapper<int32_t> expected{static_cast<int32_t>(LT::binary)};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(GetVariantTypeIdTest, Uuid)
+{
+  auto got = apache_type_id(avf::primitive_uuid);
+  cudf::test::fixed_width_column_wrapper<int32_t> expected{static_cast<int32_t>(LT::uuid)};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(GetVariantTypeIdTest, ObjectAndArray)
+{
+  {
+    cudf::test::fixed_width_column_wrapper<int32_t> const expected{
+      static_cast<int32_t>(LT::object)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*apache_type_id(avf::object_primitive), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*apache_type_id(avf::object_nested), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*apache_type_id(avf::object_empty), expected);
+  }
+  {
+    cudf::test::fixed_width_column_wrapper<int32_t> const expected{static_cast<int32_t>(LT::array)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*apache_type_id(avf::array_primitive), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*apache_type_id(avf::array_nested), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*apache_type_id(avf::array_empty), expected);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Null and unknown-type behavior.
+// ---------------------------------------------------------------------------
+
+TEST_F(GetVariantTypeIdTest, UnknownPhysicalTypeProducesNull)
+{
+  // TIME_NTZ_MICROS is a valid Variant physical type but has no logical-type mapping.
+  auto got = apache_type_id(avf::primitive_time);
+  ASSERT_EQ(got->size(), 1);
+  EXPECT_EQ(got->null_count(), 1);
+}
+
+TEST_F(GetVariantTypeIdTest, InputNullRowPropagates)
+{
+  // A null row in the input list<uint8> column propagates to the output.
+  auto const stream = cudf::test::get_default_stream();
+  auto values =
+    make_list_u8_nullable({enc_int32(1), enc_int32(2), enc_int32(3)}, {true, false, true});
+
+  auto got = cudf::io::parquet::experimental::get_variant_type_id(*values, stream);
+
+  cudf::test::fixed_width_column_wrapper<int32_t> expected(
+    {static_cast<int32_t>(LT::long_value), 0, static_cast<int32_t>(LT::long_value)},
+    {true, false, true});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(GetVariantTypeIdTest, EncodedNullIsNotInputNull)
+{
+  // An encoded Variant NULLVAL blob is a valid row whose type is null_value, not a null row.
+  auto const stream = cudf::test::get_default_stream();
+  auto val          = enc_null();
+  cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
+  auto got = cudf::io::parquet::experimental::get_variant_type_id(values, stream);
+
+  ASSERT_EQ(got->size(), 1);
+  EXPECT_EQ(got->null_count(), 0);
+  cudf::test::fixed_width_column_wrapper<int32_t> expected{static_cast<int32_t>(LT::null_value)};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(GetVariantTypeIdTest, EmptyValueBlobProducesNull)
+{
+  // An empty list row (zero bytes) has no header byte to decode → null.
+  auto const stream = cudf::test::get_default_stream();
+  auto values       = make_list_u8_nullable({enc_int32(1), {}, enc_int32(3)}, {true, true, true});
+
+  auto got = cudf::io::parquet::experimental::get_variant_type_id(*values, stream);
+
+  cudf::test::fixed_width_column_wrapper<int32_t> expected(
+    {static_cast<int32_t>(LT::long_value), 0, static_cast<int32_t>(LT::long_value)},
+    {true, false, true});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+// ---------------------------------------------------------------------------
+// Multi-row and structural tests.
+// ---------------------------------------------------------------------------
+
+TEST_F(GetVariantTypeIdTest, MixedTypesColumn)
+{
+  auto const stream = cudf::test::get_default_stream();
+
+  auto null_val = enc_null();
+  auto bool_val = enc_bool(true);
+  auto int_val  = enc_int64(999);
+  auto str_val  = enc_short_string("hi");
+  auto dbl_val  = enc_float64(3.14);
+
+  cudf::test::lists_column_wrapper<uint8_t> values{
+    {null_val.begin(), null_val.end()},
+    {bool_val.begin(), bool_val.end()},
+    {int_val.begin(), int_val.end()},
+    {str_val.begin(), str_val.end()},
+    {dbl_val.begin(), dbl_val.end()},
+  };
+  auto got = cudf::io::parquet::experimental::get_variant_type_id(values, stream);
+
+  cudf::test::fixed_width_column_wrapper<int32_t> expected{
+    static_cast<int32_t>(LT::null_value),
+    static_cast<int32_t>(LT::boolean),
+    static_cast<int32_t>(LT::long_value),
+    static_cast<int32_t>(LT::string),
+    static_cast<int32_t>(LT::double_value),
+  };
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(GetVariantTypeIdTest, AllNullInputColumn)
+{
+  // All rows are null at the list level → all output rows are null.
+  auto const stream = cudf::test::get_default_stream();
+  auto values =
+    make_list_u8_nullable({enc_int32(1), enc_int32(2), enc_int32(3)}, {false, false, false});
+
+  auto got = cudf::io::parquet::experimental::get_variant_type_id(*values, stream);
+
+  ASSERT_EQ(got->size(), 3);
+  EXPECT_EQ(got->null_count(), 3);
+}
+
+TEST_F(GetVariantTypeIdTest, EmptyInput)
+{
+  auto const stream = cudf::test::get_default_stream();
+  auto const values =
+    cudf::empty_like(cudf::structs_column_view{make_xyz_three_row_variant()}.child(1));
+
+  auto got = cudf::io::parquet::experimental::get_variant_type_id(*values, stream);
+  EXPECT_EQ(got->type().id(), cudf::type_id::INT32);
+  EXPECT_EQ(got->size(), 0);
+  EXPECT_EQ(got->null_count(), 0);
+}
+
+TEST_F(GetVariantTypeIdTest, SlicedValuesColumn)
+{
+  // Verify that a sliced input produces correct results for the slice only.
+  auto const stream      = cudf::test::get_default_stream();
+  auto col               = make_xyz_three_row_variant();
+  auto const stream2     = cudf::test::get_default_stream();
+  auto const value_child = cudf::structs_column_view{col}.get_sliced_child(1, stream2);
+
+  // The xyz variant has object rows; slicing [1,3) gives 2 object rows.
+  auto const sliced_values = cudf::slice(value_child, {1, 3}).front();
+  auto got = cudf::io::parquet::experimental::get_variant_type_id(sliced_values, stream);
+
+  cudf::test::fixed_width_column_wrapper<int32_t> expected{static_cast<int32_t>(LT::object),
+                                                           static_cast<int32_t>(LT::object)};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(GetVariantTypeIdTest, LargeMultiRowColumn)
+{
+  // 128 rows cycling through all types that get_variant_type_id can classify.
+  auto const stream = cudf::test::get_default_stream();
+
+  struct row_spec {
+    std::vector<uint8_t> blob;
+    int32_t expected_id;
+  };
+
+  std::vector<row_spec> const types{
+    {enc_null(), static_cast<int32_t>(LT::null_value)},
+    {enc_bool(false), static_cast<int32_t>(LT::boolean)},
+    {enc_int8(1), static_cast<int32_t>(LT::long_value)},
+    {enc_int16(2), static_cast<int32_t>(LT::long_value)},
+    {enc_int32(3), static_cast<int32_t>(LT::long_value)},
+    {enc_int64(4), static_cast<int32_t>(LT::long_value)},
+    {enc_float64(5.0), static_cast<int32_t>(LT::double_value)},
+    {enc_short_string("x"), static_cast<int32_t>(LT::string)},
+    {enc_long_string(std::string(70, 'z')), static_cast<int32_t>(LT::string)},
+  };
+  constexpr int num_rows = 128;
+  std::vector<std::vector<uint8_t>> blobs(num_rows);
+  std::vector<int32_t> expected_ids(num_rows);
+  for (int i = 0; i < num_rows; ++i) {
+    auto const& spec = types[i % types.size()];
+    blobs[i]         = spec.blob;
+    expected_ids[i]  = spec.expected_id;
+  }
+
+  auto values = make_list_u8_nullable(blobs, std::vector<bool>(num_rows, true));
+  auto got    = cudf::io::parquet::experimental::get_variant_type_id(*values, stream);
+
+  cudf::test::fixed_width_column_wrapper<int32_t> expected(expected_ids.begin(),
+                                                           expected_ids.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
