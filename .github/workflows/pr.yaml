@@ -56,7 +56,7 @@ jobs:
     permissions:
       actions: read
       contents: read
-    uses: rapidsai/shared-workflows/.github/workflows/maven-publish.yaml@57adbbe21eb864d9f6511d5caa7286d3ef02f678 # paul-aiyedun/add_maven_publish_workflow
+    uses: rapidsai/shared-workflows/.github/workflows/maven-publish.yaml@4e4a45a84cc91d1b196adcbfabd46f98d6a9bc59 # paul-aiyedun/add_maven_publish_workflow
     secrets:
       GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
       GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -66,4 +66,4 @@ jobs:
       artifact-name: cudf_java_maven_repo
       source-git-sha: ${{ github.sha }}
       # false = validate + drop (safe). true = stage PENDING for manual publish.
-      stage-for-maven-central-publish: false
+      stage-for-maven-central-publish: true
