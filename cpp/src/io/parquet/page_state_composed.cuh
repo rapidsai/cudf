@@ -32,12 +32,9 @@ struct level_scan_state {
   CUDF_PARQUET_PAGE_STATE_ERROR_METHODS
 };
 
-// Composition D: string offset preprocess (flat scan with progress tracking).
-// Used by: preprocess_string_offsets.
+// Shared memory state struct used by the preprocess_string_offsets kernel.
 // Includes setup (page metadata + error), stream (page bytes + dictionary), and
 // progress (input counters) because this pass scans flat string payloads while tracking counts.
-// FLBA (FIXED_LEN_BYTE_ARRAY) pages return before setup_local_page_info runs, and
-// non-FLBA setup writes conversion scratch that this kernel never reads, so it stays out.
 struct string_offset_scan_state {
   page_decode_setup_state setup;
   page_decode_stream_state stream;
