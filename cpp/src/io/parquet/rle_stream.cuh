@@ -221,16 +221,6 @@ struct rle_stream {
   // the budget transparently fall back to parsing from global.
   static constexpr int smem_stage_size = smem_stage_size_bytes;
 
-  // Chunked-expand cross-call partial-run state.
-  // When a run straddles a decode_next_chunked boundary we record its meta,
-  // total count, and how many values were already emitted so the next call
-  // can resume from the correct payload offset.  partial_run_meta ==
-  // no_partial_run means no pending partial run.
-  static constexpr uint32_t no_partial_run = ~0u;
-  uint32_t partial_run_meta;  // meta word for the split run (no_partial_run = none)
-  int partial_run_total;      // full value count of that run
-  int partial_run_done;       // values already emitted from it
-
   // Ring-mode streams need a shared-memory ring buffer of run headers to
   // coordinate the producer/consumer warps in decode_next_ring. Chunked-expand
   // streams parse run headers directly into per-chunk shared tables and never
@@ -302,10 +292,6 @@ struct rle_stream {
     // Anchor s_start to the (possibly rebased) cur so chunked-expand meta
     // offsets index into the same memory space that the parse cursor uses.
     s_start = cur;
-
-    partial_run_meta  = no_partial_run;
-    partial_run_total = 0;
-    partial_run_done  = 0;
   }
 
   __device__ inline int get_rle_run_info(rle_run& run)
@@ -471,10 +457,11 @@ struct rle_stream {
    * every warp busy even when runs are highly non-uniform in size, at the
    * cost of an extra intra-block sync per chunk.
    *
-   * A single RLE run may exceed the requested `count`. In that case we emit
-   * as much as fits, stash `partial_run_{meta,total,done}` in class state,
-   * and resume it as slot 0 of the next invocation without re-parsing its
-   * header (cur has already advanced past the payload).
+   * The current sole caller passes max_output_values = INT_MAX, so a single
+   * RLE run can never exceed the requested `count`. A cudf_assert in the
+   * header-parse loop enforces this invariant; a future caller that needs to
+   * split runs across calls must restore the partial-run resume machinery
+   * removed in this commit.
    */
   template <typename Group>
   __device__ inline int decode_next_chunked(Group const& group, int count)
@@ -490,9 +477,6 @@ struct rle_stream {
     __shared__ uint32_t chunk_meta[max_runs_per_chunk];
     cuda::std::span<int> const chunk_out_off_v{chunk_out_off, max_runs_per_chunk + 1};
     cuda::std::span<uint32_t> const chunk_meta_v{chunk_meta, max_runs_per_chunk};
-    // Payload offset within run slot 0: non-zero only when continuing a run
-    // that was split across two decode_next_chunked calls.
-    __shared__ int s_run0_payload_offset;
     __shared__ int s_chunk_runs;   // number of runs parsed in this chunk (num_runs)
     __shared__ int s_chunk_total;  // sum of run lengths in this chunk (run_prefix_end)
     __shared__ int s_base_out;     // absolute output pos where this chunk starts
@@ -516,38 +500,16 @@ struct rle_stream {
       // ----- Phase 1: single-thread run-header parse ------------------
       // Thread 0 walks the encoded stream, decoding VLQ run headers and
       // filling chunk_out_off / chunk_meta. Do not use cg::invoke_one here:
-      // it may choose different threads across calls, but cur and partial_run_*
-      // are per-thread rle_stream state that must persist on thread 0.
+      // it may choose different threads across calls, but `cur` is per-thread
+      // rle_stream state that must persist on thread 0.
       // The other threads wait at the group.sync() below. This is cheap because
       // it is bounded by max_runs_per_chunk headers and header parsing is
       // inherently serial.
       if (group.thread_rank() == 0) {
-        int run_prefix_end    = 0;
-        int num_runs          = 0;
-        int out_base          = out_pos_total;
-        chunk_out_off_v[0]    = 0;
-        s_run0_payload_offset = 0;
-
-        // Slot 0 special case: resume a run that was split by the previous
-        // call. `cur` already points past this run's payload (fully
-        // consumed last call), so we do NOT re-parse its header - we just
-        // reuse the saved meta and continue emitting values.
-        if (partial_run_meta != no_partial_run) {
-          int const remaining   = partial_run_total - partial_run_done;
-          int const room        = out_end - out_base;
-          int const run_len     = min(remaining, room);
-          chunk_meta_v[0]       = partial_run_meta;
-          chunk_out_off_v[1]    = run_len;
-          s_run0_payload_offset = partial_run_done;
-          num_runs              = 1;
-          run_prefix_end        = run_len;
-          if (run_len < remaining) {
-            partial_run_done += run_len;
-          } else {
-            partial_run_meta = no_partial_run;
-          }
-        }
-
+        int run_prefix_end = 0;
+        int num_runs       = 0;
+        int out_base       = out_pos_total;
+        chunk_out_off_v[0] = 0;
         // Parse up to max_runs_per_chunk headers, stopping early if the output range
         // fills up or the encoded stream is exhausted.
         while (num_runs < max_runs_per_chunk && (out_base + run_prefix_end) < out_end &&
@@ -577,23 +539,16 @@ struct rle_stream {
             run_desc = static_cast<uint32_t>(cur - s_start);
             cur += value_width;
           }
-
-          // If this run overflows the requested output window, clamp it and
-          // stash the remainder as a pending partial run for the next call.
-          // Note `cur` has already been advanced past the *full* payload
-          // above, which is what we want - the resumed call reads the
-          // payload out of s_start via the saved meta offset.
-          int const room = out_end - (out_base + run_prefix_end);
-          if (run_len > room) {
-            partial_run_meta  = run_desc;
-            partial_run_total = run_len;
-            partial_run_done  = room;
-            run_len           = room;
-          }
+          // With max_output_values = INT_MAX in the current caller, no single
+          // parquet run can exceed the output window. This assert exists to
+          // catch a future caller that passes a smaller window: if it fires,
+          // restore the cross-call partial-run resume machinery removed in
+          // this commit (see commits 4dbde92dd1 / 3e349acb27 / feature branch
+          // opt/rle-def-rep-split for the prior implementation).
+          cudf_assert(run_len <= (out_end - (out_base + run_prefix_end)));
           run_prefix_end += run_len;
           chunk_meta_v[num_runs]      = run_desc;
           chunk_out_off_v[++num_runs] = run_prefix_end;
-          if (partial_run_meta != no_partial_run) { break; }
         }
         s_chunk_runs  = num_runs;
         s_chunk_total = run_prefix_end;
@@ -605,10 +560,9 @@ struct rle_stream {
       // All warps see the same chunk_out_off / chunk_meta tables. We split
       // the flat output range [0, chunk_total) into `num_warps` equal-ish
       // slices and each warp writes its slice.
-      int const chunk_runs          = s_chunk_runs;
-      int const chunk_total         = s_chunk_total;
-      int const base_out            = s_base_out;
-      int const run0_payload_offset = s_run0_payload_offset;
+      int const chunk_runs  = s_chunk_runs;
+      int const chunk_total = s_chunk_total;
+      int const base_out    = s_base_out;
 
       if (chunk_runs == 0) { break; }
 
@@ -641,15 +595,12 @@ struct rle_stream {
           }
           int const run_start_out = chunk_out_off_v[run_idx];
           uint32_t const run_desc = chunk_meta_v[run_idx];
-          // Slot 0 of a resumed partial run carries a payload offset so we
-          // read from the correct position in the (already-consumed) payload.
-          int const run_payload_off = (run_idx == 0) ? run0_payload_offset : 0;
 
           if (run_desc & (1u << 31)) {
             // Literal (bit-packed) run: bit-field extract for this lane's p.
             uint32_t const payload_off = run_desc & 0x7fffffff;
             uint8_t const* payload     = s_start + payload_off;
-            int const local            = (p - run_start_out) + run_payload_off;
+            int const local            = p - run_start_out;
             int bitpos                 = local * level_bits;
             uint8_t const* source      = payload + (bitpos >> 3);
             bitpos &= 7;
