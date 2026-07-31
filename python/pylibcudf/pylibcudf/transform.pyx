@@ -358,14 +358,9 @@ cpdef Column transform(
     mr = _get_memory_resource(mr)
 
     if inputs:
-        input_view = (<Column?>inputs[0]).view()
-        smallest_size = input_view.size()
-        largest_size = smallest_size
-
-        for input in inputs[1:]:
-            input_view = (<Column?>input).view()
-            smallest_size = min(smallest_size, input_view.size())
-            largest_size = max(largest_size, input_view.size())
+        sizes = [(<Column?>input).view().size() for input in inputs]
+        smallest_size = min(sizes)
+        largest_size = max(sizes)
 
         base_size = 0 if largest_size == 1 and smallest_size == 0 else largest_size
         row_size = base_size
