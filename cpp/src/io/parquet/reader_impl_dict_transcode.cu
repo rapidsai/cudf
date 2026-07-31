@@ -270,12 +270,25 @@ void reader_impl::zero_init_dict_transcoded_index_buffers()
   // null positions. Zero them here so null rows carry a well-defined (valid) index into the
   // dictionary keys -- a requirement for `cudf::dictionary::detail::concatenate` to correctly
   // remap indices below.
+  //
+  // Only nullable columns need this: the kernel decodes non-nullable columns (max definition level
+  // 0) in DIRECT mode, which writes every output position, so their buffers are fully initialized by
+  // decode. This mirrors `is_nullable()` in the decode kernel (max_level[DEFINITION] > 0).
+  if (_pass_itm_data == nullptr) { return; }
+  auto const& pass = *_pass_itm_data;
+  std::vector<bool> col_nullable(_input_columns.size(), false);
+  for (auto const& chunk : pass.chunks) {
+    if (chunk.max_level[level_type::DEFINITION] > 0) { col_nullable[chunk.src_col_index] = true; }
+  }
+
   std::vector<cudf::device_span<int32_t>> index_bufs;
   index_bufs.reserve(_input_columns.size());
   std::for_each(cuda::counting_iterator<size_t>{0},
                 cuda::counting_iterator{_input_columns.size()},
                 [&](size_t i) {
                   if (not _dict_transcode_eligible[i]) { return; }
+                  // Non-nullable columns decode in DIRECT mode and write every slot -> no zeroing.
+                  if (not col_nullable[i]) { return; }
                   auto& out_buf = _output_buffers[_input_columns[i].nesting[0]];
                   if (out_buf.type.id() != type_id::INT32) { return; }
                   if (out_buf.data() == nullptr or out_buf.size == 0) { return; }
