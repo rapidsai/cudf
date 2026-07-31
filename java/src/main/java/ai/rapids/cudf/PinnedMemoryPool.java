@@ -133,7 +133,9 @@ public final class PinnedMemoryPool implements AutoCloseable {
    *                              A value of 1 initializes the backing memory using {@code cudaHostAlloc}.
    *                              Values greater than 1 instead request huge pages and pre-touch pages
    *                              concurrently before pinning for faster initialization. This does not
-   *                              affect subsequent suballocator behavior.
+   *                              affect subsequent suballocator behavior. Note: on multi-NUMA systems,
+   *                              multithreaded initialization may scatter pages across nodes if placement
+   *                              is not constrained in advance. Pages cannot be migrated once pinned.
    */
   public static synchronized void initialize(long poolSize, int gpuId, boolean setCudfPinnedPoolMemoryResource,
       int initializationThreads) {

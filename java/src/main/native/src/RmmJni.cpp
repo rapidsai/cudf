@@ -711,9 +711,9 @@ class parallel_init_pinned_host_memory_resource final {
     auto* const base      = static_cast<std::uint8_t volatile*>(allocation);
     std::size_t next_page = 0;
 
-    // Note that these threads will inherit the caller's CPU affinity but are not individually
-    // affinity bound. If the calling thread is not bound to a NUMA node, the resultant pages
-    // could span multiple NUMA nodes.
+    // Note that these threads will inherit the caller's affinity/mempolicy. We respect the
+    // caller's placement and do not impose any additional constraints. If the calling thread
+    // allows multiple NUMA nodes, the resultant pages could span multiple nodes.
     try {
       for (std::size_t worker_index = 0; worker_index < thread_count; ++worker_index) {
         auto const pages_for_worker =
