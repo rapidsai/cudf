@@ -196,17 +196,16 @@ static __device__ void calculate_revenue(double *revenue, double extprice, doubl
            )***";
 
     // revenue
-    result.push_back(
-      cudf::transform_extended(std::vector<cudf::transform_input>{extendedprice, discount},
-                               udf,
-                               cudf::data_type(cudf::type_id::FLOAT64),
-                               cudf::udf_source_type::CUDA,
-                               std::nullopt,
-                               cudf::null_aware::NO,
-                               std::nullopt,
-                               cudf::output_nullability::PRESERVE,
-                               chunk_stream,
-                               ctx->br()->device_mr()));
+    result.push_back(cudf::transform(std::vector<cudf::transform_input>{extendedprice, discount},
+                                     udf,
+                                     cudf::data_type(cudf::type_id::FLOAT64),
+                                     cudf::udf_source_type::CUDA,
+                                     std::nullopt,
+                                     cudf::null_aware::NO,
+                                     std::nullopt,
+                                     cudf::output_nullability::PRESERVE,
+                                     chunk_stream,
+                                     ctx->br()->device_mr()));
     co_await ch_out->send(cudf_streaming::to_message(
       sequence_number,
       std::make_unique<cudf_streaming::table_chunk>(

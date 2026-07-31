@@ -92,15 +92,15 @@ static void BM_transform(nvbench::state& state)
   auto const mem_stats_logger = cudf::memory_stats_logger();
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    cudf::transform_extended(inputs,
-                             code,
-                             cudf::data_type{cudf::type_to_id<key_type>()},
-                             cudf::udf_source_type::CUDA,
-                             std::nullopt,
-                             cudf::null_aware::NO,
-                             std::nullopt,
-                             cudf::output_nullability::PRESERVE,
-                             launch.get_stream().get_stream());
+    cudf::transform(inputs,
+                    code,
+                    cudf::data_type{cudf::type_to_id<key_type>()},
+                    cudf::udf_source_type::CUDA,
+                    std::nullopt,
+                    cudf::null_aware::NO,
+                    std::nullopt,
+                    cudf::output_nullability::PRESERVE,
+                    launch.get_stream().get_stream());
   });
 
   state.add_buffer_size(

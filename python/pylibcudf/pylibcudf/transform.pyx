@@ -5,6 +5,7 @@ from cython.operator cimport dereference
 
 from libcpp.memory cimport unique_ptr
 from libcpp.optional cimport optional
+from libcpp.span cimport span
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp.utility cimport move, pair
@@ -14,7 +15,11 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
-from pylibcudf.libcudf.types cimport bitmask_type, size_type
+from pylibcudf.libcudf.types cimport (
+    bitmask_type,
+    size_type,
+    udf_source_type,
+)
 
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
@@ -27,6 +32,8 @@ from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType, null_aware, output_nullability
 from .utils cimport _get_stream, _get_memory_resource
 from cuda.bindings.cyruntime cimport cudaStream_t
+
+ctypedef const cpp_transform.transform_input const_transform_input
 
 __all__ = [
     "bools_to_mask",
@@ -324,29 +331,58 @@ cpdef Column transform(
     Column
         The transformed column having the UDF applied to each element.
     """
-    cdef vector[column_view] c_inputs
+    cdef vector[cpp_transform.transform_input] c_inputs
     cdef unique_ptr[column] c_result
     cdef string c_transform_udf = transform_udf.encode()
-    cdef bool c_is_ptx = is_ptx
+    cdef udf_source_type source_type = (
+        udf_source_type.PTX if is_ptx else udf_source_type.CUDA
+    )
     cdef null_aware c_is_null_aware = is_null_aware
     cdef output_nullability c_null_policy = null_policy
     cdef optional[void *] user_data
+    cdef optional[size_type] row_size
+    cdef column_view input_view
+    cdef size_type smallest_size
+    cdef size_type largest_size
+    cdef size_type base_size
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    if inputs:
+        input_view = (<Column?>inputs[0]).view()
+        smallest_size = input_view.size()
+        largest_size = smallest_size
+
+        for input in inputs[1:]:
+            input_view = (<Column?>input).view()
+            smallest_size = min(smallest_size, input_view.size())
+            largest_size = max(largest_size, input_view.size())
+
+        base_size = 0 if largest_size == 1 and smallest_size == 0 else largest_size
+        row_size = base_size
+
     for input in inputs:
-        c_inputs.push_back((<Column?>input).view())
+        input_view = (<Column?>input).view()
+        if input_view.size() == 1 and input_view.size() != base_size:
+            c_inputs.push_back(
+                cpp_transform.transform_input(
+                    cpp_transform.scalar_column_view(input_view)
+                )
+            )
+        else:
+            c_inputs.push_back(cpp_transform.transform_input(input_view))
 
     with nogil:
         c_result = cpp_transform.transform(
-            c_inputs,
+            span[const_transform_input](c_inputs.data(), c_inputs.size()),
             c_transform_udf,
             output_type.c_obj,
-            c_is_ptx,
+            source_type,
             user_data,
             c_is_null_aware,
+            row_size,
             c_null_policy,
             _cs,
             mr.get_mr()

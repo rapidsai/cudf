@@ -120,16 +120,16 @@ __device__ void e164_format(void* scratch,
                                     cudf::scalar_column_view(*min_visible_age),
                                     cudf::scalar_column_view(*size)};
 
-  auto formatted = cudf::transform_extended(inputs,
-                                            udf,
-                                            cudf::data_type{cudf::type_id::STRING},
-                                            cudf::udf_source_type::CUDA,
-                                            scratch.data(),
-                                            cudf::null_aware::NO,
-                                            std::nullopt,
-                                            cudf::output_nullability::PRESERVE,
-                                            stream,
-                                            mr);
+  auto formatted = cudf::transform(inputs,
+                                   udf,
+                                   cudf::data_type{cudf::type_id::STRING},
+                                   cudf::udf_source_type::CUDA,
+                                   scratch.data(),
+                                   cudf::null_aware::NO,
+                                   std::nullopt,
+                                   cudf::output_nullability::PRESERVE,
+                                   stream,
+                                   mr);
 
   return std::make_tuple(std::move(formatted), transformed);
 }

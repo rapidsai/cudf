@@ -29,15 +29,15 @@ void test_udf(char const* udf,
 
   cudf::transform_input inputs[] = {in};
 
-  cudf::transform_extended(inputs,
-                           udf,
-                           cudf::data_type(cudf::type_to_id<dtype>()),
-                           source_type,
-                           std::nullopt,
-                           cudf::null_aware::NO,
-                           std::nullopt,
-                           cudf::output_nullability::PRESERVE,
-                           cudf::test::get_default_stream());
+  cudf::transform(inputs,
+                  udf,
+                  cudf::data_type(cudf::type_to_id<dtype>()),
+                  source_type,
+                  std::nullopt,
+                  cudf::null_aware::NO,
+                  std::nullopt,
+                  cudf::output_nullability::PRESERVE,
+                  cudf::test::get_default_stream());
 }
 
 TEST_F(TransformTest, Transform)

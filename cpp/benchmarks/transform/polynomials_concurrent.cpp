@@ -85,15 +85,15 @@ static void BM_transform_polynomials_concurrent(nvbench::state& state)
                         ";"
                         "}";
 
-      cudf::transform_extended(inputs,
-                               udf,
-                               cudf::data_type{cudf::type_to_id<key_type>()},
-                               cudf::udf_source_type::CUDA,
-                               std::nullopt,
-                               cudf::null_aware::NO,
-                               std::nullopt,
-                               cudf::output_nullability::PRESERVE,
-                               stream);
+      cudf::transform(inputs,
+                      udf,
+                      cudf::data_type{cudf::type_to_id<key_type>()},
+                      cudf::udf_source_type::CUDA,
+                      std::nullopt,
+                      cudf::null_aware::NO,
+                      std::nullopt,
+                      cudf::output_nullability::PRESERVE,
+                      stream);
       nvtxRangePop();
     };
 

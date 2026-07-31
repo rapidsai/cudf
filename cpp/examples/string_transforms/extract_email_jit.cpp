@@ -53,16 +53,16 @@ __device__ void email_provider(cudf::string_view* out,
   auto emails                    = table.column(1);
   cudf::transform_input inputs[] = {emails, cudf::scalar_column_view(*alt)};
 
-  auto providers = cudf::transform_extended(inputs,
-                                            udf,
-                                            cudf::data_type{cudf::type_id::STRING},
-                                            cudf::udf_source_type::CUDA,
-                                            std::nullopt,
-                                            cudf::null_aware::NO,
-                                            std::nullopt,
-                                            cudf::output_nullability::PRESERVE,
-                                            stream,
-                                            mr);
+  auto providers = cudf::transform(inputs,
+                                   udf,
+                                   cudf::data_type{cudf::type_id::STRING},
+                                   cudf::udf_source_type::CUDA,
+                                   std::nullopt,
+                                   cudf::null_aware::NO,
+                                   std::nullopt,
+                                   cudf::output_nullability::PRESERVE,
+                                   stream,
+                                   mr);
 
   return {std::move(providers), std::move(transformed)};
 }

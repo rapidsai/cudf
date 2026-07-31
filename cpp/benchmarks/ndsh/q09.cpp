@@ -150,16 +150,16 @@ struct q9_data {
 
   cudf::transform_input transform_inputs[] = {discount, extendedprice, supplycost, quantity};
 
-  return cudf::transform_extended(transform_inputs,
-                                  udf,
-                                  cudf::data_type{cudf::type_id::FLOAT64},
-                                  cudf::udf_source_type::CUDA,
-                                  std::nullopt,
-                                  cudf::null_aware::NO,
-                                  std::nullopt,
-                                  cudf::output_nullability::PRESERVE,
-                                  stream,
-                                  mr);
+  return cudf::transform(transform_inputs,
+                         udf,
+                         cudf::data_type{cudf::type_id::FLOAT64},
+                         cudf::udf_source_type::CUDA,
+                         std::nullopt,
+                         cudf::null_aware::NO,
+                         std::nullopt,
+                         cudf::output_nullability::PRESERVE,
+                         stream,
+                         mr);
 }
 
 [[nodiscard]] std::unique_ptr<cudf::column> compute_amount_ast(

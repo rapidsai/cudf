@@ -4,6 +4,7 @@ from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.optional cimport optional
 from libcpp.pair cimport pair
+from libcpp.span cimport span
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 from pylibcudf.exception_handler cimport libcudf_exception_handler
@@ -12,8 +13,14 @@ from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.expressions cimport expression
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
-from pylibcudf.libcudf.types cimport bitmask_type, data_type, size_type
-from pylibcudf.libcudf.types cimport null_aware, output_nullability
+from pylibcudf.libcudf.types cimport (
+    bitmask_type,
+    data_type,
+    null_aware,
+    output_nullability,
+    size_type,
+    udf_source_type,
+)
 
 from rmm.librmm.device_buffer cimport device_buffer
 from cuda.bindings.cyruntime cimport cudaStream_t
@@ -21,6 +28,15 @@ from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
 cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
+    cdef cppclass scalar_column_view:
+        scalar_column_view(const column_view& input)
+
+    cdef cppclass transform_input:
+        transform_input(const column_view& input)
+        transform_input(const scalar_column_view& input)
+
+    ctypedef const transform_input const_transform_input
+
     cdef pair[unique_ptr[device_buffer], size_type] bools_to_mask (
         const column_view& input,
         cudaStream_t stream,
@@ -48,12 +64,13 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] transform(
-        const vector[column_view] & inputs,
-        const string & transform_udf,
+        span[const_transform_input] inputs,
+        const string & udf,
         data_type output_type,
-        bool is_ptx,
+        udf_source_type source_type,
         optional[void *] user_data,
         null_aware is_null_aware,
+        optional[size_type] row_size,
         output_nullability null_policy,
         cudaStream_t stream,
         device_async_resource_ref mr

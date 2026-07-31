@@ -82,15 +82,15 @@ static void BM_transform_polynomials(nvbench::state& state)
 
     // clang-format on
 
-    cudf::transform_extended(inputs,
-                             udf,
-                             cudf::data_type{cudf::type_to_id<key_type>()},
-                             cudf::udf_source_type::CUDA,
-                             std::nullopt,
-                             cudf::null_aware::NO,
-                             std::nullopt,
-                             cudf::output_nullability::PRESERVE,
-                             launch.get_stream().get_stream());
+    cudf::transform(inputs,
+                    udf,
+                    cudf::data_type{cudf::type_to_id<key_type>()},
+                    cudf::udf_source_type::CUDA,
+                    std::nullopt,
+                    cudf::null_aware::NO,
+                    std::nullopt,
+                    cudf::output_nullability::PRESERVE,
+                    launch.get_stream().get_stream());
   });
 
   state.add_buffer_size(

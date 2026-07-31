@@ -210,7 +210,7 @@ static __device__ void calculate_amount(double *amount, double discount, double 
     *amount = extprice * (1 - discount) - supplycost * quantity;
 }
            )***";
-    result.push_back(cudf::transform_extended(
+    result.push_back(cudf::transform(
       std::vector<cudf::transform_input>{discount, extendedprice, supplycost, quantity},
       udf,
       cudf::data_type(cudf::type_id::FLOAT64),

@@ -39,16 +39,16 @@ std::tuple<std::unique_ptr<cudf::column>, std::vector<int32_t>> transform(
   auto email                     = table.column(1);
   cudf::transform_input inputs[] = {name, email};
 
-  auto result = cudf::transform_extended(inputs,
-                                         udf,
-                                         cudf::data_type{cudf::type_id::UINT16},
-                                         cudf::udf_source_type::CUDA,
-                                         std::nullopt,
-                                         cudf::null_aware::NO,
-                                         std::nullopt,
-                                         cudf::output_nullability::PRESERVE,
-                                         stream,
-                                         mr);
+  auto result = cudf::transform(inputs,
+                                udf,
+                                cudf::data_type{cudf::type_id::UINT16},
+                                cudf::udf_source_type::CUDA,
+                                std::nullopt,
+                                cudf::null_aware::NO,
+                                std::nullopt,
+                                cudf::output_nullability::PRESERVE,
+                                stream,
+                                mr);
 
   return std::make_tuple(std::move(result), transformed);
 }
