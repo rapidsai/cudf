@@ -22,11 +22,11 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -36,8 +36,10 @@
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/std/algorithm>
+#include <cuda/std/execution>
 #include <cuda/std/iterator>
 #include <cuda/std/tuple>
+#include <cuda/stream_ref>
 #include <thrust/binary_search.h>
 #include <thrust/for_each.h>
 #include <thrust/sort.h>
@@ -50,6 +52,14 @@
 namespace cudf {
 
 namespace {
+
+auto make_cub_env(rmm::cuda_stream_view stream)
+{
+  auto mr_prop = cuda::std::execution::prop{cuda::mr::get_memory_resource,
+                                            cudf::get_current_device_resource_ref()};
+  auto env     = cuda::std::execution::env{cuda::stream_ref{stream.value()}, mr_prop};
+  return env;
+}
 
 /**
  * @brief Functor to map indices through a provided mapping container.
@@ -130,6 +140,7 @@ right_run_index build_right_run_index(SortedOrderIterator sorted_order,
                                       rmm::cuda_stream_view stream)
 {
   auto temp_mr = cudf::get_current_device_resource_ref();
+  auto env     = make_cub_env(stream);
   auto rows    = std::make_unique<rmm::device_uvector<size_type>>(num_rows, stream, temp_mr);
   auto offsets = std::make_unique<rmm::device_uvector<size_type>>(num_rows + 1, stream, temp_mr);
   cudf::detail::device_scalar<size_type> num_runs{0, stream, temp_mr};
@@ -138,39 +149,23 @@ right_run_index build_right_run_index(SortedOrderIterator sorted_order,
   // kernel consumes only byte flags and integer positions, avoiding another row-operator
   // instantiation and its register pressure.
   rmm::device_uvector<uint8_t> run_starts(num_rows, stream, temp_mr);
-  cub::DeviceTransform::Transform(
+  CUDF_CUDA_TRY(cub::DeviceTransform::Transform(
     cuda::counting_iterator<size_type>{0},
     run_starts.begin(),
     num_rows,
     [sorted_order, less] __device__(size_type idx) -> uint8_t {
       return idx == 0 || less(sorted_order[idx - 1], sorted_order[idx]);
     },
-    stream.value());
+    env));
 
   auto const input  = cuda::make_zip_iterator(sorted_order, cuda::counting_iterator<size_type>{0});
   auto const output = cuda::make_zip_iterator(rows->begin(), offsets->begin());
 
-  std::size_t temp_storage_bytes = 0;
-  cub::DeviceSelect::Flagged(nullptr,
-                             temp_storage_bytes,
-                             input,
-                             run_starts.begin(),
-                             output,
-                             num_runs.data(),
-                             num_rows,
-                             stream.value());
-  rmm::device_buffer temp_storage(temp_storage_bytes, stream, temp_mr);
-  cub::DeviceSelect::Flagged(temp_storage.data(),
-                             temp_storage_bytes,
-                             input,
-                             run_starts.begin(),
-                             output,
-                             num_runs.data(),
-                             num_rows,
-                             stream.value());
+  CUDF_CUDA_TRY(
+    cub::DeviceSelect::Flagged(input, run_starts.begin(), output, num_runs.data(), num_rows, env));
 
   auto const host_num_runs = num_runs.value(stream);
-  cub::DeviceTransform::Fill(offsets->begin() + host_num_runs, 1, num_rows, stream.value());
+  CUDF_CUDA_TRY(cub::DeviceTransform::Fill(offsets->begin() + host_num_runs, 1, num_rows, env));
   return {std::move(rows), std::move(offsets), host_num_runs};
 }
 
@@ -283,22 +278,8 @@ void batched_copy(InputIts input_iterators,
                   size_type num_ranges,
                   rmm::cuda_stream_view stream)
 {
-  size_t temp_storage_bytes = 0;
-  cub::DeviceCopy::Batched(nullptr,
-                           temp_storage_bytes,
-                           input_iterators,
-                           output_iterators,
-                           sizes,
-                           num_ranges,
-                           stream.value());
-  rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-  cub::DeviceCopy::Batched(temp_storage.data(),
-                           temp_storage_bytes,
-                           input_iterators,
-                           output_iterators,
-                           sizes,
-                           num_ranges,
-                           stream.value());
+  CUDF_CUDA_TRY(cub::DeviceCopy::Batched(
+    input_iterators, output_iterators, sizes, num_ranges, make_cub_env(stream)));
 }
 
 template <typename SmallerIterator>
@@ -714,24 +695,27 @@ void sort_merge_join::postprocess_indices(preprocessed_table const& preprocessed
                                           rmm::cuda_stream_view stream) const
 {
   if (compare_nulls == null_equality::UNEQUAL) {
+    auto env = make_cub_env(stream);
     // if a table has no nullable column, then there's no postprocessing to be done
     if (has_nested_nulls(preprocessed_left._table_view)) {
       auto left_mapping = preprocessed_left.map_table_to_unprocessed(stream);
       // Use cub API to handle large arrays (> INT32_MAX)
-      cub::DeviceTransform::Transform(larger_indices.begin(),
-                                      larger_indices.begin(),
-                                      larger_indices.size(),
-                                      index_mapping<device_span<size_type>>{left_mapping},
-                                      stream.value());
+      CUDF_CUDA_TRY(
+        cub::DeviceTransform::Transform(larger_indices.begin(),
+                                        larger_indices.begin(),
+                                        larger_indices.size(),
+                                        index_mapping<device_span<size_type>>{left_mapping},
+                                        env));
     }
     if (has_nested_nulls(preprocessed_right._table_view)) {
       auto right_mapping = preprocessed_right.map_table_to_unprocessed(stream);
       // Use cub API to handle large arrays (> INT32_MAX)
-      cub::DeviceTransform::Transform(smaller_indices.begin(),
-                                      smaller_indices.begin(),
-                                      smaller_indices.size(),
-                                      index_mapping<device_span<size_type>>{right_mapping},
-                                      stream.value());
+      CUDF_CUDA_TRY(
+        cub::DeviceTransform::Transform(smaller_indices.begin(),
+                                        smaller_indices.begin(),
+                                        smaller_indices.size(),
+                                        index_mapping<device_span<size_type>>{right_mapping},
+                                        env));
     }
   }
 }
@@ -875,10 +859,11 @@ sort_merge_join::left_join(table_view const& left,
                                   left_result_indices.begin() + preprocessed_left_indices->size(),
                                   is_row_null{validity_mask},
                                   stream);
-      cub::DeviceTransform::Fill(right_result_indices.begin() + preprocessed_right_indices->size(),
-                                 num_filtered_nulls,
-                                 JoinNoMatch,
-                                 stream.value());
+      CUDF_CUDA_TRY(cub::DeviceTransform::Fill(
+        right_result_indices.begin() + preprocessed_right_indices->size(),
+        num_filtered_nulls,
+        JoinNoMatch,
+        make_cub_env(stream)));
 
       return std::pair{
         std::make_unique<rmm::device_uvector<size_type>>(std::move(left_result_indices)),
@@ -982,12 +967,12 @@ sort_merge_join::partitioned_inner_join(cudf::join_partition_context const& cont
     stream);
   // Map from slice to total null processed table
   // Use cub API to handle large arrays (> INT32_MAX)
-  cub::DeviceTransform::Transform(
+  CUDF_CUDA_TRY(cub::DeviceTransform::Transform(
     preprocessed_left_indices->begin(),
     preprocessed_left_indices->begin(),
     preprocessed_left_indices->size(),
     [left_partition_start_idx] __device__(auto idx) { return left_partition_start_idx + idx; },
-    stream.value());
+    make_cub_env(stream)));
   // Map from total null processed table to unprocessed table
   postprocess_indices(
     preprocessed_left, *preprocessed_right_indices, *preprocessed_left_indices, stream);
