@@ -1112,7 +1112,9 @@ dependencies:
               use_cuda_wheels: "true"
             packages:
               - cuda-toolkit[cufile,nvcc,nvrtc]==13.*
-          - {matrix: null, packages: []}
+          - matrix:
+              cuda_suffixed: "false"
+            packages: []
   run_cudf_polars:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -1369,7 +1371,9 @@ dependencies:
               cuda_suffixed: "true"
             packages:
               - libcudf-cu13==26.10.*,>=0.0.0a0
-          - {matrix: null, packages: [*libcudf_unsuffixed]}
+          - matrix:
+              cuda_suffixed: "false"
+            packages: [*libcudf_unsuffixed]
   depends_on_numba_cuda:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -1394,6 +1398,7 @@ dependencies:
               - numba-cuda[cu13]>=0.22.2
           # fallback to numba-cuda with no extra CUDA packages if 'cuda_suffixed' isn't true
           - matrix:
+              cuda_suffixed: "false"
             packages:
               - *numba_cuda
   depends_on_numba_cuda_mlir:
@@ -1418,6 +1423,7 @@ dependencies:
           # fallback to numba-cuda-mlir with no extra CUDA packages if
           # 'cuda_suffixed' isn't true
           - matrix:
+              cuda_suffixed: "false"
             packages:
               - numba-cuda-mlir>=0.3.0
   depends_on_pylibcudf:
@@ -1442,7 +1448,9 @@ dependencies:
               cuda_suffixed: "true"
             packages:
               - pylibcudf-cu13==26.10.*,>=0.0.0a0
-          - {matrix: null, packages: [*pylibcudf_unsuffixed]}
+          - matrix:
+              cuda_suffixed: "false"
+            packages: [*pylibcudf_unsuffixed]
   depends_on_pylibcudf_pyarrow:
     common:
       - output_types: conda
@@ -1465,7 +1473,9 @@ dependencies:
               cuda_suffixed: "true"
             packages:
               - pylibcudf-cu13[pyarrow]==26.10.*,>=0.0.0a0
-          - {matrix: null, packages: [*plc_unsuffixed]}
+          - matrix:
+              cuda_suffixed: "false"
+            packages: [*plc_unsuffixed]
   depends_on_cudf:
     common:
       - output_types: conda
@@ -1488,7 +1498,9 @@ dependencies:
               cuda_suffixed: "true"
             packages:
               - cudf-cu13==26.10.*,>=0.0.0a0
-          - {matrix: null, packages: [*cudf_unsuffixed]}
+          - matrix:
+              cuda_suffixed: "false"
+            packages: [*cudf_unsuffixed]
   depends_on_cudf_kafka:
     common:
       - output_types: [conda, pyproject]
@@ -1557,6 +1569,7 @@ dependencies:
             packages:
               - libkvikio-cu13==26.10.*,>=0.0.0a0
           - matrix:
+              cuda_suffixed: "false"
             packages:
               - *libkvikio_unsuffixed
   depends_on_librmm:
@@ -1582,6 +1595,7 @@ dependencies:
             packages:
               - librmm-cu13==26.10.*,>=0.0.0a0
           - matrix:
+              cuda_suffixed: "false"
             packages:
               - *librmm_unsuffixed
   depends_on_rmm:
@@ -1607,6 +1621,7 @@ dependencies:
             packages:
               - rmm-cu13==26.10.*,>=0.0.0a0
           - matrix:
+              cuda_suffixed: "false"
             packages:
               - *rmm_unsuffixed
   depends_on_libucxx:
@@ -1632,6 +1647,7 @@ dependencies:
             packages:
               - libucxx-cu13==0.52.*,>=0.0.0a0
           - matrix:
+              cuda_suffixed: "false"
             packages:
               - *libucxx_unsuffixed
   depends_on_ucxx:
@@ -1657,6 +1673,7 @@ dependencies:
             packages:
               - ucxx-cu13==0.52.*,>=0.0.0a0
           - matrix:
+              cuda_suffixed: "false"
             packages:
               - *ucxx_unsuffixed
   depends_on_rapidsmpf:
@@ -1682,6 +1699,7 @@ dependencies:
             packages:
               - rapidsmpf-cu13==26.10.*,>=0.0.0a0
           - matrix:
+              cuda_suffixed: "false"
             packages:
               - *rapidsmpf_unsuffixed
   depends_on_librapidsmpf:
@@ -1707,6 +1725,7 @@ dependencies:
             packages:
               - librapidsmpf-cu13==26.10.*,>=0.0.0a0
           - matrix:
+              cuda_suffixed: "false"
             packages:
               - *librapidsmpf_unsuffixed
   depends_on_libcudf_streaming:
@@ -1732,6 +1751,7 @@ dependencies:
             packages:
               - libcudf-streaming-cu13==26.10.*,>=0.0.0a0
           - matrix:
+              cuda_suffixed: "false"
             packages:
               - *libcudf_streaming_unsuffixed
   depends_on_cudf_streaming:
@@ -1757,6 +1777,7 @@ dependencies:
             packages:
               - cudf-streaming-cu13==26.10.*,>=0.0.0a0
           - matrix:
+              cuda_suffixed: "false"
             packages:
               - *cudf_streaming_unsuffixed
   depends_on_ray:
@@ -1844,6 +1865,7 @@ dependencies:
             packages:
               - dask-cuda[cu13]==26.10.*,>=0.0.0a0
           - matrix:
+              cuda_suffixed: "false"
             packages:
               - *dask_cuda_unsuffixed
   depends_on_dask_cudf:
