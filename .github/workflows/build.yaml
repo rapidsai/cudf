@@ -554,7 +554,6 @@ jobs:
     secrets:
       GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
       GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-      MAVEN_DEPLOY_USERNAME: ${{ secrets.MAVEN_DEPLOY_USERNAME }}
       MAVEN_DEPLOY_TOKEN: ${{ secrets.MAVEN_DEPLOY_TOKEN }}
     with:
       publication-type: 'rc'

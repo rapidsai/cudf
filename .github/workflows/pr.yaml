@@ -56,11 +56,10 @@ jobs:
     permissions:
       actions: read
       contents: read
-    uses: rapidsai/shared-workflows/.github/workflows/maven-publish.yaml@cdd06535f0e283219a630c95f720e94788221962 # paul-aiyedun/add_maven_publish_workflow
+    uses: rapidsai/shared-workflows/.github/workflows/maven-publish.yaml@9812dada8486192799fb32b444e24e8768dbe68d # paul-aiyedun/add_maven_publish_workflow
     secrets:
       GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
       GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-      MAVEN_DEPLOY_USERNAME: ${{ secrets.MAVEN_DEPLOY_USERNAME }}
       MAVEN_DEPLOY_TOKEN: ${{ secrets.MAVEN_DEPLOY_TOKEN }}
     with:
       publication-type: 'rc'
