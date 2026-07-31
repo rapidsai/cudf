@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -216,8 +216,11 @@ class sort_merge_join {
     }
   };
 
-  preprocessed_table preprocessed_right;  ///< Preprocessed right table
-  null_equality compare_nulls;            ///< Null comparison mode
+  preprocessed_table preprocessed_right;                              ///< Preprocessed right table
+  std::unique_ptr<rmm::device_uvector<size_type>> right_run_rows;     ///< First row of each key run
+  std::unique_ptr<rmm::device_uvector<size_type>> right_run_offsets;  ///< Sorted run boundaries
+  size_type num_right_runs{};   ///< Number of distinct key runs in the processed right table
+  null_equality compare_nulls;  ///< Null comparison mode
 
   /**
    * @brief Post-process left and right tables after the merge operation
@@ -237,7 +240,6 @@ class sort_merge_join {
    * @brief Core merge operation implementation for the sort-merge join algorithm.
    *
    * @tparam MergeOperation Functor type that implements the specific join operation
-   * @param preprocessed_left The preprocessed left table
    * @param right_view The preprocessed right table view
    * @param left_view The preprocessed left table view
    * @param op The merge operation functor to execute during the merge
@@ -245,8 +247,7 @@ class sort_merge_join {
    * @return The result of the merge operation as defined by the MergeOperation functor
    */
   template <typename MergeOperation>
-  auto invoke_merge(preprocessed_table const& preprocessed_left,
-                    table_view right_view,
+  auto invoke_merge(table_view right_view,
                     table_view left_view,
                     MergeOperation&& op,
                     rmm::cuda_stream_view stream) const;

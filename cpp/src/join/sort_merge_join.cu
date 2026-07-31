@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,7 +9,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/algorithms/copy_if.cuh>
-#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -32,12 +31,11 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_copy.cuh>
-#include <cub/device/device_reduce.cuh>
-#include <cub/device/device_scan.cuh>
 #include <cub/device/device_select.cuh>
 #include <cub/device/device_transform.cuh>
 #include <cuda/functional>
 #include <cuda/iterator>
+#include <cuda/std/algorithm>
 #include <cuda/std/iterator>
 #include <cuda/std/tuple>
 #include <thrust/binary_search.h>
@@ -119,20 +117,164 @@ struct is_row_null {
   }
 };
 
-template <typename InputIt, typename ScalarType>
-cudf::detail::device_scalar<ScalarType> reduce(InputIt input,
-                                               cudf::detail::device_scalar<ScalarType>&& output,
-                                               size_type num_items,
-                                               rmm::cuda_stream_view stream)
+struct right_run_index {
+  std::unique_ptr<rmm::device_uvector<size_type>> rows;
+  std::unique_ptr<rmm::device_uvector<size_type>> offsets;
+  size_type num_runs;
+};
+
+template <typename SortedOrderIterator, typename Less>
+right_run_index build_right_run_index(SortedOrderIterator sorted_order,
+                                      size_type num_rows,
+                                      Less less,
+                                      rmm::cuda_stream_view stream)
 {
-  size_t temp_storage_bytes = 0;
-  cub::DeviceReduce::Sum(
-    nullptr, temp_storage_bytes, input, output.data(), num_items, stream.value());
-  rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-  cub::DeviceReduce::Sum(
-    temp_storage.data(), temp_storage_bytes, input, output.data(), num_items, stream.value());
-  return output;
+  auto temp_mr = cudf::get_current_device_resource_ref();
+  auto rows    = std::make_unique<rmm::device_uvector<size_type>>(num_rows, stream, temp_mr);
+  auto offsets = std::make_unique<rmm::device_uvector<size_type>>(num_rows + 1, stream, temp_mr);
+  cudf::detail::device_scalar<size_type> num_runs{0, stream, temp_mr};
+
+  // Keep the expensive row comparator confined to this transform. The subsequent CUB selection
+  // kernel consumes only byte flags and integer positions, avoiding another row-operator
+  // instantiation and its register pressure.
+  rmm::device_uvector<uint8_t> run_starts(num_rows, stream, temp_mr);
+  cub::DeviceTransform::Transform(
+    cuda::counting_iterator<size_type>{0},
+    run_starts.begin(),
+    num_rows,
+    [sorted_order, less] __device__(size_type idx) -> uint8_t {
+      return idx == 0 || less(sorted_order[idx - 1], sorted_order[idx]);
+    },
+    stream.value());
+
+  auto const input  = cuda::make_zip_iterator(sorted_order, cuda::counting_iterator<size_type>{0});
+  auto const output = cuda::make_zip_iterator(rows->begin(), offsets->begin());
+
+  std::size_t temp_storage_bytes = 0;
+  cub::DeviceSelect::Flagged(nullptr,
+                             temp_storage_bytes,
+                             input,
+                             run_starts.begin(),
+                             output,
+                             num_runs.data(),
+                             num_rows,
+                             stream.value());
+  rmm::device_buffer temp_storage(temp_storage_bytes, stream, temp_mr);
+  cub::DeviceSelect::Flagged(temp_storage.data(),
+                             temp_storage_bytes,
+                             input,
+                             run_starts.begin(),
+                             output,
+                             num_runs.data(),
+                             num_rows,
+                             stream.value());
+
+  auto const host_num_runs = num_runs.value(stream);
+  cub::DeviceTransform::Fill(offsets->begin() + host_num_runs, 1, num_rows, stream.value());
+  return {std::move(rows), std::move(offsets), host_num_runs};
 }
+
+template <typename SortedOrderIterator>
+right_run_index build_right_run_index(table_view const& table,
+                                      SortedOrderIterator sorted_order,
+                                      rmm::cuda_stream_view stream)
+{
+  auto const has_nulls = has_nested_nulls(table);
+  std::vector<cudf::order> column_order(table.num_columns(), cudf::order::ASCENDING);
+  std::vector<cudf::null_order> null_precedence(table.num_columns(), cudf::null_order::BEFORE);
+  auto const row_less =
+    detail::row::lexicographic::self_comparator{table, column_order, null_precedence, stream};
+  if (cudf::has_nested_columns(table)) {
+    return build_right_run_index(
+      sorted_order, table.num_rows(), row_less.less<true>(nullate::DYNAMIC{has_nulls}), stream);
+  }
+  return build_right_run_index(
+    sorted_order, table.num_rows(), row_less.less<false>(nullate::DYNAMIC{has_nulls}), stream);
+}
+
+template <typename SmallerIterator>
+struct inner_input_range {
+  size_type const* match_starts;
+  SmallerIterator smaller_order;
+
+  using iterator_type = decltype(cuda::make_zip_iterator(cuda::constant_iterator<size_type>{},
+                                                         std::declval<SmallerIterator>()));
+
+  __device__ iterator_type operator()(size_type idx) const
+  {
+    return cuda::make_zip_iterator(cuda::constant_iterator<size_type>{idx},
+                                   smaller_order + match_starts[idx]);
+  }
+};
+
+template <typename Comparator>
+struct match_range_output {
+  size_type const* unique_smaller_rows;
+  size_type const* smaller_run_offsets;
+  size_type num_smaller_runs;
+  size_type* match_starts;
+  size_type* match_counts;
+  Comparator comparator;
+
+  __device__ void operator()(size_type idx, size_type run_idx) const
+  {
+    auto const is_match = run_idx < num_smaller_runs &&
+                          !comparator(detail::row::rhs_index_type{idx},
+                                      detail::row::lhs_index_type{unique_smaller_rows[run_idx]});
+    auto const start  = is_match ? smaller_run_offsets[run_idx] : 0;
+    match_starts[idx] = start;
+    match_counts[idx] = is_match ? smaller_run_offsets[run_idx + 1] - start : 0;
+  }
+};
+
+template <typename OutputIterator>
+struct output_range {
+  int64_t const* offsets;
+  OutputIterator larger_indices;
+  OutputIterator smaller_indices;
+
+  using iterator_type = decltype(cuda::make_zip_iterator(std::declval<OutputIterator>(),
+                                                         std::declval<OutputIterator>()));
+
+  __device__ iterator_type operator()(size_type idx) const
+  {
+    auto const offset = offsets[idx];
+    return cuda::make_zip_iterator(larger_indices + offset, smaller_indices + offset);
+  }
+};
+
+template <typename SmallerIterator>
+struct left_smaller_index {
+  size_type idx;
+  size_type const* match_starts;
+  size_type const* match_counts;
+  SmallerIterator smaller_order;
+
+  __device__ size_type operator()(size_type offset) const
+  {
+    return match_counts[idx] == 0 ? JoinNoMatch : smaller_order[match_starts[idx] + offset];
+  }
+};
+
+template <typename SmallerIterator>
+struct left_input_range {
+  size_type const* match_starts;
+  size_type const* match_counts;
+  SmallerIterator smaller_order;
+
+  using smaller_iterator = cuda::transform_iterator<left_smaller_index<SmallerIterator>,
+                                                    cuda::counting_iterator<size_type>>;
+  using iterator_type    = decltype(cuda::make_zip_iterator(cuda::constant_iterator<size_type>{},
+                                                         std::declval<smaller_iterator>()));
+
+  __device__ iterator_type operator()(size_type idx) const
+  {
+    auto const right_indices = cuda::transform_iterator(
+      cuda::counting_iterator<size_type>{0},
+      left_smaller_index<SmallerIterator>{idx, match_starts, match_counts, smaller_order});
+    return cuda::make_zip_iterator(cuda::constant_iterator<size_type>{idx}, right_indices);
+  }
+};
 
 template <typename InputIts, typename OutputIts, typename SizeIt>
 void batched_copy(InputIts input_iterators,
@@ -159,31 +301,36 @@ void batched_copy(InputIts input_iterators,
                            stream.value());
 }
 
-template <typename LargerIterator, typename SmallerIterator>
+template <typename SmallerIterator>
 class merge {
  private:
   table_view smaller;
   table_view larger;
   SmallerIterator sorted_smaller_order_begin;
-  SmallerIterator sorted_smaller_order_end;
-  LargerIterator sorted_larger_order_begin;
-  LargerIterator sorted_larger_order_end;
+  size_type const* unique_smaller_rows;
+  size_type const* smaller_run_offsets;
+  size_type num_smaller_runs;
   std::unique_ptr<detail::row::lexicographic::two_table_comparator> tt_comparator;
 
  public:
+  struct match_ranges {
+    std::unique_ptr<rmm::device_uvector<size_type>> starts;
+    std::unique_ptr<rmm::device_uvector<size_type>> counts;
+  };
+
   merge(table_view const& smaller,
         SmallerIterator sorted_smaller_order_begin,
-        SmallerIterator sorted_smaller_order_end,
+        size_type const* unique_smaller_rows,
+        size_type const* smaller_run_offsets,
+        size_type num_smaller_runs,
         table_view const& larger,
-        LargerIterator sorted_larger_order_begin,
-        LargerIterator sorted_larger_order_end,
         rmm::cuda_stream_view stream)
     : smaller{smaller},
       sorted_smaller_order_begin{sorted_smaller_order_begin},
-      sorted_smaller_order_end{sorted_smaller_order_end},
-      larger{larger},
-      sorted_larger_order_begin{sorted_larger_order_begin},
-      sorted_larger_order_end{sorted_larger_order_end}
+      unique_smaller_rows{unique_smaller_rows},
+      smaller_run_offsets{smaller_run_offsets},
+      num_smaller_runs{num_smaller_runs},
+      larger{larger}
   {
     std::vector<cudf::order> column_order(smaller.num_columns(), cudf::order::ASCENDING);
     std::vector<cudf::null_order> null_precedence(smaller.num_columns(), cudf::null_order::BEFORE);
@@ -194,6 +341,8 @@ class merge {
   std::unique_ptr<rmm::device_uvector<size_type>> matches_per_row(
     rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 
+  match_ranges find_match_ranges(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   inner(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
@@ -203,76 +352,67 @@ class merge {
   left(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 };
 
-template <typename LargerIterator, typename SmallerIterator>
-std::unique_ptr<rmm::device_uvector<size_type>>
-merge<LargerIterator, SmallerIterator>::matches_per_row(rmm::cuda_stream_view stream,
-                                                        rmm::device_async_resource_ref mr)
+template <typename SmallerIterator>
+typename merge<SmallerIterator>::match_ranges merge<SmallerIterator>::find_match_ranges(
+  rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
-  // naive: iterate through larger table and binary search on smaller table
-  auto const has_nulls       = has_nested_nulls(smaller) or has_nested_nulls(larger);
-  auto const larger_numrows  = larger.num_rows();
-  auto const smaller_numrows = smaller.num_rows();
+  auto const has_nulls      = has_nested_nulls(smaller) or has_nested_nulls(larger);
+  auto const larger_numrows = larger.num_rows();
+  auto match_starts = std::make_unique<rmm::device_uvector<size_type>>(larger_numrows, stream, mr);
   auto match_counts =
     cudf::detail::make_zeroed_device_uvector_async<size_type>(larger_numrows + 1, stream, mr);
 
-  auto const comparator = tt_comparator->less<true>(nullate::DYNAMIC{has_nulls});
-  auto match_counts_it  = match_counts.begin();
-  auto smaller_it =
-    cuda::transform_iterator(sorted_smaller_order_begin,
-                             cuda::proclaim_return_type<detail::row::lhs_index_type>(
-                               [] __device__(size_type idx) -> detail::row::lhs_index_type {
-                                 return static_cast<detail::row::lhs_index_type>(idx);
-                               }));
-  thrust::upper_bound(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                      smaller_it,
-                      smaller_it + smaller_numrows,
-                      cudf::detail::row::rhs_iterator(0),
-                      cudf::detail::row::rhs_iterator(0) + larger_numrows,
-                      match_counts_it,
-                      comparator);
+  auto const unique_smaller_it = cuda::transform_iterator(
+    unique_smaller_rows,
+    cuda::proclaim_return_type<detail::row::lhs_index_type>(
+      [] __device__(size_type idx) { return static_cast<detail::row::lhs_index_type>(idx); }));
 
-  auto match_counts_update_it =
-    cuda::tabulate_output_iterator([match_counts = match_counts.begin()] __device__(
-                                     size_type idx, size_type val) { match_counts[idx] -= val; });
-  thrust::lower_bound(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                      smaller_it,
-                      smaller_it + smaller_numrows,
-                      cudf::detail::row::rhs_iterator(0),
-                      cudf::detail::row::rhs_iterator(0) + larger_numrows,
-                      match_counts_update_it,
-                      comparator);
+  auto const find_ranges = [&](auto comparator) {
+    auto const ranges_output =
+      cuda::tabulate_output_iterator(match_range_output{unique_smaller_rows,
+                                                        smaller_run_offsets,
+                                                        num_smaller_runs,
+                                                        match_starts->data(),
+                                                        match_counts.data(),
+                                                        comparator});
+    // These comparisons are data-dependent binary-search probes. Materializing them ahead of
+    // time would require a pass per search level (or a quadratic comparison table), so keep them
+    // in one bulk search and emit the scalar start/count ranges directly.
+    thrust::lower_bound(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                        unique_smaller_it,
+                        unique_smaller_it + num_smaller_runs,
+                        cudf::detail::row::rhs_iterator(0),
+                        cudf::detail::row::rhs_iterator(0) + larger_numrows,
+                        ranges_output,
+                        comparator);
+  };
 
-  return std::make_unique<rmm::device_uvector<size_type>>(std::move(match_counts));
+  if (cudf::has_nested_columns(smaller)) {
+    find_ranges(tt_comparator->less<true>(nullate::DYNAMIC{has_nulls}));
+  } else {
+    find_ranges(tt_comparator->less<false>(nullate::DYNAMIC{has_nulls}));
+  }
+
+  return {std::move(match_starts),
+          std::make_unique<rmm::device_uvector<size_type>>(std::move(match_counts))};
 }
 
-template <typename LargerIterator, typename SmallerIterator>
+template <typename SmallerIterator>
+std::unique_ptr<rmm::device_uvector<size_type>> merge<SmallerIterator>::matches_per_row(
+  rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+{
+  return find_match_ranges(stream, mr).counts;
+}
+
+template <typename SmallerIterator>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
-                                              rmm::device_async_resource_ref mr)
+merge<SmallerIterator>::inner(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
-  auto temp_mr               = cudf::get_current_device_resource_ref();
-  auto const has_nulls       = has_nested_nulls(smaller) or has_nested_nulls(larger);
-  auto const larger_numrows  = larger.num_rows();
-  auto const smaller_numrows = smaller.num_rows();
+  auto temp_mr              = cudf::get_current_device_resource_ref();
+  auto const larger_numrows = larger.num_rows();
 
-  // naive: iterate through larger table and binary search on smaller table
-  auto match_counts = matches_per_row(stream, temp_mr);
-
-  auto count_matches_it = cuda::transform_iterator(
-    match_counts->begin(),
-    cuda::proclaim_return_type<size_type>([] __device__(auto c) -> size_type { return c != 0; }));
-  auto const count_matches =
-    thrust::reduce(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                   count_matches_it,
-                   count_matches_it + larger_numrows);
-  rmm::device_uvector<size_type> nonzero_matches(count_matches, stream, temp_mr);
-  cudf::detail::copy_if_async(cuda::counting_iterator<size_type>{0},
-                              cuda::counting_iterator<size_type>{larger_numrows},
-                              match_counts->begin(),
-                              nonzero_matches.begin(),
-                              cuda::std::identity{},
-                              stream);
+  auto [match_starts, match_counts] = find_match_ranges(stream, temp_mr);
 
   // Use 64-bit prefix sums to handle large output sizes (> INT32_MAX rows)
   // The prefix sums can exceed INT32_MAX even though individual match counts are small
@@ -290,87 +430,17 @@ merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
                          int64_t{0});
   auto const total_matches = static_cast<std::size_t>(last_element.value(stream));
 
-  // populate larger indices
-  auto larger_indices =
-    cudf::detail::make_zeroed_device_uvector_async<size_type>(total_matches, stream, mr);
-
-  {
-    auto const input_iterators = cuda::transform_iterator{
-      nonzero_matches.begin(),
-      cuda::proclaim_return_type<cuda::constant_iterator<size_type>>(
-        [] __device__(auto val) { return cuda::constant_iterator<size_type>(val); })};
-    auto const output_iterators = cuda::transform_iterator{
-      cuda::permutation_iterator{match_offsets.begin(), nonzero_matches.begin()},
-      cuda::proclaim_return_type<rmm::device_uvector<size_type>::iterator>(
-        [larger_indices = larger_indices.begin()] __device__(auto val) {
-          return larger_indices + val;
-        })};
-    auto const sizes = cuda::permutation_iterator{match_counts->begin(), nonzero_matches.begin()};
-
-    batched_copy(input_iterators, output_iterators, sizes, count_matches, stream);
-  }
-
-  // populate smaller indices
+  rmm::device_uvector<size_type> larger_indices(total_matches, stream, mr);
   rmm::device_uvector<size_type> smaller_indices(total_matches, stream, mr);
 
-  // Use cub API to handle large arrays (> INT32_MAX).
-  cub::DeviceTransform::Fill(smaller_indices.begin(), smaller_indices.size(), 1, stream.value());
-
-  {
-    auto const comparator    = tt_comparator->less<true>(nullate::DYNAMIC{has_nulls});
-    auto smaller_tabulate_it = cuda::tabulate_output_iterator(
-      [nonzero_matches = nonzero_matches.begin(),
-       match_offsets   = match_offsets.begin(),
-       smaller_indices = smaller_indices.begin()] __device__(size_type idx, size_type lb) {
-        auto const lhs_idx   = nonzero_matches[idx];
-        auto const pos       = match_offsets[lhs_idx];
-        smaller_indices[pos] = lb;
-      });
-    auto smaller_it = cuda::transform_iterator(
-      sorted_smaller_order_begin,
-      cuda::proclaim_return_type<detail::row::lhs_index_type>(
-        [] __device__(size_type idx) { return static_cast<detail::row::lhs_index_type>(idx); }));
-    auto larger_it = cuda::transform_iterator(
-      nonzero_matches.begin(),
-      cuda::proclaim_return_type<detail::row::rhs_index_type>(
-        [] __device__(size_type idx) { return static_cast<detail::row::rhs_index_type>(idx); }));
-    thrust::lower_bound(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                        smaller_it,
-                        smaller_it + smaller_numrows,
-                        larger_it,
-                        larger_it + nonzero_matches.size(),
-                        smaller_tabulate_it,
-                        comparator);
-  }
-
-  // Use cub API to handle large arrays (> INT32_MAX)
-  {
-    std::size_t temp_storage_bytes = 0;
-    cub::DeviceScan::InclusiveSumByKey(nullptr,
-                                       temp_storage_bytes,
-                                       larger_indices.begin(),
-                                       smaller_indices.begin(),
-                                       smaller_indices.begin(),
-                                       total_matches,
-                                       cuda::std::equal_to<>{},
-                                       stream.value());
-    rmm::device_buffer tmp_storage(temp_storage_bytes, stream);
-    cub::DeviceScan::InclusiveSumByKey(tmp_storage.data(),
-                                       temp_storage_bytes,
-                                       larger_indices.begin(),
-                                       smaller_indices.begin(),
-                                       smaller_indices.begin(),
-                                       total_matches,
-                                       cuda::std::equal_to<>{},
-                                       stream.value());
-  }
-
-  // Use cub API to handle large arrays (> INT32_MAX)
-  cub::DeviceTransform::Transform(smaller_indices.begin(),
-                                  smaller_indices.begin(),
-                                  smaller_indices.size(),
-                                  index_mapping<SmallerIterator>{sorted_smaller_order_begin},
-                                  stream.value());
+  auto const row_indices     = cuda::counting_iterator<size_type>{0};
+  auto const input_iterators = cuda::transform_iterator(
+    row_indices,
+    inner_input_range<SmallerIterator>{match_starts->data(), sorted_smaller_order_begin});
+  auto const output_iterators = cuda::transform_iterator(
+    row_indices,
+    output_range{match_offsets.data(), larger_indices.begin(), smaller_indices.begin()});
+  batched_copy(input_iterators, output_iterators, match_counts->begin(), larger_numrows, stream);
 
   return {std::make_unique<rmm::device_uvector<size_type>>(std::move(smaller_indices)),
           std::make_unique<rmm::device_uvector<size_type>>(std::move(larger_indices))};
@@ -381,147 +451,51 @@ merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
  *
  * This method performs a sort-merge left join, ensuring all rows from the larger table
  * are included in the output. Rows with no matches in the smaller table are paired with
- * JoinNoMatch sentinel values. The output indices are organized with unmatched rows first,
- * followed by matched rows.
+ * JoinNoMatch sentinel values. Output indices are grouped in probe-row order.
  *
  * @param stream CUDA stream used for device operations
  * @param mr Device memory resource for allocations
  * @return Pair of device vectors containing (smaller_indices, larger_indices)
  */
-template <typename LargerIterator, typename SmallerIterator>
+template <typename SmallerIterator>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
+merge<SmallerIterator>::left(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
-  auto temp_mr               = cudf::get_current_device_resource_ref();
-  auto const has_nulls       = has_nested_nulls(smaller) or has_nested_nulls(larger);
-  auto const larger_numrows  = larger.num_rows();
-  auto const smaller_numrows = smaller.num_rows();
+  auto temp_mr              = cudf::get_current_device_resource_ref();
+  auto const larger_numrows = larger.num_rows();
 
-  // Compute match counts per row and identify rows with at least one match
-  auto match_counts = matches_per_row(stream, temp_mr);
-
-  cudf::detail::device_scalar<size_type> count_matches(stream, temp_mr);
-  auto count_matches_it = cuda::transform_iterator(
-    match_counts->begin(),
-    cuda::proclaim_return_type<size_type>([] __device__(auto c) -> size_type { return c != 0; }));
-  count_matches = reduce(count_matches_it, std::move(count_matches), larger_numrows, stream);
-  auto const h_count_matches = count_matches.value(stream);
-  rmm::device_uvector<size_type> nonzero_matches(h_count_matches, stream, temp_mr);
-  cudf::detail::copy_if_async(cuda::counting_iterator<size_type>{0},
-                              cuda::counting_iterator<size_type>{larger_numrows},
-                              match_counts->begin(),
-                              nonzero_matches.begin(),
-                              cuda::std::identity{},
-                              stream);
+  auto [match_starts, match_counts] = find_match_ranges(stream, temp_mr);
 
   cudf::detail::device_scalar<int64_t> total_matches(stream, temp_mr);
   auto match_offsets =
     cudf::detail::make_zeroed_device_uvector_async<int64_t>(match_counts->size(), stream, temp_mr);
+  auto const output_sizes = cuda::transform_iterator(
+    cuda::counting_iterator<size_type>{0},
+    [match_counts = match_counts->begin(), larger_numrows] __device__(auto idx) -> size_type {
+      if (idx == larger_numrows) { return 0; }
+      return cuda::std::max(match_counts[idx], size_type{1});
+    });
   auto output_itr = cudf::detail::make_sizes_to_offsets_iterator(
     match_offsets.begin(), match_offsets.end(), total_matches.data());
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                         match_counts->begin(),
-                         match_counts->end(),
+                         output_sizes,
+                         output_sizes + match_counts->size(),
                          output_itr,
                          int64_t{0});
-  auto const inner_join_matches     = total_matches.value(stream);
-  auto const left_join_only_matches = static_cast<int64_t>(larger_numrows - h_count_matches);
-  auto larger_indices               = cudf::detail::make_zeroed_device_uvector_async<size_type>(
-    inner_join_matches + left_join_only_matches, stream, mr);
-  rmm::device_uvector<size_type> smaller_indices(
-    inner_join_matches + left_join_only_matches, stream, mr);
+  auto const total_output_size = total_matches.value(stream);
+  rmm::device_uvector<size_type> larger_indices(total_output_size, stream, mr);
+  rmm::device_uvector<size_type> smaller_indices(total_output_size, stream, mr);
 
-  // Fill in unmatched entries (left-join-only rows)
-  // These rows exist in the larger table but have no matches in the smaller table
-  cudf::detail::copy_if_async(
-    cuda::counting_iterator<size_type>{0},
-    cuda::counting_iterator<size_type>{larger_numrows},
-    match_counts->begin(),
-    larger_indices.begin(),
-    [] __device__(auto c) -> bool { return c == 0; },
-    stream);
-  cub::DeviceTransform::Fill(
-    smaller_indices.begin(), left_join_only_matches, JoinNoMatch, stream.value());
-
-  // Fill in matched entries (same algorithm as inner join)
-  {
-    auto const input_iterators = cuda::transform_iterator{
-      nonzero_matches.begin(),
-      cuda::proclaim_return_type<cuda::constant_iterator<size_type>>(
-        [] __device__(auto val) { return cuda::constant_iterator<size_type>(val); })};
-    auto const output_iterators = cuda::transform_iterator{
-      cuda::permutation_iterator{match_offsets.begin(), nonzero_matches.begin()},
-      cuda::proclaim_return_type<rmm::device_uvector<size_type>::iterator>(
-        [larger_indices = larger_indices.begin() + left_join_only_matches] __device__(auto val) {
-          return larger_indices + val;
-        })};
-    auto const sizes = cuda::permutation_iterator{match_counts->begin(), nonzero_matches.begin()};
-
-    batched_copy(input_iterators, output_iterators, sizes, h_count_matches, stream);
-  }
-
-  // Populate smaller indices for matched rows using binary search
-  cub::DeviceTransform::Fill(
-    smaller_indices.begin() + left_join_only_matches, inner_join_matches, 1, stream.value());
-
-  {
-    auto const comparator    = tt_comparator->less<true>(nullate::DYNAMIC{has_nulls});
-    auto smaller_tabulate_it = cuda::tabulate_output_iterator(
-      [nonzero_matches = nonzero_matches.begin(),
-       match_offsets   = match_offsets.begin(),
-       smaller_indices =
-         smaller_indices.begin() + left_join_only_matches] __device__(size_type idx, size_type lb) {
-        auto const lhs_idx   = nonzero_matches[idx];
-        auto const pos       = match_offsets[lhs_idx];
-        smaller_indices[pos] = lb;
-      });
-    auto smaller_it = cuda::transform_iterator(
-      sorted_smaller_order_begin,
-      cuda::proclaim_return_type<detail::row::lhs_index_type>(
-        [] __device__(size_type idx) { return static_cast<detail::row::lhs_index_type>(idx); }));
-    auto larger_it = cuda::transform_iterator(
-      nonzero_matches.begin(),
-      cuda::proclaim_return_type<detail::row::rhs_index_type>(
-        [] __device__(size_type idx) { return static_cast<detail::row::rhs_index_type>(idx); }));
-    thrust::lower_bound(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                        smaller_it,
-                        smaller_it + smaller_numrows,
-                        larger_it,
-                        larger_it + nonzero_matches.size(),
-                        smaller_tabulate_it,
-                        comparator);
-  }
-
-  // Use cub API to handle large arrays (> INT32_MAX)
-  {
-    std::size_t temp_storage_bytes = 0;
-    cub::DeviceScan::InclusiveSumByKey(nullptr,
-                                       temp_storage_bytes,
-                                       larger_indices.begin() + left_join_only_matches,
-                                       smaller_indices.begin() + left_join_only_matches,
-                                       smaller_indices.begin() + left_join_only_matches,
-                                       inner_join_matches,
-                                       cuda::std::equal_to<>{},
-                                       stream.value());
-    rmm::device_buffer tmp_storage(temp_storage_bytes, stream);
-    cub::DeviceScan::InclusiveSumByKey(tmp_storage.data(),
-                                       temp_storage_bytes,
-                                       larger_indices.begin() + left_join_only_matches,
-                                       smaller_indices.begin() + left_join_only_matches,
-                                       smaller_indices.begin() + left_join_only_matches,
-                                       inner_join_matches,
-                                       cuda::std::equal_to<>{},
-                                       stream.value());
-  }
-
-  // Use cub API to handle large arrays (> INT32_MAX)
-  cub::DeviceTransform::Transform(smaller_indices.begin() + left_join_only_matches,
-                                  smaller_indices.begin() + left_join_only_matches,
-                                  inner_join_matches,
-                                  index_mapping<SmallerIterator>{sorted_smaller_order_begin},
-                                  stream.value());
+  auto const row_indices     = cuda::counting_iterator<size_type>{0};
+  auto const input_iterators = cuda::transform_iterator(
+    row_indices,
+    left_input_range<SmallerIterator>{
+      match_starts->data(), match_counts->data(), sorted_smaller_order_begin});
+  auto const output_iterators = cuda::transform_iterator(
+    row_indices,
+    output_range{match_offsets.data(), larger_indices.begin(), smaller_indices.begin()});
+  batched_copy(input_iterators, output_iterators, output_sizes, larger_numrows, stream);
 
   return {std::make_unique<rmm::device_uvector<size_type>>(std::move(smaller_indices)),
           std::make_unique<rmm::device_uvector<size_type>>(std::move(larger_indices))};
@@ -703,6 +677,18 @@ sort_merge_join::sort_merge_join(table_view const& right,
   CUDF_EXPECTS(right.num_columns() != 0,
                "Number of columns the keys table must be non-zero for a join",
                std::invalid_argument);
+
+  auto const& right_view = preprocessed_right._null_processed_table_view;
+  auto run_index         = [&] {
+    if (preprocessed_right._null_processed_table_sorted_order.has_value()) {
+      auto const order = preprocessed_right._null_processed_table_sorted_order.value()->view();
+      return build_right_run_index(right_view, order.begin<size_type>(), stream);
+    }
+    return build_right_run_index(right_view, cuda::counting_iterator<size_type>{0}, stream);
+  }();
+  right_run_rows    = std::move(run_index.rows);
+  right_run_offsets = std::move(run_index.offsets);
+  num_right_runs    = run_index.num_runs;
 }
 
 rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_table_to_unprocessed(
@@ -751,56 +737,29 @@ void sort_merge_join::postprocess_indices(preprocessed_table const& preprocessed
 }
 
 template <typename MergeOperation>
-auto sort_merge_join::invoke_merge(preprocessed_table const& preprocessed_left,
-                                   table_view right_view,
+auto sort_merge_join::invoke_merge(table_view right_view,
                                    table_view left_view,
                                    MergeOperation&& op,
                                    rmm::cuda_stream_view stream) const
 {
   auto has_right_sorting_order = preprocessed_right._null_processed_table_sorted_order.has_value();
-  auto has_left_sorting_order  = preprocessed_left._null_processed_table_sorted_order.has_value();
-  if (has_right_sorting_order && has_left_sorting_order) {
-    // Both sorted
-    auto r_view = preprocessed_right._null_processed_table_sorted_order.value()->view();
-    auto l_view = preprocessed_left._null_processed_table_sorted_order.value()->view();
-    merge obj(right_view,
-              r_view.begin<size_type>(),
-              r_view.end<size_type>(),
-              left_view,
-              l_view.begin<size_type>(),
-              l_view.end<size_type>(),
-              stream);
-    return op(obj);
-  } else if (has_right_sorting_order && !has_left_sorting_order) {
-    // preprocessed_right sorted, preprocessed_left unsorted
+  if (has_right_sorting_order) {
     auto r_view = preprocessed_right._null_processed_table_sorted_order.value()->view();
     merge obj(right_view,
               r_view.begin<size_type>(),
-              r_view.end<size_type>(),
+              right_run_rows->data(),
+              right_run_offsets->data(),
+              num_right_runs,
               left_view,
-              cuda::counting_iterator<cudf::size_type>{0},
-              cuda::counting_iterator{left_view.num_rows()},
-              stream);
-    return op(obj);
-  } else if (!has_right_sorting_order && has_left_sorting_order) {
-    // preprocessed_right unsorted, preprocessed_left sorted
-    auto l_view = preprocessed_left._null_processed_table_sorted_order.value()->view();
-    merge obj(right_view,
-              cuda::counting_iterator<cudf::size_type>{0},
-              cuda::counting_iterator{preprocessed_right._null_processed_table_view.num_rows()},
-              left_view,
-              l_view.begin<size_type>(),
-              l_view.end<size_type>(),
               stream);
     return op(obj);
   }
-  // Both unsorted
   merge obj(right_view,
             cuda::counting_iterator<cudf::size_type>{0},
-            cuda::counting_iterator{preprocessed_right._null_processed_table_view.num_rows()},
+            right_run_rows->data(),
+            right_run_offsets->data(),
+            num_right_runs,
             left_view,
-            cuda::counting_iterator<cudf::size_type>{0},
-            cuda::counting_iterator{left_view.num_rows()},
             stream);
   return op(obj);
 }
@@ -821,11 +780,12 @@ sort_merge_join::inner_join(table_view const& left,
                "Number of columns must match for a join",
                std::invalid_argument);
 
-  // Create preprocessed left table locally for thread safety
-  auto preprocessed_left = preprocessed_table::create(left, compare_nulls, is_left_sorted, stream);
+  // Match discovery probes rows in their original order, so a probe-side sort is unused work.
+  static_cast<void>(is_left_sorted);
+  auto preprocessed_left =
+    preprocessed_table::create(left, compare_nulls, cudf::sorted::YES, stream);
 
   return invoke_merge(
-    preprocessed_left,
     preprocessed_right._null_processed_table_view,
     preprocessed_left._null_processed_table_view,
     [this, &preprocessed_left, stream, mr](auto& obj) {
@@ -853,11 +813,12 @@ sort_merge_join::left_join(table_view const& left,
                "Number of columns must match for a join",
                std::invalid_argument);
 
-  // Create preprocessed left table locally for thread safety
-  auto preprocessed_left = preprocessed_table::create(left, compare_nulls, is_left_sorted, stream);
+  // Match discovery probes rows in their original order, so a probe-side sort is unused work.
+  static_cast<void>(is_left_sorted);
+  auto preprocessed_left =
+    preprocessed_table::create(left, compare_nulls, cudf::sorted::YES, stream);
 
   return invoke_merge(
-    preprocessed_left,
     preprocessed_right._null_processed_table_view,
     preprocessed_left._null_processed_table_view,
     [this, &preprocessed_left, left, stream, mr](auto& obj) {
@@ -941,11 +902,12 @@ std::unique_ptr<cudf::join_match_context> sort_merge_join::inner_join_match_cont
                "Number of columns must match for a join",
                std::invalid_argument);
 
-  // Create preprocessed left table locally for thread safety
-  auto preprocessed_left = preprocessed_table::create(left, compare_nulls, is_left_sorted, stream);
+  // Match counts are produced in original probe-row order, so no probe sort is needed.
+  static_cast<void>(is_left_sorted);
+  auto preprocessed_left =
+    preprocessed_table::create(left, compare_nulls, cudf::sorted::YES, stream);
 
   return invoke_merge(
-    preprocessed_left,
     preprocessed_right._null_processed_table_view,
     preprocessed_left._null_processed_table_view,
     [this, left, &preprocessed_left, stream, mr](auto& obj) mutable {
@@ -1014,7 +976,6 @@ sort_merge_join::partitioned_inner_join(cudf::join_partition_context const& cont
                 stream)[0];
 
   auto [preprocessed_right_indices, preprocessed_left_indices] = invoke_merge(
-    preprocessed_left,
     preprocessed_right._null_processed_table_view,
     null_processed_left_partition,
     [this, left_partition_start_idx, stream, mr](auto& obj) { return obj.inner(stream, mr); },
