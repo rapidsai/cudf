@@ -595,6 +595,8 @@ def test_over_multirank(
     [
         (pl.col("x").shift(1).over("g").alias("result"), "shift"),
         (pl.col("x").diff().over("g").alias("result"), "diff"),
+        (pl.col("x").diff(n=2).over("g").alias("result"), "diff_n2"),
+        (pl.col("x").diff(n=-1).over("g").alias("result"), "diff_nneg1"),
         (pl.col("x").cum_sum().over("g").alias("result"), "cum_sum"),
         pytest.param(
             pl.col("x").rolling_mean(window_size=2).over("g").alias("result"),
@@ -616,7 +618,15 @@ def test_over_multirank(
             ),
         ),
     ],
-    ids=["shift", "diff", "cum_sum", "fixed_rolling", "fixed_rolling_ordered"],
+    ids=[
+        "shift",
+        "diff",
+        "diff_n2",
+        "diff_nneg1",
+        "cum_sum",
+        "fixed_rolling",
+        "fixed_rolling_ordered",
+    ],
 )
 def test_over_shared_group_ordering_multirank(
     comm: Communicator,
@@ -660,6 +670,10 @@ def test_over_shared_group_ordering_multirank(
             expected_values = [None, *xs[:-1]]
         elif expected == "diff":
             expected_values = [None, *([1] * (len(xs) - 1))]
+        elif expected == "diff_n2":
+            expected_values = [None, None, *([2] * (len(xs) - 2))]
+        elif expected == "diff_nneg1":
+            expected_values = [*([-1] * (len(xs) - 1)), None]
         elif expected == "cum_sum":
             total = 0
             expected_values = []

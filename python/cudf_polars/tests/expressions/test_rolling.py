@@ -303,7 +303,7 @@ def test_rank_over(
     method: RankMethod,
     *,
     descending: bool,
-    order_by: None | list[str | pl.Expr],
+    order_by: list[str | pl.Expr] | None,
 ) -> None:
     q = df.select(
         pl.col("x")
@@ -322,7 +322,7 @@ def test_rank_over_with_ties(
     method: RankMethod,
     *,
     descending: bool,
-    order_by: None | list[str | pl.Expr],
+    order_by: list[str | pl.Expr] | None,
 ) -> None:
     q = df.select(
         pl.when(pl.col("g") == 2)
@@ -343,7 +343,7 @@ def test_rank_over_with_null_values(
     method: RankMethod,
     *,
     descending: bool,
-    order_by: None | list[str | pl.Expr],
+    order_by: list[str | pl.Expr] | None,
 ) -> None:
     q = df.select(
         pl.when((pl.col("x") % 2) == 0)
@@ -364,7 +364,7 @@ def test_rank_over_with_null_group_keys(
     method: RankMethod,
     *,
     descending: bool,
-    order_by: None | list[str | pl.Expr],
+    order_by: list[str | pl.Expr] | None,
 ) -> None:
     q = df.select(
         pl.col("x")
@@ -395,7 +395,7 @@ def test_fill_over(
     engine: pl.GPUEngine,
     df: pl.LazyFrame,
     strategy: str,
-    order_by: None | list[str | pl.Expr],
+    order_by: list[str | pl.Expr] | None,
     group_key: str,
     expr: pl.Expr,
 ) -> None:
@@ -435,7 +435,7 @@ def test_cum_sum_over(
     *,
     expr: pl.Expr,
     group_key: str,
-    order_by: None | list[str | pl.Expr],
+    order_by: list[str | pl.Expr] | None,
 ) -> None:
     q = df.select(expr.cum_sum().over(group_key, order_by=order_by))
     assert_gpu_result_equal(q, engine=engine)
