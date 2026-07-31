@@ -197,6 +197,11 @@ bool reader_impl::prepare_dict_transcode(read_mode mode)
   // path here too and fall back to the post-hoc encode.
   if (uses_custom_row_bounds(mode)) { return false; }
 
+  // AST/JIT filters evaluate predicates on materialized STRING columns, so the direct transcode
+  // fast path cannot run under a filter. Skip it and let `finalize_output` encode the filtered
+  // STRING result to DICTIONARY32 via the post-hoc `dictionary::detail::encode` fallback.
+  if (_expr_conv.get_converted_expr().has_value()) { return false; }
+
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 

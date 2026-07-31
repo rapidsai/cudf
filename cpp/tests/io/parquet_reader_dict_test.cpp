@@ -18,6 +18,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/device_buffer.hpp>
+
 #include <algorithm>
 #include <array>
 #include <memory>

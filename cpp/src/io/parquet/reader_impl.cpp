@@ -265,9 +265,6 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   }
 
   // launch dict-index-as-int32 decoder for flat columns
-  // TODO: extend the Parquet-dict → DICTIONARY32 transcode to nested and list string columns by
-  // adding DICT_INT32_NESTED / DICT_INT32_LIST launches here. Only flat string columns are
-  // transcoded today; nested/list columns fall back to the normal decode path.
   if (BitAnd(kernel_mask, decode_kernel_mask::DICT_INT32) != 0) {
     decode_data(decode_kernel_mask::DICT_INT32);
   }
@@ -541,10 +538,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
     _input_pass_read_limit{pass_read_limit}
 {
   // The direct parquet-dict → DICTIONARY32 transcode fast path only supports single-pass,
-  // non-chunked reads. Splitting rowgroups across passes/subpasses would require aligning
-  // dictionary keys across passes, which are not supported yet. In that scenario, we silently
-  // skip the fast path in `prepare_dict_transcode` and still produce DICTIONARY32 output
-  // via the post-hoc `dictionary::detail::encode` fallback in `finalize_output`.
+  // non-chunked reads. 
   if (_options.output_dict_columns and (chunk_read_limit != 0 or pass_read_limit != 0)) {
     CUDF_LOG_WARN(
       "output_dict_columns: the direct parquet-dict transcode fast path is disabled for chunked / "
@@ -952,16 +946,23 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
 
   apply_decimal_width_cast(out_columns);
 
-  if (_options.output_dict_columns) {
-    // For columns that were not eligible for the direct transcode fast path, fall back to a
-    // post-hoc `dictionary::detail::encode`.
-    for (auto& col : out_columns) {
+  // Encode any remaining flat STRING columns to DICTIONARY32 via a post-hoc
+  // `dictionary::detail::encode`: columns not produced by the direct transcode fast path, or all of
+  // them when the fast path was disabled (e.g. under a filter). This is applied to the FINAL output
+  // table below -- after any filter is evaluated -- so the filter still operates on STRING columns
+  // and the dictionary is built over only the surviving rows.
+  auto const encode_output_dict_columns =
+    [&](std::unique_ptr<table> tbl) -> std::unique_ptr<table> {
+    if (not _options.output_dict_columns) { return tbl; }
+    auto columns = tbl->release();
+    for (auto& col : columns) {
       if (col and col->type().id() == type_id::STRING) {
         col =
           cudf::dictionary::detail::encode(col->view(), data_type{type_id::INT32}, _stream, _mr);
       }
     }
-  }
+    return std::make_unique<table>(std::move(columns));
+  };
 
   if (!_output_metadata) {
     populate_metadata(out_metadata);
@@ -1030,15 +1031,16 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
       // Exclude columns present in filter only in output
       auto output_table = cudf::detail::apply_mask(
         only_output, *predicate, cudf::detail::mask_type::RETENTION, _stream, _mr);
-      return {std::move(output_table), std::move(out_metadata)};
+      return {encode_output_dict_columns(std::move(output_table)), std::move(out_metadata)};
     } else {
       auto output_table = cudf::filter(
         read_table->view(), final_filter_expr.value().get(), only_output, _stream, _mr);
 
-      return {std::move(output_table), std::move(out_metadata)};
+      return {encode_output_dict_columns(std::move(output_table)), std::move(out_metadata)};
     }
   }
-  return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
+  return {encode_output_dict_columns(std::make_unique<table>(std::move(out_columns))),
+          std::move(out_metadata)};
 }
 
 table_with_metadata reader_impl::read()
