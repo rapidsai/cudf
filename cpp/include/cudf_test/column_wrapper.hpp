@@ -1855,7 +1855,7 @@ class structs_column_wrapper : public detail::column_wrapper {
   structs_column_wrapper(std::vector<std::unique_ptr<cudf::column>>&& child_columns,
                          std::vector<bool> const& validity = {})
   {
-    init(std::move(child_columns), static_cast<std::vector<bool> const&>(validity));
+    init(std::move(child_columns), validity);
   }
 
   /**
@@ -1972,7 +1972,7 @@ class structs_column_wrapper : public detail::column_wrapper {
     auto const validity_iter = detail::validity_begin(validity_iterator);
     std::copy(validity_iter, validity_iter + num_rows, validity.begin());
 
-    init(std::move(child_columns), validity);
+    init(std::move(child_columns), static_cast<std::vector<bool> const&>(validity));
   }
 };
 
