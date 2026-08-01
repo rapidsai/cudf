@@ -356,7 +356,7 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   size_t size_limit,
   size_t num_columns,
   bool is_first_subpass,
-  bool has_page_index,
+  bool has_offset_index,
   rmm::cuda_stream_view stream)
 {
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
@@ -387,13 +387,17 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   auto iter = cuda::counting_iterator{size_t{0}};
   auto page_row_index =
     cudf::detail::make_counting_transform_iterator(0, get_page_end_row_index{c_info});
-  thrust::transform(
-    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-    iter,
-    iter + num_columns,
-    page_bounds.begin(),
-    get_page_span{
-      page_offsets, chunks, page_row_index, start_row, end_row, is_first_subpass, has_page_index});
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    iter,
+                    iter + num_columns,
+                    page_bounds.begin(),
+                    get_page_span{page_offsets,
+                                  chunks,
+                                  page_row_index,
+                                  start_row,
+                                  end_row,
+                                  is_first_subpass,
+                                  has_offset_index});
 
   // total page count over all columns
   auto page_count_iter   = cuda::make_transform_iterator(page_bounds.begin(), get_span_size{});

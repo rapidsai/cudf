@@ -69,7 +69,7 @@ prioritized issues for our next release in our
 [project boards](https://github.com/rapidsai/cudf/projects).
 
 **Note:** Always look at the release board that is
-[currently under development](https://docs.rapids.ai/maintainers) for issues to work on. This is
+[currently under development](https://docs.rapids.ai/maintainers/) for issues to work on. This is
 where RAPIDS developers also focus their efforts.
 
 Look at the unassigned issues, and find an issue to which you are comfortable contributing. Start
@@ -98,7 +98,7 @@ Compilers:
 CUDA/GPU Runtime:
 
 * CUDA 12.2+
-* Volta architecture or better ([Compute Capability](https://docs.nvidia.com/deploy/cuda-compatibility/) >=7.0)
+* Volta architecture or better ([Compute Capability](https://docs.nvidia.com/deploy/cuda-compatibility/latest/) >=7.0)
 
 You can obtain CUDA from
 [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).

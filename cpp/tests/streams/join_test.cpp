@@ -161,6 +161,7 @@ TEST_F(JoinTest, LeftJoinWithPostFilter)
                               cudf::device_span<cudf::size_type const>(*hash_join_result.second),
                               left_zero_eq_right_zero,
                               cudf::join_kind::LEFT_JOIN,
+                              std::nullopt,
                               cudf::test::get_default_stream());
 }
 
