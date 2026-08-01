@@ -21,11 +21,14 @@
 #include <string>
 #include <vector>
 
-std::unique_ptr<cudf::column> make_column_from_vector(const std::vector<int32_t>& column_data)
+std::unique_ptr<cudf::column> make_column_from_vector(std::vector<int32_t> const& column_data)
 {
   cudf::data_type dtype{cudf::type_id::INT32};
   rmm::device_buffer data{
     column_data.data(), column_data.size() * sizeof(int32_t), cudf::get_default_stream()};
+  // Ensure the async H2D copy from `column_data` completes before the caller can reuse or
+  // destroy the source vector.
+  cudf::get_default_stream().synchronize();
   cudf::size_type size       = column_data.size();
   cudf::size_type null_count = 0;
   rmm::device_buffer null_mask{};
@@ -48,7 +51,7 @@ cudf::table make_table(size_t row_count, size_t column_count)
   return {std::move(columns)};
 }
 
-std::string table_view_to_string(const cudf::table_view& tbl_view)
+std::string table_view_to_string(cudf::table_view const& tbl_view)
 {
   std::vector<char> output;
   auto sink_info = cudf::io::sink_info(&output);
@@ -58,7 +61,7 @@ std::string table_view_to_string(const cudf::table_view& tbl_view)
   return {output.begin(), output.end()};
 }
 
-void print_table(const std::string& header, const cudf::table_view& tbl_view)
+void print_table(std::string const& header, cudf::table_view const& tbl_view)
 {
   std::cout << header << ":\n" << table_view_to_string(tbl_view) << "\n";
 }

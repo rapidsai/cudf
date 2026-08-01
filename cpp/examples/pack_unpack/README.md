@@ -3,22 +3,21 @@
 This C++ example demonstrates the use of libcudf to pack and unpack table data to and
 from device and host memory.
 
-There are three examples included:
-1. `device_pack_unpack.cpp`
-   This example creates a simple cuDF table on the device and then packs and unpacks
-   the table on the device. The original and unpacked tables are printed to show
-   no change in content.
+The single `pack_unpack_example` binary supports three modes, selected by a CLI argument:
 
-2. `host_pack_unpack.cpp`
-   This example creates a simple cuDF table on the device and then packs the table
-   on the host. The table is then unpacked on the host for lazy access by the device.
-   The original and unpacked tables are printed to show no change in content.
+1. `device` (default) — creates a simple cuDF table on the device and then packs and
+   unpacks the table on the device. The original and unpacked tables are printed to
+   show no change in content.
 
-3. `host_pack_copy_unpack.cpp`
-   This example creates a simple cuDF table on the device and then packs the table
-   on the host. The packed table is then copied to a different address on the host
-   (simulating host to host copy) and later unpacked on the host for lazy access by
-   the device. The original and unpacked tables are printed to show no change in content.
+2. `host` — creates a simple cuDF table on the device and then packs the table into
+   pinned host memory. The table is then unpacked from that host buffer for lazy access
+   by the device. The original and unpacked tables are printed to show no change in
+   content.
+
+3. `host-copy` — creates a simple cuDF table on the device and then packs the table
+   into pinned host memory. The packed bytes are then copied to a different host buffer
+   (simulating a host-to-host transfer) and later unpacked for lazy access by the
+   device. The original and unpacked tables are printed to show no change in content.
 
 ## Compile and Execute
 
@@ -29,10 +28,10 @@ cmake -S . -B build/
 # Build
 cmake --build build/ --parallel $PARALLEL_LEVEL
 
-# Execute
-build/device_pack_unpack_example
-build/host_pack_unpack_example
-build/host_pack_copy_unpack_example
+# Execute (mode defaults to "device" when omitted)
+build/pack_unpack_example device
+build/pack_unpack_example host
+build/pack_unpack_example host-copy
 ```
 
 If your machine does not come with a pre-built libcudf binary, expect the

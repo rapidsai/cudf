@@ -26,18 +26,7 @@ rapids_cmake_build_type("Release")
 # gcc>=14. We can remove this once we upgrade to a newer sccache version.
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
-# Add executables
-add_executable(device_pack_unpack_example device_pack_unpack.cpp common_utils.cpp)
-target_link_libraries(device_pack_unpack_example PRIVATE cudf::cudf)
-target_compile_features(device_pack_unpack_example PRIVATE cxx_std_20)
-install(TARGETS device_pack_unpack_example DESTINATION bin/examples/libcudf/pack_unpack)
-
-add_executable(host_pack_unpack_example host_pack_unpack.cpp common_utils.cpp)
-target_link_libraries(host_pack_unpack_example PRIVATE cudf::cudf)
-target_compile_features(host_pack_unpack_example PRIVATE cxx_std_20)
-install(TARGETS host_pack_unpack_example DESTINATION bin/examples/libcudf/pack_unpack)
-
-add_executable(host_pack_copy_unpack_example host_pack_copy_unpack.cpp common_utils.cpp)
-target_link_libraries(host_pack_copy_unpack_example PRIVATE cudf::cudf)
-target_compile_features(host_pack_copy_unpack_example PRIVATE cxx_std_20)
-install(TARGETS host_pack_copy_unpack_example DESTINATION bin/examples/libcudf/pack_unpack)
+add_executable(pack_unpack_example pack_unpack_example.cpp common_utils.cpp)
+target_link_libraries(pack_unpack_example PRIVATE cudf::cudf)
+target_compile_features(pack_unpack_example PRIVATE cxx_std_20)
+install(TARGETS pack_unpack_example DESTINATION bin/examples/libcudf/pack_unpack)
