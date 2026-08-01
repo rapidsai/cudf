@@ -105,10 +105,10 @@ __device__ void decode_dict_indices_as_int32(
   constexpr int num_warps      = block_size / cudf::detail::warp_size;
   constexpr int max_batch_size = num_warps * cudf::detail::warp_size;
 
-  int const leaf_level_index = s->col.max_nesting_depth - 1;
+  int const leaf_level_index = s->setup.col.max_nesting_depth - 1;
   auto const data_out        = s->nesting_info[leaf_level_index].data_out;
 
-  int const skipped_leaf_values = s->page.skipped_leaf_values;
+  int const skipped_leaf_values = s->setup.page.skipped_leaf_values;
 
   int pos = start;
   while (pos < end) {
@@ -118,10 +118,10 @@ __device__ void decode_dict_indices_as_int32(
 
     int const dst_pos = [&]() {
       if constexpr (copy_mode_t == copy_mode::DIRECT) {
-        return thread_pos - s->first_row;
+        return thread_pos - s->setup.first_row;
       } else {
         int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(thread_pos)];
-        if constexpr (!has_lists_t) { dst_pos -= s->first_row; }
+        if constexpr (!has_lists_t) { dst_pos -= s->setup.first_row; }
         return dst_pos;
       }
     }();
