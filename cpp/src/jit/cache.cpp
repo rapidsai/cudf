@@ -16,14 +16,46 @@
 #define XXH_INLINE_ALL
 #include <xxhash.h>
 
+#include <cstdint>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <future>
+#include <string>
+#include <string_view>
 
 namespace CUDF_EXPORT cudf {
 
 namespace {
+
+/**
+ * @brief Returns the architecture name to pass to NVRTC and nvJitLink for this device
+ *
+ * The precompiled JIT fragments only contain entries for the architectures this build
+ * targeted (CUDF_CUDA_ARCHITECTURES). When the build targeted only the
+ * architecture-specific variant of the device's compute capability -- which is what
+ * CMAKE_CUDA_ARCHITECTURES=NATIVE produces on such devices (e.g. 121a-real on GB10) --
+ * their fatbins hold only sm_<cc>a entries, and linking with plain sm_<cc> makes
+ * nvJitLink fail with NVJITLINK_ERROR_INVALID_INPUT. Use the architecture-specific name
+ * exactly when it is what this build was compiled for.
+ */
+std::string jit_arch_name(std::int32_t compute_capability)
+{
+  auto const specific = std::format("{}a", compute_capability);
+#if defined(CUDF_CUDA_ARCHITECTURES)
+  for (auto archs = std::string_view{CUDF_CUDA_ARCHITECTURES}; !archs.empty();) {
+    auto const comma = archs.find(',');
+    auto entry       = archs.substr(0, comma);
+    archs = comma == std::string_view::npos ? std::string_view{} : archs.substr(comma + 1);
+    // entries look like "121a-real", "120", or "90a-virtual"
+    if (auto const dash = entry.find('-'); dash != std::string_view::npos) {
+      entry = entry.substr(0, dash);
+    }
+    if (entry == specific) { return std::format("sm_{}", specific); }
+  }
+#endif
+  return std::format("sm_{}", compute_capability);
+}
 
 void hash(XXH3_state_t* ctx, std::span<char const> input)
 {
@@ -228,7 +260,7 @@ std::tuple<rtcx::library, rtcx::blob> compile_library(
     options.emplace_back(std::format("-I{}", include_dir));
   }
 
-  options.emplace_back(std::format("--gpu-architecture=sm_{}", sm));
+  options.emplace_back(std::format("--gpu-architecture={}", jit_arch_name(sm)));
 
   options.emplace_back("--diag-suppress=47");
   options.emplace_back("--device-int128");
@@ -313,7 +345,7 @@ rtcx::blob compile_fragment(char const* name,
     options.emplace_back(std::format("-I{}", include_dir));
   }
 
-  options.emplace_back(std::format("--gpu-architecture=sm_{}", sm));
+  options.emplace_back(std::format("--gpu-architecture={}", jit_arch_name(sm)));
 
   options.emplace_back("--diag-suppress=47");
   options.emplace_back("--device-int128");
@@ -507,7 +539,7 @@ std::tuple<rtcx::library, rtcx::blob> link_library_uncached(
   std::vector<std::string> options;
 
   options.emplace_back("-lto");
-  options.emplace_back(std::format("-arch=sm_{}", sm));
+  options.emplace_back(std::format("-arch={}", jit_arch_name(sm)));
 
   if (cfg.disable_cuda_cache) { options.emplace_back("--no-cache"); }
 

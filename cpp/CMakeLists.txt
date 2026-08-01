@@ -1365,6 +1365,16 @@ SECTIONS
 )
 target_link_options(cudf PRIVATE "$<HOST_LINK:${CUDF_BINARY_DIR}/fatbin.ld>")
 
+# The JIT cache must know which architectures the precompiled fragments were built for: when a
+# device's compute capability was only built as its architecture-specific variant (e.g. NATIVE
+# resolving to 121a-real), NVRTC/nvJitLink must be given sm_<cc>a rather than sm_<cc>.
+string(REPLACE ";" "," _cudf_cuda_archs "${CMAKE_CUDA_ARCHITECTURES}")
+set_source_files_properties(
+  src/jit/cache.cpp PROPERTIES COMPILE_DEFINITIONS
+                               "CUDF_CUDA_ARCHITECTURES=\"${_cudf_cuda_archs}\""
+)
+unset(_cudf_cuda_archs)
+
 add_library(cudf::cudf ALIAS cudf)
 
 # ##################################################################################################
