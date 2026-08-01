@@ -13,136 +13,111 @@
 
 #include <algorithm>
 #include <compare>
-#include <functional>
 #include <iterator>
 #include <memory>
-#include <type_traits>
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
 namespace test {
 namespace iterators {
 
-/**
- * @brief Host-only counting transform iterator for test data generation.
- *
- * This iterator avoids making host-only test functors device-callable while retaining the
- * random-access interface expected by column wrappers.
- *
- * @tparam Index Counting value type
- * @tparam UnaryFunction Transformation callable type
- */
-template <typename Index, typename UnaryFunction>
-class host_counting_transform_iterator {
+template <typename Index>
+class nulls_at_iterator {
  public:
   using difference_type   = std::ptrdiff_t;
-  using reference         = std::invoke_result_t<UnaryFunction&, Index>;
-  using value_type        = std::remove_cvref_t<reference>;
+  using reference         = bool;
+  using value_type        = bool;
   using pointer           = void;
   using iterator_category = std::random_access_iterator_tag;
   using iterator_concept  = std::random_access_iterator_tag;
 
-  host_counting_transform_iterator() = default;
+  nulls_at_iterator() = default;
 
-  host_counting_transform_iterator(Index index, UnaryFunction function)
-    : _index{index}, _function{std::move(function)}
+  explicit nulls_at_iterator(std::vector<Index> indices)
+    : _indices{std::make_shared<std::vector<Index> const>(std::move(indices))}
   {
   }
 
-  decltype(auto) operator*() const { return std::invoke(_function, _index); }
-
-  decltype(auto) operator[](difference_type offset) const
+  reference operator*() const
   {
-    return std::invoke(_function, _index + static_cast<Index>(offset));
+    auto const index = static_cast<Index>(_position);
+    return std::find(_indices->cbegin(), _indices->cend(), index) == _indices->cend();
   }
 
-  host_counting_transform_iterator& operator++()
+  reference operator[](difference_type offset) const { return *(*this + offset); }
+
+  nulls_at_iterator& operator++()
   {
-    ++_index;
+    ++_position;
     return *this;
   }
 
-  host_counting_transform_iterator operator++(int)
+  nulls_at_iterator operator++(int)
   {
     auto result = *this;
     ++*this;
     return result;
   }
 
-  host_counting_transform_iterator& operator--()
+  nulls_at_iterator& operator--()
   {
-    --_index;
+    --_position;
     return *this;
   }
 
-  host_counting_transform_iterator operator--(int)
+  nulls_at_iterator operator--(int)
   {
     auto result = *this;
     --*this;
     return result;
   }
 
-  host_counting_transform_iterator& operator+=(difference_type offset)
+  nulls_at_iterator& operator+=(difference_type offset)
   {
-    _index += static_cast<Index>(offset);
+    _position += offset;
     return *this;
   }
 
-  host_counting_transform_iterator& operator-=(difference_type offset)
+  nulls_at_iterator& operator-=(difference_type offset)
   {
-    _index -= static_cast<Index>(offset);
+    _position -= offset;
     return *this;
   }
 
-  friend host_counting_transform_iterator operator+(host_counting_transform_iterator iterator,
-                                                    difference_type offset)
+  friend nulls_at_iterator operator+(nulls_at_iterator iterator, difference_type offset)
   {
     return iterator += offset;
   }
 
-  friend host_counting_transform_iterator operator+(difference_type offset,
-                                                    host_counting_transform_iterator iterator)
+  friend nulls_at_iterator operator+(difference_type offset, nulls_at_iterator iterator)
   {
     return iterator += offset;
   }
 
-  friend host_counting_transform_iterator operator-(host_counting_transform_iterator iterator,
-                                                    difference_type offset)
+  friend nulls_at_iterator operator-(nulls_at_iterator iterator, difference_type offset)
   {
     return iterator -= offset;
   }
 
-  friend difference_type operator-(host_counting_transform_iterator const& lhs,
-                                   host_counting_transform_iterator const& rhs)
+  friend difference_type operator-(nulls_at_iterator const& lhs, nulls_at_iterator const& rhs)
   {
-    return static_cast<difference_type>(lhs._index) - static_cast<difference_type>(rhs._index);
+    return lhs._position - rhs._position;
   }
 
-  friend bool operator==(host_counting_transform_iterator const& lhs,
-                         host_counting_transform_iterator const& rhs)
+  friend bool operator==(nulls_at_iterator const& lhs, nulls_at_iterator const& rhs)
   {
-    return lhs._index == rhs._index;
+    return lhs._position == rhs._position;
   }
 
-  friend auto operator<=>(host_counting_transform_iterator const& lhs,
-                          host_counting_transform_iterator const& rhs)
+  friend auto operator<=>(nulls_at_iterator const& lhs, nulls_at_iterator const& rhs)
   {
-    return lhs._index <=> rhs._index;
+    return lhs._position <=> rhs._position;
   }
 
  private:
-  Index _index{};
-  mutable UnaryFunction _function{};
+  std::shared_ptr<std::vector<Index> const> _indices;
+  difference_type _position{};
 };
-
-/**
- * @brief Create a host-only counting transform iterator for test data generation.
- */
-template <typename Index, typename UnaryFunction>
-auto make_host_counting_transform_iterator(Index start, UnaryFunction function)
-{
-  return host_counting_transform_iterator<Index, UnaryFunction>{start, std::move(function)};
-}
 
 /**
  * @brief Bool iterator for marking (possibly multiple) null elements in a column_wrapper.
@@ -170,13 +145,7 @@ template <typename Iter>
 {
   using index_type = typename std::iterator_traits<Iter>::value_type;
 
-  auto indices = std::make_shared<std::vector<index_type> const>(
-    std::vector<index_type>{index_start, index_end});
-  return make_host_counting_transform_iterator(
-    cudf::size_type{0}, [indices = std::move(indices)](cudf::size_type i) {
-      auto const index = static_cast<index_type>(i);
-      return std::find(indices->cbegin(), indices->cend(), index) == indices->cend();
-    });
+  return nulls_at_iterator<index_type>{std::vector<index_type>{index_start, index_end}};
 }
 
 /**
