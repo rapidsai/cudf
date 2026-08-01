@@ -12,112 +12,12 @@
 #include <cuda/iterator>
 
 #include <algorithm>
-#include <compare>
 #include <iterator>
-#include <memory>
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
 namespace test {
 namespace iterators {
-
-template <typename Index>
-class nulls_at_iterator {
- public:
-  using difference_type   = std::ptrdiff_t;
-  using reference         = bool;
-  using value_type        = bool;
-  using pointer           = void;
-  using iterator_category = std::random_access_iterator_tag;
-  using iterator_concept  = std::random_access_iterator_tag;
-
-  nulls_at_iterator() = default;
-
-  explicit nulls_at_iterator(std::vector<Index> indices)
-    : _indices{std::make_shared<std::vector<Index> const>(std::move(indices))}
-  {
-  }
-
-  reference operator*() const
-  {
-    auto const index = static_cast<Index>(_position);
-    return std::find(_indices->cbegin(), _indices->cend(), index) == _indices->cend();
-  }
-
-  reference operator[](difference_type offset) const { return *(*this + offset); }
-
-  nulls_at_iterator& operator++()
-  {
-    ++_position;
-    return *this;
-  }
-
-  nulls_at_iterator operator++(int)
-  {
-    auto result = *this;
-    ++*this;
-    return result;
-  }
-
-  nulls_at_iterator& operator--()
-  {
-    --_position;
-    return *this;
-  }
-
-  nulls_at_iterator operator--(int)
-  {
-    auto result = *this;
-    --*this;
-    return result;
-  }
-
-  nulls_at_iterator& operator+=(difference_type offset)
-  {
-    _position += offset;
-    return *this;
-  }
-
-  nulls_at_iterator& operator-=(difference_type offset)
-  {
-    _position -= offset;
-    return *this;
-  }
-
-  friend nulls_at_iterator operator+(nulls_at_iterator iterator, difference_type offset)
-  {
-    return iterator += offset;
-  }
-
-  friend nulls_at_iterator operator+(difference_type offset, nulls_at_iterator iterator)
-  {
-    return iterator += offset;
-  }
-
-  friend nulls_at_iterator operator-(nulls_at_iterator iterator, difference_type offset)
-  {
-    return iterator -= offset;
-  }
-
-  friend difference_type operator-(nulls_at_iterator const& lhs, nulls_at_iterator const& rhs)
-  {
-    return lhs._position - rhs._position;
-  }
-
-  friend bool operator==(nulls_at_iterator const& lhs, nulls_at_iterator const& rhs)
-  {
-    return lhs._position == rhs._position;
-  }
-
-  friend auto operator<=>(nulls_at_iterator const& lhs, nulls_at_iterator const& rhs)
-  {
-    return lhs._position <=> rhs._position;
-  }
-
- private:
-  std::shared_ptr<std::vector<Index> const> _indices;
-  difference_type _position{};
-};
 
 /**
  * @brief Bool iterator for marking (possibly multiple) null elements in a column_wrapper.
@@ -145,7 +45,10 @@ template <typename Iter>
 {
   using index_type = typename std::iterator_traits<Iter>::value_type;
 
-  return nulls_at_iterator<index_type>{std::vector<index_type>{index_start, index_end}};
+  return cudf::detail::make_counting_transform_iterator(
+    0, [indices = std::vector<index_type>{index_start, index_end}](auto i) {
+      return std::find(indices.cbegin(), indices.cend(), i) == indices.cend();
+    });
 }
 
 /**
