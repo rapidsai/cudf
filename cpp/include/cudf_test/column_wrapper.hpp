@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -37,6 +37,7 @@
 #include <iterator>
 #include <memory>
 #include <numeric>
+#include <vector>
 
 namespace CUDF_EXPORT cudf {
 namespace test {
@@ -155,10 +156,10 @@ template <typename ElementTo,
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   static_assert(cudf::is_fixed_width<ElementTo>(), "Unexpected non-fixed width type.");
-  auto transformer     = fixed_width_type_converter<ElementFrom, ElementTo>{};
-  auto transform_begin = cuda::transform_iterator(begin, transformer);
-  auto const size      = cudf::distance(begin, end);
-  auto const elements  = thrust::host_vector<ElementTo>(transform_begin, transform_begin + size);
+  auto const size = cudf::distance(begin, end);
+  auto elements   = thrust::host_vector<ElementTo>(size);
+  std::transform(
+    begin, end, elements.begin(), fixed_width_type_converter<ElementFrom, ElementTo>{});
   return rmm::device_buffer{
     elements.data(), size * sizeof(ElementTo), cudf::test::get_default_stream()};
 }
@@ -184,11 +185,10 @@ template <typename ElementTo,
                            cudf::is_fixed_point<ElementTo>()>* = nullptr>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
-  using RepType        = typename ElementTo::rep;
-  auto transformer     = fixed_width_type_converter<ElementFrom, RepType>{};
-  auto transform_begin = cuda::transform_iterator(begin, transformer);
-  auto const size      = cudf::distance(begin, end);
-  auto const elements  = thrust::host_vector<RepType>(transform_begin, transform_begin + size);
+  using RepType   = typename ElementTo::rep;
+  auto const size = cudf::distance(begin, end);
+  auto elements   = thrust::host_vector<RepType>(size);
+  std::transform(begin, end, elements.begin(), fixed_width_type_converter<ElementFrom, RepType>{});
   return rmm::device_buffer{
     elements.data(), size * sizeof(RepType), cudf::test::get_default_stream()};
 }
@@ -216,10 +216,9 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   CUDF_EXPECTS(std::all_of(begin, end, [](ElementFrom v) { return v.scale() == 0; }),
                "Only zero-scale fixed-point values are supported");
 
-  auto to_rep            = [](ElementTo fp) { return fp.value(); };
-  auto transformer_begin = cuda::transform_iterator(begin, to_rep);
-  auto const size        = cudf::distance(begin, end);
-  auto const elements = thrust::host_vector<RepType>(transformer_begin, transformer_begin + size);
+  auto const size = cudf::distance(begin, end);
+  auto elements   = thrust::host_vector<RepType>(size);
+  std::transform(begin, end, elements.begin(), [](ElementTo const fp) { return fp.value(); });
   return rmm::device_buffer{
     elements.data(), size * sizeof(RepType), cudf::test::get_default_stream()};
 }
@@ -516,10 +515,17 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   template <typename ElementFrom>
   fixed_width_column_wrapper(std::initializer_list<std::pair<ElementFrom, bool>> elements)
   {
-    auto begin = cuda::transform_iterator(elements.begin(), [](auto const& e) { return e.first; });
-    auto end   = begin + elements.size();
-    auto v     = cuda::transform_iterator(elements.begin(), [](auto const& e) { return e.second; });
-    wrapped    = fixed_width_column_wrapper<ElementTo, ElementFrom>(begin, end, v).release();
+    auto values   = std::vector<ElementFrom>{};
+    auto validity = std::vector<bool>{};
+    values.reserve(elements.size());
+    validity.reserve(elements.size());
+    for (auto const& [value, valid] : elements) {
+      values.push_back(value);
+      validity.push_back(valid);
+    }
+    wrapped = fixed_width_column_wrapper<ElementTo, ElementFrom>(
+                values.begin(), values.end(), validity.begin())
+                .release();
   }
 };
 
@@ -902,10 +908,15 @@ class strings_column_wrapper : public detail::column_wrapper {
    */
   strings_column_wrapper(std::initializer_list<std::pair<std::string, bool>> strings)
   {
-    auto begin = cuda::transform_iterator(strings.begin(), [](auto const& s) { return s.first; });
-    auto end   = begin + strings.size();
-    auto v     = cuda::transform_iterator(strings.begin(), [](auto const& s) { return s.second; });
-    wrapped    = strings_column_wrapper(begin, end, v).release();
+    auto values   = std::vector<std::string>{};
+    auto validity = std::vector<bool>{};
+    values.reserve(strings.size());
+    validity.reserve(strings.size());
+    for (auto const& [value, valid] : strings) {
+      values.push_back(value);
+      validity.push_back(valid);
+    }
+    wrapped = strings_column_wrapper(values.begin(), values.end(), validity.begin()).release();
   }
 };
 

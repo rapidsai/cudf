@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,11 +11,139 @@
 
 #include <cuda/iterator>
 
+#include <algorithm>
+#include <compare>
+#include <functional>
 #include <iterator>
+#include <memory>
+#include <type_traits>
+#include <vector>
 
 namespace CUDF_EXPORT cudf {
 namespace test {
 namespace iterators {
+
+/**
+ * @brief Host-only counting transform iterator for test data generation.
+ *
+ * This iterator avoids making host-only test functors device-callable while retaining the
+ * random-access interface expected by column wrappers.
+ *
+ * @tparam Index Counting value type
+ * @tparam UnaryFunction Transformation callable type
+ */
+template <typename Index, typename UnaryFunction>
+class host_counting_transform_iterator {
+ public:
+  using difference_type   = std::ptrdiff_t;
+  using reference         = std::invoke_result_t<UnaryFunction&, Index>;
+  using value_type        = std::remove_cvref_t<reference>;
+  using pointer           = void;
+  using iterator_category = std::random_access_iterator_tag;
+  using iterator_concept  = std::random_access_iterator_tag;
+
+  host_counting_transform_iterator() = default;
+
+  host_counting_transform_iterator(Index index, UnaryFunction function)
+    : _index{index}, _function{std::move(function)}
+  {
+  }
+
+  decltype(auto) operator*() const { return std::invoke(_function, _index); }
+
+  decltype(auto) operator[](difference_type offset) const
+  {
+    return std::invoke(_function, _index + static_cast<Index>(offset));
+  }
+
+  host_counting_transform_iterator& operator++()
+  {
+    ++_index;
+    return *this;
+  }
+
+  host_counting_transform_iterator operator++(int)
+  {
+    auto result = *this;
+    ++*this;
+    return result;
+  }
+
+  host_counting_transform_iterator& operator--()
+  {
+    --_index;
+    return *this;
+  }
+
+  host_counting_transform_iterator operator--(int)
+  {
+    auto result = *this;
+    --*this;
+    return result;
+  }
+
+  host_counting_transform_iterator& operator+=(difference_type offset)
+  {
+    _index += static_cast<Index>(offset);
+    return *this;
+  }
+
+  host_counting_transform_iterator& operator-=(difference_type offset)
+  {
+    _index -= static_cast<Index>(offset);
+    return *this;
+  }
+
+  friend host_counting_transform_iterator operator+(host_counting_transform_iterator iterator,
+                                                    difference_type offset)
+  {
+    return iterator += offset;
+  }
+
+  friend host_counting_transform_iterator operator+(difference_type offset,
+                                                    host_counting_transform_iterator iterator)
+  {
+    return iterator += offset;
+  }
+
+  friend host_counting_transform_iterator operator-(host_counting_transform_iterator iterator,
+                                                    difference_type offset)
+  {
+    return iterator -= offset;
+  }
+
+  friend difference_type operator-(host_counting_transform_iterator const& lhs,
+                                   host_counting_transform_iterator const& rhs)
+  {
+    return static_cast<difference_type>(lhs._index) - static_cast<difference_type>(rhs._index);
+  }
+
+  friend bool operator==(host_counting_transform_iterator const& lhs,
+                         host_counting_transform_iterator const& rhs)
+  {
+    return lhs._index == rhs._index;
+  }
+
+  friend auto operator<=>(host_counting_transform_iterator const& lhs,
+                          host_counting_transform_iterator const& rhs)
+  {
+    return lhs._index <=> rhs._index;
+  }
+
+ private:
+  Index _index{};
+  mutable UnaryFunction _function{};
+};
+
+/**
+ * @brief Create a host-only counting transform iterator for test data generation.
+ */
+template <typename Index, typename UnaryFunction>
+auto make_host_counting_transform_iterator(Index start, UnaryFunction function)
+{
+  return host_counting_transform_iterator<Index, UnaryFunction>{start, std::move(function)};
+}
+
 /**
  * @brief Bool iterator for marking (possibly multiple) null elements in a column_wrapper.
  *
@@ -42,9 +170,12 @@ template <typename Iter>
 {
   using index_type = typename std::iterator_traits<Iter>::value_type;
 
-  return cudf::detail::make_counting_transform_iterator(
-    0, [indices = std::vector<index_type>{index_start, index_end}](auto i) {
-      return std::find(indices.cbegin(), indices.cend(), i) == indices.cend();
+  auto indices = std::make_shared<std::vector<index_type> const>(
+    std::vector<index_type>{index_start, index_end});
+  return make_host_counting_transform_iterator(
+    cudf::size_type{0}, [indices = std::move(indices)](cudf::size_type i) {
+      auto const index = static_cast<index_type>(i);
+      return std::find(indices->cbegin(), indices->cend(), index) == indices->cend();
     });
 }
 

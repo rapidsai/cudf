@@ -60,7 +60,7 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
 {
   if (nullable) {
     // Generate deterministic bitmask instead of random bitmask for easy computation of data size.
-    auto const valid_iter = cudf::detail::make_counting_transform_iterator(
+    auto const valid_iter = cudf::test::iterators::make_host_counting_transform_iterator(
       0, [](cudf::size_type i) { return i % 4 != 3; });
 
     cudf::size_type offset{0};
@@ -364,12 +364,13 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
     // 20000 rows of 1 char each    (20000  + 80004) = B0      100004        100004
     // 20000 rows of 4 chars each   (80000  + 80004) = B1      160004        260008
     // 20000 rows of 16 chars each  (320000 + 80004) = B2      400004        660012
-    auto const strings  = std::vector<std::string>{"a", "bbbb", "cccccccccccccccc"};
-    auto const str_iter = cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) {
-      if (i < 20000) { return strings[0]; }
-      if (i < 40000) { return strings[1]; }
-      return strings[2];
-    });
+    auto const strings = std::vector<std::string>{"a", "bbbb", "cccccccccccccccc"};
+    auto const str_iter =
+      cudf::test::iterators::make_host_counting_transform_iterator(0, [&](int32_t i) {
+        if (i < 20000) { return strings[0]; }
+        if (i < 40000) { return strings[1]; }
+        return strings[2];
+      });
     input_columns.emplace_back(strings_col(str_iter, str_iter + num_rows).release());
 
     // Cumulative sizes:
@@ -619,9 +620,9 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStringPrecise)
     // 20000 rows alternating 1-4 chars each (50000 + 80004)   A0      130004        130004
     // 20000 rows alternating 1-4 chars each (50000 + 80004)   A1      130004        260008
     // ...
-    auto const strings = std::vector<std::string>{"a", "bbbb"};
-    auto const str_iter =
-      cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) { return strings[i % 2]; });
+    auto const strings  = std::vector<std::string>{"a", "bbbb"};
+    auto const str_iter = cudf::test::iterators::make_host_counting_transform_iterator(
+      0, [&](int32_t i) { return strings[i % 2]; });
     input_columns.emplace_back(strings_col(str_iter, str_iter + num_rows).release());
 
     // Cumulative sizes:
@@ -668,7 +669,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructs)
       auto child1 = int32s_col(int_iter, int_iter + num_rows);
       auto child2 = int32s_col(int_iter + num_rows, int_iter + num_rows * 2);
 
-      auto const str_iter = cudf::detail::make_counting_transform_iterator(
+      auto const str_iter = cudf::test::iterators::make_host_counting_transform_iterator(
         0, [&](int32_t i) { return std::to_string(i); });
       auto child3 = strings_col{str_iter, str_iter + num_rows};
 
@@ -751,8 +752,8 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsNoNulls)
     auto const template_lists = int32s_lists_col{
       int32s_lists_col{}, int32s_lists_col{0}, int32s_lists_col{1, 2}, int32s_lists_col{3, 4, 5}};
 
-    auto const gather_iter =
-      cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) { return i % 4; });
+    auto const gather_iter = cudf::test::iterators::make_host_counting_transform_iterator(
+      0, [&](int32_t i) { return i % 4; });
     auto const gather_map = int32s_col(gather_iter, gather_iter + num_rows);
     input_columns.emplace_back(
       std::move(cudf::gather(cudf::table_view{{template_lists}}, gather_map)->release().front()));
@@ -841,8 +842,8 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsHavingNulls)
                        int32s_lists_col{0},
                        int32s_lists_col{1, 2},
                        int32s_lists_col{3, 4, 5, 6, 7, 8, 9} /* this list will be nullified out */};
-    auto const gather_iter =
-      cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) { return i % 4; });
+    auto const gather_iter = cudf::test::iterators::make_host_counting_transform_iterator(
+      0, [&](int32_t i) { return i % 4; });
     auto const gather_map = int32s_col(gather_iter, gather_iter + num_rows);
     input_columns.emplace_back(
       std::move(cudf::gather(cudf::table_view{{template_lists}}, gather_map)->release().front()));
@@ -930,15 +931,15 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructsOfLists)
       child_columns.emplace_back(
         int32s_col(int_iter + num_rows, int_iter + num_rows * 2).release());
 
-      auto const str_iter = cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) {
-        return std::to_string(i) + "++++++++++++++++++++" + std::to_string(i);
-      });
+      auto const str_iter = cudf::test::iterators::make_host_counting_transform_iterator(
+        0,
+        [&](int32_t i) { return std::to_string(i) + "++++++++++++++++++++" + std::to_string(i); });
       child_columns.emplace_back(strings_col{str_iter, str_iter + num_rows}.release());
 
       auto const template_lists = int32s_lists_col{
         int32s_lists_col{}, int32s_lists_col{0}, int32s_lists_col{0, 1}, int32s_lists_col{0, 1, 2}};
-      auto const gather_iter =
-        cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) { return i % 4; });
+      auto const gather_iter = cudf::test::iterators::make_host_counting_transform_iterator(
+        0, [&](int32_t i) { return i % 4; });
       auto const gather_map = int32s_col(gather_iter, gather_iter + num_rows);
       child_columns.emplace_back(
         std::move(cudf::gather(cudf::table_view{{template_lists}}, gather_map)->release().front()));
@@ -1073,7 +1074,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsOfStructs)
       auto child1 = int32s_col(int_iter, int_iter + num_structs);
       auto child2 = int32s_col(int_iter + num_structs, int_iter + num_structs * 2);
 
-      auto const str_iter = cudf::detail::make_counting_transform_iterator(
+      auto const str_iter = cudf::test::iterators::make_host_counting_transform_iterator(
         0, [&](int32_t i) { return std::to_string(i) + std::to_string(i) + std::to_string(i); });
       auto child3 = strings_col{str_iter, str_iter + num_structs};
 
@@ -1193,8 +1194,8 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadNullCount)
   auto constexpr num_rows = 100'000;
 
   auto const sequence = cuda::constant_iterator{1};
-  auto const validity =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 4 != 3; });
+  auto const validity = cudf::test::iterators::make_host_counting_transform_iterator(
+    0, [](auto i) { return i % 4 != 3; });
   cudf::test::fixed_width_column_wrapper<int32_t> col{sequence, sequence + num_rows, validity};
   std::vector<std::unique_ptr<cudf::column>> cols;
   cols.push_back(col.release());
@@ -1314,17 +1315,18 @@ TEST_F(ParquetChunkedReaderInputLimitConstrainedTest, MixedColumns)
   auto iter1 = cuda::counting_iterator<int>{0};
   cudf::test::fixed_width_column_wrapper<int> col1(iter1, iter1 + num_rows);
 
-  auto iter2 =
-    cudf::detail::make_counting_transform_iterator(0, [](int i) { return static_cast<double>(i); });
+  auto iter2 = cudf::test::iterators::make_host_counting_transform_iterator(
+    0, [](int i) { return static_cast<double>(i); });
   cudf::test::fixed_width_column_wrapper<double> col2(iter2, iter2 + num_rows);
 
-  auto const strings  = std::vector<std::string>{"abc", "de", "fghi"};
-  auto const str_iter = cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) {
-    if (i < 250000) { return strings[0]; }
-    if (i < 750000) { return strings[1]; }
-    return strings[2];
-  });
-  auto col3           = strings_col(str_iter, str_iter + num_rows);
+  auto const strings = std::vector<std::string>{"abc", "de", "fghi"};
+  auto const str_iter =
+    cudf::test::iterators::make_host_counting_transform_iterator(0, [&](int32_t i) {
+      if (i < 250000) { return strings[0]; }
+      if (i < 750000) { return strings[1]; }
+      return strings[2];
+    });
+  auto col3 = strings_col(str_iter, str_iter + num_rows);
 
   auto tbl = cudf::table_view{{col1, col2, col3}};
 
@@ -1945,7 +1947,7 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceMultipleSources)
       std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()));
 
     // Expected source index column
-    auto const src_index = cudf::detail::make_counting_transform_iterator(
+    auto const src_index = cudf::test::iterators::make_host_counting_transform_iterator(
       0, [](cudf::size_type i) { return i / num_rows; });
     auto const expected_src_index = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
       src_index, src_index + nsources * num_rows);
@@ -2113,11 +2115,11 @@ TEST_F(ParquetChunkedReaderTest, TestRowIndexColumnMultipleSources)
     EXPECT_EQ(result->num_columns(), 3);
 
     // Expected source and (file-local) row index columns
-    auto const src_index = cudf::detail::make_counting_transform_iterator(
+    auto const src_index = cudf::test::iterators::make_host_counting_transform_iterator(
       0, [](cudf::size_type i) { return i / num_rows; });
     auto const expected_src_index = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
       src_index, src_index + nsources * num_rows);
-    auto const row_index = cudf::detail::make_counting_transform_iterator(
+    auto const row_index = cudf::test::iterators::make_host_counting_transform_iterator(
       0, [](cudf::size_type i) -> size_t { return i % num_rows; });
     auto const expected_row_index =
       cudf::test::fixed_width_column_wrapper<size_t>(row_index, row_index + nsources * num_rows);
@@ -2150,11 +2152,11 @@ TEST_F(ParquetChunkedReaderTest, TestRowIndexColumnMultipleSources)
     EXPECT_EQ(result->num_rows(), rows_to_read);
 
     // Expected source and (file-local) row index columns
-    auto const src_index = cudf::detail::make_counting_transform_iterator(
+    auto const src_index = cudf::test::iterators::make_host_counting_transform_iterator(
       rows_to_skip, [](cudf::size_type i) { return i / num_rows; });
     auto const expected_src_index =
       cudf::test::fixed_width_column_wrapper<cudf::size_type>(src_index, src_index + rows_to_read);
-    auto const row_index = cudf::detail::make_counting_transform_iterator(
+    auto const row_index = cudf::test::iterators::make_host_counting_transform_iterator(
       rows_to_skip, [](cudf::size_type i) -> size_t { return i % num_rows; });
     auto const expected_row_index =
       cudf::test::fixed_width_column_wrapper<size_t>(row_index, row_index + rows_to_read);
@@ -2265,17 +2267,17 @@ TEST_F(ParquetReaderTest, BooleanList)
 
     // Validity helpers
     std::bernoulli_distribution bn(0.7f);
-    auto valids =
-      cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
-    auto list_valids =
-      cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 100; });
+    auto valids = cudf::test::iterators::make_host_counting_transform_iterator(
+      0, [&](int index) { return bn(gen); });
+    auto list_valids = cudf::test::iterators::make_host_counting_transform_iterator(
+      0, [&](int index) { return index % 100; });
 
     // str(non-nullable)
     auto col0 = testdata::ascending<cudf::string_view>();
 
     // list<bool(nullable)>(nullable)
     auto bools_iter =
-      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+      cudf::test::iterators::make_host_counting_transform_iterator(0, [](auto i) { return i % 2; });
     auto bools_col =
       cudf::test::fixed_width_column_wrapper<bool>(bools_iter, bools_iter + num_rows, valids);
     auto offsets_iter = cuda::counting_iterator<cudf::size_type>{0};
@@ -2494,7 +2496,7 @@ TEST_F(ParquetChunkedReaderTest, ReadStringsWithRowBounds)
 
   // Generate strings of varying length (~6-10 chars each) to produce enough
   // data for the chunked reader to return more than one chunk.
-  auto const str_iter = cudf::detail::make_counting_transform_iterator(
+  auto const str_iter = cudf::test::iterators::make_host_counting_transform_iterator(
     0, [](cudf::size_type i) { return "str_" + std::to_string(i); });
   std::vector<std::unique_ptr<cudf::column>> input_columns;
   input_columns.emplace_back(strings_col(str_iter, str_iter + num_rows).release());

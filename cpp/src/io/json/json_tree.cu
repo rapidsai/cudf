@@ -35,8 +35,6 @@
 #include <thrust/count.h>
 #include <thrust/fill.h>
 #include <thrust/gather.h>
-#include <thrust/iterator/permutation_iterator.h>
-#include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/remove.h>
 #include <thrust/scan.h>
@@ -500,10 +498,9 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
       stream);
 
     // scatter to node_range_end for only nested end tokens.
-    auto token_indices_it =
-      thrust::make_permutation_iterator(token_indices.begin(), token_id.begin());
-    auto nested_node_range_end_it =
-      thrust::make_transform_output_iterator(node_range_end.begin(), [] __device__(auto i) {
+    auto token_indices_it = cuda::transform_iterator(
+      cuda::make_permutation_iterator(token_indices.begin(), token_id.begin()),
+      [] __device__(auto i) -> SymbolOffsetT {
         // add +1 to include end symbol.
         return i + 1;
       });
@@ -513,7 +510,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                        token_indices_it + num_nested,
                        parent_node_ids.begin(),
                        stencil,
-                       nested_node_range_end_it);
+                       node_range_end.begin());
   }
 
   return {std::move(node_categories),

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -937,9 +937,11 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
   auto col_span       = cudf::device_span<Rep const>(c.begin<Rep>(), c.size());
   auto host_rep_types = cudf::detail::make_host_vector(col_span, cudf::get_default_stream());
 
-  auto to_fp = [&](Rep val) { return T{scaled_integer<Rep>{val, scale_type{c.type().scale()}}}; };
-  auto begin = cuda::transform_iterator(std::cbegin(host_rep_types), to_fp);
-  auto const host_fixed_points = thrust::host_vector<T>(begin, begin + c.size());
+  auto host_fixed_points = thrust::host_vector<T>(c.size());
+  std::transform(
+    host_rep_types.cbegin(), host_rep_types.cend(), host_fixed_points.begin(), [&](Rep val) {
+      return T{scaled_integer<Rep>{val, scale_type{c.type().scale()}}};
+    });
 
   return {std::move(host_fixed_points), bitmask_to_host(c)};
 }
