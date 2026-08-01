@@ -1040,7 +1040,8 @@ TEST_F(StableDistinctKeepAny, ListsOfEmptyStructs)
   // 11. [{}, {}]       ==
   // 12. [{}, {}]
 
-  auto const structs_null_it = nulls_at({0, 1, 2, 3, 4, 5, 6, 7});
+  auto const structs_null_values = nulls_at({0, 1, 2, 3, 4, 5, 6, 7});
+  auto const structs_null_it     = structs_null_values.begin();
   auto [structs_null_mask, structs_null_count] =
     cudf::test::detail::make_null_mask(structs_null_it, structs_null_it + 14);
   auto const structs =
@@ -1050,8 +1051,9 @@ TEST_F(StableDistinctKeepAny, ListsOfEmptyStructs)
                       static_cast<cudf::bitmask_type const*>(structs_null_mask.data()),
                       structs_null_count);
 
-  auto const offsets       = int32s_col{0, 0, 0, 0, 0, 2, 4, 6, 7, 8, 9, 10, 12, 14};
-  auto const lists_null_it = nulls_at({2, 3});
+  auto const offsets           = int32s_col{0, 0, 0, 0, 0, 2, 4, 6, 7, 8, 9, 10, 12, 14};
+  auto const lists_null_values = nulls_at({2, 3});
+  auto const lists_null_it     = lists_null_values.begin();
   auto [lists_null_mask, lists_null_count] =
     cudf::test::detail::make_null_mask(lists_null_it, lists_null_it + 13);
   auto const keys =
