@@ -31,32 +31,18 @@ namespace cudf::io::parquet::detail {
 namespace {
 
 /**
- * @brief Host-side check for whether a column chunk decodes to a plain string column.
+ * @brief Whether a column chunk is a plain BYTE_ARRAY string chunk.
  *
- * Host-side counterpart of `is_string_col` in `parquet_gpu.hpp`
+ * Narrows `is_string_col` (parquet_gpu.hpp) to BYTE_ARRAY only: `is_string_col` also accepts
+ * FIXED_LEN_BYTE_ARRAY, which is typically a binary payload and is excluded from transcode. This is
+ * a string-type classifier -- one of several inputs to eligibility, not the eligibility decision.
  *
  * @param chunk The column chunk descriptor to classify
- * @return True if the chunk is a plain BYTE_ARRAY string chunk eligible for transcode
+ * @return True if the chunk is a plain (non-categorical, non-decimal) BYTE_ARRAY string chunk
  */
 [[nodiscard]] bool is_byte_array_string_chunk(ColumnChunkDesc const& chunk)
 {
-  if (chunk.physical_type != Type::BYTE_ARRAY) { return false; }
-  if (chunk.is_strings_to_cat) { return false; }
-  if (chunk.logical_type.has_value() and chunk.logical_type->type == LogicalType::DECIMAL) {
-    return false;
-  }
-  return true;
-}
-
-/**
- * @brief Whether a data-page encoding that contains a dictionary page.
- *
- * @param enc The data-page encoding to test
- * @return True if the encoding is a dictionary data-page encoding
- */
-[[nodiscard]] bool is_dict_data_page_encoding(Encoding enc)
-{
-  return enc == Encoding::PLAIN_DICTIONARY or enc == Encoding::RLE_DICTIONARY;
+  return is_string_col(chunk) and chunk.physical_type == Type::BYTE_ARRAY;
 }
 
 /**
@@ -139,7 +125,7 @@ void update_from_chunk(column_eligibility& e, ColumnChunkDesc const& chunk)
     if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) != 0) { continue; }
     auto const chunk_idx = page.chunk_idx;
     auto const col_idx   = pass.chunks[chunk_idx].src_col_index;
-    if (not is_dict_data_page_encoding(page.encoding)) { elig[col_idx].all_pages_dict = false; }
+    if (not is_dictionary_encoding(page.encoding)) { elig[col_idx].all_pages_dict = false; }
   }
 
   return elig;

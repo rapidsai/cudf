@@ -85,6 +85,17 @@ CUDF_HOST_DEVICE constexpr bool is_supported_encoding(Encoding enc)
 }
 
 /**
+ * @brief Whether a page encoding references a dictionary page.
+ *
+ * Both PLAIN_DICTIONARY (legacy) and RLE_DICTIONARY mark a data page whose values are indices into
+ * the column chunk's dictionary page.
+ */
+CUDF_HOST_DEVICE constexpr bool is_dictionary_encoding(Encoding enc)
+{
+  return enc == Encoding::PLAIN_DICTIONARY or enc == Encoding::RLE_DICTIONARY;
+}
+
+/**
  * @brief Atomically OR `error` into `error_code`.
  */
 __device__ constexpr void set_error(kernel_error::value_type error,
@@ -665,7 +676,7 @@ struct EncPage {
 /**
  * @brief Test if the given column chunk is in a string column
  */
-__device__ constexpr bool is_string_col(ColumnChunkDesc const& chunk)
+CUDF_HOST_DEVICE constexpr bool is_string_col(ColumnChunkDesc const& chunk)
 {
   // return true for non-hashed byte_array and fixed_len_byte_array that isn't representing
   // a decimal.
