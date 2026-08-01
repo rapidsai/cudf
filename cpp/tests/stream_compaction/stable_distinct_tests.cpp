@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -805,7 +805,8 @@ TEST_F(StableDistinctKeepAny, ListsOfStructs)
   }();
 
   auto const offsets = int32s_col{0, 0, 0, 0, 0, 2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 17, 18};
-  auto const null_it = nulls_at({2, 3});
+  auto const null_it_values = nulls_at({2, 3});
+  auto const null_it        = null_it_values.begin();
 
   auto [null_mask, null_count] = cudf::test::detail::make_null_mask(null_it, null_it + 17);
 
@@ -889,7 +890,8 @@ TEST_F(StableDistinctKeepFirstLastNone, ListsOfStructs)
   }();
 
   auto const offsets = int32s_col{0, 0, 0, 0, 0, 2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 17, 18};
-  auto const null_it = nulls_at({2, 3});
+  auto const null_it_values = nulls_at({2, 3});
+  auto const null_it        = null_it_values.begin();
 
   auto [null_mask, null_count] = cudf::test::detail::make_null_mask(null_it, null_it + 17);
 
@@ -982,7 +984,8 @@ TEST_F(StableDistinctKeepAny, SlicedListsOfStructs)
   }();
 
   auto const offsets = int32s_col{0, 0, 0, 0, 0, 2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 17, 18};
-  auto const null_it = nulls_at({2, 3});
+  auto const null_it_values = nulls_at({2, 3});
+  auto const null_it        = null_it_values.begin();
 
   auto [null_mask, null_count] = cudf::test::detail::make_null_mask(null_it, null_it + 17);
 
@@ -1148,7 +1151,8 @@ TEST_F(StableDistinctKeepAny, StructsOfStructs)
     std::vector<std::unique_ptr<cudf::column>> s1_children;
     s1_children.emplace_back(s2.release());
     s1_children.emplace_back(c.release());
-    auto const null_it = nulls_at({6, 7});
+    auto const null_it_values = nulls_at({6, 7});
+    auto const null_it        = null_it_values.begin();
     return structs_col(std::move(s1_children), std::vector<bool>{null_it, null_it + 9});
   }();
 
@@ -1202,7 +1206,8 @@ TEST_F(StableDistinctKeepAny, SlicedStructsOfStructs)
     std::vector<std::unique_ptr<cudf::column>> s1_children;
     s1_children.emplace_back(s2.release());
     s1_children.emplace_back(c.release());
-    auto const null_it = nulls_at({6, 7});
+    auto const null_it_values = nulls_at({6, 7});
+    auto const null_it        = null_it_values.begin();
     return structs_col(std::move(s1_children), std::vector<bool>{null_it, null_it + 9});
   }();
 

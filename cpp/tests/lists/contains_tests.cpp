@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -1194,8 +1194,9 @@ TYPED_TEST(TypedStructContainsTest, ScalarKeyWithNullLists)
                               1, 0, 1, 1
     };
     // clang-format on
-    auto child               = cudf::test::structs_column_wrapper{{data1, data2}};
-    auto const validity_iter = nulls_at({3, 10});
+    auto child                      = cudf::test::structs_column_wrapper{{data1, data2}};
+    auto const validity_iter_values = nulls_at({3, 10});
+    auto const validity_iter        = validity_iter_values.begin();
     auto [null_mask, null_count] =
       cudf::test::detail::make_null_mask(validity_iter, validity_iter + 11);
     return cudf::make_lists_column(
@@ -1507,7 +1508,8 @@ TYPED_TEST(TypedStructContainsTest, ColumnKeyWithSlicedListsHavingNulls)
     };
     // clang-format on
     auto child = cudf::test::structs_column_wrapper{{data1, data2}, nulls_at({1, 10, 15, 24})};
-    auto const validity_iter = nulls_at({3, 10});
+    auto const validity_iter_values = nulls_at({3, 10});
+    auto const validity_iter        = validity_iter_values.begin();
     auto [null_mask, null_count] =
       cudf::test::detail::make_null_mask(validity_iter, validity_iter + 11);
     return cudf::make_lists_column(

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1252,7 +1252,8 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowOnStructsWithMinPe
   auto expected_offsets_column =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 4, 8, 13, 18, 23, 23, 23, 23, 23}
       .release();
-  auto expected_validity_iter = cudf::test::iterators::nulls_at({5, 6, 7, 8});
+  auto expected_validity_iter_values = cudf::test::iterators::nulls_at({5, 6, 7, 8});
+  auto expected_validity_iter        = expected_validity_iter_values.begin();
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(expected_validity_iter, expected_validity_iter + 9);
   auto expected_result = cudf::make_lists_column(9,

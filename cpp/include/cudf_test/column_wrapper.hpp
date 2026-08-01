@@ -37,11 +37,26 @@
 #include <iterator>
 #include <memory>
 #include <numeric>
+#include <ranges>
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
 namespace test {
 namespace detail {
+
+/**
+ * @brief Return the beginning of a validity range or an unchanged validity iterator.
+ */
+template <typename Validity>
+auto validity_begin(Validity& validity)
+{
+  if constexpr (std::ranges::range<Validity>) {
+    return std::ranges::begin(validity);
+  } else {
+    return validity;
+  }
+}
+
 /**
  * @brief Base class for a wrapper around a `cudf::column`.
  *
@@ -396,7 +411,8 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
     : column_wrapper{}
   {
     auto const size              = cudf::distance(begin, end);
-    auto [null_mask, null_count] = detail::make_null_mask(v, v + size);
+    auto const validity          = detail::validity_begin(v);
+    auto [null_mask, null_count] = detail::make_null_mask(validity, validity + size);
     wrapped.reset(new cudf::column{cudf::data_type{cudf::type_to_id<ElementTo>()},
                                    size,
                                    detail::make_elements<ElementTo, SourceElementT>(begin, end),
@@ -631,7 +647,8 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
     auto const elements          = thrust::host_vector<Rep>(begin, end);
     auto const id                = type_to_id<numeric::fixed_point<Rep, numeric::Radix::BASE_10>>();
     auto const data_type         = cudf::data_type{id, static_cast<int32_t>(scale)};
-    auto [null_mask, null_count] = detail::make_null_mask(v, v + size);
+    auto const validity          = detail::validity_begin(v);
+    auto [null_mask, null_count] = detail::make_null_mask(validity, validity + size);
     wrapped.reset(new cudf::column{
       data_type,
       size,
@@ -809,8 +826,9 @@ class strings_column_wrapper : public detail::column_wrapper {
       wrapped = cudf::make_empty_column(cudf::type_id::STRING);
       return;
     }
-    auto [chars, offsets]        = detail::make_chars_and_offsets(begin, end, v);
-    auto [null_mask, null_count] = detail::make_null_mask_vector(v, v + num_strings);
+    auto const validity          = detail::validity_begin(v);
+    auto [chars, offsets]        = detail::make_chars_and_offsets(begin, end, validity);
+    auto [null_mask, null_count] = detail::make_null_mask_vector(validity, validity + num_strings);
     auto d_chars                 = cudf::detail::make_device_uvector_async(
       chars, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());
     auto d_offsets = std::make_unique<cudf::column>(
@@ -1534,9 +1552,10 @@ class lists_column_wrapper : public detail::column_wrapper {
     : column_wrapper{}
   {
     std::vector<bool> validity;
+    auto const validity_iter = detail::validity_begin(v);
     std::transform(elements.begin(),
                    elements.end(),
-                   v,
+                   validity_iter,
                    std::back_inserter(validity),
                    [](lists_column_wrapper const& l, bool valid) { return valid; });
     build_from_nested(elements, validity);
@@ -1950,7 +1969,8 @@ class structs_column_wrapper : public detail::column_wrapper {
                  "All struct member columns must have the same row count.");
 
     std::vector<bool> validity(num_rows);
-    std::copy(validity_iterator, validity_iterator + num_rows, validity.begin());
+    auto const validity_iter = detail::validity_begin(validity_iterator);
+    std::copy(validity_iter, validity_iter + num_rows, validity.begin());
 
     init(std::move(child_columns), validity);
   }
