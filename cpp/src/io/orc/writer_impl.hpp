@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -23,6 +23,7 @@
 #include <cuda/iterator>
 #include <thrust/host_vector.h>
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -169,7 +170,7 @@ struct persisted_statistics {
     num_rows = 0;
   }
 
-  void persist(int num_table_rows,
+  void persist(uint64_t num_table_rows,
                single_write_mode write_mode,
                intermediate_statistics&& intermediate_stats,
                rmm::cuda_stream_view stream);
@@ -179,7 +180,7 @@ struct persisted_statistics {
   std::vector<rmm::device_uvector<char>> string_pools;
   std::vector<statistics_dtype> stats_dtypes;
   std::vector<data_type> col_types;
-  int num_rows = 0;
+  uint64_t num_rows = 0;
 };
 
 /**

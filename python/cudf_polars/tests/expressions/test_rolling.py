@@ -358,7 +358,6 @@ def test_rank_over_with_null_values(
 @pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
 @pytest.mark.parametrize("descending", [False, True])
 @pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
-@pytest.mark.timeout(120)
 def test_rank_over_with_null_group_keys(
     engine: pl.GPUEngine,
     df: pl.LazyFrame,
@@ -440,6 +439,66 @@ def test_cum_sum_over(
 ) -> None:
     q = df.select(expr.cum_sum().over(group_key, order_by=order_by))
     assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize("n", [1, -1, 2])
+@pytest.mark.parametrize(
+    "expr,group_key",
+    [
+        (pl.col("x"), "g"),
+        (pl.when((pl.col("x") % 2) == 0).then(None).otherwise(pl.col("x")), "g"),
+        (pl.col("x"), "g_null"),
+    ],
+)
+@pytest.mark.parametrize("order_by", ["x2", ["g2", pl.col("x2") * 2]])
+def test_shift_over(
+    engine: pl.GPUEngine,
+    df: pl.LazyFrame,
+    n: int,
+    expr: pl.Expr,
+    group_key: str,
+    order_by: str | list[str | pl.Expr],
+) -> None:
+    q = df.select(expr.shift(n).over(group_key, order_by=order_by))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize("n,fill_value", [(1, 0), (-1, 99)])
+def test_shift_over_fill_value(
+    engine: pl.GPUEngine,
+    df: pl.LazyFrame,
+    n: int,
+    fill_value: int,
+) -> None:
+    q = df.select(pl.col("x").shift(n, fill_value=fill_value).over("g", order_by="x2"))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("x").shift(pl.col("x2").min()).over("g"),
+        pl.col("x").shift(1, fill_value=pl.col("x2").min()).over("g"),
+    ],
+    ids=["nonliteral_offset", "nonliteral_fill_value"],
+)
+def test_shift_over_nonliteral_args_raises(
+    engine: pl.GPUEngine,
+    df: pl.LazyFrame,
+    expr: pl.Expr,
+) -> None:
+    q = df.select(expr)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+@pytest.mark.parametrize("n", [1, -1])
+def test_shift_over_without_order_by(
+    engine_raise_on_fail: pl.GPUEngine,
+    df: pl.LazyFrame,
+    n: int,
+) -> None:
+    q = df.select(pl.col("x").shift(n).over("g"))
+    assert_gpu_result_equal(q, engine=engine_raise_on_fail)
 
 
 @pytest.mark.parametrize(

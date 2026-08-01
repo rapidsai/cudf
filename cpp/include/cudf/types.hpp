@@ -38,14 +38,6 @@
  * @brief Type declarations for libcudf.
  */
 
-// Forward declarations
-/// @cond
-namespace rmm {
-class device_buffer;
-/// @endcond
-
-}  // namespace rmm
-
 namespace CUDF_EXPORT cudf {
 // Forward declaration
 class column;
@@ -79,7 +71,6 @@ class mutable_table_view;
 /**
  * @addtogroup utility_types
  * @{
- * @file
  */
 
 using size_type         = int32_t;   ///< Row index type for columns and tables

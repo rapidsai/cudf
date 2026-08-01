@@ -419,11 +419,8 @@ include(cmake/thirdparty/get_xxhash.cmake)
 # find zstd
 include(cmake/thirdparty/get_zstd.cmake)
 
-# Build librtcx as a subdirectory (zstd and nvtx3 are already available at this point)
-add_subdirectory(librtcx)
-
-# JIT Embedding helper functions
-include(librtcx/embed.cmake)
+# Fetch librtcx via CPM (zstd and nvtx3 are already available at this point)
+include(cmake/thirdparty/get_rtcx.cmake)
 
 # Pre-compiled fragment management helper functions
 include(cmake/Modules/AddFragment.cmake)
@@ -432,7 +429,7 @@ include(cmake/Modules/AddFragment.cmake)
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
-  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow zstd)
+  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow zstd rtcx)
 
   foreach(METADATA_KIND IN LISTS METADATA_KINDS)
     foreach(dep IN LISTS dependencies)
@@ -443,18 +440,13 @@ if(NOT BUILD_SHARED_LIBS)
   if(TARGET conda_env)
     install(TARGETS conda_env EXPORT cudf-exports)
   endif()
-  install(
-    TARGETS rtcx
-    EXPORT cudf-exports
-    DESTINATION ${lib_dir}
-  )
 endif()
 
 rtcx_add_embed(cudf_cuda_embed)
 
 rtcx_embed_includes(
-  cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/librtcx/libcxx DEST_DIRECTORY
-  librtcx/libcxx INCLUDE_DIRECTORIES librtcx/libcxx
+  cudf_cuda_embed SOURCE_DIRECTORY ${rtcx_SOURCE_DIR}/libcxx DEST_DIRECTORY librtcx/libcxx
+  INCLUDE_DIRECTORIES librtcx/libcxx
 )
 
 rtcx_embed_includes(
@@ -711,6 +703,7 @@ add_library(
   src/groupby/sort/host_udf_aggregation.cpp
   src/groupby/sort/scan.cpp
   src/groupby/sort/sort_helper.cu
+  src/groupby/sort/sort_helper_nested.cu
   src/groupby/streaming_groupby.cpp
   src/groupby/streaming_groupby/aggregate.cu
   src/groupby/streaming_groupby/impl.cu
@@ -825,6 +818,7 @@ add_library(
   src/io/parquet/writer_impl.cu
   src/io/parquet/writer_impl_helpers.cpp
   src/io/parquet/decode_fixed.cu
+  src/io/parquet/decode_pruned_pages.cu
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
   src/io/text/byte_range_info.cpp
@@ -849,6 +843,7 @@ add_library(
   src/jit/util.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
+  src/join/direct_join.cu
   src/join/distinct_hash_join.cu
   src/join/filter_join_indices/filter_join_indices.cu
   src/join/filter_join_indices/filter_join_indices_jit.cu
@@ -860,7 +855,11 @@ add_library(
   src/join/filter_join_indices/filter_join_indices_output_size_kernel_null_complex.cu
   src/join/filter_join_indices/filter_join_indices_output_size_kernel_null_primitive.cu
   src/join/filter_join_indices/filter_join_indices_output_size_kernel_primitive.cu
-  src/join/filtered_join.cu
+  src/join/filtered_join/filtered_join.cu
+  src/join/filtered_join/filtered_join_flat.cu
+  src/join/filtered_join/filtered_join_nested.cu
+  src/join/filtered_join/filtered_join_nested_query.cu
+  src/join/filtered_join/filtered_join_primitive.cu
   src/join/hash_join/finalize_partitioned_full_join.cpp
   src/join/hash_join/full_join_match_context.cpp
   src/join/hash_join/full_join_retrieve.cu
@@ -887,12 +886,8 @@ add_library(
   src/join/key_remapping.cu
   src/join/mark_join.cu
   src/join/mixed_join.cu
-  src/join/mixed_join_kernel.cu
-  src/join/mixed_join_kernel_nulls.cu
   src/join/mixed_join_kernels_semi.cu
   src/join/mixed_join_semi.cu
-  src/join/mixed_join_size_kernel.cu
-  src/join/mixed_join_size_kernel_nulls.cu
   src/join/sort_merge_join.cu
   src/json/json_path.cu
   src/lists/contains.cu
@@ -997,8 +992,6 @@ add_library(
   src/search/contains_scalar.cu
   src/search/contains_table.cu
   src/search/contains_table_impl.cu
-  src/search/contains_table_impl_nested.cu
-  src/search/contains_table_impl_primitive.cu
   src/search/search_ordered.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
@@ -1053,6 +1046,8 @@ add_library(
   src/strings/merge/merge.cu
   src/strings/padding.cu
   src/strings/positions.cu
+  src/strings/regex/gkexec.cpp
+  src/strings/regex/glushkov_regcomp.cpp
   src/strings/regex/regcomp.cpp
   src/strings/regex/regexec.cpp
   src/strings/regex/regex_program.cpp
@@ -1215,7 +1210,6 @@ target_include_directories(
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
           "$<BUILD_INTERFACE:${ZSTD_INCLUDE_DIR}>"
-          "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/librtcx>"
           "$<BUILD_INTERFACE:${cudf_cuda_embed_INCLUDE_DIRS}>"
           "$<BUILD_INTERFACE:${cudf_fragments_INCLUDE_DIRS}>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
@@ -1427,7 +1421,7 @@ if(CUDF_BUILD_TESTUTIL)
   )
 
   target_link_libraries(
-    cudftestutil INTERFACE $<BUILD_LOCAL_INTERFACE:cuco::cuco> Threads::Threads cudf
+    cudftestutil INTERFACE $<BUILD_LOCAL_INTERFACE:cuco::cuco> Threads::Threads cudf rmm::rmm
                            cudftest_default_stream $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 

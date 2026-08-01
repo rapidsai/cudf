@@ -38,8 +38,9 @@ from rapidsmpf.streaming.core.message import Message
 import cudf_polars.dsl.tracing
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Cast, Col, NamedExpr, TemporalFunction
-from cudf_polars.dsl.ir import Cache, Filter, GroupBy, HStack, Join, Projection, Select
+from cudf_polars.dsl.ir import Filter, GroupBy, HStack, Join, Projection, Select
 from cudf_polars.dsl.tracing import Scope
+from cudf_polars.dsl.utils.column_domain import column_domain_bindings
 from cudf_polars.dsl.utils.naming import names_to_indices
 from cudf_polars.streaming.actor_graph.collectives.allgather import AllGatherManager
 from cudf_polars.streaming.actor_graph.tracing import ActorTracer, send_chunk
@@ -221,6 +222,27 @@ async def gather_in_task_group(*coroutines: Coroutine[Any, Any, Any]) -> list[An
     return [task.result() for task in tasks]
 
 
+async def shutdown_channels(context: Context, *channels: Channel[Any]) -> None:
+    """Shutdown data and metadata paths for all channels."""
+    await gather_in_task_group(
+        *itertools.chain.from_iterable(
+            (ch.shutdown(context), ch.shutdown_metadata(context)) for ch in channels
+        )
+    )
+
+
+@asynccontextmanager
+async def shutdown_channels_on_error(
+    context: Context, *channels: Channel[Any]
+) -> AsyncIterator[None]:
+    """Shutdown channels on error without actor tracing."""
+    try:
+        yield
+    except BaseException:
+        await shutdown_channels(context, *channels)
+        raise
+
+
 @asynccontextmanager
 async def shutdown_on_error(
     context: Context,
@@ -229,10 +251,10 @@ async def shutdown_on_error(
     ir_context: IRExecutionContext | None = None,
 ) -> AsyncIterator[ActorTracer | None]:
     """
-    Shutdown on error for rapidsmpf.
+    Actor-level shutdown and tracing for rapidsmpf.
 
-    This context manager handles channel cleanup on errors and optionally
-    emits structlog tracing events when LOG_TRACES is enabled.
+    This context manager handles actor channel cleanup on errors and emits
+    structlog tracing events.
 
     Parameters
     ----------
@@ -271,12 +293,7 @@ async def shutdown_on_error(
         try:
             yield tracer
         except BaseException:
-            await gather_in_task_group(
-                *itertools.chain.from_iterable(
-                    (ch.shutdown(context), ch.shutdown_metadata(context))
-                    for ch in channels
-                )
-            )
+            await shutdown_channels(context, *channels)
             raise
         finally:
             stop = time.monotonic_ns()
@@ -430,9 +447,8 @@ def _derived_ordering(
 
 def _select_column_targets(select: Select) -> dict[str, dict[str, None]]:
     old_to_new_names: defaultdict[str, dict[str, None]] = defaultdict(dict)
-    for ne in select.exprs:
-        if isinstance(ne.value, Col):
-            old_to_new_names[ne.value.name][ne.name] = None
+    for output_name, source in column_domain_bindings(select).items():
+        old_to_new_names[source.name][output_name] = None
     return dict(old_to_new_names)
 
 
@@ -587,7 +603,7 @@ def maybe_remap_partitioning(
             ),
             local=_remap_scheme_simple(ir, partitioning.local, ir.children[0]),
         )
-    if isinstance(ir, (Cache, Join, Projection, Filter)):
+    if isinstance(ir, (Join, Projection, Filter)):
         child = child_ir if child_ir is not None else ir.children[0]
         return Partitioning(
             inter_rank=_remap_scheme_simple(ir, partitioning.inter_rank, child),

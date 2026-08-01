@@ -16,13 +16,16 @@
 
 #include <memory>
 
+/**
+ * @file
+ * @brief Class and APIs for remapping join keys to unique integer IDs
+ */
+
 namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup column_join
  * @{
- * @file
- * @brief Class and APIs for remapping join keys to unique integer IDs
  */
 
 /**
@@ -101,11 +104,14 @@ class key_remapping {
    *        and get_max_duplicate_count(). If NO, skip metrics computation for better performance;
    *        calling get_distinct_count() or get_max_duplicate_count() will throw.
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the internal hash table
    */
   key_remapping(cudf::table_view const& right,
                 null_equality compare_nulls   = null_equality::EQUAL,
                 cudf::compute_metrics metrics = cudf::compute_metrics::YES,
-                rmm::cuda_stream_view stream  = cudf::get_default_stream());
+                rmm::cuda_stream_view stream  = cudf::get_default_stream(),
+                cuda::mr::any_resource<cuda::mr::device_accessible> mr =
+                  cudf::get_current_device_resource_ref());
 
   /**
    * @brief Remap right keys to integer IDs.

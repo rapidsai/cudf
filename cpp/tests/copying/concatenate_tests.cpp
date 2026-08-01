@@ -229,6 +229,15 @@ TEST_F(TableTest, ConcatenateTables)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*concat_table, gold_table);
 }
 
+TEST_F(TableTest, ConcatenateZeroColumnTables)
+{
+  TView t1{std::vector<column_view>{}, 7};
+  TView t2{std::vector<column_view>{}, 5};
+  auto concat_table = cudf::concatenate(std::vector<TView>({t1, t2}));
+  EXPECT_EQ(concat_table->num_columns(), 0);
+  EXPECT_EQ(concat_table->num_rows(), 12);
+}
+
 TEST_F(TableTest, ConcatenateTablesWithOffsets)
 {
   column_wrapper<int32_t> col1_1{{5, 4, 3, 5, 8, 5, 6}};

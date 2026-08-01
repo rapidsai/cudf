@@ -50,8 +50,9 @@ std::vector<cudf::table_view> split(cudf::table_view const& input,
                                     std::span<size_type const> splits,
                                     rmm::cuda_stream_view stream)
 {
-  if (input.num_columns() == 0) { return {}; }
-  return split(input, input.column(0).size(), splits, stream);
+  // A genuinely empty table (no columns and no rows) has nothing to split.
+  if (input.num_columns() == 0 && input.num_rows() == 0) { return {}; }
+  return split(input, input.num_rows(), splits, stream);
 }
 
 std::vector<column_view> split(column_view const& input,
