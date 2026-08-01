@@ -25,7 +25,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
   // These static fields should only ever be accessed when class-synchronized.
   // Do NOT use singleton_ directly!  Use the getSingleton accessor instead.
   private static volatile PinnedMemoryPool singleton_ = null;
-  private static Future<PinnedMemoryPool> initFuture = null;
+  private static volatile Future<PinnedMemoryPool> initFuture = null;
   private long poolHandle;
   private long poolSize;
 
@@ -68,19 +68,19 @@ public final class PinnedMemoryPool implements AutoCloseable {
   }
 
   private static PinnedMemoryPool getSingleton() {
-    if (singleton_ == null) {
-      if (initFuture == null) {
-        return null;
-      }
-
+    if (singleton_ == null && initFuture != null) {
       synchronized (PinnedMemoryPool.class) {
-        if (singleton_ == null) {
+        if (singleton_ == null && initFuture != null) {
           try {
             singleton_ = initFuture.get();
+            initFuture = null;
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted initializing pinned memory pool", e);
           } catch (Exception e) {
+            initFuture = null;
             throw new RuntimeException("Error initializing pinned memory pool", e);
           }
-          initFuture = null;
         }
       }
     }
@@ -129,13 +129,13 @@ public final class PinnedMemoryPool implements AutoCloseable {
    * @param poolSize size of the pool to initialize.
    * @param gpuId gpu id to set to get memory pool from, -1 means to use default
    * @param setCudfPinnedPoolMemoryResource true if this pinned pool should be used by cuDF for pinned memory
-   * @param initializationThreads number of threads used to initialize the pool's backing memory.
-   *                              A value of 1 initializes the backing memory using {@code cudaHostAlloc}.
-   *                              Values greater than 1 instead request huge pages and pre-touch pages
-   *                              concurrently before pinning for faster initialization. This does not
-   *                              affect subsequent suballocator behavior. Note: on multi-NUMA systems,
-   *                              multithreaded initialization may scatter pages across nodes if placement
-   *                              is not constrained in advance. Pages cannot be migrated once pinned.
+   * @param initializationThreads requested number of threads used to initialize the pool's backing memory,
+   *                              capped at reported hardware concurrency. A value of 1 initializes the
+   *                              backing memory using {@code cudaHostAlloc}. Values greater than 1 instead
+   *                              request huge pages and pre-touch pages concurrently before pinning for
+   *                              faster initialization. This does not affect subsequent suballocator behavior.
+   * @note on multi-NUMA systems, multithreaded initialization may scatter pages across nodes if placement
+   *       is not constrained in advance. Pages cannot be migrated once pinned.
    */
   public static synchronized void initialize(long poolSize, int gpuId, boolean setCudfPinnedPoolMemoryResource,
       int initializationThreads) {

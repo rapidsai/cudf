@@ -695,7 +695,7 @@ public class Rmm {
   public static native long newPinnedPoolMemoryResource(long initSize, long maxSize);
 
   static native long newParallelPinnedPoolMemoryResource(
-      long poolSize, int parallelInitializationThreads);
+      long poolSize, int initializationThreads);
 
   public static native long setCudfPinnedPoolMemoryResource(long poolPtr);
 

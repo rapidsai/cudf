@@ -13,6 +13,7 @@
 
 #include <rmm/aligned.hpp>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/detail/error.hpp>
 #include <rmm/error.hpp>
 #include <rmm/mr/aligned_resource_adaptor.hpp>
 #include <rmm/mr/arena_memory_resource.hpp>
@@ -716,9 +717,13 @@ class parallel_init_pinned_host_memory_resource final {
   {
     // Partition by system page size. With huge pages this may touch more than necessary,
     // but is low overhead (just TLB hits) and ensures all pages are touched if madvise was ignored.
-    auto const page_size    = system_page_size();
-    auto const page_count   = bytes / page_size;
-    auto const thread_count = std::min(requested_threads, page_count);
+    auto const page_size        = system_page_size();
+    auto const page_count       = bytes / page_size;
+    auto const hardware_threads = std::thread::hardware_concurrency();
+    auto thread_count           = std::min(requested_threads, page_count);
+    if (hardware_threads != 0) {
+      thread_count = std::min(thread_count, static_cast<std::size_t>(hardware_threads));
+    }
 
     std::vector<std::thread> workers;
     workers.reserve(thread_count);
