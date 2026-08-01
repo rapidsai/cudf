@@ -48,6 +48,19 @@ struct metadata : public metadata_base {
 class aggregate_reader_metadata : public aggregate_reader_metadata_base {
  private:
   /**
+   * @brief Check whether selected columns have column and offset indexes
+   *
+   * Schema indices are mapped to each source before locating the column chunks.
+   *
+   * @param row_group_indices Row group indices, one vector per source
+   * @param schema_indices Schema indices from the first source
+   * @return A pair indicating column-index and offset-index presence, respectively
+   */
+  [[nodiscard]] std::pair<bool, bool> page_index_presence(
+    std::span<std::vector<size_type> const> row_group_indices,
+    std::span<size_type const> schema_indices) const;
+
+  /**
    * @brief Filters the row groups using dictionary pages
    *
    * @param chunks Host device span of column chunk descriptors, one per column chunk with
@@ -158,12 +171,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    *
    * @param payload_column_names List of paths of select payload column names, if any
    * @param filter_column_names List of paths of column names present only in filter, if any
-   * @param include_index Whether to always include the PANDAS index column(s)
-   * @param strings_to_categorical Type conversion parameter
-   * @param ignore_missing_columns Whether to ignore non-existent columns
-   * @param timestamp_type_id Type conversion parameter
-   * @param decimal_type_id Type conversion parameter
-   * @param case_sensitive_names Boolean indicating if column names are case sensitive
+   * @param selection_options Bundled column selection options
    *
    * @return input column information, output column buffers, list of output column schema
    * indices
@@ -172,12 +180,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
     tuple<std::vector<input_column_info>, std::vector<inline_column_buffer>, std::vector<size_type>>
     select_payload_columns(std::optional<std::vector<std::string>> const& payload_column_names,
                            std::optional<std::vector<std::string>> const& filter_column_names,
-                           bool include_index,
-                           bool strings_to_categorical,
-                           bool ignore_missing_columns,
-                           type_id timestamp_type_id,
-                           type_id decimal_type_id,
-                           bool case_sensitive_names);
+                           parquet::detail::column_selection_options const& selection_options);
 
   /**
    * @brief Filters row groups such that only the row groups that start within the byte range
@@ -239,13 +242,15 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param output_column_schemas schema indices of output columns
    * @param filter AST expression to filter row groups based on dictionary pages
    *
-   * @return Byte ranges of dictionary pages, one input column chunk with (in)equality predicate
+   * @return A pair of vectors containing dictionary page byte ranges and corresponding source
+   *         indices
    */
-  [[nodiscard]] std::vector<cudf::io::text::byte_range_info> get_dictionary_page_bytes(
-    std::span<std::vector<size_type> const> row_group_indices,
-    std::span<data_type const> output_dtypes,
-    std::span<cudf::size_type const> output_column_schemas,
-    std::reference_wrapper<ast::expression const> filter);
+  [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
+                          std::vector<cudf::size_type>>
+  dictionary_pages_byte_ranges(std::span<std::vector<size_type> const> row_group_indices,
+                               std::span<data_type const> output_dtypes,
+                               std::span<cudf::size_type const> output_column_schemas,
+                               std::reference_wrapper<ast::expression const> filter);
 
   /**
    * @brief Filter the row groups using dictionaries based on predicate filter
@@ -294,6 +299,20 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
     std::span<cudf::size_type const> output_column_schemas,
     std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Builds a row mask with all rows set to true
+   *
+   * @param row_group_indices Input row groups indices
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned column's device memory
+   *
+   * @return A boolean column representing a mask of rows with all rows set to true
+   */
+  [[nodiscard]] std::unique_ptr<cudf::column> build_all_true_row_mask(
+    std::span<std::vector<size_type> const> row_group_indices,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
 
   /**
    * @brief Builds a row mask based on the data pages that survive page-level statistics based on

@@ -351,7 +351,7 @@ class offset_column_references : public named_to_reference_converter {
  */
 [[nodiscard]] std::unordered_map<cudf::size_type, std::string> map_column_indices_to_names(
   cudf::io::parquet_reader_options const& options,
-  std::vector<SchemaElement> const& schema_tree,
+  std::span<SchemaElement const> schema_tree,
   bool case_sensitive_names);
 
 /**

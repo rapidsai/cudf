@@ -13,13 +13,16 @@
 
 #include <cuda/std/type_traits>
 
+/**
+ * @file
+ * @brief Type traits for classifying and querying properties of cudf column and scalar types.
+ */
+
 namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup utility_types
  * @{
- * @file
- * @brief Type traits for classifying and querying properties of cudf column and scalar types.
  */
 
 /// Utility metafunction that maps a sequence of any types to the type void.

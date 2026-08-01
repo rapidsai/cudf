@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -177,7 +177,7 @@ void reader_impl::setup_next_pass(read_mode mode)
     // if we are doing subpass reading, generate more accurate num_row estimates for list columns.
     // this helps us to generate more accurate subpass splits.
     if (pass.has_compressed_data && _input_pass_read_limit != 0) {
-      if (not _has_page_index) {
+      if (not _has_offset_index) {
         generate_list_column_row_counts(is_estimate_row_counts::YES);
       } else {
         generate_list_column_row_counts(is_estimate_row_counts::NO);
@@ -295,7 +295,7 @@ void reader_impl::setup_next_subpass(read_mode mode)
                                 remaining_read_limit,
                                 num_columns,
                                 is_first_subpass,
-                                _has_page_index,
+                                _has_offset_index,
                                 _stream);
   }();
 
@@ -422,7 +422,7 @@ void reader_impl::create_global_chunk_info()
   // Mapping of input column to page index column
   std::vector<size_type> column_mapping;
 
-  if (_has_page_index and not row_groups_info.empty()) {
+  if (_has_offset_index and not row_groups_info.empty()) {
     // use first row group to define mappings (assumes same schema for each file)
     auto const& rg      = row_groups_info[0];
     auto const& columns = _metadata->get_row_group(rg.index, rg.source_index).columns;
@@ -480,7 +480,7 @@ void reader_impl::create_global_chunk_info()
 
       // grab the column_chunk_info for each chunk (if it exists)
       column_chunk_info const* const chunk_info =
-        _has_page_index ? &rg.column_chunks.value()[column_mapping[i]] : nullptr;
+        _has_offset_index ? &rg.column_chunks.value()[column_mapping[i]] : nullptr;
 
       chunks.emplace_back(col_meta.total_compressed_size,
                           nullptr,

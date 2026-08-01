@@ -7,11 +7,13 @@ from cudf_streaming.channel_metadata cimport (
     HashScheme,
     OrderKey,
     OrderScheme,
+    Ordering,
     Partitioning,
     cpp_ChannelMetadata,
     cpp_HashScheme,
     cpp_OrderKey,
     cpp_OrderScheme,
+    cpp_Ordering,
     cpp_Partitioning,
     cpp_PartitioningSpec,
 )

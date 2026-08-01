@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,6 +9,11 @@
 
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
+
+#include <cooperative_groups.h>
+#include <cuda/barrier>
+#include <cuda/std/iterator>
+#include <cuda/std/memory>
 
 namespace cudf::io::parquet::detail {
 
@@ -178,6 +183,17 @@ struct rle_stream {
   int fill_index;
   int decode_index;
 
+  // Optional shared-memory staging of the encoded byte stream. When init() is
+  // given a scratch buffer large enough to hold [start, end), the stream is
+  // copied into it once (block-cooperatively) and cur/end are rebased into
+  // shared memory. This turns the serial run-header parse that dominates
+  // fill_run_batch() from a chain of dependent L2 loads into shared-memory
+  // loads. It stages *raw encoded bytes*, so it is level_t- and
+  // level_bits-agnostic: definition/repetition levels, dictionary indices, and
+  // boolean streams all benefit with identical code. Streams that do not fit
+  // the budget transparently fall back to parsing from global.
+  static constexpr int smem_stage_size = 8 * 1024;
+
   __device__ rle_stream(rle_run* _runs) : runs(_runs) {}
 
   __device__ inline bool is_last_decode_warp(int warp_id)
@@ -185,11 +201,15 @@ struct rle_stream {
     return warp_id == num_rle_stream_decode_warps;
   }
 
-  __device__ void init(int _level_bits,
+  template <typename Group>
+  __device__ void init(Group const& group,
+                       int _level_bits,
                        uint8_t const* _start,
                        uint8_t const* _end,
                        level_t* _output,
-                       int _total_values)
+                       int _total_values,
+                       uint8_t* _smem_stage                                   = nullptr,
+                       cuda::barrier<cuda::thread_scope_block>* _copy_barrier = nullptr)
   {
     level_bits = _level_bits;
     cur        = _start;
@@ -203,6 +223,26 @@ struct rle_stream {
     cur_values   = 0;
     fill_index   = 0;
     decode_index = -1;  // signals the first iteration. Nothing to decode.
+
+    // If smem staging is active, use cuda::memcpy_async for a
+    // block-cooperative global-to-shared copy that automatically dispatches to
+    // the best copy path (cp.async, cp.async.bulk, or TMA) depending on the
+    // hardware. Callers must provide a copy_barrier when using smem staging,
+    // and must issue copy_barrier->arrive_and_wait() after init() to complete
+    // the async copy.
+    if (_smem_stage != nullptr) {
+      auto* const smem_stage =
+        static_cast<uint8_t const*>(cuda::std::assume_aligned<16>(_smem_stage));
+      auto const len = static_cast<int>(cuda::std::distance(_start, _end));
+      if (len > 0 && len <= smem_stage_size) {
+        cuda::memcpy_async(group, _smem_stage, _start, static_cast<size_t>(len), *_copy_barrier);
+        // Rebase the parse cursor and end onto the shared copy. All downstream
+        // reads (get_rle_run_info, decode, skip_runs) follow cur/end and now hit
+        // shared memory with no other changes required.
+        cur = smem_stage;
+        end = smem_stage + len;
+      }
+    }
   }
 
   __device__ inline int get_rle_run_info(rle_run& run)

@@ -219,6 +219,40 @@ struct SkipRowTest {
   }
 };
 
+void expect_selected_nested_empty_struct_table(cudf::table_view expected, cudf::table_view actual)
+{
+  ASSERT_EQ(1, actual.num_columns());
+  ASSERT_EQ(1, actual.column(0).num_children());
+  ASSERT_EQ(cudf::type_id::STRUCT, actual.column(0).child(0).type().id());
+  ASSERT_EQ(0, actual.column(0).child(0).num_children());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, actual);
+}
+
+void expect_selected_nested_empty_struct_round_trip(std::unique_ptr<cudf::column> input_column,
+                                                    std::string const& filename)
+{
+  std::vector<std::unique_ptr<cudf::column>> input_columns;
+  input_columns.emplace_back(std::move(input_column));
+
+  auto expected = std::make_unique<cudf::table>(std::move(input_columns));
+  cudf::io::table_input_metadata metadata(expected->view());
+  metadata.column_metadata[0].set_name("name");
+  metadata.column_metadata[0].child(0).set_name("empty");
+
+  auto const filepath = temp_env->get_temp_filepath(filename);
+  auto const write_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, *expected)
+      .metadata(std::move(metadata))
+      .build();
+  cudf::io::write_orc(write_opts);
+
+  auto const read_opts = cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath})
+                           .columns({"name"})
+                           .build();
+  auto result = cudf::io::read_orc(read_opts);
+  expect_selected_nested_empty_struct_table(expected->view(), result.tbl->view());
+}
+
 }  // namespace
 
 TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn)
@@ -707,6 +741,23 @@ TEST_F(OrcChunkedWriterTest, SimpleTable)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
+TEST_F(OrcChunkedWriterTest, RootStatisticsAccumulateRows)
+{
+  auto table1 = create_random_fixed_table<int>(1, 5, false);
+  auto table2 = create_random_fixed_table<int>(1, 1, false);
+  auto table3 = create_random_fixed_table<int>(1, 0, false);
+
+  auto filepath = temp_env->get_temp_filepath("ChunkedRootStatistics.orc");
+  cudf::io::chunked_orc_writer_options opts =
+    cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{filepath});
+  cudf::io::orc_chunked_writer(opts).write(*table1).write(*table2).write(*table3);
+
+  auto const stats = cudf::io::read_parsed_orc_statistics(cudf::io::source_info{filepath});
+  ASSERT_FALSE(stats.file_stats.empty());
+  ASSERT_TRUE(stats.file_stats.front().number_of_values.has_value());
+  EXPECT_EQ(*stats.file_stats.front().number_of_values, 6);
+}
+
 TEST_F(OrcChunkedWriterTest, LargeTables)
 {
   srand(31337);
@@ -1141,6 +1192,28 @@ TEST_F(OrcWriterTest, SlicedValidMask)
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
+TEST_F(OrcReaderTest, ZeroColumnsPreservesRowCount)
+{
+  GTEST_SKIP() << "Zero-column / N-row ORC reads are not yet supported. See "
+                  "https://github.com/rapidsai/cudf/issues/22935).";
+
+  constexpr cudf::size_type num_rows = 8;
+  cudf::test::fixed_width_column_wrapper<int32_t> col{0, 1, 2, 3, 4, 5, 6, 7};
+  cudf::table_view input{{col}};
+
+  auto filepath = temp_env->get_temp_filepath("OrcZeroColumns.orc");
+  cudf::io::write_orc(cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, input));
+
+  // Project no columns: the result should be (num_rows, 0), not (0, 0).
+  auto in_opts = cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath})
+                   .columns(std::vector<std::string>{})
+                   .build();
+  auto result = cudf::io::read_orc(in_opts);
+
+  EXPECT_EQ(result.tbl->view().num_columns(), 0);
+  EXPECT_EQ(result.tbl->view().num_rows(), num_rows);
+}
+
 TEST_F(OrcReaderTest, SingleInputs)
 {
   srand(31533);
@@ -1527,6 +1600,46 @@ TEST_F(OrcReaderTest, NestedColumnSelection)
   int64_col expected_col{child_col2_data.begin(), child_col2_data.end(), validity};
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_col, result.tbl->view().column(0).child(0));
   ASSERT_EQ("field_b", result.metadata.schema_info[0].children[0].name);
+}
+
+TEST_F(OrcReaderTest, NestedEmptyStructColumnSelection)
+{
+  auto const validity = std::vector<bool>{true, false};
+  auto const num_rows = static_cast<cudf::size_type>(validity.size());
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(validity.begin(), validity.end());
+
+  std::vector<std::unique_ptr<cudf::column>> struct_children;
+  struct_children.emplace_back(cudf::make_structs_column(num_rows, {}, 0, {}));
+  auto input_column = cudf::make_structs_column(
+    num_rows, std::move(struct_children), null_count, std::move(null_mask));
+  ASSERT_TRUE(input_column->nullable());
+  ASSERT_EQ(null_count, input_column->null_count());
+  // Struct parent nulls are superimposed on their children by make_structs_column.
+  ASSERT_TRUE(input_column->child(0).nullable());
+  ASSERT_EQ(null_count, input_column->child(0).null_count());
+
+  expect_selected_nested_empty_struct_round_trip(std::move(input_column),
+                                                 "reader_nested_empty_struct_outer_nullable.orc");
+}
+
+TEST_F(OrcReaderTest, NullableEmptyStructChildColumnSelection)
+{
+  auto const validity = std::vector<bool>{true, false};
+  auto const num_rows = static_cast<cudf::size_type>(validity.size());
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(validity.begin(), validity.end());
+
+  std::vector<std::unique_ptr<cudf::column>> struct_children;
+  struct_children.emplace_back(
+    cudf::make_structs_column(num_rows, {}, null_count, std::move(null_mask)));
+  auto input_column = cudf::make_structs_column(num_rows, std::move(struct_children), 0, {});
+  ASSERT_FALSE(input_column->nullable());
+  ASSERT_TRUE(input_column->child(0).nullable());
+  ASSERT_EQ(null_count, input_column->child(0).null_count());
+
+  expect_selected_nested_empty_struct_round_trip(std::move(input_column),
+                                                 "reader_nested_empty_struct_inner_nullable.orc");
 }
 
 TEST_F(OrcReaderTest, DecimalOptions)
@@ -2153,6 +2266,13 @@ TEST_F(OrcReaderTest, SizeTypeRowsOverflow)
     reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}});
   EXPECT_EQ(metadata.num_rows(), total_rows);
   EXPECT_EQ(metadata.num_stripes(), total_rows / 1'000'000);
+
+  auto const stats =
+    cudf::io::read_parsed_orc_statistics(cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}});
+  ASSERT_FALSE(stats.file_stats.empty());
+  ASSERT_TRUE(stats.file_stats.front().number_of_values.has_value());
+  EXPECT_EQ(*stats.file_stats.front().number_of_values, static_cast<uint64_t>(total_rows));
 
   constexpr auto num_rows_to_read = 1'000'000;
   auto const num_rows_to_skip     = metadata.num_rows() - num_rows_to_read;

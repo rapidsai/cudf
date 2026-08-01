@@ -15,10 +15,12 @@
 
 #include <cstddef>
 #include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <tuple>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace cudf::io::parquet::detail {
@@ -67,6 +69,7 @@ struct row_group_info {
   size_type index;  // row group index within a file. aggregate_reader_metadata::get_row_group() is
                     // called with index and source_index
   size_t start_row;
+  size_t source_start_row;     // file-local start row of this row group within its source file
   size_t unadjusted_num_rows;  // number of unadjusted rows in the row group
   size_type source_index;      // file index.
   size_t compressed_size;      // compressed size of the row group
@@ -74,11 +77,6 @@ struct row_group_info {
 
   // Optional metadata pulled from the column and offset indexes, if present.
   std::optional<std::vector<column_chunk_info>> column_chunks;
-
-  /**
-   * @brief Indicates the presence of page-level indexes.
-   */
-  [[nodiscard]] bool has_page_index() const { return column_chunks.has_value(); }
 };
 
 /**
@@ -106,6 +104,22 @@ struct row_group_info {
  * @return The derived input pass byte limit
  */
 [[nodiscard]] std::size_t derive_pass_read_limit(std::size_t chunk_read_limit);
+
+/**
+ * @brief Find the offset of the column chunk with the given schema index in the specified row group
+ *
+ * @note For mismatched schemas, `schema_idx` must be pre-mapped to the row group's source using
+ * `map_schema_index`.
+ *
+ * @param row_group Row group
+ * @param schema_idx Schema index, already mapped to the row group's source
+ * @param cached_offset Offset from a previous lookup
+ * @return Offset of the matching column chunk
+ */
+[[nodiscard]] size_type find_colchunk_iter_offset(
+  RowGroup const& row_group,
+  size_type schema_idx,
+  std::optional<size_type> cached_offset = std::nullopt);
 
 /**
  * @brief Class for parsing dataset metadata
@@ -141,6 +155,47 @@ struct surviving_row_group_metrics {
   std::optional<size_type> after_stats_filter;  // number of surviving row groups after stats filter
   std::optional<size_type> after_bloom_filter;  // number of surviving row groups after bloom filter
 };
+
+/**
+ * @brief Column selection mode
+ */
+enum class column_selection_mode : uint8_t {
+  NONE        = 0,  // No column selection
+  BY_NAME     = 1,  // Select columns by name
+  BY_INDEX    = 2,  // Select columns by top-levelindex
+  BY_FIELD_ID = 3,  // Select columns by field ID
+};
+
+/**
+ * @brief Bundle of column selection parameters
+ */
+struct column_selection_options {
+  // Column selection mode
+  column_selection_mode selection_mode = column_selection_mode::NONE;
+  // Whether to always include the PANDAS index column(s)
+  bool include_index = false;
+  // Type conversion parameter: convert strings to categorical columns
+  bool strings_to_categorical = false;
+  // Whether to ignore non-existent projected columns
+  bool ignore_missing_columns = false;
+  // Type conversion parameter for timestamp columns
+  type_id timestamp_type_id = type_id::EMPTY;
+  // Type conversion parameter for decimal columns
+  type_id decimal_type_id = type_id::EMPTY;
+  // Whether column name matching is case sensitive
+  bool case_sensitive_names = true;
+};
+
+/**
+ * @brief Parses and validates a Parquet `BloomFilterHeader` from the front of `bytes`
+ *
+ * @param bytes Host bytes starting at the beginning of a bloom filter (header followed by bitset)
+ *
+ * @return A pair of the bloom filter header size and the bitset size in bytes, or `std::nullopt`
+ * if the header is missing or unsupported
+ */
+[[nodiscard]] std::optional<std::pair<int64_t, std::size_t>> parse_bloom_filter_header(
+  host_span<uint8_t const> bytes);
 
 class aggregate_reader_metadata {
  protected:
@@ -214,11 +269,6 @@ class aggregate_reader_metadata {
   void column_info_for_row_group(row_group_info& rg_info, size_t chunk_start_row) const;
 
   /**
-   * @brief Returns the required alignment for bloom filter buffers
-   */
-  [[nodiscard]] size_t get_bloom_filter_alignment() const;
-
-  /**
    * @brief Reads bloom filter bitsets for the specified columns from the given lists of row
    * groups.
    *
@@ -227,18 +277,19 @@ class aggregate_reader_metadata {
    * @param column_schemas Schema indices of columns whose bloom filters will be read
    * @param num_row_groups Number of row groups in the file
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param aligned_mr Aligned device memory resource to allocate bloom filter buffers
+   * @param mr Device memory resource used to allocate bloom filter buffers
    *
-   * @return A flattened list of bloom filter bitset device buffers for each predicate column across
-   * row group
+   * @return A pair of the device buffers backing the bloom filter bitsets and a flattened,
+   * per-chunk list of bitset device spans (empty spans for chunks without a bloom filter)
    */
-  [[nodiscard]] std::vector<rmm::device_buffer> read_bloom_filters(
-    host_span<std::unique_ptr<datasource> const> sources,
-    host_span<std::vector<size_type> const> row_group_indices,
-    host_span<int const> column_schemas,
-    size_type num_row_groups,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref aligned_mr) const;
+  [[nodiscard]] std::pair<std::vector<rmm::device_buffer>,
+                          std::vector<cudf::device_span<cuda::std::byte const>>>
+  read_bloom_filters(host_span<std::unique_ptr<datasource> const> sources,
+                     host_span<std::vector<size_type> const> row_group_indices,
+                     host_span<int const> column_schemas,
+                     size_type num_row_groups,
+                     rmm::cuda_stream_view stream,
+                     rmm::device_async_resource_ref mr) const;
 
   /**
    * @brief Collects Parquet types for the columns with the specified schema indices
@@ -374,7 +425,24 @@ class aggregate_reader_metadata {
   aggregate_reader_metadata(aggregate_reader_metadata&&)                 = default;
   aggregate_reader_metadata& operator=(aggregate_reader_metadata&&)      = default;
 
+  /**
+   * @brief Get the row group object
+   *
+   * @param row_group_index Index of the row group
+   * @param src_idx Index of the source to get the row group from
+   * @return Const reference to the row group object
+   */
   [[nodiscard]] RowGroup const& get_row_group(size_type row_group_index, size_type src_idx) const;
+
+  /**
+   * @brief Check if all row groups have an offset index
+   *
+   * @param row_groups Span of row group objects
+   * @param input_columns Span of input column objects
+   * @return True if all row groups have an offset index
+   */
+  [[nodiscard]] bool has_offset_index(std::span<row_group_info const> row_groups,
+                                      std::span<input_column_info const> input_columns) const;
 
   /**
    * @brief Get Parquet file metadatas
@@ -451,6 +519,14 @@ class aggregate_reader_metadata {
    * @return Number of row groups per file
    */
   [[nodiscard]] std::vector<size_type> get_num_row_groups_per_file() const;
+
+  /**
+   * @brief Computes file-local row group row offsets for the specified source
+   *
+   * @param src_idx The source (per_file_metadata) index
+   * @return Vector of file-local row group row offsets
+   */
+  [[nodiscard]] std::vector<size_t> compute_source_row_group_offsets(size_type src_idx) const;
 
   /**
    * @brief Checks if a schema index from 0th source is mapped to the specified file index
@@ -624,11 +700,7 @@ class aggregate_reader_metadata {
    * @param use_names List of paths of column names to select; `nullopt` if user did not select
    * columns to read
    * @param filter_columns_names List of paths of column names that are present only in filter
-   * @param include_index Whether to always include the PANDAS index column(s)
-   * @param strings_to_categorical Type conversion parameter
-   * @param ignore_missing_columns Whether to ignore non-existent projected columns
-   * @param timestamp_type_id Type conversion parameter
-   * @param decimal_type_id Type conversion parameter
+   * @param selection_options Column selection options
    *
    * @return input column information, output column buffers, list of output column schema
    * indices
@@ -638,12 +710,7 @@ class aggregate_reader_metadata {
                            std::vector<size_type>>
   select_columns(std::optional<std::vector<std::string>> const& use_names,
                  std::optional<std::vector<std::string>> const& filter_columns_names,
-                 bool include_index,
-                 bool strings_to_categorical,
-                 bool ignore_missing_columns,
-                 type_id timestamp_type_id,
-                 type_id decimal_type_id,
-                 bool case_sensitive_names);
+                 column_selection_options const& selection_options);
 };
 
 }  // namespace cudf::io::parquet::detail

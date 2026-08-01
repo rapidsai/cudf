@@ -1,6 +1,6 @@
 /**
  * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/aggregation.hpp>
@@ -21,36 +21,39 @@
 #include <utility>
 
 namespace cudf_streaming {
+namespace {
 
-order_scheme::order_scheme(std::vector<order_key> keys,
-                           std::shared_ptr<table_chunk> boundaries,
-                           bool strict_boundaries)
+void validate_ordering(ordering const& ordering)
+{
+  RAPIDSMPF_EXPECTS(
+    !ordering.keys.empty(), "ordering: keys must not be empty", std::invalid_argument);
+  RAPIDSMPF_EXPECTS(
+    ordering.boundaries != nullptr, "ordering: boundaries must not be null", std::invalid_argument);
+  RAPIDSMPF_EXPECTS(ordering.boundaries->is_available(),
+                    "ordering: boundaries must be device-resident",
+                    std::invalid_argument);
+  RAPIDSMPF_EXPECTS(
+    ordering.keys.size() == static_cast<std::size_t>(ordering.boundaries->shape().second),
+    "ordering: number of keys must match number of boundary columns",
+    std::invalid_argument);
+}
+
+}  // namespace
+
+ordering::ordering(std::vector<order_key> keys,
+                   std::shared_ptr<table_chunk> boundaries,
+                   bool strict_boundaries)
   : keys{std::move(keys)}, boundaries{std::move(boundaries)}, strict_boundaries{strict_boundaries}
 {
-  RAPIDSMPF_EXPECTS(
-    !this->keys.empty(), "OrderScheme: keys must not be empty", std::invalid_argument);
-  RAPIDSMPF_EXPECTS(
-    this->boundaries != nullptr, "OrderScheme: boundaries must not be null", std::invalid_argument);
-  RAPIDSMPF_EXPECTS(this->boundaries->is_available(),
-                    "OrderScheme: boundaries must be device-resident",
-                    std::invalid_argument);
-  RAPIDSMPF_EXPECTS(this->keys.size() == static_cast<std::size_t>(this->boundaries->shape().second),
-                    "OrderScheme: number of keys must match number of boundary columns",
-                    std::invalid_argument);
+  validate_ordering(*this);
 }
 
-partitioning_spec partitioning_spec::from_order(order_scheme o)
+ordering ordering::with_keys(std::vector<order_key> new_keys) const
 {
-  return {.type = type::ORDER, .hash = std::nullopt, .order = std::move(o)};
+  return ordering{std::move(new_keys), boundaries, strict_boundaries};
 }
 
-order_scheme order_scheme::with_keys(std::vector<order_key> new_keys) const
-{
-  return order_scheme(std::move(new_keys), boundaries, strict_boundaries);
-}
-
-bool order_scheme::boundaries_aligned_with(order_scheme const& other,
-                                           rapidsmpf::BufferResource& br) const
+bool ordering::boundaries_aligned_with(ordering const& other, rapidsmpf::BufferResource& br) const
 {
   if (strict_boundaries != other.strict_boundaries ||
       boundaries->shape() != other.boundaries->shape()) {
@@ -83,6 +86,30 @@ bool order_scheme::boundaries_aligned_with(order_scheme const& other,
     if (!scalar.value(stream)) { return false; }
   }
   return true;
+}
+
+order_scheme::order_scheme(std::vector<order_key> keys,
+                           std::shared_ptr<table_chunk> boundaries,
+                           bool strict_boundaries)
+  : order_scheme(
+      std::vector<ordering>{ordering{std::move(keys), std::move(boundaries), strict_boundaries}})
+{
+}
+
+order_scheme::order_scheme(std::vector<ordering> orderings) : orderings{std::move(orderings)}
+{
+  RAPIDSMPF_EXPECTS(
+    !this->orderings.empty(), "order_scheme: orderings must not be empty", std::invalid_argument);
+  for (auto const& ordering : this->orderings) {
+    RAPIDSMPF_EXPECTS(!ordering.keys.empty(),
+                      "order_scheme: ordering entries must not be empty",
+                      std::invalid_argument);
+  }
+}
+
+partitioning_spec partitioning_spec::from_order(order_scheme o)
+{
+  return {.type = type::ORDER, .hash = std::nullopt, .order = std::move(o)};
 }
 
 rapidsmpf::streaming::Message to_message(std::uint64_t sequence_number,

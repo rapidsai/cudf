@@ -7,6 +7,7 @@
 
 #include <cudf_test/cudf_gtest.hpp>
 
+#include <rapidsmpf/communicator/logger.hpp>
 #include <rapidsmpf/communicator/single.hpp>
 #include <rapidsmpf/config.hpp>
 #include <rapidsmpf/progress_thread.hpp>
@@ -23,8 +24,8 @@ class SingleEnvironment : public Environment {
   void SetUp() override
   {
     options_ = rapidsmpf::config::Options(rapidsmpf::config::get_environment_variables());
-    comm_ =
-      std::make_shared<rapidsmpf::Single>(options_, std::make_shared<rapidsmpf::ProgressThread>());
+    comm_    = std::make_shared<rapidsmpf::Single>(std::make_shared<rapidsmpf::ProgressThread>(),
+                                                rapidsmpf::Logger::from_options(options_));
   }
 
   void TearDown() override { comm_ = nullptr; }

@@ -8,12 +8,16 @@
 
 #include <cuda/std/cstdint>
 
+/**
+ * @file
+ * @brief Error codes for libcudf operations.
+ */
+
 namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup utility_error
  * @{
- * @file
  */
 
 /**

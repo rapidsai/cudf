@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -264,6 +264,33 @@ TEST_F(StringsExtractTests, EmptyExtractTest)
   auto prog    = cudf::strings::regex_program::create(pattern);
   auto results = cudf::strings::extract(strings_view, *prog);
   CUDF_TEST_EXPECT_TABLES_EQUAL(*results, table_expected);
+}
+
+TEST_F(StringsExtractTests, NonParticipatingGroup)
+{
+  auto input = cudf::test::strings_column_wrapper({"A1", "B2", "C"});
+  auto sv    = cudf::strings_column_view(input);
+
+  // the optional group does not participate in the match for "C" and must
+  // result in null, not an empty string
+  auto prog    = cudf::strings::regex_program::create("(\\D)(\\d)?");
+  auto results = cudf::strings::extract(sv, *prog);
+
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.push_back(cudf::test::strings_column_wrapper({"A", "B", "C"}).release());
+  columns.push_back(cudf::test::strings_column_wrapper({"1", "2", ""}, {1, 1, 0}).release());
+  auto expected = cudf::table(std::move(columns));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, expected);
+
+  // a group that participates with an empty match remains an empty string
+  auto prog2    = cudf::strings::regex_program::create("(\\D)(\\d*)");
+  auto results2 = cudf::strings::extract(sv, *prog2);
+
+  std::vector<std::unique_ptr<cudf::column>> columns2;
+  columns2.push_back(cudf::test::strings_column_wrapper({"A", "B", "C"}).release());
+  columns2.push_back(cudf::test::strings_column_wrapper({"1", "2", ""}).release());
+  auto expected2 = cudf::table(std::move(columns2));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results2, expected2);
 }
 
 TEST_F(StringsExtractTests, ExtractAllTest)
