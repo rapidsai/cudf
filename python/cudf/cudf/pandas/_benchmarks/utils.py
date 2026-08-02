@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Utility functions/classes for running the PDS-H and PDS-DS benchmarks."""
@@ -755,6 +755,11 @@ def run_pandas(
         if validation_failures:
             print(  # noqa: T201
                 f"{len(validation_failures)} queries failed validation: {sorted(set(validation_failures))}"
+            )
+        elif query_failures:
+            print(  # noqa: T201
+                "Validation was skipped for queries that failed to run: "
+                f"{sorted({q_id for q_id, _ in query_failures})}"
             )
         else:
             print("All validated queries passed.")  # noqa: T201
