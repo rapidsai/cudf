@@ -365,11 +365,12 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
   }
 
   // Must be evaluated after setup_local_page_info
-  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+  bool const has_repetition = s->setup.col.max_level[level_type::REPETITION] > 0;
   bool const process_nulls  = should_process_nulls(s);
 
   // Capture initial valid_map_offset before any processing that might modify it
-  int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
+  int const init_valid_map_offset =
+    s->nesting_info[s->setup.col.max_nesting_depth - 1].valid_map_offset;
 
   // copying logic from gpuDecodePageData.
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
@@ -382,10 +383,10 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
   auto* const rep    = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
-  uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
+  uint32_t const skipped_leaf_values = s->setup.page.skipped_leaf_values;
 
   // initialize delta state
-  if (block.thread_rank() == 0) { db->init_binary_block(s->data_start, s->data_end); }
+  if (block.thread_rank() == 0) { db->init_binary_block(s->stream.data_start, s->stream.data_end); }
   block.sync();
 
   if (db->error) {
@@ -412,8 +413,8 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
   // that has a value we need.
   if (is_skip_resume) { db->skip_values(skipped_leaf_values, block, warp); }
 
-  while (s->error == 0 &&
-         (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
+  while (s->setup.error == 0 &&
+         (s->input_value_count < s->setup.num_input_values || s->src_pos < s->nz_count)) {
     uint32_t target_pos;
     uint32_t const src_pos = s->src_pos;
 
@@ -446,7 +447,7 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
     } else if (src_pos < target_pos) {
       // warp 2
       // nesting level that is storing actual leaf values
-      int const leaf_level_index = s->col.max_nesting_depth - 1;
+      int const leaf_level_index = s->setup.col.max_nesting_depth - 1;
 
       // process the mini-block using warps
       for (uint32_t sp = src_pos + warp.thread_rank(); sp < src_pos + batch_size;
@@ -455,7 +456,7 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
         int32_t dst_pos = sb->nz_idx[rolling_index<delta_nz_buf_size>(sp)];
 
         // handle skip_rows here. flat hierarchies can just skip up to first_row.
-        if (!has_repetition) { dst_pos -= s->first_row; }
+        if (!has_repetition) { dst_pos -= s->setup.first_row; }
 
         // place value for this thread
         if (dst_pos >= 0 && sp < target_pos) {
@@ -477,7 +478,7 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
 
   if (has_repetition) {
     // Zero-fill null positions after decoding valid values
-    auto const& ni = s->nesting_info[s->col.max_nesting_depth - 1];
+    auto const& ni = s->nesting_info[s->setup.col.max_nesting_depth - 1];
     if (ni.valid_map != nullptr) {
       int const num_values = ni.valid_map_offset - init_valid_map_offset;
       zero_fill_null_positions_shared<decode_block_size>(
@@ -485,7 +486,7 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
     }
   }
 
-  if (block.thread_rank() == 0 and s->error != 0) { set_error(s->error, error_code); }
+  if (block.thread_rank() == 0 and s->setup.error != 0) { set_error(s->setup.error, error_code); }
 }
 
 // Decode page data that is DELTA_BYTE_ARRAY packed. This encoding consists of a DELTA_BINARY_PACKED
@@ -530,7 +531,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     return;
   }
 
-  if (s->col.logical_type.has_value() && s->col.logical_type->type == LogicalType::DECIMAL) {
+  if (s->setup.col.logical_type.has_value() &&
+      s->setup.col.logical_type->type == LogicalType::DECIMAL) {
     // we cannot read decimal encoded with DELTA_BYTE_ARRAY yet
     if (block.thread_rank() == 0) {
       set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_DATA_TYPE), error_code);
@@ -538,14 +540,17 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     return;
   }
 
-  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+  bool const has_repetition = s->setup.col.max_level[level_type::REPETITION] > 0;
   bool const process_nulls  = should_process_nulls(s);
 
   // Capture initial valid_map_offset before any processing that might modify it
-  int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
+  int const init_valid_map_offset =
+    s->nesting_info[s->setup.col.max_nesting_depth - 1].valid_map_offset;
 
   // choose a character parallel string copy when the average string is longer than a warp
-  auto const use_char_ll = (s->page.str_bytes / s->page.num_valids) > cudf::detail::warp_size;
+  auto const use_char_ll =
+    s->setup.page.num_valids > 0 &&
+    (s->setup.page.str_bytes / s->setup.page.num_valids) > cudf::detail::warp_size;
 
   // copying logic from decode_page_data.
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
@@ -558,15 +563,15 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   auto* const rep    = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
-  uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
+  uint32_t const skipped_leaf_values = s->setup.page.skipped_leaf_values;
 
   if (block.thread_rank() == 0) {
     // initialize the prefixes and suffixes blocks
-    dba->init(s->data_start,
-              s->data_end,
-              s->page.start_val,
-              s->page.temp_string_buf,
-              s->page.temp_string_size);
+    dba->init(s->stream.data_start,
+              s->stream.data_end,
+              s->setup.page.start_val,
+              s->setup.page.temp_string_buf,
+              s->setup.page.temp_string_size);
   }
   block.sync();
 
@@ -589,14 +594,14 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   }
 
   // pointer to location to output final strings
-  int const leaf_level_index = s->col.max_nesting_depth - 1;
+  int const leaf_level_index = s->setup.col.max_nesting_depth - 1;
   auto strings_data          = nesting_info_base[leaf_level_index].string_out;
 
   // if this is a bounds page and nested, then we need to skip up front. non-nested will work
   // its way through the page.
-  int string_pos = has_repetition ? s->page.start_val : 0;
+  int string_pos = has_repetition ? s->setup.page.start_val : 0;
   auto const is_bounds_pg =
-    is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
+    is_bounds_page(s->setup.page, s->setup.col.start_row, min_row, num_rows, has_repetition);
   bool const is_skip_resume = is_bounds_pg and string_pos > 0;
 
   // Number of values produced per main-loop iteration (see decode_delta_binary_kernel for why
@@ -608,12 +613,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   if (is_skip_resume) { dba->skip(use_char_ll, block, warp); }
 
-  while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
+  while (!s->setup.error &&
+         (s->input_value_count < s->setup.num_input_values || s->src_pos < s->nz_count)) {
     uint32_t target_pos;
     uint32_t const src_pos = s->src_pos;
 
     if (warp.meta_group_rank() < 3) {  // warp 0..2
-      target_pos = min(src_pos + 2 * batch_size, s->nz_count + s->first_row + batch_size);
+      target_pos = min(src_pos + 2 * batch_size, s->nz_count + s->setup.first_row + batch_size);
     } else {  // warp 3
       target_pos = min(s->nz_count, src_pos + batch_size);
     }
@@ -645,7 +651,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       }
     } else if (warp.meta_group_rank() == 3 and src_pos < target_pos) {
       // warp 3
-      int const nproc = min(batch_size, s->page.end_val - string_pos);
+      int const nproc = min(batch_size, s->setup.page.end_val - string_pos);
       strings_data +=
         use_char_ll
           ? dba->calculate_string_values_cp(strings_data, string_pos, nproc, warp.thread_rank())
@@ -659,7 +665,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         int dst_pos = sb->nz_idx[rolling_index<delta_nz_buf_size>(sp)];
 
         // handle skip_rows here. flat hierarchies can just skip up to first_row.
-        if (!has_repetition) { dst_pos -= s->first_row; }
+        if (!has_repetition) { dst_pos -= s->setup.first_row; }
 
         if (dst_pos >= 0 && sp < target_pos) {
           auto const offptr =
@@ -689,7 +695,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // For large strings, update the initial string buffer offset to be used during large string
   // column construction. Otherwise, convert string sizes to final offsets.
-  if (s->col.is_large_string_col) {
+  if (s->setup.col.is_large_string_col) {
     // page.chunk_idx are ordered by input_col_idx and row_group_idx respectively.
     auto const chunks_per_rowgroup = initial_str_offsets.size();
     auto const input_col_idx       = pages[page_idx].chunk_idx % chunks_per_rowgroup;
@@ -706,7 +712,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     }
   }
 
-  if (block.thread_rank() == 0 and s->error != 0) { set_error(s->error, error_code); }
+  if (block.thread_rank() == 0 and s->setup.error != 0) { set_error(s->setup.error, error_code); }
 }
 
 // Decode page data that is DELTA_LENGTH_BYTE_ARRAY packed. This encoding consists of a
@@ -747,7 +753,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     return;
   }
 
-  if (s->col.logical_type.has_value() && s->col.logical_type->type == LogicalType::DECIMAL) {
+  if (s->setup.col.logical_type.has_value() &&
+      s->setup.col.logical_type->type == LogicalType::DECIMAL) {
     // we cannot read decimal encoded with DELTA_LENGTH_BYTE_ARRAY yet
     if (block.thread_rank() == 0) {
       set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_DATA_TYPE), error_code);
@@ -755,11 +762,12 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     return;
   }
 
-  bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
+  bool const has_repetition = s->setup.col.max_level[level_type::REPETITION] > 0;
   bool const process_nulls  = should_process_nulls(s);
 
   // Capture initial valid_map_offset before any processing that might modify it
-  int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
+  int const init_valid_map_offset =
+    s->nesting_info[s->setup.col.max_nesting_depth - 1].valid_map_offset;
 
   // copying logic from gpuDecodePageData.
   PageNestingDecodeInfo const* nesting_info_base = s->nesting_info;
@@ -772,12 +780,12 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   auto* const rep    = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
   // skipped_leaf_values will always be 0 for flat hierarchies.
-  uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
+  uint32_t const skipped_leaf_values = s->setup.page.skipped_leaf_values;
 
   // initialize delta state
   if (block.thread_rank() == 0) {
     string_offset    = 0;
-    page_string_data = db->find_end_of_block(s->data_start, s->data_end);
+    page_string_data = db->find_end_of_block(s->stream.data_start, s->stream.data_end);
   }
   block.sync();
 
@@ -791,7 +799,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     return;
   }
 
-  int const leaf_level_index = s->col.max_nesting_depth - 1;
+  int const leaf_level_index = s->setup.col.max_nesting_depth - 1;
 
   // db->init_binary_block below resets db->values_per_mb
   block.sync();
@@ -799,8 +807,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   // that has a value we need, and set string_offset to the position of the first value in the
   // string data block.
   auto const is_bounds_pg =
-    is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition);
-  bool const is_skip_resume = is_bounds_pg and s->page.start_val > 0;
+    is_bounds_page(s->setup.page, s->setup.col.start_row, min_row, num_rows, has_repetition);
+  bool const is_skip_resume = is_bounds_pg and s->setup.page.start_val > 0;
 
   // Only nested pages resume the decoder mid-page; flat pages re-init it below and can keep the
   // full batch. Mid-page resumption must produce a single warp_size pass per iteration (see
@@ -814,7 +822,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   if (is_skip_resume) {
     if (warp.meta_group_rank() == 0) {
       // string_off is only valid on thread 0
-      auto const string_off = db->skip_values_and_sum(s->page.start_val, warp);
+      auto const string_off = db->skip_values_and_sum(s->setup.page.start_val, warp);
       // Threads in the warp might diverge and read in skip_values_and_sum
       // after lane 0 reinits below.
       warp.sync();
@@ -823,15 +831,16 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
         // if there is no repetition, then we need to work through the whole page, so reset the
         // delta decoder to the beginning of the page
-        if (not has_repetition) { db->init_binary_block(s->data_start, s->data_end); }
+        if (not has_repetition) { db->init_binary_block(s->stream.data_start, s->stream.data_end); }
       }
     }
     block.sync();
   }
 
-  int string_pos = has_repetition ? s->page.start_val : 0;
+  int string_pos = has_repetition ? s->setup.page.start_val : 0;
 
-  while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
+  while (!s->setup.error &&
+         (s->input_value_count < s->setup.num_input_values || s->src_pos < s->nz_count)) {
     uint32_t target_pos;
     uint32_t const src_pos = s->src_pos;
 
@@ -864,7 +873,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       }
     } else if (warp.meta_group_rank() == 2 && src_pos < target_pos) {
       // warp 2
-      int const nproc = min(batch_size, s->page.end_val - string_pos);
+      int const nproc = min(batch_size, s->setup.page.end_val - string_pos);
       string_pos += nproc;
 
       // process the mini-block in batches of 32
@@ -874,7 +883,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         int dst_pos = sb->nz_idx[rolling_index<delta_nz_buf_size>(sp)];
 
         // handle skip_rows here. flat hierarchies can just skip up to first_row.
-        if (!has_repetition) { dst_pos -= s->first_row; }
+        if (!has_repetition) { dst_pos -= s->setup.first_row; }
 
         // fill in offsets array
         if (dst_pos >= 0 && sp < target_pos) {
@@ -903,7 +912,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // For large strings, update the initial string buffer offset to be used during large string
   // column construction. Otherwise, convert string sizes to final offsets.
-  if (s->col.is_large_string_col) {
+  if (s->setup.col.is_large_string_col) {
     // page.chunk_idx are ordered by input_col_idx and row_group_idx respectively.
     auto const chunks_per_rowgroup = initial_str_offsets.size();
     auto const input_col_idx       = pages[page_idx].chunk_idx % chunks_per_rowgroup;
@@ -924,9 +933,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   // finally, copy the string data into place
   auto const dst = nesting_info_base[leaf_level_index].string_out;
   auto const src = page_string_data + string_offset;
-  memcpy_block<decode_block_size, true>(dst, src, s->page.str_bytes, block);
+  memcpy_block<decode_block_size, true>(dst, src, s->setup.page.str_bytes, block);
 
-  if (block.thread_rank() == 0 and s->error != 0) { set_error(s->error, error_code); }
+  if (block.thread_rank() == 0 and s->setup.error != 0) { set_error(s->setup.error, error_code); }
 }
 
 }  // anonymous namespace
