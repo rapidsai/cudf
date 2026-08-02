@@ -193,6 +193,20 @@ struct rle_stream {
 
   static constexpr int run_buffer_size = rle_stream_required_run_buffer_size<decode_threads>();
 
+  // Bit packing of `run_desc` (chunked-expand path). The 32-bit descriptor
+  // stores a byte offset into the encoded level stream (`cur - s_start`) in
+  // its low 31 bits and uses the top bit as a flag: 1 = literal (bit-packed)
+  // run, 0 = RLE (repeated-value) run. Keeping both in one word lets Phase 1
+  // publish a single 32-bit value per run into shared memory and lets Phase 2
+  // dispatch on the flag without a second load.
+  //
+  // Invariant enforced by `cudf_assert` at parse time: (cur - s_start) fits in
+  // 31 bits, i.e. the encoded level stream for a single Parquet page is < 2
+  // GiB. Parquet page payloads are orders of magnitude smaller than this in
+  // practice.
+  static constexpr uint32_t run_desc_literal_flag = 1u << 31;
+  static constexpr uint32_t run_desc_offset_mask  = 0x7fffffffu;
+
   int level_bits;
   uint8_t const* s_start;
   uint8_t const* cur;
@@ -519,20 +533,16 @@ struct rle_stream {
           // Parquet RLE header format: LSB selects the encoding.
           //   bit 0 = 1  -> literal (bit-packed) run of `groups*8` values
           //   bit 0 = 0  -> RLE run of `level_run >> 1` copies of one value
-          // The high bit of `run_desc` distinguishes the two at expand time.
-          //
-          // Assumption: (cur - s_start) fits in 31 bits, i.e. the encoded
-          // level stream for a single Parquet page is < 2 GiB. This is
-          // guaranteed by the Parquet format in practice (page payloads are
-          // orders of magnitude smaller than 2 GiB) and is independent of
-          // max_runs_per_chunk.
-          cudf_assert(static_cast<uint64_t>(cur - s_start) < (1ull << 31));
+          // The high bit of `run_desc` distinguishes the two at expand time;
+          // see `run_desc_literal_flag` / `run_desc_offset_mask` for the
+          // bit layout and the 31-bit offset invariant enforced below.
+          cudf_assert(static_cast<uint64_t>(cur - s_start) < (uint64_t{run_desc_offset_mask} + 1));
           int run_len;
           uint32_t run_desc;
           if (level_run & 1u) {
             int const groups = level_run >> 1;
             run_len          = groups * 8;
-            run_desc         = static_cast<uint32_t>(cur - s_start) | (1u << 31);
+            run_desc         = static_cast<uint32_t>(cur - s_start) | run_desc_literal_flag;
             cur += groups * level_bits;
           } else {
             run_len  = level_run >> 1;
@@ -596,9 +606,9 @@ struct rle_stream {
           int const run_start_out = chunk_out_off_v[run_idx];
           uint32_t const run_desc = chunk_meta_v[run_idx];
 
-          if (run_desc & (1u << 31)) {
+          if (run_desc & run_desc_literal_flag) {
             // Literal (bit-packed) run: bit-field extract for this lane's p.
-            uint32_t const payload_off = run_desc & 0x7fffffff;
+            uint32_t const payload_off = run_desc & run_desc_offset_mask;
             uint8_t const* payload     = s_start + payload_off;
             int const local            = p - run_start_out;
             int bitpos                 = local * level_bits;
@@ -633,7 +643,7 @@ struct rle_stream {
             // truncated Parquet page can leave `run_desc`'s payload offset
             // pointing within [s_start, end) while `level_bits > 8` implies
             // vptr[1..3] may lie past `end`.
-            uint8_t const* vptr = s_start + (run_desc & 0x7fffffff);
+            uint8_t const* vptr = s_start + (run_desc & run_desc_offset_mask);
             uint32_t level_val  = 0;
             if (vptr < end) { level_val = vptr[0]; }
             if constexpr (sizeof(level_t) > 1) {
