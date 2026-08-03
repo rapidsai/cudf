@@ -615,9 +615,7 @@ def test_dynamic_planning_defaults() -> None:
     assert config.executor.dynamic_planning.join_prefilter_threshold == 0.5
     assert config.executor.dynamic_planning.join_prefilter_max_key_columns == 1
     assert not config.executor.dynamic_planning.join_prefilter_trace
-    assert config.executor.join_filter_pushdown is not None
-    assert config.executor.join_filter_pushdown.threshold == 0.5
-    assert not config.executor.join_filter_pushdown.trace
+    assert config.executor.join_filter_pushdown is None
 
 
 def test_dynamic_planning_disabled_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -642,6 +640,7 @@ def test_dynamic_planning_sample_chunk_count_from_env(
 
 
 def test_join_prefilter_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN", "1")
     monkeypatch.setenv(
         "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__JOIN_PREFILTER_THRESHOLD", "0.25"
     )
@@ -665,6 +664,7 @@ def test_join_prefilter_options_from_env(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_join_filter_pushdown_options_from_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN", "1")
     monkeypatch.setenv(
         "CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN__THRESHOLD", "0.125"
     )

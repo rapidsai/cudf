@@ -397,6 +397,9 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   // Invalidate output buffer nullmasks at row indices spanned by pruned pages
   update_output_nullmasks_for_pruned_pages(subpass_page_mask_span(), skip_rows, num_rows);
 
+  // Fill output offsets for pruned pages before retrieving large string initial offsets.
+  fill_pruned_offsets(skip_rows, num_rows, initial_str_offsets);
+
   // Copy over initial string offsets from device
   auto h_initial_str_offsets = cudf::detail::make_pinned_vector_async(initial_str_offsets, _stream);
 
@@ -439,9 +442,15 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
         }
         // Nested large strings column
         else if (input_col.nesting_depth() > 0) {
-          CUDF_EXPECTS(h_initial_str_offsets[idx] != std::numeric_limits<size_t>::max(),
-                       "Encountered invalid initial offset for large string column");
-          out_buf.set_initial_string_offset(h_initial_str_offsets[idx]);
+          // A fully pruned list may have no string child values and therefore no page from which
+          // to record an initial offset.
+          if (out_buf.size == 0) {
+            out_buf.set_initial_string_offset(0);
+          } else {
+            CUDF_EXPECTS(h_initial_str_offsets[idx] != std::numeric_limits<size_t>::max(),
+                         "Encountered invalid initial offset for large string column");
+            out_buf.set_initial_string_offset(h_initial_str_offsets[idx]);
+          }
         }
       }
     }
