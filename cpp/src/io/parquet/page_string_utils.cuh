@@ -256,11 +256,11 @@ __device__ size_t decode_strings(page_state_s* s,
                             ? 0
                             : next_offset - input_thread_string_offset - sizeof(int32_t);
         }
-        if (input_thread_string_offset >= static_cast<uint32_t>(s->dict_size)) {
+        if (input_thread_string_offset >= static_cast<uint32_t>(s->stream.dict_size)) {
           return string_index_pair{nullptr, 0};
         }
         auto const thread_input_string =
-          reinterpret_cast<char const*>(s->data_start + input_thread_string_offset);
+          reinterpret_cast<char const*>(s->stream.data_start + input_thread_string_offset);
         return string_index_pair{thread_input_string, string_length};
       }
     }();
@@ -292,7 +292,7 @@ __device__ size_t decode_strings(page_state_s* s,
         auto const stream_length       = s->setup.page.str_bytes / split_string_length;
 
         for (int ii = 0; ii < split_string_length; ii++) {
-          thread_output_string[ii] = s->data_start[src_pos + ii * stream_length];
+          thread_output_string[ii] = s->stream.data_start[src_pos + ii * stream_length];
         }
       }
     } else {
