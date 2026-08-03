@@ -26,6 +26,7 @@
 #include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <cuda/std/tuple>
+#include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
@@ -523,13 +524,9 @@ void make_device_json_column(device_span<SymbolT const> input,
       col.string_offsets.resize(max_row_offsets[i] + 1, stream);
       col.string_lengths.resize(max_row_offsets[i] + 1, stream);
       thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                   col.string_offsets.begin(),
-                   col.string_offsets.end(),
-                   0);
-      thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                   col.string_lengths.begin(),
-                   col.string_lengths.end(),
-                   0);
+                   cuda::make_zip_iterator(col.string_offsets.begin(), col.string_lengths.begin()),
+                   cuda::make_zip_iterator(col.string_offsets.end(), col.string_lengths.end()),
+                   cuda::std::make_tuple(0, 0));
     } else if (column_category == NC_LIST) {
       col.child_offsets.resize(max_row_offsets[i] + 2, stream);
       thrust::uninitialized_fill(
