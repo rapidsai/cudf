@@ -35,7 +35,7 @@ Timestamp,Host,Source,Level,LogLine
 2026-07-31T09:14:05.709Z,legacy-02,legacy-api,INFO,legacy request client=198.51.100.159 url=http://192.0.2.200:8000/v1/status?format=json method=GET status=200
 2026-07-31T09:14:05.882Z,k8s-worker-03,kubelet,INFO,level=info service=kube-probe msg=healthy status=200
 2026-07-31T09:14:06.055Z,app-worker-07,checkout-worker,WARN,WARN checkout retry scheduled attempt=2 queue=payments
-2026-07-31T09:14:06.228Z,download-03,artifact-service,INFO,download complete artifact=cudf target=https://downloads.example.com/releases/cudf-26.10.tar.gz?signature=redacted#sha256 bytes=48234412
+2026-07-31T09:14:06.228Z,download-03,artifact-service,INFO,download complete artifact=cudf target=https://downloads.example.com/releases/package.tar.gz?signature=redacted#sha256 bytes=48234412
 2026-07-31T09:14:06.401Z,app-api-12,inventory-api,ERROR,level=error service=inventory msg=upstream_timeout attempt=3
 2026-07-31T09:14:06.574Z,k8s-worker-03,kubelet,INFO,level=info service=kube-probe msg=healthy status=200
 2026-07-31T09:14:06.747Z,control-01,scheduler,DEBUG,level=debug component=scheduler queue_depth=0 workers=32
