@@ -85,15 +85,16 @@ def pread_ranges(
         return None, [], None
     # Blocks this worker thread, not the event loop. The loop stays free to
     # run other coroutines while we wait for the reservation.
-    reservation = asyncio.run_coroutine_threadsafe(
-        reserve_memory(
-            context,
-            size=total,
-            net_memory_delta=total,
-            mem_type=MemoryType.PINNED_HOST,
-        ),
-        loop,
-    ).result()
+    with nvtx_annotate_cudf_polars(message="reserve_pinned_memory", payload=total):
+        reservation = asyncio.run_coroutine_threadsafe(
+            reserve_memory(
+                context,
+                size=total,
+                net_memory_delta=total,
+                mem_type=MemoryType.PINNED_HOST,
+            ),
+            loop,
+        ).result()
     buf = PinnedBuffer(pinned_mr, total, stream, reservation)
     futures = []
     offset = 0
@@ -149,29 +150,36 @@ def _plan_hybrid_scan_prefetch(
     predicate = scan.base_scan.predicate
     assert predicate is not None
 
-    plc_filter = to_parquet_filter(
-        _prepare_parquet_predicate(
-            predicate.value, scan.paths, scan.schema, scan.base_scan.with_columns
-        ),
-        stream=stream,
-    )
+    with nvtx_annotate_cudf_polars(message="to_parquet_filter"):
+        plc_filter = to_parquet_filter(
+            _prepare_parquet_predicate(
+                predicate.value, scan.paths, scan.schema, scan.base_scan.with_columns
+            ),
+            stream=stream,
+        )
     if plc_filter is None:
         return None
 
-    options = (
-        plc.io.parquet.ParquetReaderOptions.builder(
-            plc.io.SourceInfo(
-                [plc.io.types.FilepathSource(cached_info[0].path, cached_info[0].size)]
+    with nvtx_annotate_cudf_polars(message="build_reader_options"):
+        options = (
+            plc.io.parquet.ParquetReaderOptions.builder(
+                plc.io.SourceInfo(
+                    [
+                        plc.io.types.FilepathSource(
+                            cached_info[0].path, cached_info[0].size
+                        )
+                    ]
+                )
             )
+            .decimal_width(plc.TypeId.DECIMAL128)
+            .build()
         )
-        .decimal_width(plc.TypeId.DECIMAL128)
-        .build()
-    )
-    if scan.base_scan.with_columns is not None:
-        options.set_column_names(scan.base_scan.with_columns)
-    options.set_filter(plc_filter)
+        if scan.base_scan.with_columns is not None:
+            options.set_column_names(scan.base_scan.with_columns)
+        options.set_filter(plc_filter)
 
-    reader = cached_info[0].hybrid_scan_reader(id(scan.base_scan), options)
+    with nvtx_annotate_cudf_polars(message="hybrid_scan_reader"):
+        reader = cached_info[0].hybrid_scan_reader(options)
 
     if scan.parquet_options._hybrid_scan_stats_pruning:
         with nvtx_annotate_cudf_polars(message="filter_row_groups_with_stats"):
