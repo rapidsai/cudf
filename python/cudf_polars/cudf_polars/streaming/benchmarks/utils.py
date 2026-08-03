@@ -1169,9 +1169,10 @@ def _run_query_loop(
                     )
                 )
 
+        plan = None
+
         try:
             query_result: QueryResult = getattr(benchmark, f"q{q_id}")(run_config)
-            plan = None
             if (args.explain or args.explain_logical) and engine is not None:
                 # If this fails during serialization, we have issues. But we'd
                 # rather see what the issues are with execution that query serialization,
