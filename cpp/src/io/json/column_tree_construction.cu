@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,8 +21,6 @@
 #include <cuda/iterator>
 #include <cuda/std/tuple>
 #include <thrust/for_each.h>
-#include <thrust/iterator/permutation_iterator.h>
-#include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/sort.h>
@@ -160,18 +158,18 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
   }
 
   rmm::device_uvector<NodeIndexT> parent_col_ids(num_columns, stream);
-  thrust::transform_output_iterator parent_col_ids_it(parent_col_ids.begin(),
-                                                      parent_nodeids_to_colids{rev_mapped_col_ids});
+  cuda::transform_output_iterator parent_col_ids_it(parent_col_ids.begin(),
+                                                    parent_nodeids_to_colids{rev_mapped_col_ids});
   rmm::device_uvector<row_offset_t> max_row_offsets(num_columns, stream);
   rmm::device_uvector<NodeT> column_categories(num_columns, stream);
   thrust::copy_n(
     rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-    thrust::make_zip_iterator(thrust::make_permutation_iterator(
-                                unpermuted_tree.parent_node_ids.begin(), reordering_index.begin()),
-                              thrust::make_permutation_iterator(unpermuted_max_row_offsets.begin(),
-                                                                reordering_index.begin()),
-                              thrust::make_permutation_iterator(
-                                unpermuted_tree.node_categories.begin(), reordering_index.begin())),
+    thrust::make_zip_iterator(
+      cuda::make_permutation_iterator(unpermuted_tree.parent_node_ids.begin(),
+                                      reordering_index.begin()),
+      cuda::make_permutation_iterator(unpermuted_max_row_offsets.begin(), reordering_index.begin()),
+      cuda::make_permutation_iterator(unpermuted_tree.node_categories.begin(),
+                                      reordering_index.begin())),
     num_columns,
     thrust::make_zip_iterator(
       parent_col_ids_it, max_row_offsets.begin(), column_categories.begin()));

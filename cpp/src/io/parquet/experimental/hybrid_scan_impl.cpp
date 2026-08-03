@@ -397,14 +397,7 @@ std::unique_ptr<cudf::column> hybrid_scan_reader_impl::build_all_true_row_mask(
 {
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
 
-  auto const num_rows = total_rows_in_row_groups(row_group_indices);
-  CUDF_EXPECTS(num_rows < std::numeric_limits<cudf::size_type>::max(),
-               "Total rows in row groups exceed the cudf's column size limit. Retry with a smaller "
-               "set of row groups",
-               std::invalid_argument);
-  auto true_scalar =
-    cudf::numeric_scalar<bool>(true, true, stream, cudf::get_current_device_resource_ref());
-  return cudf::make_column_from_scalar(true_scalar, num_rows, stream, mr);
+  return _extended_metadata->build_all_true_row_mask(row_group_indices, stream, mr);
 }
 
 std::unique_ptr<cudf::column> hybrid_scan_reader_impl::build_row_mask_with_page_index_stats(

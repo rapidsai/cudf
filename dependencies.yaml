@@ -821,6 +821,7 @@ dependencies:
         packages:
           - cuda-cudart-dev
           - cuda-cupti-dev
+          - cuda-profiler-api
           - cuda-nvrtc-dev
           - cuda-nvtx-dev
           - cuda-sanitizer-api
@@ -1222,6 +1223,10 @@ dependencies:
         packages:
           # https://github.com/narwhals-dev/narwhals/blob/main/pyproject.toml#L67
           - pytest-env
+          # narwhals uses the uv_build backend, so its editable install needs
+          # uv and uv-build available (with --no-build-isolation)
+          - uv
+          - uv-build
   depends_on_libcudf:
     common:
       - output_types: conda
@@ -1703,8 +1708,9 @@ dependencies:
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
           - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/
+          - *dask_cuda_unsuffixed
     specific:
-      - output_types: [requirements, pyproject]
+      - output_types: pyproject
         matrices:
           - matrix:
               cuda: "12.*"
@@ -1743,7 +1749,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - narwhals==2.16.0
+          - narwhals==2.24.0
   cudf_polars_trace:
     common:
       - output_types: [conda, requirements, pyproject]
