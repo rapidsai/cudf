@@ -514,6 +514,10 @@ void make_device_json_column(device_span<SymbolT const> input,
     }
   };
 
+  auto const duplicate_value = [] __device__(device_json_column::row_offset_t value) {
+    return cuda::std::make_tuple(value, value);
+  };
+
   auto initialize_json_columns = [&](auto i, auto& col_ref, auto column_category) {
     auto& col = col_ref.get();
     if (col.type != json_col_t::Unknown) { return; }
@@ -528,7 +532,7 @@ void make_device_json_column(device_span<SymbolT const> input,
         zero,
         zero + col.string_offsets.size(),
         cuda::make_zip_iterator(col.string_offsets.begin(), col.string_lengths.begin()),
-        [] __device__(auto value) { return cuda::std::make_tuple(value, value); });
+        duplicate_value);
     } else if (column_category == NC_LIST) {
       col.child_offsets.resize(max_row_offsets[i] + 2, stream);
       thrust::uninitialized_fill(
