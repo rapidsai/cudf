@@ -250,12 +250,12 @@ class PrefetchedByteRanges:
 
 
 def _fetch_byte_ranges(
-    paths: list[str],
+    source_info: plc.io.SourceInfo,
     byte_ranges: list[plc.io.text.ByteRangeInfo],
     stream: Stream,
 ) -> list[plc.gpumemoryview]:
     return plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
-        plc.io.SourceInfo(paths), byte_ranges, stream=stream
+        source_info, byte_ranges, stream=stream
     )
 
 
@@ -308,8 +308,11 @@ def _read_with_hybrid_scan(
     with nvtx_annotate_cudf_polars(
         message="HybridScan", payload=(split_index + 1, total_splits)
     ):
+        source_info = plc.io.SourceInfo(
+            [plc.io.types.FilepathSource(cached_info.path, cached_info.size)]
+        )
         options = (
-            plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(paths))
+            plc.io.parquet.ParquetReaderOptions.builder(source_info)
             .decimal_width(plc.TypeId.DECIMAL128)
             .build()
         )
@@ -329,7 +332,7 @@ def _read_with_hybrid_scan(
                     row_group_indices, options
                 )
                 if bloom_ranges:
-                    bloom_chunks = _fetch_byte_ranges(paths, bloom_ranges, stream)
+                    bloom_chunks = _fetch_byte_ranges(source_info, bloom_ranges, stream)
                     row_group_indices = reader.filter_row_groups_with_bloom_filters(
                         bloom_chunks, row_group_indices, options, stream=stream
                     )
@@ -365,7 +368,7 @@ def _read_with_hybrid_scan(
             )
         else:
             filter_chunks = _fetch_byte_ranges(
-                paths,
+                source_info,
                 reader.filter_column_chunks_byte_ranges(row_group_indices, options),
                 stream,
             )
@@ -387,7 +390,7 @@ def _read_with_hybrid_scan(
             )
         else:
             payload_chunks = _fetch_byte_ranges(
-                paths,
+                source_info,
                 reader.payload_column_chunks_byte_ranges(row_group_indices, options),
                 stream,
             )
