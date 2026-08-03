@@ -57,8 +57,15 @@ std::size_t derive_pass_read_limit(std::size_t chunk_read_limit)
   return pass_read_limit;
 }
 
-size_type find_colchunk_iter_offset(RowGroup const& row_group, size_type schema_idx)
+size_type find_colchunk_iter_offset(RowGroup const& row_group,
+                                    size_type schema_idx,
+                                    std::optional<size_type> cached_offset)
 {
+  if (cached_offset.has_value() and cached_offset.value() >= 0 and
+      std::cmp_less(cached_offset.value(), row_group.columns.size()) and
+      row_group.columns[cached_offset.value()].schema_idx == schema_idx) {
+    return cached_offset.value();
+  }
   auto const& colchunk_iter =
     std::find_if(row_group.columns.begin(), row_group.columns.end(), [schema_idx](auto const& col) {
       return col.schema_idx == schema_idx;
@@ -719,8 +726,9 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
     auto const max_def_level = schema.max_definition_level;
     auto const max_rep_level = schema.max_repetition_level;
 
-    // Return early if any columns lack the offset index.
-    if (not col_chunk.offset_index.has_value()) { return; }
+    // Skip this column chunk if it does not have an offset index. This is because the decode
+    // paths can use column-index-derived information only together with offset index data.
+    if (not col_chunk.offset_index.has_value()) { continue; }
 
     auto const& offset_index = col_chunk.offset_index.value();
 
@@ -822,11 +830,30 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
         }
       }
 
+      // If column-index metadata is insufficient to derive all value information, leave those
+      // fields unset. Later decoding derives the missing values from page headers and levels, and
+      // scans string data when its byte size is unavailable.
+
       chunk_info.pages.push_back(std::move(pg_info));
     }
   }
 
   rg_info.column_chunks = std::move(chunks);
+}
+
+bool aggregate_reader_metadata::has_offset_index(
+  std::span<row_group_info const> row_groups,
+  std::span<input_column_info const> input_columns) const
+{
+  for (auto const& rg_info : row_groups) {
+    auto const& row_group = per_file_metadata[rg_info.source_index].row_groups[rg_info.index];
+    for (auto const& input_column : input_columns) {
+      auto const schema_idx      = map_schema_index(input_column.schema_idx, rg_info.source_index);
+      auto const colchunk_offset = find_colchunk_iter_offset(row_group, schema_idx);
+      if (not row_group.columns[colchunk_offset].offset_index.has_value()) { return false; }
+    }
+  }
+  return true;
 }
 
 void aggregate_reader_metadata::initialize_internals(bool use_arrow_schema,
@@ -1216,8 +1243,9 @@ ColumnChunkMetaData const& aggregate_reader_metadata::get_column_metadata(size_t
   // Map schema index to the provided source file index
   schema_idx = map_schema_index(schema_idx, src_idx);
 
-  auto const& row_group = per_file_metadata[src_idx].row_groups[row_group_index];
-  return row_group.columns[find_colchunk_iter_offset(row_group, schema_idx)].meta_data;
+  auto const& row_group      = per_file_metadata[src_idx].row_groups[row_group_index];
+  auto const colchunk_offset = find_colchunk_iter_offset(row_group, schema_idx);
+  return row_group.columns[colchunk_offset].meta_data;
 }
 
 std::vector<std::unordered_map<std::string, int64_t>>
