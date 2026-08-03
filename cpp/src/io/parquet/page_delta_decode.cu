@@ -356,7 +356,7 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
   uint32_t const skipped_leaf_values = s->setup.page.skipped_leaf_values;
 
   // initialize delta state
-  if (block.thread_rank() == 0) { db->init_binary_block(s->data_start, s->data_end); }
+  if (block.thread_rank() == 0) { db->init_binary_block(s->stream.data_start, s->stream.data_end); }
   block.sync();
 
   auto const batch_size = db->values_per_mb;
@@ -521,7 +521,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   if (block.thread_rank() == 0) {
     // initialize the prefixes and suffixes blocks
-    dba->init(s->data_start, s->data_end, s->setup.page.start_val, s->setup.page.temp_string_buf);
+    dba->init(s->stream.data_start,
+              s->stream.data_end,
+              s->setup.page.start_val,
+              s->setup.page.temp_string_buf);
   }
   block.sync();
 
@@ -728,7 +731,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   // initialize delta state
   if (block.thread_rank() == 0) {
     string_offset    = 0;
-    page_string_data = db->find_end_of_block(s->data_start, s->data_end);
+    page_string_data = db->find_end_of_block(s->stream.data_start, s->stream.data_end);
   }
   block.sync();
 
@@ -763,7 +766,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
         // if there is no repetition, then we need to work through the whole page, so reset the
         // delta decoder to the beginning of the page
-        if (not has_repetition) { db->init_binary_block(s->data_start, s->data_end); }
+        if (not has_repetition) { db->init_binary_block(s->stream.data_start, s->stream.data_end); }
       }
     }
     block.sync();
