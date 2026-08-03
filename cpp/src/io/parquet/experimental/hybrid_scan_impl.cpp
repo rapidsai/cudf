@@ -94,6 +94,12 @@ namespace {
     [](auto sum, auto const& rgs) { return sum + static_cast<size_type>(rgs.size()); });
 }
 
+/**
+ * @brief Get the byte range of a column chunk's dictionary page, if present
+ *
+ * @param column Column chunk metadata with a valid offset index
+ * @return Dictionary page offset and size, or `std::nullopt` when no dictionary page is present
+ */
 [[nodiscard]] std::optional<std::pair<int64_t, int64_t>> dictionary_page_range(
   ColumnChunk const& column)
 {
@@ -102,7 +108,8 @@ namespace {
     auto const offset = column.meta_data.dictionary_page_offset;
     return std::pair{offset, column.meta_data.data_page_offset - offset};
   }
-  if (column.meta_data.data_page_offset < page_locations.front().offset) {
+  if (not page_locations.empty() and
+      column.meta_data.data_page_offset < page_locations.front().offset) {
     auto const offset = column.meta_data.data_page_offset;
     return std::pair{offset, page_locations.front().offset - offset};
   }
@@ -838,11 +845,17 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
   std::size_t chunk_read_limit,
   std::size_t pass_read_limit,
   std::span<std::vector<size_type> const> row_group_indices,
+  cudf::column_view const& row_mask,
   std::span<cudf::device_span<uint8_t const> const> page_data,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(std::cmp_equal(row_mask.size(), total_rows_in_row_groups(row_group_indices)),
+               "Row mask must span across all input row groups");
+  CUDF_EXPECTS(row_mask.null_count() == 0,
+               "Row mask must not have any nulls when materializing payload column");
+
   reset_column_selection();
   prepare_materialization(
     read_columns_mode::PAYLOAD_COLUMNS, row_group_indices.size(), options, stream, mr);
@@ -850,12 +863,12 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
   _input_pass_read_limit   = pass_read_limit;
   _output_chunk_read_limit = chunk_read_limit;
 
-  // Return early if all payload pages are pruned.
-  if (std::all_of(
-        page_data.begin(), page_data.end(), [](auto const& page) { return page.empty(); })) {
+  // Return early if all rows are pruned
+  if (are_all_rows_pruned(row_mask, stream)) {
     auto const empty_row_groups =
       std::vector<std::vector<size_type>>(row_group_indices.size(), std::vector<size_type>{});
     prepare_data(read_mode::CHUNKED_READ, empty_row_groups, {}, {});
+    // Set correct number of input row groups to the output metadata
     _file_itm_data.num_input_row_groups = count_row_groups(row_group_indices);
     return;
   }
@@ -1416,11 +1429,11 @@ void hybrid_scan_reader_impl::set_sparse_pass_page_mask(
   _pass_page_mask = cudf::detail::make_empty_host_vector<bool>(pass->pages.size(), _stream);
 
   // Find the first logical page-data span for every column chunk.
-  auto page_offsets            = std::vector<std::size_t>(chunks.size());
-  auto chunk_idx               = std::size_t{0};
+  auto page_offsets = std::vector<std::size_t>{};
+  page_offsets.reserve(chunks.size());
   auto const num_logical_pages = std::accumulate(
     chunks.begin(), chunks.end(), std::size_t{0}, [&](auto offset, auto const& chunk) {
-      page_offsets[chunk_idx++] = offset;
+      page_offsets.push_back(offset);
       return offset + chunk.num_dict_pages + chunk.num_data_pages;
     });
   CUDF_EXPECTS(page_data.size() == num_logical_pages,

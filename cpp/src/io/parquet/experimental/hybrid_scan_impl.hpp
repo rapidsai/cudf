@@ -194,6 +194,9 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   payload_column_chunks_byte_ranges(std::span<std::vector<size_type> const> row_group_indices,
                                     parquet_reader_options const& options);
 
+  /**
+   * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::payload_pages_byte_ranges
+   */
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
   payload_pages_byte_ranges(std::span<std::vector<size_type> const> row_group_indices,
                             cudf::column_view const& row_mask,
@@ -266,10 +269,15 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr);
 
+  /**
+   * @copydoc
+   * cudf::io::parquet::experimental::hybrid_scan_multifile::setup_chunking_for_payload_columns
+   */
   void setup_chunking_for_payload_columns(
     std::size_t chunk_read_limit,
     std::size_t pass_read_limit,
     std::span<std::vector<size_type> const> row_group_indices,
+    cudf::column_view const& row_mask,
     std::span<cudf::device_span<uint8_t const> const> page_data,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream,
@@ -424,7 +432,8 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    *
    * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param row_group_indices Row group indices to read
-   * @param column_chunk_data Device spans of buffers containing column chunk data
+   * @param column_chunk_data Device spans containing column chunk data, or page data when sparse
+   *        page I/O is enabled
    * @param data_page_mask Input data page mask from page-pruning step
    */
   void prepare_data(read_mode mode,
@@ -467,7 +476,8 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @brief Ratchet the pass/subpass/chunk process forward.
    *
    * @param mode Value indicating if the data sources are read all at once or chunk by chunk
-   * @param column_chunk_data Device spans of buffers containing column chunk data
+   * @param column_chunk_data Device spans containing column chunk data, or page data when sparse
+   *        page I/O is enabled
    * @param data_page_mask Input data page mask for the current pass
    */
   void handle_chunking(read_mode mode,
@@ -480,7 +490,8 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * A 'pass' is defined as a subset of row groups read out of the globally
    * requested set of all row groups.
    *
-   * @param column_chunk_data Device spans of buffers containing column chunk data
+   * @param column_chunk_data Device spans containing column chunk data, or page data when sparse
+   *        page I/O is enabled
    * @param data_page_mask Input data page mask for the current pass
    */
   void setup_next_pass(std::span<cudf::device_span<uint8_t const> const> column_chunk_data,

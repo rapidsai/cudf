@@ -211,6 +211,7 @@ chunked_sparse_hybrid_scan_multifile(
   reader.setup_chunking_for_payload_columns(chunk_read_limit,
                                             pass_read_limit,
                                             row_groups,
+                                            row_mask->view(),
                                             payload_page_data.flat_spans,
                                             options,
                                             stream,

@@ -267,8 +267,7 @@ class hybrid_scan_multifile {
    * source map has one source index per byte range. Dictionary pages precede data pages within each
    * column chunk. Pruned pages are represented by empty byte ranges.
    *
-   * @throws std::invalid_argument if any selected column chunk does not have a valid offset
-   * index
+   * @throws cudf::logic_error if any selected column chunk does not have a valid offset index
    *
    * @param row_group_indices Input row group indices, one vector per source
    * @param row_mask Boolean mask spanning the selected row groups
@@ -414,6 +413,8 @@ class hybrid_scan_multifile {
    * @param chunk_read_limit Maximum bytes returned per output table chunk, or zero
    * @param pass_read_limit Maximum read/decompression memory, or zero
    * @param row_group_indices Input row group indices, one vector per source
+   * @param row_mask Boolean column spanning all selected rows across all sources and indicating
+   * which rows need to be read
    * @param page_data Flattened device spans of payload page data in the same order as the byte
    * ranges from `payload_pages_byte_ranges`
    * @param options Parquet reader options
@@ -424,6 +425,7 @@ class hybrid_scan_multifile {
     std::size_t chunk_read_limit,
     std::size_t pass_read_limit,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
+    cudf::column_view const& row_mask,
     cudf::host_span<cudf::device_span<uint8_t const> const> page_data,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream,

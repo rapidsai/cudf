@@ -239,6 +239,7 @@ void hybrid_scan_multifile::setup_chunking_for_payload_columns(
   std::size_t chunk_read_limit,
   std::size_t pass_read_limit,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
+  cudf::column_view const& row_mask,
   cudf::host_span<cudf::device_span<uint8_t const> const> page_data,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream,
@@ -246,7 +247,7 @@ void hybrid_scan_multifile::setup_chunking_for_payload_columns(
 {
   CUDF_FUNC_RANGE();
   _impl->setup_chunking_for_payload_columns(
-    chunk_read_limit, pass_read_limit, row_group_indices, page_data, options, stream, mr);
+    chunk_read_limit, pass_read_limit, row_group_indices, row_mask, page_data, options, stream, mr);
 }
 
 table_with_metadata hybrid_scan_multifile::materialize_payload_columns_chunk(

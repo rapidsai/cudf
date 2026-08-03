@@ -155,21 +155,19 @@ void hybrid_scan_reader_impl::setup_next_pass(
     // store off how much memory we've used so far. This includes the compressed page data and the
     // decompressed dictionary data. we will subtract this from the available total memory for the
     // subpasses
-    auto const compressed_data_size =
-      _sparse_page_io
-        ? std::accumulate(column_chunk_data.begin(),
-                          column_chunk_data.end(),
-                          std::size_t{0},
-                          [](auto size, auto const& page) { return size + page.size(); })
-        : [&] {
-            auto chunk_iter = thrust::make_transform_iterator(
-              pass.chunks.d_begin(), parquet::detail::get_chunk_compressed_size{});
-            return cudf::detail::reduce(chunk_iter,
-                                        chunk_iter + pass.chunks.size(),
-                                        size_t{0},
-                                        cuda::std::plus<size_t>{},
-                                        _stream);
-          }();
+    auto const compressed_data_size = [&] {
+      // In Sparse I/O case, compressed chunk size is the sum of its page data span sizes
+      if (_sparse_page_io) {
+        return std::accumulate(column_chunk_data.begin(),
+                               column_chunk_data.end(),
+                               std::size_t{0},
+                               [](auto size, auto const& page) { return size + page.size(); });
+      }
+      auto chunk_iter = thrust::make_transform_iterator(
+        pass.chunks.d_begin(), parquet::detail::get_chunk_compressed_size{});
+      return cudf::detail::reduce(
+        chunk_iter, chunk_iter + pass.chunks.size(), size_t{0}, cuda::std::plus<size_t>{}, _stream);
+    }();
     pass.base_mem_size = decomp_dict_data_size + compressed_data_size;
 
     // if we are doing subpass reading, generate more accurate num_row estimates for list columns.

@@ -198,6 +198,8 @@ void hybrid_scan_reader_impl::setup_sparse_compressed_data(
 {
   auto& pass = *_pass_itm_data;
 
+  // This function should never be called if `num_rows == 0`.
+  CUDF_EXPECTS(_pass_itm_data->num_rows > 0, "Number of reading rows must not be zero.");
   CUDF_EXPECTS(_has_offset_index, "Sparse page I/O requires complete offset indexes");
 
   auto& chunks           = pass.chunks;
