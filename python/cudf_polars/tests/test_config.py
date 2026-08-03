@@ -298,7 +298,6 @@ def test_validate_cluster() -> None:
         "client_device_threshold",
         "max_io_threads",
         "num_prefetch_workers",
-        "spill_to_pinned_memory",
         "num_py_executors",
     ],
 )
