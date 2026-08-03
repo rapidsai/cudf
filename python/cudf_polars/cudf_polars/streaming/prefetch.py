@@ -289,6 +289,7 @@ class HybridScanPrefetchExecutor:
             )
         loop = asyncio.get_running_loop()
         stream_pool = context.br().stream_pool
+        # TODO: Consider reusing ir_context.py_executor instead of a dedicated pool.
         executor = ThreadPoolExecutor(
             max_workers=num_workers,
             thread_name_prefix="hybrid-prefetch",

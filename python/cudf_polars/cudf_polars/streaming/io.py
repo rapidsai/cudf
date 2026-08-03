@@ -273,6 +273,7 @@ def copy_host_ranges_to_device(
     with nvtx_annotate_cudf_polars(message="pread_ranges:wait"):
         for f in futures:
             f.get()
+    # TODO: Reserve device memory via rapidsmpf before allocating.
     buf = DeviceBuffer(size=total)
     buf.copy_from_host(host[:total], stream=stream)
     gv = plc.gpumemoryview(buf)
