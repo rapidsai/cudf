@@ -1175,7 +1175,7 @@ def _run_query_loop(
             query_result: QueryResult = getattr(benchmark, f"q{q_id}")(run_config)
             if (args.explain or args.explain_logical) and engine is not None:
                 # If this fails during serialization, we have issues. But we'd
-                # rather see what the issues are with execution that query serialization,
+                # rather see what the issues are with execution than query serialization,
                 # so ignore exceptions here.
                 with contextlib.suppress(Exception):
                     plan = serialize_query(query_result.frame, engine)
