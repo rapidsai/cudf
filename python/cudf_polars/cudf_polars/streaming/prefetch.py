@@ -84,7 +84,7 @@ def pread_ranges(
     buf = PinnedBuffer(pinned_mr, total, stream, context, loop)
     futures = []
     offset = 0
-    with nvtx_annotate_cudf_polars(message=f"pread_ranges:submit:{total}B"):
+    with nvtx_annotate_cudf_polars(message="read_ranges:submit", payload=total):
         for r in ranges:
             futures.append(
                 handle.pread(
@@ -159,7 +159,11 @@ def prefetch_scan_byte_ranges(
         return None
 
     options = (
-        plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(scan.paths))
+        plc.io.parquet.ParquetReaderOptions.builder(
+            plc.io.SourceInfo(
+                [plc.io.types.FilepathSource(cached_info[0].path, cached_info[0].size)]
+            )
+        )
         .decimal_width(plc.TypeId.DECIMAL128)
         .build()
     )
@@ -203,7 +207,8 @@ def prefetch_scan_byte_ranges(
     filter_bytes = sum(r.size for r in filter_ranges)
     payload_bytes = sum(r.size for r in payload_ranges)
     with nvtx_annotate_cudf_polars(
-        message=f"pread_filter_and_payload [{scan.split_index + 1}/{scan.total_splits}]:filter={filter_bytes}B,payload={payload_bytes}B"
+        message="pread_filter_and_payload",
+        payload=(scan.split_index + 1, scan.total_splits, filter_bytes, payload_bytes),
     ):
         filter_host, filter_futures, filter_buf = pread_ranges(
             handle, filter_ranges, pinned_mr, stream, context, loop

@@ -306,7 +306,7 @@ def _read_with_hybrid_scan(
         "hybrid scan only supported for SplitScan; one physical file"
     )
     with nvtx_annotate_cudf_polars(
-        message=f"HybridScan: {paths[0]} [{split_index + 1}/{total_splits}]"
+        message="HybridScan", payload=(split_index + 1, total_splits)
     ):
         options = (
             plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(paths))
