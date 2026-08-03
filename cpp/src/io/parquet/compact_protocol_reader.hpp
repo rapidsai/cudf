@@ -50,7 +50,11 @@ class CompactProtocolReader {
     // Guard against `nullptr + len` (undefined) so a zero-length buffer stays fully defined.
     m_end = base != nullptr ? base + len : base;
   }
-  [[nodiscard]] ptrdiff_t bytecount() const noexcept { return m_cur - m_base; }
+  [[nodiscard]] ptrdiff_t bytecount() const noexcept
+  {
+    // Avoid `nullptr - nullptr` on a null-base reader; it has consumed nothing.
+    return m_base != nullptr ? m_cur - m_base : 0;
+  }
   unsigned int getb() noexcept { return (m_cur < m_end) ? *m_cur++ : 0; }
   void skip_bytes(size_t bytecnt) noexcept
   {
