@@ -217,8 +217,12 @@ def _infer_shape(obj: list, depth: int) -> tuple[int, ...]:
 
     shape = (len(obj),)
     if depth == 1:
+        if any(isinstance(value, list) for value in obj):
+            raise ValueError("Inconsistent inner list shapes")
         return shape
 
+    if not isinstance(obj[0], list):
+        raise ValueError("Inconsistent inner list shapes")
     first_shape = _infer_shape(obj[0], depth - 1)
     for sub in obj[1:]:
         if not isinstance(sub, list) or _infer_shape(sub, depth - 1) != first_shape:

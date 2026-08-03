@@ -102,6 +102,8 @@ def test_from_list_irregular_shapes_raises():
     [
         [[[1], [2]], [[3, 4], [5, 6]]],
         [[[1, 2], [3, 4]], [[5], [6, 7, 8]]],
+        [[[1]], [2]],
+        [[[1]], [[[2, 3]]]],
     ],
 )
 def test_from_list_deeply_irregular_shapes_raises(data):
