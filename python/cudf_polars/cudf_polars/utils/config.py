@@ -237,15 +237,6 @@ class ParquetOptions:
         Whether to use the two-pass ``HybridScanReader`` for ``SplitScan``
         tasks when a predicate can be pushed down to a parquet filter.
         Default is False.
-    hybrid_scan_stats_pruning
-        Whether to apply row-group stats and bloom-filter pruning before the
-        first pass of a hybrid scan. When ``True`` (default), row groups are
-        filtered via ``filter_row_groups_with_stats`` and
-        ``filter_row_groups_with_bloom_filters`` before any data is read.
-        Set to ``False`` to skip all pre-first-pass pruning and read every
-        row group assigned to this split, which is useful for benchmarking
-        the two-pass read overhead in isolation.
-        Only has effect when ``use_hybrid_scan`` is ``True``.
     prefetch_file_metadata
         Whether to prefetch parquet file metadata and pass it through
         `parquet_metadatas` to avoid rereading file footers.
@@ -309,7 +300,10 @@ class ParquetOptions:
             default=False,
         )
     )
-    hybrid_scan_stats_pruning: bool = dataclasses.field(
+    # Internal benchmarking flag. When False, skips stats and bloom-filter pruning
+    # before the first pass of a hybrid scan so you can measure two-pass read
+    # overhead in isolation. No reason to set this to False in production.
+    _hybrid_scan_stats_pruning: bool = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__HYBRID_SCAN_STATS_PRUNING",
             _bool_converter,
@@ -341,8 +335,8 @@ class ParquetOptions:
             raise TypeError("use_rapidsmpf_native must be a bool")
         if not isinstance(self.use_hybrid_scan, bool):
             raise TypeError("use_hybrid_scan must be a bool")
-        if not isinstance(self.hybrid_scan_stats_pruning, bool):
-            raise TypeError("hybrid_scan_stats_pruning must be a bool")
+        if not isinstance(self._hybrid_scan_stats_pruning, bool):
+            raise TypeError("_hybrid_scan_stats_pruning must be a bool")
         if not isinstance(self.prefetch_file_metadata, bool):
             raise TypeError("prefetch_file_metadata must be a bool")
 

@@ -652,7 +652,7 @@ class SplitScan(IR):
                         base_scan_id,
                         split_index=split_index,
                         total_splits=total_splits,
-                        stats_pruning=parquet_options.hybrid_scan_stats_pruning,
+                        stats_pruning=parquet_options._hybrid_scan_stats_pruning,
                     )
 
         else:
