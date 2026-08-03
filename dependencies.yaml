@@ -615,7 +615,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - &cmake_ver cmake>=4.0
-          - &ninja ninja
+          - ninja
   build_all:
     common:
       - output_types: conda
@@ -774,21 +774,27 @@ dependencies:
               use_cuda_wheels: "true"
             packages:
               - cuda-toolkit==12.2.*
+              # Pin the oldest available cuFile wheel, released with CUDA Toolkit 12.6.3.
+              - nvidia-cufile-cu12==1.11.1.6.*
           - matrix:
               cuda: "12.5"
               use_cuda_wheels: "true"
             packages:
               - cuda-toolkit==12.5.*
+              # Pin the oldest available cuFile wheel, released with CUDA Toolkit 12.6.3.
+              - nvidia-cufile-cu12==1.11.1.6.*
           - matrix:
               cuda: "12.8"
               use_cuda_wheels: "true"
             packages:
               - cuda-toolkit==12.8.*
+              - nvidia-cufile-cu12==1.13.1.3.*
           - matrix:
               cuda: "12.9"
               use_cuda_wheels: "true"
             packages:
               - cuda-toolkit==12.9.*
+              - nvidia-cufile-cu12>=1.13.1.3
           - matrix:
               cuda: "13.0"
               use_cuda_wheels: "true"
@@ -815,6 +821,7 @@ dependencies:
         packages:
           - cuda-cudart-dev
           - cuda-cupti-dev
+          - cuda-profiler-api
           - cuda-nvrtc-dev
           - cuda-nvtx-dev
           - cuda-sanitizer-api
@@ -977,12 +984,14 @@ dependencies:
               use_cuda_wheels: "true"
             packages:
               - cuda-toolkit[nvcc,nvrtc]==12.*
+              # cuda-toolkit before 12.6.3 does not have the `cufile` extra.
+              - nvidia-cufile-cu12
           - matrix:
               cuda: "13.*"
               cuda_suffixed: "true"
               use_cuda_wheels: "true"
             packages:
-              - cuda-toolkit[nvcc,nvrtc]==13.*
+              - cuda-toolkit[cufile,nvcc,nvrtc]==13.*
           - {matrix: null, packages: []}
   run_cudf_polars:
     common:
@@ -1214,6 +1223,10 @@ dependencies:
         packages:
           # https://github.com/narwhals-dev/narwhals/blob/main/pyproject.toml#L67
           - pytest-env
+          # narwhals uses the uv_build backend, so its editable install needs
+          # uv and uv-build available (with --no-build-isolation)
+          - uv
+          - uv-build
   depends_on_libcudf:
     common:
       - output_types: conda
@@ -1241,11 +1254,11 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-        # TODO: Remove after https://github.com/rapidsai/build-planning/issues/301 is resolved.
-        - numba>=0.60.0,<0.65.0
+          # TODO: Remove after https://github.com/rapidsai/build-planning/issues/301 is resolved.
+          - numba>=0.60.0,<0.65.0
       - output_types: [conda]
         packages:
-        - &numba_cuda numba-cuda>=0.22.2
+          - &numba_cuda numba-cuda>=0.22.2
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -1360,7 +1373,7 @@ dependencies:
     common:
       - output_types: [conda, pyproject]
         packages:
-          - &cudf_kafka_unsuffixed cudf_kafka==26.10.*,>=0.0.0a0
+          - cudf_kafka==26.10.*,>=0.0.0a0
   depends_on_cupy:
     common:
       - output_types: conda
@@ -1695,8 +1708,9 @@ dependencies:
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
           - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/
+          - *dask_cuda_unsuffixed
     specific:
-      - output_types: [requirements, pyproject]
+      - output_types: pyproject
         matrices:
           - matrix:
               cuda: "12.*"
@@ -1735,7 +1749,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - narwhals==2.16.0
+          - narwhals==2.24.0
   cudf_polars_trace:
     common:
       - output_types: [conda, requirements, pyproject]

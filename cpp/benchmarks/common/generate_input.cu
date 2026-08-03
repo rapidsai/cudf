@@ -43,7 +43,6 @@
 #include <thrust/for_each.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/random/uniform_int_distribution.h>
 #include <thrust/random/uniform_real_distribution.h>
@@ -793,7 +792,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     auto offsets = len_dist(engine, current_num_rows + 1);
     auto valids  = valid_dist(engine, current_num_rows);
     // to ensure these values <= current_child_column->size()
-    auto output_offsets = thrust::make_transform_output_iterator(
+    auto output_offsets = cuda::make_transform_output_iterator(
       offsets.begin(), clamp_down{current_child_column->size()});
 
     thrust::exclusive_scan(thrust::device, offsets.begin(), offsets.end(), output_offsets);
