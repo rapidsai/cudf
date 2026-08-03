@@ -457,7 +457,7 @@ class aggregate_reader_metadata {
     size_type row_group_index,
     size_type src_idx,
     std::optional<std::span<input_column_info const>> input_columns) const;
-  
+
   /**
    * @brief Check if all row groups have an offset index
    *
