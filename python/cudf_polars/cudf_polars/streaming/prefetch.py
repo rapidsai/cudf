@@ -123,18 +123,15 @@ def prefetch_scan_byte_ranges(
     Returns
     -------
     PrefetchedByteRanges | None
-        None when the split cannot use the hybrid-scan path, signalling
-        the producer to fall back to SplitScan.do_evaluate.
+        ``None`` when the predicate cannot be expressed as a parquet filter,
+        in which case the producer falls back to ``SplitScan.do_evaluate``.
+        :meth:`PrefetchedByteRanges.empty` when all row groups are pruned away.
     """
     cached_info = scan.cached_parquet_info
-    if cached_info is None:
-        return None
+    assert cached_info is not None
 
     row_group_num_rows = cached_info[0].file_metadata.row_group_num_rows
     total_row_groups = len(row_group_num_rows)
-
-    if scan.total_splits > total_row_groups:
-        return None
 
     rg_stride = total_row_groups // scan.total_splits
     skip_rgs = rg_stride * scan.split_index
@@ -146,8 +143,7 @@ def prefetch_scan_byte_ranges(
     row_group_indices = list(range(skip_rgs, end_rg))
 
     predicate = scan.base_scan.predicate
-    if predicate is None:
-        return None
+    assert predicate is not None
 
     plc_filter = to_parquet_filter(
         _prepare_parquet_predicate(
