@@ -200,12 +200,13 @@ std::unique_ptr<column> remove_duplicate_keys(dictionary_column_view const& inpu
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
 {
+  if (input.size() == 0) { return std::make_unique<column>(input.parent(), stream, mr); }
   // deduplicate keys
   auto unique_keys = cudf::detail::stable_distinct(table_view{{input.keys()}},
                                                    {0},
                                                    duplicate_keep_option::KEEP_FIRST,
                                                    null_equality::EQUAL,
-                                                   nan_equality::ALL_EQUAL,
+                                                   nan_equality::UNEQUAL,
                                                    stream,
                                                    cudf::get_current_device_resource_ref());
   // set_keys then remaps all indices into this compacted key set in a single pass
