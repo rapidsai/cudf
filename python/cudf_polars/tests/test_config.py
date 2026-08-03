@@ -91,9 +91,11 @@ def test_invalid_device_raises(device, monkeypatch):
 
 def test_failed_device_switch_does_not_set_seen_device(monkeypatch):
     monkeypatch.setattr(cudf_polars.callback, "SEEN_DEVICE", None)
-    monkeypatch.setattr(gpu, "getDevice", lambda: 0)
+    monkeypatch.setattr(gpu, "getDevice", lambda: 1)
+    calls = []
 
     def fail_for_invalid_device(device):
+        calls.append(device)
         if device == -1:
             raise RuntimeError("invalid device")
 
@@ -111,6 +113,7 @@ def test_failed_device_switch_does_not_set_seen_device(monkeypatch):
         pass
 
     assert cudf_polars.callback.SEEN_DEVICE == 0
+    assert calls == [-1, 0, 1]
 
 
 def test_multiple_devices_in_same_process_raise(monkeypatch):
