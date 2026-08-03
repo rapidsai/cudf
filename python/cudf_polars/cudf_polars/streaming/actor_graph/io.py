@@ -51,6 +51,7 @@ from cudf_polars.streaming.actor_graph.utils import (
     send_metadata,
 )
 from cudf_polars.streaming.io import (
+    SplitScan,
     StreamingScan,
     StreamingSink,
     _evaluate_with_prefetch,
@@ -76,7 +77,7 @@ if TYPE_CHECKING:
         PartitionInfo,
         StatsCollector,
     )
-    from cudf_polars.streaming.io import FusedScan, PrefetchedByteRanges, SplitScan
+    from cudf_polars.streaming.io import FusedScan, PrefetchedByteRanges
     from cudf_polars.utils.config import ParquetOptions
 
 
@@ -528,6 +529,7 @@ def evaluate_with_prefetch(
     """Evaluate a scan using parquet byte ranges prefetched into pinned host memory."""
     prefetched: PrefetchedByteRanges | None = prefetcher.result(task_idx)
     if prefetched is None:
+        # The predicate could not be expressed as a parquet filter for this split.
         return scan.do_evaluate(*scan._non_child_args, context=context)
     return _evaluate_with_prefetch(scan, prefetched, context=context)
 
@@ -644,6 +646,9 @@ async def scan_node(
         and first.cached_parquet_info is not None
         and first.base_scan.predicate is not None
         and prefetch_backend is not None
+        and isinstance(first, SplitScan)
+        and first.total_splits
+        <= len(first.cached_parquet_info[0].file_metadata.row_group_num_rows)
         and context.br().pinned_mr is not None
     )
     prefetcher: HybridScanPrefetchExecutor | None = (
