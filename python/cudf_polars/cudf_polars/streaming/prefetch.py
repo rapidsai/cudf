@@ -24,7 +24,6 @@ _cucascade_engine_lock = threading.Lock()
 import pylibcudf as plc
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.streaming.core.memory_reserve_or_wait import reserve_memory
-from rmm.pylibrmm.stream import Stream
 
 from cudf_polars.dsl.ir import _prepare_parquet_predicate
 from cudf_polars.dsl.to_ast import to_parquet_filter
@@ -37,8 +36,10 @@ if TYPE_CHECKING:
     from kvikio.cufile import CuFile, IOFuture
     from kvikio.remote_file import RemoteFile
 
+    from rapidsmpf.memory.memory_reservation import MemoryReservation
     from rapidsmpf.memory.pinned_memory_resource import PinnedMemoryResource
     from rapidsmpf.streaming.core.context import Context
+    from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.streaming.io import SplitScan
 
@@ -53,27 +54,17 @@ class PinnedBuffer:
         mr: PinnedMemoryResource,
         nbytes: int,
         stream: Stream,
-        context: Context,
-        loop: asyncio.AbstractEventLoop,
+        reservation: MemoryReservation,
     ) -> None:
         self.mr = mr
         self.nbytes = nbytes
-        self.stream = stream  # keep alive so __del__ can pass it back to the pool
-        self.reservation = asyncio.run_coroutine_threadsafe(
-            reserve_memory(
-                context,
-                size=nbytes,
-                net_memory_delta=nbytes,
-                mem_type=MemoryType.PINNED_HOST,
-            ),
-            loop,
-        ).result()
+        self.stream = stream
+        self.reservation = reservation
         self.ptr = mr.allocate(nbytes, stream)
         self.array = memoryview((ctypes.c_uint8 * nbytes).from_address(self.ptr))
 
     def __del__(self) -> None:  # noqa: D105
-        # Guard against partial init (e.g. if reserve_memory raised before
-        # self.reservation was set).
+        # Guard against partial init.
         if hasattr(self, "reservation"):
             self.reservation.clear()
         if hasattr(self, "ptr"):
@@ -92,7 +83,18 @@ def pread_ranges(
     total = sum(r.size for r in ranges)
     if not total:
         return None, [], None
-    buf = PinnedBuffer(pinned_mr, total, stream, context, loop)
+    # Blocks this worker thread, not the event loop. The loop stays free to
+    # run other coroutines while we wait for the reservation.
+    reservation = asyncio.run_coroutine_threadsafe(
+        reserve_memory(
+            context,
+            size=total,
+            net_memory_delta=total,
+            mem_type=MemoryType.PINNED_HOST,
+        ),
+        loop,
+    ).result()
+    buf = PinnedBuffer(pinned_mr, total, stream, reservation)
     futures = []
     offset = 0
     with nvtx_annotate_cudf_polars(message="read_ranges:submit", payload=total):
@@ -524,10 +526,11 @@ class HybridScanPrefetchExecutor:
                     "enable pinned memory via --pinned-memory."
                 )
             loop = asyncio.get_running_loop()
+            stream_pool = context.br().stream_pool
 
             def task(s: SplitScan) -> PrefetchedByteRanges | None:
                 return prefetch_scan_byte_ranges(
-                    s, cls.thread_local.stream, pinned_mr, context, loop
+                    s, stream_pool.get_stream(), pinned_mr, context, loop
                 )
 
         futures = [executor.submit(task, scan) for scan in scans]
