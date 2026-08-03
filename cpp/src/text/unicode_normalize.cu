@@ -218,6 +218,7 @@ struct build_comp_table_fn {
       if (tok < 2) { tokens[tok++] = hex_to_cp(ptr, size); }
     };
     for_each_decomp_token(decomp_map.element<cudf::string_view>(idx), false, fn);
+
     if (tok < 2) { return; }
     auto const composed = d_codepoints[idx];
     if (composed > MAX_CODEPOINT) { return; }
@@ -227,6 +228,7 @@ struct build_comp_table_fn {
           thrust::seq, COMPOSITION_EXCLUSIONS.begin(), COMPOSITION_EXCLUSIONS.end(), composed)) {
       return;
     }
+
     if (starter > MAX_CODEPOINT || combining > MAX_CODEPOINT) { return; }
     if (ccc_table[starter] != 0) { return; }  // non-starter decomposition — excluded
     d_comp_keys[idx]   = (static_cast<uint64_t>(starter) << 32) | combining;

@@ -843,6 +843,7 @@ ConfigureTest(
   streams/text/replace_test.cpp
   streams/text/stemmer_test.cpp
   streams/text/tokenize_test.cpp
+  streams/text/unicode_normalize_test.cpp
   STREAM_MODE
   testing
 )
