@@ -211,6 +211,8 @@ def _plan_hybrid_scan_prefetch(
             row_group_indices, options
         )
 
+    # TODO: coalesce nearby ranges before issuing pread calls.
+    # https://github.com/rapidsai/cudf/pull/23317#discussion_r3668809937
     return PrefetchedByteRanges(
         row_group_indices=row_group_indices,
         filter_ranges=filter_ranges,
