@@ -617,8 +617,8 @@ function(precompile_string_kernel_fragments)
   foreach(OUTPUT_TYPE OUTPUT_COLUMN_TYPE IN ZIP_LISTS CUDF_PRECOMPILE_STRING_OUTPUT_PHYSICAL_TYPES
                       CUDF_PRECOMPILE_STRING_OUTPUT_COLUMN_TYPES
   )
-    # Pre-compile for up to 4 output columns
-    foreach(OUTPUT_INDICES IN ITEMS "0" "0;1" "0;1;2" "0;1;2;3")
+    # Pre-compile for up to 8 output columns
+    foreach(OUTPUT_INDICES IN ITEMS "0" "0;1" "0;1;2" "0;1;2;3" "0;1;2;3;4" "0;1;2;3;4;5" "0;1;2;3;4;5;6" "0;1;2;3;4;5;6;7")
       set(FRAGMENT_NAME transform_kernel)
       get_property(
         FILE_INDEX

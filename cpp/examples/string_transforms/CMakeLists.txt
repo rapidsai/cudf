@@ -59,40 +59,40 @@ add_string_transforms_example(localize_phone_jit localize_phone_jit.cpp)
 add_string_transforms_example(localize_phone_precompiled localize_phone_precompiled.cpp)
 
 # Compile and embed the UDFs so we can link them at runtime
-rtcx_add_embed(http_log_fragments)
+rtcx_add_embed(url_log_fragments)
 add_fragment(
-  http_log_fragments
+  url_log_fragments
   FRAGMENT
-  request_line_sizes
+  url_component_sizes
   SOURCE
-  http_logs/fragments.cu
+  url_logs/fragments.cu
   DEFINITIONS
   UDF_COMPUTE_SIZES
   INCLUDE_DIRECTORIES
-  ${CMAKE_CURRENT_LIST_DIR}/http_logs
+  ${CMAKE_CURRENT_LIST_DIR}/url_logs
   LINK_LIBRARIES
   cudf::cudf
 )
 add_fragment(
-  http_log_fragments
+  url_log_fragments
   FRAGMENT
-  request_line_output
+  url_component_output
   SOURCE
-  http_logs/fragments.cu
+  url_logs/fragments.cu
   DEFINITIONS
   UDF_WRITE_OUTPUT
   INCLUDE_DIRECTORIES
-  ${CMAKE_CURRENT_LIST_DIR}/http_logs
+  ${CMAKE_CURRENT_LIST_DIR}/url_logs
   LINK_LIBRARIES
   cudf::cudf
 )
-rtcx_embed(http_log_fragments COMPRESSION none OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/embed")
+rtcx_embed(url_log_fragments COMPRESSION none OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/embed")
 
-add_string_transforms_example(http_log_transforms http_logs/transforms.cpp)
-target_sources(http_log_transforms PRIVATE ${http_log_fragments_SOURCE_DIR}/http_log_fragments.s)
-target_include_directories(http_log_transforms PRIVATE ${http_log_fragments_SOURCE_DIR})
-add_dependencies(http_log_transforms http_log_fragments)
+add_string_transforms_example(url_log_transforms url_logs/transforms.cpp)
+target_sources(url_log_transforms PRIVATE ${url_log_fragments_SOURCE_DIR}/url_log_fragments.s)
+target_include_directories(url_log_transforms PRIVATE ${url_log_fragments_SOURCE_DIR})
+add_dependencies(url_log_transforms url_log_fragments)
 
-install(FILES ${CMAKE_CURRENT_LIST_DIR}/info.csv ${CMAKE_CURRENT_LIST_DIR}/http_logs/logs.csv
+install(FILES ${CMAKE_CURRENT_LIST_DIR}/info.csv ${CMAKE_CURRENT_LIST_DIR}/url_logs/logs.csv
         DESTINATION bin/examples/libcudf/string_transformers
 )

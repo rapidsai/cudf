@@ -15,14 +15,14 @@ The following examples are included:
 5. `extract_email_precompiled` - Performs same transformation on the table as `output` but uses precompiled public APIs
 6. `format_phone_jit` - Using a transform kernel to output a string to a pre-allocated buffer
 7. `format_phone_precompiled` - Performs same transformation on the table as `preallocated` but uses precompiled public APIs
-8. `http_log_transforms` - Compares four multi-output HTTP log extractors:
-   - `regex`: `cudf::strings::extract` with a regex program.
-   - `precompiled`: public string partition and slice APIs, without regular expressions.
-   - `jit`: two CUDA source transforms compiled at runtime. The first produces exact per-row string
-     sizes; inclusive scans turn those sizes into run-end offsets, and the second writes directly to
-     the resulting string character buffers.
-   - `lto`: the same sizing and output transform ABI, AOT-compiled to embedded fatbins and JIT-linked
-     with libcudf's precompiled transform kernels.
+8. `url_log_transforms` - Searches raw text log lines for an embedded URL and decomposes the
+   first match into protocol, host, port, path, query, and fragment columns (based on https://datatracker.ietf.org/doc/html/rfc3986):
+   - `regex`: one six-capture `cudf::strings::extract` expression.
+   - `precompiled`: sequential public partition, conditional-copy, and concatenate APIs.
+   - `jit`: a fused byte parser compiled from CUDA source at runtime. Its sizing pass produces exact
+     per-row output sizes; scans create offsets and a second pass writes all six output columns.
+   - `lto`: the same fused parser ABI, AOT-compiled to embedded fatbins and JIT-linked with
+     libcudf's precompiled transform kernels.
 
 ## Compile and execute
 
