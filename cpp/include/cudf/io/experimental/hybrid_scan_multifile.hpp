@@ -171,8 +171,9 @@ class hybrid_scan_multifile {
   /**
    * @brief Filter the row groups using column chunk bloom filters
    *
-   * @param bloom_filter_data Flattened device spans of bloom filters returned in the same order as
-   *        `bloom_filters_byte_ranges`
+   * @param bloom_filter_data Device spans of header-stripped bloom filter bitsets of column
+   *                           chunks with an equality predicate, ordered to match the bloom filter
+   *                           byte ranges returned by `bloom_filters_byte_ranges`
    * @param row_group_indices Input row group indices
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches

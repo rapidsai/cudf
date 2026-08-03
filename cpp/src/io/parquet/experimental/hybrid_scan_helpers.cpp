@@ -465,7 +465,7 @@ aggregate_reader_metadata::bloom_filters_byte_ranges(
                   std::back_inserter(bloom_filter_col_schemas),
                   [](auto& bloom_filter_literals) { return not bloom_filter_literals.empty(); });
 
-  // No equality literals found, return empty vector
+  // No equality literals found, return empty pair
   if (bloom_filter_col_schemas.empty()) { return {}; }
 
   // Compute total number of input row groups
