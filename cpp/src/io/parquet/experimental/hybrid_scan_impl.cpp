@@ -534,21 +534,23 @@ hybrid_scan_reader_impl::payload_pages_byte_ranges(
                  _input_columns.end(),
                  std::back_inserter(column_schemas),
                  [](auto const& col) { return col.schema_idx; });
-
   CUDF_EXPECTS(_extended_metadata->page_index_presence(row_group_indices, column_schemas).second,
                "Page-level I/O for payload columns requires offset indexes to be present");
-
-  auto data_page_mask = _extended_metadata->compute_data_page_mask(
-    row_mask, row_group_indices, _input_columns, 0, stream);
 
   auto const num_columns = _input_columns.size();
   auto const num_chunks =
     static_cast<std::size_t>(count_row_groups(row_group_indices)) * num_columns;
-  auto chunk_page_counts = std::vector<std::size_t>(num_chunks);
-  auto row_group_ordinal = std::size_t{0};
+
+  // The data page mask is ordered by column (all pages of a column, then the next column) so
+  // accumulate page counts per column to locate each column's portion of the mask.
+  auto mask_offsets = std::vector<std::size_t>(num_columns + 1, 0);
+
+  // For each source
   for (std::size_t source_idx = 0; source_idx < row_group_indices.size(); ++source_idx) {
+    // For each row group in the source
     auto colchunk_offsets = std::vector<std::optional<size_type>>(num_columns);
     for (auto const row_group_idx : row_group_indices[source_idx]) {
+      // For each selected column chunk in the row group
       auto const& row_group = _extended_metadata->get_row_group(row_group_idx, source_idx);
       for (std::size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
         auto const schema_idx =
@@ -556,36 +558,37 @@ hybrid_scan_reader_impl::payload_pages_byte_ranges(
         auto& colchunk_offset = colchunk_offsets[col_idx];
         colchunk_offset =
           parquet::detail::find_colchunk_iter_offset(row_group, schema_idx, colchunk_offset);
-        chunk_page_counts[row_group_ordinal * num_columns + col_idx] =
+        // Accumulate page counts per column
+        mask_offsets[col_idx + 1] +=
           row_group.columns[colchunk_offset.value()].offset_index->page_locations.size();
       }
-      ++row_group_ordinal;
     }
   }
 
-  auto mask_offsets = std::vector<std::size_t>(num_chunks);
-  std::size_t mask_size{0};
-  for (std::size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
-    for (std::size_t chunk_idx = col_idx; chunk_idx < num_chunks; chunk_idx += num_columns) {
-      mask_offsets[chunk_idx] = mask_size;
-      mask_size += chunk_page_counts[chunk_idx];
-    }
-  }
+  // Accumulate page counts per column
+  std::partial_sum(mask_offsets.begin(), mask_offsets.end(), mask_offsets.begin());
+
+  // Compute the data page mask
+  auto const mask_size = mask_offsets.back();
+  auto data_page_mask  = _extended_metadata->compute_data_page_mask(
+    row_mask, row_group_indices, _input_columns, 0, stream);
   CUDF_EXPECTS(data_page_mask.empty() or data_page_mask.size() == mask_size,
                "Computed data page mask does not match offset indexes");
 
+  // Generate page ranges (row group wise) and the corresponding source map
   auto page_ranges = std::vector<byte_range_info>{};
   auto source_map  = std::vector<cudf::size_type>{};
   page_ranges.reserve(mask_size + num_chunks);
   source_map.reserve(mask_size + num_chunks);
 
-  row_group_ordinal = 0;
+  // For each source
   for (std::size_t source_idx = 0; source_idx < row_group_indices.size(); ++source_idx) {
     auto colchunk_offsets = std::vector<std::optional<size_type>>(num_columns);
+    // For each row group in the source
     for (auto const row_group_idx : row_group_indices[source_idx]) {
       auto const& row_group = _extended_metadata->get_row_group(row_group_idx, source_idx);
+      // For each selected column chunk in the row group
       for (std::size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
-        auto const chunk_idx = row_group_ordinal * num_columns + col_idx;
         auto const schema_idx =
           _extended_metadata->map_schema_index(column_schemas[col_idx], source_idx);
         auto& colchunk_offset = colchunk_offsets[col_idx];
@@ -593,31 +596,35 @@ hybrid_scan_reader_impl::payload_pages_byte_ranges(
           parquet::detail::find_colchunk_iter_offset(row_group, schema_idx, colchunk_offset);
         auto const& column_chunk   = row_group.columns[colchunk_offset.value()];
         auto const& page_locations = column_chunk.offset_index->page_locations;
-        auto const mask_offset     = mask_offsets[chunk_idx];
-        auto const any_retained =
+        auto const mask_offset     = mask_offsets[col_idx];
+        auto const any_data_page_retained =
           data_page_mask.empty() or
           std::any_of(data_page_mask.begin() + mask_offset,
                       data_page_mask.begin() + mask_offset + page_locations.size(),
-                      [](bool retained) { return retained; });
+                      cuda::std::identity{});
 
-        auto const dictionary_range = dictionary_page_range(column_chunk);
-
-        auto add_range = [&](bool retained_page, int64_t offset, int64_t size) {
-          page_ranges.emplace_back(offset, retained_page ? size : 0);
+        // Helper lambda to add a page's byte range and source index to the output vectors
+        auto add_page_range = [&](bool is_page_retained, int64_t offset, int64_t size) {
+          page_ranges.emplace_back(offset, is_page_retained ? size : 0);
           source_map.push_back(static_cast<size_type>(source_idx));
         };
 
-        if (dictionary_range.has_value()) {
-          add_range(any_retained, dictionary_range->first, dictionary_range->second);
+        // Add dictionary page range if any of the data pages are also retained
+        if (auto const dict_page_range = dictionary_page_range(column_chunk);
+            dict_page_range.has_value()) {
+          add_page_range(any_data_page_retained, dict_page_range->first, dict_page_range->second);
         }
-        for (std::size_t page_idx = 0; page_idx < page_locations.size(); ++page_idx) {
-          auto const& location = page_locations[page_idx];
-          add_range(data_page_mask.empty() or data_page_mask[mask_offset + page_idx],
-                    location.offset,
-                    static_cast<int64_t>(location.compressed_page_size));
+
+        // Add data page ranges
+        auto mask_iter = data_page_mask.cbegin() + mask_offset;
+        for (auto const& location : page_locations) {
+          add_page_range(data_page_mask.empty() or *mask_iter++,
+                         location.offset,
+                         static_cast<int64_t>(location.compressed_page_size));
         }
+        // Update the mask offset for the next column
+        mask_offsets[col_idx] += page_locations.size();
       }
-      ++row_group_ordinal;
     }
   }
 
@@ -1403,7 +1410,8 @@ void hybrid_scan_reader_impl::set_pass_page_mask(std::span<bool const> data_page
           data_page_mask.size() >= num_inserted_data_pages + num_data_pages_this_col_chunk,
           "Encountered invalid data page mask size");
 
-        if (chunks[chunk_idx].num_dict_pages > 0) { _pass_page_mask.push_back(true); }
+        // Insert a true value for each dictionary page
+        _pass_page_mask.insert(_pass_page_mask.end(), chunks[chunk_idx].num_dict_pages, true);
 
         // Insert page mask for this column chunk
         _pass_page_mask.insert(
