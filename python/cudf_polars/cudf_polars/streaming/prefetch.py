@@ -185,7 +185,17 @@ def _plan_hybrid_scan_prefetch(
             with nvtx_annotate_cudf_polars(
                 message="filter_row_groups_with_bloom_filters"
             ):
-                bloom_chunks = _fetch_byte_ranges(scan.paths, bloom_ranges, stream)
+                bloom_chunks = _fetch_byte_ranges(
+                    plc.io.SourceInfo(
+                        [
+                            plc.io.types.FilepathSource(
+                                cached_info[0].path, cached_info[0].size
+                            )
+                        ]
+                    ),
+                    bloom_ranges,
+                    stream,
+                )
                 row_group_indices = reader.filter_row_groups_with_bloom_filters(
                     bloom_chunks, row_group_indices, options, stream=stream
                 )
