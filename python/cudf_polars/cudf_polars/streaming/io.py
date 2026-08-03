@@ -46,7 +46,6 @@ from cudf_polars.utils.versions import POLARS_VERSION_LT_137
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, MutableMapping, Sequence
-
     from typing import Protocol
 
     class _ReadFuture(Protocol):
@@ -236,6 +235,7 @@ class PrefetchedByteRanges:
     payload_buf: PinnedBuffer | None = dataclasses.field(
         default=None, compare=False, repr=False
     )
+
     @classmethod
     def empty(cls) -> PrefetchedByteRanges:
         """Return a fully-pruned split with no rows to read."""

@@ -13,22 +13,22 @@ from typing import TYPE_CHECKING, Any, Self
 
 import cuda.bindings.runtime as cudart
 
+import pylibcudf as plc
+from rapidsmpf.memory.buffer import MemoryType
+from rapidsmpf.streaming.core.memory_reserve_or_wait import reserve_memory
+
 try:  # pragma: no cover; cucascade is optional
     import cucascade
 except ImportError:
     cucascade = None
 
-_cucascade_engine: Any | None = None
-_cucascade_engine_lock = threading.Lock()
-
-import pylibcudf as plc
-from rapidsmpf.memory.buffer import MemoryType
-from rapidsmpf.streaming.core.memory_reserve_or_wait import reserve_memory
-
 from cudf_polars.dsl.ir import _prepare_parquet_predicate
 from cudf_polars.dsl.to_ast import to_parquet_filter
 from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.streaming.io import PrefetchedByteRanges, _fetch_byte_ranges
+
+_cucascade_engine: list[Any] = []
+_cucascade_engine_lock = threading.Lock()
 
 if TYPE_CHECKING:
     from concurrent.futures import Future
@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from rapidsmpf.memory.memory_reservation import MemoryReservation
     from rapidsmpf.memory.pinned_memory_resource import PinnedMemoryResource
     from rapidsmpf.streaming.core.context import Context
+    from rmm.pylibrmm.cuda_stream_pool import CudaStreamPool
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.streaming.io import SplitScan
@@ -294,7 +295,7 @@ def prefetch_scan_byte_ranges(
 
 def fadvise_scan_byte_ranges(
     scan: SplitScan,
-    stream: Stream,
+    stream_pool: CudaStreamPool,
     datasource_cache: dict[str, Any],
     dev_id: int,
     pinned_mr: PinnedMemoryResource,
@@ -308,8 +309,8 @@ def fadvise_scan_byte_ranges(
     ----------
     scan
         The split scan task to prefetch.
-    stream
-        CUDA stream used for filter expression compilation.
+    stream_pool
+        RMM stream pool to draw a CUDA stream from for filter compilation.
     datasource_cache
         Per-query cache mapping file path to its open datasource.
     dev_id
@@ -327,6 +328,7 @@ def fadvise_scan_byte_ranges(
         None when the split cannot use the hybrid-scan path, signalling
         the producer to fall back to SplitScan.do_evaluate.
     """
+    stream = stream_pool.get_stream()
     planned = _plan_hybrid_scan_prefetch(scan, stream)
     if planned is None or not planned.row_group_indices:
         return planned
@@ -346,8 +348,34 @@ def fadvise_scan_byte_ranges(
 
     # TODO: eliminate the extra copy (cuCascade bounce buffer to rapidsmpf PinnedBuffer
     # to GPU) by having cuCascade expose the staged data as a device buffer directly.
-    filter_buf = PinnedBuffer(pinned_mr, filter_bytes, stream, context, loop)
-    payload_buf = PinnedBuffer(pinned_mr, payload_bytes, stream, context, loop)
+    # Blocks this worker thread, not the event loop. The loop stays free to
+    # run other coroutines while we wait for the reservation.
+    with nvtx_annotate_cudf_polars(
+        message="reserve_pinned_memory", payload=filter_bytes
+    ):
+        filter_reservation = asyncio.run_coroutine_threadsafe(
+            reserve_memory(
+                context,
+                size=filter_bytes,
+                net_memory_delta=filter_bytes,
+                mem_type=MemoryType.PINNED_HOST,
+            ),
+            loop,
+        ).result()
+    with nvtx_annotate_cudf_polars(
+        message="reserve_pinned_memory", payload=payload_bytes
+    ):
+        payload_reservation = asyncio.run_coroutine_threadsafe(
+            reserve_memory(
+                context,
+                size=payload_bytes,
+                net_memory_delta=payload_bytes,
+                mem_type=MemoryType.PINNED_HOST,
+            ),
+            loop,
+        ).result()
+    filter_buf = PinnedBuffer(pinned_mr, filter_bytes, stream, filter_reservation)
+    payload_buf = PinnedBuffer(pinned_mr, payload_bytes, stream, payload_reservation)
 
     filter_future = datasource.read_all_ranges_async(
         [(r.offset, r.size) for r in planned.filter_ranges], filter_buf.array
@@ -376,13 +404,13 @@ def _get_cucascade_engine(
     max_connections: int | None,
     chunk_size: int | None,
     max_n_chunks: int | None,
+    *,
     enable_cache: bool = False,
 ) -> Any:
-    global _cucascade_engine
-    if _cucascade_engine is not None:
-        return _cucascade_engine
+    if _cucascade_engine:
+        return _cucascade_engine[0]
     with _cucascade_engine_lock:
-        if _cucascade_engine is None:
+        if not _cucascade_engine:
             kwargs: dict[str, Any] = {}
             if pool_capacity is not None:
                 kwargs["pool_capacity"] = pool_capacity
@@ -398,17 +426,19 @@ def _get_cucascade_engine(
             if plc.io.SourceInfo._is_remote_uri(path):
                 # TODO: replace with cucascade.RestEngine.from_environment() once
                 # cuCascade exposes a factory that reads standard AWS env vars directly.
-                _cucascade_engine = cucascade.RestEngine(
-                    access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", ""),
-                    secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
-                    session_token=os.environ.get("AWS_SESSION_TOKEN", ""),
-                    region=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
-                    endpoint=os.environ.get("AWS_ENDPOINT_URL", ""),
-                    **kwargs,
+                _cucascade_engine.append(
+                    cucascade.RestEngine(
+                        access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", ""),
+                        secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
+                        session_token=os.environ.get("AWS_SESSION_TOKEN", ""),
+                        region=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
+                        endpoint=os.environ.get("AWS_ENDPOINT_URL", ""),
+                        **kwargs,
+                    )
                 )
             else:
-                _cucascade_engine = cucascade.UringEngine(**kwargs)
-    return _cucascade_engine
+                _cucascade_engine.append(cucascade.UringEngine(**kwargs))
+    return _cucascade_engine[0]
 
 
 class HybridScanPrefetchExecutor:
@@ -417,13 +447,6 @@ class HybridScanPrefetchExecutor:
 
     Submits prefetch work for all splits upfront. Use as a context manager.
     """
-
-    thread_local: threading.local = threading.local()
-
-    @staticmethod
-    def init_stream() -> None:
-        """Initialise a per-thread CUDA stream."""
-        HybridScanPrefetchExecutor.thread_local.stream = Stream()
 
     def __init__(
         self,
@@ -449,6 +472,7 @@ class HybridScanPrefetchExecutor:
         cucascade_max_connections: int | None = None,
         cucascade_chunk_size: int | None = None,
         cucascade_max_n_chunks: int | None = None,
+        *,
         cucascade_enable_cache: bool = False,
     ) -> Self:
         """
@@ -468,6 +492,14 @@ class HybridScanPrefetchExecutor:
             Size in bytes of the cuCascade pinned host memory pool.
         cucascade_n_reactors
             Number of IO reactor threads in the cuCascade engine.
+        cucascade_max_connections
+            Maximum number of concurrent connections in the cuCascade engine.
+        cucascade_chunk_size
+            Size in bytes of each cuCascade IO chunk.
+        cucascade_max_n_chunks
+            Maximum number of in-flight cuCascade IO chunks.
+        cucascade_enable_cache
+            Whether to enable the cuCascade prefetch cache.
 
         Returns
         -------
@@ -484,7 +516,6 @@ class HybridScanPrefetchExecutor:
         # TODO: Consider reusing ir_context.py_executor instead of a dedicated pool.
         executor = ThreadPoolExecutor(
             max_workers=num_workers,
-            initializer=cls.init_stream,
             thread_name_prefix="hybrid-prefetch",
         )
 
@@ -501,7 +532,7 @@ class HybridScanPrefetchExecutor:
                 cucascade_max_connections,
                 cucascade_chunk_size,
                 cucascade_max_n_chunks,
-                cucascade_enable_cache,
+                enable_cache=cucascade_enable_cache,
             )
 
             _, dev_id = cudart.cudaGetDevice()
@@ -513,6 +544,7 @@ class HybridScanPrefetchExecutor:
                     "enable pinned memory via --pinned-memory."
                 )
             loop = asyncio.get_running_loop()
+            stream_pool = context.br().stream_pool
 
             datasource_cache: dict[str, Any] = {}
             for scan in scans:
@@ -522,8 +554,13 @@ class HybridScanPrefetchExecutor:
 
             def task(s: SplitScan) -> PrefetchedByteRanges | None:
                 return fadvise_scan_byte_ranges(
-                    s, cls.thread_local.stream, datasource_cache, dev_id,
-                    pinned_mr, context, loop,
+                    s,
+                    stream_pool,
+                    datasource_cache,
+                    dev_id,
+                    pinned_mr,
+                    context,
+                    loop,
                 )
 
         else:

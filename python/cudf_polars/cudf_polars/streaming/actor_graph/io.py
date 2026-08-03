@@ -659,12 +659,24 @@ async def scan_node(
             else len(scans),
             context=context,
             prefetch_backend=prefetch_backend,  # type: ignore[arg-type]
-            cucascade_pool_capacity=first.parquet_options.cucascade_pool_capacity if first is not None else None,
-            cucascade_n_reactors=first.parquet_options.cucascade_n_reactors if first is not None else None,
-            cucascade_max_connections=first.parquet_options.cucascade_max_connections if first is not None else None,
-            cucascade_chunk_size=first.parquet_options.cucascade_chunk_size if first is not None else None,
-            cucascade_max_n_chunks=first.parquet_options.cucascade_max_n_chunks if first is not None else None,
-            cucascade_enable_cache=first.parquet_options.cucascade_enable_cache if first is not None else False,
+            cucascade_pool_capacity=first.parquet_options.cucascade_pool_capacity
+            if first is not None
+            else None,
+            cucascade_n_reactors=first.parquet_options.cucascade_n_reactors
+            if first is not None
+            else None,
+            cucascade_max_connections=first.parquet_options.cucascade_max_connections
+            if first is not None
+            else None,
+            cucascade_chunk_size=first.parquet_options.cucascade_chunk_size
+            if first is not None
+            else None,
+            cucascade_max_n_chunks=first.parquet_options.cucascade_max_n_chunks
+            if first is not None
+            else None,
+            cucascade_enable_cache=first.parquet_options.cucascade_enable_cache
+            if first is not None
+            else False,
         )
         if use_prefetch
         else None
