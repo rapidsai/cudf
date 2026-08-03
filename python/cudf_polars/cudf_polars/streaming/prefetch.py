@@ -270,7 +270,7 @@ class HybridScanPrefetchExecutor:
         num_workers
             Number of background worker threads.
         context
-            rapidsmpf context. ``context.br().pinned_mr`` must not be ``None``.
+            rapidsmpf context. Pinned memory must be enabled.
 
         Returns
         -------
