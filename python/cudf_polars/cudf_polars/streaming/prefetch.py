@@ -212,6 +212,8 @@ def prefetch_scan_byte_ranges(
     handle = cached_info[0].remote_handle()
     filter_bytes = sum(r.size for r in filter_ranges)
     payload_bytes = sum(r.size for r in payload_ranges)
+    # TODO: coalesce nearby ranges before issuing pread calls.
+    # https://github.com/rapidsai/cudf/pull/23317#discussion_r3668809937
     with nvtx_annotate_cudf_polars(
         message="pread_filter_and_payload",
         payload=(scan.split_index + 1, scan.total_splits, filter_bytes, payload_bytes),
