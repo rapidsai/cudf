@@ -445,7 +445,7 @@ class HybridScanPrefetchExecutor:
         num_workers
             Number of background worker threads.
         context
-            rapidsmpf context.
+            rapidsmpf context. Pinned memory must be enabled.
         prefetch_backend
             ``"kvikio"`` or ``"cucascade"``.
         cucascade_pool_capacity
