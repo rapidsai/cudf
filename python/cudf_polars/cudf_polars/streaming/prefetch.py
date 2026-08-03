@@ -473,6 +473,7 @@ class HybridScanPrefetchExecutor:
             If ``prefetch_backend`` is ``"cucascade"`` and the ``cucascade``
             package is not installed.
         """
+        # TODO: Consider reusing ir_context.py_executor instead of a dedicated pool.
         executor = ThreadPoolExecutor(
             max_workers=num_workers,
             initializer=cls.init_stream,
