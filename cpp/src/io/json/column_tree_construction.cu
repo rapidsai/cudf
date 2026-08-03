@@ -21,6 +21,7 @@
 #include <cuda/iterator>
 #include <cuda/std/tuple>
 #include <thrust/for_each.h>
+#include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
