@@ -1701,9 +1701,14 @@ dependencies:
           - xlsxwriter
   depends_on_dask_cuda:
     common:
-      - output_types: [conda, requirements]
+      - output_types: conda
         packages:
           - &dask_cuda_unsuffixed dask-cuda==26.10.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/
+          - *dask_cuda_unsuffixed
     specific:
       - output_types: pyproject
         matrices:
