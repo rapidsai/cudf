@@ -173,7 +173,7 @@ def _plan_hybrid_scan_prefetch(
 
     reader = cached_info[0].hybrid_scan_reader(id(scan.base_scan), options)
 
-    if scan.parquet_options.hybrid_scan_stats_pruning:
+    if scan.parquet_options._hybrid_scan_stats_pruning:
         with nvtx_annotate_cudf_polars(message="filter_row_groups_with_stats"):
             row_group_indices = reader.filter_row_groups_with_stats(
                 row_group_indices, options, stream=stream
