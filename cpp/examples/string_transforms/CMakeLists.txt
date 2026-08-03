@@ -74,17 +74,8 @@ add_fragment(
   cudf::cudf
 )
 add_fragment(
-  url_log_fragments
-  FRAGMENT
-  url_component_output
-  SOURCE
-  url_logs/fragments.cu
-  DEFINITIONS
-  UDF_WRITE_OUTPUT
-  INCLUDE_DIRECTORIES
-  ${CMAKE_CURRENT_LIST_DIR}/url_logs
-  LINK_LIBRARIES
-  cudf::cudf
+  url_log_fragments FRAGMENT url_component_output SOURCE url_logs/fragments.cu DEFINITIONS
+  UDF_WRITE_OUTPUT INCLUDE_DIRECTORIES ${CMAKE_CURRENT_LIST_DIR}/url_logs LINK_LIBRARIES cudf::cudf
 )
 rtcx_embed(url_log_fragments COMPRESSION none OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/embed")
 

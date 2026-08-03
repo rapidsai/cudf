@@ -618,7 +618,9 @@ function(precompile_string_kernel_fragments)
                       CUDF_PRECOMPILE_STRING_OUTPUT_COLUMN_TYPES
   )
     # Pre-compile for up to 8 output columns
-    foreach(OUTPUT_INDICES IN ITEMS "0" "0;1" "0;1;2" "0;1;2;3" "0;1;2;3;4" "0;1;2;3;4;5" "0;1;2;3;4;5;6" "0;1;2;3;4;5;6;7")
+    foreach(OUTPUT_INDICES IN ITEMS "0" "0;1" "0;1;2" "0;1;2;3" "0;1;2;3;4" "0;1;2;3;4;5"
+                                    "0;1;2;3;4;5;6" "0;1;2;3;4;5;6;7"
+    )
       set(FRAGMENT_NAME transform_kernel)
       get_property(
         FILE_INDEX
