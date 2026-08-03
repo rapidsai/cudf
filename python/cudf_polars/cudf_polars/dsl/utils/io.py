@@ -51,42 +51,28 @@ class CachedParquetInfo:
     path: str
     size: int | None
     file_metadata: plc.io.parquet_metadata.FileMetaData
-    # Keyed by id(base_scan): otherwise we cannot distinguish two Scan nodes
-    # that reference the same file but carry different predicates or column
-    # selections. Splits of the same Scan share a single entry. compare=False
-    # excludes them from equality and hashing so two instances for the same
-    # file compare equal regardless of cache state.
-    # HybridScanMetadata is shared across splits of the same Scan node.
-    # HybridScanReader is not cached: it holds mutable per-read state and is not
-    # thread-safe, so each producer thread creates its own reader from the shared metadata.
-    _hybrid_scan_metadata: dict[int, plc.io.experimental.HybridScanMetadata] = field(
-        default_factory=dict, compare=False, repr=False
+    # Pre-created during footer prefetch; shared across all splits and scans of this file.
+    # HybridScanReader is not cached: it holds mutable per-read state so each worker
+    # creates its own from the shared metadata.
+    _hybrid_scan_metadata: list[plc.io.experimental.HybridScanMetadata] = field(
+        default_factory=list, compare=False, repr=False
     )
     _remote_handle: list[Any] = field(default_factory=list, compare=False, repr=False)
 
-    def hybrid_scan_metadata(  # pragma: no cover; only called from thread pool workers where coverage.py does not trace
-        self,
-        base_scan_id: int,
-        options: plc.io.parquet.ParquetReaderOptions,
-    ) -> plc.io.experimental.HybridScanMetadata:
-        """Return a HybridScanMetadata shared across splits of the same Scan node."""
-        metadata = self._hybrid_scan_metadata.get(base_scan_id)
-        if metadata is None:
-            metadata = plc.io.experimental.HybridScanMetadata.from_parquet_metadata(
-                self.file_metadata, options
-            )
-            self._hybrid_scan_metadata.setdefault(base_scan_id, metadata)
-            metadata = self._hybrid_scan_metadata[base_scan_id]
-        return metadata
-
     def hybrid_scan_reader(  # pragma: no cover; only called from thread pool workers where coverage.py does not trace
         self,
-        base_scan_id: int,
         options: plc.io.parquet.ParquetReaderOptions,
     ) -> plc.io.experimental.HybridScanReader:
-        """Return a fresh HybridScanReader borrowing the shared metadata for this Scan node."""
-        metadata = self.hybrid_scan_metadata(base_scan_id, options)
-        return plc.io.experimental.HybridScanReader.from_metadata(metadata)
+        """Return a fresh HybridScanReader backed by shared pre-parsed file metadata."""
+        if not self._hybrid_scan_metadata:
+            self._hybrid_scan_metadata.append(
+                plc.io.experimental.HybridScanMetadata.from_parquet_metadata(
+                    self.file_metadata, options
+                )
+            )
+        return plc.io.experimental.HybridScanReader.from_metadata(
+            self._hybrid_scan_metadata[0]
+        )
 
     def remote_handle(self) -> Any:  # pragma: no cover; requires kvikio
         """Return the kvikio handle for this file."""
@@ -152,6 +138,19 @@ def _prefetch_parquet_footers_for_paths(paths: list[str]) -> list[CachedParquetI
         CachedParquetInfo(path, size, file_metadata)
         for path, size, file_metadata in zip(paths, sizes, metadata, strict=True)
     ]
+    for info in infos:
+        options = (
+            plc.io.parquet.ParquetReaderOptions.builder(
+                plc.io.SourceInfo([plc.io.types.FilepathSource(info.path, info.size)])
+            )
+            .decimal_width(plc.TypeId.DECIMAL128)
+            .build()
+        )
+        info._hybrid_scan_metadata.append(
+            plc.io.experimental.HybridScanMetadata.from_parquet_metadata(
+                info.file_metadata, options
+            )
+        )
     if kvikio is not None:  # pragma: no cover; requires kvikio
         # Open kvikio handles eagerly on the main thread before any prefetch workers
         # start, so all splits sharing a file get the same handle without races.

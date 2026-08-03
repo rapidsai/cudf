@@ -264,13 +264,21 @@ def copy_host_ranges_to_device(
     ranges: list[plc.io.text.ByteRangeInfo],
     futures: list[IOFuture],
     stream: Stream,
+    *,
+    base_scan_id: int = 0,
+    split_index: int = 0,
+    total_splits: int = 1,
+    label: str = "",
 ) -> list[plc.gpumemoryview]:
     """Wait for in-flight S3 reads then copy pinned host ranges to device."""
     total = sum(r.size for r in ranges)
     if not total:
         return []
     rng = nvtx.start_range("copy_host_ranges_to_device", domain=CUDF_POLARS_NVTX_DOMAIN)
-    with nvtx_annotate_cudf_polars(message="pread_ranges:wait"):
+    with nvtx_annotate_cudf_polars(
+        message=f"pread_ranges:wait:{label}" if label else "pread_ranges:wait",
+        payload=(base_scan_id, split_index + 1, total_splits, total),
+    ):
         for f in futures:
             f.get()
     # TODO: Reserve device memory via rapidsmpf before allocating.
@@ -321,7 +329,7 @@ def _read_with_hybrid_scan(
             options.set_column_names(with_columns)
         options.set_filter(plc_filter)
 
-        reader = cached_info.hybrid_scan_reader(base_scan_id, options)
+        reader = cached_info.hybrid_scan_reader(options)
 
         if stats_pruning:
             row_group_indices = reader.filter_row_groups_with_stats(
@@ -366,6 +374,10 @@ def _read_with_hybrid_scan(
                 prefetched.filter_ranges,
                 prefetched.filter_futures,
                 stream,
+                base_scan_id=base_scan_id,
+                split_index=split_index,
+                total_splits=total_splits,
+                label="filter",
             )
         else:
             filter_chunks = _fetch_byte_ranges(
@@ -388,6 +400,10 @@ def _read_with_hybrid_scan(
                 prefetched.payload_ranges,
                 prefetched.payload_futures,
                 stream,
+                base_scan_id=base_scan_id,
+                split_index=split_index,
+                total_splits=total_splits,
+                label="payload",
             )
         else:
             payload_chunks = _fetch_byte_ranges(
