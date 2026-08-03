@@ -2227,6 +2227,21 @@ def test_empty_file_pandas_compat_raises(tmp_path):
             cudf.read_csv(str(empty_file))
 
 
+@pytest.mark.parametrize(
+    "buffer,kwargs",
+    [
+        ("a,b\n", {}),
+        ("", {"names": ["a", "b"]}),
+    ],
+)
+def test_empty_csv_with_columns_pandas_compat(buffer, kwargs):
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = cudf.read_csv(StringIO(buffer), **kwargs)
+
+    expect = pd.read_csv(StringIO(buffer), **kwargs)
+    assert_eq(expect, got)
+
+
 def test_read_csv_gcs(monkeypatch):
     gcsfs = pytest.importorskip("gcsfs")
     pdf = pd.DataFrame(
