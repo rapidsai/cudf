@@ -455,6 +455,8 @@ struct rsplit_ws_tokenizer_fn : base_ws_split_tokenizer<rsplit_ws_tokenizer_fn> 
 
 // Per-string kernel outperforms the global-scan split_helper for short strings;
 // fall back to split_helper above this average byte length per non-null string.
+// This value was determined using the split benchmarks by varying the row width
+// and the row count using an RTX A6000.
 constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 120;
 
 // Per-string token count — returns number of tokens (delimiters found + 1), capped at max_tokens.
