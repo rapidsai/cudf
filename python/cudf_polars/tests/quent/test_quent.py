@@ -173,6 +173,14 @@ def test_deserialize_value_requires_single_variant() -> None:
         _deserialize_value({"U8": 1, "I8": -1})
 
 
+def test_deserialize_value_requires_dict_envelope() -> None:
+    with pytest.raises(
+        TypeError,
+        match=r"Expected Quent attribute value envelope as a single-variant object, got list\.",
+    ):
+        _deserialize_value([{"U8": 1}])
+
+
 def test_deserialize_value_raises_on_unknown_variant() -> None:
     with pytest.raises(
         ValueError,
@@ -838,9 +846,36 @@ def test_serialize_nested_list_raises() -> None:
         Attribute("nested", [[1, 2], [3, 4]]).serialize()  # type: ignore[arg-type]
 
 
+def test_serialize_list_integer_overflow_raises() -> None:
+    with pytest.raises(
+        ValueError,
+        match="Integer list values",
+    ):
+        Attribute("x", [2**64]).serialize()
+
+
 def test_serialize_heterogeneous_list_raises() -> None:
     with pytest.raises(TypeError, match="homogeneous"):
         Attribute("mixed", [1, "a"]).serialize()  # type: ignore[arg-type]
+
+
+def test_deserialize_invalid_heterogeneous_list_raises() -> None:
+    with pytest.raises(
+        ValueError,
+        match="Expected Quent List envelope with exactly one variant, got '2' instead",
+    ):
+        Attribute.deserialize(
+            {"key": "mixed", "value": {"List": {"String": ["a", "b"], "U8": [1, 2]}}}
+        )
+
+
+def test_deserialize_unsupported_attribute_type_raises() -> None:
+    with pytest.raises(
+        ValueError, match="Unsupported Quent List variant: 'Unsupported'"
+    ):
+        Attribute.deserialize(
+            {"key": "unsupported", "value": {"List": {"Unsupported": ["a", "b"]}}}
+        )
 
 
 def test_serialize_dict() -> None:

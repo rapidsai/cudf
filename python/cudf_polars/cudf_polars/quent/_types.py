@@ -528,7 +528,7 @@ def _common_integer_variant(values: list[int]) -> str:
     for variant, lo, hi in _INT_VARIANTS:
         if all(lo <= value <= hi for value in values):
             return variant
-    raise ValueError(f"Integer list values {values} do not fit any Quent integer type.")
+    raise ValueError("Integer list values do not fit any Quent integer type.")
 
 
 def _serialize_struct(value: StructValue) -> list[dict[str, Any]]:
