@@ -709,7 +709,7 @@ class StreamingExecutor:
 
         This can be set via
 
-        - keyword argument to ``polars.GPUEngine``
+        - ``executor_options`` passed to ``polars.GPUEngine``
         - the ``CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE`` environment variable
 
         By default, cudf-polars uses the minimum of 1.5GB or 2.5% of the minimum
@@ -737,9 +737,12 @@ class StreamingExecutor:
 
         Enable through environment variables with
         ``CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN=1``.
-    max_io_threads
-        Maximum number of IO threads. Default is 4.
-        This controls the parallelism of IO operations when reading data.
+    max_concurrent_io_tasks
+        Maximum number of concurrent IO tasks for each scan node. Default is 2.
+        This can be set via
+
+        - ``executor_options`` passed to ``polars.GPUEngine``
+        - the ``CUDF_POLARS__EXECUTOR__MAX_CONCURRENT_IO_TASKS`` environment variable
     num_py_executors
         Maximum number of workers for the Python ThreadPoolExecutor.
         Default is 8.
@@ -804,9 +807,9 @@ class StreamingExecutor:
     join_filter_pushdown: JoinFilterPushdownOptions | None = dataclasses.field(
         default_factory=JoinFilterPushdownOptions
     )
-    max_io_threads: int = dataclasses.field(
+    max_concurrent_io_tasks: int = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__MAX_IO_THREADS", int, default=4
+            f"{_env_prefix}__MAX_CONCURRENT_IO_TASKS", int, default=2
         )
     )
     num_py_executors: int = dataclasses.field(
@@ -894,8 +897,8 @@ class StreamingExecutor:
             raise TypeError("sink_to_directory must be bool")
         if not isinstance(self.client_device_threshold, float):
             raise TypeError("client_device_threshold must be a float")
-        if not isinstance(self.max_io_threads, int):
-            raise TypeError("max_io_threads must be an int")
+        if not isinstance(self.max_concurrent_io_tasks, int):
+            raise TypeError("max_concurrent_io_tasks must be an int")
         if not isinstance(self.num_py_executors, int):
             raise TypeError("num_py_executors must be an int")
 

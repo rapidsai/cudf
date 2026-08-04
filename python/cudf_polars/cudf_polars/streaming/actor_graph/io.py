@@ -291,7 +291,7 @@ def _(
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     config_options = rec.state["config_options"]
     rows_per_partition = config_options.executor.max_rows_per_partition
-    num_producers = rec.state["max_io_threads"]
+    num_producers = rec.state["max_concurrent_io_tasks"]
     # Use target_partition_size as the estimated chunk size
     estimated_chunk_bytes = config_options.executor.target_partition_size
 
@@ -664,7 +664,7 @@ def _(
     config_options = rec.state["config_options"]
     executor = config_options.executor
     partition_info = rec.state["partition_info"][ir]
-    num_producers = rec.state["max_io_threads"]
+    num_producers = rec.state["max_concurrent_io_tasks"]
     channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
 
     assert partition_info.io_plan is not None, "Scan node must have a partition plan"

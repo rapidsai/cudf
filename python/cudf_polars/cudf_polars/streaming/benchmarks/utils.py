@@ -480,7 +480,6 @@ class RunConfig:
     iterations: int
     io_mode: Literal["cold", "lukewarm", "hot"] = "lukewarm"
     collect_traces: bool = False
-    max_io_threads: int = 2
     # All streaming/rapidsmpf/engine knobs
     streaming_options: StreamingOptions = dataclasses.field(
         default_factory=lambda: __import__(
@@ -628,7 +627,6 @@ class RunConfig:
             iterations=args.iterations,
             io_mode=args.io_mode,
             collect_traces=args.collect_traces,
-            max_io_threads=args.max_io_threads,
             streaming_options=streaming_options,
             connect=args.connect,
             num_gpus=args.num_gpus,
@@ -660,7 +658,6 @@ class RunConfig:
             "iterations": self.iterations,
             "io_mode": self.io_mode,
             "collect_traces": self.collect_traces,
-            "max_io_threads": self.max_io_threads,
             "n_workers": self.n_workers,
             "extra_info": self.extra_info,
             "run_id": str(self.run_id),
@@ -740,7 +737,6 @@ def get_executor_options(
     executor_options: dict[str, Any] = (
         run_config.streaming_options.to_executor_options()
     )
-    executor_options["max_io_threads"] = run_config.max_io_threads
     executor_options["quent_context"] = cudf_polars.quent.QuentContext(
         engine=cudf_polars.quent.Engine(id=run_config.run_id)
     )
@@ -2035,12 +2031,6 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         default=False,
         action="store_true",
         help="Debug run.",
-    )
-    parser.add_argument(
-        "--max-io-threads",
-        default=4,
-        type=int,
-        help="Sets cudf_polars.utils.config.StreamingExecutor.max_io_threads.",
     )
     parser.add_argument(
         "-o",

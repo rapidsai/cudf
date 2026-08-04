@@ -323,7 +323,7 @@ def test_validate_cluster() -> None:
         "broadcast_limit",
         "sink_to_directory",
         "client_device_threshold",
-        "max_io_threads",
+        "max_concurrent_io_tasks",
         "num_py_executors",
     ],
 )
@@ -388,6 +388,7 @@ def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         m.setenv("CUDF_POLARS__EXECUTOR__MAX_ROWS_PER_PARTITION", "42")
         m.setenv("CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", "100")
         m.setenv("CUDF_POLARS__EXECUTOR__BROADCAST_LIMIT", "44")
+        m.setenv("CUDF_POLARS__EXECUTOR__MAX_CONCURRENT_IO_TASKS", "6")
         m.setenv("CUDF_POLARS__EXECUTOR__QUENT_CONTEXT", "1")
 
         engine = pl.GPUEngine()
@@ -398,6 +399,7 @@ def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         assert config.executor.max_rows_per_partition == 42
         assert config.executor.target_partition_size == 100
         assert config.executor.broadcast_limit == 44
+        assert config.executor.max_concurrent_io_tasks == 6
         assert config.executor.quent_context is not None
 
 
