@@ -672,11 +672,21 @@ class parallel_init_pinned_host_memory_resource final {
     return true;
   }
 
+  /**
+   * @brief Enables CCCL's `cuda::mr::device_accessible` property
+   *
+   * This overload declares that memory allocated by this resource is device accessible.
+   */
   friend void get_property(parallel_init_pinned_host_memory_resource const&,
                            cuda::mr::device_accessible) noexcept
   {
   }
 
+  /**
+   * @brief Enables CCCL's `cuda::mr::host_accessible` property
+   *
+   * This overload declares that memory allocated by this resource is host accessible.
+   */
   friend void get_property(parallel_init_pinned_host_memory_resource const&,
                            cuda::mr::host_accessible) noexcept
   {
@@ -717,13 +727,14 @@ class parallel_init_pinned_host_memory_resource final {
   {
     // Partition by system page size. With huge pages this may touch more than necessary,
     // but is low overhead (just TLB hits) and ensures all pages are touched if madvise was ignored.
-    auto const page_size        = system_page_size();
-    auto const page_count       = bytes / page_size;
-    auto const hardware_threads = std::thread::hardware_concurrency();
-    auto thread_count           = std::min(requested_threads, page_count);
-    if (hardware_threads != 0) {
-      thread_count = std::min(thread_count, static_cast<std::size_t>(hardware_threads));
-    }
+    auto const page_size    = system_page_size();
+    auto const page_count   = bytes / page_size;
+    auto const thread_count = [&]() {
+      auto const needed_threads   = std::min(requested_threads, page_count);
+      auto const hardware_threads = std::thread::hardware_concurrency();
+      if (hardware_threads == 0) { return needed_threads; }
+      return std::min(needed_threads, static_cast<std::size_t>(hardware_threads));
+    }();
 
     std::vector<std::thread> workers;
     workers.reserve(thread_count);
@@ -1334,6 +1345,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newPinnedPoolMemoryResource(JNIE
                                                                             jlong init,
                                                                             jlong max)
 {
+  JNI_ARG_CHECK(env, init >= 0, "initial pool size must not be negative", 0);
+  JNI_ARG_CHECK(env, max >= 0, "maximum pool size must not be negative", 0);
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
@@ -1347,7 +1360,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newPinnedPoolMemoryResource(JNIE
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newParallelPinnedPoolMemoryResource(
   JNIEnv* env, jclass clazz, jlong pool_size, jint initialization_threads)
 {
-  JNI_ARG_CHECK(env, pool_size > 0, "pool size must be positive", 0);
+  JNI_ARG_CHECK(env, pool_size >= 0, "pool size must not be negative", 0);
   JNI_ARG_CHECK(env, initialization_threads > 0, "parallel init thread count must be positive", 0);
   JNI_TRY
   {

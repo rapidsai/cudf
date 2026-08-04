@@ -76,8 +76,8 @@ class PinnedMemoryPoolTest extends CudfTestBase {
 
   @Test
   void failedInitFallsBackAndCanRetry() {
-    // Zero-sized pool to intentionally fail initialization.
-    PinnedMemoryPool.initialize(0, 0, false, 2);
+    // Negative pool size to intentionally fail initialization.
+    PinnedMemoryPool.initialize(-1, 0, false, 2);
     try (HostMemoryBuffer buffer = PinnedMemoryPool.allocate(1024)) {
       assertNotNull(buffer);  // this falls back
     }
