@@ -81,7 +81,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   bool const has_repetition = s->setup.col.max_level[level_type::REPETITION] > 0;
   bool const process_nulls  = should_process_nulls(s);
 
-  auto const data_len   = cuda::std::distance(s->data_start, s->data_end);
+  auto const data_len   = cuda::std::distance(s->stream.data_start, s->stream.data_end);
   auto const num_values = data_len / s->dtype_len_in;
 
   // Check malformed BYTE_STREAM_SPLIT pages
@@ -162,7 +162,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         int leaf_level_index = s->setup.col.max_nesting_depth - 1;
 
         uint32_t dtype_len = s->dtype_len;
-        uint8_t const* src = s->data_start + val_src_pos;
+        uint8_t const* src = s->stream.data_start + val_src_pos;
         uint8_t* dst =
           nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
         auto const is_decimal = s->setup.col.logical_type.has_value() and
@@ -296,8 +296,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   int const init_valid_map_offset =
     s->nesting_info[s->setup.col.max_nesting_depth - 1].valid_map_offset;
 
-  if (s->dict_base) {
-    out_warp_id = (s->dict_bits > 0) ? 2 : 1;
+  if (s->stream.dict_base) {
+    out_warp_id = (s->stream.dict_bits > 0) ? 2 : 1;
   } else {
     switch (s->setup.col.physical_type) {
       case Type::BOOLEAN: [[fallthrough]];
@@ -351,7 +351,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       // This is likely a false positive in practice, but could be solved by wrapping the next
       // 9 lines in `if (s->dict_pos < src_target_pos) {}`. If that change is made here, it will
       // be needed in the other DecodeXXX kernels.
-      if (s->dict_base) {
+      if (s->stream.dict_base) {
         src_target_pos =
           decode_dictionary_indices<is_calc_sizes_only::NO>(s, sb, src_target_pos, warp).first;
       } else if (s->setup.col.physical_type == Type::BOOLEAN) {

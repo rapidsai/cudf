@@ -758,11 +758,6 @@ class StreamingExecutor:
     max_io_threads
         Maximum number of IO threads. Default is 4.
         This controls the parallelism of IO operations when reading data.
-    spill_to_pinned_memory
-        Whether RapidsMPF should spill to pinned host memory when available,
-        or use regular pageable host memory. Pinned host memory offers higher
-        bandwidth and lower latency for device to host transfers compared to
-        regular pageable host memory.
     num_py_executors
         Maximum number of workers for the Python ThreadPoolExecutor.
         Default is 8.
@@ -830,11 +825,6 @@ class StreamingExecutor:
     max_io_threads: int = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__MAX_IO_THREADS", int, default=4
-        )
-    )
-    spill_to_pinned_memory: bool = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__SPILL_TO_PINNED_MEMORY", bool, default=False
         )
     )
     num_py_executors: int = dataclasses.field(
@@ -924,8 +914,6 @@ class StreamingExecutor:
             raise TypeError("client_device_threshold must be a float")
         if not isinstance(self.max_io_threads, int):
             raise TypeError("max_io_threads must be an int")
-        if not isinstance(self.spill_to_pinned_memory, bool):
-            raise TypeError("spill_to_pinned_memory must be bool")
         if not isinstance(self.num_py_executors, int):
             raise TypeError("num_py_executors must be an int")
 
