@@ -303,8 +303,8 @@ def _evaluate_window_with_stamps(
             plc.Table(
                 [
                     columns[n_child + 2],  # origin rank
-                    columns[n_child],  # source chunk index
-                    columns[n_child + 1],  # row position within that chunk
+                    columns[n_child],  # origin chunk index
+                    columns[n_child + 1],  # origin position (local)
                 ]
             ),
             [plc.types.Order.ASCENDING] * 3,
