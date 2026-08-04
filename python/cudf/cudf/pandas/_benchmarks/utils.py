@@ -756,12 +756,12 @@ def run_pandas(
             print(  # noqa: T201
                 f"{len(validation_failures)} queries failed validation: {sorted(set(validation_failures))}"
             )
-        elif query_failures:
+        if query_failures:
             print(  # noqa: T201
                 "Validation was skipped for queries that failed to run: "
                 f"{sorted({q_id for q_id, _ in query_failures})}"
             )
-        else:
+        if not validation_failures and not query_failures:
             print("All validated queries passed.")  # noqa: T201
 
     args.output.write(json.dumps(run_config.serialize()))
