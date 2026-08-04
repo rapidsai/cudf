@@ -891,6 +891,7 @@ async def sink_node(
         await send_metadata(
             ch_out, context, ChannelMetadata(local_count=1, duplicated=True)
         )
+        skip_write = metadata.duplicated and comm.rank != 0
 
         path_root = f"{ir.sink.path}/part"
         if comm.nranks > 1:
@@ -903,9 +904,12 @@ async def sink_node(
         count_width = max(count_width, 6)
 
         if ir.sink_to_directory:
-            _prepare_sink_directory(ir.sink.path)
+            if not skip_write:
+                _prepare_sink_directory(ir.sink.path)
             i = 0
             while (msg := await ch_in.recv(context)) is not None:
+                if skip_write:
+                    continue
                 chunk = TableChunk.from_message(
                     msg, br=context.br()
                 ).make_available_and_spill(context.br(), allow_overbooking=True)
@@ -926,6 +930,8 @@ async def sink_node(
             # Write chunks to a single file
             writer_state = None
             while (msg := await ch_in.recv(context)) is not None:
+                if skip_write:
+                    continue
                 chunk = TableChunk.from_message(
                     msg, br=context.br()
                 ).make_available_and_spill(context.br(), allow_overbooking=True)

@@ -29,6 +29,7 @@ from cudf_polars.engine.spmd import (
 )
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.config import MemoryResourceConfig
 
 if TYPE_CHECKING:
@@ -376,6 +377,61 @@ def test_execute_duplicated_result_chained_into_distributed_agg(
     # 1.0 + 2.0 = 3.0, independent of nranks (would be 3.0 * nranks if the
     # duplicated partitions were treated as distinct).
     assert total["total"].to_list() == [3.0]
+
+
+def test_sink_deduplicates_single_partition_fallback(comm: Communicator) -> None:
+    """A single-partition fallback result must not be written once per rank."""
+    import shutil
+    from pathlib import Path
+
+    from rapidsmpf.communicator.ucxx import barrier
+
+    if comm.nranks < 2:
+        pytest.skip("requires multiple ranks")
+
+    test_id = uuid.uuid5(uuid.NAMESPACE_URL, os.environ["PYTEST_CURRENT_TEST"])
+    shared_root = Path("/tmp") / f"cudf-polars-{test_id}"
+    source_path = shared_root / "input.parquet"
+    sink_path = shared_root / "out.parquet"
+    if comm.rank == 0:
+        shutil.rmtree(shared_root, ignore_errors=True)
+        shared_root.mkdir()
+        make_partitioned_source(
+            pl.DataFrame(
+                {
+                    "row": [0, 1, 2, 3],
+                    "value": [None, 1, None, 3],
+                }
+            ),
+            source_path,
+            "parquet",
+            row_group_size=2,
+        )
+    barrier(comm)
+
+    with SPMDEngine(
+        comm=comm,
+        executor_options={
+            "target_partition_size": 1,
+            "fallback_mode": "silent",
+            "sink_to_directory": True,
+        },
+    ) as engine:
+        query = pl.scan_parquet(source_path).select(
+            "row",
+            pl.col("value").fill_null(strategy="forward").alias("value"),
+        )
+        query.sink_parquet(sink_path, mkdir=True, engine=engine)
+        barrier(engine.comm)
+
+        result = pl.read_parquet(sink_path).sort("row")
+        assert result["row"].to_list() == [0, 1, 2, 3]
+        assert result["value"].to_list() == [None, 1, 1, 3]
+        barrier(engine.comm)
+
+    if comm.rank == 0:
+        shutil.rmtree(shared_root, ignore_errors=True)
+    barrier(comm)
 
 
 def test_reset_keeps_comm_alive(comm: Communicator) -> None:
