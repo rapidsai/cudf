@@ -81,7 +81,7 @@ probe_join_hash_table(
     cuda::make_transform_output_iterator(left_indices->begin(), output_fn{});
   auto const out_build_begin = [&] {
     if constexpr (Join == join_kind::FULL_JOIN) {
-      CUDF_EXPECTS(right_matches.size() == right_table.num_rows(),
+      CUDF_EXPECTS(right_matches.size() == static_cast<std::size_t>(right_table.num_rows()),
                    "full join requires one match flag per right row",
                    std::invalid_argument);
       return cuda::make_transform_output_iterator(

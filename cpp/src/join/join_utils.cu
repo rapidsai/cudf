@@ -123,9 +123,10 @@ VectorPair finalize_full_join(VectorPair&& indices,
   left_out->resize(upper, stream);
   right_out->resize(upper, stream);
 
-  CUDF_EXPECTS(right_matches.empty() || right_matches.size() == right_table_num_rows,
-               "right match flags must be empty or have one entry per right row",
-               std::invalid_argument);
+  CUDF_EXPECTS(
+    right_matches.empty() || right_matches.size() == static_cast<std::size_t>(right_table_num_rows),
+    "right match flags must be empty or have one entry per right row",
+    std::invalid_argument);
 
   // Hash joins mark right rows as part of retrieval and pass those flags here, eliminating an
   // output-sized scatter. Other join implementations use this fallback to derive the same flags
