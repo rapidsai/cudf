@@ -104,7 +104,7 @@ cpdef list fetch_byte_ranges_to_device(
     for i in range(fetched.second.size()):
         ptr = <uintptr_t>fetched.second[i].data()
         n = fetched.second[i].size()
-        result.append(owner_gv[ptr - base : ptr - base + n])
+        result.append(owner_gv.byte_slice(slice(ptr - base, ptr - base + n)))
     return result
 
 
