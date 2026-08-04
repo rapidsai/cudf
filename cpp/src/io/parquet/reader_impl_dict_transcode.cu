@@ -14,6 +14,7 @@
 #include <cudf/detail/utilities/batched_memset.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
+#include <cudf/reduction/detail/distinct_count.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -330,18 +331,27 @@ void reader_impl::assemble_dict_transcoded_columns(
                    "Expected INT32 indices column for dict-transcoded flat string column");
       auto indices_owner = std::move(indices_col);
 
-      // Single row group fast path: keys are already unique (one dict page), no dedup needed.
-      // Take ownership of the decoded INT32 indices buffer directly (zero copy), skipping the
-      // offset/null-count/segment-view work that is only needed for multi-chunk concatenation.
-      if (chunk_indices.size() == 1) {
+      // Single row group fast path: the Parquet dictionary page's entries become the keys as-is,
+      // in page order. If a file carries duplicate dictionary entries, the
+      // shortcut is skipped and the general multi-chunk path below runs instead:
+      // `emit_single_row_group_column` returns true when it fell back (keys not distinct), leaving
+      // `indices_owner` intact for the path below.
+      auto const emit_single_row_group_column = [&]() -> bool {
         auto const& chunk = pass.chunks[chunk_indices[0]];
+        auto keys         = make_keys_column_from_index_pairs(
+          chunk.str_dict_index, chunk_key_counts[0], _stream, _mr);
+        auto const num_distinct_keys = cudf::detail::distinct_count(
+          keys->view(), null_policy::INCLUDE, nan_policy::NAN_IS_VALID, _stream);
+        if (num_distinct_keys != keys->size()) { return true; }  // fall back: dedup below
         out_columns[out_idx] =
-          cudf::make_dictionary_column(make_keys_column_from_index_pairs(
-                                         chunk.str_dict_index, chunk_key_counts[0], _stream, _mr),
-                                       std::move(indices_owner),
-                                       _stream,
-                                       _mr);
-        return;
+          cudf::make_dictionary_column(std::move(keys), std::move(indices_owner), _stream, _mr);
+        return false;
+      };
+
+      if (chunk_indices.size() == 1) {
+        bool const fallback_used = emit_single_row_group_column();
+        if (not fallback_used) { return; }
+        // Keys were not distinct: fall through to the multi-row-group path, which deduplicates.
       }
 
       // Multi-row-group path: the indices buffer is shared (aliased) by per-chunk DICTIONARY32
