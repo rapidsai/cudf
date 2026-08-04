@@ -247,7 +247,7 @@ class OriginStamps:
 
 
 def _origin_stamps_for(ir: Over) -> OriginStamps:
-    """Pick stamp column names that do not collide with the schema."""
+    """Pick three stamp column names that do not collide with the schema."""
     names = unique_names((*ir.children[0].schema.keys(), *ir.schema.keys()))
     return OriginStamps(next(names), next(names), next(names))
 

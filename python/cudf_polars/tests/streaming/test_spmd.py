@@ -29,6 +29,7 @@ from cudf_polars.engine.spmd import (
 )
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.config import MemoryResourceConfig
 
 if TYPE_CHECKING:
@@ -709,13 +710,17 @@ def test_over_preserves_input_order_within_source_chunk(
     comm: Communicator, tmp_path: Path
 ) -> None:
     n_rows = 64
-    path = tmp_path / "data.parquet"
-    pl.DataFrame(
-        {
-            "g": [0] * n_rows,
-            "x": list(range(n_rows)),
-        }
-    ).write_parquet(path, row_group_size=2)
+    make_partitioned_source(
+        pl.DataFrame(
+            {
+                "g": [0] * n_rows,
+                "x": list(range(n_rows)),
+            }
+        ),
+        tmp_path,
+        "parquet",
+        row_group_size=2,
+    )
 
     with SPMDEngine(
         comm=comm,
@@ -729,7 +734,7 @@ def test_over_preserves_input_order_within_source_chunk(
             pytest.skip("expected values are defined for exactly 1 rank")
 
         q = (
-            pl.scan_parquet(path)
+            pl.scan_parquet(tmp_path)
             .sort("x")
             .select(
                 "x",
