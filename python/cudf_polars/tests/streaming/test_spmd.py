@@ -500,6 +500,7 @@ _CROSS_RANK_KEYS = [
     [
         (pl.col("x").sum().over("g").alias("result"), "sum"),
         (pl.col("x").rank(method="dense").over("g").alias("result"), "rank"),
+        (pl.col("x").diff().over("g", order_by="x").alias("result"), "diff"),
         (pl.col("x").shift(1).over("g", order_by="x").alias("result"), "shift"),
         pytest.param(
             pl.col("x")
@@ -513,7 +514,13 @@ _CROSS_RANK_KEYS = [
             ),
         ),
     ],
-    ids=["scalar_sum", "nonscalar_rank", "nonscalar_shift", "nonscalar_rolling"],
+    ids=[
+        "scalar_sum",
+        "nonscalar_rank",
+        "nonscalar_diff",
+        "nonscalar_shift",
+        "nonscalar_rolling",
+    ],
 )
 @pytest.mark.parametrize(
     "cross_rank",
@@ -572,6 +579,8 @@ def test_over_multirank(
                 assert grp["result"].to_list() == [sum(expected_xs)] * 3
             elif expected == "rank":
                 assert grp["result"].to_list() == [1, 2, 3]
+            elif expected == "diff":
+                assert grp["result"].to_list() == [None, 1, 1]
             elif expected == "shift":
                 assert grp["result"].to_list() == [None, *expected_xs[:-1]]
             else:
@@ -585,6 +594,9 @@ def test_over_multirank(
     "expr,expected",
     [
         (pl.col("x").shift(1).over("g").alias("result"), "shift"),
+        (pl.col("x").diff().over("g").alias("result"), "diff"),
+        (pl.col("x").diff(n=2).over("g").alias("result"), "diff_n2"),
+        (pl.col("x").diff(n=-1).over("g").alias("result"), "diff_nneg1"),
         (pl.col("x").cum_sum().over("g").alias("result"), "cum_sum"),
         pytest.param(
             pl.col("x").rolling_mean(window_size=2).over("g").alias("result"),
@@ -606,7 +618,15 @@ def test_over_multirank(
             ),
         ),
     ],
-    ids=["shift", "cum_sum", "fixed_rolling", "fixed_rolling_ordered"],
+    ids=[
+        "shift",
+        "diff",
+        "diff_n2",
+        "diff_nneg1",
+        "cum_sum",
+        "fixed_rolling",
+        "fixed_rolling_ordered",
+    ],
 )
 def test_over_shared_group_ordering_multirank(
     comm: Communicator,
@@ -648,6 +668,12 @@ def test_over_shared_group_ordering_multirank(
         expected_values: list[float | int | None]
         if expected == "shift":
             expected_values = [None, *xs[:-1]]
+        elif expected == "diff":
+            expected_values = [None, *([1] * (len(xs) - 1))]
+        elif expected == "diff_n2":
+            expected_values = [None, None, *([2] * (len(xs) - 2))]
+        elif expected == "diff_nneg1":
+            expected_values = [*([-1] * (len(xs) - 1)), None]
         elif expected == "cum_sum":
             total = 0
             expected_values = []

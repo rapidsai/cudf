@@ -297,7 +297,6 @@ def test_validate_cluster() -> None:
         "sink_to_directory",
         "client_device_threshold",
         "max_io_threads",
-        "spill_to_pinned_memory",
         "num_py_executors",
     ],
 )
