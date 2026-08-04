@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import itertools
@@ -63,3 +63,26 @@ def test_len(np_array, stream):
 
     assert len(gpumemview) == len(np_array_view)
     assert gpumemview.nbytes == np_array.nbytes
+
+
+@pytest.mark.parametrize(
+    "s",
+    [
+        slice(1, 3),
+        slice(None, 2),
+        slice(3, None),
+        slice(2, 2),
+    ],
+)
+def test_slice(np_array, s):
+    gv = plc.Column.from_array(np_array.view("u1")).data()
+    result = plc.Column.from_array(gv[s]).to_pylist()
+    assert result == np_array.view("u1")[s].tolist()
+
+
+def test_slice_fails(np_array):
+    gv = plc.Column.from_array(np_array.view("u1")).data()
+    with pytest.raises(TypeError, match="indices must be slices"):
+        gv[0]
+    with pytest.raises(ValueError, match="step=1"):
+        gv[::2]
