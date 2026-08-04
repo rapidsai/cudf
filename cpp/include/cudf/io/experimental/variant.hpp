@@ -135,7 +135,7 @@ namespace io::parquet::experimental {
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * `@brief` Encode a table as a VARIANT object column, one row per VARIANT.
+ * @brief Encode a table as a VARIANT object column, one row per VARIANT.
  *
  * Each table row is encoded as a VARIANT object with one field per column. The shared metadata
  * blob stores column names as a sorted UTF-8 key dictionary (version 1, offset_size chosen to
@@ -145,16 +145,16 @@ namespace io::parquet::experimental {
  * columns whose type is `EMPTY` (treated as all-null). Other types throw. Tables must have fewer
  * than 256 columns.
  *
- * `@param` input Table to encode (typically produced by `cudf::io::read_json`)
- * `@param` column_names Column name for each column in `input`; must satisfy
+ * @param input Table to encode (typically produced by `cudf::io::read_json`)
+ * @param column_names Column name for each column in `input`; must satisfy
  *                     `column_names.size() == input.num_columns()`
- * `@param` stream CUDA stream
- * `@param` mr Device memory resource
- * `@return` VARIANT column: `STRUCT<list<uint8>, list<uint8>>` (metadata child, value child)
+ * @param stream CUDA stream
+ * @param mr Device memory resource
+ * @return VARIANT column: `STRUCT<list<uint8>, list<uint8>>` (metadata child, value child)
  *
- * `@throws` std::invalid_argument if any column has an unsupported type, if the table has ≥ 256
+ * @throws std::invalid_argument if any column has an unsupported type, if the table has ≥ 256
  *         columns, or if `column_names.size() != input.num_columns()`
- * `@throws` std::overflow_error if the total encoded value bytes exceed 2 GiB
+ * @throws std::overflow_error if the total encoded value bytes exceed 2 GiB
  */
 [[nodiscard]] std::unique_ptr<column> encode_variant(
   cudf::table_view const& input,

@@ -10,11 +10,13 @@
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/io/experimental/variant.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table.hpp>
 
 #include <cstdint>
+#include <numeric>
 #include <string>
 #include <vector>
 
@@ -186,12 +188,6 @@ TEST_F(EncodeStringsToVariantTest, EmptyInput)
   EXPECT_EQ(got->null_count(), 0);
 }
 
-TEST_F(EncodeStringsToVariantTest, WrongTypeThrows)
-{
-  cudf::test::fixed_width_column_wrapper<int32_t> input{1, 2, 3};
-  EXPECT_THROW(static_cast<void>(cudf::strings_column_view{input}), cudf::logic_error);
-}
-
 TEST_F(EncodeStringsToVariantTest, ShortString)
 {
   cudf::test::strings_column_wrapper input{"hi"};
@@ -284,6 +280,25 @@ TEST_F(EncodeStringsToVariantTest, RoundtripLongStringWithCastVariant)
     val_child(*variant), cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, input);
+}
+
+TEST_F(EncodeStringsToVariantTest, SlicedInput)
+{
+  // Rows 0 and 3 are padding; the slice covers rows [1, 3) to exercise a non-zero column offset.
+  cudf::test::strings_column_wrapper full{"ignore", "hello", "world", "ignore"};
+  auto const sliced = cudf::slice(full, {1, 3})[0];
+
+  auto got = cudf::io::parquet::experimental::encode_strings_to_variant(
+    cudf::strings_column_view{sliced}, cudf::test::get_default_stream());
+
+  EXPECT_EQ(got->size(), 2);
+  EXPECT_EQ(got->null_count(), 0);
+
+  auto const meta   = std::vector<uint8_t>{0x01, 0x00, 0x00};
+  auto const exp_v0 = enc_short_string("hello");
+  auto const exp_v1 = enc_short_string("world");
+  auto expected     = make_variant_column({meta, meta}, {exp_v0, exp_v1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -576,4 +591,44 @@ TEST_F(EncodeVariantTest, LargeStringFieldRoundtrip)
     *variant, "big", cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, col);
+}
+
+TEST_F(EncodeVariantTest, MultiBlock)
+{
+  // 300 rows > block_size (256) to exercise a multi-block kernel launch
+  constexpr int N = 300;
+  std::vector<int32_t> vals(N);
+  std::iota(vals.begin(), vals.end(), 0);
+  cudf::test::fixed_width_column_wrapper<int32_t> col(vals.begin(), vals.end());
+  cudf::table_view tbl{{col}};
+  std::vector<std::string> names{"v"};
+
+  auto got =
+    cudf::io::parquet::experimental::encode_variant(tbl, names, cudf::test::get_default_stream());
+
+  EXPECT_EQ(got->size(), N);
+  EXPECT_EQ(got->null_count(), 0);
+
+  auto decoded = cudf::io::parquet::experimental::extract_variant_field(
+    *got, "v", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, col);
+}
+
+TEST_F(EncodeVariantTest, SlicedColumnInput)
+{
+  // Non-zero column offset: build a 5-row table and slice to rows [1, 4).
+  cudf::test::fixed_width_column_wrapper<int32_t> col_full{0, 10, 20, 30, 0};
+  auto const col_sliced = cudf::slice(col_full, {1, 4})[0];
+  cudf::table_view tbl{{col_sliced}};
+  std::vector<std::string> names{"x"};
+
+  auto got =
+    cudf::io::parquet::experimental::encode_variant(tbl, names, cudf::test::get_default_stream());
+
+  EXPECT_EQ(got->size(), 3);
+
+  cudf::test::fixed_width_column_wrapper<int32_t> expected_col{10, 20, 30};
+  auto decoded = cudf::io::parquet::experimental::extract_variant_field(
+    *got, "x", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, expected_col);
 }

@@ -67,7 +67,7 @@ constexpr int block_size = 256;
 // Per-field device helpers
 // ──────────────────────────────────────────────────────────────────────────────
 
-__device__ size_type field_encoded_size(column_device_view const& col, size_type row)
+__device__ int64_t field_encoded_size(column_device_view const& col, size_type row)
 {
   if (col.type().id() == type_id::EMPTY || !col.is_valid(row)) { return 1; }
   switch (col.type().id()) {
@@ -78,7 +78,7 @@ __device__ size_type field_encoded_size(column_device_view const& col, size_type
     case type_id::FLOAT32: return 5;
     case type_id::FLOAT64: return 9;
     case type_id::STRING: {
-      auto const len = static_cast<size_type>(col.element<cudf::string_view>(row).size_bytes());
+      auto const len = static_cast<int64_t>(col.element<cudf::string_view>(row).size_bytes());
       return len < 64 ? 1 + len : 5 + len;
     }
     default: return 1;
@@ -165,8 +165,12 @@ CUDF_KERNEL __launch_bounds__(block_size) void string_value_sizes_kernel(
       d_val_sizes[row] = 1;
       continue;
     }
-    auto const len   = static_cast<size_type>(strings.element<cudf::string_view>(row).size_bytes());
-    d_val_sizes[row] = len < 64 ? 1 + len : 5 + len;
+    auto const len    = static_cast<int64_t>(strings.element<cudf::string_view>(row).size_bytes());
+    auto const enc_sz = len < 64 ? 1 + len : 5 + len;
+    d_val_sizes[row]  = static_cast<size_type>(
+      enc_sz <= static_cast<int64_t>(cuda::std::numeric_limits<size_type>::max())
+        ? enc_sz
+        : cuda::std::numeric_limits<size_type>::max());
   }
 }
 
@@ -226,11 +230,14 @@ CUDF_KERNEL __launch_bounds__(block_size) void object_value_sizes_kernel(
 
   for (auto row = tid; row < num_rows; row += stride) {
     // Header: value_metadata(1) + num_elements(1) + field_ids(N) + field_offsets((N+1)*4)
-    size_type size = 2 + N + (N + 1) * 4;
+    int64_t size = static_cast<int64_t>(2 + N + (N + 1) * 4);
     for (int i = 0; i < N; i++) {
       size += field_encoded_size(tbl.column(sort_order[i]), row);
     }
-    d_val_sizes[row] = size;
+    // Saturate to INT32_MAX so the host-side total-bytes overflow check fires.
+    d_val_sizes[row] = size <= static_cast<int64_t>(cuda::std::numeric_limits<size_type>::max())
+                         ? static_cast<size_type>(size)
+                         : cuda::std::numeric_limits<size_type>::max();
   }
 }
 
@@ -265,18 +272,16 @@ CUDF_KERNEL __launch_bounds__(block_size) void object_encode_write_kernel(
       *p++ = static_cast<uint8_t>(i);
     }
 
-    // Compute per-field sizes (stack array, safe for N < 256)
-    uint32_t field_sizes[256];
-    for (int i = 0; i < N; i++) {
-      field_sizes[i] = static_cast<uint32_t>(field_encoded_size(tbl.column(sort_order[i]), row));
-    }
-
-    // Write (N+1) field offsets, 4 bytes each (LE)
+    // Write (N+1) field offsets, 4 bytes each (LE).
+    // field_encoded_size is called once per field here (and again below in write_field_value),
+    // which avoids the 1 KiB field_sizes[256] stack array that would spill to local memory.
     uint32_t running = 0;
     for (int i = 0; i <= N; i++) {
       cuda::std::memcpy(p, &running, 4);
       p += 4;
-      if (i < N) { running += field_sizes[i]; }
+      if (i < N) {
+        running += static_cast<uint32_t>(field_encoded_size(tbl.column(sort_order[i]), row));
+      }
     }
 
     // Write field values in sorted order
@@ -408,7 +413,10 @@ std::unique_ptr<column> encode_strings_to_variant(cudf::strings_column_view cons
 
   auto [val_offsets_col, total_val_bytes] = cudf::strings::detail::make_offsets_child_column(
     d_val_sizes.begin(), d_val_sizes.end(), stream, mr);
-  CUDF_EXPECTS(total_val_bytes <= std::numeric_limits<size_type>::max(),
+  // INT64 offsets are produced when total_bytes >= get_offset64_threshold() (== INT32_MAX).
+  // Checking the column type is more robust than comparing total_val_bytes to INT32_MAX,
+  // since the boundary case (total == INT32_MAX) produces INT64 but the numeric check passes.
+  CUDF_EXPECTS(val_offsets_col->type().id() == type_id::INT32,
                "VARIANT value bytes exceed 2 GiB limit",
                std::overflow_error);
 
@@ -477,17 +485,12 @@ std::unique_ptr<column> encode_variant(cudf::table_view const& input,
                  std::invalid_argument);
   }
 
-  {
-    std::vector<int32_t> name_order(N);
-    std::iota(name_order.begin(), name_order.end(), 0);
-    std::stable_sort(name_order.begin(), name_order.end(), [&](int a, int b) {
-      return column_names[a] < column_names[b];
-    });
-    for (int i = 1; i < N; i++) {
-      CUDF_EXPECTS(column_names[name_order[i]] != column_names[name_order[i - 1]],
-                   "encode_variant: duplicate column names are not allowed",
-                   std::invalid_argument);
-    }
+  // ── Metadata blob, sort order, and duplicate check (sort once) ──
+  auto [meta_bytes, sort_order] = build_metadata_blob(column_names);
+  for (int i = 1; i < N; i++) {
+    CUDF_EXPECTS(column_names[sort_order[i]] != column_names[sort_order[i - 1]],
+                 "encode_variant: duplicate column names are not allowed",
+                 std::invalid_argument);
   }
 
   auto make_empty_list = [&] {
@@ -502,9 +505,7 @@ std::unique_ptr<column> encode_variant(cudf::table_view const& input,
     return make_structs_column(0, std::move(ch), 0, {}, stream, mr);
   }
 
-  // ── Metadata blob and sort order ──
-  auto [meta_bytes, sort_order] = build_metadata_blob(column_names);
-  auto const M                  = static_cast<size_type>(meta_bytes.size());
+  auto const M = static_cast<size_type>(meta_bytes.size());
 
   rmm::device_uvector<uint8_t> d_meta_template = cudf::detail::make_device_uvector_async(
     meta_bytes, stream, cudf::get_current_device_resource_ref());
@@ -530,7 +531,7 @@ std::unique_ptr<column> encode_variant(cudf::table_view const& input,
 
   auto [val_offsets_col, total_val_bytes] = cudf::strings::detail::make_offsets_child_column(
     d_val_sizes.begin(), d_val_sizes.end(), stream, mr);
-  CUDF_EXPECTS(total_val_bytes <= std::numeric_limits<size_type>::max(),
+  CUDF_EXPECTS(val_offsets_col->type().id() == type_id::INT32,
                "VARIANT value bytes exceed 2 GiB limit",
                std::overflow_error);
 
