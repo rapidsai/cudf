@@ -17,7 +17,7 @@ source:
 
 build:
   noarch: python
-  string: ${{ date_string }}_${{ head_rev }}
+  string: ${{ datetime_string }}_${{ head_rev }}
   script:
     content: |
       ./build.sh custreamz

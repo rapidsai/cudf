@@ -23,7 +23,7 @@ source:
 build:
   python:
     version_independent: true
-  string: cuda${{ cuda_major }}_cp${{ py_buildstring }}_abi3_${{ date_string }}_${{ head_rev }}
+  string: cuda${{ cuda_major }}_cp${{ py_buildstring }}_abi3_${{ datetime_string }}_${{ head_rev }}
   script:
     content: |
       ./build.sh cudf_streaming

@@ -19,7 +19,7 @@ source:
 
 build:
   noarch: python
-  string: cuda${{ cuda_major }}_${{ date_string }}_${{ head_rev }}
+  string: cuda${{ cuda_major }}_${{ datetime_string }}_${{ head_rev }}
   script:
     content: |
       ./build.sh cudf_polars
