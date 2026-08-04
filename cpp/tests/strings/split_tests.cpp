@@ -425,6 +425,34 @@ TEST_F(StringsSplitTest, MultiByteDelimiters)
     result = cudf::strings::rsplit(view, cudf::string_scalar("}:{"));
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result, *expected);
   }
+
+  // Delimiter longer than some string rows — those rows are returned as-is
+  input = cudf::test::strings_column_wrapper({"a", "ab::cd", "b", "ef::gh::ij", "c"});
+  view  = cudf::strings_column_view(input);
+  {
+    auto result   = cudf::strings::split_record(view, cudf::string_scalar("::"));
+    auto expected = LCW({LCW{"a"}, LCW{"ab", "cd"}, LCW{"b"}, LCW{"ef", "gh", "ij"}, LCW{"c"}});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+    result = cudf::strings::rsplit_record(view, cudf::string_scalar("::"));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+  }
+  {
+    auto result = cudf::strings::split(view, cudf::string_scalar("::"));
+    auto c0     = cudf::test::strings_column_wrapper({"a", "ab", "b", "ef", "c"});
+    auto c1     = cudf::test::strings_column_wrapper({"", "cd", "", "gh", ""},
+                                                     {false, true, false, true, false});
+    auto c2     = cudf::test::strings_column_wrapper({"", "", "", "ij", ""},
+                                                     {false, false, false, true, false});
+    std::vector<std::unique_ptr<cudf::column>> expected_columns;
+    expected_columns.push_back(c0.release());
+    expected_columns.push_back(c1.release());
+    expected_columns.push_back(c2.release());
+    auto expected = std::make_unique<cudf::table>(std::move(expected_columns));
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result, *expected);
+
+    result = cudf::strings::rsplit(view, cudf::string_scalar("::"));
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result, *expected);
+  }
 }
 
 TEST_F(StringsSplitTest, SplitRegex)
