@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "join_common_utils.hpp"
@@ -32,12 +32,10 @@ inner_join(table_view const& left_input,
            rmm::cuda_stream_view stream,
            rmm::device_async_resource_ref mr)
 {
-  // Make sure any dictionary columns have matched key sets.
-  // This will return any new dictionary columns created as well as updated table_views.
-  auto matched = cudf::dictionary::detail::match_dictionaries(
-    {left_input, right_input},
-    stream,
-    cudf::get_current_device_resource_ref());  // temporary objects returned
+  // Match dictionary key sets so indices are comparable across tables; the returned
+  // index columns are temporary and serve only as the join keys.
+  auto matched = cudf::dictionary::detail::match_dictionaries_to_indices(
+    {left_input, right_input}, stream, cudf::get_current_device_resource_ref());
 
   // now rebuild the table views with the updated ones
   auto const left      = matched.second.front();
@@ -67,12 +65,11 @@ left_join(table_view const& left_input,
           rmm::cuda_stream_view stream,
           rmm::device_async_resource_ref mr)
 {
-  // Make sure any dictionary columns have matched key sets.
-  // This will return any new dictionary columns created as well as updated table_views.
-  auto matched = cudf::dictionary::detail::match_dictionaries(
-    {left_input, right_input},  // these should match
-    stream,
-    cudf::get_current_device_resource_ref());  // temporary objects returned
+  // Match dictionary key sets so indices are comparable across tables; the returned
+  // index columns are temporary and serve only as the join keys.
+  auto matched = cudf::dictionary::detail::match_dictionaries_to_indices(
+    {left_input, right_input}, stream, cudf::get_current_device_resource_ref());
+
   // now rebuild the table views with the updated ones
   table_view const left  = matched.second.front();
   table_view const right = matched.second.back();
@@ -92,12 +89,11 @@ full_join(table_view const& left_input,
           rmm::cuda_stream_view stream,
           rmm::device_async_resource_ref mr)
 {
-  // Make sure any dictionary columns have matched key sets.
-  // This will return any new dictionary columns created as well as updated table_views.
-  auto matched = cudf::dictionary::detail::match_dictionaries(
-    {left_input, right_input},  // these should match
-    stream,
-    cudf::get_current_device_resource_ref());  // temporary objects returned
+  // Match dictionary key sets so indices are comparable across tables; the returned
+  // index columns are temporary and serve only as the join keys.
+  auto matched = cudf::dictionary::detail::match_dictionaries_to_indices(
+    {left_input, right_input}, stream, cudf::get_current_device_resource_ref());
+
   // now rebuild the table views with the updated ones
   table_view const left  = matched.second.front();
   table_view const right = matched.second.back();
