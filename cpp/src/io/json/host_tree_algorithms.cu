@@ -217,6 +217,17 @@ struct json_column_data {
   bitmask_type* validity;
 };
 
+struct initialize_string_offsets_and_lengths_fn {
+  device_json_column::row_offset_t* offsets;
+  device_json_column::row_offset_t* lengths;
+
+  __device__ void operator()(size_type idx) const
+  {
+    offsets[idx] = 0;
+    lengths[idx] = 0;
+  }
+};
+
 using hashmap_of_device_columns =
   std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>;
 
@@ -520,16 +531,14 @@ void make_device_json_column(device_span<SymbolT const> input,
     if (column_category == NC_ERR || column_category == NC_FN) {
       return;
     } else if (column_category == NC_VAL || column_category == NC_STR) {
-      col.string_offsets.resize(max_row_offsets[i] + 1, stream);
-      col.string_lengths.resize(max_row_offsets[i] + 1, stream);
-      thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                   col.string_offsets.begin(),
-                   col.string_offsets.end(),
-                   0);
-      thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                   col.string_lengths.begin(),
-                   col.string_lengths.end(),
-                   0);
+      auto const num_rows = max_row_offsets[i] + 1;
+      col.string_offsets.resize(num_rows, stream);
+      col.string_lengths.resize(num_rows, stream);
+      thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                         cuda::counting_iterator<size_type>{0},
+                         num_rows,
+                         initialize_string_offsets_and_lengths_fn{col.string_offsets.data(),
+                                                                  col.string_lengths.data()});
     } else if (column_category == NC_LIST) {
       col.child_offsets.resize(max_row_offsets[i] + 2, stream);
       thrust::uninitialized_fill(
