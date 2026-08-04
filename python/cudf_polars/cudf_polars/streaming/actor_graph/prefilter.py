@@ -20,7 +20,10 @@ from cudf_polars.streaming.actor_graph.utils import (
     send_metadata,
     shutdown_channels_on_error,
 )
-from cudf_polars.streaming.filter_hint import JoinInputPrefilter
+from cudf_polars.streaming.filter_hint import (
+    ExternalDomain,
+    JoinInputDomain,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Coroutine, Iterable, Sequence
@@ -81,7 +84,11 @@ class PrefilterDecision:
             "bloom_bytes": self.bloom_bytes,
             "exact_bytes": self.exact_bytes,
         }
-        result["domain_side"] = prefilter.domain_side
+        if isinstance(prefilter.domain, JoinInputDomain):
+            result["domain_side"] = prefilter.domain.side
+        else:
+            assert isinstance(prefilter.domain, ExternalDomain)
+            result["domain"] = "external"
         return result
 
 
@@ -290,8 +297,8 @@ def choose_prefilter(
     if domain is None:
         raise ValueError("A redistributed target requires domain statistics")
     if (
-        isinstance(prefilter, JoinInputPrefilter)
-        and prefilter.target_side == prefilter.domain_side
+        isinstance(prefilter.domain, JoinInputDomain)
+        and prefilter.target_side == prefilter.domain.side
     ):
         return PrefilterDecision(
             "skip",

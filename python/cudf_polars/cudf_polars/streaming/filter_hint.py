@@ -22,17 +22,29 @@ JoinSide: TypeAlias = Literal["left", "right"]
 
 
 @dataclass(frozen=True, slots=True)
-class JoinInputPrefilter:
-    """A prefilter whose domain is already an input of its owning join."""
+class JoinInputDomain:
+    """A prefilter domain provided by an input of its owning join."""
+
+    side: JoinSide
+
+
+@dataclass(frozen=True, slots=True)
+class ExternalDomain:
+    """A prefilter domain provided by an additional join input."""
+
+
+PrefilterDomain: TypeAlias = JoinInputDomain | ExternalDomain
+
+
+@dataclass(frozen=True, slots=True)
+class Prefilter:
+    """Description of an optional join prefilter."""
 
     target_side: JoinSide
     target_on: tuple[NamedExpr, ...]
-    domain_side: JoinSide
+    domain: PrefilterDomain
     domain_on: tuple[NamedExpr, ...]
     nulls_equal: bool
-
-
-Prefilter: TypeAlias = JoinInputPrefilter
 
 
 class JoinWithPrefilter(Join):
@@ -53,13 +65,14 @@ class JoinWithPrefilter(Join):
         prefilters: Sequence[Prefilter],
         left: IR,
         right: IR,
+        *external_domains: IR,
     ):
         self.schema = schema
         self.left_on = tuple(left_on)
         self.right_on = tuple(right_on)
         self.options = options
         self.prefilters = tuple(prefilters)
-        self.children = (left, right)
+        self.children = (left, right, *external_domains)
         self._non_child_args = (
             self.left_on,
             self.right_on,
@@ -69,6 +82,15 @@ class JoinWithPrefilter(Join):
 
         if not self.prefilters:
             raise ValueError("JoinWithPrefilter requires at least one prefilter")
+        external_domain_count = sum(
+            isinstance(prefilter.domain, ExternalDomain)
+            for prefilter in self.prefilters
+        )
+        if external_domain_count != len(external_domains):
+            raise ValueError(
+                "External prefilters and additional JoinWithPrefilter children "
+                "must align"
+            )
 
     @classmethod
     def do_evaluate(
@@ -79,10 +101,11 @@ class JoinWithPrefilter(Join):
         prefilters: tuple[Prefilter, ...],
         left: DataFrame,
         right: DataFrame,
+        *external_domains: DataFrame,
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate the join while ignoring its optional prefilters."""
-        del prefilters
+        del prefilters, external_domains
         return Join.do_evaluate(
             left_on,
             right_on,

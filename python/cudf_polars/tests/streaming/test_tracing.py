@@ -242,6 +242,157 @@ def test_local_join_prefilter_trace_records_decision_and_effect(
         assert record["prefilter"]["output_rows"] == output_rows
 
 
+@pytest.mark.parametrize(
+    "broadcast_limit,bloom_filter_max_size,join_strategy,method,reason,domain_rows",
+    [
+        (1, 32 * 1024 * 1024, "shuffle", "bloom", "bloom_fits", 30),
+        (512, 0, "shuffle", "broadcast_semi_join", "exact_domain_fits", 30),
+        (
+            1_000_000,
+            32 * 1024 * 1024,
+            "broadcast_left",
+            "skip",
+            "target_not_redistributed",
+            None,
+        ),
+    ],
+    ids=["bloom", "exact", "skip"],
+)
+def test_external_join_prefilter_trace_records_decision_and_effect(
+    timeout_seconds: int,
+    broadcast_limit: int,
+    bloom_filter_max_size: int,
+    join_strategy: str,
+    method: str,
+    reason: str,
+    domain_rows: int | None,
+) -> None:
+    """Trace an external-domain prefilter selected through the public engine."""
+    pytest.importorskip("structlog")
+    code = textwrap.dedent(f"""\
+    import json
+
+    import polars as pl
+    import rmm
+    import structlog
+
+    rmm.mr.set_current_device_resource(rmm.mr.ManagedMemoryResource())
+
+    from cudf_polars.engine.spmd import SPMDEngine
+
+    nation = (
+        pl.LazyFrame(
+            {{"n_nationkey": range(10), "active": [True] * 5 + [False] * 5}}
+        )
+        .filter("active")
+        .select("n_nationkey")
+    )
+    orders = pl.LazyFrame(
+        {{
+            "o_orderkey": range(90),
+            "n_nationkey": [i % 10 for i in range(90)],
+        }}
+    )
+    lineitem = pl.LazyFrame(
+        {{
+            "l_orderkey": [i % 90 for i in range(180)],
+            "l_suppkey": [i % 60 for i in range(180)],
+        }}
+    )
+    supplier = pl.LazyFrame(
+        {{
+            "s_suppkey": range(30),
+            "s_nationkey": [i % 10 for i in range(30)],
+        }}
+    )
+    query = (
+        nation.join(orders, on="n_nationkey")
+        .join(
+            lineitem,
+            left_on="o_orderkey",
+            right_on="l_orderkey",
+            maintain_order="left",
+        )
+        .join(
+            supplier,
+            left_on=("l_suppkey", "n_nationkey"),
+            right_on=("s_suppkey", "s_nationkey"),
+        )
+    )
+    options = {{
+        "join_filter_pushdown": {{
+            "threshold": 0.5,
+            "bloom_filter_max_size": {bloom_filter_max_size},
+        }},
+        "broadcast_limit": {broadcast_limit},
+        "target_partition_size": 64,
+        "max_rows_per_partition": 100,
+    }}
+    with SPMDEngine(executor_options=options) as engine:
+        with structlog.testing.capture_logs() as logs:
+            result = query.collect(engine=engine)
+
+    (event,) = (
+        log
+        for log in logs
+        if log.get("scope") == "actor"
+        and any(
+            prefilter.get("domain") == "external"
+            for prefilter in log.get("join_prefilters", ())
+        )
+    )
+    (prefilter,) = (
+        prefilter
+        for prefilter in event["join_prefilters"]
+        if prefilter.get("domain") == "external"
+    )
+    record = {{
+        "result_rows": result.height,
+        "join_strategy": event["decision"],
+        "prefilter": prefilter,
+    }}
+    print("PREFILTER_TRACE=" + json.dumps(record))
+    """)
+
+    env = os.environ.copy()
+    env["CUDF_POLARS_LOG_TRACES"] = "1"
+    result = subprocess.check_output(
+        [sys.executable, "-c", code],
+        env=env,
+        stderr=subprocess.STDOUT,
+        timeout=timeout_seconds,
+    )
+    (payload,) = (
+        line.removeprefix(b"PREFILTER_TRACE=")
+        for line in result.splitlines()
+        if line.startswith(b"PREFILTER_TRACE=")
+    )
+    record = json.loads(payload)
+
+    assert record["result_rows"] == 45
+    assert record["join_strategy"] == join_strategy
+    assert (
+        record["prefilter"].items()
+        >= {
+            "target_side": "right",
+            "domain": "external",
+            "method": method,
+            "reason": reason,
+            "domain_rows": domain_rows,
+        }.items()
+    )
+    if method == "skip":
+        assert "input_rows" not in record["prefilter"]
+        assert "output_rows" not in record["prefilter"]
+    else:
+        assert record["prefilter"]["estimated_cardinality"] == 30
+        assert record["prefilter"]["input_rows"] == 180
+        if method == "broadcast_semi_join":
+            assert record["prefilter"]["output_rows"] == 90
+        else:
+            assert 90 <= record["prefilter"]["output_rows"] < 180
+
+
 def test_structlog_disabled_by_default(timeout_seconds: int):
     """Test that structlog does NOT emit events when CUDF_POLARS_LOG_TRACES is not set."""
     pytest.importorskip("structlog")

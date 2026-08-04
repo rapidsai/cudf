@@ -13,8 +13,10 @@ from cudf_polars.dsl.traversal import traversal
 from cudf_polars.streaming.base import PartitionInfo
 from cudf_polars.streaming.dispatch import lower_ir_node
 from cudf_polars.streaming.filter_hint import (
-    JoinInputPrefilter,
+    ExternalDomain,
+    JoinInputDomain,
     JoinWithPrefilter,
+    Prefilter,
     PushdownFilterHint,
 )
 from cudf_polars.streaming.repartition import Repartition
@@ -30,7 +32,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.streaming.filter_hint import JoinSide, Prefilter
+    from cudf_polars.streaming.filter_hint import JoinSide
     from cudf_polars.streaming.parallel import LowerIRTransformer
 
 
@@ -158,7 +160,7 @@ def _has_non_pointwise_keys(ir: Join) -> bool:
 def _lower_join_with_prefilters(
     ir: Join,
     rec: LowerIRTransformer,
-) -> tuple[Join, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[JoinWithPrefilter, MutableMapping[IR, PartitionInfo]]:
     """Lower a join and normalize its adjacent filter hints."""
     targets = tuple(
         child.children[0] if isinstance(child, PushdownFilterHint) else child
@@ -173,13 +175,15 @@ def _lower_join_with_prefilters(
     )
 
     prefilters: list[Prefilter] = []
+    external_domains: list[IR] = []
     claimed_sides: set[JoinSide] = set()
     for target_index, child in enumerate(ir.children):
         if not isinstance(child, PushdownFilterHint):
             continue
 
         _target, domain = child.children
-        domain, _domain_partition_info = rec(domain)
+        domain, domain_partition_info = rec(domain)
+        partition_info.update(domain_partition_info)
 
         # A key-only Projection retains an explicit edge to its source. If that
         # source is a join input and contains every requested key, the join can
@@ -210,31 +214,40 @@ def _lower_join_with_prefilters(
         elif domain_side is not None:
             claimed_sides.add(domain_side)
 
-        if domain_side is None:
-            continue
-        prefilters.append(
-            JoinInputPrefilter(
-                target_side,
-                child.target_on,
-                domain_side,
-                child.domain_on,
-                child.nulls_equal,
+        if domain_side is not None:
+            prefilters.append(
+                Prefilter(
+                    target_side,
+                    child.target_on,
+                    JoinInputDomain(domain_side),
+                    child.domain_on,
+                    child.nulls_equal,
+                )
             )
-        )
+        else:
+            external_domains.append(domain)
+            prefilters.append(
+                Prefilter(
+                    target_side,
+                    child.target_on,
+                    ExternalDomain(),
+                    child.domain_on,
+                    child.nulls_equal,
+                )
+            )
 
-    lowered_join: Join
-    if prefilters:
-        lowered_join = JoinWithPrefilter(
+    return (
+        JoinWithPrefilter(
             ir.schema,
             ir.left_on,
             ir.right_on,
             ir.options,
             prefilters,
             *lowered_targets,
-        )
-    else:
-        lowered_join = ir.reconstruct(lowered_targets)
-    return lowered_join, partition_info
+            *external_domains,
+        ),
+        partition_info,
+    )
 
 
 @lower_ir_node.register(PushdownFilterHint)

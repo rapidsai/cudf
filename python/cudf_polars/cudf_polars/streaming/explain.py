@@ -38,6 +38,8 @@ from cudf_polars.dsl.translate import Translator
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.streaming.base import IOPartitionFlavor
 from cudf_polars.streaming.filter_hint import (
+    ExternalDomain,
+    JoinInputDomain,
     JoinWithPrefilter,
     PushdownFilterHint,
 )
@@ -479,7 +481,7 @@ def _(ir: Join, *, offset: str = "") -> str:
 def _(ir: JoinWithPrefilter, *, offset: str = "") -> str:
     left_on = tuple(ne.name for ne in ir.left_on)
     right_on = tuple(ne.name for ne in ir.right_on)
-    prefilters = tuple(type(prefilter).__name__ for prefilter in ir.prefilters)
+    prefilters = tuple(type(prefilter.domain).__name__ for prefilter in ir.prefilters)
     return _repr_header(
         offset,
         f"JOIN {ir.options[0]} {left_on} {right_on} {prefilters=}",
@@ -618,7 +620,13 @@ def _serialize_prefilter(prefilter: Prefilter) -> dict[str, Serializable]:
         "domain_on": [ne.name for ne in prefilter.domain_on],
         "nulls_equal": prefilter.nulls_equal,
     }
-    properties["domain_side"] = prefilter.domain_side
+    if isinstance(prefilter.domain, JoinInputDomain):
+        properties["domain"] = {
+            "type": type(prefilter.domain).__name__,
+            "side": prefilter.domain.side,
+        }
+    elif isinstance(prefilter.domain, ExternalDomain):
+        properties["domain"] = {"type": type(prefilter.domain).__name__}
     return properties
 
 

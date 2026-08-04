@@ -7,7 +7,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from cudf_polars.streaming.filter_hint import JoinWithPrefilter
+from cudf_polars.streaming.filter_hint import (
+    ExternalDomain,
+    JoinInputDomain,
+    JoinWithPrefilter,
+)
 
 if TYPE_CHECKING:
     from typing import Any
@@ -58,25 +62,47 @@ def bind_join_inputs(
     ir: Join,
     ch_left: Channel[TableChunk],
     ch_right: Channel[TableChunk],
+    ch_prefilter_domains: tuple[Channel[TableChunk], ...],
     left_metadata: ChannelMetadata,
     right_metadata: ChannelMetadata,
+    prefilter_domain_metadata: tuple[ChannelMetadata, ...],
     cardinality_tags: tuple[int, ...],
 ) -> JoinBindings:
     """Bind logical join inputs and prefilters to their runtime resources."""
     left = JoinInputBinding(ir.children[0], ch_left, left_metadata)
     right = JoinInputBinding(ir.children[1], ch_right, right_metadata)
     if not isinstance(ir, JoinWithPrefilter):
+        if ch_prefilter_domains or prefilter_domain_metadata:
+            raise ValueError("A plain Join cannot have prefilter domain inputs")
         return JoinBindings(left, right)
 
+    external_inputs = tuple(
+        JoinInputBinding(node, channel, metadata)
+        for node, channel, metadata in zip(
+            ir.children[2:],
+            ch_prefilter_domains,
+            prefilter_domain_metadata,
+            strict=True,
+        )
+    )
+    external_prefilter_count = sum(
+        isinstance(prefilter.domain, ExternalDomain) for prefilter in ir.prefilters
+    )
+    if external_prefilter_count != len(external_inputs):
+        raise ValueError("Join prefilters and external domain inputs must align")
     if len(cardinality_tags) < len(ir.prefilters):
         raise ValueError("Each join prefilter requires a cardinality collective ID")
 
     sides = {"left": left, "right": right}
+    external_inputs_iter = iter(external_inputs)
     cardinality_tags_iter = iter(cardinality_tags)
     prefilters = []
     for prefilter in ir.prefilters:
         target = sides[prefilter.target_side]
-        domain = sides[prefilter.domain_side]
+        if isinstance(prefilter.domain, JoinInputDomain):
+            domain = sides[prefilter.domain.side]
+        else:
+            domain = next(external_inputs_iter)
         prefilters.append(
             BoundPrefilter(
                 prefilter,

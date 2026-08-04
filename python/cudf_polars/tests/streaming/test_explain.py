@@ -157,7 +157,7 @@ def test_explain_pushdown_filter_hint_in_dynamic_physical_plan():
     physical_serialized = serialize_query(query, engine, physical=True)
 
     assert "PUSHDOWN FILTER HINT ('key',) ('key',)" in logical
-    assert "prefilters=('JoinInputPrefilter',)" in physical
+    assert "prefilters=('JoinInputDomain',)" in physical
     expected_properties = {
         "target_on": ["key"],
         "domain_on": ["key"],
@@ -172,12 +172,12 @@ def test_explain_pushdown_filter_hint_in_dynamic_physical_plan():
         and node.properties["prefilters"]
         == [
             {
-                "type": "JoinInputPrefilter",
+                "type": "Prefilter",
                 "target_side": "right",
                 "target_on": ["key"],
                 "domain_on": ["key"],
                 "nulls_equal": False,
-                "domain_side": "left",
+                "domain": {"type": "JoinInputDomain", "side": "left"},
             }
         ]
         for node in physical_serialized.nodes.values()

@@ -64,7 +64,11 @@ from cudf_polars.streaming.actor_graph.utils import (
     send_metadata,
     shutdown_on_error,
 )
-from cudf_polars.streaming.filter_hint import JoinWithPrefilter
+from cudf_polars.streaming.filter_hint import (
+    ExternalDomain,
+    JoinInputDomain,
+    JoinWithPrefilter,
+)
 from cudf_polars.streaming.repartition import Repartition
 from cudf_polars.streaming.utils import _concat
 
@@ -533,6 +537,7 @@ def add_bloom_prefilter(
 def make_prefilter_execution(
     context: Context,
     comm: Communicator,
+    ir: Join,
     ir_context: IRExecutionContext,
     strategy: JoinStrategy,
     ch_left: Channel[TableChunk],
@@ -554,8 +559,28 @@ def make_prefilter_execution(
         if decision.method == "skip":
             continue
 
-        indices = names_to_indices(prefilter.domain_on, bound.domain.node.schema)
-        bound.key_channel = execution.buffer_domain(prefilter.domain_side, indices)
+        if isinstance(prefilter.domain, JoinInputDomain):
+            indices = names_to_indices(prefilter.domain_on, bound.domain.node.schema)
+            bound.key_channel = execution.buffer_domain(prefilter.domain.side, indices)
+        else:
+            sample = bound.domain.sample
+            if sample is None:
+                raise ValueError("Active external prefilter has no domain sample")
+            indices = names_to_indices(prefilter.domain_on, bound.domain.node.schema)
+            if indices != tuple(range(len(bound.domain.node.schema))):
+                raise ValueError("External prefilter domains must contain only keys")
+            bound.key_channel = context.create_channel()
+            execution.add_channel(bound.key_channel)
+            execution.add_task(
+                replay_buffered_channel(
+                    context,
+                    bound.key_channel,
+                    bound.domain.channel,
+                    sample.chunks,
+                    bound.domain.metadata,
+                    trace_ir=ir,
+                )
+            )
 
     for bound in bindings.prefilters:
         decision = bound.decision
@@ -1095,26 +1120,35 @@ def choose_prefilters(
     broadcast_limit: int,
     bloom_filter_max_size: int,
 ) -> None:
-    """Choose strategies for optional join prefilters."""
+    """Choose strategies for prefilters with sufficient available statistics."""
     partitionings = {
         "left": left_partitioning,
         "right": right_partitioning,
     }
     for bound in bindings.prefilters:
+        if bound.decision is not None:
+            continue
         target = bound.target.sample
         if target is None:
             raise ValueError("Join target has not been sampled")
         target_side = bound.prefilter.target_side
+        target_requires_redistribution = join_input_requires_redistribution(
+            strategy,
+            target_side,
+            partitionings[target_side],
+            bound.target.metadata,
+        )
+        if (
+            isinstance(bound.prefilter.domain, ExternalDomain)
+            and bound.domain.sample is None
+            and target_requires_redistribution
+        ):
+            continue
         bound.decision = choose_prefilter(
             bound.prefilter,
             target,
             bound.domain.sample,
-            target_requires_redistribution=join_input_requires_redistribution(
-                strategy,
-                target_side,
-                partitionings[target_side],
-                bound.target.metadata,
-            ),
+            target_requires_redistribution=target_requires_redistribution,
             broadcast_limit=broadcast_limit,
             bloom_filter_max_size=bloom_filter_max_size,
         )
@@ -1157,28 +1191,24 @@ async def sample_input(
     )
 
 
-async def collect_join_samples(
+async def collect_samples(
     context: Context,
     comm: Communicator,
     bindings: JoinBindings,
+    inputs: tuple[JoinInputBinding, ...],
     sample_chunk_count: int,
     target_partition_size: int,
     collective_id: int,
 ) -> None:
-    """Sample join inputs and attach estimates to their runtime bindings."""
-    inputs = [bindings.left, bindings.right]
-
+    """Sample inputs and attach aggregate estimates to their bindings."""
+    if not inputs:
+        return
     sampling_inputs = []
     for input_ in inputs:
-        domain_prefilters = [
-            bound for bound in bindings.prefilters if bound.domain is input_
-        ]
-        if len(domain_prefilters) > 1:
+        prefilters = [bound for bound in bindings.prefilters if bound.domain is input_]
+        if len(prefilters) > 1:
             raise ValueError("One join input cannot provide multiple prefilter domains")
-        sampling_inputs.append(
-            (input_, domain_prefilters[0] if domain_prefilters else None)
-        )
-
+        sampling_inputs.append((input_, prefilters[0] if prefilters else None))
     local_samples = await gather_in_task_group(
         *(
             sample_input(
@@ -1198,8 +1228,76 @@ async def collect_join_samples(
         tuple(local_samples),
         collective_id,
     )
-    for input_, sample in zip(inputs, samples, strict=True):
+    for (input_, _), sample in zip(sampling_inputs, samples, strict=True):
         input_.sample = sample
+
+
+async def release_skipped_external_domains(
+    context: Context, bindings: JoinBindings
+) -> None:
+    """Release buffered data and stop external domains rejected by planning."""
+    channels = []
+    for bound in bindings.prefilters:
+        if not isinstance(bound.prefilter.domain, ExternalDomain):
+            continue
+        if bound.decision is None:
+            raise ValueError("Join prefilter has no runtime decision")
+        if bound.decision.method != "skip":
+            continue
+        if bound.domain.sample is not None:
+            bound.domain.sample.chunks.clear()
+        channels.append(bound.domain.channel)
+    if channels:
+        await gather_in_task_group(*(channel.shutdown(context) for channel in channels))
+
+
+async def resolve_prefilters(
+    context: Context,
+    comm: Communicator,
+    bindings: JoinBindings,
+    strategy: JoinStrategy,
+    left_partitioning: NormalizedPartitioning,
+    right_partitioning: NormalizedPartitioning,
+    executor: StreamingExecutor,
+    collective_id: int,
+) -> None:
+    """Resolve optional prefilters after selecting the join strategy."""
+    config = executor.join_filter_pushdown
+    if config is None or not bindings.prefilters:
+        return
+
+    choose_prefilters(
+        bindings,
+        strategy,
+        left_partitioning,
+        right_partitioning,
+        executor.broadcast_limit,
+        config.bloom_filter_max_size,
+    )
+    assert executor.dynamic_planning is not None
+    await collect_samples(
+        context,
+        comm,
+        bindings,
+        tuple(
+            bound.domain
+            for bound in bindings.prefilters
+            if isinstance(bound.prefilter.domain, ExternalDomain)
+            and bound.decision is None
+        ),
+        executor.dynamic_planning.sample_chunk_count,
+        executor.target_partition_size,
+        collective_id,
+    )
+    choose_prefilters(
+        bindings,
+        strategy,
+        left_partitioning,
+        right_partitioning,
+        executor.broadcast_limit,
+        config.bloom_filter_max_size,
+    )
+    await release_skipped_external_domains(context, bindings)
 
 
 async def choose_strategy(
@@ -1245,10 +1343,11 @@ async def choose_strategy(
         )
     else:
         assert executor.dynamic_planning is not None
-        await collect_join_samples(
+        await collect_samples(
             context,
             comm,
             bindings,
+            (bindings.left, bindings.right),
             executor.dynamic_planning.sample_chunk_count,
             executor.target_partition_size,
             collective_ids.size_estimate,
@@ -1271,15 +1370,16 @@ async def choose_strategy(
         chunkwise=chunkwise,
         tracer=tracer,
     )
-    if executor.join_filter_pushdown is not None:
-        choose_prefilters(
-            bindings,
-            strategy,
-            left_partitioning,
-            right_partitioning,
-            executor.broadcast_limit,
-            executor.join_filter_pushdown.bloom_filter_max_size,
-        )
+    await resolve_prefilters(
+        context,
+        comm,
+        bindings,
+        strategy,
+        left_partitioning,
+        right_partitioning,
+        executor,
+        collective_ids.size_estimate,
+    )
     return strategy
 
 
@@ -1292,6 +1392,7 @@ async def join_actor(
     ch_out: Channel[TableChunk],
     ch_left: Channel[TableChunk],
     ch_right: Channel[TableChunk],
+    ch_prefilter_domains: tuple[Channel[TableChunk], ...],
     executor: StreamingExecutor,
     collective_ids: JoinCollectiveIds,
 ) -> None:
@@ -1318,6 +1419,8 @@ async def join_actor(
         Input channel for the left side.
     ch_right
         Input channel for the right side.
+    ch_prefilter_domains
+        Input channels providing the prefilter key domains.
     executor
         Streaming executor configuration.
     collective_ids
@@ -1328,20 +1431,28 @@ async def join_actor(
         ch_out,
         ch_left,
         ch_right,
+        *ch_prefilter_domains,
         trace_ir=ir,
         ir_context=ir_context,
     ) as tracer:
-        left_metadata, right_metadata = await gather_in_task_group(
+        (
+            left_metadata,
+            right_metadata,
+            *prefilter_domain_metadata,
+        ) = await gather_in_task_group(
             recv_metadata(ch_left, context),
             recv_metadata(ch_right, context),
+            *(recv_metadata(ch, context) for ch in ch_prefilter_domains),
         )
 
         bindings = bind_join_inputs(
             ir,
             ch_left,
             ch_right,
+            ch_prefilter_domains,
             left_metadata,
             right_metadata,
+            tuple(prefilter_domain_metadata),
             collective_ids.cardinality_tags,
         )
 
@@ -1373,6 +1484,7 @@ async def join_actor(
         prefilter_execution = make_prefilter_execution(
             context,
             comm,
+            ir,
             ir_context,
             strategy,
             ch_left_replay,
@@ -1482,7 +1594,7 @@ def _(
     ir: Join | JoinWithPrefilter, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     # Join operation.
-    left, right = ir.children
+    left, right, *prefilter_domains = ir.children
     partition_info = rec.state["partition_info"]
     left_count = partition_info[left].count
     right_count = partition_info[right].count
@@ -1534,6 +1646,10 @@ def _(
                 channels[ir].reserve_input_slot(),
                 channels[left].reserve_output_slot(),
                 channels[right].reserve_output_slot(),
+                tuple(
+                    channels[domain].reserve_output_slot()
+                    for domain in prefilter_domains
+                ),
                 executor,
                 collective_ids,
             )

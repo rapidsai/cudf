@@ -17,8 +17,9 @@ from cudf_polars.dsl.utils.column_domain import ColumnRef
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.base import StatsCollector
 from cudf_polars.streaming.filter_hint import (
-    JoinInputPrefilter,
+    JoinInputDomain,
     JoinWithPrefilter,
+    Prefilter,
     PushdownFilterHint,
 )
 from cudf_polars.streaming.join_filter_pushdown import (
@@ -199,9 +200,10 @@ def test_adjacent_filter_hint_is_recorded_on_lowered_join(
     assert not isinstance(left, PushdownFilterHint)
     assert not isinstance(right, PushdownFilterHint)
     (prefilter,) = lowering.lowered.prefilters
-    assert isinstance(prefilter, JoinInputPrefilter)
+    assert isinstance(prefilter, Prefilter)
+    assert isinstance(prefilter.domain, JoinInputDomain)
     assert prefilter.target_side == "right"
-    assert prefilter.domain_side == "left"
+    assert prefilter.domain.side == "left"
     assert tuple(right.schema) == ("l_partkey", "l_suppkey")
     assert tuple(ne.name for ne in prefilter.target_on) == ("l_partkey",)
     assert tuple(ne.name for ne in prefilter.domain_on) == ("p_partkey",)
