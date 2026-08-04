@@ -334,8 +334,7 @@ class RankActor:
                 progress_thread=ProgressThread(self._rapidsmpf_statistics),
             )
         barrier(self._comm)
-        # Now that ``comm`` exists, declare the engine-scoped inter-rank network
-        # topology once (a no-op for single-rank runs).
+        # Now we can declare the Quent worker resources, which depends on self._comm
         if self._quent_logger is not None:
             self._quent_logger.emit(self._quent_worker._init())
             self.worker_resources = WorkerResources.build(
