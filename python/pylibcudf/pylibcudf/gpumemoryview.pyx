@@ -14,6 +14,7 @@ cdef gpumemoryview _slice(gpumemoryview parent, uintptr_t ptr, uint64_t nbytes):
     v.ptr = ptr
     v.nbytes = nbytes
     v.obj = parent
+    # always returns a raw byte view regardless of the source dtype.
     v.cai = {"data": (ptr, False), "shape": (nbytes,), "typestr": "|u1", "version": 3}
     return v
 
@@ -95,14 +96,32 @@ cdef class gpumemoryview:
     def __len__(self):
         return self.cai["shape"][0]
 
-    def __getitem__(self, index):
-        if not isinstance(index, slice):
+    def byte_slice(self, s):
+        """Return a byte-range sub-view of this buffer.
+
+        Parameters
+        ----------
+        s : slice
+            Byte-based slice.
+
+        Returns
+        -------
+        gpumemoryview
+            A ``|u1`` view of the requested byte range. The returned view
+            holds a reference to the parent buffer, keeping it alive.
+
+        Raises
+        ------
+        TypeError
+            If ``s`` is not a slice.
+        """
+        if not isinstance(s, slice):
             raise TypeError(
-                f"gpumemoryview indices must be slices, not {type(index).__name__}"
+                f"byte_slice requires a slice, not {type(s).__name__}"
             )
-        start, stop, step = index.indices(self.nbytes)
+        start, stop, step = s.indices(self.nbytes)
         if step != 1:
-            raise ValueError("gpumemoryview only supports step=1 slices")
+            raise ValueError("byte_slice only supports step=1 slices")
         length = stop - start
         if length <= 0:
             return _slice(self, self.ptr + start, 0)

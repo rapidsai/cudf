@@ -76,13 +76,24 @@ def test_len(np_array, stream):
 )
 def test_slice(np_array, s):
     gv = plc.Column.from_array(np_array.view("u1")).data()
-    result = plc.Column.from_array(gv[s]).to_pylist()
+    result = plc.Column.from_array(gv.byte_slice(s)).to_pylist()
     assert result == np_array.view("u1")[s].tolist()
 
 
 def test_slice_fails(np_array):
     gv = plc.Column.from_array(np_array.view("u1")).data()
-    with pytest.raises(TypeError, match="indices must be slices"):
-        gv[0]
+    with pytest.raises(TypeError, match="requires a slice"):
+        gv.byte_slice(0)
     with pytest.raises(ValueError, match="step=1"):
-        gv[::2]
+        gv.byte_slice(slice(None, None, 2))
+
+
+def test_slice_keeps_parent_alive():
+    import gc
+
+    col = plc.Column.from_array(np.arange(10, dtype="u1"))
+    gv = col.data()
+    s = gv.byte_slice(slice(2, 5))
+    del col, gv
+    gc.collect()
+    assert plc.Column.from_array(s).to_pylist() == [2, 3, 4]
