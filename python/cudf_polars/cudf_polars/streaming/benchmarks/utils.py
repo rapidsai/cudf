@@ -480,7 +480,6 @@ class RunConfig:
     iterations: int
     io_mode: Literal["cold", "lukewarm", "hot"] = "lukewarm"
     collect_traces: bool = False
-    native_parquet: bool = True
     max_io_threads: int = 2
     # All streaming/rapidsmpf/engine knobs
     streaming_options: StreamingOptions = dataclasses.field(
@@ -629,7 +628,6 @@ class RunConfig:
             iterations=args.iterations,
             io_mode=args.io_mode,
             collect_traces=args.collect_traces,
-            native_parquet=args.native_parquet,
             max_io_threads=args.max_io_threads,
             streaming_options=streaming_options,
             connect=args.connect,
@@ -662,7 +660,6 @@ class RunConfig:
             "iterations": self.iterations,
             "io_mode": self.io_mode,
             "collect_traces": self.collect_traces,
-            "native_parquet": self.native_parquet,
             "max_io_threads": self.max_io_threads,
             "n_workers": self.n_workers,
             "extra_info": self.extra_info,
@@ -713,7 +710,6 @@ class RunConfig:
             print(f"frontend: {self.frontend}")
             if self.frontend in _STREAMING_FRONTENDS:
                 opts = self.streaming_options.to_executor_options()
-                print(f"native_parquet: {self.native_parquet}")
                 print(f"n_workers: {self.n_workers}")
                 print(f"target_partition_size: {opts.get('target_partition_size')}")
                 print(f"broadcast_limit: {opts.get('broadcast_limit')}")
@@ -2047,12 +2043,6 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         help="Sets cudf_polars.utils.config.StreamingExecutor.max_io_threads.",
     )
     parser.add_argument(
-        "--native-parquet",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Sets cudf_polars.utils.config.ParquetOptions.use_rapidsmpf_native.",
-    )
-    parser.add_argument(
         "-o",
         "--output",
         type=argparse.FileType("at"),
@@ -2278,7 +2268,7 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
                 "Unset CUDA_VISIBLE_DEVICES or use it directly to control GPU visibility."
             )
 
-    parquet_options = {"use_rapidsmpf_native": run_config.native_parquet}
+    parquet_options: dict[str, Any] = {}
     numeric_type, date_type = check_input_data_type(run_config)
     match args.frontend:
         case "dask":
