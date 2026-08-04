@@ -34,14 +34,13 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/numeric>
 #include <cuda/std/cstring>
 #include <cuda/std/limits>
 #include <cuda/std/optional>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/transform.h>
 
 #include <cstdint>
 #include <limits>
@@ -747,8 +746,8 @@ struct cast_variant_fn {
 
     thrust::transform(
       rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-      thrust::counting_iterator<size_type>(0),
-      thrust::counting_iterator<size_type>(num_rows),
+      cuda::counting_iterator<size_type>(0),
+      cuda::counting_iterator<size_type>(num_rows),
       static_cast<bool*>(data.data()),
       [values = this->values, d_null_mask = this->d_null_mask] __device__(size_type row) -> bool {
         if (!cudf::bit_is_set(d_null_mask, row)) { return false; }
