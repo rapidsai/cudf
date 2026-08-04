@@ -75,6 +75,19 @@ class PinnedMemoryPoolTest extends CudfTestBase {
   }
 
   @Test
+  void failedInitFallsBackAndCanRetry() {
+    // Zero-sized pool to intentionally fail initialization.
+    PinnedMemoryPool.initialize(0, 0, false, 2);
+    try (HostMemoryBuffer buffer = PinnedMemoryPool.allocate(1024)) {
+      assertNotNull(buffer);  // this falls back
+    }
+    assertFalse(PinnedMemoryPool.isInitialized());
+    // Initialization can be retried.
+    PinnedMemoryPool.initialize(16L * 1024 * 1024, 0, false, 2);
+    assertTrue(PinnedMemoryPool.isInitialized());
+  }
+
+  @Test
   void allocate() {
     PinnedMemoryPool.initialize(1024*1024*500L);
     for (int i = 2048000; i < 1024*1024*1024; i = i * 2) {

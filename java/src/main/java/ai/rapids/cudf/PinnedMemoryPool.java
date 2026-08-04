@@ -69,17 +69,21 @@ public final class PinnedMemoryPool implements AutoCloseable {
 
   private static PinnedMemoryPool getSingleton() {
     if (singleton_ == null && initFuture != null) {
+      // There is an initFuture whose result is not yet retrieved.
       synchronized (PinnedMemoryPool.class) {
         if (singleton_ == null && initFuture != null) {
           try {
             singleton_ = initFuture.get();
             initFuture = null;
           } catch (InterruptedException e) {
+            // Interruption does not cancel initialization; keep the future.
             Thread.currentThread().interrupt();
             throw new RuntimeException("Interrupted initializing pinned memory pool", e);
           } catch (Exception e) {
+            // Null the future so this and subsequent callers can fall back or retry initialization.
             initFuture = null;
-            throw new RuntimeException("Error initializing pinned memory pool", e);
+            log.error("Error initializing pinned memory pool",
+                e.getCause() != null ? e.getCause() : e);
           }
         }
       }
@@ -143,7 +147,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
       throw new IllegalArgumentException("Initialization thread count must be positive");
     }
     if (isInitialized()) {
-      throw new IllegalStateException("Can only initialize the pool once.");
+      throw new IllegalStateException("Pinned memory pool is already initialized.");
     }
     ExecutorService initService = Executors.newSingleThreadExecutor(runnable -> {
       Thread t = new Thread(runnable, "pinned pool init");
