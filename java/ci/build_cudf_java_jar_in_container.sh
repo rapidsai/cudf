@@ -113,6 +113,7 @@ CUDF_VERSION="$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout 
 # artifact for end-to-end pipeline testing without a real tag push. GHA
 # silently ignores a job-level `env: GITHUB_REF:` override, so we set it
 # here where it sticks (rapids-is-release-build keys off GITHUB_REF).
+# rapids-pre-commit-hooks: disable-next-line[verify-hardcoded-version]
 export GITHUB_REF=refs/tags/v26.08.0
 
 # Release tag builds strip -SNAPSHOT and rewrite the POM so packaged artifacts
