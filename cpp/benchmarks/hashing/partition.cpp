@@ -400,7 +400,8 @@ NVBENCH_BENCH_TYPES(bench_hash_partition_analytic,
 
 NVBENCH_BENCH(bench_hash_partition_partition_count)
   .set_name("hash_partition_partition_count")
-  .add_int64_axis("num_partitions", {64, 128, 256, 512, 1024, 2048, 4096});
+  .add_int64_axis("num_partitions",
+                  {64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 27648, 28672, 65536});
 
 NVBENCH_BENCH(bench_hash_partition_equal_input_size)
   .set_name("hash_partition_equal_input_size")
