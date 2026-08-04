@@ -147,6 +147,10 @@ parse_args "$@"
 if [[ -z "${GITHUB_REF:-}" ]]; then
   GITHUB_REF="$(git -C "${SCRIPT_DIR}" symbolic-ref HEAD 2>/dev/null || true)"
 fi
+if [[ -z "${GITHUB_REF:-}" ]]; then
+  echo "Error: could not derive GITHUB_REF from HEAD (detached?). Set it explicitly, e.g. GITHUB_REF=refs/heads/my-branch." >&2
+  exit 1
+fi
 export GITHUB_REF
 
 require_arg --work-dir "${WORK_DIR}"

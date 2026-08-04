@@ -107,7 +107,9 @@ branch.
 
 To rehearse the release path locally:
 
-    GITHUB_REF=refs/tags/vYY.MM.PP ./java/ci/test_java_build_local.sh
+```bash
+GITHUB_REF=refs/tags/vYY.MM.PP ./java/ci/test_java_build_local.sh
+```
 
 Rewrites `java/pom.xml` in place. Restore with `git checkout java/pom.xml`.
 
