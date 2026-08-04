@@ -116,20 +116,11 @@ def _make_quent_ir_execution_context(
 @pytest.mark.parametrize(
     "value,expected_variant",
     [
-        (0, "U8"),
-        (2**8 - 1, "U8"),
-        (2**8, "U16"),
-        (2**16 - 1, "U16"),
-        (2**16, "U32"),
-        (2**32 - 1, "U32"),
-        (2**32, "U64"),
+        (0, "I64"),
+        (2**63 - 1, "I64"),
+        (2**63, "U64"),
         (2**64 - 1, "U64"),
-        (-(2**7), "I8"),
-        (2**7 - 1, "U8"),
-        (-(2**15), "I16"),
-        (-(2**15) - 1, "I32"),
-        (-(2**31), "I32"),
-        (-(2**31) - 1, "I64"),
+        (-1, "I64"),
         (-(2**63), "I64"),
     ],
 )
@@ -813,7 +804,7 @@ def test_serialize_list() -> None:
     }
     assert Attribute("counts", [1, 2, 300]).serialize() == {
         "key": "counts",
-        "value": {"List": {"U16": [1, 2, 300]}},
+        "value": {"List": {"I64": [1, 2, 300]}},
     }
     assert Attribute("flags", [True, False]).serialize() == {
         "key": "flags",
@@ -832,7 +823,7 @@ def test_serialize_list() -> None:
             "List": {
                 "Struct": [
                     [
-                        {"key": "bytes", "value": {"U16": 1024}},
+                        {"key": "bytes", "value": {"I64": 1024}},
                         {"key": "kind", "value": {"String": "disk"}},
                     ]
                 ]

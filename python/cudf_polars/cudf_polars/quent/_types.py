@@ -487,17 +487,11 @@ HomogeneousListValue = (
 )
 Value: TypeAlias = ScalarValue | HomogeneousListValue | StructValue
 
-_INT_VARIANTS: tuple[tuple[str, int, int], ...] = (
-    ("U8", 0, 2**8 - 1),
-    ("U16", 0, 2**16 - 1),
-    ("U32", 0, 2**32 - 1),
-    ("U64", 0, 2**64 - 1),
-    ("I8", -(2**7), 2**7 - 1),
-    ("I16", -(2**15), 2**15 - 1),
-    ("I32", -(2**31), 2**31 - 1),
-    ("I64", -(2**63), 2**63 - 1),
-)
-_INT_VARIANT_NAMES = frozenset(name for name, _, _ in _INT_VARIANTS)
+_I64_MIN = -(2**63)
+_I64_MAX = 2**63 - 1
+_U64_MAX = 2**64 - 1
+# Accepted on deserialize for compatibility with other Quent producers.
+_INT_VARIANT_NAMES = frozenset({"U8", "U16", "U32", "U64", "I8", "I16", "I32", "I64"})
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -516,18 +510,20 @@ class Attribute:
 
 
 def _integer_variant(value: int) -> str:
-    """Return the narrowest Quent integer variant that can hold ``value``."""
-    for variant, lo, hi in _INT_VARIANTS:
-        if lo <= value <= hi:
-            return variant
+    """Return ``I64`` if ``value`` fits, otherwise ``U64`` up to ``2**64 - 1``."""
+    if _I64_MIN <= value <= _I64_MAX:
+        return "I64"
+    if _I64_MAX < value <= _U64_MAX:
+        return "U64"
     raise ValueError(f"Integer value {value} does not fit any Quent integer type.")
 
 
 def _common_integer_variant(values: list[int]) -> str:
-    """Return the narrowest Quent integer variant that can hold all ``values``."""
-    for variant, lo, hi in _INT_VARIANTS:
-        if all(lo <= value <= hi for value in values):
-            return variant
+    """Return ``I64`` if all ``values`` fit, otherwise ``U64`` when all are unsigned."""
+    if all(_I64_MIN <= value <= _I64_MAX for value in values):
+        return "I64"
+    if all(0 <= value <= _U64_MAX for value in values):
+        return "U64"
     raise ValueError("Integer list values do not fit any Quent integer type.")
 
 
