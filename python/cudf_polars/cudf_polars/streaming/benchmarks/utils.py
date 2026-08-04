@@ -1216,7 +1216,7 @@ def _finalize_benchmark_run(
     run_config: RunConfig,
     validation_failures: list[int],
     query_failures: list[tuple[int, int]],
-    serializable_engine_config: dict[str, Any] | None = None,
+    serializable_engine_config: dict[str, Any],
 ) -> None:
     """Summarize, serialize, and exit after a benchmark run."""
     if args.summarize:
@@ -1261,7 +1261,7 @@ def run_polars_cpu(
         run_config,
         validation_failures,
         query_failures,
-        serializable_engine_config=None,
+        serializable_engine_config=run_config.serialize(engine=None),
     )
 
 
@@ -1298,7 +1298,7 @@ def run_polars_in_memory(
         run_config,
         validation_failures,
         query_failures,
-        serializable_engine_config=None,
+        serializable_engine_config=run_config.serialize(engine=engine),
     )
 
 
