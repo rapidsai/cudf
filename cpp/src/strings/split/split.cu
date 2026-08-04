@@ -240,8 +240,16 @@ std::unique_ptr<table> split(strings_column_view const& input,
 
   size_type max_tokens = maxsplit > 0 ? maxsplit + 1 : std::numeric_limits<size_type>::max();
 
-  auto d_strings = column_device_view::create(input.parent(), stream);
+  auto d_strings            = column_device_view::create(input.parent(), stream);
+  auto const non_null_count = input.size() - input.null_count();
   if (delimiter.size() == 0) {
+    if (non_null_count > 0 &&
+        (input.chars_size(stream) / non_null_count) < AVG_CHAR_BYTES_THRESHOLD) {
+      auto [offsets, tokens] = split_ws_per_row_helper<true>(*d_strings, max_tokens, stream, mr);
+      auto results           = build_table_from_tokens(input, offsets->view(), tokens, stream, mr);
+      return (results->num_columns() == 0) ? make_all_null_table(input.size(), stream, mr)
+                                           : std::move(results);
+    }
     auto tokenizer    = split_ws_tokenizer_fn{*d_strings, max_tokens};
     auto delimiter_fn = whitespace_delimiter_fn{};
     auto results      = split_fn(input, tokenizer, delimiter_fn, stream, mr);
@@ -250,7 +258,6 @@ std::unique_ptr<table> split(strings_column_view const& input,
                                          : std::move(results);
   }
 
-  auto const non_null_count = input.size() - input.null_count();
   if (non_null_count > 0 &&
       (input.chars_size(stream) / non_null_count) < AVG_CHAR_BYTES_THRESHOLD) {
     auto tmp_mr = cudf::get_current_device_resource_ref();
@@ -274,8 +281,16 @@ std::unique_ptr<table> rsplit(strings_column_view const& input,
 
   size_type max_tokens = maxsplit > 0 ? maxsplit + 1 : std::numeric_limits<size_type>::max();
 
-  auto d_strings = column_device_view::create(input.parent(), stream);
+  auto d_strings            = column_device_view::create(input.parent(), stream);
+  auto const non_null_count = input.size() - input.null_count();
   if (delimiter.size() == 0) {
+    if (non_null_count > 0 &&
+        (input.chars_size(stream) / non_null_count) < AVG_CHAR_BYTES_THRESHOLD) {
+      auto [offsets, tokens] = split_ws_per_row_helper<false>(*d_strings, max_tokens, stream, mr);
+      auto results           = build_table_from_tokens(input, offsets->view(), tokens, stream, mr);
+      return (results->num_columns() == 0) ? make_all_null_table(input.size(), stream, mr)
+                                           : std::move(results);
+    }
     auto tokenizer    = rsplit_ws_tokenizer_fn{*d_strings, max_tokens};
     auto delimiter_fn = whitespace_delimiter_fn{};
     auto results      = split_fn(input, tokenizer, delimiter_fn, stream, mr);
@@ -284,7 +299,6 @@ std::unique_ptr<table> rsplit(strings_column_view const& input,
                                          : std::move(results);
   }
 
-  auto const non_null_count = input.size() - input.null_count();
   if (non_null_count > 0 &&
       (input.chars_size(stream) / non_null_count) < AVG_CHAR_BYTES_THRESHOLD) {
     auto tmp_mr = cudf::get_current_device_resource_ref();

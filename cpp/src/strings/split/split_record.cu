@@ -100,6 +100,40 @@ std::unique_ptr<column> split_record_per_row_fn(strings_column_view const& input
                            cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
+// Build a lists column using the per-row whitespace split helper.
+template <bool Forward>
+std::unique_ptr<column> split_record_ws_per_row_fn(strings_column_view const& input,
+                                                   size_type const max_tokens,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr)
+{
+  if (input.is_empty()) {
+    return cudf::lists::detail::make_empty_lists_column(data_type{type_id::STRING});
+  }
+  if (input.size() == input.null_count()) {
+    auto offsets = std::make_unique<column>(input.offsets(), stream, mr);
+    auto results = make_empty_column(type_id::STRING);
+    return make_lists_column(input.size(),
+                             std::move(offsets),
+                             std::move(results),
+                             input.null_count(),
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
+  }
+
+  auto d_strings         = column_device_view::create(input.parent(), stream);
+  auto [offsets, tokens] = split_ws_per_row_helper<Forward>(*d_strings, max_tokens, stream, mr);
+  CUDF_EXPECTS(tokens.size() < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+               "Size of output exceeds the column size limit",
+               std::overflow_error);
+
+  auto strings_child = make_strings_column(tokens.begin(), tokens.end(), stream, mr);
+  return make_lists_column(input.size(),
+                           std::move(offsets),
+                           std::move(strings_child),
+                           input.null_count(),
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr));
+}
+
 }  // namespace
 
 std::unique_ptr<column> split_record(strings_column_view const& input,
@@ -113,14 +147,18 @@ std::unique_ptr<column> split_record(strings_column_view const& input,
   // makes consistent with Pandas
   size_type const max_tokens = maxsplit > 0 ? maxsplit + 1 : std::numeric_limits<size_type>::max();
 
+  auto const non_null_count = input.size() - input.null_count();
   if (delimiter.size() == 0) {
+    if (non_null_count == 0 ||
+        (input.chars_size(stream) / non_null_count) < AVG_CHAR_BYTES_THRESHOLD) {
+      return split_record_ws_per_row_fn<true>(input, max_tokens, stream, mr);
+    }
     auto d_strings    = column_device_view::create(input.parent(), stream);
     auto tokenizer    = split_ws_tokenizer_fn{*d_strings, max_tokens};
     auto delimiter_fn = whitespace_delimiter_fn{};
     return split_record_fn(input, tokenizer, delimiter_fn, stream, mr);
   }
 
-  auto const non_null_count = input.size() - input.null_count();
   if (non_null_count == 0 ||
       (input.chars_size(stream) / non_null_count) < AVG_CHAR_BYTES_THRESHOLD) {
     constexpr bool forward = true;
@@ -144,14 +182,18 @@ std::unique_ptr<column> rsplit_record(strings_column_view const& input,
   // makes consistent with Pandas
   size_type const max_tokens = maxsplit > 0 ? maxsplit + 1 : std::numeric_limits<size_type>::max();
 
+  auto const non_null_count = input.size() - input.null_count();
   if (delimiter.size() == 0) {
+    if (non_null_count == 0 ||
+        (input.chars_size(stream) / non_null_count) < AVG_CHAR_BYTES_THRESHOLD) {
+      return split_record_ws_per_row_fn<false>(input, max_tokens, stream, mr);
+    }
     auto d_strings    = column_device_view::create(input.parent(), stream);
     auto tokenizer    = rsplit_ws_tokenizer_fn{*d_strings, max_tokens};
     auto delimiter_fn = whitespace_delimiter_fn{};
     return split_record_fn(input, tokenizer, delimiter_fn, stream, mr);
   }
 
-  auto const non_null_count = input.size() - input.null_count();
   if (non_null_count == 0 ||
       (input.chars_size(stream) / non_null_count) < AVG_CHAR_BYTES_THRESHOLD) {
     constexpr bool forward = false;
