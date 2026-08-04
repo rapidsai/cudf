@@ -228,6 +228,10 @@ def test_serialization_roundtrip(polars_tbl):
 
 def test_size_bytes():
     stream = get_cuda_stream()
-    df = pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    df = pl.DataFrame(
+        {
+            "a": pl.Series([1, 2, 3], dtype=pl.Int64()),
+        }
+    )
     df = DataFrame.from_polars(df, stream=stream)
-    assert df._size_bytes() == df.to_polars().estimated_size()
+    assert df._size_bytes() == 24
