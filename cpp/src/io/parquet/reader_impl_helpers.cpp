@@ -1243,22 +1243,36 @@ row_group_size_info aggregate_reader_metadata::get_row_group_size_info(
 {
   auto const& row_group = get_row_group(row_group_index, src_idx);
 
+  CUDF_EXPECTS(row_group.num_rows >= 0 && std::in_range<size_t>(row_group.num_rows),
+               "Row group has an invalid number of rows",
+               std::invalid_argument);
   auto size_info =
     row_group_size_info{.unadjusted_num_rows = static_cast<size_t>(row_group.num_rows)};
+
+  // Helper function to overflow-safeadd compressed sizes
+  auto const add_compressed_size = [&](auto&& current_size, auto&& colchunk_compressed_size) {
+    auto const sum = cuda::add_overflow<size_t>(current_size, colchunk_compressed_size);
+    CUDF_EXPECTS(not sum.overflow,
+                 "Row group compressed size exceeds the supported range",
+                 std::overflow_error);
+    return sum.value;
+  };
 
   if (input_columns.has_value()) {
     for (auto const& column : *input_columns) {
       auto const& column_metadata =
         get_column_metadata(row_group_index, src_idx, column.schema_idx);
-      size_info.compressed_size += column_metadata.total_compressed_size;
+      size_info.compressed_size =
+        add_compressed_size(size_info.compressed_size, column_metadata.total_compressed_size);
       size_info.max_leaf_values =
-        std::max(size_info.max_leaf_values, static_cast<size_t>(column_metadata.num_values));
+        std::max<size_t>(size_info.max_leaf_values, column_metadata.num_values);
     }
   } else {
     for (auto const& column_chunk : row_group.columns) {
-      size_info.compressed_size += column_chunk.meta_data.total_compressed_size;
+      size_info.compressed_size = add_compressed_size(size_info.compressed_size,
+                                                      column_chunk.meta_data.total_compressed_size);
       size_info.max_leaf_values =
-        std::max(size_info.max_leaf_values, static_cast<size_t>(column_chunk.meta_data.num_values));
+        std::max<size_t>(size_info.max_leaf_values, column_chunk.meta_data.num_values);
     }
   }
 
