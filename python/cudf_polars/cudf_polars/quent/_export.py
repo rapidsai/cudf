@@ -22,7 +22,7 @@ EXTENSION = "ndjson"
 MODEL_QMI: dict[str, Any] = {
     "quent": {
         "version": "0.1.0",
-        "commit": "9c2924510756d9eca288819e125330805053051f",
+        "commit": "153d422ae3392c24dfaf6ac5743a8682f783f864",
         "remote": "https://github.com/rapidsai/quent",
     },
     "model": {
@@ -31,7 +31,7 @@ MODEL_QMI: dict[str, Any] = {
         "type_path": "quent_simulator_instrumentation::SimulatorEvent",
         "source": {
             "version": "0.1.0",
-            "commit": "9c2924510756d9eca288819e125330805053051f",
+            "commit": "153d422ae3392c24dfaf6ac5743a8682f783f864",
             "remote": "https://github.com/rapidsai/quent",
         },
         "analyzer_package": "quent-simulator-analyzer",
