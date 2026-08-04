@@ -20,7 +20,7 @@ std::size_t compute_left_join_complement_size(cudf::device_span<size_type const>
   return cudf::detail::count_if(
     right_matches.begin(),
     right_matches.end(),
-    [] __device__(size_type is_matched) { return is_matched == 0; },
+    [] __device__(size_type is_matched) -> bool { return is_matched == 0; },
     stream);
 }
 }  // namespace
@@ -33,8 +33,7 @@ std::size_t get_full_join_size(
   cudf::detail::hash_table_t const& hash_table,
   bool has_nulls,
   null_equality compare_nulls,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  rmm::cuda_stream_view stream)
 {
   std::size_t join_size = compute_join_output_size<join_kind::LEFT_JOIN>(right_table,
                                                                          left_table,
@@ -47,8 +46,8 @@ std::size_t get_full_join_size(
 
   if (join_size == 0) { return right_table.num_rows(); }
 
-  auto right_matches =
-    cudf::detail::make_zeroed_device_uvector_async<size_type>(right_table.num_rows(), stream, mr);
+  auto right_matches = cudf::detail::make_zeroed_device_uvector_async<size_type>(
+    right_table.num_rows(), stream, cudf::get_current_device_resource_ref());
   auto const out_build_begin = cuda::make_transform_output_iterator(
     cuda::make_discard_iterator(),
     mark_matched_output_fn{right_matches.data(), right_table.num_rows()});

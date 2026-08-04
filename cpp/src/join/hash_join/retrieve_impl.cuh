@@ -215,7 +215,7 @@ hash_join<Hasher>::join_retrieve(cudf::table_view const& left,
 
   if constexpr (Join == join_kind::FULL_JOIN) {
     return detail::finalize_full_join(
-      std::move(join_indices), left.num_rows(), _right.num_rows(), stream, mr, right_matches);
+      std::move(join_indices), left.num_rows(), _right.num_rows(), right_matches, stream, mr);
   } else {
     return join_indices;
   }

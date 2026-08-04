@@ -14,6 +14,7 @@
 #include <rmm/resource_ref.hpp>
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 namespace cudf::detail {
@@ -65,19 +66,19 @@ VectorPair get_trivial_left_join_indices(table_view const& left,
  * @param left_table_num_rows Number of rows in the left table (0 → every right row is
  *                            unmatched, fast path).
  * @param right_table_num_rows Number of rows in the right table.
+ * @param right_matches Optional precomputed flags indicating which right rows matched. When absent,
+ *                      the flags are derived from `indices.second`.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate working storage.
- * @param right_matches Optional precomputed flags indicating which right rows matched. When empty,
- *                      the flags are derived from `indices.second`.
  *
  * @return `[left_indices, right_indices]` of the complete full-join output.
  */
 VectorPair finalize_full_join(VectorPair&& indices,
                               size_type left_table_num_rows,
                               size_type right_table_num_rows,
+                              std::optional<cudf::device_span<size_type const>> right_matches,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr,
-                              cudf::device_span<size_type const> right_matches = {});
+                              rmm::device_async_resource_ref mr);
 
 /**
  * @brief Finalize a full-join result from per-partition index spans.

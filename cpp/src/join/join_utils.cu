@@ -87,9 +87,9 @@ struct to_no_match_pair {
 VectorPair finalize_full_join(VectorPair&& indices,
                               size_type left_table_num_rows,
                               size_type right_table_num_rows,
+                              std::optional<cudf::device_span<size_type const>> right_matches,
                               rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr,
-                              cudf::device_span<size_type const> right_matches)
+                              rmm::device_async_resource_ref mr)
 {
   auto [left_out, right_out] = std::move(indices);
   CUDF_EXPECTS(left_out->size() == right_out->size(),
@@ -124,18 +124,16 @@ VectorPair finalize_full_join(VectorPair&& indices,
   right_out->resize(upper, stream);
 
   CUDF_EXPECTS(
-    right_matches.empty() || right_matches.size() == static_cast<std::size_t>(right_table_num_rows),
-    "right match flags must be empty or have one entry per right row",
+    !right_matches || right_matches->size() == static_cast<std::size_t>(right_table_num_rows),
+    "right match flags must be absent or have one entry per right row",
     std::invalid_argument);
 
   // Hash joins mark right rows as part of retrieval and pass those flags here, eliminating an
   // output-sized scatter. Other join implementations use this fallback to derive the same flags
   // from their materialized right indices.
   auto computed_matches = cudf::detail::make_zeroed_device_uvector_async<size_type>(
-    right_matches.empty() ? right_table_num_rows : 0,
-    stream,
-    cudf::get_current_device_resource_ref());
-  if (right_matches.empty()) {
+    right_matches ? 0 : right_table_num_rows, stream, cudf::get_current_device_resource_ref());
+  if (!right_matches) {
     thrust::scatter_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                        cuda::make_constant_iterator(size_type{1}),
                        cuda::make_constant_iterator(size_type{1}) + match_total,
@@ -144,7 +142,7 @@ VectorPair finalize_full_join(VectorPair&& indices,
                        computed_matches.begin(),
                        valid_range<size_type>{0, right_table_num_rows});
   }
-  auto const match_flags = right_matches.empty() ? computed_matches.data() : right_matches.data();
+  auto const match_flags = right_matches ? right_matches->data() : computed_matches.data();
 
   // Fused compaction: for each unmatched right row, emit (JoinNoMatch, right_idx) into
   // (left_out_tail, right_out_tail) in a single CUB DeviceSelect pass.
@@ -224,6 +222,7 @@ VectorPair finalize_full_join(
   return finalize_full_join(std::pair(std::move(left_out), std::move(right_out)),
                             left_table_num_rows,
                             right_table_num_rows,
+                            std::nullopt,
                             stream,
                             mr);
 }
