@@ -108,13 +108,6 @@ cd "${REPO_ROOT}/java"
 
 CUDF_VERSION="$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout "${BUILD_ARG[@]}")"
 
-# TEMPORARY (revert alongside the pr.yaml java-only rehearsal commit): force
-# the release-tag path so this branch produces a release-shaped Maven repo
-# artifact for end-to-end pipeline testing without a real tag push. GHA
-# silently ignores a job-level `env: GITHUB_REF:` override, so we set it
-# here where it sticks (rapids-is-release-build keys off GITHUB_REF).
-export GITHUB_REF=refs/tags/v26.08.0
-
 # Release tag builds strip -SNAPSHOT and rewrite the POM so packaged artifacts
 # carry the release version. Non-release builds keep -SNAPSHOT.
 if rapids-is-release-build; then
