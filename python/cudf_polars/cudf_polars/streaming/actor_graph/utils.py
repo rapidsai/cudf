@@ -168,7 +168,7 @@ def _keys_match(
 
 
 class ChunkStore:
-    """Ordered spillable buffer for TableChunk messages."""
+    """Ordered spillable buffer for Messages."""
 
     def __init__(self, ctx: Context) -> None:
         self._mids: deque[int] = deque()
@@ -177,6 +177,12 @@ class ChunkStore:
     def __len__(self) -> int:
         """Return the number of messages in the store."""
         return len(self._mids)
+
+    def clear(self) -> None:
+        """Discard all messages in the store."""
+        for mid in self._mids:
+            self._store.extract(mid=mid)
+        self._mids.clear()
 
     def insert(self, msg: Message) -> None:
         """Insert a message into the store."""
@@ -317,6 +323,7 @@ async def shutdown_on_error(
                     record["row_count"] = tracer.row_count
                 if tracer.decision is not None:
                     record["decision"] = tracer.decision
+                record.update(tracer.extra)
             cudf_polars.dsl.tracing.log(
                 "Streaming Actor", start=start, stop=stop, **record
             )
@@ -1229,19 +1236,23 @@ async def replay_buffered_channel(
     ch_in
         The buffered input channel.
     buffered_chunks
-        The buffered chunks to yield first.
+        The buffered chunks to yield first. The store is empty when this
+        coroutine exits, including on cancellation or error.
     metadata
         The metadata to send to the output channel.
     trace_ir
         The IR node to trace. Passed through to shutdown_on_error.
     """
-    async with shutdown_on_error(context, ch_out, ch_in, trace_ir=trace_ir):
-        await send_metadata(ch_out, context, metadata)
-        for msg in buffered_chunks:
-            await ch_out.send(context, msg)
-        while (msg := await ch_in.recv(context)) is not None:
-            await ch_out.send(context, msg)
-        await ch_out.drain(context)
+    try:
+        async with shutdown_on_error(context, ch_out, ch_in, trace_ir=trace_ir):
+            await send_metadata(ch_out, context, metadata)
+            for msg in buffered_chunks:
+                await ch_out.send(context, msg)
+            while (msg := await ch_in.recv(context)) is not None:
+                await ch_out.send(context, msg)
+            await ch_out.drain(context)
+    finally:
+        buffered_chunks.clear()
 
 
 @dataclass(frozen=True)

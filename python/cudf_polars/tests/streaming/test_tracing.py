@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import subprocess
 import sys
@@ -129,6 +130,116 @@ def test_structlog_contains_expected_ir_types(timeout_seconds: int):
     assert b"ir_type=DataFrameScan" in result
     assert b"ir_type=Filter" in result
     assert b"ir_type=GroupBy" in result
+
+
+@pytest.mark.parametrize(
+    "broadcast_limit,bloom_filter_max_size,join_strategy,method,reason,output_rows",
+    [
+        (1, 32 * 1024 * 1024, "shuffle", "bloom", "bloom_fits", 10),
+        (64, 0, "shuffle", "broadcast_semi_join", "exact_domain_fits", 10),
+        (
+            1_000_000,
+            32 * 1024 * 1024,
+            "broadcast_left",
+            "skip",
+            "target_not_redistributed",
+            None,
+        ),
+    ],
+    ids=["bloom", "exact", "skip"],
+)
+def test_local_join_prefilter_trace_records_decision_and_effect(
+    timeout_seconds: int,
+    broadcast_limit: int,
+    bloom_filter_max_size: int,
+    join_strategy: str,
+    method: str,
+    reason: str,
+    output_rows: int | None,
+) -> None:
+    """Trace a direct-input join prefilter selected through the public engine."""
+    pytest.importorskip("structlog")
+    code = textwrap.dedent(f"""\
+    import json
+    import os
+
+    import polars as pl
+    import rmm
+    import structlog
+
+    rmm.mr.set_current_device_resource(rmm.mr.ManagedMemoryResource())
+
+    from cudf_polars.engine.spmd import SPMDEngine
+
+    domain = (
+        pl.LazyFrame({{"key": [1, 99], "active": [True, False]}})
+        .filter("active")
+        .select("key")
+    )
+    target = pl.LazyFrame(
+        {{"key": [i % 100 for i in range(1_000)], "value": range(1_000)}}
+    )
+    query = domain.join(target, on="key")
+    options = {{
+        "join_filter_pushdown": {{
+            "threshold": 0.5,
+            "bloom_filter_max_size": {bloom_filter_max_size},
+        }},
+        "broadcast_limit": {broadcast_limit},
+        "target_partition_size": 64,
+        "max_rows_per_partition": 100,
+    }}
+    with SPMDEngine(executor_options=options) as engine:
+        with structlog.testing.capture_logs() as logs:
+            result = query.collect(engine=engine)
+
+    (event,) = (
+        log
+        for log in logs
+        if log.get("scope") == "actor" and "join_prefilters" in log
+    )
+    record = {{
+        "result_rows": result.height,
+        "join_strategy": event["decision"],
+        "prefilter": event["join_prefilters"][0],
+    }}
+    print("PREFILTER_TRACE=" + json.dumps(record))
+    """)
+
+    env = os.environ.copy()
+    env["CUDF_POLARS_LOG_TRACES"] = "1"
+    result = subprocess.check_output(
+        [sys.executable, "-c", code],
+        env=env,
+        stderr=subprocess.STDOUT,
+        timeout=timeout_seconds,
+    )
+    (payload,) = (
+        line.removeprefix(b"PREFILTER_TRACE=")
+        for line in result.splitlines()
+        if line.startswith(b"PREFILTER_TRACE=")
+    )
+    record = json.loads(payload)
+
+    assert record["result_rows"] == 10
+    assert record["join_strategy"] == join_strategy
+    assert (
+        record["prefilter"].items()
+        >= {
+            "target_side": "right",
+            "domain_side": "left",
+            "method": method,
+            "reason": reason,
+            "domain_rows": 1,
+        }.items()
+    )
+    if output_rows is None:
+        assert "input_rows" not in record["prefilter"]
+        assert "output_rows" not in record["prefilter"]
+    else:
+        assert record["prefilter"]["estimated_cardinality"] == 1
+        assert record["prefilter"]["input_rows"] == 1_000
+        assert record["prefilter"]["output_rows"] == output_rows
 
 
 def test_structlog_disabled_by_default(timeout_seconds: int):

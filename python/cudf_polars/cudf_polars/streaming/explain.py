@@ -37,7 +37,10 @@ from cudf_polars.dsl.ir import (
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.streaming.base import IOPartitionFlavor
-from cudf_polars.streaming.filter_hint import PushdownFilterHint
+from cudf_polars.streaming.filter_hint import (
+    JoinWithPrefilter,
+    PushdownFilterHint,
+)
 from cudf_polars.streaming.io import StreamingScan, scan_partition_plan
 from cudf_polars.streaming.parallel import lower_ir_graph, optimize_with_stats
 from cudf_polars.streaming.shuffle import Shuffle
@@ -54,6 +57,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expressions.base import Expr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.streaming.base import PartitionInfo, StatsCollector
+    from cudf_polars.streaming.filter_hint import Prefilter
 
 
 @dataclasses.dataclass
@@ -472,6 +476,18 @@ def _(ir: Join, *, offset: str = "") -> str:
 
 
 @_repr_ir.register
+def _(ir: JoinWithPrefilter, *, offset: str = "") -> str:
+    left_on = tuple(ne.name for ne in ir.left_on)
+    right_on = tuple(ne.name for ne in ir.right_on)
+    prefilters = tuple(type(prefilter).__name__ for prefilter in ir.prefilters)
+    return _repr_header(
+        offset,
+        f"JOIN {ir.options[0]} {left_on} {right_on} {prefilters=}",
+        ir.schema,
+    )
+
+
+@_repr_ir.register
 def _(ir: PushdownFilterHint, *, offset: str = "") -> str:
     target_on = tuple(ne.name for ne in ir.target_on)
     domain_on = tuple(ne.name for ne in ir.domain_on)
@@ -590,6 +606,29 @@ def _(ir: Join) -> dict[str, Serializable]:
         "how": ir.options[0],
         "left_on": [ne.name for ne in ir.left_on],
         "right_on": [ne.name for ne in ir.right_on],
+    }
+
+
+def _serialize_prefilter(prefilter: Prefilter) -> dict[str, Serializable]:
+    """Serialize a normalized join prefilter descriptor."""
+    properties: dict[str, Serializable] = {
+        "type": type(prefilter).__name__,
+        "target_side": prefilter.target_side,
+        "target_on": [ne.name for ne in prefilter.target_on],
+        "domain_on": [ne.name for ne in prefilter.domain_on],
+        "nulls_equal": prefilter.nulls_equal,
+    }
+    properties["domain_side"] = prefilter.domain_side
+    return properties
+
+
+@_serialize_properties.register
+def _(ir: JoinWithPrefilter) -> dict[str, Serializable]:
+    return {
+        "how": ir.options[0],
+        "left_on": [ne.name for ne in ir.left_on],
+        "right_on": [ne.name for ne in ir.right_on],
+        "prefilters": [_serialize_prefilter(prefilter) for prefilter in ir.prefilters],
     }
 
 

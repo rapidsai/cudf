@@ -8,11 +8,15 @@ import operator
 from functools import reduce
 from typing import TYPE_CHECKING
 
-from cudf_polars.dsl.ir import ConditionalJoin, Join, Slice
+from cudf_polars.dsl.ir import ConditionalJoin, Join, Projection, Slice
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.streaming.base import PartitionInfo
 from cudf_polars.streaming.dispatch import lower_ir_node
-from cudf_polars.streaming.filter_hint import PushdownFilterHint
+from cudf_polars.streaming.filter_hint import (
+    JoinInputPrefilter,
+    JoinWithPrefilter,
+    PushdownFilterHint,
+)
 from cudf_polars.streaming.repartition import Repartition
 from cudf_polars.streaming.shuffle import Shuffle
 from cudf_polars.streaming.utils import (
@@ -26,6 +30,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.streaming.filter_hint import JoinSide, Prefilter
     from cudf_polars.streaming.parallel import LowerIRTransformer
 
 
@@ -150,6 +155,88 @@ def _has_non_pointwise_keys(ir: Join) -> bool:
     return not all(expr.is_pointwise for expr in traversal(keys))
 
 
+def _lower_join_with_prefilters(
+    ir: Join,
+    rec: LowerIRTransformer,
+) -> tuple[Join, MutableMapping[IR, PartitionInfo]]:
+    """Lower a join and normalize its adjacent filter hints."""
+    targets = tuple(
+        child.children[0] if isinstance(child, PushdownFilterHint) else child
+        for child in ir.children
+    )
+    lowered_targets, target_partition_info = zip(
+        *(rec(target) for target in targets),
+        strict=True,
+    )
+    partition_info: MutableMapping[IR, PartitionInfo] = reduce(
+        operator.or_, target_partition_info
+    )
+
+    prefilters: list[Prefilter] = []
+    claimed_sides: set[JoinSide] = set()
+    for target_index, child in enumerate(ir.children):
+        if not isinstance(child, PushdownFilterHint):
+            continue
+
+        _target, domain = child.children
+        domain, _domain_partition_info = rec(domain)
+
+        # A key-only Projection retains an explicit edge to its source. If that
+        # source is a join input and contains every requested key, the join can
+        # project those keys itself rather than execute a separate domain input.
+        left, right = lowered_targets
+        direct_domain = domain
+        while True:
+            if direct_domain == left and direct_domain == right:
+                domain_side: JoinSide | None = "right" if target_index == 0 else "left"
+                break
+            if direct_domain == left:
+                domain_side = "left"
+                break
+            if direct_domain == right:
+                domain_side = "right"
+                break
+            if isinstance(direct_domain, Projection) and all(
+                key.name in direct_domain.children[0].schema for key in child.domain_on
+            ):
+                (direct_domain,) = direct_domain.children
+                continue
+            domain_side = None
+            break
+
+        target_side: JoinSide = "left" if target_index == 0 else "right"
+        if domain_side in claimed_sides:
+            domain_side = None
+        elif domain_side is not None:
+            claimed_sides.add(domain_side)
+
+        if domain_side is None:
+            continue
+        prefilters.append(
+            JoinInputPrefilter(
+                target_side,
+                child.target_on,
+                domain_side,
+                child.domain_on,
+                child.nulls_equal,
+            )
+        )
+
+    lowered_join: Join
+    if prefilters:
+        lowered_join = JoinWithPrefilter(
+            ir.schema,
+            ir.left_on,
+            ir.right_on,
+            ir.options,
+            prefilters,
+            *lowered_targets,
+        )
+    else:
+        lowered_join = ir.reconstruct(lowered_targets)
+    return lowered_join, partition_info
+
+
 @lower_ir_node.register(PushdownFilterHint)
 def _(
     ir: PushdownFilterHint, rec: LowerIRTransformer
@@ -224,17 +311,33 @@ def _(
         )
         return rec(Slice(ir.schema, offset, length, new_join))
 
-    # Lower children
-    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
-    partition_info = reduce(operator.or_, _partition_info)
-
-    # Check for dynamic planning - may have more partitions at runtime
     config_options = rec.state["config_options"]
     dynamic_planning = _dynamic_planning_on(config_options)
-
-    left, right = children
-    output_count = max(partition_info[left].count, partition_info[right].count)
     has_non_pointwise_keys = _has_non_pointwise_keys(ir)
+    if (
+        dynamic_planning
+        and ir.options[0] != "Cross"
+        and ir.options[5] == "none"
+        and not has_non_pointwise_keys
+        and any(isinstance(child, PushdownFilterHint) for child in ir.children)
+    ):
+        preserve_prefilters = True
+    else:
+        preserve_prefilters = False
+
+    if preserve_prefilters:
+        ir, partition_info = _lower_join_with_prefilters(ir, rec)
+        children = ir.children
+    else:
+        # Hints not owned by an adaptive join use the generic identity lowering.
+        children, _partition_info = zip(
+            *(rec(child) for child in ir.children),
+            strict=True,
+        )
+        partition_info = reduce(operator.or_, _partition_info)
+
+    left, right = children[:2]
+    output_count = max(partition_info[left].count, partition_info[right].count)
     if output_count == 1 and not dynamic_planning:
         new_node = ir.reconstruct(children)
         partition_info[new_node] = PartitionInfo(count=1)

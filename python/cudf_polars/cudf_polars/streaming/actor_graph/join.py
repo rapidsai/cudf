@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
+from cudf_streaming import BloomFilter, CardinalityEstimator
 from cudf_streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
@@ -16,6 +17,7 @@ from cudf_streaming.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,
 )
+from pylibcudf.hashing import LIBCUDF_DEFAULT_HASH_SEED
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.memory_reserve_or_wait import (
@@ -23,7 +25,7 @@ from rapidsmpf.streaming.core.memory_reserve_or_wait import (
 )
 
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import IR, Join
+from cudf_polars.dsl.ir import IR, Join, Projection
 from cudf_polars.dsl.utils.naming import names_to_indices
 from cudf_polars.streaming.actor_graph.collectives.allgather import (
     AllGatherManager,
@@ -35,8 +37,14 @@ from cudf_polars.streaming.actor_graph.collectives.shuffle import (
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
 )
+from cudf_polars.streaming.actor_graph.join_bindings import bind_join_inputs
 from cudf_polars.streaming.actor_graph.nodes import default_node_multi
-from cudf_polars.streaming.actor_graph.tracing import send_chunk
+from cudf_polars.streaming.actor_graph.prefilter import (
+    PrefilterExecution,
+    choose_prefilter,
+    count_rows_passthrough,
+)
+from cudf_polars.streaming.actor_graph.tracing import LOG_TRACES, send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
     CUDF_ROW_LIMIT,
     MAX_ROWS_PER_PARTITION,
@@ -56,11 +64,12 @@ from cudf_polars.streaming.actor_graph.utils import (
     send_metadata,
     shutdown_on_error,
 )
+from cudf_polars.streaming.filter_hint import JoinWithPrefilter
 from cudf_polars.streaming.repartition import Repartition
 from cudf_polars.streaming.utils import _concat
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import Iterable, MutableMapping
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
@@ -69,8 +78,14 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
+    from cudf_polars.streaming.actor_graph.join_bindings import (
+        BoundPrefilter,
+        JoinBindings,
+        JoinInputBinding,
+    )
     from cudf_polars.streaming.actor_graph.tracing import ActorTracer
     from cudf_polars.streaming.base import PartitionInfo
+    from cudf_polars.streaming.filter_hint import JoinSide
     from cudf_polars.utils.config import StreamingExecutor
 
 
@@ -96,6 +111,53 @@ class JoinStrategy:
     """The key expressions for the left side. Only used for shuffle joins."""
     right_keys: tuple[NamedExpr, ...] = ()
     """The key expressions for the right side. Only used for shuffle joins."""
+
+
+@dataclass(frozen=True, slots=True)
+class JoinCollectiveIds:
+    """Named collective-ID slots reserved for a dynamic join."""
+
+    size_estimate: int
+    left_redistribution: int
+    right_redistribution: int
+
+    @classmethod
+    def from_reserved(cls, collective_ids: list[int]) -> JoinCollectiveIds:
+        """Construct the named slots from IDs reserved for a dynamic join."""
+        if len(collective_ids) < 3:
+            raise ValueError(
+                "Dynamic join requires 3 reserved collective IDs "
+                "(allgather + left shuffle + right shuffle); got "
+                f"{len(collective_ids)} for this Join. "
+                "Ensure ReserveOpIDs is run with dynamic_planning enabled."
+            )
+        return cls(*collective_ids[:3])
+
+    @property
+    def cardinality_tags(self) -> tuple[int, int]:
+        """Tags available for concurrent prefilter cardinality estimates."""
+        return (self.size_estimate, self.left_redistribution)
+
+    @property
+    def broadcast(self) -> int:
+        """ID used by a broadcast join after size estimation completes."""
+        return self.left_redistribution
+
+    def shuffle(self, side: JoinSide) -> int:
+        """Return the collective ID for one shuffle input."""
+        if side == "left":
+            return self.left_redistribution
+        return self.right_redistribution
+
+    def prefilter(self, strategy: JoinStrategy, target_side: JoinSide) -> int:
+        """Return the subsequent join collective reused by a prefilter."""
+        if strategy.broadcast_side is not None:
+            if target_side != strategy.broadcast_side:
+                raise ValueError(
+                    "Only the broadcast input can have an active prefilter"
+                )
+            return self.broadcast
+        return self.shuffle(target_side)
 
 
 @define_actor()
@@ -154,7 +216,7 @@ async def broadcast_join_actor(
             ch_left,
             ch_right,
             JoinStrategy(broadcast_side=broadcast_side),
-            [collective_id],
+            collective_id,
             target_partition_size,
             tracer=tracer,
         )
@@ -249,7 +311,7 @@ async def _broadcast_join_large_chunk(
     broadcast_side: Literal["left", "right"],
     *,
     tracer: ActorTracer | None,
-) -> None:
+) -> int:
     """Join one large-side chunk with the small DataFrame(s) and send the result."""
     large_df = chunk_to_frame(large_chunk, large_child)
     large_chunk_size = large_chunk.data_alloc_size()
@@ -280,8 +342,10 @@ async def _broadcast_join_large_chunk(
     output_chunk = TableChunk.from_pylibcudf_table(
         df.table, df.stream, exclusive_view=True, br=context.br()
     )
+    output_rows = output_chunk.shape[0]
     await send_chunk(context, ch_out, output_chunk, seq_num, tracer=tracer)
     del df, large_df
+    return output_rows
 
 
 async def _broadcast_join(
@@ -293,27 +357,27 @@ async def _broadcast_join(
     ch_left: Channel[TableChunk],
     ch_right: Channel[TableChunk],
     strategy: JoinStrategy,
-    collective_ids: list[int],
-    target_partition_size: int,
+    collective_id: int,
+    target_partition_size: int | None,
     *,
     tracer: ActorTracer | None,
+    trace_stats: dict[str, Any] | None = None,
 ) -> None:
     """
     Execute a broadcast join after initial sampling.
 
     The small side is gathered (if not already duplicated) and concatenated
     into a single DataFrame, then joined with each chunk from the large side.
-    Pops one collective ID from collective_ids for allgather when needed.
+    Uses ``collective_id`` for the allgather when needed.
     """
     left_metadata, right_metadata = await gather_in_task_group(
         recv_metadata(ch_left, context),
         recv_metadata(ch_right, context),
     )
 
-    collective_id = collective_ids.pop(0) if collective_ids else 0
     broadcast_side = strategy.broadcast_side
     assert broadcast_side is not None
-    left, right = ir.children
+    left, right = ir.children[:2]
     if tracer is not None:
         tracer.decision = f"broadcast_{broadcast_side}"
 
@@ -355,8 +419,6 @@ async def _broadcast_join(
         partitioning=partitioning,
         duplicated=output_duplicated,
     )
-    await send_metadata(ch_out, context, metadata_out)
-
     small_dfs, small_size = await _collect_small_side_for_broadcast(
         context,
         comm,
@@ -368,17 +430,26 @@ async def _broadcast_join(
         concat_size_limit=(target_partition_size if ir.options[0] == "Inner" else None),
     )
 
+    # Publish output metadata only once the broadcast-side collective has
+    # completed. Besides making the data channel ready when advertised, this
+    # permits a consumer to reuse the collective ID after receiving metadata.
+    await send_metadata(ch_out, context, metadata_out)
+
+    input_rows = 0
+    output_rows = 0
     while (msg := await large_ch.recv(context)) is not None:
-        await _broadcast_join_large_chunk(
+        large_chunk = TableChunk.from_message(
+            msg, br=context.br()
+        ).make_available_and_spill(context.br(), allow_overbooking=True)
+        input_rows += large_chunk.shape[0]
+        output_rows += await _broadcast_join_large_chunk(
             context,
             ir,
             ir_context,
             ch_out,
             small_dfs,
             small_child,
-            TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
-                context.br(), allow_overbooking=True
-            ),
+            large_chunk,
             large_child,
             msg.sequence_number,
             small_size,
@@ -386,7 +457,168 @@ async def _broadcast_join(
             tracer=tracer,
         )
 
+    if trace_stats is not None:
+        trace_stats["input_rows"] = input_rows
+        trace_stats["output_rows"] = output_rows
     await ch_out.drain(context)
+
+
+def add_bloom_prefilter(
+    context: Context,
+    comm: Communicator,
+    bloom_bytes: int,
+    execution: PrefilterExecution,
+    target_indices: Iterable[int],
+    ch_domain_keys: Channel[TableChunk],
+    ch_target: Channel[TableChunk],
+    ch_filtered: Channel[TableChunk],
+    collective_id: int,
+    trace_stats: dict[str, Any] | None,
+) -> None:
+    """Add the channels and actors for an approximate Bloom prefilter."""
+    bloom = BloomFilter(
+        context,
+        comm,
+        LIBCUDF_DEFAULT_HASH_SEED,
+        bloom_bytes,
+    )
+    ch_filter = context.create_channel()
+    execution.add_channel(ch_filter)
+    execution.add_task(
+        bloom.build(
+            context,
+            ch_domain_keys,
+            ch_filter,
+            collective_id,
+        )
+    )
+    ch_apply_input = ch_target
+    ch_apply_output = ch_filtered
+    if trace_stats is not None:
+        ch_counted_input: Channel[TableChunk] = context.create_channel()
+        ch_raw_output: Channel[TableChunk] = context.create_channel()
+        execution.add_channel(ch_counted_input)
+        execution.add_channel(ch_raw_output)
+        execution.add_task(
+            count_rows_passthrough(
+                context,
+                ch_target,
+                ch_counted_input,
+                trace_stats,
+                "input_rows",
+            )
+        )
+        execution.add_task(
+            count_rows_passthrough(
+                context,
+                ch_raw_output,
+                ch_filtered,
+                trace_stats,
+                "output_rows",
+            )
+        )
+        ch_apply_input = ch_counted_input
+        ch_apply_output = ch_raw_output
+    execution.add_task(
+        bloom.apply(
+            context,
+            ch_filter,
+            ch_apply_input,
+            ch_apply_output,
+            target_indices,
+        )
+    )
+
+
+def make_prefilter_execution(
+    context: Context,
+    comm: Communicator,
+    ir_context: IRExecutionContext,
+    strategy: JoinStrategy,
+    ch_left: Channel[TableChunk],
+    ch_right: Channel[TableChunk],
+    bindings: JoinBindings,
+    collective_ids: JoinCollectiveIds,
+) -> PrefilterExecution:
+    """Create the actors and channels that realize selected prefilters."""
+    execution = PrefilterExecution(context, ch_left, ch_right)
+
+    # Prepare every required domain before connecting target-side filters. This
+    # is important for opposing direct filters: each filter must consume the
+    # replay produced while the same input's keys are copied for the other one.
+    for bound in bindings.prefilters:
+        decision = bound.decision
+        if decision is None:
+            raise ValueError("Join prefilter has no runtime decision")
+        prefilter = bound.prefilter
+        if decision.method == "skip":
+            continue
+
+        indices = names_to_indices(prefilter.domain_on, bound.domain.node.schema)
+        bound.key_channel = execution.buffer_domain(prefilter.domain_side, indices)
+
+    for bound in bindings.prefilters:
+        decision = bound.decision
+        assert decision is not None
+        if decision.method == "skip":
+            continue
+        prefilter = bound.prefilter
+        ch_domain_keys = bound.key_channel
+        assert ch_domain_keys is not None
+        target_side = prefilter.target_side
+        target = bound.target.node
+        ch_target = execution.join_inputs[target_side]
+        ch_filtered: Channel[TableChunk] = context.create_channel()
+        trace_stats = bound.trace
+
+        collective_id = collective_ids.prefilter(strategy, target_side)
+        if decision.method == "bloom":
+            assert decision.bloom_bytes is not None
+            add_bloom_prefilter(
+                context,
+                comm,
+                decision.bloom_bytes,
+                execution,
+                names_to_indices(prefilter.target_on, target.schema),
+                ch_domain_keys,
+                ch_target,
+                ch_filtered,
+                collective_id,
+                trace_stats,
+            )
+        else:
+            assert decision.method == "broadcast_semi_join"
+            domain_schema = {key.name: key.value.dtype for key in prefilter.domain_on}
+            if len(domain_schema) != len(prefilter.domain_on):
+                raise ValueError("Broadcast semi-join keys must have unique names")
+            projected_domain = Projection(domain_schema, bound.domain.node)
+            semi_join = Join(
+                target.schema,
+                prefilter.target_on,
+                prefilter.domain_on,
+                ("Semi", prefilter.nulls_equal, None, "", False, "none"),
+                target,
+                projected_domain,
+            )
+            execution.add_task(
+                _broadcast_join(
+                    context,
+                    comm,
+                    semi_join,
+                    ir_context,
+                    ch_filtered,
+                    ch_target,
+                    ch_domain_keys,
+                    JoinStrategy(broadcast_side="right"),
+                    collective_id,
+                    target_partition_size=None,
+                    tracer=None,
+                    trace_stats=trace_stats,
+                )
+            )
+        execution.replace_join_input(target_side, ch_filtered)
+
+    return execution
 
 
 def _get_key_indices(
@@ -399,7 +631,7 @@ def _get_key_indices(
     tuple[NamedExpr, ...],
     tuple[NamedExpr, ...],
 ]:
-    left, right = ir.children
+    left, right = ir.children[:2]
     n_keys = n_partitioned_keys if n_partitioned_keys is not None else len(ir.left_on)
     left_keys = ir.left_on[:n_keys]
     right_keys = ir.right_on[:n_keys]
@@ -438,7 +670,7 @@ async def _join_chunks(
         recv_metadata(ch_right, context),
     )
 
-    left, right = ir.children
+    left, right = ir.children[:2]
     while True:
         left_msg, right_msg = await gather_in_task_group(
             ch_left.recv(context), ch_right.recv(context)
@@ -534,7 +766,8 @@ async def _shuffle_join(
     ch_left: Channel[TableChunk],
     ch_right: Channel[TableChunk],
     strategy: JoinStrategy,
-    collective_ids: list[int],
+    left_collective_id: int,
+    right_collective_id: int,
     *,
     tracer: ActorTracer | None,
 ) -> None:
@@ -577,7 +810,7 @@ async def _shuffle_join(
                 strategy.left_keys,
                 ir.children[0].schema,
                 strategy.shuffle_modulus,
-                collective_ids.pop(0),
+                left_collective_id,
             ),
             _global_shuffle(
                 context,
@@ -588,7 +821,7 @@ async def _shuffle_join(
                 strategy.right_keys,
                 ir.children[1].schema,
                 strategy.shuffle_modulus,
-                collective_ids.pop(0),
+                right_collective_id,
             ),
             _join_chunks(
                 context,
@@ -650,56 +883,41 @@ def _make_shuffle_strategy(
     )
 
 
-async def _aggregate_estimates(
+async def aggregate_estimates(
     context: Context,
     comm: Communicator,
-    left_sample: TableSizeStats,
-    right_sample: TableSizeStats,
-    collective_ids: list[int],
-) -> tuple[TableSizeStats, TableSizeStats]:
+    samples: tuple[TableSizeStats, ...],
+    collective_id: int,
+) -> tuple[TableSizeStats, ...]:
     """Aggregate table-size and row estimates across ranks."""
-    # AllGather size, row, and chunk count estimates across ranks
+    # AllGather size, row, chunk count, and completeness estimates across ranks.
     totals = await allgather_reduce(
         context,
         comm,
-        collective_ids.pop(0),
-        left_sample.total_size,
-        right_sample.total_size,
-        left_sample.total_rows,
-        right_sample.total_rows,
-        left_sample.total_chunks,
-        right_sample.total_chunks,
-        int(left_sample.is_complete),
-        int(right_sample.is_complete),
+        collective_id,
+        *(
+            value
+            for sample in samples
+            for value in (
+                sample.total_size,
+                sample.total_rows,
+                sample.total_chunks,
+                int(sample.is_complete),
+            )
+        ),
     )
-    (
-        left_total,
-        right_total,
-        left_total_rows,
-        right_total_rows,
-        left_total_chunks,
-        right_total_chunks,
-        left_complete_count,
-        right_complete_count,
-    ) = totals
-
-    new_left_sample = TableSizeStats(
-        chunks=left_sample.chunks,
-        total_size=left_total,
-        total_rows=left_total_rows,
-        total_chunks=left_total_chunks,
-        is_complete=left_complete_count == comm.nranks,
-        cardinality=left_sample.cardinality,
+    totals_iter = iter(totals)
+    return tuple(
+        TableSizeStats(
+            chunks=sample.chunks,
+            total_size=next(totals_iter),
+            total_rows=next(totals_iter),
+            total_chunks=next(totals_iter),
+            is_complete=next(totals_iter) == comm.nranks,
+            cardinality=sample.cardinality,
+        )
+        for sample in samples
     )
-    new_right_sample = TableSizeStats(
-        chunks=right_sample.chunks,
-        total_size=right_total,
-        total_rows=right_total_rows,
-        total_chunks=right_total_chunks,
-        is_complete=right_complete_count == comm.nranks,
-        cardinality=right_sample.cardinality,
-    )
-    return new_left_sample, new_right_sample
 
 
 def _choose_strategy_from_samples(
@@ -849,78 +1067,197 @@ def _choose_shuffle_modulus(
         return max(large, min_shuffle_modulus)
 
 
-async def _choose_strategy(
+def join_input_requires_redistribution(
+    strategy: JoinStrategy,
+    side: Literal["left", "right"],
+    partitioning: NormalizedPartitioning,
+    metadata: ChannelMetadata,
+) -> bool:
+    """Return whether the join strategy redistributes an input side."""
+    if strategy.broadcast_side is not None:
+        return side == strategy.broadcast_side and not metadata.duplicated
+
+    indices = strategy.left_indices if side == "left" else strategy.right_indices
+    if not indices:
+        return True
+    desired = HashScheme(indices, strategy.shuffle_modulus)
+    return not (
+        partitioning.inter_rank_scheme == desired
+        and partitioning.local_scheme == "inherit"
+    )
+
+
+def choose_prefilters(
+    bindings: JoinBindings,
+    strategy: JoinStrategy,
+    left_partitioning: NormalizedPartitioning,
+    right_partitioning: NormalizedPartitioning,
+    broadcast_limit: int,
+    bloom_filter_max_size: int,
+) -> None:
+    """Choose strategies for optional join prefilters."""
+    partitionings = {
+        "left": left_partitioning,
+        "right": right_partitioning,
+    }
+    for bound in bindings.prefilters:
+        target = bound.target.sample
+        if target is None:
+            raise ValueError("Join target has not been sampled")
+        target_side = bound.prefilter.target_side
+        bound.decision = choose_prefilter(
+            bound.prefilter,
+            target,
+            bound.domain.sample,
+            target_requires_redistribution=join_input_requires_redistribution(
+                strategy,
+                target_side,
+                partitionings[target_side],
+                bound.target.metadata,
+            ),
+            broadcast_limit=broadcast_limit,
+            bloom_filter_max_size=bloom_filter_max_size,
+        )
+
+
+async def sample_input(
+    context: Context,
+    comm: Communicator,
+    input_: JoinInputBinding,
+    prefilter: BoundPrefilter | None,
+    sample_chunk_count: int,
+    target_partition_size: int,
+) -> TableSizeStats:
+    """Sample one join-planning input and optionally estimate cardinality."""
+    if prefilter is None:
+        cardinality_estimator = None
+        cardinality_columns: tuple[int, ...] = ()
+    else:
+        cardinality_estimator = CardinalityEstimator(
+            context,
+            comm,
+            tag=prefilter.cardinality_tag,
+        )
+        cardinality_columns = names_to_indices(
+            prefilter.prefilter.domain_on,
+            input_.node.schema,
+        )
+        assert len(cardinality_columns) == len(prefilter.prefilter.domain_on), (
+            "Prefilter domain keys must be columns"
+        )
+
+    return await _sample_chunks(
+        context,
+        input_.channel,
+        sample_chunk_count,
+        target_partition_size,
+        input_.metadata.local_count,
+        cardinality_estimator=cardinality_estimator,
+        cardinality_columns=cardinality_columns,
+    )
+
+
+async def collect_join_samples(
+    context: Context,
+    comm: Communicator,
+    bindings: JoinBindings,
+    sample_chunk_count: int,
+    target_partition_size: int,
+    collective_id: int,
+) -> None:
+    """Sample join inputs and attach estimates to their runtime bindings."""
+    inputs = [bindings.left, bindings.right]
+
+    sampling_inputs = []
+    for input_ in inputs:
+        domain_prefilters = [
+            bound for bound in bindings.prefilters if bound.domain is input_
+        ]
+        if len(domain_prefilters) > 1:
+            raise ValueError("One join input cannot provide multiple prefilter domains")
+        sampling_inputs.append(
+            (input_, domain_prefilters[0] if domain_prefilters else None)
+        )
+
+    local_samples = await gather_in_task_group(
+        *(
+            sample_input(
+                context,
+                comm,
+                input_,
+                prefilter,
+                sample_chunk_count,
+                target_partition_size,
+            )
+            for input_, prefilter in sampling_inputs
+        )
+    )
+    samples = await aggregate_estimates(
+        context,
+        comm,
+        tuple(local_samples),
+        collective_id,
+    )
+    for input_, sample in zip(inputs, samples, strict=True):
+        input_.sample = sample
+
+
+async def choose_strategy(
     context: Context,
     comm: Communicator,
     ir: Join,
-    ch_left: Channel[TableChunk],
-    ch_right: Channel[TableChunk],
-    left_metadata: ChannelMetadata,
-    right_metadata: ChannelMetadata,
+    bindings: JoinBindings,
     executor: StreamingExecutor,
-    collective_ids: list[int],
+    collective_ids: JoinCollectiveIds,
     *,
     tracer: ActorTracer | None,
-) -> tuple[TableSizeStats, TableSizeStats, JoinStrategy]:
-    """Sample both sides, aggregate estimates, and choose broadcast vs shuffle."""
+) -> JoinStrategy:
+    """Collect any required samples and choose broadcast vs shuffle."""
+    left, right = ir.children[:2]
+    left_metadata = bindings.left.metadata
+    right_metadata = bindings.right.metadata
     nranks = comm.nranks
     left_partitioning = NormalizedPartitioning.from_keys(
         left_metadata.partitioning,
         nranks,
-        keys=names_to_indices(ir.left_on, ir.children[0].schema, concrete_prefix=True),
+        keys=names_to_indices(ir.left_on, left.schema, concrete_prefix=True),
     )
     right_partitioning = NormalizedPartitioning.from_keys(
         right_metadata.partitioning,
         nranks,
-        keys=names_to_indices(ir.right_on, ir.children[1].schema, concrete_prefix=True),
+        keys=names_to_indices(ir.right_on, right.schema, concrete_prefix=True),
     )
-
     hash_chunkwise = isinstance(
         left_partitioning.inter_rank_scheme, HashScheme
     ) and isinstance(right_partitioning.inter_rank_scheme, HashScheme)
-    if hash_chunkwise and left_partitioning.is_aligned_with(
+    chunkwise = hash_chunkwise and left_partitioning.is_aligned_with(
         right_partitioning, context.br()
-    ):
-        # We can use a chunkwise join
-        chunkwise = True
-        left_sample = TableSizeStats(
+    )
+
+    if chunkwise:
+        bindings.left.sample = TableSizeStats(
             chunks=ChunkStore(context),
             total_chunks=left_metadata.local_count,
         )
-        right_sample = TableSizeStats(
+        bindings.right.sample = TableSizeStats(
             chunks=ChunkStore(context),
             total_chunks=right_metadata.local_count,
         )
     else:
-        # Need to shuffle or broadcast - Use sampled data to choose a strategy
-        chunkwise = False
         assert executor.dynamic_planning is not None
-        sample_chunk_count = executor.dynamic_planning.sample_chunk_count
-        target_partition_size = executor.target_partition_size
-        left_sample, right_sample = await gather_in_task_group(
-            _sample_chunks(
-                context,
-                ch_left,
-                sample_chunk_count,
-                target_partition_size,
-                left_metadata.local_count,
-            ),
-            _sample_chunks(
-                context,
-                ch_right,
-                sample_chunk_count,
-                target_partition_size,
-                right_metadata.local_count,
-            ),
-        )
-        left_sample, right_sample = await _aggregate_estimates(
+        await collect_join_samples(
             context,
             comm,
-            left_sample,
-            right_sample,
-            collective_ids,
+            bindings,
+            executor.dynamic_planning.sample_chunk_count,
+            executor.target_partition_size,
+            collective_ids.size_estimate,
         )
 
+    left_sample = bindings.left.sample
+    right_sample = bindings.right.sample
+    if left_sample is None or right_sample is None:
+        raise ValueError("Join inputs have not been sampled")
     strategy = _choose_strategy_from_samples(
         comm,
         ir,
@@ -934,8 +1271,16 @@ async def _choose_strategy(
         chunkwise=chunkwise,
         tracer=tracer,
     )
-
-    return left_sample, right_sample, strategy
+    if executor.join_filter_pushdown is not None:
+        choose_prefilters(
+            bindings,
+            strategy,
+            left_partitioning,
+            right_partitioning,
+            executor.broadcast_limit,
+            executor.join_filter_pushdown.bloom_filter_max_size,
+        )
+    return strategy
 
 
 @define_actor()
@@ -948,7 +1293,7 @@ async def join_actor(
     ch_left: Channel[TableChunk],
     ch_right: Channel[TableChunk],
     executor: StreamingExecutor,
-    collective_ids: list[int],
+    collective_ids: JoinCollectiveIds,
 ) -> None:
     """
     Dynamic Join actor that selects the best strategy at runtime.
@@ -991,24 +1336,55 @@ async def join_actor(
             recv_metadata(ch_right, context),
         )
 
-        left_sample, right_sample, strategy = await _choose_strategy(
-            context,
-            comm,
+        bindings = bind_join_inputs(
             ir,
             ch_left,
             ch_right,
             left_metadata,
             right_metadata,
+            collective_ids.cardinality_tags,
+        )
+
+        strategy = await choose_strategy(
+            context,
+            comm,
+            ir,
+            bindings,
             executor,
             collective_ids,
             tracer=tracer,
         )
+        prefilter_traces = []
+        for bound in bindings.prefilters:
+            if bound.decision is None:
+                raise ValueError("Join prefilter has no runtime decision")
+            trace = bound.decision.trace(bound.prefilter)
+            prefilter_traces.append(trace)
+            if LOG_TRACES:
+                bound.trace = trace
+        if tracer is not None and prefilter_traces:
+            tracer.set_extra("join_prefilters", prefilter_traces)
+        left_sample = bindings.left.sample
+        right_sample = bindings.right.sample
+        if left_sample is None or right_sample is None:
+            raise ValueError("Join inputs have not been sampled")
         ch_left_replay = context.create_channel()
         ch_right_replay = context.create_channel()
+        prefilter_execution = make_prefilter_execution(
+            context,
+            comm,
+            ir_context,
+            strategy,
+            ch_left_replay,
+            ch_right_replay,
+            bindings,
+            collective_ids,
+        )
         async with shutdown_on_error(
             context,
             ch_left_replay,
             ch_right_replay,
+            *prefilter_execution.channels,
             trace_ir=ir,
             ir_context=ir_context,
         ):
@@ -1029,9 +1405,10 @@ async def join_actor(
                     right_metadata,
                     trace_ir=ir,
                 ),
+                *prefilter_execution.tasks,
             ]
-            ch_left = ch_left_replay
-            ch_right = ch_right_replay
+            ch_left = prefilter_execution.left
+            ch_right = prefilter_execution.right
 
             if strategy.broadcast_side is not None:
                 actor_tasks.append(
@@ -1044,7 +1421,7 @@ async def join_actor(
                         ch_left,
                         ch_right,
                         strategy,
-                        collective_ids,
+                        collective_ids.broadcast,
                         executor.target_partition_size,
                         tracer=tracer,
                     )
@@ -1060,7 +1437,8 @@ async def join_actor(
                         ch_left,
                         ch_right,
                         strategy,
-                        collective_ids,
+                        collective_ids.shuffle("left"),
+                        collective_ids.shuffle("right"),
                         tracer=tracer,
                     )
                 )
@@ -1073,7 +1451,7 @@ def _use_pwise_join(
     ir: Join,
 ) -> bool:
     """Whether to use a static-planning partition-wise join."""
-    left, right = ir.children
+    left, right = ir.children[:2]
     output_count = partition_info[ir].count
     if (
         output_count == 1
@@ -1099,8 +1477,9 @@ def _use_pwise_join(
 
 
 @generate_ir_sub_network.register(Join)
+@generate_ir_sub_network.register(JoinWithPrefilter)
 def _(
-    ir: Join, rec: SubNetGenerator
+    ir: Join | JoinWithPrefilter, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     # Join operation.
     left, right = ir.children
@@ -1110,7 +1489,6 @@ def _(
     executor = rec.state["config_options"].executor
     pwise_join = _use_pwise_join(executor, partition_info, ir)
 
-    # Process children
     actors, channels = process_children(ir, rec)
 
     # Create output ChannelManager
@@ -1140,16 +1518,13 @@ def _(
         and ir.options[0] in ("Inner", "Left", "Right", "Full", "Semi", "Anti")
     ):
         # Dynamic join - decide strategy at runtime
-        collective_ids = list(rec.state["collective_id_map"].get(ir, []))
-        # Join uses up to 3 collective IDs: allgather, left shuffle, and
-        # right shuffle.
-        if len(collective_ids) < 3:
-            raise ValueError(
-                "Dynamic join requires 3 reserved collective IDs "
-                "(allgather + left shuffle + right shuffle); got "
-                f"{len(collective_ids)} for this Join. "
-                "Ensure ReserveOpIDs is run with dynamic_planning enabled."
-            )
+        collective_ids = JoinCollectiveIds.from_reserved(
+            rec.state["collective_id_map"].get(ir, [])
+        )
+        # Join uses up to 3 collective IDs. Cardinality allreduces complete
+        # before the size allgather and join collectives. Runtime prefilters
+        # reuse the collective ID of the target-side join redistribution, with
+        # their filtered output channel providing the ordering barrier.
         actors[ir] = [
             join_actor(
                 rec.state["context"],

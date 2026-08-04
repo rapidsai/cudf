@@ -16,7 +16,11 @@ from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.column_domain import ColumnRef
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.base import StatsCollector
-from cudf_polars.streaming.filter_hint import PushdownFilterHint
+from cudf_polars.streaming.filter_hint import (
+    JoinInputPrefilter,
+    JoinWithPrefilter,
+    PushdownFilterHint,
+)
 from cudf_polars.streaming.join_filter_pushdown import (
     CompositeCandidate,
     Decision,
@@ -165,17 +169,22 @@ def test_filter_pushdown_is_independent_of_dynamic_planning(
     engine: SPMDEngine,
 ) -> None:
     root = translate_query(simple_query, engine)
+    config = make_config(dynamic_planning=False)
 
     optimized = optimize_join_filter_pushdown(
         root,
         StatsCollector(),
-        make_config(dynamic_planning=False),
+        config,
     )
 
     assert find_hints(optimized)
+    lowering = lower_ir_graph(root, config, StatsCollector())
+    assert not any(
+        isinstance(node, JoinWithPrefilter) for node in traversal([lowering.lowered])
+    )
 
 
-def test_filter_hints_are_discarded_during_lowering(
+def test_adjacent_filter_hint_is_recorded_on_lowered_join(
     simple_query: pl.LazyFrame,
     engine: SPMDEngine,
 ) -> None:
@@ -185,7 +194,19 @@ def test_filter_hints_are_discarded_during_lowering(
     lowering = lower_ir_graph(root, config, StatsCollector())
 
     assert find_hints(lowering.optimized)
-    assert not find_hints(lowering.lowered)
+    assert isinstance(lowering.lowered, JoinWithPrefilter)
+    left, right = lowering.lowered.children
+    assert not isinstance(left, PushdownFilterHint)
+    assert not isinstance(right, PushdownFilterHint)
+    (prefilter,) = lowering.lowered.prefilters
+    assert isinstance(prefilter, JoinInputPrefilter)
+    assert prefilter.target_side == "right"
+    assert prefilter.domain_side == "left"
+    assert tuple(right.schema) == ("l_partkey", "l_suppkey")
+    assert tuple(ne.name for ne in prefilter.target_on) == ("l_partkey",)
+    assert tuple(ne.name for ne in prefilter.domain_on) == ("p_partkey",)
+    assert not prefilter.nulls_equal
+    assert tuple(left.schema) == ("p_partkey",)
     assert not find_joins(lowering.lowered, "Semi")
 
 

@@ -137,7 +137,7 @@ def test_explain_logical_plan_with_join(tmp_path, df):
     assert "JOIN Inner ('x',) ('x',)" in plan
 
 
-def test_explain_pushdown_filter_hint_is_logical_only():
+def test_explain_pushdown_filter_hint_in_dynamic_physical_plan():
     domain = (
         pl.LazyFrame({"key": [1, 99], "active": [True, False]})
         .filter("active")
@@ -157,19 +157,30 @@ def test_explain_pushdown_filter_hint_is_logical_only():
     physical_serialized = serialize_query(query, engine, physical=True)
 
     assert "PUSHDOWN FILTER HINT ('key',) ('key',)" in logical
-    assert "PUSHDOWN FILTER HINT" not in physical
+    assert "prefilters=('JoinInputPrefilter',)" in physical
+    expected_properties = {
+        "target_on": ["key"],
+        "domain_on": ["key"],
+        "nulls_equal": False,
+    }
     assert any(
-        node.type == "PushdownFilterHint"
-        and node.properties
-        == {
-            "target_on": ["key"],
-            "domain_on": ["key"],
-            "nulls_equal": False,
-        }
+        node.type == "PushdownFilterHint" and node.properties == expected_properties
         for node in logical_serialized.nodes.values()
     )
-    assert not any(
-        node.type == "PushdownFilterHint" for node in physical_serialized.nodes.values()
+    assert any(
+        node.type == "JoinWithPrefilter"
+        and node.properties["prefilters"]
+        == [
+            {
+                "type": "JoinInputPrefilter",
+                "target_side": "right",
+                "target_on": ["key"],
+                "domain_on": ["key"],
+                "nulls_equal": False,
+                "domain_side": "left",
+            }
+        ]
+        for node in physical_serialized.nodes.values()
     )
 
 
