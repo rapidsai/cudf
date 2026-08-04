@@ -186,6 +186,8 @@ match_dictionaries_to_indices(std::vector<table_view> tables,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(not tables.empty(), "expect at least one table", std::invalid_argument);
+
   // Make a copy of all the column views from each table_view
   std::vector<std::vector<column_view>> updated_columns;
   std::transform(tables.begin(), tables.end(), std::back_inserter(updated_columns), [](auto& t) {
