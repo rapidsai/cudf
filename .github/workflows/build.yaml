@@ -51,7 +51,7 @@ jobs:
         if: ${{ vars.TELEMETRY_ENABLED == 'true' }}
         uses: rapidsai/shared-actions/telemetry-dispatch-stash-base-env-vars@main
   cpp-build:
-    needs: [telemetry-setup]
+    needs: [build-details, telemetry-setup]
     permissions:
       actions: read
       contents: read
@@ -62,13 +62,14 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
+      build-datetime: ${{ needs.build-details.outputs.build-datetime }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       node_type: cpu16
       script: ci/build_cpp.sh
       sha: ${{ inputs.sha }}
   python-build:
-    needs: [telemetry-setup, cpp-build]
+    needs: [build-details, telemetry-setup, cpp-build]
     permissions:
       actions: read
       contents: read
@@ -79,6 +80,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
+      build-datetime: ${{ needs.build-details.outputs.build-datetime }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       script: ci/build_python.sh
@@ -97,6 +99,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
+      build-datetime: ${{ needs.build-details.outputs.build-datetime }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       script: ci/build_python_noarch.sh
@@ -161,7 +164,7 @@ jobs:
       dry-run: false
       version-map: '{"26.04": "legacy", "26.06": "stable"}'
   wheel-build-libcudf:
-    needs: [telemetry-setup]
+    needs: [build-details, telemetry-setup]
     permissions:
       actions: read
       contents: read
@@ -174,6 +177,7 @@ jobs:
       # build for every combination of arch and CUDA version, but only for the latest Python
       matrix_filter: group_by([.ARCH, (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by(.PY_VER|split(".")|map(tonumber)))
       build_type: ${{ inputs.build_type || 'branch' }}
+      build-datetime: ${{ needs.build-details.outputs.build-datetime }}
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
@@ -203,7 +207,7 @@ jobs:
       # trailing underscore to avoid collision with `libcudf-streaming`
       publish-wheel-search-key: cudf_wheel_cpp_libcudf_
   wheel-build-libcudf-streaming:
-    needs: [telemetry-setup, wheel-build-libcudf]
+    needs: [build-details, telemetry-setup, wheel-build-libcudf]
     permissions:
       actions: read
       contents: read
@@ -216,6 +220,7 @@ jobs:
       # build for every combination of arch and CUDA version, but only for the latest Python
       matrix_filter: group_by([.ARCH, (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by(.PY_VER|split(".")|map(tonumber)))
       build_type: ${{ inputs.build_type || 'branch' }}
+      build-datetime: ${{ needs.build-details.outputs.build-datetime }}
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
@@ -244,7 +249,7 @@ jobs:
       package-type: cpp
       publish-wheel-search-key: cudf_wheel_cpp_libcudf-streaming
   wheel-build-cudf-streaming:
-    needs: [telemetry-setup, wheel-build-libcudf-streaming, wheel-build-pylibcudf]
+    needs: [build-details, telemetry-setup, wheel-build-libcudf-streaming, wheel-build-pylibcudf]
     permissions:
       actions: read
       contents: read
@@ -257,6 +262,7 @@ jobs:
       # Build a wheel for each CUDA x ARCH x minimum supported Python version
       matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
       build_type: ${{ inputs.build_type || 'branch' }}
+      build-datetime: ${{ needs.build-details.outputs.build-datetime }}
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
@@ -285,7 +291,7 @@ jobs:
       package-type: python
       publish-wheel-search-key: cudf_wheel_python_cudf-streaming
   wheel-build-pylibcudf:
-    needs: [telemetry-setup, wheel-build-libcudf]
+    needs: [build-details, telemetry-setup, wheel-build-libcudf]
     permissions:
       actions: read
       contents: read
@@ -296,6 +302,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
+      build-datetime: ${{ needs.build-details.outputs.build-datetime }}
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
@@ -324,7 +331,7 @@ jobs:
       package-type: python
       publish-wheel-search-key: cudf_wheel_python_pylibcudf
   wheel-build-cudf:
-    needs: [telemetry-setup, wheel-build-pylibcudf]
+    needs: [build-details, telemetry-setup, wheel-build-pylibcudf]
     permissions:
       actions: read
       contents: read
@@ -335,6 +342,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
+      build-datetime: ${{ needs.build-details.outputs.build-datetime }}
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
@@ -364,7 +372,7 @@ jobs:
       # trailing underscore to avoid collision with `cudf-streaming` and `cudf-polars`
       publish-wheel-search-key: cudf_wheel_python_cudf_
   wheel-build-dask-cudf:
-    needs: [telemetry-setup, wheel-build-cudf]
+    needs: [build-details, telemetry-setup, wheel-build-cudf]
     permissions:
       actions: read
       contents: read
@@ -377,6 +385,7 @@ jobs:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: ${{ inputs.build_type || 'branch' }}
+      build-datetime: ${{ needs.build-details.outputs.build-datetime }}
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
@@ -404,7 +413,7 @@ jobs:
       package-type: python
       publish-wheel-search-key: cudf_wheel_python_dask-cudf
   wheel-build-cudf-polars:
-    needs: [telemetry-setup, wheel-build-pylibcudf]
+    needs: [build-details, telemetry-setup, wheel-build-pylibcudf]
     permissions:
       actions: read
       contents: read
@@ -417,6 +426,7 @@ jobs:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: ${{ inputs.build_type || 'branch' }}
+      build-datetime: ${{ needs.build-details.outputs.build-datetime }}
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
