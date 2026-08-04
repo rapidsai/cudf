@@ -40,6 +40,8 @@
 #include <cuda/std/optional>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
 
 #include <cstdint>
 #include <limits>
@@ -660,38 +662,6 @@ CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_primitive_kernel(
 }
 
 /**
- * @brief Per-row kernel: decode each VARIANT value blob into a bool.
- *
- * Boolean values are encoded as a single-byte `primitive_type::boolean_true` or
- * `primitive_type::boolean_false` header with no payload. Rows that are null, or whose value is
- * not a boolean primitive, are marked null in `d_null_mask` with an output of false.
- */
-CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_bool_kernel(
-  cudf::lists_column_device_view values, device_span<bool> d_output, bitmask_type* d_null_mask)
-{
-  auto const num_rows = static_cast<size_type>(d_output.size());
-  auto const tid      = cudf::detail::grid_1d::global_thread_id<block_size>();
-  auto const stride   = cudf::detail::grid_1d::grid_stride<block_size>();
-
-  for (auto row = tid; row < num_rows; row += stride) {
-    if (!cudf::bit_is_set(d_null_mask, row)) {
-      d_output[row] = false;
-      continue;
-    }
-
-    auto const val = list_row_span(values, row);
-
-    auto const decoded = decode_bool(val);
-    if (decoded.has_value()) {
-      d_output[row] = *decoded;
-    } else {
-      d_output[row] = false;
-      cudf::clear_bit(d_null_mask, row);
-    }
-  }
-}
-
-/**
  * @brief Strings-children functor: decode each VARIANT value blob into a string.
  *
  * Used with `make_strings_children`, so it runs in two passes. On the sizing pass (`d_chars ==
@@ -775,10 +745,19 @@ struct cast_variant_fn {
   {
     rmm::device_buffer data{num_rows * sizeof(bool), stream, mr};
 
-    auto grid = cudf::detail::grid_1d{num_rows, block_size};
-    cast_variant_bool_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
-      values, {static_cast<bool*>(data.data()), static_cast<std::size_t>(num_rows)}, d_null_mask);
-    CUDF_CUDA_TRY(cudaGetLastError());
+    thrust::transform(
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      thrust::counting_iterator<size_type>(0),
+      thrust::counting_iterator<size_type>(num_rows),
+      static_cast<bool*>(data.data()),
+      [values = this->values, d_null_mask = this->d_null_mask] __device__(size_type row) -> bool {
+        if (!cudf::bit_is_set(d_null_mask, row)) { return false; }
+        auto const val     = list_row_span(values, row);
+        auto const decoded = decode_bool(val);
+        if (decoded.has_value()) { return *decoded; }
+        cudf::clear_bit(d_null_mask, row);
+        return false;
+      });
 
     auto const null_count =
       num_rows - cudf::detail::count_set_bits(d_null_mask, 0, num_rows, stream);
