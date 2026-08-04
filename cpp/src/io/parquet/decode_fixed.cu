@@ -184,7 +184,7 @@ __device__ inline void decode_fixed_width_split_values(
   auto const data_out        = s->nesting_info[leaf_level_index].data_out;
 
   Type const dtype    = s->setup.col.physical_type;
-  auto const data_len = cuda::std::distance(s->data_start, s->data_end);
+  auto const data_len = cuda::std::distance(s->stream.data_start, s->stream.data_end);
 
   // Check malformed BYTE_STREAM_SPLIT pages
   if (s->dtype_len_in <= 0 or data_len <= 0) {
@@ -223,7 +223,7 @@ __device__ inline void decode_fixed_width_split_values(
     }();
 
     uint32_t const dtype_len = s->dtype_len;
-    uint8_t const* const src = s->data_start + src_pos;
+    uint8_t const* const src = s->stream.data_start + src_pos;
     uint8_t* const dst       = data_out + static_cast<size_t>(dst_pos) * dtype_len;
     auto const is_decimal    = s->setup.col.logical_type.has_value() and
                             s->setup.col.logical_type->type == LogicalType::DECIMAL;
@@ -806,7 +806,7 @@ inline __device__ void bool_plain_decode(page_state_s* s,
     int const byte_offset       = bit_pos >> 3;
     int const bit_in_byte_index = bit_pos & 7;
 
-    uint8_t const* const read_from = s->data_start + byte_offset;
+    uint8_t const* const read_from = s->stream.data_start + byte_offset;
     bool const read_bit            = (*read_from) & (1 << bit_in_byte_index);
 
     int const write_to_index     = rolling_index<state_buf::dict_buf_size>(bit_pos);
@@ -1057,20 +1057,24 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   rle_stream<uint32_t, decode_block_size_t, rolling_buf_size> dict_stream{dict_runs};
   if constexpr (has_dict_t) {
     dict_stream.init(block,
-                     s->dict_bits,
-                     s->data_start,
-                     s->data_end,
+                     s->stream.dict_bits,
+                     s->stream.data_start,
+                     s->stream.data_end,
                      sb->dict_idx,
                      s->setup.page.num_input_values);
   }
 
   // Use dictionary stream memory for bools
   rle_stream<uint32_t, decode_block_size_t, rolling_buf_size> bool_stream{bool_runs};
-  bool bools_are_rle_stream = (s->dict_run == 0);
+  bool bools_are_rle_stream = (s->stream.dict_run == 0);
   if constexpr (has_bools_t) {
     if (bools_are_rle_stream) {
-      bool_stream.init(
-        block, 1, s->data_start, s->data_end, sb->dict_idx, s->setup.page.num_input_values);
+      bool_stream.init(block,
+                       1,
+                       s->stream.data_start,
+                       s->stream.data_end,
+                       sb->dict_idx,
+                       s->setup.page.num_input_values);
     }
   }
   block.sync();
