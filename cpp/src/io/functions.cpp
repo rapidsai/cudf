@@ -4,8 +4,6 @@
  */
 
 #include "io/orc/orc.hpp"
-#include "io/parquet/compact_protocol_reader.hpp"
-#include "io/parquet/compact_protocol_writer.hpp"
 #include "io/parquet/reader_impl_helpers.hpp"
 
 #include <cudf/detail/iterator.cuh>
@@ -686,29 +684,6 @@ std::vector<parquet::FileMetaData> read_parquet_footers(
   CUDF_FUNC_RANGE();
   return detail_parquet::read_parquet_footers(sources);
 }
-
-namespace experimental {
-
-parquet::FileMetaData read_parquet_footer_bytes(host_span<uint8_t const> footer_bytes,
-                                                parquet::throw_if_type_mismatch mode)
-{
-  CUDF_FUNC_RANGE();
-  CompactProtocolReader reader{footer_bytes.data(), footer_bytes.size(), mode};
-  parquet::FileMetaData metadata;
-  reader.read(&metadata);
-  return metadata;
-}
-
-std::vector<uint8_t> write_parquet_footer_bytes(parquet::FileMetaData const& metadata)
-{
-  CUDF_FUNC_RANGE();
-  std::vector<uint8_t> out;
-  CompactProtocolWriter writer{&out};
-  writer.write(metadata);
-  return out;
-}
-
-}  // namespace experimental
 
 /**
  * @copydoc cudf::io::merge_row_group_metadata
