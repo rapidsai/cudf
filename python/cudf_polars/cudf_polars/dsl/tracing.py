@@ -214,18 +214,9 @@ def log_do_evaluate(
             try:
                 result = func(cls, *args, **kwargs)
             except Exception:  # pragma: no cover;
-                if (
-                    quent_task is not None
-                    and ir_execution_context.quent_ir_execution_context is not None
-                ):
-                    ir_execution_context.quent_ir_execution_context.context._emit_task_end_events(
-                        cls,
-                        quent_task,
-                        ir_execution_context.quent_ir_execution_context,
-                        None,
-                    )
+                result = None
                 raise
-            else:
+            finally:
                 if (
                     quent_task is not None
                     and ir_execution_context.quent_ir_execution_context is not None
@@ -238,6 +229,8 @@ def log_do_evaluate(
                         result,
                     )
             stop = time.monotonic_ns()
+
+            assert result is not None
 
             after_start = time.monotonic_ns()
             after = make_snapshot(
