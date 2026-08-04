@@ -34,11 +34,14 @@ so plain `rm -rf` works.
 ### Step 2 - Package the cuDF Java JAR for one classifier
 
 ```bash
-./java/ci/build_cudf_java_jar.sh \
+GITHUB_REF=refs/heads/my-branch ./java/ci/build_cudf_java_jar.sh \
   --libcudf-dir /tmp/libcudf-cuda12 \
   --output-dir /tmp/jars \
   --cuda-version 12.9
 ```
+
+`GITHUB_REF` is required and selects release-tag vs SNAPSHOT versioning. See
+the versioning section below.
 
 This compiles the JNI layer against the static libcudf from Step 1 and emits
 the classifier JAR (e.g. `cudf-26.08.0-SNAPSHOT-cuda12.jar`), a
@@ -90,7 +93,9 @@ lays them out as:
 The set of classifiers is whatever subdirectories are present under
 `--jars-dir`. For a local `x86_64`-only run, populate `/tmp/jars/cuda12/`
 and `/tmp/jars/cuda13/`. For the full four-way release build, add
-`/tmp/jars/cuda12-arm64/` and `/tmp/jars/cuda13-arm64/`.
+`/tmp/jars/cuda12-arm64/` and `/tmp/jars/cuda13-arm64/`. The `cuda12`
+subdirectory is required because the unclassified primary JAR is copied from
+it, so an `aarch64`-only set of subdirectories is not a valid gather input.
 
 ### Release Tag vs SNAPSHOT versioning
 

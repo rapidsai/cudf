@@ -560,4 +560,4 @@ jobs:
       artifact-name: cudf_java_maven_repo
       source-git-sha: ${{ inputs.sha || github.sha }}
       # false = validate + drop (safe). true = stage PENDING for manual publish.
-      stage-for-maven-central-publish: false
+      stage-for-maven-central-publish: true

@@ -110,9 +110,9 @@ CUDF_VERSION="$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout 
 
 # Release tag builds strip -SNAPSHOT and rewrite the POM so packaged artifacts
 # carry the release version. Non-release builds keep -SNAPSHOT.
-if rapids-is-release-build 2>/dev/null; then
+if rapids-is-release-build; then
   CUDF_VERSION="${CUDF_VERSION%-SNAPSHOT}"
-  mvn -B versions:set -DnewVersion="${CUDF_VERSION}" -DgenerateBackupPoms=false "${BUILD_ARG[@]}"
+  mvn versions:set -DnewVersion="${CUDF_VERSION}" -DgenerateBackupPoms=false "${BUILD_ARG[@]}"
 fi
 
 rapids-logger "Packaging cuDF Java JAR version ${CUDF_VERSION} (libcudf: ${CUDF_INSTALL_DIR})"
