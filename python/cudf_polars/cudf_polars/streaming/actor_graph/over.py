@@ -247,7 +247,7 @@ class OriginStamps:
 
 
 def _origin_stamps_for(ir: Over) -> OriginStamps:
-    """Pick three stamp column names that do not collide with the schema."""
+    """Pick stamp column names that do not collide with the schema."""
     names = unique_names((*ir.children[0].schema.keys(), *ir.schema.keys()))
     return OriginStamps(next(names), next(names), next(names))
 
@@ -300,10 +300,15 @@ def _evaluate_window_with_stamps(
         columns = table.columns()
         table = plc.sorting.stable_sort_by_key(
             table,
-            # Sort by (rank, chunk_index)
-            plc.Table([columns[n_child + 2], columns[n_child]]),
-            [plc.types.Order.ASCENDING] * 2,
-            [plc.types.NullOrder.AFTER] * 2,
+            plc.Table(
+                [
+                    columns[n_child + 2],  # origin rank
+                    columns[n_child],  # source chunk index
+                    columns[n_child + 1],  # row position within that chunk
+                ]
+            ),
+            [plc.types.Order.ASCENDING] * 3,
+            [plc.types.NullOrder.AFTER] * 3,
             stream=stream,
         )
     columns = table.columns()

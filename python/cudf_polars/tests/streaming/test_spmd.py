@@ -32,6 +32,8 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.config import MemoryResourceConfig
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from rapidsmpf.communicator.communicator import Communicator
 
 pytestmark = pytest.mark.spmd
@@ -701,6 +703,40 @@ def test_over_shared_group_ordering_multirank(
             expected_values = [None]
             expected_values.extend((left + right) / 2 for left, right in pairwise(xs))
         assert global_result["result"].to_list() == expected_values
+
+
+def test_over_preserves_input_order_within_source_chunk(
+    comm: Communicator, tmp_path: Path
+) -> None:
+    n_rows = 64
+    path = tmp_path / "data.parquet"
+    pl.DataFrame(
+        {
+            "g": [0] * n_rows,
+            "x": list(range(n_rows)),
+        }
+    ).write_parquet(path, row_group_size=2)
+
+    with SPMDEngine(
+        comm=comm,
+        executor_options={
+            "max_rows_per_partition": 2,
+            "dynamic_planning": {},
+            "fallback_mode": "raise",
+        },
+    ) as engine:
+        if engine.nranks != 1:
+            pytest.skip("expected values are defined for exactly 1 rank")
+
+        q = (
+            pl.scan_parquet(path)
+            .sort("x")
+            .select(
+                "x",
+                pl.col("x").cum_sum().over("g").alias("result"),
+            )
+        )
+        assert_gpu_result_equal(q, engine=engine)
 
 
 def test_over_nonscalar_duplicated_input(
