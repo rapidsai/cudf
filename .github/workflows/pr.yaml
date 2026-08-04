@@ -8,6 +8,8 @@ concurrency:
   cancel-in-progress: true
 permissions: {}
 jobs:
+  build-details:
+    uses: rapidsai/shared-workflows/.github/workflows/compute-build-details.yaml@main
   # Please keep pr-builder as the top job here
   pr-builder:
     needs:
