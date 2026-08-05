@@ -539,14 +539,14 @@ __device__ cuda::std::pair<device_span<uint8_t const>, op_status> resolve_path(
     if (step.size_bytes() >= 1 && step.data()[0] == '[') {
       auto const index = parse_index_step(step);
       if (!index.has_value()) { return {{}, op_status::missing_path}; }
-      auto const [span, st] = locate_array_element_with_status(sub_val, index.value());
+      auto const [span, st] = locate_array_element(sub_val, index.value());
       if (st != op_status::success) { return {{}, st}; }
       sub_val = span;
     } else {
-      auto const [field_id, meta_st] = find_key_in_metadata_with_status(meta, step);
+      auto const [field_id, meta_st] = find_key_in_metadata(meta, step);
       if (meta_st == op_status::malformed_variant) { return {{}, op_status::malformed_variant}; }
       if (!field_id.has_value()) { return {{}, op_status::missing_path}; }
-      auto const [span, st] = locate_object_field_with_status(sub_val, field_id.value());
+      auto const [span, st] = locate_object_field(sub_val, field_id.value());
       if (st != op_status::success) { return {{}, st}; }
       sub_val = span;
     }
@@ -1094,9 +1094,9 @@ namespace detail {
 
 std::unique_ptr<column> get_variant_field(column_view const& variant_column,
                                           std::string_view path,
+                                          std::unique_ptr<column>* status_out,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr,
-                                          std::unique_ptr<column>* status_out)
+                                          rmm::device_async_resource_ref mr)
 {
   // Validate the variant column
   CUDF_EXPECTS(variant_column.type().id() == type_id::STRUCT,
@@ -1215,10 +1215,10 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
 
 std::unique_ptr<column> cast_variant(column_view const& values,
                                      data_type desired_type,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr,
                                      column_view const* incoming_status,
-                                     std::unique_ptr<column>* status_out)
+                                     std::unique_ptr<column>* status_out,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
 {
   validate_variant_child(values);
   size_type const num_rows = values.size();
@@ -1249,10 +1249,10 @@ std::unique_ptr<column> cast_variant(column_view const& values,
                  std::invalid_argument);
   }
 
-  auto incoming_dev_view    = (incoming_status != nullptr)
-                                ? column_device_view::create(*incoming_status, stream)
-                                : column_device_view::create(*placeholder_col, stream);
-  bool const has_incoming   = (incoming_status != nullptr);
+  auto incoming_dev_view  = (incoming_status != nullptr)
+                              ? column_device_view::create(*incoming_status, stream)
+                              : column_device_view::create(*placeholder_col, stream);
+  bool const has_incoming = (incoming_status != nullptr);
 
   return cudf::type_dispatcher(desired_type,
                                cast_variant_fn{val_lists_device_view,
@@ -1271,47 +1271,45 @@ std::unique_ptr<column> cast_variant(column_view const& values,
 
 std::unique_ptr<column> get_variant_field(column_view const& variant_column,
                                           std::string_view path,
+                                          std::unique_ptr<column>* status_out,
                                           rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr,
-                                          std::unique_ptr<column>* status_out)
+                                          rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::get_variant_field(variant_column, path, stream, mr, status_out);
+  return detail::get_variant_field(variant_column, path, status_out, stream, mr);
 }
 
 std::unique_ptr<column> cast_variant(column_view const& values,
                                      data_type desired_type,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr,
                                      column_view const* incoming_status,
-                                     std::unique_ptr<column>* status_out)
+                                     std::unique_ptr<column>* status_out,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::cast_variant(values, desired_type, stream, mr, incoming_status, status_out);
+  return detail::cast_variant(values, desired_type, incoming_status, status_out, stream, mr);
 }
 
 std::unique_ptr<column> extract_variant_field(column_view const& variant_column,
                                               std::string_view path,
                                               data_type desired_type,
+                                              std::unique_ptr<column>* status_out,
                                               rmm::cuda_stream_view stream,
-                                              rmm::device_async_resource_ref mr,
-                                              std::unique_ptr<column>* status_out)
+                                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   auto const temp_mr = cudf::get_current_device_resource_ref();
 
   if (status_out != nullptr) {
-    // Get the raw field bytes, capturing intermediate extraction status
     std::unique_ptr<column> extract_status;
-    auto value = detail::get_variant_field(variant_column, path, stream, temp_mr, &extract_status);
-    // Cast using the extraction status as incoming; cast populates the final status
+    auto value = detail::get_variant_field(variant_column, path, &extract_status, stream, temp_mr);
     auto const extract_status_view = extract_status->view();
     return detail::cast_variant(
-      value->view(), desired_type, stream, mr, &extract_status_view, status_out);
+      value->view(), desired_type, &extract_status_view, status_out, stream, mr);
   }
 
-  auto value = detail::get_variant_field(variant_column, path, stream, temp_mr, nullptr);
-  return detail::cast_variant(value->view(), desired_type, stream, mr, nullptr, nullptr);
+  auto value = detail::get_variant_field(variant_column, path, nullptr, stream, temp_mr);
+  return detail::cast_variant(value->view(), desired_type, nullptr, nullptr, stream, mr);
 }
 
 }  // namespace io::parquet::experimental

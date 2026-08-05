@@ -69,9 +69,9 @@ namespace io::parquet::experimental {
 [[nodiscard]] std::unique_ptr<column> get_variant_field(
   column_view const& variant_column,
   std::string_view path,
+  std::unique_ptr<column>* status_out = nullptr,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr   = cudf::get_current_device_resource_ref(),
-  std::unique_ptr<column>* status_out = nullptr);
+  rmm::device_async_resource_ref mr   = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Decode a VARIANT value column's blobs into a typed cuDF column.
@@ -100,10 +100,10 @@ namespace io::parquet::experimental {
 [[nodiscard]] std::unique_ptr<column> cast_variant(
   column_view const& values,
   data_type desired_type,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr   = cudf::get_current_device_resource_ref(),
   column_view const* incoming_status  = nullptr,
-  std::unique_ptr<column>* status_out = nullptr);
+  std::unique_ptr<column>* status_out = nullptr,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr   = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Convenience wrapper: extract a nested object value by path and decode into a typed column.
@@ -128,9 +128,9 @@ namespace io::parquet::experimental {
   column_view const& variant_column,
   std::string_view path,
   data_type desired_type,
+  std::unique_ptr<column>* status_out = nullptr,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr   = cudf::get_current_device_resource_ref(),
-  std::unique_ptr<column>* status_out = nullptr);
+  rmm::device_async_resource_ref mr   = cudf::get_current_device_resource_ref());
 
 /** @} */
 }  // namespace io::parquet::experimental
