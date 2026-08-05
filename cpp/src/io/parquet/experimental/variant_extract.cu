@@ -1238,6 +1238,15 @@ std::unique_ptr<column> cast_variant(column_view const& values,
   // cast_variant_fn always holds a valid column_device_view (kernel ignores it when !has_incoming).
   auto placeholder_col      = make_empty_column(data_type{type_id::UINT8});
   auto placeholder_dev_view = column_device_view::create(*placeholder_col, stream);
+  if (incoming_status != nullptr) {
+    CUDF_EXPECTS(incoming_status->size() == num_rows,
+                 "incoming status column must have the same number of rows as the values column",
+                 std::invalid_argument);
+    CUDF_EXPECTS(incoming_status->type().id() == type_id::UINT8,
+                 "incoming status column must be UINT8",
+                 std::invalid_argument);
+  }
+
   auto incoming_dev_view    = (incoming_status != nullptr)
                                 ? column_device_view::create(*incoming_status, stream)
                                 : column_device_view::create(*placeholder_col, stream);
