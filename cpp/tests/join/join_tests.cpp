@@ -1163,7 +1163,7 @@ TEST_F(JoinTest, PartitionedInnerJoinWithNulls)
 TEST_F(JoinTest, PartitionedInnerJoinWithNestedNullsUnequal)
 {
   column_wrapper<int32_t> left_child{{10, 20, 30, 40, 50}, {true, false, true, true, true}};
-  column_wrapper<int32_t> right_child{{30, 40, 50, 10}};
+  column_wrapper<int32_t> right_child{{30, 40, 50, 10, 20}, {true, true, true, true, false}};
   auto left_key  = cudf::test::structs_column_wrapper{{left_child}};
   auto right_key = cudf::test::structs_column_wrapper{{right_child}};
   auto left      = cudf::table_view{{left_key}};
@@ -1172,7 +1172,8 @@ TEST_F(JoinTest, PartitionedInnerJoinWithNestedNullsUnequal)
   auto mr        = cudf::get_current_device_resource_ref();
 
   cudf::sort_merge_join obj(right, cudf::sorted::NO, cudf::null_equality::UNEQUAL, stream);
-  auto match_context     = obj.inner_join_match_context(left, stream, mr);
+  auto match_context = obj.inner_join_match_context(left, stream, mr);
+  expect_match_counts_equal(*match_context->_match_counts, {1, 0, 1, 1, 1}, stream);
   auto partition_context = cudf::join_partition_context{std::move(match_context), 2, 4};
 
   auto const [left_indices, right_indices] =
@@ -1182,6 +1183,26 @@ TEST_F(JoinTest, PartitionedInnerJoinWithNestedNullsUnequal)
             std::vector<cudf::size_type>({2, 3}));
   EXPECT_EQ(cudf::detail::make_std_vector<cudf::size_type>(*right_indices, stream),
             std::vector<cudf::size_type>({0, 1}));
+}
+
+TEST_F(JoinTest, LeftJoinPreservesNestedNullRowOrderUnequal)
+{
+  column_wrapper<int32_t> left_child{{10, 20, 30, 40, 50}, {true, false, true, false, true}};
+  column_wrapper<int32_t> right_child{{10, 30, 50}};
+  auto left_key  = cudf::test::structs_column_wrapper{{left_child}};
+  auto right_key = cudf::test::structs_column_wrapper{{right_child}};
+  auto left      = cudf::table_view{{left_key}};
+  auto right     = cudf::table_view{{right_key}};
+  auto stream    = cudf::get_default_stream();
+  auto mr        = cudf::get_current_device_resource_ref();
+
+  cudf::sort_merge_join obj(right, cudf::sorted::NO, cudf::null_equality::UNEQUAL, stream);
+  auto const [left_indices, right_indices] = obj.left_join(left, stream, mr);
+
+  EXPECT_EQ(cudf::detail::make_std_vector<cudf::size_type>(*left_indices, stream),
+            std::vector<cudf::size_type>({0, 1, 2, 3, 4}));
+  EXPECT_EQ(cudf::detail::make_std_vector<cudf::size_type>(*right_indices, stream),
+            std::vector<cudf::size_type>({0, cudf::JoinNoMatch, 1, cudf::JoinNoMatch, 2}));
 }
 
 TEST_P(JoinParameterizedTest, InnerJoinNoNulls)
