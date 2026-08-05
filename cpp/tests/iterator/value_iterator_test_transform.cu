@@ -7,8 +7,8 @@
 #include <cudf_test/random.hpp>
 
 #include <cuda/functional>
-#include <thrust/host_vector.h>
 #include <cuda/iterator>
+#include <thrust/host_vector.h>
 
 struct TransformedIteratorTest : public IteratorTest<int8_t> {};
 

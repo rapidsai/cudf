@@ -9,13 +9,13 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/iterator>
+
 #include <jit/cache.hpp>
 #include <rtcx.hpp>
 #include <runtime/context.hpp>
 
 #include <format>
-
-#include <cuda/iterator>
 
 namespace cudf {
 namespace jit {
