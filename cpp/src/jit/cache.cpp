@@ -531,7 +531,7 @@ rtcx::blob get_udf_lto_dispatcher(std::string const& symbol)
     R"***(target datalayout = "e-i64:64-i128:128-v16:16-v32:32-n16:32:64"
 target triple = "nvptx64-nvidia-cuda"
 define weak i32 @{0}(...) {{ ret i32 0 }}
-@cudf_udf_symbol = alias i32 (...), i32 (...)* @{0}
+@cudf_udf_entry = alias i32 (...), i32 (...)* @{0}
 !nvvmir.version = !{{!0}}
 !0 = !{{i32 {1}, i32 {2}}}
 )***",
