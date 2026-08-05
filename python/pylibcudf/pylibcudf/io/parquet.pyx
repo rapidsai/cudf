@@ -93,7 +93,7 @@ cdef vector[cpp_FileMetaData] _build_parquet_metadatas(
             raise TypeError(
                 "parquet_metadatas must contain only FileMetaData objects"
             )
-        metadata_ptrs.push_back(&(<FileMetaData>metadata).c_obj)
+        metadata_ptrs.push_back((<FileMetaData>metadata).c_obj.get())
 
     if metadata_ptrs.size() != num_sources:
         raise ValueError(
