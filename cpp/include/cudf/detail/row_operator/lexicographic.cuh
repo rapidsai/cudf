@@ -798,7 +798,7 @@ struct preprocessed_table {
   preprocessed_table(table_device_view_owner&& table,
                      rmm::device_uvector<order>&& column_order,
                      rmm::device_uvector<null_order>&& null_precedence,
-                     rmm::device_uvector<size_type>&& depths,
+                     rmm::device_uvector<int>&& depths,
                      std::vector<detail::dremel_data>&& dremel_data,
                      rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
                      std::vector<std::unique_ptr<column>>&& transformed_columns,
@@ -807,7 +807,7 @@ struct preprocessed_table {
   preprocessed_table(table_device_view_owner&& table,
                      rmm::device_uvector<order>&& column_order,
                      rmm::device_uvector<null_order>&& null_precedence,
-                     rmm::device_uvector<size_type>&& depths,
+                     rmm::device_uvector<int>&& depths,
                      std::vector<std::unique_ptr<column>>&& transformed_columns,
                      bool has_ranked_children);
 
@@ -882,7 +882,7 @@ struct preprocessed_table {
   table_device_view_owner const _t;
   rmm::device_uvector<order> const _column_order;
   rmm::device_uvector<null_order> const _null_precedence;
-  rmm::device_uvector<size_type> const _depths;
+  rmm::device_uvector<int> const _depths;
 
   cuda::std::optional<std::vector<detail::dremel_data>> _dremel_data;
   cuda::std::optional<rmm::device_uvector<detail::dremel_device_view>> _dremel_device_views;
