@@ -17,6 +17,8 @@
 
 #include <span>
 
+#include <array>
+
 class TransformTest : public cudf::test::BaseFixture {};
 
 template <class dtype, class Data>
