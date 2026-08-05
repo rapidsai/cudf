@@ -2203,7 +2203,76 @@ class GroupBy(IR):
         return group_keys
 
     @staticmethod
+    def _temporary_value_name(name: str, keys: Sequence[Column]) -> str:
+        """Return a temporary value name that cannot shadow a group key."""
+        used = {key.name for key in keys}
+        value_name = name
+        while value_name in used:
+            value_name = f"_{value_name}"
+        return value_name
+
+    @staticmethod
+    def _evaluate_aggregation_requests(
+        schema: Schema,
+        keys: Sequence[Column],
+        grouper: plc.groupby.GroupBy,
+        agg_requests: Sequence[expr.NamedExpr],
+        df: DataFrame,
+    ) -> tuple[plc.Table | None, list[Column]]:
+        """Evaluate ordinary grouped aggregation requests."""
+        requests = []
+        names: list[str] = []
+        cast_to_schema = []
+        for request in agg_requests:
+            should_cast = False
+            name = request.name
+            value = request.value
+            if isinstance(value, expr.Len):
+                # A count aggregation, we need a column so use a key column
+                col = keys[0].obj
+            elif isinstance(value, expr.Agg):
+                if value.name == "quantile":
+                    child = value.children[0]
+                else:
+                    (child,) = value.children
+                # libcudf will return int64 when summing integers
+                # but the schema may be a lower bit width
+                col = child.evaluate(df, context=ExecutionContext.GROUPBY).obj
+                should_cast = value.name == "sum" and plc.traits.is_integral_not_bool(
+                    col.type()
+                )
+            else:
+                # Anything else, we pre-evaluate
+                column = value.evaluate(df, context=ExecutionContext.GROUPBY)
+                if column.size != keys[0].size:
+                    column = broadcast(
+                        column, target_length=keys[0].size, stream=df.stream
+                    )[0]
+                col = column.obj
+            requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
+            names.append(name)
+            cast_to_schema.append(should_cast)
+
+        if not requests:
+            return None, []
+
+        group_keys, raw_tables = grouper.aggregate(requests, stream=df.stream)
+        results = []
+        for result_name, plc_column, should_cast in zip(
+            names,
+            itertools.chain.from_iterable(t.columns() for t in raw_tables),
+            cast_to_schema,
+            strict=True,
+        ):
+            result = Column(plc_column, name=result_name, dtype=schema[result_name])
+            if should_cast:
+                result = result.astype(schema[result_name], stream=df.stream)
+            results.append(result)
+        return group_keys, results
+
+    @classmethod
     def _evaluate_sorted_aggregation(
+        cls,
         sorted_agg: expr.SortedAgg,
         name: str,
         keys: Sequence[Column],
@@ -2239,7 +2308,21 @@ class GroupBy(IR):
             stream=df.stream,
         )
         sorted_keys = plc.Table(sorted_table.columns()[: len(keys)])
-        sorted_value = sorted_table.columns()[len(keys)]
+        sorted_key_columns = [
+            Column(column, name=key.name, dtype=key.dtype)
+            for key, column in zip(keys, sorted_keys.columns(), strict=True)
+        ]
+        value_name = cls._temporary_value_name(name, keys)
+        sorted_value = Column(
+            sorted_table.columns()[len(keys)],
+            name=value_name,
+            dtype=sorted_agg.dtype,
+        )
+        sorted_df = DataFrame(
+            [*sorted_key_columns, sorted_value],
+            stream=df.stream,
+            num_rows=sorted_table.num_rows(),
+        )
         grouper = plc.groupby.GroupBy(
             sorted_keys,
             null_handling=plc.types.NullPolicy.INCLUDE,
@@ -2247,26 +2330,27 @@ class GroupBy(IR):
             column_order=key_order,
             null_precedence=key_null_order,
         )
-        offset = 0 if sorted_agg.name == "first" else -1
-        group_keys, raw_tables = grouper.aggregate(
+        group_keys, results = cls._evaluate_aggregation_requests(
+            {name: sorted_agg.dtype},
+            sorted_key_columns,
+            grouper,
             [
-                plc.groupby.GroupByRequest(
-                    sorted_value,
-                    [
-                        plc.aggregation.nth_element(
-                            offset,
-                            null_handling=plc.types.NullPolicy.INCLUDE,
-                        )
-                    ],
+                expr.NamedExpr(
+                    name,
+                    expr.Agg(
+                        sorted_agg.dtype,
+                        sorted_agg.name,
+                        None,
+                        ExecutionContext.GROUPBY,
+                        expr.Col(sorted_agg.dtype, value_name),
+                    ),
                 )
             ],
-            stream=df.stream,
+            sorted_df,
         )
-        return group_keys, Column(
-            raw_tables[0].columns()[0],
-            name=name,
-            dtype=sorted_agg.dtype,
-        )
+        assert group_keys is not None
+        (result,) = results
+        return group_keys, result
 
     @classmethod
     @log_do_evaluate
@@ -2302,54 +2386,15 @@ class GroupBy(IR):
         )
         requests = []
         sorted_requests = []
-        names: list[str] = []
-        cast_to_schema = []
         for request in agg_requests:
-            should_cast = False
-            name = request.name
             value = request.value
             if isinstance(value, expr.SortedAgg):
                 sorted_requests.append(request)
-                continue
-            elif isinstance(value, expr.Len):
-                # A count aggregation, we need a column so use a key column
-                col = keys[0].obj
-            elif isinstance(value, expr.Agg):
-                if value.name == "quantile":
-                    child = value.children[0]
-                else:
-                    (child,) = value.children
-                # libcudf will return int64 when summing integers
-                # but the schema may be a lower bit width
-                col = child.evaluate(df, context=ExecutionContext.GROUPBY).obj
-                should_cast = value.name == "sum" and plc.traits.is_integral_not_bool(
-                    col.type()
-                )
             else:
-                # Anything else, we pre-evaluate
-                column = value.evaluate(df, context=ExecutionContext.GROUPBY)
-                if column.size != keys[0].size:
-                    column = broadcast(
-                        column, target_length=keys[0].size, stream=df.stream
-                    )[0]
-                col = column.obj
-            requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
-            names.append(name)
-            cast_to_schema.append(should_cast)
-        group_keys: plc.Table | None = None
-        results: list[Column] = []
-        if requests:
-            group_keys, raw_tables = grouper.aggregate(requests, stream=df.stream)
-            for result_name, plc_column, should_cast in zip(
-                names,
-                itertools.chain.from_iterable(t.columns() for t in raw_tables),
-                cast_to_schema,
-                strict=True,
-            ):
-                result = Column(plc_column, name=result_name, dtype=schema[result_name])
-                if should_cast:
-                    result = result.astype(schema[result_name], stream=df.stream)
-                results.append(result)
+                requests.append(request)
+        group_keys, results = cls._evaluate_aggregation_requests(
+            schema, keys, grouper, requests, df
+        )
         for request in sorted_requests:
             assert isinstance(request.value, expr.SortedAgg)
             result_group_keys, result = cls._evaluate_sorted_aggregation(
