@@ -1031,6 +1031,55 @@ TEST_F(HybridScanTest, SharedMetadataReaderMatchesReadParquet)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), table_b->view());
 }
 
+TEST_F(HybridScanTest, SharedMetadataFromFileMetaDataMatchesReadParquet)
+{
+  using T                              = int32_t;
+  auto constexpr num_concat            = 2;
+  auto [written_table, parquet_buffer] = create_parquet_with_stats<T, num_concat>();
+
+  auto const stream  = cudf::get_default_stream();
+  auto const mr      = cudf::get_current_device_resource_ref();
+  auto const options = cudf::io::parquet_reader_options::builder().build();
+
+  auto datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
+    reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
+
+  // Obtain FileMetaData from an initial reader, then build shared metadata from it.
+  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
+  auto const seed_reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*footer_buffer, options);
+  auto const file_metadata = seed_reader->parquet_metadata();
+
+  auto const metadata =
+    std::make_shared<cudf::io::parquet::experimental::hybrid_scan_metadata>(file_metadata, options);
+
+  // Two readers sharing the FileMetaData-derived metadata each produce the correct table.
+  auto const read_all_columns = [&] {
+    auto const reader =
+      std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*metadata);
+    auto const row_groups   = reader->all_row_groups(options);
+    auto const chunk_ranges = reader->all_column_chunks_byte_ranges(row_groups, options);
+    auto [buffers, data, tasks] =
+      cudf::io::parquet::fetch_byte_ranges_to_device_async(*datasource, chunk_ranges, stream, mr);
+    tasks.get();
+    return reader->materialize_all_columns(row_groups, data, options, stream, mr).tbl;
+  };
+
+  auto const table_a = read_all_columns();
+  auto const table_b = read_all_columns();
+
+  auto const expected =
+    cudf::io::read_parquet(
+      cudf::io::parquet_reader_options::builder(
+        cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size())))
+        .build(),
+      stream)
+      .tbl;
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), table_a->view());
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), table_b->view());
+}
+
 TEST_F(HybridScanTest, AllRowsPrunedReportsInputRowGroups)
 {
   using cudf::io::parquet::experimental::use_data_page_mask;

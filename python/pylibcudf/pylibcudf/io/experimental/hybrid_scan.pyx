@@ -376,7 +376,7 @@ cdef class HybridScanReader:
 
     def filter_row_groups_with_dictionary_pages(
         self,
-        list dictionary_page_data,
+        object dictionary_page_data,
         list row_group_indices,
         ParquetReaderOptions options,
         object stream=None
@@ -385,7 +385,7 @@ cdef class HybridScanReader:
 
         Parameters
         ----------
-        dictionary_page_data : list
+        dictionary_page_data : Sequence
             Span-like objects containing dictionary page data
         row_group_indices : list[int]
             Input row group indices
@@ -420,7 +420,7 @@ cdef class HybridScanReader:
 
     def filter_row_groups_with_bloom_filters(
         self,
-        list bloom_filter_data,
+        object bloom_filter_data,
         list row_group_indices,
         ParquetReaderOptions options,
         object stream=None
@@ -429,7 +429,7 @@ cdef class HybridScanReader:
 
         Parameters
         ----------
-        bloom_filter_data : list
+        bloom_filter_data : Sequence
             Span-like objects containing bloom filter data
         row_group_indices : list[int]
             Input row group indices
@@ -565,7 +565,7 @@ cdef class HybridScanReader:
     def materialize_filter_columns(
         self,
         list row_group_indices,
-        list column_chunk_data,
+        object column_chunk_data,
         Column row_mask,
         cpp_use_data_page_mask mask_data_pages,
         ParquetReaderOptions options,
@@ -578,7 +578,7 @@ cdef class HybridScanReader:
         ----------
         row_group_indices : list[int]
             Input row group indices
-        column_chunk_data : list
+        column_chunk_data : Sequence
             Span-like objects containing column chunk data of filter columns
         row_mask : Column
             Mutable boolean column indicating surviving rows
@@ -651,7 +651,7 @@ cdef class HybridScanReader:
     def materialize_payload_columns(
         self,
         list row_group_indices,
-        list column_chunk_data,
+        object column_chunk_data,
         Column row_mask,
         cpp_use_data_page_mask mask_data_pages,
         ParquetReaderOptions options,
@@ -664,7 +664,7 @@ cdef class HybridScanReader:
         ----------
         row_group_indices : list[int]
             Input row group indices
-        column_chunk_data : list
+        column_chunk_data : Sequence
             Span-like objects containing column chunk data of payload columns
         row_mask : Column
             Boolean column indicating surviving rows
@@ -737,7 +737,7 @@ cdef class HybridScanReader:
     def materialize_all_columns(
         self,
         list row_group_indices,
-        list column_chunk_data,
+        object column_chunk_data,
         ParquetReaderOptions options,
         object stream=None,
         DeviceMemoryResource mr=None
@@ -748,7 +748,7 @@ cdef class HybridScanReader:
         ----------
         row_group_indices : list[int]
             Input row group indices
-        column_chunk_data : list
+        column_chunk_data : Sequence
             Span-like objects containing column chunk data of all columns
         options : ParquetReaderOptions
             Parquet reader options
@@ -789,7 +789,7 @@ cdef class HybridScanReader:
         list row_group_indices,
         Column row_mask,
         cpp_use_data_page_mask mask_data_pages,
-        list column_chunk_data,
+        object column_chunk_data,
         ParquetReaderOptions options,
         object stream=None,
         DeviceMemoryResource mr=None
@@ -808,7 +808,7 @@ cdef class HybridScanReader:
             Boolean column indicating surviving rows
         mask_data_pages : UseDataPageMask
             Whether to use a data page mask
-        column_chunk_data : list
+        column_chunk_data : Sequence
             Span-like objects containing column chunk data of filter columns
         options : ParquetReaderOptions
             Parquet reader options
@@ -860,11 +860,14 @@ cdef class HybridScanReader:
         """
         cdef mutable_column_view mask_view = row_mask.mutable_view()
         cdef table_with_metadata c_result
+        cdef bool more_chunks
         with nogil:
             c_result = move(self.c_obj.get()[0].materialize_filter_columns_chunk(
                 mask_view
             ))
-        self._filter_chunk_data = None
+            more_chunks = self.c_obj.get()[0].has_next_table_chunk()
+        if not more_chunks:
+            self._filter_chunk_data = None
         return TableWithMetadata.from_libcudf(
             c_result, self._stream, self.mr
         )
@@ -876,7 +879,7 @@ cdef class HybridScanReader:
         list row_group_indices,
         Column row_mask,
         cpp_use_data_page_mask mask_data_pages,
-        list column_chunk_data,
+        object column_chunk_data,
         ParquetReaderOptions options,
         object stream=None,
         DeviceMemoryResource mr=None
@@ -895,7 +898,7 @@ cdef class HybridScanReader:
             Boolean column indicating surviving rows
         mask_data_pages : UseDataPageMask
             Whether to use a data page mask
-        column_chunk_data : list
+        column_chunk_data : Sequence
             Span-like objects containing column chunk data of payload columns
         options : ParquetReaderOptions
             Parquet reader options
@@ -947,11 +950,14 @@ cdef class HybridScanReader:
         """
         cdef column_view mask_view = row_mask.view()
         cdef table_with_metadata c_result
+        cdef bool more_chunks
         with nogil:
             c_result = move(self.c_obj.get()[0].materialize_payload_columns_chunk(
                 mask_view
             ))
-        self._payload_chunk_data = None
+            more_chunks = self.c_obj.get()[0].has_next_table_chunk()
+        if not more_chunks:
+            self._payload_chunk_data = None
         return TableWithMetadata.from_libcudf(
             c_result, self._stream, self.mr
         )
