@@ -206,7 +206,7 @@ struct rolling_postprocessor {
   data_type result_type;
   PrecedingWindowIterator preceding_window_begin;
   FollowingWindowIterator following_window_begin;
-  int min_periods;
+  size_type min_periods;
   rmm::cuda_stream_view stream;
   rmm::device_async_resource_ref mr;
 
@@ -429,7 +429,7 @@ struct rolling_window_launcher {
                                      column_view const& default_outputs,
                                      PrecedingWindowIterator preceding_window_begin,
                                      FollowingWindowIterator following_window_begin,
-                                     int min_periods,
+                                     size_type min_periods,
                                      [[maybe_unused]] rolling_aggregation const& agg,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
@@ -599,7 +599,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                  "Only LEAD/LAG window functions support default values.");
   }
 
-  min_periods = std::max(min_periods, 0);
+  min_periods = std::max(min_periods, size_type{0});
 
   return cudf::type_dispatcher(input.type(),
                                dispatch_rolling{},
