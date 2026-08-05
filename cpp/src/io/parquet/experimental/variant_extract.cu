@@ -238,7 +238,7 @@ __device__ cuda::std::optional<size_type> find_key_in_metadata(device_span<uint8
   auto const header = meta[0];
   int const version = header & 0x0F;
   if (version != variant_version_v1) { return cuda::std::nullopt; }
-  bool const sorted     = (header >> 4) & 0x01;
+  bool const is_sorted  = (header >> 4) & 0x01;
   int const offset_size = ((header >> 6) & 0x03) + 1;
 
   size_type pos          = 1;
@@ -269,7 +269,8 @@ __device__ cuda::std::optional<size_type> find_key_in_metadata(device_span<uint8
                              static_cast<size_type>(e.value() - s.value())};
   };
 
-  if (sorted) {
+  // Not using thrust::lower_bound since it does not propagate entry read failures
+  if (is_sorted) {
     size_type lo = 0;
     size_type hi = num_entries.value();
     while (lo < hi) {
