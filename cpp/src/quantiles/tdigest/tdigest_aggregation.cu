@@ -665,7 +665,7 @@ size_t compute_simple_cluster_count(int delta,
       // delta is the largest number of clusters we'll ever generate for any given group.
       // but a group can be significantly smaller than delta as well, in which case we will never
       // generate more than the size of that group.
-      return cuda::std::min(delta, group_size);
+      return cuda::std::min(static_cast<size_type>(delta), group_size);
     }));
 
   // total size
