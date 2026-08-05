@@ -1499,6 +1499,9 @@ TEST_F(GetVariantFieldStatusTest, VariantNullPreservedWithStatus)
   expect_status_values(*status, {ST_VNULL});
   // With status requested, the VARIANT null bytes are preserved (output is NOT SQL null)
   EXPECT_EQ(got->null_count(), 0);
+  auto const null_bytes = enc_null();
+  cudf::test::lists_column_wrapper<uint8_t> expected_bytes{{null_bytes.begin(), null_bytes.end()}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected_bytes);
 }
 
 // Without status_out, VARIANT null is returned as bytes (non-null list row), same as with status.
@@ -1514,6 +1517,9 @@ TEST_F(GetVariantFieldStatusTest, VariantNullReturnedAsBytesWithoutStatus)
   auto got = cudf::io::parquet::experimental::get_variant_field(col, "null_field", nullptr, stream);
   EXPECT_EQ(got->null_count(), 0);
   EXPECT_EQ(got->size(), 1);
+  auto const null_bytes = enc_null();
+  cudf::test::lists_column_wrapper<uint8_t> expected_bytes{{null_bytes.begin(), null_bytes.end()}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected_bytes);
 }
 
 // Malformed metadata → malformed_variant status
