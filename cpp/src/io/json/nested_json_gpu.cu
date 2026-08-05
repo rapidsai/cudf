@@ -1939,7 +1939,8 @@ void make_json_column(json_column& root_column,
 
       // Increment parent's child count and insert this struct node into the data path
       current_data_path.top().num_children++;
-      current_data_path.push({selected_col, target_row_index, nullptr, zero_child_count});
+      current_data_path.push(
+        {selected_col, static_cast<uint32_t>(target_row_index), nullptr, zero_child_count});
 
       // Add this struct node to the current column
       selected_col->append_row(target_row_index,
@@ -1977,7 +1978,8 @@ void make_json_column(json_column& root_column,
 
       // Increment parent's child count and insert this struct node into the data path
       current_data_path.top().num_children++;
-      current_data_path.push({selected_col, target_row_index, nullptr, zero_child_count});
+      current_data_path.push(
+        {selected_col, static_cast<uint32_t>(target_row_index), nullptr, zero_child_count});
 
       // Add this struct node to the current column
       selected_col->append_row(target_row_index,

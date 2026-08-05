@@ -221,9 +221,9 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::string_v
     std::overflow_error);
 
   if (input->length == 0) { return make_empty_column(type_id::STRING); }
-  auto [mask, null_count] = !skip_mask
-                              ? get_mask_buffer(input, stream, mr)
-                              : std::pair{std::make_unique<rmm::device_buffer>(0, stream, mr), 0};
+  auto [mask, null_count] =
+    !skip_mask ? get_mask_buffer(input, stream, mr)
+               : std::pair{std::make_unique<rmm::device_buffer>(0, stream, mr), size_type{0}};
   return string_column_from_arrow_host(schema, input, std::move(mask), null_count, stream, mr);
 }
 
@@ -278,7 +278,7 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::struct_v
 
   auto [out_mask, null_count] =
     !skip_mask ? get_mask_buffer(input, stream, mr)
-               : std::pair{std::make_unique<rmm::device_buffer>(0, stream, mr), 0};
+               : std::pair{std::make_unique<rmm::device_buffer>(0, stream, mr), size_type{0}};
 
   return make_structs_column(
     input->length, std::move(child_columns), null_count, std::move(*out_mask), stream, mr);
@@ -307,7 +307,7 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::list_vie
 
   auto [out_mask, null_count] =
     !skip_mask ? get_mask_buffer(input, stream, mr)
-               : std::pair{std::make_unique<rmm::device_buffer>(0, stream, mr), 0};
+               : std::pair{std::make_unique<rmm::device_buffer>(0, stream, mr), size_type{0}};
 
   return make_lists_column(static_cast<size_type>(input->length),
                            std::move(offsets_column),
