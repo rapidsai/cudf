@@ -1401,7 +1401,6 @@ TEST_F(InvalidInputShapeTest, GetVariantTypeIdRejectsMalformedInput)
   }
 }
 
-
 namespace {
 
 // Helper: run get_variant_type_id on the value child of an apache fixture.
@@ -1450,6 +1449,7 @@ inline std::unique_ptr<cudf::column> make_list_u8_nullable(
 struct GetVariantTypeIdTest : public cudf::test::BaseFixture {};
 
 using cudf::io::parquet::experimental::variant_logical_type;
+using LT = variant_logical_type;
 
 // ---------------------------------------------------------------------------
 // Apache fixtures: one test per logical-type category.
@@ -1550,6 +1550,13 @@ TEST_F(GetVariantTypeIdTest, Uuid)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
+TEST_F(GetVariantTypeIdTest, TimeNtz)
+{
+  auto got = apache_type_id(avf::primitive_time);
+  cudf::test::fixed_width_column_wrapper<int32_t> expected{static_cast<int32_t>(LT::time_ntz)};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
 TEST_F(GetVariantTypeIdTest, ObjectAndArray)
 {
   {
@@ -1573,8 +1580,10 @@ TEST_F(GetVariantTypeIdTest, ObjectAndArray)
 
 TEST_F(GetVariantTypeIdTest, UnknownPhysicalTypeProducesNull)
 {
-  // TIME_NTZ_MICROS is a valid Variant physical type but has no logical-type mapping.
-  auto got = apache_type_id(avf::primitive_time);
+  // Primitive header byte 0xFC = (63 << 2) | 0: type_id 63 is not in the spec.
+  auto const stream = cudf::test::get_default_stream();
+  auto values       = make_list_u8_nullable({{0xFC}}, {true});
+  auto got          = cudf::io::parquet::experimental::get_variant_type_id(*values, stream);
   ASSERT_EQ(got->size(), 1);
   EXPECT_EQ(got->null_count(), 1);
 }

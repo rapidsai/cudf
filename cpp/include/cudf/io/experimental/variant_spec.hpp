@@ -52,6 +52,7 @@ enum class variant_primitive_type : uint8_t {
  * All four integer widths (INT8/INT16/INT32/INT64) map to long_value. Both string encodings
  * (SHORT_STRING and LONG_STRING) map to string. The two timestamp-with-timezone encodings map to
  * timestamp; the two timestamp-without-timezone encodings map to timestamp_ntz.
+ * TIME_NTZ_MICROS maps to time_ntz.
  */
 enum class variant_logical_type : uint8_t {
   object,
@@ -67,7 +68,8 @@ enum class variant_logical_type : uint8_t {
   timestamp_ntz,
   float_value,
   binary,
-  uuid
+  uuid,
+  time_ntz
 };
 
 }  // namespace cudf::io::parquet::experimental

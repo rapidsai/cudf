@@ -822,36 +822,9 @@ __device__ cuda::std::optional<variant_logical_type> logical_type_of(device_span
     case primitive_type::FLOAT32: return variant_logical_type::float_value;
     case primitive_type::BINARY: return variant_logical_type::binary;
     case primitive_type::LONG_STRING: return variant_logical_type::string;
+    case primitive_type::TIME_NTZ_MICROS: return variant_logical_type::time_ntz;
     case primitive_type::UUID: return variant_logical_type::uuid;
     default: return cuda::std::nullopt;
-  }
-}
-
-CUDF_KERNEL __launch_bounds__(block_size) void get_variant_type_id_kernel(
-  cudf::lists_column_device_view values, device_span<int32_t> d_output, bitmask_type* d_null_mask)
-{
-  auto const num_rows = static_cast<size_type>(d_output.size());
-  auto const tid      = cudf::detail::grid_1d::global_thread_id<block_size>();
-  auto const stride   = cudf::detail::grid_1d::grid_stride<block_size>();
-
-  for (auto row = tid; row < num_rows; row += stride) {
-    if (!cudf::bit_is_set(d_null_mask, row)) {
-      d_output[row] = 0;
-      continue;
-    }
-
-    auto const val_begin = values.offset_at(row);
-    auto const val_end   = values.offset_at(row + 1);
-    device_span<uint8_t const> const val{values.child().data<uint8_t>() + val_begin,
-                                         static_cast<std::size_t>(val_end - val_begin)};
-
-    auto const ltype = logical_type_of(val);
-    if (ltype.has_value()) {
-      d_output[row] = static_cast<int32_t>(ltype.value());
-    } else {
-      d_output[row] = 0;
-      cudf::clear_bit(d_null_mask, row);
-    }
   }
 }
 
@@ -1029,12 +1002,18 @@ std::unique_ptr<column> get_variant_type_id(column_view const& values,
 
   rmm::device_buffer data{static_cast<std::size_t>(num_rows) * sizeof(int32_t), stream, mr};
 
-  auto grid = cudf::detail::grid_1d{num_rows, block_size};
-  get_variant_type_id_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
-    val_lists_device_view,
-    {static_cast<int32_t*>(data.data()), static_cast<std::size_t>(num_rows)},
-    d_null_mask);
-  CUDF_CUDA_TRY(cudaGetLastError());
+  thrust::transform(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<size_type>(0),
+    cuda::counting_iterator<size_type>(num_rows),
+    static_cast<int32_t*>(data.data()),
+    [values = val_lists_device_view, d_null_mask] __device__(size_type row) -> int32_t {
+      if (!cudf::bit_is_set(d_null_mask, row)) { return 0; }
+      auto const ltype = logical_type_of(list_row_span(values, row));
+      if (ltype.has_value()) { return static_cast<int32_t>(ltype.value()); }
+      cudf::clear_bit(d_null_mask, row);
+      return 0;
+    });
 
   auto const null_count = num_rows - cudf::detail::count_set_bits(d_null_mask, 0, num_rows, stream);
   return std::make_unique<column>(data_type{type_id::INT32},
