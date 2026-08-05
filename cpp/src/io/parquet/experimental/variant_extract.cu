@@ -931,6 +931,7 @@ std::unique_ptr<column> cast_variant(column_view const& values,
     case type_id::INT64:
     case type_id::FLOAT32:
     case type_id::FLOAT64:
+    case type_id::BOOL8:
     case type_id::STRING: break;
     default: CUDF_FAIL("unsupported type for variant cast", std::invalid_argument);
   }
