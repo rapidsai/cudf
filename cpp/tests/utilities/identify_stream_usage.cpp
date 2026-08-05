@@ -198,6 +198,7 @@ void sanitizer_subscriber::callback(Sanitizer_CallbackDomain domain,
           CHECK_STREAM_ARG(cudaLaunchHostFunc, 10000, stream);
           CHECK_STREAM_ARG(cudaLaunchHostFunc_ptsz, 10000, stream);
 #if CUDART_VERSION >= 13000
+          CHECK_STREAM_ARG(cudaMemcpyBatchAsync, 13000, stream);
           CHECK_STREAM_ARG(cudaMemPrefetchAsync, 12020, stream);
           CHECK_STREAM_ARG(cudaMemPrefetchAsync_ptsz, 12020, stream);
 #else

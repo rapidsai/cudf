@@ -1413,6 +1413,7 @@ void decimal_sizes_to_offsets(device_2dspan<rowgroup_rows const> rg_bounds,
   decimal_sizes_to_offsets_kernel<block_size>
     <<<num_blocks, block_size, 0, stream.value()>>>(rg_bounds, d_sizes);
   CUDF_CUDA_TRY(cudaGetLastError());
+  stream.synchronize();  // h_sizes goes out of scope
 }
 
 }  // namespace cudf::io::orc::detail
