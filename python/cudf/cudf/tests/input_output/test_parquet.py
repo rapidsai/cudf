@@ -3436,8 +3436,14 @@ def test_parquet_writer_gzip():
     buff = BytesIO()
     expected.to_parquet(buff, compression="GZIP")
 
+    # Decode with pyarrow's zlib, so that a malformed GZIP stream is not masked
+    # by libcudf reading back its own output.
     got = pq.read_table(buff)
     assert_eq(expected, got.to_pandas())
+
+    fmd = pq.ParquetFile(buff).metadata
+    for i in range(fmd.row_group(0).num_columns):
+        assert fmd.row_group(0).column(i).compression == "GZIP"
 
 
 @pytest.mark.parametrize("store_schema", [True, False])

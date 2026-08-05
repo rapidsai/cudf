@@ -41,6 +41,9 @@ using cudf::test::iterators::no_nulls;
 
 using ParquetCompressionTest = CompressionTest<ParquetWriterTest>;
 
+// Only the `Nvcomp` instantiation requires device GZIP support (nvCOMP 5.3+). The host
+// instantiations must keep running on older nvCOMP: `LIBCUDF_HOST_COMPRESSION=OFF` cannot force a
+// device path that does not exist, so those cases would silently compress on the host instead.
 #define SKIP_IF_NVCOMP_GZIP_UNSUPPORTED(comp)                                                \
   do {                                                                                       \
     if ((comp) == cudf::io::compression_type::GZIP && std::get<0>(GetParam()) == "NVCOMP" && \

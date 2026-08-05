@@ -792,7 +792,14 @@ size_t compress_required_alignment(compression_type compression)
   nvcompAlignmentRequirements_t alignments{};
   nvcompStatus_t status;
   switch (compression) {
+#if CUDF_NVCOMP_HAS_GZIP_COMPRESSION
     case compression_type::GZIP:
+      status = nvcompBatchedGzipCompressGetRequiredAlignments(nvcompBatchedGzipCompressDefaultOpts,
+                                                              &alignments);
+      break;
+#else
+    case compression_type::GZIP:
+#endif
     case compression_type::DEFLATE:
       status = nvcompBatchedDeflateCompressGetRequiredAlignments(
         nvcompBatchedDeflateCompressDefaultOpts, &alignments);
@@ -846,8 +853,12 @@ size_t decompress_required_alignment(compression_type compression)
 std::optional<size_t> compress_max_allowed_chunk_size(compression_type compression)
 {
   switch (compression) {
-    case compression_type::DEFLATE:
+    case compression_type::DEFLATE: return nvcompDeflateCompressionMaxAllowedChunkSize;
+#if CUDF_NVCOMP_HAS_GZIP_COMPRESSION
+    case compression_type::GZIP: return nvcompGzipCompressionMaxAllowedChunkSize;
+#else
     case compression_type::GZIP: return nvcompDeflateCompressionMaxAllowedChunkSize;
+#endif
     case compression_type::SNAPPY: return nvcompSnappyCompressionMaxAllowedChunkSize;
     case compression_type::ZSTD: return nvcompZstdCompressionMaxAllowedChunkSize;
     case compression_type::LZ4: return nvcompLZ4CompressionMaxAllowedChunkSize;
