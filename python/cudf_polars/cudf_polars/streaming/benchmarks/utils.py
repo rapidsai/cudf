@@ -655,7 +655,7 @@ class RunConfig:
         )
 
     def serialize(
-        self, engine: StreamingEngine | None, quent_archive: Path | None
+        self, engine: pl.GPUEngine | None, quent_archive: Path | None
     ) -> dict:
         """
         Serialize the run config to a dictionary.
@@ -713,11 +713,14 @@ class RunConfig:
         if engine is not None:
             config_options = ConfigOptions.from_polars_engine(engine)
             config_options = config_options.drop_unserializable()
-            rapidsmpf_options = engine.rapidsmpf_options.get_strings()
-            result["config_options"] = {
+            extra = {
                 "config_options": dataclasses.asdict(config_options),
-                "rapidsmpf_options": rapidsmpf_options,
             }
+
+            if isinstance(engine, StreamingEngine):
+                extra["rapidsmpf_options"] = engine.rapidsmpf_options.get_strings()
+
+            result["config_options"] = extra
             # discard unserializable / unnecessary UUIDs
             result["config_options"]["config_options"]["executor"].pop(
                 "quent_context", None
@@ -1182,7 +1185,9 @@ def _run_query_loop(
 
     for q_id in run_config.queries:
         if engine is not None:
-            quent_context = engine.config["executor_options"].get("quent_context")
+            quent_context = engine.config.get("executor_options", {}).get(
+                "quent_context"
+            )
             if quent_context is not None:
                 engine.config["executor_options"]["quent_context"] = (
                     dataclasses.replace(
@@ -1267,7 +1272,7 @@ def _finalize_benchmark_run(
 def run_polars_cpu(
     benchmark: Any,
     args: argparse.Namespace,
-    run_config: Any,
+    run_config: RunConfig,
     numeric_type: str,
     date_type: str,
 ) -> None:
@@ -1286,14 +1291,16 @@ def run_polars_cpu(
         run_config,
         validation_failures,
         query_failures,
-        serializable_engine_config=run_config.serialize(engine=None),
+        serializable_engine_config=run_config.serialize(
+            engine=None, quent_archive=None
+        ),
     )
 
 
 def run_polars_in_memory(
     benchmark: Any,
     args: argparse.Namespace,
-    run_config: Any,
+    run_config: RunConfig,
     parquet_options: dict[str, Any],
     numeric_type: str,
     date_type: str,
@@ -1323,14 +1330,16 @@ def run_polars_in_memory(
         run_config,
         validation_failures,
         query_failures,
-        serializable_engine_config=run_config.serialize(engine=engine),
+        serializable_engine_config=run_config.serialize(
+            engine=engine, quent_archive=None
+        ),
     )
 
 
 def run_polars_spmd(
     benchmark: Any,
     args: argparse.Namespace,
-    run_config: Any,
+    run_config: RunConfig,
     parquet_options: dict[str, Any],
     numeric_type: str,
     date_type: str,
@@ -1407,7 +1416,7 @@ def run_polars_spmd(
 def run_polars_ray(
     benchmark: Any,
     args: argparse.Namespace,
-    run_config: Any,
+    run_config: RunConfig,
     parquet_options: dict[str, Any],
     numeric_type: str,
     date_type: str,
@@ -1447,7 +1456,9 @@ def run_polars_ray(
         run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
         run_config = _consolidate_logs(run_config, engine=engine)
         # We need to create this before StreamingEngine.shutdown(), which clears engine.config
-        serializable_engine_config = run_config.serialize(engine=engine)
+        serializable_engine_config = run_config.serialize(
+            engine=engine, quent_archive=None
+        )
         quent_archive = Path("logs") / f"{run_config.run_id}.zip"
 
     _write_quent_traces(
@@ -1468,7 +1479,7 @@ def run_polars_ray(
 def run_polars_dask(
     benchmark: Any,
     args: argparse.Namespace,
-    run_config: Any,
+    run_config: RunConfig,
     parquet_options: dict[str, Any],
     numeric_type: str,
     date_type: str,
