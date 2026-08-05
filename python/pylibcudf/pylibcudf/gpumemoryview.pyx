@@ -15,7 +15,8 @@ cdef gpumemoryview _slice(gpumemoryview parent, uintptr_t ptr, uint64_t nbytes):
     v.nbytes = nbytes
     v.obj = parent
     # always returns a raw byte view regardless of the source dtype.
-    v.cai = {"data": (ptr, False), "shape": (nbytes,), "typestr": "|u1", "version": 3}
+    # TODO: Need to propagate stream from parent.cai if present
+    v.cai = {"data": (ptr, parent.cai["data"][1]), "shape": (nbytes,), "typestr": "|u1", "version": 3}
     return v
 
 
@@ -70,6 +71,7 @@ cdef class gpumemoryview:
         self.obj = obj
         self.cai = cai
         # TODO: Need to respect readonly
+        # TODO: Need to synchronize on stream if present in cai
         self.ptr = cai["data"][0]
 
         # Compute the buffer size.
@@ -114,6 +116,9 @@ cdef class gpumemoryview:
         ------
         TypeError
             If ``s`` is not a slice.
+        ValueError
+            If the slice step is not 1. Out-of-range or reversed ranges
+            return a zero-length view rather than raising.
         """
         if not isinstance(s, slice):
             raise TypeError(

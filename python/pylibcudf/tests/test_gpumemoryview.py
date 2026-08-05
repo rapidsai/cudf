@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import itertools
+import weakref
 
 import numpy as np
 import pytest
@@ -72,6 +73,7 @@ def test_len(np_array, stream):
         slice(None, 2),
         slice(3, None),
         slice(2, 2),
+        slice(0, 10000),
     ],
 )
 def test_slice(np_array, s):
@@ -89,11 +91,13 @@ def test_slice_fails(np_array):
 
 
 def test_slice_keeps_parent_alive():
-    import gc
-
     col = plc.Column.from_array(np.arange(10, dtype="u1"))
     gv = col.data()
+    col_ref = weakref.ref(col)
+    gv_ref = weakref.ref(gv)
     s = gv.byte_slice(slice(2, 5))
     del col, gv
-    gc.collect()
-    assert plc.Column.from_array(s).to_pylist() == [2, 3, 4]
+    assert col_ref() is None
+    assert gv_ref() is not None
+    del s
+    assert gv_ref() is None
