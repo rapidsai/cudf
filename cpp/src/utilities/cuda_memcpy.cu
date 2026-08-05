@@ -51,6 +51,30 @@ void copy_pageable(void* dst, void const* src, std::size_t size, rmm::cuda_strea
   CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, src, size, stream));
 }
 
+void copy_pageable_source(void* dst,
+                          void const* src,
+                          std::size_t size,
+                          rmm::cuda_stream_view stream)
+{
+  if (size == 0) return;
+
+#if CUDART_VERSION >= 13000
+  if (!stream.is_default()) {
+    void* dsts[]               = {dst};
+    void const* srcs[]         = {src};
+    std::size_t sizes[]        = {size};
+    std::size_t attrs_idxs     = 0;
+    cudaMemcpyAttributes attrs = {.srcAccessOrder = cudaMemcpySrcAccessOrderDuringApiCall,
+                                  .flags          = cudaMemcpyFlagPreferOverlapWithCompute};
+    CUDF_CUDA_TRY(
+      cudaMemcpyBatchAsync(dsts, srcs, sizes, 1, &attrs, &attrs_idxs, 1, stream.value()));
+    return;
+  }
+#endif
+  copy_pageable(dst, src, size, stream);
+  stream.synchronize();
+}
+
 };  // namespace
 
 cudaError_t memcpy_batch_async(void* const* dsts,
@@ -120,6 +144,8 @@ void cuda_memcpy_async_impl(
     copy_pinned(dst, src, size, stream);
   } else if (kind == host_memory_kind::PAGEABLE) {
     copy_pageable(dst, src, size, stream);
+  } else if (kind == host_memory_kind::PAGEABLE_SOURCE) {
+    copy_pageable_source(dst, src, size, stream);
   } else {
     CUDF_FAIL("Unsupported host memory kind");
   }

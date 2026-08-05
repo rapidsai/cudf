@@ -14,7 +14,7 @@
 namespace CUDF_EXPORT cudf {
 namespace detail {
 
-enum class host_memory_kind : uint8_t { PINNED, PAGEABLE };
+enum class host_memory_kind : uint8_t { PINNED, PAGEABLE, PAGEABLE_SOURCE };
 
 void cuda_memcpy_async_impl(
   void* dst, void const* src, size_t size, host_memory_kind kind, rmm::cuda_stream_view stream);
@@ -73,6 +73,8 @@ void cuda_memcpy_async_impl(
  * @brief Asynchronously copies data from host to device memory.
  *
  * Implementation may use different strategies depending on the size and type of host data.
+ * Pageable source memory is consumed before this function returns and may be released immediately.
+ * Device-accessible host memory must remain valid until the stream has executed the copy.
  *
  * @param dst Destination device memory
  * @param src Source host memory
@@ -86,7 +88,7 @@ void cuda_memcpy_async(device_span<T> dst, host_span<T const> src, rmm::cuda_str
   cuda_memcpy_async_impl(dst.data(),
                          src.data(),
                          src.size_bytes(),
-                         is_pinned ? host_memory_kind::PINNED : host_memory_kind::PAGEABLE,
+                         is_pinned ? host_memory_kind::PINNED : host_memory_kind::PAGEABLE_SOURCE,
                          stream);
 }
 
