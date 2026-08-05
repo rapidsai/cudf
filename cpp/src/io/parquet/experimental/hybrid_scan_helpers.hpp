@@ -177,7 +177,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * indices
    */
   [[nodiscard]] std::
-    tuple<std::vector<input_column_info>, std::vector<inline_column_buffer>, std::vector<size_type>>
+    tuple<std::vector<input_column_info>, std::vector<inline_column_buffer>, std::vector<int>>
     select_payload_columns(std::optional<std::vector<std::string>> const& payload_column_names,
                            std::optional<std::vector<std::string>> const& filter_column_names,
                            parquet::detail::column_selection_options const& selection_options);
@@ -419,7 +419,7 @@ class named_to_reference_converter : public parquet::detail::named_to_reference_
   std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
 
  private:
-  std::unordered_map<int32_t, std::string> _column_indices_to_names;
+  std::unordered_map<cudf::size_type, std::string> _column_indices_to_names;
 };
 
 }  // namespace cudf::io::parquet::experimental::detail

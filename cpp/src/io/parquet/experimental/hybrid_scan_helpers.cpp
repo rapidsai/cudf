@@ -340,9 +340,7 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_all_true_row_mask
   return cudf::make_column_from_scalar(true_scalar, num_rows, stream, mr);
 }
 
-std::tuple<std::vector<input_column_info>,
-           std::vector<inline_column_buffer>,
-           std::vector<cudf::size_type>>
+std::tuple<std::vector<input_column_info>, std::vector<inline_column_buffer>, std::vector<int>>
 aggregate_reader_metadata::select_payload_columns(
   std::optional<std::vector<std::string>> const& payload_column_names,
   std::optional<std::vector<std::string>> const& filter_column_names,
@@ -456,7 +454,7 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
       .get_literals();
 
   // Collect schema indices of columns with equality predicate(s)
-  std::vector<cudf::size_type> bloom_filter_col_schemas;
+  std::vector<int> bloom_filter_col_schemas;
   thrust::copy_if(thrust::host,
                   output_column_schemas.begin(),
                   output_column_schemas.end(),
@@ -520,7 +518,7 @@ aggregate_reader_metadata::dictionary_pages_byte_ranges(
   auto const literals = dictionary_literals_collector{filter.get(), output_dtypes}.get_literals();
 
   // Collect schema indices of columns with equality predicate(s)
-  std::vector<cudf::size_type> dictionary_col_schemas;
+  std::vector<int> dictionary_col_schemas;
   thrust::copy_if(thrust::host,
                   output_column_schemas.begin(),
                   output_column_schemas.end(),
@@ -686,7 +684,7 @@ aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
       .get_literals();
 
   // Collect schema indices of columns with equality predicate(s)
-  std::vector<cudf::size_type> bloom_filter_col_schemas;
+  std::vector<int> bloom_filter_col_schemas;
   thrust::copy_if(thrust::host,
                   output_column_schemas.begin(),
                   output_column_schemas.end(),

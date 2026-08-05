@@ -845,7 +845,7 @@ struct search_fenwick_tree_functor {
 std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_page_index_stats(
   std::span<std::vector<size_type> const> row_group_indices,
   std::span<cudf::data_type const> output_dtypes,
-  std::span<cudf::size_type const> output_column_schemas,
+  std::span<int const> output_column_schemas,
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr) const

@@ -821,7 +821,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
 
   constexpr auto warps_per_block  = 8;
   constexpr int threads_per_block = cudf::detail::warp_size * warps_per_block;
-  auto num_blocks                 = cudf::util::div_rounding_up_safe(col_size, warps_per_block);
+  auto num_blocks = cudf::util::div_rounding_up_safe(col_size, size_type{warps_per_block});
   auto str_counter =
     cudf::numeric_scalar(size_type{0}, true, stream, cudf::get_current_device_resource_ref());
 
