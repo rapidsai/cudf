@@ -673,9 +673,11 @@ def test_write_large_list_row_group():
     )
     metadata = plc.io.types.TableInputMetadata(table)
     sink = plc.io.SinkInfo([io.BytesIO()])
-    options = plc.io.parquet.ParquetWriterOptions.builder(sink, table).metadata(
-        metadata
-    ).build()
+    options = (
+        plc.io.parquet.ParquetWriterOptions.builder(sink, table)
+        .metadata(metadata)
+        .build()
+    )
 
     result = plc.io.parquet.write_parquet(options)
     parquet_file = pq.ParquetFile(io.BytesIO(result))
