@@ -498,9 +498,10 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
       stream);
 
     // scatter to node_range_end for only nested end tokens.
-    auto token_indices_it = cuda::transform_iterator(
-      cuda::make_permutation_iterator(token_indices.begin(), token_id.begin()),
-      [] __device__(auto i) -> SymbolOffsetT {
+    auto token_indices_it =
+      cuda::make_permutation_iterator(token_indices.begin(), token_id.begin());
+    auto nested_node_range_end_it =
+      cuda::make_transform_output_iterator(node_range_end.begin(), [] __device__(auto i) {
         // add +1 to include end symbol.
         return i + 1;
       });
@@ -510,7 +511,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                        token_indices_it + num_nested,
                        parent_node_ids.begin(),
                        stencil,
-                       node_range_end.begin());
+                       nested_node_range_end_it);
   }
 
   return {std::move(node_categories),

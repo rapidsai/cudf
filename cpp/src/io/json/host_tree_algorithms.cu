@@ -217,6 +217,17 @@ struct json_column_data {
   bitmask_type* validity;
 };
 
+struct initialize_string_offsets_and_lengths_fn {
+  device_json_column::row_offset_t* offsets;
+  device_json_column::row_offset_t* lengths;
+
+  __device__ void operator()(size_type idx) const
+  {
+    offsets[idx] = 0;
+    lengths[idx] = 0;
+  }
+};
+
 using hashmap_of_device_columns =
   std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>;
 
@@ -514,25 +525,20 @@ void make_device_json_column(device_span<SymbolT const> input,
     }
   };
 
-  auto const duplicate_value = [] __device__(device_json_column::row_offset_t value) {
-    return cuda::std::make_tuple(value, value);
-  };
-
   auto initialize_json_columns = [&](auto i, auto& col_ref, auto column_category) {
     auto& col = col_ref.get();
     if (col.type != json_col_t::Unknown) { return; }
     if (column_category == NC_ERR || column_category == NC_FN) {
       return;
     } else if (column_category == NC_VAL || column_category == NC_STR) {
-      col.string_offsets.resize(max_row_offsets[i] + 1, stream);
-      col.string_lengths.resize(max_row_offsets[i] + 1, stream);
-      auto const zero = cuda::make_constant_iterator(device_json_column::row_offset_t{0});
-      thrust::transform(
-        rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-        zero,
-        zero + col.string_offsets.size(),
-        cuda::make_zip_iterator(col.string_offsets.begin(), col.string_lengths.begin()),
-        duplicate_value);
+      auto const num_rows = max_row_offsets[i] + 1;
+      col.string_offsets.resize(num_rows, stream);
+      col.string_lengths.resize(num_rows, stream);
+      thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                         cuda::counting_iterator<size_type>{0},
+                         num_rows,
+                         initialize_string_offsets_and_lengths_fn{col.string_offsets.data(),
+                                                                  col.string_lengths.data()});
     } else if (column_category == NC_LIST) {
       col.child_offsets.resize(max_row_offsets[i] + 2, stream);
       thrust::uninitialized_fill(

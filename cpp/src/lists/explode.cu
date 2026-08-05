@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,6 +21,7 @@
 #include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <cuda/std/optional>
+#include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
@@ -200,12 +201,11 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
   // number of nulls or empty lists found so far in the explode column
   rmm::device_uvector<size_type> null_or_empty_offset(explode_col.size(), stream);
 
-  auto null_or_empty = cuda::transform_iterator(
-    cuda::counting_iterator<cudf::size_type>{0},
-    cuda::proclaim_return_type<size_type>(
-      [offsets, offsets_size = explode_col.size() - 1] __device__(int idx) {
-        return (idx > offsets_size || (offsets[idx + 1] != offsets[idx])) ? 0 : 1;
-      }));
+  auto const offset_pairs = cuda::make_zip_iterator(offsets, offsets + 1);
+  auto null_or_empty      = cuda::transform_iterator(
+    offset_pairs, cuda::proclaim_return_type<size_type>([] __device__(auto const& pair) {
+      return cuda::std::get<1>(pair) != cuda::std::get<0>(pair) ? 0 : 1;
+    }));
   thrust::inclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          null_or_empty,
                          null_or_empty + explode_col.size(),
