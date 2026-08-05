@@ -201,7 +201,7 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
   // number of nulls or empty lists found so far in the explode column
   rmm::device_uvector<size_type> null_or_empty_offset(explode_col.size(), stream);
 
-  auto const offset_pairs = cuda::make_zip_iterator(offsets, offsets + 1);
+  auto const offset_pairs = cuda::make_zip_iterator(cuda::std::make_tuple(offsets, offsets + 1));
   auto null_or_empty      = cuda::transform_iterator(
     offset_pairs, cuda::proclaim_return_type<size_type>([] __device__(auto const& pair) {
       return cuda::std::get<1>(pair) != cuda::std::get<0>(pair) ? 0 : 1;
