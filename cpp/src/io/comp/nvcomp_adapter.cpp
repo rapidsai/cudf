@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,9 +21,6 @@
 
 #include <mutex>
 
-// GZIP compression was added to nvCOMP in 5.3. Guard both the symbol usage and the runtime
-// enablement so libcudf still builds and runs against nvCOMP 5.2 (where these symbols may be
-// absent and GZIP compression falls back to the host path).
 #define CUDF_NVCOMP_HAS_GZIP_COMPRESSION (NVCOMP_VER >= MAKE_SEMANTIC_VERSION(5, 3, 0))
 
 namespace cudf::io::detail::nvcomp {
