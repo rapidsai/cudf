@@ -418,8 +418,8 @@ std::unique_ptr<column> encode_strings_to_variant(cudf::strings_column_view cons
     CUDF_CUDA_TRY(cudaGetLastError());
   }
 
-  auto [val_offsets_col, total_val_bytes] = cudf::strings::detail::make_offsets_child_column(
-    d_val_sizes.begin(), d_val_sizes.end(), stream, mr);
+  auto [val_offsets_col, total_val_bytes] =
+    cudf::detail::make_offsets_child_column(d_val_sizes.begin(), d_val_sizes.end(), stream, mr);
   // INT64 offsets are produced when total_bytes >= get_offset64_threshold() (== INT32_MAX).
   // Checking the column type is more robust than comparing total_val_bytes to INT32_MAX,
   // since the boundary case (total == INT32_MAX) produces INT64 but the numeric check passes.
@@ -536,8 +536,8 @@ std::unique_ptr<column> encode_variant(cudf::table_view const& input,
     CUDF_CUDA_TRY(cudaGetLastError());
   }
 
-  auto [val_offsets_col, total_val_bytes] = cudf::strings::detail::make_offsets_child_column(
-    d_val_sizes.begin(), d_val_sizes.end(), stream, mr);
+  auto [val_offsets_col, total_val_bytes] =
+    cudf::detail::make_offsets_child_column(d_val_sizes.begin(), d_val_sizes.end(), stream, mr);
   CUDF_EXPECTS(val_offsets_col->type().id() == type_id::INT32,
                "VARIANT value bytes exceed 2 GiB limit",
                std::overflow_error);
