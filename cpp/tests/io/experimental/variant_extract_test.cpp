@@ -21,6 +21,7 @@
 #include <bit>
 #include <cstdio>
 #include <cstring>
+#include <format>
 #include <memory>
 #include <string>
 #include <vector>
@@ -1057,7 +1058,7 @@ TEST_F(CastVariantTest, UnsupportedTypeThrows)
     EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::cast_variant(
                    *empty_values, cudf::data_type{id}, stream)),
                  std::invalid_argument)
-      << "expected throw for type_id " << static_cast<int>(id) << " on empty input";
+      << std::format("expected throw for type_id {} on empty input", static_cast<int>(id));
   }
 
   // Non-empty input: the dispatch path must also throw for unsupported types.
@@ -1067,7 +1068,7 @@ TEST_F(CastVariantTest, UnsupportedTypeThrows)
     EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::cast_variant(
                    value, cudf::data_type{id}, stream)),
                  std::invalid_argument)
-      << "expected throw for type_id " << static_cast<int>(id) << " on non-empty input";
+      << std::format("expected throw for type_id {} on non-empty input", static_cast<int>(id));
   }
 }
 
