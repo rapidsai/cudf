@@ -74,7 +74,16 @@ class Item(Expr):
 
 
 class SortedAgg(Expr):
-    """``first``/``last`` aggregation ordered by one or more expressions."""
+    """
+    ``first``/``last`` aggregation ordered by one or more expressions.
+
+    Notes
+    -----
+    This expression is used by GroupBy infrastructure for ordered
+    first/last aggregations. The ordering may depend on columns other than
+    the value being aggregated, so this cannot be evaluated independently
+    nor can it be represented as a plain :class:`Agg` variant.
+    """
 
     __slots__ = ("name", "options")
     _non_child = ("dtype", "name", "options")
