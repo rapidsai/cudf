@@ -29,6 +29,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
@@ -36,6 +37,7 @@
 #include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/for_each.h>
+#include <thrust/transform.h>
 
 #include <nanoarrow/nanoarrow.h>
 #include <nanoarrow/nanoarrow.hpp>
@@ -102,6 +104,36 @@ struct dispatch_to_arrow_host {
     CUDF_CUDA_TRY(
       cudf::detail::memcpy_async(buffer->data, input.data(), input.size_bytes(), stream));
     return NANOARROW_OK;
+  }
+
+  /// Writes a list column's offsets into Arrow's 32-bit list offsets buffer.
+  ///
+  /// A size_type-wide offsets child has to narrow to get there. Arrow's 64-bit equivalent is a
+  /// different type, large_list, which this path does not produce, so a child column too long to
+  /// index in 32 bits cannot be represented at all.
+  template <typename OffsetType = size_type>
+  int populate_list_offsets(lists_column_view const& lcv, size_type size, ArrowBuffer* buffer) const
+  {
+    if constexpr (cuda::std::is_same_v<OffsetType, int32_t>) {
+      return populate_data_buffer(device_span<int32_t const>(lcv.offsets_begin(), size + 1),
+                                  buffer);
+    } else {
+      CUDF_EXPECTS(lcv.child().size() <= std::numeric_limits<int32_t>::max(),
+                   "List child column is too long for Arrow's 32-bit list offsets",
+                   std::overflow_error);
+      auto offsets = rmm::device_uvector<int32_t>(size + 1, stream);
+      thrust::transform(rmm::exec_policy_nosync(stream),
+                        lcv.offsets_begin(),
+                        lcv.offsets_begin() + size + 1,
+                        offsets.begin(),
+                        cuda::proclaim_return_type<int32_t>([] __device__(OffsetType offset) {
+                          return static_cast<int32_t>(offset);
+                        }));
+      NANOARROW_RETURN_NOT_OK(populate_data_buffer(device_span<int32_t const>(offsets), buffer));
+      // populate_data_buffer copies asynchronously, so the narrowed offsets have to outlive it.
+      stream.synchronize();
+      return NANOARROW_OK;
+    }
   }
 
   template <typename T,
@@ -216,9 +248,8 @@ int dispatch_to_arrow_host::operator()<cudf::list_view>(ArrowArray* out) const
     NANOARROW_RETURN_NOT_OK(
       ArrowBufferAppendInt32(ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx), 0));
   } else {
-    NANOARROW_RETURN_NOT_OK(
-      populate_data_buffer(device_span<int32_t const>(lcv.offsets_begin(), (column.size() + 1)),
-                           ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx)));
+    NANOARROW_RETURN_NOT_OK(populate_list_offsets(
+      lcv, column.size(), ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx)));
   }
 
   NANOARROW_RETURN_NOT_OK(get_column(lcv.child(), stream, mr, tmp->children[0]));
