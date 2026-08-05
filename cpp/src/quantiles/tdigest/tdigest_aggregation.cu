@@ -684,10 +684,10 @@ void compute_cluster_starts(cluster_info& cinfo, rmm::cuda_stream_view stream)
   auto const num_groups = cinfo.num_clusters.size();
   auto cluster_size     = cudf::detail::make_counting_transform_iterator(
     0,
-    cuda::proclaim_return_type<size_type>(
-      [group_num_clusters = cinfo.num_clusters.begin(), num_groups] __device__(size_type index) {
-        return index == num_groups ? 0 : group_num_clusters[index];
-      }));
+    cuda::proclaim_return_type<size_type>([group_num_clusters = cinfo.num_clusters.begin(),
+                                           num_groups] __device__(size_type index) -> size_type {
+      return index == num_groups ? 0 : group_num_clusters[index];
+    }));
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          cluster_size,
                          cluster_size + num_groups + 1,
@@ -860,7 +860,7 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
   // This should not be wrapped in `proclaim_return_type` as it will be used inside another
   // device lambda.
   auto is_stub_digest = [offsets = offsets->view().begin<size_type>(), is_stub_weight] __device__(
-                          size_type i) { return is_stub_weight(offsets[i]) ? 1 : 0; };
+                          size_type i) -> size_type { return is_stub_weight(offsets[i]) ? 1 : 0; };
 
   size_type const num_stubs = [&]() -> size_type {
     if (!has_nulls) { return 0; }
@@ -911,7 +911,7 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
   auto iter = cudf::detail::make_counting_transform_iterator(
     0,
     cuda::proclaim_return_type<size_type>(
-      [sizes = sizes.begin(), is_stub_digest, num_rows] __device__(size_type i) {
+      [sizes = sizes.begin(), is_stub_digest, num_rows] __device__(size_type i) -> size_type {
         return i == num_rows || is_stub_digest(i) ? 0 : sizes[i];
       }));
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),

@@ -166,7 +166,7 @@ struct list_child_constructor {
       source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
         ? construct_child_nullmask(
             list_vector, list_offsets, source_lists, target_lists, num_child_rows, stream, mr)
-        : std::pair(rmm::device_buffer{}, 0);
+        : std::pair(rmm::device_buffer{}, size_type{0});
 
     auto child_column = cudf::make_fixed_width_column(source_lists_column_view.child().type(),
                                                       num_child_rows,
@@ -347,7 +347,7 @@ struct list_child_constructor {
       source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
         ? construct_child_nullmask(
             list_vector, list_offsets, source_lists, target_lists, num_child_rows, stream, mr)
-        : std::pair(rmm::device_buffer{}, 0);
+        : std::pair(rmm::device_buffer{}, size_type{0});
 
     return cudf::make_lists_column(num_child_rows,
                                    std::move(child_offsets),
@@ -438,7 +438,7 @@ struct list_child_constructor {
       source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
         ? construct_child_nullmask(
             list_vector, list_offsets, source_lists, target_lists, num_child_rows, stream, mr)
-        : std::pair(rmm::device_buffer{}, 0);
+        : std::pair(rmm::device_buffer{}, size_type{0});
 
     return cudf::make_structs_column(num_child_rows,
                                      std::move(child_columns),
