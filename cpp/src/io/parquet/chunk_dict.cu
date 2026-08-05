@@ -328,9 +328,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       auto base_idx = 0;
       while (base_idx < num_frags) {
         auto const idx = base_idx + t;
-        auto const per_thread_count =
+        size_type const per_thread_count =
           (idx < num_frags) ? col_frags[frag_start + idx].num_dict_vals : 0;
-        auto per_thread_offset = 0;
+        size_type per_thread_offset = 0;
         block_scan(scan_storage).ExclusiveSum(per_thread_count, per_thread_offset);
         if (idx < num_frags) { fragment_offsets[idx] = per_thread_offset; }
         base_idx += block_size;
@@ -516,8 +516,8 @@ void compute_per_page_dict_bits(device_span<EncPage> pages, rmm::cuda_stream_vie
 {
   if (pages.empty()) { return; }
   auto constexpr warps_per_block = DEFAULT_BLOCK_SIZE / cudf::detail::warp_size;
-  auto const num_blocks =
-    cudf::util::div_rounding_up_safe(static_cast<size_type>(pages.size()), warps_per_block);
+  auto const num_blocks = cudf::util::div_rounding_up_safe(static_cast<size_type>(pages.size()),
+                                                           size_type{warps_per_block});
   compute_page_dict_bits_kernel<<<num_blocks, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(pages);
   CUDF_CUDA_TRY(cudaGetLastError());
 }
