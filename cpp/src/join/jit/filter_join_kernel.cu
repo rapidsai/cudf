@@ -21,7 +21,7 @@
                     // need to put this pragma before including it to avoid PCH mismatch.
 
 // clang-format off
-#include <cudf/detail/udf_dispatch.cuh>
+#include <cudf/detail/kernel_dispatch.cuh>
 
 namespace cudf::join::jit {
 
@@ -94,7 +94,7 @@ __device__ void filter_join_kernel(cudf::size_type num_rows,
 
 }  // namespace cudf::join::jit
 
-extern "C" __global__ void cudf_kernel_entry(
+extern "C" __global__ void CUDF_KERNEL_ENTRY(
   cudf::size_type num_rows,
   cudf::size_type const* __restrict__ left_indices,
   cudf::size_type const* __restrict__ right_indices,

@@ -27,7 +27,7 @@
                     // it. Each UDF will have a different operation_udf.cuh generated for it, so we
                     // need to put this pragma before including it to avoid PCH mismatch.
 
-#include <cudf/detail/udf_dispatch.cuh>
+#include <cudf/detail/kernel_dispatch.cuh>
 
 namespace cudf {
 namespace jit {
@@ -128,7 +128,7 @@ __device__ void transform_kernel(size_type row_size,
 // after compilation. By using a fixed C-ABI symbol name for the kernel entry point, we can avoid
 // these issues and ensure that we can always retrieve the correct `CuFunction` for the kernel
 // regardless of the context in which it was compiled or used.
-extern "C" __global__ void cudf_kernel_entry(
+extern "C" __global__ void CUDF_KERNEL_ENTRY(
   cudf::size_type row_size,
   cudf::bitmask_type const* __restrict__ stencil,
   void* __restrict__ user_data,

@@ -160,7 +160,8 @@ struct mutable_strings_column {
   bitmask_type* null_mask() { return _col->mutable_view().null_mask(); }
 };
 
-[[maybe_unused]] static std::string get_element_type_name(column_view const& view, bool use_physical_type);
+[[maybe_unused]] static std::string get_element_type_name(column_view const& view,
+                                                          bool use_physical_type);
 
 struct element_type_name_fn {
   template <typename T>
@@ -189,62 +190,70 @@ struct element_type_name_fn {
   }
 };
 
-[[maybe_unused]] static std::string get_element_type_name(column_view const& view, bool use_physical_type)
+[[maybe_unused]] static std::string get_element_type_name(column_view const& view,
+                                                          bool use_physical_type)
 {
   return cudf::type_dispatcher(view.type(), element_type_name_fn{}, view, use_physical_type);
 }
 
-[[maybe_unused]] static std::string reflect_input_element(column_view const& c, bool use_physical_type)
+[[maybe_unused]] static std::string reflect_input_element(column_view const& c,
+                                                          bool use_physical_type)
 {
   return get_element_type_name(c, use_physical_type);
 }
 
-[[maybe_unused]] static std::string reflect_input_element(scalar_column_view const& c, bool use_physical_type)
+[[maybe_unused]] static std::string reflect_input_element(scalar_column_view const& c,
+                                                          bool use_physical_type)
 {
   return get_element_type_name(c.as_column_view(), use_physical_type);
 }
 
-[[maybe_unused]] static std::string reflect_output_element(fixed_width_column const& c, bool use_physical_type)
+[[maybe_unused]] static std::string reflect_output_element(fixed_width_column const& c,
+                                                           bool use_physical_type)
 {
   return get_element_type_name(c._col->view(), use_physical_type);
 }
 
 [[maybe_unused]] static std::string reflect_output_element(string_views_column const&,
-                                          [[maybe_unused]] bool use_physical_type)
+                                                           [[maybe_unused]] bool use_physical_type)
 {
   return "cudf::string_view";
 }
 
 [[maybe_unused]] static std::string reflect_output_element(mutable_strings_column const&,
-                                          [[maybe_unused]] bool use_physical_type)
+                                                           [[maybe_unused]] bool use_physical_type)
 {
   return "cuda::std::span<char>";
 }
 
-[[maybe_unused]] static std::string reflect_input_value_type(column_view const& c, bool use_physical_type)
+[[maybe_unused]] static std::string reflect_input_value_type(column_view const& c,
+                                                             bool use_physical_type)
 {
   return is_dictionary(c.type()) ? reflect_input_value_type(
                                      c.child(cudf::dictionary_keys_column_index), use_physical_type)
                                  : reflect_input_element(c, use_physical_type);
 }
 
-[[maybe_unused]] static std::string reflect_input_value_type(scalar_column_view const& c, bool use_physical_type)
+[[maybe_unused]] static std::string reflect_input_value_type(scalar_column_view const& c,
+                                                             bool use_physical_type)
 {
   return reflect_input_value_type(c.as_column_view(), use_physical_type);
 }
 
-[[maybe_unused]] static std::string reflect_output_value_type(fixed_width_column const& c, bool use_physical_type)
+[[maybe_unused]] static std::string reflect_output_value_type(fixed_width_column const& c,
+                                                              bool use_physical_type)
 {
   return reflect_output_element(c, use_physical_type);
 }
 
-[[maybe_unused]] static std::string reflect_output_value_type(string_views_column const& c, bool use_physical_type)
+[[maybe_unused]] static std::string reflect_output_value_type(string_views_column const& c,
+                                                              bool use_physical_type)
 {
   return reflect_output_element(c, use_physical_type);
 }
 
 [[maybe_unused]] static std::string reflect_output_value_type(mutable_strings_column const& c,
-                                             bool use_physical_type)
+                                                              bool use_physical_type)
 {
   return reflect_output_element(c, use_physical_type);
 }

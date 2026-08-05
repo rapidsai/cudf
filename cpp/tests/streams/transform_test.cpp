@@ -15,9 +15,8 @@
 #include <cudf/types.hpp>
 #include <cudf/udf.hpp>
 
-#include <span>
-
 #include <array>
+#include <span>
 
 class TransformTest : public cudf::test::BaseFixture {};
 
