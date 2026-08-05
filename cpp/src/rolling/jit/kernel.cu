@@ -13,15 +13,14 @@
                     // it. Each UDF will have a different operation_udf.cuh generated for it, so we
                     // need to put this pragma before including it to avoid PCH mismatch.
 
-#include <cudf/detail/kernel_instance.cuh>
-#include <cudf/detail/operation_udf.cuh>
+#include <cudf/detail/udf_dispatch.cuh>
 
 struct rolling_udf_ptx {
   template <typename OutType, typename InType>
   static OutType operate(InType const* in_col, cudf::size_type start, cudf::size_type count)
   {
     OutType ret;
-    GENERIC_ROLLING_OP(&ret, 0, 0, 0, 0, &in_col[start], count, sizeof(InType));
+    CUDF_DISPATCH_UDF(&ret, 0, 0, 0, 0, &in_col[start], count, sizeof(InType));
     return ret;
   }
 };
@@ -31,7 +30,7 @@ struct rolling_udf_cuda {
   static OutType operate(InType const* in_col, cudf::size_type start, cudf::size_type count)
   {
     OutType ret;
-    GENERIC_ROLLING_OP(&ret, in_col, start, count);
+    CUDF_DISPATCH_UDF(&ret, in_col, start, count);
     return ret;
   }
 };

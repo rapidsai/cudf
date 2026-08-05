@@ -68,94 +68,75 @@ TEST_F(AssertsTest, TypeSupport)
 {
   cudf::transform_input inputs[] = {a, b, cudf::scalar_column_view(t)};
 
-  EXPECT_NO_THROW((void)std::move(
-    cudf::transform(udf,
-                    cudf::udf_source_type::CUDA,
-                    cudf::null_aware::NO,
-                    std::nullopt,
-                    inputs,
-                    std::array{cudf::transform_output{cudf::data_type{cudf::type_id::FLOAT32},
-                                                      cudf::output_nullability::PRESERVE}},
-                    {},
-                    std::nullopt)
-      ->release()
-      .front()));
+  EXPECT_NO_THROW(
+    (void)cudf::transform(cudf::cuda_udf{udf, "lerp"},
+                          cudf::null_aware::NO,
+                          std::nullopt,
+                          inputs,
+                          std::array{cudf::transform_output{cudf::data_type{cudf::type_id::FLOAT32},
+                                                            cudf::output_nullability::PRESERVE}},
+                          {},
+                          std::nullopt));
 
-  EXPECT_THROW((void)std::move(cudf::transform(udf,
-                                               cudf::udf_source_type::CUDA,
-                                               cudf::null_aware::NO,
-                                               std::nullopt,
-                                               inputs,
-                                               std::array{cudf::transform_output{
-                                                 cudf::data_type{cudf::type_id::STRUCT},
-                                                 cudf::output_nullability::PRESERVE}},
-                                               {},
-                                               std::nullopt)
-                                 ->release()
-                                 .front()),
-               std::invalid_argument);
+  EXPECT_THROW(
+    (void)cudf::transform(cudf::cuda_udf{udf, "lerp"},
+                          cudf::null_aware::NO,
+                          std::nullopt,
+                          inputs,
+                          std::array{cudf::transform_output{cudf::data_type{cudf::type_id::STRUCT},
+                                                            cudf::output_nullability::PRESERVE}},
+                          {},
+                          std::nullopt),
+    std::invalid_argument);
 
   cudf::transform_input struct_inputs[] = {struct_col, cudf::scalar_column_view(t)};
 
-  EXPECT_THROW((void)std::move(cudf::transform(udf,
-                                               cudf::udf_source_type::CUDA,
-                                               cudf::null_aware::NO,
-                                               std::nullopt,
-                                               struct_inputs,
-                                               std::array{cudf::transform_output{
-                                                 cudf::data_type{cudf::type_id::FLOAT32},
-                                                 cudf::output_nullability::PRESERVE}},
-                                               {},
-                                               std::nullopt)
-                                 ->release()
-                                 .front()),
-               std::invalid_argument);
+  EXPECT_THROW(
+    (void)cudf::transform(cudf::cuda_udf{udf, "lerp"},
+                          cudf::null_aware::NO,
+                          std::nullopt,
+                          struct_inputs,
+                          std::array{cudf::transform_output{cudf::data_type{cudf::type_id::FLOAT32},
+                                                            cudf::output_nullability::PRESERVE}},
+                          {},
+                          std::nullopt),
+    std::invalid_argument);
 }
 
 TEST_F(AssertsTest, UnequalRowCount)
 {
   cudf::transform_input inputs[] = {a, b, bad_col};
 
-  EXPECT_THROW((void)std::move(cudf::transform(udf,
-                                               cudf::udf_source_type::CUDA,
-                                               cudf::null_aware::NO,
-                                               std::nullopt,
-                                               inputs,
-                                               std::array{cudf::transform_output{
-                                                 cudf::data_type{cudf::type_id::FLOAT32},
-                                                 cudf::output_nullability::PRESERVE}},
-                                               {},
-                                               std::nullopt)
-                                 ->release()
-                                 .front()),
-               std::invalid_argument);
+  EXPECT_THROW(
+    (void)cudf::transform(cudf::cuda_udf{udf, "lerp"},
+                          cudf::null_aware::NO,
+                          std::nullopt,
+                          inputs,
+                          std::array{cudf::transform_output{cudf::data_type{cudf::type_id::FLOAT32},
+                                                            cudf::output_nullability::PRESERVE}},
+                          {},
+                          std::nullopt),
+    std::invalid_argument);
 }
 
 TEST_F(AssertsTest, NullSupport)
 {
   cudf::transform_input inputs[] = {a, b_nulls, cudf::scalar_column_view(t)};
-  EXPECT_NO_THROW((void)std::move(
-    cudf::transform(udf,
-                    cudf::udf_source_type::CUDA,
+  EXPECT_NO_THROW(
+    cudf::transform(cudf::cuda_udf{udf, "lerp"},
                     cudf::null_aware::NO,
                     std::nullopt,
                     inputs,
                     std::array{cudf::transform_output{cudf::data_type{cudf::type_id::FLOAT32},
                                                       cudf::output_nullability::PRESERVE}},
                     {},
-                    std::nullopt)
-      ->release()
-      .front()));
+                    std::nullopt));
 }
 
 struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {};
 
 template <class dtype, class Op, class Data>
-void test_udf(std::string const& udf,
-              Op op,
-              Data data_init,
-              cudf::size_type size,
-              cudf::udf_source_type source_type)
+void test_udf(Op op, Data data_init, cudf::size_type size, cudf::udf const& udf)
 {
   auto all_valid = cudf::test::iterators::no_nulls();
   auto data_iter = cudf::detail::make_counting_transform_iterator(0, data_init);
@@ -163,10 +144,10 @@ void test_udf(std::string const& udf,
   cudf::test::fixed_width_column_wrapper<dtype, typename decltype(data_iter)::value_type> in(
     data_iter, data_iter + size, all_valid);
 
-  cudf::transform_input inputs[]    = {in};
+  cudf::transform_input inputs[] = {in};
+
   std::unique_ptr<cudf::column> out = std::move(
     cudf::transform(udf,
-                    source_type,
                     cudf::null_aware::NO,
                     std::nullopt,
                     inputs,
@@ -183,7 +164,7 @@ void test_udf(std::string const& udf,
 TEST_F(UnaryOperationIntegrationTest, Transform_FP32_FP32)
 {
   // c = a*a*a*a
-  std::string const cuda =
+  char const* cuda =
     R"***(
 __device__ inline void    fdsf   (
        float* C,
@@ -194,7 +175,8 @@ __device__ inline void    fdsf   (
 }
 )***";
 
-  std::string const ptx =
+  char const* ptx_symbol = "_ZN8__main__7add$241Ef";
+  char const* ptx =
     R"***(
 //
 // Generated by NVIDIA NVVM Compiler
@@ -237,17 +219,17 @@ __device__ inline void    fdsf   (
   auto op        = [](dtype a) { return a * a * a * a; };
   auto data_init = [](cudf::size_type row) { return row % 3; };
 
-  test_udf<dtype>(cuda, op, data_init, 500, cudf::udf_source_type::CUDA);
-  test_udf<dtype>(ptx, op, data_init, 500, cudf::udf_source_type::PTX);
+  test_udf<dtype>(op, data_init, 500, cudf::cuda_udf{cuda, "fdsf"});
+  test_udf<dtype>(op, data_init, 500, cudf::lto_udf::ptx(ptx, ptx_symbol));
 
-  test_udf<dtype>(cuda, op, data_init, 0, cudf::udf_source_type::CUDA);
-  test_udf<dtype>(ptx, op, data_init, 0, cudf::udf_source_type::PTX);
+  test_udf<dtype>(op, data_init, 0, cudf::cuda_udf{cuda, "fdsf"});
+  test_udf<dtype>(op, data_init, 0, cudf::lto_udf::ptx(ptx, ptx_symbol));
 }
 
 TEST_F(UnaryOperationIntegrationTest, Transform_INT32_INT32)
 {
   // c = a * a - a
-  std::string const cuda =
+  char const* cuda =
     "__device__ inline void f(int* output,int input){*output = input*input - input;}";
 
   // Generated from NUMBA, using:
@@ -277,7 +259,10 @@ TEST_F(UnaryOperationIntegrationTest, Transform_INT32_INT32)
   //
   // ```
   //
-  std::string const ptx =
+  char const* ptx_symbol =
+    "_ZN8__main__2opB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_"
+    "2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEi";
+  char const* ptx =
     R"***(
 //
 // Generated by NVIDIA NVVM Compiler
@@ -320,8 +305,8 @@ TEST_F(UnaryOperationIntegrationTest, Transform_INT32_INT32)
   auto op        = [](dtype a) { return a * a - a; };
   auto data_init = [](cudf::size_type row) { return row % 78; };
 
-  test_udf<dtype>(cuda, op, data_init, 500, cudf::udf_source_type::CUDA);
-  test_udf<dtype>(ptx, op, data_init, 500, cudf::udf_source_type::PTX);
+  test_udf<dtype>(op, data_init, 500, cudf::cuda_udf{cuda, "f"});
+  test_udf<dtype>(op, data_init, 500, cudf::lto_udf::ptx(ptx, ptx_symbol));
 }
 
 TEST_F(UnaryOperationIntegrationTest, Transform_INT8_INT8)
@@ -329,7 +314,7 @@ TEST_F(UnaryOperationIntegrationTest, Transform_INT8_INT8)
   // Capitalize all the lower case letters
   // Assuming ASCII, the PTX code is compiled from the following CUDA code
 
-  std::string const cuda =
+  char const* cuda =
     R"***(
 __device__ inline void f(
   signed char* output,
@@ -370,7 +355,10 @@ __device__ inline void f(
   //
   // ```
   //
-  std::string const ptx =
+  char const* ptx_symbol =
+    "_ZN8__main__2opB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_"
+    "2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEa";
+  char const* ptx =
     R"***(
 //
 // Generated by NVIDIA NVVM Compiler
@@ -428,15 +416,15 @@ $L__BB0_3:
   auto op        = [](dtype a) { return std::toupper(a); };
   auto data_init = [](cudf::size_type row) { return 'a' + (row % 26); };
 
-  test_udf<dtype>(cuda, op, data_init, 500, cudf::udf_source_type::CUDA);
-  test_udf<dtype>(ptx, op, data_init, 500, cudf::udf_source_type::PTX);
+  test_udf<dtype>(op, data_init, 500, cudf::cuda_udf{cuda, "f"});
+  test_udf<dtype>(op, data_init, 500, cudf::lto_udf::ptx(ptx, ptx_symbol));
 }
 
 TEST_F(UnaryOperationIntegrationTest, Transform_Datetime)
 {
   // Add one day to timestamp in microseconds
 
-  std::string const cuda =
+  char const* cuda =
     R"***(
 __device__ inline void f(cudf::timestamp_us* output, cudf::timestamp_us input)
 {
@@ -454,12 +442,12 @@ __device__ inline void f(cudf::timestamp_us* output, cudf::timestamp_us input)
   auto random_eng = cudf::test::UniformRandomGenerator<cudf::timestamp_us::rep>(0, 100000000);
   auto data_init  = [&random_eng](cudf::size_type row) { return random_eng.generate(); };
 
-  test_udf<dtype>(cuda, op, data_init, 500, cudf::udf_source_type::CUDA);
+  test_udf<dtype>(op, data_init, 500, cudf::cuda_udf{cuda, "f"});
 }
 
 TEST_F(UnaryOperationIntegrationTest, TransformDictionaryString)
 {
-  std::string const cuda =
+  char const* cuda =
     R"***(
 __device__ inline void decode(cudf::string_view * output, cudf::string_view input){
   *output = input;
@@ -477,8 +465,7 @@ __device__ inline void decode(cudf::string_view * output, cudf::string_view inpu
     cudf::transform_input inputs[] = {*a_encoded};
 
     auto out = std::move(
-      cudf::transform(cuda,
-                      cudf::udf_source_type::CUDA,
+      cudf::transform(cudf::cuda_udf{cuda, "decode"},
                       cudf::null_aware::NO,
                       std::nullopt,
                       inputs,
@@ -505,8 +492,7 @@ __device__ inline void decode(cudf::string_view * output, cudf::string_view inpu
     cudf::transform_input inputs[] = {*a_encoded};
 
     auto out = std::move(
-      cudf::transform(cuda,
-                      cudf::udf_source_type::CUDA,
+      cudf::transform(cudf::cuda_udf{cuda, "decode"},
                       cudf::null_aware::NO,
                       std::nullopt,
                       inputs,
@@ -523,7 +509,7 @@ __device__ inline void decode(cudf::string_view * output, cudf::string_view inpu
 
 TEST_F(UnaryOperationIntegrationTest, TransformDictionaryFloat)
 {
-  std::string const cuda =
+  char const* cuda =
     R"***(
 __device__ inline void decode(float * output, float input){
   *output = input;
@@ -556,7 +542,10 @@ __device__ inline void decode(float * output, float input){
   //
   // ```
   //
-  std::string const ptx = R"***(
+  char const* ptx_symbol =
+    "_ZN8__main__3opxB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_"
+    "2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEf";
+  char const* ptx = R"***(
 //
 // Generated by NVIDIA NVVM Compiler
 //
@@ -601,8 +590,7 @@ __device__ inline void decode(float * output, float input){
     cudf::transform_input inputs[] = {*a_encoded};
 
     auto out = std::move(
-      cudf::transform(cuda,
-                      cudf::udf_source_type::CUDA,
+      cudf::transform(cudf::cuda_udf{cuda, "decode"},
                       cudf::null_aware::NO,
                       std::nullopt,
                       inputs,
@@ -616,8 +604,7 @@ __device__ inline void decode(float * output, float input){
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), a->view());
 
     auto out_ptx = std::move(
-      cudf::transform(ptx,
-                      cudf::udf_source_type::PTX,
+      cudf::transform(cudf::lto_udf::ptx(ptx, ptx_symbol),
                       cudf::null_aware::NO,
                       std::nullopt,
                       inputs,
@@ -642,8 +629,7 @@ __device__ inline void decode(float * output, float input){
     cudf::transform_input inputs[] = {*a_encoded};
 
     auto out = std::move(
-      cudf::transform(cuda,
-                      cudf::udf_source_type::CUDA,
+      cudf::transform(cudf::cuda_udf{cuda, "decode"},
                       cudf::null_aware::NO,
                       std::nullopt,
                       inputs,
@@ -657,8 +643,7 @@ __device__ inline void decode(float * output, float input){
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), a->view());
 
     auto out_ptx = std::move(
-      cudf::transform(ptx,
-                      cudf::udf_source_type::PTX,
+      cudf::transform(cudf::lto_udf::ptx(ptx, ptx_symbol),
                       cudf::null_aware::NO,
                       std::nullopt,
                       inputs,
@@ -679,8 +664,7 @@ __device__ inline void decode(float * output, float input){
     cudf::transform_input inputs[] = {*a_encoded};
 
     auto out = std::move(
-      cudf::transform(cuda,
-                      cudf::udf_source_type::CUDA,
+      cudf::transform(cudf::cuda_udf{cuda, "decode"},
                       cudf::null_aware::NO,
                       std::nullopt,
                       inputs,
@@ -707,8 +691,7 @@ __device__ inline void decode(float * output, float input){
     cudf::transform_input inputs[] = {sliced_input};
 
     auto out = std::move(
-      cudf::transform(cuda,
-                      cudf::udf_source_type::CUDA,
+      cudf::transform(cudf::cuda_udf{cuda, "decode"},
                       cudf::null_aware::NO,
                       std::nullopt,
                       inputs,
@@ -721,8 +704,7 @@ __device__ inline void decode(float * output, float input){
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), sliced_expect);
 
     auto out_ptx = std::move(
-      cudf::transform(ptx,
-                      cudf::udf_source_type::PTX,
+      cudf::transform(cudf::lto_udf::ptx(ptx, ptx_symbol),
                       cudf::null_aware::NO,
                       std::nullopt,
                       inputs,
@@ -741,7 +723,7 @@ struct TernaryOperationTest : public cudf::test::BaseFixture {};
 
 TEST_F(TernaryOperationTest, TransformWithScalar)
 {
-  std::string const cuda =
+  char const* cuda =
     R"***(
 __device__ inline void transform(
        float* out,
@@ -781,7 +763,10 @@ __device__ inline void transform(
   //
   // ```
   //
-  std::string const ptx =
+  char const* ptx_symbol =
+    "_ZN8__main__2opB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_"
+    "2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEfff";
+  char const* ptx =
     R"***(
 //
 // Generated by NVIDIA NVVM Compiler
@@ -843,8 +828,7 @@ __device__ inline void transform(
 
   cudf::transform_input cuda_inputs[]       = {a, b, cudf::scalar_column_view(c)};
   std::unique_ptr<cudf::column> cuda_result = std::move(
-    cudf::transform(cuda,
-                    cudf::udf_source_type::CUDA,
+    cudf::transform(cudf::cuda_udf{cuda, "transform"},
                     cudf::null_aware::NO,
                     std::nullopt,
                     cuda_inputs,
@@ -859,8 +843,7 @@ __device__ inline void transform(
 
   cudf::transform_input ptx_inputs[]       = {a, b, cudf::scalar_column_view(c)};
   std::unique_ptr<cudf::column> ptx_result = std::move(
-    cudf::transform(ptx,
-                    cudf::udf_source_type::PTX,
+    cudf::transform(cudf::lto_udf::ptx(ptx, ptx_symbol),
                     cudf::null_aware::NO,
                     std::nullopt,
                     ptx_inputs,
@@ -918,8 +901,7 @@ TYPED_TEST(TernaryDecimalOperationTest, TransformDecimalsAndScalar)
   cudf::transform_input inputs[]            = {a, b, cudf::scalar_column_view(c)};
   std::unique_ptr<cudf::column> cuda_result = std::move(
     cudf::transform(
-      cuda,
-      cudf::udf_source_type::CUDA,
+      cudf::cuda_udf{cuda.c_str(), "transform"},
       cudf::null_aware::NO,
       std::nullopt,
       inputs,
@@ -950,8 +932,7 @@ TEST_F(StringOperationTest, StringComparison)
   auto expected = cudf::test::fixed_width_column_wrapper<bool>{true, true, false, false, true};
   cudf::transform_input inputs[] = {a, b, c};
   auto result                    = std::move(
-    cudf::transform(cuda,
-                    cudf::udf_source_type::CUDA,
+    cudf::transform(cudf::cuda_udf{cuda.c_str(), "compare"},
                     cudf::null_aware::NO,
                     std::nullopt,
                     inputs,
@@ -970,7 +951,7 @@ TEST_F(StringOperationTest, StringContains)
   auto a = cudf::test::strings_column_wrapper{"a", "ab", "ccc", "dddd", "eee", "123"};
   auto b = cudf::test::strings_column_wrapper{"aa", "b", "d", "dddddd", "e", "321"};
 
-  std::string cuda = R"***(
+  char const* cuda = R"***(
   __device__ void transform(bool * out, cudf::string_view a, cudf::string_view b){
     *out =  a.find(b) != cudf::string_view::npos;
   }
@@ -980,8 +961,7 @@ TEST_F(StringOperationTest, StringContains)
     cudf::test::fixed_width_column_wrapper<bool>{false, true, false, false, true, false};
   cudf::transform_input inputs[] = {a, b};
   auto result                    = std::move(
-    cudf::transform(cuda,
-                    cudf::udf_source_type::CUDA,
+    cudf::transform(cudf::cuda_udf{cuda, "transform"},
                     cudf::null_aware::NO,
                     std::nullopt,
                     inputs,
@@ -1000,7 +980,7 @@ TEST_F(StringOperationTest, StringFind)
   auto a = cudf::test::strings_column_wrapper{"a", "b", " h", "123"};
   auto b = cudf::test::strings_column_wrapper{"aa", "about", "oh hi", "012345"};
 
-  std::string cuda = R"***(
+  char const* cuda = R"***(
   __device__ void transform(int32_t * out, cudf::string_view a, cudf::string_view b){
     *out =  b.find(a);
   }
@@ -1009,8 +989,7 @@ TEST_F(StringOperationTest, StringFind)
   auto expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 2, 1};
   cudf::transform_input inputs[] = {a, b};
   auto result                    = std::move(
-    cudf::transform(cuda,
-                    cudf::udf_source_type::CUDA,
+    cudf::transform(cudf::cuda_udf{cuda, "transform"},
                     cudf::null_aware::NO,
                     std::nullopt,
                     inputs,
@@ -1031,7 +1010,7 @@ TEST_F(StringOperationTest, MixedTypes)
   auto c = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4, 5, 6};
   auto d = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 5, 6, 7, 8};
 
-  std::string cuda = R"***(
+  char const* cuda = R"***(
   __device__ void transform(bool * out, cudf::string_view a, cudf::string_view b, int32_t c, int32_t d){
     *out =  (a == b) && (c == d);
   }
@@ -1041,8 +1020,7 @@ TEST_F(StringOperationTest, MixedTypes)
     cudf::test::fixed_width_column_wrapper<bool>{true, true, false, false, false, false};
   cudf::transform_input inputs[] = {a, b, c, d};
   auto result                    = std::move(
-    cudf::transform(cuda,
-                    cudf::udf_source_type::CUDA,
+    cudf::transform(cudf::cuda_udf{cuda, "transform"},
                     cudf::null_aware::NO,
                     std::nullopt,
                     inputs,
@@ -1064,7 +1042,7 @@ TEST_F(StringOperationTest, Output)
   auto d = cudf::test::strings_column_wrapper{"a", "b", "d", "largest", "lexicographical", "test"};
   auto empty = cudf::test::strings_column_wrapper{};
 
-  std::string cuda = R"***(
+  char const* cuda = R"***(
     __device__ void transform(cudf::string_view * out, cudf::string_view a, cudf::string_view b, cudf::string_view c, cudf::string_view d){
       *out =  cuda::std::max(cuda::std::max(cuda::std::max(a, b), c), d);
     }
@@ -1074,8 +1052,7 @@ TEST_F(StringOperationTest, Output)
     cudf::test::strings_column_wrapper{"this", "is", "the", "largest", "lexicographical", "test"};
   cudf::transform_input inputs[] = {a, b, c, d};
   auto result                    = std::move(
-    cudf::transform(cuda,
-                    cudf::udf_source_type::CUDA,
+    cudf::transform(cudf::cuda_udf{cuda, "transform"},
                     cudf::null_aware::NO,
                     std::nullopt,
                     inputs,
@@ -1091,8 +1068,7 @@ TEST_F(StringOperationTest, Output)
   auto expected_empty                  = cudf::test::strings_column_wrapper{};
   cudf::transform_input empty_inputs[] = {empty, empty, empty, empty};
   auto result_empty                    = std::move(
-    cudf::transform(cuda,
-                    cudf::udf_source_type::CUDA,
+    cudf::transform(cudf::cuda_udf{cuda, "transform"},
                     cudf::null_aware::NO,
                     std::nullopt,
                     empty_inputs,
@@ -1112,7 +1088,7 @@ TEST_F(StringOperationTest, OutputOffsetted)
   auto b = cudf::test::strings_column_wrapper{"aa", "bb", "cc", "dd", "ee", "ff"};
   auto c = cudf::test::strings_column_wrapper{"1", "2", "3", "4", "5", "6"};
 
-  std::string cuda = R"***(
+  char const* cuda = R"***(
     __device__ void concat(cuda::std::span<char> * out, cudf::string_view a, cudf::string_view b, cudf::string_view c){
       auto iter = out->data();
       memcpy(iter, a.data(), a.size_bytes());
@@ -1130,8 +1106,7 @@ TEST_F(StringOperationTest, OutputOffsetted)
     "xaa1", "xxbb2", "xxxcc3", "xxxxdd4", "xxxxxee5", "xxxxxxff6"};
   cudf::transform_input inputs[]   = {a, b, c};
   cudf::transform_output outputs[] = {cudf::data_type(cudf::type_id::STRING)};
-  auto result                      = cudf::transform(cuda,
-                                cudf::udf_source_type::CUDA,
+  auto result                      = cudf::transform(cudf::cuda_udf{cuda, "concat"},
                                 cudf::null_aware::NO,
                                 std::nullopt,
                                 inputs,
@@ -1148,7 +1123,7 @@ TEST_F(StringOperationTest, OutputOffsettedMixed)
   auto b = cudf::test::strings_column_wrapper{"aa", "bb", "cc", "dd", "ee", "ff"};
   auto c = cudf::test::strings_column_wrapper{"1", "2", "3", "4", "5", "67"};
 
-  std::string cuda = R"***(
+  char const* cuda = R"***(
     __device__ void concat(int32_t * ab_size, cuda::std::span<char> * out, bool * is_odd, cudf::string_view a, cudf::string_view b, cudf::string_view c){
       auto iter = out->data();
       auto begin = iter;
@@ -1181,8 +1156,7 @@ TEST_F(StringOperationTest, OutputOffsettedMixed)
   cudf::transform_output outputs[] = {{cudf::data_type(cudf::type_id::INT32)},
                                       {cudf::data_type(cudf::type_id::STRING)},
                                       {cudf::data_type(cudf::type_id::BOOL8)}};
-  auto result                      = cudf::transform(cuda,
-                                cudf::udf_source_type::CUDA,
+  auto result                      = cudf::transform(cudf::cuda_udf{cuda, "concat"},
                                 cudf::null_aware::NO,
                                 std::nullopt,
                                 inputs,
@@ -1203,7 +1177,7 @@ TEST_F(StringOperationTest, StringConcat)
                              cudf::get_default_stream());
   auto scratch_sizes = cudf::test::fixed_width_column_wrapper<int32_t>{100};
 
-  std::string cuda = R"***(
+  char const* cuda = R"***(
 __device__ void transform(void* user_data, cudf::size_type row,
                           cudf::string_view* out,
                           cudf::string_view first_name,
@@ -1238,8 +1212,7 @@ __device__ void transform(void* user_data, cudf::size_type row,
                                                      "张 伟"};
   cudf::transform_input inputs[] = {first_name, last_name, cudf::scalar_column_view(scratch_sizes)};
   auto result                    = std::move(
-    cudf::transform(cuda,
-                    cudf::udf_source_type::CUDA,
+    cudf::transform(cudf::cuda_udf{cuda, "transform"},
                     cudf::null_aware::NO,
                     scratch.data(),
                     inputs,
@@ -1255,7 +1228,7 @@ __device__ void transform(void* user_data, cudf::size_type row,
 
 TEST_F(StringOperationTest, EmptyInput)
 {
-  std::string rtn_bool = R"***(
+  char const* rtn_bool = R"***(
   __device__ void transform(bool * out, cudf::string_view a, cudf::string_view b){
     *out =  a.find(b) != cudf::string_view::npos;
   }
@@ -1264,8 +1237,7 @@ TEST_F(StringOperationTest, EmptyInput)
   auto empty                          = cudf::test::strings_column_wrapper();
   cudf::transform_input bool_inputs[] = {empty, empty};
   auto result                         = std::move(
-    cudf::transform(rtn_bool,
-                    cudf::udf_source_type::CUDA,
+    cudf::transform(cudf::cuda_udf{rtn_bool, "transform"},
                     cudf::null_aware::NO,
                     std::nullopt,
                     bool_inputs,
@@ -1277,15 +1249,14 @@ TEST_F(StringOperationTest, EmptyInput)
       .front());
   EXPECT_EQ(0, result->size());
 
-  std::string rtn_str                = R"***(
+  char const* rtn_str                = R"***(
   __device__ void transform(cudf::string_view * out, cudf::string_view a, cudf::string_view b){
     *out =  (a==b ? a : cudf::string_view{});
   }
   )***";
   cudf::transform_input str_inputs[] = {empty, empty};
   result                             = std::move(
-    cudf::transform(rtn_str,
-                    cudf::udf_source_type::CUDA,
+    cudf::transform(cudf::cuda_udf{rtn_str, "transform"},
                     cudf::null_aware::NO,
                     std::nullopt,
                     str_inputs,
@@ -1311,7 +1282,7 @@ TEST_F(StringOperationTest, MultiOutput)
 
   auto expected = cudf::table_view({expected_area_code, expected_prefix, expected_line_number});
 
-  std::string cuda = R"***(
+  char const* cuda = R"***(
 __device__ void capture_group(cudf::string_view* area_code,
                               cudf::string_view* prefix,
                               cudf::string_view* line_number,
@@ -1349,8 +1320,7 @@ __device__ void capture_group(cudf::string_view* area_code,
   cudf::transform_output outputs[] = {{.type = cudf::data_type(cudf::type_id::STRING)},
                                       {.type = cudf::data_type(cudf::type_id::STRING)},
                                       {.type = cudf::data_type(cudf::type_id::STRING)}};
-  auto result                      = cudf::transform(cuda,
-                                cudf::udf_source_type::CUDA,
+  auto result                      = cudf::transform(cudf::cuda_udf{cuda, "capture_group"},
                                 cudf::null_aware::NO,
                                 std::nullopt,
                                 inputs,
@@ -1363,9 +1333,12 @@ __device__ void capture_group(cudf::string_view* area_code,
 
 struct NullTest : public cudf::test::BaseFixture {
  protected:
-  char const* const cuda =
-    "__device__ inline void lerp(float* output, float low, float high, float t){*output = low - t "
-    "* low + t * high; }";
+  char const* const cuda = R"***(
+__device__ inline void lerp(float* output, float low, float high, float t)
+{
+  *output = low - t * low + t * high;
+}
+)***";
 
   // Generated from NUMBA, using:
   //
@@ -1394,6 +1367,9 @@ struct NullTest : public cudf::test::BaseFixture {
   //
   // ```
   //
+  char const* const ptx_symbol =
+    "_ZN8__main__2opB2v1B96cw51cXTLSUwv1sCUt9Ww0FEw09RRQPKiLTj0gIGIFp_"
+    "2b2oLQFEYYkHSQB1OQAk0Bynm21OizQ1K0UoIGvDpQE8oxrNQE_3dEfff";
   char const* const ptx =
     R"***(
 //
@@ -1473,8 +1449,7 @@ TEST_F(NullTest, ColumnNulls)
 
   cudf::transform_input cuda_inputs[] = {*low, *high, *t};
   auto cuda_result                    = std::move(
-    cudf::transform(cuda,
-                    cudf::udf_source_type::CUDA,
+    cudf::transform(cudf::cuda_udf{cuda, "lerp"},
                     cudf::null_aware::NO,
                     std::nullopt,
                     cuda_inputs,
@@ -1489,8 +1464,7 @@ TEST_F(NullTest, ColumnNulls)
 
   cudf::transform_input ptx_inputs[] = {*low, *high, *t};
   auto ptx_result                    = std::move(
-    cudf::transform(ptx,
-                    cudf::udf_source_type::PTX,
+    cudf::transform(cudf::lto_udf::ptx(ptx, ptx_symbol),
                     cudf::null_aware::NO,
                     std::nullopt,
                     ptx_inputs,
@@ -1525,8 +1499,7 @@ TEST_F(NullTest, ColumnNulls_And_Scalar)
 
   cudf::transform_input cuda_inputs[] = {*low, *high, cudf::scalar_column_view(*t_scalar)};
   auto cuda_result                    = std::move(
-    cudf::transform(cuda,
-                    cudf::udf_source_type::CUDA,
+    cudf::transform(cudf::cuda_udf{cuda, "lerp"},
                     cudf::null_aware::NO,
                     std::nullopt,
                     cuda_inputs,
@@ -1541,8 +1514,7 @@ TEST_F(NullTest, ColumnNulls_And_Scalar)
 
   cudf::transform_input ptx_inputs[] = {*low, *high, cudf::scalar_column_view(*t_scalar)};
   auto ptx_result                    = std::move(
-    cudf::transform(ptx,
-                    cudf::udf_source_type::PTX,
+    cudf::transform(cudf::lto_udf::ptx(ptx, ptx_symbol),
                     cudf::null_aware::NO,
                     std::nullopt,
                     ptx_inputs,
@@ -1576,8 +1548,7 @@ TEST_F(NullTest, ColumnNulls_And_ScalarNull)
 
   cudf::transform_input cuda_inputs[] = {*low, *high, cudf::scalar_column_view(*t_scalar)};
   auto cuda_result                    = std::move(
-    cudf::transform(cuda,
-                    cudf::udf_source_type::CUDA,
+    cudf::transform(cudf::cuda_udf{cuda, "lerp"},
                     cudf::null_aware::NO,
                     std::nullopt,
                     cuda_inputs,
@@ -1592,8 +1563,7 @@ TEST_F(NullTest, ColumnNulls_And_ScalarNull)
 
   cudf::transform_input ptx_inputs[] = {*low, *high, cudf::scalar_column_view(*t_scalar)};
   auto ptx_result                    = std::move(
-    cudf::transform(ptx,
-                    cudf::udf_source_type::PTX,
+    cudf::transform(cudf::lto_udf::ptx(ptx, ptx_symbol),
                     cudf::null_aware::NO,
                     std::nullopt,
                     ptx_inputs,
@@ -1624,8 +1594,7 @@ TEST_F(NullTest, IsNull)
 
   cudf::transform_input inputs[] = {*value};
   auto result                    = std::move(
-    cudf::transform(udf,
-                    cudf::udf_source_type::CUDA,
+    cudf::transform(cudf::cuda_udf{udf, "is_null"},
                     cudf::null_aware::YES,
                     std::nullopt,
                     inputs,
@@ -1675,8 +1644,7 @@ return l - t * l + t * h;
 
   cudf::transform_input inputs[] = {*low, *high, *t};
   auto cuda_result               = std::move(
-    cudf::transform(udf,
-                    cudf::udf_source_type::CUDA,
+    cudf::transform(cudf::cuda_udf{udf, "null_lerp"},
                     cudf::null_aware::YES,
                     std::nullopt,
                     inputs,
@@ -1719,8 +1687,7 @@ __device__ cudf::errc expression (
     cudf::transform_output outputs[] = {
       {cudf::data_type(cudf::type_id::INT32), cudf::output_nullability::ALL_VALID}};
     std::unique_ptr<cudf::table> result;
-    EXPECT_NO_THROW(result = cudf::transform(cuda,
-                                             cudf::udf_source_type::CUDA,
+    EXPECT_NO_THROW(result = cudf::transform(cudf::cuda_udf{cuda, "expression"},
                                              cudf::null_aware::NO,
                                              std::nullopt,
                                              inputs,
@@ -1736,8 +1703,7 @@ __device__ cudf::errc expression (
     cudf::transform_output outputs[] = {
       {cudf::data_type(cudf::type_id::INT32), cudf::output_nullability::ALL_VALID}};
     std::unique_ptr<cudf::table> result;
-    EXPECT_THROW(result = cudf::transform(cuda,
-                                          cudf::udf_source_type::CUDA,
+    EXPECT_THROW(result = cudf::transform(cudf::cuda_udf{cuda, "expression"},
                                           cudf::null_aware::NO,
                                           std::nullopt,
                                           inputs,
