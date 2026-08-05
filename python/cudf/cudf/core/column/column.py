@@ -1342,7 +1342,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         result = self._reduce(
             "all", skipna=True, min_count=min_count, **kwargs
         )
-        if np.isnan(result):
+        if result is pd.NA or np.isnan(result):
             # Empty after dropping NaN/nulls - return np.bool_
             result = np.bool_(True)
 
@@ -1365,9 +1365,19 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         if self.size == 0:
             return False
-        if not skipna and (self.has_nulls() or self.nan_count > 0):
+        is_masked_dtype = is_pandas_nullable_extension_dtype(self.dtype)
+        if not skipna and (
+            self.nan_count > 0 or (not is_masked_dtype and self.has_nulls())
+        ):
+            # NaN values (and the NaN null sentinel of numpy dtypes) are
+            # truthy. For pandas nullable extension dtypes <NA> is not
+            # truthy; Kleene logic below decides between True and <NA>.
             return True
-        elif skipna and self.null_count == self.size:
+        if self.null_count == self.size:
+            if not skipna:
+                # All-null nullable column with skipna=False: Kleene
+                # any([NA, ...]) with no True values is <NA>.
+                return _get_nan_for_dtype(self.dtype)
             return False
 
         # For any(), we want NaN values to be treated as truthy.
@@ -1375,10 +1385,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         result = self._reduce(
             "any", skipna=True, min_count=min_count, **kwargs
         )
-        if np.isnan(result):
+        if result is pd.NA or np.isnan(result):
             # Empty after dropping NaN/nulls
             # If skipna=False, NaN values should be treated as truthy
             result = np.bool_(not skipna)
+
+        # For pandas nullable extension dtypes with skipna=False, a False
+        # result in the presence of nulls is <NA> under Kleene logic.
+        if (
+            not result
+            and not skipna
+            and self.null_count > 0
+            and is_masked_dtype
+        ):
+            return _get_nan_for_dtype(self.dtype)
         return result
 
     def dropna(self) -> Self:
@@ -2960,6 +2980,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 return col_dtype.type(0)
             if op == "product":
                 return col_dtype.type(1)
+            if is_pandas_nullable_extension_dtype(self.dtype):
+                # pandas returns <NA> for empty/all-null reductions of
+                # nullable dtypes even when the reduction result dtype is
+                # a plain numpy dtype (e.g. Int64.mean() -> float64).
+                return _get_nan_for_dtype(self.dtype)
             return _get_nan_for_dtype(col_dtype)
 
         # Perform the actual reduction

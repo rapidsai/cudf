@@ -1667,3 +1667,27 @@ def test_string_astype_int_invalid_underscores_raises(data, dtype):
         lfunc_args_and_kwargs=((), {"dtype": dtype}),
         rfunc_args_and_kwargs=((), {"dtype": dtype}),
     )
+
+
+@pytest.mark.parametrize(
+    "data, src_dtype, masked_dtype",
+    [
+        ([1.0, 2.0, float("nan")], "float64", pd.Float64Dtype()),
+        ([1, 2, 3], "int64", pd.Int64Dtype()),
+    ],
+)
+def test_astype_masked_equivalent_dtype_no_source_mutation(
+    data, src_dtype, masked_dtype
+):
+    # casting to the equivalent masked dtype takes a short-circuit path;
+    # it must not mutate the source column's dtype in place (the column
+    # is shared with the source Series/frame)
+    ser = cudf.Series(data, dtype=src_dtype)
+    result = ser.astype(masked_dtype)
+
+    assert ser.dtype == np.dtype(src_dtype)
+    assert result.dtype == masked_dtype
+    assert_eq(
+        result.to_pandas(),
+        pd.Series(data, dtype=src_dtype).astype(masked_dtype),
+    )

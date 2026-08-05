@@ -30,14 +30,13 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/statistics_resource_adaptor.hpp>
 
-#include <cuco/utility/error.hpp>
-
 #include <algorithm>
 #include <future>
 #include <iterator>
 #include <limits>
 #include <memory>
 #include <numeric>
+#include <stdexcept>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -357,13 +356,13 @@ TEST_F(JoinTest, InvalidLoadFactor)
 
   // Test load factor of -0.1
   EXPECT_THROW(cudf::hash_join(t0, cudf::nullable_join::NO, cudf::null_equality::EQUAL, -0.1),
-               cuco::logic_error);
+               std::invalid_argument);
   // Test load factor of 0
   EXPECT_THROW(cudf::hash_join(t0, cudf::nullable_join::NO, cudf::null_equality::EQUAL, 0.0),
-               cuco::logic_error);
+               std::invalid_argument);
   // Test load factor > 1
   EXPECT_THROW(cudf::hash_join(t0, cudf::nullable_join::NO, cudf::null_equality::EQUAL, 1.5),
-               cuco::logic_error);
+               std::invalid_argument);
 }
 
 struct JoinParameterizedTest : public JoinTest, public testing::WithParamInterface<algorithm> {};
