@@ -1620,7 +1620,8 @@ TEST_F(GetVariantTypeIdTest, SlicedValuesColumn)
 
 TEST_F(GetVariantTypeIdTest, LargeMultiRowColumn)
 {
-  // 128 rows cycling through all types that get_variant_type_id can classify.
+  // 600 rows cycling through all types that get_variant_type_id can classify.
+  // 600 > 512 (typical block size) so the kernel exercises the multi-block grid-stride path.
   auto const stream = cudf::test::get_default_stream();
 
   struct row_spec {
@@ -1639,7 +1640,7 @@ TEST_F(GetVariantTypeIdTest, LargeMultiRowColumn)
     {enc_short_string("x"), static_cast<int32_t>(LT::string)},
     {enc_long_string(std::string(70, 'z')), static_cast<int32_t>(LT::string)},
   };
-  constexpr int num_rows = 128;
+  constexpr int num_rows = 600;
   std::vector<std::vector<uint8_t>> blobs(num_rows);
   std::vector<int32_t> expected_ids(num_rows);
   for (int i = 0; i < num_rows; ++i) {
