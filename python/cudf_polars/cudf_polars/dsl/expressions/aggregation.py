@@ -74,7 +74,7 @@ class Item(Expr):
 
 
 class SortedAgg(Expr):
-    """Grouped ``first``/``last`` aggregation ordered by one or more expressions."""
+    """``first``/``last`` aggregation ordered by one or more expressions."""
 
     __slots__ = ("name", "options")
     _non_child = ("dtype", "name", "options")
@@ -106,7 +106,10 @@ class SortedAgg(Expr):
 
     @property
     def agg_request(self) -> plc.aggregation.Aggregation:  # noqa: D102
-        raise NotImplementedError("Sorted aggregation is handled by GroupBy")
+        raise NotImplementedError(
+            "Sorted aggregation cannot be represented as a pylibcudf "
+            "aggregation request"
+        )
 
 
 class Agg(Expr):
