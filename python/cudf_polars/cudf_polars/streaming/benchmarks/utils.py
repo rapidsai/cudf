@@ -1241,8 +1241,7 @@ def _finalize_benchmark_run(
     run_config: RunConfig,
     validation_failures: list[int],
     query_failures: list[tuple[int, int]],
-    engine: StreamingEngine | None,
-    quent_archive: Path | None,
+    serializable_engine_config: dict[str, Any],
 ) -> None:
     """Summarize, serialize, and exit after a benchmark run."""
     if args.summarize:
@@ -1260,9 +1259,7 @@ def _finalize_benchmark_run(
             )
         else:
             print("✅ All validated queries passed.")
-    args.output.write(
-        json.dumps(run_config.serialize(engine=engine, quent_archive=quent_archive))
-    )
+    args.output.write(json.dumps(serializable_engine_config))
     args.output.write("\n")
     sys.exit(1 if (query_failures or validation_failures) else 0)
 
@@ -1289,8 +1286,7 @@ def run_polars_cpu(
         run_config,
         validation_failures,
         query_failures,
-        engine=None,
-        quent_archive=None,
+        serializable_engine_config=run_config.serialize(engine=None),
     )
 
 
@@ -1327,8 +1323,7 @@ def run_polars_in_memory(
         run_config,
         validation_failures,
         query_failures,
-        engine=None,
-        quent_archive=None,
+        serializable_engine_config=run_config.serialize(engine=engine),
     )
 
 
@@ -1387,22 +1382,25 @@ def run_polars_spmd(
         run_config = _consolidate_logs(
             run_config, engine=engine, gather_client_logs=False
         )
+        # We need to create this before StreamingEngine.shutdown(), which clears engine.config
+        quent_archive = Path("logs") / f"{run_config.run_id}.zip"
+        serializable_engine_config = run_config.serialize(
+            engine=engine, quent_archive=quent_archive
+        )
 
     if is_rank_0:
-        quent_archive = _write_quent_traces(
+        _write_quent_traces(
             engine=engine,
             run_id=run_config.run_id,
             collect_traces=run_config.collect_traces,
+            quent_archive=quent_archive,
         )
-    else:
-        quent_archive = None
     _finalize_benchmark_run(
         args,
         run_config,
         validation_failures,
         query_failures,
-        engine=engine,
-        quent_archive=quent_archive,
+        serializable_engine_config=serializable_engine_config,
     )
 
 
@@ -1448,19 +1446,22 @@ def run_polars_ray(
         )
         run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
         run_config = _consolidate_logs(run_config, engine=engine)
+        # We need to create this before StreamingEngine.shutdown(), which clears engine.config
+        serializable_engine_config = run_config.serialize(engine=engine)
+        quent_archive = Path("logs") / f"{run_config.run_id}.zip"
 
-    quent_archive = _write_quent_traces(
+    _write_quent_traces(
         engine=engine,
         run_id=run_config.run_id,
         collect_traces=run_config.collect_traces,
+        quent_archive=quent_archive,
     )
     _finalize_benchmark_run(
         args,
         run_config,
         validation_failures,
         query_failures,
-        engine=engine,
-        quent_archive=quent_archive,
+        serializable_engine_config=serializable_engine_config,
     )
 
 
@@ -1512,11 +1513,17 @@ def run_polars_dask(
                 run_config, records=dict(records), plans=plans
             )
             run_config = _consolidate_logs(run_config, engine)
+            # We need to create this before StreamingEngine.shutdown(), which clears engine.config
+            quent_archive = Path("logs") / f"{run_config.run_id}.zip"
+            serializable_engine_config = run_config.serialize(
+                engine=engine, quent_archive=quent_archive
+            )
 
-        quent_archive = _write_quent_traces(
+        _write_quent_traces(
             engine=engine,
             run_id=run_config.run_id,
             collect_traces=run_config.collect_traces,
+            quent_archive=quent_archive,
         )
     finally:
         if dask_client is not None:
@@ -1526,8 +1533,7 @@ def run_polars_dask(
         run_config,
         validation_failures,
         query_failures,
-        engine=engine,
-        quent_archive=quent_archive,
+        serializable_engine_config=serializable_engine_config,
     )
 
 
@@ -1605,7 +1611,11 @@ def setup_logging(query_id: int, iteration: int) -> None:
 
 
 def _write_quent_traces(
-    engine: StreamingEngine, run_id: uuid.UUID, *, collect_traces: bool
+    engine: StreamingEngine,
+    run_id: uuid.UUID,
+    *,
+    collect_traces: bool,
+    quent_archive: Path,
 ) -> Path | None:
     """Write collected Quent events to a ``logs/<run_id>.zip`` archive."""
     if not (_HAS_STRUCTLOG or collect_traces):
@@ -1627,7 +1637,7 @@ def _write_quent_traces(
             warnings.warn(msg, stacklevel=2)
 
     logs_dir = Path("logs")
-    output_path = write_quent_export(quent_logs, logs_dir, run_id)
+    output_path = write_quent_export(quent_logs, logs_dir, run_id, quent_archive)
     print(f"Wrote {len(quent_logs)} Quent trace events to {output_path}")
     return output_path
 

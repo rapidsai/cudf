@@ -92,6 +92,7 @@ def write_quent_export(
     events: list[dict[str, Any]],
     export_root: Path,
     context_id: uuid.UUID,
+    quent_archive: Path,
     *,
     sidecar: dict[str, Any] | None = None,
 ) -> Path:
@@ -106,6 +107,8 @@ def write_quent_export(
         Directory for exported archives (e.g. ``logs``).
     context_id
         Context UUID, typically the engine/run id.
+    quent_archive
+        Quent archive path. The archive will be written to this path.
     sidecar
         Optional provenance payload for ``model.qmi``. Defaults to
         :data:`MODEL_QMI`.
@@ -122,7 +125,6 @@ def write_quent_export(
         grouped.setdefault(directory, []).append(export_line)
 
     export_root.mkdir(parents=True, exist_ok=True)
-    archive_path = export_root / f"{context_id}.zip"
     tmp_path = export_root / f".{context_id}.zip.tmp"
     context_dir = str(context_id)
 
@@ -138,5 +140,5 @@ def write_quent_export(
             contents = [json.dumps(line, separators=(",", ":")) for line in lines]
             archive.writestr(stream_path, "\n".join(contents) + "\n")
 
-    tmp_path.replace(archive_path)
-    return archive_path
+    tmp_path.replace(quent_archive)
+    return quent_archive

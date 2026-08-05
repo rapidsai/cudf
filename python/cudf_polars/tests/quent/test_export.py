@@ -86,8 +86,9 @@ def test_to_export_line_unwraps_payload() -> None:
 def test_write_quent_export_creates_archive(tmp_path: Path) -> None:
     context_id = uuid.UUID("019dd571-105a-7c53-a15b-713cbdd7666b")
     events = _buffered_events()
+    archive_path = tmp_path / f"{context_id}.zip"
 
-    archive_path = write_quent_export(events, tmp_path, context_id)
+    write_quent_export(events, tmp_path, context_id, archive_path)
 
     assert archive_path == tmp_path / f"{context_id}.zip"
     assert zipfile.is_zipfile(archive_path)
@@ -120,8 +121,8 @@ def test_write_quent_export_creates_archive(tmp_path: Path) -> None:
 def test_write_quent_export_unwraps_buffered_envelopes(tmp_path: Path) -> None:
     context_id = uuid.UUID("019dd571-105a-7c53-a15b-713cbdd7666b")
     events = _buffered_events()
-
-    archive_path = write_quent_export(events, tmp_path, context_id)
+    archive_path = tmp_path / f"{context_id}.zip"
+    write_quent_export(events, tmp_path, context_id, archive_path)
 
     with zipfile.ZipFile(archive_path) as archive:
         context_dir = str(context_id)
@@ -160,11 +161,13 @@ def test_write_quent_export_unwraps_buffered_envelopes(tmp_path: Path) -> None:
 
 
 def test_write_quent_export_rejects_malformed_event(tmp_path: Path) -> None:
+    archive_path = tmp_path / f"{uuid.uuid4()}.zip"
     with pytest.raises(ValueError, match="exactly one entity wrapper"):
         write_quent_export(
             [{"id": "x", "timestamp": 1, "data": {"Engine": {}, "Query": {}}}],
             tmp_path,
             uuid.uuid4(),
+            archive_path,
         )
 
 
@@ -181,13 +184,14 @@ def test_write_quent_traces_benchmark_writer(
         _quent_events = events
 
     monkeypatch.chdir(tmp_path)
+    archive_path = tmp_path / "logs" / f"{run_id}.zip"
     benchmark_utils._write_quent_traces(
         FakeEngine(),  # type: ignore[arg-type]
         run_id,
         collect_traces=True,
+        quent_archive=archive_path,
     )
 
-    archive_path = tmp_path / "logs" / f"{run_id}.zip"
     with zipfile.ZipFile(archive_path) as archive:
         names = archive.namelist()
         assert f"{run_id}/{SIDECAR_FILE_NAME}" in names
