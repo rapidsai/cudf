@@ -42,6 +42,8 @@ namespace {
 // ──────────────────────────────────────────────────────────────────────────────
 
 constexpr uint8_t k_null_value         = 0x00;
+constexpr uint8_t k_bool_true_header   = 0x04;  // primitive type 1 (BOOLEAN_TRUE)
+constexpr uint8_t k_bool_false_header  = 0x08;  // primitive type 2 (BOOLEAN_FALSE)
 constexpr uint8_t k_int8_header        = 0x0c;
 constexpr uint8_t k_int16_header       = 0x10;
 constexpr uint8_t k_int32_header       = 0x14;
@@ -71,6 +73,7 @@ __device__ int64_t field_encoded_size(column_device_view const& col, size_type r
 {
   if (col.type().id() == type_id::EMPTY || !col.is_valid(row)) { return 1; }
   switch (col.type().id()) {
+    case type_id::BOOL8: return 1;
     case type_id::INT8: return 2;
     case type_id::INT16: return 3;
     case type_id::INT32: return 5;
@@ -93,6 +96,10 @@ __device__ size_type write_field_value(uint8_t* out, column_device_view const& c
     return 1;
   }
   switch (col.type().id()) {
+    case type_id::BOOL8: {
+      out[0] = col.element<bool>(row) ? k_bool_true_header : k_bool_false_header;
+      return 1;
+    }
     case type_id::INT8: {
       auto const v = col.element<int8_t>(row);
       out[0]       = k_int8_header;
@@ -477,11 +484,11 @@ std::unique_ptr<column> encode_variant(cudf::table_view const& input,
 
   for (int i = 0; i < N; i++) {
     auto const id = input.column(i).type().id();
-    CUDF_EXPECTS(id == type_id::EMPTY || id == type_id::INT8 || id == type_id::INT16 ||
-                   id == type_id::INT32 || id == type_id::INT64 || id == type_id::FLOAT32 ||
-                   id == type_id::FLOAT64 || id == type_id::STRING,
-                 "encode_variant: unsupported column type — supported: EMPTY, INT8/16/32/64, "
-                 "FLOAT32/64, STRING",
+    CUDF_EXPECTS(id == type_id::EMPTY || id == type_id::BOOL8 || id == type_id::INT8 ||
+                   id == type_id::INT16 || id == type_id::INT32 || id == type_id::INT64 ||
+                   id == type_id::FLOAT32 || id == type_id::FLOAT64 || id == type_id::STRING,
+                 "encode_variant: unsupported column type — supported: EMPTY, BOOL8, "
+                 "INT8/16/32/64, FLOAT32/64, STRING",
                  std::invalid_argument);
   }
 

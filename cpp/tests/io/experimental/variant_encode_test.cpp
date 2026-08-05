@@ -30,6 +30,10 @@ namespace {
 
 inline std::vector<uint8_t> enc_null() { return {0x00}; }
 
+inline std::vector<uint8_t> enc_bool_true() { return {0x04}; }
+
+inline std::vector<uint8_t> enc_bool_false() { return {0x08}; }
+
 inline std::vector<uint8_t> enc_int8(int8_t v) { return {0x0c, static_cast<uint8_t>(v)}; }
 
 inline std::vector<uint8_t> enc_int16(int16_t v)
@@ -631,4 +635,78 @@ TEST_F(EncodeVariantTest, SlicedColumnInput)
   auto decoded = cudf::io::parquet::experimental::extract_variant_field(
     *got, "x", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, expected_col);
+}
+
+TEST_F(EncodeVariantTest, SingleBoolColumnBytes)
+{
+  // Verify boolean values produce the correct 1-byte header (no payload).
+  cudf::test::fixed_width_column_wrapper<bool> col{true, false};
+  cudf::table_view tbl{{col}};
+  std::vector<std::string> names{"b"};
+
+  auto got =
+    cudf::io::parquet::experimental::encode_variant(tbl, names, cudf::test::get_default_stream());
+
+  EXPECT_EQ(got->size(), 2);
+  EXPECT_EQ(got->null_count(), 0);
+
+  auto const meta     = build_metadata({"b"});
+  auto const exp_val0 = build_object_value({enc_bool_true()});
+  auto const exp_val1 = build_object_value({enc_bool_false()});
+
+  auto expected = make_variant_column({meta, meta}, {exp_val0, exp_val1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(EncodeVariantTest, RoundtripBoolWithExtractVariant)
+{
+  cudf::test::fixed_width_column_wrapper<bool> col{true, false, true, false};
+  cudf::table_view tbl{{col}};
+  std::vector<std::string> names{"flag"};
+
+  auto variant =
+    cudf::io::parquet::experimental::encode_variant(tbl, names, cudf::test::get_default_stream());
+
+  auto decoded = cudf::io::parquet::experimental::extract_variant_field(
+    *variant, "flag", cudf::data_type{cudf::type_id::BOOL8}, cudf::test::get_default_stream());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, col);
+}
+
+TEST_F(EncodeVariantTest, RoundtripBoolNullsWithExtractVariant)
+{
+  // Null bool values should encode as VARIANT null and decode back as null BOOL8.
+  cudf::test::fixed_width_column_wrapper<bool> col({true, false, true}, {true, false, true});
+  cudf::table_view tbl{{col}};
+  std::vector<std::string> names{"flag"};
+
+  auto variant =
+    cudf::io::parquet::experimental::encode_variant(tbl, names, cudf::test::get_default_stream());
+
+  EXPECT_EQ(variant->null_count(), 0);  // struct rows never null in encode_variant
+
+  auto decoded = cudf::io::parquet::experimental::extract_variant_field(
+    *variant, "flag", cudf::data_type{cudf::type_id::BOOL8}, cudf::test::get_default_stream());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, col);
+}
+
+TEST_F(EncodeVariantTest, RoundtripBoolWithIntColumnMultiColumn)
+{
+  // Bool column alongside an int column — exercises multi-column sort and mixed types.
+  cudf::test::fixed_width_column_wrapper<bool> col_flag{true, false, true};
+  cudf::test::fixed_width_column_wrapper<int32_t> col_id{1, 2, 3};
+  cudf::table_view tbl{{col_flag, col_id}};
+  std::vector<std::string> names{"flag", "id"};
+
+  auto variant =
+    cudf::io::parquet::experimental::encode_variant(tbl, names, cudf::test::get_default_stream());
+
+  auto decoded_flag = cudf::io::parquet::experimental::extract_variant_field(
+    *variant, "flag", cudf::data_type{cudf::type_id::BOOL8}, cudf::test::get_default_stream());
+  auto decoded_id = cudf::io::parquet::experimental::extract_variant_field(
+    *variant, "id", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded_flag, col_flag);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded_id, col_id);
 }
