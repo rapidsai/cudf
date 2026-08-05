@@ -51,7 +51,7 @@ std::unique_ptr<column> merge_offsets(host_span<lists_column_view const> columns
 {
   // outgoing offsets
   auto merged_offsets = cudf::make_fixed_width_column(
-    data_type{type_id::INT32}, total_list_count + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<size_type>()}, total_list_count + 1, mask_state::UNALLOCATED, stream, mr);
   mutable_column_device_view d_merged_offsets(*merged_offsets, 0, 0);
 
   // merge offsets
