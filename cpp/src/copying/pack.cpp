@@ -79,9 +79,18 @@ struct alignas(8) serialized_table_header {
   }
 
   int32_t version{packed_metadata_version};
+#if CUDF_SIZE_TYPE_BITS == 64
+  // The size_type fields below are 8-byte aligned when size_type is 64 bits, so the padding
+  // has to be named to keep it initialized. See packed_metadata_version for why the resulting
+  // format is deliberately incompatible with a 32-bit build.
+  int32_t pad_after_version{};
+#endif
   size_type num_columns{};
   size_type num_rows{};
   int32_t pad{};  // Explicitly pad to avoid uninitialized padding bits
+#if CUDF_SIZE_TYPE_BITS == 64
+  int32_t pad_tail{};
+#endif
 };
 
 // The header is serialized with memcpy, so it must not contain padding bytes
