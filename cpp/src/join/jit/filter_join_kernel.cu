@@ -21,11 +21,7 @@
                     // need to put this pragma before including it to avoid PCH mismatch.
 
 // clang-format off
-// This header is an inlined header that defines the GENERIC_JOIN_FILTER_OP function. It is placed here
-// so the symbols in the headers above can be used by it.
-#include <cudf/detail/kernel_instance.cuh>
-#include <cudf/detail/operation_udf.cuh>
-// clang-format on
+#include <cudf/detail/kernel_dispatch.cuh>
 
 namespace cudf::join::jit {
 
@@ -40,9 +36,9 @@ __device__ void execute_predicate_op(void* user_data,
 {
   if constexpr (has_user_data) {
     cuda::std::apply(
-      [&](auto&&... args) { (void)GENERIC_JOIN_FILTER_OP(user_data, row_index, args...); }, args);
+      [&](auto&&... args) { (void)CUDF_DISPATCH_UDF(user_data, row_index, args...); }, args);
   } else {
-    cuda::std::apply([&](auto&&... args) { (void)GENERIC_JOIN_FILTER_OP(args...); }, args);
+    cuda::std::apply([&](auto&&... args) { (void)CUDF_DISPATCH_UDF(args...); }, args);
   }
 }
 
@@ -98,7 +94,7 @@ __device__ void filter_join_kernel(cudf::size_type num_rows,
 
 }  // namespace cudf::join::jit
 
-extern "C" __global__ void cudf_kernel_entry(
+extern "C" __global__ void CUDF_KERNEL_ENTRY(
   cudf::size_type num_rows,
   cudf::size_type const* __restrict__ left_indices,
   cudf::size_type const* __restrict__ right_indices,

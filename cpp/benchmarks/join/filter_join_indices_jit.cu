@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -72,8 +72,13 @@ void filter_join_indices_benchmark(nvbench::state& state,
     )";
 
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      auto result = cudf::filter_join_indices_jit(
-        probe_table->view(), build_table->view(), left_span, right_span, predicate_code, join_kind);
+      auto result =
+        cudf::filter_join_indices_jit(probe_table->view(),
+                                      build_table->view(),
+                                      left_span,
+                                      right_span,
+                                      cudf::cuda_udf{predicate_code.c_str(), "predicate"},
+                                      join_kind);
     });
   }
   set_throughputs(state);

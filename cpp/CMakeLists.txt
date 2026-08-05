@@ -500,6 +500,8 @@ list(APPEND CUDF_PRECOMPILE_PHYSICAL_TYPES uint8_t uint16_t uint32_t uint64_t nu
      numeric::decimal64 numeric::decimal128
 )
 
+# TODO: consider merging instances into a single FATBIN to take advantage of CUDA source code
+# compression
 foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_PHYSICAL_TYPES})
   set(FRAGMENT_NAME transform_kernel)
   get_property(
@@ -515,7 +517,7 @@ foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_PHYSICAL_TYPES})
     cudf_fragments
     FRAGMENT
     ${VARIANT_NAME}
-    SOURCE
+    SOURCES
     src/transform/jit/kernel.cu
     KERNEL_INSTANCE
     ${INSTANCE}
@@ -548,7 +550,7 @@ foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_PHYSICAL_TYPES})
       cudf_fragments
       FRAGMENT
       ${VARIANT_NAME}
-      SOURCE
+      SOURCES
       src/transform/jit/kernel.cu
       KERNEL_INSTANCE
       ${INSTANCE}
@@ -846,7 +848,6 @@ add_library(
   src/join/direct_join.cu
   src/join/distinct_hash_join.cu
   src/join/filter_join_indices/filter_join_indices.cu
-  src/join/filter_join_indices/filter_join_indices_jit.cu
   src/join/filter_join_indices/filter_join_indices_kernel_complex.cu
   src/join/filter_join_indices/filter_join_indices_kernel_null_complex.cu
   src/join/filter_join_indices/filter_join_indices_kernel_null_primitive.cu
@@ -1018,7 +1019,6 @@ add_library(
   src/stream_compaction/distinct_helpers_nested_nan_unequal_ordered.cu
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
-  src/stream_compaction/filter/filter.cu
   src/stream_compaction/stable_distinct.cu
   src/stream_compaction/unique.cu
   src/strings/attributes.cu
@@ -1258,6 +1258,15 @@ target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_
 # https://github.com/NVIDIA/cccl/pull/2844
 target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1)
 
+# libNVVM compiles tiny named-entry dispatchers for modular transform LTO linking.
+find_library(
+  CUDF_NVVM_LIBRARY
+  NAMES nvvm
+  HINTS "${CUDAToolkit_LIBRARY_ROOT}/nvvm/lib64" "${CUDAToolkit_LIBRARY_ROOT}/nvvm/lib"
+        "${CUDAToolkit_LIBRARY_ROOT}/nvvm/lib/x64" REQUIRED
+)
+target_include_directories(cudf PRIVATE "${CUDAToolkit_LIBRARY_ROOT}/nvvm/include")
+
 # When rmm is a static library being absorbed via whole-archive, strip nvtx3 from its public
 # interface. We bundle nvtx3 headers directly into cudf's install tree, so consumers get them from
 # cudf's include path without needing the nvtx3 target or find_dependency(nvtx3).
@@ -1379,8 +1388,15 @@ endif()
 target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
-  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> $<BUILD_LOCAL_INTERFACE:cuco::cuco> ZLIB::ZLIB
-          kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd $<BUILD_LOCAL_INTERFACE:xxhash> rtcx::rtcx
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+          $<BUILD_LOCAL_INTERFACE:cuco::cuco>
+          ZLIB::ZLIB
+          kvikio::kvikio
+          ${CUDF_nanoarrow_TARGET}
+          zstd
+          $<BUILD_LOCAL_INTERFACE:xxhash>
+          rtcx::rtcx
+          ${CUDF_NVVM_LIBRARY}
 )
 
 if(NOT _absorbed_nvcomp)
