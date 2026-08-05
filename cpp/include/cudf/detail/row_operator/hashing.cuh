@@ -171,7 +171,7 @@ class device_row_hasher {
         keys.type(),
         _element_hasher,
         keys,
-        static_cast<size_type>(col.element<dictionary32>(row_index)));
+        static_cast<size_type>(col.element<dictionary32>(row_index).value()));
     }
 
     template <typename T>
