@@ -150,6 +150,7 @@ std::unique_ptr<column> set_keys(
  * @brief Create a new dictionary column by removing any duplicate keys.
  *
  * Any indices pointing to a duplicate key are remapped to just one of the duplicates.
+ * There is no guarantee which of the duplicate keys will be kept in the output column.
  *
  * @code{.pseudo}
  * d1 = {keys=["b", "a", "b", "c"], indices=[3, 0, 2, 1, 2]}
