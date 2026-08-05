@@ -1449,7 +1449,7 @@ inline std::unique_ptr<cudf::column> make_list_u8_nullable(
 
 struct GetVariantTypeIdTest : public cudf::test::BaseFixture {};
 
-using LT = cudf::io::parquet::experimental::variant_logical_type;
+using cudf::io::parquet::experimental::variant_logical_type;
 
 // ---------------------------------------------------------------------------
 // Apache fixtures: one test per logical-type category.
