@@ -173,6 +173,26 @@ def test_groupby_agg(df, streaming_engine, op, keys):
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
+def test_groupby_sort_by_first_last(streaming_engine_factory):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=2, fallback_mode="raise"),
+    )
+    df = pl.LazyFrame(
+        {
+            "g": ["B", "A", "C", "A", "B", "C", "A", "B"],
+            "idx": [2, 3, 2, 1, 1, 1, 2, 3],
+            "val": [40, 30, 60, 10, 30, 50, 20, 50],
+        }
+    )
+
+    q = df.group_by("g").agg(
+        pl.col("val").sum().alias("volume"),
+        pl.col("val").sort_by("idx").first().alias("open"),
+        pl.col("val").sort_by("idx").last().alias("close"),
+    )
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
+
+
 @pytest.mark.parametrize("ddof", [0, 2, 50])
 @pytest.mark.parametrize("agg", ["std", "var"])
 def test_groupby_std_var_ddof(df, engine, agg, ddof):
