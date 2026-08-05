@@ -1401,7 +1401,6 @@ TEST_F(InvalidInputShapeTest, GetVariantTypeIdRejectsMalformedInput)
   }
 }
 
-// ---------------------------------------------------------------------------
 
 namespace {
 
