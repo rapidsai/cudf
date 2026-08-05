@@ -3422,6 +3422,24 @@ def test_parquet_writer_zstd():
         assert_eq(expected, got)
 
 
+def test_parquet_writer_gzip():
+    size = 12345
+    rng = np.random.default_rng(seed=0)
+    expected = cudf.DataFrame(
+        {
+            "a": np.arange(0, stop=size, dtype="float64"),
+            "b": rng.choice(list("abcd"), size=size),
+            "c": rng.choice(np.arange(4), size=size),
+        }
+    )
+
+    buff = BytesIO()
+    expected.to_parquet(buff, compression="GZIP")
+
+    got = pq.read_table(buff)
+    assert_eq(expected, got.to_pandas())
+
+
 @pytest.mark.parametrize("store_schema", [True, False])
 def test_parquet_writer_time_delta_physical_type(store_schema):
     df = cudf.DataFrame(
