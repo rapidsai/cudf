@@ -2185,6 +2185,24 @@ class GroupBy(IR):
         return Column(ordered_result, name=result.name, dtype=result.dtype)
 
     @staticmethod
+    def _collect_group_keys(
+        grouper: plc.groupby.GroupBy,
+        key: Column,
+        stream: Any,
+    ) -> plc.Table:
+        """Collect group keys when the GroupBy has no aggregation requests."""
+        group_keys, _ = grouper.aggregate(
+            [
+                plc.groupby.GroupByRequest(
+                    key.obj,
+                    [plc.aggregation.count(null_handling=plc.types.NullPolicy.INCLUDE)],
+                )
+            ],
+            stream=stream,
+        )
+        return group_keys
+
+    @staticmethod
     def _evaluate_sorted_aggregation(
         sorted_agg: expr.SortedAgg,
         name: str,
@@ -2284,7 +2302,7 @@ class GroupBy(IR):
         )
         requests = []
         sorted_requests = []
-        names: list[str | None] = []
+        names: list[str] = []
         cast_to_schema = []
         for request in agg_requests:
             should_cast = False
@@ -2318,39 +2336,36 @@ class GroupBy(IR):
             requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
             names.append(name)
             cast_to_schema.append(should_cast)
-        if not requests:
-            requests.append(
-                plc.groupby.GroupByRequest(
-                    keys[0].obj,
-                    [plc.aggregation.count(null_handling=plc.types.NullPolicy.INCLUDE)],
-                )
-            )
-            names.append(None)
-            cast_to_schema.append(False)
-        group_keys, raw_tables = grouper.aggregate(requests, stream=df.stream)
-        results = []
-        for result_name, plc_column, should_cast in zip(
-            names,
-            itertools.chain.from_iterable(t.columns() for t in raw_tables),
-            cast_to_schema,
-            strict=True,
-        ):
-            if result_name is None:
-                continue
-            result = Column(plc_column, name=result_name, dtype=schema[result_name])
-            if should_cast:
-                result = result.astype(schema[result_name], stream=df.stream)
-            results.append(result)
+        group_keys: plc.Table | None = None
+        results: list[Column] = []
+        if requests:
+            group_keys, raw_tables = grouper.aggregate(requests, stream=df.stream)
+            for result_name, plc_column, should_cast in zip(
+                names,
+                itertools.chain.from_iterable(t.columns() for t in raw_tables),
+                cast_to_schema,
+                strict=True,
+            ):
+                result = Column(plc_column, name=result_name, dtype=schema[result_name])
+                if should_cast:
+                    result = result.astype(schema[result_name], stream=df.stream)
+                results.append(result)
         for request in sorted_requests:
             assert isinstance(request.value, expr.SortedAgg)
             result_group_keys, result = cls._evaluate_sorted_aggregation(
                 request.value, request.name, keys, df
             )
-            results.append(
-                cls._align_to_group_keys(
-                    group_keys, result_group_keys, result, df.stream
+            if group_keys is None:
+                group_keys = result_group_keys
+                results.append(result)
+            else:
+                results.append(
+                    cls._align_to_group_keys(
+                        group_keys, result_group_keys, result, df.stream
+                    )
                 )
-            )
+        if group_keys is None:
+            group_keys = cls._collect_group_keys(grouper, keys[0], df.stream)
         result_keys = [
             Column(grouped_key, name=key.name, dtype=key.dtype)
             for key, grouped_key in zip(keys, group_keys.columns(), strict=True)
