@@ -746,7 +746,7 @@ std::tuple<std::size_t, int64_t, int64_t, size_type> build_output_column_metadat
       ++current_info;
       return std::pair(bitmask_offset, null_count);
     }
-    return std::pair(static_cast<int64_t>(-1), 0);
+    return std::pair(static_cast<int64_t>(-1), size_type{0});
   }();
 
   // size/data pointer for the column

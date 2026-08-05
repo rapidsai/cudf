@@ -595,7 +595,7 @@ void make_device_json_column(device_span<SymbolT const> input,
   auto expected_types = cudf::detail::make_host_vector<NodeT>(num_columns, stream);
   std::fill_n(expected_types.begin(), num_columns, NUM_NODE_CLASSES);
 
-  auto lookup_names = [&column_names](auto const& child_ids, auto const& name) {
+  auto lookup_names = [&column_names](auto const& child_ids, auto const& name) -> NodeIndexT {
     for (auto const& child_id : child_ids) {
       if (column_names[child_id] == name) return child_id;
     }

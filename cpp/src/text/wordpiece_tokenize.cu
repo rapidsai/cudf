@@ -773,7 +773,8 @@ rmm::device_uvector<cudf::size_type> compute_some_tokens(
                     cuda::counting_iterator<cudf::size_type>{input.size()},
                     max_word_offsets.begin(),
                     cuda::proclaim_return_type<cudf::size_type>(
-                      [d_strings = *d_strings, max_words_per_row] __device__(auto idx) {
+                      [d_strings = *d_strings, max_words_per_row] __device__(
+                        auto idx) -> cudf::size_type {
                         if (idx >= d_strings.size()) { return 0; }
                         if (d_strings.is_null(idx)) { return 0; }
                         auto const d_str = d_strings.element<cudf::string_view>(idx);
