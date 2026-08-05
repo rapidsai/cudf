@@ -2327,12 +2327,12 @@ class GroupBy(IR):
                 )
             else:
                 # Anything else, we pre-evaluate
-                evaluated = value.evaluate(df, context=ExecutionContext.GROUPBY)
-                if evaluated.size != keys[0].size:
-                    evaluated = broadcast(
-                        evaluated, target_length=keys[0].size, stream=df.stream
+                column = value.evaluate(df, context=ExecutionContext.GROUPBY)
+                if column.size != keys[0].size:
+                    column = broadcast(
+                        column, target_length=keys[0].size, stream=df.stream
                     )[0]
-                col = evaluated.obj
+                col = column.obj
             requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
             names.append(name)
             cast_to_schema.append(should_cast)
