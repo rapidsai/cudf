@@ -536,26 +536,28 @@ __device__ cuda::std::pair<device_span<uint8_t const>, op_status> resolve_path(
   device_span<uint8_t const> sub_val = val;
   for (size_type i = 0; i < path.size(); ++i) {
     auto const step = path.element<cudf::string_view>(i);
-
     if (step.size_bytes() >= 1 && step.data()[0] == '[') {
       auto const index = parse_index_step(step);
       if (!index.has_value()) { return {{}, op_status::missing_path}; }
-      auto const [span, st] = locate_array_element(sub_val, index.value());
+      auto const [span, st] = locate_array_element_with_status(sub_val, index.value());
       if (st != op_status::success) { return {{}, st}; }
       sub_val = span;
     } else {
-      auto const [field_id, meta_st] = find_key_in_metadata(meta, step);
+      auto const [field_id, meta_st] = find_key_in_metadata_with_status(meta, step);
       if (meta_st == op_status::malformed_variant) { return {{}, op_status::malformed_variant}; }
       if (!field_id.has_value()) { return {{}, op_status::missing_path}; }
-      auto const [span, st] = locate_object_field(sub_val, field_id.value());
+      auto const [span, st] = locate_object_field_with_status(sub_val, field_id.value());
       if (st != op_status::success) { return {{}, st}; }
       sub_val = span;
     }
 
     // VARIANT null before the end of the path is missing_path per spec.
     if (i + 1 < path.size() && is_variant_null(sub_val)) { return {{}, op_status::missing_path}; }
+    // A zero-length resolved value is not decodable; the value-only path drops the row.
+    if (sub_val.empty()) { return {{}, op_status::malformed_variant}; }
   }
 
+  // Terminal VARIANT null: return the bytes with variant_null status.
   if (is_variant_null(sub_val)) { return {sub_val, op_status::variant_null}; }
   return {sub_val, op_status::success};
 }
