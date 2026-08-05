@@ -1,11 +1,21 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from libc.stddef cimport size_t
+from libc.stdint cimport uintptr_t, uint64_t
 import functools
 import operator
 
 from .types cimport DataType, size_of, type_id
+
+
+cdef gpumemoryview _make_subview(gpumemoryview parent, uintptr_t ptr, uint64_t nbytes):
+    cdef gpumemoryview v = gpumemoryview.__new__(gpumemoryview)
+    v.ptr = ptr
+    v.nbytes = nbytes
+    v.obj = parent  # keep the parent original buffer alive
+    v.cai = {"data": (ptr, False), "shape": (nbytes,), "typestr": "|u1", "version": 3}
+    return v
 
 
 __all__ = ["gpumemoryview"]
@@ -83,6 +93,19 @@ cdef class gpumemoryview:
         return self.nbytes
 
     def __len__(self):
-        return self.obj.__cuda_array_interface__["shape"][0]
+        return self.cai["shape"][0]
+
+    def __getitem__(self, index):
+        if not isinstance(index, slice):
+            raise TypeError(
+                f"gpumemoryview indices must be slices, not {type(index).__name__}"
+            )
+        start, stop, step = index.indices(self.nbytes)
+        if step != 1:
+            raise ValueError("gpumemoryview only supports step=1 slices")
+        length = stop - start
+        if length <= 0:
+            return _make_subview(self, self.ptr + start, 0)
+        return _make_subview(self, self.ptr + start, length)
 
     __hash__ = None

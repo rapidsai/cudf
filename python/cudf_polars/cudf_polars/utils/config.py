@@ -233,9 +233,45 @@ class ParquetOptions:
         Whether to use the native rapidsmpf node for parquet reading.
         This option is only used by the streaming executor.
         Default is False.
+    use_hybrid_scan
+        Whether to use the two-pass ``HybridScanReader`` for ``SplitScan``
+        tasks when a predicate can be pushed down to a parquet filter.
+        Default is False.
     prefetch_file_metadata
         Whether to prefetch parquet file metadata and pass it through
         `parquet_metadatas` to avoid rereading file footers.
+    prefetch_backend
+        IO backend for hybrid scan prefetching. Must be set explicitly when
+        ``use_hybrid_scan`` is ``True`` and ``prefetch_file_metadata`` is ``True``.
+        ``"kvikio"`` or ``"cucascade"`` (requires the ``cucascade`` package).
+    cucascade_pool_capacity
+        Size in bytes of the pinned host memory pool used by the cuCascade IO
+        engine for bounce buffers. Only used when ``prefetch_backend`` is
+        ``"cucascade"``. When ``None``, uses the cuCascade engine default.
+    cucascade_n_reactors
+        Number of IO reactor threads in the cuCascade engine. Controls how many
+        concurrent IO operations the engine can handle. Only used when
+        ``prefetch_backend`` is ``"cucascade"``. When ``None``, uses the
+        cuCascade engine default.
+    cucascade_max_connections
+        Maximum concurrent in-flight HTTP connections per reactor in the
+        cuCascade REST engine. Only used when ``prefetch_backend`` is
+        ``"cucascade"``. When ``None``, uses the cuCascade engine default (16).
+    cucascade_chunk_size
+        Maximum bytes per ranged GET request in the cuCascade REST engine.
+        Only used when ``prefetch_backend`` is ``"cucascade"``. When ``None``,
+        uses the cuCascade engine default (8 MiB).
+    cucascade_max_n_chunks
+        Maximum number of destination buffers fused into a single scatter GET
+        in the cuCascade REST engine. Only used when ``prefetch_backend`` is
+        ``"cucascade"``. When ``None``, uses the cuCascade engine default (16).
+    cucascade_enable_cache
+        Whether to enable cuCascade's internal prefetch cache. When ``True``,
+        :meth:`CuCascadeDatasource.fadvise` queues S3 downloads into cuCascade's
+        internal bounce buffer pool so that subsequent
+        ``host_read_ranges_async_io`` calls may serve from cache rather than
+        fetching from S3. Only used when ``prefetch_backend`` is
+        ``"cucascade"``. Default is ``False``.
     use_jit_filter
         Whether to use JIT compilation for post-read filtering in Parquet scans.
         When enabled, filter predicates are JIT-compiled to CUDA kernels for
@@ -282,11 +318,63 @@ class ParquetOptions:
             default=False,
         )
     )
+    use_hybrid_scan: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_HYBRID_SCAN",
+            _bool_converter,
+            default=False,
+        )
+    )
     prefetch_file_metadata: bool = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__PREFETCH_FILE_METADATA",
             _bool_converter,
             default=False,
+        )
+    )
+    # Internal benchmarking flag. When False, skips stats and bloom-filter pruning
+    # before the first pass of a hybrid scan so you can measure two-pass read
+    # overhead in isolation. No reason to set this to False in production.
+    _hybrid_scan_stats_pruning: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__HYBRID_SCAN_STATS_PRUNING",
+            _bool_converter,
+            default=True,
+        )
+    )
+    prefetch_backend: str | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__PREFETCH_BACKEND", str, default=None
+        )
+    )
+    cucascade_pool_capacity: int | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__CUCASCADE_POOL_CAPACITY", int, default=None
+        )
+    )
+    cucascade_n_reactors: int | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__CUCASCADE_N_REACTORS", int, default=None
+        )
+    )
+    cucascade_max_connections: int | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__CUCASCADE_MAX_CONNECTIONS", int, default=None
+        )
+    )
+    cucascade_chunk_size: int | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__CUCASCADE_CHUNK_SIZE", int, default=None
+        )
+    )
+    cucascade_max_n_chunks: int | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__CUCASCADE_MAX_N_CHUNKS", int, default=None
+        )
+    )
+    cucascade_enable_cache: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__CUCASCADE_ENABLE_CACHE", _bool_converter, default=False
         )
     )
     use_jit_filter: bool = dataclasses.field(
@@ -312,13 +400,47 @@ class ParquetOptions:
             raise TypeError("max_row_group_samples must be an int")
         if not isinstance(self.use_rapidsmpf_native, bool):
             raise TypeError("use_rapidsmpf_native must be a bool")
+        if not isinstance(self.use_hybrid_scan, bool):
+            raise TypeError("use_hybrid_scan must be a bool")
+        if not isinstance(self._hybrid_scan_stats_pruning, bool):
+            raise TypeError("_hybrid_scan_stats_pruning must be a bool")
         if not isinstance(self.prefetch_file_metadata, bool):
             raise TypeError("prefetch_file_metadata must be a bool")
+        if self.prefetch_backend is not None and self.prefetch_backend not in (
+            "kvikio",
+            "cucascade",
+        ):
+            raise ValueError(
+                f"prefetch_backend must be 'kvikio' or 'cucascade', "
+                f"got {self.prefetch_backend!r}"
+            )
 
         if self.use_rapidsmpf_native and self.prefetch_file_metadata:
             raise NotImplementedError(
                 "'use_rapidsmpf_native=True' does not currently support 'prefetch_file_metadata=True'"
             )
+        if self.cucascade_pool_capacity is not None and not isinstance(
+            self.cucascade_pool_capacity, int
+        ):
+            raise TypeError("cucascade_pool_capacity must be an int or None")
+        if self.cucascade_n_reactors is not None and not isinstance(
+            self.cucascade_n_reactors, int
+        ):
+            raise TypeError("cucascade_n_reactors must be an int or None")
+        if self.cucascade_max_connections is not None and not isinstance(
+            self.cucascade_max_connections, int
+        ):
+            raise TypeError("cucascade_max_connections must be an int or None")
+        if self.cucascade_chunk_size is not None and not isinstance(
+            self.cucascade_chunk_size, int
+        ):
+            raise TypeError("cucascade_chunk_size must be an int or None")
+        if self.cucascade_max_n_chunks is not None and not isinstance(
+            self.cucascade_max_n_chunks, int
+        ):
+            raise TypeError("cucascade_max_n_chunks must be an int or None")
+        if not isinstance(self.cucascade_enable_cache, bool):
+            raise TypeError("cucascade_enable_cache must be a bool")
         if not isinstance(self.use_jit_filter, bool):
             raise TypeError("use_jit_filter must be a bool")
 
@@ -758,11 +880,12 @@ class StreamingExecutor:
     max_io_threads
         Maximum number of IO threads. Default is 4.
         This controls the parallelism of IO operations when reading data.
+    num_prefetch_workers
+        Number of prefetch worker threads for the hybrid scan prefetch pipeline.
+        Default is 2. Set to ``None`` to use one worker per split.
     num_py_executors
         Maximum number of workers for the Python ThreadPoolExecutor.
         Default is 8.
-    quent_context
-        Quent tracing context. When ``None`` (default), Quent tracing is disabled.
         Pass a :class:`~cudf_polars.quent.QuentContext` instance to enable tracing.
         Can be set via the ``CUDF_POLARS__EXECUTOR__QUENT_CONTEXT`` environment
         variable (``true`` enables tracing with a default context, ``false``
@@ -825,6 +948,11 @@ class StreamingExecutor:
     max_io_threads: int = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__MAX_IO_THREADS", int, default=4
+        )
+    )
+    num_prefetch_workers: int | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__NUM_PREFETCH_WORKERS", int, default=2
         )
     )
     num_py_executors: int = dataclasses.field(
@@ -914,6 +1042,10 @@ class StreamingExecutor:
             raise TypeError("client_device_threshold must be a float")
         if not isinstance(self.max_io_threads, int):
             raise TypeError("max_io_threads must be an int")
+        if self.num_prefetch_workers is not None and not isinstance(
+            self.num_prefetch_workers, int
+        ):
+            raise TypeError("num_prefetch_workers must be an int or None")
         if not isinstance(self.num_py_executors, int):
             raise TypeError("num_py_executors must be an int")
 
