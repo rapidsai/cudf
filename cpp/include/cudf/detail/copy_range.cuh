@@ -9,6 +9,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/types.hpp>
@@ -91,7 +92,7 @@ CUDF_KERNEL void copy_range_kernel(SourceValueIterator source_value_begin,
     auto block_null_change =
       cudf::detail::single_lane_block_sum_reduce<block_size, leader_lane>(warp_null_change);
     if (threadIdx.x == 0) {  // if the first thread in a block
-      atomicAdd(null_count, block_null_change);
+      cudf::detail::atomic_add_relaxed(null_count, block_null_change);
     }
   }
 }
