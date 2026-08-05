@@ -41,15 +41,12 @@ using cudf::test::iterators::no_nulls;
 
 using ParquetCompressionTest = CompressionTest<ParquetWriterTest>;
 
-// Device GZIP compression requires nvCOMP >= 5.3. The `Nvcomp` instantiation forces the device
-// path (host compression disabled), so skip GZIP cases gracefully when the device engine cannot
-// provide it (e.g. built against nvCOMP 5.2).
-#define SKIP_IF_GZIP_UNSUPPORTED(comp)                                    \
-  do {                                                                    \
-    if ((comp) == cudf::io::compression_type::GZIP &&                     \
-        not cudf::io::detail::is_device_compression_supported(comp)) {    \
-      GTEST_SKIP() << "Device GZIP compression requires nvCOMP 5.3 or later"; \
-    }                                                                     \
+#define SKIP_IF_NVCOMP_GZIP_UNSUPPORTED(comp)                                                \
+  do {                                                                                       \
+    if ((comp) == cudf::io::compression_type::GZIP && std::get<0>(GetParam()) == "NVCOMP" && \
+        not cudf::io::detail::is_device_compression_supported(comp)) {                       \
+      GTEST_SKIP() << "Device GZIP compression requires nvCOMP 5.3 or later";                \
+    }                                                                                        \
   } while (0)
 
 template <typename mask_op_t>
@@ -1550,7 +1547,7 @@ TEST_F(ParquetWriterTest, UserNullabilityInvalid)
 TEST_P(ParquetCompressionTest, CompStats)
 {
   auto const compression_type = std::get<1>(GetParam());
-  SKIP_IF_GZIP_UNSUPPORTED(compression_type);
+  SKIP_IF_NVCOMP_GZIP_UNSUPPORTED(compression_type);
 
   auto table = create_random_fixed_table<int>(1, 55000, true);
 
@@ -1579,7 +1576,7 @@ TEST_P(ParquetCompressionTest, CompStats)
 TEST_P(ParquetCompressionTest, CompStatsEmptyTable)
 {
   auto const compression_type = std::get<1>(GetParam());
-  SKIP_IF_GZIP_UNSUPPORTED(compression_type);
+  SKIP_IF_NVCOMP_GZIP_UNSUPPORTED(compression_type);
 
   auto table_no_rows = create_random_fixed_table<int>(20, 0, false);
 
@@ -1600,7 +1597,7 @@ TEST_P(ParquetCompressionTest, RoundTripBasic)
 {
   constexpr auto num_rows     = 12000;
   auto const compression_type = std::get<1>(GetParam());
-  SKIP_IF_GZIP_UNSUPPORTED(compression_type);
+  SKIP_IF_NVCOMP_GZIP_UNSUPPORTED(compression_type);
 
   // Generate compressible data
   auto int_sequence =
@@ -1642,7 +1639,7 @@ TEST_P(ParquetCompressionTest, SkipCompression)
   constexpr auto row_group_rows = 2 * page_rows;
   constexpr auto num_rows       = 2 * row_group_rows;
   auto const compression_type   = std::get<1>(GetParam());
-  SKIP_IF_GZIP_UNSUPPORTED(compression_type);
+  SKIP_IF_NVCOMP_GZIP_UNSUPPORTED(compression_type);
 
   auto compressible_seq =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i / 4; });
@@ -1701,6 +1698,7 @@ INSTANTIATE_TEST_CASE_P(Host,
                         ::testing::Combine(::testing::Values("HOST", "HYBRID", "AUTO"),
                                            ::testing::Values(cudf::io::compression_type::AUTO,
                                                              cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::GZIP,
                                                              cudf::io::compression_type::ZSTD)));
 
 TEST_F(ParquetWriterTest, NoNullsAsNonNullable)

@@ -31,7 +31,7 @@ namespace {
 
 [[nodiscard]] std::string nvcomp_status_to_string(nvcompStatus_t status)
 {
-#if NVCOMP_VER_MAJOR > 5 || (NVCOMP_VER_MAJOR == 5 && NVCOMP_VER_MINOR >= 2)
+#if NVCOMP_VER >= MAKE_SEMANTIC_VERSION(5, 2, 0)
   if (auto const* str = nvcompGetStatusString(status); str != nullptr) { return str; }
   return "nvcompStatus_t(" + std::to_string(static_cast<int>(status)) + ")";
 #else
@@ -51,7 +51,7 @@ namespace {
     case nvcompStatus_t::nvcompErrorInternal: return "nvcompErrorInternal";
     case nvcompStatus_t::nvcompErrorCannotCompress: return "nvcompErrorCannotCompress";
     case nvcompStatus_t::nvcompErrorWrongInputLength: return "nvcompErrorWrongInputLength";
-#if NVCOMP_VER_MAJOR >= 5 and NVCOMP_VER_MINOR >= 1
+#if NVCOMP_VER >= MAKE_SEMANTIC_VERSION(5, 1, 0)
     case nvcompStatus_t::nvcompErrorBatchSizeTooLarge: return "nvcompErrorBatchSizeTooLarge";
 #endif
   }
