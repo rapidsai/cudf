@@ -17,11 +17,9 @@ I/O Functions
 
     avro
     csv
-    experimental
     json
     orc
     parquet
-    parquet_io_utils
     parquet_metadata
     text
     timezone

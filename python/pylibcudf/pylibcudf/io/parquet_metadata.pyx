@@ -458,7 +458,7 @@ cdef class FileMetaData:
 
     See Also
     --------
-    pylibcudf.io.parquet_metadata.read_parquet_footers
+    read_parquet_footers
         Read one ``FileMetaData`` per source directly from
         :class:`pylibcudf.io.types.SourceInfo`.
     """
