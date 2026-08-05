@@ -276,7 +276,7 @@ __device__ cuda::std::optional<size_type> find_key_in_metadata(device_span<uint8
       size_type const mid = lo + (hi - lo) / 2;
       auto const entry    = read_entry(mid);
       if (!entry.has_value()) { return cuda::std::nullopt; }
-      int const cmp = entry.value().compare(key);
+      auto const cmp = entry.value().compare(key);
       if (cmp == 0) { return mid; }
       if (cmp < 0) {
         lo = mid + 1;
