@@ -5,12 +5,15 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/default_stream.hpp>
 
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 
 #include <nvtext/unicode_normalize.hpp>
+
+#include <cstdint>
 
 class TextUnicodeNormalizeStreamTest : public cudf::test::BaseFixture {};
 
