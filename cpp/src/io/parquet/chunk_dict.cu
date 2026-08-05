@@ -8,6 +8,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
@@ -346,7 +347,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         auto const frag_loc = static_cast<size_type>(slot->second) - frag_start;
         cudf_assert(frag_loc >= 0 && frag_loc < num_frags &&
                     "populate stamped a fragment hint outside this chunk's fragment range");
-        auto const loc = atomicAdd(&fragment_offsets[frag_loc], 1);
+        auto const loc = cudf::detail::atomic_add_relaxed<cuda::thread_scope_block>(
+          &fragment_offsets[frag_loc], size_type{1});
         cudf_assert(loc < MAX_DICT_SIZE && "Number of filled slots exceeds max dict size");
         chunk.dict_data[loc] = key;
         slot->second         = loc;

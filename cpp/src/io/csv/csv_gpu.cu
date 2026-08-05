@@ -10,6 +10,7 @@
 #include "io/utilities/trie.cuh"
 
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -399,7 +400,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                                     column_flags[col] & column_parse::as_hexadecimal)) {
             // set the valid bitmap - all bits were set to 0 to start
             set_bit(valids[actual_col], rec_id);
-            atomicAdd(&valid_counts[actual_col], 1);
+            cudf::detail::atomic_add_relaxed(&valid_counts[actual_col], size_type{1});
           }
         }
       } else if (dtypes[actual_col].id() == cudf::type_id::STRING) {

@@ -23,6 +23,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
@@ -412,7 +413,7 @@ __launch_bounds__(block_size) CUDF_KERNEL
   size_type block_valid_count =
     cudf::detail::single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
 
-  if (threadIdx.x == 0) { atomicAdd(output_valid_count, block_valid_count); }
+  if (threadIdx.x == 0) { cudf::detail::atomic_add_relaxed(output_valid_count, block_valid_count); }
 }
 
 /**
