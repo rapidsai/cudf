@@ -1147,13 +1147,14 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   auto prev_level_size = static_cast<cudf::size_type>(total_rows);
   std::for_each(
     cuda::counting_iterator<cudf::size_type>{0},
-    cuda::counting_iterator{num_levels - 1},
+    cuda::counting_iterator<cudf::size_type>{num_levels - 1},
     [&](auto const prev_level) {
-      auto const current_level_size = cudf::util::div_rounding_up_safe(prev_level_size, 2);
+      auto const current_level_size =
+        cudf::util::div_rounding_up_safe(prev_level_size, cudf::size_type{2});
       thrust::for_each(
         rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
         cuda::counting_iterator<cudf::size_type>{0},
-        cuda::counting_iterator{current_level_size},
+        cuda::counting_iterator<cudf::size_type>{current_level_size},
         build_fenwick_tree_level_functor{
           fenwick_tree_level_ptrs.data(), prev_level, prev_level_size, current_level_size});
       prev_level_size = current_level_size;

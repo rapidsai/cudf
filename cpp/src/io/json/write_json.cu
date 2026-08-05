@@ -473,7 +473,7 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
   auto num_strings_per_list = cudf::detail::make_counting_transform_iterator(
     0,
     cuda::proclaim_return_type<size_type>(
-      [offsets = offsets.begin<size_type>(), num_offsets] __device__(size_type idx) {
+      [offsets = offsets.begin<size_type>(), num_offsets] __device__(size_type idx) -> size_type {
         if (idx + 1 >= num_offsets) return 0;
         auto const length = offsets[idx + 1] - offsets[idx];
         return length == 0 ? 2 : (2 + length + length - 1);
