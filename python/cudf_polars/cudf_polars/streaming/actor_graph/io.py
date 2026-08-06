@@ -533,14 +533,17 @@ async def read_chunk(
     ir_context
         The execution context for the IR node.
     estimated_chunk_bytes
-        Estimated size of the chunk in bytes. Used for memory reservation
-        with block spilling to avoid thrashing.
+        Estimated retained output size in bytes. Used to estimate peak memory
+        for admission before launching the read.
     tracer
         The actor tracer for collecting runtime statistics.
     """
     with opaque_memory_usage(
         await reserve_memory(
-            context, size=estimated_chunk_bytes, net_memory_delta=estimated_chunk_bytes
+            context,
+            # Headroom for decode
+            size=2 * estimated_chunk_bytes,
+            net_memory_delta=estimated_chunk_bytes,
         )
     ):
         df = await ir_context.to_thread(
@@ -548,12 +551,12 @@ async def read_chunk(
             *scan._non_child_args,
             context=ir_context,
         )
-    chunk = TableChunk.from_pylibcudf_table(
-        df.table,
-        df.stream,
-        exclusive_view=True,
-        br=context.br(),
-    )
+        chunk = TableChunk.from_pylibcudf_table(
+            df.table,
+            df.stream,
+            exclusive_view=True,
+            br=context.br(),
+        )
     await send_chunk(context, ch_out, chunk, seq_num, tracer=tracer)
 
 
@@ -583,8 +586,8 @@ async def scan_node(
     num_producers
         The number of producers to use for the scan node.
     estimated_chunk_bytes
-        Estimated size of each chunk in bytes. Used for memory reservation
-        with block spilling to avoid thrashing.
+        Estimated retained output size of each chunk in bytes. Used to estimate
+        peak memory for admission before launching each read.
     """
     scans: Sequence[SplitScan] | Sequence[FusedScan] = ir.scans
 

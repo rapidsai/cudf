@@ -423,6 +423,10 @@ engine = pl.GPUEngine(
 )
 ```
 
+Before each read is submitted, it waits for a device-memory reservation.
+This makes aggregate read concurrency respond to memory pressure across all
+scan nodes on the rank.
+
 Internally, `collect_statistics` walks the IR graph, groups Parquet
 `Scan` nodes that share the same file paths (unioning projected columns
 for sampling), and builds one `DataSourceInfo` per path group. It then
