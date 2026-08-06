@@ -1406,7 +1406,7 @@ TEST_F(ParquetWriterTest, DictionaryEntryLimitListTest)
     auto offset_values = cudf::detail::make_counting_transform_iterator(
       0, [vals_per_row](auto i) { return static_cast<cudf::size_type>(i * vals_per_row); });
     cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets(offset_values,
-                                                                   offset_values + num_rows + 1);
+                                                                    offset_values + num_rows + 1);
     return cudf::make_lists_column(
       num_rows, offsets.release(), leaves.release(), 0, rmm::device_buffer{});
   };
@@ -1423,10 +1423,11 @@ TEST_F(ParquetWriterTest, DictionaryEntryLimitListTest)
     SCOPED_TRACE(tag);
     auto const filepath =
       temp_env->get_temp_filepath("DictionaryEntryLimitListTest" + tag + ".parquet");
-    auto builder = cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-                     .compression(cudf::io::compression_type::NONE)
-                     .dictionary_policy(cudf::io::dictionary_policy::ADAPTIVE)
-                     .max_dictionary_size(max_dict_size);
+    auto builder =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+        .compression(cudf::io::compression_type::NONE)
+        .dictionary_policy(cudf::io::dictionary_policy::ADAPTIVE)
+        .max_dictionary_size(max_dict_size);
     if (frag_size.has_value()) { builder.max_page_fragment_size(frag_size.value()); }
     cudf::io::parquet_writer_options out_opts = builder;
     cudf::io::write_parquet(out_opts);

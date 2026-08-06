@@ -58,7 +58,6 @@ __device__ constexpr int rolling_idx(int pos) { return rolling_index<rle_buffer_
 // also valid for dict page header (V1 or V2)
 constexpr int MAX_V1_HDR_SIZE = util::round_up_unsafe(27, 8);
 
-
 // do not truncate statistics
 constexpr int32_t NO_TRUNC_STATS = 0;
 
