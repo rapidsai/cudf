@@ -425,6 +425,29 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   }
 
   /**
+   * @brief Construct a non-nullable column of fixed-width elements whose types differ.
+   *
+   * An initializer list has a single element type to deduce, so a list that mixes types is not
+   * one. That happens to any list written as `{0, n}` where `n` is a `size_type` wider than the
+   * literal, which is common in tests naming a row count next to a bound.
+   *
+   * Example:
+   * @code{.cpp}
+   * fixed_width_column_wrapper<cudf::size_type> offsets{0, table.num_rows()};
+   * @endcode
+   *
+   * @param elements The elements, each converted to the column's source element type
+   */
+  template <typename... ElementsFrom,
+            CUDF_ENABLE_IF(sizeof...(ElementsFrom) > 1 and
+                           (std::is_arithmetic_v<std::decay_t<ElementsFrom>> and ...))>
+  fixed_width_column_wrapper(ElementsFrom... elements)
+    : fixed_width_column_wrapper(
+        std::initializer_list<SourceElementT>{static_cast<SourceElementT>(elements)...})
+  {
+  }
+
+  /**
    * @brief Construct a nullable column from a list of fixed-width elements
    * using another list to indicate the validity of each element.
    *
