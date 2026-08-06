@@ -364,6 +364,24 @@ TEST_F(HashPartition, CustomSeedValue)
   CUDF_TEST_EXPECT_TABLES_EQUAL(output1->view(), output2->view());
 }
 
+TEST_F(HashPartition, SparkMurmur3)
+{
+  fixed_width_column_wrapper<int32_t> const first({0, 1, -1, 42, 123456789});
+  fixed_width_column_wrapper<int32_t> const second({10, 20, 30, -40, -987654321});
+  auto const input = cudf::table_view({first, second});
+
+  auto [output, offsets] = cudf::hash_partition(
+    input, std::vector<cudf::size_type>{0, 1}, 8, cudf::hash_id::SPARK_MURMUR3, 42);
+
+  fixed_width_column_wrapper<int32_t> const expected_first({42, 1, 0, -1, 123456789});
+  fixed_width_column_wrapper<int32_t> const expected_second({-40, 20, 10, 30, -987654321});
+  auto const expected = cudf::table_view({expected_first, expected_second});
+  std::vector<cudf::size_type> const expected_offsets({0, 1, 1, 2, 3, 3, 3, 4, 5});
+
+  EXPECT_EQ(offsets, expected_offsets);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(output->view(), expected);
+}
+
 template <typename T>
 class HashPartitionFixedWidth : public cudf::test::BaseFixture {};
 
