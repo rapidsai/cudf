@@ -228,8 +228,7 @@ __device__ cuda::std::optional<uint64_t> variant_value_length(device_span<uint8_
  *
  * @param meta The metadata blob bytes for a single row
  * @param key The key to search for
- * @return `(id, success)` when found; `(nullopt, missing_path)` when absent;
- *         `(nullopt, malformed_variant)` when the blob is malformed
+ * @return The dictionary index of `key`, or nullopt if absent or the blob is malformed
  */
 __device__ cuda::std::pair<cuda::std::optional<size_type>, op_status> find_key_in_metadata(
   device_span<uint8_t const> meta, cudf::string_view key)
@@ -295,8 +294,8 @@ __device__ cuda::std::pair<cuda::std::optional<size_type>, op_status> find_key_i
  *
  * @param val The object value bytes
  * @param id The dictionary index of the field to locate
- * @return `(span, success)` when found; `(empty, missing_path)` when the value is not an object
- *         or the field is absent; `(empty, malformed_variant)` when the blob is malformed
+ * @return The encoded bytes of the field value, or an empty span if `val` is not an object, the
+ *         field is absent, or the blob is malformed
  */
 __device__ cuda::std::pair<device_span<uint8_t const>, op_status> locate_object_field(
   device_span<uint8_t const> val, int id)
@@ -365,8 +364,6 @@ __device__ cuda::std::pair<device_span<uint8_t const>, op_status> locate_object_
 //
 // Array element offsets are monotonically increasing, so the element length is taken directly from
 // the offset delta (o1 - o0) rather than from the element's own header.
-// Returns `(span, success)` on success, `(empty, missing_path)` for out-of-bounds or non-array,
-// and `(empty, malformed_variant)` for truncated data.
 __device__ cuda::std::pair<device_span<uint8_t const>, op_status> locate_array_element(
   device_span<uint8_t const> value, size_type index)
 {
@@ -391,7 +388,10 @@ __device__ cuda::std::pair<device_span<uint8_t const>, op_status> locate_array_e
   position += num_elements_size;
 
   size_type const offsets_start = position;
-  auto const offsets_bytes      = (static_cast<uint64_t>(num_elements) + 1) * offset_size;
+
+  // Computed in 64-bit because (num_elements + 1) * offset_size can exceed the signed `size_type`
+  // range (which would be UB); the check below then rejects any array that overruns the value blob.
+  auto const offsets_bytes = (static_cast<uint64_t>(num_elements) + 1) * offset_size;
   if (cuda::std::cmp_greater(offsets_bytes, value_size - offsets_start)) {
     return {{}, op_status::malformed_variant};
   }
@@ -525,9 +525,13 @@ __device__ cuda::std::optional<size_type> parse_index_step(cudf::string_view ste
   return index;
 }
 
-// Walk a path of object-key or array-index steps. Returns `(span, status)`.
-// On success the span is non-empty and status is `success` or `variant_null` (terminal null).
-// On failure the span is empty and status is `missing_path` or `malformed_variant`.
+// Walk a path of object-key or array-index steps level by level starting at `val` and return
+// the span of the final value (subspan of `val`). Returns an empty span on failure.
+//
+// Each path step is encoded in the `path` strings column as either:
+//   - "<name>"  -> descend into an object by dictionary key, or
+//   - "[<N>]"   -> descend into an array by zero-based integer index.
+// The step kind is inferred from the first byte (`'['` means index).
 __device__ cuda::std::pair<device_span<uint8_t const>, op_status> resolve_path(
   device_span<uint8_t const> meta, device_span<uint8_t const> val, column_device_view path)
 {
@@ -652,7 +656,10 @@ CUDF_KERNEL __launch_bounds__(block_size) void locate_variant_fields_kernel(
   }
 }
 
-// Status helper for fixed-width primitive targets: returns the failure reason when decode fails.
+/**
+ * @brief Status helper for fixed-width primitive targets: returns the failure reason when decode
+ * fails.
+ */
 template <typename T>
   requires(is_variant_numerical<T>)
 __device__ op_status cast_status_for_primitive(device_span<uint8_t const> val)
@@ -678,9 +685,15 @@ __device__ op_status cast_status_for_primitive(device_span<uint8_t const> val)
   }
 }
 
-// `HasStatus=false`: decode-only; SQL-null rows produce null output, other failure types produce
-// null. `HasStatus=true`: also fills `d_status`/`d_status_null_mask` and honours `has_incoming`.
-// `has_incoming`: when true, `incoming_status` gates decoding instead of the null mask.
+/**
+ * @brief Per-row kernel: decode each VARIANT value blob into a fixed-width primitive of type `T`.
+ *
+ * Writes the decoded value to `d_output[row]` for non-null rows whose blob is a variant primitive
+ * whose physical type id matches `T` exactly (e.g. an int16 value does not decode into an int32
+ * output, and a float32 value does not decode into a float64 output; there is no widening). Rows
+ * that are null, or whose value is not an exact-width match for `T`, are marked null in
+ * `d_null_mask` with an output of 0.
+ */
 template <typename T, bool HasStatus>
 CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_primitive_kernel(
   cudf::lists_column_device_view values,
