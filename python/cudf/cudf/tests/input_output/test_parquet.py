@@ -3424,12 +3424,12 @@ def test_parquet_writer_zstd():
 
 def test_parquet_writer_gzip():
     size = 12345
-    rng = np.random.default_rng(seed=0)
+    # Both columns have to be compressible, otherwise the writer skips compression
+    # for the chunk and emits it uncompressed.
     expected = cudf.DataFrame(
         {
             "a": np.arange(0, stop=size, dtype="float64"),
-            "b": rng.choice(list("abcd"), size=size),
-            "c": rng.choice(np.arange(4), size=size),
+            "b": [f"row-{i}-value" for i in range(size)],
         }
     )
 
@@ -3442,14 +3442,8 @@ def test_parquet_writer_gzip():
     assert_eq(expected, got.to_pandas())
 
     row_group = pq.ParquetFile(buff).metadata.row_group(0)
-    codecs = {
-        row_group.column(i).path_in_schema: row_group.column(i).compression
-        for i in range(row_group.num_columns)
-    }
-    # A chunk is left uncompressed when compression does not shrink it, which can happen
-    # for the low-cardinality dictionary-encoded columns. "a" is always compressible.
-    assert codecs["a"] == "GZIP"
-    assert set(codecs.values()) <= {"GZIP", "UNCOMPRESSED"}
+    for i in range(row_group.num_columns):
+        assert row_group.column(i).compression == "GZIP"
 
 
 @pytest.mark.parametrize("store_schema", [True, False])
