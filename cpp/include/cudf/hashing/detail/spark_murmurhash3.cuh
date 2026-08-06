@@ -5,29 +5,22 @@
 
 #pragma once
 
-#include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/hashing/detail/hash_functions.cuh>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 
-#include <cuda/functional>
 #include <cuda/std/algorithm>
 #include <cuda/std/cstddef>
 #include <cuda/std/iterator>
-#include <cuda/std/type_traits>
 #include <thrust/find.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/reverse.h>
 
 namespace cudf::hashing::detail {
 
-using spark_hash_value_type = int32_t;
-
 template <typename Key, CUDF_ENABLE_IF(not cudf::is_nested<Key>())>
 struct Spark_MurmurHash3_x86_32 {
-  using result_type = spark_hash_value_type;
+  using result_type = int32_t;
 
   CUDF_HOST_DEVICE constexpr Spark_MurmurHash3_x86_32() = delete;
   CUDF_HOST_DEVICE constexpr Spark_MurmurHash3_x86_32(result_type seed)
@@ -124,57 +117,57 @@ struct Spark_MurmurHash3_x86_32 {
 };
 
 template <>
-spark_hash_value_type __device__ inline Spark_MurmurHash3_x86_32<bool>::operator()(
-  bool const& key) const
+__device__ inline auto Spark_MurmurHash3_x86_32<bool>::operator()(bool const& key) const
+  -> result_type
 {
   return compute<uint32_t>(key);
 }
 
 template <>
-spark_hash_value_type __device__ inline Spark_MurmurHash3_x86_32<int8_t>::operator()(
-  int8_t const& key) const
+__device__ inline auto Spark_MurmurHash3_x86_32<int8_t>::operator()(int8_t const& key) const
+  -> result_type
 {
   return compute<uint32_t>(key);
 }
 
 template <>
-spark_hash_value_type __device__ inline Spark_MurmurHash3_x86_32<uint8_t>::operator()(
-  uint8_t const& key) const
+__device__ inline auto Spark_MurmurHash3_x86_32<uint8_t>::operator()(uint8_t const& key) const
+  -> result_type
 {
   return compute<uint32_t>(key);
 }
 
 template <>
-spark_hash_value_type __device__ inline Spark_MurmurHash3_x86_32<int16_t>::operator()(
-  int16_t const& key) const
+__device__ inline auto Spark_MurmurHash3_x86_32<int16_t>::operator()(int16_t const& key) const
+  -> result_type
 {
   return compute<uint32_t>(key);
 }
 
 template <>
-spark_hash_value_type __device__ inline Spark_MurmurHash3_x86_32<uint16_t>::operator()(
-  uint16_t const& key) const
+__device__ inline auto Spark_MurmurHash3_x86_32<uint16_t>::operator()(uint16_t const& key) const
+  -> result_type
 {
   return compute<uint32_t>(key);
 }
 
 template <>
-spark_hash_value_type __device__ inline Spark_MurmurHash3_x86_32<float>::operator()(
-  float const& key) const
+__device__ inline auto Spark_MurmurHash3_x86_32<float>::operator()(float const& key) const
+  -> result_type
 {
   return compute<float>(normalize_nans(key));
 }
 
 template <>
-spark_hash_value_type __device__ inline Spark_MurmurHash3_x86_32<double>::operator()(
-  double const& key) const
+__device__ inline auto Spark_MurmurHash3_x86_32<double>::operator()(double const& key) const
+  -> result_type
 {
   return compute<double>(normalize_nans(key));
 }
 
 template <>
-spark_hash_value_type __device__ inline Spark_MurmurHash3_x86_32<cudf::string_view>::operator()(
-  cudf::string_view const& key) const
+__device__ inline auto Spark_MurmurHash3_x86_32<cudf::string_view>::operator()(
+  cudf::string_view const& key) const -> result_type
 {
   auto const data = reinterpret_cast<cuda::std::byte const*>(key.data());
   auto const len  = key.size_bytes();
@@ -182,22 +175,22 @@ spark_hash_value_type __device__ inline Spark_MurmurHash3_x86_32<cudf::string_vi
 }
 
 template <>
-spark_hash_value_type __device__ inline Spark_MurmurHash3_x86_32<numeric::decimal32>::operator()(
-  numeric::decimal32 const& key) const
+__device__ inline auto Spark_MurmurHash3_x86_32<numeric::decimal32>::operator()(
+  numeric::decimal32 const& key) const -> result_type
 {
   return compute<uint64_t>(key.value());
 }
 
 template <>
-spark_hash_value_type __device__ inline Spark_MurmurHash3_x86_32<numeric::decimal64>::operator()(
-  numeric::decimal64 const& key) const
+__device__ inline auto Spark_MurmurHash3_x86_32<numeric::decimal64>::operator()(
+  numeric::decimal64 const& key) const -> result_type
 {
   return compute<uint64_t>(key.value());
 }
 
 template <>
-spark_hash_value_type __device__ inline Spark_MurmurHash3_x86_32<numeric::decimal128>::operator()(
-  numeric::decimal128 const& key) const
+__device__ inline auto Spark_MurmurHash3_x86_32<numeric::decimal128>::operator()(
+  numeric::decimal128 const& key) const -> result_type
 {
   // Generates the Spark MurmurHash3 hash value, mimicking the conversion:
   // java.math.BigDecimal.valueOf(unscaled_value, _scale).unscaledValue().toByteArray()
@@ -240,143 +233,5 @@ spark_hash_value_type __device__ inline Spark_MurmurHash3_x86_32<numeric::decima
   thrust::reverse_copy(thrust::seq, data, data + length, big_endian_data);
   return compute_bytes(big_endian_data, length);
 }
-
-/**
- * @brief Computes the hash value of a row in the given table.
- *
- * This functor uses Spark conventions for Murmur hashing, which differs from
- * the Murmur implementation used in the rest of libcudf. These differences
- * include:
- * - Serially using the output hash as an input seed for the next item
- * - Ignorance of null values
- *
- * The serial use of hashes as seeds means that data of different nested types
- * can exhibit hash collisions. For example, a row of an integer column
- * containing a 1 will have the same hash as a lists column of integers
- * containing a list of [1] and a struct column of a single integer column
- * containing a struct of {1}.
- *
- * As a consequence of ignoring null values, inputs like [1], [1, null], and
- * [null, 1] have the same hash (an expected hash collision). This kind of
- * collision can also occur across a table of nullable columns and with nulls
- * in structs ({1, null} and {null, 1} have the same hash). The seed value (the
- * previous element's hash value) is returned as the hash if an element is
- * null.
- *
- * For additional differences such as special tail processing and decimal type
- * handling, refer to the Spark_MurmurHash3_x86_32 functor.
- *
- * @tparam hash_function Hash functor to use for hashing elements. Must be Spark_MurmurHash3_x86_32.
- * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
- */
-template <template <typename> class hash_function, typename Nullate>
-class spark_murmur_device_row_hasher {
-  friend class cudf::detail::row::hash::row_hasher;  ///< Allow row_hasher to access private
-                                                     ///< members.
-
- public:
-  /**
-   * @brief Return the hash value of a row in the given table.
-   *
-   * @param row_index The row index to compute the hash value of
-   * @return The hash value of the row
-   */
-  __device__ auto operator()(size_type row_index) const noexcept
-  {
-    return cudf::detail::accumulate(
-      _table.begin(),
-      _table.end(),
-      _seed,
-      cuda::proclaim_return_type<spark_hash_value_type>(
-        [row_index, nulls = this->_check_nulls] __device__(auto hash, auto column) {
-          return cudf::type_dispatcher(
-            column.type(), element_hasher_adapter<hash_function>{nulls, hash}, column, row_index);
-        }));
-  }
-
- private:
-  /**
-   * @brief Computes the hash value of an element in the given column.
-   *
-   * When the column is non-nested, this is a simple wrapper around the element_hasher.
-   * When the column is nested, this uses a seed value to serially compute each
-   * nested element, with the output hash becoming the seed for the next value.
-   * This requires constructing a new hash functor for each nested element,
-   * using the new seed from the previous element's hash. The hash of a null
-   * element is the input seed (the previous element's hash).
-   */
-  template <template <typename> class hash_fn>
-  class element_hasher_adapter {
-   public:
-    using hash_functor = cudf::detail::row::hash::element_hasher<hash_fn, Nullate>;
-    using result_type  = typename hash_functor::result_type;
-
-    __device__ element_hasher_adapter(Nullate check_nulls, result_type seed) noexcept
-      : _check_nulls(check_nulls), _seed(seed)
-    {
-    }
-
-    template <typename T, CUDF_ENABLE_IF(not cudf::is_nested<T>())>
-    __device__ spark_hash_value_type operator()(column_device_view const& col,
-                                                size_type row_index) const noexcept
-    {
-      auto const hasher = hash_functor{_check_nulls, _seed, _seed};
-      return hasher.template operator()<T>(col, row_index);
-    }
-
-    template <typename T, CUDF_ENABLE_IF(cudf::is_nested<T>())>
-    __device__ spark_hash_value_type operator()(column_device_view const& col,
-                                                size_type row_index) const noexcept
-    {
-      column_device_view curr_col = col.slice(row_index, 1);
-      while (curr_col.type().id() == type_id::STRUCT || curr_col.type().id() == type_id::LIST) {
-        if (curr_col.type().id() == type_id::STRUCT) {
-          if (curr_col.num_child_columns() == 0) { return _seed; }
-          // Non-empty structs are assumed to be decomposed and contain only one child
-          curr_col = cudf::structs_column_device_view(curr_col).get_sliced_child(0);
-        } else if (curr_col.type().id() == type_id::LIST) {
-          curr_col = cudf::lists_column_device_view(curr_col).get_sliced_child();
-        }
-      }
-
-      return cudf::detail::accumulate(
-        thrust::counting_iterator(0),
-        thrust::counting_iterator(curr_col.size()),
-        _seed,
-        [curr_col, nulls = this->_check_nulls] __device__(auto hash, auto element_index) {
-          auto const hasher = hash_functor{nulls, hash, hash};
-          return cudf::type_dispatcher<cudf::detail::dispatch_void_if_nested>(
-            curr_col.type(), hasher, curr_col, element_index);
-        });
-    }
-
-    Nullate const _check_nulls;  ///< Whether to check for nulls
-    result_type const _seed;     ///< The seed to use for hashing, also returned for null elements
-  };
-
-  using result_type = typename element_hasher_adapter<hash_function>::result_type;
-
-  CUDF_HOST_DEVICE spark_murmur_device_row_hasher(Nullate check_nulls,
-                                                  table_device_view t,
-                                                  result_type seed = DEFAULT_HASH_SEED) noexcept
-    : _check_nulls{check_nulls}, _table{t}, _seed(seed)
-  {
-    // Error out if passed an unsupported hash_function
-    static_assert(
-      cuda::std::is_same_v<Spark_MurmurHash3_x86_32<int>, hash_function<int>>,
-      "spark_murmur_device_row_hasher only supports the Spark_MurmurHash3_x86_32 hash function");
-  }
-
-  Nullate const _check_nulls;
-  table_device_view const _table;
-  result_type const _seed;
-};
-
-/**
- * @brief Throws if `input` contains a nested shape unsupported by Spark MurmurHash3.
- *
- * @param input Table to validate
- */
-void check_spark_murmurhash3_compatibility(table_view const& input);
 
 }  // namespace cudf::hashing::detail

@@ -14,6 +14,7 @@
 #include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/row_operator/lexicographic.cuh>
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
+#include <cudf/detail/row_operator/spark_hashing.cuh>
 #include <cudf/hashing/detail/spark_murmurhash3.cuh>
 #include <cudf/hashing/detail/xxhash_64.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -374,10 +375,9 @@ TEST_F(RowOperatorTest, TestSparkMurmurRowHasher)
 
   auto const stream     = cudf::get_default_stream();
   auto const row_hasher = cudf::detail::row::hash::row_hasher{input, stream};
-  auto const hasher =
-    row_hasher.device_hasher<cudf::hashing::detail::Spark_MurmurHash3_x86_32,
-                             cudf::hashing::detail::spark_murmur_device_row_hasher>(
-      cudf::nullate::DYNAMIC{false}, 42);
+  auto const hasher     = row_hasher.device_hasher<cudf::hashing::detail::Spark_MurmurHash3_x86_32,
+                                                   cudf::detail::row::hash::spark_device_row_hasher>(
+    cudf::nullate::DYNAMIC{false}, 42);
 
   auto results = cudf::test::fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0};
   thrust::transform(rmm::exec_policy_nosync(stream),

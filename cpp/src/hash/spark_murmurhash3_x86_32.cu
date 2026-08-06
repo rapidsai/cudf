@@ -4,6 +4,7 @@
  */
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/row_operator/spark_hashing.cuh>
 #include <cudf/hashing.hpp>
 #include <cudf/hashing/detail/spark_murmurhash3.cuh>
 #include <cudf/lists/lists_column_view.hpp>
@@ -18,6 +19,8 @@
 namespace cudf {
 namespace hashing {
 namespace detail {
+
+namespace {
 
 void check_spark_murmurhash3_compatibility(table_view const& input)
 {
@@ -41,16 +44,17 @@ void check_spark_murmurhash3_compatibility(table_view const& input)
   }
 }
 
+}  // namespace
+
 std::unique_ptr<column> spark_murmurhash3_x86_32(table_view const& input,
                                                  uint32_t seed,
                                                  rmm::cuda_stream_view stream,
                                                  rmm::device_async_resource_ref mr)
 {
-  auto output = make_numeric_column(data_type(type_to_id<spark_hash_value_type>()),
-                                    input.num_rows(),
-                                    mask_state::UNALLOCATED,
-                                    stream,
-                                    mr);
+  using result_type = Spark_MurmurHash3_x86_32<int32_t>::result_type;
+
+  auto output = make_numeric_column(
+    data_type(type_to_id<result_type>()), input.num_rows(), mask_state::UNALLOCATED, stream, mr);
 
   // Return early if there's nothing to hash
   if (input.num_rows() == 0) { return output; }
@@ -60,12 +64,13 @@ std::unique_ptr<column> spark_murmurhash3_x86_32(table_view const& input,
 
   bool const nullable     = has_nested_nulls(input);
   auto const row_hasher   = cudf::detail::row::hash::row_hasher(input, stream);
-  auto const output_begin = output->mutable_view().begin<spark_hash_value_type>();
+  auto const output_begin = output->mutable_view().begin<result_type>();
 
   // Compute the hash value for each row
   auto const hasher =
-    row_hasher.device_hasher<Spark_MurmurHash3_x86_32, spark_murmur_device_row_hasher>(nullable,
-                                                                                       seed);
+    row_hasher
+      .device_hasher<Spark_MurmurHash3_x86_32, cudf::detail::row::hash::spark_device_row_hasher>(
+        nullable, seed);
   CUDF_CUDA_TRY(cub::DeviceFor::Bulk(
     input.num_rows(),
     [output_begin, hasher] __device__(size_type i) mutable { output_begin[i] = hasher(i); },
