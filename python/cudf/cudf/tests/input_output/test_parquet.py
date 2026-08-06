@@ -3441,9 +3441,15 @@ def test_parquet_writer_gzip():
     got = pq.read_table(buff)
     assert_eq(expected, got.to_pandas())
 
-    fmd = pq.ParquetFile(buff).metadata
-    for i in range(fmd.row_group(0).num_columns):
-        assert fmd.row_group(0).column(i).compression == "GZIP"
+    row_group = pq.ParquetFile(buff).metadata.row_group(0)
+    codecs = {
+        row_group.column(i).path_in_schema: row_group.column(i).compression
+        for i in range(row_group.num_columns)
+    }
+    # A chunk is left uncompressed when compression does not shrink it, which can happen
+    # for the low-cardinality dictionary-encoded columns. "a" is always compressible.
+    assert codecs["a"] == "GZIP"
+    assert set(codecs.values()) <= {"GZIP", "UNCOMPRESSED"}
 
 
 @pytest.mark.parametrize("store_schema", [True, False])
