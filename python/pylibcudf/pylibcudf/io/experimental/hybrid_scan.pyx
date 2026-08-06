@@ -92,16 +92,16 @@ cdef class HybridScanMetadata:
         -------
         HybridScanMetadata
         """
-        cdef HybridScanMetadata self = HybridScanMetadata.__new__(HybridScanMetadata)
+        cdef HybridScanMetadata result = HybridScanMetadata.__new__(HybridScanMetadata)
         cdef const uint8_t* footer_ptr = <const uint8_t*>0
         if len(footer_bytes) > 0:
             footer_ptr = &footer_bytes[0]
         with nogil:
-            self.c_obj = make_unique[cpp_hybrid_scan_metadata](
+            result.c_obj = make_unique[cpp_hybrid_scan_metadata](
                 host_span[const_uint8_t](footer_ptr, len(footer_bytes)),
                 options.c_obj
             )
-        return self
+        return result
 
     @staticmethod
     def from_parquet_metadata(c_FileMetaData metadata, ParquetReaderOptions options):
@@ -118,13 +118,13 @@ cdef class HybridScanMetadata:
         -------
         HybridScanMetadata
         """
-        cdef HybridScanMetadata self = HybridScanMetadata.__new__(HybridScanMetadata)
+        cdef HybridScanMetadata result = HybridScanMetadata.__new__(HybridScanMetadata)
         with nogil:
-            self.c_obj = make_unique[cpp_hybrid_scan_metadata](
+            result.c_obj = make_unique[cpp_hybrid_scan_metadata](
                 metadata.c_obj,
                 options.c_obj
             )
-        return self
+        return result
 
 
 cdef class HybridScanReader:
