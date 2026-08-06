@@ -54,8 +54,10 @@ namespace {
 
 std::unique_ptr<column> generate_all_row_indices(size_type num_rows)
 {
-  auto indices = cudf::make_fixed_width_column(
-    data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED, cudf::test::get_default_stream());
+  auto indices = cudf::make_fixed_width_column(data_type{type_to_id<size_type>()},
+                                               num_rows,
+                                               mask_state::UNALLOCATED,
+                                               cudf::test::get_default_stream());
   thrust::sequence(rmm::exec_policy_nosync(cudf::test::get_default_stream()),
                    indices->mutable_view().begin<size_type>(),
                    indices->mutable_view().end<size_type>(),
@@ -126,8 +128,8 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
                                           row_size_iter,
                                           row_size_iter + row_indices.size());
   // no output. done.
-  auto result =
-    cudf::make_fixed_width_column(data_type{type_id::INT32}, output_size, mask_state::UNALLOCATED);
+  auto result = cudf::make_fixed_width_column(
+    data_type{type_to_id<size_type>()}, output_size, mask_state::UNALLOCATED);
   if (output_size == 0) { return result; }
 
   // for all input rows, what position in the output column they will start at.
@@ -136,7 +138,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   //                           |     |              <-- non-null input rows
   //
   auto output_row_start = cudf::make_fixed_width_column(
-    data_type{type_id::INT32}, row_indices.size(), mask_state::UNALLOCATED);
+    data_type{type_to_id<size_type>()}, row_indices.size(), mask_state::UNALLOCATED);
   thrust::exclusive_scan(rmm::exec_policy_nosync(cudf::test::get_default_stream()),
                          row_size_iter,
                          row_size_iter + row_indices.size(),
@@ -179,8 +181,8 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   //
   // result = [1, 1, 2, 2, 2]
   //
-  auto keys =
-    cudf::make_fixed_width_column(data_type{type_id::INT32}, output_size, mask_state::UNALLOCATED);
+  auto keys = cudf::make_fixed_width_column(
+    data_type{type_to_id<size_type>()}, output_size, mask_state::UNALLOCATED);
   thrust::generate(
     rmm::exec_policy_nosync(cudf::test::get_default_stream()),
     keys->mutable_view().begin<size_type>(),
