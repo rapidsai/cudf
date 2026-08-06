@@ -301,16 +301,18 @@ template <typename StringsIterator, typename ValidityIterator>
 auto make_chars_and_offsets(StringsIterator begin, StringsIterator end, ValidityIterator v)
 {
   std::vector<char> chars{};
-  std::vector<cudf::size_type> offsets(1, 0);
+  // A strings column's offsets are 32 bits wide until the column is large enough to need 64,
+  // which is a property of its character count rather than of size_type. This wrapper builds
+  // only the narrow kind, and says so below.
+  std::vector<int32_t> offsets(1, 0);
   for (auto str = begin; str < end; ++str) {
     std::string tmp = (*v++) ? std::string(*str) : std::string{};
     chars.insert(chars.end(), std::cbegin(tmp), std::cend(tmp));
     auto const last_offset = static_cast<std::size_t>(offsets.back());
     auto const next_offset = last_offset + tmp.length();
-    CUDF_EXPECTS(
-      next_offset < static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
-      "Cannot use strings_column_wrapper to build a large strings column");
-    offsets.push_back(static_cast<cudf::size_type>(next_offset));
+    CUDF_EXPECTS(next_offset < static_cast<std::size_t>(std::numeric_limits<int32_t>::max()),
+                 "Cannot use strings_column_wrapper to build a large strings column");
+    offsets.push_back(static_cast<int32_t>(next_offset));
   }
   return std::pair(std::move(chars), std::move(offsets));
 };
