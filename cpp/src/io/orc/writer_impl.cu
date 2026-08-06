@@ -962,10 +962,8 @@ std::pair<encoded_data, std::vector<extent_info>> encode_columns(
   // Compute per-rowgroup stream lengths and per-(stripe, strm_id) extent sizes, along with
   // whether an extent size may exceed what the encoder ends up writing.
   auto const num_streams = streams.size();
-  auto const extent_idx  = [num_streams](size_t stripe_id, size_t strm_id) {
-    return stripe_id * num_streams + strm_id;
-  };
-  std::vector<extent_info> extents(segmentation.num_stripes() * num_streams);
+  std::vector<extent_info> extent_storage(segmentation.num_stripes() * num_streams);
+  auto const extents = host_2dspan<extent_info>{extent_storage, num_streams};
   for (auto const& stripe : segmentation.stripes) {
     for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
       for (int strm_type = 0; strm_type < CI_NUM_STREAMS; ++strm_type) {
@@ -1024,7 +1022,7 @@ std::pair<encoded_data, std::vector<extent_info>> encode_columns(
           stripe_size += strm.lengths[strm_type] + uncomp_block_align - 1;
         });
 
-        auto& extent     = extents[extent_idx(stripe.id, strm_id)];
+        auto& extent     = extents[stripe.id][strm_id];
         extent.size      = stripe_size;
         extent.has_slack = has_slack;
       }
@@ -1037,7 +1035,7 @@ std::pair<encoded_data, std::vector<extent_info>> encode_columns(
   size_t transient_arena_size  = 0;
   for (size_t s = 0; s < segmentation.num_stripes(); ++s) {
     for (size_t strm_id = 0; strm_id < num_streams; ++strm_id) {
-      auto& extent = extents[extent_idx(s, strm_id)];
+      auto& extent = extents[s][strm_id];
       if (extent.size == 0) { continue; }
       extent.is_transient = segmentation.stripes[s].size > 1 and extent.has_slack;
       auto& arena_size    = extent.is_transient ? transient_arena_size : persistent_arena_size;
@@ -1054,7 +1052,7 @@ std::pair<encoded_data, std::vector<extent_info>> encode_columns(
     segmentation.num_stripes(), std::vector<device_span<uint8_t>>(num_streams));
   for (size_t s = 0; s < segmentation.num_stripes(); ++s) {
     for (size_t strm_id = 0; strm_id < num_streams; ++strm_id) {
-      auto const& extent = extents[extent_idx(s, strm_id)];
+      auto const extent = extents[s][strm_id];
       // Zero-size extents keep a null pointer, matching the empty device_uvector they replaced.
       if (extent.size == 0) { continue; }
       auto& arena               = extent.is_transient ? transient_buffer : persistent_buffer;
@@ -1128,7 +1126,7 @@ std::pair<encoded_data, std::vector<extent_info>> encode_columns(
                        rmm::device_uvector<uint8_t>{0, stream},  // filled by gather_stripes
                        std::move(encoded_views),
                        std::move(chunk_streams)},
-          std::move(extents)};
+          std::move(extent_storage)};
 }
 
 // TODO: remove StripeInformation from this function and return strm_desc instead
@@ -1155,17 +1153,18 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
   if (segmentation.num_stripes() == 0) { return {}; }
 
   auto const num_streams_in_data = enc_data->data[0].size();
-  auto const extent_idx          = [num_streams_in_data](size_t stripe_id, size_t strm_id) {
-    return stripe_id * num_streams_in_data + strm_id;
+
+  // Compaction destination of one (stripe, stream) pair within the gather arena.
+  struct gather_extent {
+    size_t size{0};    // what the encoder actually wrote
+    size_t offset{0};  // byte offset within the arena
+    bool gathered{false};
+    device_span<uint8_t> view{};
   };
+  std::vector<gather_extent> gather_storage(segmentation.num_stripes() * num_streams_in_data);
+  auto const gather_extents = host_2dspan<gather_extent>{gather_storage, num_streams_in_data};
 
   // Compute per-(stripe, stream) actual sizes and decide which need a gathered copy.
-  struct gather_info {
-    size_t actual_size{0};
-    bool gathered{false};
-  };
-  std::vector<gather_info> gather_meta(segmentation.num_stripes() * num_streams_in_data);
-
   for (auto const& stripe : segmentation.stripes) {
     for (size_t col_idx = 0; col_idx < enc_data->streams.size().first; col_idx++) {
       auto const& col_streams = (enc_data->streams)[col_idx];
@@ -1188,28 +1187,28 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
         // so that arena can be released below.
         bool const gathered = (stripe.size > 1 and (extents[stripe.id][stream_id].is_transient or
                                                     allocated_stripe_size > actual_stripe_size));
-        gather_meta[extent_idx(stripe.id, stream_id)] = {actual_stripe_size, gathered};
+
+        auto& extent    = gather_extents[stripe.id][stream_id];
+        extent.size     = actual_stripe_size;
+        extent.gathered = gathered;
       }
     }
   }
 
   // Lay out gather destinations in a single arena, with the same alignment as the encoded arenas.
-  std::vector<size_t> gather_offsets(segmentation.num_stripes() * num_streams_in_data, 0);
   size_t gather_total = 0;
   for (size_t s = 0; s < segmentation.num_stripes(); ++s) {
     for (size_t strm_id = 0; strm_id < num_streams_in_data; ++strm_id) {
-      auto const idx = extent_idx(s, strm_id);
-      if (!gather_meta[idx].gathered) { continue; }
-      gather_total        = util::round_up_unsafe<size_t>(gather_total, extent_alignment);
-      gather_offsets[idx] = gather_total;
-      gather_total += gather_meta[idx].actual_size;
+      auto& extent = gather_extents[s][strm_id];
+      if (!extent.gathered) { continue; }
+      gather_total  = util::round_up_unsafe<size_t>(gather_total, extent_alignment);
+      extent.offset = gather_total;
+      gather_total += extent.size;
     }
   }
   rmm::device_uvector<uint8_t> gather_buffer(gather_total, stream);
 
   // Build strm_desc entries and record gather destination spans.
-  std::vector<device_span<uint8_t>> gather_views(segmentation.num_stripes() * num_streams_in_data,
-                                                 device_span<uint8_t>{});
   std::vector<StripeInformation> stripes(segmentation.num_stripes());
   for (auto const& stripe : segmentation.stripes) {
     for (size_t col_idx = 0; col_idx < enc_data->streams.size().first; col_idx++) {
@@ -1218,20 +1217,19 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
         auto const stream_id = col_streams[0].ids[k];
         if (stream_id == -1) { continue; }
 
-        auto const idx   = extent_idx(stripe.id, stream_id);
-        auto const& meta = gather_meta[idx];
+        auto& extent     = gather_extents[stripe.id][stream_id];
         uint8_t* dst_ptr = nullptr;
-        if (meta.gathered) {
+        if (extent.gathered) {
           // Non-null even when the extent is empty, unlike the empty device_uvector this replaced.
           // `init_batched_memcpy_kernel` repoints the per-rowgroup data_ptrs at this arena, which
           // is what lets `transient_buffer` be released without leaving them dangling.
-          dst_ptr           = gather_buffer.data() + gather_offsets[idx];
-          gather_views[idx] = device_span<uint8_t>{dst_ptr, meta.actual_size};
+          dst_ptr     = gather_buffer.data() + extent.offset;
+          extent.view = device_span<uint8_t>{dst_ptr, extent.size};
         }
 
         auto* ss           = &(*strm_desc)[stripe.id][stream_id - num_index_streams];
         ss->data_ptr       = dst_ptr;  // null when not gathered; init_batched_memcpy_kernel skips
-        ss->stream_size    = meta.actual_size;
+        ss->stream_size    = extent.size;
         ss->first_chunk_id = stripe.first;
         ss->num_chunks     = stripe.size;
         ss->column_id      = col_idx;
@@ -1255,8 +1253,8 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
   // spans, so consumers that read enc_data->data observe the post-gather state.
   for (size_t stripe_id = 0; stripe_id < enc_data->data.size(); ++stripe_id) {
     for (size_t stream_id = 0; stream_id < num_streams_in_data; ++stream_id) {
-      auto const idx = extent_idx(stripe_id, stream_id);
-      if (gather_meta[idx].gathered) { enc_data->data[stripe_id][stream_id] = gather_views[idx]; }
+      auto const extent = gather_extents[stripe_id][stream_id];
+      if (extent.gathered) { enc_data->data[stripe_id][stream_id] = extent.view; }
     }
   }
 
