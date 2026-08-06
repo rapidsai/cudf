@@ -4685,6 +4685,65 @@ def test_parquet_reader_mismatched_nullability_structs(tmp_path):
     )
 
 
+@pytest.mark.parametrize(
+    "bloom_filter_fname",
+    [
+        "mixed_card_ndv_100_bf_fpp0.1_nostats.snappy.parquet",
+        "mixed_card_ndv_500_bf_fpp0.1_nostats.snappy.parquet",
+    ],
+)
+def test_parquet_bloom_filter_negated_equality(datadir, bloom_filter_fname):
+    """`NOT(col == v)` must prune exactly what `col != v` prunes.
+
+    A bloom filter answers "might this value be present", which is an existential over the
+    row group. Negating that answer asks "is the value definitely absent", which is a
+    different question: it prunes every row group holding a single `v`, dropping the rows
+    that do satisfy `col != v`. These files carry bloom filters and no column chunk
+    statistics, so the bloom filter is the only thing that can prune here.
+    """
+    import pylibcudf as plc
+    from pylibcudf.expressions import (
+        ASTOperator,
+        ColumnNameReference,
+        Literal,
+        Operation,
+    )
+
+    fname = datadir / bloom_filter_fname
+    needle = Literal(plc.Scalar.from_arrow(pa.scalar("FINDME")))
+
+    def read_with(filter_expr):
+        source = plc.io.SourceInfo([str(fname)])
+        options = plc.io.parquet.ParquetReaderOptions.builder(source).build()
+        options.set_filter(filter_expr)
+        return plc.io.parquet.read_parquet(options)
+
+    negated_equality = read_with(
+        Operation(
+            ASTOperator.NOT,
+            Operation(
+                ASTOperator.EQUAL, ColumnNameReference("str"), needle
+            ),
+        )
+    )
+    not_equal = read_with(
+        Operation(
+            ASTOperator.NOT_EQUAL, ColumnNameReference("str"), needle
+        )
+    )
+
+    # The two spellings are the same predicate and must prune identically
+    assert (
+        negated_equality.num_row_groups_after_bloom_filter
+        == not_equal.num_row_groups_after_bloom_filter
+    )
+    assert negated_equality.tbl.to_arrow().equals(not_equal.tbl.to_arrow())
+
+    # Both must keep every row that is not "FINDME". Negating the bloom filter result
+    # instead prunes the two row groups that hold a "FINDME" and returns only 600.
+    assert negated_equality.tbl.num_rows() == 998
+
+
 @pytest.mark.skipif(
     pa.__version__ == "19.0.0",
     reason="https://github.com/apache/arrow/issues/45283, https://github.com/rapidsai/cudf/issues/17806",
