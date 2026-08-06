@@ -45,17 +45,24 @@ using cudf::test::iterators::no_nulls;
 namespace {
 
 /**
- * @brief Create a list column with `num_rows` rows of `elements_per_row` values each.
+ * @brief Create a list column with `num_rows` rows of `rows_per_row` values each.
  */
 template <typename T>
 std::unique_ptr<cudf::column> make_wide_list_column(cudf::size_type num_rows,
-                                                    cudf::size_type elements_per_row)
+                                                    cudf::size_type rows_per_row)
   requires(cudf::is_integral_not_bool<T>())
 {
-  auto const offsets = cudf::detail::make_counting_transform_iterator(
-    cudf::size_type{0}, [elements_per_row](auto row) { return elements_per_row * row; });
-  auto child = cudf::sequence(
-    num_rows * elements_per_row, cudf::numeric_scalar<T>(0), cudf::numeric_scalar<T>(1));
+  // Compute in int64_t and validate before narrowing to cudf::size_type to avoid overflow
+  auto const total_values = static_cast<int64_t>(num_rows) * static_cast<int64_t>(rows_per_row);
+  CUDF_EXPECTS(total_values <= std::numeric_limits<cudf::size_type>::max(),
+               "Total list values exceeds cudf::size_type");
+  auto const offsets =
+    cudf::detail::make_counting_transform_iterator(cudf::size_type{0}, [rows_per_row](auto row) {
+      return static_cast<cudf::size_type>(static_cast<int64_t>(rows_per_row) * row);
+    });
+  auto child = cudf::sequence(static_cast<cudf::size_type>(total_values),
+                              cudf::numeric_scalar<T>(0),
+                              cudf::numeric_scalar<T>(1));
 
   return cudf::make_lists_column(
     num_rows,
