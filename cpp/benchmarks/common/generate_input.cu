@@ -412,12 +412,15 @@ rmm::device_uvector<cudf::size_type> sample_indices_with_run_length(cudf::size_t
   auto sample_dist = random_value_fn<cudf::size_type>{
     distribution_params<cudf::size_type>{distribution_id::UNIFORM, 0, cardinality - 1}};
   if (avg_run_len > 1) {
-    auto avglen_dist =
-      random_value_fn<int>{distribution_params<int>{distribution_id::UNIFORM, 1, 2 * avg_run_len}};
+    auto avglen_dist = random_value_fn<cudf::size_type>{
+      distribution_params<cudf::size_type>{distribution_id::UNIFORM, 1, 2 * avg_run_len}};
     auto const approx_run_len = num_rows / avg_run_len + 1;
     auto run_lens             = avglen_dist(engine, approx_run_len);
-    thrust::inclusive_scan(
-      thrust::device, run_lens.begin(), run_lens.end(), run_lens.begin(), cuda::std::plus<int>{});
+    thrust::inclusive_scan(thrust::device,
+                           run_lens.begin(),
+                           run_lens.end(),
+                           run_lens.begin(),
+                           cuda::std::plus<cudf::size_type>{});
     auto const samples_indices = sample_dist(engine, approx_run_len + 1);
     // This is gather.
     auto avg_repeated_sample_indices_iterator = thrust::make_transform_iterator(
@@ -510,7 +513,7 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
     lengths.end(),
     null_mask.begin(),
     lengths.begin(),
-    cuda::proclaim_return_type<cudf::size_type>([] __device__(auto) { return 0; }),
+    cuda::proclaim_return_type<uint32_t>([] __device__(auto) { return uint32_t{0}; }),
     cuda::std::logical_not<bool>{});
   auto valid_lengths = thrust::make_transform_iterator(
     thrust::make_zip_iterator(cuda::std::make_tuple(lengths.begin(), null_mask.begin())),
@@ -530,7 +533,7 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
   auto [result_bitmask, null_count] =
     profile.get_null_probability().has_value()
       ? cudf::bools_to_mask(cudf::device_span<bool const>(null_mask), stream)
-      : std::pair{std::make_unique<rmm::device_buffer>(), 0};
+      : std::pair{std::make_unique<rmm::device_buffer>(), cudf::size_type{0}};
 
   return cudf::make_strings_column(num_rows,
                                    std::move(offsets),
@@ -635,7 +638,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
   auto [result_bitmask, null_count] =
     profile.get_null_probability().has_value()
       ? cudf::bools_to_mask(cudf::device_span<bool const>(null_mask))
-      : std::pair{std::make_unique<rmm::device_buffer>(), 0};
+      : std::pair{std::make_unique<rmm::device_buffer>(), cudf::size_type{0}};
 
   return std::make_unique<cudf::column>(
     dtype, num_rows, data.release(), std::move(*result_bitmask.release()), null_count);
@@ -714,7 +717,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profi
           return cudf::bools_to_mask(cudf::device_span<bool const>(valids),
                                      cudf::get_default_stream());
         }
-        return std::pair{std::make_unique<rmm::device_buffer>(), 0};
+        return std::pair{std::make_unique<rmm::device_buffer>(), cudf::size_type{0}};
       }();
 
       // Adopt remaining children as evenly as possible
@@ -807,7 +810,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
 
     auto [null_mask, null_count] = profile.get_null_probability().has_value()
                                      ? cudf::bools_to_mask(cudf::device_span<bool const>(valids))
-                                     : std::pair{std::make_unique<rmm::device_buffer>(), 0};
+                                     : std::pair{std::make_unique<rmm::device_buffer>(), cudf::size_type{0}};
 
     list_column = cudf::make_lists_column(current_num_rows,
                                           std::move(offsets_column),
