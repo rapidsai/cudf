@@ -4770,19 +4770,30 @@ def memory_resource(request):
         rmm.mr.set_current_device_resource(current_mr)
 
 
-def _read_parquet_with_pruning_metadata(
-    sources, filter_expression, columns=None
-):
+@pytest.mark.parametrize("columns", [["r_reason_desc"], None])
+def test_parquet_bloom_filters_alignment(datadir, columns, memory_resource):
+    fname = datadir / "bloom_filter_alignment.parquet"
+    filters = [("r_reason_desc", "==", "Did not like the color")]
+
+    # Read expected table using pyarrow
+    expected = pq.read_table(fname, columns=columns, filters=filters)
+
+    # Read with cudf using the memory resource from fixture
+    read = cudf.read_parquet(
+        fname, columns=columns, filters=filters
+    ).to_arrow()
+
+    assert_eq(expected, read)
+
+
+def _read_parquet_with_pruning_metadata(sources, filter_expression):
     options = plc.io.parquet.ParquetReaderOptions.builder(
         plc.io.SourceInfo(sources)
     ).build()
-    if columns is not None:
-        options.set_column_names(columns)
     options.set_filter(filter_expression)
     return plc.io.parquet.read_parquet(options)
 
 
-@pytest.mark.parametrize("columns", [["r_reason_desc"], None])
 @pytest.mark.parametrize(
     "value,expected_row_groups",
     [
@@ -4790,15 +4801,15 @@ def _read_parquet_with_pruning_metadata(
         ("not-in-this-file", 0),
     ],
 )
-def test_parquet_bloom_filters_alignment_and_pruning(
-    datadir, columns, value, expected_row_groups, memory_resource
+def test_parquet_bloom_filters_pruning_multisource(
+    datadir, value, expected_row_groups
 ):
     fname = datadir / "bloom_filter_alignment.parquet"
     sources = [fname, fname]
     filters = [("r_reason_desc", "==", value)]
 
     # Read expected table using pyarrow
-    expected = pq.read_table(sources, columns=columns, filters=filters)
+    expected = pq.read_table(sources, filters=filters)
 
     # Read with pylibcudf to inspect row group pruning
     filter_expression = plc.expressions.Operation(
@@ -4806,9 +4817,7 @@ def test_parquet_bloom_filters_alignment_and_pruning(
         plc.expressions.ColumnNameReference("r_reason_desc"),
         plc.expressions.Literal(plc.Scalar.from_arrow(pa.scalar(value))),
     )
-    result = _read_parquet_with_pruning_metadata(
-        sources, filter_expression, columns
-    )
+    result = _read_parquet_with_pruning_metadata(sources, filter_expression)
 
     # Verify bloom pruning and table contents
     assert result.num_input_row_groups == 2
