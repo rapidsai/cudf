@@ -4634,6 +4634,9 @@ TEST_F(ParquetReaderTest, ByteBoundsAndFilters)
   }
 }
 
+// This limit is a property of a 32-bit size_type: a table with more rows than it can index
+// cannot be built at all once size_type is wider, so there is nothing left to reject.
+#if CUDF_SIZE_TYPE_BITS == 32
 TEST_F(ParquetReaderTest, TableTooLargeOverflows)
 {
   using T                             = bool;
@@ -4671,6 +4674,7 @@ TEST_F(ParquetReaderTest, TableTooLargeOverflows)
   }
   EXPECT_EQ(num_rows_read, num_rows_to_read);
 }
+#endif
 
 TEST_F(ParquetReaderTest, LateBindSourceInfo)
 {

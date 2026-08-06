@@ -1430,6 +1430,9 @@ TEST_F(OrcChunkedReaderInputLimitTest, ReadWithRowSelection)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, read_result->view());
 }
 
+// This limit is a property of a 32-bit size_type: a table with more rows than it can index
+// cannot be built at all once size_type is wider, so there is nothing left to reject.
+#if CUDF_SIZE_TYPE_BITS == 32
 TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
 {
   // this test runs over 3 hours when racecheck is used
@@ -1570,6 +1573,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
 
 #endif  // LOCAL_TEST
 }
+#endif
 
 TEST_P(OrcChunkedDecompressionTest, RoundTripBasic)
 {

@@ -2235,6 +2235,9 @@ TEST_F(OrcWriterTest, BounceBufferBug)
   cudf::io::write_orc(out_opts);
 }
 
+// This limit is a property of a 32-bit size_type: a table with more rows than it can index
+// cannot be built at all once size_type is wider, so there is nothing left to reject.
+#if CUDF_SIZE_TYPE_BITS == 32
 TEST_F(OrcReaderTest, SizeTypeRowsOverflow)
 {
   // this test runs over 1.5 hours when racecheck is used
@@ -2304,6 +2307,7 @@ TEST_F(OrcReaderTest, SizeTypeRowsOverflow)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_with_stripe_selection->view());
 }
+#endif
 
 TEST_F(OrcChunkedWriterTest, NoWriteCloseNotThrow)
 {
