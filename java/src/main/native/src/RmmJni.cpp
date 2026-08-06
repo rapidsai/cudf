@@ -44,6 +44,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -667,9 +668,9 @@ class parallel_init_pinned_host_memory_resource final {
   }
 
   [[nodiscard]] bool operator==(
-    [[maybe_unused]] parallel_init_pinned_host_memory_resource const& other) const noexcept
+    parallel_init_pinned_host_memory_resource const& other) const noexcept
   {
-    return true;
+    return this == std::addressof(other);
   }
 
   /**
