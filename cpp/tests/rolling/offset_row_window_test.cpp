@@ -273,7 +273,7 @@ TEST_F(OffsetRowWindowTest, TestNegativeBoundsClamp)
     auto const expected_fun = [&](auto const& i) {
       assert(preceding < 1);
       auto const index_in_group = i % 10;
-      auto const start          = std::min(-(preceding - 1) + index_in_group, 10);
+      auto const start          = std::min(-(preceding - 1) + index_in_group, cudf::size_type{10});
       return int64_t{10 - start};
     };
     auto const expected_iter =
@@ -288,7 +288,7 @@ TEST_F(OffsetRowWindowTest, TestNegativeBoundsClamp)
     auto const expected_fun = [&](auto const& i) {
       assert(following < 0);
       auto const index_in_group = i % 10;
-      auto const end            = std::max(index_in_group + following, -1);
+      auto const end            = std::max(index_in_group + following, cudf::size_type{-1});
       return int64_t{end + 1};
     };
     auto const expected_iter =

@@ -1222,7 +1222,9 @@ TEST_F(ReductionEmptyTest, Errors)
 struct ReductionParamTest : public ReductionTest<double>,
                             public ::testing::WithParamInterface<cudf::size_type> {};
 
-INSTANTIATE_TEST_CASE_P(ddofParam, ReductionParamTest, ::testing::Range(1, 5));
+INSTANTIATE_TEST_CASE_P(ddofParam,
+                        ReductionParamTest,
+                        ::testing::Range(cudf::size_type{1}, cudf::size_type{5}));
 
 TEST_P(ReductionParamTest, std_var)
 {
@@ -2425,8 +2427,8 @@ TYPED_TEST(ReductionTest, NthElement)
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
   // without nulls
-  for (cudf::size_type n :
-       {-input_size, -input_size / 2, -2, -1, 0, 1, 2, input_size / 2, input_size - 1}) {
+  for (cudf::size_type n : std::initializer_list<cudf::size_type>{
+         -input_size, -input_size / 2, -2, -1, 0, 1, 2, input_size / 2, input_size - 1}) {
     auto const index         = mod(n, v.size());
     T expected_value_nonull  = v[index];
     bool const expected_null = host_bools[index];
@@ -2451,8 +2453,8 @@ TYPED_TEST(ReductionTest, NthElement)
     EXPECT_EQ(res.second, expected_null);
   }
   // valid only
-  for (cudf::size_type n :
-       {-valid_count, -valid_count / 2, -2, -1, 0, 1, 2, valid_count / 2, valid_count - 1}) {
+  for (cudf::size_type n : std::initializer_list<cudf::size_type>{
+         -valid_count, -valid_count / 2, -2, -1, 0, 1, 2, valid_count / 2, valid_count - 1}) {
     T expected_value_null = v_valid[mod(n, v_valid.size())];
     EXPECT_EQ(
       this

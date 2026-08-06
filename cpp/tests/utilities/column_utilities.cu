@@ -146,10 +146,11 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   //
   // result = [1, 1, 1, 1, 1]
   //
-  thrust::generate(rmm::exec_policy_nosync(cudf::test::get_default_stream()),
-                   result->mutable_view().begin<size_type>(),
-                   result->mutable_view().end<size_type>(),
-                   cuda::proclaim_return_type<size_type>([] __device__() { return 1; }));
+  thrust::generate(
+    rmm::exec_policy_nosync(cudf::test::get_default_stream()),
+    result->mutable_view().begin<size_type>(),
+    result->mutable_view().end<size_type>(),
+    cuda::proclaim_return_type<size_type>([] __device__() -> size_type { return 1; }));
 
   // scatter the output row positions into result buffer
   //
@@ -180,10 +181,11 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   //
   auto keys =
     cudf::make_fixed_width_column(data_type{type_id::INT32}, output_size, mask_state::UNALLOCATED);
-  thrust::generate(rmm::exec_policy_nosync(cudf::test::get_default_stream()),
-                   keys->mutable_view().begin<size_type>(),
-                   keys->mutable_view().end<size_type>(),
-                   cuda::proclaim_return_type<size_type>([] __device__() { return 0; }));
+  thrust::generate(
+    rmm::exec_policy_nosync(cudf::test::get_default_stream()),
+    keys->mutable_view().begin<size_type>(),
+    keys->mutable_view().end<size_type>(),
+    cuda::proclaim_return_type<size_type>([] __device__() -> size_type { return 0; }));
   thrust::scatter_if(rmm::exec_policy_nosync(cudf::test::get_default_stream()),
                      row_size_iter,
                      row_size_iter + row_indices.size(),

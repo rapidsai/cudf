@@ -625,12 +625,13 @@ TYPED_TEST(MergeTest_, NMerge1KeyColumns)
       return row;
   });
 
-  auto sequence1 = cudf::detail::make_counting_transform_iterator(0, [inputRows](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
-      return 1;
-    else
-      return inputRows - row;
-  });
+  auto sequence1 =
+    cudf::detail::make_counting_transform_iterator(0, [inputRows](auto row) -> cudf::size_type {
+      if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
+        return 1;
+      else
+        return inputRows - row;
+    });
 
   constexpr int num_tables = 63;
   using PairT0 =
@@ -662,12 +663,13 @@ TYPED_TEST(MergeTest_, NMerge1KeyColumns)
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(seq_out1)::value_type>
     expectedDataWrap1(seq_out1, seq_out1 + outputRows);
 
-  auto seq_out2 = cudf::detail::make_counting_transform_iterator(0, [inputRows](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
-      return 1;
-    else
-      return inputRows - row / num_tables;
-  });
+  auto seq_out2 =
+    cudf::detail::make_counting_transform_iterator(0, [inputRows](auto row) -> cudf::size_type {
+      if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
+        return 1;
+      else
+        return inputRows - row / num_tables;
+    });
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(seq_out2)::value_type>
     expectedDataWrap2(seq_out2, seq_out2 + outputRows);
 
