@@ -3424,8 +3424,7 @@ def test_parquet_writer_zstd():
 
 def test_parquet_writer_gzip():
     size = 12345
-    # Both columns have to be compressible, otherwise the writer skips compression
-    # for the chunk and emits it uncompressed.
+    # Both columns have to be compressible
     expected = cudf.DataFrame(
         {
             "a": np.arange(0, stop=size, dtype="float64"),
@@ -3436,8 +3435,6 @@ def test_parquet_writer_gzip():
     buff = BytesIO()
     expected.to_parquet(buff, compression="GZIP")
 
-    # Decode with pyarrow's zlib, so that a malformed GZIP stream is not masked
-    # by libcudf reading back its own output.
     got = pq.read_table(buff)
     assert_eq(expected, got.to_pandas())
 
