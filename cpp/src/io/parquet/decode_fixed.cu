@@ -132,8 +132,14 @@ __device__ void decode_dict_indices_as_int32(
         return thread_pos;
       }();
 
-      auto* dst = reinterpret_cast<int32_t*>(data_out) + dst_pos;
-      *dst      = sb->dict_idx[rolling_index<state_buf::dict_buf_size>(src_pos)];
+      auto* dst           = reinterpret_cast<int32_t*>(data_out) + dst_pos;
+      auto const num_keys = static_cast<uint32_t>(s->dict_size / sizeof(string_index_pair));
+      auto const idx      = sb->dict_idx[rolling_index<state_buf::dict_buf_size>(src_pos)];
+      if (idx >= num_keys) {
+        s->set_error_code(decode_error::DATA_STREAM_OVERRUN);
+      } else {
+        *dst = idx;
+      }
     }
 
     pos += batch_size;

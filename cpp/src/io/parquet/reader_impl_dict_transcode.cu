@@ -153,31 +153,31 @@ void update_from_chunk(column_eligibility& e, ColumnChunkDesc const& chunk)
 
 }  // namespace
 
-bool reader_impl::prepare_dict_transcode(read_mode mode)
+void reader_impl::prepare_dict_transcode(read_mode mode)
 {
   CUDF_FUNC_RANGE();
 
   _dict_transcode_eligible.assign(_input_columns.size(), false);
 
-  if (not _options.output_dict_columns) { return false; }
+  if (not _options.output_dict_columns) { return; }
 
   // The fast path requires the whole column to live in a single subpass. For chunked / multi-pass
   // reads (non-zero chunk or pass read limit) we skip it and let `finalize_output` produce the
   // DICTIONARY32 columns via a post-hoc `dictionary::detail::encode` instead.
-  if (_output_chunk_read_limit != 0 or _input_pass_read_limit != 0) { return false; }
+  if (_output_chunk_read_limit != 0 or _input_pass_read_limit != 0) { return; }
 
   // Skip the fast path if custom row bounds are in effect.
-  if (uses_custom_row_bounds(mode)) { return false; }
+  if (uses_custom_row_bounds(mode)) { return; }
 
   // AST/JIT filters evaluate predicates on materialized STRING columns, so the direct transcode
   // fast path cannot run under a filter. Skip it and let `finalize_output` encode the filtered
   // STRING result to DICTIONARY32 via the post-hoc `dictionary::detail::encode` fallback.
-  if (_expr_conv.get_converted_expr().has_value()) { return false; }
+  if (_expr_conv.get_converted_expr().has_value()) { return; }
 
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
-  if (pass.chunks.empty() or subpass.pages.size() == 0) { return false; }
+  if (pass.chunks.empty() or subpass.pages.size() == 0) { return; }
 
   auto const elig = compute_dict_transcode_eligibility(pass, _input_columns, _output_buffers);
   std::transform(
@@ -187,7 +187,7 @@ bool reader_impl::prepare_dict_transcode(read_mode mode)
 
   auto const num_eligible =
     std::count(_dict_transcode_eligible.begin(), _dict_transcode_eligible.end(), true);
-  if (num_eligible == 0) { return false; }
+  if (num_eligible == 0) { return; }
 
   auto const num_input_cols = _input_columns.size();
 
@@ -213,7 +213,12 @@ bool reader_impl::prepare_dict_transcode(read_mode mode)
     }
   });
 
-  if (not any_rewritten) { return false; }
+  // No page was actually rewritten. Clear the eligibility flags so the member reflects the true
+  // "inactive" state.
+  if (not any_rewritten) {
+    _dict_transcode_eligible.assign(_input_columns.size(), false);
+    return;
+  }
 
   // Push the rewritten `kernel_mask`s back to device so subsequent decode kernels dispatch
   // correctly.
@@ -224,51 +229,6 @@ bool reader_impl::prepare_dict_transcode(read_mode mode)
     uint32_t{0},
     std::bit_or<>{},
     [](PageInfo const& page) { return static_cast<uint32_t>(page.kernel_mask); });
-  return true;
-}
-
-void reader_impl::zero_init_dict_transcoded_index_buffers()
-{
-  CUDF_FUNC_RANGE();
-
-  // The `DICT_INT32` kernel only writes to positions with valid definition levels, leaving null
-  // slots untouched. Since `allocate_columns` does not zero-initialize fixed-width buffers by
-  // default, the INT32 output buffer for a transcoded column may contain uninitialized bytes at
-  // null positions. Zero them here so null rows carry a well-defined (valid) index into the
-  // dictionary keys -- a requirement for `cudf::dictionary::detail::concatenate` to correctly
-  // remap indices below.
-  //
-  // Only nullable columns need this: the kernel decodes non-nullable columns (max definition level
-  // 0) in DIRECT mode, which writes every output position, so their buffers are fully initialized
-  // by decode.
-  if (_pass_itm_data == nullptr) { return; }
-  auto const& pass = *_pass_itm_data;
-  std::vector<bool> col_nullable(_input_columns.size(), false);
-  for (auto const& chunk : pass.chunks) {
-    if (chunk.max_level[level_type::DEFINITION] > 0) { col_nullable[chunk.src_col_index] = true; }
-  }
-
-  std::vector<cudf::device_span<int32_t>> index_bufs;
-  index_bufs.reserve(_input_columns.size());
-  std::for_each(cuda::counting_iterator<size_t>{0},
-                cuda::counting_iterator{_input_columns.size()},
-                [&](size_t i) {
-                  if (not _dict_transcode_eligible[i]) { return; }
-                  // Non-nullable columns decode in DIRECT mode and write every slot -> no zeroing.
-                  if (not col_nullable[i]) { return; }
-                  auto& out_buf = _output_buffers[_input_columns[i].nesting[0]];
-                  if (out_buf.type.id() != type_id::INT32) { return; }
-                  if (out_buf.data() == nullptr or out_buf.size == 0) { return; }
-                  index_bufs.emplace_back(static_cast<int32_t*>(out_buf.data()),
-                                          static_cast<std::size_t>(out_buf.size));
-                });
-
-  if (index_bufs.empty()) { return; }
-
-  // Zero all eligible index buffers in a single batched operation instead of one memset per column.
-  auto const pinned_index_bufs = cudf::detail::make_pinned_vector(
-    cudf::host_span<cudf::device_span<int32_t> const>{index_bufs}, _stream);
-  cudf::detail::batched_memset<int32_t>(pinned_index_bufs, 0, _stream);
 }
 
 void reader_impl::assemble_dict_transcoded_columns(
@@ -277,6 +237,13 @@ void reader_impl::assemble_dict_transcoded_columns(
   CUDF_FUNC_RANGE();
 
   if (_pass_itm_data == nullptr) { return; }
+
+  // Nothing to assemble unless `prepare_dict_transcode` marked at least one column eligible.
+  if (std::none_of(_dict_transcode_eligible.begin(),
+                   _dict_transcode_eligible.end(),
+                   [](bool eligible) { return eligible; })) {
+    return;
+  }
 
   auto const& pass = *_pass_itm_data;
 

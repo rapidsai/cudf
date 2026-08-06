@@ -194,20 +194,12 @@ class reader_impl {
    *
    * Must be called after `prepare_data()`. Populates `_dict_transcode_eligible` with a bool per
    * input column indicating whether the column will be assembled as a DICTIONARY32 output later in
-   * `assemble_dict_transcoded_columns`.
+   * `assemble_dict_transcoded_columns`. That member is the sole signal of whether the fast path is
+   * active: `assemble_dict_transcoded_columns` no-ops when no column is eligible.
    *
    * @param mode Value indicating if the data sources are read all at once or chunk by chunk
-   * @return True if dict transcode is active for this read. False otherwise
    */
-  [[nodiscard]] bool prepare_dict_transcode(read_mode mode);
-
-  /**
-   * @brief Zero-initialize the INT32 output buffers of dict-transcoded columns so that null rows
-   * carry a well-defined dictionary index (the `DICT_INT32` kernel skips null positions).
-   *
-   * Must be called after `allocate_columns` and before `decode_page_data`.
-   */
-  void zero_init_dict_transcoded_index_buffers();
+  void prepare_dict_transcode(read_mode mode);
 
   /**
    * @brief Assemble DICTIONARY32 output columns for input columns that were marked eligible by

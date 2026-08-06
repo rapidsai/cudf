@@ -716,7 +716,7 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
   // eligibility and mutate `_output_buffers` / `subpass.pages` before we allocate column buffers
   // or dispatch decode kernels. This has to happen before `preprocess_chunk_strings` /
   // `allocate_columns` because those branch on `subpass.kernel_mask` and on `out_buf.type`.
-  bool const dict_transcode_active = prepare_dict_transcode(mode);
+  prepare_dict_transcode(mode);
 
   // computes:
   // PageNestingInfo::batch_size for each level of nesting, for each page, taking row bounds into
@@ -771,7 +771,7 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
   // `prepare_dict_transcode`, the entries in `out_columns` are currently INT32 indices columns.
   // Assemble them into DICTIONARY32 columns here by attaching per-chunk keys; concatenate
   // remaps indices to the unified keys child.
-  if (dict_transcode_active) { assemble_dict_transcoded_columns(out_columns); }
+  assemble_dict_transcoded_columns(out_columns);
 
   out_columns =
     cudf::structs::detail::enforce_null_consistency(std::move(out_columns), _stream, _mr);
