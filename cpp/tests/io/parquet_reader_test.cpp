@@ -3163,10 +3163,9 @@ TEST_F(ParquetMetadataReaderTest, ReadParquetFootersPageIndexes)
 {
   // Page indexes are only deserialized when BYTE_ARRAY columns are present.
   auto const num_rows = 2000;
-  std::vector<std::string> strings(num_rows);
-  std::generate(
-    strings.begin(), strings.end(), [i = 0]() mutable { return "str_" + std::to_string(i++); });
-  cudf::test::strings_column_wrapper str_col(strings.begin(), strings.end());
+  auto str_iter       = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return "str_" + std::to_string(i); });
+  cudf::test::strings_column_wrapper str_col(str_iter, str_iter + num_rows);
   table_view input_table({str_col});
 
   auto filepath = temp_env->get_temp_filepath("ReadParquetFootersPageIndexes.parquet");
@@ -3183,7 +3182,7 @@ TEST_F(ParquetMetadataReaderTest, ReadParquetFootersPageIndexes)
   // Explicit false omits page indexes (lean path for read_parquet reuse).
   {
     auto metadatas = cudf::io::read_parquet_footers(datasources, false);
-    ASSERT_EQ(metadatas.size(), 1);
+    EXPECT_EQ(metadatas.size(), 1);
     ASSERT_FALSE(metadatas.front().row_groups.empty());
     ASSERT_FALSE(metadatas.front().row_groups.front().columns.empty());
     EXPECT_FALSE(metadatas.front().row_groups.front().columns.front().offset_index.has_value());
@@ -3203,7 +3202,7 @@ TEST_F(ParquetMetadataReaderTest, ReadParquetFootersPageIndexes)
   // Default (true) materializes page indexes when present.
   {
     auto metadatas = cudf::io::read_parquet_footers(datasources);
-    ASSERT_EQ(metadatas.size(), 1);
+    EXPECT_EQ(metadatas.size(), 1);
     ASSERT_FALSE(metadatas.front().row_groups.empty());
     ASSERT_FALSE(metadatas.front().row_groups.front().columns.empty());
     EXPECT_TRUE(metadatas.front().row_groups.front().columns.front().offset_index.has_value());
