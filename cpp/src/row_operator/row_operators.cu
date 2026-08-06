@@ -641,22 +641,13 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
 {
   check_lex_compatibility(preprocessed_input);
 
-  auto d_table = table_device_view::create(preprocessed_input, stream);
-  auto d_column_order =
-    detail::make_device_uvector_async(column_order,
-                                      stream,
-                                      cudf::get_current_device_resource_ref(),
-                                      cudf::detail::host_source_access_order::DURING_API_CALL);
-  auto d_null_precedence =
-    detail::make_device_uvector_async(null_precedence,
-                                      stream,
-                                      cudf::get_current_device_resource_ref(),
-                                      cudf::detail::host_source_access_order::DURING_API_CALL);
-  auto d_depths =
-    detail::make_device_uvector_async(verticalized_col_depths,
-                                      stream,
-                                      cudf::get_current_device_resource_ref(),
-                                      cudf::detail::host_source_access_order::DURING_API_CALL);
+  auto d_table        = table_device_view::create(preprocessed_input, stream);
+  auto d_column_order = detail::make_device_uvector_async_consume_source(
+    column_order, stream, cudf::get_current_device_resource_ref());
+  auto d_null_precedence = detail::make_device_uvector_async_consume_source(
+    null_precedence, stream, cudf::get_current_device_resource_ref());
+  auto d_depths = detail::make_device_uvector_async_consume_source(
+    verticalized_col_depths, stream, cudf::get_current_device_resource_ref());
 
   if (detail::has_nested_columns(preprocessed_input)) {
     auto [dremel_data, d_dremel_device_view] = list_lex_preprocess(preprocessed_input, stream);

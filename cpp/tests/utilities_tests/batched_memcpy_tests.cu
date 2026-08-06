@@ -127,15 +127,14 @@ TEST(BatchedMemcpyTest, BasicTest)
     std::equal(expected_buffer.begin(), expected_buffer.end(), result_dst_buffer.begin()));
 }
 
-TEST(BatchedMemcpyTest, HostSourceConsumedDuringApiCall)
+TEST(BatchedMemcpyTest, HostSourceConsumedBeforeReturn)
 {
   rmm::cuda_stream stream;
   auto const stream_view = stream.view();
   auto const mr          = cudf::get_current_device_resource_ref();
   auto source            = std::vector<int32_t>(1024, 1);
 
-  auto result = cudf::detail::make_device_uvector_async(
-    source, stream_view, mr, cudf::detail::host_source_access_order::DURING_API_CALL);
+  auto result = cudf::detail::make_device_uvector_async_consume_source(source, stream_view, mr);
   std::fill(source.begin(), source.end(), 2);
 
   auto const actual = cudf::detail::make_std_vector<int32_t>(result, stream_view);

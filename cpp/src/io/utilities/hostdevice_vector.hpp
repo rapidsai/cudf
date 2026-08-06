@@ -91,11 +91,14 @@ class hostdevice_vector {
     return cudf::device_span<T const>(device_ptr(), size());
   }
 
-  void host_to_device_async(
-    rmm::cuda_stream_view stream,
-    host_source_access_order source_access_order = host_source_access_order::STREAM)
+  void host_to_device_async(rmm::cuda_stream_view stream)
   {
-    if (not keep_single_copy) { cuda_memcpy_async<T>(d_data, h_data, stream, source_access_order); }
+    if (not keep_single_copy) { cuda_memcpy_async<T>(d_data, h_data, stream); }
+  }
+
+  void host_to_device_async_consume_source(rmm::cuda_stream_view stream)
+  {
+    if (not keep_single_copy) { cuda_memcpy_async_consume_source<T>(d_data, h_data, stream); }
   }
 
   [[deprecated("Use host_to_device_async instead")]] void host_to_device(

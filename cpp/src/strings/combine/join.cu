@@ -161,8 +161,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& input,
     auto h_offsets = cudf::detail::make_host_vector<size_type>(2, stream);
     h_offsets[0]   = 0;
     h_offsets[1]   = chars.size();
-    auto offsets   = cudf::detail::make_device_uvector_async(
-      h_offsets, stream, mr, cudf::detail::host_source_access_order::DURING_API_CALL);
+    auto offsets   = cudf::detail::make_device_uvector_async_consume_source(h_offsets, stream, mr);
     return std::make_unique<column>(std::move(offsets), rmm::device_buffer{}, 0);
   }();
 

@@ -83,20 +83,15 @@ rmm::device_uvector<T> make_zeroed_device_uvector(std::size_t size,
  * @param source_data The host_span of data to deep copy
  * @param stream The stream on which to allocate memory and perform the copy
  * @param mr The memory resource to use for allocating the returned device_uvector
- * @param source_access_order When the source data may be accessed
  * @return A device_uvector containing the copied data
  */
 template <typename T>
 rmm::device_uvector<std::remove_cv_t<T>> make_device_uvector_async(
-  host_span<T> source_data,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr,
-  host_source_access_order source_access_order = host_source_access_order::STREAM)
+  host_span<T> source_data, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   using value_type = std::remove_cv_t<T>;
   rmm::device_uvector<value_type> ret(source_data.size(), stream, mr);
-  cuda_memcpy_async<value_type>(
-    ret, host_span<value_type const>{source_data}, stream, source_access_order);
+  cuda_memcpy_async<value_type>(ret, host_span<value_type const>{source_data}, stream);
   return ret;
 }
 
@@ -111,19 +106,14 @@ rmm::device_uvector<std::remove_cv_t<T>> make_device_uvector_async(
  * @param c The input host container from which to copy
  * @param stream The stream on which to allocate memory and perform the copy
  * @param mr The memory resource to use for allocating the returned device_uvector
- * @param source_access_order When the source data may be accessed
  * @return A device_uvector containing the copied data
  */
 template <typename Container>
 rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
-  Container const& c,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr,
-  host_source_access_order source_access_order = host_source_access_order::STREAM)
+  Container const& c, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
   requires(std::is_convertible_v<Container, host_span<typename Container::value_type const>>)
 {
-  return make_device_uvector_async(
-    host_span<typename Container::value_type const>{c}, stream, mr, source_access_order);
+  return make_device_uvector_async(host_span<typename Container::value_type const>{c}, stream, mr);
 }
 
 /**
@@ -136,18 +126,74 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
  * @param source_data The std::vector of data to deep copy
  * @param stream The stream on which to allocate memory and perform the copy
  * @param mr The memory resource to use for allocating the returned device_uvector
- * @param source_access_order When the source data may be accessed
  * @return A device_uvector containing the copied data
  */
 template <typename T, typename Allocator>
-rmm::device_uvector<T> make_device_uvector_async(
+rmm::device_uvector<T> make_device_uvector_async(std::vector<T, Allocator> const& source_data,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::device_async_resource_ref mr)
+{
+  return make_device_uvector_async(host_span<T const>{source_data}, stream, mr);
+}
+
+/**
+ * @brief Asynchronously constructs a `device_uvector` and consumes the host source before return
+ *
+ * The destination copy remains stream ordered. The host source may be released or changed as soon
+ * as this function returns.
+ *
+ * @tparam T The type of the data to copy (may be const-qualified)
+ * @param source_data The host data to deep copy
+ * @param stream The stream on which to allocate memory and perform the copy
+ * @param mr The memory resource to use for allocating the returned device_uvector
+ * @return A device_uvector containing the copied data
+ */
+template <typename T>
+rmm::device_uvector<std::remove_cv_t<T>> make_device_uvector_async_consume_source(
+  host_span<T> source_data, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+{
+  using value_type = std::remove_cv_t<T>;
+  rmm::device_uvector<value_type> ret(source_data.size(), stream, mr);
+  cuda_memcpy_async_consume_source<value_type>(
+    ret, host_span<value_type const>{source_data}, stream);
+  return ret;
+}
+
+/**
+ * @brief Asynchronously constructs a `device_uvector` and consumes the host source before return
+ *
+ * @tparam Container The type of the container to copy from
+ * @param c The input host container from which to copy
+ * @param stream The stream on which to allocate memory and perform the copy
+ * @param mr The memory resource to use for allocating the returned device_uvector
+ * @return A device_uvector containing the copied data
+ */
+template <typename Container>
+rmm::device_uvector<typename Container::value_type> make_device_uvector_async_consume_source(
+  Container const& c, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+  requires(std::is_convertible_v<Container, host_span<typename Container::value_type const>>)
+{
+  return make_device_uvector_async_consume_source(
+    host_span<typename Container::value_type const>{c}, stream, mr);
+}
+
+/**
+ * @brief Asynchronously constructs a `device_uvector` and consumes the host source before return
+ *
+ * @tparam T The type of the data to copy
+ * @tparam Allocator The allocator type of the std::vector
+ * @param source_data The std::vector of data to deep copy
+ * @param stream The stream on which to allocate memory and perform the copy
+ * @param mr The memory resource to use for allocating the returned device_uvector
+ * @return A device_uvector containing the copied data
+ */
+template <typename T, typename Allocator>
+rmm::device_uvector<T> make_device_uvector_async_consume_source(
   std::vector<T, Allocator> const& source_data,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr,
-  host_source_access_order source_access_order = host_source_access_order::STREAM)
+  rmm::device_async_resource_ref mr)
 {
-  return make_device_uvector_async(
-    host_span<T const>{source_data}, stream, mr, source_access_order);
+  return make_device_uvector_async_consume_source(host_span<T const>{source_data}, stream, mr);
 }
 
 /**

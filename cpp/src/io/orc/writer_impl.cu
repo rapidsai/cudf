@@ -1366,13 +1366,10 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
       h_stat_chunks[i].has_sum = true;
     }
     //  Copy to device
-    auto const d_stat_chunks = cudf::detail::make_device_uvector_async<statistics_chunk>(
-      h_stat_chunks,
-      stream,
-      cudf::get_current_device_resource_ref(),
-      cudf::detail::host_source_access_order::DURING_API_CALL);
-    stats_merge.host_to_device_async(stream,
-                                     cudf::detail::host_source_access_order::DURING_API_CALL);
+    auto const d_stat_chunks =
+      cudf::detail::make_device_uvector_async_consume_source<statistics_chunk>(
+        h_stat_chunks, stream, cudf::get_current_device_resource_ref());
+    stats_merge.host_to_device_async_consume_source(stream);
 
     // Encode and return
     cudf::detail::hostdevice_vector<uint8_t> hd_file_blobs =
@@ -1422,12 +1419,9 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
   }
 
   auto const& mr    = cudf::get_current_device_resource_ref();
-  auto const d_srcs = cudf::detail::make_device_uvector_async(
-    h_srcs, stream, mr, cudf::detail::host_source_access_order::DURING_API_CALL);
-  auto const d_dsts = cudf::detail::make_device_uvector_async(
-    h_dsts, stream, mr, cudf::detail::host_source_access_order::DURING_API_CALL);
-  auto const d_lens = cudf::detail::make_device_uvector_async(
-    h_lens, stream, mr, cudf::detail::host_source_access_order::DURING_API_CALL);
+  auto const d_srcs = cudf::detail::make_device_uvector_async_consume_source(h_srcs, stream, mr);
+  auto const d_dsts = cudf::detail::make_device_uvector_async_consume_source(h_dsts, stream, mr);
+  auto const d_lens = cudf::detail::make_device_uvector_async_consume_source(h_lens, stream, mr);
   cudf::detail::batched_memcpy_async(
     d_srcs.begin(), d_dsts.begin(), d_lens.begin(), d_srcs.size(), stream);
 
@@ -1442,11 +1436,10 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
   }
 
   auto d_file_stats_merge = stats_merge.device_ptr(num_stripe_blobs);
-  cudf::detail::cuda_memcpy_async<statistics_merge_group>(
+  cudf::detail::cuda_memcpy_async_consume_source<statistics_merge_group>(
     device_span<statistics_merge_group>{stats_merge.device_ptr(num_stripe_blobs), num_file_blobs},
     file_stats_merge,
-    stream,
-    cudf::detail::host_source_access_order::DURING_API_CALL);
+    stream);
 
   auto file_stat_chunks = stat_chunks.data() + num_stripe_blobs;
   detail::merge_group_statistics<detail::io_file_format::ORC>(
@@ -1872,11 +1865,8 @@ orc_table_view make_orc_table_view(table_view const& table,
     orc_columns.cbegin(), orc_columns.cend(), std::back_inserter(type_kinds), [](auto& orc_column) {
       return orc_column.orc_kind();
     });
-  auto const d_type_kinds = cudf::detail::make_device_uvector_async(
-    type_kinds,
-    stream,
-    cudf::get_current_device_resource_ref(),
-    cudf::detail::host_source_access_order::DURING_API_CALL);
+  auto const d_type_kinds = cudf::detail::make_device_uvector_async_consume_source(
+    type_kinds, stream, cudf::get_current_device_resource_ref());
 
   rmm::device_uvector<orc_column_device_view> d_orc_columns(orc_columns.size(), stream);
   using stack_value_type =
