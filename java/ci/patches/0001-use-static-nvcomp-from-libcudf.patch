@@ -1,0 +1,14 @@
+diff --git a/java/src/main/java/ai/rapids/cudf/NativeDepsLoader.java b/java/src/main/java/ai/rapids/cudf/NativeDepsLoader.java
+index 0000000000..0000000000 100644
+--- a/java/src/main/java/ai/rapids/cudf/NativeDepsLoader.java
++++ b/java/src/main/java/ai/rapids/cudf/NativeDepsLoader.java
+@@ -69,9 +69,6 @@ public class NativeDepsLoader {
+    * subsequent stages are loaded.
+    */
+   private static final String[][] loadOrder = new String[][]{
+-      new String[]{
+-          "nvcomp"
+-      },
+       new String[]{
+           "cudf"
+       },

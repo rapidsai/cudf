@@ -38,7 +38,16 @@ if [[ -z ${HOST_UID} || -z ${HOST_GID} ]]; then
   exit 1
 fi
 
+# TEMPORARY: same patch as spark-rapids-jni
+# (NVIDIA/cudf-spark-jni patches/0001-use-static-nvcomp-from-libcudf.patch).
+# Static CUDF_JNI_LIBCUDF_STATIC=ON JARs embed nvcomp in libcudf and do not
+# package libnvcomp.so. NativeDepsLoader still requires it unless this patch
+# drops "nvcomp" from loadOrder for packaging only.
+NVCOMP_LOADER_PATCH="${REPO_ROOT}/java/ci/patches/0001-use-static-nvcomp-from-libcudf.patch"
+
 _chown_outputs_on_exit() {
+  # Best-effort: leave /repo clean even if packaging failed mid-build.
+  git -C "${REPO_ROOT}" apply --reverse "${NVCOMP_LOADER_PATCH}" >/dev/null 2>&1 || true
   chown -R "${HOST_UID}:${HOST_GID}" "${OUTPUT_DIR}" "${REPO_ROOT}/java/target" 2>/dev/null || true
 }
 trap _chown_outputs_on_exit EXIT
@@ -122,6 +131,9 @@ if rapids-is-release-build; then
 fi
 
 rapids-logger "Packaging cuDF Java JAR version ${CUDF_VERSION} (libcudf: ${CUDF_INSTALL_DIR})"
+
+rapids-logger "Applying temporary nvcomp NativeDepsLoader patch (same as spark-rapids-jni)"
+git -C "${REPO_ROOT}" apply "${NVCOMP_LOADER_PATCH}"
 
 # The `clean` goal is intentionally omitted: /repo/java/target is a
 # bind-mount point, so when `mvn clean` attempts to remove the directory,
