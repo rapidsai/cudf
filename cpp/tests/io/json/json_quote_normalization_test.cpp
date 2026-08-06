@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -27,6 +27,7 @@ void run_test(std::string const& host_input,
 {
   auto stream_view  = cudf::test::get_default_stream();
   auto device_input = rmm::device_buffer(host_input.c_str(), host_input.size(), stream_view);
+  stream_view.synchronize();
 
   // Preprocessing FST
   cudf::io::datasource::owning_buffer<rmm::device_buffer> device_data(std::move(device_input));
