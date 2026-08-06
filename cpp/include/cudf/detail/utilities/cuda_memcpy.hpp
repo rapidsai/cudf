@@ -19,7 +19,7 @@ enum class host_memory_kind : uint8_t { PINNED, PAGEABLE };
 void cuda_memcpy_async_impl(
   void* dst, void const* src, size_t size, host_memory_kind kind, rmm::cuda_stream_view stream);
 
-void cuda_memcpy_async_consume_source_impl(void* dst,
+[[nodiscard]] cudaError_t memcpy_h2d_async(void* dst,
                                            void const* src,
                                            size_t size,
                                            rmm::cuda_stream_view stream);
@@ -29,13 +29,23 @@ void cuda_memcpy_async_consume_source_impl(void* dst,
  *
  * Uses `cudaMemcpyBatchAsync` on CUDA 13.0+ with `cudaMemcpySrcAccessOrderStream`, which defers
  * reading the source buffers until the stream reaches each copy. The source buffers must therefore
- * remain valid until the stream has executed the copies.
+ * remain valid until the stream has executed the copies; for device memory this is naturally
+ * satisfied, but for host memory the caller must ensure the source is not freed before the stream
+ * is synchronized.
+ *
+ * All copies share a single attribute entry (`cudaMemcpySrcAccessOrderStream` +
+ * `cudaMemcpyFlagPreferOverlapWithCompute`). Per-copy attributes are not supported by this
+ * wrapper; callers requiring different attributes per copy should call `cudaMemcpyBatchAsync`
+ * directly.
  *
  * @param dsts Host pointer to a list of destination pointers.
  * @param srcs Host pointer to a list of source pointers.
  * @param sizes Host pointer to a list of sizes.
  * @param count Size of dsts, srcs, sizes arrays
  * @param stream CUDA stream on which copies are enqueued
+ *
+ * @note if \p stream is the default stream, this function will fallback to `cudaMemcpyAsync` for
+ * each copy.
  */
 [[nodiscard]] cudaError_t memcpy_batch_async(void* const* dsts,
                                              void const* const* srcs,
@@ -44,27 +54,14 @@ void cuda_memcpy_async_consume_source_impl(void* dst,
                                              rmm::cuda_stream_view stream);
 
 /**
- * @brief Asynchronously copies buffers and consumes host sources before returning
- *
- * The destination copies remain stream ordered. Host source buffers may be released or changed as
- * soon as this function returns.
- *
- * @param dsts Host pointer to a list of destination pointers.
- * @param srcs Host pointer to a list of source pointers.
- * @param sizes Host pointer to a list of sizes.
- * @param count Size of dsts, srcs, sizes arrays
- * @param stream CUDA stream on which copies are enqueued
- */
-[[nodiscard]] cudaError_t memcpy_batch_async_consume_source(void* const* dsts,
-                                                            void const* const* srcs,
-                                                            std::size_t const* sizes,
-                                                            std::size_t count,
-                                                            rmm::cuda_stream_view stream);
-
-/**
  * @brief Asynchronously copies a single buffer, wrapping `memcpy_batch_async`.
  *
- * The source buffer must remain valid until the stream has executed the copy.
+ * Carries the same source-lifetime requirement as `memcpy_batch_async`: the source buffer must
+ * remain valid until the stream has executed the copy.
+ *
+ * Prefer `cudf::detail::cuda_memcpy_async` for host/device copies involving typed spans.
+ * Use this function for device-to-device copies or when a raw `void*` interface is required.
+ * The copy direction is inferred from the pointer types (`cudaMemcpyDefault`).
  *
  * @param dst Destination memory address
  * @param src Source memory address
@@ -78,26 +75,10 @@ void cuda_memcpy_async_consume_source_impl(void* dst,
                                        rmm::cuda_stream_view stream);
 
 /**
- * @brief Asynchronously copies a buffer and consumes its host source before returning
+ * @brief Asynchronously copies data from host to device memory
  *
  * The destination copy remains stream ordered. The host source may be released or changed as soon
  * as this function returns.
- *
- * @param dst Destination memory address
- * @param src Source host memory address
- * @param count Size in bytes to copy
- * @param stream CUDA stream on which the copy is enqueued
- * @return cudaError_t CUDA error code
- */
-[[nodiscard]] cudaError_t memcpy_async_consume_source(void* dst,
-                                                      void const* src,
-                                                      size_t count,
-                                                      rmm::cuda_stream_view stream);
-
-/**
- * @brief Asynchronously copies data from host to device memory
- *
- * The source must remain valid until the stream has executed the copy.
  *
  * @param dst Destination device memory
  * @param src Source host memory
@@ -107,31 +88,7 @@ template <typename T>
 void cuda_memcpy_async(device_span<T> dst, host_span<T const> src, rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(dst.size() == src.size(), "Mismatched sizes in cuda_memcpy_async");
-  auto const is_pinned = src.is_device_accessible();
-  cuda_memcpy_async_impl(dst.data(),
-                         src.data(),
-                         src.size_bytes(),
-                         is_pinned ? host_memory_kind::PINNED : host_memory_kind::PAGEABLE,
-                         stream);
-}
-
-/**
- * @brief Asynchronously copies data from host to device and consumes the source before returning
- *
- * The destination copy remains stream ordered. The host source may be released or changed as soon
- * as this function returns.
- *
- * @param dst Destination device memory
- * @param src Source host memory
- * @param stream CUDA stream used for the copy
- */
-template <typename T>
-void cuda_memcpy_async_consume_source(device_span<T> dst,
-                                      host_span<T const> src,
-                                      rmm::cuda_stream_view stream)
-{
-  CUDF_EXPECTS(dst.size() == src.size(), "Mismatched sizes in cuda_memcpy_async_consume_source");
-  cuda_memcpy_async_consume_source_impl(dst.data(), src.data(), src.size_bytes(), stream);
+  CUDF_CUDA_TRY(memcpy_h2d_async(dst.data(), src.data(), src.size_bytes(), stream));
 }
 
 /**

@@ -6,6 +6,7 @@
 #include <cudf_test/cudf_gtest.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -166,7 +167,8 @@ class StreamingChannelMetadataGPU : public ::testing::Test {
 
   std::shared_ptr<table_chunk> make_chunk(std::vector<int32_t> vals)
   {
-    rmm::device_buffer buf(vals.data(), vals.size() * sizeof(int32_t), stream);
+    auto buf = cudf::detail::make_device_buffer_async(
+      cudf::host_span<int32_t const>{vals}, stream, cudf::get_current_device_resource_ref());
     auto col = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
                                               static_cast<cudf::size_type>(vals.size()),
                                               std::move(buf),

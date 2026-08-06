@@ -123,16 +123,6 @@ cudaError_t memcpy_batch_async(void* const* dsts,
     dsts, srcs, sizes, count, stream, host_source_access_order::STREAM);
 }
 
-cudaError_t memcpy_batch_async_consume_source(void* const* dsts,
-                                              void const* const* srcs,
-                                              std::size_t const* sizes,
-                                              std::size_t count,
-                                              rmm::cuda_stream_view stream)
-{
-  return memcpy_batch_async_impl(
-    dsts, srcs, sizes, count, stream, host_source_access_order::DURING_API_CALL);
-}
-
 cudaError_t memcpy_async(void* dst, void const* src, size_t count, rmm::cuda_stream_view stream)
 {
   if (count == 0) { return cudaSuccess; }
@@ -142,14 +132,15 @@ cudaError_t memcpy_async(void* dst, void const* src, size_t count, rmm::cuda_str
   return memcpy_batch_async(&dst, &src, &count, 1, stream);
 }
 
-cudaError_t memcpy_async_consume_source(void* dst,
-                                        void const* src,
-                                        size_t count,
-                                        rmm::cuda_stream_view stream)
+CUDF_EXPORT cudaError_t memcpy_h2d_async(void* dst,
+                                         void const* src,
+                                         size_t count,
+                                         rmm::cuda_stream_view stream)
 {
   if (count == 0) { return cudaSuccess; }
 
-  return memcpy_batch_async_consume_source(&dst, &src, &count, 1, stream);
+  return memcpy_batch_async_impl(
+    &dst, &src, &count, 1, stream, host_source_access_order::DURING_API_CALL);
 }
 
 void cuda_memcpy_async_impl(
@@ -162,14 +153,6 @@ void cuda_memcpy_async_impl(
   } else {
     CUDF_FAIL("Unsupported host memory kind");
   }
-}
-
-void cuda_memcpy_async_consume_source_impl(void* dst,
-                                           void const* src,
-                                           size_t size,
-                                           rmm::cuda_stream_view stream)
-{
-  CUDF_CUDA_TRY(memcpy_async_consume_source(dst, src, size, stream));
 }
 
 }  // namespace cudf::detail

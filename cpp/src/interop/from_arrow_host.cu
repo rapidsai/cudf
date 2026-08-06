@@ -110,8 +110,8 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> get_mask_buffer(
   auto const copy_size    = cudf::util::div_rounding_up_safe(num_rows + bit_index, bits_in_byte);
 
   auto mask = rmm::device_uvector<bitmask_type>(padded_words, stream, mr);
-  CUDF_CUDA_TRY(cudf::detail::memcpy_async_consume_source(
-    mask.data(), bitmap + offset_index, copy_size, stream));
+  CUDF_CUDA_TRY(
+    cudf::detail::memcpy_h2d_async(mask.data(), bitmap + offset_index, copy_size, stream));
 
   if (mask_words > 0 && bit_index > 0) {
     auto dest_mask = rmm::device_uvector<bitmask_type>(padded_words, stream, mr);
@@ -159,10 +159,10 @@ struct dispatch_copy_from_arrow_host {
 
     auto col = make_fixed_width_column(type, num_rows, mask_state::UNALLOCATED, stream, mr);
     auto mutable_column_view = col->mutable_view();
-    CUDF_CUDA_TRY(cudf::detail::memcpy_async_consume_source(mutable_column_view.data<DeviceType>(),
-                                                            data_buffer + input->offset,
-                                                            sizeof(DeviceType) * num_rows,
-                                                            stream));
+    CUDF_CUDA_TRY(cudf::detail::memcpy_h2d_async(mutable_column_view.data<DeviceType>(),
+                                                 data_buffer + input->offset,
+                                                 sizeof(DeviceType) * num_rows,
+                                                 stream));
 
     if (!skip_mask) {
       auto [mask, null_count] = get_mask_buffer(input, stream, mr);
@@ -190,8 +190,8 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<bool>(ArrowSch
   auto const copy_size    = cudf::util::div_rounding_up_safe(num_rows + bit_index, bits_in_byte);
 
   auto data = rmm::device_uvector<bitmask_type>(data_words, stream, mr);
-  CUDF_CUDA_TRY(cudf::detail::memcpy_async_consume_source(
-    data.data(), data_buffer + offset_index, copy_size, stream));
+  CUDF_CUDA_TRY(
+    cudf::detail::memcpy_h2d_async(data.data(), data_buffer + offset_index, copy_size, stream));
 
   if (data_words > 0 && bit_index > 0) {
     auto dest_data = rmm::device_uvector<bitmask_type>(data_words, stream, mr);

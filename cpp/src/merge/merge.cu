@@ -237,7 +237,7 @@ index_vector generate_merged_indices(table_view const& left_table,
   auto lhs_device_view = table_device_view::create(left_table, stream);
   auto rhs_device_view = table_device_view::create(right_table, stream);
 
-  auto d_column_order = cudf::detail::make_device_uvector_async_consume_source(
+  auto d_column_order = cudf::detail::make_device_uvector_async(
     column_order, stream, cudf::get_current_device_resource_ref());
 
   if (has_nulls) {
@@ -251,7 +251,7 @@ index_vector generate_merged_indices(table_view const& left_table,
       }
     }();
 
-    auto d_null_precedence = cudf::detail::make_device_uvector_async_consume_source(
+    auto d_null_precedence = cudf::detail::make_device_uvector_async(
       new_null_precedence, stream, cudf::get_current_device_resource_ref());
 
     auto ineq_op = detail::row_lexicographic_tagged_comparator<true>(

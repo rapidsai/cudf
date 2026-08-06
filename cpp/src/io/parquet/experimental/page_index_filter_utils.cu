@@ -149,7 +149,7 @@ rmm::device_uvector<size_type> compute_page_indices_async(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto row_offsets = cudf::detail::make_device_uvector_async_consume_source(
+  auto row_offsets = cudf::detail::make_device_uvector_async(
     page_row_offsets, stream, cudf::get_current_device_resource_ref());
 
   auto page_indices = rmm::device_uvector<cudf::size_type>(total_rows, stream, mr);

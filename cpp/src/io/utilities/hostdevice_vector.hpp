@@ -96,11 +96,6 @@ class hostdevice_vector {
     if (not keep_single_copy) { cuda_memcpy_async<T>(d_data, h_data, stream); }
   }
 
-  void host_to_device_async_consume_source(rmm::cuda_stream_view stream)
-  {
-    if (not keep_single_copy) { cuda_memcpy_async_consume_source<T>(d_data, h_data, stream); }
-  }
-
   [[deprecated("Use host_to_device_async instead")]] void host_to_device(
     rmm::cuda_stream_view stream)
   {
