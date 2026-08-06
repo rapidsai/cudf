@@ -225,7 +225,7 @@ class ParquetOptions:
         Default is False.
     prefetch_file_metadata
         Whether to prefetch parquet file metadata and pass it through
-        `parquet_metadatas` to avoid rereading file footers.
+        `parquet_metadatas` to avoid rereading file footers. Enabled by default.
     use_jit_filter
         Whether to use JIT compilation for post-read filtering in Parquet scans.
         When enabled, filter predicates are JIT-compiled to CUDA kernels for
@@ -276,7 +276,7 @@ class ParquetOptions:
         default_factory=_make_default_factory(
             f"{_env_prefix}__PREFETCH_FILE_METADATA",
             _bool_converter,
-            default=False,
+            default=True,
         )
     )
     use_jit_filter: bool = dataclasses.field(
