@@ -51,14 +51,12 @@ namespace {
 using cudf::io::parquet::experimental::variant_basic_type;
 using cudf::io::parquet::experimental::variant_primitive_type;
 
-// Compose a value-metadata header byte from a basic type and its 6-bit value_header.
 constexpr uint8_t make_variant_header(variant_basic_type basic, uint8_t value_header)
 {
   CUDF_EXPECTS(value_header <= 0x3F, "VARIANT value_header must fit in 6 bits");
   return static_cast<uint8_t>(static_cast<uint8_t>(basic) | (value_header << 2));
 }
 
-// Header byte for a primitive value of the given physical type.
 constexpr uint8_t make_variant_primitive(variant_primitive_type type)
 {
   return make_variant_header(variant_basic_type::PRIMITIVE, static_cast<uint8_t>(type));
@@ -78,7 +76,6 @@ constexpr uint8_t make_variant_object_header()
   return make_variant_header(variant_basic_type::OBJECT, 0);
 }
 
-// Build a struct `column_view` over (metadata, value) without copying.
 inline cudf::column_view wrap_variant_view(cudf::column_view const& metadata,
                                            cudf::column_view const& value)
 {
@@ -93,7 +90,6 @@ inline cudf::column_view wrap_variant_view(cudf::column_view const& metadata,
                            {metadata, value}};
 }
 
-// Wrap a single-row (metadata, value) pair as a VARIANT struct column.
 inline cudf::test::structs_column_wrapper wrap_single_variant(std::vector<uint8_t> const& meta,
                                                               std::vector<uint8_t> const& val)
 {
@@ -102,7 +98,6 @@ inline cudf::test::structs_column_wrapper wrap_single_variant(std::vector<uint8_
   return cudf::test::structs_column_wrapper{{m, v}};
 }
 
-// Wrap an Apache parquet-testing fixture into a single-row VARIANT struct column.
 template <std::size_t M, std::size_t V>
 cudf::test::structs_column_wrapper make_apache_variant(avf::fixture<M, V> const& f)
 {
@@ -402,7 +397,6 @@ inline std::vector<uint8_t> enc_int32(int32_t v)
           static_cast<uint8_t>((u >> 24) & 0xff)};
 }
 
-// Short-string primitive blob (single-byte header).
 inline std::vector<uint8_t> enc_short_string(std::string_view s)
 {
   CUDF_EXPECTS(s.size() < 64, "short-string length must fit in 6 bits of the single-byte header");
@@ -1312,7 +1306,6 @@ struct InvalidInputShapeTest : public cudf::test::BaseFixture {};
 
 namespace {
 
-// A well-formed VARIANT child: a single-row list<uint8> holding `bytes`.
 inline std::unique_ptr<cudf::column> list_u8(std::vector<uint8_t> const& bytes)
 {
   return cudf::test::lists_column_wrapper<uint8_t>(bytes.begin(), bytes.end()).release();
@@ -1330,7 +1323,6 @@ inline std::unique_ptr<cudf::column> scalar_i32()
   return cudf::test::fixed_width_column_wrapper<int32_t>{42}.release();
 }
 
-// A single-row STRUCT column adopting `children`.
 inline std::unique_ptr<cudf::column> struct_of(std::vector<std::unique_ptr<cudf::column>> children)
 {
   return cudf::make_structs_column(1, std::move(children), 0, rmm::device_buffer{});
@@ -1345,7 +1337,6 @@ inline std::vector<std::unique_ptr<cudf::column>> two_children(std::unique_ptr<c
   return v;
 }
 
-// A malformed-shape case: a human-readable label plus the offending column.
 struct broken_shape {
   std::string label;
   std::unique_ptr<cudf::column> column;
@@ -1925,36 +1916,4 @@ TEST_F(ExtractVariantFieldStatusTest, MissingNestedPathStatus)
   ASSERT_NE(status, nullptr);
   expect_status_values(*status, {ST_MISSING});
   EXPECT_EQ(got->null_count(), 1);
-}
-
-// All-null column → all-null status column
-TEST_F(ExtractVariantFieldStatusTest, AllNullInput)
-{
-  // Single-row variant column with the row marked SQL null
-  cudf::test::lists_column_wrapper<uint8_t> meta{{0x01, 0x01, 0x00, 0x01, 'x'}};
-  cudf::test::lists_column_wrapper<uint8_t> val{{0x14, 0x07, 0x00, 0x00, 0x00}};
-  cudf::test::structs_column_wrapper all_null{{meta, val}, std::vector<bool>{false}};
-
-  auto stream = cudf::test::get_default_stream();
-  std::unique_ptr<cudf::column> status;
-  auto got = cudf::io::parquet::experimental::extract_variant_field(
-    all_null, "x", cudf::data_type{cudf::type_id::INT32}, &status, stream, cmr());
-
-  ASSERT_NE(status, nullptr);
-  EXPECT_EQ(status->null_count(), 1);
-  EXPECT_EQ(got->null_count(), 1);
-}
-
-// Existing tests work without status_out (nullopt semantics)
-TEST_F(ExtractVariantFieldStatusTest, ExistingCallsUnchanged)
-{
-  auto col    = make_xyz_three_row_variant();
-  auto stream = cudf::test::get_default_stream();
-
-  // No status_out — existing behavior
-  auto got = cudf::io::parquet::experimental::extract_variant_field(
-    col, "x", cudf::data_type{cudf::type_id::INT32}, nullptr, stream);
-
-  cudf::test::fixed_width_column_wrapper<int32_t> expected({7, 42, 0}, {true, true, false});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }

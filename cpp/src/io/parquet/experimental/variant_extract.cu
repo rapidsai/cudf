@@ -53,13 +53,10 @@ namespace {
 
 constexpr int variant_version_v1 = 1;
 
-// Bytes consumed by the leading metadata byte common to every Variant value.
 constexpr size_type variant_header_bytes = 1;
 
-// Low 2 bits of a value's metadata byte: the basic type.
 using basic_type = variant_basic_type;
 
-// For a primitive value, the value_header is the physical type id of the payload.
 using primitive_type = variant_primitive_type;
 
 using op_status = variant_operation_status;
@@ -74,7 +71,6 @@ __device__ cuda::std::optional<uint64_t> read_uint64(device_span<uint8_t const> 
   return v;
 }
 
-// Safely narrow a decoded value to size_type
 __device__ cuda::std::optional<size_type> narrow_cast(cuda::std::optional<uint64_t> value)
 {
   if (!value.has_value() ||
@@ -152,7 +148,6 @@ __device__ cuda::std::optional<uint64_t> variant_value_length(device_span<uint8_
   auto const value_header   = variant_value_header(value_metadata);
 
   if (btype == basic_type::PRIMITIVE) {
-    // The leading header byte plus a payload keyed by the physical type id
     uint64_t payload = 0;
     switch (static_cast<primitive_type>(value_header)) {
       case primitive_type::NULLVAL:
@@ -418,7 +413,6 @@ __device__ cuda::std::pair<device_span<uint8_t const>, op_status> locate_array_e
           op_status::success};
 }
 
-// True when the value blob begins with the VARIANT null primitive header.
 __device__ bool is_variant_null(device_span<uint8_t const> enc)
 {
   if (enc.empty()) { return false; }
@@ -598,7 +592,6 @@ __device__ device_span<uint8_t const> list_row_span(cudf::lists_column_device_vi
   return {col.child().data<uint8_t>() + begin, static_cast<std::size_t>(end - begin)};
 }
 
-// Returns the metadata and value list bytes for a given row from device views
 __device__ cuda::std::pair<device_span<uint8_t const>, device_span<uint8_t const>>
 metadata_and_value_at(cudf::lists_column_device_view const& metadata,
                       cudf::lists_column_device_view const& values,
@@ -862,7 +855,6 @@ void validate_variant_child(column_view const& child)
                std::invalid_argument);
 }
 
-// Build the status column from d_status and d_status_null_mask buffers.
 std::unique_ptr<column> make_status_column(rmm::device_buffer status_data,
                                            rmm::device_buffer status_null_mask,
                                            size_type num_rows,
@@ -892,7 +884,6 @@ struct cast_variant_fn {
   bool has_incoming{false};
   std::unique_ptr<column>* status_out{nullptr};
 
-  // Helper: allocate status buffers and return the output status column.
   // Avoids repeating this boilerplate in each cast operator.
   auto alloc_status() -> cuda::std::pair<rmm::device_buffer, rmm::device_buffer>
   {
@@ -1098,7 +1089,6 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
 {
-  // Validate the variant column
   CUDF_EXPECTS(variant_column.type().id() == type_id::STRUCT,
                "VARIANT column must be struct type",
                std::invalid_argument);
@@ -1175,7 +1165,6 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
     CUDF_CUDA_TRY(cudaGetLastError());
   }
 
-  // Convert sizes to offsets
   auto [offsets_column, total_bytes] =
     cudf::strings::detail::make_offsets_child_column(d_sizes.begin(), d_sizes.end(), stream, mr);
   CUDF_EXPECTS(total_bytes <= std::numeric_limits<size_type>::max(),
@@ -1184,7 +1173,6 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
   device_span<size_type const> d_offsets{offsets_column->view().data<size_type>(),
                                          static_cast<std::size_t>(num_rows + 1)};
 
-  // Copy values into the output buffer
   auto val_child = make_numeric_column(
     data_type{type_id::UINT8}, total_bytes, mask_state::UNALLOCATED, stream, mr);
   if (total_bytes > 0) {
@@ -1230,7 +1218,6 @@ std::unique_ptr<column> cast_variant(column_view const& values,
   auto val_device_view = column_device_view::create(values, stream);
   cudf::lists_column_device_view val_lists_device_view(*val_device_view);
 
-  // Initialize the null mask from the values column (or all-valid)
   auto null_mask    = values.nullable()
                         ? cudf::detail::copy_bitmask(values, stream, mr)
                         : cudf::create_null_mask(num_rows, mask_state::ALL_VALID, stream, mr);
