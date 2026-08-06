@@ -318,15 +318,16 @@ TEST_F(HostUDFSegmentedReductionExampleTest, SimpleInput)
 
   // Test without init value.
   {
-    auto const result = cudf::segmented_reduce(
-      vals,
-      cudf::device_span<int const>(offsets->view().begin<int>(), offsets->size()),
-      *agg,
-      cudf::data_type{cudf::type_id::INT64},
-      cudf::null_policy::INCLUDE,
-      std::nullopt,  // init value
-      cudf::get_default_stream(),
-      cudf::get_current_device_resource_ref());
+    auto const result =
+      cudf::segmented_reduce(vals,
+                             cudf::device_span<cudf::size_type const>(
+                               offsets->view().begin<cudf::size_type>(), offsets->size()),
+                             *agg,
+                             cudf::data_type{cudf::type_id::INT64},
+                             cudf::null_policy::INCLUDE,
+                             std::nullopt,  // init value
+                             cudf::get_default_stream(),
+                             cudf::get_current_device_resource_ref());
 
     // When null_policy is set to `INCLUDE`, the null values are replaced with the init value.
     // Since init value is not given, it is set to 0.
@@ -338,15 +339,16 @@ TEST_F(HostUDFSegmentedReductionExampleTest, SimpleInput)
   // Test with init value, and include nulls.
   {
     auto const init_scalar = cudf::make_fixed_width_scalar<double>(3.0);
-    auto const result      = cudf::segmented_reduce(
-      vals,
-      cudf::device_span<int const>(offsets->view().begin<int>(), offsets->size()),
-      *agg,
-      cudf::data_type{cudf::type_id::INT64},
-      cudf::null_policy::INCLUDE,
-      *init_scalar,
-      cudf::get_default_stream(),
-      cudf::get_current_device_resource_ref());
+    auto const result =
+      cudf::segmented_reduce(vals,
+                             cudf::device_span<cudf::size_type const>(
+                               offsets->view().begin<cudf::size_type>(), offsets->size()),
+                             *agg,
+                             cudf::data_type{cudf::type_id::INT64},
+                             cudf::null_policy::INCLUDE,
+                             *init_scalar,
+                             cudf::get_default_stream(),
+                             cudf::get_current_device_resource_ref());
 
     // When null_policy is set to `INCLUDE`, the null values are replaced with the init value.
     // [ 3 * (3 + 0^2 + 3^2 + 2^2), 2 * (3 + 3^2 + 3^2), 5 * (3 + 5^2 + 3^2 + 3^2 + 8^2 + 9^2) ]
@@ -357,15 +359,16 @@ TEST_F(HostUDFSegmentedReductionExampleTest, SimpleInput)
   // Test with init value, and exclude nulls.
   {
     auto const init_scalar = cudf::make_fixed_width_scalar<double>(3.0);
-    auto const result      = cudf::segmented_reduce(
-      vals,
-      cudf::device_span<int const>(offsets->view().begin<int>(), offsets->size()),
-      *agg,
-      cudf::data_type{cudf::type_id::INT64},
-      cudf::null_policy::EXCLUDE,
-      *init_scalar,
-      cudf::get_default_stream(),
-      cudf::get_current_device_resource_ref());
+    auto const result =
+      cudf::segmented_reduce(vals,
+                             cudf::device_span<cudf::size_type const>(
+                               offsets->view().begin<cudf::size_type>(), offsets->size()),
+                             *agg,
+                             cudf::data_type{cudf::type_id::INT64},
+                             cudf::null_policy::EXCLUDE,
+                             *init_scalar,
+                             cudf::get_default_stream(),
+                             cudf::get_current_device_resource_ref());
 
     // [ 3 * (3 + 0^2 + 2^2), 2 * (3 + 3^2), 5 * (3 + 5^2 + 8^2 + 9^2) ]
     auto const expected = int64s_col{{21, 24, 865}, {true, true, true}};
@@ -379,15 +382,16 @@ TEST_F(HostUDFSegmentedReductionExampleTest, EmptySegments)
   auto const offsets = int32s_col{0, 0, 0, 0}.release();
   auto const agg     = cudf::make_host_udf_aggregation<cudf::segmented_reduce_aggregation>(
     std::make_unique<host_udf_segmented_reduction_example>());
-  auto const result = cudf::segmented_reduce(
-    vals,
-    cudf::device_span<int const>(offsets->view().begin<int>(), offsets->size()),
-    *agg,
-    cudf::data_type{cudf::type_id::INT64},
-    cudf::null_policy::INCLUDE,
-    std::nullopt,  // init value
-    cudf::get_default_stream(),
-    cudf::get_current_device_resource_ref());
+  auto const result =
+    cudf::segmented_reduce(vals,
+                           cudf::device_span<cudf::size_type const>(
+                             offsets->view().begin<cudf::size_type>(), offsets->size()),
+                           *agg,
+                           cudf::data_type{cudf::type_id::INT64},
+                           cudf::null_policy::INCLUDE,
+                           std::nullopt,  // init value
+                           cudf::get_default_stream(),
+                           cudf::get_current_device_resource_ref());
   auto const expected = int64s_col{{0, 0, 0}, {false, false, false}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
@@ -398,15 +402,16 @@ TEST_F(HostUDFSegmentedReductionExampleTest, EmptyInput)
   auto const offsets = int32s_col{}.release();
   auto const agg     = cudf::make_host_udf_aggregation<cudf::segmented_reduce_aggregation>(
     std::make_unique<host_udf_segmented_reduction_example>());
-  auto const result = cudf::segmented_reduce(
-    vals,
-    cudf::device_span<int const>(offsets->view().begin<int>(), offsets->size()),
-    *agg,
-    cudf::data_type{cudf::type_id::INT64},
-    cudf::null_policy::INCLUDE,
-    std::nullopt,  // init value
-    cudf::get_default_stream(),
-    cudf::get_current_device_resource_ref());
+  auto const result =
+    cudf::segmented_reduce(vals,
+                           cudf::device_span<cudf::size_type const>(
+                             offsets->view().begin<cudf::size_type>(), offsets->size()),
+                           *agg,
+                           cudf::data_type{cudf::type_id::INT64},
+                           cudf::null_policy::INCLUDE,
+                           std::nullopt,  // init value
+                           cudf::get_default_stream(),
+                           cudf::get_current_device_resource_ref());
   auto const expected = int64s_col{};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }

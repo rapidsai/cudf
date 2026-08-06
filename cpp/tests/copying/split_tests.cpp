@@ -1802,7 +1802,8 @@ TEST_F(ContiguousSplitUntypedTest, OffsetAlignment)
     cudf::table_view tbl({str});
     for (size_t ridx = 0; ridx < row_index_start.size(); ridx++) {
       for (size_t cidx = 0; cidx < row_counts.size(); cidx++) {
-        std::vector<int> splits{row_index_start[ridx], row_index_start[ridx] + row_counts[cidx]};
+        std::vector<cudf::size_type> splits{row_index_start[ridx],
+                                            row_index_start[ridx] + row_counts[cidx]};
 
         auto res      = cudf::contiguous_split(tbl, splits);
         auto expected = cudf::split(tbl, splits);
@@ -1828,7 +1829,8 @@ TEST_F(ContiguousSplitUntypedTest, OffsetAlignment)
     cudf::table_view tbl({*long_str});
     for (size_t ridx = 0; ridx < row_index_start.size(); ridx++) {
       for (size_t cidx = 0; cidx < row_counts.size(); cidx++) {
-        std::vector<int> splits{row_index_start[ridx], row_index_start[ridx] + row_counts[cidx]};
+        std::vector<cudf::size_type> splits{row_index_start[ridx],
+                                            row_index_start[ridx] + row_counts[cidx]};
 
         auto res      = cudf::contiguous_split(tbl, splits);
         auto expected = cudf::split(tbl, splits);
@@ -2738,7 +2740,7 @@ TEST_F(ContiguousSplitLongStrings, LongOffsets)
   }
 
   {
-    std::vector<int> splits{3, 7};
+    std::vector<cudf::size_type> splits{3, 7};
     auto res      = cudf::contiguous_split(tbl, splits);
     auto expected = cudf::split(tbl, splits);
 
@@ -2759,7 +2761,7 @@ TEST_F(ContiguousSplitLongStrings, LongOffsetsNested)
   auto list = make_lists_column(5, offsets.release(), st.release(), 0, {});
 
   cudf::table_view tbl({*list});
-  std::vector<int> splits{2, 3};
+  std::vector<cudf::size_type> splits{2, 3};
   auto res      = cudf::contiguous_split(tbl, splits);
   auto expected = cudf::split(tbl, splits);
 
@@ -2772,7 +2774,7 @@ TEST_F(ContiguousSplitLongStrings, DISABLED_LongOffsetsAndChars)
 {
   auto str = make_long_offsets_and_chars_string_column();
 
-  std::vector<int> splits{3, 7};
+  std::vector<cudf::size_type> splits{3, 7};
   cudf::table_view tbl({*str});
   auto res      = cudf::contiguous_split(tbl, splits);
   auto expected = cudf::split(tbl, splits);
@@ -2789,7 +2791,7 @@ TEST_F(ContiguousSplitLongStrings, DISABLED_LongOffsetsAndCharsNested)
     make_lists_column(5, offsets.release(), make_long_offsets_and_chars_string_column(), 0, {});
 
   cudf::table_view tbl({*list});
-  std::vector<int> splits{2, 3};
+  std::vector<cudf::size_type> splits{2, 3};
   auto res      = cudf::contiguous_split(tbl, splits);
   auto expected = cudf::split(tbl, splits);
 

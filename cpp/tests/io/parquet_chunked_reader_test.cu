@@ -1380,8 +1380,8 @@ TEST_F(ParquetChunkedReaderInputLimitTest, ProjectedColumnsReducePasses)
 
 namespace {
 struct offset_gen {
-  int const group_size;
-  __device__ int operator()(int i) { return i * group_size; }
+  cudf::size_type const group_size;
+  __device__ cudf::size_type operator()(cudf::size_type i) { return i * group_size; }
 };
 
 template <typename T>

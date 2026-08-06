@@ -51,7 +51,7 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestColumnFactoryConstruction)
       "Samuel Vimes", "Carrot Ironfoundersson", "Angua von Überwald"}
       .release();
 
-  int num_rows{names_col->size()};
+  cudf::size_type num_rows{names_col->size()};
 
   auto ages_col =
     cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>{{48, 27, 25}}.release();
@@ -602,7 +602,7 @@ TEST_F(StructColumnWrapperTest, TestStructsColumnWithEmptyChild)
   // child and then view it.
   auto empty_col = std::make_unique<cudf::column>(
     cudf::data_type(cudf::type_id::EMPTY), 3, rmm::device_buffer{}, rmm::device_buffer{}, 0);
-  int num_rows{empty_col->size()};
+  cudf::size_type num_rows{empty_col->size()};
   vector_of_columns cols;
   cols.push_back(std::move(empty_col));
   auto mask_vec = std::vector<bool>{true, false, false};

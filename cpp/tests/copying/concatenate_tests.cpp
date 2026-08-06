@@ -851,7 +851,7 @@ TEST_F(StructsColumnTest, ConcatenateSplitStructs)
 {
   auto count_iter = cuda::counting_iterator<int>{0};
 
-  std::vector<int> splits({2});
+  std::vector<cudf::size_type> splits({2});
 
   // 1. String "names" column.
   std::vector<std::vector<std::string>> names(

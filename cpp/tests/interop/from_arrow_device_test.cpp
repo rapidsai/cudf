@@ -280,7 +280,7 @@ TEST_F(FromArrowDeviceTest, StructColumn)
       "Samuel Vimes", "Carrot Ironfoundersson", "Angua von Überwald"}
       .release();
   auto str_col2 = cudf::test::strings_column_wrapper{{"", "ROCKS", ""}, {0, 1, 0}}.release();
-  int num_rows{str_col->size()};
+  cudf::size_type num_rows{str_col->size()};
   auto int_col = cudf::test::fixed_width_column_wrapper<int32_t, int32_t>{{48, 27, 25}}.release();
   auto int_col2 =
     cudf::test::fixed_width_column_wrapper<int32_t, int32_t>{{12, 24, 47}, {1, 0, 1}}.release();

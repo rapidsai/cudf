@@ -21,7 +21,7 @@ auto strings_to_string_views(std::vector<std::string>& input_strings)
 {
   auto all_valid = cudf::test::iterators::no_nulls();
   std::vector<char> chars;
-  std::vector<int32_t> offsets;
+  std::vector<cudf::size_type> offsets;
   std::tie(chars, offsets) = cudf::test::detail::make_chars_and_offsets(
     input_strings.begin(), input_strings.end(), all_valid);
   auto dev_chars = cudf::detail::make_device_uvector(
