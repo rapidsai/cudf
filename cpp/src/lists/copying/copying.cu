@@ -53,7 +53,7 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
     offsets_data + end + 1,  // size of offsets column is 1 greater than slice length
     out_offsets.data(),
     [start_offset] __device__(cudf::size_type i) { return i - start_offset; });
-  auto offsets = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
+  auto offsets = std::make_unique<cudf::column>(cudf::data_type{cudf::type_to_id<size_type>()},
                                                 offsets_count,
                                                 out_offsets.release(),
                                                 rmm::device_buffer{},

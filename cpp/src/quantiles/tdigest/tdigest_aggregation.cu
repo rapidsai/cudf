@@ -664,7 +664,7 @@ size_t compute_simple_cluster_count(int delta,
       // delta is the largest number of clusters we'll ever generate for any given group.
       // but a group can be significantly smaller than delta as well, in which case we will never
       // generate more than the size of that group.
-      return cuda::std::min(delta, group_size);
+      return cuda::std::min(static_cast<size_type>(delta), group_size);
     }));
 
   // total size
@@ -861,7 +861,7 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
   auto is_stub_digest = [offsets = offsets->view().begin<size_type>(), is_stub_weight] __device__(
                           size_type i) { return is_stub_weight(offsets[i]) ? 1 : 0; };
 
-  size_type const num_stubs = [&]() {
+  size_type const num_stubs = [&]() -> size_type {
     if (!has_nulls) { return 0; }
     auto iter = cudf::detail::make_counting_transform_iterator(
       0, cuda::proclaim_return_type<size_type>(is_stub_digest));

@@ -214,7 +214,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_stats(
     std::span<std::vector<size_type> const> row_group_indices,
     std::span<data_type const> output_dtypes,
-    std::span<cudf::size_type const> output_column_schemas,
+    std::span<int const> output_column_schemas,
     std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream) const;
 
@@ -231,7 +231,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   [[nodiscard]] std::vector<cudf::io::text::byte_range_info> get_bloom_filter_bytes(
     std::span<std::vector<size_type> const> row_group_indices,
     std::span<data_type const> output_dtypes,
-    std::span<cudf::size_type const> output_column_schemas,
+    std::span<int const> output_column_schemas,
     std::reference_wrapper<ast::expression const> filter);
 
   /**
@@ -249,7 +249,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
                           std::vector<cudf::size_type>>
   dictionary_pages_byte_ranges(std::span<std::vector<size_type> const> row_group_indices,
                                std::span<data_type const> output_dtypes,
-                               std::span<cudf::size_type const> output_column_schemas,
+                               std::span<int const> output_column_schemas,
                                std::reference_wrapper<ast::expression const> filter);
 
   /**
@@ -276,7 +276,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
     std::span<std::vector<ast::literal*> const> literals,
     std::span<std::vector<ast::ast_operator> const> operators,
     std::span<data_type const> output_dtypes,
-    std::span<cudf::size_type const> dictionary_col_schemas,
+    std::span<int const> dictionary_col_schemas,
     std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream) const;
 
@@ -296,7 +296,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
     std::span<cudf::device_span<uint8_t const> const> bloom_filter_data,
     std::span<std::vector<size_type> const> row_group_indices,
     std::span<data_type const> output_dtypes,
-    std::span<cudf::size_type const> output_column_schemas,
+    std::span<int const> output_column_schemas,
     std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream) const;
 
@@ -331,7 +331,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   [[nodiscard]] std::unique_ptr<cudf::column> build_row_mask_with_page_index_stats(
     std::span<std::vector<size_type> const> row_group_indices,
     std::span<cudf::data_type const> output_dtypes,
-    std::span<cudf::size_type const> output_column_schemas,
+    std::span<int const> output_column_schemas,
     std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const;

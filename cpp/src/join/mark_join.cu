@@ -68,11 +68,17 @@ static constexpr int32_t mark_block_size = 1024;
 
 using slot_type = mark_key_type;
 
-static_assert(sizeof(slot_type) == sizeof(uint64_t));
+// A slot is compared as a single integer, which the key permits because it is free of padding.
+using slot_bits_type =
+  std::conditional_t<sizeof(slot_type) == sizeof(uint64_t), uint64_t, __uint128_t>;
+
+static_assert(sizeof(slot_type) == sizeof(slot_bits_type));
+static_assert(std::has_unique_object_representations_v<slot_type>);
 
 __device__ inline bool slot_is_empty(slot_type const& slot, slot_type const& sentinel)
 {
-  return *reinterpret_cast<uint64_t const*>(&slot) == *reinterpret_cast<uint64_t const*>(&sentinel);
+  return *reinterpret_cast<slot_bits_type const*>(&slot) ==
+         *reinterpret_cast<slot_bits_type const*>(&sentinel);
 }
 
 template <typename FilterType>
