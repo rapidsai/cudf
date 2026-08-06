@@ -607,13 +607,11 @@ metadata_and_value_at(cudf::lists_column_device_view const& metadata,
 constexpr int block_size = 256;
 
 /**
- * @brief Per-row kernel: decode each VARIANT value blob into a fixed-width primitive of type `T`.
+ * @brief Resolves `path` in each VARIANT row and record the located field's size and source offset.
  *
- * Writes the decoded value to `d_output[row]` for non-null rows whose blob is a variant primitive
- * whose physical type id matches `T` exactly (e.g. an int16 value does not decode into an int32
- * output, and a float32 value does not decode into a float64 output; there is no widening). Rows
- * that are null, or whose value is not an exact-width match for `T`, are marked null in
- * `d_null_mask` with an output of 0.
+ * For each non-null row, walks `path` to the target value and writes its byte length to
+ * `d_sizes[row]` and its offset within the row's value blob to `d_src_offsets[row]`. Rows that are
+ * null, or whose path does not resolve, are marked null in `d_null_mask` with a size of 0.
  */
 template <bool HasStatus>
 CUDF_KERNEL __launch_bounds__(block_size) void locate_variant_fields_kernel(
