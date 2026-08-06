@@ -659,12 +659,15 @@ def test_write_parquet(
     assert isinstance(result, memoryview)
 
 
+# cupy allocates on its own stream, so this cannot honor the injected default
+# stream used by the stream-validation test pass.
+@pytest.mark.uses_custom_stream
 def test_write_large_list_row_group():
     import cupy as cp
 
-    # 800k rows of list<float32>[1024] exceed the signed 32-bit range. The
-    # writer must retain the correct plain-data size for dictionary selection.
-    rows = 800_000
+    # 524.3k list<float32>[1024] rows exceed 2 GiB plain data. The writer must retain the correct
+    # plain-data size for dictionary selection.
+    rows = 524_300
     embedding_dim = 1024
     values = cp.zeros((rows, embedding_dim), dtype=cp.float32)
     table = plc.Table(
