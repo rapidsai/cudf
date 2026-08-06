@@ -759,12 +759,12 @@ std::unique_ptr<column> build_path_column(cudf::host_span<std::string const> ste
   auto const depth = steps.size();
 
   std::string host_chars;
-  std::vector<size_type> host_offsets(depth + 1);
+  std::vector<int32_t> host_offsets(depth + 1);
   for (size_t i = 0; i < depth; ++i) {
-    host_offsets[i] = static_cast<size_type>(host_chars.size());
+    host_offsets[i] = static_cast<int32_t>(host_chars.size());
     host_chars.append(steps[i]);
   }
-  host_offsets[depth] = host_chars.size();
+  host_offsets[depth] = static_cast<int32_t>(host_chars.size());
 
   auto d_offsets   = cudf::detail::make_device_uvector_async(host_offsets, stream, mr);
   auto offsets_col = std::make_unique<column>(data_type{type_id::INT32},
@@ -804,7 +804,7 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
   auto const num_rows = variant_column.size();
   if (num_rows == 0) {
     return cudf::make_lists_column(
-      0, make_empty_column(type_id::INT32), make_empty_column(type_id::UINT8), 0, {});
+      0, make_empty_column(type_to_id<size_type>()), make_empty_column(type_id::UINT8), 0, {});
   }
 
   auto const temp_mr = cudf::get_current_device_resource_ref();

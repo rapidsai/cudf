@@ -322,7 +322,7 @@ std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
   switch (buffer.type.id()) {
     case type_id::STRING: {
       if (buffer.string_as_binary) {
-        auto offsets = cudf::make_empty_column(type_id::INT32);
+        auto offsets = cudf::make_empty_column(type_to_id<size_type>());
         auto child   = cudf::make_empty_column(type_id::UINT8);
         if (schema_info != nullptr) {
           // Mirror the binary path in `make_column` so that the schema_info for an empty
@@ -339,7 +339,7 @@ std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
 
     case type_id::LIST: {
       // make offsets column
-      auto offsets = cudf::make_empty_column(type_id::INT32);
+      auto offsets = cudf::make_empty_column(type_to_id<size_type>());
 
       column_name_info* child_info = nullptr;
       if (schema_info != nullptr) {

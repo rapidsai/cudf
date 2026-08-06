@@ -29,7 +29,7 @@ std::unique_ptr<column> create_empty_column(size_type orc_col_id,
       schema_info.children.emplace_back("offsets");
       schema_info.children.emplace_back("");
       return make_lists_column(0,
-                               make_empty_column(type_id::INT32),
+                               make_empty_column(type_to_id<size_type>()),
                                create_empty_column(metadata.get_col_type(orc_col_id).subtypes[0],
                                                    metadata,
                                                    decimal128_columns,
@@ -58,7 +58,7 @@ std::unique_ptr<column> create_empty_column(size_type orc_col_id,
         children_schema[idx].name = get_map_child_col_name(idx);
       }
       return make_lists_column(0,
-                               make_empty_column(type_id::INT32),
+                               make_empty_column(type_to_id<size_type>()),
                                make_structs_column(0,
                                                    std::move(child_columns),
                                                    0,

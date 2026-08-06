@@ -456,7 +456,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
 
       // If child is not present, set the null mask correctly, but offsets are zero, and children
       // are empty. Note: json_col modified here, reuse the memory
-      auto offsets_column = std::make_unique<column>(data_type{type_id::INT32},
+      auto offsets_column = std::make_unique<column>(data_type{type_to_id<size_type>()},
                                                      num_rows + 1,
                                                      json_col.child_offsets.release(),
                                                      rmm::device_buffer{},
