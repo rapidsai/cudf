@@ -27,6 +27,7 @@ java/              @rapidsai/cudf-java-codeowners
 /.github/                @rapidsai/ci-codeowners
 /ci/                     @rapidsai/ci-codeowners
 /.coderabbit.yaml        @rapidsai/ci-codeowners
+/.yamllint.yaml          @rapidsai/ci-codeowners
 
 #packaging code owners
 /.pre-commit-config.yaml @rapidsai/packaging-codeowners
