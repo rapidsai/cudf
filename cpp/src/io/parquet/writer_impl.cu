@@ -2003,7 +2003,12 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           chunk_fragments.begin(),
           chunk_fragments.end(),
           size_t{0},
-          [](auto sum, PageFragment const& frag) { return sum + frag.fragment_data_size; });
+          [](auto sum, PageFragment const& frag) {
+            auto const [result, overflow] =
+              cuda::add_overflow<size_t>(sum, frag.fragment_data_size);
+            CUDF_EXPECTS(not overflow, "Page fragments data size overflow", std::overflow_error);
+            return result;
+          });
         auto& column_chunk_meta          = row_group.columns[c].meta_data;
         column_chunk_meta.type           = parquet_columns[c].physical_type();
         column_chunk_meta.path_in_schema = parquet_columns[c].get_path_in_schema();
