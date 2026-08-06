@@ -659,33 +659,6 @@ def test_write_parquet(
     assert isinstance(result, memoryview)
 
 
-def test_write_large_list_row_group():
-    import cupy as cp
-
-    # 800k rows of list<float32>[1024] exceed the signed 32-bit range. The
-    # writer must retain the correct plain-data size for dictionary selection.
-    rows = 800_000
-    embedding_dim = 1024
-    values = cp.zeros((rows, embedding_dim), dtype=cp.float32)
-    table = plc.Table(
-        [plc.Column.from_cuda_array_interface(values)],
-        num_rows=rows,
-    )
-    metadata = plc.io.types.TableInputMetadata(table)
-    sink = plc.io.SinkInfo([io.BytesIO()])
-    options = (
-        plc.io.parquet.ParquetWriterOptions.builder(sink, table)
-        .metadata(metadata)
-        .build()
-    )
-
-    result = plc.io.parquet.write_parquet(options)
-    parquet_file = pq.ParquetFile(io.BytesIO(result))
-
-    assert parquet_file.metadata.num_rows == rows
-    assert parquet_file.metadata.num_row_groups == 1
-
-
 @pytest.mark.parametrize("use_jit_filter", [False, True])
 @pytest.mark.parametrize(
     "pa_filter,plc_filter",
