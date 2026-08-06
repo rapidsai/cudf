@@ -47,20 +47,16 @@ enum class variant_primitive_type : uint8_t {
 };
 
 /**
- * @brief Per-row outcome of a VARIANT extraction or conversion operation.
- *
- * A SQL-null input row produces a null status (the status column entry is null).
- * Every other row receives one of these valid status values.
+ * @brief VARIANT status types.
  */
 enum class variant_operation_status : uint8_t {
-  success,             ///< The requested output was produced.
-  missing_path,        ///< Path resolution failed: key absent, index out of range,
-                       ///< or a non-container/null value before the final step.
-  variant_null,        ///< The resolved value is an encoded VARIANT null.
-  type_mismatch,       ///< Source type is not accepted for the requested operation.
-  malformed_variant,   ///< Bytes needed by the requested operation are invalid or truncated.
-  overflow,            ///< Conversion is outside the target range or precision.
-  invalid_conversion,  ///< Conversion failed for another value-dependent reason.
+  success,
+  missing_path,
+  variant_null,
+  type_mismatch,
+  malformed_variant,
+  overflow,
+  invalid_conversion,
 };
 
 }  // namespace cudf::io::parquet::experimental
