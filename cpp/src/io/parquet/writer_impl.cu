@@ -1332,6 +1332,21 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     return std::pair(std::move(dict_data), std::move(dict_index));
   }
 
+  // The hash map only ever needs to hold as many entries as a chunk could actually use for
+  // dictionary encoding; inserts stop once that many entries have been added. Sizing the map from
+  // `num_values` (the *leaf* element count) therefore over-allocates by orders of magnitude for
+  // list columns with wide leaves, where the map alone can dwarf the payload it describes.
+  auto const max_dict_entries = [&]() -> size_type {
+    // Under ADAPTIVE, a chunk is rejected below if its unique data exceeds the dictionary size
+    // limit. The smallest a unique entry can be is 4 bytes (INT32/FLOAT, or an empty BYTE_ARRAY),
+    // so no chunk that would be accepted can hold more than `size_limit / 4` entries.
+    if (dict_policy == dictionary_policy::ADAPTIVE) {
+      auto const size_limit = max_page_bytes(compression, max_dict_size);
+      return static_cast<size_type>(std::min<size_t>(MAX_DICT_SIZE, size_limit / sizeof(int32_t)));
+    }
+    return MAX_DICT_SIZE;
+  }();
+
   // Variable to keep track of the current total map storage size
   size_t total_map_storage_size = 0;
   // Populate dict offsets and sizes for each chunk that need to build a dictionary.
@@ -1346,10 +1361,11 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     if (is_type_non_dict || is_requested_non_dict) {
       chunk.use_dictionary = false;
     } else {
-      chunk.use_dictionary = true;
+      chunk.use_dictionary   = true;
+      chunk.dict_entry_limit = std::min(chunk.num_values, max_dict_entries);
       chunk.dict_map_size =
         static_cast<cudf::size_type>(cuco::make_valid_extent<map_cg_size, bucket_size>(
-          static_cast<cudf::size_type>(occupancy_factor * chunk.num_values)));
+          static_cast<cudf::size_type>(occupancy_factor * chunk.dict_entry_limit)));
       chunk.dict_map_offset = total_map_storage_size;
       total_map_storage_size += chunk.dict_map_size;
     }
@@ -1378,6 +1394,12 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   for (auto& ck : h_chunks) {
     if (not ck.use_dictionary) { continue; }
     std::tie(ck.use_dictionary, ck.dict_rle_bits) = [&]() -> std::pair<bool, uint8_t> {
+      // `populate_chunk_hash_maps` stops inserting once the entry limit is crossed, so a chunk that
+      // ended up above the limit has an incomplete dictionary and cannot use one. Such a chunk
+      // would have been rejected by the size checks below anyway, but its `uniq_data_size` is
+      // truncated and can no longer be trusted to make that call.
+      if (ck.num_dict_entries > ck.dict_entry_limit) { return {false, 0}; }
+
       // calculate size of chunk if dictionary is used
 
       // If we have N unique values then the idx for the last value is N - 1 and nbits is the number

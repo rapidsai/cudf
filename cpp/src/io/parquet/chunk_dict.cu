@@ -97,6 +97,7 @@ struct map_insert_fn {
       auto const t                       = threadIdx.x;
       auto const col                     = chunk->col_desc;
       column_device_view const& data_col = *col->leaf_column;
+      auto const dict_entry_limit        = chunk->dict_entry_limit;
       __shared__ size_type total_num_dict_entries;
       __shared__ size_type num_dict_vals;
       if (t == 0) { num_dict_vals = 0; };
@@ -186,8 +187,9 @@ struct map_insert_fn {
         }
         __syncthreads();
 
-        // Check if the num unique values in chunk has already exceeded max dict size and early exit
-        if (total_num_dict_entries > MAX_DICT_SIZE) { break; }
+        // Check if the num unique values in chunk has already exceeded the number of entries this
+        // chunk's map was sized for (and could possibly use) and early exit
+        if (total_num_dict_entries > dict_entry_limit) { break; }
       }  // for loop
       // Flush the number of unique values inserted by this fragment
       if (t == 0) { frag->num_dict_vals = num_dict_vals; };
