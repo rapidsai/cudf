@@ -75,9 +75,8 @@ enum class use_data_page_mask : bool {
  * @endcode
  *
  * @note The metadata is immutable after `setup_page_index()` has been called (or immediately after
- * construction if page index setup is skipped). Readers sharing one instance may read different
- * row-group ranges of the same single file concurrently; overlapping ranges produce duplicate rows.
- * This handle does not support multi-source (multi-file) metadata.
+ * construction if page index setup is skipped). Concurrent usage by multiple readers is thread
+ * safe. This handle does not support multi-source (multi-file) metadata.
  */
 class hybrid_scan_metadata {
  public:
@@ -375,9 +374,7 @@ class hybrid_scan_reader {
    * @brief Constructor that borrows shared, pre-parsed Parquet file metadata
    *
    * Constructs a reader that shares `metadata` instead of parsing and copying the file metadata
-   * again. Use this to read disjoint row-group ranges of a single file without paying the metadata
-   * copy per reader. The reader options that govern reading (column selection, filter, ...) are
-   * supplied per call to the individual read methods.
+   * again.
    *
    * @param metadata Shared, pre-parsed Parquet file metadata
    */
