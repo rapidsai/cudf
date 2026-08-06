@@ -489,7 +489,9 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithComplexExpressions)
   }
 
   // Filter: NOT(col0 > 50 AND col0 < 100)
-  // NOT over a compound expression (LOGICAL_AND) cannot be negated, degrades to always_true.
+  // De Morgan rewrites this to NOT(col0 > 50) OR NOT(col0 < 100), i.e. col0 <= 50 OR col0 >= 100,
+  // stats transform: vmin <= 50 OR vmax >= 100. Every row group satisfies one of the two disjuncts,
+  // so nothing is pruned - but now for an evaluated reason rather than a relaxation.
   {
     auto literal_50_value  = cudf::numeric_scalar<T>(50, true, cudf::get_default_stream());
     auto literal_50        = cudf::ast::literal(literal_50_value);
@@ -509,7 +511,8 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithComplexExpressions)
   }
 
   // Filter: NOT(NOT(col0 < 100) OR col0 > 150)
-  // Outer NOT wraps a compound expression (LOGICAL_OR), degrades to always_true.
+  // De Morgan plus double-negation elimination rewrites this to col0 < 100 AND NOT(col0 > 150),
+  // stats transform: vmin < 100 AND vmin <= 150. Prunes RG2 (vmin=100) and RG3 (vmin=150).
   {
     auto literal_100_value = cudf::numeric_scalar<T>(100, true, cudf::get_default_stream());
     auto literal_100       = cudf::ast::literal(literal_100_value);
@@ -526,7 +529,8 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithComplexExpressions)
     auto input_row_group_indices = reader->all_row_groups(options);
     auto stats_filtered          = reader->filter_row_groups_with_stats(
       input_row_group_indices, options, cudf::get_default_stream());
-    EXPECT_EQ(stats_filtered.size(), 4);
+    EXPECT_EQ(stats_filtered.size(), 2);
+    EXPECT_EQ(reader->total_rows_in_row_groups(stats_filtered), 2 * rows_per_row_group);
   }
 }
 
@@ -1319,6 +1323,9 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
   }
 
   // Filtering - NOT(table[0] == 50)
+  // Rewritten to table[0] != 50, which prunes a row group only when 50 is the *only* value in its
+  // dictionary. The row group holding 50 holds other values too, so nothing is pruned. Negating the
+  // membership result instead would prune that row group and drop its non-50 rows.
   {
     auto uint_literal_value = cudf::numeric_scalar<T>(50, true, stream);
     auto uint_literal       = cudf::ast::literal(uint_literal_value);
@@ -1328,11 +1335,22 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
       cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     auto const result =
       filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr);
-    auto const expected = std::vector<cudf::size_type>{0, 2, 3};
+    auto const expected = std::vector<cudf::size_type>{0, 1, 2, 3};
     EXPECT_EQ(result, expected);
+
+    // `NOT(col == v)` and `col != v` are the same predicate and must prune identically
+    auto const not_equal =
+      cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col0_ref, uint_literal);
+    auto const not_equal_options =
+      cudf::io::parquet_reader_options::builder().filter(not_equal).build();
+    EXPECT_EQ(result,
+              filter_row_groups_with_dictionaries(
+                datasource_ref, reader_ref, not_equal_options, stream, mr));
   }
 
   // Filtering - NOT(table[0] == 50) AND (table[0] NULL_EQUAL 100)
+  // Rewritten to (table[0] != 50) AND NULL_EQUAL(...). NULL_EQUAL has no dictionary transform and
+  // relaxes, and table[0] != 50 prunes nothing, so all row groups survive.
   {
     auto literal_50_value  = cudf::numeric_scalar<T>(50, true, stream);
     auto literal_50        = cudf::ast::literal(literal_50_value);
@@ -1348,11 +1366,13 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
       cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     auto const result =
       filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr);
-    auto const expected = std::vector<cudf::size_type>{0, 2, 3};
+    auto const expected = std::vector<cudf::size_type>{0, 1, 2, 3};
     EXPECT_EQ(result, expected);
   }
 
   // Filtering - NOT(table[0] == 50) OR NOT(table[2] == "0100")
+  // Rewritten to (table[0] != 50) OR (table[2] != "0100"), matching the non-negated spelling of the
+  // same predicate tested above.
   {
     auto literal_50_value  = cudf::numeric_scalar<T>(50, true, stream);
     auto literal_50        = cudf::ast::literal(literal_50_value);
@@ -1368,7 +1388,7 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
       cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     auto const result =
       filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr);
-    auto const expected = std::vector<cudf::size_type>{0, 2, 3};
+    auto const expected = std::vector<cudf::size_type>{0, 1, 2, 3};
     EXPECT_EQ(result, expected);
   }
 }

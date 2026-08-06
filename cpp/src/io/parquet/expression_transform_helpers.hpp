@@ -116,46 +116,36 @@ template <operator_transform mode>
  * @brief Handle unary operation transform for membership-based row group filters. i.e., bloom
  * filter and dictionary page filter.
  *
- * @tparam VisitorType Type of the AST visitor that implements accept()
+ * A transformed operand of a membership filter is an existential summary of a row group - it
+ * answers "could some row here match?" rather than "is the operand true?". No unary operator is
+ * meaning-preserving over such a summary, so a unary operation is always relaxed to `always_true`.
+ *
+ * `NOT` is the case that matters: transforming `NOT(col == v)` into `NOT(dict_contains(v))` would
+ * prune every row group holding a single `v`, whereas `col != v` only permits pruning a row group
+ * whose values are all `v`. See `negation_pushdown`, which rewrites `NOT(col == v)` into
+ * `col != v` before it ever reaches a converter.
+ *
  * @tparam VisitOperandsFn Callable matching `(host_span<reference_wrapper<expr>>) ->
  * vector<reference_wrapper<expr>>`
  *
  * @param expr Unary operation to transform
  * @param expr_tree The AST tree to push transformed expressions into
  * @param always_true Reference to the always_true sentinel literal
- * @param visitor The visitor used to accept column references
  * @param visit_operands_fn Callable to visit operands and return the transformed operands
- * @return Transformed expression or _always_true if the operation cannot be evaluated
+ * @return The `always_true` expression
  */
-template <typename VisitorType, typename VisitOperandsFn>
+template <typename VisitOperandsFn>
 [[nodiscard]] inline std::reference_wrapper<ast::expression const> apply_unary_membership_transform(
   ast::operation const& expr,
   ast::tree& expr_tree,
   std::reference_wrapper<ast::expression const> const always_true,
-  VisitorType& visitor,
   VisitOperandsFn&& visit_operands_fn)
 {
-  auto const [kind, col_ref] = extract_unary_operand(expr);
-
-  // For `op col` form, push the `_always_true` expression
-  if (kind == operand_kind::COLUMN_REF) {
-    col_ref->accept(visitor);
-    expr_tree.push(ast::operation{ast::ast_operator::IDENTITY, always_true});
-    return always_true;
-  }
-  // For `op expr` form, visit operands and push expression
-  else {
-    auto new_operands = visit_operands_fn(expr.get_operands());
-    if (&new_operands.front().get() == &always_true.get()) {
-      // Pass through the _always_true child operand as is
-      expr_tree.push(ast::operation{ast::ast_operator::IDENTITY, expr_tree.back()});
-      return always_true;
-    } else {
-      auto const input_op = expr.get_operator();
-      expr_tree.push(ast::operation{input_op, new_operands.front()});
-      return expr_tree.back();
-    }
-  }
+  // Visit the operands to validate column references and collect any nested literals, then discard
+  // the transformed operands and relax this operation to `always_true`
+  std::ignore = visit_operands_fn(expr.get_operands());
+  expr_tree.push(ast::operation{ast::ast_operator::IDENTITY, always_true});
+  return always_true;
 }
 
 /**
@@ -208,7 +198,12 @@ class names_from_expression : public ast::detail::expression_transformer {
 };
 
 /**
- * @brief Converts named columns to index reference columns
+ * @brief Converts named columns to index reference columns and pushes logical negations down to
+ * the leaves of the expression
+ *
+ * The converted expression is the single expression the reader uses both to prune row groups and
+ * pages, and to filter the decoded rows. Every negation rewrite must therefore be an exact
+ * equivalence rather than a relaxation - see `push_down_negation()`.
  */
 class named_to_reference_converter : public ast::detail::expression_transformer {
  public:
@@ -253,6 +248,35 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
  protected:
   std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
     cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
+
+  /**
+   * @brief Rewrites `NOT(operand)` into an equivalent expression with the negation pushed into
+   * `operand`'s own operands
+   *
+   * Only rewrites that are exact in every case cudf's AST evaluates are applied, as the converted
+   * expression also filters the decoded rows:
+   *
+   * - `NOT(NOT(x))` becomes `x`
+   * - `NOT(a AND b)` becomes `NOT(a) OR NOT(b)` and the three other De Morgan forms, for both the
+   *   null-propagating (`LOGICAL_*`) and the Kleene (`NULL_LOGICAL_*`) operators
+   * - `NOT(a == b)` becomes `a != b` and vice versa
+   *
+   * Ordering comparisons are deliberately **not** complemented. IEEE-754 makes every ordered
+   * comparison against a `NaN` false, so `NOT(a < b)` is true exactly where `a >= b` is false.
+   * `NOT(IS_NULL(x))` and `NOT(NULL_EQUAL(a, b))` have no complement operator and are left alone.
+   *
+   * @param operand The operand of the `NOT` operation to rewrite
+   * @return The rewritten expression, or std::nullopt if no exact rewrite exists
+   */
+  [[nodiscard]] std::optional<std::reference_wrapper<ast::expression const>> push_down_negation(
+    ast::expression const& operand);
+
+  /**
+   * @brief Returns the converted negation of `operand`, pushing the negation down if possible and
+   * otherwise wrapping the converted operand in a `NOT`
+   */
+  [[nodiscard]] std::reference_wrapper<ast::expression const> negate(
+    ast::expression const& operand);
 
   column_path_map<size_type> _column_name_to_index;
   std::optional<std::reference_wrapper<ast::expression const>> _converted_expr;

@@ -231,7 +231,7 @@ class bloom_filter_expression_converter : public equality_literals_collector {
         return this->visit_operands(operands);
       };
       return parquet::detail::apply_unary_membership_transform(
-        expr, _bloom_filter_expr, *_always_true, *this, visit_operands_fn);
+        expr, _bloom_filter_expr, *_always_true, visit_operands_fn);
     }
 
     // Binary operation

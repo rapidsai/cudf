@@ -1366,7 +1366,7 @@ class dictionary_expression_converter : public equality_literals_collector {
         return this->visit_operands(operands);
       };
       return parquet::detail::apply_unary_membership_transform(
-        expr, _dictionary_expr, *_always_true, *this, visit_operands_fn);
+        expr, _dictionary_expr, *_always_true, visit_operands_fn);
     }
 
     // Binary operation

@@ -137,9 +137,79 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
   return std::reference_wrapper<ast::expression const>(_col_ref.back());
 }
 
+std::optional<std::reference_wrapper<ast::expression const>>
+named_to_reference_converter::push_down_negation(ast::expression const& operand)
+{
+  using cudf::ast::ast_operator;
+
+  auto const* child_operation = dynamic_cast<ast::operation const*>(&operand);
+  if (child_operation == nullptr) { return std::nullopt; }
+
+  auto const op       = child_operation->get_operator();
+  auto const operands = child_operation->get_operands();
+
+  // `NOT(NOT(x))` is `x`, including when `x` is null
+  if (op == ast_operator::NOT) { return operands.front().get().accept(*this); }
+
+  // De Morgan's laws. Exact for the null-propagating operators, where a null operand makes both
+  // sides null, and for the Kleene operators, where they hold by definition
+  auto const de_morgan_op = [op]() -> std::optional<ast_operator> {
+    switch (op) {
+      case ast_operator::LOGICAL_AND: return ast_operator::LOGICAL_OR;
+      case ast_operator::LOGICAL_OR: return ast_operator::LOGICAL_AND;
+      case ast_operator::NULL_LOGICAL_AND: return ast_operator::NULL_LOGICAL_OR;
+      case ast_operator::NULL_LOGICAL_OR: return ast_operator::NULL_LOGICAL_AND;
+      default: return std::nullopt;
+    }
+  }();
+  if (de_morgan_op.has_value()) {
+    // Negate both operands before emplacing the parent, as negating them appends to `_operators`
+    auto const lhs = negate(operands.front().get());
+    auto const rhs = negate(operands.back().get());
+    _operators.emplace_back(de_morgan_op.value(), lhs, rhs);
+    return std::reference_wrapper<ast::expression const>(_operators.back());
+  }
+
+  // Complement the equality operators. Exact for floating point values as well: IEEE-754 makes
+  // `NaN == x` false and `NaN != x` true, so the two stay exact complements. Ordering comparisons
+  // are excluded - every ordered comparison against a `NaN` is false, so `NOT(a < b)` is true
+  // exactly where `a >= b` is false
+  if (op == ast_operator::EQUAL or op == ast_operator::NOT_EQUAL) {
+    auto const complement =
+      (op == ast_operator::EQUAL) ? ast_operator::NOT_EQUAL : ast_operator::EQUAL;
+    auto new_operands = visit_operands(operands);
+    _operators.emplace_back(complement, new_operands.front(), new_operands.back());
+    return std::reference_wrapper<ast::expression const>(_operators.back());
+  }
+
+  return std::nullopt;
+}
+
+std::reference_wrapper<ast::expression const> named_to_reference_converter::negate(
+  ast::expression const& operand)
+{
+  if (auto const negated = push_down_negation(operand); negated.has_value()) {
+    return negated.value();
+  }
+  // No exact rewrite, so convert the operand and negate it in place
+  auto const new_operand = operand.accept(*this);
+  _operators.emplace_back(ast::ast_operator::NOT, new_operand);
+  return std::reference_wrapper<ast::expression const>(_operators.back());
+}
+
 std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
   ast::operation const& expr)
 {
+  // Push the negation down to the leaves so that no downstream transformer has to reason about
+  // `NOT` over an expression it has already rewritten
+  if (expr.get_operator() == ast::ast_operator::NOT) {
+    if (auto const negated = push_down_negation(expr.get_operands().front().get());
+        negated.has_value()) {
+      _converted_expr = negated.value();
+      return negated.value();
+    }
+  }
+
   auto const operands       = expr.get_operands();
   auto op                   = expr.get_operator();
   auto new_operands         = visit_operands(operands);
