@@ -3175,7 +3175,7 @@ TEST_F(ParquetMetadataReaderTest, Nested)
   for (int idx = 0; idx < num_rows + 1; ++idx) {
     row_offsets[idx] = idx * lists_per_row;
   }
-  column_wrapper<int> offsets(row_offsets.begin(), row_offsets.end());
+  column_wrapper<cudf::size_type> offsets(row_offsets.begin(), row_offsets.end());
 
   auto list_col =
     cudf::make_lists_column(num_rows, offsets.release(), std::move(s_col), 0, rmm::device_buffer{});

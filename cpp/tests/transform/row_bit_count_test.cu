@@ -114,7 +114,7 @@ std::unique_ptr<cudf::column> build_nested_column1(std::vector<bool> const& stru
 
   // wrap in a list
   std::vector<int> outer_offsets{0, 1, 1, 3, 6, 7, 8};
-  cudf::test::fixed_width_column_wrapper<int> outer_offsets_col(outer_offsets.begin(),
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> outer_offsets_col(outer_offsets.begin(),
                                                                 outer_offsets.end());
   auto const size = static_cast<cudf::column_view>(outer_offsets_col).size() - 1;
 
@@ -155,7 +155,7 @@ std::unique_ptr<cudf::column> build_nested_column2(std::vector<bool> const& stru
 
   // wrap in a list
   std::vector<int> outer_offsets{0, 1, 1, 3};
-  cudf::test::fixed_width_column_wrapper<int> outer_offsets_col(outer_offsets.begin(),
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> outer_offsets_col(outer_offsets.begin(),
                                                                 outer_offsets.end());
   auto const size = static_cast<cudf::column_view>(outer_offsets_col).size() - 1;
   return cudf::make_lists_column(static_cast<cudf::size_type>(size),
@@ -498,7 +498,7 @@ TEST_F(RowBitCount, NestedTypes)
     // innermost List<Struct<List<int>>>
     auto innermost_struct = cudf::test::structs_column_wrapper({l3, c3});
     std::vector<int> l4_offsets{0, 1, 2, 3, 4};
-    cudf::test::fixed_width_column_wrapper<int> l4_offsets_col(l4_offsets.begin(),
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> l4_offsets_col(l4_offsets.begin(),
                                                                l4_offsets.end());
     auto const l4_size = l4_offsets.size() - 1;
     auto l4            = cudf::make_lists_column(static_cast<cudf::size_type>(l4_size),

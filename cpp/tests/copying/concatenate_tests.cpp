@@ -508,7 +508,7 @@ TEST_F(OverflowTest, Presliced)
     // try and concatenate 4 string columns of with ~1/2 billion chars in each
     auto offset_gen = cudf::detail::make_counting_transform_iterator(
       0, [](cudf::size_type index) { return index * string_size; });
-    cudf::test::fixed_width_column_wrapper<int> offsets(offset_gen, offset_gen + num_rows + 1);
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets(offset_gen, offset_gen + num_rows + 1);
     auto many_chars = rmm::device_uvector<char>(total_chars_size, cudf::get_default_stream());
     auto col        = cudf::make_strings_column(
       num_rows, offsets.release(), many_chars.release(), 0, rmm::device_buffer{});
@@ -1532,7 +1532,7 @@ TEST_F(ListsColumnTest, ListOfStructs)
   auto struct_views = std::vector<column_view>(
     {inner_structs[0], inner_structs[1], inner_structs[2], inner_structs[3]});
   auto expected_child = cudf::concatenate(struct_views);
-  cudf::test::fixed_width_column_wrapper<int> offsets_w{0, 1, 1, 1, 1, 4, 6, 6, 6, 10, 11};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets_w{0, 1, 1, 1, 1, 4, 6, 6, 6, 10, 11};
   auto expected =
     make_lists_column(10, offsets_w.release(), std::move(expected_child), 0, rmm::device_buffer{});
 

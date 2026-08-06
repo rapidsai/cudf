@@ -325,7 +325,7 @@ std::vector<std::unique_ptr<cudf::column>> generate_list_of_struct()
   // 3. List column
   std::vector<bool> list_validity{true, true, true, true, true, false, true, false, true};
 
-  cudf::test::fixed_width_column_wrapper<int> offsets{0, 1, 4, 5, 7, 7, 10, 13, 14, 16};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets{0, 1, 4, 5, 7, 7, 10, 13, 14, 16};
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(list_validity.begin(), list_validity.begin() + 9);
   auto list = [&] {

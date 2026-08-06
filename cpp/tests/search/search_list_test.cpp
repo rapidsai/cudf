@@ -287,7 +287,7 @@ TYPED_TEST(TypedListContainsTestColumnNeedles, ListsOfStructs)
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
   auto const haystack = [] {
-    auto offsets = int32s_col{0, 2, 3, 5, 8, 10};
+    auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 3, 5, 8, 10};
     // clang-format off
     auto data1 = tdata_col{1, 2,     //
                            1,        //
@@ -307,7 +307,7 @@ TYPED_TEST(TypedListContainsTestColumnNeedles, ListsOfStructs)
   }();
 
   auto const needles = [] {
-    auto offsets = int32s_col{0, 3, 4, 6, 9, 11};
+    auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 3, 4, 6, 9, 11};
     // clang-format off
     auto data1 = tdata_col{1, 2, 1,  //
                            1,        //
@@ -408,7 +408,7 @@ TEST_F(ListBinarySearch, ListsOfStructs)
 {
   // Haystack must be pre-sorted.
   auto const haystack = [] {
-    auto offsets = int32s_col{0, 2, 3, 4, 5, 7, 10, 13, 16, 18};
+    auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 3, 4, 5, 7, 10, 13, 16, 18};
     // clang-format off
     auto data1 = int32s_col{1, 2,
                             3,
@@ -436,7 +436,7 @@ TEST_F(ListBinarySearch, ListsOfStructs)
   }();
 
   auto const needles = [] {
-    auto offsets = int32s_col{0, 3, 4, 6, 8, 10, 13, 14, 15};
+    auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 3, 4, 6, 8, 10, 13, 14, 15};
     // clang-format off
     auto data1 = int32s_col{1, 2, 1,
                             3,
@@ -473,7 +473,7 @@ TEST_F(ListBinarySearch, ListsOfEqualStructsInTwoTables)
 {
   // Haystack must be pre-sorted.
   auto const haystack = [] {
-    auto offsets = int32s_col{0, 2, 3, 4, 5, 7, 10, 13, 16, 18};
+    auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 3, 4, 5, 7, 10, 13, 16, 18};
     // clang-format off
     auto data1 = int32s_col{1, 2,
                             3,
@@ -501,7 +501,7 @@ TEST_F(ListBinarySearch, ListsOfEqualStructsInTwoTables)
   }();
 
   auto const needles = [] {
-    auto offsets = int32s_col{0, 2, 3, 4, 5, 7, 10, 13, 15, 17};
+    auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 3, 4, 5, 7, 10, 13, 15, 17};
     // clang-format off
     auto data1 = int32s_col{1, 2,
                             3,
@@ -546,7 +546,7 @@ TEST_F(ListBinarySearch, CrazyListTest)
   // Haystack must be pre-sorted.
   auto const haystack = [] {
     auto lists_of_structs_of_ints = [] {
-      auto offsets = int32s_col{0, 2, 3, 4, 5, 7, 10, 13, 16, 18};
+      auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 3, 4, 5, 7, 10, 13, 16, 18};
       // clang-format off
       auto data1 = int32s_col{1, 2,
         3,
@@ -586,17 +586,17 @@ TEST_F(ListBinarySearch, CrazyListTest)
     }();
 
     auto list_nested0 = [&] {
-      auto offsets = int32s_col{0, 3, 3, 4, 6, 9};
+      auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 3, 3, 4, 6, 9};
       return cudf::make_lists_column(5, offsets.release(), std::move(struct_nested1), 0, {});
     }();
 
-    auto offsets = int32s_col{0, 0, 2, 4, 5, 5};
+    auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 2, 4, 5, 5};
     return cudf::make_lists_column(5, offsets.release(), std::move(list_nested0), 0, {});
   }();
 
   auto const needles = [] {
     auto lists_of_structs_of_ints = [] {
-      auto offsets = int32s_col{0, 2, 3, 4, 5, 7, 10, 13, 15, 17};
+      auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 3, 4, 5, 7, 10, 13, 15, 17};
       // clang-format off
       auto data1 = int32s_col{1, 2,
         3,
@@ -636,11 +636,11 @@ TEST_F(ListBinarySearch, CrazyListTest)
     }();
 
     auto list_nested0 = [&] {
-      auto offsets = int32s_col{0, 3, 3, 4, 6, 9};
+      auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 3, 3, 4, 6, 9};
       return cudf::make_lists_column(5, offsets.release(), std::move(struct_nested1), 0, {});
     }();
 
-    auto offsets = int32s_col{0, 2, 2, 4, 4, 5};
+    auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 2, 4, 4, 5};
     return cudf::make_lists_column(5, offsets.release(), std::move(list_nested0), 0, {});
   }();
 

@@ -543,7 +543,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithPlainListOfStringSpanningPag
   }
 
   auto child_col   = strings_col(child_strings.begin(), child_strings.end()).release();
-  auto offsets_col = int32s_col(offsets.begin(), offsets.end()).release();
+  auto offsets_col = cudf::test::fixed_width_column_wrapper<cudf::size_type>(offsets.begin(), offsets.end()).release();
   auto list_col    = cudf::make_lists_column(
     num_rows, std::move(offsets_col), std::move(child_col), 0, rmm::device_buffer{});
 
@@ -1482,7 +1482,7 @@ void tiny_list_rowgroup_test(bool just_list_col)
 
     // write out the single-row list column as it's own file
     cudf::test::fixed_width_column_wrapper<int> values(iter, iter + row_sizes[idx]);
-    cudf::test::fixed_width_column_wrapper<int> offsets({0, row_sizes[idx]});
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets({0, row_sizes[idx]});
     cols.push_back(cudf::make_lists_column(1, offsets.release(), values.release(), 0, {}));
 
     // add a column after the list

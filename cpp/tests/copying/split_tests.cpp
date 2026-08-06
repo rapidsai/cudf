@@ -1255,7 +1255,7 @@ void split_nested_list_of_structs(SplitFunc Split, CompareFunc Compare, bool spl
 
   // wrap in a list
   std::vector<int> outer_offsets{0, 3, 4, 8, 13, 16, 17, 18};
-  cudf::test::fixed_width_column_wrapper<int> outer_offsets_col(outer_offsets.begin(),
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> outer_offsets_col(outer_offsets.begin(),
                                                                 outer_offsets.end());
   std::vector<bool> outer_validity{true, true, true, false, true, true, false};
   auto [outer_null_mask, outer_null_count] =
@@ -2757,7 +2757,7 @@ TEST_F(ContiguousSplitLongStrings, LongOffsetsNested)
   children.push_back(make_long_offsets_string_column());
   cudf::test::structs_column_wrapper st(std::move(children));
 
-  cudf::test::fixed_width_column_wrapper<int> offsets{0, 3, 5, 7, 9, 10};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets{0, 3, 5, 7, 9, 10};
   auto list = make_lists_column(5, offsets.release(), st.release(), 0, {});
 
   cudf::table_view tbl({*list});
@@ -2786,7 +2786,7 @@ TEST_F(ContiguousSplitLongStrings, DISABLED_LongOffsetsAndChars)
 
 TEST_F(ContiguousSplitLongStrings, DISABLED_LongOffsetsAndCharsNested)
 {
-  cudf::test::fixed_width_column_wrapper<int> offsets{0, 3, 5, 7, 9, 10};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets{0, 3, 5, 7, 9, 10};
   auto list =
     make_lists_column(5, offsets.release(), make_long_offsets_and_chars_string_column(), 0, {});
 
