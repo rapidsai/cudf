@@ -1227,10 +1227,12 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
                    nullptr,
                    error_code.data(),
                    stream);
+  if (auto const error = error_code.value_sync(stream); error != 0) {
+    CUDF_FAIL(
+      std::format("Parquet encoding failed with code(s) {}", kernel_error::to_string(error)));
+  }
+
   chunks.device_to_host(stream);
-  CUDF_EXPECTS(error_code.value_sync(stream) == 0,
-               std::format("Parquet encoding failed with code(s) {}",
-                           kernel_error::to_string(error_code.value_sync(stream))));
 
   auto num_pages = size_type{0};
   for (auto& chunk : chunks.host_view().flat_view()) {
@@ -1257,9 +1259,10 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
                    nullptr,
                    error_code.data(),
                    stream);
-  CUDF_EXPECTS(error_code.value_sync(stream) == 0,
-               std::format("Parquet encoding failed with code(s) {}",
-                           kernel_error::to_string(error_code.value_sync(stream))));
+  if (auto const error = error_code.value_sync(stream); error != 0) {
+    CUDF_FAIL(
+      std::format("Parquet encoding failed with code(s) {}", kernel_error::to_string(error)));
+  }
 
   page_sizes.device_to_host(stream);
 
@@ -1288,9 +1291,10 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
                    stream);
   chunks.device_to_host(stream);
 
-  CUDF_EXPECTS(error_code.value_sync(stream) == 0,
-               std::format("Parquet encoding failed with code(s) {}",
-                           kernel_error::to_string(error_code.value_sync(stream))));
+  if (auto const error = error_code.value_sync(stream); error != 0) {
+    CUDF_FAIL(
+      std::format("Parquet encoding failed with code(s) {}", kernel_error::to_string(error)));
+  }
 
   return comp_page_sizes;
 }
@@ -1488,9 +1492,10 @@ void init_encoder_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
                    error_code.data(),
                    stream);
 
-  CUDF_EXPECTS(error_code.value_sync(stream) == 0,
-               std::format("Parquet encoding failed with code(s) {}",
-                           kernel_error::to_string(error_code.value_sync(stream))));
+  if (auto const error = error_code.value_sync(stream); error != 0) {
+    CUDF_FAIL(
+      std::format("Parquet encoding failed with code(s) {}", kernel_error::to_string(error)));
+  }
 
   if (num_stats_bfr > 0) {
     detail::merge_group_statistics<detail::io_file_format::PARQUET>(
@@ -1519,7 +1524,8 @@ void init_encoder_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
  * @param column_stats optional page-level statistics for column index (nullptr if none)
  * @param comp_stats optional compression statistics (nullopt if none)
  * @param compression compression format
- * @param column_index_truncate_length maximum length of min or max values in column index, in bytes
+ * @param column_index_truncate_length maximum length of min or max values in column index, in
+ * bytes
  * @param write_v2_headers True if V2 page headers should be written
  * @param page_level_compression True if V2 pages can make per-page compression decisions
  * @param stream CUDA stream used for device memory operations and kernel launches

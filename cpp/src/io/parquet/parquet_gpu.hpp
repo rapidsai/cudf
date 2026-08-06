@@ -555,7 +555,8 @@ struct PageFragment {
  * @param value_bit_width Bit width of a single value, 0 if the level is not encoded
  * @param num_values Number of values in the run
  */
-CUDF_HOST_DEVICE constexpr size_t max_RLE_page_size(uint8_t value_bit_width, size_t num_values)
+CUDF_HOST_DEVICE constexpr inline size_t max_RLE_page_size(uint8_t value_bit_width,
+                                                           size_t num_values)
 {
   if (value_bit_width == 0) { return 0; }
 
@@ -574,7 +575,7 @@ CUDF_HOST_DEVICE constexpr size_t max_RLE_page_size(uint8_t value_bit_width, siz
 
 /// Parquet limit: Parquet stores a page's `uncompressed_page_size` and `compressed_page_size` as
 /// thrift `i32`, so writer cannot emit a page larger than this.
-constexpr size_t max_parquet_page_size = std::numeric_limits<int32_t>::max();
+constexpr size_t max_parquet_page_size = cuda::std::numeric_limits<int32_t>::max();
 
 /// Bytes reserved within a page for its header and for encoder padding, neither of which is
 /// included in a fragment's data size.
@@ -673,7 +674,7 @@ struct EncColumnChunk {
   static_assert(cuda::std::is_same_v<decltype(EncColumnChunk::compressed_size), decltype(bfr_size)>,
                 "EncColumnChunk fields `compressed_size` and `bfr_size` must be the same type");
   static constexpr size_t max_buffer_size =
-    std::numeric_limits<decltype(EncColumnChunk::bfr_size)>::max();
+    cuda::std::numeric_limits<decltype(EncColumnChunk::bfr_size)>::max();
 
   [[nodiscard]] CUDF_HOST_DEVICE constexpr uint32_t num_dict_pages() const
   {
