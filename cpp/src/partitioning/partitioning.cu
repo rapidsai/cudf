@@ -15,7 +15,6 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
-#include <cudf/hashing/detail/spark_murmurhash3.cuh>
 #include <cudf/partitioning.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
@@ -566,10 +565,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table_g
 }
 
 // NOTE hash_has_nulls must be true if table_to_hash has nulls
-template <template <typename> class hash_function,
-          bool hash_has_nulls,
-          template <template <typename> class, typename> class DeviceRowHasher =
-            detail::row::hash::device_row_hasher>
+template <template <typename> class hash_function, bool hash_has_nulls>
 std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   table_view const& input,
   table_view const& table_to_hash,
@@ -581,8 +577,8 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   auto const num_rows = table_to_hash.num_rows();
 
   auto const row_hasher = detail::row::hash::row_hasher(table_to_hash, stream);
-  auto const hasher     = row_hasher.device_hasher<hash_function, DeviceRowHasher>(
-    nullate::DYNAMIC{hash_has_nulls}, seed);
+  auto const hasher =
+    row_hasher.device_hasher<hash_function>(nullate::DYNAMIC{hash_has_nulls}, seed);
 
   // Check whether the per-block shared memory histograms fit in shared memory
   int dev;
@@ -875,9 +871,7 @@ struct IdentityHash {
   }
 };
 
-template <template <typename> class hash_function,
-          template <template <typename> class, typename> class DeviceRowHasher =
-            detail::row::hash::device_row_hasher>
+template <template <typename> class hash_function>
 std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
   table_view const& table_to_hash,
@@ -897,10 +891,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
     }
   }
   if (has_nested_nulls(table_to_hash)) {
-    return hash_partition_table<hash_function, true, DeviceRowHasher>(
+    return hash_partition_table<hash_function, true>(
       input, table_to_hash, num_partitions, seed, stream, mr);
   } else {
-    return hash_partition_table<hash_function, false, DeviceRowHasher>(
+    return hash_partition_table<hash_function, false>(
       input, table_to_hash, num_partitions, seed, stream, mr);
   }
 }
@@ -944,13 +938,6 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
       return hash_partition<detail::IdentityHash>(input, keys, num_partitions, seed, stream, mr);
     case (hash_id::HASH_MURMUR3):
       return hash_partition<cudf::hashing::detail::MurmurHash3_x86_32>(
-        input, keys, num_partitions, seed, stream, mr);
-    case (hash_id::SPARK_MURMUR3):
-      if (keys.num_rows() > 0 && keys.num_columns() > 0) {
-        cudf::hashing::detail::check_spark_murmurhash3_compatibility(keys);
-      }
-      return hash_partition<cudf::hashing::detail::Spark_MurmurHash3_x86_32,
-                            cudf::hashing::detail::spark_murmur_device_row_hasher>(
         input, keys, num_partitions, seed, stream, mr);
     default: CUDF_FAIL("Unsupported hash function in hash_partition");
   }

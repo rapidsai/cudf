@@ -31,8 +31,7 @@ namespace CUDF_EXPORT cudf {
  */
 enum class hash_id : int32_t {
   HASH_IDENTITY = 0,  ///< Identity hash function that simply returns the key to be hashed
-  HASH_MURMUR3,       ///< Murmur3 hash function
-  SPARK_MURMUR3       ///< Apache Spark-compatible Murmur3 hash function
+  HASH_MURMUR3        ///< Murmur3 hash function
 };
 
 /**
