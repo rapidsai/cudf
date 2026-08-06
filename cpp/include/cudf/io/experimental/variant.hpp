@@ -51,17 +51,10 @@ namespace io::parquet::experimental {
  * @param path JSONPath-like path string identifying the target field
  * @param stream CUDA stream
  * @param mr Device memory resource
- * @param status_out If non-null, receives a `UINT8` column of `variant_operation_status` values
- *        (one per row, aligned with the returned value column). SQL-null input rows produce a null
- *        status entry. All other rows receive a valid status: `success`, `missing_path`,
- *        `variant_null`, or `malformed_variant`. Missing-path and malformed rows produce a SQL-null
- *        output regardless; `success` and `variant_null` rows produce non-null output with the
- *        resolved bytes. When `nullptr` (the default), no status column is produced.
+ * @param status_out Status column with variant_operation_status` values
  * @return `list<uint8>` column with the extracted value's encoded bytes. A row is null when the
- *         input row is null, a name is absent, an index is out of bounds, a step does not match
- *         the current value, or bytes are malformed. Encoded VARIANT-null terminal values are
- *         always returned as the raw VARIANT-null bytes (non-null output); callers can detect them
- *         via the status column or by inspecting the returned bytes.
+ *         input row is null, a name is absent, an index is out of bounds, or a step does not match
+ *         the current value.
  *
  * @throws std::invalid_argument on empty path or malformed syntax (`[*]` wildcards, negative
  *         indices, out-of-range indices, and quoted names inside `[...]` are not supported)
@@ -84,13 +77,8 @@ namespace io::parquet::experimental {
  *        `FLOAT32`/`FLOAT64`, or `BOOL8`)
  * @param stream CUDA stream
  * @param mr Device memory resource
- * @param incoming_status Optional status column from a prior `get_variant_field` call. When
- *        non-null, rows whose status is null remain null in both the output and the new status
- *        column, and rows with a non-`success` status are propagated unchanged (output is null,
- *        status is preserved). Only `success` rows are decoded.
- * @param status_out If non-null, receives a `UINT8` column of `variant_operation_status` values
- *        aligned with the output column. SQL-null input rows (or rows whose incoming status is
- *        null) produce null status entries.
+ * @param incoming_status Incoming status column from get_variant_field call
+ * @param status_out Status column with variant_operation_status` values
  * @return Typed column decoded from the VARIANT value blobs
  *
  * @throws std::invalid_argument if `values` is not a `list<uint8>` column, or if `desired_type`
@@ -117,9 +105,7 @@ namespace io::parquet::experimental {
  *        `FLOAT32`/`FLOAT64`, or `BOOL8`
  * @param stream CUDA stream
  * @param mr Device memory resource
- * @param status_out If non-null, receives a `UINT8` column of `variant_operation_status` values
- *        aligned with the output column, combining extraction and decode outcomes. SQL-null input
- *        rows produce null status entries.
+ * @param status_out Status column with variant_operation_status` values
  * @return Column of `desired_type`
  *
  * @throws std::invalid_argument on empty path or malformed syntax
