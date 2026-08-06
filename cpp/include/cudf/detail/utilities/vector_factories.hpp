@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -494,7 +494,8 @@ host_vector<typename Container::value_type> make_host_vector(Container const& c,
 template <typename T>
 host_vector<T> make_empty_pinned_vector(size_t capacity, rmm::cuda_stream_view stream)
 {
-  auto result = host_vector<T>({cudf::get_pinned_memory_resource(), stream});
+  auto result =
+    host_vector<T>(rmm_host_allocator<T>{get_stream_ordered_pinned_memory_resource(), stream});
   result.reserve(capacity);
   return result;
 }
@@ -502,7 +503,7 @@ host_vector<T> make_empty_pinned_vector(size_t capacity, rmm::cuda_stream_view s
 /**
  * @brief Asynchronously construct a pinned `cudf::detail::host_vector` of the given size
  *
- * @note This function may not synchronize `stream` after the copy.
+ * @note This function does not synchronize `stream`.
  *
  * @tparam T The type of the vector data
  * @param size The number of elements in the created vector
@@ -512,7 +513,8 @@ host_vector<T> make_empty_pinned_vector(size_t capacity, rmm::cuda_stream_view s
 template <typename T>
 host_vector<T> make_pinned_vector_async(size_t size, rmm::cuda_stream_view stream)
 {
-  return host_vector<T>(size, {cudf::get_pinned_memory_resource(), stream});
+  return host_vector<T>(size,
+                        rmm_host_allocator<T>{get_stream_ordered_pinned_memory_resource(), stream});
 }
 
 /**
