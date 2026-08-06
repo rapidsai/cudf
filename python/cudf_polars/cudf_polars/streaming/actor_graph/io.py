@@ -8,6 +8,7 @@ import asyncio
 import functools
 import io
 import math
+import time
 from typing import TYPE_CHECKING, Any, cast
 
 import polars as pl
@@ -15,26 +16,14 @@ import polars as pl
 from cudf_streaming.channel_metadata import ChannelMetadata
 from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
-from rapidsmpf.streaming.core.memory_reserve_or_wait import (
-    reserve_memory,
-)
+from rapidsmpf.streaming.core.memory_reserve_or_wait import reserve_memory
 from rapidsmpf.streaming.core.message import Message
 
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import (
-    IR,
-    DataFrameScan,
-    PythonScan,
-    Sink,
-)
+from cudf_polars.dsl.ir import IR, DataFrameScan, PythonScan, Sink
 from cudf_polars.dsl.tracing import Scope, log
-from cudf_polars.streaming.actor_graph.dispatch import (
-    generate_ir_sub_network,
-)
-from cudf_polars.streaming.actor_graph.nodes import (
-    define_actor,
-    shutdown_on_error,
-)
+from cudf_polars.streaming.actor_graph.dispatch import generate_ir_sub_network
+from cudf_polars.streaming.actor_graph.nodes import define_actor, shutdown_on_error
 from cudf_polars.streaming.actor_graph.tracing import send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
@@ -538,14 +527,19 @@ async def read_chunk(
     tracer
         The actor tracer for collecting runtime statistics.
     """
-    with opaque_memory_usage(
-        await reserve_memory(
-            context,
-            # Headroom for decode
-            size=2 * estimated_chunk_bytes,
-            net_memory_delta=estimated_chunk_bytes,
-        )
-    ):
+    reservation_bytes = (
+        estimated_chunk_bytes
+        if isinstance(scan, DataFrameScan)
+        else 2 * estimated_chunk_bytes
+    )
+    start = time.monotonic_ns()
+    reservation = await reserve_memory(
+        context,
+        size=reservation_bytes,
+        net_memory_delta=estimated_chunk_bytes,
+    )
+    admitted = time.monotonic_ns()
+    with opaque_memory_usage(reservation):
         df = await ir_context.to_thread(
             scan.do_evaluate,
             *scan._non_child_args,
@@ -557,6 +551,19 @@ async def read_chunk(
             exclusive_view=True,
             br=context.br(),
         )
+    stop = time.monotonic_ns()
+    log(
+        "IO Task",
+        scope=Scope.IO_TASK.value,
+        start=start,
+        admitted=admitted,
+        stop=stop,
+        ir_id=scan.get_stable_id(),
+        ir_type=type(scan).__name__,
+        sequence_number=seq_num,
+        estimated_output_bytes=estimated_chunk_bytes,
+        reservation_bytes=reservation_bytes,
+    )
     await send_chunk(context, ch_out, chunk, seq_num, tracer=tracer)
 
 
