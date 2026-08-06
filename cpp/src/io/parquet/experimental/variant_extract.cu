@@ -1209,6 +1209,19 @@ std::unique_ptr<column> cast_variant(column_view const& values,
                                      rmm::device_async_resource_ref mr)
 {
   validate_variant_child(values);
+
+  switch (desired_type.id()) {
+    case type_id::INT8:
+    case type_id::INT16:
+    case type_id::INT32:
+    case type_id::INT64:
+    case type_id::FLOAT32:
+    case type_id::FLOAT64:
+    case type_id::BOOL8:
+    case type_id::STRING: break;
+    default: CUDF_FAIL("unsupported type for variant cast", std::invalid_argument);
+  }
+
   size_type const num_rows = values.size();
   if (num_rows == 0) {
     if (status_out != nullptr) { *status_out = make_empty_column(data_type{type_id::UINT8}); }
