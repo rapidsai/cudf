@@ -1917,7 +1917,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           chunk_fragments.begin(),
           chunk_fragments.end(),
           size_t{0},
-          [](auto sum, PageFragment frag) {
+          [](auto sum, PageFragment const& frag) {
             auto const [result, overflow] =
               cuda::add_overflow<size_t>(sum, frag.fragment_data_size);
             CUDF_EXPECTS(not overflow, "Page fragments data size overflow", std::overflow_error);
