@@ -40,14 +40,19 @@ TEST_F(StringsAttributesTest, ZeroSizeStringsColumn)
   auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
 
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
-  cudf::column_view expected_column(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
+  // The two counts are counts of rows' worth of characters and so are size_type wide, while a code
+  // point is a Unicode scalar value, which is 32 bits whatever size_type is.
+  cudf::column_view expected_counts(
+    cudf::data_type{cudf::type_to_id<cudf::size_type>()}, 0, nullptr, nullptr, 0);
+  cudf::column_view expected_code_points(
+    cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
 
   auto results = cudf::strings::count_bytes(strings_view);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected_column);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected_counts);
   results = cudf::strings::count_characters(strings_view);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected_column);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected_counts);
   results = cudf::strings::code_points(strings_view);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected_column);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected_code_points);
 }
 
 TEST_F(StringsAttributesTest, StringsLengths)
