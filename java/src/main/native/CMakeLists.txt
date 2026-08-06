@@ -171,9 +171,8 @@ add_library(
 if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
   message(STATUS "Using per-thread default stream")
   target_compile_definitions(
-    cudfjni
-    PUBLIC
-      "$<BUILD_LOCAL_INTERFACE:CUDA_API_PER_THREAD_DEFAULT_STREAM=CUDF_USE_PER_THREAD_DEFAULT_STREAM>"
+    cudfjni PUBLIC "$<BUILD_LOCAL_INTERFACE:CUDA_API_PER_THREAD_DEFAULT_STREAM>"
+                   "$<BUILD_LOCAL_INTERFACE:CUDF_USE_PER_THREAD_DEFAULT_STREAM>"
   )
 endif()
 
