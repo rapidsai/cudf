@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -53,7 +53,12 @@ std::unique_ptr<column> from_arrow_string(ArrowSchemaView const* schema,
 
   rmm::device_buffer chars(char_data_length, stream, mr);
   auto const* chars_data = static_cast<uint8_t const*>(input->buffers[chars_buffer_idx]) + offset;
-  CUDF_CUDA_TRY(cudf::detail::memcpy_async(chars.data(), chars_data, chars.size(), stream));
+  CUDF_CUDA_TRY(
+    cudf::detail::memcpy_async(chars.data(),
+                               chars_data,
+                               chars.size(),
+                               stream,
+                               cudf::detail::host_source_access_order::DURING_API_CALL));
 
   return make_strings_column(static_cast<size_type>(input->length),
                              std::move(offsets_column),
@@ -77,20 +82,33 @@ std::unique_ptr<column> from_arrow_stringview(ArrowSchemaView const* schema,
   // first copy stringview array to device
   auto items   = view.buffer_views[stringview_vector_idx].data.as_binary_view;
   auto d_items = rmm::device_uvector<ArrowBinaryView>(input->length, stream, mr);
-  CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-    d_items.data(), items + input->offset, input->length * sizeof(ArrowBinaryView), stream));
+  CUDF_CUDA_TRY(
+    cudf::detail::memcpy_async(d_items.data(),
+                               items + input->offset,
+                               input->length * sizeof(ArrowBinaryView),
+                               stream,
+                               cudf::detail::host_source_access_order::DURING_API_CALL));
 
   // then copy variadic buffers to device
   auto variadics     = std::vector<rmm::device_buffer>();
   auto variadic_ptrs = std::vector<char const*>();
   for (auto i = 0L; i < view.n_variadic_buffers; ++i) {
-    variadics.emplace_back(view.variadic_buffers[i], view.variadic_buffer_sizes[i], stream);
+    variadics.emplace_back(view.variadic_buffer_sizes[i], stream, mr);
+    CUDF_CUDA_TRY(
+      cudf::detail::memcpy_async(variadics.back().data(),
+                                 view.variadic_buffers[i],
+                                 view.variadic_buffer_sizes[i],
+                                 stream,
+                                 cudf::detail::host_source_access_order::DURING_API_CALL));
     variadic_ptrs.push_back(static_cast<char const*>(variadics.back().data()));
   }
 
   // copy variadic device pointers to device
   auto d_variadic_ptrs = cudf::detail::make_device_uvector_async(
-    variadic_ptrs, stream, cudf::get_current_device_resource_ref());
+    variadic_ptrs,
+    stream,
+    cudf::get_current_device_resource_ref(),
+    cudf::detail::host_source_access_order::DURING_API_CALL);
   auto d_ptrs = d_variadic_ptrs.data();
   auto d_mask = static_cast<cudf::bitmask_type*>(mask->data());
 

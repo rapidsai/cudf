@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -107,9 +107,15 @@ std::unique_ptr<cudf::column> compute_row_index_column(
                0);
 
   auto d_row_group_offsets = cudf::detail::make_device_uvector_async(
-    row_group_offsets, stream, cudf::get_current_device_resource_ref());
+    row_group_offsets,
+    stream,
+    cudf::get_current_device_resource_ref(),
+    cudf::detail::host_source_access_order::DURING_API_CALL);
   auto d_row_group_span_offsets = cudf::detail::make_device_uvector_async(
-    row_group_span_offsets, stream, cudf::get_current_device_resource_ref());
+    row_group_span_offsets,
+    stream,
+    cudf::get_current_device_resource_ref(),
+    cudf::detail::host_source_access_order::DURING_API_CALL);
   auto in_iter =
     cuda::make_zip_iterator(d_row_group_offsets.begin(), cuda::counting_iterator<size_type>(0));
   auto out_iter = cuda::make_zip_iterator(row_indices_iter, row_group_keys.begin());

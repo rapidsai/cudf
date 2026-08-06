@@ -51,40 +51,17 @@ void copy_pageable(void* dst, void const* src, std::size_t size, rmm::cuda_strea
   CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, src, size, stream));
 }
 
-void copy_pageable_source(void* dst,
-                          void const* src,
-                          std::size_t size,
-                          rmm::cuda_stream_view stream)
-{
-  if (size == 0) return;
-
-#if CUDART_VERSION >= 13000
-  if (!stream.is_default()) {
-    void* dsts[]               = {dst};
-    void const* srcs[]         = {src};
-    std::size_t sizes[]        = {size};
-    std::size_t attrs_idxs     = 0;
-    cudaMemcpyAttributes attrs = {.srcAccessOrder = cudaMemcpySrcAccessOrderDuringApiCall,
-                                  .flags          = cudaMemcpyFlagPreferOverlapWithCompute};
-    CUDF_CUDA_TRY(
-      cudaMemcpyBatchAsync(dsts, srcs, sizes, 1, &attrs, &attrs_idxs, 1, stream.value()));
-    return;
-  }
-#endif
-  copy_pageable(dst, src, size, stream);
-  stream.synchronize();
-}
-
-};  // namespace
+}  // namespace
 
 cudaError_t memcpy_batch_async(void* const* dsts,
                                void const* const* srcs,
                                std::size_t const* sizes,
                                std::size_t count,
-                               rmm::cuda_stream_view stream)
+                               rmm::cuda_stream_view stream,
+                               host_source_access_order source_access_order)
 {
-// Uses cudaMemcpyBatchAsync for CUDA 13.0+ to avoid driver-side locking overhead.
-// cudaMemcpyBatchAsync does not support the default stream.
+  // Uses cudaMemcpyBatchAsync for CUDA 13.0+ to avoid driver-side locking overhead.
+  // cudaMemcpyBatchAsync does not support the default stream.
 #if CUDART_VERSION >= 13000
   if (!stream.is_default()) {
     // Filter out invalid copies (nullptr dst/src or size==0);
@@ -114,7 +91,11 @@ cudaError_t memcpy_batch_async(void* const* dsts,
       count = valid_dsts.size();
     }
 
-    cudaMemcpyAttributes attrs = {.srcAccessOrder = cudaMemcpySrcAccessOrderStream,
+    auto const cuda_source_access_order =
+      source_access_order == host_source_access_order::DURING_API_CALL
+        ? cudaMemcpySrcAccessOrderDuringApiCall
+        : cudaMemcpySrcAccessOrderStream;
+    cudaMemcpyAttributes attrs = {.srcAccessOrder = cuda_source_access_order,
                                   .flags          = cudaMemcpyFlagPreferOverlapWithCompute};
     std::size_t attrs_idxs     = 0;
     return cudaMemcpyBatchAsync(dsts, srcs, sizes, count, &attrs, &attrs_idxs, 1, stream.value());
@@ -125,27 +106,37 @@ cudaError_t memcpy_batch_async(void* const* dsts,
       cudaMemcpyAsync(dsts[i], srcs[i], sizes[i], cudaMemcpyDefault, stream.value());
     if (status != cudaSuccess) { return status; }
   }
-  return cudaSuccess;
+  return source_access_order == host_source_access_order::DURING_API_CALL
+           ? cudaStreamSynchronize(stream.value())
+           : cudaSuccess;
 }
 
-cudaError_t memcpy_async(void* dst, void const* src, size_t count, rmm::cuda_stream_view stream)
+cudaError_t memcpy_async(void* dst,
+                         void const* src,
+                         size_t count,
+                         rmm::cuda_stream_view stream,
+                         host_source_access_order source_access_order)
 {
   if (count == 0) { return cudaSuccess; }
 
   // Use batch API with size 1 to prefer cudaMemcpyBatchAsync over
   // cudaMemcpyAsync. The batched API is more efficient.
-  return memcpy_batch_async(&dst, &src, &count, 1, stream);
+  return memcpy_batch_async(&dst, &src, &count, 1, stream, source_access_order);
 }
 
-void cuda_memcpy_async_impl(
-  void* dst, void const* src, size_t size, host_memory_kind kind, rmm::cuda_stream_view stream)
+void cuda_memcpy_async_impl(void* dst,
+                            void const* src,
+                            size_t size,
+                            host_memory_kind kind,
+                            rmm::cuda_stream_view stream,
+                            host_source_access_order source_access_order)
 {
-  if (kind == host_memory_kind::PINNED) {
+  if (source_access_order == host_source_access_order::DURING_API_CALL) {
+    CUDF_CUDA_TRY(memcpy_async(dst, src, size, stream, source_access_order));
+  } else if (kind == host_memory_kind::PINNED) {
     copy_pinned(dst, src, size, stream);
   } else if (kind == host_memory_kind::PAGEABLE) {
     copy_pageable(dst, src, size, stream);
-  } else if (kind == host_memory_kind::PAGEABLE_SOURCE) {
-    copy_pageable_source(dst, src, size, stream);
   } else {
     CUDF_FAIL("Unsupported host memory kind");
   }

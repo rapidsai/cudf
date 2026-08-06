@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -83,15 +83,20 @@ rmm::device_uvector<T> make_zeroed_device_uvector(std::size_t size,
  * @param source_data The host_span of data to deep copy
  * @param stream The stream on which to allocate memory and perform the copy
  * @param mr The memory resource to use for allocating the returned device_uvector
+ * @param source_access_order When the source data may be accessed
  * @return A device_uvector containing the copied data
  */
 template <typename T>
 rmm::device_uvector<std::remove_cv_t<T>> make_device_uvector_async(
-  host_span<T> source_data, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+  host_span<T> source_data,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr,
+  host_source_access_order source_access_order = host_source_access_order::STREAM)
 {
   using value_type = std::remove_cv_t<T>;
   rmm::device_uvector<value_type> ret(source_data.size(), stream, mr);
-  cuda_memcpy_async<value_type>(ret, host_span<value_type const>{source_data}, stream);
+  cuda_memcpy_async<value_type>(
+    ret, host_span<value_type const>{source_data}, stream, source_access_order);
   return ret;
 }
 
@@ -106,14 +111,19 @@ rmm::device_uvector<std::remove_cv_t<T>> make_device_uvector_async(
  * @param c The input host container from which to copy
  * @param stream The stream on which to allocate memory and perform the copy
  * @param mr The memory resource to use for allocating the returned device_uvector
+ * @param source_access_order When the source data may be accessed
  * @return A device_uvector containing the copied data
  */
 template <typename Container>
 rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
-  Container const& c, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+  Container const& c,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr,
+  host_source_access_order source_access_order = host_source_access_order::STREAM)
   requires(std::is_convertible_v<Container, host_span<typename Container::value_type const>>)
 {
-  return make_device_uvector_async(host_span<typename Container::value_type const>{c}, stream, mr);
+  return make_device_uvector_async(
+    host_span<typename Container::value_type const>{c}, stream, mr, source_access_order);
 }
 
 /**
@@ -126,14 +136,18 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
  * @param source_data The std::vector of data to deep copy
  * @param stream The stream on which to allocate memory and perform the copy
  * @param mr The memory resource to use for allocating the returned device_uvector
+ * @param source_access_order When the source data may be accessed
  * @return A device_uvector containing the copied data
  */
 template <typename T, typename Allocator>
-rmm::device_uvector<T> make_device_uvector_async(std::vector<T, Allocator> const& source_data,
-                                                 rmm::cuda_stream_view stream,
-                                                 rmm::device_async_resource_ref mr)
+rmm::device_uvector<T> make_device_uvector_async(
+  std::vector<T, Allocator> const& source_data,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr,
+  host_source_access_order source_access_order = host_source_access_order::STREAM)
 {
-  return make_device_uvector_async(host_span<T const>{source_data}, stream, mr);
+  return make_device_uvector_async(
+    host_span<T const>{source_data}, stream, mr, source_access_order);
 }
 
 /**

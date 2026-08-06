@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -91,9 +91,11 @@ class hostdevice_vector {
     return cudf::device_span<T const>(device_ptr(), size());
   }
 
-  void host_to_device_async(rmm::cuda_stream_view stream)
+  void host_to_device_async(
+    rmm::cuda_stream_view stream,
+    host_source_access_order source_access_order = host_source_access_order::STREAM)
   {
-    if (not keep_single_copy) { cuda_memcpy_async<T>(d_data, h_data, stream); }
+    if (not keep_single_copy) { cuda_memcpy_async<T>(d_data, h_data, stream, source_access_order); }
   }
 
   [[deprecated("Use host_to_device_async instead")]] void host_to_device(

@@ -78,16 +78,11 @@ std::unique_ptr<table> from_arrow_stream(ArrowArrayStream* input,
   NANOARROW_THROW_NOT_OK(ArrowArrayStreamGetSchema(input, &schema, nullptr));
 
   std::vector<std::unique_ptr<cudf::table>> chunks;
-  // Keep each input chunk alive until the stream has executed the host-to-device copies enqueued
-  // by `from_arrow`. Those copies use `cudaMemcpyBatchAsync` with `cudaMemcpySrcAccessOrderStream`,
-  // which defers reading the host source until the stream reaches the copy.
-  std::vector<nanoarrow::UniqueArray> sources;
   while (true) {
     nanoarrow::UniqueArray chunk;
     NANOARROW_THROW_NOT_OK(ArrowArrayStreamGetNext(input, chunk.get(), nullptr));
     if (chunk->release == nullptr) { break; }
-    sources.push_back(std::move(chunk));
-    chunks.push_back(from_arrow(&schema, sources.back().get(), stream, mr));
+    chunks.push_back(from_arrow(&schema, chunk.get(), stream, mr));
   }
   input->release(input);
 
@@ -139,17 +134,11 @@ std::unique_ptr<column> from_arrow_stream_column(ArrowArrayStream* input,
   NANOARROW_THROW_NOT_OK(ArrowArrayStreamGetSchema(input, &schema, nullptr));
 
   std::vector<std::unique_ptr<cudf::column>> chunks;
-  // Keep each input chunk alive until the stream has executed the host-to-device copies enqueued
-  // by `from_arrow_column`. Those copies use `cudaMemcpyBatchAsync` with
-  // `cudaMemcpySrcAccessOrderStream`, which defers reading the host source until the stream reaches
-  // the copy.
-  std::vector<nanoarrow::UniqueArray> sources;
   while (true) {
     nanoarrow::UniqueArray chunk;
     NANOARROW_THROW_NOT_OK(ArrowArrayStreamGetNext(input, chunk.get(), nullptr));
     if (chunk->release == nullptr) { break; }
-    sources.push_back(std::move(chunk));
-    chunks.push_back(from_arrow_column(&schema, sources.back().get(), stream, mr));
+    chunks.push_back(from_arrow_column(&schema, chunk.get(), stream, mr));
   }
   input->release(input);
 
