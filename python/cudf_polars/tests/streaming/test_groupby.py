@@ -111,6 +111,27 @@ def test_dynamic_groupby_shuffle_strategy(streaming_engine_factory):
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
+@pytest.mark.parametrize("group_keys", [("key", "subkey"), ("key",)])
+def test_dynamic_groupby_after_sort_on_group_keys(spmd_engine_factory, group_keys):
+    """Group sorted data by the full sort key set or a sorted-key prefix."""
+    streaming_engine = spmd_engine_factory(
+        StreamingOptions(target_partition_size=128),
+    )
+    df = pl.LazyFrame(
+        {
+            "key": [0] * 16 + [1] * 16 + [2] * 16 + [3] * 16,
+            "subkey": ([0] * 8 + [1] * 8) * 4,
+            "value": range(64),
+        }
+    )
+    q = (
+        df.sort("key", "subkey")
+        .group_by(*group_keys, maintain_order=True)
+        .agg(pl.col("value").sum())
+    )
+    assert_gpu_result_equal(q, engine=streaming_engine)
+
+
 def test_dynamic_groupby_single_group(streaming_engine):
     """Test dynamic groupby where all rows have the same key."""
     df = pl.LazyFrame({"key": [1] * 100, "value": range(100)})
