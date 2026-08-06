@@ -389,7 +389,7 @@ constexpr inline bool is_byte()
 /**
  * @brief Indicates whether `T` is a Boolean type.
  *
- * @param type The `data_type` to verify
+ * @tparam T The type to verify
  * @return true `type` is Boolean
  * @return false `type` is not Boolean
  */
@@ -642,7 +642,7 @@ bool is_compound(data_type type);
  * can have an arbitrarily deep list of descendants of the same
  * type. Strings are not a nested type, but lists are.
  *
- * @param T The type to verify
+ * @tparam T The type to verify
  * @return true T is a nested type
  * @return false T is not a nested type
  */

@@ -74,7 +74,7 @@ struct id_to_type_impl {
  * ```
  * static_assert(std::is_same<int32_t, id_to_type<id_type::INT32>);
  * ```
- * @tparam t The `cudf::type_id` to map
+ * @tparam Id The `cudf::type_id` to map
  */
 template <cudf::type_id Id>
 using id_to_type = typename id_to_type_impl<Id>::type;
