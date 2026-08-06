@@ -80,6 +80,10 @@ if(CUDF_BUILD_STATIC_DEPS STREQUAL "FORCE")
       ON
       CACHE BOOL "Use static linking for NVRTC" FORCE
   )
+  set(CUDF_STATIC_LINK_NVVM
+      ON
+      CACHE BOOL "Use direct linking for libNVVM" FORCE
+  )
   set(RTCX_STATIC_LINK_NVJITLINK
       ON
       CACHE BOOL "Use static linking for nvJitLink" FORCE
@@ -92,6 +96,10 @@ else()
   set(RTCX_STATIC_LINK_NVRTC
       OFF
       CACHE BOOL "Use static linking for NVRTC" FORCE
+  )
+  set(CUDF_STATIC_LINK_NVVM
+      OFF
+      CACHE BOOL "Use direct linking for libNVVM" FORCE
   )
   set(RTCX_STATIC_LINK_NVJITLINK
       OFF
@@ -840,6 +848,7 @@ add_library(
   src/io/utilities/trie.cu
   src/jit/cache.cpp
   src/jit/helpers.cpp
+  src/jit/nvvm.cpp
   src/jit/parser.cpp
   src/jit/row_ir.cpp
   src/jit/util.cpp
@@ -1258,14 +1267,18 @@ target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_
 # https://github.com/NVIDIA/cccl/pull/2844
 target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1)
 
-# libNVVM compiles tiny named-entry dispatchers for modular transform LTO linking.
+# libNVVM is required for NVVM JIT compilation.
 find_library(
-  CUDF_NVVM_LIBRARY
+  libnvvm
   NAMES nvvm
   HINTS "${CUDAToolkit_LIBRARY_ROOT}/nvvm/lib64" "${CUDAToolkit_LIBRARY_ROOT}/nvvm/lib"
         "${CUDAToolkit_LIBRARY_ROOT}/nvvm/lib/x64" REQUIRED
 )
+cmake_path(GET libnvvm PARENT_PATH libnvvm_dir)
+set_property(TARGET cudf APPEND PROPERTY BUILD_RPATH "${libnvvm_dir}")
+set_property(TARGET cudf APPEND PROPERTY INSTALL_RPATH "\$ORIGIN/../nvvm/lib64")
 target_include_directories(cudf PRIVATE "${CUDAToolkit_LIBRARY_ROOT}/nvvm/include")
+target_compile_definitions(cudf PRIVATE CUDF_STATIC_LINK_LIBNVVM=$<BOOL:${CUDF_STATIC_LINK_NVVM}>)
 
 # When rmm is a static library being absorbed via whole-archive, strip nvtx3 from its public
 # interface. We bundle nvtx3 headers directly into cudf's install tree, so consumers get them from
@@ -1396,7 +1409,7 @@ target_link_libraries(
           zstd
           $<BUILD_LOCAL_INTERFACE:xxhash>
           rtcx::rtcx
-          ${CUDF_NVVM_LIBRARY}
+          ${libnvvm}
 )
 
 if(NOT _absorbed_nvcomp)

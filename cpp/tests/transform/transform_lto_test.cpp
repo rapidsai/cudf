@@ -186,7 +186,7 @@ TEST_F(TransformLTOTest, BankersRounding)
   cudf::transform_input inputs[]   = {input};
   cudf::transform_output outputs[] = {output};
 
-  auto result = cudf::transform(cudf::lto_udf::fatbin(operators_fragment, "bankers_rounding"),
+  auto result = cudf::transform(cudf::lto_udf::fatbin(operators_fragment, "bankers_round"),
                                 cudf::null_aware::NO,
                                 std::nullopt,
                                 inputs,

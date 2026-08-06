@@ -16,7 +16,6 @@
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/join/join.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/dispatchers.hpp>
@@ -64,15 +63,15 @@ namespace detail {
 template <typename FilterEvaluator>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-execute_filter_join_indices(cudf::table_view const& left,
-                            cudf::table_view const& right,
-                            cudf::device_span<size_type const> left_indices,
-                            cudf::device_span<size_type const> right_indices,
-                            FilterEvaluator&& filter_evaluator,
-                            join_kind join_kind,
-                            std::optional<std::size_t> output_size,
-                            rmm::cuda_stream_view stream,
-                            rmm::device_async_resource_ref mr)
+filter_join_indices(cudf::table_view const& left,
+                    cudf::table_view const& right,
+                    cudf::device_span<size_type const> left_indices,
+                    cudf::device_span<size_type const> right_indices,
+                    FilterEvaluator&& filter_evaluator,
+                    join_kind join_kind,
+                    std::optional<std::size_t> output_size,
+                    rmm::cuda_stream_view stream,
+                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -446,7 +445,7 @@ std::string reflect_udf_signature(bool is_null_aware,
   for (size_t i = 0; i < inputs.size(); i++) {
     auto& in = inputs[i];
     auto element =
-      std::visit([&](auto& c) { return reflect_input_element(c, use_physical_types); }, in);
+      std::visit([&](auto& c) { return reflect_input_value_type(c, use_physical_types); }, in);
     in_types.push_back(is_null_aware ? std::format("cuda::std::optional<{}>", element) : element);
   }
 
@@ -470,6 +469,25 @@ std::string reflect_udf_signature(bool is_null_aware,
         });
 
   return std::format("int({})", joined);
+}
+
+std::pair<std::string, std::vector<std::string>> reflect_udf_nvvm(
+  bool is_null_aware, bool has_user_data, std::span<transform_input const> inputs)
+{
+  std::vector<std::string> params;
+  if (has_user_data) {
+    params.push_back(nvvm_type<void*>());
+    params.push_back(nvvm_type<cudf::size_type>());
+  }
+
+  params.push_back(nvvm_type<bool*>());
+
+  for (auto const& in : inputs) {
+    params.push_back(std::visit(
+      [&](auto const& c) { return reflect_input_value_nvvm_abi_type(c, is_null_aware); }, in));
+  }
+
+  return {nvvm_type<int>(), std::move(params)};
 }
 
 rtcx::binary_type as_rtcx_binary_type(fragment_type type)
@@ -520,14 +538,15 @@ kernel build(bool is_null_aware,
                        .type = rtcx::binary_type::LTO_IR,
                        .name = kernel_instance.c_str()});
 
-  for (auto& fragment : udf.fragments) {
-    fragments.push_back({.data = fragment, .type = as_rtcx_binary_type(udf.type), .name = nullptr});
-  }
-
-  auto dispatcher = get_udf_lto_dispatcher(udf.symbol);
+  auto [return_type, argument_types] = reflect_udf_nvvm(is_null_aware, has_user_data, inputs);
+  auto dispatcher = get_udf_dispatcher_fragment(udf.symbol, return_type, argument_types);
 
   fragments.push_back(
     {.data = dispatcher->view(), .type = rtcx::binary_type::LTO_IR, .name = nullptr});
+
+  for (auto& fragment : udf.fragments) {
+    fragments.push_back({.data = fragment, .type = as_rtcx_binary_type(udf.type), .name = nullptr});
+  }
 
   return get_lto_linked_kernel(KERNEL_SOURCE_FILE, {}, fragments);
 }
@@ -821,15 +840,15 @@ filter_join_indices(cudf::table_view const& left,
                     rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::execute_filter_join_indices(left,
-                                             right,
-                                             left_indices,
-                                             right_indices,
-                                             detail::ast_executor{predicate},
-                                             join_kind,
-                                             output_size,
-                                             stream,
-                                             mr);
+  return detail::filter_join_indices(left,
+                                     right,
+                                     left_indices,
+                                     right_indices,
+                                     detail::ast_executor{predicate},
+                                     join_kind,
+                                     output_size,
+                                     stream,
+                                     mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -847,16 +866,15 @@ filter_join_indices_jit(cudf::table_view const& left,
                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::execute_filter_join_indices(
-    left,
-    right,
-    left_indices,
-    right_indices,
-    detail::udf_executor{predicate_udf, user_data, is_null_aware},
-    join_kind,
-    output_size,
-    stream,
-    mr);
+  return detail::filter_join_indices(left,
+                                     right,
+                                     left_indices,
+                                     right_indices,
+                                     detail::udf_executor{predicate_udf, user_data, is_null_aware},
+                                     join_kind,
+                                     output_size,
+                                     stream,
+                                     mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -872,15 +890,15 @@ filter_join_indices_jit(cudf::table_view const& left,
                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::execute_filter_join_indices(left,
-                                             right,
-                                             left_indices,
-                                             right_indices,
-                                             detail::ast_jit_executor{predicate},
-                                             join_kind,
-                                             output_size,
-                                             stream,
-                                             mr);
+  return detail::filter_join_indices(left,
+                                     right,
+                                     left_indices,
+                                     right_indices,
+                                     detail::ast_jit_executor{predicate},
+                                     join_kind,
+                                     output_size,
+                                     stream,
+                                     mr);
 }
 
 }  // namespace cudf

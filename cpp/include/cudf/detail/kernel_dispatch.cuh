@@ -18,10 +18,11 @@
 // performance due to more optimization opportunities
 #ifdef CUDF_LTO_MODE
 #define CUDF_DISPATCH_UDF CUDF_UDF_ENTRY  // Call the external-linkage LTO-dispatched symbol
-#else
-#define CUDF_DISPATCH_UDF CUDF_UDF_EXPRESSION  // Call the CUDA expression directly
-#endif
 
 using cudf_udf_type_t = CUDF_UDF_TYPE;
 
 extern "C" __device__ cudf_udf_type_t CUDF_UDF_ENTRY;
+
+#else
+#define CUDF_DISPATCH_UDF CUDF_UDF_EXPRESSION  // Call the CUDA expression directly
+#endif

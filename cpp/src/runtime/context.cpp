@@ -7,6 +7,7 @@
 
 #include "io/comp/nvcomp_adapter.hpp"
 #include "jit/cache.hpp"
+#include "jit/nvvm.hpp"
 
 #include <cudf/context.hpp>
 #include <cudf/detail/utilities/getenv_or.hpp>
@@ -72,6 +73,7 @@ void context::ensure_jit_cache_initialized()
     std::filesystem::create_directories(_config.jit_tmp_dir);
 
     rtcx::initialize();
+    jit::initialize_nvvm();
 
     _nvrtc_version     = rtcx::nvrtc_version();
     _nvjitlink_version = rtcx::nvjitlink_version();
@@ -99,20 +101,15 @@ context::~context()
 {
   _jit_bundle.reset();
   _rtcx_cache.reset();
+  jit::teardown_nvvm();
   rtcx::teardown();
 }
 
-rtcx::cache_t& context::rtcx_cache()
-{
-  ensure_jit_cache_initialized();
-  return *_rtcx_cache;
-}
+rtcx::cache_t& context::rtcx_cache() { return *_rtcx_cache; }
 
-jit_bundle_t& context::jit_bundle()
-{
-  ensure_jit_cache_initialized();
-  return *_jit_bundle;
-}
+jit_bundle_t& context::jit_bundle() { return *_jit_bundle; }
+
+jit::nvvm_api const& context::nvvm() { return jit::get_nvvm(); }
 
 bool context::dump_codegen() const { return _config.dump_codegen; }
 
@@ -133,7 +130,7 @@ std::optional<int32_t> context::nvjitlink_version() const { return _nvjitlink_ve
 
 void context::initialize_components(init_flags flags)
 {
-  if (has_flag(flags, init_flags::INIT_JIT_CACHE)) { ensure_jit_cache_initialized(); }
+  ensure_jit_cache_initialized();
 
   if (has_flag(flags, init_flags::LOAD_NVCOMP)) { io::detail::nvcomp::load_nvcomp_library(); }
 }
@@ -236,8 +233,6 @@ void initialize(init_flags flags)
 
     auto const kernel_cache_limit_process =
       detail::getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", 16'384U);
-
-    flags = flags | (use_jit ? init_flags::INIT_JIT_CACHE : init_flags::NONE);
 
     auto const cache_dir      = get_cudf_kernel_cache_dir();
     auto const jit_bundle_dir = cache_dir / "bundle";

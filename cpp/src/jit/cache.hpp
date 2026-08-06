@@ -117,8 +117,14 @@ rtcx::blob get_nvvm_fragment(std::string const& name, std::span<char const> ir);
 
 /**
  * @brief Gets a UDF LTO dispatcher fragment
+ *
+ * @param symbol UDF symbol used to identify the cached fragment
+ * @param return_type NVVM UDF return type
+ * @param argument_types NVVM UDF argument types
  */
-rtcx::blob get_udf_lto_dispatcher(std::string const& symbol);
+rtcx::blob get_udf_dispatcher_fragment(std::string const& symbol,
+                                  std::string const& return_type,
+                                  std::span<std::string const> argument_types);
 
 /**
  * @brief Gets a kernel by linking together embedded binary fragments

@@ -28,6 +28,7 @@
 #include <jit/cache.hpp>
 #include <jit/column_utilities.hpp>
 #include <jit/helpers.hpp>
+#include <jit/nvvm_types.hpp>
 #include <jit/parser.hpp>
 #include <jit/row_ir.hpp>
 #include <jit/span.cuh>
@@ -111,7 +112,7 @@ std::string reflect_udf_signature(bool is_null_aware,
   for (size_t i = 0; i < inputs.size(); i++) {
     auto& in = inputs[i];
     auto element =
-      std::visit([&](auto& c) { return reflect_input_element(c, use_physical_types); }, in);
+      std::visit([&](auto& c) { return reflect_input_value_type(c, use_physical_types); }, in);
     in_types.push_back(is_null_aware ? std::format("cuda::std::optional<{}>", element) : element);
   }
 
@@ -120,7 +121,7 @@ std::string reflect_udf_signature(bool is_null_aware,
   for (size_t i = 0; i < outputs.size(); i++) {
     auto& out = outputs[i];
     auto element =
-      std::visit([&](auto& c) { return reflect_output_element(c, use_physical_types); }, out);
+      std::visit([&](auto& c) { return reflect_output_value_type(c, use_physical_types); }, out);
     out_types.push_back(is_null_aware ? std::format("cuda::std::optional<{}> *", element)
                                       : std::format("{} *", element));
   }
@@ -141,6 +142,31 @@ std::string reflect_udf_signature(bool is_null_aware,
         });
 
   return std::format("int({})", joined);
+}
+
+std::pair<std::string, std::vector<std::string>> reflect_udf_nvvm(
+  bool is_null_aware,
+  bool has_user_data,
+  std::span<input_column_view const> inputs,
+  std::span<output_column const> outputs)
+{
+  std::vector<std::string> params;
+  if (has_user_data) {
+    params.push_back(nvvm_type<void*>());
+    params.push_back(nvvm_type<cudf::size_type>());
+  }
+
+  for (auto const& out : outputs) {
+    params.push_back(std::visit(
+      [&](auto const& c) { return reflect_output_value_nvvm_abi_type(c, is_null_aware); }, out));
+  }
+
+  for (auto const& in : inputs) {
+    params.push_back(std::visit(
+      [&](auto const& c) { return reflect_input_value_nvvm_abi_type(c, is_null_aware); }, in));
+  }
+
+  return {nvvm_type<int>(), std::move(params)};
 }
 
 void launch(cudf::kernel const& kernel,
@@ -281,6 +307,16 @@ kernel build(bool is_null_aware,
     .name = kernel_fragment_id.c_str(),
   });
 
+  auto [return_type, argument_types] =
+    reflect_udf_nvvm(is_null_aware, has_user_data, inputs, outputs);
+  auto dispatcher = get_udf_dispatcher_fragment(udf.symbol, return_type, argument_types);
+
+  fragments.push_back({
+    .data = dispatcher->view(),
+    .type = rtcx::binary_type::LTO_IR,
+    .name = nullptr,
+  });
+
   for (auto& fragment : udf.fragments) {
     fragments.push_back({
       .data = fragment,
@@ -288,14 +324,6 @@ kernel build(bool is_null_aware,
       .name = nullptr,  // unnamed fragments are hashed by their contents
     });
   }
-
-  auto dispatcher = get_udf_lto_dispatcher(udf.symbol);
-
-  fragments.push_back({
-    .data = dispatcher->view(),
-    .type = rtcx::binary_type::LTO_IR,
-    .name = nullptr,
-  });
 
   return get_lto_linked_kernel(KERNEL_SOURCE_FILE, {}, fragments);
 }

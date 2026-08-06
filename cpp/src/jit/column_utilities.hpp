@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -23,10 +24,12 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/iterator>
+#include <cuda/std/optional>
 
 #include <cudf_fragments.hpp>
 #include <jit/cache.hpp>
 #include <jit/helpers.hpp>
+#include <jit/nvvm_types.hpp>
 #include <jit/parser.hpp>
 #include <jit/row_ir.hpp>
 #include <jit/span.cuh>
@@ -35,6 +38,7 @@
 #include <algorithm>
 #include <numeric>
 #include <span>
+#include <type_traits>
 #include <variant>
 
 namespace cudf {
@@ -256,6 +260,61 @@ struct element_type_name_fn {
                                                               bool use_physical_type)
 {
   return reflect_output_element(c, use_physical_type);
+}
+
+template <typename T>
+[[maybe_unused]] static std::string reflect_nvvm_value_type(bool use_optional)
+{
+  if (use_optional) {
+    return nvvm_type<cuda::std::optional<T>>();
+  } else {
+    return nvvm_type<T>();
+  }
+}
+
+struct nvvm_abi_type_name_fn {
+  template <typename T>
+  std::string operator()(bool use_optional) const
+  {
+    if constexpr (is_fixed_width<T>() || std::same_as<T, cudf::string_view>) {
+      return reflect_nvvm_value_type<T>(use_optional);
+    } else {
+      CUDF_FAIL("Unsupported type for JIT NVVM ABI reflection");
+    }
+  }
+};
+
+[[maybe_unused]] static std::string reflect_input_value_nvvm_abi_type(column_view const& c,
+                                                                      bool use_optional)
+{
+  return is_dictionary(c.type())
+           ? reflect_input_value_nvvm_abi_type(c.child(cudf::dictionary_keys_column_index),
+                                               use_optional)
+           : cudf::type_dispatcher(c.type(), nvvm_abi_type_name_fn{}, use_optional);
+}
+
+[[maybe_unused]] static std::string reflect_input_value_nvvm_abi_type(scalar_column_view const& c,
+                                                                      bool use_optional)
+{
+  return reflect_input_value_nvvm_abi_type(c.as_column_view(), use_optional);
+}
+
+[[maybe_unused]] static std::string reflect_output_value_nvvm_abi_type(fixed_width_column const&,
+                                                                       bool use_optional)
+{
+  return reflect_nvvm_value_type<void*>(use_optional);
+}
+
+[[maybe_unused]] static std::string reflect_output_value_nvvm_abi_type(string_views_column const&,
+                                                                       bool use_optional)
+{
+  return reflect_nvvm_value_type<void*>(use_optional);
+}
+
+[[maybe_unused]] static std::string reflect_output_value_nvvm_abi_type(
+  mutable_strings_column const&, bool use_optional)
+{
+  return reflect_nvvm_value_type<void*>(use_optional);
 }
 
 [[maybe_unused]] static std::string reflect_input_column(column_view const&)

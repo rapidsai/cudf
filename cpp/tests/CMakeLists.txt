@@ -698,12 +698,7 @@ add_fragment(
   FRAGMENT
   operators
   SOURCES
-  transform/fragments/bankers_rounding.cu
-  transform/fragments/distance.cu
-  transform/fragments/invsqrt.cu
-  transform/fragments/lehmer_mean.cu
-  transform/fragments/sum_of_squares.cu
-  transform/fragments/to_upper.cu
+  transform/operator_fragment.cu
 )
 
 rtcx_embed(
