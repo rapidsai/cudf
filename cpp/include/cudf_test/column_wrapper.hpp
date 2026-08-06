@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -160,8 +160,10 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto transform_begin = thrust::make_transform_iterator(begin, transformer);
   auto const size      = cudf::distance(begin, end);
   auto const elements  = thrust::host_vector<ElementTo>(transform_begin, transform_begin + size);
-  return rmm::device_buffer{
-    elements.data(), size * sizeof(ElementTo), cudf::test::get_default_stream()};
+  auto ret =
+    rmm::device_buffer{elements.data(), size * sizeof(ElementTo), cudf::test::get_default_stream()};
+  ret.stream().synchronize();
+  return ret;
 }
 
 // The two signatures below are identical to the above overload apart from
@@ -190,8 +192,10 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto transform_begin = thrust::make_transform_iterator(begin, transformer);
   auto const size      = cudf::distance(begin, end);
   auto const elements  = thrust::host_vector<RepType>(transform_begin, transform_begin + size);
-  return rmm::device_buffer{
-    elements.data(), size * sizeof(RepType), cudf::test::get_default_stream()};
+  auto ret =
+    rmm::device_buffer{elements.data(), size * sizeof(RepType), cudf::test::get_default_stream()};
+  ret.stream().synchronize();
+  return ret;
 }
 
 /**
@@ -221,8 +225,10 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto transformer_begin = thrust::make_transform_iterator(begin, to_rep);
   auto const size        = cudf::distance(begin, end);
   auto const elements = thrust::host_vector<RepType>(transformer_begin, transformer_begin + size);
-  return rmm::device_buffer{
-    elements.data(), size * sizeof(RepType), cudf::test::get_default_stream()};
+  auto ret =
+    rmm::device_buffer{elements.data(), size * sizeof(RepType), cudf::test::get_default_stream()};
+  ret.stream().synchronize();
+  return ret;
 }
 //! @endcond
 
@@ -280,6 +286,7 @@ std::pair<rmm::device_buffer, cudf::size_type> make_null_mask(ValidityIterator b
   auto d_mask                  = rmm::device_buffer{null_mask.data(),
                                    cudf::bitmask_allocation_size_bytes(cudf::distance(begin, end)),
                                    cudf::test::get_default_stream()};
+  d_mask.stream().synchronize();
   return {std::move(d_mask), null_count};
 }
 
@@ -635,6 +642,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
       rmm::device_buffer{elements.data(), size * sizeof(Rep), cudf::test::get_default_stream()},
       std::move(null_mask),
       null_count});
+    cudf::test::get_default_stream().synchronize();
   }
 
   /**
@@ -765,6 +773,7 @@ class strings_column_wrapper : public detail::column_wrapper {
         offsets, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref()),
       rmm::device_buffer{},
       0);
+    cudf::test::get_default_stream().synchronize();
     wrapped =
       cudf::make_strings_column(num_strings, std::move(d_offsets), d_chars.release(), 0, {});
   }
@@ -817,6 +826,7 @@ class strings_column_wrapper : public detail::column_wrapper {
       0);
     auto d_bitmask = cudf::detail::make_device_uvector(
       null_mask, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());
+    cudf::test::get_default_stream().synchronize();
     wrapped = cudf::make_strings_column(
       num_strings, std::move(d_offsets), d_chars.release(), null_count, d_bitmask.release());
   }
@@ -1653,6 +1663,7 @@ class lists_column_wrapper : public detail::column_wrapper {
     // construct the list column
     wrapped = make_lists_column(
       cols.size(), std::move(offsets), std::move(data), null_count, std::move(null_mask));
+    cudf::test::get_default_stream().synchronize();
   }
 
   /**
