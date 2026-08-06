@@ -13,7 +13,6 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.cuh>
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
@@ -59,9 +58,6 @@ constexpr uint8_t k_short_string_basic_type = 0x01;
 //   value_header = (is_large=0 << 4) | (field_id_size-1=0 << 2) | (field_offset_size-1=3) = 0x03
 //   value_metadata = (value_header << 2) | basic_type::object(2) = 0x0e
 constexpr uint8_t k_object_value_metadata = 0x0e;
-
-// Bytes in the constant empty-dictionary metadata blob {version=1, 0 keys}
-constexpr size_type k_empty_meta_size = 3;
 
 constexpr int block_size = 256;
 
@@ -152,71 +148,6 @@ __device__ size_type write_field_value(uint8_t* out, column_device_view const& c
       }
     }
     default: out[0] = k_null_value; return 1;
-  }
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// encode_strings_to_variant kernels
-// ──────────────────────────────────────────────────────────────────────────────
-
-// Pass 1: compute per-row value blob sizes (metadata is always k_empty_meta_size = 3 bytes).
-CUDF_KERNEL __launch_bounds__(block_size) void string_value_sizes_kernel(
-  column_device_view strings, device_span<size_type> d_val_sizes)
-{
-  auto const num_rows = strings.size();
-  auto const tid      = cudf::detail::grid_1d::global_thread_id<block_size>();
-  auto const stride   = cudf::detail::grid_1d::grid_stride<block_size>();
-
-  for (auto row = tid; row < num_rows; row += stride) {
-    if (!strings.is_valid(row)) {
-      d_val_sizes[row] = 1;
-      continue;
-    }
-    auto const len    = static_cast<int64_t>(strings.element<cudf::string_view>(row).size_bytes());
-    auto const enc_sz = len < 64 ? 1 + len : 5 + len;
-    d_val_sizes[row]  = static_cast<size_type>(
-      enc_sz <= static_cast<int64_t>(cuda::std::numeric_limits<size_type>::max())
-        ? enc_sz
-        : cuda::std::numeric_limits<size_type>::max());
-  }
-}
-
-// Pass 2: write metadata and value blobs.
-// Metadata is constant {0x01, 0x00, 0x00} at stride k_empty_meta_size bytes per row.
-CUDF_KERNEL __launch_bounds__(block_size) void string_encode_write_kernel(
-  column_device_view strings,
-  device_span<size_type const> d_val_offsets,
-  uint8_t* d_val_buf,
-  uint8_t* d_meta_buf)
-{
-  auto const num_rows = strings.size();
-  auto const tid      = cudf::detail::grid_1d::global_thread_id<block_size>();
-  auto const stride   = cudf::detail::grid_1d::grid_stride<block_size>();
-
-  for (auto row = tid; row < num_rows; row += stride) {
-    // Constant metadata: {version=1, num_keys=0, sentinel_offset=0}
-    auto* mp = d_meta_buf + row * k_empty_meta_size;
-    mp[0]    = 0x01;
-    mp[1]    = 0x00;
-    mp[2]    = 0x00;
-
-    // Value
-    uint8_t* vp = d_val_buf + d_val_offsets[row];
-    if (!strings.is_valid(row)) {
-      vp[0] = k_null_value;
-      continue;
-    }
-    auto const sv  = strings.element<cudf::string_view>(row);
-    auto const len = static_cast<size_type>(sv.size_bytes());
-    if (len < 64) {
-      vp[0] = static_cast<uint8_t>(k_short_string_basic_type | (len << 2));
-      cuda::std::memcpy(vp + 1, sv.data(), len);
-    } else {
-      vp[0]              = k_long_string_header;
-      uint32_t const u32 = static_cast<uint32_t>(len);
-      cuda::std::memcpy(vp + 1, &u32, 4);
-      cuda::std::memcpy(vp + 5, sv.data(), len);
-    }
   }
 }
 
@@ -381,90 +312,6 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_constant_list_b
 namespace detail {
 
 // ──────────────────────────────────────────────────────────────────────────────
-// encode_strings_to_variant
-// ──────────────────────────────────────────────────────────────────────────────
-
-std::unique_ptr<column> encode_strings_to_variant(cudf::strings_column_view const& input,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::device_async_resource_ref mr)
-{
-  auto const num_rows = input.size();
-
-  auto make_empty_list = [&] {
-    return make_lists_column(
-      0, make_empty_column(type_id::INT32), make_empty_column(type_id::UINT8), 0, {});
-  };
-
-  if (num_rows == 0) {
-    std::vector<std::unique_ptr<column>> ch;
-    ch.push_back(make_empty_list());
-    ch.push_back(make_empty_list());
-    return make_structs_column(0, std::move(ch), 0, {}, stream, mr);
-  }
-
-  auto input_dv = column_device_view::create(input.parent(), stream);
-
-  // ── Metadata: constant k_empty_meta_size bytes per row ──
-  auto [meta_offsets_col, meta_data_col] =
-    make_constant_list_buffers(num_rows, k_empty_meta_size, stream, mr);
-
-  // ── Value sizes ──
-  rmm::device_uvector<size_type> d_val_sizes(
-    num_rows, stream, cudf::get_current_device_resource_ref());
-  {
-    cudf::detail::grid_1d grid{num_rows, block_size};
-    string_value_sizes_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(*input_dv,
-                                                                                  d_val_sizes);
-    CUDF_CUDA_TRY(cudaGetLastError());
-  }
-
-  auto [val_offsets_col, total_val_bytes] =
-    cudf::detail::make_offsets_child_column(d_val_sizes.begin(), d_val_sizes.end(), stream, mr);
-  // INT64 offsets are produced when total_bytes >= get_offset64_threshold() (== INT32_MAX).
-  // Checking the column type is more robust than comparing total_val_bytes to INT32_MAX,
-  // since the boundary case (total == INT32_MAX) produces INT64 but the numeric check passes.
-  CUDF_EXPECTS(val_offsets_col->type().id() == type_id::INT32,
-               "VARIANT value bytes exceed 2 GiB limit",
-               std::overflow_error);
-
-  auto val_data_col = make_numeric_column(data_type{type_id::UINT8},
-                                          static_cast<size_type>(total_val_bytes),
-                                          mask_state::UNALLOCATED,
-                                          stream,
-                                          mr);
-
-  // ── Write pass (metadata + values) ──
-  {
-    device_span<size_type const> d_val_offsets{val_offsets_col->view().data<size_type>(),
-                                               static_cast<std::size_t>(num_rows + 1)};
-    cudf::detail::grid_1d grid{num_rows, block_size};
-    string_encode_write_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
-      *input_dv,
-      d_val_offsets,
-      val_data_col->mutable_view().data<uint8_t>(),
-      meta_data_col->mutable_view().data<uint8_t>());
-    CUDF_CUDA_TRY(cudaGetLastError());
-  }
-
-  // ── Null mask: propagate from input ──
-  size_type const null_count = input.null_count();
-  rmm::device_buffer null_mask =
-    null_count > 0 ? cudf::detail::copy_bitmask(input.parent(), stream, mr) : rmm::device_buffer{};
-
-  // ── Assemble STRUCT<list<uint8>, list<uint8>> ──
-  auto meta_col =
-    make_lists_column(num_rows, std::move(meta_offsets_col), std::move(meta_data_col), 0, {});
-  auto val_col =
-    make_lists_column(num_rows, std::move(val_offsets_col), std::move(val_data_col), 0, {});
-
-  std::vector<std::unique_ptr<column>> children;
-  children.push_back(std::move(meta_col));
-  children.push_back(std::move(val_col));
-  return make_structs_column(
-    num_rows, std::move(children), null_count, std::move(null_mask), stream, mr);
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
 // encode_variant
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -577,14 +424,6 @@ std::unique_ptr<column> encode_variant(cudf::table_view const& input,
 }
 
 }  // namespace detail
-
-std::unique_ptr<column> encode_strings_to_variant(cudf::strings_column_view const& input,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::encode_strings_to_variant(input, stream, mr);
-}
 
 std::unique_ptr<column> encode_variant(cudf::table_view const& input,
                                        cudf::host_span<std::string const> column_names,

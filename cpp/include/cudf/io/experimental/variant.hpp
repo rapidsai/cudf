@@ -7,7 +7,6 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -110,27 +109,6 @@ namespace io::parquet::experimental {
   column_view const& variant_column,
   std::string_view path,
   data_type desired_type,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-/**
- * @brief Encode a STRING column as a scalar VARIANT column.
- *
- * Each non-null string is encoded as a VARIANT scalar value: a short_string blob (1 header byte +
- * payload) for strings shorter than 64 bytes, or a long_string primitive blob (1 header + 4-byte
- * LE length + payload) for longer strings. The metadata blob for every row is the minimal
- * empty-dictionary encoding `{0x01, 0x00, 0x00}` (version 1, 0 keys). Null input rows produce
- * null VARIANT struct rows.
- *
- * @param input STRING column to encode
- * @param stream CUDA stream
- * @param mr Device memory resource
- * @return VARIANT column: `STRUCT<list<uint8>, list<uint8>>` (metadata child, value child)
- *
- * @throws cudf::logic_error if `input` is not a STRING column
- */
-[[nodiscard]] std::unique_ptr<column> encode_strings_to_variant(
-  cudf::strings_column_view const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
