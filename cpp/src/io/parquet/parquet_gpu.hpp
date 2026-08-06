@@ -36,6 +36,10 @@ namespace cudf::io::parquet::detail {
 
 using cudf::io::detail::string_index_pair;
 
+// Parquet stores a page's `uncompressed_page_size` and `compressed_page_size` as
+// thrift `i32`, so writer must emit pages smaller than this.
+constexpr size_t MAX_PARQUET_PAGE_SIZE = cuda::std::numeric_limits<int32_t>::max();
+
 // Largest number of bits to use for dictionary keys
 constexpr int MAX_DICT_BITS = 24;
 
@@ -575,20 +579,16 @@ CUDF_HOST_DEVICE constexpr inline size_t max_RLE_page_size(uint8_t value_bit_wid
   return 4 + 5 + ((num_values * value_bit_width + 7) / 8) + (num_values / 8);
 }
 
-/// Parquet limit: Parquet stores a page's `uncompressed_page_size` and `compressed_page_size` as
-/// thrift `i32`, so writer cannot emit a page larger than this.
-constexpr size_t MAX_PARQUET_PAGE_SIZE = cuda::std::numeric_limits<int32_t>::max();
-
-/// Bytes needed for the RLE length field
+// Bytes needed for the RLE length field
 constexpr uint32_t RLE_LENGTH_FIELD_LEN = sizeof(uint32_t);
 
-/// Maximum size of a thrift field holding a varint of `value_bits` bits. Each varint byte carries seven payload bits.
+// Maximum size of a thrift field holding a varint of `value_bits` bits. Each varint byte carries seven payload bits.
 CUDF_HOST_DEVICE constexpr size_t max_thrift_field_size(size_t value_bits)
 {
   return 1 /* field header byte */ + cudf::util::div_rounding_up_unsafe<size_t>(value_bits, 7);
 }
 
-/// Max V2 page header size excluding statistics.
+// Max V2 page header size excluding statistics.
 constexpr size_t MAX_V2_HDR_SIZE =
   9 /* number of `i32` fields */ * max_thrift_field_size(sizeof(int32_t) * CHAR_BIT) + 2 /* is_compressed + nested struct */ + 2 /* stop bytes */;
 
