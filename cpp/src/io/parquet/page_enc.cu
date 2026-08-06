@@ -58,8 +58,6 @@ __device__ constexpr int rolling_idx(int pos) { return rolling_index<rle_buffer_
 // also valid for dict page header (V1 or V2)
 constexpr int MAX_V1_HDR_SIZE = util::round_up_unsafe(27, 8);
 
-// max V2 header size
-constexpr int MAX_V2_HDR_SIZE = util::round_up_unsafe(49, 8);
 
 // do not truncate statistics
 constexpr int32_t NO_TRUNC_STATS = 0;
@@ -72,9 +70,6 @@ constexpr uint32_t WARP_MASK = cudf::detail::warp_size - 1;
 
 // currently 64k - 1
 constexpr uint32_t MAX_GRID_Y_SIZE = (1 << 16) - 1;
-
-// space needed for RLE length field
-constexpr int RLE_LENGTH_FIELD_LEN = 4;
 
 struct frag_init_state_s {
   parquet_column_device_view col;
@@ -786,7 +781,7 @@ CUDF_KERNEL void __launch_bounds__(128)
           }
           auto const max_data_size = page_size + rle_pad + lvl_size;
           // Page sizes must fit in parquet page size limit.
-          if (max_data_size > max_parquet_page_size) {
+          if (max_data_size > MAX_PARQUET_PAGE_SIZE) {
             set_error(static_cast<kernel_error::value_type>(encode_error::PAGE_SIZE_OVERFLOW),
                       error_code);
           }

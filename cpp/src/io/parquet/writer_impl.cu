@@ -1926,7 +1926,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         auto const frag = row_group_fragments[c][f];
         fragment_data_size += frag.fragment_data_size;
         chunk_frag_size[c] =
-          required_page_size(frag.fragment_data_size, frag.num_values, col_desc[c]);
+          max_fragment_page_size(frag.fragment_data_size, frag.num_values, col_desc[c]);
         is_chunk_size_exceeded |= sum_exceeds_threshold(
           curr_chunk_size[c], chunk_frag_size[c], EncColumnChunk::max_buffer_size);
       }

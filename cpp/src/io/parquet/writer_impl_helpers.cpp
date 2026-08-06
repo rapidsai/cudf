@@ -96,22 +96,22 @@ std::optional<size_type> compute_smaller_fragment_size(
   for (auto const col_idx : std::views::iota(size_t{0}, num_columns)) {
     for (auto const& frag : fragments[col_idx]) {
       auto const page_size =
-        required_page_size(frag.fragment_data_size, frag.num_values, col_desc[col_idx]);
-      if (page_size <= max_parquet_page_size) { continue; }
+        max_fragment_page_size(frag.fragment_data_size, frag.num_values, col_desc[col_idx]);
+      if (page_size <= MAX_PARQUET_PAGE_SIZE) { continue; }
 
       CUDF_EXPECTS(frag.num_rows > 1,
                    std::format("A single row of column {} needs {} bytes, which exceeds the "
                                "maximum Parquet page size of {} bytes",
                                col_idx,
                                page_size,
-                               max_parquet_page_size),
+                               MAX_PARQUET_PAGE_SIZE),
                    std::overflow_error);
 
       // Scale the row span down by the overshoot, then halve it again so that columns with
       // uneven row lengths are less likely to need another pass. Halving also bounds the number
       // of passes to the width of `size_type`.
       auto const scaled_row_span = util::div_rounding_up_safe<size_t>(
-        static_cast<size_t>(frag.num_rows) * max_parquet_page_size, page_size * 2);
+        static_cast<size_t>(frag.num_rows) * MAX_PARQUET_PAGE_SIZE, page_size * 2);
       fragment_size = std::min<size_type>(fragment_size, std::max<size_t>(1, scaled_row_span));
     }
   }

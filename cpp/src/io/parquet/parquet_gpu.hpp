@@ -12,6 +12,7 @@
 #include "io/utilities/column_buffer.hpp"
 
 #include <cudf/detail/device_scalar.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/codec.hpp>
 #include <cudf/io/parquet_schema.hpp>
@@ -25,6 +26,7 @@
 #include <cuda/std/optional>
 #include <cuda_runtime.h>
 
+#include <climits>
 #include <limits>
 #include <type_traits>
 #include <utility>
@@ -575,28 +577,40 @@ CUDF_HOST_DEVICE constexpr inline size_t max_RLE_page_size(uint8_t value_bit_wid
 
 /// Parquet limit: Parquet stores a page's `uncompressed_page_size` and `compressed_page_size` as
 /// thrift `i32`, so writer cannot emit a page larger than this.
-constexpr size_t max_parquet_page_size = cuda::std::numeric_limits<int32_t>::max();
+constexpr size_t MAX_PARQUET_PAGE_SIZE = cuda::std::numeric_limits<int32_t>::max();
 
-/// Bytes reserved within a page for its header and for encoder padding, neither of which is
-/// included in a fragment's data size.
-constexpr size_t page_overhead_reserve = 64 * 1024;
+/// Bytes needed for the RLE length field
+constexpr uint32_t RLE_LENGTH_FIELD_LEN = sizeof(uint32_t);
+
+/// Maximum size of a thrift field holding a varint of `value_bits` bits. Each varint byte carries seven payload bits.
+CUDF_HOST_DEVICE constexpr size_t max_thrift_field_size(size_t value_bits)
+{
+  return 1 /* field header byte */ + cudf::util::div_rounding_up_unsafe<size_t>(value_bits, 7);
+}
+
+/// Max V2 page header size excluding statistics.
+constexpr size_t MAX_V2_HDR_SIZE =
+  9 /* number of `i32` fields */ * max_thrift_field_size(sizeof(int32_t) * CHAR_BIT) + 2 /* is_compressed + nested struct */ + 2 /* stop bytes */;
 
 /**
- * @brief Size, in bytes, of the smallest page that can hold a fragment's data and levels.
+ * @brief Maximum size, in bytes, of a page holding a single fragment's data and levels.
  *
  * A fragment is never split across pages, so a fragment whose page size exceeds
- * `max_parquet_page_size` has to be broken into fragments spanning fewer rows.
+ * `MAX_PARQUET_PAGE_SIZE` has to be broken into fragments spanning fewer rows.
  *
  * @param data_size Plain-encoded size of the fragment's data
  * @param num_values Number of repetition/definition level values in the fragment
  * @param col Description of the column the fragment belongs to
  */
-constexpr size_t required_page_size(size_t data_size,
-                                    size_t num_values,
-                                    parquet_column_device_view const& col)
+CUDF_HOST_DEVICE constexpr size_t max_fragment_page_size(size_t data_size,
+                                                         size_t num_values,
+                                                         parquet_column_device_view const& col)
 {
+  // Bytes reserved within a page for its header and the level length prefixes, neither of which is
+  // included in a fragment's data size.
+  constexpr size_t PAGE_OVERHEAD_RESERVE = MAX_V2_HDR_SIZE + 2 * RLE_LENGTH_FIELD_LEN;
   return data_size + max_RLE_page_size(col.num_def_level_bits(), num_values) +
-         max_RLE_page_size(col.num_rep_level_bits(), num_values) + page_overhead_reserve;
+         max_RLE_page_size(col.num_rep_level_bits(), num_values) + PAGE_OVERHEAD_RESERVE;
 }
 
 /// Size of hash used for building dictionaries
