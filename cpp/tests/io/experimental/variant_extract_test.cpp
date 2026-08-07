@@ -1405,7 +1405,7 @@ namespace {
 
 // Helper: run get_variant_type_id on the value child of an apache fixture.
 template <std::size_t M, std::size_t V>
-std::unique_ptr<cudf::column> apache_type_id(avf::fixture<M, V> const& fixture)
+[[nodiscard]] std::unique_ptr<cudf::column> apache_type_id(avf::fixture<M, V> const& fixture)
 {
   auto const stream = cudf::test::get_default_stream();
   auto col          = make_apache_variant(fixture);
