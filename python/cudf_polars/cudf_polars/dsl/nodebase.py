@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Base class for IR nodes, and utilities."""
@@ -21,13 +21,25 @@ __all__: list[str] = ["Node"]
 T = TypeVar("T", bound="Node[Any]")
 
 
-def _expand_hashable(obj: Any) -> Any:
-    """Expand nested Node instances to their hashable form."""
+def _update_stable_hasher(hasher: Any, obj: Any) -> None:
+    """
+    Feed ``hasher`` a bottom-up structural digest of ``obj``.
+
+    Nested :class:`Node` instances contribute their cached
+    :meth:`~Node.get_stable_id` rather than a full subtree expansion, so
+    hashing an entire DAG is linear in total local payload size.
+    """
     if isinstance(obj, Node):
-        return _expand_hashable(obj.get_hashable())
+        hasher.update(b"N")
+        hasher.update(obj.get_stable_id().to_bytes(4, "big"))
     elif isinstance(obj, tuple):
-        return tuple(_expand_hashable(x) for x in obj)
-    return obj
+        hasher.update(b"T")
+        hasher.update(len(obj).to_bytes(4, "big"))
+        for x in obj:
+            _update_stable_hasher(hasher, x)
+    else:
+        hasher.update(b"L")
+        hasher.update(repr(obj).encode("utf-8"))
 
 
 class Node(Generic[T]):
@@ -106,13 +118,10 @@ class Node(Generic[T]):
         """
         Compute a stable identifier for Node.
 
-        Uses MD5 hash of the node's hashable representation for determinism
-        across process boundaries (Python's hash() uses PYTHONHASHSEED).
-
-        Parameters
-        ----------
-        ir_node
-            The IR node.
+        Digests :meth:`get_hashable` bottom-up with MD5 so the result is
+        deterministic across process boundaries (Python's ``hash()`` uses
+        ``PYTHONHASHSEED``). Nested nodes contribute their own stable ids
+        rather than re-expanding their subtrees.
 
         Returns
         -------
@@ -122,8 +131,9 @@ class Node(Generic[T]):
         try:
             return self._stable_hash_value
         except AttributeError:
-            content = repr(_expand_hashable(self)).encode("utf-8")
-            self._stable_hash_value = int(hashlib.md5(content).hexdigest()[:8], 16)
+            h = hashlib.md5(usedforsecurity=False)
+            _update_stable_hasher(h, self.get_hashable())
+            self._stable_hash_value = int(h.hexdigest()[:8], 16)
             return self._stable_hash_value
 
     def get_stable_plan_id(self) -> uuid.UUID:

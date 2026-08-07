@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -95,7 +95,7 @@ def test_get_stable_id(node: Node):
     assert node.get_stable_id() == node_id
 
 
-def test_get_stable_plan_id():
+def test_get_stable_plan_id() -> None:
     node = expr.BinOp(
         DataType(pl.Int64()),
         plc.binaryop.BinaryOperator.ADD,
@@ -115,6 +115,7 @@ def test_get_stable_plan_id():
         expr.Literal(DataType(pl.Int64()), 1),
     )
     assert node2.get_stable_plan_id() == plan_id
+    assert node.children[0].get_stable_id() == node2.children[0].get_stable_id()
 
     # And uniqueness
     node3 = node.children[0]
