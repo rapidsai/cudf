@@ -1519,6 +1519,12 @@ def _(
     executor = rec.state["config_options"].executor
     pwise_join = _use_pwise_join(executor, partition_info, ir)
 
+    if pwise_join and isinstance(ir, JoinWithPrefilter):
+        raise AssertionError(
+            "Partition-wise JoinWithPrefilter should have been simplified "
+            "during IR lowering"
+        )
+
     actors, channels = process_children(ir, rec)
 
     # Create output ChannelManager

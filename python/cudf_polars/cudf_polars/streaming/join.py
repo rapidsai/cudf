@@ -162,10 +162,10 @@ def is_direct_join_prefilter(ir: IR) -> bool:
     return isinstance(ir, PushdownFilterHint) and ir.placement == "join_input"
 
 
-def _lower_join_with_prefilters(
+def lower_join_with_prefilters(
     ir: Join,
     rec: LowerIRTransformer,
-) -> tuple[JoinWithPrefilter, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[Join, MutableMapping[IR, PartitionInfo]]:
     """Lower a join and normalize its adjacent filter hints."""
     targets = tuple(
         child.children[0] if is_direct_join_prefilter(child) else child
@@ -178,6 +178,28 @@ def _lower_join_with_prefilters(
     partition_info: MutableMapping[IR, PartitionInfo] = reduce(
         operator.or_, target_partition_info
     )
+
+    if all(
+        isinstance(target, Repartition) and partition_info[target].count == 1
+        for target in lowered_targets
+    ):
+        # This join will execute partition-wise, so its optional prefilters
+        # are unnecessary. Moreover, the piecewise join special case
+        # execution at runtime never has a chance to shut down prefilter
+        # channels that would be produced, which would leave an actor graph
+        # in a deadlocked state. Since they are unnecessary, drop them
+        # before lowering their domains and before the actor graph derives
+        # fanout from the lowered DAG.
+        return (
+            Join(
+                ir.schema,
+                ir.left_on,
+                ir.right_on,
+                ir.options,
+                *lowered_targets,
+            ),
+            partition_info,
+        )
 
     prefilters: list[Prefilter] = []
     external_domains: list[IR] = []
@@ -353,7 +375,7 @@ def _(
         preserve_prefilters = False
 
     if preserve_prefilters:
-        ir, partition_info = _lower_join_with_prefilters(ir, rec)
+        ir, partition_info = lower_join_with_prefilters(ir, rec)
         children = ir.children
     else:
         # Hints not owned by an adaptive join use the generic identity lowering.

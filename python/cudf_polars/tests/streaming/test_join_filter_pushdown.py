@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -11,16 +11,29 @@ import polars as pl
 
 from cudf_polars import Translator
 from cudf_polars.dsl.expr import Col
-from cudf_polars.dsl.ir import Cache, DataFrameScan, Distinct, Join, Select, Slice
-from cudf_polars.dsl.traversal import traversal
+from cudf_polars.dsl.ir import (
+    IR,
+    Cache,
+    DataFrameScan,
+    Distinct,
+    Join,
+    Projection,
+    Select,
+    Slice,
+)
+from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.dsl.utils.column_domain import ColumnRef
 from cudf_polars.engine.options import StreamingOptions
-from cudf_polars.streaming.base import StatsCollector
+from cudf_polars.streaming.base import PartitionInfo, StatsCollector
 from cudf_polars.streaming.filter_hint import (
     JoinInputDomain,
     JoinWithPrefilter,
     Prefilter,
     PushdownFilterHint,
+)
+from cudf_polars.streaming.join import (
+    is_direct_join_prefilter,
+    lower_join_with_prefilters,
 )
 from cudf_polars.streaming.join_filter_pushdown import (
     CompositeCandidate,
@@ -40,6 +53,7 @@ from cudf_polars.streaming.parallel import (
     optimize_with_stats,
     remove_cache_nodes,
 )
+from cudf_polars.streaming.repartition import Repartition
 from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.config import ConfigOptions
@@ -211,6 +225,49 @@ def test_adjacent_filter_hint_is_recorded_on_lowered_join(
     assert not prefilter.nulls_equal
     assert tuple(left.schema) == ("p_partkey",)
     assert not find_joins(lowering.lowered, "Semi")
+
+
+def test_partition_wise_join_discards_prefilters_before_lowering_domains(
+    simple_query: pl.LazyFrame,
+    engine: SPMDEngine,
+) -> None:
+    """Partition-wise joins must not retain optional prefilter inputs."""
+    root = translate_query(simple_query, engine)
+    config = ConfigOptions.from_polars_engine(engine)
+    optimized = optimize_with_stats(root, config, StatsCollector())
+    assert isinstance(optimized, Join)
+
+    children = list(optimized.children)
+    (hint_index,) = (
+        index for index, child in enumerate(children) if is_direct_join_prefilter(child)
+    )
+    hint = children[hint_index]
+    assert isinstance(hint, PushdownFilterHint)
+    domain = Projection(hint.children[1].schema, hint.children[1])
+    children[hint_index] = hint.reconstruct((hint.children[0], domain))
+    optimized = optimized.reconstruct(children)
+
+    targets = tuple(
+        child.children[0] if is_direct_join_prefilter(child) else child
+        for child in optimized.children
+    )
+    repartitions = tuple(Repartition(target.schema, target) for target in targets)
+    lowered_targets = dict(zip(targets, repartitions, strict=True))
+
+    def lower_target(child: IR, rec: Any) -> tuple[IR, dict[IR, PartitionInfo]]:
+        assert child in lowered_targets, "prefilter domain was lowered"
+        lowered = lowered_targets[child]
+        return lowered, {lowered: PartitionInfo(count=1)}
+
+    rec: Any = CachingVisitor(
+        lower_target,
+        state={"config_options": config},
+    )
+    lowered, partition_info = lower_join_with_prefilters(optimized, rec)
+
+    assert type(lowered) is Join
+    assert lowered.children == repartitions
+    assert domain not in partition_info
 
 
 def test_filter_pushdown_can_be_disabled(
