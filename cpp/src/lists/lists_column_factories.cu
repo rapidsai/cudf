@@ -118,7 +118,8 @@ std::unique_ptr<column> make_lists_column(size_type num_rows,
   // A list offset indexes a row of the child column, so it is size_type wide. Everything that
   // reads these offsets assumes as much, and reads past the end of a narrower buffer.
   CUDF_EXPECTS(offsets_column->type() == data_type{type_to_id<size_type>()},
-               "Offsets column must be of type size_type");
+               "Offsets column must be of type size_type, got type id " +
+                 std::to_string(static_cast<int32_t>(offsets_column->type().id())));
 
   std::vector<std::unique_ptr<column>> children;
   children.emplace_back(std::move(offsets_column));
