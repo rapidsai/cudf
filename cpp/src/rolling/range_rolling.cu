@@ -88,7 +88,7 @@ std::unique_ptr<column> make_range_window(
   bool const nulls_at_start = (order == order::ASCENDING && null_order == null_order::BEFORE) ||
                               (order == order::DESCENDING && null_order == null_order::AFTER);
 
-  auto dispatch = [&](auto&& clamper, scalar const* row_delta) {
+  auto dispatch = [&](auto&& clamper, scalar const* row_delta, column_view const* delta_col) {
     return type_dispatcher(orderby.type(),
                            clamper,
                            orderby,
@@ -97,13 +97,23 @@ std::unique_ptr<column> make_range_window(
                            grouping,
                            nulls_at_start,
                            row_delta,
+                           delta_col,
                            stream,
                            mr);
   };
   return std::visit(
     [&](auto&& window) -> std::unique_ptr<column> {
-      using WindowType = cuda::std::decay_t<decltype(window)>;
-      return dispatch(rolling::range_window_clamper<WindowType>{}, window.delta());
+      using WindowType      = cuda::std::decay_t<decltype(window)>;
+      auto const* delta_col = window.delta_column();
+      // Type-independent invariants for a per-row delta column are enforced once here, regardless
+      // of the orderby type. The orderby-type-specific type relationship is checked per-type in
+      // range_window_clamper::operator().
+      if (delta_col != nullptr) {
+        CUDF_EXPECTS(delta_col->size() == orderby.size(),
+                     "Delta column must have the same number of rows as the orderby column.");
+        CUDF_EXPECTS(!delta_col->has_nulls(), "Delta column must not contain nulls.");
+      }
+      return dispatch(rolling::range_window_clamper<WindowType>{}, window.delta(), delta_col);
     },
     window);
 }
