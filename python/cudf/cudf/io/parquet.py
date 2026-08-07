@@ -1682,6 +1682,7 @@ def to_parquet(
             pa_table,
             root_path=path,
             partition_cols=partition_cols,
+            compression=compression,
             *args,
             **kwargs,
         )

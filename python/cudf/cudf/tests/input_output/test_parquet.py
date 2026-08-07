@@ -3443,6 +3443,21 @@ def test_parquet_writer_gzip():
         assert row_group.column(i).compression == "GZIP"
 
 
+@pytest.mark.parametrize(
+    "compression", ["GZIP", "ZSTD", "LZ4", "snappy", None]
+)
+def test_parquet_writer_pyarrow_engine_compression(tmp_path, compression):
+    df = cudf.DataFrame({"a": [f"row-{i}-value" for i in range(1000)]})
+
+    df.to_parquet(tmp_path, engine="pyarrow", compression=compression)
+
+    row_group = pq.ParquetFile(
+        next(tmp_path.glob("*.parquet"))
+    ).metadata.row_group(0)
+    expected = "UNCOMPRESSED" if compression is None else compression.upper()
+    assert row_group.column(0).compression == expected
+
+
 @pytest.mark.parametrize("store_schema", [True, False])
 def test_parquet_writer_time_delta_physical_type(store_schema):
     df = cudf.DataFrame(
