@@ -237,9 +237,12 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
       }
 
       case type_id::LIST: {
-        // make offsets column
-        auto offsets = std::make_unique<column>(
-          data_type{type_id::INT32}, buffer.size, std::move(buffer._data), rmm::device_buffer{}, 0);
+        // make offsets column; the buffer was allocated at size_type width to match
+        auto offsets = std::make_unique<column>(data_type{type_to_id<size_type>()},
+                                                buffer.size,
+                                                std::move(buffer._data),
+                                                rmm::device_buffer{},
+                                                0);
 
         column_name_info* child_info = nullptr;
         if (schema_info != nullptr) {
