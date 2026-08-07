@@ -45,3 +45,75 @@ def test_max_horizontal_string_unsupported(engine: pl.GPUEngine) -> None:
     df = pl.LazyFrame({"a": ["x", None], "b": ["y", "z"]})
     q = df.select(pl.max_horizontal("a", "b"))
     assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+@pytest.mark.parametrize("ignore_nulls", [True, False])
+def test_mean_horizontal(
+    df: pl.LazyFrame,
+    engine: pl.GPUEngine,
+    ignore_nulls: bool,  # noqa: FBT001
+) -> None:
+    q = df.select(pl.mean_horizontal("a", "b", "c", ignore_nulls=ignore_nulls))
+    assert_gpu_result_equal(q, engine=engine, check_exact=False)
+
+
+def test_mean_horizontal_single_column(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
+    q = df.select(pl.mean_horizontal("a"))
+    assert_gpu_result_equal(q, engine=engine, check_exact=False)
+
+
+def test_mean_horizontal_mixed_dtypes(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [1, 2, None], "b": [1.5, None, 3.5]})
+    q = df.select(pl.mean_horizontal("a", "b"))
+    assert_gpu_result_equal(q, engine=engine, check_exact=False)
+
+
+def test_min_horizontal(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
+    q = df.select(pl.min_horizontal("a", "b", "c"))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_min_horizontal_single_column(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
+    q = df.select(pl.min_horizontal("a"))
+    assert_gpu_result_equal(q, engine=engine, check_exact=False)
+
+
+def test_min_horizontal_all_null_row(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame(
+        {"a": [None, 1], "b": [None, 2]}, schema={"a": pl.Int64, "b": pl.Int64}
+    )
+    q = df.select(pl.min_horizontal("a", "b"))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_min_horizontal_string_unsupported(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": ["x", None], "b": ["y", "z"]})
+    q = df.select(pl.min_horizontal("a", "b"))
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+@pytest.mark.parametrize("ignore_nulls", [True, False])
+def test_sum_horizontal(
+    df: pl.LazyFrame,
+    engine: pl.GPUEngine,
+    ignore_nulls: bool,  # noqa: FBT001
+) -> None:
+    q = df.select(pl.sum_horizontal("a", "b", "c", ignore_nulls=ignore_nulls))
+    assert_gpu_result_equal(q, engine=engine, check_exact=False)
+
+
+def test_sum_horizontal_single_column(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
+    q = df.select(pl.sum_horizontal("a"))
+    assert_gpu_result_equal(q, engine=engine, check_exact=False)
+
+
+def test_sum_horizontal_mixed_dtypes(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [1, 2, None], "b": [1.5, None, 3.5]})
+    q = df.select(pl.sum_horizontal("a", "b"))
+    assert_gpu_result_equal(q, engine=engine, check_exact=False)
+
+
+def test_sum_horizontal_string_unsupported(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": ["x", None], "b": ["y", "z"]})
+    q = df.select(pl.sum_horizontal("a", "b"))
+    assert_ir_translation_raises(q, engine, NotImplementedError)
