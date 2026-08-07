@@ -29,7 +29,8 @@ from cudf_polars.streaming.actor_graph.utils import (
 from cudf_polars.streaming.filter_hint import PushdownFilterHint
 
 if TYPE_CHECKING:
-    from cudf_streaming.channel_metadata import ChannelMetadata
+    from collections.abc import Sequence
+
     from cudf_streaming.table_chunk import TableChunk
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
@@ -39,31 +40,6 @@ if TYPE_CHECKING:
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
     from cudf_polars.streaming.actor_graph.utils import TableSizeStats
     from cudf_polars.utils.config import StreamingExecutor
-
-
-async def replay_skipped_prefilter(
-    context: Context,
-    ir: PushdownFilterHint,
-    ch_out: Channel[TableChunk],
-    ch_target: Channel[TableChunk],
-    ch_domain: Channel[TableChunk],
-    target_metadata: ChannelMetadata,
-    target_sample: TableSizeStats,
-    domain_sample: TableSizeStats,
-) -> None:
-    """Replay an unfiltered target and stop its unused domain input."""
-    domain_sample.chunks.clear()
-    await gather_in_task_group(
-        replay_buffered_channel(
-            context,
-            ch_out,
-            ch_target,
-            target_sample.chunks,
-            target_metadata,
-            trace_ir=ir,
-        ),
-        ch_domain.shutdown(context),
-    )
 
 
 @define_actor()
@@ -79,7 +55,7 @@ async def pushdown_filter_actor(
     collective_id: int,
 ) -> None:
     """Choose and optionally execute one standalone pushdown-filter hint."""
-    samples: tuple[TableSizeStats, TableSizeStats] | None = None
+    collected_samples: Sequence[TableSizeStats] = []
     async with shutdown_on_error(
         context,
         ch_out,
@@ -126,7 +102,6 @@ async def pushdown_filter_actor(
             if len(collected_samples) != 2:
                 raise ValueError("Standalone prefilters require two input samples")
             target_sample, domain_sample = collected_samples
-            samples = (target_sample, domain_sample)
             config = executor.join_filter_pushdown
             if config is None:
                 raise ValueError("Standalone prefilter has no runtime configuration")
@@ -145,15 +120,17 @@ async def pushdown_filter_actor(
                 tracer.set_extra("prefilter", trace)
 
             if decision.method == "skip":
-                await replay_skipped_prefilter(
-                    context,
-                    ir,
-                    ch_out,
-                    ch_target,
-                    ch_domain,
-                    target_metadata,
-                    target_sample,
-                    domain_sample,
+                domain_sample.chunks.clear()
+                await gather_in_task_group(
+                    ch_domain.shutdown(context),
+                    replay_buffered_channel(
+                        context,
+                        ch_out,
+                        ch_target,
+                        target_sample.chunks,
+                        target_metadata,
+                        trace_ir=ir,
+                    ),
                 )
             else:
                 target, domain = ir.children
@@ -208,9 +185,8 @@ async def pushdown_filter_actor(
                 ):
                     await gather_in_task_group(*execution.tasks)
         finally:
-            if samples is not None:
-                for sample in samples:
-                    sample.chunks.clear()
+            for sample in collected_samples:
+                sample.chunks.clear()
 
 
 @generate_ir_sub_network.register(PushdownFilterHint)
