@@ -223,6 +223,10 @@ class ParquetOptions:
         Whether to use the native rapidsmpf node for parquet reading.
         This option is only used by the streaming executor.
         Default is False.
+    use_hybrid_scan
+        Whether to use the two-pass ``HybridScanReader`` for ``SplitScan``
+        tasks when a predicate can be pushed down to a parquet filter.
+        Default is False.
     prefetch_file_metadata
         Whether to prefetch parquet file metadata and pass it through
         `parquet_metadatas` to avoid rereading file footers.
@@ -272,11 +276,28 @@ class ParquetOptions:
             default=False,
         )
     )
+    use_hybrid_scan: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_HYBRID_SCAN",
+            _bool_converter,
+            default=False,
+        )
+    )
     prefetch_file_metadata: bool = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__PREFETCH_FILE_METADATA",
             _bool_converter,
             default=False,
+        )
+    )
+    # Internal benchmarking flag. When False, skips stats and bloom-filter pruning
+    # before the first pass of a hybrid scan so you can measure two-pass read
+    # overhead in isolation. No reason to set this to False in production.
+    _hybrid_scan_stats_pruning: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__HYBRID_SCAN_STATS_PRUNING",
+            _bool_converter,
+            default=True,
         )
     )
     use_jit_filter: bool = dataclasses.field(
@@ -302,6 +323,10 @@ class ParquetOptions:
             raise TypeError("max_row_group_samples must be an int")
         if not isinstance(self.use_rapidsmpf_native, bool):
             raise TypeError("use_rapidsmpf_native must be a bool")
+        if not isinstance(self.use_hybrid_scan, bool):
+            raise TypeError("use_hybrid_scan must be a bool")
+        if not isinstance(self._hybrid_scan_stats_pruning, bool):
+            raise TypeError("_hybrid_scan_stats_pruning must be a bool")
         if not isinstance(self.prefetch_file_metadata, bool):
             raise TypeError("prefetch_file_metadata must be a bool")
 
@@ -697,6 +722,9 @@ class StreamingExecutor:
     max_io_threads
         Maximum number of IO threads. Default is 4.
         This controls the parallelism of IO operations when reading data.
+    num_prefetch_workers
+        Number of prefetch worker threads for the hybrid scan prefetch pipeline.
+        Default is 2. Set to ``None`` to use one worker per split.
     num_py_executors
         Maximum number of workers for the Python ThreadPoolExecutor.
         Default is 8.
@@ -764,6 +792,11 @@ class StreamingExecutor:
     max_io_threads: int = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__MAX_IO_THREADS", int, default=4
+        )
+    )
+    num_prefetch_workers: int | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__NUM_PREFETCH_WORKERS", int, default=2
         )
     )
     num_py_executors: int = dataclasses.field(
@@ -853,6 +886,10 @@ class StreamingExecutor:
             raise TypeError("client_device_threshold must be a float")
         if not isinstance(self.max_io_threads, int):
             raise TypeError("max_io_threads must be an int")
+        if self.num_prefetch_workers is not None and not isinstance(
+            self.num_prefetch_workers, int
+        ):
+            raise TypeError("num_prefetch_workers must be an int or None")
         if not isinstance(self.num_py_executors, int):
             raise TypeError("num_py_executors must be an int")
 
