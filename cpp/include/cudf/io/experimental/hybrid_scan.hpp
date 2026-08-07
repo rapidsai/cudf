@@ -511,6 +511,26 @@ class hybrid_scan_reader {
     std::span<size_type const> row_group_indices, parquet_reader_options const& options) const;
 
   /**
+   * @brief Plan page-level payload byte ranges using the row mask
+   *
+   * When page masking cannot be used, returns the full payload column-chunk ranges. The resulting
+   * plan must be consumed exactly once by the matching page-data setup overload.
+   *
+   * @param row_group_indices Input row group indices
+   * @param row_mask Boolean mask spanning the selected row groups
+   * @param mask_data_pages Whether to use the row mask to prune data pages
+   * @param options Parquet reader options
+   * @param stream CUDA stream used to compute the page mask
+   * @return Byte ranges to fetch
+   */
+  [[nodiscard]] std::vector<byte_range_info> payload_column_chunks_byte_ranges(
+    std::span<size_type const> row_group_indices,
+    cudf::column_view const& row_mask,
+    use_data_page_mask mask_data_pages,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream) const;
+
+  /**
    * @brief Materialize payload columns and applies the row mask to the output table
    *
    * @param row_group_indices Input row groups indices
@@ -616,6 +636,34 @@ class hybrid_scan_reader {
     cudf::column_view const& row_mask,
     use_data_page_mask mask_data_pages,
     std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @brief Setup chunking for payload columns using page-level payload data
+   *
+   * The `page_data` must correspond to the byte ranges returned by the matching page-level
+   * `payload_column_chunks_byte_ranges` overload.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per table chunk
+   * @param pass_read_limit Limit on the memory used for reading and decompressing data
+   * @param row_group_indices Input row group indices
+   * @param row_mask Boolean column indicating which rows need to be read
+   * @param mask_data_pages Whether to use the row mask to prune data pages
+   * @param page_data_per_source Device spans of page data returned by the page-level range plan,
+   *        grouped by source
+   * @param options Parquet reader options
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the output table chunks
+   */
+  void setup_chunking_for_payload_columns(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    std::span<size_type const> row_group_indices,
+    cudf::column_view const& row_mask,
+    use_data_page_mask mask_data_pages,
+    cudf::host_span<std::vector<cudf::device_span<uint8_t const>> const> page_data_per_source,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const;
