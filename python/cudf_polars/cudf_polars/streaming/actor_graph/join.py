@@ -85,9 +85,17 @@ if TYPE_CHECKING:
         JoinInput,
         JoinPlanningState,
     )
+    from cudf_polars.streaming.actor_graph.prefilter import (
+        PrefilterDecision,
+        PrefilterExecution,
+    )
     from cudf_polars.streaming.actor_graph.tracing import ActorTracer
     from cudf_polars.streaming.base import PartitionInfo
-    from cudf_polars.streaming.filter_hint import JoinSide
+    from cudf_polars.streaming.filter_hint import (
+        JoinSide,
+        Prefilter,
+        PushdownFilterHint,
+    )
     from cudf_polars.utils.config import StreamingExecutor
 
 
@@ -465,6 +473,70 @@ async def broadcast_join(
     await ch_out.drain(context)
 
 
+def add_prefilter(
+    execution: PrefilterExecution,
+    comm: Communicator,
+    *,
+    spec: Prefilter | PushdownFilterHint,
+    decision: PrefilterDecision,
+    target: IR,
+    domain: IR,
+    ch_target: Channel[TableChunk],
+    ch_domain_keys: Channel[TableChunk],
+    ch_filtered: Channel[TableChunk],
+    collective_id: int,
+    ir_context: IRExecutionContext,
+    trace_stats: dict[str, Any] | None,
+) -> None:
+    """Add the actors and channels that apply one selected prefilter."""
+    context = execution.context
+    if decision.method == "bloom":
+        if decision.bloom_bytes is None:
+            raise ValueError("Bloom prefilter decision has no filter size")
+        add_bloom_prefilter(
+            context,
+            comm,
+            decision.bloom_bytes,
+            execution,
+            names_to_indices(spec.target_on, target.schema),
+            ch_domain_keys,
+            ch_target,
+            ch_filtered,
+            collective_id,
+            trace_stats,
+        )
+    elif decision.method == "broadcast_semi_join":
+        domain_schema = {key.name: key.value.dtype for key in spec.domain_on}
+        if len(domain_schema) != len(spec.domain_on):
+            raise ValueError("Broadcast semi-join keys must have unique names")
+        semi_join = Join(
+            target.schema,
+            spec.target_on,
+            spec.domain_on,
+            ("Semi", spec.nulls_equal, None, "", False, "none"),
+            target,
+            Projection(domain_schema, domain),
+        )
+        execution.add_task(
+            broadcast_join(
+                context,
+                comm,
+                semi_join,
+                ir_context,
+                ch_filtered,
+                ch_target,
+                ch_domain_keys,
+                JoinStrategy(broadcast_side="right"),
+                collective_id,
+                target_partition_size=None,
+                tracer=None,
+                trace_stats=trace_stats,
+            )
+        )
+    else:
+        raise ValueError(f"Cannot apply prefilter method {decision.method!r}")
+
+
 def make_prefilter_execution(
     context: Context,
     comm: Communicator,
@@ -527,51 +599,20 @@ def make_prefilter_execution(
         ch_filtered: Channel[TableChunk] = context.create_channel()
         trace_stats = candidate.trace
 
-        collective_id = collective_ids.prefilter(strategy, target_side)
-        if decision.method == "bloom":
-            assert decision.bloom_bytes is not None
-            add_bloom_prefilter(
-                context,
-                comm,
-                decision.bloom_bytes,
-                execution,
-                names_to_indices(spec.target_on, target.schema),
-                ch_domain_keys,
-                ch_target,
-                ch_filtered,
-                collective_id,
-                trace_stats,
-            )
-        else:
-            assert decision.method == "broadcast_semi_join"
-            domain_schema = {key.name: key.value.dtype for key in spec.domain_on}
-            if len(domain_schema) != len(spec.domain_on):
-                raise ValueError("Broadcast semi-join keys must have unique names")
-            projected_domain = Projection(domain_schema, candidate.domain.node)
-            semi_join = Join(
-                target.schema,
-                spec.target_on,
-                spec.domain_on,
-                ("Semi", spec.nulls_equal, None, "", False, "none"),
-                target,
-                projected_domain,
-            )
-            execution.add_task(
-                broadcast_join(
-                    context,
-                    comm,
-                    semi_join,
-                    ir_context,
-                    ch_filtered,
-                    ch_target,
-                    ch_domain_keys,
-                    JoinStrategy(broadcast_side="right"),
-                    collective_id,
-                    target_partition_size=None,
-                    tracer=None,
-                    trace_stats=trace_stats,
-                )
-            )
+        add_prefilter(
+            execution,
+            comm,
+            spec=spec,
+            decision=decision,
+            target=target,
+            domain=candidate.domain.node,
+            ch_target=ch_target,
+            ch_domain_keys=ch_domain_keys,
+            ch_filtered=ch_filtered,
+            collective_id=collective_ids.prefilter(strategy, target_side),
+            ir_context=ir_context,
+            trace_stats=trace_stats,
+        )
         execution.replace_join_input(target_side, ch_filtered)
 
     return execution

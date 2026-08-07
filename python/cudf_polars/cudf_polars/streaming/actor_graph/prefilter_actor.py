@@ -9,13 +9,11 @@ from typing import TYPE_CHECKING, Any
 from cudf_streaming import CardinalityEstimator
 from rapidsmpf.streaming.core.actor import define_actor
 
-from cudf_polars.dsl.ir import Join, Projection
 from cudf_polars.dsl.utils.naming import names_to_indices
 from cudf_polars.streaming.actor_graph.dispatch import generate_ir_sub_network
-from cudf_polars.streaming.actor_graph.join import JoinStrategy, broadcast_join
+from cudf_polars.streaming.actor_graph.join import add_prefilter
 from cudf_polars.streaming.actor_graph.prefilter import (
     PrefilterExecution,
-    add_bloom_prefilter,
     choose_prefilter_method,
 )
 from cudf_polars.streaming.actor_graph.utils import (
@@ -39,26 +37,8 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
-    from cudf_polars.streaming.actor_graph.prefilter import PrefilterDecision
     from cudf_polars.streaming.actor_graph.utils import TableSizeStats
     from cudf_polars.utils.config import StreamingExecutor
-
-
-def make_broadcast_semi_join(ir: PushdownFilterHint) -> Join:
-    """Build the synthetic semi-join used for exact filtering."""
-    target, domain = ir.children
-    domain_schema = {key.name: key.value.dtype for key in ir.domain_on}
-    if len(domain_schema) != len(ir.domain_on):
-        raise ValueError("Broadcast semi-join keys must have unique names")
-    projected_domain = Projection(domain_schema, domain)
-    return Join(
-        target.schema,
-        ir.target_on,
-        ir.domain_on,
-        ("Semi", ir.nulls_equal, None, "", False, "none"),
-        target,
-        projected_domain,
-    )
 
 
 async def replay_skipped_prefilter(
@@ -84,98 +64,6 @@ async def replay_skipped_prefilter(
         ),
         ch_domain.shutdown(context),
     )
-
-
-async def apply_prefilter(
-    context: Context,
-    comm: Communicator,
-    ir: PushdownFilterHint,
-    ir_context: IRExecutionContext,
-    ch_out: Channel[TableChunk],
-    ch_target: Channel[TableChunk],
-    ch_domain: Channel[TableChunk],
-    target_metadata: ChannelMetadata,
-    domain_metadata: ChannelMetadata,
-    target_sample: TableSizeStats,
-    domain_sample: TableSizeStats,
-    decision: PrefilterDecision,
-    collective_id: int,
-    trace_stats: dict[str, Any] | None,
-) -> None:
-    """Apply the selected standalone prefilter implementation."""
-    target, domain = ir.children
-    domain_indices = names_to_indices(ir.domain_on, domain.schema)
-    if domain_indices != tuple(range(len(domain.schema))):
-        raise ValueError("Pushdown filter domains must contain only keys")
-
-    execution = PrefilterExecution(context)
-    ch_target_replay: Channel[TableChunk] = context.create_channel()
-    ch_domain_replay: Channel[TableChunk] = context.create_channel()
-    execution.add_channel(ch_target_replay)
-    execution.add_channel(ch_domain_replay)
-    execution.add_task(
-        replay_buffered_channel(
-            context,
-            ch_target_replay,
-            ch_target,
-            target_sample.chunks,
-            target_metadata,
-            trace_ir=ir,
-        )
-    )
-    execution.add_task(
-        replay_buffered_channel(
-            context,
-            ch_domain_replay,
-            ch_domain,
-            domain_sample.chunks,
-            domain_metadata,
-            trace_ir=ir,
-        )
-    )
-
-    if decision.method == "bloom":
-        if decision.bloom_bytes is None:
-            raise ValueError("Bloom prefilter decision has no filter size")
-        add_bloom_prefilter(
-            context,
-            comm,
-            decision.bloom_bytes,
-            execution,
-            names_to_indices(ir.target_on, target.schema),
-            ch_domain_replay,
-            ch_target_replay,
-            ch_out,
-            collective_id,
-            trace_stats,
-        )
-    elif decision.method == "broadcast_semi_join":
-        execution.add_task(
-            broadcast_join(
-                context,
-                comm,
-                make_broadcast_semi_join(ir),
-                ir_context,
-                ch_out,
-                ch_target_replay,
-                ch_domain_replay,
-                JoinStrategy(broadcast_side="right"),
-                collective_id,
-                target_partition_size=None,
-                tracer=None,
-                trace_stats=trace_stats,
-            )
-        )
-    else:
-        raise ValueError(f"Cannot apply prefilter method {decision.method!r}")
-
-    async with shutdown_on_error(
-        context,
-        *execution.channels,
-        trace_ir=ir,
-        ir_context=ir_context,
-    ):
-        await gather_in_task_group(*execution.tasks)
 
 
 @define_actor()
@@ -268,22 +156,57 @@ async def pushdown_filter_actor(
                     domain_sample,
                 )
             else:
-                await apply_prefilter(
-                    context,
-                    comm,
-                    ir,
-                    ir_context,
-                    ch_out,
-                    ch_target,
-                    ch_domain,
-                    target_metadata,
-                    domain_metadata,
-                    target_sample,
-                    domain_sample,
-                    decision,
-                    collective_id,
-                    trace_stats,
+                target, domain = ir.children
+                domain_indices = names_to_indices(ir.domain_on, domain.schema)
+                if domain_indices != tuple(range(len(domain.schema))):
+                    raise ValueError("Pushdown filter domains must contain only keys")
+
+                execution = PrefilterExecution(context)
+                ch_target_replay: Channel[TableChunk] = context.create_channel()
+                ch_domain_replay: Channel[TableChunk] = context.create_channel()
+                execution.add_channel(ch_target_replay)
+                execution.add_channel(ch_domain_replay)
+                execution.add_task(
+                    replay_buffered_channel(
+                        context,
+                        ch_target_replay,
+                        ch_target,
+                        target_sample.chunks,
+                        target_metadata,
+                        trace_ir=ir,
+                    )
                 )
+                execution.add_task(
+                    replay_buffered_channel(
+                        context,
+                        ch_domain_replay,
+                        ch_domain,
+                        domain_sample.chunks,
+                        domain_metadata,
+                        trace_ir=ir,
+                    )
+                )
+                add_prefilter(
+                    execution,
+                    comm,
+                    spec=ir,
+                    decision=decision,
+                    target=target,
+                    domain=domain,
+                    ch_target=ch_target_replay,
+                    ch_domain_keys=ch_domain_replay,
+                    ch_filtered=ch_out,
+                    collective_id=collective_id,
+                    ir_context=ir_context,
+                    trace_stats=trace_stats,
+                )
+                async with shutdown_on_error(
+                    context,
+                    *execution.channels,
+                    trace_ir=ir,
+                    ir_context=ir_context,
+                ):
+                    await gather_in_task_group(*execution.tasks)
         finally:
             if samples is not None:
                 for sample in samples:
