@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.containers import DataType
+    from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.streaming.actor_graph.utils import TableSizeStats
     from cudf_polars.streaming.filter_hint import JoinSide, Prefilter
 
@@ -285,7 +286,7 @@ def choose_prefilter(
     broadcast_limit: int,
     bloom_filter_max_size: int,
 ) -> PrefilterDecision:
-    """Choose whether and how to apply one prefilter."""
+    """Choose whether one join prefilter is eligible to be applied."""
     domain_rows = None if domain is None else domain.total_rows
     if not target_requires_redistribution:
         return PrefilterDecision(
@@ -307,6 +308,24 @@ def choose_prefilter(
             domain_rows,
         )
 
+    return choose_prefilter_method(
+        prefilter.domain_on,
+        target,
+        domain,
+        broadcast_limit=broadcast_limit,
+        bloom_filter_max_size=bloom_filter_max_size,
+    )
+
+
+def choose_prefilter_method(
+    domain_on: Sequence[NamedExpr],
+    target: TableSizeStats,
+    domain: TableSizeStats,
+    *,
+    broadcast_limit: int,
+    bloom_filter_max_size: int,
+) -> PrefilterDecision:
+    """Choose the implementation for an eligible prefilter."""
     cardinality = estimate_cardinality(domain)
     if cardinality is None:
         return PrefilterDecision(
@@ -331,7 +350,7 @@ def choose_prefilter(
         BloomFilter.aligned_size(estimate_bloom_filter_bytes(cardinality)),
     )
     exact_bytes = estimate_bytes(
-        tuple(key.value.dtype for key in prefilter.domain_on),
+        tuple(key.value.dtype for key in domain_on),
         domain.total_rows,
     )
     if bloom_bytes <= min(bloom_filter_max_size, target.total_size):
