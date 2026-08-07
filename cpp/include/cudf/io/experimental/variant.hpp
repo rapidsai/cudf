@@ -113,16 +113,15 @@ namespace io::parquet::experimental {
 /**
  * @brief Return the logical type of each VARIANT value blob in a `list<uint8>` column.
  *
- * Physical integer widths INT8/INT16/INT32/INT64 all map to `long_value`; both string encodings
- * (short and long) map to `string`. An encoded Variant null (NULLVAL) produces a valid
- * `null_value` identifier — not a null output row. An input-null row produces an output-null row.
- * An unrecognized or unknown header produces a null output row.
+ * Classifies only the value_metadata header byte; does not validate the remaining payload.
+ * A recognized header returns its logical type even when the payload is truncated. A null output
+ * row is produced when the input row is null, the blob is empty, or the header carries an
+ * unrecognized type. An encoded Variant null (NULLVAL) produces a valid `NULL_VALUE` row.
  *
  * @param values `list<uint8>` column of VARIANT-encoded value bytes
  * @param stream CUDA stream
  * @param mr Device memory resource
- * @return `INT32` column of `variant_logical_type` values cast to `int32_t`. A row is null when
- *         the input row is null or the value header carries an unrecognized type.
+ * @return `INT32` column of `variant_logical_type` values cast to `int32_t`
  *
  * @throws std::invalid_argument if `values` is not a `list<uint8>` column
  */

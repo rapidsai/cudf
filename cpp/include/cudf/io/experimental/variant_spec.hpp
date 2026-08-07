@@ -51,21 +51,21 @@ enum class variant_primitive_type : uint8_t {
  *
  */
 enum class variant_logical_type : uint8_t {
-  object,
-  array,
-  null_value,
-  boolean,
-  long_value,
-  string,
-  double_value,
-  decimal,
-  date,
-  timestamp,
-  timestamp_ntz,
-  float_value,
-  binary,
-  uuid,
-  time_ntz
+  OBJECT        = 0,
+  ARRAY         = 1,
+  NULL_VALUE    = 2,
+  BOOLEAN       = 3,
+  LONG_VALUE    = 4,
+  STRING        = 5,
+  DOUBLE_VALUE  = 6,
+  DECIMAL       = 7,
+  DATE          = 8,
+  TIMESTAMP     = 9,
+  TIMESTAMP_NTZ = 10,
+  FLOAT_VALUE   = 11,
+  BINARY        = 12,
+  UUID          = 13,
+  TIME_NTZ      = 14,
 };
 
 }  // namespace cudf::io::parquet::experimental

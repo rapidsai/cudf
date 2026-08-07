@@ -792,38 +792,41 @@ struct cast_variant_fn {
   }
 };
 
+// Classifies only the first (value_metadata) byte of enc; does not validate the remaining payload.
+// A recognized header returns its logical type even when the payload is truncated.
+// Returns nullopt for an empty blob or an unrecognized primitive type ID.
 __device__ cuda::std::optional<variant_logical_type> logical_type_of(device_span<uint8_t const> enc)
 {
   if (enc.empty()) { return cuda::std::nullopt; }
   auto const value_metadata = enc[0];
   auto const btype          = decode_basic_type(value_metadata);
 
-  if (btype == basic_type::SHORT_STRING) { return variant_logical_type::string; }
-  if (btype == basic_type::OBJECT) { return variant_logical_type::object; }
-  if (btype == basic_type::ARRAY) { return variant_logical_type::array; }
+  if (btype == basic_type::SHORT_STRING) { return variant_logical_type::STRING; }
+  if (btype == basic_type::OBJECT) { return variant_logical_type::OBJECT; }
+  if (btype == basic_type::ARRAY) { return variant_logical_type::ARRAY; }
 
   switch (static_cast<primitive_type>(variant_value_header(value_metadata))) {
-    case primitive_type::NULLVAL: return variant_logical_type::null_value;
+    case primitive_type::NULLVAL: return variant_logical_type::NULL_VALUE;
     case primitive_type::BOOLEAN_TRUE:
-    case primitive_type::BOOLEAN_FALSE: return variant_logical_type::boolean;
+    case primitive_type::BOOLEAN_FALSE: return variant_logical_type::BOOLEAN;
     case primitive_type::INT8:
     case primitive_type::INT16:
     case primitive_type::INT32:
-    case primitive_type::INT64: return variant_logical_type::long_value;
-    case primitive_type::FLOAT64: return variant_logical_type::double_value;
+    case primitive_type::INT64: return variant_logical_type::LONG_VALUE;
+    case primitive_type::FLOAT64: return variant_logical_type::DOUBLE_VALUE;
     case primitive_type::DECIMAL4:
     case primitive_type::DECIMAL8:
-    case primitive_type::DECIMAL16: return variant_logical_type::decimal;
-    case primitive_type::DATE: return variant_logical_type::date;
+    case primitive_type::DECIMAL16: return variant_logical_type::DECIMAL;
+    case primitive_type::DATE: return variant_logical_type::DATE;
     case primitive_type::TIMESTAMP_MICROS:
-    case primitive_type::TIMESTAMP_NANOS: return variant_logical_type::timestamp;
+    case primitive_type::TIMESTAMP_NANOS: return variant_logical_type::TIMESTAMP;
     case primitive_type::TIMESTAMP_NTZ_MICROS:
-    case primitive_type::TIMESTAMP_NTZ_NANOS: return variant_logical_type::timestamp_ntz;
-    case primitive_type::FLOAT32: return variant_logical_type::float_value;
-    case primitive_type::BINARY: return variant_logical_type::binary;
-    case primitive_type::LONG_STRING: return variant_logical_type::string;
-    case primitive_type::TIME_NTZ_MICROS: return variant_logical_type::time_ntz;
-    case primitive_type::UUID: return variant_logical_type::uuid;
+    case primitive_type::TIMESTAMP_NTZ_NANOS: return variant_logical_type::TIMESTAMP_NTZ;
+    case primitive_type::FLOAT32: return variant_logical_type::FLOAT_VALUE;
+    case primitive_type::BINARY: return variant_logical_type::BINARY;
+    case primitive_type::LONG_STRING: return variant_logical_type::STRING;
+    case primitive_type::TIME_NTZ_MICROS: return variant_logical_type::TIME_NTZ;
+    case primitive_type::UUID: return variant_logical_type::UUID;
     default: return cuda::std::nullopt;
   }
 }
