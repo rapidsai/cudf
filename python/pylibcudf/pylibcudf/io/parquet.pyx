@@ -628,8 +628,11 @@ cdef class ChunkedParquetReader:
         else:
             with nogil:
                 sources = make_datasources(options.c_obj.get_source())
+            # Pin wrappers for the nogil clone; do not rely on the caller's
+            # mutable parquet_metadatas container remaining unchanged.
+            metadata_holders = tuple(parquet_metadatas)
             metadata_ptrs = _parquet_metadata_ptrs(
-                parquet_metadatas, sources.size()
+                metadata_holders, sources.size()
             )
             with nogil:
                 c_metadatas = clone_parquet_metadatas(
@@ -729,7 +732,10 @@ cpdef read_parquet(
         # Cython does not deep-copy vector[FileMetaData] while holding the GIL.
         with nogil:
             sources = make_datasources(options.c_obj.get_source())
-        metadata_ptrs = _parquet_metadata_ptrs(parquet_metadatas, sources.size())
+        # Pin wrappers for the nogil clone; do not rely on the caller's
+        # mutable parquet_metadatas container remaining unchanged.
+        metadata_holders = tuple(parquet_metadatas)
+        metadata_ptrs = _parquet_metadata_ptrs(metadata_holders, sources.size())
         with nogil:
             c_metadatas = clone_parquet_metadatas(
                 host_span[const_FileMetaData_ptr](
