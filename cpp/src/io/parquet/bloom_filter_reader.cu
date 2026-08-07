@@ -556,16 +556,4 @@ std::vector<std::vector<ast::literal*>> equality_literals_collector::get_literal
   return std::move(_literals);
 }
 
-std::vector<std::reference_wrapper<ast::expression const>>
-equality_literals_collector::visit_operands(
-  cudf::host_span<std::reference_wrapper<ast::expression const> const> operands)
-{
-  std::vector<std::reference_wrapper<ast::expression const>> transformed_operands;
-  for (auto const& operand : operands) {
-    auto const new_operand = operand.get().accept(*this);
-    transformed_operands.push_back(new_operand);
-  }
-  return transformed_operands;
-}
-
 }  // namespace cudf::io::parquet::detail

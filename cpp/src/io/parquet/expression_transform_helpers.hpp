@@ -102,11 +102,6 @@ template <operator_transform mode>
  * @brief Handle unary operation transform for membership-based row group filters. i.e., bloom
  * filter and dictionary page filter.
  *
- * A membership test answers "might this value be present", an existential over the row group that
- * is not closed under negation, so a `NOT` is relaxed to `always_true` rather than negated.
- * `named_to_reference_converter::push_down_negation` rewrites `NOT(col == v)` into `col != v`
- * before any converter sees it, so no negation that could be pruned should reach here.
- *
  * @tparam VisitOperandsFn Callable matching `(std::span<reference_wrapper<expr>>) ->
  * vector<reference_wrapper<expr>>`
  *
@@ -171,29 +166,22 @@ class names_from_expression : public ast::detail::expression_transformer {
   [[nodiscard]] std::vector<std::string> to_vector() &&;
 
  private:
-  void visit_operands(
-    cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
-
   std::unordered_map<cudf::size_type, std::string> _column_indices_to_names;
   std::unordered_set<std::string> _column_names;
   column_path_set _skip_names;
 };
 
 /**
- * @brief Converts named columns to index reference columns and pushes logical negations down to
- * the leaves of the expression
- *
- * The converted expression is the single expression the reader uses both to prune row groups and
- * pages, and to filter the decoded rows. Every negation rewrite must therefore be an exact
- * equivalence rather than a relaxation - see `push_down_negation()`.
+ * @brief Converts named columns to index reference columns and pushes logical negations down to the
+ * leaves of the expression.
  */
-class named_to_reference_converter : public ast::detail::expression_transformer {
+class parquet_filter_normalizer : public ast::detail::expression_transformer {
  public:
-  named_to_reference_converter() = default;
+  parquet_filter_normalizer() = default;
 
-  named_to_reference_converter(std::optional<std::reference_wrapper<ast::expression const>> expr,
-                               table_metadata const& metadata,
-                               bool case_sensitive_names);
+  parquet_filter_normalizer(std::optional<std::reference_wrapper<ast::expression const>> expr,
+                            table_metadata const& metadata,
+                            bool case_sensitive_names);
 
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
@@ -219,18 +207,12 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
   /**
    * @brief Returns the converted AST expression
    *
-   * @return AST operation expression
+   * @return Converted expression, if an input expression was provided
    */
   [[nodiscard]] std::optional<std::reference_wrapper<ast::expression const>> get_converted_expr()
-    const
-  {
-    return _converted_expr;
-  }
+    const;
 
  protected:
-  std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
-    cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
-
   /**
    * @brief Rewrites `NOT(operand)` into an equivalent expression with the negation pushed into
    * `operand`'s own operands
@@ -308,9 +290,6 @@ class equality_literals_collector : public ast::detail::expression_transformer {
   [[nodiscard]] std::vector<std::vector<ast::literal*>> get_literals() &&;
 
  protected:
-  std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
-    cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
-
   cudf::host_span<cudf::data_type const> _output_dtypes;
   std::vector<std::vector<ast::literal*>> _literals;
 
@@ -323,13 +302,15 @@ class equality_literals_collector : public ast::detail::expression_transformer {
  * @brief Offsets every column referencein an expression by the specified value
  *
  */
-class offset_column_references : public named_to_reference_converter {
+class offset_column_references : public ast::detail::expression_transformer {
  public:
   offset_column_references(std::optional<std::reference_wrapper<ast::expression const>> expr,
                            size_type offset);
 
-  // Use `visit` overloads from named_to_reference_converter
-  using named_to_reference_converter::visit;
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override;
 
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
@@ -337,12 +318,27 @@ class offset_column_references : public named_to_reference_converter {
   std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
 
   /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
+
+  /**
    * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
    */
   std::reference_wrapper<ast::expression const> visit(
     ast::column_name_reference const& expr) override;
 
+  /**
+   * @brief Returns the converted AST expression
+   *
+   * @return Converted expression, if an input expression was provided
+   */
+  [[nodiscard]] std::optional<std::reference_wrapper<ast::expression const>> get_converted_expr()
+    const;
+
  private:
+  ast::tree _tree;
+  std::optional<std::reference_wrapper<ast::expression const>> _converted_expr;
   size_type _offset{0};
 };
 

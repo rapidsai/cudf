@@ -130,7 +130,7 @@ binary_operands extract_binary_operands(ast::operation const& expr)
   }
 }
 
-named_to_reference_converter::named_to_reference_converter(
+parquet_filter_normalizer::parquet_filter_normalizer(
   std::optional<std::reference_wrapper<ast::expression const>> expr,
   table_metadata const& metadata,
   bool case_sensitive_names)
@@ -147,21 +147,21 @@ named_to_reference_converter::named_to_reference_converter(
   expr.value().get().accept(*this);
 }
 
-std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
+std::reference_wrapper<ast::expression const> parquet_filter_normalizer::visit(
   ast::literal const& expr)
 {
   _converted_expr = std::reference_wrapper<ast::expression const>(expr);
   return expr;
 }
 
-std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
+std::reference_wrapper<ast::expression const> parquet_filter_normalizer::visit(
   ast::column_reference const& expr)
 {
   _converted_expr = std::reference_wrapper<ast::expression const>(expr);
   return expr;
 }
 
-std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
+std::reference_wrapper<ast::expression const> parquet_filter_normalizer::visit(
   ast::column_name_reference const& expr)
 {
   // check if column name is in metadata
@@ -179,7 +179,7 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
 }
 
 std::optional<std::reference_wrapper<ast::expression const>>
-named_to_reference_converter::push_down_negation(ast::expression const& operand)
+parquet_filter_normalizer::push_down_negation(ast::expression const& operand)
 {
   using cudf::ast::ast_operator;
 
@@ -214,7 +214,7 @@ named_to_reference_converter::push_down_negation(ast::expression const& operand)
   return std::nullopt;
 }
 
-std::reference_wrapper<ast::expression const> named_to_reference_converter::negate(
+std::reference_wrapper<ast::expression const> parquet_filter_normalizer::negate(
   ast::expression const& operand)
 {
   // Push negation down to operands
@@ -227,7 +227,7 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::nega
   return std::reference_wrapper<ast::expression const>(_operators.back());
 }
 
-std::reference_wrapper<ast::expression const> named_to_reference_converter::visit(
+std::reference_wrapper<ast::expression const> parquet_filter_normalizer::visit(
   ast::operation const& expr)
 {
   auto const operands       = expr.get_operands();
@@ -251,18 +251,6 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
   }
   _converted_expr = std::reference_wrapper<ast::expression const>(_operators.back());
   return std::reference_wrapper<ast::expression const>(_operators.back());
-}
-
-std::vector<std::reference_wrapper<ast::expression const>>
-named_to_reference_converter::visit_operands(
-  cudf::host_span<std::reference_wrapper<ast::expression const> const> operands)
-{
-  std::vector<std::reference_wrapper<ast::expression const>> transformed_operands;
-  for (auto const& operand : operands) {
-    auto const new_operand = operand.get().accept(*this);
-    transformed_operands.push_back(new_operand);
-  }
-  return transformed_operands;
 }
 
 names_from_expression::names_from_expression(
@@ -319,7 +307,7 @@ std::reference_wrapper<ast::expression const> names_from_expression::visit(
 std::reference_wrapper<ast::expression const> names_from_expression::visit(
   ast::operation const& expr)
 {
-  visit_operands(expr.get_operands());
+  std::ignore = visit_operands(expr.get_operands());
   return expr;
 }
 
@@ -329,12 +317,50 @@ std::vector<std::string> names_from_expression::to_vector() &&
           std::make_move_iterator(_column_names.end())};
 }
 
-void names_from_expression::visit_operands(
-  cudf::host_span<std::reference_wrapper<ast::expression const> const> operands)
+offset_column_references::offset_column_references(
+  std::optional<std::reference_wrapper<ast::expression const>> expr, size_type offset)
+  : _offset{offset}
 {
-  for (auto const& operand : operands) {
-    operand.get().accept(*this);
+  if (not expr.has_value()) { return; }
+  if (offset == 0) {
+    _converted_expr = expr;
+    return;
   }
+  _converted_expr = expr.value().get().accept(*this);
+}
+
+std::optional<std::reference_wrapper<ast::expression const>>
+offset_column_references::get_converted_expr() const
+{
+  return _converted_expr;
+}
+
+std::reference_wrapper<ast::expression const> offset_column_references::visit(
+  ast::literal const& expr)
+{
+  return expr;
+}
+
+std::reference_wrapper<ast::expression const> offset_column_references::visit(
+  ast::column_reference const& expr)
+{
+  return _tree.push(
+    ast::column_reference{expr.get_column_index() + _offset, expr.get_table_source()});
+}
+
+std::reference_wrapper<ast::expression const> offset_column_references::visit(
+  ast::operation const& expr)
+{
+  auto const new_operands = visit_operands(expr.get_operands());
+  auto const arity        = cudf::ast::detail::ast_operator_arity(expr.get_operator());
+  if (arity == 1) { return _tree.push(ast::operation{expr.get_operator(), new_operands.front()}); }
+  return _tree.push(ast::operation{expr.get_operator(), new_operands.front(), new_operands.back()});
+}
+
+std::reference_wrapper<ast::expression const> offset_column_references::visit(
+  ast::column_name_reference const&)
+{
+  CUDF_FAIL("Column name references are not supported in column reference offsetter");
 }
 
 [[nodiscard]] std::unordered_map<cudf::size_type, std::string> map_column_indices_to_names(
@@ -482,32 +508,6 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
   }
 
   return {filtered_row_group_indices};
-}
-
-offset_column_references::offset_column_references(
-  std::optional<std::reference_wrapper<ast::expression const>> expr, size_type offset)
-  : _offset{offset}
-{
-  if (!expr.has_value()) { return; }
-
-  if (offset == 0) {
-    _converted_expr = expr;
-    return;
-  }
-  _converted_expr = expr.value().get().accept(*this);
-}
-
-std::reference_wrapper<ast::expression const> offset_column_references::visit(
-  ast::column_reference const& expr)
-{
-  _col_ref.emplace_back(expr.get_column_index() + _offset, expr.get_table_source());
-  return _col_ref.back();
-}
-
-std::reference_wrapper<ast::expression const> offset_column_references::visit(
-  ast::column_name_reference const&)
-{
-  CUDF_FAIL("Column name references are not supported in offset_column_references");
 }
 
 }  // namespace cudf::io::parquet::detail
