@@ -242,9 +242,7 @@ CUDF_EXPORT std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host
  */
 template <>
 CUDF_EXPORT std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(
-  column_view c,
-  rmm::cuda_stream_view stream = cudf::test::get_default_stream(),
-  cudf::memory_resources mr    = cudf::get_current_device_resource_ref());
+  column_view c, rmm::cuda_stream_view stream, cudf::memory_resources mr);
 //! @endcond
 
 /**
