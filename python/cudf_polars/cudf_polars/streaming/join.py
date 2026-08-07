@@ -157,13 +157,18 @@ def _has_non_pointwise_keys(ir: Join) -> bool:
     return not all(expr.is_pointwise for expr in traversal(keys))
 
 
+def is_direct_join_prefilter(ir: IR) -> bool:
+    """Return whether a hint belongs to its immediately enclosing join."""
+    return isinstance(ir, PushdownFilterHint) and ir.placement == "join_input"
+
+
 def _lower_join_with_prefilters(
     ir: Join,
     rec: LowerIRTransformer,
 ) -> tuple[JoinWithPrefilter, MutableMapping[IR, PartitionInfo]]:
     """Lower a join and normalize its adjacent filter hints."""
     targets = tuple(
-        child.children[0] if isinstance(child, PushdownFilterHint) else child
+        child.children[0] if is_direct_join_prefilter(child) else child
         for child in ir.children
     )
     lowered_targets, target_partition_info = zip(
@@ -178,8 +183,9 @@ def _lower_join_with_prefilters(
     external_domains: list[IR] = []
     claimed_sides: set[JoinSide] = set()
     for target_index, child in enumerate(ir.children):
-        if not isinstance(child, PushdownFilterHint):
+        if not is_direct_join_prefilter(child):
             continue
+        assert isinstance(child, PushdownFilterHint)
 
         _target, domain = child.children
         domain, domain_partition_info = rec(domain)
@@ -340,7 +346,7 @@ def _(
         and ir.options[0] != "Cross"
         and ir.options[5] == "none"
         and not has_non_pointwise_keys
-        and any(isinstance(child, PushdownFilterHint) for child in ir.children)
+        and any(is_direct_join_prefilter(child) for child in ir.children)
     ):
         preserve_prefilters = True
     else:

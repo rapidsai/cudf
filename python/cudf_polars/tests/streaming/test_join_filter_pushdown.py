@@ -202,6 +202,7 @@ def test_adjacent_filter_hint_is_recorded_on_lowered_join(
     (prefilter,) = lowering.lowered.prefilters
     assert isinstance(prefilter, Prefilter)
     assert isinstance(prefilter.domain, JoinInputDomain)
+    assert find_hints(lowering.optimized)[0].placement == "join_input"
     assert prefilter.target_side == "right"
     assert prefilter.domain.side == "left"
     assert tuple(right.schema) == ("l_partkey", "l_suppkey")

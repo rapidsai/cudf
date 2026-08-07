@@ -162,6 +162,7 @@ def test_explain_pushdown_filter_hint_in_dynamic_physical_plan():
         "target_on": ["key"],
         "domain_on": ["key"],
         "nulls_equal": False,
+        "placement": "join_input",
     }
     assert any(
         node.type == "PushdownFilterHint" and node.properties == expected_properties

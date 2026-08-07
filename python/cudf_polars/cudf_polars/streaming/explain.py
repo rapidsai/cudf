@@ -495,7 +495,7 @@ def _(ir: PushdownFilterHint, *, offset: str = "") -> str:
     domain_on = tuple(ne.name for ne in ir.domain_on)
     return _repr_header(
         offset,
-        f"PUSHDOWN FILTER HINT {target_on} {domain_on}",
+        f"PUSHDOWN FILTER HINT {target_on} {domain_on} {ir.placement}",
         ir.schema,
     )
 
@@ -646,6 +646,7 @@ def _(ir: PushdownFilterHint) -> dict[str, Serializable]:
         "target_on": [ne.name for ne in ir.target_on],
         "domain_on": [ne.name for ne in ir.domain_on],
         "nulls_equal": ir.nulls_equal,
+        "placement": ir.placement,
     }
 
 

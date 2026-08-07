@@ -259,7 +259,7 @@ def test_standalone_prefilter_trace_records_decision_and_effect(
     reason: str,
     output_rows: int | None,
 ) -> None:
-    """Trace a non-adjacent prefilter selected through the public engine."""
+    """Trace a prefilter pushed below an intervening join."""
     pytest.importorskip("structlog")
     code = textwrap.dedent(f"""\
     import json
@@ -279,12 +279,17 @@ def test_standalone_prefilter_trace_records_decision_and_effect(
         .filter("active")
         .select("p_partkey")
     )
-    target = pl.LazyFrame(
-        {{
-            "l_partkey": [i % 10 for i in range(100)],
-            "value": range(100),
-        }}
-    ).with_columns((pl.col("value") + 1).alias("derived"))
+    target = (
+        pl.LazyFrame(
+            {{
+                "l_partkey": [i % 10 for i in range(100)],
+                "bridge_key": range(100),
+                "value": range(100),
+            }}
+        )
+        .join(pl.LazyFrame({{"bridge_key": range(100)}}), on="bridge_key")
+        .with_columns((pl.col("value") + 1).alias("derived"))
+    )
     query = domain.join(target, left_on="p_partkey", right_on="l_partkey")
     options = {{
         "join_filter_pushdown": {{
@@ -349,31 +354,29 @@ def test_standalone_prefilter_trace_records_decision_and_effect(
 
 
 @pytest.mark.parametrize(
-    "broadcast_limit,bloom_filter_max_size,join_strategy,method,reason,domain_rows",
+    "broadcast_limit,bloom_filter_max_size,method,reason,domain_rows",
     [
-        (1, 32 * 1024 * 1024, "shuffle", "bloom", "bloom_fits", 15),
-        (512, 0, "shuffle", "broadcast_semi_join", "exact_domain_fits", 15),
+        (1, 32 * 1024 * 1024, "bloom", "bloom_fits", 15),
+        (512, 0, "broadcast_semi_join", "exact_domain_fits", 15),
         (
             1_000_000,
             32 * 1024 * 1024,
-            "broadcast_left",
-            "skip",
-            "target_not_redistributed",
-            None,
+            "bloom",
+            "bloom_fits",
+            15,
         ),
     ],
-    ids=["bloom", "exact", "skip"],
+    ids=["bloom", "exact", "bloom_despite_intervening_broadcast"],
 )
-def test_external_join_prefilter_trace_records_decision_and_effect(
+def test_indirect_prefilter_trace_records_decision_and_effect(
     timeout_seconds: int,
     broadcast_limit: int,
     bloom_filter_max_size: int,
-    join_strategy: str,
     method: str,
     reason: str,
     domain_rows: int | None,
 ) -> None:
-    """Trace an external-domain prefilter selected through the public engine."""
+    """Trace a composite prefilter pushed below an intervening join."""
     pytest.importorskip("structlog")
     code = textwrap.dedent(f"""\
     import json
@@ -442,20 +445,12 @@ def test_external_join_prefilter_trace_records_decision_and_effect(
         log
         for log in logs
         if log.get("scope") == "actor"
-        and any(
-            prefilter.get("domain") == "external"
-            for prefilter in log.get("join_prefilters", ())
-        )
-    )
-    (prefilter,) = (
-        prefilter
-        for prefilter in event["join_prefilters"]
-        if prefilter.get("domain") == "external"
+        and log.get("prefilter", {{}}).get("placement") == "standalone"
+        and log.get("prefilter", {{}}).get("target_on") == ["l_suppkey"]
     )
     record = {{
         "result_rows": result.height,
-        "join_strategy": event["decision"],
-        "prefilter": prefilter,
+        "prefilter": event["prefilter"],
     }}
     print("PREFILTER_TRACE=" + json.dumps(record))
     """)
@@ -476,12 +471,11 @@ def test_external_join_prefilter_trace_records_decision_and_effect(
     record = json.loads(payload)
 
     assert record["result_rows"] == 45
-    assert record["join_strategy"] == join_strategy
+    assert record["prefilter"]["target_on"] == ["l_suppkey"]
     assert (
         record["prefilter"].items()
         >= {
-            "target_side": "right",
-            "domain": "external",
+            "placement": "standalone",
             "method": method,
             "reason": reason,
             "domain_rows": domain_rows,

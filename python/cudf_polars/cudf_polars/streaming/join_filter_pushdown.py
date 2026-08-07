@@ -107,6 +107,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping, Sequence
 
     from cudf_polars.streaming.base import StatsCollector
+    from cudf_polars.streaming.filter_hint import HintPlacement
     from cudf_polars.typing import GenericTransformer
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
@@ -487,6 +488,7 @@ def apply_candidate(ir: Join, candidate: Candidate) -> IR:
         domain,
         expr.Col(domain.schema[candidate.domain_key.name], candidate.domain_key.name),
         nulls_equal=ir.options[1],
+        placement="join_input" if not target.path else "pushed_down",
     )
     if candidate.target_side == "left":
         left = replace_at_path(left, target.path, target_filter)
@@ -748,12 +750,14 @@ def _make_filter_hint(
     domain_key: expr.Col,
     *,
     nulls_equal: bool,
+    placement: HintPlacement = "pushed_down",
 ) -> PushdownFilterHint:
     return PushdownFilterHint(
         target.schema,
         (expr.NamedExpr(target_key.name, target_key),),
         (expr.NamedExpr(domain_key.name, domain_key),),
         nulls_equal,
+        placement,
         target,
         domain,
     )

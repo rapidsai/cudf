@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
 
 JoinSide: TypeAlias = Literal["left", "right"]
+HintPlacement: TypeAlias = Literal["join_input", "pushed_down"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,14 +126,15 @@ class PushdownFilterHint(IR):
     optional.
     """
 
-    __slots__ = ("domain_on", "nulls_equal", "target_on")
+    __slots__ = ("domain_on", "nulls_equal", "placement", "target_on")
     _non_child: ClassVar[tuple[str, ...]] = (
         "schema",
         "target_on",
         "domain_on",
         "nulls_equal",
+        "placement",
     )
-    _n_non_child_args: ClassVar[int] = 3
+    _n_non_child_args: ClassVar[int] = 4
 
     target_on: tuple[NamedExpr, ...]
     """Expressions selecting filter keys from the target."""
@@ -140,6 +142,8 @@ class PushdownFilterHint(IR):
     """Expressions selecting filter keys from the domain."""
     nulls_equal: bool
     """Whether null key values compare equal."""
+    placement: HintPlacement
+    """Whether the hint remains at the motivating join input."""
 
     def __init__(
         self,
@@ -147,6 +151,7 @@ class PushdownFilterHint(IR):
         target_on: Sequence[NamedExpr],
         domain_on: Sequence[NamedExpr],
         nulls_equal: bool,  # noqa: FBT001
+        placement: HintPlacement,
         target: IR,
         domain: IR,
     ):
@@ -154,7 +159,13 @@ class PushdownFilterHint(IR):
         self.target_on = tuple(target_on)
         self.domain_on = tuple(domain_on)
         self.nulls_equal = nulls_equal
-        self._non_child_args = (self.target_on, self.domain_on, self.nulls_equal)
+        self.placement = placement
+        self._non_child_args = (
+            self.target_on,
+            self.domain_on,
+            self.nulls_equal,
+            self.placement,
+        )
         self.children = (target, domain)
 
     @classmethod
@@ -163,10 +174,12 @@ class PushdownFilterHint(IR):
         target_on: tuple[NamedExpr, ...],
         domain_on: tuple[NamedExpr, ...],
         nulls_equal: bool,  # noqa: FBT001
+        placement: HintPlacement,
         target: DataFrame,
         domain: DataFrame,
         *,
         context: IRExecutionContext,
     ) -> DataFrame:
         """Ignore the optional filter and return the target."""
+        del placement
         return target
