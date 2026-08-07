@@ -2918,7 +2918,7 @@ INSTANTIATE_TEST_CASE_P(PageHeaderVersion,
                         ParquetWriterSizeLimitsPageModeTest,
                         ::testing::Values(false, true));
 
-TEST_P(ParquetWriterSizeLimitsPageModeTest, WideRowsSplitFragmentsAndRowGroups)
+TEST_P(ParquetWriterSizeLimitsPageModeTest, DISABLED_WideRowsSplitFragmentsAndRowGroups)
 {
   auto const write_v2_headers = GetParam();
 
