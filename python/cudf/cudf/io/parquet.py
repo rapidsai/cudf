@@ -83,9 +83,7 @@ def _plc_write_parquet(
     table,
     filepaths_or_buffers,
     index: bool | None = None,
-    compression: Literal[
-        "snappy", "ZSTD", "ZLIB", "LZ4", "GZIP", None
-    ] = "snappy",
+    compression: Literal["snappy", "ZSTD", "LZ4", "GZIP", None] = "snappy",
     statistics: Literal["ROWGROUP", "PAGE", "COLUMN", "NONE"] = "ROWGROUP",
     metadata_file_path: str | None = None,
     int96_timestamps: bool = False,
@@ -254,9 +252,7 @@ def _plc_write_parquet(
 def _write_parquet(
     df,
     paths,
-    compression: Literal[
-        "snappy", "ZSTD", "ZLIB", "LZ4", "GZIP", None
-    ] = "snappy",
+    compression: Literal["snappy", "ZSTD", "LZ4", "GZIP", None] = "snappy",
     index: bool | None = None,
     statistics: Literal["ROWGROUP", "PAGE", "COLUMN", "NONE"] = "ROWGROUP",
     metadata_file_path: str | None = None,
@@ -356,9 +352,7 @@ def _write_parquet(
 def write_to_dataset(
     df,
     root_path,
-    compression: Literal[
-        "snappy", "ZSTD", "ZLIB", "LZ4", "GZIP", None
-    ] = "snappy",
+    compression: Literal["snappy", "ZSTD", "LZ4", "GZIP", None] = "snappy",
     filename=None,
     partition_cols=None,
     fs=None,
@@ -411,7 +405,7 @@ def write_to_dataset(
     df : cudf.DataFrame
     root_path : string,
         The root directory of the dataset
-    compression : {'snappy', 'ZSTD', 'GZIP', None}, default 'snappy'
+    compression : {'snappy', 'ZSTD', 'LZ4', 'GZIP', None}, default 'snappy'
         Name of the compression to use. Use ``None`` for no compression.
     filename : string, default None
         The file name to use (within each partition directory). If None,
@@ -1526,9 +1520,7 @@ def to_parquet(
     df,
     path,
     engine="cudf",
-    compression: Literal[
-        "snappy", "ZSTD", "ZLIB", "LZ4", "GZIP", None
-    ] = "snappy",
+    compression: Literal["snappy", "ZSTD", "LZ4", "GZIP", None] = "snappy",
     index: bool | None = None,
     partition_cols=None,
     partition_file_name=None,
@@ -1795,7 +1787,7 @@ class ParquetWriter:
         If ``True``, include a dataframe's index(es) in the file output.
         If ``False``, they will not be written to the file. If ``None``,
         index(es) other than RangeIndex will be saved as columns.
-    compression : {'snappy', 'GZIP', None}, default 'snappy'
+    compression : {'snappy', 'ZSTD', 'LZ4', 'GZIP', None}, default 'snappy'
         Name of the compression to use. Use ``None`` for no compression.
     statistics : {'ROWGROUP', 'PAGE', 'COLUMN', 'NONE'}, default 'ROWGROUP'
         Level at which column statistics should be included in file.
@@ -1832,9 +1824,7 @@ class ParquetWriter:
         self,
         filepath_or_buffer,
         index: bool | None = None,
-        compression: Literal[
-            "snappy", "ZSTD", "ZLIB", "LZ4", "GZIP", None
-        ] = "snappy",
+        compression: Literal["snappy", "ZSTD", "LZ4", "GZIP", None] = "snappy",
         statistics: Literal["ROWGROUP", "PAGE", "COLUMN", "NONE"] = "ROWGROUP",
         row_group_size_bytes: int = int(np.iinfo(np.uint64).max),
         row_group_size_rows: int = 1000000,
@@ -2052,7 +2042,7 @@ class ParquetDatasetWriter:
         If ``True``, include the dataframe's index(es) in the file output.
         If ``False``, they will not be written to the file. If ``None``,
         index(es) other than RangeIndex will be saved as columns.
-    compression : {'snappy', 'GZIP', None}, default 'snappy'
+    compression : {'snappy', 'ZSTD', 'LZ4', 'GZIP', None}, default 'snappy'
         Name of the compression to use. Use ``None`` for no compression.
     statistics : {'ROWGROUP', 'PAGE', 'COLUMN', 'NONE'}, default 'ROWGROUP'
         Level at which column statistics should be included in file.
@@ -2111,9 +2101,7 @@ class ParquetDatasetWriter:
         path,
         partition_cols,
         index=None,
-        compression: Literal[
-            "snappy", "ZSTD", "ZLIB", "LZ4", "GZIP", None
-        ] = "snappy",
+        compression: Literal["snappy", "ZSTD", "LZ4", "GZIP", None] = "snappy",
         statistics: Literal["ROWGROUP", "PAGE", "COLUMN", "NONE"] = "ROWGROUP",
         max_file_size=None,
         file_name_prefix=None,
