@@ -47,6 +47,9 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 
+[project.scripts]
+cudfgrep = "cudf.grep:main"
+
 [project.optional-dependencies]
 test = [
     "aiobotocore>=2.2.0,<3",
