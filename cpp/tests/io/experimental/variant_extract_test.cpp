@@ -1448,8 +1448,7 @@ template <std::size_t M, std::size_t V>
 
 struct GetVariantTypeIdTest : public cudf::test::BaseFixture {};
 
-using cudf::io::parquet::experimental::variant_logical_type;
-using LT = variant_logical_type;
+using vlt = cudf::io::parquet::experimental::variant_logical_type;
 
 // ---------------------------------------------------------------------------
 // Apache fixtures: one test per logical-type category.
