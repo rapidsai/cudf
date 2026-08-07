@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp.vector cimport vector
 from pylibcudf.exception_handler cimport libcudf_exception_handler
@@ -15,3 +15,4 @@ cdef extern from "cudf/utilities/span.hpp" namespace "cudf" nogil:
         device_span() noexcept
         device_span(T *data, size_type size) noexcept
         T *data() noexcept
+        size_type size() noexcept
