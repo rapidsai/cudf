@@ -222,6 +222,23 @@ repos:
       - id: ruff
         args: ["--fix"]
       - id: ruff-format
+  - repo: https://github.com/numpy/numpydoc
+    rev: v1.9.0
+    hooks:
+      - id: numpydoc-validation
+        files: |
+          (?x)^python/cudf/cudf/(
+            options\.py|
+            _typing\.py|
+            _version\.py|
+            core/_compat\.py|
+            core/join/_join_helpers\.py|
+            core/udf/_ops\.py|
+            core/udf/mlir_backend/__init__\.py|
+            pandas/_logger\.py|
+            testing/_utils\.py|
+            utils/_numba\.py
+          )$
   - repo: https://github.com/rapidsai/pre-commit-hooks
     rev: v1.6.0
     hooks:

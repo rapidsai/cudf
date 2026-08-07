@@ -163,3 +163,28 @@ rapids = ["rmm", "pylibcudf"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["E402", "F401"]
+
+[tool.numpydoc_validation]
+checks = [
+    "all",   # report all checks, except the ones deselected below
+    "ES01",  # extended summary not required for every object
+    "EX01",  # examples section not required for every object
+    "GL01",  # allow summary to start on the line after the opening quotes
+    "GL02",  # allow closing quotes on the same line as the last text
+    "GL03",  # allow blank lines used deliberately for readability
+    "SA01",  # see also section not required for every object
+    "SA04",  # description in see also not required
+    "SS06",  # allow summaries that span more than a single line
+]
+exclude = [
+    # Protocol/dunder methods whose behavior is defined by the interface they
+    # implement and do not need standalone docstrings.
+    '\.__init__$',
+    '\.__repr__$',
+    '\.__str__$',
+    '\.__enter__$',
+    '\.__exit__$',
+    # Module-private helpers (a single leading underscore) are implementation
+    # details, not part of the validated public API.
+    '(^|\.)_[^_]',
+]
