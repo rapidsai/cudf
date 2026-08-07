@@ -274,7 +274,7 @@ def read_csv(
     table_w_meta = plc.io.csv.read_csv(options)
     df = DataFrame.from_pylibcudf(table_w_meta)
 
-    if get_option("mode.pandas_compatible") and df.empty:
+    if get_option("mode.pandas_compatible") and len(df._column_names) == 0:
         raise pd.errors.EmptyDataError("No columns to parse from file")
 
     # Cast result to categorical if specified in dtype=
