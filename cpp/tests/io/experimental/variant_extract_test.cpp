@@ -1419,7 +1419,7 @@ template <std::size_t M, std::size_t V>
   std::vector<std::vector<uint8_t>> const& blobs, std::vector<bool> const& valid)
 {
   auto const n = static_cast<cudf::size_type>(blobs.size());
-  std::vector<int32_t> offs(n + 1, 0);
+  std::vector<int32_t> offsets(n + 1, 0);
   std::vector<uint8_t> flat;
   for (cudf::size_type i = 0; i < n; ++i) {
     flat.insert(flat.end(), blobs[i].begin(), blobs[i].end());
