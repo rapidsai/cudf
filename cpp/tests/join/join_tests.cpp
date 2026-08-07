@@ -1034,6 +1034,22 @@ TEST_F(JoinTest, SortMergeInnerJoinSizePerRowNoNulls)
   }
 }
 
+TEST_F(JoinTest, SortMergeInnerJoinMatchContextMemoryResource)
+{
+  column_wrapper<int32_t> left_key{{3, 1, 2, 0, 2}};
+  column_wrapper<int32_t> right_key{{2, 2, 0, 4, 3}};
+  auto left   = cudf::table_view{{left_key}};
+  auto right  = cudf::table_view{{right_key}};
+  auto stream = cudf::get_default_stream();
+
+  auto mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+  cudf::sort_merge_join obj(right, cudf::sorted::NO, cudf::null_equality::EQUAL, stream);
+  auto match_context = obj.inner_join_match_context(left, stream, mr);
+
+  EXPECT_GT(mr.get_bytes_counter().peak, 0);
+  expect_match_counts_equal(*match_context->_match_counts, {1, 0, 2, 1, 2}, stream);
+}
+
 TEST_F(JoinTest, SortMergeInnerJoinSizePerRowWithNulls)
 {
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};

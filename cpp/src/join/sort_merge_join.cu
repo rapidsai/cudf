@@ -240,7 +240,7 @@ struct match_range_output {
   size_type const* unique_smaller_rows;  ///< Representative build row for each run
   size_type const* smaller_run_offsets;  ///< Build-run starts and trailing sentinel
   size_type num_smaller_runs;            ///< Number of build key runs
-  size_type* match_starts;               ///< Output matching-run start per probe row
+  size_type* match_starts;               ///< Optional matching-run start output; nullptr skips it
   size_type* match_counts;               ///< Output matching-row count per probe row
   Comparator comparator;                 ///< Probe-to-build row comparator
 
@@ -249,8 +249,8 @@ struct match_range_output {
     auto const is_match = run_idx < num_smaller_runs &&
                           !comparator(detail::row::rhs_index_type{idx},
                                       detail::row::lhs_index_type{unique_smaller_rows[run_idx]});
-    auto const start  = is_match ? smaller_run_offsets[run_idx] : 0;
-    match_starts[idx] = start;
+    auto const start = is_match ? smaller_run_offsets[run_idx] : 0;
+    if (match_starts != nullptr) { match_starts[idx] = start; }
     match_counts[idx] = is_match ? smaller_run_offsets[run_idx + 1] - start : 0;
   }
 };
@@ -324,6 +324,9 @@ void batched_copy(InputIts input_iterators,
     input_iterators, output_iterators, sizes, num_ranges, make_cub_env(stream)));
 }
 
+/// Whether to materialize per-row match start offsets.
+enum class compute_match_starts : bool { NO, YES };
+
 template <typename SmallerIterator>
 class merge {
  private:
@@ -361,7 +364,9 @@ class merge {
   std::unique_ptr<rmm::device_uvector<size_type>> matches_per_row(
     rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 
-  match_ranges find_match_ranges(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+  match_ranges find_match_ranges(compute_match_starts compute_starts,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref mr);
 
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -374,13 +379,19 @@ class merge {
 
 template <typename SmallerIterator>
 typename merge<SmallerIterator>::match_ranges merge<SmallerIterator>::find_match_ranges(
-  rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+  compute_match_starts compute_starts,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   auto const has_nulls        = has_nested_nulls(smaller) or has_nested_nulls(larger);
   auto const larger_numrows   = larger.num_rows();
   auto const num_smaller_runs = static_cast<size_type>(unique_smaller_rows.size());
-  auto match_starts = std::make_unique<rmm::device_uvector<size_type>>(larger_numrows, stream, mr);
-  auto match_counts = cudf::detail::make_zeroed_device_uvector_async<size_type>(
+  auto match_starts =
+    compute_starts == compute_match_starts::YES
+      ? std::make_unique<rmm::device_uvector<size_type>>(larger_numrows, stream, mr)
+      : nullptr;
+  auto const match_starts_data = match_starts == nullptr ? nullptr : match_starts->data();
+  auto match_counts            = cudf::detail::make_zeroed_device_uvector_async<size_type>(
     static_cast<std::size_t>(larger_numrows) + 1, stream, mr);
 
   auto const unique_smaller_it = cuda::transform_iterator(
@@ -393,7 +404,7 @@ typename merge<SmallerIterator>::match_ranges merge<SmallerIterator>::find_match
       cuda::tabulate_output_iterator(match_range_output{unique_smaller_rows.data(),
                                                         smaller_run_offsets.data(),
                                                         num_smaller_runs,
-                                                        match_starts->data(),
+                                                        match_starts_data,
                                                         match_counts.data(),
                                                         comparator});
     // These comparisons are data-dependent binary-search probes. Materializing them ahead of
@@ -422,7 +433,7 @@ template <typename SmallerIterator>
 std::unique_ptr<rmm::device_uvector<size_type>> merge<SmallerIterator>::matches_per_row(
   rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
-  return find_match_ranges(stream, mr).counts;
+  return find_match_ranges(compute_match_starts::NO, stream, mr).counts;
 }
 
 template <typename SmallerIterator>
@@ -433,7 +444,7 @@ merge<SmallerIterator>::inner(rmm::cuda_stream_view stream, rmm::device_async_re
   auto temp_mr              = cudf::get_current_device_resource_ref();
   auto const larger_numrows = larger.num_rows();
 
-  auto [match_starts, match_counts] = find_match_ranges(stream, temp_mr);
+  auto [match_starts, match_counts] = find_match_ranges(compute_match_starts::YES, stream, temp_mr);
 
   // Use 64-bit prefix sums to handle large output sizes (> INT32_MAX rows)
   // The prefix sums can exceed INT32_MAX even though individual match counts are small
@@ -486,7 +497,7 @@ merge<SmallerIterator>::left(rmm::cuda_stream_view stream, rmm::device_async_res
   auto temp_mr              = cudf::get_current_device_resource_ref();
   auto const larger_numrows = larger.num_rows();
 
-  auto [match_starts, match_counts] = find_match_ranges(stream, temp_mr);
+  auto [match_starts, match_counts] = find_match_ranges(compute_match_starts::YES, stream, temp_mr);
 
   cudf::detail::device_scalar<int64_t> total_matches(stream, temp_mr);
   auto match_offsets =
@@ -914,7 +925,7 @@ std::unique_ptr<cudf::join_match_context> sort_merge_join::inner_join_match_cont
     preprocessed_right._null_processed_table_view,
     preprocessed_left._null_processed_table_view,
     [this, left, &preprocessed_left, stream, mr](auto& obj) mutable {
-      auto matches_per_row = obj.matches_per_row(stream, cudf::get_current_device_resource_ref());
+      auto matches_per_row = obj.matches_per_row(stream, mr);
       matches_per_row->resize(matches_per_row->size() - 1, stream);
       if (compare_nulls == null_equality::UNEQUAL &&
           has_nested_nulls(preprocessed_left._table_view)) {
