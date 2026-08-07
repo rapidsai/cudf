@@ -319,8 +319,7 @@ hybrid_scan_reader_impl::prepare_dictionaries(
   decode_dictionary_page_headers(
     chunks,
     pages,
-    cudf::host_span<cudf::device_span<uint8_t const> const>{dictionary_page_data.data(),
-                                                           dictionary_page_data.size()},
+    cudf::host_span{dictionary_page_data.data(), dictionary_page_data.size()},
     stream);
 
   return {has_compressed_data, std::move(chunks), std::move(pages)};
