@@ -120,8 +120,7 @@ class Node(Generic[T]):
 
         Digests :meth:`get_hashable` bottom-up with MD5 so the result is
         deterministic across process boundaries (Python's ``hash()`` uses
-        ``PYTHONHASHSEED``). Nested nodes contribute their own stable ids
-        rather than re-expanding their subtrees.
+        ``PYTHONHASHSEED``).
 
         Returns
         -------
