@@ -12,6 +12,7 @@ import pylibcudf as plc
 from cudf_streaming import BloomFilter
 from cudf_streaming.channel_metadata import ChannelMetadata
 from cudf_streaming.table_chunk import TableChunk
+from pylibcudf.hashing import LIBCUDF_DEFAULT_HASH_SEED
 from rapidsmpf.streaming.core.message import Message
 
 from cudf_polars.streaming.actor_graph.utils import (
@@ -28,6 +29,7 @@ from cudf_polars.streaming.filter_hint import (
 if TYPE_CHECKING:
     from collections.abc import Coroutine, Iterable, Sequence
 
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
@@ -172,7 +174,24 @@ async def count_rows_passthrough(
 
 
 class PrefilterExecution:
-    """Channels and actors used to apply prefilters before a join."""
+    """Channels and actor tasks used to apply one or more prefilters."""
+
+    def __init__(self, context: Context) -> None:
+        self.context = context
+        self.tasks: list[Coroutine[Any, Any, None]] = []
+        self.channels: list[Channel[Any]] = []
+
+    def add_task(self, task: Coroutine[Any, Any, None]) -> None:
+        """Add an actor task to the prefilter execution."""
+        self.tasks.append(task)
+
+    def add_channel(self, channel: Channel[Any]) -> None:
+        """Register an auxiliary channel for shutdown on failure."""
+        self.channels.append(channel)
+
+
+class JoinPrefilterExecution(PrefilterExecution):
+    """Channels and actor tasks used to apply prefilters before a join."""
 
     def __init__(
         self,
@@ -180,11 +199,9 @@ class PrefilterExecution:
         ch_left: Channel[TableChunk],
         ch_right: Channel[TableChunk],
     ) -> None:
-        self.context = context
+        super().__init__(context)
         self.source_inputs = {"left": ch_left, "right": ch_right}
         self.join_inputs = dict(self.source_inputs)
-        self.tasks: list[Coroutine[Any, Any, None]] = []
-        self.channels: list[Channel[Any]] = []
         self.buffered_domains: set[JoinSide] = set()
 
     def buffer_domain(
@@ -221,14 +238,6 @@ class PrefilterExecution:
         self.join_inputs[side] = channel
         self.channels.append(channel)
 
-    def add_task(self, task: Coroutine[Any, Any, None]) -> None:
-        """Add an actor task to the prefilter execution."""
-        self.tasks.append(task)
-
-    def add_channel(self, channel: Channel[Any]) -> None:
-        """Register an auxiliary channel for shutdown on failure."""
-        self.channels.append(channel)
-
     @property
     def left(self) -> Channel[TableChunk]:
         """Current left join input."""
@@ -238,6 +247,73 @@ class PrefilterExecution:
     def right(self) -> Channel[TableChunk]:
         """Current right join input."""
         return self.join_inputs["right"]
+
+
+def add_bloom_prefilter(
+    context: Context,
+    comm: Communicator,
+    bloom_bytes: int,
+    execution: PrefilterExecution,
+    target_indices: Iterable[int],
+    ch_domain_keys: Channel[TableChunk],
+    ch_target: Channel[TableChunk],
+    ch_filtered: Channel[TableChunk],
+    collective_id: int,
+    trace_stats: dict[str, Any] | None,
+) -> None:
+    """Add the channels and actors for an approximate Bloom prefilter."""
+    bloom = BloomFilter(
+        context,
+        comm,
+        LIBCUDF_DEFAULT_HASH_SEED,
+        bloom_bytes,
+    )
+    ch_filter = context.create_channel()
+    execution.add_channel(ch_filter)
+    execution.add_task(
+        bloom.build(
+            context,
+            ch_domain_keys,
+            ch_filter,
+            collective_id,
+        )
+    )
+    ch_apply_input = ch_target
+    ch_apply_output = ch_filtered
+    if trace_stats is not None:
+        ch_counted_input: Channel[TableChunk] = context.create_channel()
+        ch_raw_output: Channel[TableChunk] = context.create_channel()
+        execution.add_channel(ch_counted_input)
+        execution.add_channel(ch_raw_output)
+        execution.add_task(
+            count_rows_passthrough(
+                context,
+                ch_target,
+                ch_counted_input,
+                trace_stats,
+                "input_rows",
+            )
+        )
+        execution.add_task(
+            count_rows_passthrough(
+                context,
+                ch_raw_output,
+                ch_filtered,
+                trace_stats,
+                "output_rows",
+            )
+        )
+        ch_apply_input = ch_counted_input
+        ch_apply_output = ch_raw_output
+    execution.add_task(
+        bloom.apply(
+            context,
+            ch_filter,
+            ch_apply_input,
+            ch_apply_output,
+            target_indices,
+        )
+    )
 
 
 def estimate_cardinality(stats: TableSizeStats) -> int | None:

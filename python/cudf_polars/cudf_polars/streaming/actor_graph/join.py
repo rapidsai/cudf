@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
-from cudf_streaming import BloomFilter, CardinalityEstimator
+from cudf_streaming import CardinalityEstimator
 from cudf_streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
@@ -17,7 +17,6 @@ from cudf_streaming.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,
 )
-from pylibcudf.hashing import LIBCUDF_DEFAULT_HASH_SEED
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.memory_reserve_or_wait import (
@@ -40,9 +39,9 @@ from cudf_polars.streaming.actor_graph.dispatch import (
 from cudf_polars.streaming.actor_graph.join_planning import make_join_planning_state
 from cudf_polars.streaming.actor_graph.nodes import default_node_multi
 from cudf_polars.streaming.actor_graph.prefilter import (
-    PrefilterExecution,
+    JoinPrefilterExecution,
+    add_bloom_prefilter,
     choose_prefilter,
-    count_rows_passthrough,
 )
 from cudf_polars.streaming.actor_graph.tracing import LOG_TRACES, send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
@@ -73,7 +72,7 @@ from cudf_polars.streaming.repartition import Repartition
 from cudf_polars.streaming.utils import _concat
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, MutableMapping
+    from collections.abc import MutableMapping
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
@@ -467,73 +466,6 @@ async def _broadcast_join(
     await ch_out.drain(context)
 
 
-def add_bloom_prefilter(
-    context: Context,
-    comm: Communicator,
-    bloom_bytes: int,
-    execution: PrefilterExecution,
-    target_indices: Iterable[int],
-    ch_domain_keys: Channel[TableChunk],
-    ch_target: Channel[TableChunk],
-    ch_filtered: Channel[TableChunk],
-    collective_id: int,
-    trace_stats: dict[str, Any] | None,
-) -> None:
-    """Add the channels and actors for an approximate Bloom prefilter."""
-    bloom = BloomFilter(
-        context,
-        comm,
-        LIBCUDF_DEFAULT_HASH_SEED,
-        bloom_bytes,
-    )
-    ch_filter = context.create_channel()
-    execution.add_channel(ch_filter)
-    execution.add_task(
-        bloom.build(
-            context,
-            ch_domain_keys,
-            ch_filter,
-            collective_id,
-        )
-    )
-    ch_apply_input = ch_target
-    ch_apply_output = ch_filtered
-    if trace_stats is not None:
-        ch_counted_input: Channel[TableChunk] = context.create_channel()
-        ch_raw_output: Channel[TableChunk] = context.create_channel()
-        execution.add_channel(ch_counted_input)
-        execution.add_channel(ch_raw_output)
-        execution.add_task(
-            count_rows_passthrough(
-                context,
-                ch_target,
-                ch_counted_input,
-                trace_stats,
-                "input_rows",
-            )
-        )
-        execution.add_task(
-            count_rows_passthrough(
-                context,
-                ch_raw_output,
-                ch_filtered,
-                trace_stats,
-                "output_rows",
-            )
-        )
-        ch_apply_input = ch_counted_input
-        ch_apply_output = ch_raw_output
-    execution.add_task(
-        bloom.apply(
-            context,
-            ch_filter,
-            ch_apply_input,
-            ch_apply_output,
-            target_indices,
-        )
-    )
-
-
 def make_prefilter_execution(
     context: Context,
     comm: Communicator,
@@ -544,9 +476,9 @@ def make_prefilter_execution(
     ch_right: Channel[TableChunk],
     join_state: JoinPlanningState,
     collective_ids: JoinCollectiveIds,
-) -> PrefilterExecution:
+) -> JoinPrefilterExecution:
     """Create the actors and channels that realize selected prefilters."""
-    execution = PrefilterExecution(context, ch_left, ch_right)
+    execution = JoinPrefilterExecution(context, ch_left, ch_right)
 
     # Prepare every required domain before connecting target-side filters. This
     # is important for opposing direct filters: each filter must consume the
