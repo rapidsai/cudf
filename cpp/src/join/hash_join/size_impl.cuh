@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -20,8 +20,7 @@ std::size_t get_full_join_size(
   cudf::detail::hash_table_t const& hash_table,
   bool has_nulls,
   null_equality compare_nulls,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+  rmm::cuda_stream_view stream);
 
 template <join_kind Join>
 std::size_t compute_join_output_size(
@@ -97,7 +96,7 @@ template <typename Hasher>
 template <join_kind Join>
 std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
                                          rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr) const
+                                         rmm::device_async_resource_ref) const
 {
   static_assert(Join == join_kind::FULL_JOIN);
 
@@ -119,8 +118,7 @@ std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
                                           _impl->_hash_table,
                                           _has_nulls,
                                           _nulls_equal,
-                                          stream,
-                                          mr);
+                                          stream);
 }
 
 }  // namespace cudf::detail
