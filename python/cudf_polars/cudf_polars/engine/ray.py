@@ -45,7 +45,10 @@ from cudf_polars.engine.persisted_result import (
     PersistedBackend,
     execute_persisted_query,
 )
-from cudf_polars.quent._context import LocalQuentContext
+from cudf_polars.quent._context import (
+    LocalQuentContext,
+    WorkerResources,
+)
 from cudf_polars.quent._types import Worker
 from cudf_polars.unstable import unstable
 from cudf_polars.utils.config import MemoryResourceConfig, RayContext
@@ -63,6 +66,7 @@ if TYPE_CHECKING:
     from cudf_polars.engine.core import T
     from cudf_polars.engine.options import StreamingOptions
     from cudf_polars.engine.persisted_result import PersistedQueryResult
+    from cudf_polars.quent._context import QuentContext
     from cudf_polars.streaming.parallel import ConfigOptions
     from cudf_polars.utils.config import StreamingExecutor
 
@@ -162,8 +166,9 @@ def evaluate_pipeline_ray_mode(
     if quent_context is not None:
         quent_logger = config_options.executor.ray_context.quent_logger
         assert quent_logger is not None
+        query = quent_context.query_for(query_id)
         quent_context._emit_query_group_events(quent_logger)
-        quent_context._emit_query_events(quent_logger)
+        quent_context._emit_query_events(quent_logger, query)
 
     # Serialize the IR into the Ray object store so actors fetch by reference
     # instead of receiving N copies.
@@ -192,7 +197,7 @@ def evaluate_pipeline_ray_mode(
     if quent_context is not None:
         quent_logger = config_options.executor.ray_context.quent_logger
         assert quent_logger is not None
-        quent_context._emit_query_exit_events(quent_logger)
+        quent_context._emit_query_exit_events(quent_logger, query)
     return pl.concat(dfs), metadata_collector or None
 
 
@@ -272,13 +277,15 @@ class RankActor:
             )
         else:
             self._quent_logger = None
+        self._quent_engine = engine
+        self._worker_id = worker_id
         self._quent_worker = Worker(
             id=worker_id,
             engine=engine,
             instance_name=f"RankActor-{worker_id.hex[:8]}",
         )
-        if self._quent_logger is not None:
-            self._quent_logger.emit(self._quent_worker._init())
+        # Initialized later in setup_worker once ``comm`` is available.
+        self.worker_resources: WorkerResources | None = None
 
     def setup_root(self) -> bytes:
         """
@@ -327,6 +334,18 @@ class RankActor:
                 progress_thread=ProgressThread(self._rapidsmpf_statistics),
             )
         barrier(self._comm)
+        # Now we can declare the Quent worker resources, which depends on self._comm
+        if self._quent_logger is not None:
+            self._quent_logger.emit(self._quent_worker._init())
+            self.worker_resources = WorkerResources.build(
+                instance_suffix=f"RankActor-{self._quent_worker.id.hex[:8]}",
+                engine_id=self._quent_engine.id,
+                worker_id=self._worker_id,
+                rank=self._comm.rank,
+                nranks=self._nranks,
+            )
+            self.worker_resources.declare(self._quent_logger)
+
         assert self._base_mr is not None
         self._ctx = Context.from_options(
             self._comm.logger,
@@ -387,6 +406,9 @@ class RankActor:
         # Maybe generalize this to all application-level things,
         # followed by framework (ray) level things.
         if self._quent_worker is not None and self._quent_logger is not None:
+            if self.worker_resources is not None:
+                self.worker_resources.finalize(self._quent_logger)
+
             self._quent_logger.emit(self._quent_worker._exit())
             return self._drain_quent_events()
         return []
@@ -454,7 +476,7 @@ class RankActor:
         config_options: ConfigOptions[StreamingExecutor],
         *,
         collect_metadata: bool,
-        quent_context: cudf_polars.quent.QuentContext | None,
+        quent_context: QuentContext | None,
         query_id: uuid.UUID,
     ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
         """
@@ -500,10 +522,13 @@ class RankActor:
         local_quent_context: LocalQuentContext | None = None
         if quent_context is not None:
             assert self._quent_logger is not None
+            assert self.worker_resources is not None
             local_quent_context = LocalQuentContext(
                 context=quent_context,
+                query=quent_context.query_for(query_id),
                 worker=self._quent_worker,
                 logger=self._quent_logger,
+                worker_resources=self.worker_resources,
             )
         # evaluate_on_rank always collects metadata internally so we can read
         # metadata[-1].duplicated to decide whether to suppress this rank's
@@ -728,20 +753,14 @@ class RayEngine(StreamingEngine):
 
         check_reserved_keys(executor_options, engine_options)
 
-        quent_context: cudf_polars.quent.QuentContext | None = executor_options.get(
-            "quent_context"
-        )
+        quent_context: QuentContext | None = executor_options.get("quent_context")
         if quent_context is not None:
             self._quent_logger = cudf_polars.quent._logging.QuentLogger()
-        else:
-            self._quent_logger = None
-
-        if quent_context is not None:
             executor_options.setdefault("quent_context", quent_context)
-            assert self._quent_logger is not None
             quent_context._emit_engine_init_events(self._quent_logger)
             engine = quent_context.engine
         else:
+            self._quent_logger = None
             engine = cudf_polars.quent.Engine(id=uuid.uuid4())
 
         # This engine's store uid, used to key its partitions in each actor's process rank-local store.
@@ -985,9 +1004,9 @@ class RayEngine(StreamingEngine):
         if self._rank_actors is None:
             return  # already shut down; idempotent
         exceptions: list[Exception] = []
-        quent_context: cudf_polars.quent.QuentContext | None = self.config[
-            "executor_options"
-        ].get("quent_context")
+        quent_context: QuentContext | None = self.config["executor_options"].get(
+            "quent_context"
+        )
         try:
             # If Ray is no longer initialized (for example, if ``ray.shutdown()`` was
             # called before ``RayEngine.shutdown()``), the actors are gone as well.

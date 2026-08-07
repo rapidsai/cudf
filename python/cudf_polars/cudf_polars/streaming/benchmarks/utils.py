@@ -68,6 +68,7 @@ except ImportError:
 try:
     import cudf_polars.dsl.tracing
     import cudf_polars.quent
+    import cudf_polars.quent._context
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.dsl.tracing import Scope
     from cudf_polars.dsl.translate import Translator
@@ -140,7 +141,13 @@ class NsysRole:
     type: Literal["nsys"] = dataclasses.field(default="nsys", init=False)
 
 
-Role = NightlyRole | NsysRole
+@dataclasses.dataclass
+class QuentRole:
+    type: Literal["quent"] = dataclasses.field(default="quent", init=False)
+    filename: str
+
+
+Role = NightlyRole | NsysRole | QuentRole
 
 
 @dataclasses.dataclass
@@ -647,9 +654,27 @@ class RunConfig:
             roles=roles,
         )
 
-    def serialize(self, engine: StreamingEngine | None) -> dict:
-        """Serialize the run config to a dictionary."""
+    def serialize(
+        self, engine: pl.GPUEngine | None, quent_archive: Path | None
+    ) -> dict:
+        """
+        Serialize the run config to a dictionary.
+
+        Parameters
+        ----------
+        engine
+            The engine that was used to run the benchmark.
+        quent_archive
+            The path to the Quent archive that was written during the benchmark, if any.
+            This path will be inserted in ``extra_info.quent-archive``.
+        """
         opts = self.streaming_options
+        extra_info = dict(self.extra_info)
+        if quent_archive is not None:
+            extra_info["quent-archive"] = str(quent_archive.absolute())
+        roles = list(self.roles)
+        if quent_archive is not None:
+            roles.append(QuentRole(filename=quent_archive.name))
         result: dict[str, Any] = {
             "engine_name": self.engine_name,
             "queries": self.queries,
@@ -665,7 +690,7 @@ class RunConfig:
             "native_parquet": self.native_parquet,
             "max_io_threads": self.max_io_threads,
             "n_workers": self.n_workers,
-            "extra_info": self.extra_info,
+            "extra_info": extra_info,
             "run_id": str(self.run_id),
             "timestamp": self.timestamp,
             "command_line": self.command_line,
@@ -683,16 +708,19 @@ class RunConfig:
             "validation_method": dataclasses.asdict(self.validation_method)
             if self.validation_method
             else None,
-            "roles": [dataclasses.asdict(r) for r in self.roles],
+            "roles": [dataclasses.asdict(r) for r in roles],
         }
         if engine is not None:
             config_options = ConfigOptions.from_polars_engine(engine)
             config_options = config_options.drop_unserializable()
-            rapidsmpf_options = engine.rapidsmpf_options.get_strings()
-            result["config_options"] = {
+            extra = {
                 "config_options": dataclasses.asdict(config_options),
-                "rapidsmpf_options": rapidsmpf_options,
             }
+
+            if isinstance(engine, StreamingEngine):
+                extra["rapidsmpf_options"] = engine.rapidsmpf_options.get_strings()
+
+            result["config_options"] = extra
             # discard unserializable / unnecessary UUIDs
             result["config_options"]["config_options"]["executor"].pop(
                 "quent_context", None
@@ -745,7 +773,7 @@ def get_executor_options(
         run_config.streaming_options.to_executor_options()
     )
     executor_options["max_io_threads"] = run_config.max_io_threads
-    executor_options["quent_context"] = cudf_polars.quent.QuentContext(
+    executor_options["quent_context"] = cudf_polars.quent._context.QuentContext(
         engine=cudf_polars.quent.Engine(id=run_config.run_id)
     )
 
@@ -1157,7 +1185,9 @@ def _run_query_loop(
 
     for q_id in run_config.queries:
         if engine is not None:
-            quent_context = engine.config["executor_options"].get("quent_context")
+            quent_context = engine.config.get("executor_options", {}).get(
+                "quent_context"
+            )
             if quent_context is not None:
                 engine.config["executor_options"]["quent_context"] = (
                     dataclasses.replace(
@@ -1242,7 +1272,7 @@ def _finalize_benchmark_run(
 def run_polars_cpu(
     benchmark: Any,
     args: argparse.Namespace,
-    run_config: Any,
+    run_config: RunConfig,
     numeric_type: str,
     date_type: str,
 ) -> None:
@@ -1261,14 +1291,16 @@ def run_polars_cpu(
         run_config,
         validation_failures,
         query_failures,
-        serializable_engine_config=run_config.serialize(engine=None),
+        serializable_engine_config=run_config.serialize(
+            engine=None, quent_archive=None
+        ),
     )
 
 
 def run_polars_in_memory(
     benchmark: Any,
     args: argparse.Namespace,
-    run_config: Any,
+    run_config: RunConfig,
     parquet_options: dict[str, Any],
     numeric_type: str,
     date_type: str,
@@ -1298,14 +1330,16 @@ def run_polars_in_memory(
         run_config,
         validation_failures,
         query_failures,
-        serializable_engine_config=run_config.serialize(engine=engine),
+        serializable_engine_config=run_config.serialize(
+            engine=engine, quent_archive=None
+        ),
     )
 
 
 def run_polars_spmd(
     benchmark: Any,
     args: argparse.Namespace,
-    run_config: Any,
+    run_config: RunConfig,
     parquet_options: dict[str, Any],
     numeric_type: str,
     date_type: str,
@@ -1358,13 +1392,17 @@ def run_polars_spmd(
             run_config, engine=engine, gather_client_logs=False
         )
         # We need to create this before StreamingEngine.shutdown(), which clears engine.config
-        serializable_engine_config = run_config.serialize(engine=engine)
+        quent_archive = Path("logs") / f"{run_config.run_id}.zip"
+        serializable_engine_config = run_config.serialize(
+            engine=engine, quent_archive=quent_archive
+        )
 
     if is_rank_0:
         _write_quent_traces(
             engine=engine,
             run_id=run_config.run_id,
             collect_traces=run_config.collect_traces,
+            quent_archive=quent_archive,
         )
     _finalize_benchmark_run(
         args,
@@ -1378,7 +1416,7 @@ def run_polars_spmd(
 def run_polars_ray(
     benchmark: Any,
     args: argparse.Namespace,
-    run_config: Any,
+    run_config: RunConfig,
     parquet_options: dict[str, Any],
     numeric_type: str,
     date_type: str,
@@ -1418,12 +1456,16 @@ def run_polars_ray(
         run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
         run_config = _consolidate_logs(run_config, engine=engine)
         # We need to create this before StreamingEngine.shutdown(), which clears engine.config
-        serializable_engine_config = run_config.serialize(engine=engine)
+        serializable_engine_config = run_config.serialize(
+            engine=engine, quent_archive=None
+        )
+        quent_archive = Path("logs") / f"{run_config.run_id}.zip"
 
     _write_quent_traces(
         engine=engine,
         run_id=run_config.run_id,
         collect_traces=run_config.collect_traces,
+        quent_archive=quent_archive,
     )
     _finalize_benchmark_run(
         args,
@@ -1437,7 +1479,7 @@ def run_polars_ray(
 def run_polars_dask(
     benchmark: Any,
     args: argparse.Namespace,
-    run_config: Any,
+    run_config: RunConfig,
     parquet_options: dict[str, Any],
     numeric_type: str,
     date_type: str,
@@ -1483,12 +1525,16 @@ def run_polars_dask(
             )
             run_config = _consolidate_logs(run_config, engine)
             # We need to create this before StreamingEngine.shutdown(), which clears engine.config
-            serializable_engine_config = run_config.serialize(engine=engine)
+            quent_archive = Path("logs") / f"{run_config.run_id}.zip"
+            serializable_engine_config = run_config.serialize(
+                engine=engine, quent_archive=quent_archive
+            )
 
         _write_quent_traces(
             engine=engine,
             run_id=run_config.run_id,
             collect_traces=run_config.collect_traces,
+            quent_archive=quent_archive,
         )
     finally:
         if dask_client is not None:
@@ -1576,15 +1622,21 @@ def setup_logging(query_id: int, iteration: int) -> None:
 
 
 def _write_quent_traces(
-    engine: StreamingEngine, run_id: uuid.UUID, *, collect_traces: bool
-) -> None:
-    """Write collected Quent events to logs/{run_id}.ndjson."""
+    engine: StreamingEngine,
+    run_id: uuid.UUID,
+    *,
+    collect_traces: bool,
+    quent_archive: Path,
+) -> Path | None:
+    """Write collected Quent events to a ``logs/<run_id>.zip`` archive."""
     if not (_HAS_STRUCTLOG or collect_traces):
-        return
+        return None
+
+    from cudf_polars.quent._export import write_quent_export
 
     quent_logs = list(engine._quent_events)
 
-    # The quent UI currently requires the filename to match the engine's ID.
+    # The quent UI currently requires the context directory to match the engine's ID.
     for log in quent_logs:
         if log.get("data", {}).get("Engine", {}).get("Init") and log.get("id") != str(
             run_id
@@ -1596,13 +1648,9 @@ def _write_quent_traces(
             warnings.warn(msg, stacklevel=2)
 
     logs_dir = Path("logs")
-    logs_dir.mkdir(parents=True, exist_ok=True)
-    output_path = logs_dir / f"{run_id}.ndjson"
-    with output_path.open("w") as f:
-        for log in quent_logs:
-            f.write(json.dumps(log))
-            f.write("\n")
+    output_path = write_quent_export(quent_logs, logs_dir, run_id, quent_archive)
     print(f"Wrote {len(quent_logs)} Quent trace events to {output_path}")
+    return output_path
 
 
 def _consolidate_logs(
@@ -1857,7 +1905,7 @@ def run_duckdb(duckdb_queries_cls: Any, args: argparse.Namespace) -> None:
     if args.summarize:
         run_config.summarize()
 
-    args.output.write(json.dumps(run_config.serialize(engine=None)))
+    args.output.write(json.dumps(run_config.serialize(engine=None, quent_archive=None)))
     args.output.write("\n")
 
 
@@ -2244,6 +2292,11 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
             f"--collect-traces is not supported with --frontend {run_config.frontend}; "
             "cudf-polars tracing only applies to GPU frontends "
             "(in-memory, dask, ray, spmd)."
+        )
+
+    if run_config.collect_traces and not cudf_polars.dsl.tracing.LOG_TRACES:
+        raise ValueError(
+            "--collect-traces is not supported when CUDF_POLARS_LOG_TRACES is not enabled. Set CUDF_POLARS_LOG_TRACES=1 and rerun."
         )
 
     if run_config.validation_method is not None:

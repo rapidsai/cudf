@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal
 
 from cudf_streaming.channel_metadata import (
@@ -34,6 +34,7 @@ from cudf_polars.streaming.actor_graph.collectives.shuffle import (
 )
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
+    ir_context_for_node,
 )
 from cudf_polars.streaming.actor_graph.nodes import default_node_multi
 from cudf_polars.streaming.actor_graph.tracing import send_chunk
@@ -145,6 +146,7 @@ async def broadcast_join_actor(
         trace_ir=ir,
         ir_context=ir_context,
     ) as tracer:
+        ir_context = replace(ir_context, tracer=tracer)
         await _broadcast_join(
             context,
             comm,
@@ -986,6 +988,7 @@ async def join_actor(
         trace_ir=ir,
         ir_context=ir_context,
     ) as tracer:
+        ir_context = replace(ir_context, tracer=tracer)
         left_metadata, right_metadata = await gather_in_task_group(
             recv_metadata(ch_left, context),
             recv_metadata(ch_right, context),
@@ -1115,6 +1118,7 @@ def _(
 
     # Create output ChannelManager
     channels[ir] = ChannelManager(rec.state["context"])
+    ir_context = ir_context_for_node(rec, ir)
 
     if pwise_join:
         # Partition-wise join (use default_node_multi)
@@ -1123,7 +1127,7 @@ def _(
             default_node_multi(
                 rec.state["context"],
                 ir,
-                rec.state["ir_context"],
+                ir_context,
                 channels[ir].reserve_input_slot(),
                 (
                     channels[left].reserve_output_slot(),
@@ -1155,7 +1159,7 @@ def _(
                 rec.state["context"],
                 rec.state["comm"],
                 ir,
-                rec.state["ir_context"],
+                ir_context,
                 channels[ir].reserve_input_slot(),
                 channels[left].reserve_output_slot(),
                 channels[right].reserve_output_slot(),
@@ -1178,7 +1182,7 @@ def _(
                 rec.state["context"],
                 rec.state["comm"],
                 ir,
-                rec.state["ir_context"],
+                ir_context,
                 channels[ir].reserve_input_slot(),
                 channels[left].reserve_output_slot(),
                 channels[right].reserve_output_slot(),

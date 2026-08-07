@@ -22,6 +22,7 @@ from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Empty
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
+    ir_context_for_node,
 )
 from cudf_polars.streaming.actor_graph.tracing import send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
@@ -86,6 +87,9 @@ async def default_node_single(
             ),
             duplicated=metadata_in.duplicated,
         )
+        import dataclasses
+
+        ir_context = dataclasses.replace(ir_context, tracer=tracer)
 
         # Process chunks (handle empty input for aggregation-like operations)
         await chunkwise_evaluate(
@@ -525,6 +529,7 @@ def _(
 
     # Create output ChannelManager
     channels[ir] = ChannelManager(rec.state["context"])
+    ir_context = ir_context_for_node(rec, ir)
 
     if len(ir.children) == 1:
         # Single-channel default node
@@ -532,7 +537,7 @@ def _(
             default_node_single(
                 rec.state["context"],
                 ir,
-                rec.state["ir_context"],
+                ir_context,
                 channels[ir].reserve_input_slot(),
                 channels[ir.children[0]].reserve_output_slot(),
             )
@@ -543,7 +548,7 @@ def _(
             default_node_multi(
                 rec.state["context"],
                 ir,
-                rec.state["ir_context"],
+                ir_context,
                 channels[ir].reserve_input_slot(),
                 tuple(channels[c].reserve_output_slot() for c in ir.children),
             )
@@ -600,7 +605,7 @@ def _(
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     """Generate network for Empty node - produces one empty chunk."""
     context = rec.state["context"]
-    ir_context = rec.state["ir_context"]
+    ir_context = ir_context_for_node(rec, ir)
     channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
     nodes: dict[IR, list[Any]] = {
         ir: [empty_node(context, ir, ir_context, channels[ir].reserve_input_slot())]
@@ -635,6 +640,7 @@ def generate_ir_sub_network_wrapper(
     if (fanout_info := rec.state["fanout_nodes"].get(ir)) is not None:
         count = fanout_info.num_consumers
         manager = ChannelManager(rec.state["context"], count=count)
+        ir_context = ir_context_for_node(rec, ir)
         fanout_node: Any
         if fanout_info.unbounded:
             fanout_node = fanout_node_unbounded(
@@ -642,7 +648,7 @@ def generate_ir_sub_network_wrapper(
                 channels[ir].reserve_output_slot(),
                 *[manager.reserve_input_slot() for _ in range(count)],
                 trace_ir=ir,
-                ir_context=rec.state["ir_context"],
+                ir_context=ir_context,
             )
         else:  # "bounded"
             fanout_node = fanout_node_bounded(
@@ -650,7 +656,7 @@ def generate_ir_sub_network_wrapper(
                 channels[ir].reserve_output_slot(),
                 *[manager.reserve_input_slot() for _ in range(count)],
                 trace_ir=ir,
-                ir_context=rec.state["ir_context"],
+                ir_context=ir_context,
             )
         nodes[ir].append(fanout_node)
         channels[ir] = manager
