@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -160,8 +160,10 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto transform_begin = thrust::make_transform_iterator(begin, transformer);
   auto const size      = cudf::distance(begin, end);
   auto const elements  = thrust::host_vector<ElementTo>(transform_begin, transform_begin + size);
-  return rmm::device_buffer{
-    elements.data(), size * sizeof(ElementTo), cudf::test::get_default_stream()};
+  return cudf::detail::make_device_buffer_async(
+    cudf::host_span<ElementTo const>{elements.data(), elements.size()},
+    cudf::test::get_default_stream(),
+    cudf::get_current_device_resource_ref());
 }
 
 // The two signatures below are identical to the above overload apart from
@@ -190,8 +192,10 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto transform_begin = thrust::make_transform_iterator(begin, transformer);
   auto const size      = cudf::distance(begin, end);
   auto const elements  = thrust::host_vector<RepType>(transform_begin, transform_begin + size);
-  return rmm::device_buffer{
-    elements.data(), size * sizeof(RepType), cudf::test::get_default_stream()};
+  return cudf::detail::make_device_buffer_async(
+    cudf::host_span<RepType const>{elements.data(), elements.size()},
+    cudf::test::get_default_stream(),
+    cudf::get_current_device_resource_ref());
 }
 
 /**
@@ -221,8 +225,10 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto transformer_begin = thrust::make_transform_iterator(begin, to_rep);
   auto const size        = cudf::distance(begin, end);
   auto const elements = thrust::host_vector<RepType>(transformer_begin, transformer_begin + size);
-  return rmm::device_buffer{
-    elements.data(), size * sizeof(RepType), cudf::test::get_default_stream()};
+  return cudf::detail::make_device_buffer_async(
+    cudf::host_span<RepType const>{elements.data(), elements.size()},
+    cudf::test::get_default_stream(),
+    cudf::get_current_device_resource_ref());
 }
 //! @endcond
 
@@ -277,9 +283,10 @@ std::pair<rmm::device_buffer, cudf::size_type> make_null_mask(ValidityIterator b
                                                               ValidityIterator end)
 {
   auto [null_mask, null_count] = make_null_mask_vector(begin, end);
-  auto d_mask                  = rmm::device_buffer{null_mask.data(),
-                                   cudf::bitmask_allocation_size_bytes(cudf::distance(begin, end)),
-                                   cudf::test::get_default_stream()};
+  auto d_mask                  = cudf::detail::make_device_buffer_async(
+    cudf::host_span<bitmask_type const>{null_mask.data(), null_mask.size()},
+    cudf::test::get_default_stream(),
+    cudf::get_current_device_resource_ref());
   return {std::move(d_mask), null_count};
 }
 
@@ -563,12 +570,14 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
     auto const id        = type_to_id<numeric::fixed_point<Rep, numeric::Radix::BASE_10>>();
     auto const data_type = cudf::data_type{id, static_cast<int32_t>(scale)};
 
-    wrapped.reset(new cudf::column{
-      data_type,
-      size,
-      rmm::device_buffer{elements.data(), size * sizeof(Rep), cudf::test::get_default_stream()},
-      rmm::device_buffer{},
-      0});
+    wrapped.reset(new cudf::column{data_type,
+                                   size,
+                                   cudf::detail::make_device_buffer_async(
+                                     cudf::host_span<Rep const>{elements.data(), elements.size()},
+                                     cudf::test::get_default_stream(),
+                                     cudf::get_current_device_resource_ref()),
+                                   rmm::device_buffer{},
+                                   0});
   }
 
   /**
@@ -629,12 +638,14 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
     auto const id                = type_to_id<numeric::fixed_point<Rep, numeric::Radix::BASE_10>>();
     auto const data_type         = cudf::data_type{id, static_cast<int32_t>(scale)};
     auto [null_mask, null_count] = detail::make_null_mask(v, v + size);
-    wrapped.reset(new cudf::column{
-      data_type,
-      size,
-      rmm::device_buffer{elements.data(), size * sizeof(Rep), cudf::test::get_default_stream()},
-      std::move(null_mask),
-      null_count});
+    wrapped.reset(new cudf::column{data_type,
+                                   size,
+                                   cudf::detail::make_device_buffer_async(
+                                     cudf::host_span<Rep const>{elements.data(), elements.size()},
+                                     cudf::test::get_default_stream(),
+                                     cudf::get_current_device_resource_ref()),
+                                   std::move(null_mask),
+                                   null_count});
   }
 
   /**

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,6 +21,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/resource_ref.hpp>
 
@@ -77,7 +78,8 @@ rmm::device_uvector<T> make_zeroed_device_uvector(std::size_t size,
  * @brief Asynchronously construct a `device_uvector` containing a deep copy of data from a
  * `host_span`
  *
- * @note This function does not synchronize `stream`.
+ * @note The destination copy remains stream ordered. The host source may be released or changed as
+ * soon as this function returns.
  *
  * @tparam T The type of the data to copy (may be const-qualified)
  * @param source_data The host_span of data to deep copy
@@ -99,7 +101,8 @@ rmm::device_uvector<std::remove_cv_t<T>> make_device_uvector_async(
  * @brief Asynchronously construct a `device_uvector` containing a deep copy of data from a host
  * container
  *
- * @note This function does not synchronize `stream`.
+ * @note The destination copy remains stream ordered. The host source may be released or changed as
+ * soon as this function returns.
  *
  * @tparam Container The type of the container to copy from
  * @tparam T The type of the data to copy
@@ -119,7 +122,8 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
 /**
  * @brief Asynchronously construct a `device_uvector` from a `std::vector`
  *
- * @note This function does not synchronize `stream`.
+ * @note The destination copy remains stream ordered. The host source may be released or changed as
+ * soon as this function returns.
  *
  * @tparam T The type of the data to copy
  * @tparam Allocator The allocator type of the std::vector
@@ -134,6 +138,32 @@ rmm::device_uvector<T> make_device_uvector_async(std::vector<T, Allocator> const
                                                  rmm::device_async_resource_ref mr)
 {
   return make_device_uvector_async(host_span<T const>{source_data}, stream, mr);
+}
+
+/**
+ * @brief Asynchronously construct a `device_buffer` containing a deep copy of host data
+ *
+ * @note The destination copy remains stream ordered. The host source may be released or changed as
+ * soon as this function returns.
+ *
+ * @tparam T The type of the data to copy (may be const-qualified)
+ * @param source_data The host data to deep copy
+ * @param stream The stream on which to allocate memory and perform the copy
+ * @param mr The memory resource to use for allocating the returned device_buffer
+ * @return A device_buffer containing the copied data
+ */
+template <typename T>
+rmm::device_buffer make_device_buffer_async(host_span<T> source_data,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::device_async_resource_ref mr)
+{
+  using value_type = std::remove_cv_t<T>;
+  rmm::device_buffer ret(source_data.size_bytes(), stream, mr);
+  cuda_memcpy_async<value_type>(
+    device_span<value_type>{static_cast<value_type*>(ret.data()), source_data.size()},
+    host_span<value_type const>{source_data},
+    stream);
+  return ret;
 }
 
 /**

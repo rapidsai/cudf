@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,6 +13,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/cuda_stream.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/device_vector.hpp>
 
@@ -124,4 +125,44 @@ TEST(BatchedMemcpyTest, BasicTest)
   // Check if both vectors are equal
   EXPECT_TRUE(
     std::equal(expected_buffer.begin(), expected_buffer.end(), result_dst_buffer.begin()));
+}
+
+void expect_uvector_source_can_be_modified(rmm::cuda_stream_view stream)
+{
+  auto const mr = cudf::get_current_device_resource_ref();
+  auto source   = std::vector<int32_t>(1024, 1);
+
+  auto result = cudf::detail::make_device_uvector_async(source, stream, mr);
+  std::fill(source.begin(), source.end(), 2);
+
+  auto const actual = cudf::detail::make_std_vector<int32_t>(result, stream);
+  EXPECT_TRUE(std::all_of(actual.cbegin(), actual.cend(), [](auto value) { return value == 1; }));
+}
+
+TEST(BatchedMemcpyTest, UvectorHostSourceCanBeModifiedAfterReturn)
+{
+  rmm::cuda_stream stream;
+  expect_uvector_source_can_be_modified(stream.view());
+}
+
+TEST(BatchedMemcpyTest, UvectorHostSourceCanBeModifiedAfterReturnDefaultStream)
+{
+  expect_uvector_source_can_be_modified(cudf::get_default_stream());
+}
+
+TEST(BatchedMemcpyTest, DeviceBufferHostSourceCanBeModifiedAfterReturn)
+{
+  rmm::cuda_stream stream;
+  auto const stream_view = stream.view();
+  auto const mr          = cudf::get_current_device_resource_ref();
+  auto source            = std::vector<int32_t>(1024, 1);
+
+  auto result =
+    cudf::detail::make_device_buffer_async(cudf::host_span<int32_t const>{source}, stream_view, mr);
+  std::fill(source.begin(), source.end(), 2);
+
+  auto const actual = cudf::detail::make_std_vector<int32_t>(
+    cudf::device_span<int32_t const>{static_cast<int32_t const*>(result.data()), source.size()},
+    stream_view);
+  EXPECT_TRUE(std::all_of(actual.cbegin(), actual.cend(), [](auto value) { return value == 1; }));
 }

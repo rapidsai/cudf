@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,6 +8,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/experimental/hybrid_scan.hpp>
 #include <cudf/io/parquet_io_utils.hpp>
 #include <cudf/io/parquet_schema.hpp>
@@ -120,7 +121,8 @@ auto make_index_column(cudf::size_type num_rows, rmm::cuda_stream_view stream)
 {
   std::vector<cudf::size_type> data(num_rows);
   std::iota(data.begin(), data.end(), 0);
-  auto buffer = rmm::device_buffer(data.data(), num_rows * sizeof(int64_t), stream);
+  auto buffer = cudf::detail::make_device_buffer_async(
+    cudf::host_span<cudf::size_type const>{data}, stream, cudf::get_current_device_resource_ref());
   return std::make_unique<cudf::column>(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
                                         num_rows,
                                         std::move(buffer),
@@ -140,7 +142,8 @@ auto make_index_column(cudf::size_type num_rows, rmm::cuda_stream_view stream)
 template <typename T>
 auto make_column(cudf::host_span<T const> host_data, rmm::cuda_stream_view stream)
 {
-  auto device_buffer = rmm::device_buffer(host_data.data(), host_data.size() * sizeof(T), stream);
+  auto device_buffer = cudf::detail::make_device_buffer_async(
+    host_data, stream, cudf::get_current_device_resource_ref());
   return std::make_unique<cudf::column>(cudf::data_type{cudf::type_to_id<T>()},
                                         host_data.size(),
                                         std::move(device_buffer),
@@ -172,8 +175,8 @@ auto make_page_data_list_column(cudf::host_span<T const> data,
 
   auto offsets_column = make_column<cudf::size_type>(col_page_offsets, stream);
 
-  auto page_data_buffer =
-    rmm::device_buffer(data.data(), num_pages_this_column * sizeof(int64_t), stream);
+  auto page_data_buffer = cudf::detail::make_device_buffer_async(
+    data.subspan(0, num_pages_this_column), stream, cudf::get_current_device_resource_ref());
 
   auto page_data_column =
     std::make_unique<cudf::column>(cudf::data_type{cudf::type_to_id<int64_t>()},
@@ -279,11 +282,17 @@ void write_rowgroup_metadata(cudf::io::parquet::FileMetaData const& metadata,
   columns.emplace_back(make_index_column(num_row_groups, stream));
 
   auto row_offsets_buffer =
-    rmm::device_buffer(row_group_row_offsets.data(), num_row_groups * sizeof(int64_t), stream);
+    cudf::detail::make_device_buffer_async(cudf::host_span<int64_t const>{row_group_row_offsets},
+                                           stream,
+                                           cudf::get_current_device_resource_ref());
   auto row_counts_buffer =
-    rmm::device_buffer(row_group_row_counts.data(), num_row_groups * sizeof(int64_t), stream);
+    cudf::detail::make_device_buffer_async(cudf::host_span<int64_t const>{row_group_row_counts},
+                                           stream,
+                                           cudf::get_current_device_resource_ref());
   auto byte_offsets_buffer =
-    rmm::device_buffer(row_group_byte_offsets.data(), num_row_groups * sizeof(int64_t), stream);
+    cudf::detail::make_device_buffer_async(cudf::host_span<int64_t const>{row_group_byte_offsets},
+                                           stream,
+                                           cudf::get_current_device_resource_ref());
 
   columns.emplace_back(std::make_unique<cudf::column>(cudf::data_type{cudf::type_to_id<int64_t>()},
                                                       num_row_groups,

@@ -13,6 +13,7 @@
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/parquet_io_utils.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
@@ -345,8 +346,10 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<char>> create_parquet_with_s
 
     auto const make_null_mask = [stream](auto begin, auto end) {
       auto [null_mask, null_count] = cudf::test::detail::make_null_mask_vector(begin, end);
-      auto d_mask                  = rmm::device_buffer{
-        null_mask.data(), cudf::bitmask_allocation_size_bytes(cudf::distance(begin, end)), stream};
+      auto d_mask =
+        cudf::detail::make_device_buffer_async(cudf::host_span<cudf::bitmask_type const>{null_mask},
+                                               stream,
+                                               cudf::get_current_device_resource_ref());
       return std::pair{std::move(d_mask), null_count};
     };
 

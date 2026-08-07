@@ -51,16 +51,17 @@ void copy_pageable(void* dst, void const* src, std::size_t size, rmm::cuda_strea
   CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, src, size, stream));
 }
 
-};  // namespace
+enum class host_source_access_order : uint8_t { STREAM, DURING_API_CALL };
 
-cudaError_t memcpy_batch_async(void* const* dsts,
-                               void const* const* srcs,
-                               std::size_t const* sizes,
-                               std::size_t count,
-                               rmm::cuda_stream_view stream)
+cudaError_t memcpy_batch_async_impl(void* const* dsts,
+                                    void const* const* srcs,
+                                    std::size_t const* sizes,
+                                    std::size_t count,
+                                    rmm::cuda_stream_view stream,
+                                    host_source_access_order source_access_order)
 {
-// Uses cudaMemcpyBatchAsync for CUDA 13.0+ to avoid driver-side locking overhead.
-// cudaMemcpyBatchAsync does not support the default stream.
+  // Uses cudaMemcpyBatchAsync for CUDA 13.0+ to avoid driver-side locking overhead.
+  // cudaMemcpyBatchAsync does not support the default stream.
 #if CUDART_VERSION >= 13000
   if (!stream.is_default()) {
     // Filter out invalid copies (nullptr dst/src or size==0);
@@ -90,7 +91,11 @@ cudaError_t memcpy_batch_async(void* const* dsts,
       count = valid_dsts.size();
     }
 
-    cudaMemcpyAttributes attrs = {.srcAccessOrder = cudaMemcpySrcAccessOrderStream,
+    auto const cuda_source_access_order =
+      source_access_order == host_source_access_order::DURING_API_CALL
+        ? cudaMemcpySrcAccessOrderDuringApiCall
+        : cudaMemcpySrcAccessOrderStream;
+    cudaMemcpyAttributes attrs = {.srcAccessOrder = cuda_source_access_order,
                                   .flags          = cudaMemcpyFlagPreferOverlapWithCompute};
     std::size_t attrs_idxs     = 0;
     return cudaMemcpyBatchAsync(dsts, srcs, sizes, count, &attrs, &attrs_idxs, 1, stream.value());
@@ -101,7 +106,21 @@ cudaError_t memcpy_batch_async(void* const* dsts,
       cudaMemcpyAsync(dsts[i], srcs[i], sizes[i], cudaMemcpyDefault, stream.value());
     if (status != cudaSuccess) { return status; }
   }
-  return cudaSuccess;
+  return source_access_order == host_source_access_order::DURING_API_CALL
+           ? cudaStreamSynchronize(stream.value())
+           : cudaSuccess;
+}
+
+}  // namespace
+
+cudaError_t memcpy_batch_async(void* const* dsts,
+                               void const* const* srcs,
+                               std::size_t const* sizes,
+                               std::size_t count,
+                               rmm::cuda_stream_view stream)
+{
+  return memcpy_batch_async_impl(
+    dsts, srcs, sizes, count, stream, host_source_access_order::STREAM);
 }
 
 cudaError_t memcpy_async(void* dst, void const* src, size_t count, rmm::cuda_stream_view stream)
@@ -111,6 +130,17 @@ cudaError_t memcpy_async(void* dst, void const* src, size_t count, rmm::cuda_str
   // Use batch API with size 1 to prefer cudaMemcpyBatchAsync over
   // cudaMemcpyAsync. The batched API is more efficient.
   return memcpy_batch_async(&dst, &src, &count, 1, stream);
+}
+
+CUDF_EXPORT cudaError_t memcpy_h2d_async(void* dst,
+                                         void const* src,
+                                         size_t count,
+                                         rmm::cuda_stream_view stream)
+{
+  if (count == 0) { return cudaSuccess; }
+
+  return memcpy_batch_async_impl(
+    &dst, &src, &count, 1, stream, host_source_access_order::DURING_API_CALL);
 }
 
 void cuda_memcpy_async_impl(

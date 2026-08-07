@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,6 +18,11 @@ enum class host_memory_kind : uint8_t { PINNED, PAGEABLE };
 
 void cuda_memcpy_async_impl(
   void* dst, void const* src, size_t size, host_memory_kind kind, rmm::cuda_stream_view stream);
+
+[[nodiscard]] cudaError_t memcpy_h2d_async(void* dst,
+                                           void const* src,
+                                           size_t size,
+                                           rmm::cuda_stream_view stream);
 
 /**
  * @brief Wrapper around cudaMemcpyBatchAsync
@@ -70,9 +75,10 @@ void cuda_memcpy_async_impl(
                                        rmm::cuda_stream_view stream);
 
 /**
- * @brief Asynchronously copies data from host to device memory.
+ * @brief Asynchronously copies data from host to device memory
  *
- * Implementation may use different strategies depending on the size and type of host data.
+ * The destination copy remains stream ordered. The host source may be released or changed as soon
+ * as this function returns.
  *
  * @param dst Destination device memory
  * @param src Source host memory
@@ -82,12 +88,7 @@ template <typename T>
 void cuda_memcpy_async(device_span<T> dst, host_span<T const> src, rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(dst.size() == src.size(), "Mismatched sizes in cuda_memcpy_async");
-  auto const is_pinned = src.is_device_accessible();
-  cuda_memcpy_async_impl(dst.data(),
-                         src.data(),
-                         src.size_bytes(),
-                         is_pinned ? host_memory_kind::PINNED : host_memory_kind::PAGEABLE,
-                         stream);
+  CUDF_CUDA_TRY(memcpy_h2d_async(dst.data(), src.data(), src.size_bytes(), stream));
 }
 
 /**
