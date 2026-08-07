@@ -254,9 +254,17 @@ def _lower_join_with_prefilters(
 def _(
     ir: PushdownFilterHint, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    """Discard the optional filter without lowering its domain."""
-    target, _domain = ir.children
-    return rec(target)
+    """Preserve optional filters for dynamic execution, otherwise discard them."""
+    target, domain = ir.children
+    target, partition_info = rec(target)
+    if not _dynamic_planning_on(rec.state["config_options"]):
+        return target, partition_info
+
+    domain, domain_partition_info = rec(domain)
+    partition_info.update(domain_partition_info)
+    lowered = ir.reconstruct((target, domain))
+    partition_info[lowered] = partition_info[target]
+    return lowered, partition_info
 
 
 @lower_ir_node.register(ConditionalJoin)

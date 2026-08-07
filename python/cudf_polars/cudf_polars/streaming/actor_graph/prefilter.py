@@ -75,10 +75,9 @@ class PrefilterDecision:
     bloom_bytes: int | None = None
     exact_bytes: int | None = None
 
-    def trace(self, prefilter: Prefilter) -> dict[str, str | int | None]:
-        """Return serializable actor-trace information."""
-        result: dict[str, str | int | None] = {
-            "target_side": prefilter.target_side,
+    def trace_details(self) -> dict[str, str | int | None]:
+        """Return trace information common to every prefilter placement."""
+        return {
             "method": self.method,
             "reason": self.reason,
             "target_bytes": self.target_bytes,
@@ -87,6 +86,11 @@ class PrefilterDecision:
             "bloom_bytes": self.bloom_bytes,
             "exact_bytes": self.exact_bytes,
         }
+
+    def trace(self, prefilter: Prefilter) -> dict[str, str | int | None]:
+        """Return serializable actor-trace information."""
+        result = self.trace_details()
+        result["target_side"] = prefilter.target_side
         if isinstance(prefilter.domain, JoinInputDomain):
             result["domain_side"] = prefilter.domain.side
         else:
