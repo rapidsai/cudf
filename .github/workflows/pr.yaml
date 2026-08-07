@@ -14,8 +14,62 @@ concurrency:
   cancel-in-progress: true
 permissions: {}
 jobs:
+  # TEMPORARY: drop a prior PENDING/VALIDATED Sonatype deployment before rebuilding
+  # so the new java-publish upload is not blocked by the old one.
+  drop-old-deployment:
+    runs-on: linux-amd64-cpu4
+    steps:
+      - name: Drop Sonatype deployment if present
+        env:
+          MAVEN_DEPLOY_USERNAME: ${{ vars.MAVEN_DEPLOY_USERNAME }}
+          MAVEN_DEPLOY_TOKEN: ${{ secrets.MAVEN_DEPLOY_TOKEN }}
+          DEPLOYMENT_ID: 6bf96242-4756-4ab2-8230-73427e51d564
+          CENTRAL_PORTAL_URL: https://central.sonatype.com
+        run: |
+          set -euo pipefail
+          : "${MAVEN_DEPLOY_USERNAME:?must be set}"
+          : "${MAVEN_DEPLOY_TOKEN:?must be set}"
+          AUTH="$(printf '%s:%s' "${MAVEN_DEPLOY_USERNAME}" "${MAVEN_DEPLOY_TOKEN}" | base64 | tr -d '\n')"
+          status_url="${CENTRAL_PORTAL_URL}/api/v1/publisher/status?id=${DEPLOYMENT_ID}"
+          drop_url="${CENTRAL_PORTAL_URL}/api/v1/publisher/deployment/${DEPLOYMENT_ID}"
+
+          body="$(mktemp)"
+          http="$(curl -sS --retry 3 --retry-delay 2 \
+            -H "Authorization: Bearer ${AUTH}" \
+            -X POST -o "${body}" -w '%{http_code}' "${status_url}" || echo transport-error)"
+          if [[ ${http} == 404 ]]; then
+            echo "Deployment ${DEPLOYMENT_ID} not found; nothing to drop"
+            rm -f "${body}"
+            exit 0
+          fi
+          if [[ ${http} != 2* ]]; then
+            echo "Status check failed (HTTP ${http}): $(cat "${body}")" >&2
+            rm -f "${body}"
+            exit 1
+          fi
+          state="$(jq -r '.deploymentState // empty' "${body}")"
+          rm -f "${body}"
+          if [[ ${state} != VALIDATED ]]; then
+            echo "Expected VALIDATED or absent, got '${state:-UNKNOWN}'" >&2
+            exit 1
+          fi
+
+          echo "Dropping VALIDATED deployment ${DEPLOYMENT_ID}"
+          body="$(mktemp)"
+          http="$(curl -sS --retry 3 --retry-delay 2 \
+            -H "Authorization: Bearer ${AUTH}" \
+            -X DELETE -o "${body}" -w '%{http_code}' "${drop_url}" || echo transport-error)"
+          if [[ ${http} != 2* ]]; then
+            echo "Drop failed (HTTP ${http}): $(cat "${body}")" >&2
+            rm -f "${body}"
+            exit 1
+          fi
+          rm -f "${body}"
+          echo "Dropped deployment ${DEPLOYMENT_ID}"
+
   # Build the cuDF Java JAR for every Maven classifier.
   java-build:
+    needs: [drop-old-deployment]
     strategy:
       fail-fast: false
       matrix:
