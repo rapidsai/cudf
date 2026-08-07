@@ -15,7 +15,6 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/filling.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_metadata.hpp>
@@ -38,33 +37,10 @@
 #include <iterator>
 #include <limits>
 #include <random>
-#include <stdexcept>
 
 using cudf::test::iterators::no_nulls;
 
 namespace {
-
-/**
- * @brief Create a list column with `num_rows` rows of `elements_per_row` values each.
- */
-template <typename T>
-std::unique_ptr<cudf::column> make_wide_list_column(cudf::size_type num_rows,
-                                                    cudf::size_type elements_per_row)
-  requires(cudf::is_integral_not_bool<T>())
-{
-  auto const offsets = cudf::detail::make_counting_transform_iterator(
-    cudf::size_type{0}, [elements_per_row](auto row) { return elements_per_row * row; });
-  auto child = cudf::sequence(
-    num_rows * elements_per_row, cudf::numeric_scalar<T>(0), cudf::numeric_scalar<T>(1));
-
-  return cudf::make_lists_column(
-    num_rows,
-    cudf::test::fixed_width_column_wrapper<cudf::size_type>(offsets, offsets + num_rows + 1)
-      .release(),
-    std::move(child),
-    0,
-    rmm::device_buffer{});
-}
 
 template <typename mask_op_t>
 void test_durations(mask_op_t mask_op, bool use_byte_stream_split, bool arrow_schema)

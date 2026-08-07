@@ -46,6 +46,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <format>
 #include <functional>
 #include <iterator>
 #include <limits>
@@ -1227,10 +1228,12 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
                    nullptr,
                    error_code.data(),
                    stream);
+  if (auto const error = error_code.value_sync(stream); error != 0) {
+    CUDF_FAIL(
+      std::format("Parquet encoding failed with code(s) {}", kernel_error::to_string(error)));
+  }
+
   chunks.device_to_host(stream);
-  CUDF_EXPECTS(error_code.value_sync(stream) == 0,
-               std::format("Parquet encoding failed with code(s) {}",
-                           kernel_error::to_string(error_code.value_sync(stream))));
 
   auto num_pages = size_type{0};
   for (auto& chunk : chunks.host_view().flat_view()) {
@@ -1257,9 +1260,10 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
                    nullptr,
                    error_code.data(),
                    stream);
-  CUDF_EXPECTS(error_code.value_sync(stream) == 0,
-               std::format("Parquet encoding failed with code(s) {}",
-                           kernel_error::to_string(error_code.value_sync(stream))));
+  if (auto const error = error_code.value_sync(stream); error != 0) {
+    CUDF_FAIL(
+      std::format("Parquet encoding failed with code(s) {}", kernel_error::to_string(error)));
+  }
 
   page_sizes.device_to_host(stream);
 
@@ -1288,9 +1292,10 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
                    stream);
   chunks.device_to_host(stream);
 
-  CUDF_EXPECTS(error_code.value_sync(stream) == 0,
-               std::format("Parquet encoding failed with code(s) {}",
-                           kernel_error::to_string(error_code.value_sync(stream))));
+  if (auto const error = error_code.value_sync(stream); error != 0) {
+    CUDF_FAIL(
+      std::format("Parquet encoding failed with code(s) {}", kernel_error::to_string(error)));
+  }
 
   return comp_page_sizes;
 }
@@ -1342,10 +1347,17 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     // so no chunk that would be accepted can hold more than `size_limit / 4` entries.
     if (dict_policy == dictionary_policy::ADAPTIVE) {
       auto const size_limit = max_page_bytes(compression, max_dict_size);
-      return static_cast<size_type>(std::min<size_t>(MAX_DICT_SIZE, size_limit / sizeof(int32_t)));
+      return static_cast<size_type>(std::clamp<size_t>(
+        size_limit / sizeof(int32_t), 1, static_cast<size_t>(MAX_DICT_SIZE)));
     }
     return MAX_DICT_SIZE;
   }();
+
+  // Storage slots needed to hold `entries` keys at the target occupancy
+  auto const map_extent = [](size_t entries) {
+    return static_cast<size_type>(cuco::make_valid_extent<map_cg_size, bucket_size>(
+      static_cast<size_type>(occupancy_factor * entries)));
+  };
 
   // Variable to keep track of the current total map storage size
   size_t total_map_storage_size = 0;
@@ -1363,9 +1375,14 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     } else {
       chunk.use_dictionary   = true;
       chunk.dict_entry_limit = std::min(chunk.num_values, max_dict_entries);
-      chunk.dict_map_size =
-        static_cast<cudf::size_type>(cuco::make_valid_extent<map_cg_size, bucket_size>(
-          static_cast<cudf::size_type>(occupancy_factor * chunk.dict_entry_limit)));
+      // Each fragment's thread block inserts keys before re-reading the chunk's entry counter, so up to `num_fragments * dict_encode_block_size` keys can land past `dict_entry_limit`.
+      auto const overshoot = static_cast<size_t>(chunk.num_fragments) * dict_encode_block_size;
+      auto const slack =
+        static_cast<size_t>(map_extent(chunk.dict_entry_limit) - chunk.dict_entry_limit);
+      auto const map_entries = std::min<size_t>(
+        chunk.num_values,
+        static_cast<size_t>(chunk.dict_entry_limit) + (overshoot > slack ? overshoot - slack : 0));
+      chunk.dict_map_size = map_extent(map_entries);
       chunk.dict_map_offset = total_map_storage_size;
       total_map_storage_size += chunk.dict_map_size;
     }
@@ -1510,9 +1527,10 @@ void init_encoder_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
                    error_code.data(),
                    stream);
 
-  CUDF_EXPECTS(error_code.value_sync(stream) == 0,
-               std::format("Parquet encoding failed with code(s) {}",
-                           kernel_error::to_string(error_code.value_sync(stream))));
+  if (auto const error = error_code.value_sync(stream); error != 0) {
+    CUDF_FAIL(
+      std::format("Parquet encoding failed with code(s) {}", kernel_error::to_string(error)));
+  }
 
   if (num_stats_bfr > 0) {
     detail::merge_group_statistics<detail::io_file_format::PARQUET>(

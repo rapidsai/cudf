@@ -31,7 +31,7 @@ namespace {
 constexpr size_type MAX_FRAGMENTS_PER_CHUNK = 1024;
 
 /// Default block size for kernel launches
-constexpr int DEFAULT_BLOCK_SIZE = 256;
+constexpr int DEFAULT_BLOCK_SIZE = dict_encode_block_size;
 
 /**
  * @brief Functor for checking equality of two keys.
@@ -188,7 +188,7 @@ struct map_insert_fn {
         __syncthreads();
 
         // Check if the num unique values in chunk has already exceeded the number of entries this
-        // chunk's map was sized for (and could possibly use) and early exit
+        // chunk could possibly use and early exit
         if (total_num_dict_entries > dict_entry_limit) { break; }
       }  // for loop
       // Flush the number of unique values inserted by this fragment

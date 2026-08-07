@@ -23,6 +23,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/atomic>
+#include <cuda/std/limits>
 #include <cuda/std/optional>
 #include <cuda_runtime.h>
 
@@ -691,7 +692,7 @@ struct EncColumnChunk {
   static_assert(cuda::std::is_same_v<decltype(EncColumnChunk::compressed_size), decltype(bfr_size)>,
                 "EncColumnChunk fields `compressed_size` and `bfr_size` must be the same type");
   static constexpr size_t max_buffer_size =
-    std::numeric_limits<decltype(EncColumnChunk::bfr_size)>::max();
+    cuda::std::numeric_limits<decltype(EncColumnChunk::bfr_size)>::max();
 
   [[nodiscard]] CUDF_HOST_DEVICE constexpr uint32_t num_dict_pages() const
   {
