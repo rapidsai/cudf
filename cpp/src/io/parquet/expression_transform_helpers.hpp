@@ -88,7 +88,7 @@ enum class operator_transform : uint8_t {
  * untransformable operators are returned as is (no std::nullopt)
  */
 template <operator_transform mode>
-[[nodiscard]] inline std::optional<ast::ast_operator> transform_operator(ast::ast_operator op)
+[[nodiscard]] std::optional<ast::ast_operator> transform_operator(ast::ast_operator op)
 {
   if constexpr (mode == operator_transform::INVERT) {
     switch (op) {
@@ -113,19 +113,32 @@ template <operator_transform mode>
 }
 
 /**
+ * @brief Returns the De Morgan operator for the given operator
+ *
+ * @param op Operator to transform
+ * @return De Morgan operator or std::nullopt
+ */
+[[nodiscard]] std::optional<ast::ast_operator> de_morgan_operator(ast::ast_operator op)
+{
+  switch (op) {
+    case ast::ast_operator::LOGICAL_AND: return ast::ast_operator::LOGICAL_OR;
+    case ast::ast_operator::LOGICAL_OR: return ast::ast_operator::LOGICAL_AND;
+    case ast::ast_operator::NULL_LOGICAL_AND: return ast::ast_operator::NULL_LOGICAL_OR;
+    case ast::ast_operator::NULL_LOGICAL_OR: return ast::ast_operator::NULL_LOGICAL_AND;
+    default: return std::nullopt;
+  }
+}
+
+/**
  * @brief Handle unary operation transform for membership-based row group filters. i.e., bloom
  * filter and dictionary page filter.
  *
- * A transformed operand of a membership filter is an existential summary of a row group - it
- * answers "could some row here match?" rather than "is the operand true?". No unary operator is
- * meaning-preserving over such a summary, so a unary operation is always relaxed to `always_true`.
+ * A membership test answers "might this value be present", an existential over the row group that
+ * is not closed under negation, so a `NOT` is relaxed to `always_true` rather than negated.
+ * `named_to_reference_converter::push_down_negation` rewrites `NOT(col == v)` into `col != v`
+ * before any converter sees it, so no negation that could be pruned should reach here.
  *
- * `NOT` is the case that matters: transforming `NOT(col == v)` into `NOT(dict_contains(v))` would
- * prune every row group holding a single `v`, whereas `col != v` only permits pruning a row group
- * whose values are all `v`. See `negation_pushdown`, which rewrites `NOT(col == v)` into
- * `col != v` before it ever reaches a converter.
- *
- * @tparam VisitOperandsFn Callable matching `(host_span<reference_wrapper<expr>>) ->
+ * @tparam VisitOperandsFn Callable matching `(std::span<reference_wrapper<expr>>) ->
  * vector<reference_wrapper<expr>>`
  *
  * @param expr Unary operation to transform
@@ -256,14 +269,13 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
    * Only rewrites that are exact in every case cudf's AST evaluates are applied, as the converted
    * expression also filters the decoded rows:
    *
-   * - `NOT(NOT(x))` becomes `x`
-   * - `NOT(a AND b)` becomes `NOT(a) OR NOT(b)` and the three other De Morgan forms, for both the
-   *   null-propagating (`LOGICAL_*`) and the Kleene (`NULL_LOGICAL_*`) operators
-   * - `NOT(a == b)` becomes `a != b` and vice versa
-   *
-   * Ordering comparisons are deliberately **not** complemented. IEEE-754 makes every ordered
-   * comparison against a `NaN` false, so `NOT(a < b)` is true exactly where `a >= b` is false.
-   * `NOT(IS_NULL(x))` and `NOT(NULL_EQUAL(a, b))` have no complement operator and are left alone.
+   * - `NOT(NOT(x))` => `x`
+   * - De Morgan forms: `NOT(a AND b)` => `NOT(a) OR NOT(b)` for both the null-propagating
+   *   (`LOGICAL_*`) and the Kleene (`NULL_LOGICAL_*`) operators
+   * - `NOT(a == b)` => `a != b` and vice versa
+   * - `NOT(IS_NULL(x))` and `NOT(NULL_EQUAL(a, b))` => left alone as they have no complement
+   * - Ordering comparisons (`<`, `>`, `<=`, `>=`) are *not* complemented as IEEE-754 makes every
+   *   comparison with a `NaN` false, so `NOT(a < b)` is true while `a >= b` is not
    *
    * @param operand The operand of the `NOT` operation to rewrite
    * @return The rewritten expression, or std::nullopt if no exact rewrite exists

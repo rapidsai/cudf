@@ -4693,14 +4693,8 @@ def test_parquet_reader_mismatched_nullability_structs(tmp_path):
     ],
 )
 def test_parquet_bloom_filter_negated_equality(datadir, bloom_filter_fname):
-    """`NOT(col == v)` must prune exactly what `col != v` prunes.
+    """`NOT(col == v)` must prune identically to `col != v`"""
 
-    A bloom filter answers "might this value be present", which is an existential over the
-    row group. Negating that answer asks "is the value definitely absent", which is a
-    different question: it prunes every row group holding a single `v`, dropping the rows
-    that do satisfy `col != v`. These files carry bloom filters and no column chunk
-    statistics, so the bloom filter is the only thing that can prune here.
-    """
     import pylibcudf as plc
     from pylibcudf.expressions import (
         ASTOperator,
@@ -4721,15 +4715,11 @@ def test_parquet_bloom_filter_negated_equality(datadir, bloom_filter_fname):
     negated_equality = read_with(
         Operation(
             ASTOperator.NOT,
-            Operation(
-                ASTOperator.EQUAL, ColumnNameReference("str"), needle
-            ),
+            Operation(ASTOperator.EQUAL, ColumnNameReference("str"), needle),
         )
     )
     not_equal = read_with(
-        Operation(
-            ASTOperator.NOT_EQUAL, ColumnNameReference("str"), needle
-        )
+        Operation(ASTOperator.NOT_EQUAL, ColumnNameReference("str"), needle)
     )
 
     # The two spellings are the same predicate and must prune identically
@@ -4739,8 +4729,7 @@ def test_parquet_bloom_filter_negated_equality(datadir, bloom_filter_fname):
     )
     assert negated_equality.tbl.to_arrow().equals(not_equal.tbl.to_arrow())
 
-    # Both must keep every row that is not "FINDME". Negating the bloom filter result
-    # instead prunes the two row groups that hold a "FINDME" and returns only 600.
+    # 998 of the 1000 rows are not "FINDME".
     assert negated_equality.tbl.num_rows() == 998
 
 

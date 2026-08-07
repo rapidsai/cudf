@@ -1962,7 +1962,9 @@ TEST_F(ParquetReaderTest, FilterNegationPushdown)
       .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP);
   cudf::io::write_parquet(out_opts);
 
-  auto const expect_matches_unrewritten = [&](cudf::ast::expression const& filter) {
+  auto const expect_matches_unrewritten = [&](cudf::ast::expression const& filter,
+                                              std::optional<cudf::size_type> expected_row_groups =
+                                                std::nullopt) {
     auto predicate = cudf::compute_column(written_table, filter);
     auto expected  = cudf::apply_boolean_mask(written_table, *predicate);
 
@@ -1970,6 +1972,9 @@ TEST_F(ParquetReaderTest, FilterNegationPushdown)
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).filter(filter);
     auto result = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+    if (expected_row_groups.has_value()) {
+      EXPECT_EQ(result.metadata.num_row_groups_after_stats_filter, expected_row_groups);
+    }
   };
 
   auto col_ref_a = cudf::ast::column_reference(0);
@@ -1994,24 +1999,27 @@ TEST_F(ParquetReaderTest, FilterNegationPushdown)
   auto a_lt_150 = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_a, lit_150);
   auto b_eq_10  = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_b, lit_10);
 
-  // NOT(NOT(col_a < 50)) - double negation elimination
+  // NOT(NOT(col_a < 50)) - double negation elimination. Becomes col_a < 50
   {
     auto not_lt = cudf::ast::operation(cudf::ast::ast_operator::NOT, a_lt_50);
-    expect_matches_unrewritten(cudf::ast::operation(cudf::ast::ast_operator::NOT, not_lt));
+    expect_matches_unrewritten(cudf::ast::operation(cudf::ast::ast_operator::NOT, not_lt), 1);
   }
 
-  // NOT(col_a == 10) and NOT(col_a != 10) - complemented equality
-  expect_matches_unrewritten(cudf::ast::operation(cudf::ast::ast_operator::NOT, a_eq_10));
-  expect_matches_unrewritten(cudf::ast::operation(cudf::ast::ast_operator::NOT, a_neq_10));
+  // NOT(col_a == 10) and NOT(col_a != 10) - complemented equality. col_a != 10 prunes nothing and
+  // col_a == 10 keeps only the first row group
+  expect_matches_unrewritten(cudf::ast::operation(cudf::ast::ast_operator::NOT, a_eq_10), 4);
+  expect_matches_unrewritten(cudf::ast::operation(cudf::ast::ast_operator::NOT, a_neq_10), 1);
 
   // De Morgan over the null-propagating operators
   {
+    // Becomes col_a <= 50 OR col_a >= 150, all row groups kept
     auto conjunction =
       cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, a_gt_50, a_lt_150);
-    expect_matches_unrewritten(cudf::ast::operation(cudf::ast::ast_operator::NOT, conjunction));
+    expect_matches_unrewritten(cudf::ast::operation(cudf::ast::ast_operator::NOT, conjunction), 4);
 
+    // Becomes col_a <= 50 AND col_a != 10, only first row group kept
     auto disjunction = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, a_gt_50, a_eq_10);
-    expect_matches_unrewritten(cudf::ast::operation(cudf::ast::ast_operator::NOT, disjunction));
+    expect_matches_unrewritten(cudf::ast::operation(cudf::ast::ast_operator::NOT, disjunction), 1);
   }
 
   // De Morgan over the Kleene operators, where a null operand does not always produce a null result
@@ -2054,10 +2062,9 @@ TEST_F(ParquetReaderTest, FilterNegationPushdown)
 
   // Nested negations mixing all of the above
   {
-    auto inner_or = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, a_eq_10, a_gt_50);
-    auto not_or   = cudf::ast::operation(cudf::ast::ast_operator::NOT, inner_or);
-    auto outer_and =
-      cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, not_or, a_lt_150);
+    auto inner_or  = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, a_eq_10, a_gt_50);
+    auto not_or    = cudf::ast::operation(cudf::ast::ast_operator::NOT, inner_or);
+    auto outer_and = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, not_or, a_lt_150);
     expect_matches_unrewritten(cudf::ast::operation(cudf::ast::ast_operator::NOT, outer_and));
   }
 }
