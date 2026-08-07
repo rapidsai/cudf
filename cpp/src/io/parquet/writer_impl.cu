@@ -1923,7 +1923,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
       size_t fragment_data_size   = 0;
       bool is_chunk_size_exceeded = false;
       for (auto c = 0; c < num_columns; c++) {
-        auto const frag = row_group_fragments[c][f];
+        auto const& frag = row_group_fragments[c][f];
         fragment_data_size += frag.fragment_data_size;
         chunk_frag_size[c] =
           max_fragment_page_size(frag.fragment_data_size, frag.num_values, col_desc[c]);
