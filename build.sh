@@ -65,8 +65,8 @@ BUILD_DIRS="${LIB_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR} ${KAFKA_LI
 
 CUDA_VERSION="$(nvcc --version | sed -E -n 's/^.*release ([0-9]+\.[0-9]+).*$/\1/p')"
 if [[ -z "$CUDA_VERSION" ]]; then
-  echo "Could not determine CUDA version. Please make sure your \$PATH contains a valid nvcc."
-  exit 1
+    echo "Could not determine CUDA version. Please make sure your \$PATH contains a valid nvcc."
+    exit 1
 fi
 
 # Set defaults for vars modified by flags to this script
