@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,12 +7,271 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/memory_resource_utilities.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 
 #include <cuda/iterator>
+
+using cudf::test::expect_output_uses_distinct_resources;
+using cudf::test::temporary_allocation_expectation;
+
+namespace {
+auto const uses_temporary = cudf::test::memory_resource_expectations{
+  cudf::test::output_allocation_expectation::EXACT, temporary_allocation_expectation::SOME};
+}  // namespace
+
+TEST(FixedWidthColumnWrapperMemoryResourceTest, DistinctOutputAndTemporaryResources)
+{
+  auto stream         = cudf::test::get_default_stream();
+  auto const elements = std::vector<int32_t>{1, 2, 3, 4};
+  auto const validity = std::vector<bool>{true, false, true, false};
+
+  expect_output_uses_distinct_resources(
+    [&](auto mr) { return cudf::test::fixed_width_column_wrapper<int32_t>(stream, mr); });
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::fixed_width_column_wrapper<int32_t>(
+      elements.begin(), elements.end(), stream, mr);
+  });
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::fixed_width_column_wrapper<int32_t>(
+      {1, 2, 3, 4}, stream, mr.get_output_mr());
+  });
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::fixed_width_column_wrapper<int32_t>(
+      elements.begin(), elements.end(), validity.begin(), stream, mr);
+  });
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::fixed_width_column_wrapper<int32_t>(
+      {1, 2, 3, 4}, {true, false, true, false}, stream, mr);
+  });
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::fixed_width_column_wrapper<int32_t>(
+      {1, 2, 3, 4}, validity.begin(), stream, mr);
+  });
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::fixed_width_column_wrapper<int32_t>(
+      elements.begin(), elements.end(), {true, false, true, false}, stream, mr);
+  });
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    using pair_type = std::pair<int32_t, bool>;
+    return cudf::test::fixed_width_column_wrapper<int32_t>(
+      {pair_type{1, true}, pair_type{2, false}, pair_type{3, true}}, stream, mr);
+  });
+}
+
+TEST(FixedWidthColumnWrapperMemoryResourceTest, FixedPointElementPaths)
+{
+  auto stream     = cudf::test::get_default_stream();
+  using decimal32 = numeric::decimal32;
+
+  auto const reps     = std::vector<int32_t>{1, 2, 3, 4};
+  auto const decimals = std::vector<decimal32>{decimal32{1, numeric::scale_type{0}},
+                                               decimal32{2, numeric::scale_type{0}},
+                                               decimal32{3, numeric::scale_type{0}},
+                                               decimal32{4, numeric::scale_type{0}}};
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::fixed_width_column_wrapper<decimal32, int32_t>(
+      reps.begin(), reps.end(), stream, mr);
+  });
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::fixed_width_column_wrapper<decimal32>(
+      decimals.begin(), decimals.end(), stream, mr);
+  });
+}
+
+TEST(FixedPointColumnWrapperMemoryResourceTest, DistinctOutputAndTemporaryResources)
+{
+  auto stream         = cudf::test::get_default_stream();
+  auto const elements = std::vector<int32_t>{1, 2, 3, 4};
+  auto const validity = std::vector<bool>{true, false, true, false};
+  auto const scale    = numeric::scale_type{-2};
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::fixed_point_column_wrapper<int32_t>(
+      elements.begin(), elements.end(), scale, stream, mr);
+  });
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::fixed_point_column_wrapper<int32_t>(
+      {1, 2, 3, 4}, scale, stream, mr.get_output_mr());
+  });
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::fixed_point_column_wrapper<int32_t>(
+      elements.begin(), elements.end(), validity.begin(), scale, stream, mr);
+  });
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::fixed_point_column_wrapper<int32_t>(
+      {1, 2, 3, 4}, {true, false, true, false}, scale, stream, mr);
+  });
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::fixed_point_column_wrapper<int32_t>(
+      {1, 2, 3, 4}, validity.begin(), scale, stream, mr);
+  });
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::fixed_point_column_wrapper<int32_t>(
+      elements.begin(), elements.end(), {true, false, true, false}, scale, stream, mr);
+  });
+}
+
+TEST(StringsColumnWrapperMemoryResourceTest, DistinctOutputAndTemporaryResources)
+{
+  auto stream         = cudf::test::get_default_stream();
+  auto const strings  = std::vector<std::string>{"", "alpha", "beta", "gamma"};
+  auto const validity = std::vector<bool>{true, false, true, false};
+
+  expect_output_uses_distinct_resources(
+    [&](auto mr) { return cudf::test::strings_column_wrapper(stream, mr); });
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::strings_column_wrapper(strings.begin(), strings.end(), stream, mr);
+  });
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::strings_column_wrapper(
+      {"", "alpha", "beta", "gamma"}, stream, mr.get_output_mr());
+  });
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::strings_column_wrapper(
+      strings.begin(), strings.end(), validity.begin(), stream, mr);
+  });
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::strings_column_wrapper(
+      {"", "alpha", "beta", "gamma"}, validity.begin(), stream, mr);
+  });
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::strings_column_wrapper(
+      {"", "alpha", "beta", "gamma"}, {true, false, true, false}, stream, mr);
+  });
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    using pair_type = std::pair<std::string, bool>;
+    return cudf::test::strings_column_wrapper(
+      {pair_type{"", true}, pair_type{"alpha", false}, pair_type{"beta", true}}, stream, mr);
+  });
+}
+
+TEST(DictionaryColumnWrapperMemoryResourceTest, FixedWidthDistinctOutputAndTemporaryResources)
+{
+  auto stream         = cudf::test::get_default_stream();
+  auto const elements = std::vector<int32_t>{3, 1, 3, 2};
+  auto const validity = std::vector<bool>{true, false, true, true};
+
+  // Intermediate fixed-width column is allocated on temporary_mr before encode.
+  expect_output_uses_distinct_resources(
+    [&](auto mr) {
+      return cudf::test::dictionary_column_wrapper<int32_t>(
+        elements.begin(), elements.end(), stream, mr);
+    },
+    uses_temporary);
+
+  // Single-ref overload: temporaries go to the current resource, not the harness temporary.
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::dictionary_column_wrapper<int32_t>({3, 1, 3, 2}, stream, mr.get_output_mr());
+  });
+
+  expect_output_uses_distinct_resources(
+    [&](auto mr) {
+      return cudf::test::dictionary_column_wrapper<int32_t>(
+        elements.begin(), elements.end(), validity.begin(), stream, mr);
+    },
+    uses_temporary);
+
+  expect_output_uses_distinct_resources(
+    [&](auto mr) {
+      return cudf::test::dictionary_column_wrapper<int32_t>(
+        {3, 1, 3, 2}, validity.begin(), stream, mr);
+    },
+    uses_temporary);
+
+  expect_output_uses_distinct_resources(
+    [&](auto mr) {
+      return cudf::test::dictionary_column_wrapper<int32_t>(
+        {3, 1, 3, 2}, {true, false, true, true}, stream, mr);
+    },
+    uses_temporary);
+
+  expect_output_uses_distinct_resources(
+    [&](auto mr) {
+      return cudf::test::dictionary_column_wrapper<int32_t>(
+        elements.begin(), elements.end(), {true, false, true, true}, stream, mr);
+    },
+    uses_temporary);
+}
+
+TEST(DictionaryColumnWrapperMemoryResourceTest, EmptyStringDictionaryPreservesChildTypes)
+{
+  expect_output_uses_distinct_resources([&](auto mr) {
+    auto wrapper =
+      cudf::test::dictionary_column_wrapper<std::string>(cudf::test::get_default_stream(), mr);
+    auto dictionary = cudf::dictionary_column_view{static_cast<cudf::column_view>(wrapper)};
+
+    EXPECT_EQ(0, static_cast<cudf::column_view>(wrapper).size());
+    EXPECT_EQ(cudf::type_id::STRING, dictionary.keys().type().id());
+    EXPECT_EQ(cudf::type_id::INT32, dictionary.indices().type().id());
+    return wrapper;
+  });
+}
+
+TEST(DictionaryColumnWrapperMemoryResourceTest, StringDistinctOutputAndTemporaryResources)
+{
+  auto stream         = cudf::test::get_default_stream();
+  auto const strings  = std::vector<std::string>{"gamma", "alpha", "gamma", "beta"};
+  auto const validity = std::vector<bool>{true, false, true, true};
+
+  expect_output_uses_distinct_resources(
+    [&](auto mr) {
+      return cudf::test::dictionary_column_wrapper<std::string>(
+        strings.begin(), strings.end(), stream, mr);
+    },
+    uses_temporary);
+
+  // Single-ref overload: temporaries go to the current resource, not the harness temporary.
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::dictionary_column_wrapper<std::string>(
+      {"gamma", "alpha", "gamma", "beta"}, stream, mr.get_output_mr());
+  });
+
+  expect_output_uses_distinct_resources(
+    [&](auto mr) {
+      return cudf::test::dictionary_column_wrapper<std::string>(
+        strings.begin(), strings.end(), validity.begin(), stream, mr);
+    },
+    uses_temporary);
+
+  expect_output_uses_distinct_resources(
+    [&](auto mr) {
+      return cudf::test::dictionary_column_wrapper<std::string>(
+        {"gamma", "alpha", "gamma", "beta"}, validity.begin(), stream, mr);
+    },
+    uses_temporary);
+
+  expect_output_uses_distinct_resources(
+    [&](auto mr) {
+      return cudf::test::dictionary_column_wrapper<std::string>(
+        {"gamma", "alpha", "gamma", "beta"}, {true, false, true, true}, stream, mr);
+    },
+    uses_temporary);
+}
 
 template <typename T>
 struct FixedWidthColumnWrapperTest : public cudf::test::BaseFixture,
