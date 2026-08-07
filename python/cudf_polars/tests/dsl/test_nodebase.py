@@ -93,6 +93,9 @@ def test_get_stable_id(node: Node):
     assert isinstance(node_id, int)
     # Second call should return the cached value
     assert node.get_stable_id() == node_id
+    # External id is a truncation of the full digest used for composition.
+    assert node_id == int.from_bytes(node._get_stable_digest()[:4], "big")
+    assert len(node._get_stable_digest()) == 16
 
 
 def test_get_stable_plan_id() -> None:

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -21,6 +21,20 @@ if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame
 
 __all__ = ["Literal", "LiteralColumn"]
+
+
+def _freeze_for_hash(value: Any) -> Hashable:
+    """
+    Convert ``value`` into a process-independent hashable form.
+
+    Nested ``list`` / ``dict`` values (e.g. list/struct literals) are frozen
+    into tuples so they can appear in :meth:`Node.get_hashable` results.
+    """
+    if isinstance(value, dict):
+        return tuple(sorted((k, _freeze_for_hash(v)) for k, v in value.items()))
+    if isinstance(value, list):
+        return tuple(_freeze_for_hash(v) for v in value)
+    return value
 
 
 class Literal(Expr):
@@ -57,9 +71,8 @@ class Literal(Expr):
             "Not expecting to require agg request of literal"
         )  # pragma: no cover
 
-    def get_hashable(self) -> Hashable:
-        """Get the hash of the literal."""
-        return (type(self), self.dtype.plc_type, id(self.value))
+    def get_hashable(self) -> Hashable:  # noqa: D102
+        return (type(self), self.dtype.plc_type, _freeze_for_hash(self.value))
 
     def astype(self, dtype: DataType) -> Literal:
         """Cast self to dtype."""
@@ -87,12 +100,19 @@ class LiteralColumn(Expr):
         self.children = ()
         self.is_pointwise = True
 
-    def get_hashable(self) -> Hashable:
-        """Compute a hash of the column."""
-        # This is stricter than necessary, but we only need this hash
-        # for identity in groupby replacements so it's OK. And this
-        # way we avoid doing potentially expensive compute.
-        return (type(self), self.dtype.plc_type, id(self.value))
+    def get_hashable(self) -> Hashable:  # noqa: D102
+        return (
+            type(self),
+            self.dtype.plc_type,
+            _freeze_for_hash(self.value.to_list()),
+        )
+
+    def is_equal(self, other: LiteralColumn) -> bool:
+        """Equality that compares Series values by content, not identity."""
+        if self is other:
+            return True
+        # pl.Series.__eq__ is elementwise and cannot be used as a scalar bool.
+        return self.dtype == other.dtype and self.value.equals(other.value)
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME

@@ -21,17 +21,18 @@ __all__: list[str] = ["Node"]
 T = TypeVar("T", bound="Node[Any]")
 
 
-def _update_stable_hasher(hasher: Any, obj: Any) -> None:
+def _update_stable_hasher(hasher: Any, obj: Hashable) -> None:
     """
     Feed ``hasher`` a bottom-up structural digest of ``obj``.
 
-    Nested :class:`Node` instances contribute their cached
-    :meth:`~Node.get_stable_id` rather than a full subtree expansion, so
-    hashing an entire DAG is linear in total local payload size.
+    Nested :class:`Node` instances contribute their full cached digest
+    rather than a truncated id or a full subtree expansion, so hashing an
+    entire DAG is linear in total local payload size while distinct child
+    subtrees remain distinguishable when composing parent digests.
     """
     if isinstance(obj, Node):
         hasher.update(b"N")
-        hasher.update(obj.get_stable_id().to_bytes(4, "big"))
+        hasher.update(obj._get_stable_digest())
     elif isinstance(obj, tuple):
         hasher.update(b"T")
         hasher.update(len(obj).to_bytes(4, "big"))
@@ -61,11 +62,13 @@ class Node(Generic[T]):
     __slots__ = (
         "_hash_value",
         "_repr_value",
+        "_stable_digest",
         "_stable_hash_value",
         "_stable_plan_id",
         "children",
     )
     _hash_value: int
+    _stable_digest: bytes
     _stable_hash_value: int
     _stable_plan_id: uuid.UUID
     _repr_value: str
@@ -114,6 +117,16 @@ class Node(Generic[T]):
         """
         return (type(self), self._ctor_arguments(self.children))
 
+    def _get_stable_digest(self) -> bytes:
+        """Return the full MD5 digest for this node, computing it if needed."""
+        try:
+            return self._stable_digest
+        except AttributeError:
+            h = hashlib.md5(usedforsecurity=False)
+            _update_stable_hasher(h, self.get_hashable())
+            self._stable_digest = h.digest()
+            return self._stable_digest
+
     def get_stable_id(self) -> int:
         """
         Compute a stable identifier for Node.
@@ -130,9 +143,10 @@ class Node(Generic[T]):
         try:
             return self._stable_hash_value
         except AttributeError:
-            h = hashlib.md5(usedforsecurity=False)
-            _update_stable_hasher(h, self.get_hashable())
-            self._stable_hash_value = int(h.hexdigest()[:8], 16)
+            # First 4 digest bytes == int(hexdigest()[:8], 16).
+            self._stable_hash_value = int.from_bytes(
+                self._get_stable_digest()[:4], "big"
+            )
             return self._stable_hash_value
 
     def get_stable_plan_id(self) -> uuid.UUID:
