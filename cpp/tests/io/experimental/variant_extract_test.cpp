@@ -1693,7 +1693,7 @@ TEST_F(GetVariantTypeIdTest, SlicedValuesColumn)
   // Verify that a sliced input produces correct results for the slice only.
   auto const stream      = cudf::test::get_default_stream();
   auto col               = make_xyz_three_row_variant();
-  auto const value_child = cudf::structs_column_view{col}.get_sliced_child(1, stream2);
+  auto const value_child = cudf::structs_column_view{col}.get_sliced_child(1, stream);
 
   // The xyz variant has object rows; slicing [1,3) gives 2 object rows.
   auto const sliced_values = cudf::slice(value_child, {1, 3}).front();
