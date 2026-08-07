@@ -138,7 +138,7 @@ def prefetch_parquet_file_metadata_for_ir(
     all_paths: set[str] = set()
 
     for node in traversal([root]):
-        if isinstance(node, StreamingScan):
+        if isinstance(node, StreamingScan) and node.base_scan.typ == "parquet":
             for scan in node.scans:
                 for path in scan.paths:
                     all_paths.add(path)
@@ -197,7 +197,7 @@ def attach_cached_parquet_metadata(
         Mapping from file paths to cached parquet metadata.
     """
     for node in traversal([root]):
-        if isinstance(node, StreamingScan):
+        if isinstance(node, StreamingScan) and node.base_scan.typ == "parquet":
             for scan in node.scans:
                 cached = [cached_parquet_info_map[path] for path in scan.paths]
                 Scan._validate_cached_parquet_info(scan.paths, cached)
