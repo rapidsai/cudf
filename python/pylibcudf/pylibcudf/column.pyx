@@ -212,24 +212,23 @@ def _flatten_nested_list(obj: list, depth: int) -> tuple[list, tuple[int, ...]]:
 
 
 def _infer_shape(obj: list, depth: int) -> tuple[int, ...]:
-    shape = []
-    current = obj
+    if not obj:
+        raise ValueError("Cannot infer shape from empty list")
 
-    for i in range(depth):
-        if not current:
-            raise ValueError("Cannot infer shape from empty list")
+    shape = (len(obj),)
+    if depth == 1:
+        if any(isinstance(value, list) for value in obj):
+            raise ValueError("Inconsistent inner list shapes")
+        return shape
 
-        shape.append(len(current))
+    if not isinstance(obj[0], list):
+        raise ValueError("Inconsistent inner list shapes")
+    first_shape = _infer_shape(obj[0], depth - 1)
+    for sub in obj[1:]:
+        if not isinstance(sub, list) or _infer_shape(sub, depth - 1) != first_shape:
+            raise ValueError("Inconsistent inner list shapes")
 
-        if i < depth - 1:
-            first = current[0]
-            if not all(
-                isinstance(sub, list) and len(sub) == len(first) for sub in current
-            ):
-                raise ValueError("Inconsistent inner list shapes")
-            current = first
-
-    return tuple(shape)
+    return shape + first_shape
 
 
 def _flatten(obj: list, out: list, offset: int) -> int:
