@@ -1,21 +1,27 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/random.hpp>
+#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 
+#include <rmm/mr/statistics_resource_adaptor.hpp>
+
 #include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
+
+#include <sstream>
 
 template <typename T>
 struct ColumnUtilitiesTest : public cudf::test::BaseFixture {
@@ -139,6 +145,53 @@ TEST_F(ColumnUtilitiesEquivalenceTest, NullabilityTest)
   cudf::test::fixed_width_column_wrapper<double> col2({1, 2, 3}, all_valid);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(col1, col2);
+}
+
+TEST_F(ColumnUtilitiesEquivalenceTest, DistinctMemoryResources)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> lhs{1, 2, 3, 4};
+  cudf::test::fixed_width_column_wrapper<int32_t> rhs{1, 2, 3, 4};
+  cudf::test::fixed_width_column_wrapper<int32_t> nullable({1, 2, 3, 4}, {true, false, true, true});
+  cudf::test::strings_column_wrapper strings{"one", "two", "three", "four"};
+  cudf::test::fixed_point_column_wrapper<int32_t> decimals({123, 456}, numeric::scale_type{-2});
+  cudf::column_view const lhs_view = lhs;
+  cudf::column_view const rhs_view = rhs;
+  auto const sliced                = cudf::slice(nullable, {1, 4}).front();
+  auto const table                 = cudf::table_view{{lhs_view, rhs_view}};
+
+  auto upstream     = cudf::get_current_device_resource_ref();
+  auto output_mr    = rmm::mr::statistics_resource_adaptor(upstream);
+  auto temporary_mr = rmm::mr::statistics_resource_adaptor(upstream);
+  auto mr           = cudf::memory_resources{output_mr, temporary_mr};
+
+  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(lhs, rhs, cudf::test::debug_output_level::QUIET, mr);
+  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(
+    lhs, rhs, cudf::test::debug_output_level::QUIET, mr);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(lhs, rhs, cudf::test::debug_output_level::QUIET, mr);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    lhs, rhs, cudf::test::debug_output_level::QUIET, cudf::test::default_ulp, mr);
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(
+    lhs_view.data<int32_t>(), rhs_view.data<int32_t>(), lhs_view.size() * sizeof(int32_t), mr);
+
+  static_cast<void>(cudf::test::bitmask_to_host(sliced, mr));
+  static_cast<void>(cudf::test::to_host<int32_t>(sliced, mr));
+  static_cast<void>(cudf::test::to_host<std::string>(strings, mr));
+  static_cast<void>(cudf::test::to_host<numeric::decimal32>(decimals, mr));
+
+  CUDF_TEST_EXPECT_TABLE_PROPERTIES_EQUAL(table, table);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table, table, mr);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(table, table, mr);
+
+  static_cast<void>(cudf::test::to_strings(sliced, mr));
+  static_cast<void>(cudf::test::to_string(sliced, ",", mr));
+  std::ostringstream output;
+  cudf::test::print(sliced, output, mr);
+
+  cudf::test::get_default_stream().synchronize();
+  EXPECT_EQ(0, output_mr.get_bytes_counter().value);
+  EXPECT_EQ(0, output_mr.get_bytes_counter().total);
+  EXPECT_EQ(0, temporary_mr.get_bytes_counter().value);
+  EXPECT_GT(temporary_mr.get_bytes_counter().total, 0);
 }
 
 struct ColumnUtilitiesStringsTest : public cudf::test::BaseFixture {};
@@ -279,7 +332,8 @@ TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructureBeforeConstruction)
     cudf::test::fixed_width_column_wrapper<int> c0_data{
       1, 1, 1, 2, 2, 2, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 7, 7, 7};
 
-    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids.begin(), valids.end());
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+      valids.begin(), valids.end(), cudf::get_current_device_resource_ref());
 
     auto c0 = [&] {
       auto tmp = make_lists_column(
@@ -295,7 +349,8 @@ TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructureBeforeConstruction)
         c1_offsets.release(),
         c1_data.release(),
         null_count,
-        std::get<0>(cudf::test::detail::make_null_mask(valids.begin(), valids.end())));
+        std::get<0>(cudf::test::detail::make_null_mask(
+          valids.begin(), valids.end(), cudf::get_current_device_resource_ref())));
       return cudf::purge_nonempty_nulls(tmp->view());
     }();
 
@@ -319,16 +374,16 @@ TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructureBeforeConstruction)
     cudf::test::structs_column_wrapper c0_l2_data({c0_l3_ints, c0_l3_floats});
     std::vector<bool> c0_l2_valids = {1, 1, 1, 0, 0, 1, 1};
 
-    auto [null_mask, null_count] =
-      cudf::test::detail::make_null_mask(c0_l2_valids.begin(), c0_l2_valids.end());
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+      c0_l2_valids.begin(), c0_l2_valids.end(), cudf::get_current_device_resource_ref());
     auto c0_l2 = [&] {
       auto tmp = make_lists_column(
         7, c0_l2_offsets.release(), c0_l2_data.release(), null_count, std::move(null_mask));
       return cudf::purge_nonempty_nulls(tmp->view());
     }();
 
-    std::tie(null_mask, null_count) =
-      cudf::test::detail::make_null_mask(level1_valids.begin(), level1_valids.end());
+    std::tie(null_mask, null_count) = cudf::test::detail::make_null_mask(
+      level1_valids.begin(), level1_valids.end(), cudf::get_current_device_resource_ref());
     auto c0 = [&] {
       auto tmp = make_lists_column(
         7, c0_l1_offsets.release(), std::move(c0_l2), null_count, std::move(null_mask));
@@ -343,16 +398,16 @@ TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructureBeforeConstruction)
     cudf::test::structs_column_wrapper c1_l2_data({c1_l3_ints, c1_l3_floats});
     std::vector<bool> c1_l2_valids = {1, 0, 0, 1, 1};
 
-    std::tie(null_mask, null_count) =
-      cudf::test::detail::make_null_mask(c1_l2_valids.begin(), c1_l2_valids.end());
+    std::tie(null_mask, null_count) = cudf::test::detail::make_null_mask(
+      c1_l2_valids.begin(), c1_l2_valids.end(), cudf::get_current_device_resource_ref());
     auto c1_l2 = [&] {
       auto tmp = make_lists_column(
         5, c1_l2_offsets.release(), c1_l2_data.release(), null_count, std::move(null_mask));
       return cudf::purge_nonempty_nulls(tmp->view());
     }();
 
-    std::tie(null_mask, null_count) =
-      cudf::test::detail::make_null_mask(level1_valids.begin(), level1_valids.end());
+    std::tie(null_mask, null_count) = cudf::test::detail::make_null_mask(
+      level1_valids.begin(), level1_valids.end(), cudf::get_current_device_resource_ref());
     auto c1 = [&] {
       auto tmp = make_lists_column(
         7, c1_l1_offsets.release(), std::move(c1_l2), null_count, std::move(null_mask));

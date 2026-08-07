@@ -62,7 +62,7 @@ TEST_F(ColumnDeviceViewTest, ExplicitMemoryResourceControl)
 {
   auto harness = cudf::test::memory_resource_test_harness{this->mr()};
   auto stream  = cudf::get_default_stream();
-  auto input   = cudf::test::strings_column_wrapper({"one", "two"}).release();
+  auto input   = cudf::test::strings_column_wrapper({"one", "two"}, harness.setup_mr()).release();
 
   auto immutable_view = [&] {
     auto current_scope = harness.fail_on_current_device_resource_use();

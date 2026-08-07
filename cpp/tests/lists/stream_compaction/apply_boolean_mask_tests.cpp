@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf_test/base_fixture.hpp>
@@ -140,7 +140,8 @@ TYPED_TEST(ApplyBooleanMaskTypedTest, StructInput)
     auto child_str               = strings{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
     auto const null_mask_begin   = null_at(5);
     auto const null_mask_end     = null_mask_begin + num_input_rows;
-    auto [null_mask, null_count] = detail::make_null_mask(null_mask_begin, null_mask_end);
+    auto [null_mask, null_count] = detail::make_null_mask(
+      null_mask_begin, null_mask_end, cudf::get_current_device_resource_ref());
     return cudf::make_lists_column(num_input_rows,
                                    offsets{0, 2, 3, 6, 6, 8, 8, 10}.release(),
                                    structs_column_wrapper{{child_num, child_str}}.release(),
@@ -158,7 +159,8 @@ TYPED_TEST(ApplyBooleanMaskTypedTest, StructInput)
       auto child_str               = strings{"0", "1", "4", "6", "9"};
       auto const null_mask_begin   = null_at(5);
       auto const null_mask_end     = null_mask_begin + num_input_rows;
-      auto [null_mask, null_count] = detail::make_null_mask(null_mask_begin, null_mask_end);
+      auto [null_mask, null_count] = detail::make_null_mask(
+        null_mask_begin, null_mask_end, cudf::get_current_device_resource_ref());
       return cudf::make_lists_column(num_input_rows,
                                      offsets{0, 2, 2, 3, 3, 4, 4, 5}.release(),
                                      structs_column_wrapper{{child_num, child_str}}.release(),
@@ -180,7 +182,8 @@ TYPED_TEST(ApplyBooleanMaskTypedTest, StructInput)
       auto child_str               = strings{"4", "6", "9"};
       auto const null_mask_begin   = null_at(4);
       auto const null_mask_end     = null_mask_begin + num_input_rows;
-      auto [null_mask, null_count] = detail::make_null_mask(null_mask_begin, null_mask_end);
+      auto [null_mask, null_count] = detail::make_null_mask(
+        null_mask_begin, null_mask_end, cudf::get_current_device_resource_ref());
       return cudf::make_lists_column(num_input_rows - 1,
                                      offsets{0, 0, 1, 1, 2, 2, 3}.release(),
                                      structs_column_wrapper{{child_num, child_str}}.release(),

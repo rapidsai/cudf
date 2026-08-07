@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -122,10 +122,13 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                    column_view const& left_edges,
                                    column_view const& right_edges,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
-  auto output = make_numeric_column(
-    data_type(type_to_id<size_type>()), input.size(), mask_state::UNALLOCATED, stream, mr);
+  auto output              = make_numeric_column(data_type(type_to_id<size_type>()),
+                                    input.size(),
+                                    mask_state::UNALLOCATED,
+                                    stream,
+                                    resources.get_output_mr());
   auto output_mutable_view = output->mutable_view();
   auto output_begin        = output_mutable_view.begin<size_type>();
   auto output_end          = output_mutable_view.end<size_type>();
@@ -134,9 +137,11 @@ std::unique_ptr<column> label_bins(column_view const& input,
   // for columns of compound types. The column_view iterators fail for compound
   // types because they return raw pointers to the start of the data. The output
   // does not require these iterators because it's always a primitive type.
-  auto input_device_view       = column_device_view::create(input, stream);
-  auto left_edges_device_view  = column_device_view::create(left_edges, stream);
-  auto right_edges_device_view = column_device_view::create(right_edges, stream);
+  auto input_device_view = column_device_view::create(input, stream, resources.get_temporary_mr());
+  auto left_edges_device_view =
+    column_device_view::create(left_edges, stream, resources.get_temporary_mr());
+  auto right_edges_device_view =
+    column_device_view::create(right_edges, stream, resources.get_temporary_mr());
 
   auto left_begin  = left_edges_device_view->begin<T>();
   auto left_end    = left_edges_device_view->end<T>();
@@ -145,7 +150,7 @@ std::unique_ptr<column> label_bins(column_view const& input,
   using RandomAccessIterator = decltype(left_edges_device_view->begin<T>());
 
   dispatch_bool(input.has_nulls(), [&](auto has_nulls) {
-    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    thrust::transform(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
                       input_device_view->pair_begin<T, has_nulls>(),
                       input_device_view->pair_end<T, has_nulls>(),
                       output_begin,
@@ -153,7 +158,8 @@ std::unique_ptr<column> label_bins(column_view const& input,
                         left_begin, left_end, right_begin));
   });
 
-  auto mask_and_count = valid_if(output_begin, output_end, filter_null_sentinel(), stream, mr);
+  auto mask_and_count =
+    valid_if(output_begin, output_end, filter_null_sentinel(), stream, resources);
 
   output->set_null_mask(std::move(mask_and_count.first), mask_and_count.second);
   return output;
@@ -180,13 +186,13 @@ struct bin_type_dispatcher {
                                      column_view const& right_edges,
                                      inclusive right_inclusive,
                                      rmm::cuda_stream_view stream,
-                                     rmm::device_async_resource_ref mr)
+                                     cudf::memory_resources resources)
     requires(detail::is_supported_bin_type<T>())
   {
     return dispatch_inclusive(left_inclusive, [&](auto li) {
       return dispatch_inclusive(right_inclusive, [&](auto ri) {
         return label_bins<T, InclusiveToComparator_t<T, li>, InclusiveToComparator_t<T, ri>>(
-          input, left_edges, right_edges, stream, mr);
+          input, left_edges, right_edges, stream, resources);
       });
     });
   }
@@ -201,7 +207,7 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                    column_view const& right_edges,
                                    inclusive right_inclusive,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(
@@ -224,7 +230,7 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                                 right_edges,
                                                 right_inclusive,
                                                 stream,
-                                                mr);
+                                                resources);
 }
 
 }  // namespace detail
@@ -236,10 +242,10 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                    column_view const& right_edges,
                                    inclusive right_inclusive,
                                    rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+                                   cudf::memory_resources resources)
 {
   CUDF_FUNC_RANGE();
   return detail::label_bins(
-    input, left_edges, left_inclusive, right_edges, right_inclusive, stream, mr);
+    input, left_edges, left_inclusive, right_edges, right_inclusive, stream, resources);
 }
 }  // namespace cudf

@@ -58,8 +58,8 @@ TEST_F(JSONTypeCastTest, String)
   rmm::device_uvector<cudf::size_type> svs_length = string_offset_to_length(column, stream);
 
   auto null_mask_it = no_nulls();
-  auto null_mask =
-    std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + column.size()));
+  auto null_mask    = std::get<0>(cudf::test::detail::make_null_mask(
+    null_mask_it, null_mask_it + column.size(), cudf::get_current_device_resource_ref()));
 
   auto str_col = cudf::io::json::detail::parse_data(
     column.chars_begin(stream),
@@ -91,8 +91,8 @@ TEST_F(JSONTypeCastTest, Int)
   rmm::device_uvector<cudf::size_type> svs_length = string_offset_to_length(column, stream);
 
   auto null_mask_it = no_nulls();
-  auto null_mask =
-    std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + column.size()));
+  auto null_mask    = std::get<0>(cudf::test::detail::make_null_mask(
+    null_mask_it, null_mask_it + column.size(), cudf::get_current_device_resource_ref()));
 
   auto col = cudf::io::json::detail::parse_data(
     column.chars_begin(stream),
@@ -132,8 +132,8 @@ TEST_F(JSONTypeCastTest, StringEscapes)
   rmm::device_uvector<cudf::size_type> svs_length = string_offset_to_length(column, stream);
 
   auto null_mask_it = no_nulls();
-  auto null_mask =
-    std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + column.size()));
+  auto null_mask    = std::get<0>(cudf::test::detail::make_null_mask(
+    null_mask_it, null_mask_it + column.size(), cudf::get_current_device_resource_ref()));
 
   auto col = cudf::io::json::detail::parse_data(
     column.chars_begin(stream),
@@ -202,8 +202,8 @@ TEST_F(JSONTypeCastTest, ErrorNulls)
     rmm::device_uvector<cudf::size_type> svs_length = string_offset_to_length(column, stream);
 
     auto null_mask_it = no_nulls();
-    auto null_mask =
-      std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + column.size()));
+    auto null_mask    = std::get<0>(cudf::test::detail::make_null_mask(
+      null_mask_it, null_mask_it + column.size(), cudf::get_current_device_resource_ref()));
 
     auto str_col = cudf::io::json::detail::parse_data(
       column.chars_begin(stream),

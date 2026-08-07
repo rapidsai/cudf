@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,6 +7,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/memory_resource_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -18,6 +19,7 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/device_buffer.hpp>
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <cuda/iterator>
 
@@ -30,6 +32,15 @@
 using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
 using cudf::size_type;
 
+using cudf::test::expect_output_uses_distinct_resources;
+using cudf::test::expect_output_uses_resource;
+
+constexpr auto output_may_include_released_allocations =
+  cudf::test::output_allocation_expectation::AT_LEAST_LIVE;
+constexpr auto struct_resource_expectations =
+  cudf::test::memory_resource_expectations{cudf::test::output_allocation_expectation::AT_LEAST_LIVE,
+                                           cudf::test::temporary_allocation_expectation::NONE};
+
 struct StructColumnWrapperTest : public cudf::test::BaseFixture {};
 
 template <typename T>
@@ -41,6 +52,98 @@ using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBo
                                                   cudf::test::TimestampTypes>;
 
 TYPED_TEST_SUITE(TypedStructColumnWrapperTest, FixedWidthTypesNotBool);
+
+TEST_F(StructColumnWrapperTest, CopiedChildrenUseExplicitMemoryResource)
+{
+  auto integers = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4};
+  auto strings  = cudf::test::strings_column_wrapper{"one", "two", "three", "four"};
+  auto validity = std::vector<bool>{true, false, true, true};
+
+  expect_output_uses_resource(
+    [&](auto& mr) {
+      auto ref = rmm::device_async_resource_ref{mr};
+      return cudf::test::structs_column_wrapper({integers, strings}, ref);
+    },
+    output_may_include_released_allocations);
+
+  expect_output_uses_resource(
+    [&](auto& mr) { return cudf::test::structs_column_wrapper({integers, strings}, validity, mr); },
+    output_may_include_released_allocations);
+
+  expect_output_uses_resource(
+    [&](auto& mr) {
+      return cudf::test::structs_column_wrapper({integers, strings}, validity.begin(), mr);
+    },
+    output_may_include_released_allocations);
+}
+
+TEST_F(StructColumnWrapperTest, CopiedChildrenUseDistinctResources)
+{
+  auto integers = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4};
+  auto strings  = cudf::test::strings_column_wrapper{"one", "two", "three", "four"};
+  auto validity = std::vector<bool>{true, false, true, true};
+
+  expect_output_uses_distinct_resources(
+    [&](auto mr) { return cudf::test::structs_column_wrapper({integers, strings}, validity, mr); },
+    struct_resource_expectations);
+}
+
+TEST_F(StructColumnWrapperTest, AdoptedChildrenRetainResourceProvenance)
+{
+  auto child_mr  = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+  auto output_mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+
+  {
+    vector_of_columns children;
+    children.push_back(
+      cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3, 4}, child_mr).release());
+    children.push_back(
+      cudf::test::strings_column_wrapper({"one", "two", "three", "four"}, child_mr).release());
+    cudf::test::get_default_stream().synchronize();
+    auto const adopted_bytes = child_mr.get_bytes_counter().value;
+
+    auto column = cudf::test::structs_column_wrapper(std::move(children), output_mr).release();
+    cudf::test::get_default_stream().synchronize();
+
+    EXPECT_EQ(adopted_bytes, child_mr.get_bytes_counter().value);
+    EXPECT_EQ(0, output_mr.get_bytes_counter().value);
+    EXPECT_EQ(column->alloc_size(),
+              static_cast<std::size_t>(child_mr.get_bytes_counter().value +
+                                       output_mr.get_bytes_counter().value));
+  }
+
+  cudf::test::get_default_stream().synchronize();
+  EXPECT_EQ(0, child_mr.get_bytes_counter().value);
+  EXPECT_EQ(0, output_mr.get_bytes_counter().value);
+}
+
+TEST_F(StructColumnWrapperTest, AdoptedNullableChildrenUseExplicitMemoryResource)
+{
+  auto child_mr  = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+  auto output_mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+
+  {
+    vector_of_columns children;
+    children.push_back(
+      cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3, 4}, child_mr).release());
+    children.push_back(
+      cudf::test::strings_column_wrapper({"one", "two", "three", "four"}, child_mr).release());
+
+    auto column = cudf::test::structs_column_wrapper(
+                    std::move(children), std::vector<bool>{true, false, true, true}, output_mr)
+                    .release();
+    cudf::test::get_default_stream().synchronize();
+
+    EXPECT_GT(output_mr.get_bytes_counter().value, 0);
+    EXPECT_EQ(column->alloc_size(),
+              static_cast<std::size_t>(child_mr.get_bytes_counter().value +
+                                       output_mr.get_bytes_counter().value));
+  }
+
+  cudf::test::get_default_stream().synchronize();
+  EXPECT_EQ(0, child_mr.get_bytes_counter().value);
+  EXPECT_EQ(0, output_mr.get_bytes_counter().value);
+}
 
 // Test simple struct construction without nullmask, through column factory.
 // Columns must retain their originally set values.
@@ -422,8 +525,9 @@ TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)
   auto struct_of_lists_col = structs_column_wrapper{{list_col}}.release();
 
   auto list_of_struct_of_list_validity = cudf::test::iterators::nulls_at_multiples_of(3);
-  auto [null_mask, null_count] =
-    detail::make_null_mask(list_of_struct_of_list_validity, list_of_struct_of_list_validity + 5);
+  auto [null_mask, null_count]         = detail::make_null_mask(list_of_struct_of_list_validity,
+                                                        list_of_struct_of_list_validity + 5,
+                                                        cudf::get_current_device_resource_ref());
   auto list_of_struct_of_list =
     cudf::make_lists_column(5,
                             fixed_width_column_wrapper<size_type>{0, 2, 4, 6, 8, 10}.release(),
@@ -442,8 +546,9 @@ TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(cudf::lists_column_view(*list_of_struct_of_list).child(),
                                  *expected_level2_struct);
 
-  std::tie(null_mask, null_count) =
-    detail::make_null_mask(list_of_struct_of_list_validity, list_of_struct_of_list_validity + 5);
+  std::tie(null_mask, null_count) = detail::make_null_mask(list_of_struct_of_list_validity,
+                                                           list_of_struct_of_list_validity + 5,
+                                                           cudf::get_current_device_resource_ref());
   auto expected_level3_list =
     cudf::make_lists_column(5,
                             fixed_width_column_wrapper<size_type>{0, 0, 2, 4, 4, 6}.release(),
@@ -469,7 +574,8 @@ TYPED_TEST(TypedStructColumnWrapperTest, StructOfListOfStruct)
       .release();
 
   auto list_validity           = cudf::test::iterators::nulls_at_multiples_of(3);
-  auto [null_mask, null_count] = detail::make_null_mask(list_validity, list_validity + 5);
+  auto [null_mask, null_count] = detail::make_null_mask(
+    list_validity, list_validity + 5, cudf::get_current_device_resource_ref());
 
   auto lists_col =
     cudf::make_lists_column(5,
@@ -491,7 +597,8 @@ TYPED_TEST(TypedStructColumnWrapperTest, StructOfListOfStruct)
   auto expected_structs_col =
     structs_column_wrapper{{expected_ints_col}, {1, 1, 1, 1, 1, 1, 0, 0, 0, 0}}.release();
 
-  std::tie(null_mask, null_count) = detail::make_null_mask(list_validity, list_validity + 5);
+  std::tie(null_mask, null_count) = detail::make_null_mask(
+    list_validity, list_validity + 5, cudf::get_current_device_resource_ref());
 
   auto expected_lists_col =
     cudf::make_lists_column(5,
@@ -605,9 +712,9 @@ TEST_F(StructColumnWrapperTest, TestStructsColumnWithEmptyChild)
   int num_rows{empty_col->size()};
   vector_of_columns cols;
   cols.push_back(std::move(empty_col));
-  auto mask_vec = std::vector<bool>{true, false, false};
-  auto [null_mask, null_count] =
-    cudf::test::detail::make_null_mask(mask_vec.begin(), mask_vec.end());
+  auto mask_vec                = std::vector<bool>{true, false, false};
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+    mask_vec.begin(), mask_vec.end(), cudf::get_current_device_resource_ref());
   EXPECT_NO_THROW(auto structs_col = cudf::make_structs_column(
                     num_rows, std::move(cols), null_count, std::move(null_mask)));
 }

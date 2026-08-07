@@ -137,7 +137,8 @@ TEST_F(TableViewTest, ExplicitDeviceViewMemoryResourceControl)
   auto harness = cudf::test::memory_resource_test_harness{this->mr()};
   auto stream  = cudf::get_default_stream();
   std::vector<std::unique_ptr<cudf::column>> columns;
-  columns.push_back(cudf::test::strings_column_wrapper({"one", "two"}).release());
+  columns.push_back(
+    cudf::test::strings_column_wrapper({"one", "two"}, harness.setup_mr()).release());
   auto input = cudf::table{std::move(columns)};
 
   auto immutable_view = [&] {

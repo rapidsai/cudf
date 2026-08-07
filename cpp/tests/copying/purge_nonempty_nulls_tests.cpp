@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf_test/base_fixture.hpp>
@@ -359,8 +359,9 @@ TEST_F(PurgeNonEmptyNullsTest, UnsanitizedListOfUnsanitizedStrings)
   );
 
   // Construct a list column from the strings column.
-  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(no_nulls(), no_nulls() + 4);
-  auto const lists             = cudf::make_lists_column(4,
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+    no_nulls(), no_nulls() + 4, cudf::get_current_device_resource_ref());
+  auto const lists = cudf::make_lists_column(4,
                                              offsets_col_t{0, 4, 5, 7, 10}.release(),
                                              std::move(strings),
                                              null_count,
@@ -420,7 +421,8 @@ TEST_F(PurgeNonEmptyNullsTest, StructOfList)
   }();
   auto [null_mask, null_count] = [&] {
     auto const valid_iter = null_at(2);
-    return cudf::test::detail::make_null_mask(valid_iter, valid_iter + structs_input->size());
+    return cudf::test::detail::make_null_mask(
+      valid_iter, valid_iter + structs_input->size(), cudf::get_current_device_resource_ref());
   }();
 
   // Manually set the null mask for the columns, leaving the null at list index 2 unsanitized.

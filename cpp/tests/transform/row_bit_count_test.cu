@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -243,7 +243,9 @@ TYPED_TEST(RowBitCountTyped, ListsWithNulls)
   cudf::test::fixed_width_column_wrapper<cudf::size_type> inner_offsets{0, 2, 5, 6, 9, 9};
   std::vector<bool> inner_list_validity{1, 1, 1, 1, 0};
   auto [null_mask, null_count] =
-    cudf::test::detail::make_null_mask(inner_list_validity.begin(), inner_list_validity.end());
+    cudf::test::detail::make_null_mask(inner_list_validity.begin(),
+                                       inner_list_validity.end(),
+                                       cudf::get_current_device_resource_ref());
   auto inner_list = cudf::make_lists_column(
     5, inner_offsets.release(), values.release(), null_count, std::move(null_mask));
   cudf::test::fixed_width_column_wrapper<cudf::size_type> outer_offsets{0, 2, 2, 3, 5};

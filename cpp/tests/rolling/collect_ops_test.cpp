@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -257,8 +257,8 @@ TYPED_TEST(TypedCollectListTest, RollingWindowWithNullInputsHonoursMinPeriods)
       cudf::size_type{0},
       [expected_num_rows](auto i) { return i != 0 && i != (expected_num_rows - 1); });
 
-    auto [null_mask, null_count] =
-      cudf::test::detail::make_null_mask(null_mask_iter, null_mask_iter + expected_num_rows);
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+      null_mask_iter, null_mask_iter + expected_num_rows, cudf::get_current_device_resource_ref());
 
     auto expected_result = cudf::make_lists_column(expected_num_rows,
                                                    std::move(expected_offsets),
@@ -292,8 +292,8 @@ TYPED_TEST(TypedCollectListTest, RollingWindowWithNullInputsHonoursMinPeriods)
       cudf::size_type{0},
       [expected_num_rows](auto i) { return i != 0 && i != (expected_num_rows - 1); });
 
-    auto [null_mask, null_count] =
-      cudf::test::detail::make_null_mask(null_mask_iter, null_mask_iter + expected_num_rows);
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+      null_mask_iter, null_mask_iter + expected_num_rows, cudf::get_current_device_resource_ref());
 
     auto expected_result = cudf::make_lists_column(expected_num_rows,
                                                    std::move(expected_offsets),
@@ -330,8 +330,8 @@ TYPED_TEST(TypedCollectListTest, RollingWindowWithNullInputsHonoursMinPeriods)
     auto null_mask_iter    = cudf::detail::make_counting_transform_iterator(
       cudf::size_type{0}, [](auto i) { return i > 0 && i < 4; });
 
-    auto [null_mask, null_count] =
-      cudf::test::detail::make_null_mask(null_mask_iter, null_mask_iter + expected_num_rows);
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+      null_mask_iter, null_mask_iter + expected_num_rows, cudf::get_current_device_resource_ref());
 
     auto expected_result = cudf::make_lists_column(expected_num_rows,
                                                    std::move(expected_offsets),
@@ -365,8 +365,8 @@ TYPED_TEST(TypedCollectListTest, RollingWindowWithNullInputsHonoursMinPeriods)
     auto null_mask_iter    = cudf::detail::make_counting_transform_iterator(
       cudf::size_type{0}, [](auto i) { return i > 0 && i < 4; });
 
-    auto [null_mask, null_count] =
-      cudf::test::detail::make_null_mask(null_mask_iter, null_mask_iter + expected_num_rows);
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+      null_mask_iter, null_mask_iter + expected_num_rows, cudf::get_current_device_resource_ref());
 
     auto expected_result = cudf::make_lists_column(expected_num_rows,
                                                    std::move(expected_offsets),
@@ -473,8 +473,8 @@ TEST_F(CollectListTest, RollingWindowHonoursMinPeriodsWithDecimal)
       cudf::size_type{0},
       [expected_num_rows](auto i) { return i != 0 && i != (expected_num_rows - 1); });
 
-    auto [null_mask, null_count] =
-      cudf::test::detail::make_null_mask(null_mask_iter, null_mask_iter + expected_num_rows);
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+      null_mask_iter, null_mask_iter + expected_num_rows, cudf::get_current_device_resource_ref());
 
     auto expected_result = cudf::make_lists_column(expected_num_rows,
                                                    std::move(expected_offsets),
@@ -518,8 +518,8 @@ TEST_F(CollectListTest, RollingWindowHonoursMinPeriodsWithDecimal)
     auto null_mask_iter    = cudf::detail::make_counting_transform_iterator(
       cudf::size_type{0}, [](auto i) { return i > 0 && i < 4; });
 
-    auto [null_mask, null_count] =
-      cudf::test::detail::make_null_mask(null_mask_iter, null_mask_iter + expected_num_rows);
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+      null_mask_iter, null_mask_iter + expected_num_rows, cudf::get_current_device_resource_ref());
 
     auto expected_result = cudf::make_lists_column(expected_num_rows,
                                                    std::move(expected_offsets),
@@ -1252,9 +1252,9 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowOnStructsWithMinPe
   auto expected_offsets_column =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 4, 8, 13, 18, 23, 23, 23, 23, 23}
       .release();
-  auto expected_validity_iter = cudf::test::iterators::nulls_at({5, 6, 7, 8});
-  auto [null_mask, null_count] =
-    cudf::test::detail::make_null_mask(expected_validity_iter, expected_validity_iter + 9);
+  auto expected_validity_iter  = cudf::test::iterators::nulls_at({5, 6, 7, 8});
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+    expected_validity_iter, expected_validity_iter + 9, cudf::get_current_device_resource_ref());
   auto expected_result = cudf::make_lists_column(9,
                                                  std::move(expected_offsets_column),
                                                  std::move(expected_structs_column),
@@ -1598,8 +1598,8 @@ TEST_F(CollectSetTest, RollingWindowHonoursMinPeriodsWithDecimal)
       cudf::size_type{0},
       [expected_num_rows](auto i) { return i != 0 && i != (expected_num_rows - 1); });
 
-    auto [null_mask, null_count] =
-      cudf::test::detail::make_null_mask(null_mask_iter, null_mask_iter + expected_num_rows);
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+      null_mask_iter, null_mask_iter + expected_num_rows, cudf::get_current_device_resource_ref());
 
     auto expected_result = cudf::make_lists_column(expected_num_rows,
                                                    std::move(expected_offsets),
@@ -1643,8 +1643,8 @@ TEST_F(CollectSetTest, RollingWindowHonoursMinPeriodsWithDecimal)
     auto null_mask_iter    = cudf::detail::make_counting_transform_iterator(
       cudf::size_type{0}, [](auto i) { return i > 0 && i < 4; });
 
-    auto [null_mask, null_count] =
-      cudf::test::detail::make_null_mask(null_mask_iter, null_mask_iter + expected_num_rows);
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+      null_mask_iter, null_mask_iter + expected_num_rows, cudf::get_current_device_resource_ref());
 
     auto expected_result = cudf::make_lists_column(expected_num_rows,
                                                    std::move(expected_offsets),
