@@ -777,8 +777,13 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
 
   auto leaf_column = cudf::type_dispatcher(
     cudf::data_type(dist_params.element_type), create_rand_col_fn{}, profile, engine, num_elements);
-  auto len_dist =
-    random_value_fn<uint32_t>{profile.get_distribution_params<cudf::list_view>().length_params};
+  // The offsets buffer these lengths are scanned into becomes the list column's offsets, so it has
+  // to be size_type wide, which means generating the lengths at that width too.
+  auto const len_params = profile.get_distribution_params<cudf::list_view>().length_params;
+  auto len_dist         = random_value_fn<cudf::size_type>{
+    distribution_params<cudf::size_type>{len_params.id,
+                                                 static_cast<cudf::size_type>(len_params.lower_bound),
+                                                 static_cast<cudf::size_type>(len_params.upper_bound)}};
   auto valid_dist = random_value_fn<bool>(
     distribution_params<bool>{1. - profile.get_null_probability().value_or(0)});
 
@@ -802,15 +807,17 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     thrust::device_pointer_cast(offsets.end())[-1] =
       current_child_column->size();  // Always include all elements
 
-    auto offsets_column = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
-                                                         current_num_rows + 1,
-                                                         offsets.release(),
-                                                         rmm::device_buffer{},
-                                                         0);
+    auto offsets_column =
+      std::make_unique<cudf::column>(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
+                                     current_num_rows + 1,
+                                     offsets.release(),
+                                     rmm::device_buffer{},
+                                     0);
 
-    auto [null_mask, null_count] = profile.get_null_probability().has_value()
-                                     ? cudf::bools_to_mask(cudf::device_span<bool const>(valids))
-                                     : std::pair{std::make_unique<rmm::device_buffer>(), cudf::size_type{0}};
+    auto [null_mask, null_count] =
+      profile.get_null_probability().has_value()
+        ? cudf::bools_to_mask(cudf::device_span<bool const>(valids))
+        : std::pair{std::make_unique<rmm::device_buffer>(), cudf::size_type{0}};
 
     list_column = cudf::make_lists_column(current_num_rows,
                                           std::move(offsets_column),
