@@ -121,6 +121,8 @@ require_arg --libcudf-dir  "${LIBCUDF_DIR}"
 require_arg --output-dir   "${OUTPUT_DIR}"
 require_arg --cuda-version "${CUDA_VERSION}"
 
+: "${GITHUB_REF:?GITHUB_REF must be set.}"
+
 if [[ ! -d ${LIBCUDF_DIR} ]]; then
   echo "Error: --libcudf-dir '${LIBCUDF_DIR}' does not exist."
   exit 1
@@ -194,6 +196,7 @@ DOCKER_ARGS=(
   --env PARALLEL_LEVEL="${PARALLEL_LEVEL}"
   --env HOST_UID="$(id -u)"
   --env HOST_GID="$(id -g)"
+  --env GITHUB_REF="${GITHUB_REF}"
 )
 
 if [[ -n ${CMAKE_CUDA_ARCHITECTURES} ]]; then

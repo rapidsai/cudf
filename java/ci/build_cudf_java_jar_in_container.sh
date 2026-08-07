@@ -38,7 +38,16 @@ if [[ -z ${HOST_UID} || -z ${HOST_GID} ]]; then
   exit 1
 fi
 
+# TEMPORARY: same patch as spark-rapids-jni
+# (NVIDIA/cudf-spark-jni patches/0001-use-static-nvcomp-from-libcudf.patch).
+# Static CUDF_JNI_LIBCUDF_STATIC=ON JARs embed nvcomp in libcudf and do not
+# package libnvcomp.so. NativeDepsLoader still requires it unless this patch
+# drops "nvcomp" from loadOrder for packaging only.
+NVCOMP_LOADER_PATCH="${REPO_ROOT}/java/ci/patches/0001-use-static-nvcomp-from-libcudf.patch"
+
 _chown_outputs_on_exit() {
+  # Best-effort: leave /repo clean even if packaging failed mid-build.
+  git -C "${REPO_ROOT}" apply --reverse "${NVCOMP_LOADER_PATCH}" >/dev/null 2>&1 || true
   chown -R "${HOST_UID}:${HOST_GID}" "${OUTPUT_DIR}" "${REPO_ROOT}/java/target" 2>/dev/null || true
 }
 trap _chown_outputs_on_exit EXIT
@@ -107,7 +116,34 @@ fi
 cd "${REPO_ROOT}/java"
 
 CUDF_VERSION="$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout "${BUILD_ARG[@]}")"
+
+# TEMPORARY (revert with the pr.yaml change): force the release-tag path for the
+# manual release. Set here rather than as a job-level `env:` because GHA
+# silently ignores that override.
+# rapids-pre-commit-hooks: disable-next-line[verify-hardcoded-version]
+export GITHUB_REF=refs/tags/v26.08.00
+
+# Release tag builds strip -SNAPSHOT and rewrite the POM so packaged artifacts
+# carry the release version. Non-release builds keep -SNAPSHOT.
+if rapids-is-release-build; then
+  CUDF_VERSION="${CUDF_VERSION%-SNAPSHOT}"
+  mvn versions:set -DnewVersion="${CUDF_VERSION}" -DgenerateBackupPoms=false "${BUILD_ARG[@]}"
+fi
+
 rapids-logger "Packaging cuDF Java JAR version ${CUDF_VERSION} (libcudf: ${CUDF_INSTALL_DIR})"
+
+# PIC libspdlog.a / libfmt.a are installed into the static libcudf prefix
+# (same tree as rmm) and linked via $<INSTALL_PREFIX> from the packaging
+# cmake patch. Fail early if this mount is missing them.
+for _logging_lib in libfmt.a libspdlog.a; do
+  if [[ ! -f ${CUDF_INSTALL_DIR}/lib/${_logging_lib} ]]; then
+    echo "Error: ${CUDF_INSTALL_DIR}/lib/${_logging_lib} missing; rebuild static libcudf with install_static_logging_libs" >&2
+    exit 1
+  fi
+done
+
+rapids-logger "Applying temporary nvcomp NativeDepsLoader patch (same as spark-rapids-jni)"
+git -C "${REPO_ROOT}" apply "${NVCOMP_LOADER_PATCH}"
 
 # The `clean` goal is intentionally omitted: /repo/java/target is a
 # bind-mount point, so when `mvn clean` attempts to remove the directory,
@@ -161,5 +197,7 @@ done
 
 cp -f "${MAIN_JAR}" "${OUTPUT_DIR}/"
 cp -f pom.xml "${OUTPUT_DIR}/cudf-${CUDF_VERSION}.pom"
+
+bash "${REPO_ROOT}/java/ci/check_jar_libcudf_needed.sh" "${OUTPUT_DIR}/$(basename "${MAIN_JAR}")"
 
 rapids-logger "Emitted $(basename "${MAIN_JAR}"), cudf-${CUDF_VERSION}-sources.jar, cudf-${CUDF_VERSION}-javadoc.jar, and cudf-${CUDF_VERSION}.pom to ${OUTPUT_DIR}"
