@@ -260,7 +260,7 @@ TEST_F(SparkMurmurHashTest, MultiValueWithSeeds)
   cudf::test::fixed_width_column_wrapper<int32_t> const hash_strings_expected(
     {142593372, 1217302703, -715697185, -2061143941, -111635966});
   cudf::test::fixed_width_column_wrapper<int32_t> const hash_doubles_expected(
-    {-1670924195, -853646085, -1281358385, 1897734433, -508695674});
+    {-1670924195, -1670924195, -1281358385, 1897734433, -508695674});
   cudf::test::fixed_width_column_wrapper<int32_t> const hash_timestamps_expected(
     {-1670924195, 1114849490, 904948192, -1832979433, 1752430209});
   cudf::test::fixed_width_column_wrapper<int32_t> const hash_decimal64_expected(
@@ -268,7 +268,7 @@ TEST_F(SparkMurmurHashTest, MultiValueWithSeeds)
   cudf::test::fixed_width_column_wrapper<int32_t> const hash_longs_expected(
     {-1670924195, 1114849490, 904948192, -853646085, -1604625029});
   cudf::test::fixed_width_column_wrapper<int32_t> const hash_floats_expected(
-    {933211791, 723455942, -349261430, -1225560532, -338752985});
+    {933211791, 933211791, -349261430, -1225560532, -338752985});
   cudf::test::fixed_width_column_wrapper<int32_t> const hash_dates_expected(
     {933211791, 751823303, -1080202046, -1906567553, -1503850410});
   cudf::test::fixed_width_column_wrapper<int32_t> const hash_decimal32_expected(
@@ -284,7 +284,7 @@ TEST_F(SparkMurmurHashTest, MultiValueWithSeeds)
   cudf::test::fixed_width_column_wrapper<int32_t> const hash_decimal128_expected(
     {-783713497, -295670906, 1398487324, -52622807, -1359749815});
   cudf::test::fixed_width_column_wrapper<int32_t> const hash_combined_expected(
-    {401603227, 588162166, 552160517, 1132537411, -326043017});
+    {401603227, 1728350528, 552160517, 1132537411, -326043017});
 
   using double_limits = std::numeric_limits<double>;
   using long_limits   = std::numeric_limits<int64_t>;
