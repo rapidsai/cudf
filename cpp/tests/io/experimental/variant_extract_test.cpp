@@ -1457,7 +1457,7 @@ using vlt = cudf::io::parquet::experimental::variant_logical_type;
 TEST_F(GetVariantTypeIdTest, NullValue)
 {
   auto got = apache_type_id(avf::primitive_null);
-  cudf::test::fixed_width_column_wrapper<int32_t> expected{static_cast<int32_t>(LT::null_value)};
+  cudf::test::fixed_width_column_wrapper<int32_t> expected{static_cast<int32_t>(vlt::null_value)};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
