@@ -238,6 +238,7 @@ __device__ cuda::std::optional<size_type> find_key_in_metadata(device_span<uint8
   auto const header = meta[0];
   int const version = header & 0x0F;
   if (version != variant_version_v1) { return cuda::std::nullopt; }
+  bool const is_sorted  = (header >> 4) & 0x01;
   int const offset_size = ((header >> 6) & 0x03) + 1;
 
   size_type pos          = 1;
@@ -251,22 +252,46 @@ __device__ cuda::std::optional<size_type> find_key_in_metadata(device_span<uint8
     return cuda::std::nullopt;
   }
 
-  auto start_off = read_uint64(meta, offsets_start, offset_size);
-  if (!start_off.has_value()) { return cuda::std::nullopt; }
   auto const strings_base = offsets_start + static_cast<size_type>(offsets_bytes);
   // Bytes available for dictionary string payloads
   auto const strings_extent = meta_len - strings_base;
-  for (size_type i = 0; i < num_entries.value(); ++i) {
-    auto const end_off = read_uint64(meta, offsets_start + (i + 1) * offset_size, offset_size);
-    if (!end_off.has_value()) { return cuda::std::nullopt; }
-    if (end_off.value() < start_off.value() || end_off.value() > strings_extent) {
+
+  // Helper: read the string for entry i without bounds-checking strings_extent
+  // (callers must validate). Returns nullopt on a bad offset read.
+  auto read_entry = [&](size_type i) -> cuda::std::optional<cudf::string_view> {
+    auto const s = read_uint64(meta, offsets_start + i * offset_size, offset_size);
+    auto const e = read_uint64(meta, offsets_start + (i + 1) * offset_size, offset_size);
+    if (!s.has_value() || !e.has_value()) { return cuda::std::nullopt; }
+    if (e.value() < s.value() || cuda::std::cmp_greater(e.value(), strings_extent)) {
       return cuda::std::nullopt;
     }
-    cudf::string_view const entry{
-      reinterpret_cast<char const*>(meta.data() + strings_base + start_off.value()),
-      static_cast<size_type>(end_off.value() - start_off.value())};
-    if (entry == key) { return i; }
-    start_off = end_off;
+    return cudf::string_view{reinterpret_cast<char const*>(meta.data() + strings_base + s.value()),
+                             static_cast<size_type>(e.value() - s.value())};
+  };
+
+  // Not using thrust::lower_bound since it does not propagate entry read failures
+  if (is_sorted) {
+    size_type lo = 0;
+    size_type hi = num_entries.value();
+    while (lo < hi) {
+      size_type const mid = lo + (hi - lo) / 2;
+      auto const entry    = read_entry(mid);
+      if (!entry.has_value()) { return cuda::std::nullopt; }
+      auto const cmp = entry.value().compare(key);
+      if (cmp == 0) { return mid; }
+      if (cmp < 0) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return cuda::std::nullopt;
+  }
+
+  for (size_type i = 0; i < num_entries.value(); ++i) {
+    auto const entry = read_entry(i);
+    if (!entry.has_value()) { return cuda::std::nullopt; }
+    if (entry.value() == key) { return i; }
   }
   return cuda::std::nullopt;
 }
