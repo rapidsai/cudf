@@ -157,10 +157,8 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
   }
 
   rmm::device_uvector<NodeIndexT> parent_col_ids(num_columns, stream);
-  auto parent_col_ids_it =
-    cuda::transform_iterator(cuda::make_permutation_iterator(
-                               unpermuted_tree.parent_node_ids.begin(), reordering_index.begin()),
-                             parent_nodeids_to_colids{rev_mapped_col_ids});
+  cuda::transform_output_iterator parent_col_ids_it(parent_col_ids.begin(),
+                                                    parent_nodeids_to_colids{rev_mapped_col_ids});
   rmm::device_uvector<row_offset_t> max_row_offsets(num_columns, stream);
   rmm::device_uvector<NodeT> column_categories(num_columns, stream);
   thrust::copy_n(
