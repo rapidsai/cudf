@@ -1007,7 +1007,10 @@ std::pair<encoded_data, std::vector<extent_info>> encode_columns(
             }
           } else if (strm_type == CI_DATA && ck.type_kind == TypeKind::STRING &&
                      ck.encoding_kind == DIRECT_V2) {
-            strm.lengths[strm_type] = std::max(column.rowgroup_char_count(rg_idx), 1);
+            auto const char_count   = column.rowgroup_char_count(rg_idx);
+            strm.lengths[strm_type] = std::max(char_count, 1);
+            // The `max` reserves a byte the encoder does not write
+            has_slack |= (char_count == 0);
           } else if (strm_type == CI_DATA && streams[strm_id].length == 0 &&
                      (ck.type_kind == DOUBLE || ck.type_kind == FLOAT)) {
             // Pass-through. The encoder reports this length back unchanged, so it is exact.
