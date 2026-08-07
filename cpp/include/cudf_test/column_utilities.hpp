@@ -219,6 +219,7 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(
  *
  * @tparam T The data type of the elements of the `column_view`
  * @param c the `column_view` to copy from
+ * @param stream CUDA stream used for device memory operations
  * @param mr Memory resources used for temporary device allocations
  * @return std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> first is the
  *  `column_view`'s data, and second is the column's bitmask.
@@ -236,6 +237,7 @@ CUDF_EXPORT std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host
  * @throw cudf::logic_error if c is not strings column.
  *
  * @param c the `column_view` of strings to copy from
+ * @param stream CUDA stream used for device memory operations
  * @param mr Memory resources used for temporary device allocations
  * @return std::pair first is `std::vector` of `std::string`
  * and second is the column's bitmask.
