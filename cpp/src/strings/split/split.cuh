@@ -605,21 +605,27 @@ struct split_ws_extract_fn {
     auto const token_offset = d_token_offsets[idx];
     auto const token_count  = static_cast<size_type>(d_token_offsets[idx + 1] - token_offset);
     if (token_count == 0) { return; }
-    auto* const d_result  = d_tokens + token_offset;
-    auto const size       = d_str.size_bytes();
-    auto const base       = d_str.data();
-    auto const all_tokens = (max_tokens == cuda::std::numeric_limits<size_type>::max()) ||
-                            (token_count == 1);
+    auto* const d_result = d_tokens + token_offset;
+    auto const size      = d_str.size_bytes();
+    auto const base      = d_str.data();
+    auto const all_tokens =
+      (max_tokens == cuda::std::numeric_limits<size_type>::max()) || (token_count == 1);
 
     size_type token_idx = 0;
     size_type i         = 0;
-    while (i < size && is_whitespace(static_cast<char_utf8>(base[i]))) { ++i; }
+    while (i < size && is_whitespace(static_cast<char_utf8>(base[i]))) {
+      ++i;
+    }
     while (i < size && token_idx < token_count) {
       auto const tok_start = i;
       if (all_tokens || (token_idx + 1 < token_count)) {
-        while (i < size && !is_whitespace(static_cast<char_utf8>(base[i]))) { ++i; }
+        while (i < size && !is_whitespace(static_cast<char_utf8>(base[i]))) {
+          ++i;
+        }
         d_result[token_idx++] = string_index_pair{base + tok_start, i - tok_start};
-        while (i < size && is_whitespace(static_cast<char_utf8>(base[i]))) { ++i; }
+        while (i < size && is_whitespace(static_cast<char_utf8>(base[i]))) {
+          ++i;
+        }
       } else {
         // last slot with max_tokens reached: rest of string (including trailing whitespace)
         d_result[token_idx++] = string_index_pair{base + tok_start, size - tok_start};
@@ -643,24 +649,30 @@ struct rsplit_ws_extract_fn {
     auto const token_offset = d_token_offsets[idx];
     auto const token_count  = static_cast<size_type>(d_token_offsets[idx + 1] - token_offset);
     if (token_count == 0) { return; }
-    auto* const d_result  = d_tokens + token_offset;
-    auto const size       = d_str.size_bytes();
-    auto const base       = d_str.data();
-    auto const all_tokens = (max_tokens == cuda::std::numeric_limits<size_type>::max()) ||
-                            (token_count == 1);
+    auto* const d_result = d_tokens + token_offset;
+    auto const size      = d_str.size_bytes();
+    auto const base      = d_str.data();
+    auto const all_tokens =
+      (max_tokens == cuda::std::numeric_limits<size_type>::max()) || (token_count == 1);
 
     size_type token_idx = 0;
     size_type i         = size - 1;
-    while (i >= 0 && is_whitespace(static_cast<char_utf8>(base[i]))) { --i; }
+    while (i >= 0 && is_whitespace(static_cast<char_utf8>(base[i]))) {
+      --i;
+    }
     while (i >= 0 && token_idx < token_count) {
       auto const tok_end = i + 1;
       if (all_tokens || (token_idx + 1 < token_count)) {
-        while (i >= 0 && !is_whitespace(static_cast<char_utf8>(base[i]))) { --i; }
-        auto const tok_start              = i + 1;
+        while (i >= 0 && !is_whitespace(static_cast<char_utf8>(base[i]))) {
+          --i;
+        }
+        auto const tok_start = i + 1;
         d_result[token_count - 1 - token_idx] =
           string_index_pair{base + tok_start, tok_end - tok_start};
         ++token_idx;
-        while (i >= 0 && is_whitespace(static_cast<char_utf8>(base[i]))) { --i; }
+        while (i >= 0 && is_whitespace(static_cast<char_utf8>(base[i]))) {
+          --i;
+        }
       } else {
         // last slot (first in output) with max_tokens: rest from beginning (incl. leading ws)
         d_result[0] = string_index_pair{base, tok_end};
@@ -703,7 +715,6 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
   }
   return {std::move(offsets), std::move(tokens)};
 }
-
 
 /**
  * @brief Count the number of delimiters in a strings column

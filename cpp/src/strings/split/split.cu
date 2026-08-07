@@ -268,7 +268,7 @@ std::unique_ptr<table> split_impl(strings_column_view const& input,
 
   if (non_null_count > 0 &&
       (input.chars_size(stream) / non_null_count) < AVG_CHAR_BYTES_THRESHOLD) {
-    auto const d_delim = delimiter.value(stream);
+    auto const d_delim     = delimiter.value(stream);
     auto [offsets, tokens] = split_per_row_impl(
       *d_strings,
       token_count_fn{*d_strings, d_delim, max_tokens},
