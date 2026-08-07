@@ -335,13 +335,13 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
                           rmm::device_async_resource_ref mr);
 
   /**
-   * @brief Convert the input filter expression such that all column name references are replaced
-   * with corresponding column references
+   * @brief Normalize input filter such that all column names are converted to index references and
+   * logical negations are pushed down to the leaves.
    *
    * @param options Reader options
-   * @return Converted expression
+   * @return Filter expression normalizer
    */
-  [[nodiscard]] named_to_reference_converter build_converted_expression(
+  [[nodiscard]] parquet_filter_normalizer build_normalized_expression(
     parquet_reader_options const& options);
 
   /**
@@ -370,12 +370,12 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     std::span<std::vector<size_type> const> row_group_indices) const;
 
   /**
-   * @brief Helper to prepare converted filter expression and output column data types
+   * @brief Helper to prepare a normalized filter expression and output column data types
    *
    * @param options Parquet reader options
-   * @return A pair of a converted filter expression and a vector of output column data types
+   * @return A pair of filter expression normalizer and output column data types
    */
-  std::pair<named_to_reference_converter, std::vector<cudf::data_type>>
+  std::pair<parquet_filter_normalizer, std::vector<cudf::data_type>>
   prepare_filter_and_output_types(parquet_reader_options const& options);
 
   /**
