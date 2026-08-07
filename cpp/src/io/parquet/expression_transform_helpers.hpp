@@ -99,33 +99,6 @@ template <operator_transform mode>
 [[nodiscard]] std::optional<ast::ast_operator> de_morgan_operator(ast::ast_operator op);
 
 /**
- * @brief Handle unary operation transform for membership-based row group filters. i.e., bloom
- * filter and dictionary page filter.
- *
- * @tparam VisitOperandsFn Callable matching `(std::span<reference_wrapper<expr>>) ->
- * vector<reference_wrapper<expr>>`
- *
- * @param expr Unary operation to transform
- * @param expr_tree The AST tree to push transformed expressions into
- * @param always_true Reference to the always_true sentinel literal
- * @param visit_operands_fn Callable to visit operands and return the transformed operands
- * @return The `always_true` expression
- */
-template <typename VisitOperandsFn>
-[[nodiscard]] inline std::reference_wrapper<ast::expression const> apply_unary_membership_transform(
-  ast::operation const& expr,
-  ast::tree& expr_tree,
-  std::reference_wrapper<ast::expression const> const always_true,
-  VisitOperandsFn&& visit_operands_fn)
-{
-  // Visit the operands to validate column references and collect any nested literals, then discard
-  // the transformed operands and relax this operation to `always_true`
-  std::ignore = visit_operands_fn(expr.get_operands());
-  expr_tree.push(ast::operation{ast::ast_operator::IDENTITY, always_true});
-  return always_true;
-}
-
-/**
  * @brief Collects column names from the expression ignoring the `skip_names`
  */
 class names_from_expression : public ast::detail::expression_transformer {

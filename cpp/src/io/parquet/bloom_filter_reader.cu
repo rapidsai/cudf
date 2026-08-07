@@ -225,13 +225,11 @@ class bloom_filter_expression_converter : public equality_literals_collector {
     auto const input_op       = expr.get_operator();
     auto const operator_arity = cudf::ast::detail::ast_operator_arity(input_op);
 
-    // Unary operation
+    // Membership filters cannot evaluate unary operations. Visit operands and push always true
     if (operator_arity == 1) {
-      auto visit_operands_fn = [this](auto const& operands) {
-        return this->visit_operands(operands);
-      };
-      return parquet::detail::apply_unary_membership_transform(
-        expr, _bloom_filter_expr, *_always_true, visit_operands_fn);
+      std::ignore = this->visit_operands(expr.get_operands());
+      _bloom_filter_expr.push(ast::operation{ast_operator::IDENTITY, *_always_true});
+      return *_always_true;
     }
 
     // Binary operation
