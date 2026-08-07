@@ -91,7 +91,7 @@ struct mixed_unbounded_distance_fn {
 template <typename GroupHelper>
 void select_and_write_offsets(range_window_type const& preceding,
                               range_window_type const& following,
-                              rolling::grouped peers,
+                              std::optional<rolling::grouped> const& peers,
                               std::optional<GroupHelper>& group_helper,
                               mutable_column_view preceding_view,
                               mutable_column_view following_view,
@@ -112,7 +112,7 @@ void select_and_write_offsets(range_window_type const& preceding,
   // Write offsets for the current row case
   if (std::holds_alternative<current_row>(preceding) &&
       std::holds_alternative<current_row>(following)) {
-    write_offsets(unbounded_distance_fn<rolling::grouped>{peers});
+    write_offsets(unbounded_distance_fn<rolling::grouped>{peers.value()});
     // Write offsets for the unbounded case
   } else if (std::holds_alternative<unbounded>(preceding) &&
              std::holds_alternative<unbounded>(following)) {
@@ -127,7 +127,7 @@ void select_and_write_offsets(range_window_type const& preceding,
     auto const select_grouping =
       [&](range_window_type const& window) -> std::variant<rolling::grouped, rolling::ungrouped> {
       if (std::holds_alternative<current_row>(window)) {
-        return peers;
+        return peers.value();
       } else if (group_helper.has_value()) {
         return rolling::grouped{group_helper->group_labels(stream).data(),
                                 group_helper->group_offsets(stream).data()};
@@ -190,11 +190,17 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
 
   using sort_helper = cudf::groupby::detail::sort::sort_groupby_helper;
 
-  std::vector<column_view> peer_keys(group_keys.begin(), group_keys.end());
-  peer_keys.insert(peer_keys.end(), orderby.begin(), orderby.end());
-  sort_helper peer_helper{table_view{peer_keys}, null_policy::INCLUDE, sorted::YES, {}};
-  auto const peers = rolling::grouped{peer_helper.group_labels(stream).data(),
-                                      peer_helper.group_offsets(stream).data()};
+  std::optional<sort_helper> peer_helper;
+  std::optional<rolling::grouped> peers;
+  if (std::holds_alternative<current_row>(preceding) ||
+      std::holds_alternative<current_row>(following)) {
+    std::vector<column_view> peer_keys(group_keys.begin(), group_keys.end());
+    peer_keys.insert(peer_keys.end(), orderby.begin(), orderby.end());
+    peer_helper.emplace(
+      table_view{peer_keys}, null_policy::INCLUDE, sorted::YES, std::vector<null_order>{});
+    peers = rolling::grouped{peer_helper->group_labels(stream).data(),
+                             peer_helper->group_offsets(stream).data()};
+  }
 
   std::optional<sort_helper> group_helper;
   if (group_keys.num_columns() > 0 && (std::holds_alternative<unbounded>(preceding) ||

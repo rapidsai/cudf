@@ -443,11 +443,21 @@ struct bounded_distance_functor {
   }
 };
 
-// Using a custom kernel instead of CUB is intentional to reduce compile time and binary size.
+constexpr thread_index_type materialize_range_window_bounds_block_size{128};
+
+/**
+ * @brief Writes `transform(i)` to `result[i]` for each row `i`
+ *
+ * A custom kernel is used instead of CUB to reduce compile time and binary size.
+ *
+ * @tparam Transform Callable mapping a row index to a window bound
+ * @param size Number of rows
+ * @param result Device pointer to `size` output elements
+ * @param transform Per-row window-bound computation
+ */
 template <typename Transform>
-CUDF_KERNEL void materialize_range_window_bounds_kernel(size_type size,
-                                                        size_type* result,
-                                                        Transform transform)
+CUDF_KERNEL void __launch_bounds__(materialize_range_window_bounds_block_size)
+  materialize_range_window_bounds_kernel(size_type size, size_type* result, Transform transform)
 {
   auto const index = cudf::detail::grid_1d::global_thread_id();
   if (index < size) { result[index] = transform(static_cast<size_type>(index)); }
@@ -461,8 +471,7 @@ void materialize_range_window_bounds(size_type size,
 {
   if (size == 0) { return; }
 
-  constexpr thread_index_type block_size{128};
-  cudf::detail::grid_1d config{size, block_size};
+  cudf::detail::grid_1d config{size, materialize_range_window_bounds_block_size};
   materialize_range_window_bounds_kernel<<<config.num_blocks,
                                            config.num_threads_per_block,
                                            0,

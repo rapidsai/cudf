@@ -85,9 +85,16 @@ std::unique_ptr<column> make_range_window(
                               (order == order::DESCENDING && null_order == null_order::AFTER);
 
   return std::visit(
-    [&](auto const& window) -> std::unique_ptr<column> {
-      return dispatch_range_window(
-        window, orderby, direction, order, grouping, nulls_at_start, window.delta(), stream, mr);
+    [&](auto const& window_bound) -> std::unique_ptr<column> {
+      return dispatch_range_window(window_bound,
+                                   orderby,
+                                   direction,
+                                   order,
+                                   grouping,
+                                   nulls_at_start,
+                                   window_bound.delta(),
+                                   stream,
+                                   mr);
     },
     window);
 }

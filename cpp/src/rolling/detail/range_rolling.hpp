@@ -22,6 +22,19 @@
 
 namespace cudf::detail {
 
+/**
+ * @brief Constructs preceding and following window-size columns for a single-column RANGE window.
+ *
+ * @param group_keys Possibly empty table of sorted keys defining groups
+ * @param orderby Sorted order-by column
+ * @param order Sort order of the order-by column
+ * @param null_order Null sort order of the order-by column
+ * @param preceding Type of the preceding window
+ * @param following Type of the following window
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned columns' device memory
+ * @return Pair of preceding and following window-size columns
+ */
 [[nodiscard]] std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   table_view const& group_keys,
   column_view const& orderby,
@@ -32,8 +45,22 @@ namespace cudf::detail {
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
+/**
+ * @brief Dispatches computation of an unbounded RANGE window-size column.
+ *
+ * @param window Unbounded window tag
+ * @param orderby Sorted order-by column
+ * @param direction Direction of the window
+ * @param order Sort order of the order-by column
+ * @param grouping Preprocessed grouping information, if any
+ * @param nulls_at_start Whether nulls are ordered before non-null values
+ * @param row_delta Must be null for an unbounded window
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Column containing the window size for each row
+ */
 [[nodiscard]] std::unique_ptr<column> dispatch_range_window(
-  unbounded,
+  unbounded window,
   column_view const& orderby,
   rolling::direction direction,
   order order,
@@ -43,8 +70,22 @@ namespace cudf::detail {
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
+/**
+ * @brief Dispatches computation of a current-row RANGE window-size column.
+ *
+ * @param window Current-row window tag
+ * @param orderby Sorted order-by column
+ * @param direction Direction of the window
+ * @param order Sort order of the order-by column
+ * @param grouping Preprocessed grouping information, if any
+ * @param nulls_at_start Whether nulls are ordered before non-null values
+ * @param row_delta Must be null for a current-row window
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Column containing the window size for each row
+ */
 [[nodiscard]] std::unique_ptr<column> dispatch_range_window(
-  current_row,
+  current_row window,
   column_view const& orderby,
   rolling::direction direction,
   order order,
@@ -54,8 +95,22 @@ namespace cudf::detail {
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
+/**
+ * @brief Dispatches computation of a bounded-closed RANGE window-size column.
+ *
+ * @param window Bounded-closed window tag
+ * @param orderby Sorted order-by column
+ * @param direction Direction of the window
+ * @param order Sort order of the order-by column
+ * @param grouping Preprocessed grouping information, if any
+ * @param nulls_at_start Whether nulls are ordered before non-null values
+ * @param row_delta Must be non-null and contain the bounded-window delta
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Column containing the window size for each row
+ */
 [[nodiscard]] std::unique_ptr<column> dispatch_range_window(
-  bounded_closed,
+  bounded_closed window,
   column_view const& orderby,
   rolling::direction direction,
   order order,
@@ -65,8 +120,22 @@ namespace cudf::detail {
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
+/**
+ * @brief Dispatches computation of a bounded-open RANGE window-size column.
+ *
+ * @param window Bounded-open window tag
+ * @param orderby Sorted order-by column
+ * @param direction Direction of the window
+ * @param order Sort order of the order-by column
+ * @param grouping Preprocessed grouping information, if any
+ * @param nulls_at_start Whether nulls are ordered before non-null values
+ * @param row_delta Must be non-null and contain the bounded-window delta
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Column containing the window size for each row
+ */
 [[nodiscard]] std::unique_ptr<column> dispatch_range_window(
-  bounded_open,
+  bounded_open window,
   column_view const& orderby,
   rolling::direction direction,
   order order,
