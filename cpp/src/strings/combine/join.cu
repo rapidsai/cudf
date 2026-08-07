@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -162,6 +162,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& input,
     h_offsets[0]   = 0;
     h_offsets[1]   = chars.size();
     auto offsets   = cudf::detail::make_device_uvector_async(h_offsets, stream, mr);
+    stream.synchronize();  // h_offsets is going of scope
     return std::make_unique<column>(std::move(offsets), rmm::device_buffer{}, 0);
   }();
 
