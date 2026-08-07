@@ -185,16 +185,6 @@ def test_literal_stable_id_is_content_based():
     )
 
 
-def test_literal_column_stable_id_is_content_based():
-    from cudf_polars.dsl.expressions.literal import LiteralColumn
-
-    a = LiteralColumn(DataType(pl.Int64()), pl.Series([1, 2, 3], dtype=pl.Int64()))
-    b = LiteralColumn(DataType(pl.Int64()), pl.Series([1, 2, 3], dtype=pl.Int64()))
-    c = LiteralColumn(DataType(pl.Int64()), pl.Series([1, 2, 4], dtype=pl.Int64()))
-    assert a.get_stable_id() == b.get_stable_id()
-    assert a.get_stable_id() != c.get_stable_id()
-
-
 def test_struct_literal_not_supported(engine: pl.GPUEngine):
     df = pl.LazyFrame({"a": [1, 2, 3]})
     q = df.select(pl.lit({"x": 1, "y": "foo"}))

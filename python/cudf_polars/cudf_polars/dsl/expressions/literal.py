@@ -100,19 +100,12 @@ class LiteralColumn(Expr):
         self.children = ()
         self.is_pointwise = True
 
-    def get_hashable(self) -> Hashable:  # noqa: D102
-        return (
-            type(self),
-            self.dtype.plc_type,
-            _freeze_for_hash(self.value.to_list()),
-        )
-
-    def is_equal(self, other: LiteralColumn) -> bool:
-        """Equality that compares Series values by content, not identity."""
-        if self is other:
-            return True
-        # pl.Series.__eq__ is elementwise and cannot be used as a scalar bool.
-        return self.dtype == other.dtype and self.value.equals(other.value)
+    def get_hashable(self) -> Hashable:
+        """Compute a hash of the column."""
+        # This is stricter than necessary, but we only need this hash
+        # for identity in groupby replacements so it's OK. And this
+        # way we avoid doing potentially expensive compute.
+        return (type(self), self.dtype.plc_type, id(self.value))
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
