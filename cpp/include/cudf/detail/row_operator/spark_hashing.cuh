@@ -29,6 +29,9 @@ namespace detail::row::hash {
  * The element hash function is responsible for Spark-specific type encodings
  * and hash algorithm behavior.
  *
+ * LIST columns whose child is a STRUCT are unsupported and must be rejected
+ * before invoking this hasher.
+ *
  * @tparam hash_function Seeded element hash functor with a `result_type` member
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls
  */
@@ -101,11 +104,12 @@ class spark_device_row_hasher {
         thrust::counting_iterator(0),
         thrust::counting_iterator(curr_col.size()),
         _seed,
-        [curr_col, nulls = this->_check_nulls] __device__(auto hash, auto element_index) {
-          auto const hasher = hash_functor{nulls, hash, hash};
-          return cudf::type_dispatcher<cudf::detail::dispatch_void_if_nested>(
-            curr_col.type(), hasher, curr_col, element_index);
-        });
+        cuda::proclaim_return_type<result_type>(
+          [curr_col, nulls = this->_check_nulls] __device__(auto hash, auto element_index) {
+            auto const hasher = hash_functor{nulls, hash, hash};
+            return cudf::type_dispatcher<cudf::detail::dispatch_void_if_nested>(
+              curr_col.type(), hasher, curr_col, element_index);
+          }));
     }
 
    private:

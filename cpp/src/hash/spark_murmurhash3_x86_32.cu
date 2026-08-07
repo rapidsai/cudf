@@ -6,6 +6,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/spark_hashing.cuh>
 #include <cudf/hashing.hpp>
+#include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/hashing/detail/spark_murmurhash3.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/error.hpp>
@@ -62,7 +63,7 @@ std::unique_ptr<column> spark_murmurhash3_x86_32(table_view const& input,
   // Lists of structs are not supported
   check_spark_murmurhash3_compatibility(input);
 
-  bool const nullable     = has_nested_nulls(input);
+  auto const nullable     = nullate::DYNAMIC{has_nested_nulls(input)};
   auto const row_hasher   = cudf::detail::row::hash::row_hasher(input, stream);
   auto const output_begin = output->mutable_view().begin<result_type>();
 
