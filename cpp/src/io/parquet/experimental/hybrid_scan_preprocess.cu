@@ -32,7 +32,6 @@ namespace cudf::io::parquet::experimental::detail {
 
 namespace {
 
-using parquet::detail::chunk_page_info;
 using parquet::detail::ColumnChunkDesc;
 using parquet::detail::PageInfo;
 
@@ -41,24 +40,38 @@ using parquet::detail::PageInfo;
  *
  * @param chunks Host device span of column chunk descriptors, one per input column chunk
  * @param pages Host device span of empty page headers to fill in, one per input column chunk
+ * @param dict_page_data Device spans of dictionary page data, one per input column chunk. Empty
+ *                       for column chunks without a dictionary page
  * @param stream CUDA stream
  */
-void decode_dictionary_page_headers(cudf::detail::hostdevice_span<ColumnChunkDesc> chunks,
-                                    cudf::detail::hostdevice_span<PageInfo> pages,
-                                    rmm::cuda_stream_view stream)
+void decode_dictionary_page_headers(
+  cudf::detail::hostdevice_span<ColumnChunkDesc> chunks,
+  cudf::detail::hostdevice_span<PageInfo> pages,
+  cudf::host_span<cudf::device_span<uint8_t const> const> dict_page_data,
+  rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
 
-  rmm::device_uvector<chunk_page_info> chunk_page_info(chunks.size(), stream);
-  thrust::for_each(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                   cuda::counting_iterator<cuda::std::size_t>{0},
-                   cuda::counting_iterator{chunks.size()},
-                   [cpi = chunk_page_info.begin(), pages = pages.device_begin()] __device__(
-                     auto page_idx) { cpi[page_idx].pages = &pages[page_idx]; });
+  auto const page_data = cudf::detail::make_device_uvector_async(
+    dict_page_data, stream, cudf::get_current_device_resource_ref());
+
+  // Exactly one dictionary page per column chunk
+  rmm::device_uvector<size_type> chunk_page_offsets(chunks.size() + 1, stream);
+  thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   chunk_page_offsets.begin(),
+                   chunk_page_offsets.end(),
+                   0);
 
   parquet::kernel_error error_code(stream);
 
-  parquet::detail::decode_page_headers(chunks, chunk_page_info, error_code.data(), stream);
+  // Decode dictionary page headers, one thread per page
+  parquet::detail::decode_page_headers_from_page_data(
+    cudf::device_span<ColumnChunkDesc const>{chunks.device_ptr(), chunks.size()},
+    cudf::device_span<PageInfo>{pages.device_ptr(), pages.size()},
+    page_data,
+    chunk_page_offsets,
+    error_code.data(),
+    stream);
 
   if (auto const error = error_code.value_sync(stream); error != 0) {
     CUDF_FAIL("Parquet header parsing failed with code(s) " +
@@ -68,7 +81,7 @@ void decode_dictionary_page_headers(cudf::detail::hostdevice_span<ColumnChunkDes
   // Setup dictionary page for each chunk. One page per column chunk, zeroed out struct if a column
   // is not fully dictionary encoded.
   thrust::for_each(
-    policy,
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     cuda::counting_iterator<cuda::std::size_t>(0),
     cuda::counting_iterator<cuda::std::size_t>(chunks.size()),
     [chunks = chunks.device_begin(), pages = pages.device_begin()] __device__(auto chunk_idx) {
@@ -298,14 +311,17 @@ hybrid_scan_reader_impl::prepare_dictionaries(
   // Copy the column chunk descriptors to the device
   chunks.host_to_device_async(stream);
 
-  // Create page infos for each column chunk's dictionary page. Zero out as
-  // `decode_dictionary_page_headers()` does not touch `PageInfo`s for non-dictionary
-  // encoded column chunks.
+  // Create page infos for each column chunk's dictionary page
   cudf::detail::hostdevice_vector<PageInfo> pages(total_column_chunks, stream);
-  CUDF_CUDA_TRY(cudaMemsetAsync(pages.device_ptr(), 0, pages.size_bytes(), stream.value()));
+  CUDF_CUDA_TRY(cudaMemsetAsync(pages.device_ptr(), 0, pages.size() * sizeof(PageInfo), stream));
 
   // Decode dictionary page headers
-  decode_dictionary_page_headers(chunks, pages, stream);
+  decode_dictionary_page_headers(
+    chunks,
+    pages,
+    cudf::host_span<cudf::device_span<uint8_t const> const>{dictionary_page_data.data(),
+                                                           dictionary_page_data.size()},
+    stream);
 
   return {has_compressed_data, std::move(chunks), std::move(pages)};
 }
