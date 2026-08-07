@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import cupy as cp
 import numpy as np
-from numba_cuda_mlir import cuda, compiler
+from numba_cuda_mlir import compiler, cuda
 from numba_cuda_mlir.numba_cuda.core import config as _mlir_config
 from numba_cuda_mlir.numba_cuda.np import numpy_support
 
@@ -32,7 +32,8 @@ class _MLIRNumbaCudaConfig:
 
 def _get_udf_return_type(func: Callable, value_dtype: np.dtype) -> np.dtype:
     """Compile ``func`` for a 1D window of ``value_dtype`` to infer its
-    output dtype."""
+    output dtype.
+    """
     nb_value_type = numpy_support.from_dtype(value_dtype)
     signature = (nb_value_type[::1],)
     try:
