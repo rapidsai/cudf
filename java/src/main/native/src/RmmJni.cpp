@@ -35,10 +35,10 @@
 
 #include <algorithm>
 #include <atomic>
+#include <bit>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <ctime>
 #include <exception>
 #include <fstream>
@@ -537,12 +537,14 @@ inline void log_system_error_noexcept(char const* operation,
                                       bool warning             = false) noexcept
 {
   try {
-    auto const* sep     = error.has_value() ? ": " : "";
-    auto const* err_msg = error.has_value() ? std::strerror(*error) : "";
+    auto const* sep           = error.has_value() ? ": " : "";
+    std::string const err_msg = error.has_value() ? std::system_category().message(*error) : "";
     if (warning) {
-      CUDF_LOG_WARN("%s failed for parallel pinned allocation%s%s", operation, sep, err_msg);
+      CUDF_LOG_WARN(
+        "%s failed for parallel pinned allocation%s%s", operation, sep, err_msg.c_str());
     } else {
-      CUDF_LOG_ERROR("%s failed for parallel pinned allocation%s%s", operation, sep, err_msg);
+      CUDF_LOG_ERROR(
+        "%s failed for parallel pinned allocation%s%s", operation, sep, err_msg.c_str());
     }
   } catch (...) {
     // Logging must not mask the original exception or escape a noexcept cleanup path.
@@ -598,7 +600,7 @@ class parallel_init_pinned_host_memory_resource final {
                                     std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
   {
     if (bytes == 0) { return nullptr; }
-    CUDF_EXPECTS(alignment != 0 && (alignment & (alignment - 1)) == 0,
+    CUDF_EXPECTS(std::has_single_bit(alignment),
                  "pinned allocation alignment must be a power of two",
                  rmm::bad_alloc);
     CUDF_EXPECTS(alignment <= system_page_size(),
@@ -610,9 +612,9 @@ class parallel_init_pinned_host_memory_resource final {
     void* allocation =
       ::mmap(nullptr, mapping_bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (allocation == MAP_FAILED) {
-      auto const error = errno;
-      auto const message =
-        std::string{"mmap failed for parallel pinned allocation: "} + std::strerror(error);
+      auto const error   = errno;
+      auto const message = std::string{"mmap failed for parallel pinned allocation: "} +
+                           std::system_category().message(error);
       if (error == ENOMEM) { throw rmm::out_of_memory{message}; }
       throw std::system_error(error, std::generic_category(), message);
     }
