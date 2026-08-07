@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,7 +17,6 @@
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <thrust/adjacent_difference.h>
-#include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
 namespace groupby {
@@ -43,10 +42,9 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
     // make_validity_iterator returns a boolean iterator that sums to 1 (1+1=1)
     // so we need to transform it to cast it to an integer type
     auto bitmask_iterator =
-      thrust::make_transform_iterator(cudf::detail::make_validity_iterator(*values_view),
-                                      cuda::proclaim_return_type<size_type>([] __device__(auto b) {
-                                        return static_cast<size_type>(b);
-                                      }));
+      cuda::transform_iterator(cudf::detail::make_validity_iterator(*values_view),
+                               cuda::proclaim_return_type<size_type>(
+                                 [] __device__(auto b) { return static_cast<size_type>(b); }));
 
     cudf::detail::reduce_by_key_async(group_labels.begin(),
                                       group_labels.end(),

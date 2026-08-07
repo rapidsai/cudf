@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -331,7 +331,8 @@ TEST_F(ByteCastTest, StringValuesWithNulls)
 
     // Set nulls by `set_null_mask` so the output column will have non-empty nulls.
     // This is intentional.
-    auto const null_iter = cudf::test::iterators::nulls_at({2, 4});
+    auto const null_iter_values = cudf::test::iterators::nulls_at({2, 4});
+    auto const null_iter        = null_iter_values.begin();
     auto [null_mask, null_count] =
       cudf::test::detail::make_null_mask(null_iter, null_iter + output->size());
     output->set_null_mask(std::move(null_mask), null_count);

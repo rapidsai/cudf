@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
@@ -18,7 +18,6 @@
 #include <cuda/iterator>
 #include <cuda/std/cmath>
 #include <thrust/for_each.h>
-#include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
 namespace io {

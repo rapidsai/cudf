@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -702,7 +702,9 @@ TEST_F(ListsZeroLengthColumnTest, SuperimposeNulls)
                    .release();
     auto offsets = offset_t{0, 3, 3, 5}.release();
 
-    auto const valid_iter        = cudf::test::iterators::null_at(2);
+    auto const valid_iter_values = cudf::test::iterators::null_at(2);
+
+    auto const valid_iter        = valid_iter_values.begin();
     auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valid_iter, valid_iter + 3);
 
     auto tmp = cudf::make_lists_column(

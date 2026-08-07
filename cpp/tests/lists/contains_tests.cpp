@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -323,7 +323,8 @@ TYPED_TEST(TypedContainsTest, ScalarKeysWithNullsInLists)
 
   auto numerals = cudf::test::fixed_width_column_wrapper<T>{
     {X, 1, 2, X, 4, 5, X, 7, 8, X, X, 1, 2, X, 1}, nulls_at({0, 3, 6, 9, 10, 13})};
-  auto input_null_mask_iter = null_at(4);
+  auto input_null_mask_values = null_at(4);
+  auto input_null_mask_iter   = input_null_mask_values.begin();
 
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8);
@@ -367,7 +368,8 @@ TEST_F(ContainsTest, BoolScalarWithNullsInLists)
 
   auto numerals = cudf::test::fixed_width_column_wrapper<T>{
     {X, 1, 1, X, 1, 1, X, 1, 1, X, X, 1, 1, X, 1}, nulls_at({0, 3, 6, 9, 10, 13})};
-  auto input_null_mask_iter = null_at(4);
+  auto input_null_mask_values = null_at(4);
+  auto input_null_mask_iter   = input_null_mask_values.begin();
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8);
   auto search_space = cudf::make_lists_column(
@@ -412,7 +414,8 @@ TEST_F(ContainsTest, StringScalarWithNullsInLists)
   auto strings = cudf::test::strings_column_wrapper{
     {"X", "1", "2", "X", "4", "5", "X", "7", "8", "X", "X", "1", "2", "X", "1"},
     nulls_at({0, 3, 6, 9, 10, 13})};
-  auto input_null_mask_iter = null_at(4);
+  auto input_null_mask_values = null_at(4);
+  auto input_null_mask_iter   = input_null_mask_values.begin();
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8);
   auto search_space = cudf::make_lists_column(8,
@@ -650,7 +653,9 @@ TYPED_TEST(TypedVectorContainsTest, VectorWithNullsInLists)
   auto numerals = cudf::test::fixed_width_column_wrapper<T>{
     {X, 1, 2, X, 4, 5, X, 7, 8, X, X, 1, 2, X, 1}, nulls_at({0, 3, 6, 9, 10, 13})};
 
-  auto input_null_mask_iter = null_at(4);
+  auto input_null_mask_values = null_at(4);
+
+  auto input_null_mask_iter = input_null_mask_values.begin();
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8);
   auto search_space = cudf::make_lists_column(8,
@@ -689,7 +694,9 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullsInListsAndInSearc
   auto numerals = cudf::test::fixed_width_column_wrapper<T>{
     {X, 1, 2, X, 4, 5, X, 7, 8, X, X, 1, 2, X, 1}, nulls_at({0, 3, 6, 9, 10, 13})};
 
-  auto input_null_mask_iter = null_at(4);
+  auto input_null_mask_values = null_at(4);
+
+  auto input_null_mask_iter = input_null_mask_values.begin();
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8);
   auto search_space = cudf::make_lists_column(8,
@@ -729,7 +736,9 @@ TEST_F(ContainsTest, BoolKeyVectorWithNullsInListsAndInSearchKeys)
   auto numerals = cudf::test::fixed_width_column_wrapper<T>{
     {X, 0, 1, X, 1, 1, X, 1, 1, X, X, 0, 1, X, 1}, nulls_at({0, 3, 6, 9, 10, 13})};
 
-  auto input_null_mask_iter = null_at(4);
+  auto input_null_mask_values = null_at(4);
+
+  auto input_null_mask_iter = input_null_mask_values.begin();
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8);
   auto search_space = cudf::make_lists_column(8,
@@ -767,7 +776,8 @@ TEST_F(ContainsTest, StringKeyVectorWithNullsInListsAndInSearchKeys)
   auto strings = cudf::test::strings_column_wrapper{
     {"X", "1", "2", "X", "4", "5", "X", "7", "8", "X", "X", "1", "2", "X", "1"},
     nulls_at({0, 3, 6, 9, 10, 13})};
-  auto input_null_mask_iter = null_at(4);
+  auto input_null_mask_values = null_at(4);
+  auto input_null_mask_iter   = input_null_mask_values.begin();
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(input_null_mask_iter, input_null_mask_iter + 8);
   auto search_space = cudf::make_lists_column(
@@ -1194,8 +1204,9 @@ TYPED_TEST(TypedStructContainsTest, ScalarKeyWithNullLists)
                               1, 0, 1, 1
     };
     // clang-format on
-    auto child               = cudf::test::structs_column_wrapper{{data1, data2}};
-    auto const validity_iter = nulls_at({3, 10});
+    auto child                      = cudf::test::structs_column_wrapper{{data1, data2}};
+    auto const validity_iter_values = nulls_at({3, 10});
+    auto const validity_iter        = validity_iter_values.begin();
     auto [null_mask, null_count] =
       cudf::test::detail::make_null_mask(validity_iter, validity_iter + 11);
     return cudf::make_lists_column(
@@ -1507,7 +1518,8 @@ TYPED_TEST(TypedStructContainsTest, ColumnKeyWithSlicedListsHavingNulls)
     };
     // clang-format on
     auto child = cudf::test::structs_column_wrapper{{data1, data2}, nulls_at({1, 10, 15, 24})};
-    auto const validity_iter = nulls_at({3, 10});
+    auto const validity_iter_values = nulls_at({3, 10});
+    auto const validity_iter        = validity_iter_values.begin();
     auto [null_mask, null_count] =
       cudf::test::detail::make_null_mask(validity_iter, validity_iter + 11);
     return cudf::make_lists_column(

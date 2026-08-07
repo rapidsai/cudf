@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -32,16 +32,31 @@
 #include <cuda/std/functional>
 #include <thrust/copy.h>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
 #include <iterator>
 #include <memory>
 #include <numeric>
+#include <ranges>
+#include <vector>
 
 namespace CUDF_EXPORT cudf {
 namespace test {
 namespace detail {
+
+/**
+ * @brief Return the beginning of a validity range or an unchanged validity iterator.
+ */
+template <typename Validity>
+auto validity_begin(Validity& validity)
+{
+  if constexpr (std::ranges::range<Validity>) {
+    return std::ranges::begin(validity);
+  } else {
+    return validity;
+  }
+}
+
 /**
  * @brief Base class for a wrapper around a `cudf::column`.
  *
@@ -156,10 +171,10 @@ template <typename ElementTo,
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   static_assert(cudf::is_fixed_width<ElementTo>(), "Unexpected non-fixed width type.");
-  auto transformer     = fixed_width_type_converter<ElementFrom, ElementTo>{};
-  auto transform_begin = thrust::make_transform_iterator(begin, transformer);
-  auto const size      = cudf::distance(begin, end);
-  auto const elements  = thrust::host_vector<ElementTo>(transform_begin, transform_begin + size);
+  auto const size = cudf::distance(begin, end);
+  auto elements   = thrust::host_vector<ElementTo>(size);
+  std::transform(
+    begin, end, elements.begin(), fixed_width_type_converter<ElementFrom, ElementTo>{});
   return rmm::device_buffer{
     elements.data(), size * sizeof(ElementTo), cudf::test::get_default_stream()};
 }
@@ -185,11 +200,10 @@ template <typename ElementTo,
                            cudf::is_fixed_point<ElementTo>()>* = nullptr>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
-  using RepType        = typename ElementTo::rep;
-  auto transformer     = fixed_width_type_converter<ElementFrom, RepType>{};
-  auto transform_begin = thrust::make_transform_iterator(begin, transformer);
-  auto const size      = cudf::distance(begin, end);
-  auto const elements  = thrust::host_vector<RepType>(transform_begin, transform_begin + size);
+  using RepType   = typename ElementTo::rep;
+  auto const size = cudf::distance(begin, end);
+  auto elements   = thrust::host_vector<RepType>(size);
+  std::transform(begin, end, elements.begin(), fixed_width_type_converter<ElementFrom, RepType>{});
   return rmm::device_buffer{
     elements.data(), size * sizeof(RepType), cudf::test::get_default_stream()};
 }
@@ -217,10 +231,9 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   CUDF_EXPECTS(std::all_of(begin, end, [](ElementFrom v) { return v.scale() == 0; }),
                "Only zero-scale fixed-point values are supported");
 
-  auto to_rep            = [](ElementTo fp) { return fp.value(); };
-  auto transformer_begin = thrust::make_transform_iterator(begin, to_rep);
-  auto const size        = cudf::distance(begin, end);
-  auto const elements = thrust::host_vector<RepType>(transformer_begin, transformer_begin + size);
+  auto const size = cudf::distance(begin, end);
+  auto elements   = thrust::host_vector<RepType>(size);
+  std::transform(begin, end, elements.begin(), [](ElementTo const fp) { return fp.value(); });
   return rmm::device_buffer{
     elements.data(), size * sizeof(RepType), cudf::test::get_default_stream()};
 }
@@ -394,11 +407,12 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @param v The beginning of the sequence of validity indicators
    */
   template <typename InputIterator, typename ValidityIterator>
-  fixed_width_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator v)
+  fixed_width_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator&& v)
     : column_wrapper{}
   {
     auto const size              = cudf::distance(begin, end);
-    auto [null_mask, null_count] = detail::make_null_mask(v, v + size);
+    auto const validity          = detail::validity_begin(v);
+    auto [null_mask, null_count] = detail::make_null_mask(validity, validity + size);
     wrapped.reset(new cudf::column{cudf::data_type{cudf::type_to_id<ElementTo>()},
                                    size,
                                    detail::make_elements<ElementTo, SourceElementT>(begin, end),
@@ -466,7 +480,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @param v The beginning of the sequence of validity indicators
    */
   template <typename ValidityIterator, typename ElementFrom>
-  fixed_width_column_wrapper(std::initializer_list<ElementFrom> element_list, ValidityIterator v)
+  fixed_width_column_wrapper(std::initializer_list<ElementFrom> element_list, ValidityIterator&& v)
     : fixed_width_column_wrapper(std::cbegin(element_list), std::cend(element_list), v)
   {
   }
@@ -517,12 +531,17 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   template <typename ElementFrom>
   fixed_width_column_wrapper(std::initializer_list<std::pair<ElementFrom, bool>> elements)
   {
-    auto begin =
-      thrust::make_transform_iterator(elements.begin(), [](auto const& e) { return e.first; });
-    auto end = begin + elements.size();
-    auto v =
-      thrust::make_transform_iterator(elements.begin(), [](auto const& e) { return e.second; });
-    wrapped = fixed_width_column_wrapper<ElementTo, ElementFrom>(begin, end, v).release();
+    auto values   = std::vector<ElementFrom>{};
+    auto validity = std::vector<bool>{};
+    values.reserve(elements.size());
+    validity.reserve(elements.size());
+    for (auto const& [value, valid] : elements) {
+      values.push_back(value);
+      validity.push_back(valid);
+    }
+    wrapped = fixed_width_column_wrapper<ElementTo, ElementFrom>(
+                values.begin(), values.end(), validity.begin())
+                .release();
   }
 };
 
@@ -618,7 +637,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
   template <typename FixedPointRepIterator, typename ValidityIterator>
   fixed_point_column_wrapper(FixedPointRepIterator begin,
                              FixedPointRepIterator end,
-                             ValidityIterator v,
+                             ValidityIterator&& v,
                              numeric::scale_type scale)
     : column_wrapper{}
   {
@@ -628,7 +647,8 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
     auto const elements          = thrust::host_vector<Rep>(begin, end);
     auto const id                = type_to_id<numeric::fixed_point<Rep, numeric::Radix::BASE_10>>();
     auto const data_type         = cudf::data_type{id, static_cast<int32_t>(scale)};
-    auto [null_mask, null_count] = detail::make_null_mask(v, v + size);
+    auto const validity          = detail::validity_begin(v);
+    auto [null_mask, null_count] = detail::make_null_mask(validity, validity + size);
     wrapped.reset(new cudf::column{
       data_type,
       size,
@@ -682,7 +702,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    */
   template <typename ValidityIterator>
   fixed_point_column_wrapper(std::initializer_list<Rep> element_list,
-                             ValidityIterator v,
+                             ValidityIterator&& v,
                              numeric::scale_type scale)
     : fixed_point_column_wrapper(std::cbegin(element_list), std::cend(element_list), v, scale)
   {
@@ -798,7 +818,7 @@ class strings_column_wrapper : public detail::column_wrapper {
    * @param v The beginning of the sequence of validity indicators
    */
   template <typename StringsIterator, typename ValidityIterator>
-  strings_column_wrapper(StringsIterator begin, StringsIterator end, ValidityIterator v)
+  strings_column_wrapper(StringsIterator begin, StringsIterator end, ValidityIterator&& v)
     : column_wrapper{}
   {
     size_type num_strings = std::distance(begin, end);
@@ -806,8 +826,9 @@ class strings_column_wrapper : public detail::column_wrapper {
       wrapped = cudf::make_empty_column(cudf::type_id::STRING);
       return;
     }
-    auto [chars, offsets]        = detail::make_chars_and_offsets(begin, end, v);
-    auto [null_mask, null_count] = detail::make_null_mask_vector(v, v + num_strings);
+    auto const validity          = detail::validity_begin(v);
+    auto [chars, offsets]        = detail::make_chars_and_offsets(begin, end, validity);
+    auto [null_mask, null_count] = detail::make_null_mask_vector(validity, validity + num_strings);
     auto d_chars                 = cudf::detail::make_device_uvector_async(
       chars, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());
     auto d_offsets = std::make_unique<cudf::column>(
@@ -857,7 +878,7 @@ class strings_column_wrapper : public detail::column_wrapper {
    * @param v The beginning of the sequence of validity indicators
    */
   template <typename ValidityIterator>
-  strings_column_wrapper(std::initializer_list<std::string> strings, ValidityIterator v)
+  strings_column_wrapper(std::initializer_list<std::string> strings, ValidityIterator&& v)
     : strings_column_wrapper(std::cbegin(strings), std::cend(strings), v)
   {
   }
@@ -905,12 +926,15 @@ class strings_column_wrapper : public detail::column_wrapper {
    */
   strings_column_wrapper(std::initializer_list<std::pair<std::string, bool>> strings)
   {
-    auto begin =
-      thrust::make_transform_iterator(strings.begin(), [](auto const& s) { return s.first; });
-    auto end = begin + strings.size();
-    auto v =
-      thrust::make_transform_iterator(strings.begin(), [](auto const& s) { return s.second; });
-    wrapped = strings_column_wrapper(begin, end, v).release();
+    auto values   = std::vector<std::string>{};
+    auto validity = std::vector<bool>{};
+    values.reserve(strings.size());
+    validity.reserve(strings.size());
+    for (auto const& [value, valid] : strings) {
+      values.push_back(value);
+      validity.push_back(valid);
+    }
+    wrapped = strings_column_wrapper(values.begin(), values.end(), validity.begin()).release();
   }
 };
 
@@ -993,7 +1017,7 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    * @param v The beginning of the sequence of validity indicators
    */
   template <typename InputIterator, typename ValidityIterator>
-  dictionary_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator v)
+  dictionary_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator&& v)
     : column_wrapper{}
   {
     wrapped = cudf::dictionary::encode(
@@ -1065,7 +1089,7 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    * @param v The beginning of the sequence of validity indicators
    */
   template <typename ValidityIterator, typename ElementFrom>
-  dictionary_column_wrapper(std::initializer_list<ElementFrom> element_list, ValidityIterator v)
+  dictionary_column_wrapper(std::initializer_list<ElementFrom> element_list, ValidityIterator&& v)
     : dictionary_column_wrapper(std::cbegin(element_list), std::cend(element_list), v)
   {
   }
@@ -1196,7 +1220,7 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
    * @param v The beginning of the sequence of validity indicators
    */
   template <typename StringsIterator, typename ValidityIterator>
-  dictionary_column_wrapper(StringsIterator begin, StringsIterator end, ValidityIterator v)
+  dictionary_column_wrapper(StringsIterator begin, StringsIterator end, ValidityIterator&& v)
     : column_wrapper{}
   {
     wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end, v),
@@ -1240,7 +1264,7 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
    * @param v The beginning of the sequence of validity indicators
    */
   template <typename ValidityIterator>
-  dictionary_column_wrapper(std::initializer_list<std::string> strings, ValidityIterator v)
+  dictionary_column_wrapper(std::initializer_list<std::string> strings, ValidityIterator&& v)
     : dictionary_column_wrapper(std::cbegin(strings), std::cend(strings), v)
   {
   }
@@ -1372,7 +1396,7 @@ class lists_column_wrapper : public detail::column_wrapper {
   template <typename Element = T,
             typename ValidityIterator,
             std::enable_if_t<cudf::is_fixed_width<Element>()>* = nullptr>
-  lists_column_wrapper(std::initializer_list<SourceElementT> elements, ValidityIterator v)
+  lists_column_wrapper(std::initializer_list<SourceElementT> elements, ValidityIterator&& v)
     : column_wrapper{}
   {
     build_from_non_nested(
@@ -1400,7 +1424,7 @@ class lists_column_wrapper : public detail::column_wrapper {
             typename InputIterator,
             typename ValidityIterator,
             std::enable_if_t<cudf::is_fixed_width<Element>()>* = nullptr>
-  lists_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator v)
+  lists_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator&& v)
     : column_wrapper{}
   {
     build_from_non_nested(
@@ -1446,7 +1470,7 @@ class lists_column_wrapper : public detail::column_wrapper {
   template <typename Element = T,
             typename ValidityIterator,
             std::enable_if_t<std::is_same_v<Element, cudf::string_view>>* = nullptr>
-  lists_column_wrapper(std::initializer_list<std::string> elements, ValidityIterator v)
+  lists_column_wrapper(std::initializer_list<std::string> elements, ValidityIterator&& v)
     : column_wrapper{}
   {
     build_from_non_nested(
@@ -1524,13 +1548,14 @@ class lists_column_wrapper : public detail::column_wrapper {
    */
   template <typename ValidityIterator>
   lists_column_wrapper(std::initializer_list<lists_column_wrapper<T, SourceElementT>> elements,
-                       ValidityIterator v)
+                       ValidityIterator&& v)
     : column_wrapper{}
   {
     std::vector<bool> validity;
+    auto const validity_iter = detail::validity_begin(v);
     std::transform(elements.begin(),
                    elements.end(),
-                   v,
+                   validity_iter,
                    std::back_inserter(validity),
                    [](lists_column_wrapper const& l, bool valid) { return valid; });
     build_from_nested(elements, validity);
@@ -1892,7 +1917,7 @@ class structs_column_wrapper : public detail::column_wrapper {
   template <typename V>
   structs_column_wrapper(
     std::initializer_list<std::reference_wrapper<detail::column_wrapper>> child_column_wrappers,
-    V validity_iter)
+    V&& validity_iter)
   {
     std::vector<std::unique_ptr<cudf::column>> child_columns;
     child_columns.reserve(child_column_wrappers.size());
@@ -1934,7 +1959,7 @@ class structs_column_wrapper : public detail::column_wrapper {
   }
 
   template <typename V>
-  void init(std::vector<std::unique_ptr<cudf::column>>&& child_columns, V validity_iterator)
+  void init(std::vector<std::unique_ptr<cudf::column>>&& child_columns, V&& validity_iterator)
   {
     size_type const num_rows = child_columns.empty() ? 0 : child_columns[0]->size();
 
@@ -1944,9 +1969,10 @@ class structs_column_wrapper : public detail::column_wrapper {
                  "All struct member columns must have the same row count.");
 
     std::vector<bool> validity(num_rows);
-    std::copy(validity_iterator, validity_iterator + num_rows, validity.begin());
+    auto const validity_iter = detail::validity_begin(validity_iterator);
+    std::copy(validity_iter, validity_iter + num_rows, validity.begin());
 
-    init(std::move(child_columns), validity);
+    init(std::move(child_columns), static_cast<std::vector<bool> const&>(validity));
   }
 };
 
