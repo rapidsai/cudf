@@ -48,11 +48,10 @@ from cudf_polars.streaming.actor_graph.utils import (
     CUDF_ROW_LIMIT,
     MAX_ROWS_PER_PARTITION,
     ChannelManager,
+    ChunkSampler,
     ChunkStore,
     NormalizedPartitioning,
     TableSizeStats,
-    _sample_chunks,
-    aggregate_table_size_stats,
     chunk_to_frame,
     empty_table_chunk,
     gather_in_task_group,
@@ -60,6 +59,7 @@ from cudf_polars.streaming.actor_graph.utils import (
     process_children,
     recv_metadata,
     replay_buffered_channel,
+    sample_inputs,
     send_metadata,
     shutdown_on_error,
 )
@@ -84,7 +84,6 @@ if TYPE_CHECKING:
     from cudf_polars.streaming.actor_graph.join_planning import (
         JoinInput,
         JoinPlanningState,
-        PrefilterCandidate,
     )
     from cudf_polars.streaming.actor_graph.tracing import ActorTracer
     from cudf_polars.streaming.base import PartitionInfo
@@ -1049,43 +1048,6 @@ def choose_prefilters(
         )
 
 
-async def sample_input(
-    context: Context,
-    comm: Communicator,
-    input_: JoinInput,
-    candidate: PrefilterCandidate | None,
-    sample_chunk_count: int,
-    target_partition_size: int,
-) -> TableSizeStats:
-    """Sample one join-planning input and optionally estimate cardinality."""
-    if candidate is None:
-        cardinality_estimator = None
-        cardinality_columns: tuple[int, ...] = ()
-    else:
-        cardinality_estimator = CardinalityEstimator(
-            context,
-            comm,
-            tag=candidate.cardinality_tag,
-        )
-        cardinality_columns = names_to_indices(
-            candidate.spec.domain_on,
-            input_.node.schema,
-        )
-        assert len(cardinality_columns) == len(candidate.spec.domain_on), (
-            "Prefilter domain keys must be columns"
-        )
-
-    return await _sample_chunks(
-        context,
-        input_.channel,
-        sample_chunk_count,
-        target_partition_size,
-        input_.metadata.local_count,
-        cardinality_estimator=cardinality_estimator,
-        cardinality_columns=cardinality_columns,
-    )
-
-
 async def collect_samples(
     context: Context,
     comm: Communicator,
@@ -1108,23 +1070,39 @@ async def collect_samples(
         if len(candidates) > 1:
             raise ValueError("One join input cannot provide multiple prefilter domains")
         sampling_inputs.append((input_, candidates[0] if candidates else None))
-    local_samples = await gather_in_task_group(
-        *(
-            sample_input(
+    samplers = []
+    for input_, candidate in sampling_inputs:
+        if candidate is None:
+            cardinality_estimator = None
+            cardinality_columns: tuple[int, ...] = ()
+        else:
+            cardinality_estimator = CardinalityEstimator(
                 context,
                 comm,
-                input_,
-                candidate,
-                sample_chunk_count,
-                target_partition_size,
+                tag=candidate.cardinality_tag,
             )
-            for input_, candidate in sampling_inputs
+            cardinality_columns = names_to_indices(
+                candidate.spec.domain_on,
+                input_.node.schema,
+            )
+            assert len(cardinality_columns) == len(candidate.spec.domain_on), (
+                "Prefilter domain keys must be columns"
+            )
+        samplers.append(
+            ChunkSampler(
+                context=context,
+                ch_in=input_.channel,
+                max_chunks=sample_chunk_count,
+                max_bytes=target_partition_size,
+                ch_in_chunk_count=input_.metadata.local_count,
+                cardinality_estimator=cardinality_estimator,
+                cardinality_columns=cardinality_columns,
+            )
         )
-    )
-    samples = await aggregate_table_size_stats(
+    samples = await sample_inputs(
         context,
         comm,
-        tuple(local_samples),
+        samplers,
         collective_id,
     )
     for (input_, _), sample in zip(sampling_inputs, samples, strict=True):

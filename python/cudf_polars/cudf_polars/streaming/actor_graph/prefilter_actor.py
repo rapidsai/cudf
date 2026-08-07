@@ -20,12 +20,12 @@ from cudf_polars.streaming.actor_graph.prefilter import (
 )
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
-    _sample_chunks,
-    aggregate_table_size_stats,
+    ChunkSampler,
     gather_in_task_group,
     process_children,
     recv_metadata,
     replay_buffered_channel,
+    sample_inputs,
     shutdown_on_error,
 )
 from cudf_polars.streaming.filter_hint import PushdownFilterHint
@@ -59,52 +59,6 @@ def make_broadcast_semi_join(ir: PushdownFilterHint) -> Join:
         target,
         projected_domain,
     )
-
-
-async def sample_prefilter_inputs(
-    context: Context,
-    comm: Communicator,
-    ir: PushdownFilterHint,
-    ch_target: Channel[TableChunk],
-    ch_domain: Channel[TableChunk],
-    target_metadata: ChannelMetadata,
-    domain_metadata: ChannelMetadata,
-    executor: StreamingExecutor,
-    collective_id: int,
-) -> tuple[TableSizeStats, TableSizeStats]:
-    """Sample and aggregate a standalone hint's target and domain inputs."""
-    dynamic_planning = executor.dynamic_planning
-    if dynamic_planning is None:
-        raise ValueError("Standalone prefilters require dynamic planning")
-    local_samples = await gather_in_task_group(
-        _sample_chunks(
-            context,
-            ch_target,
-            dynamic_planning.sample_chunk_count,
-            executor.target_partition_size,
-            target_metadata.local_count,
-        ),
-        _sample_chunks(
-            context,
-            ch_domain,
-            dynamic_planning.sample_chunk_count,
-            executor.target_partition_size,
-            domain_metadata.local_count,
-            cardinality_estimator=CardinalityEstimator(
-                context,
-                comm,
-                tag=collective_id,
-            ),
-            cardinality_columns=names_to_indices(ir.domain_on, ir.children[1].schema),
-        ),
-    )
-    target_sample, domain_sample = await aggregate_table_size_stats(
-        context,
-        comm,
-        tuple(local_samples),
-        collective_id,
-    )
-    return target_sample, domain_sample
 
 
 async def replay_skipped_prefilter(
@@ -251,18 +205,40 @@ async def pushdown_filter_actor(
                 recv_metadata(ch_target, context),
                 recv_metadata(ch_domain, context),
             )
-            samples = await sample_prefilter_inputs(
+            dynamic_planning = executor.dynamic_planning
+            if dynamic_planning is None:
+                raise ValueError("Standalone prefilters require dynamic planning")
+            collected_samples = await sample_inputs(
                 context,
                 comm,
-                ir,
-                ch_target,
-                ch_domain,
-                target_metadata,
-                domain_metadata,
-                executor,
+                (
+                    ChunkSampler(
+                        context=context,
+                        ch_in=ch_target,
+                        max_chunks=dynamic_planning.sample_chunk_count,
+                        max_bytes=executor.target_partition_size,
+                        ch_in_chunk_count=target_metadata.local_count,
+                    ),
+                    ChunkSampler(
+                        context=context,
+                        ch_in=ch_domain,
+                        max_chunks=dynamic_planning.sample_chunk_count,
+                        max_bytes=executor.target_partition_size,
+                        ch_in_chunk_count=domain_metadata.local_count,
+                        cardinality_estimator=CardinalityEstimator(
+                            context, comm, tag=collective_id
+                        ),
+                        cardinality_columns=names_to_indices(
+                            ir.domain_on, ir.children[1].schema
+                        ),
+                    ),
+                ),
                 collective_id,
             )
-            target_sample, domain_sample = samples
+            if len(collected_samples) != 2:
+                raise ValueError("Standalone prefilters require two input samples")
+            target_sample, domain_sample = collected_samples
+            samples = (target_sample, domain_sample)
             config = executor.join_filter_pushdown
             if config is None:
                 raise ValueError("Standalone prefilter has no runtime configuration")

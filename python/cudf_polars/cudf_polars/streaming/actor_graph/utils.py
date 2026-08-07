@@ -1204,6 +1204,26 @@ class ChunkSampler:
         )
 
 
+async def sample_inputs(
+    context: Context,
+    comm: Communicator,
+    samplers: Sequence[ChunkSampler],
+    collective_id: int,
+) -> tuple[TableSizeStats, ...]:
+    """Sample input channels concurrently and aggregate their statistics."""
+    if not samplers:
+        return ()
+    local_samples = await gather_in_task_group(
+        *(sampler.sample() for sampler in samplers)
+    )
+    return await aggregate_table_size_stats(
+        context,
+        comm,
+        tuple(local_samples),
+        collective_id,
+    )
+
+
 async def _sample_chunks(
     context: Context,
     ch: Channel[TableChunk],
