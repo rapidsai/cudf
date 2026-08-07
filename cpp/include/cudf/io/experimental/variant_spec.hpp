@@ -51,6 +51,7 @@ enum class variant_primitive_type : uint8_t {
  */
 enum class variant_operation_status : uint8_t {
   success,
+  row_null,  ///< the SQL row itself was null (no VARIANT data to decode)
   missing_path,
   variant_null,
   type_mismatch,

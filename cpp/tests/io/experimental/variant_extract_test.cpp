@@ -890,7 +890,7 @@ TEST_F(GetVariantFieldTest, ApacheObjectPrimitive)
   EXPECT_EQ(cudf::lists_column_view{got->view()}.child().type().id(), cudf::type_id::UINT8);
 
   auto casted = cudf::io::parquet::experimental::cast_variant(
-    got->view(), cudf::data_type{cudf::type_id::INT8}, nullptr, nullptr, stream);
+    got->view(), cudf::data_type{cudf::type_id::INT8}, {}, nullptr, stream);
   cudf::test::fixed_width_column_wrapper<int8_t> expected{int8_t{1}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*casted, expected);
 }
@@ -916,7 +916,7 @@ TEST_F(GetVariantFieldTest, GetAndCastMatchesExtract)
 
   auto intermediate = cudf::io::parquet::experimental::get_variant_field(col, "x", nullptr, stream);
   auto two_step_x   = cudf::io::parquet::experimental::cast_variant(
-    intermediate->view(), cudf::data_type{cudf::type_id::INT32}, nullptr, nullptr, stream);
+    intermediate->view(), cudf::data_type{cudf::type_id::INT32}, {}, nullptr, stream);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_x, *two_step_x);
 }
@@ -940,7 +940,7 @@ std::unique_ptr<cudf::column> cast_apache_primitive(avf::fixture<M, V> const& fi
   auto col          = make_apache_variant(fixture);
   auto const value  = cudf::structs_column_view{col}.get_sliced_child(1, stream);
   return cudf::io::parquet::experimental::cast_variant(
-    value, cudf::data_type{cudf::type_to_id<T>()}, nullptr, nullptr, stream);
+    value, cudf::data_type{cudf::type_to_id<T>()}, {}, nullptr, stream);
 }
 
 struct CastVariantTest : public cudf::test::BaseFixture {};
@@ -977,7 +977,7 @@ TEST_F(CastVariantTest, ApachePrimitiveFloats)
     auto col         = make_apache_variant(fixture);
     auto const value = cudf::structs_column_view{col}.get_sliced_child(1, stream);
     auto got         = cudf::io::parquet::experimental::cast_variant(
-      value, cudf::data_type{cudf::type_to_id<T>()}, nullptr, nullptr, stream);
+      value, cudf::data_type{cudf::type_to_id<T>()}, {}, nullptr, stream);
     cudf::test::fixed_width_column_wrapper<T> expected{expected_val};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
   };
@@ -993,7 +993,7 @@ TEST_F(CastVariantTest, ApachePrimitiveBooleans)
     auto col         = make_apache_variant(fixture);
     auto const value = cudf::structs_column_view{col}.get_sliced_child(1, stream);
     auto got         = cudf::io::parquet::experimental::cast_variant(
-      value, cudf::data_type{cudf::type_id::BOOL8}, nullptr, nullptr, stream);
+      value, cudf::data_type{cudf::type_id::BOOL8}, {}, nullptr, stream);
     cudf::test::fixed_width_column_wrapper<bool> expected{expected_val};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
   };
@@ -1006,7 +1006,7 @@ TEST_F(CastVariantTest, ApachePrimitiveBooleans)
     auto col         = make_apache_variant(avf::primitive_null);
     auto const value = cudf::structs_column_view{col}.get_sliced_child(1, stream);
     auto got         = cudf::io::parquet::experimental::cast_variant(
-      value, cudf::data_type{cudf::type_id::BOOL8}, nullptr, nullptr, stream);
+      value, cudf::data_type{cudf::type_id::BOOL8}, {}, nullptr, stream);
     cudf::test::fixed_width_column_wrapper<bool> expected({false}, {false});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
   }
@@ -1054,7 +1054,7 @@ TEST_F(CastVariantTest, ApachePrimitiveBooleans)
     auto const sliced = cudf::slice(col, {slice_beg, slice_end}).front();
     auto const value  = cudf::structs_column_view{sliced}.get_sliced_child(1, stream);
     auto got          = cudf::io::parquet::experimental::cast_variant(
-      value, cudf::data_type{cudf::type_id::BOOL8}, nullptr, nullptr, stream);
+      value, cudf::data_type{cudf::type_id::BOOL8}, {}, nullptr, stream);
 
     cudf::test::fixed_width_column_wrapper<bool> expected(
       exp_vals.begin() + slice_beg, exp_vals.begin() + slice_end, exp_valid.begin() + slice_beg);
@@ -1069,7 +1069,7 @@ TEST_F(CastVariantTest, ApacheShortString)
   auto const value = cudf::structs_column_view{col}.get_sliced_child(1, stream);
 
   auto got = cudf::io::parquet::experimental::cast_variant(
-    value, cudf::data_type{cudf::type_id::STRING}, nullptr, nullptr, stream);
+    value, cudf::data_type{cudf::type_id::STRING}, {}, nullptr, stream);
 
   // Decoded from short_string.value: skip the 1-byte header, take the rest.
   std::string const expected_str(reinterpret_cast<char const*>(avf::short_string.value.data() + 1),
@@ -1085,7 +1085,7 @@ TEST_F(CastVariantTest, ApachePrimitiveString)
   auto const value = cudf::structs_column_view{col}.get_sliced_child(1, stream);
 
   auto got = cudf::io::parquet::experimental::cast_variant(
-    value, cudf::data_type{cudf::type_id::STRING}, nullptr, nullptr, stream);
+    value, cudf::data_type{cudf::type_id::STRING}, {}, nullptr, stream);
 
   // Long-string layout: 1 header byte + 4-byte LE length + payload.
   std::string const expected_str(
@@ -1102,7 +1102,7 @@ TEST_F(CastVariantTest, MismatchedTypeYieldsNull)
   auto col         = make_apache_variant(avf::object_primitive);
   auto const value = cudf::structs_column_view{col}.get_sliced_child(1, stream);
   auto got         = cudf::io::parquet::experimental::cast_variant(
-    value, cudf::data_type{cudf::type_id::INT32}, nullptr, nullptr, stream);
+    value, cudf::data_type{cudf::type_id::INT32}, {}, nullptr, stream);
   ASSERT_EQ(got->size(), 1);
   EXPECT_EQ(got->null_count(), 1);
 }
@@ -1119,7 +1119,7 @@ TEST_F(CastVariantTest, EmptyInput)
                         cudf::type_id::FLOAT64,
                         cudf::type_id::BOOL8}) {
     auto got = cudf::io::parquet::experimental::cast_variant(
-      *values, cudf::data_type{id}, nullptr, nullptr, stream);
+      *values, cudf::data_type{id}, {}, nullptr, stream);
     EXPECT_EQ(got->type().id(), id);
     EXPECT_EQ(got->size(), 0);
     EXPECT_EQ(got->null_count(), 0);
@@ -1148,7 +1148,7 @@ TEST_F(CastVariantTest, UnsupportedTypeThrows)
     cudf::empty_like(cudf::structs_column_view{make_xyz_three_row_variant()}.child(1));
   for (auto const id : ids) {
     EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::cast_variant(
-                   *empty_values, cudf::data_type{id}, nullptr, nullptr, stream)),
+                   *empty_values, cudf::data_type{id}, {}, nullptr, stream)),
                  std::invalid_argument)
       << std::format("expected throw for type_id {} on empty input", static_cast<int>(id));
   }
@@ -1158,7 +1158,7 @@ TEST_F(CastVariantTest, UnsupportedTypeThrows)
   auto const value = cudf::structs_column_view{col}.get_sliced_child(1, stream);
   for (auto const id : ids) {
     EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::cast_variant(
-                   value, cudf::data_type{id}, nullptr, nullptr, stream)),
+                   value, cudf::data_type{id}, {}, nullptr, stream)),
                  std::invalid_argument)
       << std::format("expected throw for type_id {} on non-empty input", static_cast<int>(id));
   }
@@ -1201,8 +1201,7 @@ TEST_F(CastVariantTest, CastSourceTargetMatrix)
     for (auto const& src : sources) {
       SCOPED_TRACE(std::string{"int target "} + match_label + ", source " + src.label);
       auto values = values_of(src.bytes);
-      auto got =
-        cudf::io::parquet::experimental::cast_variant(values, target, nullptr, nullptr, stream);
+      auto got = cudf::io::parquet::experimental::cast_variant(values, target, {}, nullptr, stream);
       if (std::string_view{src.label} == match_label) {
         cudf::test::fixed_width_column_wrapper<T> const expected{match_value};
         CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
@@ -1223,7 +1222,7 @@ TEST_F(CastVariantTest, CastSourceTargetMatrix)
     SCOPED_TRACE(std::string{"string target, source "} + src.label);
     auto values = values_of(src.bytes);
     auto got =
-      cudf::io::parquet::experimental::cast_variant(values, string_type, nullptr, nullptr, stream);
+      cudf::io::parquet::experimental::cast_variant(values, string_type, {}, nullptr, stream);
     std::string_view const label{src.label};
     if (label == "short_string" || label == "long_string") {
       std::string const expected_str = (label == "short_string") ? "hi" : std::string(70, 'a');
@@ -1243,7 +1242,7 @@ TEST_F(CastVariantTest, ShortStringLengthZero)
   std::vector<uint8_t> const val{make_variant_short_string_header(0)};
   cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
   auto got = cudf::io::parquet::experimental::cast_variant(
-    values, cudf::data_type{cudf::type_id::STRING}, nullptr, nullptr, stream);
+    values, cudf::data_type{cudf::type_id::STRING}, {}, nullptr, stream);
   cudf::test::strings_column_wrapper expected({""});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
@@ -1258,7 +1257,7 @@ TEST_F(CastVariantTest, ShortStringMaxLength)
   val.insert(val.end(), payload.begin(), payload.end());
   cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
   auto got = cudf::io::parquet::experimental::cast_variant(
-    values, cudf::data_type{cudf::type_id::STRING}, nullptr, nullptr, stream);
+    values, cudf::data_type{cudf::type_id::STRING}, {}, nullptr, stream);
   cudf::test::strings_column_wrapper expected({payload});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
@@ -1271,7 +1270,7 @@ TEST_F(CastVariantTest, LongStringLengthZero)
     make_variant_primitive(variant_primitive_type::LONG_STRING), 0x00, 0x00, 0x00, 0x00};
   cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
   auto got = cudf::io::parquet::experimental::cast_variant(
-    values, cudf::data_type{cudf::type_id::STRING}, nullptr, nullptr, stream);
+    values, cudf::data_type{cudf::type_id::STRING}, {}, nullptr, stream);
   cudf::test::strings_column_wrapper expected({""});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
@@ -1291,7 +1290,7 @@ TEST_F(CastVariantTest, LongStringDeclaredLengthExceedsPayloadYieldsNull)
     SCOPED_TRACE(std::string{"payload bytes present: "} + std::to_string(val.size() - 5));
     cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
     auto got = cudf::io::parquet::experimental::cast_variant(
-      values, cudf::data_type{cudf::type_id::STRING}, nullptr, nullptr, stream);
+      values, cudf::data_type{cudf::type_id::STRING}, {}, nullptr, stream);
     ASSERT_EQ(got->size(), 1);
     EXPECT_EQ(got->null_count(), 1);
   }
@@ -1308,7 +1307,7 @@ TEST_F(CastVariantTest, LongStringPayloadExceedsDeclaredLength)
     hdr, 0x03, 0x00, 0x00, 0x00, 'a', 'b', 'c', 'x', 'x', 'x', 'x', 'x'};
   cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
   auto got = cudf::io::parquet::experimental::cast_variant(
-    values, cudf::data_type{cudf::type_id::STRING}, nullptr, nullptr, stream);
+    values, cudf::data_type{cudf::type_id::STRING}, {}, nullptr, stream);
   cudf::test::strings_column_wrapper expected({"abc"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
@@ -1398,10 +1397,9 @@ TEST_F(InvalidInputShapeTest, CastVariantRejectsMalformedInput)
 
   for (auto const& c : cases) {
     SCOPED_TRACE(c.label);
-    EXPECT_THROW(
-      static_cast<void>(cudf::io::parquet::experimental::cast_variant(
-        c.column->view(), cudf::data_type{cudf::type_id::INT32}, nullptr, nullptr, stream)),
-      std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::cast_variant(
+                   c.column->view(), cudf::data_type{cudf::type_id::INT32}, {}, nullptr, stream)),
+                 std::invalid_argument);
   }
 }
 
@@ -1422,6 +1420,7 @@ static void expect_status_values(cudf::column_view const& status,
 }
 
 constexpr uint8_t ST_SUCCESS   = static_cast<uint8_t>(op_status::success);
+constexpr uint8_t ST_ROW_NULL  = static_cast<uint8_t>(op_status::row_null);
 constexpr uint8_t ST_MISSING   = static_cast<uint8_t>(op_status::missing_path);
 constexpr uint8_t ST_VNULL     = static_cast<uint8_t>(op_status::variant_null);
 constexpr uint8_t ST_MISMATCH  = static_cast<uint8_t>(op_status::type_mismatch);
@@ -1433,8 +1432,8 @@ constexpr uint8_t ST_MALFORMED = static_cast<uint8_t>(op_status::malformed_varia
 
 struct GetVariantFieldStatusTest : public cudf::test::BaseFixture {};
 
-// SQL-null input row → null output + null status
-TEST_F(GetVariantFieldStatusTest, SqlNullInputProducesNullStatus)
+// SQL-null input row → null output + row_null status (status column is always non-nullable)
+TEST_F(GetVariantFieldStatusTest, SqlNullInputProducesRowNullStatus)
 {
   cudf::test::lists_column_wrapper<uint8_t> meta{{0x01, 0x01, 0x00, 0x01, 'x'}};
   cudf::test::lists_column_wrapper<uint8_t> val{{0x14, 0x07, 0x00, 0x00, 0x00}};
@@ -1446,7 +1445,8 @@ TEST_F(GetVariantFieldStatusTest, SqlNullInputProducesNullStatus)
 
   ASSERT_NE(status, nullptr);
   ASSERT_EQ(status->size(), 1);
-  ASSERT_EQ(status->null_count(), 1);
+  ASSERT_EQ(status->null_count(), 0);
+  expect_status_values(*status, {ST_ROW_NULL});
   ASSERT_EQ(got->null_count(), 1);
 }
 
@@ -1572,7 +1572,7 @@ TEST_F(GetVariantFieldStatusTest, MixedRows)
   // Row 2: {} (no x key)  → missing_path
   auto const m2 = build_metadata({});
   auto const v2 = build_single_field_object(/*fid=*/0, enc_int32(0));  // fid 0 but dict empty
-  // Row 3: SQL null        → null status
+  // Row 3: SQL null        → row_null status (status column is always non-nullable)
   auto const v3 = enc_int32(0);
 
   cudf::test::lists_column_wrapper<uint8_t> meta{{dict.begin(), dict.end()},
@@ -1589,14 +1589,8 @@ TEST_F(GetVariantFieldStatusTest, MixedRows)
 
   ASSERT_NE(status, nullptr);
   ASSERT_EQ(status->size(), 4);
-  // Row 3 (SQL null input) → null status; rows 0-2 → valid status
-  ASSERT_EQ(status->null_count(), 1);
-  // Check per-row status values via expected column (rows 0-2 valid, row 3 null)
-  std::vector<uint8_t> const exp_sv{ST_SUCCESS, ST_VNULL, ST_MISSING, 0};
-  std::vector<bool> const exp_sv_valid{true, true, true, false};
-  cudf::test::fixed_width_column_wrapper<uint8_t> expected_status(
-    exp_sv.begin(), exp_sv.end(), exp_sv_valid.begin());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*status, expected_status);
+  ASSERT_EQ(status->null_count(), 0);
+  expect_status_values(*status, {ST_SUCCESS, ST_VNULL, ST_MISSING, ST_ROW_NULL});
 
   // Row 0: valid (INT32 bytes), Row 1: valid (VARIANT null bytes preserved), Row 2+3: null
   EXPECT_EQ(got->null_count(), 2);
@@ -1639,7 +1633,7 @@ TEST_F(CastVariantStatusTest, SuccessProducesSuccessStatus)
   auto values = make_value_col(enc_int32(42));
   std::unique_ptr<cudf::column> status;
   auto got = cudf::io::parquet::experimental::cast_variant(
-    values, cudf::data_type{cudf::type_id::INT32}, nullptr, &status, stream, cmr());
+    values, cudf::data_type{cudf::type_id::INT32}, {}, &status, stream, cmr());
 
   ASSERT_NE(status, nullptr);
   expect_status_values(*status, {ST_SUCCESS});
@@ -1654,7 +1648,7 @@ TEST_F(CastVariantStatusTest, VariantNullProducesVariantNullStatus)
   auto values = make_value_col(enc_null());
   std::unique_ptr<cudf::column> status;
   auto got = cudf::io::parquet::experimental::cast_variant(
-    values, cudf::data_type{cudf::type_id::INT32}, nullptr, &status, stream, cmr());
+    values, cudf::data_type{cudf::type_id::INT32}, {}, &status, stream, cmr());
 
   ASSERT_NE(status, nullptr);
   expect_status_values(*status, {ST_VNULL});
@@ -1668,15 +1662,15 @@ TEST_F(CastVariantStatusTest, TypeMismatchStatus)
   auto values = make_value_col(enc_int8(5));  // INT8 cast to INT32 target → mismatch
   std::unique_ptr<cudf::column> status;
   auto got = cudf::io::parquet::experimental::cast_variant(
-    values, cudf::data_type{cudf::type_id::INT32}, nullptr, &status, stream, cmr());
+    values, cudf::data_type{cudf::type_id::INT32}, {}, &status, stream, cmr());
 
   ASSERT_NE(status, nullptr);
   expect_status_values(*status, {ST_MISMATCH});
   EXPECT_EQ(got->null_count(), 1);
 }
 
-// SQL-null input (null list row) → null status
-TEST_F(CastVariantStatusTest, SqlNullInputProducesNullStatus)
+// SQL-null input (null list row) → row_null status (status column is always non-nullable)
+TEST_F(CastVariantStatusTest, SqlNullInputProducesRowNullStatus)
 {
   auto stream = cudf::test::get_default_stream();
 
@@ -1702,12 +1696,12 @@ TEST_F(CastVariantStatusTest, SqlNullInputProducesNullStatus)
 
   std::unique_ptr<cudf::column> status;
   auto got = cudf::io::parquet::experimental::cast_variant(
-    values_col->view(), cudf::data_type{cudf::type_id::INT32}, nullptr, &status, stream, cmr());
+    values_col->view(), cudf::data_type{cudf::type_id::INT32}, {}, &status, stream, cmr());
 
   ASSERT_NE(status, nullptr);
-  // Row 0: success; row 1: null status
-  ASSERT_EQ(status->null_count(), 1);
-  EXPECT_EQ(cudf::test::to_host<uint8_t>(*status).first[0], ST_SUCCESS);
+  // Row 0: success; row 1: row_null (status column is always non-nullable)
+  ASSERT_EQ(status->null_count(), 0);
+  expect_status_values(*status, {ST_SUCCESS, ST_ROW_NULL});
   EXPECT_EQ(got->null_count(), 1);
 }
 
@@ -1731,7 +1725,7 @@ TEST_F(CastVariantStatusTest, IncomingStatusPropagation)
 
   std::unique_ptr<cudf::column> status;
   auto got = cudf::io::parquet::experimental::cast_variant(
-    values, cudf::data_type{cudf::type_id::INT32}, &incoming_view1, &status, stream, cmr());
+    values, cudf::data_type{cudf::type_id::INT32}, incoming_view1, &status, stream, cmr());
 
   ASSERT_NE(status, nullptr);
   // Row 0: success (decoded), Row 1: missing_path (propagated), Row 2: variant_null (propagated)
@@ -1740,8 +1734,9 @@ TEST_F(CastVariantStatusTest, IncomingStatusPropagation)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
-// Incoming status with null entry → null output and null status for that row
-TEST_F(CastVariantStatusTest, IncomingNullStatusProducesNullStatus)
+// Incoming row_null status → null output and row_null status for that row.
+// The status column produced by get_variant_field is non-nullable; SQL-null rows carry row_null.
+TEST_F(CastVariantStatusTest, IncomingRowNullStatusProducesRowNullStatus)
 {
   auto stream = cudf::test::get_default_stream();
 
@@ -1750,24 +1745,19 @@ TEST_F(CastVariantStatusTest, IncomingNullStatusProducesNullStatus)
     wrap_multi_row_variant(std::vector<std::vector<uint8_t>>(2, build_metadata({})), val_rows);
   auto const values = cudf::structs_column_view{col}.get_sliced_child(1, stream);
 
-  // Row 0: success, Row 1: null incoming status
-  cudf::test::fixed_width_column_wrapper<uint8_t> incoming_status_w2({ST_SUCCESS, ST_SUCCESS},
-                                                                     {true, false});
+  // Row 0: success, Row 1: row_null (non-nullable incoming status, as produced by
+  // get_variant_field)
+  cudf::test::fixed_width_column_wrapper<uint8_t> incoming_status_w2({ST_SUCCESS, ST_ROW_NULL});
   auto incoming_status_col2 = incoming_status_w2.release();
   auto const incoming_view2 = incoming_status_col2->view();
 
   std::unique_ptr<cudf::column> status;
   auto got = cudf::io::parquet::experimental::cast_variant(
-    values, cudf::data_type{cudf::type_id::INT32}, &incoming_view2, &status, stream, cmr());
+    values, cudf::data_type{cudf::type_id::INT32}, incoming_view2, &status, stream, cmr());
 
   ASSERT_NE(status, nullptr);
-  ASSERT_EQ(status->null_count(), 1);
-  // Row 0: success; Row 1: null status
-  std::vector<uint8_t> const exp_s2{ST_SUCCESS, 0};
-  std::vector<bool> const exp_s2_valid{true, false};
-  cudf::test::fixed_width_column_wrapper<uint8_t> expected_status2(
-    exp_s2.begin(), exp_s2.end(), exp_s2_valid.begin());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*status, expected_status2);
+  ASSERT_EQ(status->null_count(), 0);
+  expect_status_values(*status, {ST_SUCCESS, ST_ROW_NULL});
 
   cudf::test::fixed_width_column_wrapper<int32_t> expected({7, 0}, {true, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
@@ -1786,7 +1776,7 @@ TEST_F(CastVariantStatusTest, BoolStatusTracking)
 
   std::unique_ptr<cudf::column> status;
   auto got = cudf::io::parquet::experimental::cast_variant(
-    values, cudf::data_type{cudf::type_id::BOOL8}, nullptr, &status, stream, cmr());
+    values, cudf::data_type{cudf::type_id::BOOL8}, {}, &status, stream, cmr());
 
   ASSERT_NE(status, nullptr);
   expect_status_values(*status, {ST_SUCCESS, ST_VNULL, ST_MISMATCH});
@@ -1818,7 +1808,7 @@ TEST_F(CastVariantStatusTest, StringStatusTracking)
 
   std::unique_ptr<cudf::column> status;
   auto got = cudf::io::parquet::experimental::cast_variant(
-    values, cudf::data_type{cudf::type_id::STRING}, nullptr, &status, stream, cmr());
+    values, cudf::data_type{cudf::type_id::STRING}, {}, &status, stream, cmr());
 
   ASSERT_NE(status, nullptr);
   expect_status_values(*status, {ST_SUCCESS, ST_VNULL, ST_MISMATCH, ST_MALFORMED});
@@ -1833,7 +1823,7 @@ TEST_F(CastVariantStatusTest, EmptyInput)
     cudf::empty_like(cudf::structs_column_view{make_xyz_three_row_variant()}.child(1));
   std::unique_ptr<cudf::column> status;
   auto got = cudf::io::parquet::experimental::cast_variant(
-    *values, cudf::data_type{cudf::type_id::INT32}, nullptr, &status, stream, cmr());
+    *values, cudf::data_type{cudf::type_id::INT32}, {}, &status, stream, cmr());
 
   ASSERT_NE(status, nullptr);
   EXPECT_EQ(status->size(), 0);
@@ -1863,8 +1853,8 @@ TEST_F(ExtractVariantFieldStatusTest, SuccessStatus)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
-// SQL null input → null status
-TEST_F(ExtractVariantFieldStatusTest, SqlNullInputProducesNullStatus)
+// SQL null input → row_null status (status column is always non-nullable)
+TEST_F(ExtractVariantFieldStatusTest, SqlNullInputProducesRowNullStatus)
 {
   cudf::test::lists_column_wrapper<uint8_t> meta{{0x01, 0x01, 0x00, 0x01, 'x'}};
   cudf::test::lists_column_wrapper<uint8_t> val{{0x14, 0x07, 0x00, 0x00, 0x00}};
@@ -1876,7 +1866,8 @@ TEST_F(ExtractVariantFieldStatusTest, SqlNullInputProducesNullStatus)
     col, "x", cudf::data_type{cudf::type_id::INT32}, &status, stream, cmr());
 
   ASSERT_NE(status, nullptr);
-  EXPECT_EQ(status->null_count(), 1);
+  EXPECT_EQ(status->null_count(), 0);
+  expect_status_values(*status, {ST_ROW_NULL});
   EXPECT_EQ(got->null_count(), 1);
 }
 

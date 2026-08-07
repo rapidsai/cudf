@@ -15,6 +15,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
+#include <optional>
 #include <string_view>
 
 /**
@@ -77,7 +78,8 @@ namespace io::parquet::experimental {
  *        `FLOAT32`/`FLOAT64`, or `BOOL8`)
  * @param stream CUDA stream
  * @param mr Device memory resource
- * @param incoming_status Incoming status column from get_variant_field call
+ * @param incoming_status Optional status column from a prior `get_variant_field` call. When
+ *        provided, non-success rows are propagated directly to the output without decoding.
  * @param status_out Status column with variant_operation_status` values
  * @return Typed column decoded from the VARIANT value blobs
  *
@@ -88,10 +90,10 @@ namespace io::parquet::experimental {
 [[nodiscard]] std::unique_ptr<column> cast_variant(
   column_view const& values,
   data_type desired_type,
-  column_view const* incoming_status  = nullptr,
-  std::unique_ptr<column>* status_out = nullptr,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr   = cudf::get_current_device_resource_ref());
+  std::optional<column_view> incoming_status = std::nullopt,
+  std::unique_ptr<column>* status_out        = nullptr,
+  rmm::cuda_stream_view stream               = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr          = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Convenience wrapper: extract a nested object value by path and decode into a typed column.
