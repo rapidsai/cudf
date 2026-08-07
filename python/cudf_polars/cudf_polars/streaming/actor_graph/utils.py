@@ -1040,6 +1040,42 @@ class TableSizeStats:
     """Global cardinality statistics for the sampled rows, when requested."""
 
 
+async def aggregate_table_size_stats(
+    context: Context,
+    comm: Communicator,
+    samples: tuple[TableSizeStats, ...],
+    collective_id: int,
+) -> tuple[TableSizeStats, ...]:
+    """Aggregate table-size and row estimates across ranks."""
+    totals = await allgather_reduce(
+        context,
+        comm,
+        collective_id,
+        *(
+            value
+            for sample in samples
+            for value in (
+                sample.total_size,
+                sample.total_rows,
+                sample.total_chunks,
+                int(sample.is_complete),
+            )
+        ),
+    )
+    totals_iter = iter(totals)
+    return tuple(
+        TableSizeStats(
+            chunks=sample.chunks,
+            total_size=next(totals_iter),
+            total_rows=next(totals_iter),
+            total_chunks=next(totals_iter),
+            is_complete=next(totals_iter) == comm.nranks,
+            cardinality=sample.cardinality,
+        )
+        for sample in samples
+    )
+
+
 @dataclass(frozen=True)
 class ChunkSampler:
     """Object for obtaining statistics from a channel of TableChunks."""
