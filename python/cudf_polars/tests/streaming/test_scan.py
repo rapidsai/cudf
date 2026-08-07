@@ -96,7 +96,10 @@ def test_scan_parquet_use_rapidsmpf_native(tmp_path, df, streaming_engine_factor
     streaming_engine = streaming_engine_factory(
         StreamingOptions(
             target_partition_size=1_000,
-            parquet_options={"use_rapidsmpf_native": True},
+            parquet_options={
+                "use_rapidsmpf_native": True,
+                "prefetch_file_metadata": False,
+            },
         ),
     )
     make_partitioned_source(df, tmp_path, "parquet", n_files=1)
