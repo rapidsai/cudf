@@ -576,7 +576,7 @@ CUDF_HOST_DEVICE constexpr inline size_t max_RLE_page_size(uint8_t value_bit_wid
   // bitwidths it's hard to get the pathological 8:2 split.
   // If the encoder starts printing the data corruption warning, then this will need to be
   // revisited.
-  return 4 + 5 + ((num_values * value_bit_width + 7) / 8) + (num_values / 8);
+  return 4 + 5 + cudf::util::div_rounding_up_unsafe<size_t>(num_values * value_bit_width, 8) + (num_values / 8);
 }
 
 // Bytes needed for the RLE length field
