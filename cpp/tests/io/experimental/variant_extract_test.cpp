@@ -1415,7 +1415,7 @@ template <std::size_t M, std::size_t V>
 
 // Build a list<uint8> column from blobs with per-row validity. Rows where valid[i] is false are
 // null at the list level (not an encoded Variant null — those are valid rows with a NULLVAL blob).
-inline std::unique_ptr<cudf::column> make_list_u8_nullable(
+[[nodiscard]] std::unique_ptr<cudf::column> make_list_u8_nullable(
   std::vector<std::vector<uint8_t>> const& blobs, std::vector<bool> const& valid)
 {
   auto const n = static_cast<cudf::size_type>(blobs.size());
