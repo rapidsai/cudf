@@ -469,13 +469,32 @@ class aggregate_reader_metadata {
                                       std::span<input_column_info const> input_columns) const;
 
   /**
-   * @brief Get Parquet file metadatas
+   * @brief Get Parquet file metadatas (copies)
    *
    * @return Parquet file metadatas
    */
-  [[nodiscard]] std::vector<FileMetaData> get_parquet_metadatas() const
+  [[nodiscard]] std::vector<FileMetaData> get_parquet_metadatas() const&
   {
     return std::vector<FileMetaData>{per_file_metadata.begin(), per_file_metadata.end()};
+  }
+
+  /**
+   * @brief Get Parquet file metadatas by moving out of this aggregate
+   *
+   * Used when the aggregate_reader_metadata is temporary and discarded after
+   * extracting footers (e.g. read_parquet_footers), avoiding a deep copy.
+   *
+   * @return Parquet file metadatas
+   */
+  [[nodiscard]] std::vector<FileMetaData> get_parquet_metadatas() &&
+  {
+    std::vector<FileMetaData> result;
+    result.reserve(per_file_metadata.size());
+    for (auto& pfm : per_file_metadata) {
+      result.push_back(std::move(static_cast<FileMetaData&>(pfm)));
+    }
+    per_file_metadata.clear();
+    return result;
   }
 
   /**

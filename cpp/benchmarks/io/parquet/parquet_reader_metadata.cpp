@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -125,7 +125,7 @@ void BM_parquet_read_footer(nvbench::state& state)
       auto sources = cudf::io::make_datasources(source_info);
 
       timer.start();
-      auto const metadatas = cudf::io::read_parquet_footers(sources);
+      auto const metadatas = cudf::io::read_parquet_footers(sources, write_page_index);
       timer.stop();
 
       // Validate metadata

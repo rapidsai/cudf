@@ -1,5 +1,8 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+
+from libcpp cimport bool
+from libcpp.memory cimport unique_ptr
 
 from pylibcudf.io.types cimport SourceInfo
 from pylibcudf.libcudf.io.parquet_schema cimport (
@@ -65,10 +68,10 @@ cdef class ParquetMetadata:
     cpdef dict columnchunk_metadata(self)
 
 cdef class FileMetaData:
-    cdef cpp_FileMetaData c_obj
+    cdef unique_ptr[cpp_FileMetaData] c_obj
 
     @staticmethod
-    cdef FileMetaData from_cpp(cpp_FileMetaData metadata)
+    cdef FileMetaData from_libcudf(unique_ptr[cpp_FileMetaData] metadata)
 
 cdef class SortingColumn:
     cdef cpp_SortingColumn c_obj
@@ -95,4 +98,4 @@ cdef class RowGroup:
     cdef RowGroup from_cpp(cpp_RowGroup row_group)
 
 cpdef ParquetMetadata read_parquet_metadata(SourceInfo src_info)
-cpdef list read_parquet_footers(SourceInfo src_info)
+cpdef list read_parquet_footers(SourceInfo src_info, bool read_page_indexes=*)

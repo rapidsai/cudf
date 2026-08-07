@@ -260,11 +260,25 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
  * @brief Constructs FileMetaData objects from parquet dataset
  *
  * @param sources Input `datasource` objects to read the dataset from
+ * @param read_page_indexes If true, deserialize page indexes into each column chunk when present
  *
  * @return List of FileMetaData objects, one per parquet source
  */
 std::vector<parquet::FileMetaData> read_parquet_footers(
-  std::span<std::unique_ptr<datasource> const> sources);
+  std::span<std::unique_ptr<datasource> const> sources, bool read_page_indexes = true);
+
+/**
+ * @brief Deep-copy FileMetaData objects from a span of pointers
+ *
+ * Used when handing cached footers into the parquet reader so the clone can
+ * run without the Python GIL (Cython calls this under `nogil`).
+ *
+ * @param sources Non-owning pointers to FileMetaData objects to clone
+ *
+ * @return Deep copies of each pointed-to FileMetaData
+ */
+[[nodiscard]] std::vector<parquet::FileMetaData> clone_parquet_metadatas(
+  host_span<parquet::FileMetaData const*> sources);
 
 }  // namespace parquet::detail
 }  // namespace io

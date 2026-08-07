@@ -1240,7 +1240,7 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
 }
 
 std::vector<parquet::FileMetaData> read_parquet_footers(
-  std::span<std::unique_ptr<datasource> const> sources)
+  std::span<std::unique_ptr<datasource> const> sources, bool read_page_indexes)
 {
   // Do not use arrow schema when only reading the parquet metadata.
   constexpr auto use_arrow_schema = false;
@@ -1248,16 +1248,28 @@ std::vector<parquet::FileMetaData> read_parquet_footers(
   // Do not select any columns when only reading the parquet metadata.
   constexpr auto has_column_projection = false;
 
-  // Read page indexes if available here since we will want to reuse the raw metadata for later use.
-  constexpr auto read_page_indexes = true;
-
-  // Parse the source dataset metadata
+  // Parse the source dataset metadata. Callers that only reuse footers with read_parquet can
+  // pass read_page_indexes=false to skip materializing ColumnIndex/OffsetIndex (cheaper to clone).
   return aggregate_reader_metadata(
            host_span<std::unique_ptr<datasource> const>{sources.data(), sources.size()},
            use_arrow_schema,
            has_column_projection,
            read_page_indexes)
     .get_parquet_metadatas();
+}
+
+[[nodiscard]] std::vector<parquet::FileMetaData> clone_parquet_metadatas(
+  host_span<parquet::FileMetaData const*> sources)
+{
+  CUDF_FUNC_RANGE();
+
+  std::vector<parquet::FileMetaData> result;
+  result.reserve(sources.size());
+  for (auto const* src : sources) {
+    CUDF_EXPECTS(src != nullptr, "Null FileMetaData pointer");
+    result.push_back(*src);
+  }
+  return result;
 }
 
 }  // namespace cudf::io::parquet::detail

@@ -351,3 +351,12 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
     cdef unique_ptr[vector[uint8_t]] merge_row_group_metadata(
         const vector[unique_ptr[vector[uint8_t]]]& metadata_list
     ) except +libcudf_exception_handler
+
+from pylibcudf.libcudf.utilities.span cimport host_span
+
+ctypedef const FileMetaData* const_FileMetaData_ptr
+
+cdef extern from "cudf/io/detail/parquet.hpp" namespace "cudf::io::parquet::detail" nogil:
+    cdef vector[FileMetaData] clone_parquet_metadatas(
+        host_span[const_FileMetaData_ptr] sources
+    ) except +libcudf_exception_handler
