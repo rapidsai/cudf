@@ -9,6 +9,7 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/hashing.hpp>
@@ -75,14 +76,47 @@ TYPED_TEST(SparkMurmurHashTestFloatTyped, TestExtremes)
   auto const table_col_neg_zero = cudf::table_view({col_neg_zero});
   auto const table_col_neg_nan  = cudf::table_view({col_neg_nan});
 
-  // Spark hash is sensitive to 0 and -0
-  auto const spark_col         = cudf::hashing::spark_murmurhash3_x86_32(table_col, 0);
-  auto const spark_col_neg_nan = cudf::hashing::spark_murmurhash3_x86_32(table_col_neg_nan);
+  // Spark 3.2+ normalizes signed zero before invoking the JNI hasher.
+  // https://github.com/NVIDIA/spark-rapids/blob/aef688e232b9e2c710696d380b2539230897450a/sql-plugin/src/main/scala/com/nvidia/spark/rapids/shims/HashUtils.scala#L21-L44
+  // https://github.com/NVIDIA/spark-rapids-jni/blob/09bae9c7dccf050b5db53a70282c3001cba5a015/src/main/cpp/src/hash/murmur_hash.cuh#L163-L172
+  auto const spark_col          = cudf::hashing::spark_murmurhash3_x86_32(table_col, 0);
+  auto const spark_col_neg_zero = cudf::hashing::spark_murmurhash3_x86_32(table_col_neg_zero, 0);
+  auto const spark_col_neg_nan  = cudf::hashing::spark_murmurhash3_x86_32(table_col_neg_nan, 0);
 
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*spark_col, *spark_col_neg_zero);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*spark_col, *spark_col_neg_nan);
 }
 
 class SparkMurmurHashTest : public cudf::test::BaseFixture {};
+
+TEST_F(SparkMurmurHashTest, EmptyInput)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> const empty{};
+  auto const expected = cudf::test::fixed_width_column_wrapper<int32_t>{};
+
+  auto const empty_table_output = cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view{}, 42);
+  auto const empty_column_output =
+    cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view{{empty}}, 42);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, empty_table_output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, empty_column_output->view());
+}
+
+TEST_F(SparkMurmurHashTest, SlicedInput)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> const first({999, 0, 1, -1, 42, 123456789, -999});
+  cudf::test::fixed_width_column_wrapper<int32_t> const second(
+    {999, 10, 20, 30, -40, -987654321, -999});
+
+  auto const first_slice  = cudf::slice(first, {1, 6}).front();
+  auto const second_slice = cudf::slice(second, {1, 6}).front();
+  auto const output =
+    cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view{{first_slice, second_slice}}, 42);
+
+  cudf::test::fixed_width_column_wrapper<int32_t> const expected(
+    {-1721723333, 1151116018, 1549484878, -1287750896, -1980733329});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
+}
 
 TEST_F(SparkMurmurHashTest, IterativeSeeding)
 {
@@ -490,7 +524,7 @@ TEST_F(SparkMurmurHashTest, StructOfListValues)
   val df = spark.createDataFrame(
     spark.sparkContext.parallelize(data), schema)
 
-  val df2 = df.selectExpr("lists", "hash(lists) as hash")
+  val df2 = df.selectExpr("structs", "hash(structs) as hash")
   df2.printSchema()
   df2.show(false)
   */
@@ -558,7 +592,7 @@ TEST_F(SparkMurmurHashTest, ListOfStructValues)
     cudf::test::structs_column_wrapper{{col1, col2}, {1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1}};
   auto offsets =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 2, 3, 4, 5, 7, 9, 11};
-  auto list_nullmask = std::vector<bool>(1, 8);
+  auto list_nullmask = std::vector<bool>(8, true);
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
   auto list_column = cudf::make_lists_column(

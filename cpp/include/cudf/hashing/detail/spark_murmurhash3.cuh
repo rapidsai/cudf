@@ -13,6 +13,7 @@
 #include <cuda/std/algorithm>
 #include <cuda/std/cstddef>
 #include <cuda/std/iterator>
+#include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/reverse.h>
 
@@ -108,7 +109,7 @@ struct Spark_MurmurHash3_x86_32 {
   }
 
  private:
-  uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
+  uint32_t m_seed;
   static constexpr uint32_t c1     = 0xcc9e2d51;
   static constexpr uint32_t c2     = 0x1b873593;
   static constexpr uint32_t c3     = 0xe6546b64;
@@ -155,14 +156,14 @@ template <>
 __device__ inline auto Spark_MurmurHash3_x86_32<float>::operator()(float const& key) const
   -> result_type
 {
-  return compute<float>(normalize_nans(key));
+  return compute<float>(normalize_nans_and_zeros(key));
 }
 
 template <>
 __device__ inline auto Spark_MurmurHash3_x86_32<double>::operator()(double const& key) const
   -> result_type
 {
-  return compute<double>(normalize_nans(key));
+  return compute<double>(normalize_nans_and_zeros(key));
 }
 
 template <>
@@ -194,7 +195,7 @@ __device__ inline auto Spark_MurmurHash3_x86_32<numeric::decimal128>::operator()
 {
   // Generates the Spark MurmurHash3 hash value, mimicking the conversion:
   // java.math.BigDecimal.valueOf(unscaled_value, _scale).unscaledValue().toByteArray()
-  // https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/hash.scala#L381
+  // https://github.com/apache/spark/blob/ce5ddad990373636e94071e7cef2f31021add07b/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/hash.scala#L391-L396
   __int128_t const val               = key.value();
   constexpr cudf::size_type key_size = sizeof(__int128_t);
   cuda::std::byte const* data        = reinterpret_cast<cuda::std::byte const*>(&val);
