@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,6 +13,8 @@
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/dictionary/search.hpp>
 #include <cudf/dictionary/update_keys.hpp>
+
+#include <rmm/device_buffer.hpp>
 
 class DictionaryTest : public cudf::test::BaseFixture {};
 
@@ -96,6 +98,15 @@ TEST_F(DictionaryTest, RemoveUnsedKeys)
   cudf::test::dictionary_column_wrapper<int32_t> dict_col(elements.begin(), elements.end());
   cudf::dictionary_column_view dict_col_view = dict_col;
   cudf::dictionary::remove_unused_keys(dict_col_view, cudf::test::get_default_stream());
+}
+
+TEST_F(DictionaryTest, RemoveDuplicateKeys)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> keys_col{10, 20, 10, 30};
+  cudf::test::fixed_width_column_wrapper<int32_t> indices_col{0, 1, 2, 3, 0};
+  auto dict = cudf::make_dictionary_column(
+    keys_col.release(), indices_col.release(), rmm::device_buffer{}, 0);
+  cudf::dictionary::remove_duplicate_keys(dict->view(), cudf::test::get_default_stream());
 }
 
 TEST_F(DictionaryTest, SetKeys)
