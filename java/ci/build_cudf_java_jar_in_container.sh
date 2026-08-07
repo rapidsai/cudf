@@ -132,6 +132,16 @@ fi
 
 rapids-logger "Packaging cuDF Java JAR version ${CUDF_VERSION} (libcudf: ${CUDF_INSTALL_DIR})"
 
+# PIC libspdlog.a / libfmt.a are installed into the static libcudf prefix
+# (same tree as rmm) and linked via $<INSTALL_PREFIX> from the packaging
+# cmake patch. Fail early if this mount is missing them.
+for _logging_lib in libfmt.a libspdlog.a; do
+  if [[ ! -f ${CUDF_INSTALL_DIR}/lib/${_logging_lib} ]]; then
+    echo "Error: ${CUDF_INSTALL_DIR}/lib/${_logging_lib} missing; rebuild static libcudf with install_static_logging_libs" >&2
+    exit 1
+  fi
+done
+
 rapids-logger "Applying temporary nvcomp NativeDepsLoader patch (same as spark-rapids-jni)"
 git -C "${REPO_ROOT}" apply "${NVCOMP_LOADER_PATCH}"
 
@@ -187,5 +197,7 @@ done
 
 cp -f "${MAIN_JAR}" "${OUTPUT_DIR}/"
 cp -f pom.xml "${OUTPUT_DIR}/cudf-${CUDF_VERSION}.pom"
+
+bash "${REPO_ROOT}/java/ci/check_jar_libcudf_needed.sh" "${OUTPUT_DIR}/$(basename "${MAIN_JAR}")"
 
 rapids-logger "Emitted $(basename "${MAIN_JAR}"), cudf-${CUDF_VERSION}-sources.jar, cudf-${CUDF_VERSION}-javadoc.jar, and cudf-${CUDF_VERSION}.pom to ${OUTPUT_DIR}"

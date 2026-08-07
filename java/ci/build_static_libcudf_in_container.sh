@@ -34,6 +34,14 @@ if [[ -z ${HOST_UID} || -z ${HOST_GID} ]]; then
   exit 1
 fi
 
+SPDLOG_FMT_PATCH="${REPO_ROOT}/java/ci/patches/0002-static-spdlog-fmt-for-java-libcudf.patch"
+
+_cleanup_on_exit() {
+  git -C "${REPO_ROOT}" apply --reverse "${SPDLOG_FMT_PATCH}" >/dev/null 2>&1 || true
+  chown -R "${HOST_UID}:${HOST_GID}" "${INSTALL_PREFIX}" 2>/dev/null || true
+}
+trap _cleanup_on_exit EXIT
+
 if [[ -z ${PARALLEL_LEVEL} ]]; then
   PARALLEL_LEVEL=$(nproc)
 fi
@@ -61,6 +69,13 @@ fi
 if [[ -z ${LIBCUDF_KERNEL_CACHE_PATH} ]]; then
   export LIBCUDF_KERNEL_CACHE_PATH=/tmp/rapids-kernel-cache
 fi
+
+# PIC libfmt.a / libspdlog.a into the same install prefix as rmm / rapids_logger.
+# shellcheck disable=SC1091
+. "${REPO_ROOT}/java/ci/install_static_logging_libs.sh"
+install_static_logging_libs "${INSTALL_PREFIX}"
+
+git -C "${REPO_ROOT}" apply "${SPDLOG_FMT_PATCH}"
 
 CMAKE_ARGS=(
   -S "${REPO_ROOT}/cpp"
@@ -91,5 +106,4 @@ cmake --build "${BUILD_DIR}" --parallel "${PARALLEL_LEVEL}"
 rapids-logger "Installing static libcudf to ${INSTALL_PREFIX}"
 cmake --install "${BUILD_DIR}"
 
-rapids-logger "Chowning ${INSTALL_PREFIX} to ${HOST_UID}:${HOST_GID}"
-chown -R "${HOST_UID}:${HOST_GID}" "${INSTALL_PREFIX}"
+rapids-logger "Emitted static libcudf install tree to ${INSTALL_PREFIX}"

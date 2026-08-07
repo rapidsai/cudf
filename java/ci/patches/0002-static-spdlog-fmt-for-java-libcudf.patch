@@ -1,0 +1,29 @@
+diff --git a/cpp/CMakeLists.txt b/cpp/CMakeLists.txt
+index 0000000000..1111111111 100644
+--- a/cpp/CMakeLists.txt
++++ b/cpp/CMakeLists.txt
+@@ -1359,4 +1359,23 @@ if(TARGET spdlog::spdlog)
+   else()
+-    target_link_libraries(cudf PRIVATE ${_spdlog_link})
++    # TEMPORARY (java packaging): absorb PIC static spdlog/fmt from the
++    # libcudf install prefix (same tree as rmm). BUILD_INTERFACE uses the
++    # libs found at configure time; INSTALL_INTERFACE uses $<INSTALL_PREFIX>
++    # so consumers (JAR container at /libcudf) resolve them like other deps.
++    find_library(
++      CUDF_JAVA_SPDLOG_STATIC NAMES libspdlog.a
++      PATHS "${CMAKE_INSTALL_PREFIX}/lib" NO_DEFAULT_PATH REQUIRED
++    )
++    find_library(
++      CUDF_JAVA_FMT_STATIC NAMES libfmt.a
++      PATHS "${CMAKE_INSTALL_PREFIX}/lib" NO_DEFAULT_PATH REQUIRED
++    )
++    target_link_libraries(
++      cudf
++      PRIVATE
++        "$<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,${CUDF_JAVA_SPDLOG_STATIC}>>"
++        "$<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,${CUDF_JAVA_FMT_STATIC}>>"
++        "$<INSTALL_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,$<INSTALL_PREFIX>/lib/libspdlog.a>>"
++        "$<INSTALL_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,$<INSTALL_PREFIX>/lib/libfmt.a>>"
++    )
+   endif()
+ endif()
