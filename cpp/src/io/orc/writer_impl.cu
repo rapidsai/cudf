@@ -1209,7 +1209,7 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
       gather_total += extent.size;
     }
   }
-  rmm::device_uvector<uint8_t> gather_buffer(gather_total, stream);
+  rmm::device_uvector<uint8_t> gather_buffer(std::max<size_t>(gather_total, 1), stream);
 
   // Build strm_desc entries and record gather destination spans.
   std::vector<StripeInformation> stripes(segmentation.num_stripes());
