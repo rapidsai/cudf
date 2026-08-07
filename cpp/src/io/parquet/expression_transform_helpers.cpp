@@ -47,6 +47,47 @@ namespace {
 
 }  // namespace
 
+template <operator_transform mode>
+std::optional<ast::ast_operator> transform_operator(ast::ast_operator op)
+{
+  if constexpr (mode == operator_transform::INVERT) {
+    switch (op) {
+      case ast::ast_operator::LESS: return ast::ast_operator::GREATER;
+      case ast::ast_operator::GREATER: return ast::ast_operator::LESS;
+      case ast::ast_operator::LESS_EQUAL: return ast::ast_operator::GREATER_EQUAL;
+      case ast::ast_operator::GREATER_EQUAL: return ast::ast_operator::LESS_EQUAL;
+      default: return std::make_optional(op);
+    }
+  } else {
+    // mode == NEGATE
+    switch (op) {
+      case ast::ast_operator::LESS: return ast::ast_operator::GREATER_EQUAL;
+      case ast::ast_operator::GREATER: return ast::ast_operator::LESS_EQUAL;
+      case ast::ast_operator::LESS_EQUAL: return ast::ast_operator::GREATER;
+      case ast::ast_operator::GREATER_EQUAL: return ast::ast_operator::LESS;
+      case ast::ast_operator::EQUAL: return ast::ast_operator::NOT_EQUAL;
+      case ast::ast_operator::NOT_EQUAL: return ast::ast_operator::EQUAL;
+      default: return std::nullopt;
+    }
+  }
+}
+
+template std::optional<ast::ast_operator> transform_operator<operator_transform::INVERT>(
+  ast::ast_operator op);
+template std::optional<ast::ast_operator> transform_operator<operator_transform::NEGATE>(
+  ast::ast_operator op);
+
+std::optional<ast::ast_operator> de_morgan_operator(ast::ast_operator op)
+{
+  switch (op) {
+    case ast::ast_operator::LOGICAL_AND: return ast::ast_operator::LOGICAL_OR;
+    case ast::ast_operator::LOGICAL_OR: return ast::ast_operator::LOGICAL_AND;
+    case ast::ast_operator::NULL_LOGICAL_AND: return ast::ast_operator::NULL_LOGICAL_OR;
+    case ast::ast_operator::NULL_LOGICAL_OR: return ast::ast_operator::NULL_LOGICAL_AND;
+    default: return std::nullopt;
+  }
+}
+
 unary_operand extract_unary_operand(ast::operation const& expr)
 {
   auto const& operands = expr.get_operands();

@@ -88,29 +88,7 @@ enum class operator_transform : uint8_t {
  * untransformable operators are returned as is (no std::nullopt)
  */
 template <operator_transform mode>
-[[nodiscard]] std::optional<ast::ast_operator> transform_operator(ast::ast_operator op)
-{
-  if constexpr (mode == operator_transform::INVERT) {
-    switch (op) {
-      case ast::ast_operator::LESS: return ast::ast_operator::GREATER;
-      case ast::ast_operator::GREATER: return ast::ast_operator::LESS;
-      case ast::ast_operator::LESS_EQUAL: return ast::ast_operator::GREATER_EQUAL;
-      case ast::ast_operator::GREATER_EQUAL: return ast::ast_operator::LESS_EQUAL;
-      default: return std::make_optional(op);
-    }
-  } else {
-    // mode == NEGATE
-    switch (op) {
-      case ast::ast_operator::LESS: return ast::ast_operator::GREATER_EQUAL;
-      case ast::ast_operator::GREATER: return ast::ast_operator::LESS_EQUAL;
-      case ast::ast_operator::LESS_EQUAL: return ast::ast_operator::GREATER;
-      case ast::ast_operator::GREATER_EQUAL: return ast::ast_operator::LESS;
-      case ast::ast_operator::EQUAL: return ast::ast_operator::NOT_EQUAL;
-      case ast::ast_operator::NOT_EQUAL: return ast::ast_operator::EQUAL;
-      default: return std::nullopt;
-    }
-  }
-}
+[[nodiscard]] std::optional<ast::ast_operator> transform_operator(ast::ast_operator op);
 
 /**
  * @brief Returns the De Morgan operator for the given operator
@@ -118,16 +96,7 @@ template <operator_transform mode>
  * @param op Operator to transform
  * @return De Morgan operator or std::nullopt
  */
-[[nodiscard]] std::optional<ast::ast_operator> de_morgan_operator(ast::ast_operator op)
-{
-  switch (op) {
-    case ast::ast_operator::LOGICAL_AND: return ast::ast_operator::LOGICAL_OR;
-    case ast::ast_operator::LOGICAL_OR: return ast::ast_operator::LOGICAL_AND;
-    case ast::ast_operator::NULL_LOGICAL_AND: return ast::ast_operator::NULL_LOGICAL_OR;
-    case ast::ast_operator::NULL_LOGICAL_OR: return ast::ast_operator::NULL_LOGICAL_AND;
-    default: return std::nullopt;
-  }
-}
+[[nodiscard]] std::optional<ast::ast_operator> de_morgan_operator(ast::ast_operator op);
 
 /**
  * @brief Handle unary operation transform for membership-based row group filters. i.e., bloom
