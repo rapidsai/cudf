@@ -277,26 +277,29 @@ TYPED_TEST(MergeTest_, Merge1KeyColumns)
 {
   cudf::size_type inputRows = 40;
 
-  auto sequence0 = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
-      return 0;
-    else
-      return row;
-  });
+  auto sequence0 =
+    cudf::detail::make_counting_transform_iterator(0, [](auto row) -> cudf::size_type {
+      if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
+        return 0;
+      else
+        return row;
+    });
 
-  auto sequence1 = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
-      return 1;
-    else
-      return 2 * row;
-  });
+  auto sequence1 =
+    cudf::detail::make_counting_transform_iterator(0, [](auto row) -> cudf::size_type {
+      if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
+        return 1;
+      else
+        return 2 * row;
+    });
 
-  auto sequence2 = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
-      return 0;
-    else
-      return 2 * row + 1;
-  });
+  auto sequence2 =
+    cudf::detail::make_counting_transform_iterator(0, [](auto row) -> cudf::size_type {
+      if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
+        return 0;
+      else
+        return 2 * row + 1;
+    });
 
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence1)::value_type>
     leftColWrap1(sequence1, sequence1 + inputRows);
@@ -335,12 +338,13 @@ TYPED_TEST(MergeTest_, Merge1KeyColumns)
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(seq_out1)::value_type>
     expectedDataWrap1(seq_out1, seq_out1 + outputRows);
 
-  auto seq_out2 = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
-      return 0;
-    else
-      return row / 2;
-  });
+  auto seq_out2 =
+    cudf::detail::make_counting_transform_iterator(0, [](auto row) -> cudf::size_type {
+      if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
+        return 0;
+      else
+        return row / 2;
+    });
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(seq_out2)::value_type>
     expectedDataWrap2(seq_out2, seq_out2 + outputRows);
 
@@ -438,25 +442,27 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns)
   cudf::size_type inputRows = 40;
 
   // data: 0  2  4  6 | valid: 1 1 1 0
-  auto sequence1       = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      return 0;  // <- no shortcut to this can avoid compiler errors
-    } else {
-      return row * 2;
-    }
-  });
+  auto sequence1 =
+    cudf::detail::make_counting_transform_iterator(0, [](auto row) -> cudf::size_type {
+      if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
+        return 0;  // <- no shortcut to this can avoid compiler errors
+      } else {
+        return row * 2;
+      }
+    });
   auto valid_sequence1 = cudf::detail::make_counting_transform_iterator(
     0, [inputRows](auto row) { return (row < inputRows - 1); });
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence1)::value_type>
     leftColWrap1(sequence1, sequence1 + inputRows, valid_sequence1);
 
   // data: 1  3  5  7 | valid: 1 1 1 0
-  auto sequence2 = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      return 1;
-    } else
-      return (2 * row + 1);
-  });
+  auto sequence2 =
+    cudf::detail::make_counting_transform_iterator(0, [](auto row) -> cudf::size_type {
+      if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
+        return 1;
+      } else
+        return (2 * row + 1);
+    });
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence2)::value_type>
     rightColWrap1(sequence2,
                   sequence2 + inputRows,
@@ -618,12 +624,13 @@ TYPED_TEST(MergeTest_, NMerge1KeyColumns)
 {
   cudf::size_type inputRows = 64;
 
-  auto sequence0 = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
-      return 0;
-    else
-      return row;
-  });
+  auto sequence0 =
+    cudf::detail::make_counting_transform_iterator(0, [](auto row) -> cudf::size_type {
+      if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
+        return 0;
+      else
+        return row;
+    });
 
   auto sequence1 =
     cudf::detail::make_counting_transform_iterator(0, [inputRows](auto row) -> cudf::size_type {
