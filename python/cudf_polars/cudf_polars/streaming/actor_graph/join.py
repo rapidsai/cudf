@@ -37,7 +37,7 @@ from cudf_polars.streaming.actor_graph.collectives.shuffle import (
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
 )
-from cudf_polars.streaming.actor_graph.join_bindings import bind_join_inputs
+from cudf_polars.streaming.actor_graph.join_planning import make_join_planning_state
 from cudf_polars.streaming.actor_graph.nodes import default_node_multi
 from cudf_polars.streaming.actor_graph.prefilter import (
     PrefilterExecution,
@@ -82,10 +82,10 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
-    from cudf_polars.streaming.actor_graph.join_bindings import (
-        BoundPrefilter,
-        JoinBindings,
-        JoinInputBinding,
+    from cudf_polars.streaming.actor_graph.join_planning import (
+        JoinInput,
+        JoinPlanningState,
+        PrefilterCandidate,
     )
     from cudf_polars.streaming.actor_graph.tracing import ActorTracer
     from cudf_polars.streaming.base import PartitionInfo
@@ -542,7 +542,7 @@ def make_prefilter_execution(
     strategy: JoinStrategy,
     ch_left: Channel[TableChunk],
     ch_right: Channel[TableChunk],
-    bindings: JoinBindings,
+    join_state: JoinPlanningState,
     collective_ids: JoinCollectiveIds,
 ) -> PrefilterExecution:
     """Create the actors and channels that realize selected prefilters."""
@@ -551,50 +551,50 @@ def make_prefilter_execution(
     # Prepare every required domain before connecting target-side filters. This
     # is important for opposing direct filters: each filter must consume the
     # replay produced while the same input's keys are copied for the other one.
-    for bound in bindings.prefilters:
-        decision = bound.decision
+    for candidate in join_state.candidates:
+        decision = candidate.decision
         if decision is None:
             raise ValueError("Join prefilter has no runtime decision")
-        prefilter = bound.prefilter
+        spec = candidate.spec
         if decision.method == "skip":
             continue
 
-        if isinstance(prefilter.domain, JoinInputDomain):
-            indices = names_to_indices(prefilter.domain_on, bound.domain.node.schema)
-            bound.key_channel = execution.buffer_domain(prefilter.domain.side, indices)
+        if isinstance(spec.domain, JoinInputDomain):
+            indices = names_to_indices(spec.domain_on, candidate.domain.node.schema)
+            candidate.key_channel = execution.buffer_domain(spec.domain.side, indices)
         else:
-            sample = bound.domain.sample
+            sample = candidate.domain.sample
             if sample is None:
                 raise ValueError("Active external prefilter has no domain sample")
-            indices = names_to_indices(prefilter.domain_on, bound.domain.node.schema)
-            if indices != tuple(range(len(bound.domain.node.schema))):
+            indices = names_to_indices(spec.domain_on, candidate.domain.node.schema)
+            if indices != tuple(range(len(candidate.domain.node.schema))):
                 raise ValueError("External prefilter domains must contain only keys")
-            bound.key_channel = context.create_channel()
-            execution.add_channel(bound.key_channel)
+            candidate.key_channel = context.create_channel()
+            execution.add_channel(candidate.key_channel)
             execution.add_task(
                 replay_buffered_channel(
                     context,
-                    bound.key_channel,
-                    bound.domain.channel,
+                    candidate.key_channel,
+                    candidate.domain.channel,
                     sample.chunks,
-                    bound.domain.metadata,
+                    candidate.domain.metadata,
                     trace_ir=ir,
                 )
             )
 
-    for bound in bindings.prefilters:
-        decision = bound.decision
+    for candidate in join_state.candidates:
+        decision = candidate.decision
         assert decision is not None
         if decision.method == "skip":
             continue
-        prefilter = bound.prefilter
-        ch_domain_keys = bound.key_channel
+        spec = candidate.spec
+        ch_domain_keys = candidate.key_channel
         assert ch_domain_keys is not None
-        target_side = prefilter.target_side
-        target = bound.target.node
+        target_side = spec.target_side
+        target = candidate.target.node
         ch_target = execution.join_inputs[target_side]
         ch_filtered: Channel[TableChunk] = context.create_channel()
-        trace_stats = bound.trace
+        trace_stats = candidate.trace
 
         collective_id = collective_ids.prefilter(strategy, target_side)
         if decision.method == "bloom":
@@ -604,7 +604,7 @@ def make_prefilter_execution(
                 comm,
                 decision.bloom_bytes,
                 execution,
-                names_to_indices(prefilter.target_on, target.schema),
+                names_to_indices(spec.target_on, target.schema),
                 ch_domain_keys,
                 ch_target,
                 ch_filtered,
@@ -613,15 +613,15 @@ def make_prefilter_execution(
             )
         else:
             assert decision.method == "broadcast_semi_join"
-            domain_schema = {key.name: key.value.dtype for key in prefilter.domain_on}
-            if len(domain_schema) != len(prefilter.domain_on):
+            domain_schema = {key.name: key.value.dtype for key in spec.domain_on}
+            if len(domain_schema) != len(spec.domain_on):
                 raise ValueError("Broadcast semi-join keys must have unique names")
-            projected_domain = Projection(domain_schema, bound.domain.node)
+            projected_domain = Projection(domain_schema, candidate.domain.node)
             semi_join = Join(
                 target.schema,
-                prefilter.target_on,
-                prefilter.domain_on,
-                ("Semi", prefilter.nulls_equal, None, "", False, "none"),
+                spec.target_on,
+                spec.domain_on,
+                ("Semi", spec.nulls_equal, None, "", False, "none"),
                 target,
                 projected_domain,
             )
@@ -1113,7 +1113,7 @@ def join_input_requires_redistribution(
 
 
 def choose_prefilters(
-    bindings: JoinBindings,
+    join_state: JoinPlanningState,
     strategy: JoinStrategy,
     left_partitioning: NormalizedPartitioning,
     right_partitioning: NormalizedPartitioning,
@@ -1125,29 +1125,29 @@ def choose_prefilters(
         "left": left_partitioning,
         "right": right_partitioning,
     }
-    for bound in bindings.prefilters:
-        if bound.decision is not None:
+    for candidate in join_state.candidates:
+        if candidate.decision is not None:
             continue
-        target = bound.target.sample
+        target = candidate.target.sample
         if target is None:
             raise ValueError("Join target has not been sampled")
-        target_side = bound.prefilter.target_side
+        target_side = candidate.spec.target_side
         target_requires_redistribution = join_input_requires_redistribution(
             strategy,
             target_side,
             partitionings[target_side],
-            bound.target.metadata,
+            candidate.target.metadata,
         )
         if (
-            isinstance(bound.prefilter.domain, ExternalDomain)
-            and bound.domain.sample is None
+            isinstance(candidate.spec.domain, ExternalDomain)
+            and candidate.domain.sample is None
             and target_requires_redistribution
         ):
             continue
-        bound.decision = choose_prefilter(
-            bound.prefilter,
+        candidate.decision = choose_prefilter(
+            candidate.spec,
             target,
-            bound.domain.sample,
+            candidate.domain.sample,
             target_requires_redistribution=target_requires_redistribution,
             broadcast_limit=broadcast_limit,
             bloom_filter_max_size=bloom_filter_max_size,
@@ -1157,26 +1157,26 @@ def choose_prefilters(
 async def sample_input(
     context: Context,
     comm: Communicator,
-    input_: JoinInputBinding,
-    prefilter: BoundPrefilter | None,
+    input_: JoinInput,
+    candidate: PrefilterCandidate | None,
     sample_chunk_count: int,
     target_partition_size: int,
 ) -> TableSizeStats:
     """Sample one join-planning input and optionally estimate cardinality."""
-    if prefilter is None:
+    if candidate is None:
         cardinality_estimator = None
         cardinality_columns: tuple[int, ...] = ()
     else:
         cardinality_estimator = CardinalityEstimator(
             context,
             comm,
-            tag=prefilter.cardinality_tag,
+            tag=candidate.cardinality_tag,
         )
         cardinality_columns = names_to_indices(
-            prefilter.prefilter.domain_on,
+            candidate.spec.domain_on,
             input_.node.schema,
         )
-        assert len(cardinality_columns) == len(prefilter.prefilter.domain_on), (
+        assert len(cardinality_columns) == len(candidate.spec.domain_on), (
             "Prefilter domain keys must be columns"
         )
 
@@ -1194,32 +1194,36 @@ async def sample_input(
 async def collect_samples(
     context: Context,
     comm: Communicator,
-    bindings: JoinBindings,
-    inputs: tuple[JoinInputBinding, ...],
+    join_state: JoinPlanningState,
+    inputs: tuple[JoinInput, ...],
     sample_chunk_count: int,
     target_partition_size: int,
     collective_id: int,
 ) -> None:
-    """Sample inputs and attach aggregate estimates to their bindings."""
+    """Sample inputs and attach aggregate estimates to their planning state."""
     if not inputs:
         return
     sampling_inputs = []
     for input_ in inputs:
-        prefilters = [bound for bound in bindings.prefilters if bound.domain is input_]
-        if len(prefilters) > 1:
+        candidates = [
+            candidate
+            for candidate in join_state.candidates
+            if candidate.domain is input_
+        ]
+        if len(candidates) > 1:
             raise ValueError("One join input cannot provide multiple prefilter domains")
-        sampling_inputs.append((input_, prefilters[0] if prefilters else None))
+        sampling_inputs.append((input_, candidates[0] if candidates else None))
     local_samples = await gather_in_task_group(
         *(
             sample_input(
                 context,
                 comm,
                 input_,
-                prefilter,
+                candidate,
                 sample_chunk_count,
                 target_partition_size,
             )
-            for input_, prefilter in sampling_inputs
+            for input_, candidate in sampling_inputs
         )
     )
     samples = await aggregate_estimates(
@@ -1233,20 +1237,20 @@ async def collect_samples(
 
 
 async def release_skipped_external_domains(
-    context: Context, bindings: JoinBindings
+    context: Context, join_state: JoinPlanningState
 ) -> None:
     """Release buffered data and stop external domains rejected by planning."""
     channels = []
-    for bound in bindings.prefilters:
-        if not isinstance(bound.prefilter.domain, ExternalDomain):
+    for candidate in join_state.candidates:
+        if not isinstance(candidate.spec.domain, ExternalDomain):
             continue
-        if bound.decision is None:
+        if candidate.decision is None:
             raise ValueError("Join prefilter has no runtime decision")
-        if bound.decision.method != "skip":
+        if candidate.decision.method != "skip":
             continue
-        if bound.domain.sample is not None:
-            bound.domain.sample.chunks.clear()
-        channels.append(bound.domain.channel)
+        if candidate.domain.sample is not None:
+            candidate.domain.sample.chunks.clear()
+        channels.append(candidate.domain.channel)
     if channels:
         await gather_in_task_group(*(channel.shutdown(context) for channel in channels))
 
@@ -1254,7 +1258,7 @@ async def release_skipped_external_domains(
 async def resolve_prefilters(
     context: Context,
     comm: Communicator,
-    bindings: JoinBindings,
+    join_state: JoinPlanningState,
     strategy: JoinStrategy,
     left_partitioning: NormalizedPartitioning,
     right_partitioning: NormalizedPartitioning,
@@ -1263,11 +1267,11 @@ async def resolve_prefilters(
 ) -> None:
     """Resolve optional prefilters after selecting the join strategy."""
     config = executor.join_filter_pushdown
-    if config is None or not bindings.prefilters:
+    if config is None or not join_state.candidates:
         return
 
     choose_prefilters(
-        bindings,
+        join_state,
         strategy,
         left_partitioning,
         right_partitioning,
@@ -1278,33 +1282,33 @@ async def resolve_prefilters(
     await collect_samples(
         context,
         comm,
-        bindings,
+        join_state,
         tuple(
-            bound.domain
-            for bound in bindings.prefilters
-            if isinstance(bound.prefilter.domain, ExternalDomain)
-            and bound.decision is None
+            candidate.domain
+            for candidate in join_state.candidates
+            if isinstance(candidate.spec.domain, ExternalDomain)
+            and candidate.decision is None
         ),
         executor.dynamic_planning.sample_chunk_count,
         executor.target_partition_size,
         collective_id,
     )
     choose_prefilters(
-        bindings,
+        join_state,
         strategy,
         left_partitioning,
         right_partitioning,
         executor.broadcast_limit,
         config.bloom_filter_max_size,
     )
-    await release_skipped_external_domains(context, bindings)
+    await release_skipped_external_domains(context, join_state)
 
 
 async def choose_strategy(
     context: Context,
     comm: Communicator,
     ir: Join,
-    bindings: JoinBindings,
+    join_state: JoinPlanningState,
     executor: StreamingExecutor,
     collective_ids: JoinCollectiveIds,
     *,
@@ -1312,8 +1316,8 @@ async def choose_strategy(
 ) -> JoinStrategy:
     """Collect any required samples and choose broadcast vs shuffle."""
     left, right = ir.children[:2]
-    left_metadata = bindings.left.metadata
-    right_metadata = bindings.right.metadata
+    left_metadata = join_state.left.metadata
+    right_metadata = join_state.right.metadata
     nranks = comm.nranks
     left_partitioning = NormalizedPartitioning.from_keys(
         left_metadata.partitioning,
@@ -1333,11 +1337,11 @@ async def choose_strategy(
     )
 
     if chunkwise:
-        bindings.left.sample = TableSizeStats(
+        join_state.left.sample = TableSizeStats(
             chunks=ChunkStore(context),
             total_chunks=left_metadata.local_count,
         )
-        bindings.right.sample = TableSizeStats(
+        join_state.right.sample = TableSizeStats(
             chunks=ChunkStore(context),
             total_chunks=right_metadata.local_count,
         )
@@ -1346,15 +1350,15 @@ async def choose_strategy(
         await collect_samples(
             context,
             comm,
-            bindings,
-            (bindings.left, bindings.right),
+            join_state,
+            (join_state.left, join_state.right),
             executor.dynamic_planning.sample_chunk_count,
             executor.target_partition_size,
             collective_ids.size_estimate,
         )
 
-    left_sample = bindings.left.sample
-    right_sample = bindings.right.sample
+    left_sample = join_state.left.sample
+    right_sample = join_state.right.sample
     if left_sample is None or right_sample is None:
         raise ValueError("Join inputs have not been sampled")
     strategy = _choose_strategy_from_samples(
@@ -1373,7 +1377,7 @@ async def choose_strategy(
     await resolve_prefilters(
         context,
         comm,
-        bindings,
+        join_state,
         strategy,
         left_partitioning,
         right_partitioning,
@@ -1445,7 +1449,7 @@ async def join_actor(
             *(recv_metadata(ch, context) for ch in ch_prefilter_domains),
         )
 
-        bindings = bind_join_inputs(
+        join_state = make_join_planning_state(
             ir,
             ch_left,
             ch_right,
@@ -1460,23 +1464,23 @@ async def join_actor(
             context,
             comm,
             ir,
-            bindings,
+            join_state,
             executor,
             collective_ids,
             tracer=tracer,
         )
         prefilter_traces = []
-        for bound in bindings.prefilters:
-            if bound.decision is None:
+        for candidate in join_state.candidates:
+            if candidate.decision is None:
                 raise ValueError("Join prefilter has no runtime decision")
-            trace = bound.decision.trace(bound.prefilter)
+            trace = candidate.decision.trace(candidate.spec)
             prefilter_traces.append(trace)
             if LOG_TRACES:
-                bound.trace = trace
+                candidate.trace = trace
         if tracer is not None and prefilter_traces:
             tracer.set_extra("join_prefilters", prefilter_traces)
-        left_sample = bindings.left.sample
-        right_sample = bindings.right.sample
+        left_sample = join_state.left.sample
+        right_sample = join_state.right.sample
         if left_sample is None or right_sample is None:
             raise ValueError("Join inputs have not been sampled")
         ch_left_replay = context.create_channel()
@@ -1489,7 +1493,7 @@ async def join_actor(
             strategy,
             ch_left_replay,
             ch_right_replay,
-            bindings,
+            join_state,
             collective_ids,
         )
         async with shutdown_on_error(

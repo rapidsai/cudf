@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Runtime bindings for optional join prefilters."""
+"""Actor-local planning state for dynamic joins and optional prefilters."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(slots=True)
-class JoinInputBinding:
+class JoinInput:
     """Concrete runtime resources for one input to a dynamic join."""
 
     node: IR
@@ -37,12 +37,12 @@ class JoinInputBinding:
 
 
 @dataclass(slots=True)
-class BoundPrefilter:
-    """A logical prefilter bound to its concrete runtime inputs."""
+class PrefilterCandidate:
+    """An optional prefilter and the runtime inputs needed to evaluate it."""
 
-    prefilter: Prefilter
-    target: JoinInputBinding
-    domain: JoinInputBinding
+    spec: Prefilter
+    target: JoinInput
+    domain: JoinInput
     cardinality_tag: int
     decision: PrefilterDecision | None = None
     key_channel: Channel[TableChunk] | None = None
@@ -50,15 +50,15 @@ class BoundPrefilter:
 
 
 @dataclass(frozen=True, slots=True)
-class JoinBindings:
-    """Concrete runtime inputs and optional prefilters for a dynamic join."""
+class JoinPlanningState:
+    """Actor-local input and prefilter state for planning a dynamic join."""
 
-    left: JoinInputBinding
-    right: JoinInputBinding
-    prefilters: tuple[BoundPrefilter, ...] = ()
+    left: JoinInput
+    right: JoinInput
+    candidates: tuple[PrefilterCandidate, ...] = ()
 
 
-def bind_join_inputs(
+def make_join_planning_state(
     ir: Join,
     ch_left: Channel[TableChunk],
     ch_right: Channel[TableChunk],
@@ -67,17 +67,17 @@ def bind_join_inputs(
     right_metadata: ChannelMetadata,
     prefilter_domain_metadata: tuple[ChannelMetadata, ...],
     cardinality_tags: tuple[int, ...],
-) -> JoinBindings:
-    """Bind logical join inputs and prefilters to their runtime resources."""
-    left = JoinInputBinding(ir.children[0], ch_left, left_metadata)
-    right = JoinInputBinding(ir.children[1], ch_right, right_metadata)
+) -> JoinPlanningState:
+    """Create actor-local planning state from a join and its runtime inputs."""
+    left = JoinInput(ir.children[0], ch_left, left_metadata)
+    right = JoinInput(ir.children[1], ch_right, right_metadata)
     if not isinstance(ir, JoinWithPrefilter):
         if ch_prefilter_domains or prefilter_domain_metadata:
             raise ValueError("A plain Join cannot have prefilter domain inputs")
-        return JoinBindings(left, right)
+        return JoinPlanningState(left, right)
 
     external_inputs = tuple(
-        JoinInputBinding(node, channel, metadata)
+        JoinInput(node, channel, metadata)
         for node, channel, metadata in zip(
             ir.children[2:],
             ch_prefilter_domains,
@@ -96,19 +96,19 @@ def bind_join_inputs(
     sides = {"left": left, "right": right}
     external_inputs_iter = iter(external_inputs)
     cardinality_tags_iter = iter(cardinality_tags)
-    prefilters = []
-    for prefilter in ir.prefilters:
-        target = sides[prefilter.target_side]
-        if isinstance(prefilter.domain, JoinInputDomain):
-            domain = sides[prefilter.domain.side]
+    candidates = []
+    for spec in ir.prefilters:
+        target = sides[spec.target_side]
+        if isinstance(spec.domain, JoinInputDomain):
+            domain = sides[spec.domain.side]
         else:
             domain = next(external_inputs_iter)
-        prefilters.append(
-            BoundPrefilter(
-                prefilter,
+        candidates.append(
+            PrefilterCandidate(
+                spec,
                 target,
                 domain,
                 cardinality_tag=next(cardinality_tags_iter),
             )
         )
-    return JoinBindings(left, right, tuple(prefilters))
+    return JoinPlanningState(left, right, tuple(candidates))
