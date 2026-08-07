@@ -489,8 +489,9 @@ std::string stringify_column_differences(cudf::device_span<int const> difference
     buffer << depth_str << "differences:" << std::endl;
 
     auto source_table = cudf::table_view({lhs, rhs});
-    auto diff_column =
-      fixed_width_column_wrapper<int32_t>(h_differences.begin(), h_differences.end());
+    // Intermediate gather indices — allocate on temporary, not output.
+    auto diff_column = fixed_width_column_wrapper<int32_t>(
+      h_differences.begin(), h_differences.end(), stream, mr.get_temporary_mr());
     auto diff_table = cudf::gather(source_table,
                                    diff_column,
                                    cudf::out_of_bounds_policy::DONT_CHECK,
