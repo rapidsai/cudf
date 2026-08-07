@@ -687,16 +687,7 @@ class RunConfig:
         }
         if engine is not None:
             config_options = ConfigOptions.from_polars_engine(engine)
-            # Drop non-serializable contexts.
-            config_options = dataclasses.replace(
-                config_options,
-                executor=dataclasses.replace(
-                    config_options.executor,
-                    spmd_context=None,
-                    ray_context=None,
-                    dask_context=None,
-                ),
-            )
+            config_options = config_options.drop_unserializable()
             rapidsmpf_options = engine.rapidsmpf_options.get_strings()
             result["config_options"] = {
                 "config_options": dataclasses.asdict(config_options),
@@ -1225,7 +1216,7 @@ def _finalize_benchmark_run(
     run_config: RunConfig,
     validation_failures: list[int],
     query_failures: list[tuple[int, int]],
-    engine: StreamingEngine | None,
+    serializable_engine_config: dict[str, Any],
 ) -> None:
     """Summarize, serialize, and exit after a benchmark run."""
     if args.summarize:
@@ -1243,7 +1234,7 @@ def _finalize_benchmark_run(
             )
         else:
             print("✅ All validated queries passed.")
-    args.output.write(json.dumps(run_config.serialize(engine=engine)))
+    args.output.write(json.dumps(serializable_engine_config))
     args.output.write("\n")
     sys.exit(1 if (query_failures or validation_failures) else 0)
 
@@ -1266,7 +1257,11 @@ def run_polars_cpu(
     )
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
     _finalize_benchmark_run(
-        args, run_config, validation_failures, query_failures, engine=None
+        args,
+        run_config,
+        validation_failures,
+        query_failures,
+        serializable_engine_config=run_config.serialize(engine=None),
     )
 
 
@@ -1299,7 +1294,11 @@ def run_polars_in_memory(
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
     run_config = _consolidate_logs(run_config, engine=None)
     _finalize_benchmark_run(
-        args, run_config, validation_failures, query_failures, engine=None
+        args,
+        run_config,
+        validation_failures,
+        query_failures,
+        serializable_engine_config=run_config.serialize(engine=engine),
     )
 
 
@@ -1358,6 +1357,8 @@ def run_polars_spmd(
         run_config = _consolidate_logs(
             run_config, engine=engine, gather_client_logs=False
         )
+        # We need to create this before StreamingEngine.shutdown(), which clears engine.config
+        serializable_engine_config = run_config.serialize(engine=engine)
 
     if is_rank_0:
         _write_quent_traces(
@@ -1366,7 +1367,11 @@ def run_polars_spmd(
             collect_traces=run_config.collect_traces,
         )
     _finalize_benchmark_run(
-        args, run_config, validation_failures, query_failures, engine=engine
+        args,
+        run_config,
+        validation_failures,
+        query_failures,
+        serializable_engine_config=serializable_engine_config,
     )
 
 
@@ -1412,6 +1417,8 @@ def run_polars_ray(
         )
         run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
         run_config = _consolidate_logs(run_config, engine=engine)
+        # We need to create this before StreamingEngine.shutdown(), which clears engine.config
+        serializable_engine_config = run_config.serialize(engine=engine)
 
     _write_quent_traces(
         engine=engine,
@@ -1419,7 +1426,11 @@ def run_polars_ray(
         collect_traces=run_config.collect_traces,
     )
     _finalize_benchmark_run(
-        args, run_config, validation_failures, query_failures, engine=engine
+        args,
+        run_config,
+        validation_failures,
+        query_failures,
+        serializable_engine_config=serializable_engine_config,
     )
 
 
@@ -1471,6 +1482,8 @@ def run_polars_dask(
                 run_config, records=dict(records), plans=plans
             )
             run_config = _consolidate_logs(run_config, engine)
+            # We need to create this before StreamingEngine.shutdown(), which clears engine.config
+            serializable_engine_config = run_config.serialize(engine=engine)
 
         _write_quent_traces(
             engine=engine,
@@ -1481,7 +1494,11 @@ def run_polars_dask(
         if dask_client is not None:
             dask_client.close()
     _finalize_benchmark_run(
-        args, run_config, validation_failures, query_failures, engine=engine
+        args,
+        run_config,
+        validation_failures,
+        query_failures,
+        serializable_engine_config=serializable_engine_config,
     )
 
 

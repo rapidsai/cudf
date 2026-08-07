@@ -89,6 +89,24 @@ def test_with_index():
     assert_eq(pdf_q, gdf_q, check_index_type=False)
 
 
+@pytest.mark.parametrize("method", ["single", "table"])
+def test_quantile_columns_subset(method):
+    # The cudf-specific ``columns`` argument restricts the computation in
+    # both the per-column and the row-selecting table methods.
+    q = [0, 0.5, 1]
+
+    pdf = pd.DataFrame({"a": [4, 24, 13, 8, 7], "b": [1, 2, 3, 4, 5]})
+    gdf = cudf.from_pandas(pdf)
+
+    pdf_q = pdf[["a"]].quantile(q, interpolation="nearest")
+    gdf_q = gdf.quantile(
+        q, interpolation="nearest", method=method, columns=["a"]
+    )
+
+    assert list(gdf_q._column_names) == ["a"]
+    assert_eq(pdf_q, gdf_q, check_index_type=False)
+
+
 def test_with_multiindex():
     q = [0, 0.5, 1]
 

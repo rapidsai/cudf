@@ -25,7 +25,7 @@ namespace tdigest {
  * provides a wrapper on the compound column for tdigest operations.
  *
  * A tdigest is a "compressed" set of input scalars represented as a sorted
- * set of centroids (https://arxiv.org/pdf/1902.04023.pdf).
+ * set of centroids (https://arxiv.org/pdf/1902.04023).
  * This data can be queried for quantile information. Each row in a tdigest
  * column represents an entire tdigest.
  *

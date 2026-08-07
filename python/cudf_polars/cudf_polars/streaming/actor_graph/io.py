@@ -440,10 +440,22 @@ async def python_scan_node(
                 context=ir_context,
             )
         )
+        # A rank-aware source may emit a duplicated output (an identical copy on
+        # every rank, e.g. a persisted global sort/limit). Re-advertise that as
+        # the channel's ``duplicated`` flag so downstream collectives treat the
+        # copies as duplicates rather than distinct partitions.
+        duplicated = (
+            rank_aware_source is not None
+            and rank_aware_source.output_duplicated(comm.rank, comm.nranks)
+        )
         if count is not None:
             # The chunk count is available so we can stream one chunk at a time.
             announced = max(count, 1)
-            await send_metadata(ch_out, context, ChannelMetadata(local_count=announced))
+            await send_metadata(
+                ch_out,
+                context,
+                ChannelMetadata(local_count=announced, duplicated=duplicated),
+            )
             sentinel = object()
             seq_num = 0
             while True:
@@ -470,7 +482,9 @@ async def python_scan_node(
             # count before announcing it.
             chunks = await ir_context.to_thread(lambda: list(raw_chunks))
             await send_metadata(
-                ch_out, context, ChannelMetadata(local_count=len(chunks))
+                ch_out,
+                context,
+                ChannelMetadata(local_count=len(chunks), duplicated=duplicated),
             )
             for seq_num, chunk in enumerate(chunks):
                 await _process_and_send_chunk(
@@ -877,60 +891,65 @@ async def sink_node(
         await send_metadata(
             ch_out, context, ChannelMetadata(local_count=1, duplicated=True)
         )
+        skip_write = metadata.duplicated and comm.rank != 0
 
-        path_root = f"{ir.sink.path}/part"
-        if comm.nranks > 1:
-            rank_width = math.ceil(math.log10(comm.nranks))
-            rank_str = str(comm.rank).zfill(rank_width)
-            path_root = f"{path_root}.{rank_str}"
-        # local_count may be 0 when a rank receives no partitions
-        # (e.g. more ranks than input files); log10(0) is undefined.
-        count_width = math.ceil(math.log10(max(metadata.local_count, 1)))
-        count_width = max(count_width, 6)
-
-        if ir.sink_to_directory:
-            _prepare_sink_directory(ir.sink.path)
-            i = 0
-            while (msg := await ch_in.recv(context)) is not None:
-                chunk = TableChunk.from_message(
-                    msg, br=context.br()
-                ).make_available_and_spill(context.br(), allow_overbooking=True)
-                df = chunk_to_frame(chunk, child_ir)
-                part_path = f"{path_root}.{str(i).zfill(count_width)}.{suffix}"
-                await ir_context.to_thread(
-                    Sink.do_evaluate,
-                    ir.sink.schema,
-                    ir.sink.kind,
-                    part_path,
-                    ir.sink.parquet_options,
-                    ir.sink.options,
-                    df,
-                    context=ir_context,
-                )
-                i += 1
+        if skip_write:
+            while await ch_in.recv(context) is not None:
+                pass
         else:
-            # Write chunks to a single file
-            writer_state = None
-            while (msg := await ch_in.recv(context)) is not None:
-                chunk = TableChunk.from_message(
-                    msg, br=context.br()
-                ).make_available_and_spill(context.br(), allow_overbooking=True)
-                # Multiple chunks - use chunked writer
-                df = chunk_to_frame(chunk, child_ir)
-                writer_state = await ir_context.to_thread(
-                    _sink_to_file,  # type: ignore[arg-type]  # (to_thread accepts this keyword-only sink helper)
-                    ir.sink.kind,
-                    ir.sink.path,
-                    ir.sink.options,
-                    writer_state=writer_state,
-                    df=df,
-                )
+            path_root = f"{ir.sink.path}/part"
+            if comm.nranks > 1:
+                rank_width = math.ceil(math.log10(comm.nranks))
+                rank_str = str(comm.rank).zfill(rank_width)
+                path_root = f"{path_root}.{rank_str}"
+            # local_count may be 0 when a rank receives no partitions
+            # (e.g. more ranks than input files); log10(0) is undefined.
+            count_width = math.ceil(math.log10(max(metadata.local_count, 1)))
+            count_width = max(count_width, 6)
 
-            # Finalize the writer after all chunks are processed
-            if writer_state and ir.sink.kind == "Parquet":
-                # We know that with ir.sink.kind == "Parquet", writer_state being truthy
-                # means that it's a ChunkedParquetWriter.
-                await ir_context.to_thread(writer_state.close, [])  # type: ignore[attr-defined]
+            if ir.sink_to_directory:
+                _prepare_sink_directory(ir.sink.path)
+                i = 0
+                while (msg := await ch_in.recv(context)) is not None:
+                    chunk = TableChunk.from_message(
+                        msg, br=context.br()
+                    ).make_available_and_spill(context.br(), allow_overbooking=True)
+                    df = chunk_to_frame(chunk, child_ir)
+                    part_path = f"{path_root}.{str(i).zfill(count_width)}.{suffix}"
+                    await ir_context.to_thread(
+                        Sink.do_evaluate,
+                        ir.sink.schema,
+                        ir.sink.kind,
+                        part_path,
+                        ir.sink.parquet_options,
+                        ir.sink.options,
+                        df,
+                        context=ir_context,
+                    )
+                    i += 1
+            else:
+                # Write chunks to a single file
+                writer_state = None
+                while (msg := await ch_in.recv(context)) is not None:
+                    chunk = TableChunk.from_message(
+                        msg, br=context.br()
+                    ).make_available_and_spill(context.br(), allow_overbooking=True)
+                    # Multiple chunks - use chunked writer
+                    df = chunk_to_frame(chunk, child_ir)
+                    writer_state = await ir_context.to_thread(
+                        _sink_to_file,  # type: ignore[arg-type]  # (to_thread accepts this keyword-only sink helper)
+                        ir.sink.kind,
+                        ir.sink.path,
+                        ir.sink.options,
+                        writer_state=writer_state,
+                        df=df,
+                    )
+
+                # Finalize the writer after all chunks are processed
+                if writer_state and ir.sink.kind == "Parquet":
+                    # We know that with ir.sink.kind == "Parquet", writer_state being truthy
+                    # means that it's a ChunkedParquetWriter.
+                    await ir_context.to_thread(writer_state.close, [])  # type: ignore[attr-defined]
 
         # Signal completion on the metadata and data channels with empty results
         stream = ir_context.get_cuda_stream()

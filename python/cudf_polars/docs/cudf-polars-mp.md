@@ -777,9 +777,9 @@ native Parquet reads.
 
 <!-- Reference links -->
 [dask-cli]: https://docs.dask.org/en/latest/deploying-cli.html
-[dask-distributed]: https://distributed.dask.org/
+[dask-distributed]: https://distributed.dask.org/en/stable/
 [spmd-wiki]: https://en.wikipedia.org/wiki/Single_program,_multiple_data
-[ray-docs]: https://docs.ray.io/
+[ray-docs]: https://docs.ray.io/en/latest/
 [ray-actors]: https://docs.ray.io/en/latest/ray-core/actors.html
 [rapidsmpf-communicator]: https://docs.rapids.ai/api/rapidsmpf/stable/glossary/#term-Communicator
 [rapidsmpf-context]: https://docs.rapids.ai/api/rapidsmpf/stable/glossary/#term-Context
