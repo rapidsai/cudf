@@ -493,6 +493,13 @@ def test_validate_parquet_options(option: str) -> None:
         )
 
 
+def test_prefetch_file_metadata_default() -> None:
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine(executor="streaming"))
+    assert config.parquet_options.prefetch_file_metadata is True
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine(executor="in-memory"))
+    assert config.parquet_options.prefetch_file_metadata is False
+
+
 def test_prefetch_and_use_rapidsmpf_native_raises() -> None:
     with pytest.raises(
         NotImplementedError,

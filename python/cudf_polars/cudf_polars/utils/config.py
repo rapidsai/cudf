@@ -975,7 +975,14 @@ class ConfigOptions(Generic[ExecutorType]):
         if user_parquet_options is None:
             user_parquet_options = {}
 
+        user_parquet_options = dict(user_parquet_options)
+
         if isinstance(user_parquet_options, dict):
+            # The default value of prefetch_file_metadata depends on the executor.
+            default_prefetch_file_metadata = user_executor == "streaming"
+            user_parquet_options.setdefault(
+                "prefetch_file_metadata", default_prefetch_file_metadata
+            )
             parquet_options = ParquetOptions(**user_parquet_options)
         else:
             parquet_options = user_parquet_options
