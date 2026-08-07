@@ -21,7 +21,6 @@ from cudf_streaming.channel_metadata import (
     OrderScheme,
     Partitioning,
 )
-from cudf_streaming.parquet import Filter, read_parquet
 from cudf_streaming.partition import (
     partition_and_pack as actor_partition_and_pack,
     unpack_and_concat as actor_unpack_and_concat,
@@ -40,7 +39,6 @@ from cudf_streaming.table_chunk import (
 __all__ = [
     "BloomFilter",
     "ChannelMetadata",
-    "Filter",
     "HashScheme",
     "OrderKey",
     "OrderScheme",
@@ -52,7 +50,6 @@ __all__ = [
     "make_table_chunks_available_or_wait",
     "packed_data_from_cudf_packed_columns",
     "partition_and_pack",
-    "read_parquet",
     "split_and_pack",
     "unpack_and_concat",
 ]
