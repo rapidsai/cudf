@@ -30,6 +30,7 @@
 #include <thrust/iterator/iterator_facade.h>
 
 #include <memory>
+#include <optional>
 #include <type_traits>
 #include <vector>
 
@@ -884,8 +885,8 @@ struct preprocessed_table {
   rmm::device_uvector<null_order> const _null_precedence;
   rmm::device_uvector<int> const _depths;
 
-  cuda::std::optional<std::vector<detail::dremel_data>> _dremel_data;
-  cuda::std::optional<rmm::device_uvector<detail::dremel_device_view>> _dremel_device_views;
+  std::optional<std::vector<detail::dremel_data>> _dremel_data;
+  std::optional<rmm::device_uvector<detail::dremel_device_view>> _dremel_device_views;
 
   std::vector<std::unique_ptr<column>> _transformed_columns;
 
