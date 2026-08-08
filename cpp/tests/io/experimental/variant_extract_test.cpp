@@ -1446,7 +1446,8 @@ TEST_F(InvalidInputShapeTest, CastVariantRejectsNullableIncomingStatus)
   std::vector<bool> const sv_valid{false};
   cudf::test::fixed_width_column_wrapper<uint8_t> nullable_status(
     sv.begin(), sv.end(), sv_valid.begin());
-  auto const status_view = nullable_status.release()->view();
+  auto const status_col  = nullable_status.release();
+  auto const status_view = status_col->view();
   EXPECT_THROW(
     static_cast<void>(cudf::io::parquet::experimental::cast_variant(
       values->view(), cudf::data_type{cudf::type_id::INT32}, status_view, nullptr, stream)),
@@ -1469,7 +1470,8 @@ TEST_F(InvalidInputShapeTest, CastVariantRejectsInvalidIncomingStatusOnEmptyValu
     std::vector<bool> const sv_valid{false};
     cudf::test::fixed_width_column_wrapper<uint8_t> nullable_status(
       sv.begin(), sv.end(), sv_valid.begin());
-    auto const status_view = nullable_status.release()->view();
+    auto const status_col  = nullable_status.release();
+    auto const status_view = status_col->view();
     EXPECT_THROW(
       static_cast<void>(cudf::io::parquet::experimental::cast_variant(
         *empty_values, cudf::data_type{cudf::type_id::INT32}, status_view, nullptr, stream)),
@@ -1480,7 +1482,8 @@ TEST_F(InvalidInputShapeTest, CastVariantRejectsInvalidIncomingStatusOnEmptyValu
   // Case 2: non-UINT8 incoming_status (zero-row INT32 column, non-nullable).
   {
     cudf::test::fixed_width_column_wrapper<int32_t> wrong_type_status{};
-    auto const status_view = wrong_type_status.release()->view();
+    auto const status_col  = wrong_type_status.release();
+    auto const status_view = status_col->view();
     EXPECT_THROW(
       static_cast<void>(cudf::io::parquet::experimental::cast_variant(
         *empty_values, cudf::data_type{cudf::type_id::INT32}, status_view, nullptr, stream)),
@@ -1491,7 +1494,8 @@ TEST_F(InvalidInputShapeTest, CastVariantRejectsInvalidIncomingStatusOnEmptyValu
   // Case 3: row-count mismatch (one-row status vs zero-row values).
   {
     cudf::test::fixed_width_column_wrapper<uint8_t> mismatched_status({uint8_t{0}});
-    auto const status_view = mismatched_status.release()->view();
+    auto const status_col  = mismatched_status.release();
+    auto const status_view = status_col->view();
     EXPECT_THROW(
       static_cast<void>(cudf::io::parquet::experimental::cast_variant(
         *empty_values, cudf::data_type{cudf::type_id::INT32}, status_view, nullptr, stream)),
