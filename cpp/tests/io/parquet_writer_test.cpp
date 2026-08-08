@@ -14,6 +14,7 @@
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_metadata.hpp>
@@ -34,11 +35,12 @@
 #include <fstream>
 #include <functional>
 #include <iterator>
+#include <limits>
 #include <random>
 
 using cudf::test::iterators::no_nulls;
 
-using ParquetCompressionTest = CompressionTest<ParquetWriterTest>;
+namespace {
 
 template <typename mask_op_t>
 void test_durations(mask_op_t mask_op, bool use_byte_stream_split, bool arrow_schema)
@@ -108,6 +110,8 @@ void test_durations(mask_op_t mask_op, bool use_byte_stream_split, bool arrow_sc
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_us, result.tbl->view().column(3));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(durations_ns, result.tbl->view().column(4));
 }
+
+}  // namespace
 
 TEST_F(ParquetWriterTest, Durations)
 {
@@ -1350,6 +1354,87 @@ TEST_F(ParquetWriterTest, DictionaryNeverTest)
   EXPECT_FALSE(used_dict());
 }
 
+TEST_F(ParquetWriterTest, DictionaryEntryLimitListTest)
+{
+  // Create list column smaller and larger than the max dictionary size under the ADAPTIVE policy. A
+  // column chunk larger than the max dictionary size must fall back to plain encoding.
+  constexpr size_t max_dict_size = 1024 * 1024;
+
+  // Each distinct value repeats 10 times, so plain encoding stays larger than dictionary encoding
+  auto const make_list_col = [](cudf::size_type vals_per_row, cudf::size_type cardinality) {
+    constexpr cudf::size_type num_rows = 100'000;
+
+    auto const num_leaves = num_rows * vals_per_row;
+    auto leaf_values      = cudf::detail::make_counting_transform_iterator(
+      0, [cardinality](auto i) { return static_cast<int32_t>(i % cardinality); });
+    cudf::test::fixed_width_column_wrapper<int32_t> leaves(leaf_values, leaf_values + num_leaves);
+    auto offset_values = cudf::detail::make_counting_transform_iterator(
+      0, [vals_per_row](auto i) { return static_cast<cudf::size_type>(i * vals_per_row); });
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets(offset_values,
+                                                                    offset_values + num_rows + 1);
+    return cudf::make_lists_column(
+      num_rows, offsets.release(), leaves.release(), 0, rmm::device_buffer{});
+  };
+
+  constexpr cudf::size_type multiplier = 10'000;
+
+  constexpr cudf::size_type vals_per_row_under = 20;
+  auto const col0 = make_list_col(vals_per_row_under, vals_per_row_under * multiplier);
+  constexpr cudf::size_type vals_per_row_over = 40;
+  auto const col1 = make_list_col(vals_per_row_over, vals_per_row_over * multiplier);
+
+  auto const expected = table_view{{*col0, *col1}};
+
+  // Dictionary selection must not depend on fragment size; run with default and small fragments.
+  auto const test_dictionary_selection = [&](std::optional<cudf::size_type> frag_size,
+                                             std::string_view tag) {
+    SCOPED_TRACE(tag);
+    auto const filepath =
+      temp_env->get_temp_filepath("DictionaryEntryLimitListTest" + std::string(tag) + ".parquet");
+    {
+      auto out_opts =
+        cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+          .compression(cudf::io::compression_type::NONE)
+          .dictionary_policy(cudf::io::dictionary_policy::ADAPTIVE)
+          .max_dictionary_size(max_dict_size)
+          .build();
+
+      if (frag_size.has_value()) { out_opts.set_max_page_fragment_size(frag_size.value()); }
+      cudf::io::write_parquet(out_opts);
+    }
+
+    {
+      cudf::io::parquet_reader_options in_opts =
+        cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+      auto const result = cudf::io::read_parquet(in_opts);
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+    }
+
+    auto const source = cudf::io::datasource::create(filepath);
+    cudf::io::parquet::FileMetaData fmd;
+    read_footer(source, &fmd);
+
+    // Both columns must land in a single chunk for the cardinalities above to be the per-chunk
+    // dictionary entry counts.
+    ASSERT_EQ(fmd.row_groups.size(), 1);
+
+    auto used_dict = [&fmd](int col_idx) {
+      for (auto enc : fmd.row_groups[0].columns[col_idx].meta_data.encodings) {
+        if (enc == cudf::io::parquet::Encoding::PLAIN_DICTIONARY or
+            enc == cudf::io::parquet::Encoding::RLE_DICTIONARY) {
+          return true;
+        }
+      }
+      return false;
+    };
+    EXPECT_TRUE(used_dict(0));
+    EXPECT_FALSE(used_dict(1));
+  };
+
+  test_dictionary_selection(std::nullopt, "DefaultFragments");
+  test_dictionary_selection(50, "SmallFragments");
+}
+
 TEST_F(ParquetWriterTest, DictionaryAdaptiveTest)
 {
   constexpr unsigned int nrows = 65'536U;
@@ -1534,6 +1619,8 @@ TEST_F(ParquetWriterTest, UserNullabilityInvalid)
   // Can't write a column with nulls as not nullable
   EXPECT_THROW(cudf::io::write_parquet(write_opts), cudf::logic_error);
 }
+
+using ParquetCompressionTest = CompressionTest<ParquetWriterTest>;
 
 TEST_P(ParquetCompressionTest, CompStats)
 {
