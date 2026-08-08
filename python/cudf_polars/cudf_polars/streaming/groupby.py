@@ -22,6 +22,7 @@ from cudf_polars.dsl.expr import (
     Len,
     Literal,
     NamedExpr,
+    SortedAgg,
     StructFunction,
     Ternary,
     UnaryFunction,
@@ -251,6 +252,46 @@ def _decompose_std_var(
     return selection, aggregations, reductions, False
 
 
+def _decompose_sorted_agg(
+    name: str, expr: SortedAgg, *, names: Generator[str, None, None]
+) -> tuple[NamedExpr, list[NamedExpr], list[NamedExpr], bool]:
+    """Carry the selected payload and order keys through grouped reductions."""
+    value, *by = expr.children
+    by_names = [f"{next(names)}__sort_key" for _ in by]
+    by_cols = [
+        Col(order_by.dtype, by_name)
+        for order_by, by_name in zip(by, by_names, strict=True)
+    ]
+
+    selection = NamedExpr(name, Col(expr.dtype, name))
+    aggregations = [
+        NamedExpr(name, SortedAgg(expr.dtype, expr.name, expr.options, value, *by)),
+        *(
+            NamedExpr(
+                by_name,
+                SortedAgg(order_by.dtype, expr.name, expr.options, order_by, *by),
+            )
+            for order_by, by_name in zip(by, by_names, strict=True)
+        ),
+    ]
+    reductions = [
+        NamedExpr(
+            name,
+            SortedAgg(
+                expr.dtype, expr.name, expr.options, Col(expr.dtype, name), *by_cols
+            ),
+        ),
+        *(
+            NamedExpr(
+                by_name,
+                SortedAgg(order_by.dtype, expr.name, expr.options, order_by, *by_cols),
+            )
+            for order_by, by_name in zip(by_cols, by_names, strict=True)
+        ),
+    ]
+    return selection, aggregations, reductions, False
+
+
 def decompose(
     name: str, expr: Expr, *, names: Generator[str, None, None]
 ) -> tuple[NamedExpr, list[NamedExpr], list[NamedExpr], bool]:
@@ -289,6 +330,8 @@ def decompose(
             )
         ]
         return selection, aggregation, reduction, False
+    if isinstance(expr, SortedAgg):
+        return _decompose_sorted_agg(name, expr, names=names)
     if isinstance(expr, Agg):
         if (aggfunc := _GB_AGG_REDUCTIONS.get(expr.name)) is not None:
             if expr.name == "count":
