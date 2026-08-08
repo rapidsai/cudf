@@ -297,7 +297,7 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_chrono<T>()>> {
     }
   }
 
-  rmm::device_uvector<T> operator()(thrust::minstd_rand& engine, unsigned size)
+  rmm::device_uvector<T> operator()(thrust::minstd_rand& engine, size_t size)
   {
     auto const sec = seconds_gen(engine, size);
     auto const ns  = nanoseconds_gen(engine, size);
@@ -348,7 +348,7 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
     return scale.value_or(numeric::scale_type{0});
   }
 
-  rmm::device_uvector<DeviceType> operator()(thrust::minstd_rand& engine, unsigned size)
+  rmm::device_uvector<DeviceType> operator()(thrust::minstd_rand& engine, size_t size)
   {
     return dist(engine, size);
   }
@@ -370,7 +370,7 @@ struct random_value_fn<T, std::enable_if_t<!std::is_same_v<T, bool> && cudf::is_
   {
   }
 
-  auto operator()(thrust::minstd_rand& engine, unsigned size) { return dist(engine, size); }
+  auto operator()(thrust::minstd_rand& engine, size_t size) { return dist(engine, size); }
 };
 
 /**
@@ -391,7 +391,7 @@ struct random_value_fn<T, typename std::enable_if_t<std::is_same_v<T, bool>>> {
       }}
   {
   }
-  auto operator()(thrust::minstd_rand& engine, unsigned size) { return dist(engine, size); }
+  auto operator()(thrust::minstd_rand& engine, size_t size) { return dist(engine, size); }
 };
 
 /**
