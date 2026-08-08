@@ -49,11 +49,18 @@ jobs:
           merge-multiple: true
       - name: Locate Maven-repo root
         run: |
+          # The maven-central-bundle artifact wraps a nested central-bundle.zip
+          # that holds the ai/rapids/cudf/ Maven layout. Unpack it if present.
+          bundle="$(find "${CUDF_SMOKE_MAVEN_REPO}" -type f -name 'central-bundle.zip' | head -n 1 || true)"
+          if [[ -n "${bundle}" ]]; then
+            echo "Unpacking central bundle: ${bundle}"
+            unzip -q -o "${bundle}" -d "${CUDF_SMOKE_MAVEN_REPO}/bundle-extracted"
+          fi
           if [[ -d "${CUDF_SMOKE_MAVEN_REPO}/ai/rapids/cudf" ]]; then
             echo "CUDF_SMOKE_MAVEN_REPO_DIR=${CUDF_SMOKE_MAVEN_REPO}" >> "${GITHUB_ENV}"
             exit 0
           fi
-          # download-artifact may nest under the artifact name directory.
+          # download-artifact / bundle extraction may nest ai/rapids/cudf deeper.
           found="$(find "${CUDF_SMOKE_MAVEN_REPO}" -type d -path '*/ai/rapids/cudf' | head -n 1 || true)"
           if [[ -z "${found}" ]]; then
             echo "ERROR: no ai/rapids/cudf/ under ${CUDF_SMOKE_MAVEN_REPO}" >&2
