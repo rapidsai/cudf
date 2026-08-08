@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -567,7 +567,7 @@ struct range_window_clamper {
   /**
    * @brief Is the given type supported as an orderby column.
    *
-   * @tparam The type of the elements of the orderby column.
+   * @tparam OrderbyT The type of the elements of the orderby column.
    */
   template <typename OrderbyT>
   static constexpr bool is_supported()
