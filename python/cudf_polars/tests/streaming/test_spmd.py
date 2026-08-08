@@ -813,6 +813,7 @@ def test_groupby_sort_by_first_last_multirank(
                     {
                         "g": ["B", "A", "C", "A", "B", "C", "A", "B"],
                         "idx": [2, 3, 2, 1, 1, 1, 2, 3],
+                        "tie": [1, 1, 1, 1, 1, 1, 1, 1],
                         "val": [40, 30, 60, 10, 30, 50, 20, 50],
                     }
                 ),
@@ -837,6 +838,14 @@ def test_groupby_sort_by_first_last_multirank(
                 pl.col("val").sum().alias("volume"),
                 pl.col("val").sort_by("idx").first().alias("open"),
                 pl.col("val").sort_by("idx").last().alias("close"),
+                pl.col("val")
+                .sort_by("tie", maintain_order=True)
+                .first()
+                .alias("first_tie"),
+                pl.col("val")
+                .sort_by("tie", maintain_order=True)
+                .last()
+                .alias("last_tie"),
             )
         )
         expected = q.collect()

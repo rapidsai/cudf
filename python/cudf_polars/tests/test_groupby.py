@@ -489,6 +489,28 @@ def test_groupby_sort_by_first_stable_in_memory(
     assert_gpu_result_equal(q, engine=in_memory_engine)
 
 
+def test_groupby_sort_by_preserves_sorted_key_order_in_memory(
+    in_memory_engine: pl.GPUEngine,
+) -> None:
+    df = pl.LazyFrame(
+        {
+            "g": ["A", "A", "B", "B", "C", "C"],
+            "idx": [1, 2, 1, 2, 1, 2],
+            "val": [10, 20, 30, 40, 50, 60],
+        }
+    )
+
+    q = (
+        df.sort("g", descending=True)
+        .group_by("g", maintain_order=True)
+        .agg(
+            pl.col("val").sort_by("idx").first().alias("open"),
+            pl.col("val").sort_by("idx").last().alias("close"),
+        )
+    )
+    assert_gpu_result_equal(q, engine=in_memory_engine, check_row_order=True)
+
+
 def test_groupby_sort_by_drop_nulls_first_raises(
     in_memory_engine: pl.GPUEngine,
 ) -> None:

@@ -56,7 +56,7 @@ from cudf_polars.dsl.utils.windows import (
     offsets_to_windows,
     range_window_bounds,
 )
-from cudf_polars.utils import dtypes
+from cudf_polars.utils import dtypes, sorting
 from cudf_polars.utils.cuda_stream import (
     get_cuda_stream,
     stream_ordered_after,
@@ -2285,8 +2285,8 @@ class GroupBy(IR):
 
         common_group_keys: plc.Table | None = None
         results_by_name: dict[str, Column] = {}
-        key_order = [plc.types.Order.ASCENDING] * len(keys)
-        key_null_order = [plc.types.NullOrder.BEFORE] * len(keys)
+        key_order = [key.order for key in keys]
+        key_null_order = [key.null_order for key in keys]
 
         for group in request_groups.values():
             first_agg = group[0].value
@@ -2307,18 +2307,9 @@ class GroupBy(IR):
             values = columns[: len(value_exprs)]
             by = columns[len(value_exprs) :]
             stable, nulls_last, descending = first_agg.options
-            by_order = [
-                plc.types.Order.DESCENDING
-                if is_descending
-                else plc.types.Order.ASCENDING
-                for is_descending in descending
-            ]
-            by_null_order = [
-                plc.types.NullOrder.AFTER
-                if is_nulls_last
-                else plc.types.NullOrder.BEFORE
-                for is_nulls_last in nulls_last
-            ]
+            by_order, by_null_order = sorting.sort_order(
+                descending, nulls_last=nulls_last, num_keys=len(by_exprs)
+            )
             do_sort = (
                 plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
             )

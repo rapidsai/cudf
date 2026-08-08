@@ -256,12 +256,6 @@ def _decompose_sorted_agg(
     name: str, expr: SortedAgg, *, names: Generator[str, None, None]
 ) -> tuple[NamedExpr, list[NamedExpr], list[NamedExpr], bool]:
     """Carry the selected payload and order keys through grouped reductions."""
-    stable, _, _ = expr.options
-    if stable:
-        raise NotImplementedError(
-            "group_by sort_by(..., maintain_order=True).first/last is not "
-            "supported for multiple partitions"
-        )
     value, *by = expr.children
     by_names = [f"{next(names)}__sort_key" for _ in by]
     by_cols = [

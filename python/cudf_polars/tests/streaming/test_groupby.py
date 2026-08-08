@@ -193,6 +193,48 @@ def test_groupby_sort_by_first_last(streaming_engine_factory):
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
+def test_groupby_sort_by_first_last_stable_ties(streaming_engine_factory):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=2, fallback_mode="raise"),
+    )
+    df = pl.LazyFrame(
+        {
+            "g": ["A", "B", "A", "B", "A", "B"],
+            "idx": [1, 1, 1, 1, 1, 1],
+            "val": [10, 40, 20, 50, 30, 60],
+        }
+    )
+
+    q = df.group_by("g").agg(
+        pl.col("val").sort_by("idx", maintain_order=True).first().alias("first_tie"),
+        pl.col("val").sort_by("idx", maintain_order=True).last().alias("last_tie"),
+    )
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
+
+
+def test_groupby_sort_by_preserves_sorted_key_order(streaming_engine_factory):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=2, fallback_mode="raise"),
+    )
+    df = pl.LazyFrame(
+        {
+            "g": ["A", "A", "B", "B", "C", "C"],
+            "idx": [1, 2, 1, 2, 1, 2],
+            "val": [10, 20, 30, 40, 50, 60],
+        }
+    )
+
+    q = (
+        df.sort("g", descending=True)
+        .group_by("g", maintain_order=True)
+        .agg(
+            pl.col("val").sort_by("idx").first().alias("open"),
+            pl.col("val").sort_by("idx").last().alias("close"),
+        )
+    )
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=True)
+
+
 @pytest.mark.parametrize("ddof", [0, 2, 50])
 @pytest.mark.parametrize("agg", ["std", "var"])
 def test_groupby_std_var_ddof(df, engine, agg, ddof):
