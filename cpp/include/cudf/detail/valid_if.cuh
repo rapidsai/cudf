@@ -156,7 +156,8 @@ CUDF_KERNEL void valid_if_n_kernel(InputIterator1 begin1,
     auto const mask = masks[mask_idx];
     if (mask == nullptr) { continue; }
 
-    auto block_offset     = blockIdx.x * blockDim.x;
+    auto block_offset =
+      static_cast<size_type>(blockIdx.x) * static_cast<size_type>(blockDim.x);
     auto warp_valid_count = static_cast<size_type>(0);
 
     while (block_offset < mask_num_bits) {
@@ -171,7 +172,8 @@ CUDF_KERNEL void valid_if_n_kernel(InputIterator1 begin1,
       if (thread_active && threadIdx.x % warp_size == 0) { mask[mask_idx] = warp_validity; }
 
       warp_valid_count += __popc(warp_validity);
-      block_offset += blockDim.x * gridDim.x;
+      block_offset +=
+        static_cast<size_type>(blockDim.x) * static_cast<size_type>(gridDim.x);
     }
 
     auto block_valid_count = single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
