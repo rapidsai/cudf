@@ -1403,6 +1403,27 @@ TEST_F(InvalidInputShapeTest, CastVariantRejectsMalformedInput)
   }
 }
 
+// cast_variant must reject a nullable incoming_status column (SQL-null rows must be represented
+// by the row_null enum value, not by null bits).
+TEST_F(InvalidInputShapeTest, CastVariantRejectsNullableIncomingStatus)
+{
+  auto stream = cudf::test::get_default_stream();
+  // One-row valid values column.
+  auto values =
+    list_u8({make_variant_primitive(variant_primitive_type::INT32), 0x01, 0x00, 0x00, 0x00});
+  // Incoming status with a null entry (row 0 is null) — must be rejected.
+  // Use uint8_t{0} (== op_status::success) directly; ST_SUCCESS is not in scope here.
+  std::vector<uint8_t> const sv{uint8_t{0}};
+  std::vector<bool> const sv_valid{false};
+  cudf::test::fixed_width_column_wrapper<uint8_t> nullable_status(
+    sv.begin(), sv.end(), sv_valid.begin());
+  auto const status_view = nullable_status.release()->view();
+  EXPECT_THROW(
+    static_cast<void>(cudf::io::parquet::experimental::cast_variant(
+      values->view(), cudf::data_type{cudf::type_id::INT32}, status_view, nullptr, stream)),
+    std::invalid_argument);
+}
+
 // ---------------------------------------------------------------------------
 // Status column tests
 // ---------------------------------------------------------------------------

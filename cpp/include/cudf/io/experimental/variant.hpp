@@ -50,9 +50,10 @@ namespace io::parquet::experimental {
  * @param variant_column Struct column (VARIANT materialization) with `list<uint8>` children
  *                       (`metadata`, `value`), plus optional shredded siblings
  * @param path JSONPath-like path string identifying the target field
+ * @param status_out Optional. When non-null, receives a non-nullable `UINT8` column of
+ *                   `variant_operation_status` values, one per row
  * @param stream CUDA stream
  * @param mr Device memory resource
- * @param status_out Status column with variant_operation_status` values
  * @return `list<uint8>` column with the extracted value's encoded bytes. A row is null when the
  *         input row is null, a name is absent, an index is out of bounds, or a step does not match
  *         the current value.
@@ -76,16 +77,19 @@ namespace io::parquet::experimental {
  * @param values `list<uint8>` column of VARIANT-encoded value bytes
  * @param desired_type Target cuDF type (`STRING`, `INT8`/`INT16`/`INT32`/`INT64`,
  *        `FLOAT32`/`FLOAT64`, or `BOOL8`)
- * @param stream CUDA stream
- * @param mr Device memory resource
  * @param incoming_status Optional status column from a prior `get_variant_field` call. When
  *        provided, non-success rows are propagated directly to the output without decoding.
- * @param status_out Status column with variant_operation_status` values
+ *        Must be non-nullable, `UINT8`, and have the same row count as `values`.
+ * @param status_out Optional. When non-null, receives a non-nullable `UINT8` column of
+ *                   `variant_operation_status` values, one per row
+ * @param stream CUDA stream
+ * @param mr Device memory resource
  * @return Typed column decoded from the VARIANT value blobs
  *
- * @throws std::invalid_argument if `values` is not a `list<uint8>` column, or if `desired_type`
+ * @throws std::invalid_argument if `values` is not a `list<uint8>` column; if `desired_type`
  *         is not one of the supported types (`STRING`, `INT8`/`INT16`/`INT32`/`INT64`,
- *         `FLOAT32`/`FLOAT64`, or `BOOL8`)
+ *         `FLOAT32`/`FLOAT64`, or `BOOL8`); or if `incoming_status` is provided but is nullable,
+ *         not `UINT8`, or has a different row count than `values`
  */
 [[nodiscard]] std::unique_ptr<column> cast_variant(
   column_view const& values,
@@ -105,9 +109,10 @@ namespace io::parquet::experimental {
  * @param path JSONPath-like path string (see `get_variant_field` for syntax)
  * @param desired_type Target type: `STRING`, `INT8`/`INT16`/`INT32`/`INT64`,
  *        `FLOAT32`/`FLOAT64`, or `BOOL8`
+ * @param status_out Optional. When non-null, receives a non-nullable `UINT8` column of
+ *                   `variant_operation_status` values, one per row
  * @param stream CUDA stream
  * @param mr Device memory resource
- * @param status_out Status column with variant_operation_status` values
  * @return Column of `desired_type`
  *
  * @throws std::invalid_argument on empty path or malformed syntax

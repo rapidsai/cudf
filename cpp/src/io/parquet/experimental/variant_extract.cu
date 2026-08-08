@@ -1248,6 +1248,9 @@ std::unique_ptr<column> cast_variant(column_view const& values,
     CUDF_EXPECTS(incoming_status->type().id() == type_id::UINT8,
                  "incoming status column must be UINT8",
                  std::invalid_argument);
+    CUDF_EXPECTS(!incoming_status->nullable(),
+                 "incoming status column must not be nullable; use row_null for SQL-null rows",
+                 std::invalid_argument);
   }
 
   auto incoming_dev_view  = incoming_status.has_value()
