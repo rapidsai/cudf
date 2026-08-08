@@ -44,7 +44,9 @@ option(CUDF_LARGE_STRINGS_DISABLED "Build with large string support disabled" OF
 mark_as_advanced(CUDF_LARGE_STRINGS_DISABLED)
 set(CUDF_SIZE_TYPE_BITS
     "32"
-    CACHE STRING "Width of cudf::size_type in bits. 64 is experimental and ABI-incompatible."
+    CACHE
+      STRING
+      "Width of cudf::size_type in bits. 64 is experimental, ABI-incompatible, and requires 16-byte cuco key support."
 )
 set_property(CACHE CUDF_SIZE_TYPE_BITS PROPERTY STRINGS 32 64)
 mark_as_advanced(CUDF_SIZE_TYPE_BITS)
