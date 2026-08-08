@@ -1347,8 +1347,8 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     // so no chunk that would be accepted can hold more than `size_limit / 4` entries.
     if (dict_policy == dictionary_policy::ADAPTIVE) {
       auto const size_limit = max_page_bytes(compression, max_dict_size);
-      return static_cast<size_type>(std::clamp<size_t>(
-        size_limit / sizeof(int32_t), 1, static_cast<size_t>(MAX_DICT_SIZE)));
+      return static_cast<size_type>(
+        std::clamp<size_t>(size_limit / sizeof(int32_t), 1, static_cast<size_t>(MAX_DICT_SIZE)));
     }
     return MAX_DICT_SIZE;
   }();
@@ -1375,14 +1375,15 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     } else {
       chunk.use_dictionary   = true;
       chunk.dict_entry_limit = std::min(chunk.num_values, max_dict_entries);
-      // Each fragment's thread block inserts keys before re-reading the chunk's entry counter, so up to `num_fragments * dict_encode_block_size` keys can land past `dict_entry_limit`.
+      // Each fragment's thread block inserts keys before re-reading the chunk's entry counter, so
+      // up to `num_fragments * dict_encode_block_size` keys can land past `dict_entry_limit`.
       auto const overshoot = static_cast<size_t>(chunk.num_fragments) * dict_encode_block_size;
       auto const slack =
         static_cast<size_t>(map_extent(chunk.dict_entry_limit) - chunk.dict_entry_limit);
       auto const map_entries = std::min<size_t>(
         chunk.num_values,
         static_cast<size_t>(chunk.dict_entry_limit) + (overshoot > slack ? overshoot - slack : 0));
-      chunk.dict_map_size = map_extent(map_entries);
+      chunk.dict_map_size   = map_extent(map_entries);
       chunk.dict_map_offset = total_map_storage_size;
       total_map_storage_size += chunk.dict_map_size;
     }
