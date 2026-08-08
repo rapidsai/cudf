@@ -1383,10 +1383,10 @@ TEST_F(InvalidInputShapeTest, CastVariantRejectsMalformedInput)
   }
 }
 
-// get_variant_type_id requires a list<uint8> input; every other shape must be rejected with
-// std::invalid_argument.
 TEST_F(InvalidInputShapeTest, GetVariantTypeIdRejectsMalformedInput)
 {
+  // get_variant_type_id requires a list<uint8> input; every other shape must be rejected with
+  // std::invalid_argument.
   auto stream = cudf::test::get_default_stream();
 
   std::vector<broken_shape> cases;
@@ -1403,7 +1403,9 @@ TEST_F(InvalidInputShapeTest, GetVariantTypeIdRejectsMalformedInput)
 
 namespace {
 
-// Helper: run get_variant_type_id on the value child of an apache fixture.
+/**
+ * @brief Helper: run get_variant_type_id on the value child of an apache fixture.
+ */
 template <std::size_t M, std::size_t V>
 [[nodiscard]] std::unique_ptr<cudf::column> apache_type_id(avf::fixture<M, V> const& fixture)
 {
@@ -1413,8 +1415,11 @@ template <std::size_t M, std::size_t V>
   return cudf::io::parquet::experimental::get_variant_type_id(value, stream);
 }
 
-// Build a list<uint8> column from blobs with per-row validity. Rows where valid[i] is false are
-// null at the list level (not an encoded Variant null — those are valid rows with a NULLVAL blob).
+/**
+ * @brief Build a list<uint8> column from blobs with per-row validity. Rows where valid[i] is false
+ * are null at the list level (not an encoded Variant null — those are valid rows with a NULLVAL
+ * blob).
+ */
 [[nodiscard]] std::unique_ptr<cudf::column> make_list_u8_nullable(
   cudf::host_span<std::vector<uint8_t> const> blobs, std::vector<bool> const& valid)
 {

@@ -792,9 +792,11 @@ struct cast_variant_fn {
   }
 };
 
-// Classifies only the first (value_metadata) byte of enc; does not validate the remaining payload.
-// A recognized header returns its logical type even when the payload is truncated.
-// Returns nullopt for an empty blob or an unrecognized primitive type ID.
+/**
+ * @brief Classifies only the first (value_metadata) byte of enc; does not validate the remaining
+ * payload. A recognized header returns its logical type even when the payload is truncated. Returns
+ * nullopt for an empty blob or an unrecognized primitive type ID.
+ */
 __device__ cuda::std::optional<variant_logical_type> logical_type_of(device_span<uint8_t const> enc)
 {
   if (enc.empty()) { return cuda::std::nullopt; }

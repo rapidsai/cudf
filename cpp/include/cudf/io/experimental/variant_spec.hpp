@@ -48,7 +48,6 @@ enum class variant_primitive_type : uint8_t {
 
 /**
  * @brief Logical type of a VARIANT value as returned by get_variant_type_id.
- *
  */
 enum class variant_logical_type : uint8_t {
   OBJECT        = 0,
