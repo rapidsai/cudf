@@ -64,15 +64,19 @@ constexpr uint8_t make_variant_primitive(variant_primitive_type type)
   return make_variant_header(variant_basic_type::PRIMITIVE, static_cast<uint8_t>(type));
 }
 
-// Header byte for a short string of the given length (must fit in 6 bits: 0..63).
+/**
+ * @brief Header byte for a short string of the given length (must fit in 6 bits: 0..63).
+ */
 constexpr uint8_t make_variant_short_string_header(std::size_t length)
 {
   CUDF_EXPECTS(length <= 0x3F, "VARIANT short string length must fit in 6 bits");
   return make_variant_header(variant_basic_type::SHORT_STRING, static_cast<uint8_t>(length));
 }
 
-// Header byte for an object value with 1-byte field ids and 1-byte offsets
-// (is_large=false), i.e. value_header == 0.
+/**
+ * @brief Header byte for an object value with 1-byte field ids and 1-byte offsets
+ * (is_large=false), i.e. value_header == 0.
+ */
 constexpr uint8_t make_variant_object_header()
 {
   return make_variant_header(variant_basic_type::OBJECT, 0);
@@ -108,10 +112,12 @@ cudf::test::structs_column_wrapper make_apache_variant(avf::fixture<M, V> const&
   return cudf::test::structs_column_wrapper{{m, v}};
 }
 
-// Three-row VARIANT fixture reused by multiple multi-row tests below.
-//   Row 0: dict {x,y}, value { x: INT32(7),  y: "hi"  }
-//   Row 1: dict {x,z}, value { x: INT32(42), z: INT32(99) }
-//   Row 2: dict {y},   value { y: "zzz" }
+/**
+ * @brief Three-row VARIANT fixture reused by multiple multi-row tests below.
+ *   Row 0: dict {x,y}, value { x: INT32(7),  y: "hi"  }
+ *   Row 1: dict {x,z}, value { x: INT32(42), z: INT32(99) }
+ *   Row 2: dict {y},   value { y: "zzz" }
+ */
 inline cudf::test::structs_column_wrapper make_xyz_three_row_variant()
 {
   std::vector<uint8_t> const m1 = {0x01, 0x02, 0x00, 0x01, 0x02, 'x', 'y'};
@@ -388,7 +394,9 @@ TEST_F(ExtractVariantFieldTest, BareNameEqualsDollarPath)
 
 namespace {
 
-// INT32 primitive blob: primitive int32 header + little-endian 4-byte payload.
+/**
+ * @brief INT32 primitive blob: primitive int32 header + little-endian 4-byte payload.
+ */
 inline std::vector<uint8_t> enc_int32(int32_t v)
 {
   auto const u = static_cast<uint32_t>(v);
@@ -407,7 +415,9 @@ inline std::vector<uint8_t> enc_short_string(std::string_view s)
   return out;
 }
 
-// Append `width` little-endian bytes of `bits` to `out`.
+/**
+ * @brief Append `width` little-endian bytes of `bits` to `out`.
+ */
 inline void append_le(std::vector<uint8_t>& out, uint64_t bits, int width)
 {
   for (int i = 0; i < width; ++i) {
@@ -415,7 +425,10 @@ inline void append_le(std::vector<uint8_t>& out, uint64_t bits, int width)
   }
 }
 
-// Primitive value blobs (header + fixed payload) for every physical type the cast matrix exercises.
+/**
+ * @brief Primitive value blobs (header + fixed payload) for every physical type the cast matrix
+ * exercises.
+ */
 inline std::vector<uint8_t> enc_null()
 {
   return {make_variant_primitive(variant_primitive_type::NULLVAL)};
@@ -453,7 +466,9 @@ inline std::vector<uint8_t> enc_float64(double v)
   return out;
 }
 
-// Long-string primitive blob: header + 4-byte LE length + payload.
+/**
+ * @brief Long-string primitive blob: header + 4-byte LE length + payload.
+ */
 inline std::vector<uint8_t> enc_long_string(std::string_view s)
 {
   std::vector<uint8_t> out{make_variant_primitive(variant_primitive_type::LONG_STRING)};
@@ -464,8 +479,10 @@ inline std::vector<uint8_t> enc_long_string(std::string_view s)
   return out;
 }
 
-// Build a single-field object value wrapping `inner` under field id `fid`.
-// field_off_size=1, field_id_size=1, is_large=false.
+/**
+ * @brief Build a single-field object value wrapping `inner` under field id `fid`.
+ * field_off_size=1, field_id_size=1, is_large=false.
+ */
 inline std::vector<uint8_t> build_single_field_object(uint8_t fid,
                                                       std::vector<uint8_t> const& inner)
 {
@@ -477,10 +494,12 @@ inline std::vector<uint8_t> build_single_field_object(uint8_t fid,
   return out;
 }
 
-// Build a VARIANT object blob with `n_fields` fields.  Field ids are 0..n_fields-1
-// (in ascending order, matching the dictionary positions) and each field holds a bare INT32 equal
-// to its field id.  Uses 1-byte field_id_size and 1-byte field_off_size; n_fields must be
-// <= 51 so the total value bytes (5 * n_fields) still fit in 1-byte offsets.
+/**
+ * @brief Build a VARIANT object blob with `n_fields` fields.  Field ids are 0..n_fields-1
+ * (in ascending order, matching the dictionary positions) and each field holds a bare INT32 equal
+ * to its field id.  Uses 1-byte field_id_size and 1-byte field_off_size; n_fields must be
+ * <= 51 so the total value bytes (5 * n_fields) still fit in 1-byte offsets.
+ */
 inline std::vector<uint8_t> build_sequential_int32_object(int n_fields)
 {
   std::vector<uint8_t> out{make_variant_object_header(), static_cast<uint8_t>(n_fields)};
@@ -497,7 +516,9 @@ inline std::vector<uint8_t> build_sequential_int32_object(int n_fields)
   return out;
 }
 
-// Lexicographically ordered dictionary of N zero-padded two-digit keys "k<NN>".
+/**
+ * @brief Lexicographically ordered dictionary of N zero-padded two-digit keys "k<NN>".
+ */
 inline std::vector<std::string> make_numeric_keys(int n)
 {
   std::vector<std::string> out;
@@ -510,9 +531,11 @@ inline std::vector<std::string> make_numeric_keys(int n)
   return out;
 }
 
-// Wrap per-row (metadata, value) byte vectors into a VARIANT struct column.  Built
-// with make_lists_column + structs_column_wrapper directly so the helper stays
-// self-contained within this test file for dynamic row counts.
+/**
+ * @brief Wrap per-row (metadata, value) byte vectors into a VARIANT struct column.  Built
+ * with make_lists_column + structs_column_wrapper directly so the helper stays
+ * self-contained within this test file for dynamic row counts.
+ */
 inline cudf::test::structs_column_wrapper wrap_multi_row_variant(
   std::vector<std::vector<uint8_t>> const& meta_rows,
   std::vector<std::vector<uint8_t>> const& val_rows)
@@ -536,7 +559,9 @@ inline cudf::test::structs_column_wrapper wrap_multi_row_variant(
   return cudf::test::structs_column_wrapper{std::move(children)};
 }
 
-// Build a metadata blob (version 1, offset_size=1) for the given ordered string dictionary.
+/**
+ * @brief Build a metadata blob (version 1, offset_size=1) for the given ordered string dictionary.
+ */
 inline std::vector<uint8_t> build_metadata(std::vector<std::string> const& keys)
 {
   std::vector<uint8_t> out{0x01, static_cast<uint8_t>(keys.size())};
@@ -1321,13 +1346,17 @@ inline std::unique_ptr<cudf::column> list_u8(std::vector<uint8_t> const& bytes)
   return cudf::test::lists_column_wrapper<uint8_t>(bytes.begin(), bytes.end()).release();
 }
 
-// A single-row list<int32> (wrong element type for a VARIANT child).
+/**
+ * @brief A single-row list<int32> (wrong element type for a VARIANT child).
+ */
 inline std::unique_ptr<cudf::column> list_i32(std::vector<int32_t> const& values)
 {
   return cudf::test::lists_column_wrapper<int32_t>(values.begin(), values.end()).release();
 }
 
-// A single-row fixed-width int32 column (a non-list child).
+/**
+ * @brief A single-row fixed-width int32 column (a non-list child).
+ */
 inline std::unique_ptr<cudf::column> scalar_i32()
 {
   return cudf::test::fixed_width_column_wrapper<int32_t>{42}.release();
@@ -1354,11 +1383,11 @@ struct broken_shape {
 
 }  // namespace
 
-// A VARIANT column must be a STRUCT whose first two children are each a list<uint8>. Enumerate the
-// distinct ways that column-shape contract can be broken; get_variant_field must reject every one
-// with std::invalid_argument.
 TEST_F(InvalidInputShapeTest, GetVariantFieldRejectsMalformedInput)
 {
+  // A VARIANT column must be a STRUCT whose first two children are each a list<uint8>. Enumerate
+  // the distinct ways that column-shape contract can be broken; get_variant_field must reject every
+  // one with std::invalid_argument.
   auto stream = cudf::test::get_default_stream();
 
   std::vector<broken_shape> cases;
@@ -1385,10 +1414,10 @@ TEST_F(InvalidInputShapeTest, GetVariantFieldRejectsMalformedInput)
   }
 }
 
-// cast_variant requires a list<uint8> input; every other shape must be rejected with
-// std::invalid_argument.
 TEST_F(InvalidInputShapeTest, CastVariantRejectsMalformedInput)
 {
+  // cast_variant requires a list<uint8> input; every other shape must be rejected with
+  // std::invalid_argument.
   auto stream = cudf::test::get_default_stream();
 
   std::vector<broken_shape> cases;
@@ -1403,10 +1432,10 @@ TEST_F(InvalidInputShapeTest, CastVariantRejectsMalformedInput)
   }
 }
 
-// cast_variant must reject a nullable incoming_status column (SQL-null rows must be represented
-// by the row_null enum value, not by null bits).
 TEST_F(InvalidInputShapeTest, CastVariantRejectsNullableIncomingStatus)
 {
+  // cast_variant must reject a nullable incoming_status column (SQL-null rows must be represented
+  // by the row_null enum value, not by null bits).
   auto stream = cudf::test::get_default_stream();
   // One-row valid values column.
   auto values =
@@ -1424,11 +1453,11 @@ TEST_F(InvalidInputShapeTest, CastVariantRejectsNullableIncomingStatus)
     std::invalid_argument);
 }
 
-// Regression: incoming_status validation must fire even when values is empty (zero rows).
-// Prior to the fix, the empty-values fast path returned before the validation block, so a
-// nullable, non-UINT8, or row-count-mismatched status column was silently accepted.
 TEST_F(InvalidInputShapeTest, CastVariantRejectsInvalidIncomingStatusOnEmptyValues)
 {
+  // Regression: incoming_status validation must fire even when values is empty (zero rows).
+  // Prior to the fix, the empty-values fast path returned before the validation block, so a
+  // nullable, non-UINT8, or row-count-mismatched status column was silently accepted.
   auto stream = cudf::test::get_default_stream();
   // Build a zero-row list<uint8> values column.
   auto const empty_values =
@@ -1478,8 +1507,10 @@ using op_status = cudf::io::parquet::experimental::variant_operation_status;
 namespace expns = cudf::io::parquet::experimental;
 auto const& cmr = cudf::get_current_device_resource_ref;
 
-// Helper using fixed_width_column_wrapper comparison for the common case where the status
-// column has no nulls.
+/**
+ * @brief Helper using fixed_width_column_wrapper comparison for the common case where the status
+ * column has no nulls.
+ */
 static void expect_status_values(cudf::column_view const& status,
                                  std::vector<uint8_t> const& expected)
 {
@@ -1500,9 +1531,9 @@ constexpr uint8_t ST_MALFORMED = static_cast<uint8_t>(op_status::malformed_varia
 
 struct GetVariantFieldStatusTest : public cudf::test::BaseFixture {};
 
-// SQL-null input row → null output + row_null status (status column is always non-nullable)
 TEST_F(GetVariantFieldStatusTest, SqlNullInputProducesRowNullStatus)
 {
+  // SQL-null input row → null output + row_null status (status column is always non-nullable)
   cudf::test::lists_column_wrapper<uint8_t> meta{{0x01, 0x01, 0x00, 0x01, 'x'}};
   cudf::test::lists_column_wrapper<uint8_t> val{{0x14, 0x07, 0x00, 0x00, 0x00}};
   cudf::test::structs_column_wrapper col{{meta, val}, std::vector<bool>{false}};
@@ -1518,9 +1549,9 @@ TEST_F(GetVariantFieldStatusTest, SqlNullInputProducesRowNullStatus)
   ASSERT_EQ(got->null_count(), 1);
 }
 
-// Successful extraction → success status
 TEST_F(GetVariantFieldStatusTest, SuccessStatus)
 {
+  // Successful extraction → success status
   auto col    = make_xyz_three_row_variant();
   auto stream = cudf::test::get_default_stream();
 
@@ -1534,9 +1565,9 @@ TEST_F(GetVariantFieldStatusTest, SuccessStatus)
   EXPECT_EQ(got->null_count(), 1);
 }
 
-// Missing key → missing_path status
 TEST_F(GetVariantFieldStatusTest, MissingKeyProducesMissingPathStatus)
 {
+  // Missing key → missing_path status
   auto col    = make_apache_variant(avf::object_primitive);
   auto stream = cudf::test::get_default_stream();
 
@@ -1550,9 +1581,9 @@ TEST_F(GetVariantFieldStatusTest, MissingKeyProducesMissingPathStatus)
   EXPECT_EQ(got->null_count(), 1);
 }
 
-// VARIANT null terminal value → variant_null status, preserved bytes (non-null output)
 TEST_F(GetVariantFieldStatusTest, VariantNullPreservedWithStatus)
 {
+  // VARIANT null terminal value → variant_null status, preserved bytes (non-null output)
   // Build a single-row VARIANT: object {null_field: VARIANT_NULL}
   // metadata: {null_field}, value: object wrapping NULLVAL primitive
   auto const m = build_metadata({"null_field"});
@@ -1574,10 +1605,10 @@ TEST_F(GetVariantFieldStatusTest, VariantNullPreservedWithStatus)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected_bytes);
 }
 
-// Without status_out, VARIANT null is returned as bytes (non-null list row), same as with status.
-// Only cast_variant turns a VARIANT null blob into a SQL null.
 TEST_F(GetVariantFieldStatusTest, VariantNullReturnedAsBytesWithoutStatus)
 {
+  // Without status_out, VARIANT null is returned as bytes (non-null list row), same as with status.
+  // Only cast_variant turns a VARIANT null blob into a SQL null.
   auto const m = build_metadata({"null_field"});
   auto const v = build_single_field_object(/*fid=*/0, enc_null());
   auto col     = wrap_single_variant(m, v);
@@ -1592,9 +1623,9 @@ TEST_F(GetVariantFieldStatusTest, VariantNullReturnedAsBytesWithoutStatus)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected_bytes);
 }
 
-// Malformed metadata → malformed_variant status
 TEST_F(GetVariantFieldStatusTest, MalformedMetadataProducesMalformedStatus)
 {
+  // Malformed metadata → malformed_variant status
   std::vector<uint8_t> const bad_meta = {0x02};  // too short / version ≠ 1
   std::vector<uint8_t> const val      = {0x14, 0x07, 0x00, 0x00, 0x00};
   auto col                            = wrap_single_variant(bad_meta, val);
@@ -1608,9 +1639,9 @@ TEST_F(GetVariantFieldStatusTest, MalformedMetadataProducesMalformedStatus)
   EXPECT_EQ(got->null_count(), 1);
 }
 
-// VARIANT null before end of a nested path → missing_path
 TEST_F(GetVariantFieldStatusTest, VariantNullBeforeEndIsMissingPath)
 {
+  // VARIANT null before end of a nested path → missing_path
   // Object {a: VARIANT_NULL}; path "$.a.b" should be missing_path (null intermediate)
   auto const m = build_metadata({"a"});
   auto const v = build_single_field_object(/*fid=*/0, enc_null());
@@ -1626,9 +1657,9 @@ TEST_F(GetVariantFieldStatusTest, VariantNullBeforeEndIsMissingPath)
   EXPECT_EQ(got->null_count(), 1);
 }
 
-// Mixed rows: success / missing / variant_null / malformed / SQL null
 TEST_F(GetVariantFieldStatusTest, MixedRows)
 {
+  // Mixed rows: success / missing / variant_null / malformed / SQL null
   auto stream = cudf::test::get_default_stream();
 
   auto const dict = build_metadata({"x"});
@@ -1664,9 +1695,9 @@ TEST_F(GetVariantFieldStatusTest, MixedRows)
   EXPECT_EQ(got->null_count(), 2);
 }
 
-// Empty input → empty status column
 TEST_F(GetVariantFieldStatusTest, EmptyInput)
 {
+  // Empty input → empty status column
   auto const stream  = cudf::test::get_default_stream();
   auto const variant = cudf::empty_like(make_xyz_three_row_variant());
 
@@ -1694,9 +1725,9 @@ inline cudf::test::lists_column_wrapper<uint8_t> make_value_col(std::vector<uint
 
 }  // namespace
 
-// Success → success status
 TEST_F(CastVariantStatusTest, SuccessProducesSuccessStatus)
 {
+  // Success → success status
   auto stream = cudf::test::get_default_stream();
   auto values = make_value_col(enc_int32(42));
   std::unique_ptr<cudf::column> status;
@@ -1709,9 +1740,9 @@ TEST_F(CastVariantStatusTest, SuccessProducesSuccessStatus)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
-// VARIANT null → variant_null status
 TEST_F(CastVariantStatusTest, VariantNullProducesVariantNullStatus)
 {
+  // VARIANT null → variant_null status
   auto stream = cudf::test::get_default_stream();
   auto values = make_value_col(enc_null());
   std::unique_ptr<cudf::column> status;
@@ -1723,9 +1754,9 @@ TEST_F(CastVariantStatusTest, VariantNullProducesVariantNullStatus)
   EXPECT_EQ(got->null_count(), 1);
 }
 
-// Type mismatch → type_mismatch status
 TEST_F(CastVariantStatusTest, TypeMismatchStatus)
 {
+  // Type mismatch → type_mismatch status
   auto stream = cudf::test::get_default_stream();
   auto values = make_value_col(enc_int8(5));  // INT8 cast to INT32 target → mismatch
   std::unique_ptr<cudf::column> status;
@@ -1737,9 +1768,9 @@ TEST_F(CastVariantStatusTest, TypeMismatchStatus)
   EXPECT_EQ(got->null_count(), 1);
 }
 
-// SQL-null input (null list row) → row_null status (status column is always non-nullable)
 TEST_F(CastVariantStatusTest, SqlNullInputProducesRowNullStatus)
 {
+  // SQL-null input (null list row) → row_null status (status column is always non-nullable)
   auto stream = cudf::test::get_default_stream();
 
   // Build the values list<uint8> column directly (two rows), then mask row 1 null.
@@ -1773,9 +1804,9 @@ TEST_F(CastVariantStatusTest, SqlNullInputProducesRowNullStatus)
   EXPECT_EQ(got->null_count(), 1);
 }
 
-// Incoming status propagation: non-success upstream → propagated status
 TEST_F(CastVariantStatusTest, IncomingStatusPropagation)
 {
+  // Incoming status propagation: non-success upstream → propagated status
   auto stream = cudf::test::get_default_stream();
 
   // 3 rows: success, missing_path, variant_null (from a prior get_variant_field)
@@ -1802,10 +1833,10 @@ TEST_F(CastVariantStatusTest, IncomingStatusPropagation)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
-// Incoming row_null status → null output and row_null status for that row.
-// The status column produced by get_variant_field is non-nullable; SQL-null rows carry row_null.
 TEST_F(CastVariantStatusTest, IncomingRowNullStatusProducesRowNullStatus)
 {
+  // Incoming row_null status → null output and row_null status for that row.
+  // The status column produced by get_variant_field is non-nullable; SQL-null rows carry row_null.
   auto stream = cudf::test::get_default_stream();
 
   std::vector<std::vector<uint8_t>> const val_rows{enc_int32(7), enc_int32(1)};
@@ -1831,9 +1862,9 @@ TEST_F(CastVariantStatusTest, IncomingRowNullStatusProducesRowNullStatus)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
-// Status for bool target
 TEST_F(CastVariantStatusTest, BoolStatusTracking)
 {
+  // Status for bool target
   auto stream = cudf::test::get_default_stream();
 
   // 3 rows: bool_true (success), null (variant_null), int32 (type_mismatch)
@@ -1852,9 +1883,9 @@ TEST_F(CastVariantStatusTest, BoolStatusTracking)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
-// Status for string target: short_string, variant_null, type_mismatch, malformed long_string
 TEST_F(CastVariantStatusTest, StringStatusTracking)
 {
+  // Status for string target: short_string, variant_null, type_mismatch, malformed long_string
   auto stream = cudf::test::get_default_stream();
 
   std::vector<std::vector<uint8_t>> const val_rows{
@@ -1883,9 +1914,9 @@ TEST_F(CastVariantStatusTest, StringStatusTracking)
   EXPECT_EQ(got->null_count(), 3);  // all but row 0 are null
 }
 
-// Empty input → empty status column
 TEST_F(CastVariantStatusTest, EmptyInput)
 {
+  // Empty input → empty status column
   auto const stream = cudf::test::get_default_stream();
   auto const values =
     cudf::empty_like(cudf::structs_column_view{make_xyz_three_row_variant()}.child(1));
@@ -1904,9 +1935,9 @@ TEST_F(CastVariantStatusTest, EmptyInput)
 
 struct ExtractVariantFieldStatusTest : public cudf::test::BaseFixture {};
 
-// Success path: object {x: INT32(7)} extracted as INT32
 TEST_F(ExtractVariantFieldStatusTest, SuccessStatus)
 {
+  // Success path: object {x: INT32(7)} extracted as INT32
   auto col    = make_xyz_three_row_variant();
   auto stream = cudf::test::get_default_stream();
 
@@ -1921,9 +1952,9 @@ TEST_F(ExtractVariantFieldStatusTest, SuccessStatus)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
-// SQL null input → row_null status (status column is always non-nullable)
 TEST_F(ExtractVariantFieldStatusTest, SqlNullInputProducesRowNullStatus)
 {
+  // SQL null input → row_null status (status column is always non-nullable)
   cudf::test::lists_column_wrapper<uint8_t> meta{{0x01, 0x01, 0x00, 0x01, 'x'}};
   cudf::test::lists_column_wrapper<uint8_t> val{{0x14, 0x07, 0x00, 0x00, 0x00}};
   cudf::test::structs_column_wrapper col{{meta, val}, std::vector<bool>{false}};
@@ -1939,9 +1970,9 @@ TEST_F(ExtractVariantFieldStatusTest, SqlNullInputProducesRowNullStatus)
   EXPECT_EQ(got->null_count(), 1);
 }
 
-// VARIANT null → variant_null status (from extraction phase)
 TEST_F(ExtractVariantFieldStatusTest, VariantNullStatus)
 {
+  // VARIANT null → variant_null status (from extraction phase)
   auto const m = build_metadata({"f"});
   auto const v = build_single_field_object(/*fid=*/0, enc_null());
   auto col     = wrap_single_variant(m, v);
@@ -1956,9 +1987,9 @@ TEST_F(ExtractVariantFieldStatusTest, VariantNullStatus)
   EXPECT_EQ(got->null_count(), 1);
 }
 
-// Type mismatch: field exists but is a string, requested as INT32
 TEST_F(ExtractVariantFieldStatusTest, TypeMismatchStatus)
 {
+  // Type mismatch: field exists but is a string, requested as INT32
   auto const m = build_metadata({"s"});
   auto const v = build_single_field_object(/*fid=*/0, enc_short_string("hello"));
   auto col     = wrap_single_variant(m, v);
@@ -1973,9 +2004,9 @@ TEST_F(ExtractVariantFieldStatusTest, TypeMismatchStatus)
   EXPECT_EQ(got->null_count(), 1);
 }
 
-// Missing path for a multi-step path
 TEST_F(ExtractVariantFieldStatusTest, MissingNestedPathStatus)
 {
+  // Missing path for a multi-step path
   auto col    = make_apache_variant(avf::object_nested);
   auto stream = cudf::test::get_default_stream();
 
