@@ -1424,6 +1424,53 @@ TEST_F(InvalidInputShapeTest, CastVariantRejectsNullableIncomingStatus)
     std::invalid_argument);
 }
 
+// Regression: incoming_status validation must fire even when values is empty (zero rows).
+// Prior to the fix, the empty-values fast path returned before the validation block, so a
+// nullable, non-UINT8, or row-count-mismatched status column was silently accepted.
+TEST_F(InvalidInputShapeTest, CastVariantRejectsInvalidIncomingStatusOnEmptyValues)
+{
+  auto stream = cudf::test::get_default_stream();
+  // Build a zero-row list<uint8> values column.
+  auto const empty_values =
+    cudf::empty_like(cudf::structs_column_view{make_xyz_three_row_variant()}.child(1));
+
+  // Case 1: nullable incoming_status (one row, but values has zero rows — catch nullable first).
+  {
+    std::vector<uint8_t> const sv{uint8_t{0}};
+    std::vector<bool> const sv_valid{false};
+    cudf::test::fixed_width_column_wrapper<uint8_t> nullable_status(
+      sv.begin(), sv.end(), sv_valid.begin());
+    auto const status_view = nullable_status.release()->view();
+    EXPECT_THROW(
+      static_cast<void>(cudf::io::parquet::experimental::cast_variant(
+        *empty_values, cudf::data_type{cudf::type_id::INT32}, status_view, nullptr, stream)),
+      std::invalid_argument)
+      << "nullable incoming_status must be rejected even when values is empty";
+  }
+
+  // Case 2: non-UINT8 incoming_status (zero-row INT32 column, non-nullable).
+  {
+    cudf::test::fixed_width_column_wrapper<int32_t> wrong_type_status{};
+    auto const status_view = wrong_type_status.release()->view();
+    EXPECT_THROW(
+      static_cast<void>(cudf::io::parquet::experimental::cast_variant(
+        *empty_values, cudf::data_type{cudf::type_id::INT32}, status_view, nullptr, stream)),
+      std::invalid_argument)
+      << "non-UINT8 incoming_status must be rejected even when values is empty";
+  }
+
+  // Case 3: row-count mismatch (one-row status vs zero-row values).
+  {
+    cudf::test::fixed_width_column_wrapper<uint8_t> mismatched_status({uint8_t{0}});
+    auto const status_view = mismatched_status.release()->view();
+    EXPECT_THROW(
+      static_cast<void>(cudf::io::parquet::experimental::cast_variant(
+        *empty_values, cudf::data_type{cudf::type_id::INT32}, status_view, nullptr, stream)),
+      std::invalid_argument)
+      << "row-count-mismatched incoming_status must be rejected even when values is empty";
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Status column tests
 // ---------------------------------------------------------------------------

@@ -1224,6 +1224,21 @@ std::unique_ptr<column> cast_variant(column_view const& values,
   }
 
   size_type const num_rows = values.size();
+
+  // Validate incoming_status before the empty-values fast path so callers always get
+  // std::invalid_argument for a malformed status column, even when values is empty.
+  if (incoming_status.has_value()) {
+    CUDF_EXPECTS(!incoming_status->nullable(),
+                 "incoming status column must not be nullable; use row_null for SQL-null rows",
+                 std::invalid_argument);
+    CUDF_EXPECTS(incoming_status->type().id() == type_id::UINT8,
+                 "incoming status column must be UINT8",
+                 std::invalid_argument);
+    CUDF_EXPECTS(incoming_status->size() == num_rows,
+                 "incoming status column must have the same number of rows as the values column",
+                 std::invalid_argument);
+  }
+
   if (num_rows == 0) {
     if (status_out != nullptr) { *status_out = make_empty_column(data_type{type_id::UINT8}); }
     return make_empty_column(desired_type);
@@ -1239,20 +1254,7 @@ std::unique_ptr<column> cast_variant(column_view const& values,
 
   // Build device view for incoming status if provided; keep a placeholder when absent so that
   // cast_variant_fn always holds a valid column_device_view (kernel ignores it when !has_incoming).
-  auto placeholder_col      = make_empty_column(data_type{type_id::UINT8});
-  auto placeholder_dev_view = column_device_view::create(*placeholder_col, stream);
-  if (incoming_status.has_value()) {
-    CUDF_EXPECTS(incoming_status->size() == num_rows,
-                 "incoming status column must have the same number of rows as the values column",
-                 std::invalid_argument);
-    CUDF_EXPECTS(incoming_status->type().id() == type_id::UINT8,
-                 "incoming status column must be UINT8",
-                 std::invalid_argument);
-    CUDF_EXPECTS(!incoming_status->nullable(),
-                 "incoming status column must not be nullable; use row_null for SQL-null rows",
-                 std::invalid_argument);
-  }
-
+  auto placeholder_col    = make_empty_column(data_type{type_id::UINT8});
   auto incoming_dev_view  = incoming_status.has_value()
                               ? column_device_view::create(*incoming_status, stream)
                               : column_device_view::create(*placeholder_col, stream);
