@@ -9,6 +9,8 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cuda/stream_ref>
+
 /**
  * @file
  * @brief APIs for computing hash values of columns and tables using various hash algorithms.
@@ -75,7 +77,7 @@ std::unique_ptr<column> murmurhash3_x86_32(
 std::unique_ptr<column> spark_murmurhash3_x86_32(
   table_view const& input,
   uint32_t seed                     = DEFAULT_HASH_SEED,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  cuda::stream_ref stream           = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**

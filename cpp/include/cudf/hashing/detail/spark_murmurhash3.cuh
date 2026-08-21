@@ -19,7 +19,8 @@
 
 namespace cudf::hashing::detail {
 
-template <typename Key, CUDF_ENABLE_IF(not cudf::is_nested<Key>())>
+template <typename Key>
+  requires(not cudf::is_nested<Key>())
 struct Spark_MurmurHash3_x86_32 {
   using result_type = int32_t;
 
@@ -59,10 +60,10 @@ struct Spark_MurmurHash3_x86_32 {
     return compute_bytes(reinterpret_cast<cuda::std::byte const*>(&key), sizeof(T));
   }
 
-  result_type __device__ inline compute_remaining_bytes(cuda::std::byte const* data,
-                                                        cudf::size_type len,
-                                                        cudf::size_type tail_offset,
-                                                        result_type h) const
+  uint32_t __device__ inline compute_remaining_bytes(cuda::std::byte const* data,
+                                                     cudf::size_type len,
+                                                     cudf::size_type tail_offset,
+                                                     uint32_t h) const
   {
     // Process remaining bytes that do not fill a four-byte chunk using Spark's approach
     // (does not conform to normal MurmurHash3).
@@ -76,7 +77,7 @@ struct Spark_MurmurHash3_x86_32 {
       k1 = rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h ^= k1;
-      h = rotate_bits_left(static_cast<uint32_t>(h), rot_c2);
+      h = rotate_bits_left(h, rot_c2);
       h = h * 5 + c3;
     }
     return h;
@@ -87,7 +88,7 @@ struct Spark_MurmurHash3_x86_32 {
     constexpr cudf::size_type BLOCK_SIZE = 4;
     cudf::size_type const nblocks        = len / BLOCK_SIZE;
     cudf::size_type const tail_offset    = nblocks * BLOCK_SIZE;
-    result_type h                        = m_seed;
+    uint32_t h                           = m_seed;
 
     // Process all four-byte chunks.
     for (cudf::size_type i = 0; i < nblocks; i++) {
@@ -96,16 +97,16 @@ struct Spark_MurmurHash3_x86_32 {
       k1 = rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h ^= k1;
-      h = rotate_bits_left(static_cast<uint32_t>(h), rot_c2);
+      h = rotate_bits_left(h, rot_c2);
       h = h * 5 + c3;
     }
 
     h = compute_remaining_bytes(data, len, tail_offset, h);
 
     // Finalize hash.
-    h ^= len;
+    h ^= static_cast<uint32_t>(len);
     h = fmix32(h);
-    return h;
+    return static_cast<result_type>(h);
   }
 
  private:

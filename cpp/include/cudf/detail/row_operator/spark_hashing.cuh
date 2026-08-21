@@ -77,7 +77,8 @@ class spark_device_row_hasher {
     {
     }
 
-    template <typename T, CUDF_ENABLE_IF(not cudf::is_nested<T>())>
+    template <typename T>
+      requires(not cudf::is_nested<T>())
     __device__ result_type operator()(column_device_view const& col,
                                       size_type row_index) const noexcept
     {
@@ -85,7 +86,8 @@ class spark_device_row_hasher {
       return hasher.template operator()<T>(col, row_index);
     }
 
-    template <typename T, CUDF_ENABLE_IF(cudf::is_nested<T>())>
+    template <typename T>
+      requires(cudf::is_nested<T>())
     __device__ result_type operator()(column_device_view const& col,
                                       size_type row_index) const noexcept
     {

@@ -14,6 +14,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cub/device/device_for.cuh>
+#include <cuda/stream_ref>
 
 #include <functional>
 
@@ -49,7 +50,7 @@ void check_spark_murmurhash3_compatibility(table_view const& input)
 
 std::unique_ptr<column> spark_murmurhash3_x86_32(table_view const& input,
                                                  uint32_t seed,
-                                                 rmm::cuda_stream_view stream,
+                                                 cuda::stream_ref stream,
                                                  rmm::device_async_resource_ref mr)
 {
   using result_type = Spark_MurmurHash3_x86_32<int32_t>::result_type;
@@ -75,7 +76,7 @@ std::unique_ptr<column> spark_murmurhash3_x86_32(table_view const& input,
   CUDF_CUDA_TRY(cub::DeviceFor::Bulk(
     input.num_rows(),
     [output_begin, hasher] __device__(size_type i) mutable { output_begin[i] = hasher(i); },
-    stream.value()));
+    stream.get()));
 
   return output;
 }
@@ -84,7 +85,7 @@ std::unique_ptr<column> spark_murmurhash3_x86_32(table_view const& input,
 
 std::unique_ptr<column> spark_murmurhash3_x86_32(table_view const& input,
                                                  uint32_t seed,
-                                                 rmm::cuda_stream_view stream,
+                                                 cuda::stream_ref stream,
                                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
