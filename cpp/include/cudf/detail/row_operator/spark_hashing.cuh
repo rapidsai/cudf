@@ -12,7 +12,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cuda/functional>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 namespace CUDF_EXPORT cudf {
 namespace detail::row::hash {
@@ -103,8 +103,8 @@ class spark_device_row_hasher {
       }
 
       return cudf::detail::accumulate(
-        thrust::counting_iterator(0),
-        thrust::counting_iterator(curr_col.size()),
+        cuda::counting_iterator<size_type>{0},
+        cuda::counting_iterator<size_type>{curr_col.size()},
         _seed,
         cuda::proclaim_return_type<result_type>(
           [curr_col, nulls = this->_check_nulls] __device__(auto hash, auto element_index) {

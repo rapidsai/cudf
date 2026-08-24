@@ -461,10 +461,11 @@ TEST_F(RowOperatorTest, TestSparkMurmurRowHasher)
   auto const second = cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30, -40, -987654321};
   auto const input  = cudf::table_view{{first, second}};
 
-  auto const stream     = cudf::get_default_stream();
-  auto const row_hasher = cudf::detail::row::hash::row_hasher{input, stream};
-  auto const hasher     = row_hasher.device_hasher<cudf::hashing::detail::Spark_MurmurHash3_x86_32,
-                                                   cudf::detail::row::hash::spark_device_row_hasher>(
+  auto const stream = cudf::get_default_stream();
+  auto const row_hasher =
+    cudf::detail::row::hash::row_hasher{input, stream, cudf::get_current_device_resource_ref()};
+  auto const hasher = row_hasher.device_hasher<cudf::hashing::detail::Spark_MurmurHash3_x86_32,
+                                               cudf::detail::row::hash::spark_device_row_hasher>(
     cudf::nullate::DYNAMIC{false}, 42);
 
   auto results = cudf::test::fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0};
