@@ -793,7 +793,9 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
                               cuda::counting_iterator<int64_t>{chars_bytes},
                               delimiter_positions.begin(),
                               delimiter_fn,
-                              stream);
+                              stream,
+                              cudf::memory_resources{cudf::get_current_device_resource_ref(),
+                                                     cudf::get_current_device_resource_ref()});
 
   // create a vector of offsets to each string's delimiter set within delimiter_positions
   auto const delimiter_offsets =

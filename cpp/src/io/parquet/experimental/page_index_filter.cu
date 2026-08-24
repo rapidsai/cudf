@@ -206,11 +206,14 @@ struct page_stats_caster : public stats_caster_base {
                    row_str_sizes.begin());
 
     // Total bytes in the output chars buffer
-    auto const total_bytes = cudf::detail::reduce(row_str_sizes.begin(),
-                                                  row_str_sizes.end(),
-                                                  std::size_t{0},
-                                                  cuda::std::plus<std::size_t>{},
-                                                  stream);
+    auto const total_bytes =
+      cudf::detail::reduce(row_str_sizes.begin(),
+                           row_str_sizes.end(),
+                           std::size_t{0},
+                           cuda::std::plus<std::size_t>{},
+                           stream,
+                           cudf::memory_resources{cudf::get_current_device_resource_ref(),
+                                                  cudf::get_current_device_resource_ref()});
 
     CUDF_EXPECTS(
       total_bytes <= cuda::std::numeric_limits<cudf::size_type>::max(),
@@ -1014,7 +1017,9 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
       cudf::detail::all_of(row_mask.template begin<bool>() + row_mask_offset,
                            row_mask.template begin<bool>() + row_mask_offset + total_rows,
                            cuda::std::identity{},
-                           stream)) {
+                           stream,
+                           cudf::memory_resources{cudf::get_current_device_resource_ref(),
+                                                  cudf::get_current_device_resource_ref()})) {
     return thrust::host_vector<bool>(0);
   }
 
