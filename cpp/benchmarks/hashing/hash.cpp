@@ -44,6 +44,12 @@ static void bench_hash(nvbench::state& state)
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       auto result = cudf::hashing::murmurhash3_x86_32(data->view());
     });
+  } else if (hash_name == "spark_murmurhash3_x86_32") {
+    state.add_global_memory_writes<nvbench::uint32_t>(num_rows);
+
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      auto result = cudf::hashing::spark_murmurhash3_x86_32(data->view());
+    });
   } else if (hash_name == "md5") {
     // md5 creates a 32-byte string
     state.add_global_memory_writes<nvbench::int8_t>(32L * num_rows);
@@ -95,4 +101,11 @@ NVBENCH_BENCH(bench_hash)
   .add_int64_axis("num_cols", {2, 64})
   .add_float64_axis("nulls", {0.0, 0.1})
   .add_string_axis("hash_name",
-                   {"murmurhash3_x86_32", "md5", "sha1", "sha224", "sha256", "sha384", "sha512"});
+                   {"murmurhash3_x86_32",
+                    "spark_murmurhash3_x86_32",
+                    "md5",
+                    "sha1",
+                    "sha224",
+                    "sha256",
+                    "sha384",
+                    "sha512"});
