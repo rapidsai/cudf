@@ -44,7 +44,9 @@ struct Spark_MurmurHash3_x86_32 {
                                                       cudf::size_type offset) const
   {
     // Read a 4-byte value from the data pointer as individual bytes for safe
-    // unaligned access (very likely for string types).
+    // unaligned access (very likely for string types). The bytes are combined in
+    // little-endian order as MurmurHash3 defines, unlike `cudf::io::unaligned_load`,
+    // which reproduces native byte order and lives in a header this one cannot include.
     auto block = reinterpret_cast<uint8_t const*>(data + offset);
     return block[0] | (block[1] << 8) | (block[2] << 16) | (block[3] << 24);
   }
