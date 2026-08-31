@@ -76,9 +76,9 @@ TYPED_TEST(SparkMurmurHashTestFloatTyped, TestExtremes)
   auto const table_col_neg_zero = cudf::table_view({col_neg_zero});
   auto const table_col_neg_nan  = cudf::table_view({col_neg_nan});
 
-  // Spark 3.2+ normalizes signed zero before invoking the JNI hasher.
-  // https://github.com/NVIDIA/spark-rapids/blob/aef688e232b9e2c710696d380b2539230897450a/sql-plugin/src/main/scala/com/nvidia/spark/rapids/shims/HashUtils.scala#L21-L44
-  // https://github.com/NVIDIA/spark-rapids-jni/blob/09bae9c7dccf050b5db53a70282c3001cba5a015/src/main/cpp/src/hash/murmur_hash.cuh#L163-L172
+  // Spark's own hash normalizes both cases: `-0.0` is hashed as `0`, and `doubleToLongBits`
+  // collapses every NaN to one bit pattern.
+  // https://github.com/apache/spark/blob/1eef893d8935ae280bda7e1f7843dee212d90ae3/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/hash.scala#L476-L494
   auto const spark_col          = cudf::hashing::spark_murmurhash3_x86_32(table_col, 0);
   auto const spark_col_neg_zero = cudf::hashing::spark_murmurhash3_x86_32(table_col_neg_zero, 0);
   auto const spark_col_neg_nan  = cudf::hashing::spark_murmurhash3_x86_32(table_col_neg_nan, 0);

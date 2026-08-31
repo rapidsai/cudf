@@ -62,10 +62,12 @@ std::unique_ptr<column> murmurhash3_x86_32(
  *
  * This function follows Apache Spark value hashing and row traversal semantics. Each non-null value
  * is hashed using the preceding value hash as its seed. Null values leave the current hash
- * unchanged. Spark-specific handling is applied to strings, narrow integral types, floating-point
- * NaNs and signed zeros, fixed-point values, lists, and structs. MurmurHash3 packs the bytes left
- * over after the last full four-byte block into a single partial block. Spark instead sign-extends
- * each leftover byte and mixes it as a complete block.
+ * unchanged. Spark-specific handling is applied to strings, narrow integral types, fixed-point
+ * values, lists, and structs. Floating-point values follow Spark's rule that `-0.0` hashes as
+ * `+0.0` and every NaN is canonicalized to a single bit pattern, so callers do not need to
+ * normalize their input beforehand. MurmurHash3 packs the bytes left over after the last full
+ * four-byte block into a single partial block. Spark instead sign-extends each leftover byte and
+ * mixes it as a complete block.
  *
  * Chrono columns are hashed by their stored count, without unit conversion, so the caller must
  * supply Spark's units: `TIMESTAMP_MICROSECONDS` for `TimestampType`, `TIMESTAMP_DAYS` for
