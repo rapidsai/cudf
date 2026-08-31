@@ -461,30 +461,36 @@ TEST_F(RowOperatorTest, TestSparkMurmurRowHasher)
 {
   using limits = std::numeric_limits<int32_t>;
 
+  auto const stream = this->stream();
+  auto const mr     = this->resources();
+
   // The last five rows pair the extremes so that both the first and second column exercise the
   // minimum and maximum `int32_t`.
   auto const first = cudf::test::fixed_width_column_wrapper<int32_t>{
-    0, 1, -1, 42, 123456789, limits::min(), limits::max(), limits::min(), limits::max(), 0};
-  auto const second = cudf::test::fixed_width_column_wrapper<int32_t>{10,
-                                                                      20,
-                                                                      30,
-                                                                      -40,
-                                                                      -987654321,
-                                                                      limits::min(),
-                                                                      limits::max(),
-                                                                      limits::max(),
-                                                                      limits::min(),
-                                                                      limits::min()};
+    {0, 1, -1, 42, 123456789, limits::min(), limits::max(), limits::min(), limits::max(), 0},
+    stream,
+    mr};
+  auto const second = cudf::test::fixed_width_column_wrapper<int32_t>{{10,
+                                                                       20,
+                                                                       30,
+                                                                       -40,
+                                                                       -987654321,
+                                                                       limits::min(),
+                                                                       limits::max(),
+                                                                       limits::max(),
+                                                                       limits::min(),
+                                                                       limits::min()},
+                                                                      stream,
+                                                                      mr};
   auto const input  = cudf::table_view{{first, second}};
 
-  auto const stream = cudf::get_default_stream();
-  auto const row_hasher =
-    cudf::detail::row::hash::row_hasher{input, stream, cudf::get_current_device_resource_ref()};
-  auto const hasher = row_hasher.device_hasher<cudf::hashing::detail::Spark_MurmurHash3_x86_32,
-                                               cudf::detail::row::hash::spark_device_row_hasher>(
+  auto const row_hasher = cudf::detail::row::hash::row_hasher{input, stream, mr.get_temporary_mr()};
+  auto const hasher     = row_hasher.device_hasher<cudf::hashing::detail::Spark_MurmurHash3_x86_32,
+                                                   cudf::detail::row::hash::spark_device_row_hasher>(
     cudf::nullate::DYNAMIC{false}, 42);
 
-  auto results = cudf::test::fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  auto results =
+    cudf::test::fixed_width_column_wrapper<int32_t>{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, stream, mr};
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator<cudf::size_type>{0},
                     cuda::counting_iterator<cudf::size_type>{input.num_rows()},
@@ -502,7 +508,8 @@ TEST_F(RowOperatorTest, TestSparkMurmurRowHasher)
                                                                         -1676088145,
                                                                         -1252530078,
                                                                         363576572};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    results, expected, cudf::test::debug_output_level::FIRST_ERROR, stream, mr);
 }
 
 TEST_F(RowOperatorTest, TestPrimitiveRowHasher64BitHash)
