@@ -10,7 +10,6 @@
 #include <cudf/strings/string_view.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <cuda/std/algorithm>
 #include <cuda/std/array>
 #include <cuda/std/bit>
 #include <cuda/std/cstddef>
@@ -228,17 +227,18 @@ __device__ inline auto Spark_MurmurHash3_x86_32<numeric::decimal128>::operator()
 
   // If the value can be represented with a shorter than 16-byte integer, the
   // leading bytes of the little-endian value are truncated and are not hashed.
+  // Stopping before the least significant byte leaves it always retained, which also covers 0 and
+  // -1, whose bytes are entirely `zero_value` and would otherwise shorten to zero length.
   auto const reverse_begin = cuda::std::reverse_iterator(data + key_size);
-  auto const reverse_end   = cuda::std::reverse_iterator(data);
+  auto const reverse_end   = cuda::std::reverse_iterator(data + 1);
   auto const first_nonzero_byte =
     thrust::find_if_not(thrust::seq,
                         reverse_begin,
                         reverse_end,
                         [zero_value](cuda::std::byte const& v) { return v == zero_value; })
       .base();
-  // Max handles special case of 0 and -1 which would shorten to 0 length otherwise
   cudf::size_type length =
-    cuda::std::max(1, static_cast<cudf::size_type>(cuda::std::distance(data, first_nonzero_byte)));
+    static_cast<cudf::size_type>(cuda::std::distance(data, first_nonzero_byte));
 
   // Preserve the 2's complement sign bit by adding a byte back on if necessary.
   // e.g. 0x0000ff would shorten to 0x00ff. The 0x00 byte is retained to
