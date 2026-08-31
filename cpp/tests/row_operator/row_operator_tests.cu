@@ -461,8 +461,8 @@ TEST_F(RowOperatorTest, TestSparkMurmurRowHasher)
 {
   using limits = std::numeric_limits<int32_t>;
 
-  // The last five rows pair the extremes so that both the first and second column exercise
-  // `INT32_MIN` and `INT32_MAX`.
+  // The last five rows pair the extremes so that both the first and second column exercise the
+  // minimum and maximum `int32_t`.
   auto const first = cudf::test::fixed_width_column_wrapper<int32_t>{
     0, 1, -1, 42, 123456789, limits::min(), limits::max(), limits::min(), limits::max(), 0};
   auto const second = cudf::test::fixed_width_column_wrapper<int32_t>{10,
