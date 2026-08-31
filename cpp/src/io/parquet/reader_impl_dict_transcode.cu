@@ -7,10 +7,10 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/concatenate.hpp>
-#include <cudf/detail/unary.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/batched_memset.hpp>
 #include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -123,14 +123,17 @@ void update_from_chunk(column_eligibility& e, ColumnChunkDesc const& chunk)
  * @brief Compute per-input-column eligibility for Parquet-dict → DICTIONARY32 transcode.
  *
  * A column is eligible iff
- *  - the corresponding output buffer is currently typed as STRING (i.e. a flat string column),
- *  - every chunk of that column is a BYTE_ARRAY string chunk with a dictionary page,
+ *  - the corresponding output buffer is a flat STRING column, or a flat fixed-width column whose
+ *    decode is a plain copy of INT32/INT64 physical values (no decimal, timestamp-unit, or width
+ *    conversion) -- the buffer's logical type becomes the DICTIONARY32 keys type,
+ *  - every chunk of that column is a matching chunk of that type with a dictionary page,
  *  - every data page of every chunk of that column uses DICTIONARY encoding,
  *  - the chunk has a flat (non-list, non-nested) schema.
  *
  * @param pass The pass intermediate data holding host-side chunks and pages
  * @param input_columns The reader's input column descriptors
- * @param output_buffers The output column buffers (used to detect flat STRING columns)
+ * @param output_buffers The output column buffers (used to detect eligible flat columns and
+ * their logical key types)
  * @return A vector of per-input-column eligibility records, indexed by input column
  */
 [[nodiscard]] std::vector<column_eligibility> compute_dict_transcode_eligibility(
@@ -421,7 +424,7 @@ void reader_impl::assemble_dict_transcoded_columns(
     if (chunk_idx < 0 or static_cast<size_t>(chunk_idx) >= pass.chunks.size()) { continue; }
     if (pass.chunks[chunk_idx].dict_page == nullptr) { continue; }
     chunk_dict_key_counts[chunk_idx] = static_cast<size_type>(page.num_input_values);
-    chunk_dict_payloads[chunk_idx] = page.page_data;
+    chunk_dict_payloads[chunk_idx]   = page.page_data;
   }
 
   // Pre-pass 2: Bucket chunk indices by their source input-column ordinal. Because
@@ -468,7 +471,7 @@ void reader_impl::assemble_dict_transcoded_columns(
       std::vector<uint8_t const*> chunk_dict_data(chunk_indices.size());
       for (size_t k = 0; k < chunk_indices.size(); ++k) {
         chunk_key_counts[k] = chunk_dict_key_counts[chunk_indices[k]];
-        chunk_dict_data[k] = chunk_dict_payloads[chunk_indices[k]];
+        chunk_dict_data[k]  = chunk_dict_payloads[chunk_indices[k]];
       }
 
       auto& indices_col = out_columns[out_idx];
@@ -540,10 +543,12 @@ void reader_impl::assemble_dict_transcoded_columns(
       // The per-chunk key ranges are contiguous in `pass.str_dict_index` iff this is the only
       // eligible string column: chunks are laid out row-group-major, so a second string column
       // interleaves its chunks between this one's.
-      auto const contiguous = key_type.id() == type_id::STRING and std::all_of(
-        cuda::counting_iterator<size_t>{0},
-        cuda::counting_iterator{chunk_indices.size() - 1},
-        [&](size_t k) { return key_offset_of(k + 1) == key_offset_of(k) + chunk_key_counts[k]; });
+      auto const contiguous =
+        key_type.id() == type_id::STRING and
+        std::all_of(
+          cuda::counting_iterator<size_t>{0},
+          cuda::counting_iterator{chunk_indices.size() - 1},
+          [&](size_t k) { return key_offset_of(k + 1) == key_offset_of(k) + chunk_key_counts[k]; });
 
       // Device copies of the per-chunk row/key boundaries, reused by the strided key gather below
       // and by `remap_dict_indices_by_chunk`.
@@ -571,10 +576,10 @@ void reader_impl::assemble_dict_transcoded_columns(
         std::vector<column_view> key_views;
         key_views.reserve(chunk_indices.size());
         for (size_t k = 0; k < chunk_indices.size(); ++k) {
-          key_views.emplace_back(key_type, chunk_key_counts[k], chunk_dict_data[k]);
+          key_views.emplace_back(key_type, chunk_key_counts[k], chunk_dict_data[k], nullptr, 0);
         }
-        stacked_keys_owner = cudf::detail::concatenate(
-          key_views, _stream, get_current_device_resource_ref());
+        stacked_keys_owner =
+          cudf::detail::concatenate(key_views, _stream, get_current_device_resource_ref());
       } else if (contiguous) {
         stacked_keys_owner =
           make_keys_column_from_index_pairs(pass.chunks[chunk_indices[0]].str_dict_index,
@@ -627,11 +632,12 @@ void reader_impl::assemble_dict_transcoded_columns(
                       std::is_same_v<Index, int32_t>) {
           remap_dict_indices_by_chunk(
             cudf::device_span<Index>{indices_owner->mutable_view().data<Index>(),
-                                    static_cast<std::size_t>(num_row_vals)},
+                                     static_cast<std::size_t>(num_row_vals)},
             cudf::device_span<size_type const>{d_row_offsets.data(), d_row_offsets.size()},
-            cudf::device_span<size_type const>{d_key_counts_prefix.data(), d_key_counts_prefix.size()},
+            cudf::device_span<size_type const>{d_key_counts_prefix.data(),
+                                               d_key_counts_prefix.size()},
             cudf::device_span<int32_t const>{stacked_to_unique->view().data<int32_t>(),
-                                           static_cast<std::size_t>(stacked_to_unique->size())},
+                                             static_cast<std::size_t>(stacked_to_unique->size())},
             _stream);
         } else {
           CUDF_FAIL("Expected signed INT8, INT16 or INT32 dictionary indices");
