@@ -11,6 +11,7 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <cuda/std/algorithm>
+#include <cuda/std/bit>
 #include <cuda/std/cstddef>
 #include <cuda/std/iterator>
 #include <thrust/execution_policy.h>
@@ -161,14 +162,16 @@ template <>
 __device__ inline auto Spark_MurmurHash3_x86_32<float>::operator()(float const& key) const
   -> result_type
 {
-  return compute<float>(normalize_nans_and_zeros(key));
+  // Spark hashes the raw bit pattern as a 32-bit integer.
+  return compute<uint32_t>(cuda::std::bit_cast<uint32_t>(normalize_nans_and_zeros(key)));
 }
 
 template <>
 __device__ inline auto Spark_MurmurHash3_x86_32<double>::operator()(double const& key) const
   -> result_type
 {
-  return compute<double>(normalize_nans_and_zeros(key));
+  // Spark hashes the raw bit pattern as a 64-bit integer.
+  return compute<uint64_t>(cuda::std::bit_cast<uint64_t>(normalize_nans_and_zeros(key)));
 }
 
 template <>
