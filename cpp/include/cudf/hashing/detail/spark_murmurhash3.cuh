@@ -11,6 +11,7 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <cuda/std/algorithm>
+#include <cuda/std/array>
 #include <cuda/std/bit>
 #include <cuda/std/cstddef>
 #include <cuda/std/iterator>
@@ -60,7 +61,20 @@ struct Spark_MurmurHash3_x86_32 {
   template <typename T>
   result_type __device__ inline compute(T const& key) const
   {
-    return compute_bytes(reinterpret_cast<cuda::std::byte const*>(&key), sizeof(T));
+    if constexpr (sizeof(T) % 4 == 0) {
+      // A whole number of blocks with no tail.  Hashing the words directly lets the compiler use
+      // wide aligned loads instead of reassembling each block byte by byte.  The word order is the
+      // device's own, which is little-endian, so this matches `getblock32`.
+      auto const words = cuda::std::bit_cast<cuda::std::array<uint32_t, sizeof(T) / 4>>(key);
+      uint32_t h       = m_seed;
+      for (auto const word : words) {
+        h = mix_block(word, h);
+      }
+      h ^= static_cast<uint32_t>(sizeof(T));
+      return static_cast<result_type>(fmix32(h));
+    } else {
+      return compute_bytes(reinterpret_cast<cuda::std::byte const*>(&key), sizeof(T));
+    }
   }
 
   /*
