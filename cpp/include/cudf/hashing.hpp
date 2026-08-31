@@ -67,6 +67,11 @@ std::unique_ptr<column> murmurhash3_x86_32(
  * over after the last full four-byte block into a single partial block. Spark instead sign-extends
  * each leftover byte and mixes it as a complete block.
  *
+ * Chrono columns are hashed by their stored count, without unit conversion, so the caller must
+ * supply Spark's units: `TIMESTAMP_MICROSECONDS` for `TimestampType`, `TIMESTAMP_DAYS` for
+ * `DateType`, `DURATION_MICROSECONDS` for a day-time interval. Passing another resolution hashes
+ * a different logical instant than Spark would.
+ *
  * LIST columns whose child is a STRUCT are not supported yet, and a non-empty table containing
  * one is rejected. Row preprocessing only decomposes top level structs, so a struct nested in a
  * list still carries every child and the hasher has no single child to descend into.

@@ -307,7 +307,9 @@ TEST_F(SparkMurmurHashTest, MultiValueWithSeeds)
      "!\"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~\ud720\ud721"});
   cudf::test::fixed_width_column_wrapper<double> const doubles_col(
     {0., -0., -double_limits::quiet_NaN(), double_limits::lowest(), double_limits::max()});
-  cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep> const
+  // Spark's `TimestampType` is microseconds, which is what `DateTimeUtils.toJavaTimestamp` above
+  // consumes, so the cuDF column must be microseconds for the two to describe the same instants.
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_us, cudf::timestamp_us::rep> const
     timestamps_col({0L, 100L, -100L, long_limits::min() / 1000000, long_limits::max() / 1000000});
   cudf::test::fixed_point_column_wrapper<int64_t> const decimal64_col(
     {0L, 100L, -100L, -999999999999999999L, 999999999999999999L}, numeric::scale_type{-7});
