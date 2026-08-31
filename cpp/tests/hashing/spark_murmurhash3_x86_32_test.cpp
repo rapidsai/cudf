@@ -397,6 +397,28 @@ TEST_F(SparkMurmurHashTest, MultiValueWithSeeds)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_combined, hash_combined_expected, verbosity);
 }
 
+TEST_F(SparkMurmurHashTest, NonCanonicalBool)
+{
+  // BOOL8 is documented as "0 == false, else true", so any non-zero byte must hash as true.
+  // `fixed_width_column_wrapper<bool>` normalizes on construction, so build the column from raw
+  // bytes to get values the wrapper cannot express.
+  auto const stream = cudf::get_default_stream();
+  std::vector<uint8_t> const raw{0, 1, 2, 255};
+  auto data      = rmm::device_buffer{raw.data(), raw.size(), stream};
+  auto const col = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::BOOL8},
+                                                  static_cast<cudf::size_type>(raw.size()),
+                                                  std::move(data),
+                                                  rmm::device_buffer{},
+                                                  0);
+
+  auto const output = cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({col->view()}), 42);
+  auto const host   = cudf::test::to_host<int32_t>(output->view()).first;
+
+  EXPECT_EQ(host[1], host[2]) << "byte 2 must hash the same as byte 1";
+  EXPECT_EQ(host[1], host[3]) << "byte 255 must hash the same as byte 1";
+  EXPECT_NE(host[0], host[1]) << "false and true must differ";
+}
+
 TEST_F(SparkMurmurHashTest, StringsWithSeed)
 {
   // The hash values were determined by running the following Scala code in Apache Spark:
