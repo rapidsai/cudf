@@ -25,6 +25,8 @@
 #include <cuda/stream>
 #include <thrust/transform.h>
 
+#include <limits>
+
 template <typename T>
 struct TypedTableViewTest : public cudf::test::BaseFixtureWithHarness {};
 
@@ -457,8 +459,22 @@ TEST_F(RowOperatorTest, TestRowHasher64BitHash)
 
 TEST_F(RowOperatorTest, TestSparkMurmurRowHasher)
 {
-  auto const first  = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, -1, 42, 123456789};
-  auto const second = cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30, -40, -987654321};
+  using limits = std::numeric_limits<int32_t>;
+
+  // The last five rows pair the extremes so that both the first and second column exercise
+  // `INT32_MIN` and `INT32_MAX`.
+  auto const first = cudf::test::fixed_width_column_wrapper<int32_t>{
+    0, 1, -1, 42, 123456789, limits::min(), limits::max(), limits::min(), limits::max(), 0};
+  auto const second = cudf::test::fixed_width_column_wrapper<int32_t>{10,
+                                                                      20,
+                                                                      30,
+                                                                      -40,
+                                                                      -987654321,
+                                                                      limits::min(),
+                                                                      limits::max(),
+                                                                      limits::max(),
+                                                                      limits::min(),
+                                                                      limits::min()};
   auto const input  = cudf::table_view{{first, second}};
 
   auto const stream = cudf::get_default_stream();
@@ -468,7 +484,7 @@ TEST_F(RowOperatorTest, TestSparkMurmurRowHasher)
                                                cudf::detail::row::hash::spark_device_row_hasher>(
     cudf::nullate::DYNAMIC{false}, 42);
 
-  auto results = cudf::test::fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0};
+  auto results = cudf::test::fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator<cudf::size_type>{0},
                     cuda::counting_iterator<cudf::size_type>{input.num_rows()},
@@ -476,8 +492,16 @@ TEST_F(RowOperatorTest, TestSparkMurmurRowHasher)
                     hasher);
 
   // Values produced by Apache Spark for the same input and seed.
-  auto const expected = cudf::test::fixed_width_column_wrapper<int32_t>{
-    -1721723333, 1151116018, 1549484878, -1287750896, -1980733329};
+  auto const expected = cudf::test::fixed_width_column_wrapper<int32_t>{-1721723333,
+                                                                        1151116018,
+                                                                        1549484878,
+                                                                        -1287750896,
+                                                                        -1980733329,
+                                                                        -36760162,
+                                                                        -1141491041,
+                                                                        -1676088145,
+                                                                        -1252530078,
+                                                                        363576572};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results, expected);
 }
 
