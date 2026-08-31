@@ -13,6 +13,7 @@
 
 #include <cuda/functional>
 #include <cuda/iterator>
+#include <cuda/std/type_traits>
 
 namespace CUDF_EXPORT cudf {
 namespace detail::row::hash {
@@ -32,7 +33,7 @@ namespace detail::row::hash {
  * LIST columns whose child is a STRUCT are unsupported and must be rejected
  * before invoking this hasher.
  *
- * @tparam hash_function Seeded element hash functor with a `result_type` member
+ * @tparam hash_function Seeded element hash functor
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls
  */
 template <template <typename> class hash_function, typename Nullate>
@@ -40,7 +41,10 @@ class spark_device_row_hasher {
   friend class row_hasher;
 
  public:
-  using result_type = typename hash_function<int32_t>::result_type;
+  // `int32_t` is only a probe type used to ask the hasher what it returns.  Every
+  // `hash_function` specialization shares one return type, so the choice does not affect the
+  // answer; it matches the probe used by `element_hasher` in `hashing.cuh`.
+  using result_type = cuda::std::invoke_result_t<hash_function<int32_t>, int32_t>;
 
   /**
    * @brief Returns the hash value of a row in the table.

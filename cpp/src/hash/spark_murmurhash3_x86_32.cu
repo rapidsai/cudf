@@ -14,6 +14,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cub/device/device_for.cuh>
+#include <cuda/std/type_traits>
 #include <cuda/stream_ref>
 
 #include <functional>
@@ -53,7 +54,7 @@ std::unique_ptr<column> spark_murmurhash3_x86_32(table_view const& input,
                                                  cuda::stream_ref stream,
                                                  rmm::device_async_resource_ref mr)
 {
-  using result_type = Spark_MurmurHash3_x86_32<int32_t>::result_type;
+  using result_type = cuda::std::invoke_result_t<Spark_MurmurHash3_x86_32<int32_t>, int32_t>;
 
   auto output = make_numeric_column(
     data_type(type_to_id<result_type>()), input.num_rows(), mask_state::UNALLOCATED, stream, mr);
