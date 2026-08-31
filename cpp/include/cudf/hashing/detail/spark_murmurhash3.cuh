@@ -13,6 +13,7 @@
 #include <cuda/std/array>
 #include <cuda/std/bit>
 #include <cuda/std/cstddef>
+#include <cuda/std/cstdint>
 #include <cuda/std/iterator>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
@@ -219,42 +220,43 @@ __device__ inline auto Spark_MurmurHash3_x86_32<numeric::decimal128>::operator()
   // https://github.com/apache/spark/blob/ce5ddad990373636e94071e7cef2f31021add07b/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/hash.scala#L391-L396
   __int128_t const val               = key.value();
   constexpr cudf::size_type key_size = sizeof(__int128_t);
-  cuda::std::byte const* data        = reinterpret_cast<cuda::std::byte const*>(&val);
 
-  // Small negative values start with 0xff..., small positive values start with 0x00...
-  bool const is_negative           = val < 0;
-  cuda::std::byte const zero_value = is_negative ? cuda::std::byte{0xff} : cuda::std::byte{0x00};
+  // Number of bytes in the minimal two's complement representation, matching
+  // `BigInteger.toByteArray().length`, which is `bitLength() / 8 + 1`.  Negative values are
+  // complemented first so that leading sign bits count as leading zeros.  Both 0 and -1 have a
+  // bit length of 0 and so keep a single byte.
+  auto const magnitude = static_cast<__uint128_t>(val < 0 ? ~val : val);
+  auto const mag_hi    = static_cast<cuda::std::uint64_t>(magnitude >> 64);
+  auto const mag_lo    = static_cast<cuda::std::uint64_t>(magnitude);
+  auto const bit_length =
+    mag_hi != 0 ? 128 - cuda::std::countl_zero(mag_hi) : 64 - cuda::std::countl_zero(mag_lo);
+  auto const length = static_cast<cudf::size_type>(bit_length / 8) + 1;
 
-  // If the value can be represented with a shorter than 16-byte integer, the
-  // leading bytes of the little-endian value are truncated and are not hashed.
-  // Stopping before the least significant byte leaves it always retained, which also covers 0 and
-  // -1, whose bytes are entirely `zero_value` and would otherwise shorten to zero length.
-  auto const reverse_begin = cuda::std::reverse_iterator(data + key_size);
-  auto const reverse_end   = cuda::std::reverse_iterator(data + 1);
-  auto const first_nonzero_byte =
-    thrust::find_if_not(thrust::seq,
-                        reverse_begin,
-                        reverse_end,
-                        [zero_value](cuda::std::byte const& v) { return v == zero_value; })
-      .base();
-  cudf::size_type length =
-    static_cast<cudf::size_type>(cuda::std::distance(data, first_nonzero_byte));
+  // Spark hashes the big-endian representation, so reverse the bytes and shift the significant
+  // ones down.  Doing this in registers avoids staging a byte buffer in local memory.
+  auto const swap32 = [](cuda::std::uint32_t v) { return __byte_perm(v, 0, 0x0123); };
+  auto const swap64 = [swap32](cuda::std::uint64_t v) {
+    return (static_cast<cuda::std::uint64_t>(swap32(static_cast<cuda::std::uint32_t>(v))) << 32) |
+           swap32(static_cast<cuda::std::uint32_t>(v >> 32));
+  };
+  auto const value = static_cast<__uint128_t>(val);
+  auto const swapped =
+    (static_cast<__uint128_t>(swap64(static_cast<cuda::std::uint64_t>(value))) << 64) |
+    swap64(static_cast<cuda::std::uint64_t>(value >> 64));
+  auto const big_endian = swapped >> (8 * (key_size - length));
 
-  // Preserve the 2's complement sign bit by adding a byte back on if necessary.
-  // e.g. 0x0000ff would shorten to 0x00ff. The 0x00 byte is retained to
-  // preserve the sign bit, rather than leaving an "f" at the front which would
-  // change the sign bit. However, 0x00007f would shorten to 0x7f. No extra byte
-  // is needed because the leftmost bit matches the sign bit. Similarly for
-  // negative values: 0xffff00 --> 0xff00 and 0xffff80 --> 0x80.
-  if ((length < key_size) && (is_negative ^ bool(data[length - 1] & cuda::std::byte{0x80}))) {
-    ++length;
+  // Hash the low `length` bytes of `big_endian`, matching what `compute_bytes` would do over the
+  // equivalent byte buffer.
+  auto const nblocks = length / 4;
+  uint32_t h         = m_seed;
+  for (cudf::size_type i = 0; i < nblocks; i++) {
+    h = mix_block(static_cast<uint32_t>(big_endian >> (32 * i)), h);
   }
-
-  // Convert to big endian by reversing the range of nonzero bytes. Only those bytes are hashed.
-  __int128_t big_endian_value = 0;
-  auto big_endian_data        = reinterpret_cast<cuda::std::byte*>(&big_endian_value);
-  thrust::reverse_copy(thrust::seq, data, data + length, big_endian_data);
-  return compute_bytes(big_endian_data, length);
+  for (cudf::size_type i = nblocks * 4; i < length; i++) {
+    h = mix_block(static_cast<uint32_t>(static_cast<cuda::std::int8_t>(big_endian >> (8 * i))), h);
+  }
+  h ^= static_cast<uint32_t>(length);
+  return static_cast<result_type>(fmix32(h));
 }
 
 }  // namespace cudf::hashing::detail
