@@ -63,7 +63,9 @@ std::unique_ptr<column> murmurhash3_x86_32(
  * This function follows Apache Spark value hashing and row traversal semantics. Each non-null value
  * is hashed using the preceding value hash as its seed. Null values leave the current hash
  * unchanged. Spark-specific handling is applied to strings, narrow integral types, floating-point
- * NaNs and signed zeros, fixed-point values, lists, and structs.
+ * NaNs and signed zeros, fixed-point values, lists, and structs. Trailing bytes that do not fill a
+ * four-byte block follow a different handling pattern: each is sign-extended and mixed as its own
+ * complete block, including the finalization step MurmurHash3 applies only to full blocks.
  *
  * This function does not support LIST columns whose child is a STRUCT.
  *
