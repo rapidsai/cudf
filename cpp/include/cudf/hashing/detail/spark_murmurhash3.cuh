@@ -62,6 +62,20 @@ struct Spark_MurmurHash3_x86_32 {
     return compute_bytes(reinterpret_cast<cuda::std::byte const*>(&key), sizeof(T));
   }
 
+  /*
+   * Mix one four-byte block into the running hash.  Spark applies this to every trailing byte as
+   * well, which is where it departs from MurmurHash3.
+   */
+  [[nodiscard]] __device__ inline uint32_t mix_block(uint32_t k1, uint32_t h) const
+  {
+    k1 *= c1;
+    k1 = rotate_bits_left(k1, rot_c1);
+    k1 *= c2;
+    h ^= k1;
+    h = rotate_bits_left(h, rot_c2);
+    return h * 5 + c3;
+  }
+
   uint32_t __device__ inline compute_remaining_bytes(cuda::std::byte const* data,
                                                      cudf::size_type len,
                                                      cudf::size_type tail_offset,
@@ -74,13 +88,7 @@ struct Spark_MurmurHash3_x86_32 {
       // we must cast to a signed int8_t. Then, the sign bit is preserved when
       // casting to uint32_t under 2's complement. Java preserves the sign when
       // casting byte-to-int, but C++ does not.
-      uint32_t k1 = static_cast<uint32_t>(cuda::std::to_integer<int8_t>(data[i]));
-      k1 *= c1;
-      k1 = rotate_bits_left(k1, rot_c1);
-      k1 *= c2;
-      h ^= k1;
-      h = rotate_bits_left(h, rot_c2);
-      h = h * 5 + c3;
+      h = mix_block(static_cast<uint32_t>(cuda::std::to_integer<int8_t>(data[i])), h);
     }
     return h;
   }
@@ -94,13 +102,7 @@ struct Spark_MurmurHash3_x86_32 {
 
     // Process all four-byte chunks.
     for (cudf::size_type i = 0; i < nblocks; i++) {
-      uint32_t k1 = getblock32(data, i * BLOCK_SIZE);
-      k1 *= c1;
-      k1 = rotate_bits_left(k1, rot_c1);
-      k1 *= c2;
-      h ^= k1;
-      h = rotate_bits_left(h, rot_c2);
-      h = h * 5 + c3;
+      h = mix_block(getblock32(data, i * BLOCK_SIZE), h);
     }
 
     h = compute_remaining_bytes(data, len, tail_offset, h);
