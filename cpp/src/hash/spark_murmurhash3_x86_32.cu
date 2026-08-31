@@ -54,10 +54,11 @@ std::unique_ptr<column> spark_murmurhash3_x86_32(table_view const& input,
                                                  cuda::stream_ref stream,
                                                  rmm::device_async_resource_ref mr)
 {
-  using result_type = cuda::std::invoke_result_t<Spark_MurmurHash3_x86_32<int32_t>, int32_t>;
+  // The hasher works in unsigned; Spark reports a signed `Int`, so the output column is INT32.
+  using output_type = int32_t;
 
   auto output = make_numeric_column(
-    data_type(type_to_id<result_type>()), input.num_rows(), mask_state::UNALLOCATED, stream, mr);
+    data_type(type_to_id<output_type>()), input.num_rows(), mask_state::UNALLOCATED, stream, mr);
 
   // Return early if there's nothing to hash
   if (input.num_rows() == 0) { return output; }
@@ -68,7 +69,7 @@ std::unique_ptr<column> spark_murmurhash3_x86_32(table_view const& input,
   auto const nullable = nullate::DYNAMIC{has_nested_nulls(input)};
   auto const row_hasher =
     cudf::detail::row::hash::row_hasher(input, stream, cudf::get_current_device_resource_ref());
-  auto const output_begin = output->mutable_view().begin<result_type>();
+  auto const output_begin = output->mutable_view().begin<output_type>();
 
   // Compute the hash value for each row
   auto const hasher =
@@ -77,7 +78,9 @@ std::unique_ptr<column> spark_murmurhash3_x86_32(table_view const& input,
         nullable, seed);
   CUDF_CUDA_TRY(cub::DeviceFor::Bulk(
     input.num_rows(),
-    [output_begin, hasher] __device__(size_type i) mutable { output_begin[i] = hasher(i); },
+    [output_begin, hasher] __device__(size_type i) mutable {
+      output_begin[i] = static_cast<output_type>(hasher(i));
+    },
     stream.get()));
 
   return output;

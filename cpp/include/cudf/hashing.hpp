@@ -79,7 +79,8 @@ std::unique_ptr<column> murmurhash3_x86_32(
  * list still carries every child and the hasher has no single child to descend into.
  *
  * @param input The table of columns to hash
- * @param seed Optional initial seed value
+ * @param seed Optional initial seed value, interpreted as unsigned. Spark's `hash(col, -1)`
+ *             is spelled `spark_murmurhash3_x86_32(t, static_cast<uint32_t>(-1))`
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column device memory
  *
