@@ -67,7 +67,9 @@ std::unique_ptr<column> murmurhash3_x86_32(
  * over after the last full four-byte block into a single partial block. Spark instead sign-extends
  * each leftover byte and mixes it as a complete block.
  *
- * This function does not support LIST columns whose child is a STRUCT.
+ * LIST columns whose child is a STRUCT are not supported yet, and a non-empty table containing
+ * one is rejected. Row preprocessing only decomposes top level structs, so a struct nested in a
+ * list still carries every child and the hasher has no single child to descend into.
  *
  * @param input The table of columns to hash
  * @param seed Optional initial seed value
