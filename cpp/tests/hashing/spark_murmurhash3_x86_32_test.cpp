@@ -157,8 +157,9 @@ TEST_F(SparkMurmurHashTest, MultiValueNulls)
   cudf::test::fixed_width_column_wrapper<int32_t> const ints_col2(
     {0, -200, 200, limits::min(), limits::max()}, {1, 0, 0, 1, 1});
 
-  // Nulls with different values should be equal
-  // Different truth values should be equal
+  // Nulls with different values should be equal.  The non-zero literals below are normalized to
+  // `true` by the wrapper, so this does not exercise the hasher's own BOOL8 canonicalization;
+  // `NonCanonicalBool` covers that by building the column from raw bytes.
   cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
   cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 0, 1});
 
@@ -325,6 +326,7 @@ TEST_F(SparkMurmurHashTest, MultiValueWithSeeds)
     {0, 100, -100, int_limits::min(), int_limits::max()});
   cudf::test::fixed_width_column_wrapper<int16_t> const shorts_col({0, 100, -100, -32768, 32767});
   cudf::test::fixed_width_column_wrapper<int8_t> const bytes_col({0, 100, -100, -128, 127});
+  // As above, the wrapper normalizes 2 and 255 to `true` before the hasher sees them.
   cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0});
   cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0});
   cudf::test::fixed_point_column_wrapper<__int128_t> const decimal128_col(
