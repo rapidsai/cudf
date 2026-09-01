@@ -692,16 +692,6 @@ def _key_indices(
         return tuple(schema_keys[k] for k in schema if k in subset)
 
 
-def _maintain_order(ir: GroupBy | Distinct) -> bool:
-    if isinstance(ir, GroupBy):
-        return ir.maintain_order or _has_stable_sorted_agg(ir.agg_requests)
-    else:
-        return ir.stable or ir.keep in (
-            plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
-            plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
-        )
-
-
 def _partition_count_for_rank(rank: int, nranks: int, npartitions: int) -> int:
     """Return the contiguous output-partition count owned by one rank."""
     start, stop = _partition_range(rank, nranks, npartitions)
@@ -973,6 +963,9 @@ async def groupby_actor(
             collective_ids,
             target_partition_size,
             skip_global_comm,
+            # Tree reduction is the only current fallback that preserves
+            # general input-order semantics. A future origin-order shuffle
+            # can relax this without changing ``order_sensitive`` itself.
             order_sensitive and not can_adjust_preserving_order,
             tracer,
         )
