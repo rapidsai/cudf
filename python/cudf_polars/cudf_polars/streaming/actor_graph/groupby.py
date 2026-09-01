@@ -889,7 +889,18 @@ async def groupby_actor(
         stable_sorted_agg = isinstance(ir, GroupBy) and _has_stable_sorted_agg(
             ir.agg_requests
         )
-        order_sensitive = preserves_output_order or stable_sorted_agg
+        order_sensitive = (
+            preserves_output_order
+            or stable_sorted_agg
+            or (
+                isinstance(ir, Distinct)
+                and ir.keep
+                in (
+                    plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+                    plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+                )
+            )
+        )
         fully_partitioned = partitioning.is_strictly_partitioned(
             level=partitioning_level,
         )
