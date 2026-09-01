@@ -722,6 +722,16 @@ def _adjustable_ordering(partitioning: NormalizedPartitioning) -> Ordering | Non
     return partitioning.inter_rank_scheme.orderings[0]
 
 
+def _is_order_sensitive(ir: GroupBy | Distinct, *, stable_sorted_agg: bool) -> bool:
+    """Return whether execution depends on input-order semantics."""
+    if isinstance(ir, GroupBy):
+        return ir.preserves_output_order or stable_sorted_agg
+    return ir.preserves_output_order or ir.keep in (
+        plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+        plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+    )
+
+
 async def _choose_strategy(
     context: Context,
     comm: Communicator,
@@ -889,18 +899,7 @@ async def groupby_actor(
         stable_sorted_agg = isinstance(ir, GroupBy) and _has_stable_sorted_agg(
             ir.agg_requests
         )
-        order_sensitive = (
-            preserves_output_order
-            or stable_sorted_agg
-            or (
-                isinstance(ir, Distinct)
-                and ir.keep
-                in (
-                    plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
-                    plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
-                )
-            )
-        )
+        order_sensitive = _is_order_sensitive(ir, stable_sorted_agg=stable_sorted_agg)
         fully_partitioned = partitioning.is_strictly_partitioned(
             level=partitioning_level,
         )
