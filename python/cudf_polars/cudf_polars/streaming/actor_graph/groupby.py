@@ -897,9 +897,6 @@ async def groupby_actor(
         )
         maintain_order = _maintain_order(ir)
         preserves_output_order = ir.preserves_output_order
-        stable_sorted_agg = isinstance(ir, GroupBy) and _has_stable_sorted_agg(
-            ir.agg_requests
-        )
         fully_partitioned = partitioning.is_strictly_partitioned(
             level=partitioning_level,
         )
@@ -909,8 +906,8 @@ async def groupby_actor(
         can_adjust_preserving_order = (
             isinstance(ir, GroupBy)
             and preserves_output_order
-            and not stable_sorted_agg
             and input_ordering is not None
+            and not _has_stable_sorted_agg(ir.agg_requests)
         )
         fallback_case = (
             # NOTE: This criteria means that we fell back
