@@ -722,14 +722,14 @@ def _adjustable_ordering(partitioning: NormalizedPartitioning) -> Ordering | Non
     return partitioning.inter_rank_scheme.orderings[0]
 
 
-def _is_order_sensitive(ir: GroupBy | Distinct, *, stable_sorted_agg: bool) -> bool:
-    """Return whether execution depends on input-order semantics."""
+def _maintain_order(ir: GroupBy | Distinct) -> bool:
     if isinstance(ir, GroupBy):
-        return ir.preserves_output_order or stable_sorted_agg
-    return ir.preserves_output_order or ir.keep in (
-        plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
-        plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
-    )
+        return ir.maintain_order or _has_stable_sorted_agg(ir.agg_requests)
+    else:
+        return ir.stable or ir.keep in (
+            plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+            plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+        )
 
 
 async def _choose_strategy(
@@ -899,7 +899,7 @@ async def groupby_actor(
         stable_sorted_agg = isinstance(ir, GroupBy) and _has_stable_sorted_agg(
             ir.agg_requests
         )
-        order_sensitive = _is_order_sensitive(ir, stable_sorted_agg=stable_sorted_agg)
+        maintain_order = _maintain_order(ir)
         fully_partitioned = partitioning.is_strictly_partitioned(
             level=partitioning_level,
         )
@@ -957,7 +957,7 @@ async def groupby_actor(
             ir_context,
             ch_in,
             target_partition_size,
-            allow_early_exit=not order_sensitive or can_adjust_preserving_order,
+            allow_early_exit=not maintain_order or can_adjust_preserving_order,
         )
 
         skip_global_comm = metadata_in.duplicated or isinstance(
@@ -975,8 +975,8 @@ async def groupby_actor(
             skip_global_comm,
             # Tree reduction is the only current fallback that preserves
             # general input-order semantics. A future origin-order shuffle
-            # can relax this without changing ``order_sensitive`` itself.
-            order_sensitive and not can_adjust_preserving_order,
+            # can relax this without changing ``maintain_order`` itself.
+            maintain_order and not can_adjust_preserving_order,
             tracer,
         )
 

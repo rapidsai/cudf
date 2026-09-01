@@ -129,9 +129,10 @@ def test_order_sensitive_execution_does_not_imply_output_order() -> None:
         Empty(schema),
     )
 
-    assert groupby_actor_graph._is_order_sensitive(groupby, stable_sorted_agg=True)
+    with patch.object(groupby_actor_graph, "_has_stable_sorted_agg", return_value=True):
+        assert groupby_actor_graph._maintain_order(groupby)
     assert not groupby.preserves_output_order
-    assert groupby_actor_graph._is_order_sensitive(distinct, stable_sorted_agg=False)
+    assert groupby_actor_graph._maintain_order(distinct)
     assert not distinct.preserves_output_order
 
 
