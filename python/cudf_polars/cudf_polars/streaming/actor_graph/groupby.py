@@ -692,6 +692,16 @@ def _key_indices(
         return tuple(schema_keys[k] for k in schema if k in subset)
 
 
+def _maintain_order(ir: GroupBy | Distinct) -> bool:
+    if isinstance(ir, GroupBy):
+        return ir.maintain_order or _has_stable_sorted_agg(ir.agg_requests)
+    else:
+        return ir.stable or ir.keep in (
+            plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+            plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+        )
+
+
 def _partition_count_for_rank(rank: int, nranks: int, npartitions: int) -> int:
     """Return the contiguous output-partition count owned by one rank."""
     start, stop = _partition_range(rank, nranks, npartitions)
@@ -722,16 +732,6 @@ def _adjustable_ordering(partitioning: NormalizedPartitioning) -> Ordering | Non
     return partitioning.inter_rank_scheme.orderings[0]
 
 
-def _maintain_order(ir: GroupBy | Distinct) -> bool:
-    if isinstance(ir, GroupBy):
-        return ir.maintain_order or _has_stable_sorted_agg(ir.agg_requests)
-    else:
-        return ir.stable or ir.keep in (
-            plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
-            plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
-        )
-
-
 async def _choose_strategy(
     context: Context,
     comm: Communicator,
@@ -742,7 +742,7 @@ async def _choose_strategy(
     collective_ids: list[int],
     target_partition_size: int,
     skip_global_comm: bool,  # noqa: FBT001
-    force_tree: bool,  # noqa: FBT001
+    maintain_order: bool,  # noqa: FBT001
     tracer: ActorTracer | None,
 ) -> int:
     """
@@ -768,8 +768,8 @@ async def _choose_strategy(
         The target partition size.
     skip_global_comm
         Whether to skip the global communication.
-    force_tree
-        Whether tree reduction is required to preserve order-sensitive semantics.
+    maintain_order
+        Whether the operation should maintain input ordering semantics.
     tracer
         Optional tracer for runtime metrics.
 
@@ -815,7 +815,7 @@ async def _choose_strategy(
         ) // MAX_ROWS_PER_PARTITION
 
     ideal_count = 1
-    use_tree = force_tree or (
+    use_tree = maintain_order or (
         total_need_shuffle == 0
         and (skip_global_comm or total_estimated_rows < MAX_ROWS_PER_PARTITION)
     )
@@ -895,11 +895,11 @@ async def groupby_actor(
         partitioning_level: PartitioningLevel = (
             "local" if metadata_in.duplicated else "flat"
         )
+        maintain_order = _maintain_order(ir)
         preserves_output_order = ir.preserves_output_order
         stable_sorted_agg = isinstance(ir, GroupBy) and _has_stable_sorted_agg(
             ir.agg_requests
         )
-        maintain_order = _maintain_order(ir)
         fully_partitioned = partitioning.is_strictly_partitioned(
             level=partitioning_level,
         )
