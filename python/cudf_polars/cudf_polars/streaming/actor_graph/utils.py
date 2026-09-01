@@ -54,6 +54,7 @@ if TYPE_CHECKING:
         Callable,
         Coroutine,
         Generator,
+        Iterable,
         Iterator,
         Sequence,
     )
@@ -1278,7 +1279,7 @@ async def replay_buffered_channel(
     context: Context,
     ch_out: Channel[TableChunk],
     ch_in: Channel[TableChunk],
-    buffered_chunks: ChunkStore,
+    buffered_chunks: Iterable[Message],
     metadata: ChannelMetadata,
     *,
     trace_ir: IR,
@@ -1295,7 +1296,7 @@ async def replay_buffered_channel(
     ch_in
         The buffered input channel.
     buffered_chunks
-        The buffered chunks to yield first.
+        Buffered messages to yield first. May be empty.
     metadata
         The metadata to send to the output channel.
     trace_ir

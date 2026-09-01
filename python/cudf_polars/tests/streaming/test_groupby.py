@@ -14,6 +14,12 @@ import pytest
 import polars as pl
 
 import pylibcudf as plc
+from cudf_streaming.channel_metadata import (
+    OrderKey,
+    OrderScheme,
+    Ordering,
+    Partitioning,
+)
 from cudf_streaming.table_chunk import TableChunk
 
 from cudf_polars.containers import DataFrame, DataType
@@ -22,6 +28,7 @@ from cudf_polars.dsl.ir import Distinct, Empty, GroupBy
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.actor_graph import groupby as groupby_actor_graph
 from cudf_polars.streaming.actor_graph.collectives.shuffle import ShuffleManager
+from cudf_polars.streaming.actor_graph.utils import NormalizedPartitioning
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
@@ -130,6 +137,35 @@ def test_order_sensitive_execution_does_not_imply_output_order() -> None:
     assert not groupby.preserves_output_order
     assert groupby_actor_graph._maintain_order(distinct)
     assert not distinct.preserves_output_order
+
+
+def test_groupby_adjust_accepts_non_strict_ordered_prefix(spmd_engine) -> None:
+    """A non-strict ordered prefix can still seed adjust_ordering for groupby."""
+    context = spmd_engine.context
+    stream = context.br().stream_pool.get_stream()
+    df = DataFrame.from_polars(pl.DataFrame({"key": [10, 20]}), stream)
+    boundaries = TableChunk.from_pylibcudf_table(
+        df.table, stream, exclusive_view=False, br=context.br()
+    )
+    asc, before = plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE
+    ordering = Ordering(
+        (OrderKey(0, asc, before),),
+        boundaries,
+        strict_boundaries=False,
+        locally_ordered=False,
+    )
+    partitioning = NormalizedPartitioning.from_keys(
+        Partitioning(inter_rank=OrderScheme([ordering]), local="inherit"),
+        nranks=2,
+        keys=(0, 1),
+    )
+
+    assert not partitioning.is_ordered((0, 1))
+    input_ordering = groupby_actor_graph._adjustable_ordering(partitioning)
+    assert input_ordering is not None
+    assert input_ordering.keys == ordering.keys
+    assert not input_ordering.strict_boundaries
+    assert not input_ordering.locally_ordered
 
 
 @pytest.mark.parametrize("keys", [("key",), ("key", "key2")])

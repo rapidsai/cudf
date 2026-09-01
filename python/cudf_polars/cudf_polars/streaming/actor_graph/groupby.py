@@ -723,6 +723,15 @@ def _adjusted_ordering_metadata(
     )
 
 
+def _adjustable_ordering(partitioning: NormalizedPartitioning) -> Ordering | None:
+    """Return an ordering that can be tightened with adjust_ordering."""
+    if partitioning.local_scheme != "inherit" or not isinstance(
+        partitioning.inter_rank_scheme, OrderScheme
+    ):
+        return None
+    return partitioning.inter_rank_scheme.orderings[0]
+
+
 async def _choose_strategy(
     context: Context,
     comm: Communicator,
@@ -969,11 +978,10 @@ async def groupby_actor(
                 aggregated=aggregated,
                 tracer=tracer,
             )
-        elif not metadata_in.duplicated and partitioning.is_ordered(
-            group_keys,
-            level="flat",
+        elif (
+            not metadata_in.duplicated
+            and (input_ordering := _adjustable_ordering(partitioning)) is not None
         ):
-            assert isinstance(partitioning.inter_rank_scheme, OrderScheme)
             await _ordered_adjust_reduce(
                 context,
                 comm,
@@ -986,7 +994,7 @@ async def groupby_actor(
                 target_partition_size,
                 aggregated=aggregated,
                 input_drained=input_drained,
-                input_ordering=partitioning.inter_rank_scheme.orderings[0],
+                input_ordering=input_ordering,
                 preserves_output_order=preserves_output_order,
                 tracer=tracer,
             )

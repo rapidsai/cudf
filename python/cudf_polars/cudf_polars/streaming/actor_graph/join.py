@@ -754,21 +754,30 @@ async def _adjust_ordered_join_side(
     input_ordering: Ordering,
     output_ordering: Ordering,
     *,
+    already_aligned: bool,
     collective_id: int,
 ) -> None:
     """Send metadata, then align one join side to output_ordering."""
-    await send_metadata(
-        ch_out,
-        context,
-        ChannelMetadata(
-            local_count=_local_count_for_ordering(comm, output_ordering),
-            partitioning=Partitioning(
-                OrderScheme([output_ordering]),
-                local="inherit",
-            ),
-            duplicated=False,
+    output_metadata = ChannelMetadata(
+        local_count=_local_count_for_ordering(comm, output_ordering),
+        partitioning=Partitioning(
+            OrderScheme([output_ordering]),
+            local="inherit",
         ),
+        duplicated=False,
     )
+    if already_aligned:
+        await replay_buffered_channel(
+            context,
+            ch_out,
+            ch_in,
+            (),
+            output_metadata,
+            trace_ir=schema_ir,
+        )
+        return
+
+    await send_metadata(ch_out, context, output_metadata)
     await adjust_ordering(
         context,
         comm,
@@ -796,6 +805,22 @@ async def _ordered_join(
     tracer: ActorTracer | None,
 ) -> None:
     """Align ordered inputs to common boundaries, then join partition-wise."""
+    left_aligned = strategy.left_input_ordering.boundaries_aligned_with(
+        strategy.left_output_ordering, context.br()
+    )
+    right_aligned = strategy.right_input_ordering.boundaries_aligned_with(
+        strategy.right_output_ordering, context.br()
+    )
+    if tracer is not None:
+        tracer.decision = (
+            "ordered_aligned"
+            if left_aligned and right_aligned
+            else "ordered_adjust_right"
+            if left_aligned
+            else "ordered_adjust_left"
+            if right_aligned
+            else "ordered_adjust_both"
+        )
     metadata_out = ChannelMetadata(
         local_count=_local_count_for_ordering(comm, strategy.output_ordering),
         partitioning=Partitioning(
@@ -829,6 +854,7 @@ async def _ordered_join(
                 ch_left,
                 strategy.left_input_ordering,
                 strategy.left_output_ordering,
+                already_aligned=left_aligned,
                 collective_id=collective_ids.pop(0),
             ),
             _adjust_ordered_join_side(
@@ -840,6 +866,7 @@ async def _ordered_join(
                 ch_right,
                 strategy.right_input_ordering,
                 strategy.right_output_ordering,
+                already_aligned=right_aligned,
                 collective_id=collective_ids.pop(0),
             ),
             _join_chunks(
