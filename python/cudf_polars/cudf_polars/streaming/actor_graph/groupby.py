@@ -742,7 +742,7 @@ async def _choose_strategy(
     collective_ids: list[int],
     target_partition_size: int,
     skip_global_comm: bool,  # noqa: FBT001
-    maintain_order: bool,  # noqa: FBT001
+    force_tree: bool,  # noqa: FBT001
     tracer: ActorTracer | None,
 ) -> int:
     """
@@ -768,8 +768,8 @@ async def _choose_strategy(
         The target partition size.
     skip_global_comm
         Whether to skip the global communication.
-    maintain_order
-        Whether the operation should maintain input ordering semantics.
+    force_tree
+        Whether tree reduction is required to preserve order-sensitive semantics.
     tracer
         Optional tracer for runtime metrics.
 
@@ -815,7 +815,7 @@ async def _choose_strategy(
         ) // MAX_ROWS_PER_PARTITION
 
     ideal_count = 1
-    use_tree = maintain_order or (
+    use_tree = force_tree or (
         total_need_shuffle == 0
         and (skip_global_comm or total_estimated_rows < MAX_ROWS_PER_PARTITION)
     )
@@ -895,10 +895,22 @@ async def groupby_actor(
         partitioning_level: PartitioningLevel = (
             "local" if metadata_in.duplicated else "flat"
         )
-        maintain_order = _maintain_order(ir)
         preserves_output_order = ir.preserves_output_order
+        stable_sorted_agg = isinstance(ir, GroupBy) and _has_stable_sorted_agg(
+            ir.agg_requests
+        )
+        order_sensitive = preserves_output_order or stable_sorted_agg
         fully_partitioned = partitioning.is_strictly_partitioned(
             level=partitioning_level,
+        )
+        input_ordering = (
+            None if metadata_in.duplicated else _adjustable_ordering(partitioning)
+        )
+        can_adjust_preserving_order = (
+            isinstance(ir, GroupBy)
+            and preserves_output_order
+            and not stable_sorted_agg
+            and input_ordering is not None
         )
         fallback_case = (
             # NOTE: This criteria means that we fell back
@@ -945,7 +957,7 @@ async def groupby_actor(
             ir_context,
             ch_in,
             target_partition_size,
-            allow_early_exit=not maintain_order,
+            allow_early_exit=not order_sensitive or can_adjust_preserving_order,
         )
 
         skip_global_comm = metadata_in.duplicated or isinstance(
@@ -961,7 +973,7 @@ async def groupby_actor(
             collective_ids,
             target_partition_size,
             skip_global_comm,
-            maintain_order,
+            order_sensitive and not can_adjust_preserving_order,
             tracer,
         )
 
@@ -978,10 +990,7 @@ async def groupby_actor(
                 aggregated=aggregated,
                 tracer=tracer,
             )
-        elif (
-            not metadata_in.duplicated
-            and (input_ordering := _adjustable_ordering(partitioning)) is not None
-        ):
+        elif input_ordering is not None:
             await _ordered_adjust_reduce(
                 context,
                 comm,

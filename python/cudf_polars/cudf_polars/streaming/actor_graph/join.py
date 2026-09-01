@@ -139,6 +139,12 @@ class OrderedJoinStrategy:
 JoinStrategy: TypeAlias = (
     BroadcastJoinStrategy | ShuffleJoinStrategy | OrderedJoinStrategy
 )
+OrderedJoinDecision: TypeAlias = Literal[
+    "ordered_aligned",
+    "ordered_adjust_left",
+    "ordered_adjust_right",
+    "ordered_adjust_both",
+]
 
 
 @define_actor()
@@ -744,6 +750,19 @@ def _local_count_for_ordering(comm: Communicator, ordering: Ordering) -> int:
     return stop - start
 
 
+def _ordered_join_decision(
+    *, left_aligned: bool, right_aligned: bool
+) -> OrderedJoinDecision:
+    """Return the trace decision for ordered join-side alignment."""
+    if left_aligned and right_aligned:
+        return "ordered_aligned"
+    if left_aligned:
+        return "ordered_adjust_right"
+    if right_aligned:
+        return "ordered_adjust_left"
+    return "ordered_adjust_both"
+
+
 async def _adjust_ordered_join_side(
     context: Context,
     comm: Communicator,
@@ -812,14 +831,8 @@ async def _ordered_join(
         strategy.right_output_ordering, context.br()
     )
     if tracer is not None:
-        tracer.decision = (
-            "ordered_aligned"
-            if left_aligned and right_aligned
-            else "ordered_adjust_right"
-            if left_aligned
-            else "ordered_adjust_left"
-            if right_aligned
-            else "ordered_adjust_both"
+        tracer.decision = _ordered_join_decision(
+            left_aligned=left_aligned, right_aligned=right_aligned
         )
     metadata_out = ChannelMetadata(
         local_count=_local_count_for_ordering(comm, strategy.output_ordering),
