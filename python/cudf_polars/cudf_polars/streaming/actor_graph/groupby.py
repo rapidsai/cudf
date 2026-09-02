@@ -959,9 +959,6 @@ async def groupby_actor(
             collective_ids,
             target_partition_size,
             skip_global_comm,
-            # Tree reduction is the only current fallback that preserves
-            # general input-order semantics. A future origin-order shuffle
-            # can relax this without changing ``maintain_order`` itself.
             maintain_order and not can_adjust_preserving_order,
             tracer,
         )
