@@ -832,9 +832,11 @@ async def sort_actor(
         partitioning = NormalizedPartitioning.from_keys(
             metadata_in.partitioning, comm.nranks, keys=order_keys
         )
-        if partitioning.is_ordered(
-            order_keys,
-            level="local" if metadata_in.duplicated else "flat",
+        ordering = partitioning.get_ordering(
+            level="local" if metadata_in.duplicated else "flat"
+        )
+        if ordering is not None and (
+            len(ordering.keys) == len(order_keys) or ordering.strict_boundaries
         ):
             if tracer is not None:
                 tracer.decision = "already_sorted"

@@ -1359,29 +1359,6 @@ class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ e
             return scheme.orderings[0].strict_boundaries
         return True
 
-    @staticmethod
-    def _ordering_covers_keys(
-        ordering: Ordering,
-        order_keys: Sequence[int | OrderKey],
-    ) -> bool:
-        """True when an ordering covers the requested sort keys."""
-        ordering_keys = ordering.keys
-        if len(ordering.keys) < len(order_keys):
-            # If we are only sorted on a subset of the keys, we need strict
-            # boundaries to know later keys cannot interleave across chunks.
-            if not ordering.strict_boundaries:
-                return False
-            order_keys = order_keys[: len(ordering.keys)]
-        else:
-            ordering_keys = ordering.keys[: len(order_keys)]
-        for current, target in zip(ordering_keys, order_keys, strict=True):
-            if isinstance(target, OrderKey):
-                if current != target:
-                    return False
-            elif current.column_index != target:
-                return False
-        return True
-
     def is_strictly_partitioned(
         self,
         *,
@@ -1390,17 +1367,10 @@ class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ e
         """True if data is strictly partitioned at the requested level."""
         return self._scheme_is_strict(self._scheme_for_level(level))
 
-    def is_ordered(
-        self,
-        order_keys: Sequence[int | OrderKey],
-        *,
-        level: PartitioningLevel = "flat",
-    ) -> bool:
-        """True if the selected ordering covers order_keys."""
+    def get_ordering(self, *, level: PartitioningLevel = "flat") -> Ordering | None:
+        """Return the normalized ordering for the requested partitioning level."""
         scheme = self._scheme_for_level(level)
-        if not isinstance(scheme, OrderScheme):
-            return False
-        return self._ordering_covers_keys(scheme.orderings[0], order_keys)
+        return scheme.orderings[0] if isinstance(scheme, OrderScheme) else None
 
     def is_aligned_with(
         self, other: NormalizedPartitioning, br: BufferResource

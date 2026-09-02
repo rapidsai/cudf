@@ -1096,7 +1096,7 @@ def test_sort_output_metadata(spmd_engine_factory, by, descending, nulls_last) -
 
 
 @pytest.mark.parametrize(
-    "scheme_key_count,strict_boundaries,locally_ordered,expected",
+    "scheme_key_count,strict_boundaries,locally_ordered,expected_sort_compatible",
     [
         (1, True, True, True),  # prefix match + strict boundaries
         (1, True, False, True),  # local order is not required for partitioning
@@ -1106,8 +1106,12 @@ def test_sort_output_metadata(spmd_engine_factory, by, descending, nulls_last) -
         (2, False, True, True),  # exact match + non-strict boundaries
     ],
 )
-def test_is_ordered(
-    spmd_engine, scheme_key_count, strict_boundaries, locally_ordered, expected
+def test_get_ordering(
+    spmd_engine,
+    scheme_key_count,
+    strict_boundaries,
+    locally_ordered,
+    expected_sort_compatible,
 ) -> None:
     df_lf = pl.LazyFrame({"x": list(range(5)), "y": list(range(5))})
     base_ir = Translator(df_lf._ldf.visit(), spmd_engine).translate_ir()
@@ -1141,14 +1145,31 @@ def test_is_ordered(
     partitioning = NormalizedPartitioning.from_keys(
         meta.partitioning, nranks=1, keys=order_keys
     )
-    assert partitioning.is_ordered(order_keys) is expected
-    assert partitioning.is_ordered(order_keys, level="flat") is expected
-    assert not partitioning.is_ordered(order_keys, level="local")
+    ordering = partitioning.get_ordering()
+    assert ordering is not None
+    flat_ordering = partitioning.get_ordering(level="flat")
+    assert flat_ordering is not None
+    assert flat_ordering.keys == ordering.keys
+    assert flat_ordering.strict_boundaries is ordering.strict_boundaries
+    assert flat_ordering.locally_ordered is ordering.locally_ordered
+    assert partitioning.get_ordering(level="local") is None
+    assert (
+        len(ordering.keys) == len(order_keys) or ordering.strict_boundaries
+    ) is expected_sort_compatible
 
     nested = NormalizedPartitioning(scheme, scheme)
-    assert not nested.is_ordered(order_keys)
-    assert nested.is_ordered(order_keys, level="inter_rank") is expected
-    assert nested.is_ordered(order_keys, level="local") is expected
+    assert nested.get_ordering() is None
+    nested_inter_rank = nested.get_ordering(level="inter_rank")
+    nested_local = nested.get_ordering(level="local")
+    assert nested_inter_rank is not None
+    assert nested_local is not None
+    assert (
+        len(nested_inter_rank.keys) == len(order_keys)
+        or nested_inter_rank.strict_boundaries
+    ) is expected_sort_compatible
+    assert (
+        len(nested_local.keys) == len(order_keys) or nested_local.strict_boundaries
+    ) is expected_sort_compatible
 
     if scheme_key_count == 2:
         desc, after = plc.types.Order.DESCENDING, plc.types.NullOrder.AFTER
@@ -1158,6 +1179,14 @@ def test_is_ordered(
             (OrderKey(0, asc, after), OrderKey(1, asc, before)),
         ]
         for mismatched_keys in mismatched_order_keys:
-            assert not partitioning.is_ordered(mismatched_keys)
-            assert not nested.is_ordered(mismatched_keys, level="inter_rank")
-            assert not nested.is_ordered(mismatched_keys, level="local")
+            mismatched = NormalizedPartitioning.from_keys(
+                meta.partitioning, nranks=1, keys=mismatched_keys
+            )
+            assert mismatched.get_ordering() is None
+            mismatched_nested = NormalizedPartitioning.from_keys(
+                Partitioning(inter_rank=scheme, local=scheme),
+                nranks=1,
+                keys=mismatched_keys,
+            )
+            assert mismatched_nested.get_ordering(level="inter_rank") is None
+            assert mismatched_nested.get_ordering(level="local") is None
