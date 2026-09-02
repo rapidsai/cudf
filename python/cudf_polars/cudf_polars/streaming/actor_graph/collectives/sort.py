@@ -701,6 +701,15 @@ def _sort_to_order_keys(ir: Sort) -> list[OrderKey]:
     ]
 
 
+def _can_sort_chunkwise(
+    ordering: Ordering | None, order_keys: Sequence[OrderKey]
+) -> bool:
+    """Return true when ordering avoids a global sort."""
+    return ordering is not None and (
+        len(ordering.keys) == len(order_keys) or ordering.strict_boundaries
+    )
+
+
 def _build_order_scheme(
     context: Context,
     order_keys: list[OrderKey],
@@ -835,9 +844,7 @@ async def sort_actor(
         ordering = partitioning.get_ordering(
             level="local" if metadata_in.duplicated else "flat"
         )
-        if ordering is not None and (
-            len(ordering.keys) == len(order_keys) or ordering.strict_boundaries
-        ):
+        if _can_sort_chunkwise(ordering, order_keys):
             if tracer is not None:
                 tracer.decision = "already_sorted"
             await chunkwise_evaluate(

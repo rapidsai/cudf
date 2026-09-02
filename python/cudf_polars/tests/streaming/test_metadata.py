@@ -37,6 +37,7 @@ from cudf_polars.dsl.ir import (
 )
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.actor_graph.collectives.sort import (
+    _can_sort_chunkwise,
     _sort_to_order_keys,
 )
 from cudf_polars.streaming.actor_graph.core import evaluate_logical_plan
@@ -1147,29 +1148,22 @@ def test_get_ordering(
     )
     ordering = partitioning.get_ordering()
     assert ordering is not None
-    flat_ordering = partitioning.get_ordering(level="flat")
-    assert flat_ordering is not None
-    assert flat_ordering.keys == ordering.keys
-    assert flat_ordering.strict_boundaries is ordering.strict_boundaries
-    assert flat_ordering.locally_ordered is ordering.locally_ordered
+    assert tuple(k.column_index for k in ordering.keys) == tuple(
+        range(scheme_key_count)
+    )
+    assert ordering.strict_boundaries is strict_boundaries
+    assert ordering.locally_ordered is locally_ordered
+    assert partitioning.get_ordering(level="flat") is not None
     assert partitioning.get_ordering(level="local") is None
-    assert (
-        len(ordering.keys) == len(order_keys) or ordering.strict_boundaries
-    ) is expected_sort_compatible
+    assert _can_sort_chunkwise(ordering, order_keys) is expected_sort_compatible
 
     nested = NormalizedPartitioning(scheme, scheme)
     assert nested.get_ordering() is None
-    nested_inter_rank = nested.get_ordering(level="inter_rank")
-    nested_local = nested.get_ordering(level="local")
-    assert nested_inter_rank is not None
-    assert nested_local is not None
-    assert (
-        len(nested_inter_rank.keys) == len(order_keys)
-        or nested_inter_rank.strict_boundaries
-    ) is expected_sort_compatible
-    assert (
-        len(nested_local.keys) == len(order_keys) or nested_local.strict_boundaries
-    ) is expected_sort_compatible
+    for level in ("inter_rank", "local"):
+        nested_ordering = nested.get_ordering(level=level)
+        assert nested_ordering is not None
+        sort_compatible = _can_sort_chunkwise(nested_ordering, order_keys)
+        assert sort_compatible is expected_sort_compatible
 
     if scheme_key_count == 2:
         desc, after = plc.types.Order.DESCENDING, plc.types.NullOrder.AFTER
