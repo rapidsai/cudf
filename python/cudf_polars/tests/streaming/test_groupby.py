@@ -150,8 +150,8 @@ def test_groupby_adjusts_truncated_ordering_with_maintain_order(
     )
     df = pl.LazyFrame(
         {
-            "DateTime": [i * 1_000 for i in range(128)],
-            "RIC": ["a", "b", "c", "d"] * 32,
+            "DateTime": [i * 250 for i in range(128)],
+            "RIC": ["a", "b", "a", "b"] * 32,
             "value": range(128),
         }
     )
@@ -167,6 +167,8 @@ def test_groupby_adjusts_truncated_ordering_with_maintain_order(
         .group_by("ts_bucket", "RIC", maintain_order=True)
         .agg(pl.col("value").sum())
     )
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
     ir = Translator(q._ldf.visit(), engine).translate_ir()
 
     metadata_collector = evaluate_logical_plan(
