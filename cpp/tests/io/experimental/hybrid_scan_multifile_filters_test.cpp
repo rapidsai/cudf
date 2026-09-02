@@ -7,6 +7,7 @@
 #include "tests/io/parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/table_utilities.hpp>
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/copying.hpp>
