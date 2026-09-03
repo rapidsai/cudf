@@ -1173,6 +1173,7 @@ def test_get_ordering(
             (OrderKey(0, asc, after), OrderKey(1, asc, before)),
         ]
         for mismatched_keys in mismatched_order_keys:
+            assert _can_sort_chunkwise(ordering, mismatched_keys) is False
             mismatched = NormalizedPartitioning.from_keys(
                 meta.partitioning, nranks=1, keys=mismatched_keys
             )
