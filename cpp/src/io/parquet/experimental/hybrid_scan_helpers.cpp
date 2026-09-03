@@ -61,8 +61,10 @@ namespace {
 }
 
 // Compute the page index (column index and/or offset index) byte range
-[[nodiscard]] byte_range_info page_index_byte_range(FileMetaData const& file_metadata)
+[[nodiscard]] byte_range_info page_index_byte_range(parquet::detail::metadata const& file_metadata)
 {
+  if (file_metadata.is_page_index_setup()) { return {}; }
+
   auto const& row_groups = file_metadata.row_groups;
   if (row_groups.empty() or row_groups.front().columns.empty()) { return {}; }
 

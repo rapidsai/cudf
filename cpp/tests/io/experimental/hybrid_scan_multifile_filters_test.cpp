@@ -200,12 +200,20 @@ TEST_F(HybridScanMultifileFiltersTest, Metadata)
   }
 
   // Move the existing FileMetaData into a new reader without copying it.
-  auto const reader_with_existing_metadata =
-    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_multifile>(
-      std::move(parquet_metadata), options);
+  {
+    auto const reader_with_existing_metadata =
+      std::make_unique<cudf::io::parquet::experimental::hybrid_scan_multifile>(
+        std::move(parquet_metadata), options);
 
-  // Check if the new metadata is the same as the existing one
-  EXPECT_TRUE(metadata_matches(reader_with_existing_metadata->parquet_metadatas()));
+    // Check if the new metadata is the same as the existing one
+    EXPECT_TRUE(metadata_matches(reader_with_existing_metadata->parquet_metadatas()));
+
+    // Page indexes were moved with the metadata, so the reader must not request them again.
+    auto const page_index_byte_ranges = reader_with_existing_metadata->page_index_byte_ranges();
+    EXPECT_TRUE(std::all_of(page_index_byte_ranges.begin(),
+                            page_index_byte_ranges.end(),
+                            [](auto const& range) { return range.is_empty(); }));
+  }
 }
 
 TEST_F(HybridScanMultifileFiltersTest, MismatchedNullabilityDoesNotLeakIntoMetadata)

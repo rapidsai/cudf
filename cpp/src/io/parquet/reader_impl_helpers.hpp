@@ -203,11 +203,13 @@ struct metadata : public FileMetaData {
 
   void setup_page_index(cudf::host_span<uint8_t const> page_index_bytes, int64_t min_offset);
 
+  [[nodiscard]] bool is_page_index_setup() const { return is_page_index_setup_; }
+
  protected:
   void sanitize_schema();
 
  private:
-  bool is_page_index_setup = false;
+  bool is_page_index_setup_ = false;
 };
 
 /**

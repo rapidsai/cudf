@@ -514,7 +514,7 @@ metadata::metadata(FileMetaData&& other) : FileMetaData(std::move(other))
 {
   // Since page index is set up for all or no row groups, just check if any column chunk has it set.
   // Update this check if this behavior changes in the future.
-  is_page_index_setup =
+  is_page_index_setup_ =
     std::any_of(row_groups.cbegin(), row_groups.cend(), [](auto const& row_group) {
       return std::any_of(row_group.columns.cbegin(), row_group.columns.cend(), [](auto const& col) {
         return col.column_index.has_value() or col.offset_index.has_value();
@@ -560,7 +560,7 @@ metadata::metadata(datasource* source, bool read_page_indexes)
 
 void metadata::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes, int64_t min_offset)
 {
-  if (is_page_index_setup) { return; }
+  if (is_page_index_setup_) { return; }
 
   CUDF_FUNC_RANGE();
 
@@ -638,7 +638,7 @@ void metadata::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes,
     }
   }
 
-  is_page_index_setup = true;
+  is_page_index_setup_ = true;
 }
 
 metadata::~metadata()
