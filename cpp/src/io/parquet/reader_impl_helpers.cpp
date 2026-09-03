@@ -959,7 +959,7 @@ aggregate_reader_metadata::aggregate_reader_metadata(std::vector<FileMetaData>&&
                                                      bool has_cols_from_mismatched_srcs)
 {
   CUDF_EXPECTS(not parquet_metadatas.empty(),
-               "Encountered an empty vector of parquet metadatas (sources)",
+               "Cannot construct aggregate Parquet reader metadata without source metadata",
                std::invalid_argument);
 
   per_file_metadata.reserve(parquet_metadatas.size());
