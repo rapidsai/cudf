@@ -32,6 +32,7 @@ from cudf_polars.quent._types import (
     Engine,
     Implementation,
     Memory,
+    MemoryReservationRequest,
     Network,
     Operator,
     Plan,
@@ -40,6 +41,7 @@ from cudf_polars.quent._types import (
     Statistics,
     Task,
     Worker,
+    _format_bytes,
 )
 from cudf_polars.utils.config import ConfigOptions
 from cudf_polars.utils.cuda_stream import get_cuda_stream
@@ -1176,3 +1178,96 @@ def test_emit_task_events_io_node(disk_to_device_channel: Channel) -> None:
     assert "Loading" in task_events[2]["data"]["Task"]["state"]
     assert "Computing" in task_events[3]["data"]["Task"]["state"]
     assert "Exit" in task_events[4]["data"]["Task"]["state"]
+
+
+@pytest.mark.parametrize(
+    "nbytes,expected",
+    [
+        (0, "0B"),
+        (512, "512B"),
+        (1024, "1.0KiB"),
+        (256 * 1024**2, "256.0MiB"),
+        (3 * 1024**5, "3.0PiB"),
+    ],
+)
+def test_format_bytes(nbytes: int, expected: str) -> None:
+    assert _format_bytes(nbytes) == expected
+
+
+def test_memory_reservation_request_serialization() -> None:
+    request = MemoryReservationRequest(
+        purpose="scan",
+        size_bytes=2 * 1024**2,
+        mem_type="DEVICE",
+        net_memory_delta=1024**2,
+        sequence_number=3,
+    )
+    assert request.label == "scan-2.0MiB-device"
+    assert request.to_dict() == {
+        "purpose": "scan",
+        "size_bytes": 2 * 1024**2,
+        "mem_type": "DEVICE",
+        "granted": True,
+        "net_memory_delta": 1024**2,
+        "sequence_number": 3,
+    }
+    # The optional attributes are dropped rather than serialized as null.
+    minimal = MemoryReservationRequest(
+        purpose="join", size_bytes=0, mem_type="HOST", granted=False
+    )
+    assert minimal.to_dict() == {
+        "purpose": "join",
+        "size_bytes": 0,
+        "mem_type": "HOST",
+        "granted": False,
+    }
+
+
+def test_emit_memory_reservation_events() -> None:
+    operator_id = uuid.uuid4()
+    logger, quent_ir_execution_context = _make_quent_ir_execution_context(
+        operator_id=operator_id
+    )
+    request = MemoryReservationRequest(
+        purpose="scan",
+        size_bytes=1024**2,
+        mem_type="DEVICE",
+        net_memory_delta=1024**2,
+        sequence_number=2,
+    )
+    task = Task.for_memory_reservation(request, quent_ir_execution_context)
+    # The size and memory tier are legible from the instance name, since Quent
+    # doesn't declare attributes on the Allocating state yet.
+    assert task.instance_name is not None
+    assert task.instance_name.startswith("reserve-scan-1.0MiB-device-")
+    assert task.instance_name.endswith(f"-{operator_id.hex[:8]}-2")
+
+    quent_ir_execution_context.context._emit_memory_reservation_events(
+        task,
+        quent_ir_execution_context,
+        request,
+        requested_at=10,
+        satisfied_at=30,
+    )
+
+    events = _drained_events(logger)
+    task_events = [event for event in events if "Task" in event["data"]]
+    # queueing -> allocating -> exit
+    assert [event["data"]["Task"]["seq"] for event in task_events] == [0, 1, 2]
+    queueing, allocating, exit_ = task_events
+    assert all(event["id"] == str(task.id) for event in task_events)
+    assert queueing["data"]["Task"]["state"]["Queueing"]["operator_id"] == str(
+        operator_id
+    )
+    # The Allocating state spans the wait: it is entered when the reservation
+    # is requested and left when it is satisfied.
+    assert queueing["timestamp"] == allocating["timestamp"] == 10
+    assert exit_["timestamp"] == 30
+
+    allocating_state = allocating["data"]["Task"]["state"]["Allocating"]
+    processor_events = [event for event in events if "Processor" in event["data"]]
+    assert allocating_state["use_thread"] == {
+        "resource_id": processor_events[0]["id"],
+        "capacity": None,
+    }
+    assert allocating_state.items() >= request.to_dict().items()

@@ -20,10 +20,7 @@ from cudf_streaming.table_chunk import (
 )
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.actor import define_actor
-from rapidsmpf.streaming.core.memory_reserve_or_wait import (
-    missing_net_memory_delta,
-    reserve_memory,
-)
+from rapidsmpf.streaming.core.memory_reserve_or_wait import missing_net_memory_delta
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Join
@@ -43,6 +40,7 @@ from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
     ir_context_for_node,
 )
+from cudf_polars.streaming.actor_graph.memory import reserve_memory_traced
 from cudf_polars.streaming.actor_graph.nodes import default_node_multi
 from cudf_polars.streaming.actor_graph.tracing import (
     send_chunk,
@@ -314,7 +312,14 @@ async def _broadcast_join_large_chunk(
     join_results: list[DataFrame] = []
     input_bytes = large_chunk_size + small_size
     with opaque_memory_usage(
-        await reserve_memory(context, size=input_bytes, net_memory_delta=0)
+        await reserve_memory_traced(
+            context,
+            size=input_bytes,
+            net_memory_delta=0,
+            ir_context=ir_context,
+            purpose="broadcast-join",
+            sequence_number=seq_num,
+        )
     ):
         for sdf in dfs_to_join:
             result = await ir_context.to_thread(
@@ -615,7 +620,14 @@ async def _join_chunks(
             )
         )
         with opaque_memory_usage(
-            await reserve_memory(context, size=input_bytes, net_memory_delta=0)
+            await reserve_memory_traced(
+                context,
+                size=input_bytes,
+                net_memory_delta=0,
+                ir_context=ir_context,
+                purpose="join",
+                sequence_number=left_msg.sequence_number,
+            )
         ):
             df = await ir_context.to_thread(
                 ir.do_evaluate,
