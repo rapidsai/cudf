@@ -211,29 +211,35 @@ def groupby_apply_jit_reductions_test_inner(func, data, dtype):
 @pytest.mark.parametrize(
     "func", ["min", "max", "sum", "mean", "var", "std", "idxmin", "idxmax"]
 )
-@pytest.mark.parametrize("dataset", ["small", "large", "nans"])
+@pytest.mark.parametrize(
+    "dataset_names",
+    [
+        pytest.param(("small", "large"), id="small-large"),
+        pytest.param(("nans",), id="nans"),
+    ],
+)
 def test_groupby_apply_jit_unary_reductions(
-    request, func, dtype, dataset, groupby_jit_datasets
+    request, func, dtype, dataset_names, groupby_jit_datasets
 ):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(
-                (
-                    dataset == "nans"
-                    and func in {"var", "std", "mean"}
-                    and str(dtype) in {"int64", "float32", "float64"}
-                )
-                or (
-                    dataset == "nans"
-                    and func in {"idxmax", "idxmin", "sum"}
-                    and dtype.kind == "f"
-                )
-            ),
-            reason=("https://github.com/NVIDIA/cudf/issues/14860"),
+    if dataset_names == ("nans",):
+        request.applymarker(
+            pytest.mark.xfail(
+                condition=(
+                    (
+                        func in {"var", "std", "mean"}
+                        and str(dtype) in {"int64", "float32", "float64"}
+                    )
+                    or (
+                        func in {"idxmax", "idxmin", "sum"}
+                        and dtype.kind == "f"
+                    )
+                ),
+                reason=("https://github.com/NVIDIA/cudf/issues/14860"),
+            )
         )
-    )
-    dataset = groupby_jit_datasets[dataset].copy(deep=True)
-    groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
+    for dataset_name in dataset_names:
+        dataset = groupby_jit_datasets[dataset_name].copy(deep=True)
+        groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
 
 
 # test unary reductions for special values
@@ -301,26 +307,27 @@ def test_groupby_apply_jit_reductions_special_vals(
 
 @pytest.mark.parametrize("func", ["idxmax", "idxmin"])
 @pytest.mark.parametrize(
-    "special_val",
+    "special_vals",
     [
         pytest.param(
-            np.nan,
+            (np.nan,),
             marks=pytest.mark.xfail(
                 reason="https://github.com/NVIDIA/cudf/issues/13832"
             ),
+            id="nan",
         ),
-        np.inf,
-        -np.inf,
+        pytest.param((np.inf, -np.inf), id="inf"),
     ],
 )
 @pytest.mark.parametrize("dataset", ["small", "large", "nans"])
 def test_groupby_apply_jit_idx_reductions_special_vals(
-    func, dataset, groupby_jit_datasets, special_val
+    func, dataset, groupby_jit_datasets, special_vals
 ):
-    dataset = groupby_jit_datasets[dataset].copy(deep=True)
-    groupby_apply_jit_idx_reductions_special_vals_inner(
-        func, dataset, "float64", special_val
-    )
+    for special_val in special_vals:
+        data = groupby_jit_datasets[dataset].copy(deep=True)
+        groupby_apply_jit_idx_reductions_special_vals_inner(
+            func, data, "float64", special_val
+        )
 
 
 def test_groupby_apply_jit_sum_integer_overflow():
@@ -340,46 +347,32 @@ def test_groupby_apply_jit_sum_integer_overflow():
 
 
 @pytest.mark.parametrize("dtype", ["int32", "int64", "float32", "float64"])
-@pytest.mark.parametrize(
-    "dataset",
-    [
-        pytest.param(
-            "small",
-            marks=[
-                pytest.mark.filterwarnings(
-                    "ignore:Degrees of Freedom <= 0 for slice"
-                ),
-                pytest.mark.filterwarnings(
-                    "ignore:divide by zero encountered in divide"
-                ),
-            ],
-        ),
-        "large",
-    ],
-)
-def test_groupby_apply_jit_correlation(dataset, groupby_jit_datasets, dtype):
-    dataset = groupby_jit_datasets[dataset].copy(deep=True)
+@pytest.mark.filterwarnings("ignore:Degrees of Freedom <= 0 for slice")
+@pytest.mark.filterwarnings("ignore:divide by zero encountered in divide")
+def test_groupby_apply_jit_correlation(groupby_jit_datasets, dtype):
+    for dataset_name in ("small", "large"):
+        dataset = groupby_jit_datasets[dataset_name].copy(deep=True)
 
-    dataset["val1"] = dataset["val1"].astype(dtype)
-    dataset["val2"] = dataset["val2"].astype(dtype)
+        dataset["val1"] = dataset["val1"].astype(dtype)
+        dataset["val2"] = dataset["val2"].astype(dtype)
 
-    keys = ["key1"]
+        keys = ["key1"]
 
-    def func(group):
-        return group["val1"].corr(group["val2"])
+        def func(group):
+            return group["val1"].corr(group["val2"])
 
-    if np.dtype(dtype).kind == "f":
-        # Correlation of floating types is not yet supported:
-        # https://github.com/NVIDIA/cudf/issues/13839
-        m = (
-            f"Series.corr\\(Series\\) is not "
-            f"supported for \\({dtype}, {dtype}\\)"
-        )
-        with pytest.raises(UDFError, match=m):
+        if np.dtype(dtype).kind == "f":
+            # Correlation of floating types is not yet supported:
+            # https://github.com/NVIDIA/cudf/issues/13839
+            m = (
+                f"Series.corr\\(Series\\) is not "
+                f"supported for \\({dtype}, {dtype}\\)"
+            )
+            with pytest.raises(UDFError, match=m):
+                run_groupby_apply_jit_test(dataset, func, keys)
+            continue
+        with expect_warning_if(dtype in {"int32", "int64"}, RuntimeWarning):
             run_groupby_apply_jit_test(dataset, func, keys)
-        return
-    with expect_warning_if(dtype in {"int32", "int64"}, RuntimeWarning):
-        run_groupby_apply_jit_test(dataset, func, keys)
 
 
 @pytest.mark.parametrize("dtype", ["int32", "int64"])
