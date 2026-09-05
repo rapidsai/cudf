@@ -279,6 +279,16 @@ def test_groupby_apply_jit_unary_reductions(func, dtype, groupby_jit_datasets):
                         func, data, dtype, special_val
                     )
 
+    if func in {"idxmin", "idxmax"} and str(dtype) == "float64":
+        # These share the generated UDF and input dtypes with the ordinary
+        # reductions above, so keep them in this test item to reuse its cache.
+        for dataset_name in ("small", "large", "nans"):
+            for special_val in (np.inf, -np.inf):
+                data = groupby_jit_datasets[dataset_name].copy(deep=True)
+                groupby_apply_jit_idx_reductions_special_vals_inner(
+                    func, data, dtype, special_val
+                )
+
 
 @pytest.mark.parametrize("func,dtype", NANS_UNARY_REDUCTION_XFAIL_PARAMS)
 def test_groupby_apply_jit_unary_reductions_nans_xfail(
@@ -360,7 +370,6 @@ def groupby_apply_jit_idx_reductions_special_vals_inner(
             ),
             id="nans-nan",
         ),
-        pytest.param((np.inf, -np.inf), ("small", "large", "nans"), id="inf"),
     ],
 )
 def test_groupby_apply_jit_idx_reductions_special_vals(
