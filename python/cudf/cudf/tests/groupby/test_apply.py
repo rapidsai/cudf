@@ -203,43 +203,63 @@ def groupby_apply_jit_reductions_test_inner(func, data, dtype):
 
 
 # test unary reductions
+JIT_UNARY_REDUCTION_FUNCTIONS = [
+    "min",
+    "max",
+    "sum",
+    "mean",
+    "var",
+    "std",
+    "idxmin",
+    "idxmax",
+]
+
+
+def _nans_unary_reduction_xfails(func, dtype):
+    return (
+        func in {"var", "std", "mean"}
+        and str(dtype) in {"int64", "float32", "float64"}
+    ) or (func in {"idxmax", "idxmin", "sum"} and dtype.kind == "f")
+
+
+NANS_UNARY_REDUCTION_XFAIL_PARAMS = [
+    pytest.param(
+        func,
+        dtype,
+        marks=pytest.mark.xfail(
+            reason="https://github.com/NVIDIA/cudf/issues/14860"
+        ),
+        id=f"{func}-{dtype}",
+    )
+    for func in JIT_UNARY_REDUCTION_FUNCTIONS
+    for dtype in SUPPORTED_GROUPBY_NUMPY_TYPES
+    if _nans_unary_reduction_xfails(func, dtype)
+]
+
+
 @pytest.mark.parametrize(
     "dtype",
     SUPPORTED_GROUPBY_NUMPY_TYPES,
     ids=[str(t) for t in SUPPORTED_GROUPBY_NUMPY_TYPES],
 )
-@pytest.mark.parametrize(
-    "func", ["min", "max", "sum", "mean", "var", "std", "idxmin", "idxmax"]
-)
-@pytest.mark.parametrize(
-    "dataset_names",
-    [
-        pytest.param(("small", "large"), id="small-large"),
-        pytest.param(("nans",), id="nans"),
-    ],
-)
-def test_groupby_apply_jit_unary_reductions(
-    request, func, dtype, dataset_names, groupby_jit_datasets
-):
-    if dataset_names == ("nans",):
-        request.applymarker(
-            pytest.mark.xfail(
-                condition=(
-                    (
-                        func in {"var", "std", "mean"}
-                        and str(dtype) in {"int64", "float32", "float64"}
-                    )
-                    or (
-                        func in {"idxmax", "idxmin", "sum"}
-                        and dtype.kind == "f"
-                    )
-                ),
-                reason=("https://github.com/NVIDIA/cudf/issues/14860"),
-            )
-        )
+@pytest.mark.parametrize("func", JIT_UNARY_REDUCTION_FUNCTIONS)
+def test_groupby_apply_jit_unary_reductions(func, dtype, groupby_jit_datasets):
+    # Keep all passing datasets in one item to reuse the per-process JIT cache.
+    dataset_names = ["small", "large"]
+    if not _nans_unary_reduction_xfails(func, dtype):
+        dataset_names.append("nans")
+
     for dataset_name in dataset_names:
         dataset = groupby_jit_datasets[dataset_name].copy(deep=True)
         groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
+
+
+@pytest.mark.parametrize("func,dtype", NANS_UNARY_REDUCTION_XFAIL_PARAMS)
+def test_groupby_apply_jit_unary_reductions_nans_xfail(
+    func, dtype, groupby_jit_datasets
+):
+    dataset = groupby_jit_datasets["nans"].copy(deep=True)
+    groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
 
 
 # test unary reductions for special values
