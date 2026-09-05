@@ -4,6 +4,7 @@
 import textwrap
 from functools import partial
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
@@ -138,7 +139,12 @@ def groupby_jit_data_large(groupby_jit_data_small):
     factor = (
         max_tpb + 1
     )  # bigger than a block but not always an exact multiple
-    df = cudf.concat([groupby_jit_data_small] * factor)
+    df = cudf.DataFrame(
+        {
+            name: cp.tile(column.values, factor)
+            for name, column in groupby_jit_data_small.items()
+        }
+    )
 
     return df
 
