@@ -213,6 +213,15 @@ JIT_UNARY_REDUCTION_FUNCTIONS = [
     "idxmin",
     "idxmax",
 ]
+JIT_UNARY_REDUCTION_SPECIAL_VALUE_FUNCTIONS = [
+    "min",
+    "max",
+    "sum",
+    "mean",
+    "var",
+    "std",
+]
+JIT_UNARY_REDUCTION_SPECIAL_VALUE_DTYPES = {"float32", "float64"}
 
 
 def _nans_unary_reduction_xfails(func, dtype):
@@ -252,6 +261,23 @@ def test_groupby_apply_jit_unary_reductions(func, dtype, groupby_jit_datasets):
     for dataset_name in dataset_names:
         dataset = groupby_jit_datasets[dataset_name].copy(deep=True)
         groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
+
+    if (
+        func in JIT_UNARY_REDUCTION_SPECIAL_VALUE_FUNCTIONS
+        and str(dtype) in JIT_UNARY_REDUCTION_SPECIAL_VALUE_DTYPES
+    ):
+        # These use the same generated UDF and input dtypes as the ordinary
+        # reductions above, so keep them in this test item to reuse its cache.
+        for dataset_name in ("small", "large", "nans"):
+            for special_val in (np.nan, np.inf, -np.inf):
+                data = groupby_jit_datasets[dataset_name].copy(deep=True)
+                with expect_warning_if(
+                    func in {"var", "std"} and not np.isnan(special_val),
+                    RuntimeWarning,
+                ):
+                    groupby_apply_jit_reductions_special_vals_inner(
+                        func, data, dtype, special_val
+                    )
 
 
 @pytest.mark.parametrize("func,dtype", NANS_UNARY_REDUCTION_XFAIL_PARAMS)
@@ -304,25 +330,6 @@ def groupby_apply_jit_idx_reductions_special_vals_inner(
     data["val2"] = special_val
 
     run_groupby_apply_jit_test(data, func, ["key1"])
-
-
-@pytest.mark.parametrize("dtype", ["float64", "float32"])
-@pytest.mark.parametrize("func", ["min", "max", "sum", "mean", "var", "std"])
-def test_groupby_apply_jit_reductions_special_vals(
-    func, dtype, groupby_jit_datasets
-):
-    # All datasets and special values use the same generated UDF and input
-    # dtypes, so run them in one test item to reuse the per-process JIT cache.
-    for dataset_name in ("small", "large", "nans"):
-        for special_val in (np.nan, np.inf, -np.inf):
-            data = groupby_jit_datasets[dataset_name].copy(deep=True)
-            with expect_warning_if(
-                func in {"var", "std"} and not np.isnan(special_val),
-                RuntimeWarning,
-            ):
-                groupby_apply_jit_reductions_special_vals_inner(
-                    func, data, dtype, special_val
-                )
 
 
 @pytest.mark.parametrize("func", ["idxmax", "idxmin"])
