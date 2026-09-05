@@ -288,46 +288,63 @@ def groupby_apply_jit_idx_reductions_special_vals_inner(
 
 @pytest.mark.parametrize("dtype", ["float64", "float32"])
 @pytest.mark.parametrize("func", ["min", "max", "sum", "mean", "var", "std"])
-@pytest.mark.parametrize("dataset", ["small", "large", "nans"])
 def test_groupby_apply_jit_reductions_special_vals(
-    func, dtype, dataset, groupby_jit_datasets
+    func, dtype, groupby_jit_datasets
 ):
-    # All special values use the same generated UDF and input dtypes, so run
-    # them in one test item to reuse the per-process JIT cache.
-    for special_val in (np.nan, np.inf, -np.inf):
-        data = groupby_jit_datasets[dataset].copy(deep=True)
-        with expect_warning_if(
-            func in {"var", "std"} and not np.isnan(special_val),
-            RuntimeWarning,
-        ):
-            groupby_apply_jit_reductions_special_vals_inner(
-                func, data, dtype, special_val
-            )
+    # All datasets and special values use the same generated UDF and input
+    # dtypes, so run them in one test item to reuse the per-process JIT cache.
+    for dataset_name in ("small", "large", "nans"):
+        for special_val in (np.nan, np.inf, -np.inf):
+            data = groupby_jit_datasets[dataset_name].copy(deep=True)
+            with expect_warning_if(
+                func in {"var", "std"} and not np.isnan(special_val),
+                RuntimeWarning,
+            ):
+                groupby_apply_jit_reductions_special_vals_inner(
+                    func, data, dtype, special_val
+                )
 
 
 @pytest.mark.parametrize("func", ["idxmax", "idxmin"])
 @pytest.mark.parametrize(
-    "special_vals",
+    "special_vals,dataset_names",
     [
         pytest.param(
             (np.nan,),
+            ("small",),
             marks=pytest.mark.xfail(
                 reason="https://github.com/NVIDIA/cudf/issues/13832"
             ),
-            id="nan",
+            id="small-nan",
         ),
-        pytest.param((np.inf, -np.inf), id="inf"),
+        pytest.param(
+            (np.nan,),
+            ("large",),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/NVIDIA/cudf/issues/13832"
+            ),
+            id="large-nan",
+        ),
+        pytest.param(
+            (np.nan,),
+            ("nans",),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/NVIDIA/cudf/issues/13832"
+            ),
+            id="nans-nan",
+        ),
+        pytest.param((np.inf, -np.inf), ("small", "large", "nans"), id="inf"),
     ],
 )
-@pytest.mark.parametrize("dataset", ["small", "large", "nans"])
 def test_groupby_apply_jit_idx_reductions_special_vals(
-    func, dataset, groupby_jit_datasets, special_vals
+    func, dataset_names, groupby_jit_datasets, special_vals
 ):
-    for special_val in special_vals:
-        data = groupby_jit_datasets[dataset].copy(deep=True)
-        groupby_apply_jit_idx_reductions_special_vals_inner(
-            func, data, "float64", special_val
-        )
+    for dataset_name in dataset_names:
+        for special_val in special_vals:
+            data = groupby_jit_datasets[dataset_name].copy(deep=True)
+            groupby_apply_jit_idx_reductions_special_vals_inner(
+                func, data, "float64", special_val
+            )
 
 
 def test_groupby_apply_jit_sum_integer_overflow():
