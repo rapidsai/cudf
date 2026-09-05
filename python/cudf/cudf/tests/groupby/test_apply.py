@@ -103,7 +103,8 @@ def test_groupby_apply_args(func, args):
     assert_groupby_results_equal(expect, got)
 
 
-@pytest.fixture
+# These source datasets are read-only; tests that modify one take a deep copy.
+@pytest.fixture(scope="module")
 def groupby_jit_data_small():
     """
     Return a small dataset for testing JIT Groupby Apply. The dataframe
@@ -125,7 +126,7 @@ def groupby_jit_data_small():
     return df
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def groupby_jit_data_large(groupby_jit_data_small):
     """
     Larger version of groupby_jit_data_small which contains enough data
@@ -142,7 +143,7 @@ def groupby_jit_data_large(groupby_jit_data_small):
     return df
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def groupby_jit_data_nans(groupby_jit_data_small):
     """
     Returns a modified version of groupby_jit_data_small which contains
@@ -156,7 +157,7 @@ def groupby_jit_data_nans(groupby_jit_data_small):
     return df
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def groupby_jit_datasets(
     groupby_jit_data_small, groupby_jit_data_large, groupby_jit_data_nans
 ):
