@@ -711,7 +711,7 @@ def test_concat_dataframe_with_multiindex(key2):
         ],
     ],
 )
-def test_concat_join(objs, ignore_index, sort, join, axis):
+def test_concat_join(objs, ignore_index, sort, join):
     axis = 0
     gpu_objs = [cudf.from_pandas(o) for o in objs]
 
@@ -780,7 +780,7 @@ def test_concat_join_axis_1_dup_error(objs):
         ],
     ],
 )
-def test_concat_join_axis_1(objs, ignore_index, sort, join, axis):
+def test_concat_join_axis_1(objs, ignore_index, sort, join):
     # no duplicate columns
     axis = 1
     gpu_objs = [cudf.from_pandas(o) for o in objs]
