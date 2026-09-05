@@ -1222,30 +1222,6 @@ def test_concat_join_empty_dataframes_axis_1(
         join=join,
         sort=sort,
     )
-    if expected.shape != df.shape:
-        if axis == 0:
-            for key, col in actual[actual.columns].items():
-                if isinstance(expected[key].dtype, pd.CategoricalDtype):
-                    expected[key] = expected[key].fillna("-1")
-                    actual[key] = col.astype("str").fillna("-1")
-            # if not expected.empty:
-            assert_eq(
-                expected.fillna(-1),
-                actual.fillna(-1),
-                check_dtype=False,
-                check_index_type=False
-                if len(expected) == 0 or actual.empty
-                else True,
-                check_column_type=False,
-            )
-        else:
-            # no need to fill in if axis=1
-            assert_eq(
-                expected,
-                actual,
-                check_index_type=False,
-                check_column_type=False,
-            )
     assert_eq(
         expected, actual, check_index_type=False, check_column_type=False
     )
