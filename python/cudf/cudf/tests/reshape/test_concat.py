@@ -1200,7 +1200,7 @@ def test_concat_join_empty_dataframes(
     ],
 )
 def test_concat_join_empty_dataframes_axis_1(
-    df, other, ignore_index, axis, join, sort
+    df, other, ignore_index, join, sort
 ):
     # no duplicate columns
     axis = 1
