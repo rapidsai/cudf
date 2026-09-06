@@ -166,9 +166,9 @@ def test_groupby_MI(nrows, ncols):
         assert repr(gdg.T) == repr(pdg.T)
 
 
-@pytest.mark.parametrize(
-    "gdf",
-    [
+@pytest.fixture(
+    scope="module",
+    params=[
         lambda: cudf.DataFrame({"a": range(10000)}),
         lambda: cudf.DataFrame({"a": range(10000), "b": range(10000)}),
         lambda: cudf.DataFrame({"a": range(20), "b": range(20)}),
@@ -193,6 +193,10 @@ def test_groupby_MI(nrows, ncols):
         ),
     ],
 )
+def sliced_dataframe(request):
+    return request.param()
+
+
 @pytest.mark.parametrize(
     "slc",
     [
@@ -206,14 +210,13 @@ def test_groupby_MI(nrows, ncols):
 )
 @pytest.mark.parametrize("max_seq_items", [1, 10, 60, 10000, None])
 @pytest.mark.parametrize("max_rows", [1, 10, 60, 10000, None])
-def test_dataframe_sliced(gdf, slc, max_seq_items, max_rows):
-    gdf = gdf()
+def test_dataframe_sliced(sliced_dataframe, slc, max_seq_items, max_rows):
     with pd.option_context(
         "display.max_seq_items", max_seq_items, "display.max_rows", max_rows
     ):
-        pdf = gdf.to_pandas()
+        pdf = sliced_dataframe.to_pandas()
 
-        sliced_gdf = gdf[slc]
+        sliced_gdf = sliced_dataframe[slc]
         sliced_pdf = pdf[slc]
 
         expected_repr = repr(sliced_pdf)
