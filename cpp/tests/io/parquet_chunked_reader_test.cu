@@ -4,6 +4,7 @@
  */
 
 #include "compression_common.hpp"
+#include "io/parquet/reader_impl_chunking_utils.cuh"
 #include "io_test_utils.hpp"
 #include "parquet_common.hpp"
 
@@ -22,6 +23,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
@@ -38,6 +40,7 @@
 
 #include <cuda/iterator>
 #include <cuda/stream>
+#include <thrust/transform.h>
 
 #include <algorithm>
 #include <fstream>
@@ -228,13 +231,122 @@ struct ParquetScratchTest : public ParquetChunkedReaderTest {
   }
 };
 
+TEST_F(ParquetScratchTest, DecompressionInputs)
+{
+  namespace pq      = cudf::io::parquet::detail;
+  auto const stream = cudf::get_default_stream();
+  rmm::device_uvector<uint8_t> data(100, stream);
+
+  // V1 and dictionary pages ignore is_compressed; V2 may have either/both level streams,
+  // uncompressed values, or no values. No compressed input is dereferenced in this test.
+  std::vector<pq::PageInfo> pages(7);
+  for (auto& page : pages) {
+    page.page_data              = data.data();
+    page.compressed_page_size   = 100;
+    page.uncompressed_page_size = 1'000;
+  }
+  pages[1].flags = pq::PAGEINFO_FLAGS_DICTIONARY;
+  for (auto i = 2; i < 7; ++i) {
+    pages[i].flags         = pq::PAGEINFO_FLAGS_V2;
+    pages[i].is_compressed = true;
+  }
+  pages[2].lvl_bytes[pq::level_type::DEFINITION] = 10;
+  pages[3].lvl_bytes[pq::level_type::REPETITION] = 20;
+  pages[4].lvl_bytes[pq::level_type::DEFINITION] = 10;
+  pages[4].lvl_bytes[pq::level_type::REPETITION] = 20;
+  pages[5].is_compressed                         = false;
+  pages[6].lvl_bytes[pq::level_type::DEFINITION] = 100;
+  auto const d_pages =
+    cudf::detail::make_device_uvector(pages, stream, cudf::get_current_device_resource_ref());
+  rmm::device_uvector<cudf::device_span<uint8_t const>> inputs(pages.size(), stream);
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    d_pages.begin(),
+                    d_pages.end(),
+                    inputs.begin(),
+                    pq::get_decompression_input{});
+  auto const h_inputs = cudf::detail::make_host_vector(inputs, stream);
+  std::vector<std::size_t> const offsets{0, 0, 10, 20, 30};
+  for (std::size_t i = 0; i < pages.size(); ++i) {
+    SCOPED_TRACE(i);
+    bool const compressed = i < offsets.size();
+    EXPECT_EQ(h_inputs[i].data(), compressed ? data.data() + offsets[i] : nullptr);
+    EXPECT_EQ(h_inputs[i].size(), compressed ? 100 - offsets[i] : 0);
+  }
+}
+
+TEST_F(ParquetScratchTest, SkippedPagesDoNotReduceScratchEstimate)
+{
+  namespace pq = cudf::io::parquet::detail;
+  tmp_env_var const nvcomp{nvcomp_policy_env_var, "ALWAYS"};
+  tmp_env_var const host_decomp{host_decomp_env_var, "OFF"};
+  auto const stream = cudf::get_default_stream();
+  // A Zstd frame containing 32,768 repetitions of '*'.
+  std::vector<uint8_t> const frame{0x28,
+                                   0xb5,
+                                   0x2f,
+                                   0xfd,
+                                   0x60,
+                                   0x00,
+                                   0x7f,
+                                   0x4d,
+                                   0x00,
+                                   0x00,
+                                   0x10,
+                                   0x2a,
+                                   0x2a,
+                                   0x01,
+                                   0x00,
+                                   0xfb,
+                                   0xff,
+                                   0x0e,
+                                   0xb0};
+  auto data =
+    cudf::detail::make_device_uvector(frame, stream, cudf::get_current_device_resource_ref());
+  std::vector<pq::ColumnChunkDesc> chunks(1);
+  chunks.front().codec = cudf::io::parquet::Compression::ZSTD;
+  auto const d_chunks =
+    cudf::detail::make_device_uvector(chunks, stream, cudf::get_current_device_resource_ref());
+  pq::PageInfo compressed{};
+  compressed.page_data              = data.data();
+  compressed.flags                  = pq::PAGEINFO_FLAGS_V2;
+  compressed.is_compressed          = true;
+  compressed.compressed_page_size   = frame.size();
+  compressed.uncompressed_page_size = 32'768;
+  auto uncompressed                 = compressed;
+  uncompressed.is_compressed        = false;
+  auto empty                        = compressed;
+  empty.compressed_page_size        = 0;
+  empty.uncompressed_page_size      = 0;
+  auto const scratch_sizes          = [&](std::vector<pq::PageInfo> const& pages) {
+    auto const d_pages =
+      cudf::detail::make_device_uvector(pages, stream, cudf::get_current_device_resource_ref());
+    return cudf::detail::make_host_vector(
+      pq::compute_decompression_scratch_sizes(d_chunks, d_pages, stream), stream);
+  };
+  auto const baseline = scratch_sizes({compressed, compressed});
+  auto const mixed =
+    scratch_sizes({compressed, uncompressed, empty, compressed, uncompressed, empty});
+  auto const skipped = scratch_sizes({uncompressed, empty});
+  ASSERT_GT(baseline.front(), 0);
+  // Skipped pages must neither add scratch nor dilute the extended/legacy adjustment ratio.
+  EXPECT_EQ(mixed[0], baseline[0]);
+  EXPECT_EQ(mixed[1], baseline[0]);
+  EXPECT_EQ(mixed[2], baseline[0]);
+  EXPECT_EQ(mixed[3], baseline[1]);
+  EXPECT_EQ(mixed[4], baseline[1]);
+  EXPECT_EQ(mixed[5], baseline[1]);
+  EXPECT_EQ(skipped[0], 0);
+  EXPECT_EQ(skipped[1], 0);
+}
+
 struct ParquetV2ScratchLevelsTest
   : public ParquetScratchTest,
-    public ::testing::WithParamInterface<std::tuple<bool, bool, bool>> {};
+    public ::testing::WithParamInterface<std::tuple<std::pair<bool, bool>, bool, bool>> {};
 
 TEST_P(ParquetV2ScratchLevelsTest, NullableAndRepeatedValues)
 {
-  auto const [v2, dictionary, use_metadata] = GetParam();
+  auto const [page_options, dictionary, use_metadata] = GetParam();
+  auto const [v2, page_compression]                   = page_options;
   tmp_env_var const nvcomp{nvcomp_policy_env_var, "ALWAYS"};
   tmp_env_var const host_decomp{host_decomp_env_var, "OFF"};
   constexpr cudf::size_type num_rows = 20'000;
@@ -259,7 +371,7 @@ TEST_P(ParquetV2ScratchLevelsTest, NullableAndRepeatedValues)
       .metadata(metadata)
       .compression(cudf::io::compression_type::ZSTD)
       .write_v2_headers(v2)
-      .page_level_compression(v2)
+      .page_level_compression(page_compression)
       .dictionary_policy(dictionary ? cudf::io::dictionary_policy::ALWAYS
                                     : cudf::io::dictionary_policy::NEVER)
       .max_page_size_rows(5'000)
@@ -295,7 +407,9 @@ TEST_P(ParquetV2ScratchLevelsTest, NullableAndRepeatedValues)
 
 INSTANTIATE_TEST_SUITE_P(PageVersionAndReader,
                          ParquetV2ScratchLevelsTest,
-                         ::testing::Combine(::testing::Bool(),
+                         ::testing::Combine(::testing::Values(std::pair{false, false},
+                                                              std::pair{true, false},
+                                                              std::pair{true, true}),
                                             ::testing::Bool(),
                                             ::testing::Bool()));
 
