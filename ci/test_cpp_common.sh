@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -32,6 +32,11 @@ set -u
 RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
+
+# Keep JIT-compiled kernels in the workspace so CI can persist them across jobs.
+JIT_CACHE_ROOT=${GITHUB_WORKSPACE:-${PWD}}
+export LIBCUDF_KERNEL_CACHE_PATH="${LIBCUDF_KERNEL_CACHE_PATH:-${JIT_CACHE_ROOT}/.cache/libcudf}"
+mkdir -p "${LIBCUDF_KERNEL_CACHE_PATH}"
 
 rapids-print-env
 
