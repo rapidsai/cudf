@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import textwrap
@@ -9,6 +9,43 @@ import pytest
 from hypothesis import given, settings, strategies as st
 
 import cudf
+
+_FULL_REPR_DTYPES = [
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "uint8",
+    "uint16",
+    "uint32",
+    "uint64",
+    "float32",
+    "float64",
+    "datetime64[ns]",
+    "datetime64[us]",
+    "datetime64[ms]",
+    "datetime64[s]",
+    "timedelta64[ns]",
+    "timedelta64[us]",
+    "timedelta64[ms]",
+    "timedelta64[s]",
+    "str",
+    "bool",
+    "category",
+]
+
+
+@pytest.fixture(
+    scope="module",
+    params=[(dtype, size) for dtype in _FULL_REPR_DTYPES for size in [20, 21]],
+)
+def full_dataframe(request):
+    dtype, size = request.param
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(
+        {idx: rng.integers(0, 100, size) for idx in range(size)}
+    ).astype(dtype)
+    return pdf, cudf.from_pandas(pdf)
 
 
 @pytest.mark.parametrize("ncols", [1, 2, 10])
@@ -37,13 +74,8 @@ def test_null_dataframe(ncols):
 
 @pytest.mark.parametrize("nrows", [5, 10, 15])
 @pytest.mark.parametrize("ncols", [5, 10, 15])
-@pytest.mark.parametrize("size", [20, 21])
-def test_full_dataframe_20(all_supported_types_as_str, size, nrows, ncols):
-    rng = np.random.default_rng(seed=0)
-    pdf = pd.DataFrame(
-        {idx: rng.integers(0, 100, size) for idx in range(size)}
-    ).astype(all_supported_types_as_str)
-    gdf = cudf.from_pandas(pdf)
+def test_full_dataframe_20(full_dataframe, nrows, ncols):
+    pdf, gdf = full_dataframe
 
     with pd.option_context(
         "display.max_rows", int(nrows), "display.max_columns", int(ncols)
