@@ -19,19 +19,9 @@ def center(request):
     return request.param
 
 
-@pytest.fixture
-def supported_rolling_reductions(reduction_methods):
-    if reduction_methods in [
-        "product",
-        "quantile",
-        "all",
-        "any",
-        "median",
-        "kurtosis",
-        "skew",
-    ]:
-        pytest.skip(f"{reduction_methods} not implemented")
-    return reduction_methods
+@pytest.fixture(params=["min", "max", "sum", "std", "var"])
+def supported_rolling_reductions(request):
+    return request.param
 
 
 @pytest.mark.parametrize(
@@ -388,11 +378,15 @@ def test_rolling_numba_udf_with_offset():
     )
 
 
-@pytest.mark.parametrize("window_size", [1, 2, 3])
-@pytest.mark.parametrize("min_periods", [1, 2, 3])
+@pytest.mark.parametrize(
+    "window_size,min_periods",
+    [
+        (window_size, min_periods)
+        for window_size in [1, 2, 3]
+        for min_periods in range(1, window_size + 1)
+    ],
+)
 def test_rolling_groupby_numba_udf(window_size, min_periods):
-    if min_periods > window_size:
-        pytest.skip("min_periods cannot exceed window_size")
     pdf = pd.DataFrame(
         {
             "a": [1, 1, 1, 2, 2, 2, 2],
