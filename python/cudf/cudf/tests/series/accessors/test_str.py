@@ -2823,9 +2823,13 @@ def test_string_cat(ps_gs, others, sep, na_rep, index, request):
         expect.index = expect.index.astype(got.index.dtype)
     assert_eq(expect, got)
 
+
+@pytest.mark.parametrize("sep", [None, "", " ", "|", ",", "|||"])
+@pytest.mark.parametrize("na_rep", [None, "", "null", "a"])
+def test_string_cat_index_others(data, sep, na_rep):
     index = ["1", "2", "3", "4", "5"]
-    ps.index = index
-    gs.index = index
+    ps = pd.Series(data, index=index, dtype="str", name="nice name")
+    gs = cudf.Series(data, index=index, dtype="str", name="nice name")
 
     expect = ps.str.cat(others=ps.index, sep=sep, na_rep=na_rep)
     got = gs.str.cat(others=gs.index, sep=sep, na_rep=na_rep)
