@@ -140,10 +140,15 @@ def test_rolling_with_offset(supported_rolling_reductions):
     )
 
 
-@pytest.mark.parametrize("agg", ["std", "var"])
-@pytest.mark.parametrize("ddof", [0, 1])
-@pytest.mark.parametrize("window_size", [2, 100])
-def test_rolling_var_std_large(agg, ddof, center, window_size):
+@pytest.fixture(scope="module", params=[2, 100])
+def rolling_var_std_window_size(request):
+    return request.param
+
+
+@pytest.fixture(scope="module")
+def rolling_var_std_large_data(rolling_var_std_window_size):
+    # All consumers only read these inputs while varying the rolling options.
+    window_size = rolling_var_std_window_size
     iupper_bound = math.sqrt(np.iinfo(np.int64).max / window_size)
     ilower_bound = -math.sqrt(abs(np.iinfo(np.int64).min) / window_size)
 
@@ -180,7 +185,20 @@ def test_rolling_var_std_large(agg, ddof, center, window_size):
         seed=100,
     )
     gdf = cudf.DataFrame.from_arrow(data)
-    pdf = gdf.to_pandas()
+    return gdf, gdf.to_pandas()
+
+
+@pytest.mark.parametrize("agg", ["std", "var"])
+@pytest.mark.parametrize("ddof", [0, 1])
+def test_rolling_var_std_large(
+    agg,
+    ddof,
+    center,
+    rolling_var_std_window_size,
+    rolling_var_std_large_data,
+):
+    window_size = rolling_var_std_window_size
+    gdf, pdf = rolling_var_std_large_data
 
     expect = getattr(pdf.rolling(window_size, 1, center), agg)(ddof=ddof)
     got = getattr(gdf.rolling(window_size, 1, center), agg)(ddof=ddof)
