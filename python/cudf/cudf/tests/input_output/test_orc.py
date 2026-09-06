@@ -1173,7 +1173,7 @@ def test_pyspark_struct(datadir):
     assert_eq(pdf, gdf)
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def map_buff():
     size = 100
     rd = random.Random(1)
