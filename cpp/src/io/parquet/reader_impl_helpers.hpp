@@ -11,6 +11,7 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_schema.hpp>
+#include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/types.hpp>
 
 #include <cstddef>
@@ -26,6 +27,14 @@
 #include <vector>
 
 namespace cudf::io::parquet::detail {
+
+/**
+ * @brief Computes the byte range containing the column and/or offset indexes.
+ *
+ * @param file_metadata Parquet file metadata
+ * @return Page-index byte range, or an empty range when no indexes are available
+ */
+[[nodiscard]] text::byte_range_info page_index_byte_range(FileMetaData const& file_metadata);
 
 /**
  * @brief page location and size info
