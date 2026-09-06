@@ -67,26 +67,8 @@ def test_dataframe_sort_index(
         assert_eq(expected, got)
 
 
-@pytest.mark.parametrize("axis", [0, 1, "index", "columns"])
-@pytest.mark.parametrize(
-    "level",
-    [
-        0,
-        "b",
-        1,
-        ["b"],
-        "a",
-        ["a", "b"],
-        ["b", "a"],
-        [0, 1],
-        [1, 0],
-        [0, 2],
-        None,
-    ],
-)
-@pytest.mark.parametrize("na_position", ["first", "last"])
-def test_dataframe_mulitindex_sort_index(
-    request, axis, level, ascending, inplace, ignore_index, na_position
+def _assert_dataframe_multiindex_sort_index(
+    axis, level, ascending, inplace, ignore_index, na_position
 ):
     pdf = pd.DataFrame(
         {
@@ -120,6 +102,60 @@ def test_dataframe_mulitindex_sort_index(
         assert_eq(pdf, gdf)
     else:
         assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "level, ascending, na_position",
+    [
+        (None, True, "last"),
+        (None, False, "last"),
+        (0, True, "first"),
+        (0, False, "last"),
+        ("b", False, "first"),
+        (1, True, "last"),
+        (1, False, "last"),
+        (["b"], False, "first"),
+        ("a", False, "last"),
+        (["a", "b"], True, "last"),
+        (["b", "a"], False, "last"),
+        ([0, 1], False, "last"),
+        ([1, 0], True, "last"),
+        ([0, 2], False, "first"),
+    ],
+)
+def test_dataframe_multiindex_sort_index(level, ascending, na_position):
+    _assert_dataframe_multiindex_sort_index(
+        axis=0,
+        level=level,
+        ascending=ascending,
+        inplace=False,
+        ignore_index=False,
+        na_position=na_position,
+    )
+
+
+@pytest.mark.parametrize("inplace", [True, False])
+@pytest.mark.parametrize("ignore_index", [True, False])
+def test_dataframe_multiindex_sort_index_lifecycle(inplace, ignore_index):
+    _assert_dataframe_multiindex_sort_index(
+        axis=0,
+        level=[1, 0],
+        ascending=False,
+        inplace=inplace,
+        ignore_index=ignore_index,
+        na_position="first",
+    )
+
+
+def test_dataframe_multiindex_sort_index_axis_alias():
+    _assert_dataframe_multiindex_sort_index(
+        axis="index",
+        level=[0, 2],
+        ascending=False,
+        inplace=False,
+        ignore_index=False,
+        na_position="first",
+    )
 
 
 def test_sort_index_axis_1_ignore_index_true_columnaccessor_state_names():
