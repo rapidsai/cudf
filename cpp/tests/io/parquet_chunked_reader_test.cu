@@ -26,6 +26,7 @@
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/parquet_metadata.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
@@ -42,6 +43,7 @@
 #include <fstream>
 #include <numeric>
 #include <optional>
+#include <random>
 #include <ranges>
 #include <type_traits>
 
@@ -199,6 +201,173 @@ auto const read_table_and_nrows_per_source(cudf::io::chunked_parquet_reader cons
 struct ParquetChunkedReaderTest : public cudf::test::BaseFixture {};
 
 using ParquetChunkedDecompressionTest = DecompressionTest<ParquetChunkedReaderTest>;
+
+// Exercise has_next() before the first read, including the pre-parsed-footer entry point.
+struct ParquetScratchTest : public ParquetChunkedReaderTest {
+  void check_chunked_read(std::string const& filepath, cudf::table_view expected, bool use_metadata)
+  {
+    auto const options =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).build();
+    auto const full = cudf::io::read_parquet(options);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, full.tbl->view());
+    for (auto const limit : {std::size_t{32'768}, std::size_t{1'024'000'000}}) {
+      auto reader = [&] {
+        if (use_metadata) {
+          auto sources = cudf::io::make_datasources(cudf::io::source_info{filepath});
+          auto footers = cudf::io::read_parquet_footers(sources);
+          return cudf::io::chunked_parquet_reader(
+            0, limit, std::move(sources), std::move(footers), options);
+        }
+        return cudf::io::chunked_parquet_reader(0, limit, options);
+      }();
+      ASSERT_TRUE(reader.has_next());
+      auto const [result, num_chunks] = chunked_read(reader);
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, result->view());
+      EXPECT_GT(num_chunks, 0);
+    }
+  }
+};
+
+struct ParquetV2ScratchLevelsTest
+  : public ParquetScratchTest,
+    public ::testing::WithParamInterface<std::tuple<bool, bool, bool>> {};
+
+TEST_P(ParquetV2ScratchLevelsTest, NullableAndRepeatedValues)
+{
+  auto const [v2, dictionary, use_metadata] = GetParam();
+  tmp_env_var const nvcomp{nvcomp_policy_env_var, "ALWAYS"};
+  tmp_env_var const host_decomp{host_decomp_env_var, "OFF"};
+  constexpr cudf::size_type num_rows = 20'000;
+  auto values = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 25; });
+  auto valid =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 10 != 0; });
+  int64s_col flat(values, values + num_rows, valid);
+  int32s_col child(values, values + 2 * num_rows, valid);
+  auto offsets = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return 2 * i; });
+  int32s_col list_offsets(offsets, offsets + num_rows + 1);
+  auto const lists = cudf::make_lists_column(
+    num_rows, list_offsets.release(), child.release(), 0, rmm::device_buffer{});
+  auto const expected = cudf::table_view{{flat, lists->view()}};
+  auto metadata       = cudf::io::table_input_metadata{expected};
+  if (not dictionary) {
+    metadata.column_metadata[0].set_encoding(cudf::io::column_encoding::PLAIN);
+    metadata.column_metadata[1].child(1).set_encoding(cudf::io::column_encoding::PLAIN);
+  }
+  auto const filepath = temp_env->get_temp_filepath("ScratchLevels.parquet");
+  auto const options =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(metadata)
+      .compression(cudf::io::compression_type::ZSTD)
+      .write_v2_headers(v2)
+      .page_level_compression(v2)
+      .dictionary_policy(dictionary ? cudf::io::dictionary_policy::ALWAYS
+                                    : cudf::io::dictionary_policy::NEVER)
+      .max_page_size_rows(5'000)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .build();
+  cudf::io::write_parquet(options);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData footer;
+  read_footer(source, &footer);
+  ASSERT_EQ(footer.row_groups.size(), 1);
+  ASSERT_EQ(footer.row_groups.front().columns.size(), 2);
+  for (auto i = 0; i < 2; ++i) {
+    auto const& column = footer.row_groups.front().columns[i];
+    ASSERT_EQ(column.meta_data.codec, cudf::io::parquet::Compression::ZSTD);
+    EXPECT_EQ(column.meta_data.dictionary_page_offset > 0, dictionary);
+    auto const indexes = read_offset_index(source, column);
+    ASSERT_GT(indexes.page_locations.size(), 1);
+    for (auto const& location : indexes.page_locations) {
+      auto const page = read_page_header(source, location);
+      ASSERT_EQ(
+        page.type,
+        v2 ? cudf::io::parquet::PageType::DATA_PAGE_V2 : cudf::io::parquet::PageType::DATA_PAGE);
+      if (v2) {
+        EXPECT_GT(page.data_page_header_v2.definition_levels_byte_length, 0);
+        if (i == 1) { EXPECT_GT(page.data_page_header_v2.repetition_levels_byte_length, 0); }
+        EXPECT_TRUE(page.data_page_header_v2.is_compressed);
+      }
+    }
+  }
+  check_chunked_read(filepath, expected, use_metadata);
+}
+
+INSTANTIATE_TEST_SUITE_P(PageVersionAndReader,
+                         ParquetV2ScratchLevelsTest,
+                         ::testing::Combine(::testing::Bool(),
+                                            ::testing::Bool(),
+                                            ::testing::Bool()));
+
+struct ParquetV2ScratchSkippedPagesTest
+  : public ParquetScratchTest,
+    public ::testing::WithParamInterface<std::tuple<bool, bool>> {};
+
+TEST_P(ParquetV2ScratchSkippedPagesTest, UncompressedAndEmptyValues)
+{
+  auto const [empty_pages, use_metadata] = GetParam();
+  tmp_env_var const nvcomp{nvcomp_policy_env_var, "ALWAYS"};
+  tmp_env_var const host_decomp{host_decomp_env_var, "OFF"};
+  constexpr cudf::size_type num_rows = 20'000;
+  std::vector<int64_t> values(num_rows, 42);
+  std::mt19937_64 random(42);
+  std::generate(values.begin(), values.begin() + num_rows / 2, [&] { return random(); });
+  // Keep compressed values in the same column chunk so empty pages are still tagged ZSTD.
+  auto valid = cudf::detail::make_counting_transform_iterator(
+    0, [empty_pages](auto i) { return not empty_pages or i >= num_rows / 2; });
+  int64s_col column(values.begin(), values.end(), valid);
+  auto const expected = cudf::table_view{{column}};
+  auto metadata       = cudf::io::table_input_metadata{expected};
+  metadata.column_metadata.front().set_encoding(cudf::io::column_encoding::PLAIN);
+  auto const filepath = temp_env->get_temp_filepath("ScratchSkippedPages.parquet");
+  auto const options =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(metadata)
+      .compression(cudf::io::compression_type::ZSTD)
+      .write_v2_headers(true)
+      .page_level_compression(true)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER)
+      .max_page_size_rows(5'000)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .build();
+  cudf::io::write_parquet(options);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData footer;
+  read_footer(source, &footer);
+  ASSERT_EQ(footer.row_groups.size(), 1);
+  ASSERT_EQ(footer.row_groups.front().columns.size(), 1);
+  auto const& chunk = footer.row_groups.front().columns.front();
+  ASSERT_EQ(chunk.meta_data.codec, cudf::io::parquet::Compression::ZSTD);
+  auto const indexes = read_offset_index(source, chunk);
+  ASSERT_GT(indexes.page_locations.size(), 1);
+  bool found_compressed   = false;
+  bool found_uncompressed = false;
+  bool found_empty        = false;
+  for (auto const& location : indexes.page_locations) {
+    auto const page = read_page_header(source, location);
+    ASSERT_EQ(page.type, cudf::io::parquet::PageType::DATA_PAGE_V2);
+    auto const& header = page.data_page_header_v2;
+    found_compressed |= header.is_compressed;
+    found_uncompressed |= not header.is_compressed;
+    if (empty_pages and header.num_nulls == header.num_values) {
+      found_empty = true;
+      EXPECT_EQ(page.compressed_page_size,
+                header.definition_levels_byte_length + header.repetition_levels_byte_length);
+    }
+  }
+  EXPECT_TRUE(found_compressed);
+  if (empty_pages) {
+    EXPECT_TRUE(found_empty);
+  } else {
+    EXPECT_TRUE(found_uncompressed);
+  }
+  check_chunked_read(filepath, expected, use_metadata);
+}
+
+INSTANTIATE_TEST_SUITE_P(PageContentsAndReader,
+                         ParquetV2ScratchSkippedPagesTest,
+                         ::testing::Combine(::testing::Bool(), ::testing::Bool()));
 
 TEST_F(ParquetChunkedReaderTest, TestChunkedReadNoData)
 {

@@ -86,9 +86,10 @@ void BM_parquet_read_subrowgroup_chunks(nvbench::state& state,
   auto const pass_read_limit  = static_cast<cudf::size_type>(state.get_int64("pass_read_limit"));
   auto const source_type      = retrieve_io_type_enum(state.get_string("io_type"));
   auto const data_size        = static_cast<size_t>(state.get_int64("data_size"));
-  auto const compression      = cudf::io::compression_type::SNAPPY;
-  auto const rg_size_bytes    = state.get_int64("row_group_size_bytes");
-  auto const rg_size_rows     = state.get_int64("row_group_size_rows");
+  auto const compression   = retrieve_compression_type_enum(state.get_string("compression_type"));
+  auto const v2_headers    = state.get_int64("write_v2_headers") != 0;
+  auto const rg_size_bytes = state.get_int64("row_group_size_bytes");
+  auto const rg_size_rows  = state.get_int64("row_group_size_rows");
   cuio_source_sink_pair source_sink(source_type);
 
   auto const num_rows_written = [&]() {
@@ -100,7 +101,9 @@ void BM_parquet_read_subrowgroup_chunks(nvbench::state& state,
 
     cudf::io::parquet_writer_options write_opts =
       cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
-        .compression(compression);
+        .compression(compression)
+        .write_v2_headers(v2_headers)
+        .page_level_compression(v2_headers);
     if (rg_size_bytes > 0) write_opts.set_row_group_size_bytes(rg_size_bytes);
     if (rg_size_rows > 0) write_opts.set_row_group_size_rows(rg_size_rows);
     cudf::io::write_parquet(write_opts);
@@ -160,6 +163,8 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_chunks, NVBENCH_TYPE_AXES(d_type_list))
 NVBENCH_BENCH_TYPES(BM_parquet_read_subrowgroup_chunks, NVBENCH_TYPE_AXES(d_type_list))
   .set_name("parquet_read_subrowgroup_chunks")
   .add_string_axis("io_type", {"DEVICE_BUFFER"})
+  .add_string_axis("compression_type", {"SNAPPY", "ZSTD"})
+  .add_int64_axis("write_v2_headers", {0, 1})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32})
