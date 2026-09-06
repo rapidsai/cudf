@@ -7,6 +7,8 @@
 
 cmake_minimum_required(VERSION 4.0 FATAL_ERROR)
 
+# Temporary no-op marker for a complete PR-workflow timing run.
+
 include(../cmake/rapids_config.cmake)
 include(rapids-cmake)
 include(rapids-cpm)
