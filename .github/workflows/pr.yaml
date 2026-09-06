@@ -310,7 +310,7 @@ jobs:
     with:
       build_type: pull-request
       script: ci/test_cpp.sh
-      cache-paths: ${{ github.workspace }}/.cache/libcudf
+      cache-paths: .cache/libcudf
       cache-key-prefix: libcudf-rtcx-v1
       # https://github.com/NVIDIA/cudf/issues/23498
       matrix_filter: map(select(.GPU != "gb300" and .GPU != "gh200"))
