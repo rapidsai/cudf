@@ -31,6 +31,8 @@ namespace cudf::io::parquet::detail {
 /**
  * @brief Computes the byte range containing the column and/or offset indexes.
  *
+ * @throws std::invalid_argument if an index end exceeds the supported offset range
+ *
  * @param file_metadata Parquet file metadata
  * @return Page-index byte range, or an empty range when no indexes are available
  */
