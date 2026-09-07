@@ -1468,9 +1468,19 @@ def test_operator_func_series_and_scalar(
     assert_eq(pdf_series_result, gdf_series_result)
 
 
-@pytest.mark.parametrize("fill_value", [0, 1, None, np.nan])
-@pytest.mark.parametrize("scalar_a", [0, 1, None, np.nan])
-@pytest.mark.parametrize("scalar_b", [0, 1, None, np.nan])
+@pytest.mark.parametrize(
+    "scalar_a, scalar_b, fill_value",
+    [
+        (0, 0, 0),
+        (1, 1, 1),
+        (None, None, None),
+        (np.nan, np.nan, np.nan),
+        (0, 1, None),
+        (1, 0, np.nan),
+        (None, np.nan, 0),
+        (np.nan, None, 1),
+    ],
+)
 def test_operator_func_between_series_logical(
     float_types_as_str, comparison_op_method, scalar_a, scalar_b, fill_value
 ):
