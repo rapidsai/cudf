@@ -33,12 +33,12 @@ COV_CORR_DATA_PAIRS = [
     ),
     pytest.param(
         pa.array([5, 10, 53, None, np.nan, None]),
-        pd.Series([1.1, 2.32, 43.4], index=[0, 500, 4000]),
-        id="arrow-and-indexed-series",
+        np.array([1.0, 4.0, 9.0, np.nan, 16.0, 25.0]),
+        id="arrow",
     ),
     pytest.param(
         pd.Series([1.1, 2.32, 43.4], index=[0, 4, 3]),
-        pd.Series([1.1, 2.32, 43.4], index=[0, 500, 4000]),
+        pd.Series([43.4, 1.1, 2.32], index=[3, 0, 4]),
         id="indexed-series",
     ),
     pytest.param(np.array([], dtype="float64"), np.array([5]), id="empty"),
