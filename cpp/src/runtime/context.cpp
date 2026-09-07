@@ -140,6 +140,7 @@ std::optional<int32_t> context::nvjitlink_version() const { return _nvjitlink_ve
 void context::initialize_components(detail::init_flags flags)
 {
   CUDF_FUNC_RANGE();
+  if (has_flag(flags, detail::init_flags::INITIALIZE_JIT)) { initialize_jit(); }
   if (has_flag(flags, detail::init_flags::LOAD_NVCOMP)) { preload_nvcomp(); }
 }
 
