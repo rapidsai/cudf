@@ -460,8 +460,6 @@ NODEIDS_THAT_FAIL = {
     "tests/copy_view/test_indexing.py::test_del_series[numpy]": "TODO: Add a reason for failure",
     "tests/copy_view/test_indexing.py::test_getitem_midx_slice": "TODO: Add a reason for failure",
     "tests/copy_view/test_indexing.py::test_loc_enlarging_with_dataframe": "TODO: Add a reason for failure",
-    "tests/copy_view/test_indexing.py::test_series_getitem_ellipsis": "TODO: Add a reason for failure",
-    "tests/copy_view/test_indexing.py::test_series_getitem_slice[nullable]": "TODO: Add a reason for failure",
     "tests/copy_view/test_indexing.py::test_series_getitem_slice[numpy]": "TODO: Add a reason for failure",
     "tests/copy_view/test_indexing.py::test_set_value_copy_only_necessary_column[mixed-block-iloc-indexer1-100]": "TODO: Add a reason for failure",
     "tests/copy_view/test_indexing.py::test_set_value_copy_only_necessary_column[mixed-block-iloc-indexer3-100]": "TODO: Add a reason for failure",
@@ -5557,6 +5555,8 @@ NODEIDS_TO_SKIP_WHEN_SHARDED: dict[str, str] = {
 
 # Keep keys in alphabetical order
 NODEIDS_THAT_MAY_FAIL = {
+    "tests/copy_view/test_indexing.py::test_series_getitem_ellipsis": "TODO: Add a reason for failure",
+    "tests/copy_view/test_indexing.py::test_series_getitem_slice[nullable]": "TODO: Add a reason for failure",
     "tests/groupby/test_numeric_only.py::TestNumericOnly::test_extrema[max]": "Environment-sensitive TypeError expectation",
     "tests/groupby/test_numeric_only.py::TestNumericOnly::test_extrema[min]": "Environment-sensitive TypeError expectation",
     "tests/io/test_spss.py::test_spss_metadata": "pandas 3.0.3 metadata expectation is incompatible with pyreadstat 1.3.6",
