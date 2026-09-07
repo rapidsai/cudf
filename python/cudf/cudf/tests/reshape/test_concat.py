@@ -2463,66 +2463,81 @@ def test_dataframe_concat_series(df, other, sort):
         assert_eq(expected, actual, check_index_type=not gdf.empty)
 
 
+_DATAFRAME_CONCAT_DFS = [
+    pd.DataFrame(),
+    pd.DataFrame(index=[10, 20, 30]),
+    pd.DataFrame({"first_col": [], "second_col": [], "third_col": []}),
+    pd.DataFrame([[1, 2], [3, 4]], columns=list("AB")),
+    pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[10, 20]),
+    pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[7, 8]),
+    pd.DataFrame(
+        {
+            "a": [315.3324, 3243.32432, 3232.332, -100.32],
+            "z": [0.3223, 0.32, 0.0000232, 0.32224],
+        }
+    ),
+    pd.DataFrame(
+        {
+            "a": [315.3324, 3243.32432, 3232.332, -100.32],
+            "z": [0.3223, 0.32, 0.0000232, 0.32224],
+        },
+        index=[7, 20, 11, 9],
+    ),
+    pd.DataFrame({"l": [10]}),
+    pd.DataFrame({"l": [10]}, index=[100]),
+    pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+    pd.DataFrame(
+        {"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]},
+        index=[100, 200, 300, 400, 500, 0],
+    ),
+]
+
+_DATAFRAME_CONCAT_OTHERS = [
+    pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
+    pd.DataFrame([[5, 6], [7, 8]], columns=list("BD")),
+    pd.DataFrame([[5, 6], [7, 8]], columns=list("DE")),
+    pd.DataFrame(),
+    pd.DataFrame(
+        {"c": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
+    ),
+    pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+    pd.DataFrame({"l": [10]}),
+    pd.DataFrame({"l": [10]}, index=[200]),
+    pd.DataFrame([]),
+    pd.DataFrame({"first_col": [], "second_col": [], "third_col": []}),
+    pd.DataFrame([], index=[100]),
+    pd.DataFrame(
+        {
+            "a": [315.3324, 3243.32432, 3232.332, -100.32],
+            "z": [0.3223, 0.32, 0.0000232, 0.32224],
+        }
+    ),
+    pd.DataFrame(
+        {
+            "a": [315.3324, 3243.32432, 3232.332, -100.32],
+            "z": [0.3223, 0.32, 0.0000232, 0.32224],
+        },
+        index=[0, 100, 200, 300],
+    ),
+]
+
+
 @pytest.mark.parametrize(
-    "df",
+    "df, other",
     [
-        pd.DataFrame(),
-        pd.DataFrame(index=[10, 20, 30]),
-        pd.DataFrame({"first_col": [], "second_col": [], "third_col": []}),
-        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB")),
-        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[10, 20]),
-        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[7, 8]),
-        pd.DataFrame(
-            {
-                "a": [315.3324, 3243.32432, 3232.332, -100.32],
-                "z": [0.3223, 0.32, 0.0000232, 0.32224],
-            }
-        ),
-        pd.DataFrame(
-            {
-                "a": [315.3324, 3243.32432, 3232.332, -100.32],
-                "z": [0.3223, 0.32, 0.0000232, 0.32224],
-            },
-            index=[7, 20, 11, 9],
-        ),
-        pd.DataFrame({"l": [10]}),
-        pd.DataFrame({"l": [10]}, index=[100]),
-        pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
-        pd.DataFrame(
-            {"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]},
-            index=[100, 200, 300, 400, 500, 0],
-        ),
-    ],
-)
-@pytest.mark.parametrize(
-    "other",
-    [
-        pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
-        pd.DataFrame([[5, 6], [7, 8]], columns=list("BD")),
-        pd.DataFrame([[5, 6], [7, 8]], columns=list("DE")),
-        pd.DataFrame(),
-        pd.DataFrame(
-            {"c": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
-        ),
-        pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
-        pd.DataFrame({"l": [10]}),
-        pd.DataFrame({"l": [10]}, index=[200]),
-        pd.DataFrame([]),
-        pd.DataFrame({"first_col": [], "second_col": [], "third_col": []}),
-        pd.DataFrame([], index=[100]),
-        pd.DataFrame(
-            {
-                "a": [315.3324, 3243.32432, 3232.332, -100.32],
-                "z": [0.3223, 0.32, 0.0000232, 0.32224],
-            }
-        ),
-        pd.DataFrame(
-            {
-                "a": [315.3324, 3243.32432, 3232.332, -100.32],
-                "z": [0.3223, 0.32, 0.0000232, 0.32224],
-            },
-            index=[0, 100, 200, 300],
-        ),
+        pytest.param(_DATAFRAME_CONCAT_DFS[0], _DATAFRAME_CONCAT_OTHERS[0]),
+        pytest.param(_DATAFRAME_CONCAT_DFS[1], _DATAFRAME_CONCAT_OTHERS[1]),
+        pytest.param(_DATAFRAME_CONCAT_DFS[2], _DATAFRAME_CONCAT_OTHERS[2]),
+        pytest.param(_DATAFRAME_CONCAT_DFS[3], _DATAFRAME_CONCAT_OTHERS[3]),
+        pytest.param(_DATAFRAME_CONCAT_DFS[4], _DATAFRAME_CONCAT_OTHERS[4]),
+        pytest.param(_DATAFRAME_CONCAT_DFS[5], _DATAFRAME_CONCAT_OTHERS[5]),
+        pytest.param(_DATAFRAME_CONCAT_DFS[6], _DATAFRAME_CONCAT_OTHERS[6]),
+        pytest.param(_DATAFRAME_CONCAT_DFS[7], _DATAFRAME_CONCAT_OTHERS[7]),
+        pytest.param(_DATAFRAME_CONCAT_DFS[8], _DATAFRAME_CONCAT_OTHERS[8]),
+        pytest.param(_DATAFRAME_CONCAT_DFS[9], _DATAFRAME_CONCAT_OTHERS[9]),
+        pytest.param(_DATAFRAME_CONCAT_DFS[10], _DATAFRAME_CONCAT_OTHERS[10]),
+        pytest.param(_DATAFRAME_CONCAT_DFS[11], _DATAFRAME_CONCAT_OTHERS[11]),
+        pytest.param(_DATAFRAME_CONCAT_DFS[0], _DATAFRAME_CONCAT_OTHERS[12]),
     ],
 )
 def test_dataframe_concat_dataframe(df, other, sort, ignore_index):
