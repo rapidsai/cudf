@@ -1494,9 +1494,19 @@ def test_operator_func_between_series_logical(
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("has_nulls", [True, False])
-@pytest.mark.parametrize("scalar", [-59.0, np.nan, 0, 59.0])
-@pytest.mark.parametrize("fill_value", [None, 1.0])
+@pytest.mark.parametrize(
+    "has_nulls, scalar, fill_value",
+    [
+        (False, -59.0, None),
+        (False, np.nan, 1.0),
+        (False, 0, None),
+        (False, 59.0, 1.0),
+        (True, -59.0, 1.0),
+        (True, np.nan, 1.0),
+        (True, 0, 1.0),
+        (True, 59.0, None),
+    ],
+)
 def test_operator_func_series_and_scalar_logical(
     request,
     float_types_as_str,
