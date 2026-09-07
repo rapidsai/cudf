@@ -632,29 +632,41 @@ def test_dt_ops(data):
     assert_eq(pd_data > pd_data, gdf_data > gdf_data)
 
 
+_DATETIME_SUBTRACT_DATA = [
+    [1, 2, 3, 4, 10, 100, 20000],
+    [None] * 7,
+    [10, 20, 30, None, 100, 200, None],
+    [3223.234, 342.2332, 23423.23, 3343.23324, 23432.2323, 242.23, 233],
+]
+
+_DATETIME_SUBTRACT_OTHERS = [
+    [1, 2, 3, 4, 10, 100, 20000],
+    [None] * 7,
+    [10, 20, 30, None, 100, 200, None],
+    [3223.234, 342.2332, 23423.23, 3343.23324, 23432.2323, 242.23, 233],
+    datetime.datetime(1993, 6, 22, 13, 30),
+    datetime.datetime(2005, 1, 22, 10, 00),
+    np.datetime64("2005-02"),
+    np.datetime64("2005-02-25"),
+    np.datetime64("2005-02-25T03:30"),
+    np.datetime64("nat"),
+    # TODO: https://github.com/pandas-dev/pandas/issues/52295
+]
+
+
 @pytest.mark.parametrize(
-    "data",
+    "data, other",
     [
-        [1, 2, 3, 4, 10, 100, 20000],
-        [None] * 7,
-        [10, 20, 30, None, 100, 200, None],
-        [3223.234, 342.2332, 23423.23, 3343.23324, 23432.2323, 242.23, 233],
-    ],
-)
-@pytest.mark.parametrize(
-    "other",
-    [
-        [1, 2, 3, 4, 10, 100, 20000],
-        [None] * 7,
-        [10, 20, 30, None, 100, 200, None],
-        [3223.234, 342.2332, 23423.23, 3343.23324, 23432.2323, 242.23, 233],
-        datetime.datetime(1993, 6, 22, 13, 30),
-        datetime.datetime(2005, 1, 22, 10, 00),
-        np.datetime64("2005-02"),
-        np.datetime64("2005-02-25"),
-        np.datetime64("2005-02-25T03:30"),
-        np.datetime64("nat"),
-        # TODO: https://github.com/pandas-dev/pandas/issues/52295
+        (_DATETIME_SUBTRACT_DATA[0], _DATETIME_SUBTRACT_OTHERS[0]),
+        (_DATETIME_SUBTRACT_DATA[1], _DATETIME_SUBTRACT_OTHERS[1]),
+        (_DATETIME_SUBTRACT_DATA[2], _DATETIME_SUBTRACT_OTHERS[2]),
+        (_DATETIME_SUBTRACT_DATA[3], _DATETIME_SUBTRACT_OTHERS[3]),
+        (_DATETIME_SUBTRACT_DATA[0], _DATETIME_SUBTRACT_OTHERS[4]),
+        (_DATETIME_SUBTRACT_DATA[1], _DATETIME_SUBTRACT_OTHERS[5]),
+        (_DATETIME_SUBTRACT_DATA[2], _DATETIME_SUBTRACT_OTHERS[6]),
+        (_DATETIME_SUBTRACT_DATA[3], _DATETIME_SUBTRACT_OTHERS[7]),
+        (_DATETIME_SUBTRACT_DATA[0], _DATETIME_SUBTRACT_OTHERS[8]),
+        (_DATETIME_SUBTRACT_DATA[1], _DATETIME_SUBTRACT_OTHERS[9]),
     ],
 )
 def test_datetime_subtract(
