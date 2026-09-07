@@ -1,5 +1,7 @@
 # <div align="left"><img src="../../img/rapids_logo.png" width="90px"/>&nbsp;Dask cuDF - A GPU Backend for Dask DataFrame</div>
 
+<!-- Temporary no-op marker for a complete PR-workflow timing run. -->
+
 Dask cuDF (a.k.a. dask-cudf or `dask_cudf`) is an extension library for [Dask DataFrame](https://docs.dask.org/en/stable/dataframe.html) that provides a Pandas-like API for parallel and larger-than-memory DataFrame computing on GPUs. When installed, Dask cuDF is automatically registered as the `"cudf"` [dataframe backend](https://docs.dask.org/en/stable/how-to/selecting-the-collection-backend.html) for Dask DataFrame.
 
 > [!IMPORTANT]
