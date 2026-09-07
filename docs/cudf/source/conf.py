@@ -31,6 +31,7 @@ from enum import IntEnum, IntFlag
 from typing import Any
 
 import cudf
+from breathe.directives.content_block import DoxygenPageDirective
 from breathe.renderer.sphinxrenderer import SphinxRenderer
 from docutils import nodes
 from docutils.nodes import Node, Text
@@ -62,6 +63,33 @@ def visit_docsect4(self, node):
 
 
 SphinxRenderer.methods["docsect4"] = visit_docsect4
+
+
+class FlatDoxygenPageDirective(DoxygenPageDirective):
+    """Render a Doxygen page body as direct children of its RST section."""
+
+    def run(self):
+        self.options["content-only"] = None
+        rendered = super().run()
+
+        if len(rendered) != 1 or not isinstance(rendered[0], nodes.container):
+            return rendered
+
+        content = next(
+            (
+                child
+                for child in rendered[0].children
+                if isinstance(child, addnodes.desc_content)
+            ),
+            None,
+        )
+        if content is None:
+            return rendered
+
+        children = list(content.children)
+        for child in children:
+            content.remove(child)
+        return children
 
 
 class PseudoLexer(RegexLexer):
@@ -905,48 +933,6 @@ def relocate_libcudf_developer_guide_images(
             image["uri"] = "strings.png"
 
 
-def promote_libcudf_developer_guide_page_titles(
-    app: Sphinx, document: Node
-) -> None:
-    """Make Doxygen page titles usable as Sphinx document titles.
-
-    Breathe renders ``doxygenpage`` titles as C++ description signatures. Its
-    Markdown sections are consequently nested below that signature, so Sphinx
-    cannot use them to build a document toctree. Promote the Doxygen-authored
-    page title and content to a top-level section while retaining its targets.
-    """
-    if not app.env.docname.startswith("libcudf/developer_guide/"):
-        return
-
-    for page in list(document.findall(addnodes.desc)):
-        if page.get("domain") != "cpp" or page.get("objtype") != "page":
-            continue
-
-        signature = next(
-            child
-            for child in page.children
-            if isinstance(child, addnodes.desc_signature)
-        )
-        content = next(
-            child
-            for child in page.children
-            if isinstance(child, addnodes.desc_content)
-        )
-        name = next(signature.findall(addnodes.desc_name))
-
-        section = nodes.section(ids=page["ids"], names=page["names"])
-        section += nodes.title(
-            "", "", *[child.deepcopy() for child in name.children]
-        )
-        section.extend(
-            child.deepcopy()
-            for child in signature.children
-            if isinstance(child, nodes.target)
-        )
-        section.extend(content.children)
-        page.replace_self(section)
-
-
 _libcudf_developer_guide_documents = {
     "DEVELOPER_GUIDE.md": "libcudf/developer_guide/DEVELOPER_GUIDE",
     "DOCUMENTATION.md": "libcudf/developer_guide/DOCUMENTATION",
@@ -1069,14 +1055,10 @@ def use_slugged_duplicate_ids(app):
 
 
 def setup(app):
+    app.add_directive("flatdoxygenpage", FlatDoxygenPageDirective)
     app.connect("builder-inited", use_slugged_duplicate_ids)
     app.connect("doctree-read", resolve_aliases)
     app.connect("doctree-read", register_sections_as_label)
-    app.connect(
-        "doctree-read",
-        promote_libcudf_developer_guide_page_titles,
-        priority=90,
-    )
     app.connect(
         "doctree-read", relocate_libcudf_developer_guide_images, priority=100
     )

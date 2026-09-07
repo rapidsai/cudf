@@ -1,6 +1,10 @@
 .. _md_developer_guide:
+.. _DEVELOPER_GUIDE:
 
-.. doxygenpage:: DEVELOPER_GUIDE
+libcudf C++ Developer Guide
+===========================
+
+.. flatdoxygenpage:: DEVELOPER_GUIDE
    :project: libcudf
 
 .. toctree::
