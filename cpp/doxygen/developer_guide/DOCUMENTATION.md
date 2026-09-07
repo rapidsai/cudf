@@ -438,4 +438,5 @@ Then open `<IP address>:8000` in your local web browser, inserting the IP addres
 
 The doxygen output is intended for building documentation only for the public APIs and classes.
 For example, the output should not include documentation for `detail` or `/src` files, and these directories are excluded in the `Doxyfile` configuration.
-When published by the build/CI system, the doxygen output will appear on our external [RAPIDS web site](https://docs.rapids.ai/api/libcudf/stable/index.html).
+When published by the build/CI system, the doxygen output will appear as
+part of the [cuDF documentation](https://docs.nvidia.com/cudf/latest/libcudf/).
