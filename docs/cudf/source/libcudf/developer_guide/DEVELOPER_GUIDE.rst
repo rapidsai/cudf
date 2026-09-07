@@ -1,17 +1,13 @@
 .. _md_developer_guide:
 
-libcudf C++ Developer Guide
-===========================
-
 .. doxygenpage:: DEVELOPER_GUIDE
    :project: libcudf
-   :no-title:
 
 .. toctree::
    :hidden:
    :maxdepth: 1
 
-   DOCUMENTATION
-   TESTING
-   BENCHMARKING
-   PROFILING
+   libcudf C++ Documentation Guide <DOCUMENTATION>
+   Unit Testing in libcudf <TESTING>
+   Unit Benchmarking in libcudf <BENCHMARKING>
+   Profiling libcudf <PROFILING>

@@ -1,6 +1,6 @@
 # libcudf C++ Documentation Guide
 
-These guidelines apply to documenting all libcudf C++ source files using doxygen style formatting although only public APIs and classes are actually [published](https://docs.rapids.ai/api/libcudf/stable/index.html).
+These guidelines apply to documenting all libcudf C++ source files using doxygen style formatting although only public APIs and classes are actually [published](https://docs.nvidia.com/cudf/latest/libcudf/api_docs/).
 
 ## Copyright License
 

@@ -674,7 +674,7 @@ cudf::detail::copy_if(
 
 ## Memory Allocation
 
-Device [memory resources](#rmmdevice_memory_resource) are used in libcudf to abstract and control
+Device [memory resources](#memory-resources) are used in libcudf to abstract and control
 how device memory is allocated.
 
 ### Output Memory

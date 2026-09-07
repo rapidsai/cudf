@@ -31,17 +31,37 @@ from enum import IntEnum, IntFlag
 from typing import Any
 
 import cudf
+from breathe.renderer.sphinxrenderer import SphinxRenderer
 from docutils import nodes
 from docutils.nodes import Node, Text
 from packaging.version import Version
 from pygments.lexer import RegexLexer
 from pygments.token import Text as PText
+from sphinx import addnodes
 from sphinx.addnodes import pending_xref
 from sphinx.application import Sphinx
 from sphinx.ext import intersphinx
 from sphinx.ext.autodoc import ClassDocumenter
 from sphinx.highlighting import lexers
+from sphinx.util import logging
 from sphinx.util.nodes import clean_astext, make_refnode
+
+
+# TODO: ship this upstream in breathe. Today breathe doesn't render
+# docsect4 headers or the contents at all.
+def visit_docsect4(self, node):
+    (title,) = (item for item in node.content_ if item.name == "title")
+
+    section = nodes.section(ids=[self.get_refid(node.id)])
+    section += nodes.title("", "", *self.render(title))
+    section += self.create_doxygen_target(node)
+    section += self.render_iterable(
+        [item for item in node.content_ if item.name != "title"]
+    )
+    return [section]
+
+
+SphinxRenderer.methods["docsect4"] = visit_docsect4
 
 
 class PseudoLexer(RegexLexer):
@@ -885,6 +905,164 @@ def relocate_libcudf_developer_guide_images(
             image["uri"] = "strings.png"
 
 
+def promote_libcudf_developer_guide_page_titles(
+    app: Sphinx, document: Node
+) -> None:
+    """Make Doxygen page titles usable as Sphinx document titles.
+
+    Breathe renders ``doxygenpage`` titles as C++ description signatures. Its
+    Markdown sections are consequently nested below that signature, so Sphinx
+    cannot use them to build a document toctree. Promote the Doxygen-authored
+    page title and content to a top-level section while retaining its targets.
+    """
+    if not app.env.docname.startswith("libcudf/developer_guide/"):
+        return
+
+    for page in list(document.findall(addnodes.desc)):
+        if page.get("domain") != "cpp" or page.get("objtype") != "page":
+            continue
+
+        signature = next(
+            child
+            for child in page.children
+            if isinstance(child, addnodes.desc_signature)
+        )
+        content = next(
+            child
+            for child in page.children
+            if isinstance(child, addnodes.desc_content)
+        )
+        name = next(signature.findall(addnodes.desc_name))
+
+        section = nodes.section(ids=page["ids"], names=page["names"])
+        section += nodes.title(
+            "", "", *[child.deepcopy() for child in name.children]
+        )
+        section.extend(
+            child.deepcopy()
+            for child in signature.children
+            if isinstance(child, nodes.target)
+        )
+        section.extend(content.children)
+        page.replace_self(section)
+
+
+_libcudf_developer_guide_documents = {
+    "DEVELOPER_GUIDE.md": "libcudf/developer_guide/DEVELOPER_GUIDE",
+    "DOCUMENTATION.md": "libcudf/developer_guide/DOCUMENTATION",
+    "TESTING.md": "libcudf/developer_guide/TESTING",
+    "BENCHMARKING.md": "libcudf/developer_guide/BENCHMARKING",
+    "PROFILING.md": "libcudf/developer_guide/PROFILING",
+}
+_libcudf_developer_guide_source_files = {
+    docname: filename
+    for filename, docname in _libcudf_developer_guide_documents.items()
+}
+_libcudf_developer_guide_xref_prefix = "libcudf-guide-md:"
+_libcudf_developer_guide_logger = logging.getLogger(__name__)
+
+
+def _markdown_heading_slug(title: str) -> str:
+    """Return the GitHub-style fragment generated for a Markdown heading."""
+    slug = title.lower()
+    slug = re.sub(r"[^\w\s-]", "", slug)
+    return re.sub(r"-+", "-", re.sub(r"\s+", "-", slug)).strip("-")
+
+
+def rewrite_libcudf_developer_guide_markdown_links(
+    app: Sphinx, document: Node
+) -> None:
+    """Turn local Markdown fragment links in the developer guide into xrefs."""
+    if not app.env.docname.startswith("libcudf/developer_guide/"):
+        return
+
+    for reference in list(document.findall(nodes.reference)):
+        refuri = reference.get("refuri")
+        if not refuri or "#" not in refuri or not reference.children:
+            continue
+
+        path, fragment = refuri.split("#", maxsplit=1)
+        if not path:
+            path = _libcudf_developer_guide_source_files[app.env.docname]
+        else:
+            path = path.removeprefix("./")
+        # Paths outside this directory remain ordinary source/external links.
+        if "/" in path or not fragment:
+            continue
+
+        target = _libcudf_developer_guide_documents.get(path)
+        reftarget = f"{_libcudf_developer_guide_xref_prefix}{path}#{fragment}"
+        xref = pending_xref(
+            "",
+            refdomain="std",
+            reftype="ref",
+            reftarget=reftarget,
+            refexplicit=True,
+            refwarn=True,
+        )
+        xref["refdoc"] = app.env.docname
+        xref["libcudf_guide_target_docname"] = target
+        xref.source = reference.source
+        xref.line = reference.line
+        xref.extend(child.deepcopy() for child in reference.children)
+        reference.replace_self(xref)
+
+
+def resolve_libcudf_developer_guide_markdown_link(app, env, node, contnode):
+    """Resolve a rewritten guide Markdown link or warn with its original URL."""
+    reftarget = node.get("reftarget", "")
+    if not reftarget.startswith(_libcudf_developer_guide_xref_prefix):
+        return None
+
+    markdown_target = reftarget.removeprefix(
+        _libcudf_developer_guide_xref_prefix
+    )
+    target_docname = node.get("libcudf_guide_target_docname")
+    if target_docname is not None:
+        _, fragment = markdown_target.split("#", maxsplit=1)
+        slugs: dict[str, int] = {}
+        for section in env.get_doctree(target_docname).findall(nodes.section):
+            title = clean_astext(section[0])
+            base_slug = _markdown_heading_slug(title)
+            occurrence = slugs.get(base_slug, 0)
+            slugs[base_slug] = occurrence + 1
+            heading_slug = (
+                base_slug if occurrence == 0 else f"{base_slug}-{occurrence}"
+            )
+            if fragment in (heading_slug, section["ids"][0]):
+                return make_refnode(
+                    app.builder,
+                    node["refdoc"],
+                    target_docname,
+                    section["ids"][0],
+                    contnode,
+                    title,
+                )
+            for target in section.findall(nodes.target):
+                refid = target.get("refid", "")
+                if fragment in target["ids"] or fragment in (
+                    refid,
+                    refid.rsplit("_1", maxsplit=1)[-1],
+                ):
+                    return make_refnode(
+                        app.builder,
+                        node["refdoc"],
+                        target_docname,
+                        section["ids"][0],
+                        contnode,
+                        title,
+                    )
+
+    _libcudf_developer_guide_logger.warning(
+        "libcudf developer-guide Markdown link target not found: %s",
+        markdown_target,
+        location=node,
+        type="ref",
+        subtype="libcudf_guide_markdown",
+    )
+    return contnode
+
+
 def use_slugged_duplicate_ids(app):
     # Use default docutils deduplication scheme for duplicate node ids.
     app.env.settings["auto_id_prefix"] = "%"
@@ -895,7 +1073,22 @@ def setup(app):
     app.connect("doctree-read", resolve_aliases)
     app.connect("doctree-read", register_sections_as_label)
     app.connect(
+        "doctree-read",
+        promote_libcudf_developer_guide_page_titles,
+        priority=90,
+    )
+    app.connect(
         "doctree-read", relocate_libcudf_developer_guide_images, priority=100
+    )
+    app.connect(
+        "doctree-read",
+        rewrite_libcudf_developer_guide_markdown_links,
+        priority=110,
+    )
+    app.connect(
+        "missing-reference",
+        resolve_libcudf_developer_guide_markdown_link,
+        priority=100,
     )
     app.connect("missing-reference", on_missing_reference)
     app.setup_extension("sphinx.ext.autodoc")
