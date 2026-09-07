@@ -519,7 +519,7 @@ def _collect_series_key_column_names(obj, by) -> dict[int, Hashable]:
 
 
 class GroupByNthSelector:
-    """Mirror of :class:`pandas.core.groupby.indexing.GroupByNthSelector`.
+    """Mirror of ``pandas.core.groupby.indexing.GroupByNthSelector``.
 
     ``GroupBy.nth`` supports both the call form ``gb.nth(n, dropna=...)``
     and the index form ``gb.nth[n]``.
@@ -1505,8 +1505,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             Computed {op} of values within each group.
 
         .. pandas-compat::
-            :meth:`pandas.core.groupby.DataFrameGroupBy.{op}`,
-             :meth:`pandas.core.groupby.SeriesGroupBy.{op}`
+            :meth:`pandas.api.typing.DataFrameGroupBy.{op}`,
+             :meth:`pandas.api.typing.SeriesGroupBy.{op}`
 
             The numeric_only, min_count
         """
@@ -2640,8 +2640,8 @@ class GroupBy(Serializable, Reducible, Scannable):
           6    2    6   12
 
         .. pandas-compat::
-            :meth:`pandas.core.groupby.DataFrameGroupBy.apply`,
-             :meth:`pandas.core.groupby.SeriesGroupBy.apply`
+            :meth:`pandas.api.typing.DataFrameGroupBy.apply`,
+             :meth:`pandas.api.typing.SeriesGroupBy.apply`
 
             cuDF's ``groupby.apply`` is limited compared to pandas.
             In some situations, Pandas returns the grouped keys as part of
@@ -3593,8 +3593,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             Object shifted within each group.
 
         .. pandas-compat::
-            :meth:`pandas.core.groupby.DataFrameGroupBy.shift`,
-             :meth:`pandas.core.groupby.SeriesGroupBy.shift`
+            :meth:`pandas.api.typing.DataFrameGroupBy.shift`,
+             :meth:`pandas.api.typing.SeriesGroupBy.shift`
 
             Parameter ``freq`` is unsupported.
         """

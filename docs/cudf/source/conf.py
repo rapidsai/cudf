@@ -166,6 +166,9 @@ nb_execution_timeout = 300
 copybutton_prompt_text = ">>> "
 autosummary_generate = True
 
+toc_object_entries_show_parents = "hide"
+maximum_signature_line_length = 70
+
 # Enable automatic generation of systematic, namespaced labels for sections
 myst_heading_anchors = 2
 
@@ -176,7 +179,7 @@ templates_path = ["_templates"]
 # You can specify multiple suffix as a list of string:
 #
 # source_suffix = ['.rst', '.md']
-source_suffix = {".rst": "restructuredtext"}
+source_suffix = {".rst": "restructuredtext", ".md": "myst-nb"}
 
 # The master toctree document.
 master_doc = "index"
@@ -324,22 +327,33 @@ texinfo_documents = [
     )
 ]
 
+with open("../../../RAPIDS_BRANCH", "r") as f:
+    branch = f.read().strip()
+intersphinx_version = "latest" if branch == "main" else version
 
-# Example configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {
     "cupy": ("https://docs.cupy.dev/en/stable/", None),
+    "dask-cuda": (
+        f"https://docs.nvidia.com/dask-cuda/{intersphinx_version}/",
+        None,
+    ),
+    "dask-cudf": (
+        f"https://docs.nvidia.com/dask-cudf/{intersphinx_version}/",
+        None,
+    ),
     "dlpack": ("https://dmlc.github.io/dlpack/latest/", None),
+    "kvikio": (f"https://docs.nvidia.com/kvikio/{intersphinx_version}/", None),
     "nanoarrow": ("https://arrow.apache.org/nanoarrow/latest/", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
-    # Temporarily disable nitpick warnings for pandas: https://github.com/pandas-dev/pandas/issues/64584
-    # "pandas": (
-    #     "https://pandas.pydata.org/pandas-docs/stable/",
-    #     None,
-    # ),
+    "pandas": ("https://pandas.pydata.org/pandas-docs/stable/", None),
     "polars": ("https://docs.pola.rs/api/python/stable/", None),
     "pyarrow": ("https://arrow.apache.org/docs/", None),
     "python": ("https://docs.python.org/3/", None),
-    "rmm": ("https://docs.rapids.ai/api/rmm/nightly/", None),
+    "rmm": (f"https://docs.nvidia.com/rmm/{intersphinx_version}/", None),
+    "rapidsmpf": (
+        f"https://docs.nvidia.com/rapidsmpf/{intersphinx_version}/",
+        None,
+    ),
     "typing_extensions": (
         "https://typing-extensions.readthedocs.io/en/stable/",
         None,
@@ -456,6 +470,8 @@ _names_to_skip_in_cpp = {
     "type_to_scalar_type_impl",
     "type_to_scalar_type_impl",
     "detail",
+    # Test-only helper types are intentionally not published as API pages.
+    "classcudf_1_1test_1_1",
     # kafka objects
     "python_callable_type",
     "kafka_oauth_callback_wrapper_type",
@@ -479,7 +495,7 @@ _intersphinx_cache = {}
 _intersphinx_extra_prefixes = ("rmm", "rmm::mr", "mr")
 
 _external_intersphinx_aliases = {
-    # "pandas": "pd",
+    "pandas": "pd",
     "pyarrow": "pa",
     "numpy": "np",
     "cupy": "cp",
@@ -653,6 +669,12 @@ def on_missing_reference(app, env, node, contnode):
 nitpick_ignore = [
     ("py:class", "Dtype"),
     ("py:class", "pandas.core.indexes.frozen.FrozenList"),
+    # pandas does not publish these implementation types in its inventory.
+    ("py:class", "pandas.api.typing.FrozenList"),
+    (
+        "py:class",
+        "pandas.core.arrays.arrow.extension_types.ArrowIntervalType",
+    ),
     ("py:class", "ScalarLike"),
     ("py:class", "StringColumn"),
     ("py:class", "ColumnLike"),
@@ -694,11 +716,8 @@ nitpick_ignore = [
     ("py:class", "SupportsCudaArrayInterface"),
     ("py:class", "T"),
 ]
-# Temporarily disable nitpick warnings for pandas: https://github.com/pandas-dev/pandas/issues/64584
+
 nitpick_ignore_regex = [
-    ("py:.*", "pandas.*"),
-    ("py:.*", "pd.*"),
-    ("ref.*", ".*pandas.*"),
     # External libs without configured intersphinx inventories.
     ("py:.*", r"rapidsmpf(\..*)?"),
     ("py:.*", r"kvikio(\..*)?"),
