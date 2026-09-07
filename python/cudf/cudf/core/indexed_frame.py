@@ -2437,7 +2437,7 @@ class IndexedFrame(Frame):
             before, after = after, before
 
         slicer = [slice(None, None)] * self.ndim
-        slicer[axis] = slice(before, after) 
+        slicer[axis] = slice(before, after)
         return self.loc[tuple(slicer)].copy()
 
     @_performance_tracking
