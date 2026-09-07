@@ -2140,44 +2140,57 @@ def test_series_concat_existing_buffers():
     )
 
 
+_DATAFRAME_LIST_DFS = [
+    pd.DataFrame(),
+    pd.DataFrame([[1, 2], [3, 4]], columns=list("AB")),
+    pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[10, 20]),
+    pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[7, 8]),
+    pd.DataFrame(
+        {
+            "a": [315.3324, 3243.32432, 3232.332, -100.32],
+            "z": [0.3223, 0.32, 0.0000232, 0.32224],
+        }
+    ),
+    pd.DataFrame(
+        {
+            "a": [315.3324, 3243.32432, 3232.332, -100.32],
+            "z": [0.3223, 0.32, 0.0000232, 0.32224],
+        },
+        index=[7, 20, 11, 9],
+    ),
+    pd.DataFrame({"l": [10]}),
+    pd.DataFrame({"l": [10]}, index=[100]),
+    pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+    pd.DataFrame(
+        {"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]},
+        index=[100, 200, 300, 400, 500, 0],
+    ),
+    pd.DataFrame({"first_col": [], "second_col": [], "third_col": []}),
+]
+
+_DATAFRAME_LIST_OTHERS = [
+    [[1, 2], [10, 100]],
+    [[1, 2, 10, 100, 0.1, 0.2, 0.0021]],
+    [[]],
+    [[], [], [], []],
+    [[0.23, 0.00023, -10.00, 100, 200, 1000232, 1232.32323]],
+]
+
+
 @pytest.mark.parametrize(
-    "df",
+    "df, other",
     [
-        pd.DataFrame(),
-        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB")),
-        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[10, 20]),
-        pd.DataFrame([[1, 2], [3, 4]], columns=list("AB"), index=[7, 8]),
-        pd.DataFrame(
-            {
-                "a": [315.3324, 3243.32432, 3232.332, -100.32],
-                "z": [0.3223, 0.32, 0.0000232, 0.32224],
-            }
-        ),
-        pd.DataFrame(
-            {
-                "a": [315.3324, 3243.32432, 3232.332, -100.32],
-                "z": [0.3223, 0.32, 0.0000232, 0.32224],
-            },
-            index=[7, 20, 11, 9],
-        ),
-        pd.DataFrame({"l": [10]}),
-        pd.DataFrame({"l": [10]}, index=[100]),
-        pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
-        pd.DataFrame(
-            {"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]},
-            index=[100, 200, 300, 400, 500, 0],
-        ),
-        pd.DataFrame({"first_col": [], "second_col": [], "third_col": []}),
-    ],
-)
-@pytest.mark.parametrize(
-    "other",
-    [
-        [[1, 2], [10, 100]],
-        [[1, 2, 10, 100, 0.1, 0.2, 0.0021]],
-        [[]],
-        [[], [], [], []],
-        [[0.23, 0.00023, -10.00, 100, 200, 1000232, 1232.32323]],
+        pytest.param(_DATAFRAME_LIST_DFS[0], _DATAFRAME_LIST_OTHERS[0]),
+        pytest.param(_DATAFRAME_LIST_DFS[1], _DATAFRAME_LIST_OTHERS[1]),
+        pytest.param(_DATAFRAME_LIST_DFS[2], _DATAFRAME_LIST_OTHERS[2]),
+        pytest.param(_DATAFRAME_LIST_DFS[3], _DATAFRAME_LIST_OTHERS[3]),
+        pytest.param(_DATAFRAME_LIST_DFS[4], _DATAFRAME_LIST_OTHERS[4]),
+        pytest.param(_DATAFRAME_LIST_DFS[5], _DATAFRAME_LIST_OTHERS[0]),
+        pytest.param(_DATAFRAME_LIST_DFS[6], _DATAFRAME_LIST_OTHERS[1]),
+        pytest.param(_DATAFRAME_LIST_DFS[7], _DATAFRAME_LIST_OTHERS[2]),
+        pytest.param(_DATAFRAME_LIST_DFS[8], _DATAFRAME_LIST_OTHERS[3]),
+        pytest.param(_DATAFRAME_LIST_DFS[9], _DATAFRAME_LIST_OTHERS[4]),
+        pytest.param(_DATAFRAME_LIST_DFS[10], _DATAFRAME_LIST_OTHERS[2]),
     ],
 )
 def test_dataframe_concat_lists(df, other, sort, ignore_index):
