@@ -147,6 +147,7 @@ void context::initialize_components(detail::init_flags flags)
 {
   CUDF_FUNC_RANGE();
   if (has_flag(flags, detail::init_flags::LOAD_NVCOMP)) { preload_nvcomp(); }
+  if (has_flag(flags, detail::init_flags::INITIALIZE_JIT)) { ensure_jit_initialized(); }
 }
 
 namespace {
