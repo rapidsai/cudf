@@ -65,6 +65,8 @@ class context {
  private:
   void preload_nvcomp();
 
+  void ensure_jit_initialized();
+
   void initialize_jit();
 
   void initialize_components(detail::init_flags flags);

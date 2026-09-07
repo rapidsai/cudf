@@ -19,12 +19,10 @@ enum class init_flags : std::uint32_t {
   NONE = 0,
   /// @brief Load the nvCOMP library during initialization
   LOAD_NVCOMP = 1 << 0,
-  /// @brief Initialize the JIT runtime and program cache
-  INITIALIZE_JIT = 1 << 1,
   /// @brief Default initialization steps
   DEFAULT = NONE,
   /// @brief All initialization steps
-  ALL = LOAD_NVCOMP | INITIALIZE_JIT
+  ALL = LOAD_NVCOMP
 };
 
 /// @brief Bitwise OR operator for init_flags
