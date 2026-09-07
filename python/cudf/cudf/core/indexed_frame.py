@@ -184,6 +184,24 @@ doc_binop_template = textwrap.dedent(
 )
 
 
+def _freq_after_take(original_freq, indexer):
+    """Return the freq that should apply after gathering rows by `indexer`.
+
+    Matches pandas: if the positions in `indexer` form a constant step,
+    the new freq is step * original_freq; otherwise the new freq is None.
+    A result with 0 or 1 rows keeps the original freq.
+    """
+    if original_freq is None:
+        return None
+    positions = cp.asarray(indexer)
+    if len(positions) <= 1:
+        return original_freq
+    diffs = cp.diff(positions)
+    if cp.all(diffs == diffs[0]):
+        return int(diffs[0]) * original_freq
+    return None
+
+
 def _get_unique_drop_labels(array):
     """Return labels to be dropped for IndexFrame.drop."""
     if isinstance(array, (cudf.Series, cudf.Index, ColumnBase)):
@@ -2419,7 +2437,7 @@ class IndexedFrame(Frame):
             before, after = after, before
 
         slicer = [slice(None, None)] * self.ndim
-        slicer[axis] = slice(before, after)
+        slicer[axis] = slice(before, after) 
         return self.loc[tuple(slicer)].copy()
 
     @_performance_tracking
@@ -2496,7 +2514,7 @@ class IndexedFrame(Frame):
         )
         result = self.iloc[indexer]
         if isinstance(result.index, cudf.DatetimeIndex):
-            result.index._freq = None
+            result.index._freq = _freq_after_take(self.index._freq, indexer)
         return result
 
     @_performance_tracking
@@ -2546,7 +2564,7 @@ class IndexedFrame(Frame):
         )
         result = self.iloc[indexer]
         if isinstance(result.index, cudf.DatetimeIndex):
-            result.index._freq = None
+            result.index._freq = _freq_after_take(self.index._freq, indexer)
         return result
 
     @property
