@@ -125,6 +125,8 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+# Copied from the doxygen subdirectory
+docs/cudf/source/libcudf/developer_guide/strings.png
 
 # PyBuilder
 target/
