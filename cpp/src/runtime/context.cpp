@@ -53,12 +53,8 @@ int32_t get_current_device_compute_capability()
 context::context(context_config cfg, detail::init_flags flags)
   : _config{std::move(cfg)},
     _device_properties{
-      get_driver_version(), get_runtime_version(), get_current_device_compute_capability()},
-    _nvrtc_version{0},
-    _nvjitlink_version{0}
+      get_driver_version(), get_runtime_version(), get_current_device_compute_capability()}
 {
-  rtcx::initialize();
-  initialize_jit();
   initialize_components(flags);
 }
 
@@ -71,45 +67,58 @@ void context::preload_nvcomp()
 
 void context::initialize_jit()
 {
-  CUDF_FUNC_RANGE();
+  std::call_once(_jit_init_flag, [&] {
+    CUDF_FUNC_RANGE();
 
-  // make sure the required directories exist
-  std::filesystem::create_directories(_config.rtcx_cache_dir);
-  std::filesystem::create_directories(_config.jit_bundle_dir);
-  std::filesystem::create_directories(_config.jit_pch_dir);
-  std::filesystem::create_directories(_config.jit_tmp_dir);
+    // make sure the required directories exist
+    std::filesystem::create_directories(_config.rtcx_cache_dir);
+    std::filesystem::create_directories(_config.jit_bundle_dir);
+    std::filesystem::create_directories(_config.jit_pch_dir);
+    std::filesystem::create_directories(_config.jit_tmp_dir);
 
-  _nvrtc_version     = rtcx::nvrtc_version();
-  _nvjitlink_version = rtcx::nvjitlink_version();
+    rtcx::initialize();
+    _rtcx_initialized = true;
 
-  auto limits = rtcx::cache_limits{.num_mem_blobs     = _config.kernel_cache_limit_process,
-                                   .num_mem_libraries = _config.kernel_cache_limit_process};
+    _nvrtc_version     = rtcx::nvrtc_version();
+    _nvjitlink_version = rtcx::nvjitlink_version();
 
-  _rtcx_cache = std::make_unique<rtcx::cache_t>(_config.rtcx_cache_dir,
-                                                _config.jit_tmp_dir,
-                                                limits,
-                                                bool{_config.preload_jit_cache},
-                                                bool{_config.disable_jit_cache});
+    auto limits = rtcx::cache_limits{.num_mem_blobs     = _config.kernel_cache_limit_process,
+                                     .num_mem_libraries = _config.kernel_cache_limit_process};
 
-  if (_config.clear_jit_cache) {
-    _rtcx_cache->clear_memory_store();
-    _rtcx_cache->clear_disk_store();
-  }
+    _rtcx_cache = std::make_unique<rtcx::cache_t>(_config.rtcx_cache_dir,
+                                                  _config.jit_tmp_dir,
+                                                  limits,
+                                                  bool{_config.preload_jit_cache},
+                                                  bool{_config.disable_jit_cache});
 
-  // note that jit_bundle depends on rtcx_cache, so we ensure rtcx_cache is initialized first.
-  _jit_bundle = std::make_unique<jit_bundle_t>(_config.jit_bundle_dir, *_rtcx_cache);
+    if (_config.clear_jit_cache) {
+      _rtcx_cache->clear_memory_store();
+      _rtcx_cache->clear_disk_store();
+    }
+
+    // note that jit_bundle depends on rtcx_cache, so we ensure rtcx_cache is initialized first.
+    _jit_bundle = std::make_unique<jit_bundle_t>(_config.jit_bundle_dir, *_rtcx_cache);
+  });
 }
 
 context::~context()
 {
   _jit_bundle.reset();
   _rtcx_cache.reset();
-  rtcx::teardown();
+  if (_rtcx_initialized) { rtcx::teardown(); }
 }
 
-rtcx::cache_t& context::rtcx_cache() { return *_rtcx_cache; }
+rtcx::cache_t& context::rtcx_cache()
+{
+  initialize_jit();
+  return *_rtcx_cache;
+}
 
-jit_bundle_t& context::jit_bundle() { return *_jit_bundle; }
+jit_bundle_t& context::jit_bundle()
+{
+  initialize_jit();
+  return *_jit_bundle;
+}
 
 bool context::dump_codegen() const { return _config.dump_codegen; }
 
