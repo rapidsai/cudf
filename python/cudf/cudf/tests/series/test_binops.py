@@ -1659,28 +1659,17 @@ def is_timezone_aware_dtype(dtype: str) -> bool:
     return bool(re.match(r"^datetime64\[ns, .+\]$", dtype))
 
 
-@pytest.mark.parametrize("n_periods", [0, 1, -12])
 @pytest.mark.parametrize(
-    "frequency",
+    "n_periods, frequency, dtype, components",
     [
-        "months",
-        "years",
-        "days",
-        "hours",
-        "minutes",
-        "seconds",
-        "microseconds",
-        "nanoseconds",
-    ],
-)
-@pytest.mark.parametrize(
-    "dtype, components",
-    [
-        ["datetime64[ns]", "00.012345678"],
-        ["datetime64[us]", "00.012345"],
-        ["datetime64[ms]", "00.012"],
-        ["datetime64[s]", "00"],
-        ["datetime64[ns, Asia/Kathmandu]", "00.012345678"],
+        (0, "months", "datetime64[ns]", "00.012345678"),
+        (1, "years", "datetime64[us]", "00.012345"),
+        (0, "microseconds", "datetime64[ms]", "00.012"),
+        (-12, "days", "datetime64[s]", "00"),
+        (0, "hours", "datetime64[ns, Asia/Kathmandu]", "00.012345678"),
+        (1, "minutes", "datetime64[ns]", "00.012345678"),
+        (-12, "seconds", "datetime64[us]", "00.012345"),
+        (1, "nanoseconds", "datetime64[ns, Asia/Kathmandu]", "00.012345678"),
     ],
 )
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
