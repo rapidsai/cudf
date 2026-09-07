@@ -234,17 +234,10 @@ def test_dataframe_pairs_of_triples(pairs, how):
         pdf_right[right_column] = rng.integers(0, 10, 10)
     gdf_left = cudf.from_pandas(pdf_left)
     gdf_right = cudf.from_pandas(pdf_right)
-    if not set(pdf_left.columns).intersection(pdf_right.columns):
-        with pytest.raises(
-            pd.errors.MergeError,
-            match="No common columns to perform merge on",
-        ):
-            pdf_left.merge(pdf_right)
-        with pytest.raises(
-            ValueError, match="No common columns to perform merge on"
-        ):
-            gdf_left.merge(gdf_right)
-    elif not [value for value in pdf_left if value in pdf_right]:
+    if (
+        not set(pdf_left.columns).intersection(pdf_right.columns)
+        and how != "cross"
+    ):
         with pytest.raises(
             pd.errors.MergeError,
             match="No common columns to perform merge on",
