@@ -522,13 +522,15 @@ class ParquetScanTask(ScanTask):
             return None
         return [cached_by_path[path] for path in self.paths]
 
-    def _fetch_parquet_info(self) -> list[CachedParquetInfo]:
+    def _fetch_parquet_info(
+        self, *, parse_hybrid_metadata: bool = False
+    ) -> list[CachedParquetInfo]:
         """Fetch parquet metadata for this task's paths."""
         from cudf_polars.dsl.utils.io import _prefetch_parquet_footers_for_paths
 
         return _prefetch_parquet_footers_for_paths(
             self.paths,
-            parse_hybrid_metadata=self.parquet_options.use_hybrid_scan,
+            parse_hybrid_metadata=parse_hybrid_metadata,
         )
 
     def _split_task_bounds(
@@ -600,21 +602,21 @@ class ParquetScanTask(ScanTask):
         base_scan = task.base_scan
         paths = task.paths
         cached_parquet_info = task._cached_parquet_info()
-        if cached_parquet_info is None and (
-            task.is_split
-            or (
-                len(paths) == 1
-                and base_scan.skip_rows == 0
-                and base_scan.n_rows == -1
-                and _hybrid_scan_preconditions(
-                    parquet_options,
-                    row_index=base_scan.row_index,
-                    include_file_paths=base_scan.include_file_paths,
-                    predicate=base_scan.predicate,
-                )
+        should_try_hybrid_scan = (
+            len(paths) == 1
+            and base_scan.skip_rows == 0
+            and base_scan.n_rows == -1
+            and _hybrid_scan_preconditions(
+                parquet_options,
+                row_index=base_scan.row_index,
+                include_file_paths=base_scan.include_file_paths,
+                predicate=base_scan.predicate,
             )
-        ):
-            cached_parquet_info = task._fetch_parquet_info()
+        )
+        if cached_parquet_info is None and (task.is_split or should_try_hybrid_scan):
+            cached_parquet_info = task._fetch_parquet_info(
+                parse_hybrid_metadata=should_try_hybrid_scan
+            )
         bounds = task._task_bounds_from_cached(cached_parquet_info)
 
         assert bounds is not None
