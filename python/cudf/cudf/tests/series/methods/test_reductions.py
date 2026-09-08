@@ -866,11 +866,12 @@ def test_categorical_reductions(request, reduction_methods):
         [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
     ],
 )
+@pytest.mark.parametrize(
+    "reduction_methods", ["sum", "mean", "median", "quantile"]
+)
 def test_timedelta_reduction_ops(
     data_non_overflow, timedelta_types_as_str, reduction_methods
 ):
-    if reduction_methods not in ["sum", "mean", "median", "quantile"]:
-        pytest.skip(f"{reduction_methods} not supported for timedelta")
     gsr = cudf.Series(data_non_overflow, dtype=timedelta_types_as_str)
     psr = gsr.to_pandas()
 
@@ -1103,9 +1104,8 @@ def test_object_min_max_with_null(method, skipna):
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3], [], [1, 20, 1000, None]])
+@pytest.mark.parametrize("reduction_methods", ["mean", "quantile"])
 def test_datetime_stats(data, datetime_types_as_str, reduction_methods):
-    if reduction_methods not in ["mean", "quantile"]:
-        pytest.skip(f"{reduction_methods} not applicable for test")
     gsr = cudf.Series(data, dtype=datetime_types_as_str)
     psr = gsr.to_pandas()
 
@@ -1129,9 +1129,8 @@ def test_datetime_stats(data, datetime_types_as_str, reduction_methods):
         [1231],
     ],
 )
+@pytest.mark.parametrize("reduction_methods", ["max", "min", "std", "median"])
 def test_datetime_reductions(data, reduction_methods, datetime_types_as_str):
-    if reduction_methods not in ["max", "min", "std", "median"]:
-        pytest.skip(f"{reduction_methods} not applicable for test")
     sr = cudf.Series(data, dtype=datetime_types_as_str)
     psr = sr.to_pandas()
 
