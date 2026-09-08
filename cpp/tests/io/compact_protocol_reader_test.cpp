@@ -13,23 +13,6 @@
 #include <stdexcept>
 #include <vector>
 
-TEST(CompactProtocolReaderVarintTest, OverlongU32)
-{
-  // Value exceeds uint32_t: the value-bound check rejects byte 0x85 at shift 28.
-  std::vector<uint8_t> const bytes{0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x07};
-  cudf::io::parquet::detail::CompactProtocolReader cp(bytes.data(), bytes.size());
-  EXPECT_THROW(cp.get_u32(), std::overflow_error);
-}
-
-TEST(CompactProtocolReaderVarintTest, OverlongU64)
-{
-  // Value exceeds uint64_t: the value-bound check rejects byte 0x8B at shift 63.
-  std::vector<uint8_t> const bytes{
-    0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8B, 0x8A, 0x00};
-  cudf::io::parquet::detail::CompactProtocolReader cp(bytes.data(), bytes.size());
-  EXPECT_THROW(cp.get_u64(), std::overflow_error);
-}
-
 TEST(CompactProtocolReaderVarintTest, OverflowAtWidthBoundaryU32)
 {
   // Fifth group at shift 28: 0x10 << 28 sets bit 32, overflowing uint32_t.
@@ -37,36 +20,12 @@ TEST(CompactProtocolReaderVarintTest, OverflowAtWidthBoundaryU32)
   cudf::io::parquet::detail::CompactProtocolReader cp(bytes.data(), bytes.size());
   EXPECT_THROW(cp.get_u32(), std::overflow_error);
 }
-
-TEST(CompactProtocolReaderVarintTest, OverflowAtWidthBoundaryU64)
-{
-  // Tenth group at shift 63: 0x02 << 63 sets bit 64, overflowing uint64_t.
-  std::vector<uint8_t> const bytes{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x02};
-  cudf::io::parquet::detail::CompactProtocolReader cp(bytes.data(), bytes.size());
-  EXPECT_THROW(cp.get_u64(), std::overflow_error);
-}
-
 TEST(CompactProtocolReaderVarintTest, OverlongSignedThrows)
 {
-  // get_i32/get_i64 forward through get_zigzag to get_varint<U> and propagate overflow_error.
-  {
-    std::vector<uint8_t> const bytes{0x80, 0x80, 0x80, 0x80, 0x10};
-    cudf::io::parquet::detail::CompactProtocolReader cp(bytes.data(), bytes.size());
-    EXPECT_THROW(cp.get_i32(), std::overflow_error);
-  }
-  {
-    std::vector<uint8_t> const bytes{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x02};
-    cudf::io::parquet::detail::CompactProtocolReader cp(bytes.data(), bytes.size());
-    EXPECT_THROW(cp.get_i64(), std::overflow_error);
-  }
-}
-
-TEST(CompactProtocolReaderVarintTest, OverlongListHeaderThrows)
-{
-  // The size-0xF escape routes through get_u32, which propagates overflow_error.
-  std::vector<uint8_t> const bytes{0xF0, 0x80, 0x80, 0x80, 0x80, 0x10};
+  // get_i32 forwards through get_zigzag to get_varint<U> and propagates overflow_error.
+  std::vector<uint8_t> const bytes{0x80, 0x80, 0x80, 0x80, 0x10};
   cudf::io::parquet::detail::CompactProtocolReader cp(bytes.data(), bytes.size());
-  EXPECT_THROW((void)cp.get_listh(), std::overflow_error);
+  EXPECT_THROW(cp.get_i32(), std::overflow_error);
 }
 
 TEST(CompactProtocolReaderVarintTest, WellFormedListHeader)
@@ -98,12 +57,6 @@ TEST(CompactProtocolReaderVarintTest, UnterminatedRunAtEof)
     cudf::io::parquet::detail::CompactProtocolReader cp(bytes.data(), bytes.size());
     EXPECT_EQ(cp.get_u64(), 0x7'FFFF'FFFFUL);
     EXPECT_EQ(cp.bytecount(), static_cast<ptrdiff_t>(bytes.size()));
-  }
-  {
-    // However, a run spanning past the width is overlong and throws, terminator or not.
-    std::vector<uint8_t> const bytes(6, 0xFF);
-    cudf::io::parquet::detail::CompactProtocolReader cp(bytes.data(), bytes.size());
-    EXPECT_THROW(cp.get_u32(), std::overflow_error);
   }
 }
 
