@@ -28,7 +28,7 @@ static void bench_hash(nvbench::state& state)
   auto builder =
     data_profile_builder().null_probability(no_nulls ? std::nullopt : std::optional<double>{nulls});
 
-  // Column types to hash.  `mixed` is the historical default; the rest isolate a single type so
+  // Column types to hash. `mixed` is the historical default; the rest isolate a single type so
   // that per-type costs, such as the byte-wise decimal128 path, are visible on their own.
   auto const types = [&]() -> std::vector<cudf::type_id> {
     if (data_type == "mixed") {

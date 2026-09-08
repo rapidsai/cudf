@@ -41,7 +41,7 @@ class spark_device_row_hasher {
   friend class row_hasher;
 
  public:
-  // `int32_t` is only a probe type used to ask the hasher what it returns.  Every
+  // `int32_t` is only a probe type used to ask the hasher what it returns. Every
   // `hash_function` specialization shares one return type, so the choice does not affect the
   // answer; it matches the probe used by `element_hasher` in `hashing.cuh`.
   using result_type = cuda::std::invoke_result_t<hash_function<int32_t>, int32_t>;

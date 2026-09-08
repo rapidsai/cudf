@@ -25,13 +25,13 @@ template <typename Key>
   requires(not cudf::is_nested<Key>())
 struct Spark_MurmurHash3_x86_32 {
   // Unsigned internally, like every other cudf hasher, so the seed and the running hash share one
-  // type.  `spark_murmurhash3_x86_32` converts back to `int32_t` for its output column, matching
+  // type. `spark_murmurhash3_x86_32` converts back to `int32_t` for its output column, matching
   // Spark's signed `Int` result.
   using result_type = uint32_t;
 
   CUDF_HOST_DEVICE constexpr Spark_MurmurHash3_x86_32() = delete;
   /// The seed is mixed as an unsigned value, matching `MurmurHash3_x86_32` and the Spark JNI
-  /// hasher.  The result stays signed because Spark's hash returns a signed `Int`.
+  /// hasher. The result stays signed because Spark's hash returns a signed `Int`.
   CUDF_HOST_DEVICE constexpr Spark_MurmurHash3_x86_32(uint32_t seed) : m_seed(seed) {}
 
   [[nodiscard]] __device__ inline uint32_t fmix32(uint32_t h) const
@@ -64,8 +64,8 @@ struct Spark_MurmurHash3_x86_32 {
   result_type __device__ inline compute(T const& key) const
   {
     if constexpr (sizeof(T) % 4 == 0) {
-      // A whole number of blocks with no tail.  Hashing the words directly lets the compiler use
-      // wide aligned loads instead of reassembling each block byte by byte.  The word order is the
+      // A whole number of blocks with no tail. Hashing the words directly lets the compiler use
+      // wide aligned loads instead of reassembling each block byte by byte. The word order is the
       // device's own, which is little-endian, so this matches `getblock32`.
       auto const words = cuda::std::bit_cast<cuda::std::array<uint32_t, sizeof(T) / 4>>(key);
       uint32_t h       = m_seed;
@@ -80,7 +80,7 @@ struct Spark_MurmurHash3_x86_32 {
   }
 
   /*
-   * Mix one four-byte block into the running hash.  Spark applies this to every trailing byte as
+   * Mix one four-byte block into the running hash. Spark applies this to every trailing byte as
    * well, which is where it departs from MurmurHash3.
    */
   [[nodiscard]] __device__ inline uint32_t mix_block(uint32_t k1, uint32_t h) const
@@ -226,8 +226,8 @@ __device__ inline auto Spark_MurmurHash3_x86_32<numeric::decimal128>::operator()
   constexpr cudf::size_type key_size = sizeof(__int128_t);
 
   // Number of bytes in the minimal two's complement representation, matching
-  // `BigInteger.toByteArray().length`, which is `bitLength() / 8 + 1`.  Negative values are
-  // complemented first so that leading sign bits count as leading zeros.  Both 0 and -1 have a
+  // `BigInteger.toByteArray().length`, which is `bitLength() / 8 + 1`. Negative values are
+  // complemented first so that leading sign bits count as leading zeros. Both 0 and -1 have a
   // bit length of 0 and so keep a single byte.
   auto const magnitude = static_cast<__uint128_t>(val < 0 ? ~val : val);
   auto const mag_hi    = static_cast<cuda::std::uint64_t>(magnitude >> 64);
@@ -237,7 +237,7 @@ __device__ inline auto Spark_MurmurHash3_x86_32<numeric::decimal128>::operator()
   auto const length = static_cast<cudf::size_type>(bit_length / 8) + 1;
 
   // Spark hashes the big-endian representation, so reverse the bytes and shift the significant
-  // ones down.  Doing this in registers avoids staging a byte buffer in local memory.
+  // ones down. Doing this in registers avoids staging a byte buffer in local memory.
   auto const swap32 = [](cuda::std::uint32_t v) { return __byte_perm(v, 0, 0x0123); };
   auto const swap64 = [swap32](cuda::std::uint64_t v) {
     return (static_cast<cuda::std::uint64_t>(swap32(static_cast<cuda::std::uint32_t>(v))) << 32) |
