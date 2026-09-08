@@ -344,7 +344,9 @@ static uint32_t __device__ protobuf_parse_row_index_entry(rowindex_state_s* s,
           // Bit-packed streams have an extra byte to indicate the position of the bit within the
           // byte; the PRESENT stream is always bit-packed, and so is the data of a BOOLEAN column
           auto const is_bit_packed = (ci_id == CI_PRESENT) || (s->chunk.type_kind == BOOLEAN);
-          s->row_index_entry[RI_RUN][ci_id] = is_bit_packed ? (v << 3) + *cur : v;
+          // A truncated entry leaves nothing to read; take the bit position as zero
+          auto const bit_pos                = (cur < end) ? *cur : 0;
+          s->row_index_entry[RI_RUN][ci_id] = is_bit_packed ? (v << 3) + bit_pos : v;
         }
         if (ci_id == CI_PRESENT || s->chunk.type_kind == BOOLEAN) cur++;
         if (cur >= start + pos_end) return length;
