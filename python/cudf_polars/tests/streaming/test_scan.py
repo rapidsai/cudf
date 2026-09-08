@@ -467,8 +467,8 @@ def test_expand_scan_for_rank_fused_and_single_read(
         streaming_scan.tasks, expected_path_groups, strict=True
     ):
         assert isinstance(scan, ParquetScanTask)
-        assert scan.split_index is None
-        assert scan.total_splits is None
+        assert scan.split_index == 0
+        assert scan.total_splits == 1
         assert scan.paths == expected_paths
 
 

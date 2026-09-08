@@ -461,10 +461,10 @@ class ParquetScanTask(IR):
     """Scan operation this task is based on."""
     paths: list[str]
     """File paths assigned to this task."""
-    split_index: int | None
-    """Index of the current split, or None for fused/full-file tasks."""
-    total_splits: int | None
-    """Total number of splits for this file, or None for fused/full-file tasks."""
+    split_index: int
+    """Index of the current split, or 0 for non-split tasks."""
+    total_splits: int
+    """Total number of splits for a split file, or 1 for non-split tasks."""
     parquet_options: ParquetOptions
     """Parquet-specific options."""
 
@@ -472,15 +472,19 @@ class ParquetScanTask(IR):
         self,
         base_scan: Scan,
         paths: list[str],
-        split_index: int | None,
-        total_splits: int | None,
+        split_index: int,
+        total_splits: int,
         parquet_options: ParquetOptions,
     ):
         if base_scan.typ != "parquet":  # pragma: no cover
             raise ValueError(f"Expected a parquet scan, got: {base_scan.typ}")
-        if (split_index is None) != (total_splits is None):  # pragma: no cover
-            raise ValueError("split_index and total_splits must be set together")
-        if split_index is not None and len(paths) > 1:  # pragma: no cover
+        if total_splits < 1:  # pragma: no cover
+            raise ValueError(f"Expected at least one split, got: {total_splits}")
+        if not 0 <= split_index < total_splits:  # pragma: no cover
+            raise ValueError(
+                f"Expected split_index in [0, {total_splits}), got: {split_index}"
+            )
+        if total_splits > 1 and len(paths) > 1:  # pragma: no cover
             raise ValueError(f"Expected a single path for a split task, got: {paths}")
         self.base_scan = base_scan
         self.paths = paths
@@ -499,8 +503,8 @@ class ParquetScanTask(IR):
 
     @property
     def is_split(self) -> bool:
-        """Whether this task is one split of a single parquet file."""
-        return self.split_index is not None
+        """Whether this task is one of multiple splits of a single parquet file."""
+        return self.total_splits > 1
 
     def get_task_bounds(self) -> ParquetTaskBounds | None:
         """Return parquet read bounds for this task."""
@@ -530,14 +534,9 @@ class ParquetScanTask(IR):
 
     def _split_task_bounds(
         self,
-        cached_parquet_info: list[CachedParquetInfo] | None,
-    ) -> ParquetTaskBounds | None:
+        cached_parquet_info: list[CachedParquetInfo],
+    ) -> ParquetTaskBounds:
         """Return parquet read bounds for a split task."""
-        if cached_parquet_info is None:
-            return None
-
-        assert self.split_index is not None
-        assert self.total_splits is not None
         row_group_num_rows = cached_parquet_info[0].file_metadata.row_group_num_rows
         total_row_groups = len(row_group_num_rows)
         if self.total_splits <= total_row_groups:
@@ -566,7 +565,11 @@ class ParquetScanTask(IR):
         cached_parquet_info: list[CachedParquetInfo] | None,
     ) -> ParquetTaskBounds | None:
         if self.is_split:
-            return self._split_task_bounds(cached_parquet_info)
+            return (
+                None
+                if cached_parquet_info is None
+                else self._split_task_bounds(cached_parquet_info)
+            )
 
         base_scan = self.base_scan
         row_groups: list[list[int]] | None = None
@@ -602,8 +605,8 @@ class ParquetScanTask(IR):
         cls,
         base_scan: Scan,
         paths: list[str],
-        split_index: int | None,
-        total_splits: int | None,
+        split_index: int,
+        total_splits: int,
         parquet_options: ParquetOptions,
         *,
         context: IRExecutionContext,
@@ -613,7 +616,18 @@ class ParquetScanTask(IR):
         base_scan = task.base_scan
         paths = task.paths
         cached_parquet_info = task._cached_parquet_info()
-        if cached_parquet_info is None and task.is_split:
+        if cached_parquet_info is None and (
+            task.is_split
+            or (
+                parquet_options.use_hybrid_scan
+                and len(paths) == 1
+                and base_scan.skip_rows == 0
+                and base_scan.n_rows == -1
+                and base_scan.row_index is None
+                and base_scan.include_file_paths is None
+                and base_scan.predicate is not None
+            )
+        ):
             cached_parquet_info = task._fetch_parquet_info()
         bounds = task._task_bounds_from_cached(cached_parquet_info)
 
@@ -655,14 +669,12 @@ class ParquetScanTask(IR):
                     bounds.row_groups[0],
                     stream,
                     cached_parquet_info[0],
-                    split_index=split_index or 0,
-                    total_splits=total_splits or 1,
+                    split_index=split_index,
+                    total_splits=total_splits,
                     stats_pruning=parquet_options._hybrid_scan_stats_pruning,
                 )
 
         if task.is_split:
-            assert split_index is not None
-            assert total_splits is not None
             nvtx_message = f"SplitScan: {paths[0]} [{split_index + 1}/{total_splits}]"
         else:
             nvtx_message = f"FusedScan: {', '.join(paths)}"
@@ -833,8 +845,8 @@ class StreamingScan(IR):
                 ParquetScanTask(
                     base_scan,
                     base_scan.paths[offset : offset + plan.factor],
-                    None,
-                    None,
+                    0,
+                    1,
                     parquet_options,
                 )
                 if base_scan.typ == "parquet"
