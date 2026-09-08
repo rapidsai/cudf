@@ -70,11 +70,9 @@ class CompactProtocolReader {
     T v = 0;
     for (uint32_t l = 0;; l += 7) {
       T const c = getb();
-      // Reject overlong varints. `l < digits` keeps the shift in range (and guards `max() >> l`);
-      // `c <= max() >> l` then bounds the value, since the shift-count check alone would let the
-      // top group's bits silently wrap past `T`'s width instead of being rejected. `c` is the raw
-      // byte (continuation bit included): comparing it, not the masked payload, only rejects a
-      // boundary continuation byte one group early; correct, since the next group overflows anyway.
+      // The byte's value, shifted into place, must fit in `T`; `l < digits` also keeps `max() >> l`
+      // itself in range. Comparing the raw byte, not the masked payload, is intentional: it also
+      // rejects a continuation byte whose successor group could not fit.
       CUDF_EXPECTS(l < std::numeric_limits<T>::digits && c <= (std::numeric_limits<T>::max() >> l),
                    "Parquet varint exceeds the width of its target type",
                    std::overflow_error);
