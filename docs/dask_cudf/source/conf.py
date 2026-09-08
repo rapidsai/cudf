@@ -78,16 +78,23 @@ html_theme_options = {
 }
 include_pandas_compat = True
 
+with open("../../../RAPIDS_BRANCH", "r") as f:
+    branch = f.read().strip()
+intersphinx_version = "latest" if branch == "main" else version
+
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3/", None),
     "cupy": ("https://docs.cupy.dev/en/stable/", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
     "pyarrow": ("https://arrow.apache.org/docs/", None),
-    "cudf": (f"https://docs.nvidia.com/cudf/{version}/", None),
+    "cudf": (f"https://docs.nvidia.com/cudf/{intersphinx_version}/", None),
     "dask": ("https://docs.dask.org/en/stable/", None),
     "pandas": ("https://pandas.pydata.org/docs/", None),
-    "dask-cuda": (f"https://docs.nvidia.com/dask-cuda/{version}/", None),
-    "rmm": (f"https://docs.nvidia.com/rmm/{version}/", None),
+    "dask-cuda": (
+        f"https://docs.nvidia.com/dask-cuda/{intersphinx_version}/",
+        None,
+    ),
+    "rmm": (f"https://docs.nvidia.com/rmm/{intersphinx_version}/", None),
 }
 
 numpydoc_show_inherited_class_members = True
