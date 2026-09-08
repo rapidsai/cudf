@@ -711,7 +711,7 @@ def test_concat_dataframe_with_multiindex(key2):
         ],
     ],
 )
-def test_concat_join(objs, ignore_index, sort, join, axis):
+def test_concat_join(objs, ignore_index, sort, join):
     axis = 0
     gpu_objs = [cudf.from_pandas(o) for o in objs]
 
@@ -780,7 +780,7 @@ def test_concat_join_axis_1_dup_error(objs):
         ],
     ],
 )
-def test_concat_join_axis_1(objs, ignore_index, sort, join, axis):
+def test_concat_join_axis_1(objs, ignore_index, sort, join):
     # no duplicate columns
     axis = 1
     gpu_objs = [cudf.from_pandas(o) for o in objs]
@@ -1071,48 +1071,96 @@ def test_concat_join_series(ignore_index, sort, join, axis):
 
 
 @pytest.mark.parametrize(
-    "df",
+    "df, other",
     [
-        pd.DataFrame(),
-        pd.DataFrame(index=[10, 20, 30]),
-        pd.DataFrame(
-            {"c": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
+        pytest.param(
+            pd.DataFrame(),
+            [pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()],
         ),
-        pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
-        pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
-        pd.DataFrame({"l": [10]}),
-        pd.DataFrame({"l": [10]}, index=[200]),
-        pd.DataFrame([], index=[100]),
-        pd.DataFrame({"cat": pd.Series(["one", "two"], dtype="category")}),
-    ],
-)
-@pytest.mark.parametrize(
-    "other",
-    [
-        [pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()],
-        [
+        pytest.param(
+            pd.DataFrame(index=[10, 20, 30]),
+            [
+                pd.DataFrame(
+                    {"b": [10, 11, 22, 33, 44, 100]},
+                    index=[7, 8, 9, 10, 11, 20],
+                ),
+                pd.DataFrame(),
+                pd.DataFrame(),
+                pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
+            ],
+        ),
+        pytest.param(
             pd.DataFrame(
-                {"b": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
+                {"c": [10, 11, 22, 33, 44, 100]},
+                index=[7, 8, 9, 10, 11, 20],
             ),
-            pd.DataFrame(),
-            pd.DataFrame(),
+            [
+                pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+                pd.DataFrame({"l": [10]}),
+                pd.DataFrame({"k": [10]}, index=[200]),
+                pd.DataFrame(
+                    {"cat": pd.Series(["two", "three"], dtype="category")}
+                ),
+            ],
+        ),
+        pytest.param(
             pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
-        ],
-        [
+            [
+                pd.DataFrame([]),
+                pd.DataFrame([], index=[100]),
+                pd.DataFrame(
+                    {"cat": pd.Series(["two", "three"], dtype="category")}
+                ),
+            ],
+        ),
+        pytest.param(
             pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+            [pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()],
+        ),
+        pytest.param(
             pd.DataFrame({"l": [10]}),
-            pd.DataFrame({"k": [10]}, index=[200]),
-            pd.DataFrame(
-                {"cat": pd.Series(["two", "three"], dtype="category")}
-            ),
-        ],
-        [
-            pd.DataFrame([]),
+            [
+                pd.DataFrame(
+                    {"b": [10, 11, 22, 33, 44, 100]},
+                    index=[7, 8, 9, 10, 11, 20],
+                ),
+                pd.DataFrame(),
+                pd.DataFrame(),
+                pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
+            ],
+        ),
+        pytest.param(
+            pd.DataFrame({"l": [10]}, index=[200]),
+            [
+                pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+                pd.DataFrame({"l": [10]}),
+                pd.DataFrame({"k": [10]}, index=[200]),
+                pd.DataFrame(
+                    {"cat": pd.Series(["two", "three"], dtype="category")}
+                ),
+            ],
+        ),
+        pytest.param(
             pd.DataFrame([], index=[100]),
-            pd.DataFrame(
-                {"cat": pd.Series(["two", "three"], dtype="category")}
-            ),
-        ],
+            [
+                pd.DataFrame([]),
+                pd.DataFrame([], index=[100]),
+                pd.DataFrame(
+                    {"cat": pd.Series(["two", "three"], dtype="category")}
+                ),
+            ],
+        ),
+        pytest.param(
+            pd.DataFrame({"cat": pd.Series(["one", "two"], dtype="category")}),
+            [
+                pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+                pd.DataFrame({"l": [10]}),
+                pd.DataFrame({"k": [10]}, index=[200]),
+                pd.DataFrame(
+                    {"cat": pd.Series(["two", "three"], dtype="category")}
+                ),
+            ],
+        ),
     ],
 )
 def test_concat_join_empty_dataframes(
@@ -1155,52 +1203,100 @@ def test_concat_join_empty_dataframes(
 
 
 @pytest.mark.parametrize(
-    "df",
+    "df, other",
     [
-        pd.DataFrame(),
-        pd.DataFrame(index=[10, 20, 30]),
-        pd.DataFrame(
-            {"c": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
+        pytest.param(
+            pd.DataFrame(),
+            [pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()],
         ),
-        pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
-        pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
-        pd.DataFrame({"l": [10]}),
-        pd.DataFrame({"m": [10]}, index=[200]),
-        pd.DataFrame([], index=[100]),
-        pd.DataFrame({"cat": pd.Series(["one", "two"], dtype="category")}),
-    ],
-)
-@pytest.mark.parametrize(
-    "other",
-    [
-        [pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()],
-        [
+        pytest.param(
+            pd.DataFrame(index=[10, 20, 30]),
+            [
+                pd.DataFrame(
+                    {"b": [10, 11, 22, 33, 44, 100]},
+                    index=[7, 8, 9, 10, 11, 20],
+                ),
+                pd.DataFrame(),
+                pd.DataFrame(),
+                pd.DataFrame([[5, 6], [7, 8]], columns=list("CD")),
+            ],
+        ),
+        pytest.param(
             pd.DataFrame(
-                {"b": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
+                {"c": [10, 11, 22, 33, 44, 100]},
+                index=[7, 8, 9, 10, 11, 20],
             ),
-            pd.DataFrame(),
-            pd.DataFrame(),
-            pd.DataFrame([[5, 6], [7, 8]], columns=list("CD")),
-        ],
-        [
-            pd.DataFrame({"g": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
-            pd.DataFrame({"h": [10]}),
-            pd.DataFrame({"k": [10]}, index=[200]),
-            pd.DataFrame(
-                {"dog": pd.Series(["two", "three"], dtype="category")}
-            ),
-        ],
-        [
-            pd.DataFrame([]),
+            [
+                pd.DataFrame({"g": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+                pd.DataFrame({"h": [10]}),
+                pd.DataFrame({"k": [10]}, index=[200]),
+                pd.DataFrame(
+                    {"dog": pd.Series(["two", "three"], dtype="category")}
+                ),
+            ],
+        ),
+        pytest.param(
+            pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
+            [
+                pd.DataFrame([]),
+                pd.DataFrame([], index=[100]),
+                pd.DataFrame(
+                    {"bird": pd.Series(["two", "three"], dtype="category")}
+                ),
+            ],
+        ),
+        pytest.param(
+            pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+            [pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()],
+        ),
+        pytest.param(
+            pd.DataFrame({"l": [10]}),
+            [
+                pd.DataFrame(
+                    {"b": [10, 11, 22, 33, 44, 100]},
+                    index=[7, 8, 9, 10, 11, 20],
+                ),
+                pd.DataFrame(),
+                pd.DataFrame(),
+                pd.DataFrame([[5, 6], [7, 8]], columns=list("CD")),
+            ],
+        ),
+        pytest.param(
+            pd.DataFrame({"m": [10]}, index=[200]),
+            [
+                pd.DataFrame({"g": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+                pd.DataFrame({"h": [10]}),
+                pd.DataFrame({"k": [10]}, index=[200]),
+                pd.DataFrame(
+                    {"dog": pd.Series(["two", "three"], dtype="category")}
+                ),
+            ],
+        ),
+        pytest.param(
             pd.DataFrame([], index=[100]),
-            pd.DataFrame(
-                {"bird": pd.Series(["two", "three"], dtype="category")}
-            ),
-        ],
+            [
+                pd.DataFrame([]),
+                pd.DataFrame([], index=[100]),
+                pd.DataFrame(
+                    {"bird": pd.Series(["two", "three"], dtype="category")}
+                ),
+            ],
+        ),
+        pytest.param(
+            pd.DataFrame({"cat": pd.Series(["one", "two"], dtype="category")}),
+            [
+                pd.DataFrame({"g": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+                pd.DataFrame({"h": [10]}),
+                pd.DataFrame({"k": [10]}, index=[200]),
+                pd.DataFrame(
+                    {"dog": pd.Series(["two", "three"], dtype="category")}
+                ),
+            ],
+        ),
     ],
 )
 def test_concat_join_empty_dataframes_axis_1(
-    df, other, ignore_index, axis, join, sort
+    df, other, ignore_index, join, sort
 ):
     # no duplicate columns
     axis = 1
@@ -1222,30 +1318,6 @@ def test_concat_join_empty_dataframes_axis_1(
         join=join,
         sort=sort,
     )
-    if expected.shape != df.shape:
-        if axis == 0:
-            for key, col in actual[actual.columns].items():
-                if isinstance(expected[key].dtype, pd.CategoricalDtype):
-                    expected[key] = expected[key].fillna("-1")
-                    actual[key] = col.astype("str").fillna("-1")
-            # if not expected.empty:
-            assert_eq(
-                expected.fillna(-1),
-                actual.fillna(-1),
-                check_dtype=False,
-                check_index_type=False
-                if len(expected) == 0 or actual.empty
-                else True,
-                check_column_type=False,
-            )
-        else:
-            # no need to fill in if axis=1
-            assert_eq(
-                expected,
-                actual,
-                check_index_type=False,
-                check_column_type=False,
-            )
     assert_eq(
         expected, actual, check_index_type=False, check_column_type=False
     )
