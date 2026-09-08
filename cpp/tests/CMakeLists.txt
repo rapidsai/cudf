@@ -356,8 +356,6 @@ ConfigureTest(
   io/experimental/hybrid_scan_test.cpp
   io/parquet_common.cpp
   io/parquet_test.cpp
-  GPUS 1
-  PERCENT 100
 )
 ConfigureTest(VARIANT_EXTRACT_TEST io/experimental/variant_extract_test.cpp)
 ConfigureTest(
