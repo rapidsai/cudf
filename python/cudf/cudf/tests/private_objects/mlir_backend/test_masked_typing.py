@@ -55,7 +55,9 @@ def test_masked_type_unsupported_value_becomes_poison():
 
 @pytest.mark.parametrize("unit", ["ns", "us", "ms", "s"])
 def test_masked_datetime_timedelta_not_poisoned(unit):
-    """TODO: write docstring."""
+    """datetime64/timedelta64 payloads are supported MaskedType value types
+    (not poisoned) across the units cuDF columns use.
+    """
     dt = MaskedType(types.NPDatetime(unit))
     td = MaskedType(types.NPTimedelta(unit))
     assert dt.value_type == types.NPDatetime(unit)

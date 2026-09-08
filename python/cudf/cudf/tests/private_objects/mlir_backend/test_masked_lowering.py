@@ -817,7 +817,7 @@ def _bool(v):
 
 
 def test_masked_datetime_minus_datetime_is_timedelta():
-    """TODO: write docstring."""
+    """Masked ``datetime - datetime`` yields a Masked timedelta."""
 
     @cuda.jit(
         types.void(
@@ -850,7 +850,7 @@ def test_masked_datetime_minus_datetime_is_timedelta():
 
 
 def test_masked_datetime_plus_timedelta_is_datetime():
-    """TODO: write docstring."""
+    """Masked ``datetime + timedelta`` yields a Masked datetime."""
 
     @cuda.jit(
         types.void(
@@ -870,7 +870,7 @@ def test_masked_datetime_plus_timedelta_is_datetime():
 
 
 def test_masked_timedelta_plus_timedelta_is_timedelta():
-    """TODO: write docstring."""
+    """Masked ``timedelta + timedelta`` yields a Masked timedelta."""
 
     @cuda.jit(
         types.void(
@@ -889,12 +889,9 @@ def test_masked_timedelta_plus_timedelta_is_timedelta():
     assert int(out_v.get().view("int64")[0]) == 420
 
 
-@pytest.mark.parametrize(
-    "op,ref",
-    [(operator.lt, lambda a, b: a < b), (operator.gt, lambda a, b: a > b)],
-)
-def test_masked_datetime_comparison(op, ref):
-    """TODO: write docstring."""
+@pytest.mark.parametrize("op", [operator.lt, operator.gt])
+def test_masked_datetime_comparison(op):
+    """Masked datetime comparisons evaluate on the operand payloads."""
 
     @cuda.jit(
         types.void(
@@ -910,11 +907,41 @@ def test_masked_datetime_comparison(op, ref):
 
     out = cp.zeros(1, dtype=np.bool_)
     _launch(k, out, _dt_in([400]), _bool(True), _dt_in([1000]), _bool(True))
-    assert bool(out.get()[0]) == ref(400, 1000)
+    assert bool(out.get()[0]) == op(400, 1000)
+
+
+def test_masked_datetime_comparison_mixed_units():
+    """Mixed-unit comparisons scale to a common unit rather than comparing
+    raw payloads: ``1 s`` vs ``2 ns`` compares as ``1_000_000_000`` vs ``2``
+    (True for ``>``), not the raw ``1 < 2``.
+    """
+    dt_s = types.NPDatetime("s")
+    dt_ns = types.NPDatetime("ns")
+
+    @cuda.jit(
+        types.void(
+            types.boolean[::1],
+            dt_s[::1],
+            types.boolean[::1],
+            dt_ns[::1],
+            types.boolean[::1],
+        )
+    )
+    def k(out, a, av, b, bv):
+        out[0] = (Masked(a[0], av[0]) > Masked(b[0], bv[0])).value
+
+    a = cp.asarray(np.array([1], dtype="int64")).view("datetime64[s]")
+    b = cp.asarray(np.array([2], dtype="int64")).view("datetime64[ns]")
+    out = cp.zeros(1, dtype=np.bool_)
+    _launch(k, out, a, _bool(True), b, _bool(True))
+    # 1 second (1e9 ns) > 2 ns is True; a raw i64 compare would give 1 > 2 = False.
+    assert bool(out.get()[0]) is True
 
 
 def test_masked_datetime_arith_validity_propagates():
-    """TODO: write docstring."""
+    """Temporal arithmetic ANDs operand validity: an NA operand poisons the
+    result.
+    """
 
     @cuda.jit(
         types.void(
