@@ -157,11 +157,10 @@ TEST_F(SparkMurmurHashTest, MultiValueNulls)
   cudf::test::fixed_width_column_wrapper<int32_t> const ints_col2(
     {0, -200, 200, limits::min(), limits::max()}, {1, 0, 0, 1, 1});
 
-  // Nulls with different values should be equal. The non-zero literals below are normalized to
-  // `true` by the wrapper, so this does not exercise the hasher's own BOOL8 canonicalization;
-  // `NonCanonicalBool` covers that by building the column from raw bytes.
+  // Nulls with different values should be equal. Use canonical bool values here; the differing
+  // values are hidden by the null masks. `NonCanonicalBool` covers hasher canonicalization.
   cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
-  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 0, 1});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 1, 1, 0, 1}, {1, 1, 0, 0, 1});
 
   // Nulls with different values should be equal
   using ts = cudf::timestamp_s;
