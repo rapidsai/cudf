@@ -99,6 +99,8 @@ def _assert_dataframe_multiindex_sort_index(
     )
 
     if inplace is True:
+        assert expected is None
+        assert got is None
         assert_eq(pdf, gdf)
     else:
         assert_eq(expected, got)
