@@ -21,6 +21,33 @@ from cudf.testing._utils import (
     gen_rand_series,
 )
 
+TIMEDELTA_SERIES_BINARY_OP_METHODS = [
+    "add",
+    "radd",
+    "sub",
+    "rsub",
+    "truediv",
+    "rtruediv",
+    "floordiv",
+    "rfloordiv",
+    "mod",
+    "rmod",
+    "lt",
+    "le",
+    "eq",
+    "ne",
+    "ge",
+    "gt",
+]
+
+TIMEDELTA_SCALAR_ARITHMETIC_OP_METHODS = [
+    "add",
+    "sub",
+    "truediv",
+    "floordiv",
+    "mod",
+]
+
 
 @pytest.mark.parametrize(
     "sr1", [pd.Series([10, 11, 12], index=["a", "b", "z"]), pd.Series(["a"])]
@@ -60,11 +87,12 @@ def test_series_error_equality(sr1, sr2, comparison_op):
         (cp.asarray([10, 20, 30, 100]), cp.asarray([10, 20, 30, 100])),
     ],
 )
+@pytest.mark.parametrize(
+    "binary_op_method", TIMEDELTA_SERIES_BINARY_OP_METHODS
+)
 def test_timedelta_ops_misc_inputs(
     data, other, timedelta_types_as_str, binary_op_method
 ):
-    if binary_op_method in {"mul", "rmul", "pow", "rpow"}:
-        pytest.skip(f"Test not applicable for {binary_op_method}")
     gsr = cudf.Series(data, dtype=timedelta_types_as_str)
     other_gsr = cudf.Series(other, dtype=timedelta_types_as_str)
 
@@ -232,21 +260,12 @@ def test_timedelta_dataframe_ops(df, op):
         np.timedelta64(1, "ns"),
     ],
 )
+@pytest.mark.parametrize(
+    "arithmetic_op_method", TIMEDELTA_SCALAR_ARITHMETIC_OP_METHODS
+)
 def test_timedelta_series_ops_with_scalars(
-    data, other_scalars, timedelta_types_as_str, arithmetic_op_method, request
+    data, other_scalars, timedelta_types_as_str, arithmetic_op_method
 ):
-    if arithmetic_op_method in {
-        "mul",
-        "rmul",
-        "rtruediv",
-        "pow",
-        "rpow",
-        "radd",
-        "rsub",
-        "rfloordiv",
-        "rmod",
-    }:
-        pytest.skip(f"Test not applicable for {arithmetic_op_method}")
     gsr = cudf.Series(data=data, dtype=timedelta_types_as_str)
     psr = gsr.to_pandas()
 
