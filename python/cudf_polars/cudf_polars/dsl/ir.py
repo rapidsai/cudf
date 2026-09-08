@@ -2578,8 +2578,7 @@ def _colref_comparisons(
     ------
     tuple[expr.ColRef, expr.ColRef]
         Left and right operands of each comparison whose operands are both
-        column references. Comparisons against literals or computed
-        subexpressions are skipped.
+        column references.
     """
     if isinstance(node, expr.BinOp) and node.op in _BINOPS:
         left_expr, right_expr = node.children
@@ -2636,26 +2635,31 @@ def _collect_decimal_binop_casts(
         dtypes[right_key] = right_expr.dtype
         comparisons.append((left_key, right_key))
 
-    target = DataType(pl.Float64())
-    realigned: set[_ColumnKey] = set()
-    previous = -1
-    while len(realigned) != previous:
-        previous = len(realigned)
-        for left_key, right_key in comparisons:
-            if plc.traits.is_fixed_point(
-                dtypes[left_key].plc_type
-            ) == plc.traits.is_fixed_point(dtypes[right_key].plc_type):
-                continue
-            for key in (left_key, right_key):
-                if dtypes[key] != target:
-                    dtypes[key] = target
-                    realigned.add(key)
+    parent: dict[_ColumnKey, _ColumnKey] = {key: key for key in dtypes}
 
+    def find(key: _ColumnKey) -> _ColumnKey:
+        while parent[key] != key:
+            parent[key] = parent[parent[key]]
+            key = parent[key]
+        return key
+
+    for left_key, right_key in comparisons:
+        parent[find(left_key)] = find(right_key)
+
+    type_ids: dict[_ColumnKey, set[plc.TypeId]] = {}
+    for key, dtype in dtypes.items():
+        type_ids.setdefault(find(key), set()).add(dtype.plc_type.id())
+
+    target = DataType(pl.Float64())
     left_casts: dict[str, DataType] = {}
     right_casts: dict[str, DataType] = {}
-    for table_ref, name in realigned:
-        casts = left_casts if table_ref == plc_expr.TableReference.LEFT else right_casts
-        casts[name] = target
+    for key, dtype in dtypes.items():
+        if len(type_ids[find(key)]) > 1 and dtype != target:
+            table_ref, name = key
+            casts = (
+                left_casts if table_ref == plc_expr.TableReference.LEFT else right_casts
+            )
+            casts[name] = target
     return left_casts, right_casts
 
 
