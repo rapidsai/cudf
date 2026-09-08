@@ -11,7 +11,7 @@ import math
 import statistics
 from collections import defaultdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple, overload
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, NamedTuple, overload
 
 import polars as pl
 
@@ -208,18 +208,15 @@ def expand_scan_for_rank(
     else:
         paths_start = local_offset * plan.factor
         paths_end = paths_start + plan.factor * local_count
-        task_type = ParquetScanTask if ir.typ == "parquet" else ScanTask
-        tasks = [
-            task_type(
-                ir,
-                ir.paths[offset : offset + plan.factor],
-                0,
-                1,
-                parquet_options,
-            )
-            for offset in range(paths_start, paths_end, plan.factor)
-            if ir.paths[offset : offset + plan.factor]
-        ]
+        tasks = []
+        for offset in range(paths_start, paths_end, plan.factor):
+            paths = ir.paths[offset : offset + plan.factor]
+            if not paths:
+                continue
+            if ir.typ == "parquet":
+                tasks.append(ParquetScanTask(ir, paths, 0, 1, parquet_options))
+            else:
+                tasks.append(ScanTask(ir, paths, 0, 1))
     return StreamingScan(tasks, ir)
 
 
@@ -378,20 +375,18 @@ class ScanTask(IR):
 
     __slots__ = (
         "base_scan",
-        "parquet_options",
         "paths",
         "schema",
         "split_index",
         "total_splits",
     )
-    _non_child = (
+    _non_child: ClassVar[tuple[str, ...]] = (
         "base_scan",
         "paths",
         "split_index",
         "total_splits",
-        "parquet_options",
     )
-    _n_non_child_args = 5
+    _n_non_child_args = 4
     base_scan: Scan
     """Scan operation this task is based on."""
     paths: list[str]
@@ -400,8 +395,6 @@ class ScanTask(IR):
     """Index of the current split, or 0 for non-split tasks."""
     total_splits: int
     """Total number of splits for a split file, or 1 for non-split tasks."""
-    parquet_options: ParquetOptions
-    """Parquet-specific options."""
 
     def __init__(
         self,
@@ -409,11 +402,10 @@ class ScanTask(IR):
         paths: list[str],
         split_index: int,
         total_splits: int,
-        parquet_options: ParquetOptions,
     ):
-        if total_splits < 1:  # pragma: no cover
+        if total_splits < 1:
             raise ValueError(f"Expected at least one split, got: {total_splits}")
-        if not 0 <= split_index < total_splits:  # pragma: no cover
+        if not 0 <= split_index < total_splits:
             raise ValueError(
                 f"Expected split_index in [0, {total_splits}), got: {split_index}"
             )
@@ -422,13 +414,11 @@ class ScanTask(IR):
         self.paths = paths
         self.split_index = split_index
         self.total_splits = total_splits
-        self.parquet_options = parquet_options
         self._non_child_args = (
             base_scan,
             paths,
             split_index,
             total_splits,
-            parquet_options,
         )
         self.children = ()
 
@@ -446,7 +436,6 @@ class ScanTask(IR):
             tuple(self.paths),
             self.split_index,
             self.total_splits,
-            self.parquet_options,
         )
 
     def trace_ir_type(self) -> str:
@@ -460,7 +449,6 @@ class ScanTask(IR):
         paths: list[str],
         split_index: int,
         total_splits: int,
-        parquet_options: ParquetOptions,
         *,
         context: IRExecutionContext,
     ) -> DataFrame:
@@ -481,7 +469,7 @@ class ScanTask(IR):
                 base_scan.row_index,
                 base_scan.include_file_paths,
                 base_scan.predicate,
-                parquet_options,
+                base_scan.parquet_options,
                 None,
                 context=context,
             )
@@ -490,9 +478,12 @@ class ScanTask(IR):
 class ParquetScanTask(ScanTask):
     """Parquet-specific streaming scan task."""
 
-    __slots__ = ()
-    _non_child = ScanTask._non_child
-    _n_non_child_args = ScanTask._n_non_child_args
+    __slots__ = ("parquet_options",)
+    _non_child: ClassVar[tuple[str, ...]] = (
+        *ScanTask._non_child,
+        "parquet_options",
+    )
+    _n_non_child_args = 5
 
     def __init__(
         self,
@@ -502,11 +493,28 @@ class ParquetScanTask(ScanTask):
         total_splits: int,
         parquet_options: ParquetOptions,
     ):
-        if base_scan.typ != "parquet":  # pragma: no cover
+        if base_scan.typ != "parquet":
             raise ValueError(f"Expected a parquet scan, got: {base_scan.typ}")
-        if total_splits > 1 and len(paths) > 1:  # pragma: no cover
+        if total_splits > 1 and len(paths) > 1:
             raise ValueError(f"Expected a single path for a split task, got: {paths}")
-        super().__init__(base_scan, paths, split_index, total_splits, parquet_options)
+        super().__init__(base_scan, paths, split_index, total_splits)
+        self.parquet_options = parquet_options
+        self._non_child_args = (
+            *self._non_child_args,
+            parquet_options,
+        )
+
+    def get_hashable(self) -> Hashable:
+        """Hashable representation of the node."""
+        return (
+            type(self),
+            tuple(self.schema.items()),
+            self.base_scan.get_hashable(),
+            tuple(self.paths),
+            self.split_index,
+            self.total_splits,
+            self.parquet_options,
+        )
 
     def get_task_bounds(self) -> ParquetScanTaskBounds | None:
         """Return parquet read bounds for this task."""
@@ -590,7 +598,7 @@ class ParquetScanTask(ScanTask):
         return ParquetScanTaskBounds(row_groups, base_scan.skip_rows, base_scan.n_rows)
 
     @classmethod
-    def do_evaluate(
+    def do_evaluate(  # type: ignore[override]
         cls,
         base_scan: Scan,
         paths: list[str],

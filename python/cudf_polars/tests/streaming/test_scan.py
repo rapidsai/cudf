@@ -660,7 +660,7 @@ def test_attach_cached_parquet_metadata_leaves_sliced_fused_scan_unaligned(
 def test_streaming_scan_raises() -> None:
     # This isn't reachable by normal cudf-polars usage.
     scan = _make_csv_scan(["file.csv"])
-    task = ScanTask(scan, scan.paths, 0, 1, scan.parquet_options)
+    task = ScanTask(scan, scan.paths, 0, 1)
     ctx = IRExecutionContext()
     with pytest.raises(NotImplementedError, match=r"StreamingScan.do_evaluate"):
         StreamingScan.do_evaluate([task], scan, context=ctx)
@@ -811,13 +811,39 @@ def test_scan_task_identity_equality() -> None:
     base = _make_csv_scan(["a.csv", "b.csv"])
     paths = ["a.csv"]
 
-    a = ScanTask(base, paths, 0, 1, base.parquet_options)
-    b = ScanTask(base, paths, 0, 1, base.parquet_options)
-    c = ScanTask(base, ["b.csv"], 0, 1, base.parquet_options)
+    a = ScanTask(base, paths, 0, 1)
+    b = ScanTask(base, paths, 0, 1)
+    c = ScanTask(base, ["b.csv"], 0, 1)
 
     assert a == b
     assert hash(a) == hash(b)
     assert a != c
+
+
+def test_scan_task_validates_split_bounds() -> None:
+    base = _make_csv_scan(["a.csv"])
+
+    with pytest.raises(ValueError, match=r"Expected at least one split"):
+        ScanTask(base, ["a.csv"], 0, 0)
+
+    with pytest.raises(ValueError, match=r"Expected split_index in"):
+        ScanTask(base, ["a.csv"], 1, 1)
+
+
+def test_parquet_scan_task_validates_inputs() -> None:
+    csv_scan = _make_csv_scan(["a.csv"])
+    with pytest.raises(ValueError, match=r"Expected a parquet scan"):
+        ParquetScanTask(csv_scan, csv_scan.paths, 0, 1, csv_scan.parquet_options)
+
+    parquet_scan = _make_parquet_scan(["a.parquet", "b.parquet"])
+    with pytest.raises(ValueError, match=r"Expected a single path for a split task"):
+        ParquetScanTask(
+            parquet_scan,
+            parquet_scan.paths,
+            0,
+            2,
+            parquet_scan.parquet_options,
+        )
 
 
 def test_parquet_split_task_identity_equality() -> None:
