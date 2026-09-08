@@ -228,7 +228,7 @@ std::unique_ptr<cudf::column> normalize_characters(
  *
  * @param input The input strings to normalize
  * @param normalizer Normalizer to use for this function
- * @param flags Bitmask of nvtext::normalize_flags values
+ * @param flags Combination of nvtext::normalize_flags values
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Memory resource to allocate any returned objects
  * @return Normalized strings column
