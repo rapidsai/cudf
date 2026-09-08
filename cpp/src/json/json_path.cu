@@ -355,9 +355,8 @@ class json_state : private parser {
    * The user can specify whether or not the name string must be present via
    * the `can_be_empty` flag.
    *
-   * When a name is present, it must be followed by a colon `:`. Note that a name that is
-   * present but zero-length (the `""` key of `{"":1}`) is distinct from an absent name, so
-   * presence is determined by the `parse_string` result rather than by the name's length.
+   * When a name is present, it must be followed by a colon `:`. A present but zero-length
+   * name (the `""` key of `{"":1}`) is not an absent name.
    *
    * @param[out] name The resulting name.
    * @param can_be_empty Parameter indicating whether it is valid for the name
