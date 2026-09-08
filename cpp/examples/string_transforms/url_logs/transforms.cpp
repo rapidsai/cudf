@@ -234,9 +234,7 @@ constexpr std::string_view usage =
   "       url_log_transforms <usage|--help>\n";
 
 // warmup the PCH cache
-void warmup_pch(cudf::column_view input,
-                rmm::cuda_stream_view stream,
-                rmm::device_async_resource_ref mr)
+void warmup_pch(cudf::column_view input, cuda::stream_ref stream, rmm::device_async_resource_ref mr)
 {
   constexpr char udf[]           = R"***(
 __device__ int transform(int32_t* output, cudf::string_view input) {
@@ -258,12 +256,12 @@ __device__ int transform(int32_t* output, cudf::string_view input) {
                                 std::nullopt,
                                 stream,
                                 mr);
-  stream.synchronize();
+  stream.sync();
 }
 
 // Extracts RFC 3986-style hierarchical URI components from unstructured log lines.
 [[nodiscard]] std::unique_ptr<cudf::table> run_regex(cudf::column_view input,
-                                                     rmm::cuda_stream_view stream,
+                                                     cuda::stream_ref stream,
                                                      rmm::device_async_resource_ref mr)
 {
   // Derived from RFC 3986 Appendix B (https://www.rfc-editor.org/info/rfc3986/#page-50). The
@@ -282,7 +280,7 @@ __device__ int transform(int32_t* output, cudf::string_view input) {
 
 // Decomposes key-value URL tokens using only precompiled libcudf string primitives.
 [[nodiscard]] std::unique_ptr<cudf::table> run_precompiled(cudf::column_view input,
-                                                           rmm::cuda_stream_view stream,
+                                                           cuda::stream_ref stream,
                                                            rmm::device_async_resource_ref mr)
 {
   // Materialize the delimiters used by each partitioning stage.
@@ -410,7 +408,7 @@ __device__ int transform(int32_t* output, cudf::string_view input) {
 // Runs either the runtime-compiled CUDA-string UDFs or their AOT fatbin/LTO counterparts.
 [[nodiscard]] std::unique_ptr<cudf::table> run_jit(cudf::column_view input,
                                                    bool use_lto,
-                                                   rmm::cuda_stream_view stream,
+                                                   cuda::stream_ref stream,
                                                    rmm::device_async_resource_ref mr)
 {
   cudf::transform_output const size_spec{cudf::data_type{cudf::type_id::INT32},
@@ -545,7 +543,7 @@ try {
     input =
       cudf::sample(input->view(), rows, cudf::sample_with_replacement::TRUE, 0, stream, whole_mr);
   }
-  stream.synchronize();
+  stream.sync();
   auto input_view          = input->get_column(0).view();
   auto logical_input_bytes = cudf::strings_column_view{input_view}.chars_size(stream);
   nvtxRangePop();
@@ -576,11 +574,11 @@ try {
   } else if (warmup_control == "--warm") {
     // Do not track warm-up allocations.
     cudf::set_current_device_resource(upstream_mr);
-    stream.synchronize();
+    stream.sync();
     auto warmup_start = std::chrono::steady_clock::now();
     nvtxRangePush("url_log_warmup");
     result = run_transform(upstream_mr);
-    stream.synchronize();
+    stream.sync();
     nvtxRangePop();
     warmup_duration = std::chrono::steady_clock::now() - warmup_start;
     result.reset();
@@ -589,11 +587,11 @@ try {
 
   // Measured allocations update both statistics scopes.
   cudf::set_current_device_resource(measured_mr);
-  stream.synchronize();
+  stream.sync();
   auto measured_start = std::chrono::steady_clock::now();
   nvtxRangePush("url_log_measured");
   result = run_transform(measured_mr);
-  stream.synchronize();
+  stream.sync();
   nvtxRangePop();
   auto measured_duration = std::chrono::steady_clock::now() - measured_start;
 
