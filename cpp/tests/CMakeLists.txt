@@ -126,6 +126,7 @@ ConfigureTest(
   groupby/count_scan_tests.cpp
   groupby/count_tests.cpp
   groupby/covariance_tests.cpp
+  groupby/global_memory_aggs_tests.cpp
   groupby/groupby_test_util.cpp
   groupby/groups_tests.cpp
   groupby/histogram_tests.cpp
