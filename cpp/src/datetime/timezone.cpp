@@ -4,6 +4,7 @@
  */
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/timezone.hpp>
+#include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
 
@@ -599,7 +600,7 @@ duration_s lookup_ut_offset(host_transition_table const& tz_table, timestamp_s t
 
 std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_view> tzif_dir,
                                                       std::string_view timezone_name,
-                                                      rmm::cuda_stream_view stream,
+                                                      cuda::stream_ref stream,
                                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -610,7 +611,7 @@ namespace detail {
 
 std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_view> tzif_dir,
                                                       std::string_view timezone_name,
-                                                      rmm::cuda_stream_view stream,
+                                                      cuda::stream_ref stream,
                                                       rmm::device_async_resource_ref mr)
 {
   auto const tz_table = build_transition_table(tzif_dir, timezone_name);
@@ -637,7 +638,7 @@ std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_
     std::make_unique<cudf::column>(std::move(d_offsets), rmm::device_buffer{}, 0));
 
   // Need to finish copies before the host vectors go out of scope
-  stream.synchronize();
+  cudf::detail::sync_stream(stream);
 
   return std::make_unique<cudf::table>(std::move(tz_table_columns));
 }

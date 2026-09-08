@@ -6,13 +6,27 @@ import operator
 from functools import partial
 from typing import TYPE_CHECKING
 
+import numpy as np
 from numba_cuda_mlir import types
 from numba_cuda_mlir._mlir import ir as mlir_ir
 from numba_cuda_mlir._mlir.dialects import arith, llvm
 from numba_cuda_mlir.extending import lower_cast, lowering_registry
-from numba_cuda_mlir.lowering_utilities import convert
+from numba_cuda_mlir.lowering_utilities import (
+    coerce_numpy_scalars_for_binary_op,
+    convert,
+    false,
+    true,
+)
 from numba_cuda_mlir.models import PrimitiveModel, register_model
+from numba_cuda_mlir.numba_cuda.core import ir as numba_ir
+from numba_cuda_mlir.numba_cuda.types.misc import unliteral
 
+from cudf.core.udf._ops import (
+    arith_ops,
+    bitwise_ops,
+    comparison_ops,
+    unary_ops,
+)
 from cudf.core.udf.api import Masked
 from cudf.core.udf.mlir_backend.masked_typing import (
     MaskedType,
@@ -21,6 +35,8 @@ from cudf.core.udf.mlir_backend.masked_typing import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from numba_cuda_mlir.mlir_lowering import MLIRLower
     from numba_cuda_mlir.numba_cuda.core.ir import Var
     from numba_cuda_mlir.numba_cuda.datamodel.manager import (
@@ -183,6 +199,285 @@ def _lower_masked_na_compare(builder, target, args, kwargs, *, is_null):
     builder.store_var(target, valid)
 
 
+def _apply_masked_binary_op(
+    builder: MLIRLower,
+    target: Var,
+    target_type: MaskedType,
+    v1: mlir_ir.Value,
+    v2: mlir_ir.Value,
+    result_valid: mlir_ir.Value,
+    op: Callable,
+) -> None:
+    """Apply ``op(v1, v2)`` to two scalar MLIR values, convert the result to
+    the target Masked's value type, and pack it with the given validity bit.
+    Numeric/boolean only at this layer.
+    """
+    target_value_mlir_ty = builder.get_mlir_type(target_type.value_type)
+    v1, v2 = coerce_numpy_scalars_for_binary_op(v1, v2)
+    # Comparisons compute on the (already coerced) operand type and
+    # produce i1; arithmetic/bitwise compute on the target value type.
+    is_cmp = op in comparison_ops
+    operand_ty = v1.type if is_cmp else target_value_mlir_ty
+    v1 = convert(v1, operand_ty)
+    v2 = convert(v2, operand_ty)
+    result_val = convert(op(v1, v2), target_value_mlir_ty)
+    packed = _pack_masked(builder, target_type, result_val, result_valid)
+    builder.store_var(target, packed)
+
+
+def _make_lower_masked_binary(op: Callable) -> Callable:
+    """``Masked <op> Masked``: AND the validity bits."""
+
+    def _lower(
+        builder: MLIRLower, target: Var, args: list[Var], kwargs: list
+    ) -> None:
+        target_type = builder.get_numba_type(target.name)
+        m1 = builder.load_var(args[0])
+        m2 = builder.load_var(args[1])
+        st1 = llvm.StructType(m1.type)
+        st2 = llvm.StructType(m2.type)
+        v1, valid1 = _extract_masked_value_valid(m1, st1.body[0], st1.body[1])
+        v2, valid2 = _extract_masked_value_valid(m2, st2.body[0], st2.body[1])
+        result_valid = arith.andi(valid1, valid2)
+        _apply_masked_binary_op(
+            builder, target, target_type, v1, v2, result_valid, op
+        )
+
+    return _lower
+
+
+def _scalar_value_from_var(
+    builder: MLIRLower,
+    s_var: Var,
+) -> mlir_ir.Value:
+    """Resolve the scalar operand for the Masked-vs-scalar path.
+
+    A ``Literal`` operand carries its value in the type rather than as a
+    distinct runtime register, so materialize it directly as a constant;
+    genuine runtime scalars are loaded from their variable.
+    """
+    s_ty = builder.get_numba_type(s_var.name)
+    if isinstance(s_ty, types.Literal):
+        py_val = s_ty.literal_value
+        base_ty = unliteral(s_ty)
+        mlir_ty = builder.get_mlir_type(base_ty)
+        if isinstance(py_val, (bool, np.bool_)) or (
+            hasattr(mlir_ty, "width") and mlir_ty.width == 1
+        ):
+            py_val = 1 if py_val else 0
+        return arith.constant(mlir_ty, py_val)
+    return builder.load_var(s_var)
+
+
+def _make_lower_masked_binary_scalar(
+    op: Callable, masked_first: bool
+) -> Callable:
+    """``Masked <op> scalar`` and ``scalar <op> Masked``: carry the Masked
+    operand's validity.
+    """
+
+    def _lower(
+        builder: MLIRLower, target: Var, args: list[Var], kwargs: list
+    ) -> None:
+        target_type = builder.get_numba_type(target.name)
+        m_var, s_var = (
+            (args[0], args[1]) if masked_first else (args[1], args[0])
+        )
+        m = builder.load_var(m_var)
+        st = llvm.StructType(m.type)
+        m_val, m_valid = _extract_masked_value_valid(m, st.body[0], st.body[1])
+        s_val = _scalar_value_from_var(builder, s_var)
+        if masked_first:
+            _apply_masked_binary_op(
+                builder, target, target_type, m_val, s_val, m_valid, op
+            )
+        else:
+            _apply_masked_binary_op(
+                builder, target, target_type, s_val, m_val, m_valid, op
+            )
+
+    return _lower
+
+
+def _lower_masked_binary_null(
+    builder: MLIRLower, target: Var, args: list[Var], kwargs: list
+) -> None:
+    """``Masked <op> NA`` / ``NA <op> Masked``: result is invalid."""
+    target_type = builder.get_numba_type(target.name)
+    value_mlir_ty = builder.get_mlir_type(target_type.value_type)
+    undef_val = llvm.UndefOp(value_mlir_ty)
+    valid_zero = arith.constant(
+        result=builder.get_mlir_type(types.boolean), value=0
+    )
+    packed = _pack_masked(builder, target_type, undef_val, valid_zero)
+    builder.store_var(target, packed)
+
+
+def _make_temp_var(
+    builder: MLIRLower,
+    base_var: Var,
+    name_suffix: str,
+    numba_type: types.Type,
+) -> Var:
+    """Create a fresh typed IR ``Var`` for staging an intermediate value.
+
+    Used to feed the masked payload into a registered scalar lowering (which
+    operates on plain IR vars) and to receive its result. The name is derived
+    from ``base_var`` plus ``name_suffix`` so typemap keys stay unique when one
+    operand feeds several unary calls in a single expression.
+    """
+    scope = getattr(base_var, "scope", None)
+    loc = getattr(base_var, "loc", None)
+    name = f"$masked_uop_{base_var.name}_{name_suffix}"
+    temp = numba_ir.Var(scope=scope, name=name, loc=loc)
+    builder.fndesc.typemap[temp.name] = numba_type
+    return temp
+
+
+def _make_lower_masked_unary(op: Callable) -> Callable:
+    """``<op>(Masked)``: delegate the scalar op to the registered
+    numba_cuda_mlir scalar lowering (``math.sin`` -> math dialect,
+    ``operator.neg`` -> arith, etc.), then re-wrap with the operand's
+    validity bit.
+    """
+
+    def _lower(
+        builder: MLIRLower, target: Var, args: list[Var], kwargs: list
+    ) -> None:
+        target_type = builder.get_numba_type(target.name)
+        result_inner_ty = target_type.value_type
+        operand_inner_ty = builder.get_numba_type(args[0].name).value_type
+
+        m = builder.load_var(args[0])
+        st = llvm.StructType(m.type)
+        m_val, m_valid = _extract_masked_value_valid(m, st.body[0], st.body[1])
+        m_val = convert(m_val, builder.get_mlir_type(operand_inner_ty))
+
+        sig = result_inner_ty(operand_inner_ty)
+        cg = builder.get_registered_builder(op, sig)
+        if cg is None:
+            raise NotImplementedError(
+                "No MLIR lowering for unary "
+                f"{getattr(op, '__name__', op)!r} on {operand_inner_ty}; "
+                f"signature {sig}"
+            )
+        # The same operand var can feed multiple unary calls in one
+        # expression (e.g. ``sin(x) + lgamma(x)``); suffix the temp var
+        # name by op so typemap keys stay unique.
+        op_tag = getattr(op, "__name__", "op")
+        op_var = _make_temp_var(
+            builder, args[0], f"{op_tag}_in", operand_inner_ty
+        )
+        out_var = _make_temp_var(
+            builder, args[0], f"{op_tag}_out", result_inner_ty
+        )
+        builder.store_var(op_var, m_val)
+        cg(builder, out_var, [op_var], [])
+        result_val = convert(
+            builder.load_var(out_var),
+            builder.get_mlir_type(result_inner_ty),
+        )
+        packed = _pack_masked(builder, target_type, result_val, m_valid)
+        builder.store_var(target, packed)
+
+    return _lower
+
+
+def _lower_masked_invert(
+    builder: MLIRLower, target: Var, args: list[Var], kwargs: list
+) -> None:
+    """``operator.invert`` (bitwise ~) on Masked integers.
+
+    There is no scalar ``@lower`` for invert, so compute ``xori(x, -1)``. The
+    all-ones mask is the signed constant -1 (two's complement); ``(1<<width)-1``
+    would overflow the signed IntegerAttr range for i64.
+    """
+    target_type = builder.get_numba_type(target.name)
+    result_inner_ty = target_type.value_type
+    operand_inner_ty = builder.get_numba_type(args[0].name).value_type
+    if not isinstance(operand_inner_ty, types.Integer):
+        raise NotImplementedError(
+            "operator.invert on Masked is only supported for integer "
+            f"payloads, not {operand_inner_ty}"
+        )
+    m = builder.load_var(args[0])
+    st = llvm.StructType(m.type)
+    m_val, m_valid = _extract_masked_value_valid(m, st.body[0], st.body[1])
+    m_val = convert(m_val, builder.get_mlir_type(operand_inner_ty))
+    mask = arith.constant(result=m_val.type, value=-1)
+    result_val = convert(
+        arith.xori(m_val, mask), builder.get_mlir_type(result_inner_ty)
+    )
+    packed = _pack_masked(builder, target_type, result_val, m_valid)
+    builder.store_var(target, packed)
+
+
+def _masked_truth_value(builder: MLIRLower, arg: Var) -> mlir_ir.Value:
+    """Return the ``i1`` truth value of a Masked: ``m.valid and bool(m.value)``.
+
+    The payload truthiness cannot go through ``convert(payload -> i1)`` because
+    that narrows numerically rather than testing truth:
+
+    * ``convert(int -> i1)`` is ``arith.trunci``, keeping only the low bit, so
+      ``bool(Masked(2))`` would come out ``False``.
+    * ``convert(float -> i1)`` is ``arith.fptoui``, which truncates similarly,
+      so ``bool(Masked(1.0))`` would come out ``False``.
+
+    Compare against zero directly instead. For floats the unordered ``UNE``
+    predicate also gives the Python-correct ``bool(nan) is True``.
+    """
+    m = builder.load_var(arg)
+    st = llvm.StructType(m.type)
+    m_val, m_valid = _extract_masked_value_valid(m, st.body[0], st.body[1])
+    inner_ty = builder.get_numba_type(arg.name).value_type
+    if isinstance(inner_ty, types.Float):
+        zero = arith.constant(m_val.type, 0.0)
+        payload_as_bool = arith.cmpf(arith.CmpFPredicate.UNE, m_val, zero)
+    else:
+        zero = arith.constant(m_val.type, 0)
+        payload_as_bool = arith.cmpi(arith.CmpIPredicate.ne, m_val, zero)
+    return arith.select(m_valid, payload_as_bool, false())
+
+
+def _lower_masked_truth(
+    builder: MLIRLower, target: Var, args: list[Var], kwargs: list
+) -> None:
+    """``bool(m)`` / ``operator.truth(m)``: ``m.valid and bool(m.value)``."""
+    builder.store_var(target, _masked_truth_value(builder, args[0]))
+
+
+def _lower_masked_not(
+    builder: MLIRLower, target: Var, args: list[Var], kwargs: list
+) -> None:
+    """``not m`` / ``operator.not_(m)``: ``not (m.valid and bool(m.value))``.
+
+    The result is a plain boolean, not a Masked: an invalid operand is falsy,
+    so ``not`` of it is ``True`` rather than an invalid masked value.
+    """
+    truth = _masked_truth_value(builder, args[0])
+    builder.store_var(target, arith.xori(truth, true()))
+
+
+def _make_lower_masked_numeric_cast() -> Callable:
+    """``int(m)`` -> ``Masked(int64)`` / ``float(m)`` -> ``Masked(float64)``:
+    cast the payload to the target value type, preserving the validity bit.
+    """
+
+    def _lower(
+        builder: MLIRLower, target: Var, args: list[Var], kwargs: list
+    ) -> None:
+        target_type = builder.get_numba_type(target.name)
+        target_value_mlir_ty = builder.get_mlir_type(target_type.value_type)
+        m = builder.load_var(args[0])
+        st = llvm.StructType(m.type)
+        m_val, m_valid = _extract_masked_value_valid(m, st.body[0], st.body[1])
+        casted = builder.mlir_convert(m_val, target_value_mlir_ty)
+        packed = _pack_masked(builder, target_type, casted, m_valid)
+        builder.store_var(target, packed)
+
+    return _lower
+
+
 def _register() -> None:
     """Register the data model and lowerings with ``numba_cuda_mlir``.
 
@@ -212,6 +507,41 @@ def _register() -> None:
     lower(operator.is_, NAType, MaskedType)(is_na)
     lower(operator.is_not, MaskedType, NAType)(is_not_na)
     lower(operator.is_not, NAType, MaskedType)(is_not_na)
+
+    for binary_op in arith_ops + bitwise_ops + comparison_ops:
+        lower(binary_op, MaskedType, MaskedType)(
+            _make_lower_masked_binary(binary_op)
+        )
+        lower(binary_op, MaskedType, types.Number)(
+            _make_lower_masked_binary_scalar(binary_op, True)
+        )
+        lower(binary_op, types.Number, MaskedType)(
+            _make_lower_masked_binary_scalar(binary_op, False)
+        )
+        lower(binary_op, MaskedType, types.Boolean)(
+            _make_lower_masked_binary_scalar(binary_op, True)
+        )
+        lower(binary_op, types.Boolean, MaskedType)(
+            _make_lower_masked_binary_scalar(binary_op, False)
+        )
+        lower(binary_op, MaskedType, NAType)(_lower_masked_binary_null)
+        lower(binary_op, NAType, MaskedType)(_lower_masked_binary_null)
+
+    for unary_op in unary_ops:
+        # invert has no scalar lowering to delegate to (handled below), and
+        # not_ is logical negation returning a plain bool rather than a Masked.
+        if unary_op in (operator.invert, operator.not_):
+            continue
+        lower(unary_op, MaskedType)(_make_lower_masked_unary(unary_op))
+    lower(abs, MaskedType)(_make_lower_masked_unary(abs))
+    lower(operator.invert, MaskedType)(_lower_masked_invert)
+
+    lower(operator.truth, MaskedType)(_lower_masked_truth)
+    lower(bool, MaskedType)(_lower_masked_truth)
+    lower(operator.not_, MaskedType)(_lower_masked_not)
+
+    lower(float, MaskedType)(_make_lower_masked_numeric_cast())
+    lower(int, MaskedType)(_make_lower_masked_numeric_cast())
 
 
 _register()

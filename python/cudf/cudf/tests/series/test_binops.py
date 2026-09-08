@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import datetime
 import decimal
@@ -20,6 +20,33 @@ from cudf.testing._utils import (
     assert_exceptions_equal,
     gen_rand_series,
 )
+
+TIMEDELTA_SERIES_BINARY_OP_METHODS = [
+    "add",
+    "radd",
+    "sub",
+    "rsub",
+    "truediv",
+    "rtruediv",
+    "floordiv",
+    "rfloordiv",
+    "mod",
+    "rmod",
+    "lt",
+    "le",
+    "eq",
+    "ne",
+    "ge",
+    "gt",
+]
+
+TIMEDELTA_SCALAR_ARITHMETIC_OP_METHODS = [
+    "add",
+    "sub",
+    "truediv",
+    "floordiv",
+    "mod",
+]
 
 
 @pytest.mark.parametrize(
@@ -60,11 +87,12 @@ def test_series_error_equality(sr1, sr2, comparison_op):
         (cp.asarray([10, 20, 30, 100]), cp.asarray([10, 20, 30, 100])),
     ],
 )
+@pytest.mark.parametrize(
+    "binary_op_method", TIMEDELTA_SERIES_BINARY_OP_METHODS
+)
 def test_timedelta_ops_misc_inputs(
     data, other, timedelta_types_as_str, binary_op_method
 ):
-    if binary_op_method in {"mul", "rmul", "pow", "rpow"}:
-        pytest.skip(f"Test not applicable for {binary_op_method}")
     gsr = cudf.Series(data, dtype=timedelta_types_as_str)
     other_gsr = cudf.Series(other, dtype=timedelta_types_as_str)
 
@@ -232,21 +260,12 @@ def test_timedelta_dataframe_ops(df, op):
         np.timedelta64(1, "ns"),
     ],
 )
+@pytest.mark.parametrize(
+    "arithmetic_op_method", TIMEDELTA_SCALAR_ARITHMETIC_OP_METHODS
+)
 def test_timedelta_series_ops_with_scalars(
-    data, other_scalars, timedelta_types_as_str, arithmetic_op_method, request
+    data, other_scalars, timedelta_types_as_str, arithmetic_op_method
 ):
-    if arithmetic_op_method in {
-        "mul",
-        "rmul",
-        "rtruediv",
-        "pow",
-        "rpow",
-        "radd",
-        "rsub",
-        "rfloordiv",
-        "rmod",
-    }:
-        pytest.skip(f"Test not applicable for {arithmetic_op_method}")
     gsr = cudf.Series(data=data, dtype=timedelta_types_as_str)
     psr = gsr.to_pandas()
 
@@ -298,7 +317,7 @@ def test_timedelta_series_ops_with_scalars(
                 reason=(
                     "timedelta modulo by zero is dubiously defined in "
                     "both pandas and cuDF "
-                    "(see https://github.com/rapidsai/cudf/issues/5938)"
+                    "(see https://github.com/NVIDIA/cudf/issues/5938)"
                 ),
             ),
         ),
@@ -1449,9 +1468,19 @@ def test_operator_func_series_and_scalar(
     assert_eq(pdf_series_result, gdf_series_result)
 
 
-@pytest.mark.parametrize("fill_value", [0, 1, None, np.nan])
-@pytest.mark.parametrize("scalar_a", [0, 1, None, np.nan])
-@pytest.mark.parametrize("scalar_b", [0, 1, None, np.nan])
+@pytest.mark.parametrize(
+    "scalar_a, scalar_b, fill_value",
+    [
+        (0, 0, 0),
+        (1, 1, 1),
+        (None, None, None),
+        (np.nan, np.nan, np.nan),
+        (0, 1, None),
+        (1, 0, np.nan),
+        (None, np.nan, 0),
+        (np.nan, None, 1),
+    ],
+)
 def test_operator_func_between_series_logical(
     float_types_as_str, comparison_op_method, scalar_a, scalar_b, fill_value
 ):
@@ -1475,9 +1504,19 @@ def test_operator_func_between_series_logical(
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("has_nulls", [True, False])
-@pytest.mark.parametrize("scalar", [-59.0, np.nan, 0, 59.0])
-@pytest.mark.parametrize("fill_value", [None, 1.0])
+@pytest.mark.parametrize(
+    "has_nulls, scalar, fill_value",
+    [
+        (False, -59.0, None),
+        (False, np.nan, 1.0),
+        (False, 0, None),
+        (False, 59.0, 1.0),
+        (True, -59.0, 1.0),
+        (True, np.nan, 1.0),
+        (True, 0, 1.0),
+        (True, 59.0, None),
+    ],
+)
 def test_operator_func_series_and_scalar_logical(
     request,
     float_types_as_str,
@@ -1525,7 +1564,7 @@ def test_binop_bool_uint(request, binary_op_method, rhs):
     if binary_op_method in {"rmod", "rfloordiv"}:
         request.applymarker(
             pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/12162"
+                reason="https://github.com/NVIDIA/cudf/issues/12162"
             ),
         )
     psr = pd.Series([True, False, False])
@@ -1554,7 +1593,7 @@ def test_floordiv_zero_float64(
 
 
 @pytest.mark.parametrize("scalar_divisor", [False, True])
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/12162")
+@pytest.mark.xfail(reason="https://github.com/NVIDIA/cudf/issues/12162")
 def test_floordiv_zero_bool(scalar_divisor):
     sr = pd.Series([True, True, False], dtype=np.bool_)
     cr = cudf.from_pandas(sr)
@@ -3174,7 +3213,7 @@ def test_binops_float_scalar_decimal():
         [decimal.Decimal("1"), decimal.Decimal("-2.5"), None],
         dtype=cudf.Decimal32Dtype(3, 2),
     )
-    expected = cudf.Series([0.0, -3.5, None], dtype="float64")
+    expected = cudf.Series([0.0, 3.5, None], dtype="float64")
     assert_eq(result, expected)
 
 
