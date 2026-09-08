@@ -203,6 +203,8 @@ def test_prefetch_parquet_file_metadata_remote_only(tmp_path, df) -> None:
         streaming_scan, py_executor=None, stats=None, remote_only=True
     )
     assert result == {}
+    attach_cached_parquet_metadata(streaming_scan, result)
+    assert scan.cached_parquet_info is None
 
     # The same local path is prefetched when remote_only=False (the default).
     result = prefetch_parquet_file_metadata_for_ir(
