@@ -81,12 +81,12 @@ lays them out as:
 
 ```text
 /tmp/maven-repo/ai/rapids/cudf/<CUDF_VERSION>-SNAPSHOT/
-    cudf-26.10.0-SNAPSHOT.jar
-    cudf-26.10.0-SNAPSHOT-cuda12.jar
-    cudf-26.10.0-SNAPSHOT-cuda13.jar
-    cudf-26.10.0-SNAPSHOT-sources.jar
-    cudf-26.10.0-SNAPSHOT-javadoc.jar
-    cudf-26.10.0-SNAPSHOT.pom
+    cudf-<CUDF_VERSION>-SNAPSHOT.jar
+    cudf-<CUDF_VERSION>-SNAPSHOT-cuda12.jar
+    cudf-<CUDF_VERSION>-SNAPSHOT-cuda13.jar
+    cudf-<CUDF_VERSION>-SNAPSHOT-sources.jar
+    cudf-<CUDF_VERSION>-SNAPSHOT-javadoc.jar
+    cudf-<CUDF_VERSION>-SNAPSHOT.pom
 ```
 
 The set of classifiers is whatever subdirectories are present under
@@ -99,7 +99,7 @@ it, so an `aarch64`-only set of subdirectories is not a valid gather input.
 ### Release Tag vs SNAPSHOT Versioning
 
 Release tag CI runs (`GITHUB_REF=refs/tags/vYY.MM.PP`) produce release-versioned
-JARs (`cudf-26.10.0-SNAPSHOT`. Gated by
+JARs (`cudf-<CUDF_VERSION>-*.jar`). All other runs produce `-SNAPSHOT`. Gated by
 [`rapids-is-release-build`](https://github.com/rapidsai/gha-tools/blob/main/tools/rapids-is-release-build).
 `GITHUB_REF` is optional. Unset or non-tag values stay SNAPSHOT.
 
@@ -159,7 +159,7 @@ nvidia-docker run -it cudf-build:12.9.1-devel-rocky8 bash
 You can download the cuDF repo in the docker container or you can mount it into the container.
 Here I choose to download again in the container.
 ```bash
-git clone --recursive https://github.com/NVIDIA/cudf.git -b release/26.10
+git clone --recursive https://github.com/NVIDIA/cudf.git -b main
 ```
 
 ```bash
