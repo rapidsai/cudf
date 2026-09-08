@@ -81,6 +81,7 @@ try:
     from cudf_polars.dsl.tracing import Scope
     from cudf_polars.dsl.translate import Translator
     from cudf_polars.engine.core import StreamingEngine
+    from cudf_polars.quent._export import write_quent_export
     from cudf_polars.streaming.benchmarks.asserts import (
         ValidationError,
         assert_tpch_result_equal,
@@ -176,6 +177,38 @@ else:
 _STREAMING_FRONTENDS = frozenset({"dask", "ray", "spmd"})
 _CPU_ENGINES = frozenset({"polars-cpu", "duckdb"})
 
+EXIT_SUCCESS = 0
+EXIT_QUERY_FAILURE = 3
+EXIT_VALIDATION_FAILURE = 4
+
+
+def benchmark_exit_code(
+    query_failures: list[tuple[int, int]],
+    validation_failures: list[int],
+) -> int:
+    """
+    Map a run's failures to the process exit code.
+
+    Parameters
+    ----------
+    query_failures
+        ``(query, iteration)`` pairs for queries that raised while running.
+    validation_failures
+        Queries whose results did not match the expected answer.
+
+    Returns
+    -------
+    int
+        0: Success
+        3: Query failure
+        4: Validation failure
+    """
+    if query_failures:
+        return EXIT_QUERY_FAILURE
+    if validation_failures:
+        return EXIT_VALIDATION_FAILURE
+    return EXIT_SUCCESS
+
 
 @dataclasses.dataclass
 class NightlyRole:
@@ -194,7 +227,13 @@ class NsysRole:
     type: Literal["nsys"] = dataclasses.field(default="nsys", init=False)
 
 
-Role = NightlyRole | NsysRole
+@dataclasses.dataclass
+class QuentRole:
+    type: Literal["quent"] = dataclasses.field(default="quent", init=False)
+    filename: str
+
+
+Role = NightlyRole | NsysRole | QuentRole
 
 
 @dataclasses.dataclass
@@ -743,9 +782,27 @@ class RunConfig:
             roles=roles,
         )
 
-    def serialize(self, engine: StreamingEngine | None) -> dict:
-        """Serialize the run config to a dictionary."""
+    def serialize(
+        self, engine: pl.GPUEngine | None, quent_archive: Path | None
+    ) -> dict:
+        """
+        Serialize the run config to a dictionary.
+
+        Parameters
+        ----------
+        engine
+            The engine that was used to run the benchmark.
+        quent_archive
+            The path to the Quent archive that was written during the benchmark, if any.
+            This path will be inserted in ``extra_info.quent-archive``.
+        """
         opts = self.streaming_options
+        extra_info = dict(self.extra_info)
+        if quent_archive is not None:
+            extra_info["quent-archive"] = str(quent_archive.absolute())
+        roles = list(self.roles)
+        if quent_archive is not None:
+            roles.append(QuentRole(filename=quent_archive.name))
         result: dict[str, Any] = {
             "engine_name": self.engine_name,
             "queries": self.queries,
@@ -759,7 +816,7 @@ class RunConfig:
             "io_mode": self.io_mode,
             "collect_traces": self.collect_traces,
             "n_workers": self.n_workers,
-            "extra_info": self.extra_info,
+            "extra_info": extra_info,
             "run_id": str(self.run_id),
             "timestamp": self.timestamp,
             "command_line": self.command_line,
@@ -777,18 +834,21 @@ class RunConfig:
             "validation_method": dataclasses.asdict(self.validation_method)
             if self.validation_method
             else None,
-            "roles": [dataclasses.asdict(r) for r in self.roles],
+            "roles": [dataclasses.asdict(r) for r in roles],
         }
         if engine is not None:
             config_options = ConfigOptions.from_polars_engine(engine)
             config_options = config_options.drop_unserializable()
-            rapidsmpf_options = engine.rapidsmpf_options.get_strings()
-            result["config_options"] = {
+            extra = {
                 "config_options": dataclasses.asdict(
                     config_options, dict_factory=ConfigOptions.dict_factory
                 ),
-                "rapidsmpf_options": rapidsmpf_options,
             }
+
+            if isinstance(engine, StreamingEngine):
+                extra["rapidsmpf_options"] = engine.rapidsmpf_options.get_strings()
+
+            result["config_options"] = extra
             # discard unserializable / unnecessary UUIDs
             result["config_options"]["config_options"]["executor"].pop(
                 "quent_context", None
@@ -1373,12 +1433,19 @@ def _run_query_loop(
     return records, plans, validation_failures, query_failures
 
 
+def _elapsed_ms(begin: float) -> float:
+    """Return milliseconds elapsed since ``begin`` (a ``time.monotonic()`` timestamp)."""
+    return (time.monotonic() - begin) * 1000
+
+
 def _finalize_benchmark_run(
     run_options: RunOptions,
     run_config: RunConfig,
     validation_failures: list[int],
     query_failures: list[tuple[int, int]],
     serializable_engine_config: dict[str, Any],
+    startup_duration_ms: float | None,
+    shutdown_duration_ms: float | None,
 ) -> None:
     """Summarize, serialize, and exit after a benchmark run."""
     if run_options.summarize:
@@ -1401,16 +1468,24 @@ def _finalize_benchmark_run(
             )
         if not validation_failures and not query_failures:
             print("✅ All validated queries passed.")
+
+    # We modify the serialized engine config here to record the engine's
+    # start/end duration. We have to do it here, rather than in `RunConfig.serialize()`
+    # since serialize() needs to run before the engine is shutdown.
+    serializable_engine_config = dict(serializable_engine_config)
+    serializable_engine_config["startup_duration_ms"] = startup_duration_ms
+    serializable_engine_config["shutdown_duration_ms"] = shutdown_duration_ms
+
     if run_options.output is not None:
         run_options.output.write(json.dumps(serializable_engine_config))
         run_options.output.write("\n")
-    sys.exit(1 if (query_failures or validation_failures) else 0)
+    sys.exit(benchmark_exit_code(query_failures, validation_failures))
 
 
 def run_polars_cpu(
     benchmark: Any,
     args: argparse.Namespace,
-    run_config: Any,
+    run_config: RunConfig,
     numeric_type: str,
     date_type: str,
 ) -> None:
@@ -1430,14 +1505,18 @@ def run_polars_cpu(
         run_config,
         validation_failures,
         query_failures,
-        serializable_engine_config=run_config.serialize(engine=None),
+        serializable_engine_config=run_config.serialize(
+            engine=None, quent_archive=None
+        ),
+        startup_duration_ms=None,
+        shutdown_duration_ms=None,
     )
 
 
 def run_polars_in_memory(
     benchmark: Any,
     args: argparse.Namespace,
-    run_config: Any,
+    run_config: RunConfig,
     parquet_options: dict[str, Any],
     numeric_type: str,
     date_type: str,
@@ -1449,10 +1528,12 @@ def run_polars_in_memory(
         "parquet_options": parquet_options,
     }
     engine_options.setdefault("raise_on_fail", True)
+    start_time_begin = time.monotonic()
     engine = pl.GPUEngine(
         executor="in-memory",
         **engine_options,
     )
+    startup_duration_ms = _elapsed_ms(start_time_begin)
     records, plans, validation_failures, query_failures = _run_query_loop(
         benchmark,
         run_options,
@@ -1468,14 +1549,18 @@ def run_polars_in_memory(
         run_config,
         validation_failures,
         query_failures,
-        serializable_engine_config=run_config.serialize(engine=engine),
+        serializable_engine_config=run_config.serialize(
+            engine=engine, quent_archive=None
+        ),
+        startup_duration_ms=startup_duration_ms,
+        shutdown_duration_ms=None,
     )
 
 
 def run_polars_spmd(
     benchmark: Any,
     args: argparse.Namespace,
-    run_config: Any,
+    run_config: RunConfig,
     parquet_options: dict[str, Any],
     numeric_type: str,
     date_type: str,
@@ -1492,11 +1577,13 @@ def run_polars_spmd(
         "parquet_options": parquet_options,
     }
     engine_options.setdefault("raise_on_fail", True)
+    start_time_begin = time.monotonic()
     with SPMDEngine(
         rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
         executor_options=executor_options,
         engine_options=engine_options,
     ) as engine:
+        startup_duration_ms = _elapsed_ms(start_time_begin)
         from cudf_polars.engine.spmd import (
             allgather_polars_dataframe,
         )
@@ -1523,33 +1610,44 @@ def run_polars_spmd(
             prepare_validation_result=_allgather_result,
         )
         if engine.rank > 0:
-            sys.exit(1 if (query_failures or validation_failures) else 0)
+            sys.exit(benchmark_exit_code(query_failures, validation_failures))
         run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
         run_config = _consolidate_logs(
             run_config, engine=engine, gather_client_logs=False
         )
         # We need to create this before StreamingEngine.shutdown(), which clears engine.config
-        serializable_engine_config = run_config.serialize(engine=engine)
+        if run_config.collect_traces:
+            quent_archive = Path("logs") / f"{run_config.run_id}.zip"
+        else:
+            quent_archive = None
+        serializable_engine_config = run_config.serialize(
+            engine=engine, quent_archive=quent_archive
+        )
+        shutdown_time_begin = time.monotonic()
 
-    if is_rank_0:
+    if is_rank_0 and quent_archive is not None:
         _write_quent_traces(
             engine=engine,
             run_id=run_config.run_id,
             collect_traces=run_config.collect_traces,
+            quent_archive=quent_archive,
         )
+    shutdown_duration_ms = _elapsed_ms(shutdown_time_begin)
     _finalize_benchmark_run(
         run_options,
         run_config,
         validation_failures,
         query_failures,
         serializable_engine_config=serializable_engine_config,
+        startup_duration_ms=startup_duration_ms,
+        shutdown_duration_ms=shutdown_duration_ms,
     )
 
 
 def run_polars_ray(
     benchmark: Any,
     args: argparse.Namespace,
-    run_config: Any,
+    run_config: RunConfig,
     parquet_options: dict[str, Any],
     numeric_type: str,
     date_type: str,
@@ -1572,12 +1670,14 @@ def run_polars_ray(
     if run_config.num_gpus is not None:
         ray_init_options["num_gpus"] = run_config.num_gpus
 
+    start_time_begin = time.monotonic()
     with RayEngine(
         rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
         executor_options=executor_options,
         engine_options=engine_options,
         ray_init_options=ray_init_options,
     ) as engine:
+        startup_duration_ms = _elapsed_ms(start_time_begin)
         run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
         records, plans, validation_failures, query_failures = _run_query_loop(
             benchmark,
@@ -1590,26 +1690,39 @@ def run_polars_ray(
         run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
         run_config = _consolidate_logs(run_config, engine=engine)
         # We need to create this before StreamingEngine.shutdown(), which clears engine.config
-        serializable_engine_config = run_config.serialize(engine=engine)
+        if run_config.collect_traces:
+            quent_archive = Path("logs") / f"{run_config.run_id}.zip"
+        else:
+            quent_archive = None
 
-    _write_quent_traces(
-        engine=engine,
-        run_id=run_config.run_id,
-        collect_traces=run_config.collect_traces,
-    )
+        serializable_engine_config = run_config.serialize(
+            engine=engine, quent_archive=quent_archive
+        )
+        shutdown_time_begin = time.monotonic()
+
+    if quent_archive is not None:
+        _write_quent_traces(
+            engine=engine,
+            run_id=run_config.run_id,
+            collect_traces=run_config.collect_traces,
+            quent_archive=quent_archive,
+        )
+    shutdown_duration_ms = _elapsed_ms(shutdown_time_begin)
     _finalize_benchmark_run(
         run_options,
         run_config,
         validation_failures,
         query_failures,
         serializable_engine_config=serializable_engine_config,
+        startup_duration_ms=startup_duration_ms,
+        shutdown_duration_ms=shutdown_duration_ms,
     )
 
 
 def run_polars_dask(
     benchmark: Any,
     args: argparse.Namespace,
-    run_config: Any,
+    run_config: RunConfig,
     parquet_options: dict[str, Any],
     numeric_type: str,
     date_type: str,
@@ -1640,6 +1753,7 @@ def run_polars_dask(
             str(i) for i in range(run_config.num_gpus)
         )
 
+    start_time_begin = time.monotonic()
     try:
         with DaskEngine(
             rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
@@ -1647,6 +1761,7 @@ def run_polars_dask(
             engine_options=engine_options,
             dask_client=dask_client,
         ) as engine:
+            startup_duration_ms = _elapsed_ms(start_time_begin)
             run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
             records, plans, validation_failures, query_failures = _run_query_loop(
                 benchmark, run_options, run_config, engine, numeric_type, date_type
@@ -1656,22 +1771,34 @@ def run_polars_dask(
             )
             run_config = _consolidate_logs(run_config, engine)
             # We need to create this before StreamingEngine.shutdown(), which clears engine.config
-            serializable_engine_config = run_config.serialize(engine=engine)
+            if run_config.collect_traces:
+                quent_archive = Path("logs") / f"{run_config.run_id}.zip"
+            else:
+                quent_archive = None
+            serializable_engine_config = run_config.serialize(
+                engine=engine, quent_archive=quent_archive
+            )
+            shutdown_time_begin = time.monotonic()
 
-        _write_quent_traces(
-            engine=engine,
-            run_id=run_config.run_id,
-            collect_traces=run_config.collect_traces,
-        )
+        if quent_archive is not None:
+            _write_quent_traces(
+                engine=engine,
+                run_id=run_config.run_id,
+                collect_traces=run_config.collect_traces,
+                quent_archive=quent_archive,
+            )
     finally:
         if dask_client is not None:
             dask_client.close()
+    shutdown_duration_ms = _elapsed_ms(shutdown_time_begin)
     _finalize_benchmark_run(
         run_options,
         run_config,
         validation_failures,
         query_failures,
         serializable_engine_config=serializable_engine_config,
+        startup_duration_ms=startup_duration_ms,
+        shutdown_duration_ms=shutdown_duration_ms,
     )
 
 
@@ -1749,15 +1876,19 @@ def setup_logging(query_id: int, iteration: int) -> None:
 
 
 def _write_quent_traces(
-    engine: StreamingEngine, run_id: uuid.UUID, *, collect_traces: bool
-) -> None:
-    """Write collected Quent events to logs/{run_id}.ndjson."""
+    engine: StreamingEngine,
+    run_id: uuid.UUID,
+    *,
+    collect_traces: bool,
+    quent_archive: Path,
+) -> Path | None:
+    """Write collected Quent events to a ``logs/<run_id>.zip`` archive."""
     if not (_HAS_STRUCTLOG or collect_traces):
-        return
+        return None
 
     quent_logs = list(engine._quent_events)
 
-    # The quent UI currently requires the filename to match the engine's ID.
+    # The quent UI currently requires the context directory to match the engine's ID.
     for log in quent_logs:
         if log.get("data", {}).get("Engine", {}).get("Init") and log.get("id") != str(
             run_id
@@ -1769,13 +1900,9 @@ def _write_quent_traces(
             warnings.warn(msg, stacklevel=2)
 
     logs_dir = Path("logs")
-    logs_dir.mkdir(parents=True, exist_ok=True)
-    output_path = logs_dir / f"{run_id}.ndjson"
-    with output_path.open("w") as f:
-        for log in quent_logs:
-            f.write(json.dumps(log))
-            f.write("\n")
+    output_path = write_quent_export(quent_logs, logs_dir, run_id, quent_archive)
     print(f"Wrote {len(quent_logs)} Quent trace events to {output_path}")
+    return output_path
 
 
 def _consolidate_logs(
@@ -2039,7 +2166,9 @@ def run_duckdb(duckdb_queries_cls: Any, args: argparse.Namespace) -> None:
         run_config.summarize()
 
     if run_options.output is not None:
-        run_options.output.write(json.dumps(run_config.serialize(engine=None)))
+        run_options.output.write(
+            json.dumps(run_config.serialize(engine=None, quent_archive=None))
+        )
         run_options.output.write("\n")
 
 
@@ -2170,6 +2299,14 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(
         prog="Cudf-Polars PDS-H/PDS-DS Benchmarks",
+        description=textwrap.dedent(f"""\
+            Exit code description:
+            - {EXIT_SUCCESS} : Success
+            - 1 : Unhandled exception during query run
+            - 2 : Invalid command line arguments
+            - {EXIT_QUERY_FAILURE} : Query failure (setup or execution)
+            - {EXIT_VALIDATION_FAILURE} : Validation failure
+            """),
         formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument(

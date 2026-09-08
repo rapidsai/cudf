@@ -892,7 +892,8 @@ TEST_F(HybridScanFiltersTest, OffsetIndexOnlyDataPageMask)
   auto const byte_ranges =
     offset_only_reader.payload_column_chunks_byte_ranges(selected_row_groups, options);
   auto [column_buffers, column_data, read_tasks] =
-    cudf::io::parquet::fetch_byte_ranges_to_device_async(*datasource, byte_ranges, stream, mr);
+    cudf::io::parquet::fetch_byte_ranges_to_device_async(
+      *datasource, byte_ranges, cudf::io::parquet::io_submission_policy::SERIALIZE, stream, mr);
   read_tasks.get();
 
   // Materialization maps the row mask to pages using only offset index, then applies the row mask.
@@ -904,7 +905,8 @@ TEST_F(HybridScanFiltersTest, OffsetIndexOnlyDataPageMask)
     options,
     stream,
     mr);
-  auto const expected = cudf::apply_boolean_mask(written_table->view(), row_mask_view, stream, mr);
+  auto const expected =
+    cudf::apply_retention_mask(written_table->view(), row_mask_view, stream, mr);
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), result.tbl->view());
 
   // Without offset index, data-page pruning falls back to decoding all pages.
@@ -918,7 +920,8 @@ TEST_F(HybridScanFiltersTest, OffsetIndexOnlyDataPageMask)
   auto const no_index_ranges =
     no_index_reader.payload_column_chunks_byte_ranges(no_index_row_groups, options);
   auto [no_index_buffers, no_index_data, no_index_tasks] =
-    cudf::io::parquet::fetch_byte_ranges_to_device_async(*datasource, no_index_ranges, stream, mr);
+    cudf::io::parquet::fetch_byte_ranges_to_device_async(
+      *datasource, no_index_ranges, cudf::io::parquet::io_submission_policy::SERIALIZE, stream, mr);
   no_index_tasks.get();
   auto const no_index_result = no_index_reader.materialize_payload_columns(
     no_index_row_groups,
@@ -1828,6 +1831,7 @@ TEST_F(HybridScanFiltersTest, FetchByteRangesInvalidRanges)
     cudf::io::parquet::fetch_byte_ranges_to_device_async(
       *datasource,
       std::vector<cudf::io::text::byte_range_info>{cudf::io::text::byte_range_info{-1, 16}},
+      cudf::io::parquet::io_submission_policy::SERIALIZE,
       stream,
       mr),
     cudf::logic_error);
@@ -1836,6 +1840,7 @@ TEST_F(HybridScanFiltersTest, FetchByteRangesInvalidRanges)
     cudf::io::parquet::fetch_byte_ranges_to_device_async(
       *datasource,
       std::vector<cudf::io::text::byte_range_info>{cudf::io::text::byte_range_info{512, 1024}},
+      cudf::io::parquet::io_submission_policy::SERIALIZE,
       stream,
       mr),
     cudf::logic_error);
@@ -1844,6 +1849,7 @@ TEST_F(HybridScanFiltersTest, FetchByteRangesInvalidRanges)
     cudf::io::parquet::fetch_byte_ranges_to_device_async(
       *datasource,
       std::vector<cudf::io::text::byte_range_info>{cudf::io::text::byte_range_info{0, -1}},
+      cudf::io::parquet::io_submission_policy::SERIALIZE,
       stream,
       mr),
     cudf::logic_error);
@@ -1851,6 +1857,7 @@ TEST_F(HybridScanFiltersTest, FetchByteRangesInvalidRanges)
   EXPECT_NO_THROW(cudf::io::parquet::fetch_byte_ranges_to_device_async(
     *datasource,
     std::vector<cudf::io::text::byte_range_info>{cudf::io::text::byte_range_info{1023, 1}},
+    cudf::io::parquet::io_submission_policy::SERIALIZE,
     stream,
     mr));
 }
@@ -1919,7 +1926,7 @@ TEST_P(DictionaryFilterGapTest, FilterRowGroupsWithMissingDictPages)
     ASSERT_EQ(row_group_indices.size(), 2);
 
     auto const dict_page_byte_ranges =
-      reader->secondary_filters_byte_ranges(row_group_indices, options).second;
+      reader->dictionary_pages_byte_ranges(row_group_indices, options);
     ASSERT_EQ(dict_page_byte_ranges.size(), 2);
     EXPECT_GT(dict_page_byte_ranges[0].size(), 0);
     EXPECT_EQ(dict_page_byte_ranges[1].size(), 0);
