@@ -544,7 +544,7 @@ def test_attach_cached_parquet_metadata_resolves_row_groups(
     pl.DataFrame({"x": range(4)}).write_parquet(source, row_group_size=2)
 
     base = _make_parquet_scan([str(source)])
-    streaming_scan = StreamingScan.for_split_files(
+    streaming_scan = expand_scan_for_rank(
         base,
         IOPartitionPlan(2, IOPartitionFlavor.SPLIT_FILES),
         partition_count=2,
@@ -573,7 +573,7 @@ def test_attach_cached_parquet_metadata_uses_rank_local_tasks(
         pl.DataFrame({"x": range(4)}).write_parquet(path, row_group_size=2)
 
     base = _make_parquet_scan(paths)
-    streaming_scan = StreamingScan.for_fused_files(
+    streaming_scan = expand_scan_for_rank(
         base,
         IOPartitionPlan(1, IOPartitionFlavor.SINGLE_FILE),
         partition_count=4,
@@ -601,7 +601,7 @@ def test_attach_cached_parquet_metadata_leaves_sub_row_group_split_unaligned(
     pl.DataFrame({"x": range(4)}).write_parquet(source, row_group_size=2)
 
     base = _make_parquet_scan([str(source)])
-    streaming_scan = StreamingScan.for_split_files(
+    streaming_scan = expand_scan_for_rank(
         base,
         IOPartitionPlan(4, IOPartitionFlavor.SPLIT_FILES),
         partition_count=4,
@@ -637,7 +637,7 @@ def test_attach_cached_parquet_metadata_leaves_sliced_fused_scan_unaligned(
     base = _make_parquet_scan(
         [str(source)], skip_rows=skip_rows, n_rows=n_rows, row_index=row_index
     )
-    streaming_scan = StreamingScan.for_fused_files(
+    streaming_scan = expand_scan_for_rank(
         base,
         IOPartitionPlan(1, IOPartitionFlavor.SINGLE_READ),
         partition_count=1,

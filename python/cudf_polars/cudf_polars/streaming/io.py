@@ -11,7 +11,7 @@ import math
 import statistics
 from collections import defaultdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Self, overload
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, overload
 
 import polars as pl
 
@@ -183,44 +183,47 @@ def expand_scan_for_rank(
     StreamingScan
         Rank-local streaming scan.
     """
+    local_offset, local_count = _rank_slice(partition_count, rank, nranks)
     if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
-        return StreamingScan.for_split_files(
-            ir,
-            plan,
-            partition_count,
-            rank=rank,
-            nranks=nranks,
-            parquet_options=parquet_options,
-        )
+        path_offset = local_offset // plan.factor
+        path_end = math.ceil((local_offset + local_count) / plan.factor)
+        local_paths = ir.paths[path_offset:path_end]
+        sindex = local_offset % plan.factor
+        tasks: list[ScanTask] = []
+        splits_created = 0
+        for path in local_paths:
+            while sindex < plan.factor and splits_created < local_count:
+                tasks.append(
+                    ParquetScanTask(
+                        ir,
+                        [path],
+                        sindex,
+                        plan.factor,
+                        parquet_options,
+                    )
+                )
+                sindex += 1
+                splits_created += 1
+            sindex = 0
     else:
-        return StreamingScan.for_fused_files(
-            ir,
-            plan,
-            partition_count,
-            rank=rank,
-            nranks=nranks,
-            parquet_options=parquet_options,
-        )
+        paths_start = local_offset * plan.factor
+        paths_end = paths_start + plan.factor * local_count
+        task_type = ParquetScanTask if ir.typ == "parquet" else ScanTask
+        tasks = [
+            task_type(
+                ir,
+                ir.paths[offset : offset + plan.factor],
+                0,
+                1,
+                parquet_options,
+            )
+            for offset in range(paths_start, paths_end, plan.factor)
+            if ir.paths[offset : offset + plan.factor]
+        ]
+    return StreamingScan(tasks, ir)
 
 
 def hybrid_scan_eligible(
-    parquet_options: ParquetOptions,
-    *,
-    cached_parquet_info: list[CachedParquetInfo] | None,
-    row_index: tuple[str, int] | None,
-    include_file_paths: str | None,
-    predicate: NamedExpr | None,
-) -> bool:
-    """Whether cached parquet metadata can use the HybridScanReader path."""
-    return cached_parquet_info is not None and _hybrid_scan_preconditions(
-        parquet_options,
-        row_index=row_index,
-        include_file_paths=include_file_paths,
-        predicate=predicate,
-    )
-
-
-def _hybrid_scan_preconditions(
     parquet_options: ParquetOptions,
     *,
     row_index: tuple[str, int] | None,
@@ -606,7 +609,7 @@ class ParquetScanTask(ScanTask):
             len(paths) == 1
             and base_scan.skip_rows == 0
             and base_scan.n_rows == -1
-            and _hybrid_scan_preconditions(
+            and hybrid_scan_eligible(
                 parquet_options,
                 row_index=base_scan.row_index,
                 include_file_paths=base_scan.include_file_paths,
@@ -625,16 +628,10 @@ class ParquetScanTask(ScanTask):
         # TODO: Investigate re-enabling for some of the excluded paths
         # (row_index / include_file_paths). Needs performance investigation.
         if (
-            len(paths) == 1
+            should_try_hybrid_scan
             and bounds.row_groups is not None
             and len(bounds.row_groups) == 1
-            and hybrid_scan_eligible(
-                parquet_options,
-                cached_parquet_info=cached_parquet_info,
-                row_index=base_scan.row_index,
-                include_file_paths=base_scan.include_file_paths,
-                predicate=base_scan.predicate,
-            )
+            and cached_parquet_info is not None
         ):
             assert base_scan.predicate is not None
             assert cached_parquet_info is not None
@@ -774,79 +771,6 @@ class StreamingScan(IR):
         self.tasks = tasks
         self._non_child_args = (tasks, base_scan)
         self.children = ()
-
-    @classmethod
-    def for_split_files(
-        cls,
-        base_scan: Scan,
-        plan: IOPartitionPlan,
-        partition_count: int,
-        *,
-        rank: int,
-        nranks: int,
-        parquet_options: ParquetOptions,
-    ) -> Self:
-        """Construct a StreamingScan where each file is split into factor partitions."""
-        local_offset, local_count = _rank_slice(partition_count, rank, nranks)
-        path_offset = local_offset // plan.factor
-        path_end = math.ceil((local_offset + local_count) / plan.factor)
-        local_paths = base_scan.paths[path_offset:path_end]
-        sindex = local_offset % plan.factor
-        tasks: list[ScanTask] = []
-        splits_created = 0
-        for path in local_paths:
-            while sindex < plan.factor and splits_created < local_count:
-                tasks.append(
-                    ParquetScanTask(
-                        base_scan,
-                        [path],
-                        sindex,
-                        plan.factor,
-                        parquet_options,
-                    )
-                )
-                sindex += 1
-                splits_created += 1
-            sindex = 0
-        return cls(tasks, base_scan)
-
-    @classmethod
-    def for_fused_files(
-        cls,
-        base_scan: Scan,
-        plan: IOPartitionPlan,
-        partition_count: int,
-        *,
-        rank: int,
-        nranks: int,
-        parquet_options: ParquetOptions,
-    ) -> Self:
-        """Construct a StreamingScan where factor files are grouped into one partition."""
-        local_offset, local_count = _rank_slice(partition_count, rank, nranks)
-        paths_start = local_offset * plan.factor
-        paths_end = paths_start + plan.factor * local_count
-        tasks: list[ScanTask] = [
-            (
-                ParquetScanTask(
-                    base_scan,
-                    base_scan.paths[offset : offset + plan.factor],
-                    0,
-                    1,
-                    parquet_options,
-                )
-                if base_scan.typ == "parquet"
-                else ScanTask(
-                    base_scan,
-                    base_scan.paths[offset : offset + plan.factor],
-                    0,
-                    1,
-                    parquet_options,
-                )
-            )
-            for offset in range(paths_start, paths_end, plan.factor)
-            if base_scan.paths[offset : offset + plan.factor]
-        ]
-        return cls(tasks, base_scan)
 
     def get_hashable(self) -> Hashable:
         """Hashable representation of the node."""
