@@ -33,8 +33,8 @@ RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
 
-# CI provides LIBCUDF_KERNEL_CACHE_PATH through the reusable workflow's cache-environment input.
-# Keep a workspace-relative default for local runs.
+# CI provides LIBCUDF_KERNEL_CACHE_PATH as a workspace-relative path through the reusable workflow's
+# cache-environment input. Keep the same default for local runs.
 export LIBCUDF_KERNEL_CACHE_PATH="${LIBCUDF_KERNEL_CACHE_PATH:-${PWD}/.cache/libcudf}"
 mkdir -p "${LIBCUDF_KERNEL_CACHE_PATH}"
 
