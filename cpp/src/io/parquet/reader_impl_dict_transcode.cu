@@ -7,11 +7,11 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/batched_memset.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
@@ -572,14 +572,23 @@ void reader_impl::assemble_dict_transcoded_columns(
       // iterator.
       std::unique_ptr<column> stacked_keys_owner;
       if (key_type.id() != type_id::STRING) {
-        // Stack fixed-width dictionary payloads directly; only keys are copied, not row indices.
-        std::vector<column_view> key_views;
-        key_views.reserve(chunk_indices.size());
+        // Dictionary payloads follow variable-length page headers and need not be aligned
+        // for key_type. Copy bytes into an aligned allocation before exposing typed keys.
+        auto const key_width = cudf::size_of(key_type);
+        rmm::device_buffer stacked_data{static_cast<std::size_t>(total_keys) * key_width,
+                                        _stream,
+                                        get_current_device_resource_ref()};
+        auto* const dst = static_cast<uint8_t*>(stacked_data.data());
         for (size_t k = 0; k < chunk_indices.size(); ++k) {
-          key_views.emplace_back(key_type, chunk_key_counts[k], chunk_dict_data[k], nullptr, 0);
+          if (chunk_key_counts[k] == 0) { continue; }
+          CUDF_CUDA_TRY(cudf::detail::memcpy_async(
+            dst + static_cast<std::size_t>(key_counts_prefix[k]) * key_width,
+            chunk_dict_data[k],
+            static_cast<std::size_t>(chunk_key_counts[k]) * key_width,
+            _stream));
         }
-        stacked_keys_owner =
-          cudf::detail::concatenate(key_views, _stream, get_current_device_resource_ref());
+        stacked_keys_owner = std::make_unique<column>(
+          key_type, total_keys, std::move(stacked_data), rmm::device_buffer{}, 0);
       } else if (contiguous) {
         stacked_keys_owner =
           make_keys_column_from_index_pairs(pass.chunks[chunk_indices[0]].str_dict_index,

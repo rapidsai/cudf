@@ -26,6 +26,8 @@
 
 #include <rmm/device_buffer.hpp>
 
+#include <src/io/parquet/compact_protocol_reader.hpp>
+
 #include <algorithm>
 #include <array>
 #include <memory>
@@ -889,6 +891,56 @@ TEST_F(ParquetReaderDictTest, DictTranscodeWidensMergedIndices)
     auto const dict = cudf::dictionary_column_view(merged->view().column(col));
     EXPECT_EQ(dict.indices().type().id(), cudf::type_id::INT16);
     EXPECT_EQ(dict.keys().size(), 500);
+    auto const decoded = cudf::dictionary::decode(dict);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(input.column(col), decoded->view());
+  }
+}
+
+// Uncompressed dictionary payloads follow variable-length page headers. A typed column view
+// over these bytes can cause misaligned INT32/INT64 loads when row-group keys are stacked.
+TEST_F(ParquetReaderDictTest, UnalignedFixedWidthDictionaryPayloads)
+{
+  auto const ints  = make_low_cardinality_ints();
+  auto const longs = make_low_cardinality_int64s();
+  auto const dates = make_low_cardinality_dates();
+  auto const input = cudf::table_view{{ints, longs, dates}};
+  auto const filepath =
+    temp_env->get_temp_filepath("UnalignedFixedWidthDictionaryPayloads.parquet");
+  write_parquet(input, filepath);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData metadata;
+  read_footer(source, &metadata);
+  ASSERT_GT(metadata.row_groups.size(), 1);
+  // The reader packs the requested chunk ranges into one aligned buffer. Check the
+  // payload offsets in that buffer, including the variable-sized preceding chunks.
+  std::array<bool, 3> has_unaligned_payload{};
+  std::size_t chunk_offset = 0;
+  for (auto const& row_group : metadata.row_groups) {
+    for (std::size_t col = 0; col < row_group.columns.size(); ++col) {
+      auto const& md = row_group.columns[col].meta_data;
+      ASSERT_GT(md.dictionary_page_offset, 0);
+      auto const bytes = source->host_read(md.dictionary_page_offset, md.total_compressed_size);
+      cudf::io::parquet::detail::CompactProtocolReader reader(bytes->data(), bytes->size());
+      cudf::io::parquet::PageHeader header;
+      reader.read(&header);
+      ASSERT_EQ(header.type, cudf::io::parquet::PageType::DICTIONARY_PAGE);
+      auto const width = md.type == cudf::io::parquet::Type::INT64 ? 8 : 4;
+      has_unaligned_payload[col] =
+        has_unaligned_payload[col] or (chunk_offset + reader.bytecount()) % width != 0;
+      chunk_offset += md.total_compressed_size;
+    }
+  }
+  for (auto const unaligned : has_unaligned_payload) {
+    ASSERT_TRUE(unaligned);
+  }
+
+  auto const result = read_parquet_as_dict(filepath).tbl;
+  ASSERT_EQ(result->num_columns(), input.num_columns());
+  for (cudf::size_type col = 0; col < input.num_columns(); ++col) {
+    ASSERT_EQ(result->view().column(col).type().id(), cudf::type_id::DICTIONARY32);
+    auto const dict = cudf::dictionary_column_view(result->view().column(col));
+    EXPECT_EQ(dict.keys().type(), input.column(col).type());
     auto const decoded = cudf::dictionary::decode(dict);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(input.column(col), decoded->view());
   }
