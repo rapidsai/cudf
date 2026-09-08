@@ -134,3 +134,23 @@ def test_normalizer_with_special_tokens(norm_chars_input_data, do_lower):
             ]
         )
     assert_column_eq(expect, got)
+
+
+def test_normalizer_special_tokens_no_pad_punctuation():
+    # With normalize_flags::NONE (pad_punctuation=False) the special_tokens_kernel
+    # must not run: special tokens should pass through exactly unchanged.
+    special_tokens = pa.array(["[CLS]", "[PAD]", "[SEP]"])
+    input_data = pa.array(
+        ["hello world", "[PAD]", "[CLS] how are you", "normal text [SEP]"]
+    )
+    got = plc.nvtext.normalize.normalize_characters(
+        plc.Column.from_arrow(input_data),
+        plc.nvtext.normalize.CharacterNormalizer(
+            False, plc.Column.from_arrow(special_tokens)
+        ),
+        int(plc.nvtext.normalize.NormalizeFlags.NONE),
+    )
+    expect = pa.array(
+        ["hello world", "[PAD]", "[CLS] how are you", "normal text [SEP]"]
+    )
+    assert_column_eq(expect, got)

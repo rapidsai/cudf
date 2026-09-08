@@ -548,10 +548,10 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   CUDF_CUDA_TRY(cudaGetLastError());
 
   // This removes space added around any special tokens in the form of [ttt].
-  // An alternate approach is to do a multi-replace of '[ ttt ]' with '[ttt]' right
-  // before returning the output strings column.
+  // The kernel relies on the space-padded layout produced when pad_punctuation=true;
+  // when pad_punctuation=false no spaces were inserted, so there is nothing to undo.
   auto const special_tokens = parameters->get_special_tokens();
-  if (!special_tokens.empty()) {
+  if (!special_tokens.empty() && pad_punctuation) {
     special_tokens_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.get()>>>(
       d_normalized.data(), chars_size, special_tokens, parameters->do_lower_case);
     CUDF_CUDA_TRY(cudaGetLastError());

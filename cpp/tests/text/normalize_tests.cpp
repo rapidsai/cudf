@@ -244,6 +244,24 @@ TEST_F(TextNormalizeTest, NormalizeCharactersNoTokenizePunctuation)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
+TEST_F(TextNormalizeTest, NormalizeCharactersSpecialTokensNoPadPunctuation)
+{
+  // When normalize_flags::NONE is used (pad_punctuation=false), the special_tokens_kernel
+  // must not run: special tokens should pass through exactly as-is.
+  auto input = cudf::test::strings_column_wrapper(
+    {"hello world", "[PAD]", "[CLS] how are you", "normal text [SEP]"});
+  auto sv = cudf::strings_column_view(input);
+
+  auto special_tokens_col = cudf::test::strings_column_wrapper({"[CLS]", "[PAD]", "[SEP]"});
+  auto normalizer =
+    nvtext::create_character_normalizer(false, cudf::strings_column_view(special_tokens_col));
+
+  auto results  = nvtext::normalize_characters(sv, *normalizer, nvtext::normalize_flags::NONE);
+  auto expected = cudf::test::strings_column_wrapper(
+    {"hello world", "[PAD]", "[CLS] how are you", "normal text [SEP]"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(TextNormalizeTest, NormalizeSlicedColumn)
 {
   cudf::test::strings_column_wrapper strings(
