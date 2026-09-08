@@ -33,9 +33,13 @@ RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
 
-# CI provides LIBCUDF_KERNEL_CACHE_PATH as a workspace-relative path through the reusable workflow's
-# cache-environment input. Keep the same default for local runs.
-export LIBCUDF_KERNEL_CACHE_PATH="${LIBCUDF_KERNEL_CACHE_PATH:-${PWD}/.cache/libcudf}"
+# CI provides LIBCUDF_KERNEL_CACHE_PATH through the reusable workflow's cache-environment input.
+# Resolve a workspace-relative value before CTest changes its working directory.
+LIBCUDF_KERNEL_CACHE_PATH="${LIBCUDF_KERNEL_CACHE_PATH:-.cache/libcudf}"
+if [[ "${LIBCUDF_KERNEL_CACHE_PATH}" != /* ]]; then
+  LIBCUDF_KERNEL_CACHE_PATH="$(realpath -m "${LIBCUDF_KERNEL_CACHE_PATH}")"
+fi
+export LIBCUDF_KERNEL_CACHE_PATH
 mkdir -p "${LIBCUDF_KERNEL_CACHE_PATH}"
 
 rapids-print-env
