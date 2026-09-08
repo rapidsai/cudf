@@ -419,8 +419,8 @@ TEST_F(ParquetReaderTest, NullableStructDictionaryAndByteStreamSplit)
 TEST_F(ParquetReaderTest, ByteStreamSplitNestedListFloat)
 {
   // Exercise BYTE_STREAM_SPLIT under both nesting and repetition. The nullable STRUCT and LIST
-  // levels add definition and repetition streams; 32-row pages and the selected ranges cover both
-  // page boundaries and the 32-value decode boundary.
+  // levels add definition and repetition streams; the selected ranges cover the 32-value decode
+  // boundary.
   constexpr cudf::size_type num_rows = 257;
   std::vector<cudf::size_type> offsets{0};
   std::vector<float> values;
