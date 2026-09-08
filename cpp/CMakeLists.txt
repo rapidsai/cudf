@@ -536,8 +536,7 @@ function(precompile_fixed_width_kernel_fragments)
 
   endforeach()
 
-  # Precompile binary-op kernel fragments for fixed-width types. To minimize binary size impact,
-  # only the RHS-scalar variants are precompiled.
+  # Precompile binary-op kernel fragments for fixed-width types.
   foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_PHYSICAL_TYPES})
     foreach(RHS_IS_SCALAR IN ITEMS "false" "true")
       set(FRAGMENT_NAME transform_kernel)
