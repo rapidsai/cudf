@@ -12,8 +12,46 @@
 
 #include <nvbench/nvbench.cuh>
 
+#include <array>
 #include <optional>
+#include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
+
+namespace {
+
+enum class column_type { UNKNOWN, MIXED, INT64, DOUBLE, DECIMAL128, STRING, LIST, STRUCT };
+
+constexpr auto column_types = std::to_array<std::pair<column_type, std::string_view>>({
+  {column_type::MIXED, "mixed"},
+  {column_type::INT64, "int64"},
+  {column_type::DOUBLE, "double"},
+  {column_type::DECIMAL128, "decimal128"},
+  {column_type::STRING, "string"},
+  {column_type::LIST, "list"},
+  {column_type::STRUCT, "struct"},
+});
+
+[[nodiscard]] constexpr column_type parse_column_type(std::string_view name)
+{
+  for (auto const& [type, type_name] : column_types) {
+    if (type_name == name) { return type; }
+  }
+  return column_type::UNKNOWN;
+}
+
+[[nodiscard]] std::vector<std::string> column_type_names()
+{
+  std::vector<std::string> result;
+  result.reserve(column_types.size());
+  for (auto const& type : column_types) {
+    result.emplace_back(type.second);
+  }
+  return result;
+}
+
+}  // namespace
 
 static void bench_hash(nvbench::state& state)
 {
@@ -23,34 +61,32 @@ static void bench_hash(nvbench::state& state)
   // disable null bitmask if probability is exactly 0.0
   bool const no_nulls  = nulls == 0.0;
   auto const hash_name = state.get_string("hash_name");
-  auto const data_type = state.get_string("data_type");
+  auto const data_type = parse_column_type(state.get_string("data_type"));
 
   auto builder =
     data_profile_builder().null_probability(no_nulls ? std::nullopt : std::optional<double>{nulls});
 
   // Column types to hash. `mixed` is the historical default; the rest isolate a single type so
   // that per-type costs, such as the byte-wise decimal128 path, are visible on their own.
-  auto const types = [&]() -> std::vector<cudf::type_id> {
-    if (data_type == "mixed") {
-      return cycle_dtypes({cudf::type_id::INT64, cudf::type_id::STRING}, num_cols);
+  auto const types = [&]() {
+    switch (data_type) {
+      case column_type::MIXED:
+        return cycle_dtypes({cudf::type_id::INT64, cudf::type_id::STRING}, num_cols);
+      case column_type::INT64: return cycle_dtypes({cudf::type_id::INT64}, num_cols);
+      case column_type::DOUBLE: return cycle_dtypes({cudf::type_id::FLOAT64}, num_cols);
+      case column_type::DECIMAL128: return cycle_dtypes({cudf::type_id::DECIMAL128}, num_cols);
+      case column_type::STRING: return cycle_dtypes({cudf::type_id::STRING}, num_cols);
+      case column_type::LIST:
+        builder.list_depth(1).list_type(cudf::type_id::INT64);
+        return cycle_dtypes({cudf::type_id::LIST}, num_cols);
+      case column_type::STRUCT:
+        builder.struct_types({cudf::type_id::INT64, cudf::type_id::FLOAT64});
+        return cycle_dtypes({cudf::type_id::STRUCT}, num_cols);
+      default: return cycle_dtypes({}, 0);
     }
-    if (data_type == "int64") { return std::vector(num_cols, cudf::type_id::INT64); }
-    if (data_type == "double") { return std::vector(num_cols, cudf::type_id::FLOAT64); }
-    if (data_type == "decimal128") { return std::vector(num_cols, cudf::type_id::DECIMAL128); }
-    if (data_type == "string") { return std::vector(num_cols, cudf::type_id::STRING); }
-    if (data_type == "list") {
-      builder.list_depth(1).list_type(cudf::type_id::INT64);
-      return std::vector(num_cols, cudf::type_id::LIST);
-    }
-    if (data_type == "struct") {
-      builder.struct_types(
-        std::vector<cudf::type_id>{cudf::type_id::INT64, cudf::type_id::FLOAT64});
-      return std::vector(num_cols, cudf::type_id::STRUCT);
-    }
-    return {};
   }();
   if (types.empty()) {
-    state.skip(data_type + ": unknown data type");
+    state.skip(state.get_string("data_type") + ": unknown data type");
     return;
   }
 
@@ -125,8 +161,7 @@ static void bench_hash(nvbench::state& state)
 NVBENCH_BENCH(bench_hash)
   .set_name("hashing")
   .add_int64_axis("num_rows", {65536, 16777216})
-  .add_string_axis("data_type",
-                   {"mixed", "int64", "double", "decimal128", "string", "list", "struct"})
+  .add_string_axis("data_type", column_type_names())
   .add_int64_axis("num_cols", {2, 64})
   .add_float64_axis("nulls", {0.0, 0.1})
   .add_string_axis("hash_name",
