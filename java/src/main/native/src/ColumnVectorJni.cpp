@@ -480,7 +480,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_bitwiseMergeAndSetValid
     // descendants for STRUCTs so that child masks stay consistent ,
     // and fix offsets for LIST/STRINGs by purging non-empty nulls.
     auto result = cudf::structs::detail::superimpose_and_sanitize_nulls(
-      static_cast<cudf::bitmask_type const*>(merge_mask.data()),
+      reinterpret_cast<cudf::bitmask_type const*>(merge_mask.data()),
       merge_null_count,
       std::move(copy),
       cudf::get_default_stream(),

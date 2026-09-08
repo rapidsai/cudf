@@ -885,11 +885,12 @@ jlongArray mixed_join_size(JNIEnv* env,
     auto col_data = matches_per_row->release();
     cudf::jni::native_jlongArray result(env, 2);
     result[0] = static_cast<jlong>(join_size);
-    result[1] = ptr_as_jlong(new cudf::column{cudf::data_type{cudf::type_id::INT32},
-                                              col_size,
-                                              std::move(col_data),
-                                              rmm::device_buffer{},
-                                              0});
+    result[1] =
+      ptr_as_jlong(new cudf::column{cudf::data_type{cudf::type_id::INT32},
+                                    col_size,
+                                    std::move(col_data),
+                                    cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED),
+                                    0});
     return result.get_jArray();
   }
   JNI_CATCH(env, NULL);
