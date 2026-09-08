@@ -2594,8 +2594,8 @@ class GroupBy(Serializable, Reducible, Scannable):
           std, idxmax, and idxmin and any arithmetic formula involving them are
           allowed. Binary operations are not yet supported, so syntax like
           `df['x'] * 2` is not yet allowed.
-          For more information, see the `cuDF guide to user defined functions
-          <https://docs.rapids.ai/api/cudf/stable/cudf/guide-to-udfs/>`__.
+          For more information, see the :doc:`cuDF guide to user defined functions
+          </cudf/guide-to-udfs>`.
           Use `cudf` to select the iterative groupby apply algorithm which aims
           to provide maximum flexibility at the expense of performance.
           The default value `auto` will attempt to use the numba JIT pipeline

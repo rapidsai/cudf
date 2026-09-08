@@ -1,8 +1,9 @@
 # <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;cuDF - A GPU-accelerated DataFrame library for tabular data processing</div>
 
 cuDF (pronounced "KOO-dee-eff") is an [Apache 2.0 licensed](LICENSE), GPU-accelerated DataFrame library
-for tabular data processing. The cuDF library is one part of the [RAPIDS](https://rapids.ai/) GPU
-Accelerated Data Science suite of libraries.
+for tabular data processing. The cuDF library is one part of the [NVIDIA
+CUDA-X](https://developer.nvidia.com/cuda/cuda-x-libraries) suite of GPU
+Accelerated libraries.
 
 ## About
 
