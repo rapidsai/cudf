@@ -52,7 +52,7 @@ fi
 # environment variable so it does not constrain the frontend installation.
 unset PIP_CONSTRAINT
 
-rapids-telemetry-record build-${package_name}.log python -m build \
+rapids-telemetry-record build-${package_name}.log rapids-python-build-retry \
     "${RAPIDS_BUILD_ARGS[@]}" \
     .
 
