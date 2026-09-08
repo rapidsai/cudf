@@ -1046,8 +1046,6 @@ TEST_F(JsonPathTests, QueriesContainingQuotes)
 
 TEST_F(JsonPathTests, ObjectWithEmptyKey)
 {
-  // A zero-length key is a legal JSON name. Scanning past it must not abort the row, so fields
-  // that follow an empty key have to remain reachable.
   auto const input = cudf::test::strings_column_wrapper{R"({"":0,"a":1})",
                                                         R"({"a":1,"":0})",
                                                         R"({"" : 0, "a" : 1})",
