@@ -18,8 +18,11 @@ namespace cudf::groupby::detail::hash {
 template <typename Index, typename Function>
 CUDF_KERNEL void filtered_single_pass_aggs_kernel(Index num_items, Function fn)
 {
-  auto const idx = static_cast<Index>(cudf::detail::grid_1d::global_thread_id());
-  if (idx < num_items) { fn(idx); }
+  // The last block can extend past `num_items`, and for a 32-bit `Index` those thread ids may not
+  // be representable, so compare in the 64-bit thread index space before narrowing.
+  auto const tid = cudf::detail::grid_1d::global_thread_id();
+  if (tid >= static_cast<cudf::thread_index_type>(num_items)) { return; }
+  fn(static_cast<Index>(tid));
 }
 
 template <typename Index, typename Function>
