@@ -367,8 +367,10 @@ class json_state : private parser {
   {
     char const quote = options.get_allow_single_quotes() ? 0 : '\"';
 
-    auto const result = parse_string(name, can_be_empty, quote);
-    if (result != parse_result::SUCCESS) { return result; }
+    if (auto const result = parse_string(name, can_be_empty, quote);
+        result != parse_result::SUCCESS) {
+      return result;
+    }
 
     // a name is present, so the next char must be a :
     if (!parse_whitespace()) { return parse_result::ERROR; }
