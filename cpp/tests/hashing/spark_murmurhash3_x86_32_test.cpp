@@ -326,9 +326,7 @@ TEST_F(SparkMurmurHashTest, MultiValueWithSeeds)
     {0, 100, -100, int_limits::min(), int_limits::max()});
   cudf::test::fixed_width_column_wrapper<int16_t> const shorts_col({0, 100, -100, -32768, 32767});
   cudf::test::fixed_width_column_wrapper<int8_t> const bytes_col({0, 100, -100, -128, 127});
-  // As above, the wrapper normalizes 2 and 255 to `true` before the hasher sees them.
-  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0});
-  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col({0, 1, 1, 1, 0});
   cudf::test::fixed_point_column_wrapper<__int128_t> const decimal128_col(
     {static_cast<__int128>(0),
      static_cast<__int128>(100),
@@ -360,10 +358,8 @@ TEST_F(SparkMurmurHashTest, MultiValueWithSeeds)
     cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({shorts_col}), 42);
   auto const hash_bytes =
     cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({bytes_col}), 42);
-  auto const hash_bools1 =
-    cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({bools_col1}), 42);
-  auto const hash_bools2 =
-    cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({bools_col2}), 42);
+  auto const hash_bools =
+    cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({bools_col}), 42);
   auto const hash_decimal128 =
     cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({decimal128_col}), 42);
 
@@ -379,8 +375,7 @@ TEST_F(SparkMurmurHashTest, MultiValueWithSeeds)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_ints, hash_ints_expected, verbosity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_shorts, hash_shorts_expected, verbosity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_bytes, hash_bytes_expected, verbosity);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_bools1, hash_bools_expected, verbosity);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_bools2, hash_bools_expected, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_bools, hash_bools_expected, verbosity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_decimal128, hash_decimal128_expected, verbosity);
 
   auto const combined_table = cudf::table_view({structs_col,
@@ -395,7 +390,7 @@ TEST_F(SparkMurmurHashTest, MultiValueWithSeeds)
                                                 ints_col,
                                                 shorts_col,
                                                 bytes_col,
-                                                bools_col2,
+                                                bools_col,
                                                 decimal128_col});
   auto const hash_combined  = cudf::hashing::spark_murmurhash3_x86_32(combined_table, 42);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_combined, hash_combined_expected, verbosity);
