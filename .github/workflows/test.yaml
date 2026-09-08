@@ -56,6 +56,7 @@ jobs:
       sha: ${{ inputs.sha }}
       cache-paths: .cache/libcudf
       cache-key-prefix: libcudf-rtcx-v1
+      cache-environment: LIBCUDF_KERNEL_CACHE_PATH=${{ github.workspace }}/.cache/libcudf
       # https://github.com/NVIDIA/cudf/issues/23498
       matrix_filter: map(select(.GPU != "gb300" and .GPU != "gh200"))
   conda-cpp-benchmark-tests:
