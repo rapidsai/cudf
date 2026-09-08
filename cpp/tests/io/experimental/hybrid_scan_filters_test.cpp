@@ -859,10 +859,10 @@ TYPED_TEST(PageFilteringWithPageIndexStats, FilterPages)
 
 TEST_F(HybridScanFiltersTest, RowMaskNullsAreRetained)
 {
-  auto const input = cudf::test::fixed_width_column_wrapper<double>{
-    {3.0, 0.0, 1.0, 0.0}, {true, false, true, false}};
-  auto const table   = cudf::table_view{{input}};
-  auto buffer        = std::vector<char>{};
+  auto const input = cudf::test::fixed_width_column_wrapper<double>{{3.0, 0.0, 1.0, 0.0},
+                                                                    {true, false, true, false}};
+  auto const table = cudf::table_view{{input}};
+  auto buffer      = std::vector<char>{};
 
   auto metadata = cudf::io::table_input_metadata{table};
   metadata.column_metadata[0].set_name("col");
@@ -910,8 +910,7 @@ TEST_F(HybridScanFiltersTest, RowMaskNullsAreRetained)
                                       stream,
                                       mr);
 
-  auto const expected =
-    cudf::test::fixed_width_column_wrapper<double>{{0.0, 0.0}, {false, false}};
+  auto const expected = cudf::test::fixed_width_column_wrapper<double>{{0.0, 0.0}, {false, false}};
   CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view{{expected}}, result.tbl->view());
 }
 
