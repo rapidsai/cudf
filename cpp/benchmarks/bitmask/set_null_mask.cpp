@@ -44,8 +44,9 @@ auto generate_test_data(cudf::size_type num_masks,
   std::vector<cudf::bitmask_type*> masks_ptr;
   masks_ptr.reserve(num_masks);
   for (cudf::size_type i = 0; i < num_masks; ++i) {
-    masks.emplace_back(cudf::create_null_mask(mask_size, cudf::mask_state::UNINITIALIZED));
-    masks_ptr.emplace_back(reinterpret_cast<cudf::bitmask_type*>(masks.back().data()));
+    auto& last =
+      masks.emplace_back(cudf::create_null_mask(mask_size, cudf::mask_state::UNINITIALIZED));
+    masks_ptr.emplace_back(reinterpret_cast<cudf::bitmask_type*>(last.data()));
   }
 
   return std::make_tuple(std::move(begin_bits),
