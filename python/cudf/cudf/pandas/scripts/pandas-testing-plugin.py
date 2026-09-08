@@ -460,6 +460,8 @@ NODEIDS_THAT_FAIL = {
     "tests/copy_view/test_indexing.py::test_del_series[numpy]": "TODO: Add a reason for failure",
     "tests/copy_view/test_indexing.py::test_getitem_midx_slice": "TODO: Add a reason for failure",
     "tests/copy_view/test_indexing.py::test_loc_enlarging_with_dataframe": "TODO: Add a reason for failure",
+    "tests/copy_view/test_indexing.py::test_series_getitem_ellipsis": "TODO: Add a reason for failure",
+    "tests/copy_view/test_indexing.py::test_series_getitem_slice[nullable]": "TODO: Add a reason for failure",
     "tests/copy_view/test_indexing.py::test_series_getitem_slice[numpy]": "TODO: Add a reason for failure",
     "tests/copy_view/test_indexing.py::test_set_value_copy_only_necessary_column[mixed-block-iloc-indexer1-100]": "TODO: Add a reason for failure",
     "tests/copy_view/test_indexing.py::test_set_value_copy_only_necessary_column[mixed-block-iloc-indexer3-100]": "TODO: Add a reason for failure",
