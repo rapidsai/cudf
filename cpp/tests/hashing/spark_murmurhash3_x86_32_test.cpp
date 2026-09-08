@@ -418,6 +418,26 @@ TEST_F(SparkMurmurHashTest, NonCanonicalBool)
   EXPECT_NE(host[0], host[1]) << "false and true must differ";
 }
 
+TEST_F(SparkMurmurHashTest, Decimal128RepresentationBoundaries)
+{
+  auto const two_to_64 = static_cast<__int128_t>(1) << 64;
+  cudf::test::fixed_point_column_wrapper<__int128_t> const input(
+    {(static_cast<__int128_t>(1) << 32) + 0xff,
+     static_cast<__int128_t>(128),
+     static_cast<__int128_t>(127),
+     static_cast<__int128_t>(-129),
+     two_to_64,
+     two_to_64 - 1},
+    numeric::scale_type{0});
+  // Expected values were generated with Spark's Murmur3HashFunction over DecimalType values.
+  cudf::test::fixed_width_column_wrapper<int32_t> const expected{
+    -337832848, -544401882, 1185089389, -771458971, 1074617613, -853727376};
+
+  auto const output = cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({input}), 42);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, expected, verbosity);
+}
+
 TEST_F(SparkMurmurHashTest, StringsWithSeed)
 {
   // The hash values were determined by running the following Scala code in Apache Spark:
