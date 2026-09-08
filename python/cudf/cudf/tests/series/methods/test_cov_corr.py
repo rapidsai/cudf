@@ -14,13 +14,13 @@ from cudf.testing._utils import expect_warning_if
 COV_CORR_DATA_PAIRS = [
     pytest.param(
         np.random.default_rng(seed=0).normal(-100, 100, 1000),
-        np.random.default_rng(seed=0).normal(-100, 100, 1000),
-        id="normal",
+        np.random.default_rng(seed=0).integers(-50, 50, 1000),
+        id="normal-integers",
     ),
     pytest.param(
         np.random.default_rng(seed=0).integers(-50, 50, 1000),
-        np.random.default_rng(seed=0).integers(-50, 50, 1000),
-        id="integers",
+        np.random.default_rng(seed=0).normal(-100, 100, 1000),
+        id="integers-normal",
     ),
     pytest.param(np.zeros(100), np.zeros(100), id="constant"),
     pytest.param(
