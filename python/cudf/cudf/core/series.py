@@ -1200,6 +1200,10 @@ class Series(SingleColumnFrame, IndexedFrame):
         result = self.to_frame().unstack(
             level=level, fill_value=fill_value, sort=sort
         )
+        if result.columns.nlevels == 1:
+            # No level was actually unstacked (e.g. level=[]); pandas
+            # returns the original Series unchanged in that case.
+            return self.copy(deep=False)
         result.columns = result.columns.droplevel(0)
         return result
 

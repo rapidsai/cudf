@@ -134,3 +134,12 @@ def test_series_unstack_index_invalid():
         ),
     ):
         gs.unstack()
+
+
+def test_series_unstack_empty_level_is_a_noop():
+    index = pd.MultiIndex.from_tuples(
+        [("one", "a"), ("one", "b"), ("two", "a"), ("two", "b")]
+    )
+    ps = pd.Series([1, 2, 3, 4], index=index, name="v")
+    gs = cudf.from_pandas(ps)
+    assert_eq(ps.unstack(level=[]), gs.unstack(level=[]))
