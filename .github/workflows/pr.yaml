@@ -30,17 +30,12 @@ jobs:
       - conda-notebook-tests
       - docs-build
       - publish-api-docs
-      - wheel-build-libcudf
-      - wheel-build-libcudf-streaming
-      - wheel-build-cudf-streaming
-      - wheel-tests-cudf-streaming
-      - wheel-build-pylibcudf
-      - wheel-build-cudf
+      - wheel-cpp-build
+      - wheel-python-build
       - wheel-tests-cudf
-      - wheel-build-cudf-polars
       - wheel-tests-cudf-polars
       - cudf-polars-polars-tests
-      - wheel-build-dask-cudf
+      - wheel-python-build-noarch
       - wheel-tests-dask-cudf
       - devcontainer
       - unit-tests-cudf-pandas
@@ -208,22 +203,20 @@ jobs:
           - 'ci/test_narwhals.sh'
         test_python_wheels:
           - 'ci/build_wheel.sh'
-          - 'ci/build_wheel_libcudf.sh'
-          - 'ci/build_wheel_pylibcudf.sh'
+          - 'ci/build_wheel_cpp.sh'
+          - 'ci/build_wheel_python.sh'
+          - 'ci/build_wheel_python_noarch.sh'
+          - 'ci/build_wheel_common.sh'
+          - 'ci/validate_wheel.sh'
+          - '.github/workflows/build.yaml'
+          - '.github/workflows/wheels-build-stage.yaml'
         test_python_wheel_cudf:
           - 'ci/test_wheel_cudf.sh'
-          - 'ci/build_wheel_cudf.sh'
-        test_python_wheel_cudf_streaming:
-          - 'ci/test_wheel_cudf_streaming.sh'
-          - 'ci/build_wheel_libcudf_streaming.sh'
-          - 'ci/build_wheel_cudf_streaming.sh'
         test_python_wheel_cudf_polars:
           - 'ci/test_wheel_cudf_polars.sh'
-          - 'ci/build_wheel_cudf_polars.sh'
           - 'ci/utils/get_matrix_values.py'
         test_python_wheel_dask_cudf:
           - 'ci/test_wheel_dask_cudf.sh'
-          - 'ci/build_wheel_dask_cudf.sh'
         test_python_cudf_polars_polars:
           - 'ci/test_cudf_polars_polars_tests.sh'
           - 'ci/run_cudf_polars_polars_tests.sh'
@@ -336,7 +329,7 @@ jobs:
       # Build a conda package for each CUDA x ARCH x minimum supported Python version
       matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
   conda-python-build-noarch:
-    needs: [build-details, conda-cpp-build, conda-python-build]
+    needs: [build-details]
     permissions:
       actions: read
       contents: read
@@ -368,7 +361,7 @@ jobs:
       matrix_filter: map(select(.GPU != "gb300" and .GPU != "gh200"))
   conda-python-other-tests:
     # Tests for dask_cudf, cudf_polars, custreamz, cudf_kafka are separated for CI parallelism
-    needs: [conda-python-build-noarch, changed-files]
+    needs: [conda-python-build, conda-python-build-noarch, changed-files]
     permissions:
       actions: read
       contents: read
@@ -492,7 +485,7 @@ jobs:
       docs-projects: cudf,dask-cudf,libcudf
       dry-run: true
       version-map: ${{ vars.VERSION_MAP }}
-  wheel-build-libcudf:
+  wheel-cpp-build:
     needs: [build-details, checks]
     permissions:
       actions: read
@@ -501,18 +494,17 @@ jobs:
       packages: read
       pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
+    uses: ./.github/workflows/wheels-build-stage.yaml
     with:
       # build for every combination of arch and CUDA version, but only for the latest Python
       matrix_filter: group_by([.ARCH, (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by(.PY_VER|split(".")|map(tonumber)))
       build_type: pull-request
       build-datetime: ${{ needs.build-details.outputs.build-datetime }}
       node_type: cpu16
-      script: "ci/build_wheel_libcudf.sh"
-      package-name: libcudf
-      package-type: cpp
-  wheel-build-libcudf-streaming:
-    needs: [build-details, checks, wheel-build-libcudf]
+      script: ci/build_wheel_cpp.sh
+      stage: cpp
+  wheel-python-build:
+    needs: [build-details, checks, wheel-cpp-build]
     permissions:
       actions: read
       contents: read
@@ -520,37 +512,17 @@ jobs:
       packages: read
       pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
-    with:
-      # build for every combination of arch and CUDA version, but only for the latest Python
-      matrix_filter: group_by([.ARCH, (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by(.PY_VER|split(".")|map(tonumber)))
-      build_type: pull-request
-      build-datetime: ${{ needs.build-details.outputs.build-datetime }}
-      node_type: cpu16
-      script: "ci/build_wheel_libcudf_streaming.sh"
-      package-name: libcudf_streaming
-      package-type: cpp
-  wheel-build-cudf-streaming:
-    needs: [build-details, checks, wheel-build-libcudf-streaming, wheel-build-pylibcudf]
-    permissions:
-      actions: read
-      contents: read
-      id-token: write
-      packages: read
-      pull-requests: read
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
+    uses: ./.github/workflows/wheels-build-stage.yaml
     with:
       # Build a wheel for each CUDA x ARCH x minimum supported Python version
       matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
       build_type: pull-request
       build-datetime: ${{ needs.build-details.outputs.build-datetime }}
       node_type: cpu16
-      script: "ci/build_wheel_cudf_streaming.sh"
-      package-name: cudf_streaming
-      package-type: python
-  wheel-tests-cudf-streaming:
-    needs: [wheel-build-cudf-streaming, changed-files]
+      script: ci/build_wheel_python.sh
+      stage: python
+  wheel-python-build-noarch:
+    needs: [build-details, checks]
     permissions:
       actions: read
       contents: read
@@ -558,89 +530,39 @@ jobs:
       packages: read
       pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf_streaming || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheel_cudf_streaming
+    uses: ./.github/workflows/wheels-build-stage.yaml
     with:
-      build_type: pull-request
-      script: ci/test_wheel_cudf_streaming.sh
-      # https://github.com/NVIDIA/cudf/issues/23498
-      matrix_filter: map(select(.GPU != "gb300" and .GPU != "gh200"))
-  wheel-build-pylibcudf:
-    needs: [build-details, checks, wheel-build-libcudf]
-    permissions:
-      actions: read
-      contents: read
-      id-token: write
-      packages: read
-      pull-requests: read
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
-    with:
-      build_type: pull-request
-      build-datetime: ${{ needs.build-details.outputs.build-datetime }}
-      node_type: cpu8
-      script: "ci/build_wheel_pylibcudf.sh"
-      package-name: pylibcudf
-      package-type: python
-      # Build a wheel for each CUDA x ARCH x minimum supported Python version
-      matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
-  wheel-build-cudf:
-    needs: [build-details, wheel-build-pylibcudf]
-    permissions:
-      actions: read
-      contents: read
-      id-token: write
-      packages: read
-      pull-requests: read
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
-    with:
-      build_type: pull-request
-      build-datetime: ${{ needs.build-details.outputs.build-datetime }}
-      node_type: cpu8
-      script: "ci/build_wheel_cudf.sh"
-      package-name: cudf
-      package-type: python
-      # Build a wheel for each CUDA x ARCH x minimum supported Python version
-      matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
-  wheel-tests-cudf:
-    needs: [wheel-build-cudf, changed-files]
-    permissions:
-      actions: read
-      contents: read
-      id-token: write
-      packages: read
-      pull-requests: read
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheel_cudf
-    with:
-      build_type: pull-request
-      script: ci/test_wheel_cudf.sh
-      # https://github.com/NVIDIA/cudf/issues/23498
-      matrix_filter: map(select(.GPU != "gb300" and .GPU != "gh200"))
-  wheel-build-cudf-polars:
-    needs: [build-details, wheel-build-pylibcudf]
-    permissions:
-      actions: read
-      contents: read
-      id-token: write
-      packages: read
-      pull-requests: read
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
-    with:
-      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
+      # This selects amd64 and the latest Python for each CUDA major version.
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       build-datetime: ${{ needs.build-details.outputs.build-datetime }}
       node_type: cpu8
-      script: "ci/build_wheel_cudf_polars.sh"
-      package-name: cudf_polars
-      package-type: python
       pure-wheel: true
+      script: ci/build_wheel_python_noarch.sh
+      stage: python-noarch
+  wheel-tests-cudf:
+    needs: [wheel-python-build, changed-files]
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: read
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf_streaming || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheel_cudf
+    with:
+      build_type: pull-request
+      script: >-
+        env
+        RUN_PYLIBCUDF_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheel_cudf }}
+        RUN_CUDF_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheel_cudf }}
+        RUN_CUDF_STREAMING_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf_streaming || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheel_cudf }}
+        ci/test_wheel_cudf.sh
+      # https://github.com/NVIDIA/cudf/issues/23498
+      matrix_filter: map(select(.GPU != "gb300" and .GPU != "gh200"))
   wheel-tests-cudf-polars:
-    needs: [wheel-build-cudf-polars, wheel-build-cudf-streaming, changed-files]
+    needs: [wheel-python-build, wheel-python-build-noarch, changed-files]
     permissions:
       actions: read
       contents: read
@@ -657,7 +579,7 @@ jobs:
       container-options: "--cap-add CAP_SYS_PTRACE --shm-size=8g --ulimit=nofile=1000000:1000000"
       script: "env POLARS_VERSIONS=endpoints ci/test_wheel_cudf_polars.sh"
   cudf-polars-polars-tests:
-    needs: [wheel-build-cudf-polars, wheel-build-cudf-streaming, changed-files]
+    needs: [wheel-python-build, wheel-python-build-noarch, changed-files]
     strategy:
       fail-fast: false
       matrix:
@@ -691,28 +613,8 @@ jobs:
         ci/test_cudf_polars_polars_tests.sh --engine ${{ matrix.engine }}
         --cudf-polars-shard-id ${{ matrix.shard_id }}
         --cudf-polars-num-shards ${{ matrix.num_shards }}
-  wheel-build-dask-cudf:
-    needs: [build-details, wheel-build-cudf]
-    permissions:
-      actions: read
-      contents: read
-      id-token: write
-      packages: read
-      pull-requests: read
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
-    with:
-      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
-      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
-      build_type: pull-request
-      build-datetime: ${{ needs.build-details.outputs.build-datetime }}
-      node_type: cpu8
-      script: "ci/build_wheel_dask_cudf.sh"
-      package-name: dask_cudf
-      package-type: python
-      pure-wheel: true
   wheel-tests-dask-cudf:
-    needs: [wheel-build-dask-cudf, changed-files]
+    needs: [wheel-python-build, wheel-python-build-noarch, changed-files]
     permissions:
       actions: read
       contents: read
@@ -752,7 +654,7 @@ jobs:
         build-all -j0 --verbose -DBUILD_BENCHMARKS=ON 2>&1 | tee telemetry-artifacts/build.log;
         sccache --show-adv-stats | tee telemetry-artifacts/sccache-stats.txt;
   unit-tests-cudf-pandas:
-    needs: [wheel-build-cudf, changed-files]
+    needs: [wheel-python-build, changed-files]
     permissions:
       actions: read
       contents: read
@@ -829,7 +731,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
   pandas-tests:
     # run the Pandas unit tests using PR branch, sharded across runners.
-    needs: [wheel-build-cudf, changed-files, pandas-tests-shards]
+    needs: [wheel-python-build, changed-files, pandas-tests-shards]
     strategy:
       fail-fast: false
       matrix:

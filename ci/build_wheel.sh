@@ -23,19 +23,6 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-source rapids-configure-sccache
-source rapids-datetime-string
-source rapids-init-pip
-
-export SCCACHE_S3_PREPROCESSOR_CACHE_KEY_PREFIX="${package_name}-${RAPIDS_CONDA_ARCH}-cuda${RAPIDS_CUDA_VERSION%%.*}-wheel-preprocessor-cache"
-export SCCACHE_S3_USE_PREPROCESSOR_CACHE_MODE=true
-
-RAPIDS_VERSION_SUFFIX=".post${RAPIDS_DATETIME_STRING}" \
-  rapids-generate-version > ./VERSION
-
-RAPIDS_VERSION_SUFFIX=".post${RAPIDS_DATETIME_STRING}" \
-  rapids-generate-version > ./python/cudf/cudf/VERSION
-
 cd "${package_dir}"
 
 sccache --stop-server 2>/dev/null || true
