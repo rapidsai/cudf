@@ -161,15 +161,16 @@ static void bench_hash(nvbench::state& state)
 NVBENCH_BENCH(bench_hash)
   .set_name("hashing")
   .add_int64_axis("num_rows", {65536, 16777216})
-  .add_string_axis("data_type", column_type_names())
+  .add_string_axis("data_type", {"mixed"})
   .add_int64_axis("num_cols", {2, 64})
   .add_float64_axis("nulls", {0.0, 0.1})
   .add_string_axis("hash_name",
-                   {"murmurhash3_x86_32",
-                    "spark_murmurhash3_x86_32",
-                    "md5",
-                    "sha1",
-                    "sha224",
-                    "sha256",
-                    "sha384",
-                    "sha512"});
+                   {"murmurhash3_x86_32", "md5", "sha1", "sha224", "sha256", "sha384", "sha512"});
+
+NVBENCH_BENCH(bench_hash)
+  .set_name("spark_hashing")
+  .add_int64_axis("num_rows", {65536, 16777216})
+  .add_string_axis("data_type", column_type_names())
+  .add_int64_axis("num_cols", {2, 64})
+  .add_float64_axis("nulls", {0.0, 0.1})
+  .add_string_axis("hash_name", {"spark_murmurhash3_x86_32"});
