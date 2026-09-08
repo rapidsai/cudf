@@ -177,9 +177,6 @@ def read_csv(
     if byte_range is None:
         byte_range = (0, 0)
 
-    # We need this later when setting index cols
-    orig_header = header
-
     if names is not None:
         # explicitly mentioned name, so don't check header
         if header is None or header == "infer":
@@ -358,7 +355,7 @@ def read_csv(
             if (
                 isinstance(index_col_name, str)
                 and names is None
-                and orig_header == "infer"
+                and header != -1
             ):
                 if index_col_name.startswith("Unnamed:"):
                     # TODO: Try to upstream it to libcudf
@@ -374,7 +371,7 @@ def read_csv(
             if names is None:
                 df.index.names = [
                     (None if label.startswith("Unnamed:") else label)
-                    if isinstance(label, str) and orig_header == "infer"
+                    if isinstance(label, str) and header != -1
                     else position
                     for label, position in zip(
                         index_col_labels, index_col, strict=True
