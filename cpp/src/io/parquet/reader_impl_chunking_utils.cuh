@@ -217,7 +217,7 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
 /**
  * @brief Computes the per-page scratch space required for decompression.
  */
-rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
+CUDF_EXPORT rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
   device_span<ColumnChunkDesc const> chunks,
   device_span<PageInfo const> pages,
   cuda::stream_ref stream);
@@ -417,13 +417,30 @@ struct codec_stats {
 };
 
 /**
+ * @brief Returns the compressed values passed to the decompressor, excluding V2 level bytes.
+ */
+struct get_decompression_input {
+  __device__ inline device_span<uint8_t const> operator()(PageInfo const& page) const
+  {
+    auto const is_compressed = (page.flags & PAGEINFO_FLAGS_V2) ? page.is_compressed : true;
+    auto const offset =
+      page.lvl_bytes[level_type::DEFINITION] + page.lvl_bytes[level_type::REPETITION];
+    if (not is_compressed or page.compressed_page_size <= offset) { return {}; }
+    return {page.page_data + offset, static_cast<size_t>(page.compressed_page_size - offset)};
+  }
+};
+
+/**
  * @brief Functor which retrieves per-page decompression information.
  */
 struct get_decomp_info {
   device_span<ColumnChunkDesc const> chunks;
   __device__ inline decompression_info operator()(PageInfo const& p) const
   {
-    return {parquet_compression_support(chunks[p.chunk_idx].codec).first,
+    auto const codec = parquet_compression_support(chunks[p.chunk_idx].codec).first;
+    if (get_decompression_input{}(p).empty()) { return {codec, 0, 0, 0}; }
+    // Keep the full page size as a conservative bound, as in codec_stats::add_pages.
+    return {codec,
             1,
             static_cast<size_t>(p.uncompressed_page_size),
             static_cast<size_t>(p.uncompressed_page_size)};

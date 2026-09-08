@@ -732,7 +732,7 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
   auto temp_cost     = cudf::detail::make_pinned_vector_async<size_t>(pages.size(), stream);
   auto h_decomp_info = cudf::detail::make_pinned_vector(decomp_info, stream);
   std::transform(h_decomp_info.begin(), h_decomp_info.end(), temp_cost.begin(), [](auto const& d) {
-    return cudf::io::detail::get_decompression_scratch_size(d);
+    return d.num_pages == 0 ? 0 : cudf::io::detail::get_decompression_scratch_size(d);
   });
 
   rmm::device_uvector<size_t> d_temp_cost =
@@ -756,25 +756,22 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
         decomp_sum{},
         stream);
 
-      // Collect pages with matching codecs
+      // Use the same page selection for the input spans and decompression-size estimates.
       rmm::device_uvector<device_span<uint8_t const>> temp_spans(pages.size(), stream);
       auto iter = cuda::counting_iterator{size_t{0}};
-      thrust::for_each(
-        rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-        iter,
-        iter + pages.size(),
-        [pages      = pages.begin(),
-         chunks     = chunks.begin(),
-         temp_spans = temp_spans.begin(),
-         codec] __device__(size_t i) {
-          auto const& page = pages[i];
-          if (parquet_compression_support(chunks[page.chunk_idx].codec).first == codec) {
-            temp_spans[i] = device_span<uint8_t const>(
-              page.page_data, static_cast<size_t>(page.compressed_page_size));
-          } else {
-            temp_spans[i] = device_span<uint8_t const>();  // Mark pages with other codecs as empty
-          }
-        });
+      thrust::for_each(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                       iter,
+                       iter + pages.size(),
+                       [pages      = pages.begin(),
+                        chunks     = chunks.begin(),
+                        temp_spans = temp_spans.begin(),
+                        codec] __device__(size_t i) {
+                         auto const& page = pages[i];
+                         temp_spans[i] =
+                           parquet_compression_support(chunks[page.chunk_idx].codec).first == codec
+                             ? get_decompression_input{}(page)
+                             : device_span<uint8_t const>{};
+                       });
       // Copy only non-null spans
       rmm::device_uvector<device_span<uint8_t const>> page_spans(pages.size(), stream);
       auto end_iter =
