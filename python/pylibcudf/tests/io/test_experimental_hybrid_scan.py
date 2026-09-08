@@ -448,10 +448,14 @@ def test_hybrid_scan_payload_page_mask_without_page_index(
         pa.array([i < num_selected for i in range(num_rows)], type=pa.bool_())
     )
 
+    # the caller is responsible for keeping the source bytes alive until
+    # synchronize_stream() below runs.
+    # See https://github.com/rapidsai/rmm/issues/2521
+    src_bytes = simple_parquet_bytes[r.offset : r.offset + r.size]
     payload_data = [
         plc.gpumemoryview(
             rmm.DeviceBuffer.to_device(
-                simple_parquet_bytes[r.offset : r.offset + r.size],
+                src_bytes,
                 plc.utils._get_stream(),
             )
         )
