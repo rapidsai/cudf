@@ -254,11 +254,6 @@ def log_do_evaluate(
             )
             log.info("Execute IR", **record)
 
-            if (tracer := ir_execution_context.tracer) is not None:
-                # ActorTracer.send updates row_count and chunk_count
-                tracer.input_bytes += sum(frame._size_bytes for frame in frames)
-                tracer.output_bytes += result._size_bytes
-
             return result
 
         return wrapper

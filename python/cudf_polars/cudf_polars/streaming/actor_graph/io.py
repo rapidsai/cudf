@@ -32,7 +32,10 @@ from cudf_polars.streaming.actor_graph.dispatch import (
     ir_context_for_node,
 )
 from cudf_polars.streaming.actor_graph.nodes import define_actor, shutdown_on_error
-from cudf_polars.streaming.actor_graph.tracing import send_chunk
+from cudf_polars.streaming.actor_graph.tracing import (
+    send_chunk,
+    trace_channel,
+)
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
     chunk_to_frame,
@@ -181,6 +184,7 @@ async def dataframescan_node(
     async with shutdown_on_error(
         context, ch_out, trace_ir=ir, ir_context=ir_context
     ) as tracer:
+        ch_out = trace_channel(ch_out, tracer)
         # Find local partition count.
         nrows = ir.df.shape()[0]
         global_count = math.ceil(nrows / rows_per_partition) if nrows > 0 else 0
@@ -428,6 +432,7 @@ async def python_scan_node(
     async with shutdown_on_error(
         context, ch_out, trace_ir=ir, ir_context=ir_context
     ) as tracer:
+        ch_out = trace_channel(ch_out, tracer)
         rank_aware_source = _find_rank_aware_source(ir.options[0])
         if rank_aware_source is None and comm.nranks > 1 and comm.rank != 0:
             # A plain (rank-unaware) source runs on rank 0 only; other ranks
@@ -624,6 +629,7 @@ async def scan_node(
     async with shutdown_on_error(
         context, ch_out, trace_ir=ir, ir_context=ir_context
     ) as tracer:
+        ch_out = trace_channel(ch_out, tracer)
         # Send basic metadata
         ir_context = dataclasses.replace(ir_context, tracer=tracer)
         await send_metadata(
@@ -770,7 +776,9 @@ async def sink_node(
 
     async with shutdown_on_error(
         context, ch_in, ch_out, ir_context=ir_context, trace_ir=ir
-    ):
+    ) as tracer:
+        ch_in = trace_channel(ch_in, tracer)
+        ch_out = trace_channel(ch_out, tracer)
         metadata = await recv_metadata(ch_in, context)
         await send_metadata(
             ch_out, context, ChannelMetadata(local_count=1, duplicated=True)

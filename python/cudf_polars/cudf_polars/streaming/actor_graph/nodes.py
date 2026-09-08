@@ -23,7 +23,10 @@ from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
     ir_context_for_node,
 )
-from cudf_polars.streaming.actor_graph.tracing import send_chunk
+from cudf_polars.streaming.actor_graph.tracing import (
+    send_chunk,
+    trace_channel,
+)
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
     _leading_order_keys,
@@ -93,6 +96,8 @@ async def default_node_single(
     async with shutdown_on_error(
         context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
     ) as tracer:
+        ch_in = trace_channel(ch_in, tracer)
+        ch_out = trace_channel(ch_out, tracer)
         # Recv metadata and prepare output metadata
         metadata_in = await recv_metadata(ch_in, context)
         partitioning = maybe_remap_partitioning(
@@ -155,6 +160,8 @@ async def default_node_multi(
     async with shutdown_on_error(
         context, *chs_in, ch_out, trace_ir=ir, ir_context=ir_context
     ) as tracer:
+        chs_in = tuple(trace_channel(ch, tracer) for ch in chs_in)
+        ch_out = trace_channel(ch_out, tracer)
         # Merge and forward basic metadata.
         local_count = 1
         duplicated = True
@@ -615,7 +622,10 @@ async def empty_node(
     ch_out
         The output Channel[TableChunk].
     """
-    async with shutdown_on_error(context, ch_out, ir_context=ir_context, trace_ir=ir):
+    async with shutdown_on_error(
+        context, ch_out, ir_context=ir_context, trace_ir=ir
+    ) as tracer:
+        ch_out = trace_channel(ch_out, tracer)
         # Send metadata indicating a single empty chunk
         await send_metadata(
             ch_out,

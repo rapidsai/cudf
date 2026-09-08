@@ -44,7 +44,10 @@ from cudf_polars.streaming.actor_graph.dispatch import (
     ir_context_for_node,
 )
 from cudf_polars.streaming.actor_graph.nodes import default_node_multi
-from cudf_polars.streaming.actor_graph.tracing import send_chunk
+from cudf_polars.streaming.actor_graph.tracing import (
+    send_chunk,
+    trace_channel,
+)
 from cudf_polars.streaming.actor_graph.utils import (
     CUDF_ROW_LIMIT,
     MAX_ROWS_PER_PARTITION,
@@ -189,6 +192,9 @@ async def broadcast_join_actor(
         trace_ir=ir,
         ir_context=ir_context,
     ) as tracer:
+        ch_left = trace_channel(ch_left, tracer)
+        ch_right = trace_channel(ch_right, tracer)
+        ch_out = trace_channel(ch_out, tracer)
         ir_context = replace(ir_context, tracer=tracer)
         await _broadcast_join(
             context,
@@ -1245,6 +1251,9 @@ async def join_actor(
         trace_ir=ir,
         ir_context=ir_context,
     ) as tracer:
+        ch_left = trace_channel(ch_left, tracer)
+        ch_right = trace_channel(ch_right, tracer)
+        ch_out = trace_channel(ch_out, tracer)
         ir_context = replace(ir_context, tracer=tracer)
         left_metadata, right_metadata = await gather_in_task_group(
             recv_metadata(ch_left, context),
