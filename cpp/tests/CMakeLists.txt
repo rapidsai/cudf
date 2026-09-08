@@ -345,7 +345,7 @@ ConfigureTest(
   GPUS 1
   PERCENT 100
 )
-ConfigureTest(PARQUET_FOOTER_FACADE_TEST io/parquet_footer_facade_test.cpp)
+ConfigureTest(PARQUET_FOOTER_FACADE_TEST io/experimental/parquet_footer_facade_test.cpp)
 ConfigureTest(
   HYBRID_SCAN_TEST
   io/experimental/hybrid_scan_common.cpp
