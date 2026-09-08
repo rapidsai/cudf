@@ -71,8 +71,7 @@ std::unique_ptr<column> murmurhash3_x86_32(
  *
  * Chrono columns are hashed by their stored count, without unit conversion, so the caller must
  * supply Spark's units: `TIMESTAMP_MICROSECONDS` for `TimestampType`, `TIMESTAMP_DAYS` for
- * `DateType`, `DURATION_MICROSECONDS` for a day-time interval. Passing another resolution hashes
- * a different logical instant than Spark would.
+ * `DateType`, `DURATION_MICROSECONDS` for a day-time interval. Other resolutions are rejected.
  *
  * LIST columns whose child is a STRUCT are not supported yet, and a non-empty table containing
  * one is rejected. Row preprocessing only decomposes top level structs, so a struct nested in a
@@ -83,6 +82,9 @@ std::unique_ptr<column> murmurhash3_x86_32(
  *             is spelled `spark_murmurhash3_x86_32(t, static_cast<uint32_t>(-1))`
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column device memory
+ *
+ * @throws cudf::logic_error If the input contains an unsupported chrono resolution or a LIST
+ *                           column whose child is a STRUCT
  *
  * @returns A non-nullable INT32 column containing one Spark-compatible hash per input row
  */

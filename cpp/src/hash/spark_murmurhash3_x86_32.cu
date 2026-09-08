@@ -30,12 +30,18 @@ void check_spark_murmurhash3_compatibility(table_view const& input)
   using column_checker_fn_t = std::function<void(column_view const&)>;
 
   column_checker_fn_t check_column = [&](column_view const& c) {
-    if (c.type().id() == type_id::LIST) {
+    auto const type = c.type().id();
+    if (is_chrono(c.type())) {
+      CUDF_EXPECTS(type == type_id::TIMESTAMP_DAYS || type == type_id::TIMESTAMP_MICROSECONDS ||
+                     type == type_id::DURATION_MICROSECONDS,
+                   "Spark MurmurHash3 requires dates in days and timestamps and durations in "
+                   "microseconds.");
+    } else if (type == type_id::LIST) {
       auto const& list_col = lists_column_view(c);
       CUDF_EXPECTS(list_col.child().type().id() != type_id::STRUCT,
                    "Cannot compute hash of a table with a LIST of STRUCT columns.");
       check_column(list_col.child());
-    } else if (c.type().id() == type_id::STRUCT) {
+    } else if (type == type_id::STRUCT) {
       for (auto child = c.child_begin(); child != c.child_end(); ++child) {
         check_column(*child);
       }

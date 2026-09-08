@@ -625,3 +625,16 @@ TEST_F(SparkMurmurHashTest, ListOfStructValues)
   EXPECT_THROW(cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({*list_column}), 42),
                cudf::logic_error);
 }
+
+TEST_F(SparkMurmurHashTest, UnsupportedChronoUnits)
+{
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep> const
+    timestamps{0};
+  cudf::test::fixed_width_column_wrapper<cudf::duration_ns, cudf::duration_ns::rep> const durations{
+    0};
+
+  EXPECT_THROW(cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({timestamps}), 42),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({durations}), 42),
+               cudf::logic_error);
+}
