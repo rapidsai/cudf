@@ -732,16 +732,24 @@ def test_scan_path_mismatch_raises() -> None:
         )
 
 
-def test_streaming_scan_missing_prefetch_metadata_raises() -> None:
-    # This isn't reachable by polars' public API, so we test it directly.
-    scan = _make_parquet_scan(
-        ["file.parquet"], parquet_options=ParquetOptions(prefetch_file_metadata=True)
-    )
-    task = ParquetScanTask(scan, scan.paths, 0, 1, scan.parquet_options)
+def test_parquet_split_task_fetches_missing_metadata(tmp_path: Path) -> None:
+    source = tmp_path / "data.parquet"
+    pl.DataFrame({"x": range(4)}).write_parquet(source, row_group_size=2)
 
-    ctx = IRExecutionContext()
-    with pytest.raises(NotImplementedError, match=r"StreamingScan.do_evaluate"):
-        StreamingScan.do_evaluate([task], scan, context=ctx)
+    scan = _make_parquet_scan(
+        [str(source)], parquet_options=ParquetOptions(prefetch_file_metadata=True)
+    )
+
+    result = ParquetScanTask.do_evaluate(
+        scan,
+        scan.paths,
+        0,
+        2,
+        scan.parquet_options,
+        context=IRExecutionContext(),
+    )
+
+    assert result.to_polars().to_dict(as_series=False) == {"x": [0, 1]}
 
 
 def test_prefetch_file_metadata_join(
