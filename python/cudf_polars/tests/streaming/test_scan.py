@@ -424,7 +424,20 @@ def _make_csv_scan(paths: list[str]) -> Scan:
     return Scan(
         {"x": DataType(pl.Int64())},
         "csv",
-        {},
+        {
+            "has_header": True,
+            "schema": None,
+            "skip_rows": 0,
+            "skip_rows_after_header": 0,
+            "parse_options": {
+                "separator": ord(","),
+                "quote_char": ord('"'),
+                "eol_char": ord("\n"),
+                "null_values": None,
+                "comment_prefix": None,
+                "decimal_comma": False,
+            },
+        },
         None,
         paths,
         None,
@@ -548,6 +561,35 @@ def test_attach_cached_parquet_metadata_resolves_row_groups(
         assert bounds is not None
         row_groups.append(bounds.row_groups)
     assert row_groups == [[[0]], [[1]]]
+
+
+def test_attach_cached_parquet_metadata_uses_rank_local_tasks(
+    tmp_path: Path,
+) -> None:
+    paths = [str(tmp_path / f"part-{i}.parquet") for i in range(4)]
+    for path in paths:
+        pl.DataFrame({"x": range(4)}).write_parquet(path, row_group_size=2)
+
+    base = _make_parquet_scan(paths)
+    streaming_scan = StreamingScan.for_fused_files(
+        base,
+        IOPartitionPlan(1, IOPartitionFlavor.SINGLE_FILE),
+        partition_count=4,
+        rank=0,
+        nranks=2,
+        parquet_options=base.parquet_options,
+    )
+
+    cached = prefetch_parquet_file_metadata_for_ir(streaming_scan, None)
+    attach_cached_parquet_metadata(streaming_scan, cached)
+
+    assert base.cached_parquet_info is not None
+    assert [info.path for info in base.cached_parquet_info] == paths[:2]
+    for scan in streaming_scan.tasks:
+        assert isinstance(scan, ParquetScanTask)
+        bounds = scan.get_task_bounds()
+        assert bounds is not None
+        assert bounds.row_groups == [[0, 1]]
 
 
 def test_attach_cached_parquet_metadata_leaves_sub_row_group_split_unaligned(

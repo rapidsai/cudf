@@ -243,7 +243,7 @@ def attach_cached_parquet_metadata(
     cached_parquet_info_map: dict[str, CachedParquetInfo],
 ) -> None:
     """
-    Attach prefetched metadata to parquet scan nodes.
+    Attach prefetched metadata to parquet scan tasks.
 
     This is an optimization only and does not affect IR identity.
 
@@ -257,9 +257,14 @@ def attach_cached_parquet_metadata(
     for node in traversal([root]):
         if isinstance(node, StreamingScan) and node.base_scan.typ == "parquet":
             base_scan = node.base_scan
-            if not all(path in cached_parquet_info_map for path in base_scan.paths):
+            task_paths = {path for task in node.tasks for path in task.paths}
+            cached_paths = [
+                path
+                for path in base_scan.paths
+                if path in task_paths and path in cached_parquet_info_map
+            ]
+            cached = [cached_parquet_info_map[path] for path in cached_paths]
+            if not cached:
                 continue
-            cached = [cached_parquet_info_map[path] for path in base_scan.paths]
-            Scan._validate_cached_parquet_info(base_scan.paths, cached)
+            Scan._validate_cached_parquet_info(cached_paths, cached)
             base_scan.cached_parquet_info = cached
-            base_scan._non_child_args = (*base_scan._non_child_args[:-1], cached)
