@@ -2104,7 +2104,7 @@ aggregate_reader_metadata::select_columns(
   // Compares two schema elements to be equal except their number of children
   auto const equal_to_except_num_children = [selection_mode, case_sensitive_names](
                                               SchemaElement const& lhs, SchemaElement const& rhs) {
-    // Match by field ID only when it is the selection method, otherwise match by name. Field IDs 
+    // Match by field ID only when it is the selection method, otherwise match by name. Field IDs
     // are optional in Parquet and may not be present in all sources.
     auto const match_schema_by_field_id = selection_mode == column_selection_mode::BY_FIELD_ID;
     auto const identities_match =
