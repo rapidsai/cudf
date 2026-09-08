@@ -350,7 +350,7 @@ def test_hybrid_scan_materialize_columns(
     filter_data = [
         plc.gpumemoryview(
             rmm.DeviceBuffer.to_device(
-                memoryview(simple_parquet_bytes)[r.offset: r.offset + r.size],
+                memoryview(simple_parquet_bytes)[r.offset : r.offset + r.size],
                 plc.utils._get_stream(stream),
             )
         )
@@ -385,7 +385,7 @@ def test_hybrid_scan_materialize_columns(
     payload_data = [
         plc.gpumemoryview(
             rmm.DeviceBuffer.to_device(
-                memoryview(simple_parquet_bytes)[r.offset: r.offset + r.size],
+                memoryview(simple_parquet_bytes)[r.offset : r.offset + r.size],
                 plc.utils._get_stream(stream),
             )
         )
@@ -453,7 +453,7 @@ def test_hybrid_scan_payload_page_mask_without_page_index(
     # synchronize_stream() is called below.
     # See https://github.com/rapidsai/rmm/issues/2521
     payload_ranges = [
-        simple_parquet_bytes[r.offset: r.offset + r.size]
+        simple_parquet_bytes[r.offset : r.offset + r.size]
         for r in reader.payload_column_chunks_byte_ranges(
             row_groups, simple_parquet_options
         )
@@ -551,7 +551,7 @@ def test_hybrid_scan_single_step_materialize(
     all_columns_data = [
         plc.gpumemoryview(
             rmm.DeviceBuffer.to_device(
-                memoryview(simple_parquet_bytes)[r.offset: r.offset + r.size],
+                memoryview(simple_parquet_bytes)[r.offset : r.offset + r.size],
                 plc.utils._get_stream(stream),
             )
         )
@@ -633,7 +633,7 @@ def test_hybrid_scan_has_next_table_chunk(
     filter_data = [
         plc.gpumemoryview(
             rmm.DeviceBuffer.to_device(
-                memoryview(simple_parquet_bytes)[r.offset: r.offset + r.size],
+                memoryview(simple_parquet_bytes)[r.offset : r.offset + r.size],
                 plc.utils._get_stream(),
             )
         )
@@ -703,7 +703,7 @@ def test_hybrid_scan_chunked_reading(
     filter_data = [
         plc.gpumemoryview(
             rmm.DeviceBuffer.to_device(
-                memoryview(simple_parquet_bytes)[r.offset: r.offset + r.size],
+                memoryview(simple_parquet_bytes)[r.offset : r.offset + r.size],
                 plc.utils._get_stream(stream),
             )
         )
@@ -948,7 +948,7 @@ def test_hybrid_scan_filter_row_groups_with_dictionary_pages_negation(
         # synchronize_stream() below runs.
         # See https://github.com/rapidsai/rmm/issues/2521
         dict_page_bytes = [
-            simple_parquet_bytes[r.offset: r.offset + r.size]
+            simple_parquet_bytes[r.offset : r.offset + r.size]
             for r in dictionary_ranges
         ]
         dictionary_data = [
@@ -1023,7 +1023,7 @@ def test_hybrid_scan_metadata_with_page_index(
     # Fetch page index bytes from the parquet file
     simple_parquet_mv = memoryview(simple_parquet_bytes)
     page_index_mv = simple_parquet_mv[
-        page_index_byte_range.offset: page_index_byte_range.offset
+        page_index_byte_range.offset : page_index_byte_range.offset
         + page_index_byte_range.size
     ]
 
