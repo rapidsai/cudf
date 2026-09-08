@@ -2705,7 +2705,7 @@ def _assert_string_cat(data, others, sep, na_rep, index=None):
     )
     if is_any_others_ndarray:
         # pandas returns Index[object] which cuDF doesn't support
-        expect.index = expect.index.astype(got.index.dtype)
+        expect.index = expect.index.astype(ps.index.dtype)
     assert_eq(expect, got)
 
 
