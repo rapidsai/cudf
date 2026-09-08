@@ -109,23 +109,53 @@ public class DeletionVector {
     if (deletionVectorInfo == null) {
       throw new NullPointerException("Expected non-null deletionVectorInfo");
     }
+    return computeNumDeletedRows(new DeletionVectorInfo[] {deletionVectorInfo}, maxChunkRows);
+  }
+
+  /**
+   * Computes (on the GPU) the total number of rows deleted by serialized deletion vectors.
+   *
+   * @param deletionVectorInfos deletion vectors and row-group metadata
+   * @param maxChunkRows maximum number of row indexes to process at once
+   * @return total number of deleted rows in the specified row groups
+   * @throws NullPointerException if {@code deletionVectorInfos} or one of its elements is null
+   * @throws IllegalArgumentException if no deletion vectors are supplied, row-group metadata is
+   *     missing, empty, or contains a negative value, deletion and retention vectors are mixed,
+   *     or {@code maxChunkRows} is not positive
+   */
+  public static long computeNumDeletedRows(
+      DeletionVectorInfo[] deletionVectorInfos, int maxChunkRows) {
+    if (deletionVectorInfos == null) {
+      throw new NullPointerException("Expected non-null deletionVectorInfos");
+    }
+    if (deletionVectorInfos.length == 0) {
+      throw new IllegalArgumentException("deletionVectorInfos must be non-empty");
+    }
     if (maxChunkRows <= 0) {
       throw new IllegalArgumentException("maxChunkRows must be positive");
     }
-    if (deletionVectorInfo.rowGroupOffsets == null ||
-        deletionVectorInfo.rowGroupOffsets.length == 0) {
-      throw new IllegalArgumentException("row-group metadata must be non-empty");
+    for (DeletionVectorInfo info : deletionVectorInfos) {
+      if (info == null) {
+        throw new NullPointerException("Expected non-null deletionVectorInfo");
+      }
+      if (info.rowGroupOffsets == null || info.rowGroupOffsets.length == 0) {
+        throw new IllegalArgumentException("row-group metadata must be non-empty");
+      }
+      if (Arrays.stream(info.rowGroupOffsets).anyMatch(value -> value < 0) ||
+          Arrays.stream(info.rowGroupNumRows).anyMatch(value -> value < 0)) {
+        throw new IllegalArgumentException("row-group metadata values must be non-negative");
+      }
     }
-    if (Arrays.stream(deletionVectorInfo.rowGroupOffsets).anyMatch(value -> value < 0) ||
-        Arrays.stream(deletionVectorInfo.rowGroupNumRows).anyMatch(value -> value < 0)) {
-      throw new IllegalArgumentException("row-group metadata values must be non-negative");
-    }
+
     return computeNumDeletedRows(
-        getAddrsAndSizes(deletionVectorInfo.serializedBitmap),
-        new int[] {deletionVectorInfo.totalNumRows},
-        deletionVectorInfo.rowGroupOffsets,
-        deletionVectorInfo.rowGroupNumRows,
-        deletionVectorInfo.isRetention,
+        getAddrsAndSizes(Arrays.stream(deletionVectorInfos)
+            .map(info -> info.serializedBitmap).toArray(HostMemoryBuffer[]::new)),
+        Arrays.stream(deletionVectorInfos).mapToInt(info -> info.totalNumRows).toArray(),
+        Arrays.stream(deletionVectorInfos)
+            .flatMapToLong(info -> Arrays.stream(info.rowGroupOffsets)).toArray(),
+        Arrays.stream(deletionVectorInfos)
+            .flatMapToInt(info -> Arrays.stream(info.rowGroupNumRows)).toArray(),
+        getDeletionVectorTypes(deletionVectorInfos),
         maxChunkRows);
   }
 
