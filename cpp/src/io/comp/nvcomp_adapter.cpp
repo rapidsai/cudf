@@ -23,13 +23,13 @@
 
 #define CUDF_NVCOMP_HAS_GZIP_COMPRESSION (NVCOMP_VER >= MAKE_SEMANTIC_VERSION(5, 3, 0))
 
-// nvCOMP 6.0 drops the `Async` suffix from the host-only 
+// nvCOMP 6.0 drops the `Async` suffix from the host-only
 // `nvcompBatchedXXX(De)CompressGetTempSizeAsync` functions and gave them a stream parameter.
 #if NVCOMP_VER >= MAKE_SEMANTIC_VERSION(6, 0, 0)
 // Call sites spell `fn` without the `Async` suffix
 #define NVCOMP_BATCHED_GET_TEMP_SIZE(fn, stream, ...) fn(__VA_ARGS__, stream)
 #else
-// ingore the `stream` parameter
+// ignore the `stream` parameter
 #define NVCOMP_BATCHED_GET_TEMP_SIZE(fn, stream, ...) fn##Async(__VA_ARGS__)
 #endif
 
