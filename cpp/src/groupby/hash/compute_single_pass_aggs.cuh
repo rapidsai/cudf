@@ -6,6 +6,7 @@
 #pragma once
 
 #include "compute_global_memory_aggs.hpp"
+#include "compute_global_memory_aggs_null.hpp"
 #include "compute_mapping_indices.hpp"
 #include "compute_shared_memory_aggs.hpp"
 #include "compute_single_pass_aggs.hpp"
