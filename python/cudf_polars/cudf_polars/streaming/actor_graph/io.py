@@ -570,15 +570,19 @@ async def read_chunk(
             br=context.br(),
         )
     stop = time.monotonic_ns()
-    trace_task = task.base_task if isinstance(task, ParquetScanTask) else task
+    ir_type = (
+        task.trace_ir_type()
+        if isinstance(task, ParquetScanTask)
+        else type(task).__name__
+    )
     log(
         "IO Task",
         scope=Scope.IO_TASK.value,
         start=start,
         admitted=admitted,
         stop=stop,
-        ir_id=trace_task.get_stable_id(),
-        ir_type=type(trace_task).__name__,
+        ir_id=task.get_stable_id(),
+        ir_type=ir_type,
         sequence_number=seq_num,
         estimated_output_bytes=estimated_chunk_bytes,
         reservation_bytes=reservation_bytes,

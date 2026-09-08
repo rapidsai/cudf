@@ -34,7 +34,6 @@ from cudf_polars.streaming.base import (
 from cudf_polars.streaming.io import (
     FusedScan,
     ParquetScanTask,
-    SplitScan,
     StreamingScan,
     expand_scan_for_rank,
     scan_partition_plan,
@@ -468,7 +467,8 @@ def test_expand_scan_for_rank_fused_and_single_read(
         streaming_scan.tasks, expected_path_groups, strict=True
     ):
         assert isinstance(scan, ParquetScanTask)
-        assert isinstance(scan.base_task, FusedScan)
+        assert scan.split_index is None
+        assert scan.total_splits is None
         assert scan.paths == expected_paths
 
 
@@ -499,9 +499,8 @@ def test_expand_scan_for_rank_split_files(
         streaming_scan.tasks, expected_splits, strict=True
     ):
         assert isinstance(scan, ParquetScanTask)
-        assert isinstance(scan.base_task, SplitScan)
-        assert scan.base_task.split_index == split_index
-        assert scan.base_task.total_splits == total_splits
+        assert scan.split_index == split_index
+        assert scan.total_splits == total_splits
         assert scan.paths == ["file.parquet"]
 
 
@@ -554,7 +553,7 @@ def test_attach_cached_parquet_metadata_leaves_sub_row_group_split_unaligned(
 
     for scan in streaming_scan.tasks:
         assert isinstance(scan, ParquetScanTask)
-        assert isinstance(scan.base_task, SplitScan)
+        assert scan.is_split
         bounds = scan.get_task_bounds()
         assert bounds is not None
         assert bounds.row_groups is None
@@ -590,7 +589,7 @@ def test_attach_cached_parquet_metadata_leaves_sliced_fused_scan_unaligned(
 
     for scan in streaming_scan.tasks:
         assert isinstance(scan, ParquetScanTask)
-        assert isinstance(scan.base_task, FusedScan)
+        assert not scan.is_split
         bounds = scan.get_task_bounds()
         assert bounds is not None
         assert bounds.row_groups is None
@@ -751,12 +750,12 @@ def test_fused_scan_identity_equality() -> None:
     assert a != c
 
 
-def test_split_scan_identity_equality() -> None:
+def test_parquet_split_task_identity_equality() -> None:
     base = _make_parquet_scan(["a.parquet"])
 
-    a = SplitScan(base, base.paths, 0, 4, base.parquet_options)
-    b = SplitScan(base, base.paths, 0, 4, base.parquet_options)
-    c = SplitScan(base, base.paths, 1, 4, base.parquet_options)
+    a = ParquetScanTask(base, base.paths, 0, 4, base.parquet_options)
+    b = ParquetScanTask(base, base.paths, 0, 4, base.parquet_options)
+    c = ParquetScanTask(base, base.paths, 1, 4, base.parquet_options)
 
     assert a == b
     assert hash(a) == hash(b)
@@ -765,21 +764,21 @@ def test_split_scan_identity_equality() -> None:
 
 def test_streaming_scan_identity_equality() -> None:
     base = _make_parquet_scan(["a.parquet"])
-    split = SplitScan(
+    split = ParquetScanTask(
         base,
         base.paths,
         0,
         2,
         base.parquet_options,
     )
-    split_same = SplitScan(
+    split_same = ParquetScanTask(
         base,
         base.paths,
         0,
         2,
         base.parquet_options,
     )
-    split_diff = SplitScan(
+    split_diff = ParquetScanTask(
         base,
         base.paths,
         1,
