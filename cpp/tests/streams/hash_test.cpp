@@ -28,7 +28,7 @@ TEST_F(HashTest, MultiValue)
   cudf::test::fixed_width_column_wrapper<int32_t> const ints_col(
     {0, 100, -100, limits::min(), limits::max()});
 
-  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bool_col({0, 1, 1, 1, 0});
 
   using ts = cudf::timestamp_s;
   cudf::test::fixed_width_column_wrapper<ts, ts::duration> const secs_col(
@@ -38,22 +38,20 @@ TEST_F(HashTest, MultiValue)
      ts::duration::min(),
      ts::duration::max()});
 
-  auto const input1 = cudf::table_view({strings_col, ints_col, bools_col1, secs_col});
+  auto const input = cudf::table_view({strings_col, ints_col, bool_col, secs_col});
 
-  auto const output1 = cudf::hashing::murmurhash3_x86_32(
-    input1, cudf::DEFAULT_HASH_SEED, cudf::test::get_default_stream());
+  auto const output = cudf::hashing::murmurhash3_x86_32(
+    input, cudf::DEFAULT_HASH_SEED, cudf::test::get_default_stream());
 }
 
 TEST_F(HashTest, SparkMurmurMultiValue)
 {
   // Covers the types that take a Spark specific path, which the shared `MultiValue` case above
   // does not reach: decimal128, floating point, and nested columns.
-  using limits = std::numeric_limits<int64_t>;
-
   cudf::test::strings_column_wrapper const strings_col(
     {"", "The quick brown fox", "jumps over the lazy dog.", "0123456789", "!@#$%^&*()"});
   cudf::test::fixed_width_column_wrapper<int64_t> const longs_col(
-    {0L, 100L, -100L, limits::min(), limits::max()});
+    {0L, 100L, -100L, std::numeric_limits<int64_t>::min(), std::numeric_limits<int64_t>::max()});
   cudf::test::fixed_width_column_wrapper<double> const doubles_col(
     {0., -0., 100., -100., std::numeric_limits<double>::quiet_NaN()});
   cudf::test::fixed_point_column_wrapper<__int128_t> const decimal128_col(
