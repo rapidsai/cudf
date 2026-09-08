@@ -33,9 +33,9 @@ RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
 
-# Keep JIT-compiled kernels in the workspace so CI can persist them across jobs.
-JIT_CACHE_ROOT=${GITHUB_WORKSPACE:-${PWD}}
-export LIBCUDF_KERNEL_CACHE_PATH="${LIBCUDF_KERNEL_CACHE_PATH:-${JIT_CACHE_ROOT}/.cache/libcudf}"
+# CI provides LIBCUDF_KERNEL_CACHE_PATH through the reusable workflow's cache-environment input.
+# Keep a workspace-relative default for local runs.
+export LIBCUDF_KERNEL_CACHE_PATH="${LIBCUDF_KERNEL_CACHE_PATH:-${PWD}/.cache/libcudf}"
 mkdir -p "${LIBCUDF_KERNEL_CACHE_PATH}"
 
 rapids-print-env
