@@ -15,9 +15,14 @@
 #include <cuda/std/cstddef>
 #include <cuda/std/cstdint>
 #include <cuda/std/iterator>
+#include <cuda/std/type_traits>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/reverse.h>
+
+#include <vector_types.h>
+
+#include <cstddef>
 
 namespace cudf::hashing::detail {
 
@@ -45,7 +50,7 @@ struct Spark_MurmurHash3_x86_32 {
   }
 
   [[nodiscard]] __device__ inline uint32_t getblock32(cuda::std::byte const* data,
-                                                      cudf::size_type offset) const
+                                                      std::size_t offset) const
   {
     // Read a 4-byte value from the data pointer as individual bytes for safe
     // unaligned access (very likely for string types). The bytes are combined in
@@ -61,22 +66,21 @@ struct Spark_MurmurHash3_x86_32 {
   }
 
   template <typename T>
-  result_type __device__ inline compute(T const& key) const
+    requires(sizeof(T) % 4 == 0)
+  uint32_t __device__ inline compute(T const& key) const
   {
-    if constexpr (sizeof(T) % 4 == 0) {
-      // A whole number of blocks with no tail. Hashing the words directly lets the compiler use
-      // wide aligned loads instead of reassembling each block byte by byte. The word order is the
-      // device's own, which is little-endian, so this matches `getblock32`.
-      auto const words = cuda::std::bit_cast<cuda::std::array<uint32_t, sizeof(T) / 4>>(key);
-      uint32_t h       = m_seed;
-      for (auto const word : words) {
-        h = mix_block(word, h);
-      }
-      h ^= static_cast<uint32_t>(sizeof(T));
-      return static_cast<result_type>(fmix32(h));
-    } else {
-      return compute_bytes(reinterpret_cast<cuda::std::byte const*>(&key), sizeof(T));
+    // A whole number of blocks with no tail. Hashing the words directly lets the compiler use
+    // wide aligned loads instead of reassembling each block byte by byte. The word order is the
+    // device's own, which is little-endian, so this matches `getblock32`.
+    auto const words = cuda::std::bit_cast<cuda::std::array<uint32_t, sizeof(T) / 4>>(key);
+    uint32_t h       = m_seed;
+    for (auto const word : words) {
+      h = mix_block(word, h);
     }
+    // Finalize hash.
+    h ^= static_cast<uint32_t>(sizeof(T));
+    h = fmix32(h);
+    return h;
   }
 
   /*
@@ -90,12 +94,13 @@ struct Spark_MurmurHash3_x86_32 {
     k1 *= c2;
     h ^= k1;
     h = rotate_bits_left(h, rot_c2);
-    return h * 5 + c3;
+    h = h * 5 + c3;
+    return h;
   }
 
   uint32_t __device__ inline compute_remaining_bytes(cuda::std::byte const* data,
-                                                     cudf::size_type len,
-                                                     cudf::size_type tail_offset,
+                                                     std::size_t len,
+                                                     std::size_t tail_offset,
                                                      uint32_t h) const
   {
     // Process remaining bytes that do not fill a four-byte chunk using Spark's approach
@@ -110,15 +115,15 @@ struct Spark_MurmurHash3_x86_32 {
     return h;
   }
 
-  result_type __device__ compute_bytes(cuda::std::byte const* data, cudf::size_type const len) const
+  uint32_t __device__ compute_bytes(cuda::std::byte const* data, std::size_t const len) const
   {
-    constexpr cudf::size_type BLOCK_SIZE = 4;
-    cudf::size_type const nblocks        = len / BLOCK_SIZE;
-    cudf::size_type const tail_offset    = nblocks * BLOCK_SIZE;
-    uint32_t h                           = m_seed;
+    constexpr std::size_t BLOCK_SIZE = 4;
+    std::size_t const nblocks        = len / BLOCK_SIZE;
+    std::size_t const tail_offset    = nblocks * BLOCK_SIZE;
+    uint32_t h                       = m_seed;
 
     // Process all four-byte chunks.
-    for (cudf::size_type i = 0; i < nblocks; i++) {
+    for (std::size_t i = 0; i < nblocks; i++) {
       h = mix_block(getblock32(data, i * BLOCK_SIZE), h);
     }
 
@@ -127,7 +132,31 @@ struct Spark_MurmurHash3_x86_32 {
     // Finalize hash.
     h ^= static_cast<uint32_t>(len);
     h = fmix32(h);
-    return static_cast<result_type>(h);
+    return h;
+  }
+
+  /**
+   * @brief Hash the low `length` bytes of an integral value in little-endian order
+   *
+   * Four-byte blocks are mixed whole. Leftover bytes are sign-extended and mixed individually,
+   * matching Spark's tail-byte handling without staging an intermediate byte buffer.
+   */
+  template <typename T>
+  [[nodiscard]] uint32_t __device__ inline hash_low_bytes(T value, std::size_t length) const
+  {
+    static_assert(cuda::std::is_integral_v<T>);
+    auto const nblocks = length / 4;
+    uint32_t h         = m_seed;
+    for (std::size_t i = 0; i < nblocks; ++i) {
+      h = mix_block(static_cast<uint32_t>(value >> (32 * i)), h);
+    }
+    for (std::size_t i = nblocks * 4; i < length; ++i) {
+      h = mix_block(static_cast<uint32_t>(static_cast<cuda::std::int8_t>(value >> (8 * i))), h);
+    }
+    // Finalize hash.
+    h ^= static_cast<uint32_t>(length);
+    h = fmix32(h);
+    return h;
   }
 
  private:
@@ -222,8 +251,8 @@ __device__ inline auto Spark_MurmurHash3_x86_32<numeric::decimal128>::operator()
   // Generates the Spark MurmurHash3 hash value, mimicking the conversion:
   // java.math.BigDecimal.valueOf(unscaled_value, _scale).unscaledValue().toByteArray()
   // https://github.com/apache/spark/blob/ce5ddad990373636e94071e7cef2f31021add07b/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/hash.scala#L391-L396
-  __int128_t const val               = key.value();
-  constexpr cudf::size_type key_size = sizeof(__int128_t);
+  __int128_t const val           = key.value();
+  constexpr std::size_t key_size = sizeof(__int128_t);
 
   // Number of bytes in the minimal two's complement representation, matching
   // `BigInteger.toByteArray().length`, which is `bitLength() / 8 + 1`. Negative values are
@@ -234,33 +263,24 @@ __device__ inline auto Spark_MurmurHash3_x86_32<numeric::decimal128>::operator()
   auto const mag_lo    = static_cast<cuda::std::uint64_t>(magnitude);
   auto const bit_length =
     mag_hi != 0 ? 128 - cuda::std::countl_zero(mag_hi) : 64 - cuda::std::countl_zero(mag_lo);
-  auto const length = static_cast<cudf::size_type>(bit_length / 8) + 1;
+  auto const length = static_cast<std::size_t>(bit_length / 8) + 1;
 
   // Spark hashes the big-endian representation, so reverse the bytes and shift the significant
   // ones down. Doing this in registers avoids staging a byte buffer in local memory.
-  auto const swap32 = [](cuda::std::uint32_t v) { return __byte_perm(v, 0, 0x0123); };
-  auto const swap64 = [swap32](cuda::std::uint64_t v) {
-    return (static_cast<cuda::std::uint64_t>(swap32(static_cast<cuda::std::uint32_t>(v))) << 32) |
-           swap32(static_cast<cuda::std::uint32_t>(v >> 32));
+  auto const swap128 = [](__uint128_t v) {
+    auto const words = cuda::std::bit_cast<uint4>(v);
+    return cuda::std::bit_cast<__uint128_t>(uint4{__byte_perm(words.w, 0, 0x0123),
+                                                  __byte_perm(words.z, 0, 0x0123),
+                                                  __byte_perm(words.y, 0, 0x0123),
+                                                  __byte_perm(words.x, 0, 0x0123)});
   };
-  auto const value = static_cast<__uint128_t>(val);
-  auto const swapped =
-    (static_cast<__uint128_t>(swap64(static_cast<cuda::std::uint64_t>(value))) << 64) |
-    swap64(static_cast<cuda::std::uint64_t>(value >> 64));
+  auto const value      = static_cast<__uint128_t>(val);
+  auto const swapped    = swap128(value);
   auto const big_endian = swapped >> (8 * (key_size - length));
 
   // Hash the low `length` bytes of `big_endian`, matching what `compute_bytes` would do over the
   // equivalent byte buffer.
-  auto const nblocks = length / 4;
-  uint32_t h         = m_seed;
-  for (cudf::size_type i = 0; i < nblocks; i++) {
-    h = mix_block(static_cast<uint32_t>(big_endian >> (32 * i)), h);
-  }
-  for (cudf::size_type i = nblocks * 4; i < length; i++) {
-    h = mix_block(static_cast<uint32_t>(static_cast<cuda::std::int8_t>(big_endian >> (8 * i))), h);
-  }
-  h ^= static_cast<uint32_t>(length);
-  return static_cast<result_type>(fmix32(h));
+  return hash_low_bytes(big_endian, length);
 }
 
 }  // namespace cudf::hashing::detail
