@@ -79,9 +79,12 @@ static void bench_hash(nvbench::state& state)
       case column_type::LIST:
         builder.list_depth(1).list_type(cudf::type_id::INT64);
         return cycle_dtypes({cudf::type_id::LIST}, num_cols);
-      case column_type::STRUCT:
-        builder.struct_types({cudf::type_id::INT64, cudf::type_id::FLOAT64});
+      case column_type::STRUCT: {
+        auto const struct_types =
+          std::vector<cudf::type_id>{cudf::type_id::INT64, cudf::type_id::FLOAT64};
+        builder.struct_types(struct_types);
         return cycle_dtypes({cudf::type_id::STRUCT}, num_cols);
+      }
       default: return cycle_dtypes({}, 0);
     }
   }();
