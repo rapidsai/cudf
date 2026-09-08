@@ -11,7 +11,7 @@ import math
 import statistics
 from collections import defaultdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Self, TypeAlias, overload
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Self, overload
 
 import polars as pl
 
@@ -355,90 +355,8 @@ class ParquetTaskBounds(NamedTuple):
     n_rows: int
 
 
-class FusedScan(IR):
-    """
-    Input from one or more complete files read as a single task.
-
-    Covers both FUSED_FILES (N > 1 small files grouped together) and
-    SINGLE_FILE (N = 1).
-    """
-
-    __slots__ = (
-        "base_scan",
-        "parquet_options",
-        "paths",
-        "schema",
-    )
-    _non_child = (
-        "base_scan",
-        "paths",
-        "parquet_options",
-    )
-    _n_non_child_args = 3
-    base_scan: Scan
-    """Scan operation this node is based on."""
-    paths: list[str]
-    """File paths assigned to this task."""
-    parquet_options: ParquetOptions
-    """Parquet-specific options."""
-
-    def __init__(
-        self,
-        base_scan: Scan,
-        paths: list[str],
-        parquet_options: ParquetOptions,
-    ):
-        self.schema = base_scan.schema
-        self.base_scan = base_scan
-        self.paths = paths
-        self.parquet_options = parquet_options
-        self._non_child_args = (
-            base_scan,
-            paths,
-            parquet_options,
-        )
-        self.children = ()
-
-    def get_hashable(self) -> Hashable:
-        """Hashable representation of the node."""
-        return (
-            type(self),
-            tuple(self.schema.items()),
-            self.base_scan.get_hashable(),
-            tuple(self.paths),
-            self.parquet_options,
-        )
-
-    @classmethod
-    def do_evaluate(
-        cls,
-        base_scan: Scan,
-        paths: list[str],
-        parquet_options: ParquetOptions,
-        *,
-        context: IRExecutionContext,
-    ) -> DataFrame:
-        """Evaluate and return a dataframe."""
-        with nvtx_annotate_cudf_polars(message=f"FusedScan: {', '.join(paths)}"):
-            return Scan.do_evaluate(
-                base_scan.schema,
-                base_scan.typ,
-                base_scan.reader_options,
-                paths,
-                base_scan.with_columns,
-                base_scan.skip_rows,
-                base_scan.n_rows,
-                base_scan.row_index,
-                base_scan.include_file_paths,
-                base_scan.predicate,
-                parquet_options,
-                None,
-                context=context,
-            )
-
-
-class ParquetScanTask(IR):
-    """Parquet-specific streaming scan task."""
+class ScanTask(IR):
+    """Generic streaming scan task."""
 
     __slots__ = (
         "base_scan",
@@ -456,7 +374,6 @@ class ParquetScanTask(IR):
         "parquet_options",
     )
     _n_non_child_args = 5
-
     base_scan: Scan
     """Scan operation this task is based on."""
     paths: list[str]
@@ -476,22 +393,18 @@ class ParquetScanTask(IR):
         total_splits: int,
         parquet_options: ParquetOptions,
     ):
-        if base_scan.typ != "parquet":  # pragma: no cover
-            raise ValueError(f"Expected a parquet scan, got: {base_scan.typ}")
         if total_splits < 1:  # pragma: no cover
             raise ValueError(f"Expected at least one split, got: {total_splits}")
         if not 0 <= split_index < total_splits:  # pragma: no cover
             raise ValueError(
                 f"Expected split_index in [0, {total_splits}), got: {split_index}"
             )
-        if total_splits > 1 and len(paths) > 1:  # pragma: no cover
-            raise ValueError(f"Expected a single path for a split task, got: {paths}")
+        self.schema = base_scan.schema
         self.base_scan = base_scan
         self.paths = paths
         self.split_index = split_index
         self.total_splits = total_splits
         self.parquet_options = parquet_options
-        self.schema = base_scan.schema
         self._non_child_args = (
             base_scan,
             paths,
@@ -503,8 +416,79 @@ class ParquetScanTask(IR):
 
     @property
     def is_split(self) -> bool:
-        """Whether this task is one of multiple splits of a single parquet file."""
+        """Whether this task is one of multiple splits of a single file."""
         return self.total_splits > 1
+
+    def get_hashable(self) -> Hashable:
+        """Hashable representation of the node."""
+        return (
+            type(self),
+            tuple(self.schema.items()),
+            self.base_scan.get_hashable(),
+            tuple(self.paths),
+            self.split_index,
+            self.total_splits,
+            self.parquet_options,
+        )
+
+    def trace_ir_type(self) -> str:
+        """Return the task type to use for IO-task tracing."""
+        return "SplitScan" if self.is_split else type(self).__name__
+
+    @classmethod
+    def do_evaluate(
+        cls,
+        base_scan: Scan,
+        paths: list[str],
+        split_index: int,
+        total_splits: int,
+        parquet_options: ParquetOptions,
+        *,
+        context: IRExecutionContext,
+    ) -> DataFrame:
+        """Evaluate and return a dataframe."""
+        if total_splits > 1:  # pragma: no cover
+            raise NotImplementedError(
+                f"File splitting is not implemented for {base_scan.typ} scans."
+            )
+        with nvtx_annotate_cudf_polars(message=f"ScanTask: {', '.join(paths)}"):
+            return Scan.do_evaluate(
+                base_scan.schema,
+                base_scan.typ,
+                base_scan.reader_options,
+                paths,
+                base_scan.with_columns,
+                base_scan.skip_rows,
+                base_scan.n_rows,
+                base_scan.row_index,
+                base_scan.include_file_paths,
+                base_scan.predicate,
+                parquet_options,
+                None,
+                context=context,
+            )
+
+
+class ParquetScanTask(ScanTask):
+    """Parquet-specific streaming scan task."""
+
+    __slots__ = ()
+    _non_child = ScanTask._non_child
+    _n_non_child_args = ScanTask._n_non_child_args
+
+    def __init__(
+        self,
+        base_scan: Scan,
+        paths: list[str],
+        split_index: int,
+        total_splits: int,
+        parquet_options: ParquetOptions,
+    ):
+        if base_scan.typ != "parquet":  # pragma: no cover
+            raise ValueError(f"Expected a parquet scan, got: {base_scan.typ}")
+        if total_splits > 1 and len(paths) > 1:  # pragma: no cover
+            raise ValueError(f"Expected a single path for a split task, got: {paths}")
+        super().__init__(base_scan, paths, split_index, total_splits, parquet_options)
 
     def get_task_bounds(self) -> ParquetTaskBounds | None:
         """Return parquet read bounds for this task."""
@@ -585,21 +569,6 @@ class ParquetScanTask(IR):
             ]
         return ParquetTaskBounds(row_groups, base_scan.skip_rows, base_scan.n_rows)
 
-    def get_hashable(self) -> Hashable:
-        """Hashable representation of the node."""
-        return (
-            type(self),
-            self.base_scan.get_hashable(),
-            tuple(self.paths),
-            self.split_index,
-            self.total_splits,
-            self.parquet_options,
-        )
-
-    def trace_ir_type(self) -> str:
-        """Return the task type to use for IO-task tracing."""
-        return "SplitScan" if self.is_split else "FusedScan"
-
     @classmethod
     def do_evaluate(
         cls,
@@ -677,7 +646,7 @@ class ParquetScanTask(IR):
         if task.is_split:
             nvtx_message = f"SplitScan: {paths[0]} [{split_index + 1}/{total_splits}]"
         else:
-            nvtx_message = f"FusedScan: {', '.join(paths)}"
+            nvtx_message = f"ParquetScanTask: {', '.join(paths)}"
         with nvtx_annotate_cudf_polars(message=nvtx_message):
             return Scan.do_evaluate(
                 base_scan.schema,
@@ -694,9 +663,6 @@ class ParquetScanTask(IR):
                 cached_parquet_info,
                 context=context,
             )
-
-
-StreamingScanTask: TypeAlias = FusedScan | ParquetScanTask
 
 
 @lower_ir_node.register(Empty)
@@ -777,11 +743,11 @@ class StreamingScan(IR):
     )
     _n_non_child_args = 2
     base_scan: Scan
-    tasks: Sequence[StreamingScanTask]
+    tasks: Sequence[ScanTask]
 
     def __init__(
         self,
-        tasks: Sequence[StreamingScanTask],
+        tasks: Sequence[ScanTask],
         base_scan: Scan,
     ):
         self.base_scan = base_scan
@@ -807,7 +773,7 @@ class StreamingScan(IR):
         path_end = math.ceil((local_offset + local_count) / plan.factor)
         local_paths = base_scan.paths[path_offset:path_end]
         sindex = local_offset % plan.factor
-        tasks: list[StreamingScanTask] = []
+        tasks: list[ScanTask] = []
         splits_created = 0
         for path in local_paths:
             while sindex < plan.factor and splits_created < local_count:
@@ -840,7 +806,7 @@ class StreamingScan(IR):
         local_offset, local_count = _rank_slice(partition_count, rank, nranks)
         paths_start = local_offset * plan.factor
         paths_end = paths_start + plan.factor * local_count
-        tasks: list[StreamingScanTask] = [
+        tasks: list[ScanTask] = [
             (
                 ParquetScanTask(
                     base_scan,
@@ -850,9 +816,11 @@ class StreamingScan(IR):
                     parquet_options,
                 )
                 if base_scan.typ == "parquet"
-                else FusedScan(
+                else ScanTask(
                     base_scan,
                     base_scan.paths[offset : offset + plan.factor],
+                    0,
+                    1,
                     parquet_options,
                 )
             )
@@ -869,7 +837,7 @@ class StreamingScan(IR):
     @classmethod
     def do_evaluate(
         cls,
-        tasks: Sequence[StreamingScanTask],
+        tasks: Sequence[ScanTask],
         base_scan: Scan,
         *,
         context: IRExecutionContext,

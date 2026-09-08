@@ -32,8 +32,8 @@ from cudf_polars.streaming.base import (
     StatsCollector,
 )
 from cudf_polars.streaming.io import (
-    FusedScan,
     ParquetScanTask,
+    ScanTask,
     StreamingScan,
     expand_scan_for_rank,
     scan_partition_plan,
@@ -179,8 +179,8 @@ def test_prefetch_skips_paths_cached_by_stats_collection(
     )
 
     scan = _make_parquet_scan(paths)
-    fused = FusedScan(scan, paths, scan.parquet_options)
-    streaming_scan = StreamingScan([fused], scan)
+    task = ParquetScanTask(scan, paths, 0, 1, scan.parquet_options)
+    streaming_scan = StreamingScan([task], scan)
 
     result = prefetch_parquet_file_metadata_for_ir(
         streaming_scan, py_executor=None, stats=stats
@@ -195,8 +195,8 @@ def test_prefetch_parquet_file_metadata_remote_only(tmp_path, df) -> None:
     local_path = str(next(tmp_path.glob("*.parquet")))
 
     scan = _make_parquet_scan([local_path])
-    fused = FusedScan(scan, scan.paths, scan.parquet_options)
-    streaming_scan = StreamingScan([fused], scan)
+    task = ParquetScanTask(scan, scan.paths, 0, 1, scan.parquet_options)
+    streaming_scan = StreamingScan([task], scan)
 
     # Local paths are skipped entirely when remote_only=True.
     result = prefetch_parquet_file_metadata_for_ir(
@@ -420,6 +420,24 @@ def _make_parquet_scan(
     )
 
 
+def _make_csv_scan(paths: list[str]) -> Scan:
+    return Scan(
+        {"x": DataType(pl.Int64())},
+        "csv",
+        {},
+        None,
+        paths,
+        None,
+        0,
+        -1,
+        None,
+        None,
+        None,
+        ParquetOptions(),
+        None,
+    )
+
+
 @pytest.mark.parametrize(
     "plan,paths,rank,nranks,expected_path_groups",
     [
@@ -597,11 +615,11 @@ def test_attach_cached_parquet_metadata_leaves_sliced_fused_scan_unaligned(
 
 def test_streaming_scan_raises() -> None:
     # This isn't reachable by normal cudf-polars usage.
-    scan = _make_parquet_scan(["file.parquet"])
-    fused = FusedScan(scan, scan.paths, scan.parquet_options)
+    scan = _make_csv_scan(["file.csv"])
+    task = ScanTask(scan, scan.paths, 0, 1, scan.parquet_options)
     ctx = IRExecutionContext()
     with pytest.raises(NotImplementedError, match=r"StreamingScan.do_evaluate"):
-        StreamingScan.do_evaluate([fused], scan, context=ctx)
+        StreamingScan.do_evaluate([task], scan, context=ctx)
 
 
 @pytest.mark.parametrize(
@@ -675,11 +693,11 @@ def test_streaming_scan_missing_prefetch_metadata_raises() -> None:
     scan = _make_parquet_scan(
         ["file.parquet"], parquet_options=ParquetOptions(prefetch_file_metadata=True)
     )
-    fused = FusedScan(scan, scan.paths, scan.parquet_options)
+    task = ParquetScanTask(scan, scan.paths, 0, 1, scan.parquet_options)
 
     ctx = IRExecutionContext()
     with pytest.raises(NotImplementedError, match=r"StreamingScan.do_evaluate"):
-        StreamingScan.do_evaluate([fused], scan, context=ctx)
+        StreamingScan.do_evaluate([task], scan, context=ctx)
 
 
 def test_prefetch_file_metadata_join(
@@ -737,13 +755,13 @@ def test_prefetch_file_metadata_with_cached_scan_parent_nodes(
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_fused_scan_identity_equality() -> None:
-    base = _make_parquet_scan(["a.parquet", "b.parquet"])
-    paths = ["a.parquet"]
+def test_scan_task_identity_equality() -> None:
+    base = _make_csv_scan(["a.csv", "b.csv"])
+    paths = ["a.csv"]
 
-    a = FusedScan(base, paths, base.parquet_options)
-    b = FusedScan(base, paths, base.parquet_options)
-    c = FusedScan(base, ["b.parquet"], base.parquet_options)
+    a = ScanTask(base, paths, 0, 1, base.parquet_options)
+    b = ScanTask(base, paths, 0, 1, base.parquet_options)
+    c = ScanTask(base, ["b.csv"], 0, 1, base.parquet_options)
 
     assert a == b
     assert hash(a) == hash(b)

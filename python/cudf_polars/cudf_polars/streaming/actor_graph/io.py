@@ -39,7 +39,7 @@ from cudf_polars.streaming.actor_graph.utils import (
     send_metadata,
 )
 from cudf_polars.streaming.io import (
-    ParquetScanTask,
+    ScanTask,
     StreamingScan,
     StreamingSink,
     _prepare_sink_directory,
@@ -61,7 +61,6 @@ if TYPE_CHECKING:
         IOPartitionPlan,
         PartitionInfo,
     )
-    from cudf_polars.streaming.io import StreamingScanTask
     from cudf_polars.utils.config import MaxConcurrentIOTasks
 
 
@@ -571,9 +570,7 @@ async def read_chunk(
         )
     stop = time.monotonic_ns()
     ir_type = (
-        task.trace_ir_type()
-        if isinstance(task, ParquetScanTask)
-        else type(task).__name__
+        task.trace_ir_type() if isinstance(task, ScanTask) else type(task).__name__
     )
     log(
         "IO Task",
@@ -619,7 +616,7 @@ async def scan_node(
         Estimated retained output size of each chunk in bytes. Used to estimate
         peak memory for admission before launching each read.
     """
-    tasks: Sequence[StreamingScanTask] = ir.tasks
+    tasks: Sequence[ScanTask] = ir.tasks
 
     async with shutdown_on_error(
         context, ch_out, trace_ir=ir, ir_context=ir_context
@@ -657,7 +654,7 @@ async def scan_node(
         lineariser = Lineariser(context, ch_out, num_producers)
 
         # Assign tasks to producers using round-robin
-        producer_tasks: list[list[tuple[int, StreamingScanTask]]] = [
+        producer_tasks: list[list[tuple[int, ScanTask]]] = [
             [] for _ in range(num_producers)
         ]
         for task_idx, task in enumerate(tasks):
