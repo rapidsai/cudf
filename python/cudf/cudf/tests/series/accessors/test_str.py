@@ -2593,103 +2593,41 @@ def _cat_convert_seq_to_cudf(others):
     return gd_others
 
 
-@pytest.mark.parametrize(
-    "data",
-    [["a", None, "c", None, "e"], ["a", "b", "c", "d", "a"]],
-)
-@pytest.mark.parametrize(
-    "others",
-    [
-        None,
-        ["f", "g", "h", "i", "j"],
-        pd.Series(["AbC", "de", "FGHI", "j", "kLm"]),
-        pd.Index(["f", "g", "h", "i", "j"]),
-        pd.Index(["AbC", "de", "FGHI", "j", "kLm"]),
-        [
-            np.array(["f", "g", "h", "i", "j"]),
-            np.array(["f", "g", "h", "i", "j"]),
-        ],
-        [
-            pd.Series(["f", "g", "h", "i", "j"]),
-            pd.Series(["f", "g", "h", "i", "j"]),
-        ],
-        pytest.param(
-            [
-                pd.Series(["f", "g", "h", "i", "j"]),
-                np.array(["f", "g", "h", "i", "j"]),
-            ],
-            marks=pytest.mark.xfail(
-                reason="https://github.com/NVIDIA/cudf/issues/5862"
-            ),
-        ),
-        pytest.param(
-            (
-                pd.Series(["f", "g", "h", "i", "j"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                pd.Series(["f", "g", "h", "i", "j"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                pd.Index(["1", "2", "3", "4", "5"]),
-                np.array(["f", "a", "b", "f", "a"]),
-                pd.Index(["f", "g", "h", "i", "j"]),
-            ),
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/33436"
-            ),
-        ),
-        [
-            pd.Series(
-                ["hello", "world", "abc", "xyz", "pqr"],
-                index=["a", "b", "c", "d", "e"],
-            ),
-            pd.Series(
-                ["abc", "xyz", "hello", "pqr", "world"],
-                index=["a", "b", "c", "d", "e"],
-            ),
-        ],
-        [
-            pd.Series(
-                ["hello", "world", "abc", "xyz", "pqr"],
-                index=[10, 11, 12, 13, 14],
-            ),
-            pd.Series(
-                ["abc", "xyz", "hello", "pqr", "world"],
-                index=[10, 15, 11, 13, 14],
-            ),
-        ],
-        [
-            pd.Series(
-                ["hello", "world", "abc", "xyz", "pqr"],
-                index=["1", "2", "3", "4", "5"],
-            ),
-            pd.Series(
-                ["abc", "xyz", "hello", "pqr", "world"],
-                index=["1", "2", "3", "4", "5"],
-            ),
-        ],
-    ],
-)
-@pytest.mark.parametrize("sep", [None, "", " ", ",", "|||"])
-@pytest.mark.parametrize("na_rep", [None, "", "null", "a"])
-@pytest.mark.parametrize("name", [None, "This is the name"])
-def test_string_index_duplicate_str_cat(data, others, sep, na_rep, name):
+def _assert_string_index_cat(
+    data, others, sep, na_rep, name=None, sort_result=False
+):
     pi, gi = pd.Index(data, name=name), cudf.Index(data, name=name)
 
-    pd_others = others
-    gd_others = _cat_convert_seq_to_cudf(others)
-
-    got = gi.str.cat(others=gd_others, sep=sep, na_rep=na_rep)
-    expect = pi.str.cat(others=pd_others, sep=sep, na_rep=na_rep)
-
-    # TODO: Remove got.sort_values call once we have `join` param support
-    # in `.str.cat`
-    # https://github.com/NVIDIA/cudf/issues/5862
-
-    assert_eq(
-        expect.sort_values() if not isinstance(expect, str) else expect,
-        got.sort_values() if not isinstance(got, str) else got,
-        exact=False,
+    expect = pi.str.cat(others=others, sep=sep, na_rep=na_rep)
+    got = gi.str.cat(
+        others=_cat_convert_seq_to_cudf(others), sep=sep, na_rep=na_rep
     )
+    if sort_result:
+        # TODO: Remove sorting once `.str.cat` supports `join`.
+        # https://github.com/NVIDIA/cudf/issues/5862
+        expect = (
+            expect.sort_values() if not isinstance(expect, str) else expect
+        )
+        got = got.sort_values() if not isinstance(got, str) else got
+    assert_eq(expect, got, exact=False)
+
+
+@pytest.mark.parametrize(
+    "data, sep, na_rep, name",
+    [
+        pytest.param(["1", "2", "3", "4", "5"], None, None, None),
+        pytest.param(["a", "b", "c", "d", "e"], "", None, "index name"),
+        pytest.param(["a", "b", "c", "d", "e"], " ", None, None),
+        pytest.param(["a", "b", "c", "d", "e"], ",", None, None),
+        pytest.param(["a", "b", "c", "d", "e"], "|", None, None),
+        pytest.param(["a", "b", "c", "d", "e"], "|||", None, None),
+        pytest.param(["a", None, "c", None, "e"], "|", "", None),
+        pytest.param(["a", None, "c", None, "e"], "|", "null", None),
+        pytest.param(["a", None, "c", None, "e"], "|", "a", None),
+    ],
+)
+def test_string_index_str_cat_join(data, sep, na_rep, name):
+    _assert_string_index_cat(data, None, sep, na_rep, name)
 
 
 @pytest.mark.parametrize(
@@ -2844,14 +2782,6 @@ def test_string_cat(ps_gs, others, sep, na_rep, index, request):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [
-        ["1", "2", "3", "4", "5"],
-        ["a", "b", "c", "d", "e"],
-        ["a", "b", "c", None, "e"],
-    ],
-)
-@pytest.mark.parametrize(
     "others",
     [
         None,
@@ -2895,12 +2825,10 @@ def test_string_cat(ps_gs, others, sep, na_rep, index, request):
         ],
         [
             pd.Series(
-                ["hello", "world", "abc", "xyz", "pqr"],
-                index=["a", "b", "c", "d", "e"],
+                ["hello", "world", "abc", "xyz", "pqr"], index=list("abcde")
             ),
             pd.Series(
-                ["abc", "xyz", "hello", "pqr", "world"],
-                index=["a", "b", "c", "d", "e"],
+                ["abc", "xyz", "hello", "pqr", "world"], index=list("abcde")
             ),
         ],
         [
@@ -2925,22 +2853,54 @@ def test_string_cat(ps_gs, others, sep, na_rep, index, request):
         ],
     ],
 )
-@pytest.mark.parametrize("sep", [None, "", " ", "|", "|||"])
-@pytest.mark.parametrize("na_rep", [None, "", "null", "a"])
-@pytest.mark.parametrize("name", [None, "This is the name"])
-def test_string_index_str_cat(data, others, sep, na_rep, name):
-    pi, gi = pd.Index(data, name=name), cudf.Index(data, name=name)
+def test_string_index_str_cat_input_forms(others):
+    _assert_string_index_cat(["a", "b", "c", "d", "e"], others, "|", None)
 
-    pd_others = others
-    gd_others = _cat_convert_seq_to_cudf(others)
 
-    expect = pi.str.cat(others=pd_others, sep=sep, na_rep=na_rep)
-    got = gi.str.cat(others=gd_others, sep=sep, na_rep=na_rep)
-
-    assert_eq(
-        expect,
-        got,
-        exact=False,
+@pytest.mark.parametrize(
+    "others",
+    [
+        None,
+        ["f", "g", "h", "i", "j"],
+        pd.Series(["AbC", "de", "FGHI", "j", "kLm"]),
+        pd.Index(["f", "g", "h", "i", "j"]),
+        [
+            np.array(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
+        ],
+        [
+            pd.Series(["f", "g", "h", "i", "j"]),
+            pd.Series(["f", "g", "h", "i", "j"]),
+        ],
+        pytest.param(
+            [
+                pd.Series(["f", "g", "h", "i", "j"]),
+                np.array(["f", "g", "h", "i", "j"]),
+            ],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/NVIDIA/cudf/issues/5862"
+            ),
+        ),
+        pytest.param(
+            (
+                pd.Series(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Series(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["1", "2", "3", "4", "5"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["f", "g", "h", "i", "j"]),
+            ),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/33436"
+            ),
+        ),
+    ],
+)
+def test_string_index_duplicate_str_cat_input_forms(others):
+    _assert_string_index_cat(
+        ["a", "b", "c", "d", "a"], others, "|", None, sort_result=True
     )
 
 
