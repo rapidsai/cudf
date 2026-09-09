@@ -606,7 +606,10 @@ def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
         elif (
             isinstance(source_dtype, pd.StringDtype)
             and source_dtype.storage == "pyarrow"
+            and isinstance(target_dtype, cudf.ListDtype)
         ):
+            # Arrow-backed strings preserve Arrow storage for list results.
+            # Numeric and boolean results use pandas' nullable dtypes.
             return dtype_to_pandas_arrowdtype(target_dtype)
         return dtype_to_pandas_nullable_extension_type(target_dtype)
     else:

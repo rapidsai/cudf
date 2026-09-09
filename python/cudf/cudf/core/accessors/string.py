@@ -120,6 +120,15 @@ class StringMethods(BaseAccessor):
             )
         super().__init__(parent=parent)
 
+    def _return_integer(self, new_col: ColumnBase) -> Series | Index:
+        if (
+            isinstance(self._column.dtype, pd.StringDtype)
+            and self._column.dtype.na_value is pd.NA
+        ):
+            # Nullable string methods return pandas' nullable 64-bit integers.
+            new_col = new_col.astype(pd.Int64Dtype())
+        return self._return_or_inplace(new_col)
+
     def htoi(self) -> Series | Index:
         """
         Returns integer value represented by each hex string.
@@ -201,7 +210,7 @@ class StringMethods(BaseAccessor):
         3    <NA>
         dtype: int32
         """
-        return self._return_or_inplace(self._column.count_characters())
+        return self._return_integer(self._column.count_characters())
 
     def byte_count(self) -> Series | Index:
         """
@@ -3652,7 +3661,7 @@ class StringMethods(BaseAccessor):
                 "unsupported value for `flags` parameter"
             )
         pat = self._remove_named_capture_groups(pat)
-        return self._return_or_inplace(self._column.count_re(pat, flags))
+        return self._return_integer(self._column.count_re(pat, flags))
 
     def _findall(
         self,
@@ -4273,7 +4282,7 @@ class StringMethods(BaseAccessor):
         if (result == -1).any():
             raise ValueError("substring not found")
         else:
-            return result.astype(np.dtype(np.int64))
+            return result
 
     def rindex(
         self, sub: str, start: int = 0, end: int | None = None
@@ -4333,7 +4342,7 @@ class StringMethods(BaseAccessor):
         if (result == -1).any():
             raise ValueError("substring not found")
         else:
-            return result.astype(np.dtype(np.int64))
+            return result
 
     def match(
         self,
