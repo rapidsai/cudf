@@ -24,6 +24,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/iterator>
+#include <cuda/std/algorithm>
 #include <cuda/std/cmath>
 #include <cuda/std/utility>
 #include <cuda/stream>
@@ -78,9 +79,9 @@ CUDF_KERNEL void compute_percentiles_kernel(device_span<int32_t const> tdigest_o
     auto const tdigest_index = tid / percentiles.size();
     auto const pindex        = tid % percentiles.size();
 
-    // size of the digest we're querying
+    // Size of the digest we're querying.
     auto const tdigest_size = tdigest_offsets[tdigest_index + 1] - tdigest_offsets[tdigest_index];
-    // no work to do. values will be set to null
+    // No work to do. Values will be set to null.
     if (tdigest_size == 0 || !percentiles.is_valid(pindex)) { continue; }
 
     auto const output_index = [&]() {
@@ -95,16 +96,16 @@ CUDF_KERNEL void compute_percentiles_kernel(device_span<int32_t const> tdigest_o
       double const percentage         = percentiles.element<double>(pindex);
       double const* cumulative_weight = cumulative_weight_ + tdigest_offsets[tdigest_index];
 
-      // centroids for this particular tdigest
+      // Centroids for this particular tdigest.
       CentroidIter centroids = centroids_ + tdigest_offsets[tdigest_index];
 
-      // min and max for the digest
+      // Min and max for the digest.
       double const* min_val = min_ + tdigest_index;
       double const* max_val = max_ + tdigest_index;
 
       double const total_weight = cumulative_weight[tdigest_size - 1];
 
-      // The following Arrow code serves as a basis for this computation
+      // The following Arrow code serves as a basis for this computation.
       // https://github.com/apache/arrow/blob/master/cpp/src/arrow/util/tdigest.cc#L280
       double const weighted_q = percentage * total_weight;
       if (weighted_q <= 1) {
@@ -113,11 +114,10 @@ CUDF_KERNEL void compute_percentiles_kernel(device_span<int32_t const> tdigest_o
         return *max_val;
       }
 
-      // determine what centroid this weighted quantile falls within.
+      // Determine what centroid this weighted quantile falls within.
       size_type const centroid_index = static_cast<size_type>(cuda::std::distance(
         cumulative_weight,
-        thrust::lower_bound(
-          thrust::seq, cumulative_weight, cumulative_weight + tdigest_size, weighted_q)));
+        cuda::std::lower_bound(cumulative_weight, cumulative_weight + tdigest_size, weighted_q)));
       centroid c                     = centroids[centroid_index];
 
       // diff == how far from the "center" of the centroid we are,
@@ -134,12 +134,12 @@ CUDF_KERNEL void compute_percentiles_kernel(device_span<int32_t const> tdigest_o
       // Z has a diff of 3 (3 units to the right of the center of the centroid)
       double const diff = weighted_q + c.weight / 2 - cumulative_weight[centroid_index];
 
-      // if we're completely within a centroid of weight 1, just return that.
+      // If we're completely within a centroid of weight 1, just return that.
       if (c.weight == 1 && cuda::std::abs(diff) <= 0.5) { return c.mean; }
 
-      // otherwise, interpolate between two centroids.
+      // Otherwise, interpolate between two centroids.
 
-      // get the two centroids we want to interpolate between
+      // Get the two centroids we want to interpolate between.
       auto const look_left  = diff < 0;
       auto const [lhs, rhs] = [&]() {
         if (look_left) {
@@ -157,15 +157,15 @@ CUDF_KERNEL void compute_percentiles_kernel(device_span<int32_t const> tdigest_o
         }
       }();
 
-      // compute interpolation value t
+      // Compute interpolation value t.
 
-      // total interpolation range. the total range of "space" between the lhs and rhs centroids.
+      // Total interpolation range. The total range of "space" between the lhs and rhs centroids.
       auto const tip = lhs.weight / 2 + rhs.weight / 2;
-      // if we're looking left, diff is negative, so shift it so that we are interpolating
+      // If we're looking left, diff is negative, so shift it so that we are interpolating
       // from lhs -> rhs.
       auto const t = (look_left) ? (diff + tip) / tip : diff / tip;
 
-      // interpolate
+      // Interpolate.
       return lerp(lhs.mean, rhs.mean, t);
     }();
   }
