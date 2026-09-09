@@ -1001,12 +1001,16 @@ def _source_markdown_fragment(app, docname, link_text):
     return fragments.pop() if len(fragments) == 1 else None
 
 
-def rewrite_libcudf_developer_guide_markdown_links(
+def rewrite_libcudf_developer_guide_references(
     app: Sphinx, document: Node
 ) -> None:
-    """Turn local Markdown fragment links in the developer guide into xrefs."""
+    """Rewrite Doxygen assets and local Markdown links in the developer guide."""
     if not app.env.docname.startswith("libcudf/developer_guide/"):
         return
+
+    for image in document.findall(nodes.image):
+        if image["uri"].endswith("cpp/doxygen/xml/strings.png"):
+            image["uri"] = "strings.png"
 
     for reference in list(document.findall(nodes.reference)):
         refuri = reference.get("refuri")
@@ -1098,10 +1102,10 @@ def setup(app: Sphinx):
 
     # Do some rewrite passes on the doctrees. Lower priority hooks run
     # earlier, equal priority in registration order.
-    # First rewire markdown links in the libcudf dev guide
+    # First rewrite Doxygen assets and Markdown links in the libcudf dev guide.
     app.connect(
         "doctree-read",
-        rewrite_libcudf_developer_guide_markdown_links,
+        rewrite_libcudf_developer_guide_references,
         priority=100,
     )
     # Then rewrite xrefs in all documents for aliases.
@@ -1109,12 +1113,14 @@ def setup(app: Sphinx):
     # Finally add std:label labels to all section headers for intersphinx
     app.connect("doctree-read", register_sections_as_label, priority=300)
 
-    # Now hook up missing-reference rewrites
+    # Now hook up missing-reference rewrites. First handle libcudf dev
+    # guide links.
     app.connect(
         "missing-reference",
         resolve_libcudf_developer_guide_markdown_link,
         priority=100,
     )
-    app.connect("missing-reference", on_missing_reference)
+    # And generic missing references.
+    app.connect("missing-reference", on_missing_reference, priority=200)
     app.setup_extension("sphinx.ext.autodoc")
     app.add_autodocumenter(PLCIntEnumDocumenter)
