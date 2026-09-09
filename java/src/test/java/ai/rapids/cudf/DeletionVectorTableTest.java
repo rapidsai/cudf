@@ -181,6 +181,11 @@ class DeletionVectorTableTest extends CudfTestBase {
     }
   }
 
+  /**
+   * Verifies batched row counting for chunked deletion and retention vectors.
+   *
+   * @param isRetention whether the input bitmaps identify retained rows
+   */
   @ParameterizedTest(name = "isRetention={0}")
   @CsvSource({"false", "true"})
   void testComputeNumDeletedRowsBatch(boolean isRetention) throws IOException {
@@ -201,6 +206,9 @@ class DeletionVectorTableTest extends CudfTestBase {
     }
   }
 
+  /**
+   * Verifies invalid row-count arguments are rejected with the expected messages.
+   */
   @Test
   void testComputeNumDeletedRowsInvalidArguments() throws IOException {
     byte[] bitmapData = TableTestUtils.arrayFrom(DELETED_ROWS_FILE1);
