@@ -5,44 +5,163 @@
 
 #include "compute_groupby.hpp"
 #include "compute_single_pass_aggs.hpp"
+#include "extract_single_pass_aggs.hpp"
 #include "groupby/common/utils.hpp"
 #include "hash_compound_agg_finalizer.hpp"
+#include "hash_csr_kernels.cuh"
 #include "helpers.cuh"
-#include "output_utils.hpp"
 
-#include <cudf/detail/aggregation/aggregation.cuh>
+#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/gather.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/mr/polymorphic_allocator.hpp>
 
-#include <cuco/static_set.cuh>
 #include <cuda/iterator>
+#include <cuda/std/cstdint>
 #include <cuda/std/iterator>
 #include <cuda/stream>
-#include <thrust/tabulate.h>
+#include <thrust/copy.h>
+#include <thrust/gather.h>
+#include <thrust/scan.h>
+#include <thrust/scatter.h>
+
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <limits>
+#include <stdexcept>
 
 namespace cudf::groupby::detail::hash {
 
 namespace {
 
-// The number of columns in the keys table that will trigger caching of row hashes.
-// This is a heuristic to reduce memory read when the keys table is hashed twice.
-constexpr int HASH_CACHING_THRESHOLD = 4;
+/// The keys grouped by the HashCSR build.
+struct grouped_keys {
+  size_type num_groups;
+  size_type num_grouped_rows;
+  rmm::device_uvector<size_type> key_rows;       ///< One representative input row per group
+  rmm::device_uvector<size_type> group_offsets;  ///< `num_groups + 1` offsets into `grouped_rows`
+  rmm::device_uvector<size_type> grouped_rows;   ///< Input rows reordered so groups are contiguous
+};
 
-int count_nested_columns(column_view const& input)
+cuda::std::uint32_t hash_csr_capacity(size_type num_rows)
 {
-  if (!is_nested(input.type())) { return 1; }
+  auto const requested =
+    std::max(static_cast<double>(num_rows) + 1,
+             std::ceil(static_cast<double>(num_rows) / cudf::detail::CUCO_DESIRED_LOAD_FACTOR));
+  CUDF_EXPECTS(requested <= std::numeric_limits<cuda::std::uint32_t>::max(),
+               "HashCSR table capacity is not representable",
+               std::overflow_error);
+  return static_cast<cuda::std::uint32_t>(requested);
+}
 
-  // Count the current column too.
-  return 1 + std::accumulate(
-               input.child_begin(), input.child_end(), 0, [](int count, column_view const& child) {
-                 return count + count_nested_columns(child);
-               });
+/**
+ * @brief Groups the input rows by key with a HashCSR build.
+ *
+ * Every valid row inserts its key into an open-addressed table and takes a rank within the slot
+ * it lands in. The occupied slots become the groups, a scan of their row counts gives the group
+ * offsets, and a scatter of the rows by slot offset plus rank yields the grouped row order.
+ */
+template <typename Equal, typename Hash>
+grouped_keys group_keys(size_type num_rows,
+                        bitmask_type const* row_bitmask,
+                        Equal const& d_row_equal,
+                        Hash const& d_row_hash,
+                        bool need_grouped_rows,
+                        cuda::stream_ref stream)
+{
+  auto const temp_mr  = cudf::get_current_device_resource_ref();
+  auto const capacity = hash_csr_capacity(num_rows);
+  auto const policy   = rmm::exec_policy_nosync(stream, temp_mr);
+
+  rmm::device_uvector<hash_table_entry_type> entries(capacity, stream, temp_mr);
+  CUDF_CUDA_TRY(cudaMemsetAsync(
+    entries.data(), 0xff, entries.size() * sizeof(hash_table_entry_type), stream.get()));
+  auto const table       = hash_csr_table_ref{entries.data(), capacity};
+  auto const is_occupied = [] __device__(size_type row) -> bool {
+    return row != cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
+  };
+  auto const entry_rows = cuda::make_transform_iterator(
+    entries.begin(),
+    [] __device__(hash_table_entry_type const& entry) -> size_type { return entry.second; });
+
+  if (!need_grouped_rows) {
+    // Only the distinct keys are needed, and the occupied slots hold one row for each of them.
+    launch_hash_csr_build_kernel(
+      num_rows, row_bitmask, nullptr, nullptr, table, d_row_equal, d_row_hash, stream);
+    rmm::device_uvector<size_type> key_rows(num_rows, stream, temp_mr);
+    auto const key_rows_end =
+      thrust::copy_if(policy, entry_rows, entry_rows + capacity, key_rows.begin(), is_occupied);
+    key_rows.resize(cuda::std::distance(key_rows.begin(), key_rows_end), stream);
+    auto const num_groups = static_cast<size_type>(key_rows.size());
+    return {num_groups,
+            0,
+            std::move(key_rows),
+            rmm::device_uvector<size_type>{0, stream, temp_mr},
+            rmm::device_uvector<size_type>{0, stream, temp_mr}};
+  }
+
+  rmm::device_uvector<size_type> slot_counts(capacity, stream, temp_mr);
+  CUDF_CUDA_TRY(
+    cudaMemsetAsync(slot_counts.data(), 0, slot_counts.size() * sizeof(size_type), stream.get()));
+  rmm::device_uvector<build_position_type> positions(num_rows, stream, temp_mr);
+  launch_hash_csr_build_kernel(num_rows,
+                               row_bitmask,
+                               positions.data(),
+                               slot_counts.data(),
+                               table,
+                               d_row_equal,
+                               d_row_hash,
+                               stream);
+
+  // The occupied slots, in slot order, are the groups.
+  rmm::device_uvector<cuda::std::uint32_t> group_slots(num_rows, stream, temp_mr);
+  auto const group_slots_end =
+    thrust::copy_if(policy,
+                    cuda::counting_iterator<cuda::std::uint32_t>{0},
+                    cuda::counting_iterator<cuda::std::uint32_t>{capacity},
+                    slot_counts.begin(),
+                    group_slots.begin(),
+                    [] __device__(size_type count) -> bool { return count > 0; });
+  group_slots.resize(cuda::std::distance(group_slots.begin(), group_slots_end), stream);
+  auto const num_groups = static_cast<size_type>(group_slots.size());
+
+  rmm::device_uvector<size_type> key_rows(num_groups, stream, temp_mr);
+  thrust::gather(policy, group_slots.begin(), group_slots.end(), entry_rows, key_rows.begin());
+  entries.resize(0, stream);
+  entries.shrink_to_fit(stream);
+
+  rmm::device_uvector<size_type> group_offsets(num_groups + 1, stream, temp_mr);
+  group_offsets.set_element_to_zero_async(0, stream);
+  auto const group_counts =
+    cuda::make_permutation_iterator(slot_counts.begin(), group_slots.begin());
+  thrust::inclusive_scan(
+    policy, group_counts, group_counts + num_groups, group_offsets.begin() + 1);
+  auto const num_grouped_rows =
+    row_bitmask == nullptr ? num_rows : group_offsets.back_element(stream);
+
+  // Reuse the slot counts to hold the start offset of the group of each occupied slot, then
+  // scatter every row to its group.
+  thrust::scatter(policy,
+                  group_offsets.begin(),
+                  group_offsets.begin() + num_groups,
+                  group_slots.begin(),
+                  slot_counts.begin());
+  rmm::device_uvector<size_type> grouped_rows(num_grouped_rows, stream, temp_mr);
+  launch_hash_csr_fill_kernel(
+    num_rows, positions.data(), slot_counts.data(), grouped_rows.data(), stream);
+
+  return {num_groups,
+          num_grouped_rows,
+          std::move(key_rows),
+          std::move(group_offsets),
+          std::move(grouped_rows)};
 }
 
 }  // namespace
@@ -57,7 +176,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
                                        cuda::stream_ref stream,
                                        rmm::device_async_resource_ref mr)
 {
-  auto const num_keys = keys.num_rows();
+  auto const num_rows = keys.num_rows();
 
   [[maybe_unused]] auto [row_bitmask_data, row_bitmask] =
     skip_rows_with_nulls
@@ -65,45 +184,12 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
       : std::pair<rmm::device_buffer, bitmask_type const*>{
           rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()}, nullptr};
 
-  auto const cached_hashes = [&]() -> rmm::device_uvector<hash_value_type> {
-    auto const num_columns =
-      std::accumulate(keys.begin(), keys.end(), 0, [](int count, column_view const& col) {
-        return count + count_nested_columns(col);
-      });
+  auto const groups =
+    group_keys(num_rows, row_bitmask, d_row_equal, d_row_hash, !requests.empty(), stream);
 
-    if (num_columns <= HASH_CACHING_THRESHOLD) {
-      return rmm::device_uvector<hash_value_type>{
-        0, stream, cudf::get_current_device_resource_ref()};
-    }
-
-    rmm::device_uvector<hash_value_type> hashes(
-      num_keys, stream, cudf::get_current_device_resource_ref());
-    thrust::tabulate(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                     hashes.begin(),
-                     hashes.end(),
-                     [d_row_hash, row_bitmask] __device__(size_type const idx) {
-                       if (!row_bitmask || cudf::bit_is_set(row_bitmask, idx)) {
-                         return d_row_hash(idx);
-                       }
-                       return hash_value_type{0};  // dummy value, as it will be unused
-                     });
-    return hashes;
-  }();
-
-  auto set =
-    cuco::static_set{cuco::extent<int64_t>{static_cast<int64_t>(num_keys)},
-                     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
-                     cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-                     d_row_equal,
-                     probing_scheme_t{row_hasher_with_cache_t{d_row_hash, cached_hashes.data()}},
-                     cuco::thread_scope_device,
-                     cuco::storage<GROUPBY_BUCKET_SIZE>{},
-                     rmm::mr::polymorphic_allocator<char>{},
-                     stream.get()};
-
-  auto const gather_keys = [&](auto const& gather_map) {
+  auto const gather_keys = [&] {
     return cudf::detail::gather(keys,
-                                gather_map,
+                                groups.key_rows,
                                 out_of_bounds_policy::DONT_CHECK,
                                 cudf::negative_index_policy::NOT_ALLOWED,
                                 stream,
@@ -111,39 +197,26 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   };
 
   // In case of no requests, we still need to generate a set of unique keys.
-  if (requests.empty()) {
-    thrust::for_each_n(
-      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-      cuda::counting_iterator<cudf::size_type>{0},
-      num_keys,
-      [set_ref = set.ref(cuco::op::insert), row_bitmask] __device__(size_type const idx) mutable {
-        if (!row_bitmask || cudf::bit_is_set(row_bitmask, idx)) { set_ref.insert(idx); }
-      });
-
-    rmm::device_uvector<size_type> unique_key_indices(
-      num_keys, stream, cudf::get_current_device_resource_ref());
-    auto const keys_end       = set.retrieve_all(unique_key_indices.begin(), stream.get());
-    auto const key_gather_map = device_span<size_type const>{
-      unique_key_indices.data(),
-      static_cast<std::size_t>(cuda::std::distance(unique_key_indices.begin(), keys_end))};
-    return gather_keys(key_gather_map);
-  }
+  if (requests.empty()) { return gather_keys(); }
 
   // Compute all single pass aggs first.
-  auto const [key_gather_map, has_compound_aggs] =
-    compute_single_pass_aggs(set, row_bitmask, requests, cache, stream, mr);
+  auto const [values, agg_kinds, aggs, is_agg_intermediate, has_compound_aggs] =
+    extract_single_pass_aggs(requests, stream);
+
+  auto const grouped = make_grouped_rows(groups.grouped_rows, groups.group_offsets, stream);
+  auto results =
+    compute_single_pass_aggs(values, agg_kinds, is_agg_intermediate, grouped, stream, mr);
+  for (std::size_t i = 0; i < results.size(); ++i) {
+    cache->add_result(values.column(i), *aggs[i], std::move(results[i]));
+  }
 
   if (has_compound_aggs) {
     for (auto const& request : requests) {
       auto const& agg_v = request.aggregations;
       auto const& col   = request.values;
 
-      // The map to find the target output index for each input row is not always available due to
-      // minimizing overhead. As such, there is no way for the finalizers to perform additional
-      // aggregation operations. They can only compute their output using the previously computed
-      // single-pass aggregations with linear transformations such as addition/multiplication (e.g.
-      // for variance/stddev). In the future, if there are more compound aggregations that require
-      // additional aggregation steps, we can revisit this design.
+      // The finalizers only combine the single-pass results with linear transformations such as
+      // addition/multiplication (e.g. for variance/stddev); they do not aggregate further.
       auto const finalizer = hash_compound_agg_finalizer(col, cache, row_bitmask, stream, mr);
       for (auto&& agg : agg_v) {
         cudf::detail::aggregation_dispatcher(agg->kind, finalizer, *agg);
@@ -151,7 +224,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     }
   }
 
-  return gather_keys(key_gather_map);
+  return gather_keys();
 }
 
 template std::unique_ptr<table> compute_groupby<row_comparator_t, row_hash_t>(
@@ -173,4 +246,5 @@ template std::unique_ptr<table> compute_groupby<nullable_row_comparator_t, row_h
   cudf::detail::result_cache* cache,
   cuda::stream_ref stream,
   rmm::device_async_resource_ref mr);
+
 }  // namespace cudf::groupby::detail::hash
