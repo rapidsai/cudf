@@ -51,11 +51,14 @@ struct hash_csr_table_ref {
   {
     auto slot = static_cast<cuda::std::uint32_t>(hash % capacity);
     for (cuda::std::uint32_t step = 0; step < capacity; ++step) {
-      auto entry_ref =
-        cuda::atomic_ref<hash_table_entry_type, cuda::thread_scope_device>{entries[slot]};
-      auto current = entry_ref.load(cuda::memory_order_relaxed);
+      // A claimed slot never changes, so the first look may come from L1 (block scope): a stale
+      // empty value only costs a failed compare-and-swap, which then yields the claiming row.
+      auto current =
+        cuda::atomic_ref<hash_table_entry_type, cuda::thread_scope_block>{entries[slot]}.load(
+          cuda::memory_order_relaxed);
       if (current == cudf::detail::CUDF_SIZE_TYPE_SENTINEL &&
-          entry_ref.compare_exchange_strong(current, row, cuda::memory_order_relaxed)) {
+          cuda::atomic_ref<hash_table_entry_type, cuda::thread_scope_device>{entries[slot]}
+            .compare_exchange_strong(current, row, cuda::memory_order_relaxed)) {
         return slot;
       }
       if (equal(row, current)) { return slot; }
