@@ -163,6 +163,43 @@ struct split_fused_sums_fn {
   }
 };
 
+/// The by-key scan slows down with wide accumulators, so on that path only the two sums are fused
+/// and the valid count is reduced separately.
+template <typename Result>
+using fused_sum_pair = cuda::std::pair<Result, Result>;
+
+template <typename Result>
+struct fused_sum_pair_plus {
+  __device__ fused_sum_pair<Result> operator()(fused_sum_pair<Result> const& lhs,
+                                               fused_sum_pair<Result> const& rhs) const
+  {
+    return {lhs.first + rhs.first, lhs.second + rhs.second};
+  }
+};
+
+template <typename Source, typename Result>
+struct grouped_fused_sum_pair_fn {
+  size_type const* grouped_rows;
+  value_accessor<Source> value;
+  bool has_nulls;
+
+  __device__ fused_sum_pair<Result> operator()(size_type position) const
+  {
+    auto const row = grouped_rows[position];
+    if (has_nulls && value.col.is_null_nocheck(row)) { return {Result{0}, Result{0}}; }
+    auto const result = static_cast<Result>(value(row));
+    return {result, result * result};
+  }
+};
+
+template <typename Result>
+struct split_fused_sum_pair_fn {
+  __device__ cuda::std::tuple<Result, Result> operator()(fused_sum_pair<Result> const& sums) const
+  {
+    return {sums.first, sums.second};
+  }
+};
+
 constexpr bool is_fusable_sum(aggregation::Kind kind)
 {
   return kind == aggregation::SUM || kind == aggregation::SUM_OF_SQUARES ||
@@ -467,9 +504,25 @@ struct fused_sums_fn {
     };
     auto sum            = make_output(aggregation::SUM);
     auto sum_of_squares = make_output(aggregation::SUM_OF_SQUARES);
-    auto count          = make_output(aggregation::COUNT_VALID);
+    auto count          = !ctx.grouped.labels.is_empty() ? count_groups(ctx, true)
+                                                         : make_output(aggregation::COUNT_VALID);
     auto const counts   = count->view().template begin<size_type>();
-    if (ctx.num_groups > 0) {
+    if (ctx.num_groups > 0 && !ctx.grouped.labels.is_empty()) {
+      auto const values = cudf::detail::make_counting_transform_iterator(
+        0,
+        grouped_fused_sum_pair_fn<Source, Result>{
+          ctx.grouped.rows.data(), ctx.accessor<Source>(), ctx.values.has_nulls()});
+      auto const outputs = cuda::transform_output_iterator{
+        cuda::make_zip_iterator(sum->mutable_view().template begin<Result>(),
+                                sum_of_squares->mutable_view().template begin<Result>()),
+        split_fused_sum_pair_fn<Result>{}};
+      reduce_groups(ctx.grouped,
+                    values,
+                    outputs,
+                    fused_sum_pair_plus<Result>{},
+                    fused_sum_pair<Result>{Result{0}, Result{0}},
+                    ctx.stream);
+    } else if (ctx.num_groups > 0) {
       auto const values = cudf::detail::make_counting_transform_iterator(
         0,
         grouped_fused_sums_fn<Source, Result>{
@@ -671,9 +724,7 @@ std::vector<std::unique_ptr<column>> compute_single_pass_aggs(
   // that can be computed together with the aggregation at `begin`.
   auto const fused_end = [&](std::size_t begin, data_type values_type) {
     auto const& col = values.column(begin);
-    // The by-key scan slows down markedly with the wide fused accumulator, so fusion is only used
-    // with segmented reductions.
-    if (!grouped.labels.is_empty() || !is_fusable_sum(agg_kinds[begin]) ||
+    if (!is_fusable_sum(agg_kinds[begin]) ||
         !is_single_pass_agg_supported(values_type, aggregation::SUM_OF_SQUARES)) {
       return begin + 1;
     }
@@ -683,6 +734,15 @@ std::vector<std::unique_ptr<column>> compute_single_pass_aggs(
            std::find(agg_kinds.begin() + begin, agg_kinds.begin() + end, agg_kinds[end]) ==
              agg_kinds.begin() + end) {
       ++end;
+    }
+    // By key, only the two sums are fused, so fusing pays off only when both are requested.
+    auto const has_kind = [&](aggregation::Kind kind) {
+      return std::find(agg_kinds.begin() + begin, agg_kinds.begin() + end, kind) !=
+             agg_kinds.begin() + end;
+    };
+    if (!grouped.labels.is_empty() &&
+        !(has_kind(aggregation::SUM) && has_kind(aggregation::SUM_OF_SQUARES))) {
+      return begin + 1;
     }
     return end;
   };
