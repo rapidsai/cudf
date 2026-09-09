@@ -353,7 +353,10 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                                 detail::size_begin(input),
                                 detail::size_begin(input) + input.size(),
                                 [] __device__(auto const x) { return x == 0; },
-                                stream) == static_cast<std::size_t>(input.size());
+                                stream,
+                                cudf::memory_resources{cudf::get_current_device_resource_ref(),
+                                                       cudf::get_current_device_resource_ref()}) ==
+                              static_cast<std::size_t>(input.size());
   auto row_size_iter = cuda::make_constant_iterator(all_empty_rows ? 0 : percentiles.size());
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          row_size_iter,

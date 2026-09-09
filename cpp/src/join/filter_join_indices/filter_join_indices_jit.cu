@@ -207,7 +207,9 @@ apply_join_semantics(cudf::table_view const& left,
       cudf::detail::count_if(cuda::counting_iterator<size_type>{0},
                              cuda::counting_iterator{static_cast<size_type>(left_indices.size())},
                              valid_predicate,
-                             stream);
+                             stream,
+                             cudf::memory_resources{cudf::get_current_device_resource_ref(),
+                                                    cudf::get_current_device_resource_ref()});
 
     if (num_valid == 0) { return make_empty_result(); }
 
@@ -224,7 +226,9 @@ apply_join_semantics(cudf::table_view const& left,
       cuda::counting_iterator<size_type>{0},
       output_iter,
       [valid_predicate] __device__(size_type idx) -> bool { return valid_predicate(idx); },
-      stream);
+      stream,
+      cudf::memory_resources{cudf::get_current_device_resource_ref(),
+                             cudf::get_current_device_resource_ref()});
 
     return std::pair{std::move(filtered_left_indices), std::move(filtered_right_indices)};
 
@@ -264,7 +268,9 @@ apply_join_semantics(cudf::table_view const& left,
       cuda::counting_iterator<size_type>{0},
       cuda::counting_iterator{static_cast<size_type>(left_indices.size())},
       [predicate_results_ptr] __device__(size_type i) -> bool { return predicate_results_ptr[i]; },
-      stream);
+      stream,
+      cudf::memory_resources{cudf::get_current_device_resource_ref(),
+                             cudf::get_current_device_resource_ref()});
     auto const output_size = num_valid + num_invalid;
     if (output_size == 0) { return make_empty_result(); }
 
@@ -283,7 +289,9 @@ apply_join_semantics(cudf::table_view const& left,
                             cuda::counting_iterator<std::size_t>{0},
                             output_iter,
                             valid_predicate,
-                            stream);
+                            stream,
+                            cudf::memory_resources{cudf::get_current_device_resource_ref(),
+                                                   cudf::get_current_device_resource_ref()});
     }
     if (num_invalid > 0) {
       auto filter_passing_indices_ref = filter_passing_indices.ref(cuco::contains);
@@ -295,7 +303,9 @@ apply_join_semantics(cudf::table_view const& left,
                             cuda::counting_iterator{static_cast<std::size_t>(left.num_rows())},
                             filtered_left_indices->begin() + num_valid,
                             is_unmatched_idx,
-                            stream);
+                            stream,
+                            cudf::memory_resources{cudf::get_current_device_resource_ref(),
+                                                   cudf::get_current_device_resource_ref()});
 
       cub::DeviceTransform::Fill(
         filtered_right_indices->begin() + num_valid, num_invalid, JoinNoMatch, stream.get());
@@ -313,7 +323,9 @@ apply_join_semantics(cudf::table_view const& left,
       cudf::detail::count_if(cuda::counting_iterator<cudf::size_type>{0},
                              cuda::counting_iterator{static_cast<size_type>(left_indices.size())},
                              is_failed_matched_pair,
-                             stream);
+                             stream,
+                             cudf::memory_resources{cudf::get_current_device_resource_ref(),
+                                                    cudf::get_current_device_resource_ref()});
     auto const output_size = left_indices.size() + failed_matched_count;
 
     if (output_size == 0) { return make_empty_result(); }
@@ -348,7 +360,9 @@ apply_join_semantics(cudf::table_view const& left,
                             cuda::counting_iterator<cudf::size_type>{0},
                             secondary_iter,
                             is_failed_matched_pair,
-                            stream);
+                            stream,
+                            cudf::memory_resources{cudf::get_current_device_resource_ref(),
+                                                   cudf::get_current_device_resource_ref()});
     }
 
     return std::pair{std::move(filtered_left_indices), std::move(filtered_right_indices)};
