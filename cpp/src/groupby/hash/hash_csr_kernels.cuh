@@ -21,8 +21,8 @@
 
 namespace cudf::groupby::detail::hash {
 
-/// One open-addressed slot: the row hash and the first input row that claimed the slot.
-using hash_table_entry_type = cuco::pair<hash_value_type, size_type>;
+/// One open-addressed slot: the first input row that claimed the slot.
+using hash_table_entry_type = size_type;
 
 /// Where an input row landed: the slot owned by its key and its rank among the rows of that slot.
 using build_position_type = cuco::pair<cuda::std::uint32_t, size_type>;
@@ -49,17 +49,16 @@ struct hash_csr_table_ref {
                                                 hash_value_type hash,
                                                 Equal const& equal) const
   {
-    auto const key = hash_table_entry_type{hash, row};
-    auto slot      = static_cast<cuda::std::uint32_t>(hash % capacity);
+    auto slot = static_cast<cuda::std::uint32_t>(hash % capacity);
     for (cuda::std::uint32_t step = 0; step < capacity; ++step) {
       auto entry_ref =
         cuda::atomic_ref<hash_table_entry_type, cuda::thread_scope_device>{entries[slot]};
       auto current = entry_ref.load(cuda::memory_order_relaxed);
-      if (current.second == cudf::detail::CUDF_SIZE_TYPE_SENTINEL &&
-          entry_ref.compare_exchange_strong(current, key, cuda::memory_order_relaxed)) {
+      if (current == cudf::detail::CUDF_SIZE_TYPE_SENTINEL &&
+          entry_ref.compare_exchange_strong(current, row, cuda::memory_order_relaxed)) {
         return slot;
       }
-      if (current.first == hash && equal(row, current.second)) { return slot; }
+      if (equal(row, current)) { return slot; }
       slot = slot + 1 == capacity ? 0 : slot + 1;
     }
     return capacity;

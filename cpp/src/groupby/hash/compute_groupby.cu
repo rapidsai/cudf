@@ -87,9 +87,7 @@ grouped_keys group_keys(size_type num_rows,
   auto const is_occupied = [] __device__(size_type row) -> bool {
     return row != cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
   };
-  auto const entry_rows = cuda::make_transform_iterator(
-    entries.begin(),
-    [] __device__(hash_table_entry_type const& entry) -> size_type { return entry.second; });
+  auto const entry_rows = entries.begin();
 
   if (!need_grouped_rows) {
     // Only the distinct keys are needed, and the occupied slots hold one row for each of them.
