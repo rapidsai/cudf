@@ -234,10 +234,13 @@ jobs:
     permissions:
       contents: read
     needs: telemetry-setup
-    uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@codex/checks-main-cache
     with:
       enable_check_generated_files: false
       ignored_pr_jobs: "telemetry-summarize cudf-spark-jni cuml-compat-tests"
+      # Main builds seed this cache. PR merge refs can restore it but should not create
+      # duplicate archives that are inaccessible to other PRs.
+      pre-commit-cache-read-only: true
   conda-cpp-build:
     needs: [build-details, checks]
     permissions:
