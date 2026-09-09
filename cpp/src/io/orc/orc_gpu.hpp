@@ -462,14 +462,12 @@ void orc_init_statistics_buffersize(statistics_merge_group* groups,
  * @param[in,out] groups Statistics merge groups
  * @param[in,out] chunks Statistics data
  * @param[in] statistics_count Number of statistics buffers
- * @param[in] timestamps_are_utc Whether the written timestamps are relative to UTC
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void orc_encode_statistics(uint8_t* blob_bfr,
                            statistics_merge_group* groups,
                            statistics_chunk const* chunks,
                            uint32_t statistics_count,
-                           bool timestamps_are_utc,
                            cuda::stream_ref stream);
 
 /**

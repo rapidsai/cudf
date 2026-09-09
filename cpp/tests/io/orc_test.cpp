@@ -782,20 +782,17 @@ TEST_F(OrcWriterTest, WriterTimezoneStatistics)
     return std::get<cudf::io::timestamp_statistics>(stats.file_stats[1].type_specific_stats);
   };
 
-  // For UTC files the legacy local-time fields agree with the UTC ones, so both are written
-  auto const utc_stats = timestamp_stats(std::nullopt);
-  EXPECT_EQ(*utc_stats.minimum, 0);
-  EXPECT_EQ(*utc_stats.maximum, 1421323200000);
-  EXPECT_EQ(*utc_stats.minimum_utc, 0);
-  EXPECT_EQ(*utc_stats.maximum_utc, 1421323200000);
-
-  // Otherwise the legacy fields would be read back in the reader's own timezone, which is not the
-  // one they were written in, so only the unambiguous UTC fields are written
-  auto const local_stats = timestamp_stats("Asia/Shanghai");
-  EXPECT_FALSE(local_stats.minimum.has_value());
-  EXPECT_FALSE(local_stats.maximum.has_value());
-  EXPECT_EQ(*local_stats.minimum_utc, 0);
-  EXPECT_EQ(*local_stats.maximum_utc, 1421323200000);
+  // Statistics are the input instants and do not depend on the writer timezone: only the data
+  // stream is re-based on the writer's epoch, matching Apache, which writes instant statistics
+  // alongside a re-based stream for a UTC-valued column.
+  for (auto const& timezone :
+       {std::optional<std::string>{std::nullopt}, std::optional<std::string>{"Asia/Shanghai"}}) {
+    auto const stats = timestamp_stats(timezone);
+    EXPECT_EQ(*stats.minimum, 0);
+    EXPECT_EQ(*stats.maximum, 1421323200000);
+    EXPECT_EQ(*stats.minimum_utc, 0);
+    EXPECT_EQ(*stats.maximum_utc, 1421323200000);
+  }
 }
 
 TEST_F(OrcWriterTest, WriterTimezoneInvalid)

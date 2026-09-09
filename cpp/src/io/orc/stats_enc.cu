@@ -216,7 +216,6 @@ __device__ cuda::std::pair<int64_t, int32_t> split_nanosecond_timestamp(int64_t 
  * @param[in,out] groups Statistics merge groups
  * @param[in,out] chunks Statistics data
  * @param[in] statistics_count Number of statistics buffers
- * @param[in] timestamps_are_utc Whether the written timestamps are relative to UTC
  *
  * ORC statistics format from https://orc.apache.org/specification/ORCv1/
  *
@@ -244,8 +243,7 @@ CUDF_KERNEL void __launch_bounds__(encode_threads_per_block)
   gpu_encode_statistics(uint8_t* blob_bfr,
                         statistics_merge_group* groups,
                         statistics_chunk const* chunks,
-                        uint32_t statistics_count,
-                        bool timestamps_are_utc)
+                        uint32_t statistics_count)
 {
   __shared__ __align__(8) stats_state_s state_g[encode_chunks_per_block];
   auto t                 = threadIdx.x;
@@ -414,13 +412,9 @@ CUDF_KERNEL void __launch_bounds__(encode_threads_per_block)
             auto const [max_ms, max_ns_remainder] =
               split_nanosecond_timestamp(s->chunk.max_value.i_val);
 
-            // The legacy minimum/maximum fields hold local time, which readers interpret in their
-            // own timezone; only write them when that matches what we wrote, i.e. for UTC files.
-            // minimumUtc/maximumUtc are unambiguous and are preferred by readers that support them.
-            if (timestamps_are_utc) {
-              cur = pb_put_int(cur, 1, min_ms);  // minimum
-              cur = pb_put_int(cur, 2, max_ms);  // maximum
-            }
+            // minimum/maximum are the same as minimumUtc/maximumUtc as we always write files in UTC
+            cur = pb_put_int(cur, 1, min_ms);  // minimum
+            cur = pb_put_int(cur, 2, max_ms);  // maximum
             cur = pb_put_int(cur, 3, min_ms);  // minimumUtc
             cur = pb_put_int(cur, 4, max_ms);  // maximumUtc
 
@@ -484,21 +478,19 @@ void orc_init_statistics_buffersize(statistics_merge_group* groups,
  * @param[in,out] groups Statistics merge groups
  * @param[in,out] chunks Statistics data
  * @param[in] statistics_count Number of statistics buffers
- * @param[in] timestamps_are_utc Whether the written timestamps are relative to UTC
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void orc_encode_statistics(uint8_t* blob_bfr,
                            statistics_merge_group* groups,
                            statistics_chunk const* chunks,
                            uint32_t statistics_count,
-                           bool timestamps_are_utc,
                            cuda::stream_ref stream)
 {
   auto const num_blocks =
     cudf::util::div_rounding_up_safe(statistics_count, encode_chunks_per_block);
   dim3 dim_block(encode_threads_per_chunk, encode_chunks_per_block);
   gpu_encode_statistics<<<num_blocks, dim_block, 0, stream.get()>>>(
-    blob_bfr, groups, chunks, statistics_count, timestamps_are_utc);
+    blob_bfr, groups, chunks, statistics_count);
   CUDF_CUDA_TRY(cudaGetLastError());
 }
 

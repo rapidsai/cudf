@@ -1294,7 +1294,6 @@ cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
   cudf::detail::hostdevice_vector<statistics_merge_group>& stats_merge_groups,
   device_span<statistics_chunk const> stat_chunks,
   int num_stat_blobs,
-  bool timestamps_are_utc,
   cuda::stream_ref stream)
 {
   // figure out the buffer size needed for protobuf format
@@ -1316,7 +1315,6 @@ cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
                         stats_merge_groups.device_ptr(),
                         stat_chunks.data(),
                         num_stat_blobs,
-                        timestamps_are_utc,
                         stream);
   stats_merge_groups.device_to_host_async(stream);
   blobs.device_to_host(stream);
@@ -1347,14 +1345,12 @@ cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
  * @param stats_freq Frequency of statistics to be included in the output file
  * @param orc_table Table information to be written
  * @param segmentation stripe and rowgroup ranges
- * @param timestamps_are_utc Whether the written timestamps are relative to UTC
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return The statistic information
  */
 intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
                                                orc_table_view const& orc_table,
                                                file_segmentation const& segmentation,
-                                               bool timestamps_are_utc,
                                                cuda::stream_ref stream)
 {
   auto const num_rowgroup_blobs     = segmentation.rowgroups.count();
@@ -1448,8 +1444,8 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
   auto rowgroup_blobs = [&]() -> std::vector<col_stats_blob> {
     if (not is_granularity_rowgroup) { return {}; }
 
-    cudf::detail::hostdevice_vector<uint8_t> blobs = allocate_and_encode_blobs(
-      rowgroup_merge, rowgroup_chunks, num_rowgroup_blobs, timestamps_are_utc, stream);
+    cudf::detail::hostdevice_vector<uint8_t> blobs =
+      allocate_and_encode_blobs(rowgroup_merge, rowgroup_chunks, num_rowgroup_blobs, stream);
 
     std::vector<col_stats_blob> rowgroup_blobs(num_rowgroup_blobs);
     for (size_t i = 0; i < num_rowgroup_blobs; i++) {
@@ -1472,13 +1468,11 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
  *
  * @param footer ORC footer containing stripe and type information
  * @param per_chunk_stats Persisted per-chunk statistics from `gather_statistic_blobs`
- * @param timestamps_are_utc Whether the written timestamps are relative to UTC
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return The encoded statistic blobs
  */
 encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
                                                  persisted_statistics& per_chunk_stats,
-                                                 bool timestamps_are_utc,
                                                  cuda::stream_ref stream)
 {
   auto stripe_size_iter = cuda::transform_iterator(per_chunk_stats.stripe_stat_merge.begin(),
@@ -1511,8 +1505,8 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
     stats_merge.host_to_device_async(stream);
 
     // Encode and return
-    cudf::detail::hostdevice_vector<uint8_t> hd_file_blobs = allocate_and_encode_blobs(
-      stats_merge, d_stat_chunks, num_file_blobs, timestamps_are_utc, stream);
+    cudf::detail::hostdevice_vector<uint8_t> hd_file_blobs =
+      allocate_and_encode_blobs(stats_merge, d_stat_chunks, num_file_blobs, stream);
 
     // Copy blobs to host (actual size)
     std::vector<col_stats_blob> file_blobs(num_file_blobs);
@@ -1586,7 +1580,7 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
     file_stat_chunks, stat_chunks.data(), d_file_stats_merge, num_file_blobs, stream);
 
   cudf::detail::hostdevice_vector<uint8_t> blobs =
-    allocate_and_encode_blobs(stats_merge, stat_chunks, num_blobs, timestamps_are_utc, stream);
+    allocate_and_encode_blobs(stats_merge, stat_chunks, num_blobs, stream);
 
   auto stripe_stat_merge = stats_merge.host_ptr();
 
@@ -2636,8 +2630,7 @@ auto convert_table_to_orc_data(table_view const& input,
 
   auto bounce_buffer = cudf::detail::make_pinned_vector_async<uint8_t>(max_out_stream_size, stream);
 
-  auto intermediate_stats =
-    gather_statistic_blobs(stats_freq, orc_table, segmentation, timezone.is_utc(), stream);
+  auto intermediate_stats = gather_statistic_blobs(stats_freq, orc_table, segmentation, stream);
 
   return std::tuple{std::move(enc_data),
                     std::move(segmentation),
@@ -2961,8 +2954,7 @@ void writer::impl::close()
 
   if (_stats_freq != statistics_freq::STATISTICS_NONE) {
     // Write column statistics
-    auto statistics =
-      finish_statistic_blobs(_footer, _persisted_stripe_statistics, _timezone.is_utc(), _stream);
+    auto statistics = finish_statistic_blobs(_footer, _persisted_stripe_statistics, _stream);
 
     // File-level statistics
     {
