@@ -518,14 +518,10 @@ class QuentContext:
         This emits the following events:
 
         - queueing
-        - allocating (with the Quent Processor for the current thread)
+        - allocating (with the Quent Processor for the current thread). By using
+          the current thread, we're assuming that the same thread that requested
+          the memory reservation also emitted the memory reservation events.
         - exit
-
-        They're all built after the fact from recorded timestamps, so emitting
-        them doesn't inflate the wait we're trying to measure.
-
-        A reservation that induces spilling ought to pass through the Task's
-        ``Spilling`` state, but rapidsmpf doesn't report that back to us yet.
         """
         quent_processor = quent_ir_execution_context.get_or_declare_processor(
             thread_ident=threading.get_ident(),

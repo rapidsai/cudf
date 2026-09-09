@@ -881,16 +881,6 @@ class Processor:
         )
 
 
-def _format_bytes(nbytes: int) -> str:
-    """Format a byte count compactly (e.g. ``256.0MiB``) for display."""
-    value = float(nbytes)
-    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
-        if abs(value) < 1024.0:
-            return f"{value:.0f}B" if unit == "B" else f"{value:.1f}{unit}"
-        value /= 1024.0
-    return f"{value:.1f}PiB"
-
-
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class MemoryReservationRequest:
     """
@@ -928,11 +918,6 @@ class MemoryReservationRequest:
     :class:`Task`, so the time spent in that state is the time it took to
     satisfy the request. See
     :meth:`~cudf_polars.quent._context.QuentContext._emit_memory_reservation_events`.
-
-    Quent's data processing domain doesn't declare attributes on the
-    ``Allocating`` state yet, so an analyzer built against the current model
-    reads the timing but ignores the attributes below. They're still written
-    to the event stream, and will show up once the model declares them.
     """
 
     purpose: str
@@ -946,9 +931,7 @@ class MemoryReservationRequest:
     @property
     def label(self) -> str:
         """A compact description, e.g. ``scan-256.0MiB-device``."""
-        return (
-            f"{self.purpose}-{_format_bytes(self.size_bytes)}-{self.mem_type.lower()}"
-        )
+        return f"{self.purpose}-{self.mem_type.lower()}"
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to the flat attribute layout used by Quent FSM states."""

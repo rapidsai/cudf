@@ -41,7 +41,6 @@ from cudf_polars.quent._types import (
     Statistics,
     Task,
     Worker,
-    _format_bytes,
 )
 from cudf_polars.utils.config import ConfigOptions
 from cudf_polars.utils.cuda_stream import get_cuda_stream
@@ -1180,20 +1179,6 @@ def test_emit_task_events_io_node(disk_to_device_channel: Channel) -> None:
     assert "Exit" in task_events[4]["data"]["Task"]["state"]
 
 
-@pytest.mark.parametrize(
-    "nbytes,expected",
-    [
-        (0, "0B"),
-        (512, "512B"),
-        (1024, "1.0KiB"),
-        (256 * 1024**2, "256.0MiB"),
-        (3 * 1024**5, "3.0PiB"),
-    ],
-)
-def test_format_bytes(nbytes: int, expected: str) -> None:
-    assert _format_bytes(nbytes) == expected
-
-
 def test_memory_reservation_request_serialization() -> None:
     request = MemoryReservationRequest(
         purpose="scan",
@@ -1202,7 +1187,7 @@ def test_memory_reservation_request_serialization() -> None:
         net_memory_delta=1024**2,
         sequence_number=3,
     )
-    assert request.label == "scan-2.0MiB-device"
+    assert request.label == "scan-device"
     assert request.to_dict() == {
         "purpose": "scan",
         "size_bytes": 2 * 1024**2,
@@ -1239,7 +1224,7 @@ def test_emit_memory_reservation_events() -> None:
     # The size and memory tier are legible from the instance name, since Quent
     # doesn't declare attributes on the Allocating state yet.
     assert task.instance_name is not None
-    assert task.instance_name.startswith("reserve-scan-1.0MiB-device-")
+    assert task.instance_name.startswith("reserve-scan-device-")
     assert task.instance_name.endswith(f"-{operator_id.hex[:8]}-2")
 
     quent_ir_execution_context.context._emit_memory_reservation_events(
