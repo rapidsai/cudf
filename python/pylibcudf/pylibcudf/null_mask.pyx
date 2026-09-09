@@ -64,7 +64,7 @@ cpdef gpumemoryview copy_bitmask(
     """
     cdef unique_ptr[device_buffer[uint8_t]] db
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     mr = _get_memory_resource(mr)
 
     cdef column_view c_col = col.view()
@@ -111,7 +111,7 @@ cpdef gpumemoryview copy_bitmask_from_bitmask(
         )
     cdef unique_ptr[device_buffer[uint8_t]] db
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     mr = _get_memory_resource(mr)
     cdef uintptr_t ptr = bitmask.ptr
 
@@ -179,7 +179,7 @@ cpdef gpumemoryview create_null_mask(
     """
     cdef unique_ptr[device_buffer[uint8_t]] db
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -216,7 +216,7 @@ cpdef tuple[gpumemoryview, int] bitmask_and(
     cdef Table c_table = Table(columns)
     cdef pair[unique_ptr[device_buffer[uint8_t]], size_type] c_result
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     mr = _get_memory_resource(mr)
 
     cdef table_view c_input = c_table.view()
@@ -257,7 +257,7 @@ cpdef tuple[gpumemoryview, int] bitmask_or(
     cdef Table c_table = Table(columns)
     cdef pair[unique_ptr[device_buffer[uint8_t]], size_type] c_result
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     mr = _get_memory_resource(mr)
 
     cdef table_view c_input = c_table.view()
@@ -305,7 +305,7 @@ cpdef size_type null_count(
         )
     cdef uintptr_t ptr = bitmask.ptr
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     with nogil:
         return cpp_null_mask.null_count(
             <bitmask_type*>ptr,
@@ -348,7 +348,7 @@ cpdef size_type index_of_first_set_bit(
         )
     cdef uintptr_t ptr = bitmask.ptr
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     with nogil:
         return cpp_null_mask.index_of_first_set_bit(
             <bitmask_type*>ptr,
