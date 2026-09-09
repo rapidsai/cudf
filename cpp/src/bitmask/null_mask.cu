@@ -76,7 +76,7 @@ cuda::device_buffer<uint8_t> create_null_mask(size_type size,
 
   cuda::device_buffer<uint8_t> mask(stream, mr, mask_size, cuda::no_init);
 
-  if (state != mask_state::UNINITIALIZED) {
+  if (mask_size > 0 && state != mask_state::UNINITIALIZED) {
     uint8_t fill_value = (state == mask_state::ALL_VALID) ? 0xff : 0x00;
     CUDF_CUDA_TRY(cudaMemsetAsync(
       reinterpret_cast<bitmask_type*>(mask.data()), fill_value, mask_size, stream.get()));
