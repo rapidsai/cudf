@@ -13,10 +13,14 @@
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
@@ -27,6 +31,7 @@
 #include <cuda/std/iterator>
 #include <cuda/stream>
 #include <thrust/copy.h>
+#include <thrust/count.h>
 #include <thrust/gather.h>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
@@ -35,7 +40,10 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <numeric>
+#include <optional>
 #include <stdexcept>
+#include <utility>
 
 namespace cudf::groupby::detail::hash {
 
@@ -61,6 +69,76 @@ cuda::std::uint32_t hash_csr_capacity(size_type num_rows)
   return static_cast<cuda::std::uint32_t>(requested);
 }
 
+struct is_occupied_fn {
+  __device__ bool operator()(hash_table_entry_type entry) const
+  {
+    return entry != cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
+  }
+};
+
+/**
+ * @brief Estimates the table capacity that fits the distinct keys of a large input.
+ *
+ * Every `stride`-th row is inserted into a small table, and the number of distinct keys among
+ * those rows is corrected for the keys the sample missed: `D` distinct keys show
+ * `D * (1 - exp(-s / D))` of themselves in a sample of `s` rows, which is solved for `D`.
+ *
+ * @return Four slots per estimated distinct key, or the maximum capacity when the sampled rows
+ * are nearly all distinct
+ */
+template <typename Equal, typename Hash>
+cuda::std::uint32_t estimate_capacity(size_type num_rows,
+                                      bitmask_type const* row_bitmask,
+                                      Equal const& d_row_equal,
+                                      Hash const& d_row_hash,
+                                      cuda::stream_ref stream)
+{
+  auto const temp_mr = cudf::get_current_device_resource_ref();
+  rmm::device_uvector<hash_table_entry_type> entries(hash_csr_sample_capacity, stream, temp_mr);
+  rmm::device_uvector<size_type> counts(2, stream, temp_mr);
+  // Counts the valid rows among every `stride`-th row and the distinct keys among them.
+  auto const sample = [&](size_type stride) {
+    CUDF_CUDA_TRY(cudaMemsetAsync(
+      entries.data(), 0xff, entries.size() * sizeof(hash_table_entry_type), stream.get()));
+    CUDF_CUDA_TRY(
+      cudaMemsetAsync(counts.data(), 0, counts.size() * sizeof(size_type), stream.get()));
+    launch_hash_csr_sample_kernel(
+      num_rows,
+      stride,
+      row_bitmask,
+      hash_csr_table_ref{entries.data(), hash_csr_sample_capacity, hash_csr_sample_capacity},
+      d_row_equal,
+      d_row_hash,
+      counts.data(),
+      stream);
+    auto const h_counts = cudf::detail::make_host_vector(counts, stream);
+    return std::pair{static_cast<double>(h_counts[0]), static_cast<double>(h_counts[1])};
+  };
+  // One row in 64 is sampled, fewer when that would fill more than half of the sample table.
+  auto const stride = std::max<size_type>(
+    64, cudf::util::div_rounding_up_safe<size_type>(num_rows, hash_csr_sample_capacity / 2));
+  auto const max_capacity  = std::numeric_limits<cuda::std::uint32_t>::max();
+  auto [sampled, distinct] = sample(stride);
+  if (sampled == 0) { return hash_csr_min_estimated_capacity; }
+  // Nearly every sampled row has its own key: the keys are (close to) unique.
+  if (distinct >= 0.9 * sampled) { return max_capacity; }
+
+  // The expected number of distinct keys seen grows with the population, so bisect on it.
+  auto const seen = [sampled](double population) {
+    return population * (1.0 - std::exp(-sampled / population));
+  };
+  auto low  = distinct;
+  auto high = static_cast<double>(num_rows);
+  for (int i = 0; i < 64; ++i) {
+    auto const mid                      = 0.5 * (low + high);
+    (seen(mid) < distinct ? low : high) = mid;
+  }
+  // Four slots per distinct key keep the probes short while the table stays small.
+  auto const estimate = 4.0 * high;
+  if (estimate >= static_cast<double>(max_capacity)) { return max_capacity; }
+  return std::max(hash_csr_min_estimated_capacity, static_cast<cuda::std::uint32_t>(estimate));
+}
+
 /**
  * @brief Groups the input rows by key with a HashCSR build.
  *
@@ -70,33 +148,80 @@ cuda::std::uint32_t hash_csr_capacity(size_type num_rows)
  */
 template <typename Equal, typename Hash>
 grouped_keys group_keys(size_type num_rows,
+                        size_type key_bytes,
                         bitmask_type const* row_bitmask,
                         Equal const& d_row_equal,
                         Hash const& d_row_hash,
                         bool need_grouped_rows,
                         cuda::stream_ref stream)
 {
-  auto const temp_mr  = cudf::get_current_device_resource_ref();
-  auto const capacity = hash_csr_capacity(num_rows);
-  auto const policy   = rmm::exec_policy_nosync(stream, temp_mr);
+  auto const temp_mr = cudf::get_current_device_resource_ref();
+  auto const policy  = rmm::exec_policy_nosync(stream, temp_mr);
 
-  rmm::device_uvector<hash_table_entry_type> entries(capacity, stream, temp_mr);
-  CUDF_CUDA_TRY(cudaMemsetAsync(
-    entries.data(), 0xff, entries.size() * sizeof(hash_table_entry_type), stream.get()));
-  auto const table       = hash_csr_table_ref{entries.data(), capacity};
-  auto const is_occupied = [] __device__(size_type row) -> bool {
-    return row != cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
-  };
-  auto const entry_rows = entries.begin();
+  // A table with a slot for every row would spread a few distinct keys over a table too large for
+  // the cache and make clearing and compacting its slots the dominant cost of low-cardinality
+  // inputs, so large inputs get a table sized from an estimate of their number of distinct keys.
+  // Should the estimate fall short, the build restarts with the table sized for every row.
+  auto const full_capacity = hash_csr_capacity(num_rows);
+  auto capacity =
+    num_rows < hash_csr_min_rows_to_estimate || key_bytes > hash_csr_max_estimated_key_bytes
+      ? full_capacity
+      : std::min(full_capacity,
+                 estimate_capacity(num_rows, row_bitmask, d_row_equal, d_row_hash, stream));
+  rmm::device_uvector<hash_table_entry_type> entries(0, stream, temp_mr);
+  rmm::device_uvector<size_type> slot_counts(0, stream, temp_mr);
+  rmm::device_uvector<build_position_type> positions(
+    need_grouped_rows ? num_rows : 0, stream, temp_mr);
+  // Set by the build when the estimated table turns out to be too small.
+  std::optional<cudf::detail::device_scalar<int>> overflow;
+  if (capacity < full_capacity) { overflow.emplace(0, stream, temp_mr); }
+  // The occupied slots, in slot order, are the groups: without aggregations the slots hold the
+  // one row wanted for each group, otherwise the slot indices lead to the counts and rows.
+  rmm::device_uvector<size_type> key_rows(0, stream, temp_mr);
+  rmm::device_uvector<cuda::std::uint32_t> group_slots(0, stream, temp_mr);
+  while (true) {
+    auto const is_full_size = capacity == full_capacity;
+    entries.resize(capacity, stream);
+    CUDF_CUDA_TRY(cudaMemsetAsync(
+      entries.data(), 0xff, entries.size() * sizeof(hash_table_entry_type), stream.get()));
+    if (need_grouped_rows) {
+      slot_counts.resize(capacity, stream);
+      CUDF_CUDA_TRY(cudaMemsetAsync(
+        slot_counts.data(), 0, slot_counts.size() * sizeof(size_type), stream.get()));
+    }
+    auto const table =
+      hash_csr_table_ref{entries.data(), capacity, is_full_size ? capacity : hash_csr_max_probes};
+    launch_hash_csr_build_kernel(num_rows,
+                                 row_bitmask,
+                                 need_grouped_rows ? positions.data() : nullptr,
+                                 need_grouped_rows ? slot_counts.data() : nullptr,
+                                 table,
+                                 d_row_equal,
+                                 d_row_hash,
+                                 is_full_size ? nullptr : overflow->data(),
+                                 stream);
+    if (!need_grouped_rows) {
+      key_rows.resize(num_rows, stream);
+      auto const key_rows_end =
+        thrust::copy_if(policy, entries.begin(), entries.end(), key_rows.begin(), is_occupied_fn{});
+      key_rows.resize(cuda::std::distance(key_rows.begin(), key_rows_end), stream);
+    } else {
+      group_slots.resize(num_rows, stream);
+      auto const group_slots_end =
+        thrust::copy_if(policy,
+                        cuda::counting_iterator<cuda::std::uint32_t>{0},
+                        cuda::counting_iterator<cuda::std::uint32_t>{capacity},
+                        slot_counts.begin(),
+                        group_slots.begin(),
+                        [] __device__(size_type count) -> bool { return count > 0; });
+      group_slots.resize(cuda::std::distance(group_slots.begin(), group_slots_end), stream);
+    }
+    // The compaction has just synchronized the stream, so reading the flag is cheap here.
+    if (is_full_size || overflow->value(stream) == 0) { break; }
+    capacity = full_capacity;
+  }
 
   if (!need_grouped_rows) {
-    // Only the distinct keys are needed, and the occupied slots hold one row for each of them.
-    launch_hash_csr_build_kernel(
-      num_rows, row_bitmask, nullptr, nullptr, table, d_row_equal, d_row_hash, stream);
-    rmm::device_uvector<size_type> key_rows(num_rows, stream, temp_mr);
-    auto const key_rows_end =
-      thrust::copy_if(policy, entry_rows, entry_rows + capacity, key_rows.begin(), is_occupied);
-    key_rows.resize(cuda::std::distance(key_rows.begin(), key_rows_end), stream);
     auto const num_groups = static_cast<size_type>(key_rows.size());
     return {num_groups,
             0,
@@ -105,32 +230,9 @@ grouped_keys group_keys(size_type num_rows,
             rmm::device_uvector<size_type>{0, stream, temp_mr}};
   }
 
-  rmm::device_uvector<size_type> slot_counts(capacity, stream, temp_mr);
-  CUDF_CUDA_TRY(
-    cudaMemsetAsync(slot_counts.data(), 0, slot_counts.size() * sizeof(size_type), stream.get()));
-  rmm::device_uvector<build_position_type> positions(num_rows, stream, temp_mr);
-  launch_hash_csr_build_kernel(num_rows,
-                               row_bitmask,
-                               positions.data(),
-                               slot_counts.data(),
-                               table,
-                               d_row_equal,
-                               d_row_hash,
-                               stream);
-
-  // The occupied slots, in slot order, are the groups.
-  rmm::device_uvector<cuda::std::uint32_t> group_slots(num_rows, stream, temp_mr);
-  auto const group_slots_end =
-    thrust::copy_if(policy,
-                    cuda::counting_iterator<cuda::std::uint32_t>{0},
-                    cuda::counting_iterator<cuda::std::uint32_t>{capacity},
-                    slot_counts.begin(),
-                    group_slots.begin(),
-                    [] __device__(size_type count) -> bool { return count > 0; });
-  group_slots.resize(cuda::std::distance(group_slots.begin(), group_slots_end), stream);
+  auto const entry_rows = entries.begin();
   auto const num_groups = static_cast<size_type>(group_slots.size());
-
-  rmm::device_uvector<size_type> key_rows(num_groups, stream, temp_mr);
+  key_rows.resize(num_groups, stream);
   thrust::gather(policy, group_slots.begin(), group_slots.end(), entry_rows, key_rows.begin());
   entries.resize(0, stream);
   entries.shrink_to_fit(stream);
@@ -182,8 +284,13 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
       : std::pair<rmm::device_buffer, bitmask_type const*>{
           rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()}, nullptr};
 
-  auto const groups =
-    group_keys(num_rows, row_bitmask, d_row_equal, d_row_hash, !requests.empty(), stream);
+  // Bytes of one key row, with variable-width and nested columns counted as wide.
+  auto const key_bytes = std::accumulate(
+    keys.begin(), keys.end(), size_type{0}, [](size_type bytes, column_view const& col) {
+      return bytes + (cudf::is_fixed_width(col.type()) ? cudf::size_of(col.type()) : 64);
+    });
+  auto const groups = group_keys(
+    num_rows, key_bytes, row_bitmask, d_row_equal, d_row_hash, !requests.empty(), stream);
 
   auto const gather_keys = [&] {
     return cudf::detail::gather(keys,
