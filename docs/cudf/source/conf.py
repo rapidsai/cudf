@@ -66,7 +66,13 @@ SphinxRenderer.methods["docsect4"] = visit_docsect4
 
 
 class FlatDoxygenPageDirective(DoxygenPageDirective):
-    """Render a Doxygen page body as direct children of its RST section."""
+    """
+    Render a Doxygen page body as direct children of its RST section.
+
+    This is basically the same as breathe's doxygenpage directive but
+    allows us to splice a page in to the toctree at the right level such
+    that it is rendered with an "on this page" sidebar by the theme we use.
+    """
 
     def run(self):
         self.options["content-only"] = None
@@ -742,7 +748,7 @@ nitpick_ignore = [
     ("py:class", "Options"),
     # Not yet published in API docs.
     ("py:class", "rapidsmpf.streaming.core.context.Context"),
-    ("py:class", "rapidsmpf.rrun.rrun.bind"),
+    ("py:func", "rapidsmpf.rrun.rrun.bind"),
     # kvikio aliases that don't match the public intersphinx targets.
     ("py:class", "kvikio.Summary"),
     # polars aliases that don't match the public intersphinx targets.
@@ -923,18 +929,6 @@ def register_sections_as_label(app: Sphinx, document: Node) -> None:
         domain.labels[name] = docname, labelid, title
 
 
-def relocate_libcudf_developer_guide_images(
-    app: Sphinx, document: Node
-) -> None:
-    """Use source-controlled image copies when rendering Doxygen page XML."""
-    if not app.env.docname.startswith("libcudf/developer_guide/"):
-        return
-
-    for image in document.findall(nodes.image):
-        if image["uri"].endswith("cpp/doxygen/xml/strings.png"):
-            image["uri"] = "strings.png"
-
-
 _libcudf_developer_guide_documents = {
     "DEVELOPER_GUIDE.md": "libcudf/developer_guide/DEVELOPER_GUIDE",
     "DOCUMENTATION.md": "libcudf/developer_guide/DOCUMENTATION",
@@ -948,6 +942,11 @@ _libcudf_developer_guide_source_files = {
 }
 _libcudf_developer_guide_xref_prefix = "libcudf-guide-md:"
 _libcudf_developer_guide_logger = logging.getLogger(__name__)
+_libcudf_developer_guide_source_dir = os.path.abspath(
+    os.path.join(
+        os.path.dirname(__file__), "../../../cpp/doxygen/developer_guide"
+    )
+)
 
 
 def _markdown_heading_slug(title: str) -> str:
@@ -955,6 +954,51 @@ def _markdown_heading_slug(title: str) -> str:
     slug = title.lower()
     slug = re.sub(r"[^\w\s-]", "", slug)
     return re.sub(r"-+", "-", re.sub(r"\s+", "-", slug)).strip("-")
+
+
+def _find_libcudf_developer_guide_section(env, docname, fragment):
+    """Return the guide section identified by a Markdown or Doxygen fragment."""
+    slugs: dict[str, int] = {}
+    for section in env.get_doctree(docname).findall(nodes.section):
+        title = clean_astext(section[0])
+        base_slug = _markdown_heading_slug(title)
+        occurrence = slugs.get(base_slug, 0)
+        slugs[base_slug] = occurrence + 1
+        heading_slug = (
+            base_slug if occurrence == 0 else f"{base_slug}-{occurrence}"
+        )
+        if fragment in (heading_slug, section["ids"][0]):
+            return section, title
+        for target in section.findall(nodes.target):
+            refid = target.get("refid", "")
+            if fragment in target["ids"] or fragment in (
+                refid,
+                refid.rsplit("_1", maxsplit=1)[-1],
+            ):
+                return section, title
+    return None
+
+
+def _source_markdown_fragment(app, docname, link_text):
+    """Find the unique same-page fragment for a link in its source Markdown."""
+    source_filename = _libcudf_developer_guide_source_files[docname]
+    source_path = os.path.join(
+        _libcudf_developer_guide_source_dir, source_filename
+    )
+    with open(source_path) as source:
+        markdown = source.read()
+
+    normalized_text = " ".join(link_text.replace("`", "").split())
+    fragments = {
+        match.group("fragment")
+        for match in re.finditer(
+            r"\[([^]]+)\]\((?P<path>[^#)]*)#(?P<fragment>[^)\s]+)\)",
+            markdown,
+        )
+        if " ".join(match.group(1).replace("`", "").split()) == normalized_text
+        and match.group("path").removeprefix("./") in ("", source_filename)
+    }
+    return fragments.pop() if len(fragments) == 1 else None
 
 
 def rewrite_libcudf_developer_guide_markdown_links(
@@ -1008,38 +1052,30 @@ def resolve_libcudf_developer_guide_markdown_link(app, env, node, contnode):
     target_docname = node.get("libcudf_guide_target_docname")
     if target_docname is not None:
         _, fragment = markdown_target.split("#", maxsplit=1)
-        slugs: dict[str, int] = {}
-        for section in env.get_doctree(target_docname).findall(nodes.section):
-            title = clean_astext(section[0])
-            base_slug = _markdown_heading_slug(title)
-            occurrence = slugs.get(base_slug, 0)
-            slugs[base_slug] = occurrence + 1
-            heading_slug = (
-                base_slug if occurrence == 0 else f"{base_slug}-{occurrence}"
+        section_data = _find_libcudf_developer_guide_section(
+            env, target_docname, fragment
+        )
+        if section_data is None and target_docname == node["refdoc"]:
+            # Doxygen may replace a Markdown heading fragment with an
+            # unrelated Doxygen anchor. Recover only an unambiguous fragment
+            # from the original Markdown so invalid source links still warn.
+            source_fragment = _source_markdown_fragment(
+                app, target_docname, contnode.astext()
             )
-            if fragment in (heading_slug, section["ids"][0]):
-                return make_refnode(
-                    app.builder,
-                    node["refdoc"],
-                    target_docname,
-                    section["ids"][0],
-                    contnode,
-                    title,
+            if source_fragment is not None:
+                section_data = _find_libcudf_developer_guide_section(
+                    env, target_docname, source_fragment
                 )
-            for target in section.findall(nodes.target):
-                refid = target.get("refid", "")
-                if fragment in target["ids"] or fragment in (
-                    refid,
-                    refid.rsplit("_1", maxsplit=1)[-1],
-                ):
-                    return make_refnode(
-                        app.builder,
-                        node["refdoc"],
-                        target_docname,
-                        section["ids"][0],
-                        contnode,
-                        title,
-                    )
+        if section_data is not None:
+            section, title = section_data
+            return make_refnode(
+                app.builder,
+                node["refdoc"],
+                target_docname,
+                section["ids"][0],
+                contnode,
+                title,
+            )
 
     _libcudf_developer_guide_logger.warning(
         "libcudf developer-guide Markdown link target not found: %s",
@@ -1056,19 +1092,24 @@ def use_slugged_duplicate_ids(app):
     app.env.settings["auto_id_prefix"] = "%"
 
 
-def setup(app):
+def setup(app: Sphinx):
     app.add_directive("flatdoxygenpage", FlatDoxygenPageDirective)
     app.connect("builder-inited", use_slugged_duplicate_ids)
-    app.connect("doctree-read", resolve_aliases)
-    app.connect("doctree-read", register_sections_as_label)
-    app.connect(
-        "doctree-read", relocate_libcudf_developer_guide_images, priority=100
-    )
+
+    # Do some rewrite passes on the doctrees. Lower priority hooks run
+    # earlier, equal priority in registration order.
+    # First rewire markdown links in the libcudf dev guide
     app.connect(
         "doctree-read",
         rewrite_libcudf_developer_guide_markdown_links,
-        priority=110,
+        priority=100,
     )
+    # Then rewrite xrefs in all documents for aliases.
+    app.connect("doctree-read", resolve_aliases, priority=200)
+    # Finally add std:label labels to all section headers for intersphinx
+    app.connect("doctree-read", register_sections_as_label, priority=300)
+
+    # Now hook up missing-reference rewrites
     app.connect(
         "missing-reference",
         resolve_libcudf_developer_guide_markdown_link,
