@@ -461,11 +461,8 @@ filter(std::vector<column_view> const& predicate_columns,
 /**
  * @brief Typedef for inputs to the filter function. Each input can be either a column or a
  * scalar column.
- *
- * @deprecated in release 26.12. Use `cudf::transform_input` instead.
  */
-using filter_input [[deprecated("Use cudf::transform_input instead.")]] =
-  std::variant<column_view, scalar_column_view>;
+using filter_input = std::variant<column_view, scalar_column_view>;
 
 /**
  * @brief Creates a new column by applying a filter function against every
