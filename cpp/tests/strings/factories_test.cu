@@ -140,9 +140,8 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
       h_offsets, cudf::get_default_stream(), cudf::get_current_device_resource_ref()),
     cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED),
     0);
-  auto d_nulls = cuda::device_buffer<std::byte>{
-    cudf::get_default_stream(), cudf::get_current_device_resource_ref(), h_nulls};
-  auto column = cudf::make_strings_column(
+  auto d_nulls = cudf::copy_bitmask(h_nulls.data(), 0, count);
+  auto column  = cudf::make_strings_column(
     count, std::move(d_offsets), d_buffer.release(), null_count, std::move(d_nulls));
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_id::STRING});
   EXPECT_EQ(column->null_count(), null_count);
