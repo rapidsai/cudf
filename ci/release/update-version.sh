@@ -158,6 +158,7 @@ DEPENDENCIES=(
   libcudf
   libcudf-example
   libcudf-streaming
+  libcudf-streaming-tests
   libcudf-tests
   libcudf_kafka
   libkvikio
