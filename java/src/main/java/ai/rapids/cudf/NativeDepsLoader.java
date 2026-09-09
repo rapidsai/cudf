@@ -44,7 +44,6 @@ import java.util.zip.CRC32;
  * This class will load the native dependencies.
  */
 public class NativeDepsLoader {
-  private static final Logger log = LoggerFactory.getLogger(NativeDepsLoader.class);
   private static final int COPY_BUFFER_SIZE = 1024 * 1024;
   // Positional extraction uses one copy buffer per worker.
   private static final int MAX_CONCURRENT_CHUNK_READS =
@@ -106,6 +105,23 @@ public class NativeDepsLoader {
 
   private static boolean loaded = false;
 
+  /** Avoid requiring SLF4J when NativeDepUtil extracts a library directly from the JAR. */
+  private static final class Log {
+    private static final Logger INSTANCE = LoggerFactory.getLogger(NativeDepsLoader.class);
+
+    private static void info(String message, Object... args) {
+      INSTANCE.info(message, args);
+    }
+
+    private static void warn(String message, Object... args) {
+      INSTANCE.warn(message, args);
+    }
+
+    private static void error(String message, Throwable throwable) {
+      INSTANCE.error(message, throwable);
+    }
+  }
+
   /**
    * Load the native libraries needed for libcudf, if not loaded already.
    */
@@ -114,7 +130,7 @@ public class NativeDepsLoader {
       try {
         String[][] deps = loadOrder;
         if (!hasNativeResource("nvcomp")) {
-          log.info("Skipping optional native dependency {}", System.mapLibraryName("nvcomp"));
+          Log.info("Skipping optional native dependency {}", System.mapLibraryName("nvcomp"));
           deps = Arrays.stream(loadOrder)
               .filter(stage -> Arrays.stream(stage).noneMatch("nvcomp"::equals))
               .toArray(String[][]::new);
@@ -122,7 +138,7 @@ public class NativeDepsLoader {
         loadNativeDeps(deps, preserveDepsAfterLoad);
         loaded = true;
       } catch (Throwable t) {
-        log.error("Could not load cudf jni library...", t);
+        Log.error("Could not load cudf jni library...", t);
       }
     }
   }
@@ -245,7 +261,7 @@ public class NativeDepsLoader {
       loadNativeDeps(loadOrder, preserveDepsAfterLoad);
       return true;
     } catch (Throwable t) {
-      log.warn("Could not load optional native dependencies: " + t.getMessage());
+      Log.warn("Could not load optional native dependencies: " + t.getMessage());
       return false;
     }
   }
@@ -395,7 +411,7 @@ public class NativeDepsLoader {
     if (libNativeDir != null) {
       File loc = new File(libNativeDir, mappedName);
       if (libLogLoadTiming) {
-        log.info("Skipped JAR extraction for {} (using lib-native-dir={})",
+        Log.info("Skipped JAR extraction for {} (using lib-native-dir={})",
             mappedName, libNativeDir);
       }
       return loc;
@@ -409,13 +425,13 @@ public class NativeDepsLoader {
       success = true;
     } finally {
       if (!success && loc.exists() && !loc.delete()) {
-        log.warn("Could not delete partial native dependency {}", loc);
+        Log.warn("Could not delete partial native dependency {}", loc);
       }
     }
     if (libLogLoadTiming) {
       long elapsed = System.currentTimeMillis() - t0;
       long sizeMB = loc.length() / (1024L * 1024L);
-      log.info("Extracted {} in {} ms (size={} MB)", mappedName, elapsed, sizeMB);
+      Log.info("Extracted {} in {} ms (size={} MB)", mappedName, elapsed, sizeMB);
     }
     return loc;
   }
@@ -483,7 +499,13 @@ public class NativeDepsLoader {
         try {
           Files.deleteIfExists(temporaryPath);
         } catch (IOException e) {
-          log.warn("Could not delete partial native dependency {}", temporaryPath, e);
+          try {
+            Log.warn("Could not delete partial native dependency {}", temporaryPath, e);
+          } catch (LinkageError loggerUnavailable) {
+            // NativeDepUtil supports running with only the cuDF JAR on the class path.
+            System.err.println("Could not delete partial native dependency " + temporaryPath);
+            e.printStackTrace(System.err);
+          }
         }
       }
     }
@@ -810,7 +832,7 @@ public class NativeDepsLoader {
               n, t[EXTRACT_MS_IDX], t[LOAD_MS_IDX]);
         })
         .collect(Collectors.joining("\n"));
-    log.info("Native dependency load complete  total={} ms\n{}", totalMs, body);
+    Log.info("Native dependency load complete  total={} ms\n{}", totalMs, body);
   }
 
   public static boolean libraryLoaded() {
