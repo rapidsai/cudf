@@ -581,8 +581,8 @@ std::unique_ptr<table> concatenate(std::span<table_view const> tables_to_concat,
 }
 
 cuda::device_buffer<std::byte> concatenate_masks(std::span<column_view const> views,
-                                               cuda::stream_ref stream,
-                                               rmm::device_async_resource_ref mr)
+                                                 cuda::stream_ref stream,
+                                                 rmm::device_async_resource_ref mr)
 {
   bool const has_nulls =
     std::any_of(views.begin(), views.end(), [](column_view const col) { return col.has_nulls(); });
@@ -608,8 +608,8 @@ cuda::device_buffer<std::byte> concatenate_masks(std::span<column_view const> vi
 }  // namespace detail
 
 cuda::device_buffer<std::byte> concatenate_masks(std::span<column_view const> views,
-                                               cuda::stream_ref stream,
-                                               rmm::device_async_resource_ref mr)
+                                                 cuda::stream_ref stream,
+                                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::concatenate_masks(views, stream, mr);

@@ -65,11 +65,12 @@ std::unique_ptr<column> from_arrow_string(ArrowSchemaView const* schema,
 
 constexpr int stringview_vector_idx = 1;
 
-std::unique_ptr<column> from_arrow_stringview(ArrowSchemaView const* schema,
-                                              ArrowArray const* input,
-                                              std::unique_ptr<cuda::device_buffer<std::byte>>&& mask,
-                                              cuda::stream_ref stream,
-                                              rmm::device_async_resource_ref mr)
+std::unique_ptr<column> from_arrow_stringview(
+  ArrowSchemaView const* schema,
+  ArrowArray const* input,
+  std::unique_ptr<cuda::device_buffer<std::byte>>&& mask,
+  cuda::stream_ref stream,
+  rmm::device_async_resource_ref mr)
 {
   ArrowArrayView view;
   NANOARROW_THROW_NOT_OK(ArrowArrayViewInitFromSchema(&view, schema->schema, nullptr));

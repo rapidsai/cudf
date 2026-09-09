@@ -510,7 +510,7 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorContiguous)
                                        760,
                                        760,
                                        num_elements};
-  std::vector<cudf::column_view> views              = cudf::slice(original, indices);
+  std::vector<cudf::column_view> views                = cudf::slice(original, indices);
   cuda::device_buffer<std::byte> concatenated_bitmask = cudf::concatenate_masks(views);
   cleanEndWord(concatenated_bitmask, 0, num_elements);
   CUDF_TEST_EXPECT_EQUAL_BUFFERS(

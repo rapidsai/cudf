@@ -249,9 +249,9 @@ class column {
    * Returned by `column::release()`.
    */
   struct contents {
-    std::unique_ptr<rmm::device_buffer> data;                 ///< data device memory buffer
+    std::unique_ptr<rmm::device_buffer> data;                   ///< data device memory buffer
     std::unique_ptr<cuda::device_buffer<std::byte>> null_mask;  ///< null mask device memory buffer
-    std::vector<std::unique_ptr<column>> children;            ///< child columns
+    std::vector<std::unique_ptr<column>> children;              ///< child columns
   };
 
   /**

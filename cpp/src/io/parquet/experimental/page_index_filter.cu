@@ -77,14 +77,14 @@ struct page_stats_caster : public stats_caster_base {
    * @return A pair containing the output data buffer and nullmask
    */
   template <typename T>
-  [[nodiscard]] std::pair<rmm::device_buffer, cuda::device_buffer<std::byte>> build_data_and_nullmask(
-    mutable_column_view input_column,
-    bitmask_type const* page_nullmask,
-    cudf::device_span<size_type const> page_indices,
-    cudf::host_span<size_type const> page_row_offsets,
-    cudf::data_type dtype,
-    cuda::stream_ref stream,
-    rmm::device_async_resource_ref mr) const
+  [[nodiscard]] std::pair<rmm::device_buffer, cuda::device_buffer<std::byte>>
+  build_data_and_nullmask(mutable_column_view input_column,
+                          bitmask_type const* page_nullmask,
+                          cudf::device_span<size_type const> page_indices,
+                          cudf::host_span<size_type const> page_row_offsets,
+                          cudf::data_type dtype,
+                          cuda::stream_ref stream,
+                          rmm::device_async_resource_ref mr) const
     requires(not cudf::is_compound<T>())
   {
     // Total number of pages in the column

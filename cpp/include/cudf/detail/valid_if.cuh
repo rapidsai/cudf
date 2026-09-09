@@ -77,10 +77,10 @@ CUDF_KERNEL void valid_if_kernel(
  */
 template <typename InputIterator, typename Predicate>
 std::pair<cuda::device_buffer<std::byte>, size_type> valid_if(InputIterator begin,
-                                                            InputIterator end,
-                                                            Predicate p,
-                                                            cuda::stream_ref stream,
-                                                            cudf::memory_resources resources)
+                                                              InputIterator end,
+                                                              Predicate p,
+                                                              cuda::stream_ref stream,
+                                                              cudf::memory_resources resources)
 {
   CUDF_EXPECTS(begin <= end, "Invalid range.");
 

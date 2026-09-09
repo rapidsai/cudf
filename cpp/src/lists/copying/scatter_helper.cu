@@ -34,8 +34,8 @@ namespace detail {
  * @param num_child_rows Number of rows in child column
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate child column's null mask
- * @return std::pair<cuda::device_buffer<std::byte>, size_type> Child column's null mask and null row
- * count
+ * @return std::pair<cuda::device_buffer<std::byte>, size_type> Child column's null mask and null
+ * row count
  */
 std::pair<cuda::device_buffer<std::byte>, size_type> construct_child_nullmask(
   rmm::device_uvector<unbound_list_view> const& parent_list_vector,
