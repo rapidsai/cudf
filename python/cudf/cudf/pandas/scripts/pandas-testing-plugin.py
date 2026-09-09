@@ -5279,8 +5279,6 @@ NODEIDS_TO_SKIP_WHEN_SHARDED: dict[str, str] = {
     "tests/strings/test_find_replace.py::test_pyarrow_ambiguous_group_references[pyarrow_string_dtype0-(\\\\w+) (\\\\w+) (\\\\w+)-\\\\20]": "Flaky under test sharding: cudf.pandas behavior is test-order-dependent (see #22992)",
     "tests/strings/test_find_replace.py::test_pyarrow_backend_group_replacement[\\\\[(\\\\d+)\\\\]-(\\\\1)-expected_list1]": "Flaky under test sharding: cudf.pandas behavior is test-order-dependent (see #22992)",
     "tests/extension/test_arrow.py::TestArrowArray::test_compare_array[timestamp[ns]-eq]": "Skipped: failing in pandas-tests sharded CI (PR #22992, run 28204832469)",
-    "tests/frame/test_stack_unstack.py::TestStackUnstackMultiLevel::test_stack_names_and_numbers[False]": "Skipped: failing in pandas-tests sharded CI (PR #22992, run 28204832469)",
-    "tests/frame/test_stack_unstack.py::TestStackUnstackMultiLevel::test_stack_names_and_numbers[True]": "Skipped: failing in pandas-tests sharded CI (PR #22992, run 28204832469)",
     "tests/groupby/methods/test_value_counts.py::test_against_frame_and_seriesgroupby[False-False-False-None-True-proportion-function]": "Skipped: failing in pandas-tests sharded CI (PR #22992, run 28204832469)",
     "tests/groupby/methods/test_value_counts.py::test_against_frame_and_seriesgroupby[False-False-True-False-False-count-column]": "Skipped: failing in pandas-tests sharded CI (PR #22992, run 28204832469)",
     "tests/groupby/methods/test_value_counts.py::test_against_frame_and_seriesgroupby[False-False-True-False-False-count-function]": "Skipped: failing in pandas-tests sharded CI (PR #22992, run 28204832469)",
@@ -5407,7 +5405,6 @@ NODEIDS_TO_SKIP_WHEN_SHARDED: dict[str, str] = {
     # sibling unstack tests pass in the other shard, and
     # test_to_datetime_iso8601_fails passed in the previous run of this
     # same shard.
-    "tests/frame/test_stack_unstack.py::TestStackUnstackMultiLevel::test_stack_multiple_out_of_bounds[False]": "Flaky under test sharding: cudf.pandas behavior is test-order-dependent (see #22992)",
     "tests/tools/test_to_datetime.py::TestToDatetimeMisc::test_to_datetime_iso8601_fails[True-2012-01-01-%Y-%m-%d %H]": "Flaky under test sharding: cudf.pandas behavior is test-order-dependent (see #22992)",
 }
 
