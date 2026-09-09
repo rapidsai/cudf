@@ -32,6 +32,7 @@
 #include <thrust/fill.h>
 #include <thrust/scan.h>
 
+#include <algorithm>
 #include <limits>
 #include <stdexcept>
 
@@ -70,103 +71,104 @@ CUDF_KERNEL void compute_percentiles_kernel(device_span<int32_t const> tdigest_o
                                             int32_t const* output_offsets,
                                             double* output)
 {
-  auto const tid = cudf::detail::grid_1d::global_thread_id();
+  auto const num_tdigests = tdigest_offsets.size() - 1;
+  auto const num_pairs    = static_cast<thread_index_type>(num_tdigests) * percentiles.size();
+  auto const stride       = cudf::detail::grid_1d::grid_stride();
+  for (auto tid = cudf::detail::grid_1d::global_thread_id(); tid < num_pairs; tid += stride) {
+    auto const tdigest_index = tid / percentiles.size();
+    auto const pindex        = tid % percentiles.size();
 
-  auto const num_tdigests  = tdigest_offsets.size() - 1;
-  auto const tdigest_index = tid / percentiles.size();
-  if (tdigest_index >= num_tdigests) { return; }
-  auto const pindex = tid % percentiles.size();
+    // size of the digest we're querying
+    auto const tdigest_size = tdigest_offsets[tdigest_index + 1] - tdigest_offsets[tdigest_index];
+    // no work to do. values will be set to null
+    if (tdigest_size == 0 || !percentiles.is_valid(pindex)) { continue; }
 
-  // size of the digest we're querying
-  auto const tdigest_size = tdigest_offsets[tdigest_index + 1] - tdigest_offsets[tdigest_index];
-  // no work to do. values will be set to null
-  if (tdigest_size == 0 || !percentiles.is_valid(pindex)) { return; }
-
-  auto const output_index = [&]() {
-    if constexpr (CompactOutput) {
-      return output_offsets[tdigest_index] + pindex;
-    } else {
-      return tid;
-    }
-  }();
-
-  output[output_index] = [&]() {
-    double const percentage         = percentiles.element<double>(pindex);
-    double const* cumulative_weight = cumulative_weight_ + tdigest_offsets[tdigest_index];
-
-    // centroids for this particular tdigest
-    CentroidIter centroids = centroids_ + tdigest_offsets[tdigest_index];
-
-    // min and max for the digest
-    double const* min_val = min_ + tdigest_index;
-    double const* max_val = max_ + tdigest_index;
-
-    double const total_weight = cumulative_weight[tdigest_size - 1];
-
-    // The following Arrow code serves as a basis for this computation
-    // https://github.com/apache/arrow/blob/master/cpp/src/arrow/util/tdigest.cc#L280
-    double const weighted_q = percentage * total_weight;
-    if (weighted_q <= 1) {
-      return *min_val;
-    } else if (weighted_q > total_weight - 1) {
-      return *max_val;
-    }
-
-    // determine what centroid this weighted quantile falls within.
-    size_type const centroid_index = static_cast<size_type>(cuda::std::distance(
-      cumulative_weight,
-      thrust::lower_bound(
-        thrust::seq, cumulative_weight, cumulative_weight + tdigest_size, weighted_q)));
-    centroid c                     = centroids[centroid_index];
-
-    // diff == how far from the "center" of the centroid we are,
-    // in unit weights.
-    // visually:
-    //
-    // centroid of weight 7
-    //        C       <-- center of the centroid
-    //    |-------|
-    //      | |  |
-    //      X Y  Z
-    // X has a diff of -2 (2 units to the left of the center of the centroid)
-    // Y has a diff of 0 (directly in the middle of the centroid)
-    // Z has a diff of 3 (3 units to the right of the center of the centroid)
-    double const diff = weighted_q + c.weight / 2 - cumulative_weight[centroid_index];
-
-    // if we're completely within a centroid of weight 1, just return that.
-    if (c.weight == 1 && cuda::std::abs(diff) <= 0.5) { return c.mean; }
-
-    // otherwise, interpolate between two centroids.
-
-    // get the two centroids we want to interpolate between
-    auto const look_left  = diff < 0;
-    auto const [lhs, rhs] = [&]() {
-      if (look_left) {
-        // if we're at the first centroid, "left" of us is the min value
-        auto const first_centroid = centroid_index == 0;
-        auto const lhs = first_centroid ? centroid{*min_val, 0} : centroids[centroid_index - 1];
-        auto const rhs = c;
-        return cuda::std::pair<centroid, centroid>{lhs, rhs};
+    auto const output_index = [&]() {
+      if constexpr (CompactOutput) {
+        return output_offsets[tdigest_index] + pindex;
       } else {
-        // if we're at the last centroid, "right" of us is the max value
-        auto const last_centroid = (centroid_index == tdigest_size - 1);
-        auto const lhs           = c;
-        auto const rhs = last_centroid ? centroid{*max_val, 0} : centroids[centroid_index + 1];
-        return cuda::std::pair<centroid, centroid>{lhs, rhs};
+        return tid;
       }
     }();
 
-    // compute interpolation value t
+    output[output_index] = [&]() {
+      double const percentage         = percentiles.element<double>(pindex);
+      double const* cumulative_weight = cumulative_weight_ + tdigest_offsets[tdigest_index];
 
-    // total interpolation range. the total range of "space" between the lhs and rhs centroids.
-    auto const tip = lhs.weight / 2 + rhs.weight / 2;
-    // if we're looking left, diff is negative, so shift it so that we are interpolating
-    // from lhs -> rhs.
-    auto const t = (look_left) ? (diff + tip) / tip : diff / tip;
+      // centroids for this particular tdigest
+      CentroidIter centroids = centroids_ + tdigest_offsets[tdigest_index];
 
-    // interpolate
-    return lerp(lhs.mean, rhs.mean, t);
-  }();
+      // min and max for the digest
+      double const* min_val = min_ + tdigest_index;
+      double const* max_val = max_ + tdigest_index;
+
+      double const total_weight = cumulative_weight[tdigest_size - 1];
+
+      // The following Arrow code serves as a basis for this computation
+      // https://github.com/apache/arrow/blob/master/cpp/src/arrow/util/tdigest.cc#L280
+      double const weighted_q = percentage * total_weight;
+      if (weighted_q <= 1) {
+        return *min_val;
+      } else if (weighted_q > total_weight - 1) {
+        return *max_val;
+      }
+
+      // determine what centroid this weighted quantile falls within.
+      size_type const centroid_index = static_cast<size_type>(cuda::std::distance(
+        cumulative_weight,
+        thrust::lower_bound(
+          thrust::seq, cumulative_weight, cumulative_weight + tdigest_size, weighted_q)));
+      centroid c                     = centroids[centroid_index];
+
+      // diff == how far from the "center" of the centroid we are,
+      // in unit weights.
+      // visually:
+      //
+      // centroid of weight 7
+      //        C       <-- center of the centroid
+      //    |-------|
+      //      | |  |
+      //      X Y  Z
+      // X has a diff of -2 (2 units to the left of the center of the centroid)
+      // Y has a diff of 0 (directly in the middle of the centroid)
+      // Z has a diff of 3 (3 units to the right of the center of the centroid)
+      double const diff = weighted_q + c.weight / 2 - cumulative_weight[centroid_index];
+
+      // if we're completely within a centroid of weight 1, just return that.
+      if (c.weight == 1 && cuda::std::abs(diff) <= 0.5) { return c.mean; }
+
+      // otherwise, interpolate between two centroids.
+
+      // get the two centroids we want to interpolate between
+      auto const look_left  = diff < 0;
+      auto const [lhs, rhs] = [&]() {
+        if (look_left) {
+          // if we're at the first centroid, "left" of us is the min value
+          auto const first_centroid = centroid_index == 0;
+          auto const lhs = first_centroid ? centroid{*min_val, 0} : centroids[centroid_index - 1];
+          auto const rhs = c;
+          return cuda::std::pair<centroid, centroid>{lhs, rhs};
+        } else {
+          // if we're at the last centroid, "right" of us is the max value
+          auto const last_centroid = (centroid_index == tdigest_size - 1);
+          auto const lhs           = c;
+          auto const rhs = last_centroid ? centroid{*max_val, 0} : centroids[centroid_index + 1];
+          return cuda::std::pair<centroid, centroid>{lhs, rhs};
+        }
+      }();
+
+      // compute interpolation value t
+
+      // total interpolation range. the total range of "space" between the lhs and rhs centroids.
+      auto const tip = lhs.weight / 2 + rhs.weight / 2;
+      // if we're looking left, diff is negative, so shift it so that we are interpolating
+      // from lhs -> rhs.
+      auto const t = (look_left) ? (diff + tip) / tip : diff / tip;
+
+      // interpolate
+      return lerp(lhs.mean, rhs.mean, t);
+    }();
+  }
 }
 
 /**
@@ -176,12 +178,12 @@ CUDF_KERNEL void compute_percentiles_kernel(device_span<int32_t const> tdigest_o
  * corresponding tdigest of from row `i` in `input`. The length of each output list
  * is the number of percentiles specified in `percentiles`
  *
- * @param input tdigest input data. One tdigest per row.
- * @param percentiles Desired percentiles in range [0, 1].
+ * @param input             tdigest input data. One tdigest per row.
+ * @param percentiles       Desired percentiles in range [0, 1].
  * @param num_output_values Number of elements to allocate in the output column.
- * @param output_offsets Optional compact output offsets for inputs containing empty digests.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param output_offsets    Optional compact output offsets for inputs containing empty digests.
+ * @param stream            CUDA stream used for device memory operations and kernel launches.
+ * @param mr                Device memory resource used for output allocation.
  *
  * @returns Column of doubles containing requested percentile values.
  */
@@ -242,29 +244,26 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
   auto centroids = cudf::detail::make_counting_transform_iterator(
     0, make_centroid{tdv.means().begin<double>(), tdv.weights().begin<double>()});
 
-  constexpr size_type block_size = 256;
-  cudf::detail::grid_1d const grid(thread_index_type{percentiles.size()} * input.size(),
-                                   block_size);
+  constexpr size_type block_size  = 256;
+  auto const logical_num_threads  = thread_index_type{percentiles.size()} * input.size();
+  auto const launched_num_threads = std::min(
+    logical_num_threads, static_cast<thread_index_type>(std::numeric_limits<size_type>::max()));
+  cudf::detail::grid_1d const grid(launched_num_threads, block_size);
+  auto const launch_kernel = [&]<bool CompactOutput>() {
+    compute_percentiles_kernel<CompactOutput><<<grid.num_blocks, block_size, 0, stream.get()>>>(
+      {offsets.begin<size_type>(), static_cast<size_t>(offsets.size())},
+      *percentiles_cdv,
+      centroids,
+      tdv.min_begin(),
+      tdv.max_begin(),
+      cumulative_weights->view().begin<double>(),
+      output_offsets,
+      result->mutable_view().begin<double>());
+  };
   if (output_offsets == nullptr) {
-    compute_percentiles_kernel<false><<<grid.num_blocks, block_size, 0, stream.get()>>>(
-      {offsets.begin<size_type>(), static_cast<size_t>(offsets.size())},
-      *percentiles_cdv,
-      centroids,
-      tdv.min_begin(),
-      tdv.max_begin(),
-      cumulative_weights->view().begin<double>(),
-      output_offsets,
-      result->mutable_view().begin<double>());
+    launch_kernel.template operator()<false>();
   } else {
-    compute_percentiles_kernel<true><<<grid.num_blocks, block_size, 0, stream.get()>>>(
-      {offsets.begin<size_type>(), static_cast<size_t>(offsets.size())},
-      *percentiles_cdv,
-      centroids,
-      tdv.min_begin(),
-      tdv.max_begin(),
-      cumulative_weights->view().begin<double>(),
-      output_offsets,
-      result->mutable_view().begin<double>());
+    launch_kernel.template operator()<true>();
   }
   CUDF_CUDA_TRY(cudaGetLastError());
 
