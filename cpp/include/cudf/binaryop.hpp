@@ -255,6 +255,10 @@ std::unique_ptr<column> binary_operation(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column
  * @return Output column
+ * @throws cudf::evaluation_error if @p policy is `error_policy::PROPAGATE` and any row fails
+ * @throws cudf::logic_error if @p op is not a checked arithmetic operator
+ * @throws cudf::data_type_error if the input and output types do not match, are not supported
+ * arithmetic or fixed-point types, or @p output_type has an invalid fixed-point scale
  */
 std::unique_ptr<column> binary_operation(
   scalar const& lhs,
@@ -279,6 +283,8 @@ std::unique_ptr<column> binary_operation(
 
 /** @copydoc binary_operation(scalar const&, column_view const&, binary_operator, data_type,
  * error_policy, cuda::stream_ref, rmm::device_async_resource_ref)
+ *
+ * @throws std::invalid_argument if @p lhs and @p rhs have different sizes
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,

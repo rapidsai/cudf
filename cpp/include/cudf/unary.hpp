@@ -30,32 +30,32 @@ namespace CUDF_EXPORT cudf {
  * @brief Types of unary operations that can be performed on data.
  */
 enum class unary_operator : int32_t {
-  SIN,         ///< Trigonometric sine
-  COS,         ///< Trigonometric cosine
-  TAN,         ///< Trigonometric tangent
-  ARCSIN,      ///< Trigonometric sine inverse
-  ARCCOS,      ///< Trigonometric cosine inverse
-  ARCTAN,      ///< Trigonometric tangent inverse
-  SINH,        ///< Hyperbolic sine
-  COSH,        ///< Hyperbolic cosine
-  TANH,        ///< Hyperbolic tangent
-  ARCSINH,     ///< Hyperbolic sine inverse
-  ARCCOSH,     ///< Hyperbolic cosine inverse
-  ARCTANH,     ///< Hyperbolic tangent inverse
-  EXP,         ///< Exponential (base e, Euler number)
-  LOG,         ///< Natural Logarithm (base e)
-  SQRT,        ///< Square-root (x^0.5)
-  CBRT,        ///< Cube-root (x^(1.0/3))
-  CEIL,        ///< Smallest integer value not less than arg
-  FLOOR,       ///< largest integer value not greater than arg
-  ABS,         ///< Absolute value
-  RINT,        ///< Rounds the floating-point argument arg to an integer value
-  BIT_COUNT,   ///< Count the number of bits set to 1 of an integer value
-  BIT_INVERT,  ///< Bitwise Not (~)
-  NOT,         ///< Logical Not (!)
-  NEGATE,      ///< Unary negation (-), only for signed numeric and duration types.
-  NEG_OVERFLOW, ///< Negation with overflow detection
-  ABS_OVERFLOW  ///< Absolute value with overflow detection
+  SIN,           ///< Trigonometric sine
+  COS,           ///< Trigonometric cosine
+  TAN,           ///< Trigonometric tangent
+  ARCSIN,        ///< Trigonometric sine inverse
+  ARCCOS,        ///< Trigonometric cosine inverse
+  ARCTAN,        ///< Trigonometric tangent inverse
+  SINH,          ///< Hyperbolic sine
+  COSH,          ///< Hyperbolic cosine
+  TANH,          ///< Hyperbolic tangent
+  ARCSINH,       ///< Hyperbolic sine inverse
+  ARCCOSH,       ///< Hyperbolic cosine inverse
+  ARCTANH,       ///< Hyperbolic tangent inverse
+  EXP,           ///< Exponential (base e, Euler number)
+  LOG,           ///< Natural Logarithm (base e)
+  SQRT,          ///< Square-root (x^0.5)
+  CBRT,          ///< Cube-root (x^(1.0/3))
+  CEIL,          ///< Smallest integer value not less than arg
+  FLOOR,         ///< largest integer value not greater than arg
+  ABS,           ///< Absolute value
+  RINT,          ///< Rounds the floating-point argument arg to an integer value
+  BIT_COUNT,     ///< Count the number of bits set to 1 of an integer value
+  BIT_INVERT,    ///< Bitwise Not (~)
+  NOT,           ///< Logical Not (!)
+  NEGATE,        ///< Unary negation (-), only for signed numeric and duration types.
+  NEG_OVERFLOW,  ///< Negation with overflow detection
+  ABS_OVERFLOW   ///< Absolute value with overflow detection
 };
 
 /**
@@ -90,6 +90,9 @@ std::unique_ptr<cudf::column> unary_operation(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column
  * @return Output column
+ * @throws cudf::evaluation_error if @p policy is `error_policy::PROPAGATE` and any row fails
+ * @throws cudf::logic_error if @p op is not a checked arithmetic operator
+ * @throws cudf::data_type_error if @p input is not a supported arithmetic or fixed-point type
  */
 std::unique_ptr<cudf::column> unary_operation(
   cudf::column_view const& input,

@@ -53,8 +53,11 @@ namespace binops {
 bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op)
 {
   if (cudf::detail::checked_arithmetic::is_checked(op)) {
-    return out.id() == lhs.id() && lhs.id() == rhs.id() &&
-           ((is_numeric(lhs) && lhs.id() != type_id::BOOL8) || is_fixed_point(lhs));
+    if (out.id() != lhs.id() || lhs.id() != rhs.id()) { return false; }
+    if (is_fixed_point(lhs)) {
+      return out.scale() == binary_operation_fixed_point_scale(op, lhs.scale(), rhs.scale());
+    }
+    return is_numeric(lhs) && lhs.id() != type_id::BOOL8;
   }
   return cudf::binops::compiled::is_supported_operation(out, lhs, rhs, op);
 }

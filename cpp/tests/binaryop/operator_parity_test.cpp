@@ -5,6 +5,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
 
 #include <cudf/binaryop.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -12,11 +13,28 @@
 
 #include <limits>
 
-namespace {
-
 struct BinaryOperatorParityTest : public cudf::test::BaseFixture {};
 
 static_assert(static_cast<int32_t>(cudf::binary_operator::INVALID_BINARY) == 34);
+
+TEST_F(BinaryOperatorParityTest, CheckedDecimalSupportRequiresOutputScale)
+{
+  auto const lhs_type = cudf::data_type{cudf::type_id::DECIMAL32, -2};
+  auto const rhs_type = cudf::data_type{cudf::type_id::DECIMAL32, -1};
+
+  auto expect_scale = [&](cudf::binary_operator op, int32_t expected_scale) {
+    EXPECT_TRUE(cudf::binops::is_supported_operation(
+      cudf::data_type{cudf::type_id::DECIMAL32, expected_scale}, lhs_type, rhs_type, op));
+    EXPECT_FALSE(cudf::binops::is_supported_operation(
+      cudf::data_type{cudf::type_id::DECIMAL32, expected_scale + 1}, lhs_type, rhs_type, op));
+  };
+
+  expect_scale(cudf::binary_operator::ADD_OVERFLOW, -2);
+  expect_scale(cudf::binary_operator::SUB_OVERFLOW, -2);
+  expect_scale(cudf::binary_operator::MUL_OVERFLOW, -3);
+  expect_scale(cudf::binary_operator::DIV_OVERFLOW, -1);
+  expect_scale(cudf::binary_operator::MOD_OVERFLOW, -2);
+}
 
 TEST_F(BinaryOperatorParityTest, CheckedArithmeticPropagates)
 {
@@ -138,4 +156,3 @@ TEST_F(BinaryOperatorParityTest, CheckedDecimalScaleRules)
       lhs, rhs, cudf::binary_operator::ADD_OVERFLOW, cudf::data_type{cudf::type_id::DECIMAL32, -1}),
     cudf::data_type_error);
 }
-}  // namespace
