@@ -19,7 +19,14 @@ constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_leve
 template <typename T>
 class SparkMurmurHashTestTyped : public cudf::test::BaseFixture {};
 
-TYPED_TEST_SUITE(SparkMurmurHashTestTyped, cudf::test::FixedWidthTypes);
+// Spark hashes dates in days and timestamps and durations in microseconds; other chrono units are
+// rejected, so the typed tests only cover the supported fixed-width types.
+using SparkChronoTypes =
+  cudf::test::Types<cudf::timestamp_D, cudf::timestamp_us, cudf::duration_us>;
+using SparkFixedWidthTypes =
+  cudf::test::Concat<cudf::test::NumericTypes, SparkChronoTypes, cudf::test::FixedPointTypes>;
+
+TYPED_TEST_SUITE(SparkMurmurHashTestTyped, SparkFixedWidthTypes);
 
 TYPED_TEST(SparkMurmurHashTestTyped, Equality)
 {
@@ -163,7 +170,7 @@ TEST_F(SparkMurmurHashTest, MultiValueNulls)
   cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 1, 1, 0, 1}, {1, 1, 0, 0, 1});
 
   // Nulls with different values should be equal
-  using ts = cudf::timestamp_s;
+  using ts = cudf::timestamp_us;
   cudf::test::fixed_width_column_wrapper<ts, ts::duration> const secs_col1(
     {ts::duration::zero(),
      static_cast<ts::duration>(100),
