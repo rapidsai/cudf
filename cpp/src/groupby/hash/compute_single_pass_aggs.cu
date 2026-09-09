@@ -79,13 +79,22 @@ struct grouped_value_fn {
   Target null_value;
   bool has_nulls;
 
-  __device__ Target operator()(size_type position) const
+  __device__ bool col_is_null(size_type row) const
   {
-    auto const row = grouped_rows[position];
-    if (has_nulls && value.col.is_null_nocheck(row)) { return null_value; }
+    return has_nulls && value.col.is_null_nocheck(row);
+  }
+
+  __device__ Target compute(size_type row) const
+  {
     auto const result = static_cast<Target>(value(row));
     if constexpr (Square) { return result * result; }
     return result;
+  }
+
+  __device__ Target operator()(size_type position) const
+  {
+    auto const row = grouped_rows[position];
+    return col_is_null(row) ? null_value : compute(row);
   }
 };
 
@@ -97,6 +106,45 @@ struct grouped_validity_fn {
   __device__ bool operator()(size_type position) const
   {
     return col.is_valid_nocheck(grouped_rows[position]);
+  }
+};
+
+/// A reduced value together with whether any of the reduced rows was valid, so that a nullable
+/// aggregation and its null mask come out of one pass.
+template <typename Result>
+struct valid_value {
+  Result value;
+  bool valid;
+};
+
+template <typename Op, typename Result>
+struct valid_value_op {
+  __device__ valid_value<Result> operator()(valid_value<Result> const& lhs,
+                                            valid_value<Result> const& rhs) const
+  {
+    return {Op{}(lhs.value, rhs.value), lhs.valid || rhs.valid};
+  }
+};
+
+/// Maps a grouped position to the value of the input row at that position and its validity; null
+/// rows contribute the identity.
+template <typename Source, typename Target, bool Square>
+struct grouped_valid_value_fn {
+  grouped_value_fn<Source, Target, Square> value;
+
+  __device__ valid_value<Target> operator()(size_type position) const
+  {
+    auto const row = value.grouped_rows[position];
+    if (value.col_is_null(row)) { return {value.null_value, false}; }
+    return {value.compute(row), true};
+  }
+};
+
+template <typename Result>
+struct split_valid_value_fn {
+  __device__ cuda::std::tuple<Result, bool> operator()(valid_value<Result> const& v) const
+  {
+    return {v.value, v.valid};
   }
 };
 
@@ -487,12 +535,35 @@ struct reduce_fn {
 
     using value_fn      = grouped_value_fn<Source, Result, K == aggregation::SUM_OF_SQUARES>;
     auto const identity = Op::template identity<Result>();
-    auto const values   = cudf::detail::make_counting_transform_iterator(
-      0,
-      value_fn{ctx.grouped.rows.data(), ctx.accessor<Source>(), identity, ctx.values.has_nulls()});
-    reduce_groups(
-      ctx.grouped, values, result->mutable_view().begin<Result>(), Op{}, identity, ctx.stream);
-    set_group_null_mask(*result, ctx);
+    auto const value =
+      value_fn{ctx.grouped.rows.data(), ctx.accessor<Source>(), identity, ctx.values.has_nulls()};
+    auto const output = result->mutable_view().begin<Result>();
+    if (!ctx.nullable) {
+      reduce_groups(ctx.grouped,
+                    cudf::detail::make_counting_transform_iterator(0, value),
+                    output,
+                    Op{},
+                    identity,
+                    ctx.stream);
+      return result;
+    }
+
+    // The validity of a group (any valid row) rides along with its value in one pass.
+    rmm::device_uvector<bool> group_valid(
+      ctx.num_groups, ctx.stream, cudf::get_current_device_resource_ref());
+    auto const values = cudf::detail::make_counting_transform_iterator(
+      0, grouped_valid_value_fn < Source, Result, K == aggregation::SUM_OF_SQUARES > {value});
+    auto const outputs = cuda::transform_output_iterator{
+      cuda::make_zip_iterator(output, group_valid.begin()), split_valid_value_fn<Result>{}};
+    reduce_groups(ctx.grouped,
+                  values,
+                  outputs,
+                  valid_value_op<Op, Result>{},
+                  valid_value<Result>{identity, false},
+                  ctx.stream);
+    auto [null_mask, null_count] = cudf::detail::valid_if(
+      group_valid.begin(), group_valid.end(), cuda::std::identity{}, ctx.stream, ctx.mr);
+    result->set_null_mask(std::move(null_mask), null_count);
     return result;
   }
 
