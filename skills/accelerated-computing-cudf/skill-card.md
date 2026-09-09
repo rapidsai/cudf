@@ -28,8 +28,8 @@ Mitigation: Review and scan skill before deployment. <br>
 - [cuDF API Patterns, Gaps, and Semantic Differences](references/api-patterns.md) <br>
 - [cudf.pandas Accelerator Deep Dive](references/cudf-pandas-accelerator.md) <br>
 - [dask-cuDF Patterns](references/dask-cudf-patterns.md) <br>
-- [cuDF Documentation](https://docs.rapids.ai/api/cudf/stable/) <br>
-- [dask-cuDF API Reference](https://docs.rapids.ai/api/dask-cudf/stable/api/) <br>
+- [cuDF Documentation](https://docs.nvidia.com/cudf/) <br>
+- [dask-cuDF API Reference](https://docs.nvidia.com/dask-cudf/) <br>
 - [cuDF GitHub Repository](https://github.com/NVIDIA/cudf) <br>
 
 
