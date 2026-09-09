@@ -7,12 +7,12 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/algorithms/reduce.cuh>
-#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
@@ -176,13 +176,12 @@ CUDF_KERNEL void compute_percentiles_kernel(device_span<int32_t const> tdigest_o
  * corresponding tdigest of from row `i` in `input`. The length of each output list
  * is the number of percentiles specified in `percentiles`
  *
- * @param input           tdigest input data. One tdigest per row.
- * @param percentiles     Desired percentiles in range [0, 1].
+ * @param input tdigest input data. One tdigest per row.
+ * @param percentiles Desired percentiles in range [0, 1].
  * @param num_output_values Number of elements to allocate in the output column.
- * @param output_offsets  Optional compact output offsets for inputs containing empty digests.
- * @param stream          CUDA stream used for device memory operations and kernel launches.
- * @param mr              Device memory resource used to allocate the returned column's device
- *                        memory.
+ * @param output_offsets Optional compact output offsets for inputs containing empty digests.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  *
  * @returns Column of doubles containing requested percentile values.
  */
@@ -414,9 +413,9 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
   auto bitmask = [stream, mr, &tdv, null_count]() {
     if (null_count == 0) { return rmm::device_buffer{}; }
 
-    auto mask = cudf::create_null_mask(tdv.size(), mask_state::UNINITIALIZED, stream, mr);
-    auto valid_count =
-      cudf::detail::device_scalar<size_type>(0, stream, cudf::get_current_device_resource_ref());
+    auto mask        = cudf::create_null_mask(tdv.size(), mask_state::UNINITIALIZED, stream, mr);
+    auto valid_count = cudf::detail::make_zeroed_device_uvector_async<size_type>(
+      1, stream, cudf::get_current_device_resource_ref());
     constexpr size_type block_size{256};
     auto const grid = cudf::detail::grid_1d{static_cast<thread_index_type>(tdv.size()), block_size};
     cudf::detail::valid_if_kernel<block_size>

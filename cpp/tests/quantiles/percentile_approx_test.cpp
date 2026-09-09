@@ -627,6 +627,58 @@ TEST_F(PercentileApproxTest, GroupByWithMixedEmptyAndNonEmptyDigests)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }
 
+TEST_F(PercentileApproxTest, GroupByWithMixedEmptyDigestMaskBoundaries)
+{
+  auto const delta       = 1'000;
+  auto const percentiles = cudf::test::fixed_width_column_wrapper<double>{0.5};
+
+  for (auto const num_rows : {31, 32, 33, 65, 257}) {
+    SCOPED_TRACE(::testing::Message() << "num_rows=" << num_rows);
+
+    std::vector<int32_t> key_data(num_rows);
+    std::vector<double> value_data(num_rows);
+    std::vector<bool> validities(num_rows);
+    std::vector<cudf::size_type> offsets_data(num_rows + 1, 0);
+    std::vector<double> child_data;
+    child_data.reserve((num_rows + 1) / 2);
+
+    for (cudf::size_type row = 0; row < num_rows; ++row) {
+      key_data[row]   = row;
+      value_data[row] = row;
+      validities[row] = row % 2 == 0;
+      if (validities[row]) { child_data.push_back(value_data[row]); }
+      offsets_data[row + 1] = static_cast<cudf::size_type>(child_data.size());
+    }
+
+    auto const keys =
+      cudf::test::fixed_width_column_wrapper<int32_t>(key_data.begin(), key_data.end());
+    auto const values = cudf::test::fixed_width_column_wrapper<double>(
+      value_data.begin(), value_data.end(), validities.begin());
+
+    cudf::groupby::groupby gb(
+      cudf::table_view{{keys}}, cudf::null_policy::EXCLUDE, cudf::sorted::YES);
+    std::vector<cudf::groupby::aggregation_request> requests;
+    std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
+    aggregations.push_back(cudf::make_tdigest_aggregation<cudf::groupby_aggregation>(delta));
+    requests.push_back({values, std::move(aggregations)});
+    auto const tdigest_column = gb.aggregate(requests);
+
+    cudf::tdigest::tdigest_column_view tdv(*tdigest_column.second[0].results[0]);
+    auto const result = cudf::percentile_approx(tdv, percentiles);
+
+    auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>(offsets_data.begin(),
+                                                                           offsets_data.end());
+    auto child =
+      cudf::test::fixed_width_column_wrapper<double>(child_data.begin(), child_data.end());
+    auto [null_mask, null_count] =
+      cudf::test::detail::make_null_mask(validities.begin(), validities.end());
+    auto const expected = cudf::make_lists_column(
+      num_rows, offsets.release(), child.release(), null_count, std::move(null_mask));
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
+  }
+}
+
 namespace {
 
 TEST_F(PercentileApproxTest, CompressedTdigestsAgainstHostQuantiles)
