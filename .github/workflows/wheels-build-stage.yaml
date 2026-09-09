@@ -125,7 +125,8 @@ jobs:
           INPUTS_SCRIPT: ${{ inputs.script }}
         shell: bash -leo pipefail {0}
       - name: Save Cython cache
-        if: inputs.stage == 'python' && steps.cython-cache-restore.outputs.cache-hit != 'true'
+        # PRs restore this cache but do not create merge-ref-scoped entries.
+        if: inputs.stage == 'python' && inputs.build_type != 'pull-request' && steps.cython-cache-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ github.workspace }}/.cache/cython
