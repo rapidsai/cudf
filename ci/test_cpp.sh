@@ -13,7 +13,7 @@ EXITCODE=0
 trap "EXITCODE=1" ERR
 set +e
 
-# Run gtests from the libcudf-tests and libcudf-streaming-tests packages
+# Run package gtests from the libcudf-tests and libcudf-streaming-tests packages.
 export GTEST_OUTPUT=xml:${RAPIDS_TESTS_DIR}/
 
 rapids-logger "Run libcudf gtests"
