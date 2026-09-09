@@ -291,8 +291,9 @@ struct streaming_groupby::impl {
   bool _initialized{false};
   /// Set true once an `aggregate()` / `merge()` call has thrown after touching the
   /// hash set.  Subsequent `aggregate()` / `merge()` calls fail fast; only
-  /// `finalize()` may still be called to recover partial results.
-  bool _invalidated{false};
+  /// `finalize()` may still be called to recover partial results.  Atomic so the
+  /// fail-fast check in `do_aggregate` can run ahead of `_insert_mutex`.
+  std::atomic<bool> _invalidated{false};
   /*
    * Number of distinct keys accumulated so far.  Also serves as the high-water
    * mark of dense IDs in the persistent hash set: stored slot values are in
@@ -339,9 +340,11 @@ struct streaming_groupby::impl {
   std::unique_ptr<streaming_set_t> _key_set;
 
   [[nodiscard]] size_type num_keys() const { return static_cast<size_type>(_key_indices.size()); }
-  [[nodiscard]] bool has_state() const
+  void ensure_not_invalidated() const
   {
-    return _initialized && _distinct_keys.load(std::memory_order_relaxed) > 0;
+    CUDF_EXPECTS(!_invalidated.load(std::memory_order_relaxed),
+                 "streaming_groupby is in an invalidated state from a prior failure; "
+                 "no further aggregate()/merge() is allowed.  finalize() may still be called.");
   }
 
   impl(host_span<size_type const> key_indices,

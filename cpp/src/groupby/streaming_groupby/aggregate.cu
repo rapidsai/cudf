@@ -24,6 +24,8 @@ namespace cudf::groupby {
 
 void streaming_groupby::impl::do_aggregate(table_view const& data, cuda::stream_ref stream)
 {
+  ensure_not_invalidated();
+
   auto const batch_size = data.num_rows();
   if (batch_size == 0) { return; }
 
@@ -41,11 +43,11 @@ void streaming_groupby::impl::do_aggregate(table_view const& data, cuda::stream_
   // insertion is serialized across concurrent callers on the host and, via the event, on the
   // device.  The aggregation below is per-group atomic and runs unserialized.
   auto const result = [&] {
-    std::lock_guard<std::mutex> const lock{_insert_mutex};
+    std::lock_guard const lock{_insert_mutex};
 
-    CUDF_EXPECTS(!_invalidated,
-                 "streaming_groupby is in an invalidated state from a prior failure; "
-                 "no further aggregate()/merge() is allowed.  finalize() may still be called.");
+    // Re-check under the lock: another caller may have invalidated the object since the
+    // fail-fast check above.
+    ensure_not_invalidated();
 
     if (!_initialized) { initialize(data, stream); }
 
