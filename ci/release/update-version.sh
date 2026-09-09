@@ -220,7 +220,10 @@ done
 # Java files
 NEXT_FULL_JAVA_TAG="${NEXT_SHORT_TAG}.${PATCH_PEP440}-SNAPSHOT"
 sed_runner "s|<version>.*-SNAPSHOT</version>|<version>${NEXT_FULL_JAVA_TAG}</version>|g" java/pom.xml
-sed_runner "s|cudf-.*-SNAPSHOT|cudf-${NEXT_FULL_JAVA_TAG}|g" java/ci/README.md
+# Match only concrete CalVer examples. A broad wildcard can start at a
+# <CUDF_VERSION> placeholder and consume punctuation and prose up to a later
+# -SNAPSHOT, corrupting the documentation and leaving delimiters unbalanced.
+sed_runner "s|cudf-[0-9][0-9]\.[0-9][0-9]\.[0-9][0-9]*-SNAPSHOT|cudf-${NEXT_FULL_JAVA_TAG}|g" java/ci/README.md
 sed_runner "s|/ai/rapids/cudf/[0-9]\+\.[0-9]\+\.[0-9]\+-SNAPSHOT/|/ai/rapids/cudf/${NEXT_FULL_JAVA_TAG}/|g" java/ci/README.md
 
 # Java documentation references
