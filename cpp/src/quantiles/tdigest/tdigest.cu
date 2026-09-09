@@ -7,6 +7,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/algorithms/reduce.cuh>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
@@ -389,11 +390,17 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
       tdigest_is_empty, tdigest_is_empty + tdv.size(), cuda::std::logical_not{}, stream, mr);
   }();
 
-  return cudf::make_lists_column(input.size(),
-                                 std::move(offsets),
-                                 detail::compute_approx_percentiles(input, percentiles, stream, mr),
-                                 null_count,
-                                 std::move(bitmask));
+  auto result =
+    cudf::make_lists_column(input.size(),
+                            std::move(offsets),
+                            detail::compute_approx_percentiles(input, percentiles, stream, mr),
+                            null_count,
+                            std::move(bitmask));
+
+  // Empty digests produce null rows whose child values are uninitialized. Since list factories do
+  // not sanitize null rows, remove those child values before returning the nested column.
+  return null_count == 0 ? std::move(result)
+                         : cudf::detail::purge_nonempty_nulls(result->view(), stream, mr);
 }
 
 }  // namespace tdigest
