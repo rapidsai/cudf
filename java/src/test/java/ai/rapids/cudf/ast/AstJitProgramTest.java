@@ -31,7 +31,8 @@ public class AstJitProgramTest extends CudfTestBase {
              .build();
          CompiledExpression multiplyCompiled = multiply.compileJit();
          CompiledExpression sumCompiled = sum.compileJit()) {
-      program = AstJitProgram.compile(schemaTable, multiplyCompiled, sumCompiled);
+      program = AstJitProgram.compile(
+          schemaTable, multiplyCompiled, sumCompiled, sumCompiled);
     }
 
     try (AstJitProgram closeableProgram = program;
@@ -50,12 +51,14 @@ public class AstJitProgramTest extends CudfTestBase {
          Table secondResult = closeableProgram.computeTable(secondInput);
          ColumnVector secondMultiply = ColumnVector.fromInts(132, 154, 176, 198);
          ColumnVector secondSum = ColumnVector.fromInts(66, 77, 88, 99)) {
-      Assertions.assertEquals(2, firstResult.getNumberOfColumns());
+      Assertions.assertEquals(3, firstResult.getNumberOfColumns());
       assertColumnsAreEqual(firstMultiply, firstResult.getColumn(0));
       assertColumnsAreEqual(firstSum, firstResult.getColumn(1));
-      Assertions.assertEquals(2, secondResult.getNumberOfColumns());
+      assertColumnsAreEqual(firstSum, firstResult.getColumn(2));
+      Assertions.assertEquals(3, secondResult.getNumberOfColumns());
       assertColumnsAreEqual(secondMultiply, secondResult.getColumn(0));
       assertColumnsAreEqual(secondSum, secondResult.getColumn(1));
+      assertColumnsAreEqual(secondSum, secondResult.getColumn(2));
     }
   }
 
@@ -76,6 +79,25 @@ public class AstJitProgramTest extends CudfTestBase {
       assertColumnsAreEqual(firstExpected, firstResult.getColumn(0));
       Assertions.assertEquals(1, secondResult.getNumberOfColumns());
       assertColumnsAreEqual(secondExpected, secondResult.getColumn(0));
+    }
+  }
+
+  @Test
+  void testReusesProgramWithStringLiteral() {
+    AstExpression expression = new BinaryOperation(BinaryOperator.LESS,
+        new ColumnReference(0), Literal.ofString("ccc"));
+
+    AstJitProgram program;
+    try (Table schemaTable = new Table.TestBuilder().column("a", "ccc").build();
+         CompiledExpression compiled = expression.compileJit()) {
+      program = AstJitProgram.compile(schemaTable, compiled);
+    }
+
+    try (AstJitProgram closeableProgram = program;
+         Table input = new Table.TestBuilder().column("a", "ccc", "dddd").build();
+         Table result = closeableProgram.computeTable(input);
+         ColumnVector expected = ColumnVector.fromBooleans(true, false, false)) {
+      assertColumnsAreEqual(expected, result.getColumn(0));
     }
   }
 
@@ -119,14 +141,14 @@ public class AstJitProgramTest extends CudfTestBase {
     AstExpression defaultExpression = new BinaryOperation(BinaryOperator.ADD,
         new ColumnReference(0), Literal.ofInt(1));
     try (Table schemaTable = new Table.TestBuilder().column(1, 2, 3).build();
-         CompiledExpression compiled = defaultExpression.compile()) {
+         CompiledExpression nonJitExpression = defaultExpression.compile()) {
       Assertions.assertThrows(IllegalArgumentException.class,
-          () -> AstJitProgram.compile(schemaTable, compiled));
+          () -> AstJitProgram.compile(schemaTable, nonJitExpression));
     }
 
     try (Table closedTable = new Table.TestBuilder().column(1, 2, 3).build();
          CompiledExpression compiled = expression.compileJit()) {
-      closedTable.close();
+      closedTable.close();  // idempotent
       Assertions.assertThrows(IllegalStateException.class,
           () -> AstJitProgram.compile(closedTable, compiled));
     }
@@ -141,8 +163,7 @@ public class AstJitProgramTest extends CudfTestBase {
       AstJitProgram program = AstJitProgram.compile(schemaTable, compiled);
       Assertions.assertThrows(NullPointerException.class, () -> program.computeTable(null));
       program.close();
-      Assertions.assertThrows(IllegalStateException.class,
-          () -> program.computeTable(schemaTable));
+      Assertions.assertThrows(IllegalStateException.class, () -> program.computeTable(schemaTable));
       Assertions.assertThrows(IllegalStateException.class, program::close);
     }
 

@@ -345,12 +345,9 @@ public class CompiledExpressionTest extends CudfTestBase {
 
   @ParameterizedTest
   @MethodSource("createDecimal128LiteralParams")
-  public void testDecimal128LiteralLegacyTransformFails(DType type, BigInteger value) {
+  public void testDecimal128LiteralLegacyCompileFails(DType type, BigInteger value) {
     Literal expr = Literal.ofDecimal(type, value);
-    try (Table t = new Table.TestBuilder().column(1, 2, 3).build();
-         CompiledExpression compiledExpr = expr.compile()) {
-      Assertions.assertThrows(CudfException.class, () -> compiledExpr.computeColumn(t).close());
-    }
+    Assertions.assertThrows(IllegalArgumentException.class, expr::compile);
   }
 
   @ParameterizedTest
@@ -564,17 +561,18 @@ public class CompiledExpressionTest extends CudfTestBase {
          CompiledExpression subtractCompiled = subtract.compileJit();
          CompiledExpression sumCompiled = secondSum.compileJit()) {
       actual = CompiledExpression.computeTableJit(
-          input, multiplyCompiled, subtractCompiled, sumCompiled);
+          input, multiplyCompiled, subtractCompiled, sumCompiled, sumCompiled);
     }
 
     try (Table result = actual;
          ColumnVector expectedMultiply = ColumnVector.fromInts(22, 44, 66, 88);
          ColumnVector expectedSubtract = ColumnVector.fromInts(9, 19, 29, 39);
          ColumnVector expectedSum = ColumnVector.fromInts(11, 22, 33, 44)) {
-      Assertions.assertEquals(3, result.getNumberOfColumns());
+      Assertions.assertEquals(4, result.getNumberOfColumns());
       assertColumnsAreEqual(expectedMultiply, result.getColumn(0));
       assertColumnsAreEqual(expectedSubtract, result.getColumn(1));
       assertColumnsAreEqual(expectedSum, result.getColumn(2));
+      assertColumnsAreEqual(expectedSum, result.getColumn(3));
     }
   }
 

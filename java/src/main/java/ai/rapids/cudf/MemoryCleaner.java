@@ -368,7 +368,7 @@ public final class MemoryCleaner {
   }
 
   public static void register(CompiledExpression expr, Cleaner cleaner) {
-    // JIT expressions can own one-row literal columns.
+    // Both compilation modes retain device-backed literal values.
     all.put(cleaner.id, new CleanerWeakReference(expr, cleaner, collected, true));
   }
 

@@ -44,16 +44,11 @@ class compiled_expr {
   cudf::ast::literal const& add_literal(ScalarType& scalar,
                                         std::unique_ptr<cudf::scalar> scalar_ptr)
   {
-    if (is_jit()) {
-      auto scalar_column = cudf::make_column_from_scalar(scalar, 1);
-      scalars.push_back(std::move(scalar_ptr));
-      scalar_columns.push_back(std::move(scalar_column));
-      return expressions.emplace<cudf::ast::literal>(
-        cudf::scalar_column_view{scalar_columns.back()->view()});
-    }
-
     scalars.push_back(std::move(scalar_ptr));
-    return expressions.emplace<cudf::ast::literal>(scalar);
+    if (!is_jit()) { return expressions.emplace<cudf::ast::literal>(scalar); }
+    scalar_columns.push_back(cudf::make_column_from_scalar(scalar, 1));
+    return expressions.emplace<cudf::ast::literal>(
+      cudf::scalar_column_view{scalar_columns.back()->view()});
   }
 
   cudf::ast::column_reference const& add_column_ref(cudf::size_type column_index,

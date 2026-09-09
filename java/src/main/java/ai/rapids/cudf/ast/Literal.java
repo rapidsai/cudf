@@ -253,6 +253,15 @@ public final class Literal extends AstExpression {
   }
 
   @Override
+  void validateCompilationMode(CompiledExpression.CompilationMode mode) {
+    if (mode == CompiledExpression.CompilationMode.DEFAULT &&
+        type.getTypeId() == DType.DTypeEnum.DECIMAL128) {
+      throw new IllegalArgumentException(
+          "DECIMAL128 root literals require JIT compilation");
+    }
+  }
+
+  @Override
   int getSerializedSize() {
     ExpressionType nodeType = serializedValue != null
         ? ExpressionType.VALID_LITERAL : ExpressionType.NULL_LITERAL;

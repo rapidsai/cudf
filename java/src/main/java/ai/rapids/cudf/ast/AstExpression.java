@@ -45,6 +45,8 @@ public abstract class AstExpression {
    * Compile this expression for execution with the process-level backend selection.
    *
    * @return expression compatible with default AST consumers
+   * @throws IllegalArgumentException if a root literal requires JIT compilation
+   * @throws ai.rapids.cudf.CudfException if compilation fails
    */
   public CompiledExpression compile() {
     return compile(CompiledExpression.CompilationMode.DEFAULT);
@@ -55,18 +57,22 @@ public abstract class AstExpression {
    * The returned expression cannot be used as a join or scan predicate.
    *
    * @return expression specialized for JIT execution
+   * @throws ai.rapids.cudf.CudfException if compilation fails
    */
   public CompiledExpression compileJit() {
     return compile(CompiledExpression.CompilationMode.JIT);
   }
 
   private CompiledExpression compile(CompiledExpression.CompilationMode mode) {
+    validateCompilationMode(mode);
     int size = getSerializedSize();
     ByteBuffer bb = ByteBuffer.allocate(size);
     bb.order(ByteOrder.nativeOrder());
     serialize(bb);
     return new CompiledExpression(bb.array(), mode);
   }
+
+  void validateCompilationMode(CompiledExpression.CompilationMode mode) {}
 
   /** Get the size in bytes of the serialized form of this node and all child nodes */
   abstract int getSerializedSize();

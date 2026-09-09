@@ -35,20 +35,21 @@ public final class AstJitProgram implements AutoCloseable {
 
     @Override
     protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
-      long origAddress = nativeHandle;
-      boolean neededCleanup = nativeHandle != 0;
-      if (neededCleanup) {
-        try {
-          destroy(nativeHandle);
-        } finally {
-          nativeHandle = 0;
-        }
-        if (logErrorIfNotClean) {
-          log.error("AN AST JIT PROGRAM WAS LEAKED (ID: " +
-              id + " " + Long.toHexString(origAddress));
-        }
+      boolean alreadyClean = nativeHandle == 0;
+      if (alreadyClean) {
+        return false;
       }
-      return neededCleanup;
+      long origAddress = nativeHandle;
+      try {
+        destroy(nativeHandle);
+      } finally {
+        nativeHandle = 0;
+      }
+      if (logErrorIfNotClean) {
+        log.error("AN AST JIT PROGRAM WAS LEAKED (ID: {} {})", id,
+            Long.toHexString(origAddress));
+      }
+      return true;
     }
 
     @Override
@@ -61,9 +62,24 @@ public final class AstJitProgram implements AutoCloseable {
   private boolean isClosed = false;
 
   private AstJitProgram(long nativeHandle) {
-    cleaner = new AstJitProgramCleaner(nativeHandle);
-    MemoryCleaner.register(this, cleaner);
-    cleaner.addRef();
+    AstJitProgramCleaner newCleaner = null;
+    try {
+      newCleaner = new AstJitProgramCleaner(nativeHandle);
+      cleaner = newCleaner;
+      MemoryCleaner.register(this, cleaner);
+      cleaner.addRef();
+    } catch (Throwable t) {
+      try {
+        if (newCleaner == null) {
+          destroy(nativeHandle);
+        } else {
+          newCleaner.clean(false);
+        }
+      } catch (Throwable cleanupFailure) {
+        t.addSuppressed(cleanupFailure);
+      }
+      throw t;
+    }
   }
 
   /**
@@ -81,27 +97,19 @@ public final class AstJitProgram implements AutoCloseable {
    * @throws ai.rapids.cudf.CudfException if JIT compilation fails
    */
   public static AstJitProgram compile(Table schemaTable, CompiledExpression... expressions) {
-    Objects.requireNonNull(schemaTable, "schemaTable");
-    Objects.requireNonNull(expressions, "expressions");
-    if (expressions.length == 0) {
-      throw new IllegalArgumentException("At least one expression is required");
-    }
-
-    long tableHandle = schemaTable.getNativeView();
+    long tableHandle = Objects.requireNonNull(schemaTable, "schemaTable").getNativeView();
+    CompiledExpression.JitExpressionArgs expressionArgs =
+        CompiledExpression.getJitExpressionArgs(expressions);
     if (tableHandle == 0) {
       throw new IllegalStateException("Table is closed");
     }
 
-    CompiledExpression[] expressionRefs = expressions.clone();
-    long[] nativeHandles = CompiledExpression.getJitNativeHandles(expressionRefs);
-    long programHandle;
     try {
-      programHandle = create(nativeHandles, tableHandle);
+      return new AstJitProgram(create(expressionArgs.nativeHandles, tableHandle));
     } finally {
       CompiledExpression.reachabilityFence(schemaTable);
-      CompiledExpression.reachabilityFence(expressionRefs);
+      CompiledExpression.reachabilityFence(expressionArgs.expressionRefs);
     }
-    return new AstJitProgram(programHandle);
   }
 
   /**
@@ -117,24 +125,21 @@ public final class AstJitProgram implements AutoCloseable {
    *         evaluation fails
    */
   public Table computeTable(Table table) {
-    Objects.requireNonNull(table, "table");
+    long tableHandle = Objects.requireNonNull(table, "table").getNativeView();
     long programHandle = cleaner.nativeHandle;
     if (programHandle == 0) {
       throw new IllegalStateException("AST JIT program is closed");
     }
-    long tableHandle = table.getNativeView();
     if (tableHandle == 0) {
       throw new IllegalStateException("Table is closed");
     }
 
-    long[] result;
     try {
-      result = computeTableNative(programHandle, tableHandle);
+      return new Table(computeTableNative(programHandle, tableHandle));
     } finally {
       CompiledExpression.reachabilityFence(this);
       CompiledExpression.reachabilityFence(table);
     }
-    return new Table(result);
   }
 
   @Override

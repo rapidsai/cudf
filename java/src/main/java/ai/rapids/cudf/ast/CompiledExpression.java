@@ -18,7 +18,7 @@ import java.util.Objects;
 public class CompiledExpression implements AutoCloseable {
   enum CompilationMode {
     DEFAULT,
-    JIT
+    JIT,
   }
 
   static {
@@ -70,10 +70,25 @@ public class CompiledExpression implements AutoCloseable {
 
   /** Construct a compiled expression from a native compiled AST pointer */
   private CompiledExpression(long nativeHandle, CompilationMode mode) {
-    this.cleaner = new CompiledExpressionCleaner(nativeHandle);
-    this.mode = mode;
-    MemoryCleaner.register(this, cleaner);
-    cleaner.addRef();
+    CompiledExpressionCleaner newCleaner = null;
+    try {
+      newCleaner = new CompiledExpressionCleaner(nativeHandle);
+      this.cleaner = newCleaner;
+      this.mode = mode;
+      MemoryCleaner.register(this, cleaner);
+      cleaner.addRef();
+    } catch (Throwable t) {
+      try {
+        if (newCleaner == null) {
+          destroy(nativeHandle);
+        } else {
+          newCleaner.clean(false);
+        }
+      } catch (Throwable cleanupFailure) {
+        t.addSuppressed(cleanupFailure);
+      }
+      throw t;
+    }
   }
 
   /**
@@ -89,14 +104,12 @@ public class CompiledExpression implements AutoCloseable {
    *         {@link TableReference#RIGHT}, or if compilation or evaluation fails
    */
   public ColumnVector computeColumn(Table table) {
-    long result;
     try {
-      result = computeColumn(cleaner.nativeHandle, table.getNativeView());
+      return new ColumnVector(computeColumn(cleaner.nativeHandle, table.getNativeView()));
     } finally {
       reachabilityFence(this);
       reachabilityFence(table);
     }
-    return new ColumnVector(result);
   }
 
   /**
@@ -113,34 +126,41 @@ public class CompiledExpression implements AutoCloseable {
    * @throws ai.rapids.cudf.CudfException if JIT compilation or evaluation fails
    */
   public static Table computeTableJit(Table table, CompiledExpression... expressions) {
-    Objects.requireNonNull(table, "table");
-    Objects.requireNonNull(expressions, "expressions");
-    if (expressions.length == 0) {
-      throw new IllegalArgumentException("At least one expression is required");
-    }
-
-    long tableHandle = table.getNativeView();
+    long tableHandle = Objects.requireNonNull(table, "table").getNativeView();
+    JitExpressionArgs expressionArgs = getJitExpressionArgs(expressions);
     if (tableHandle == 0) {
       throw new IllegalStateException("Table is closed");
     }
 
-    CompiledExpression[] expressionRefs = expressions.clone();
-    long[] nativeHandles = getJitNativeHandles(expressionRefs);
-    long[] result;
     try {
-      result = computeTableJitNative(nativeHandles, tableHandle);
+      return new Table(computeTableJitNative(expressionArgs.nativeHandles, tableHandle));
     } finally {
       reachabilityFence(table);
-      reachabilityFence(expressionRefs);
+      reachabilityFence(expressionArgs.expressionRefs);
     }
-    return new Table(result);
   }
 
-  static long[] getJitNativeHandles(CompiledExpression[] expressions) {
-    long[] nativeHandles = new long[expressions.length];
-    for (int i = 0; i < expressions.length; i++) {
+  static final class JitExpressionArgs {
+    final CompiledExpression[] expressionRefs;
+    final long[] nativeHandles;
+
+    private JitExpressionArgs(CompiledExpression[] expressionRefs, long[] nativeHandles) {
+      this.expressionRefs = expressionRefs;
+      this.nativeHandles = nativeHandles;
+    }
+  }
+
+  static JitExpressionArgs getJitExpressionArgs(CompiledExpression[] expressions) {
+    CompiledExpression[] expressionRefs =
+        Objects.requireNonNull(expressions, "expressions").clone();
+    if (expressionRefs.length == 0) {
+      throw new IllegalArgumentException("At least one expression is required");
+    }
+
+    long[] nativeHandles = new long[expressionRefs.length];
+    for (int i = 0; i < expressionRefs.length; i++) {
       CompiledExpression expression = Objects.requireNonNull(
-          expressions[i], "expression " + i + " is null");
+          expressionRefs[i], "expression " + i + " is null");
       if (expression.mode != CompilationMode.JIT) {
         throw new IllegalArgumentException("Expression " + i + " was not compiled for JIT");
       }
@@ -149,7 +169,7 @@ public class CompiledExpression implements AutoCloseable {
         throw new IllegalStateException("Expression " + i + " is closed");
       }
     }
-    return nativeHandles;
+    return new JitExpressionArgs(expressionRefs, nativeHandles);
   }
 
   static void reachabilityFence(Object object) {
