@@ -19,19 +19,9 @@ def center(request):
     return request.param
 
 
-@pytest.fixture
-def supported_rolling_reductions(reduction_methods):
-    if reduction_methods in [
-        "product",
-        "quantile",
-        "all",
-        "any",
-        "median",
-        "kurtosis",
-        "skew",
-    ]:
-        pytest.skip(f"{reduction_methods} not implemented")
-    return reduction_methods
+@pytest.fixture(params=["min", "max", "sum", "std", "var"])
+def supported_rolling_reductions(request):
+    return request.param
 
 
 @pytest.mark.parametrize(
@@ -140,10 +130,15 @@ def test_rolling_with_offset(supported_rolling_reductions):
     )
 
 
-@pytest.mark.parametrize("agg", ["std", "var"])
-@pytest.mark.parametrize("ddof", [0, 1])
-@pytest.mark.parametrize("window_size", [2, 100])
-def test_rolling_var_std_large(agg, ddof, center, window_size):
+@pytest.fixture(scope="module", params=[2, 100])
+def rolling_var_std_window_size(request):
+    return request.param
+
+
+@pytest.fixture(scope="module")
+def rolling_var_std_large_data(rolling_var_std_window_size):
+    # All consumers only read these inputs while varying the rolling options.
+    window_size = rolling_var_std_window_size
     iupper_bound = math.sqrt(np.iinfo(np.int64).max / window_size)
     ilower_bound = -math.sqrt(abs(np.iinfo(np.int64).min) / window_size)
 
@@ -180,7 +175,20 @@ def test_rolling_var_std_large(agg, ddof, center, window_size):
         seed=100,
     )
     gdf = cudf.DataFrame.from_arrow(data)
-    pdf = gdf.to_pandas()
+    return gdf, gdf.to_pandas()
+
+
+@pytest.mark.parametrize("agg", ["std", "var"])
+@pytest.mark.parametrize("ddof", [0, 1])
+def test_rolling_var_std_large(
+    agg,
+    ddof,
+    center,
+    rolling_var_std_window_size,
+    rolling_var_std_large_data,
+):
+    window_size = rolling_var_std_window_size
+    gdf, pdf = rolling_var_std_large_data
 
     expect = getattr(pdf.rolling(window_size, 1, center), agg)(ddof=ddof)
     got = getattr(gdf.rolling(window_size, 1, center), agg)(ddof=ddof)
@@ -370,11 +378,15 @@ def test_rolling_numba_udf_with_offset():
     )
 
 
-@pytest.mark.parametrize("window_size", [1, 2, 3])
-@pytest.mark.parametrize("min_periods", [1, 2, 3])
+@pytest.mark.parametrize(
+    "window_size,min_periods",
+    [
+        (window_size, min_periods)
+        for window_size in [1, 2, 3]
+        for min_periods in range(1, window_size + 1)
+    ],
+)
 def test_rolling_groupby_numba_udf(window_size, min_periods):
-    if min_periods > window_size:
-        pytest.skip("min_periods cannot exceed window_size")
     pdf = pd.DataFrame(
         {
             "a": [1, 1, 1, 2, 2, 2, 2],

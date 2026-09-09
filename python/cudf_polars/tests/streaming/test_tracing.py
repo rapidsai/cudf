@@ -17,8 +17,11 @@ import pytest
 import polars as pl
 
 from cudf_streaming.table_chunk import TableChunk
+from rapidsmpf.streaming.chunks.arbitrary import ArbitraryChunk
+from rapidsmpf.streaming.core.message import Message
 
 from cudf_polars.containers import DataFrame
+from cudf_polars.streaming.actor_graph.io import Lineariser
 from cudf_polars.streaming.actor_graph.tracing import ActorTracer, send_chunk
 
 if TYPE_CHECKING:
@@ -66,6 +69,55 @@ def test_send_chunk_traces_and_sends_message(
     assert TableChunk.from_message(msg, br=context.br()).shape[0] == 3
     assert tracer.chunk_count == 1
     assert tracer.row_count == 3
+
+
+@pytest.mark.spmd
+def test_lineariser_backpressures_each_producer(spmd_engine: SPMDEngine) -> None:
+    context = spmd_engine.context
+    ch_out = context.create_channel()
+    lineariser = Lineariser(context, ch_out, num_producers=2)
+    produced: list[list[int]] = [[], []]
+    output: list[int] = []
+
+    async def run() -> list[list[int]]:
+        release_gap = asyncio.Event()
+        out_of_order_sent = asyncio.Event()
+
+        async def producer(producer_id: int, sequence_numbers: list[int]) -> None:
+            if producer_id == 1:
+                await release_gap.wait()
+            for sequence_number in sequence_numbers:
+                ch_in = await lineariser.acquire(producer_id)
+                produced[producer_id].append(sequence_number)
+                await ch_in.send(
+                    context,
+                    Message(sequence_number, ArbitraryChunk(sequence_number)),
+                )
+                if sequence_number == 2:
+                    out_of_order_sent.set()
+            await lineariser.input_channels[producer_id].drain(context)
+
+        async def consumer() -> None:
+            while (msg := await ch_out.recv(context)) is not None:
+                output.append(ArbitraryChunk.from_message(msg).release())
+
+        async with asyncio.TaskGroup() as tg:
+            tg.create_task(lineariser.drain())
+            tg.create_task(producer(0, [0, 2, 4]))
+            tg.create_task(producer(1, [1, 3, 5]))
+            tg.create_task(consumer())
+
+            await out_of_order_sent.wait()
+            await asyncio.sleep(0)
+            produced_before_gap = [values.copy() for values in produced]
+            release_gap.set()
+
+        return produced_before_gap
+
+    produced_before_gap = asyncio.run(run())
+
+    assert produced_before_gap == [[0, 2], []]
+    assert output == list(range(6))
 
 
 def test_structlog_streaming_node_events(timeout_seconds: int):
