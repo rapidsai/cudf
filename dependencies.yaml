@@ -1059,11 +1059,7 @@ dependencies:
       - output_types: [conda, requirements, constraints, pyproject]
         packages:
           - fsspec>=0.6.0
-          # pandas 3.0.4 segfaults constructing pd.Timedelta on Python 3.14,
-          # which breaks `import cudf` (https://github.com/pandas-dev/pandas/issues/66086).
-          # Cap below 3.0.4 (rather than just excluding it) until a fixed
-          # release is confirmed upstream, then raise the bound.
-          - &pandas pandas>=3.0.0,<3.0.4a0
+          - &pandas pandas>=3.0.0,<3.1.0
   run_libcudf:
     common:
       - output_types: [requirements, pyproject]
@@ -1157,11 +1153,11 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numba==0.60.0
-              - pandas==3.0.*,<3.0.4a0
+              - *pandas
               - numba-cuda==0.22.2
           - matrix: {dependencies: "latest"}
             packages:
-              - pandas==3.0.3
+              - *pandas
           - matrix:
             packages:
       - output_types: conda
@@ -1301,10 +1297,6 @@ dependencies:
           - zstandard
           # Used by ci/timeout_with_stack.py utility
           - psutil
-          # The polars test suite constructs pandas objects for interop and
-          # dask-cuda pulls pandas in transitively (unbounded), so constrain it
-          # here to exclude the 3.0.4 release that segfaults on pd.Timedelta
-          # (https://github.com/pandas-dev/pandas/issues/66086).
           - *pandas
       - output_types: conda
         packages:
@@ -1353,7 +1345,7 @@ dependencies:
           - numba>=0.60.0,<0.65.0
       - output_types: [conda]
         packages:
-          - &numba_cuda numba-cuda>=0.22.2
+          - &numba_cuda numba-cuda>=0.22.2,<0.31.0
     specific:
       - output_types: [requirements, constraints, pyproject]
         matrices:
@@ -1361,12 +1353,12 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - numba-cuda[cu12]>=0.22.2
+              - numba-cuda[cu12]>=0.22.2,<0.31.0
           - matrix:
               cuda: "13.*"
               cuda_suffixed: "true"
             packages:
-              - numba-cuda[cu13]>=0.22.2
+              - numba-cuda[cu13]>=0.22.2,<0.31.0
           # fallback to numba-cuda with no extra CUDA packages if 'cuda_suffixed' isn't true
           - matrix:
               cuda_suffixed: "false"
@@ -1908,7 +1900,7 @@ dependencies:
               pandas_compat_version: "3.0"
             packages:
               - numpy>=2.0,<3.0
-              - pandas==3.0.*,<3.0.4a0
+              - *pandas
           - matrix:
             packages:
   test_cudf_polars_compat:
