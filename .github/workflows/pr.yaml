@@ -315,8 +315,9 @@ jobs:
       script: ci/test_cpp.sh
       cache-paths: .cache/libcudf
       cache-key-prefix: libcudf-rtcx-v2
-      # Caches are immutable. Re-key when the embedded JIT runtime or its tests change so a
-      # completed run can save newly compiled entries; restore a compatible earlier archive first.
+      # Pull-request cache entries are merge-ref scoped and cannot warm another PR. Restore the
+      # trusted nightly cache instead; it is maintained by test.yaml after changes reach main.
+      cache-read-only: true
       cache-key-files: |
         cpp/CMakeLists.txt
         cpp/cmake/**
