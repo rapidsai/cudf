@@ -611,6 +611,7 @@ jobs:
       build_type: pull-request
       script: >-
         ci/test_cudf_polars_polars_tests.sh --engine ${{ matrix.engine }}
+        --inject-gpu-engine-blocksize default
         --cudf-polars-shard-id ${{ matrix.shard_id }}
         --cudf-polars-num-shards ${{ matrix.num_shards }}
   wheel-tests-dask-cudf:

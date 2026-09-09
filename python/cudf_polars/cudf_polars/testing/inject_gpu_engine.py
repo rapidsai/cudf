@@ -16,6 +16,10 @@ import pytest
 
 import polars
 
+from cudf_polars.testing.engine_utils import (
+    SMALL_MAX_ROWS_PER_PARTITION,
+    SMALL_TARGET_PARTITION_SIZE,
+)
 from cudf_polars.utils.config import StreamingFallbackMode
 
 if TYPE_CHECKING:
@@ -48,8 +52,9 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default="default",
         choices=("default", "small"),
         help=(
-            "Blocksize mode for the 'spmd' engine. Set to 'small' to run most "
-            "tests with multiple partitions. Ignored for 'in-memory'."
+            "Blocksize mode for the 'spmd' engine. 'small' forces most tests "
+            "onto the multi-partition path. PR CI uses 'default'; nightly uses "
+            "'small'. Ignored for 'in-memory'."
         ),
     )
     group.addoption(
@@ -139,8 +144,8 @@ def pytest_configure(config: pytest.Config) -> None:
 
         executor_options: dict[str, object] = {}
         if blocksize == "small":
-            executor_options["max_rows_per_partition"] = 4
-            executor_options["target_partition_size"] = 10
+            executor_options["max_rows_per_partition"] = SMALL_MAX_ROWS_PER_PARTITION
+            executor_options["target_partition_size"] = SMALL_TARGET_PARTITION_SIZE
             # We expect many tests to fall back, so silence the warnings.
             executor_options["fallback_mode"] = StreamingFallbackMode.SILENT
         engine = SPMDEngine(
@@ -574,13 +579,24 @@ def pytest_collection_modifyitems(
         # Don't xfail tests if running without fallback
         return
     with_streaming_engine = config.getoption("--inject-gpu-engine") == "spmd"
+    with_small_blocksize = (
+        with_streaming_engine
+        and config.getoption("--inject-gpu-engine-blocksize") == "small"
+    )
     for item in items:
-        if (reason := TESTS_TO_SKIP.get(item.nodeid)) is not None or (
-            with_streaming_engine
-            and (reason := STREAMING_ENGINE_TESTS_TO_SKIP.get(item.nodeid, None))
-            is not None
-        ):
-            item.add_marker(pytest.mark.skip(reason=reason))
+        skip_reason = TESTS_TO_SKIP.get(item.nodeid)
+        if skip_reason is None and with_streaming_engine:
+            skip_reason = STREAMING_ENGINE_TESTS_TO_SKIP.get(item.nodeid)
+            # Tests skipped only because small partitions are too slow can run
+            # under the default (non-small) blocksize used on PRs.
+            if (
+                skip_reason is not None
+                and "blocksize=small" in skip_reason
+                and not with_small_blocksize
+            ):
+                skip_reason = None
+        if skip_reason is not None:
+            item.add_marker(pytest.mark.skip(reason=skip_reason))
         elif (
             with_streaming_engine
             and (s_reason := STREAMING_ENGINE_EXPECTED_FAILURES.get(item.nodeid, None))
