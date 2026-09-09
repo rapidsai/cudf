@@ -112,7 +112,7 @@ std::unique_ptr<column> make_lists_column(size_type num_rows,
                                           std::unique_ptr<column> offsets_column,
                                           std::unique_ptr<column> child_column,
                                           size_type null_count,
-                                          cuda::device_buffer<uint8_t>&& null_mask)
+                                          cuda::device_buffer<std::byte>&& null_mask)
 {
   if (null_count > 0) { CUDF_EXPECTS(null_mask.size() > 0, "Column with nulls must be nullable."); }
   CUDF_EXPECTS(

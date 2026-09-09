@@ -227,7 +227,7 @@ std::unique_ptr<column> scatter(scalar const& slr,
 
   auto lv        = static_cast<list_scalar const*>(&slr);
   bool slr_valid = slr.is_valid(stream);
-  cuda::device_buffer<uint8_t> null_mask =
+  cuda::device_buffer<std::byte> null_mask =
     slr_valid ? cudf::create_null_mask(1, mask_state::UNALLOCATED, stream, mr)
               : cudf::create_null_mask(1, mask_state::ALL_NULL, stream, mr);
   auto offset_column =

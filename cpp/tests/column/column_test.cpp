@@ -54,10 +54,10 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
   std::uniform_int_distribution<cudf::size_type> distribution{200, 1000};
   cudf::size_type _num_elements{distribution(generator)};
   rmm::device_buffer data{};
-  cuda::device_buffer<uint8_t> mask = cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED);
-  cuda::device_buffer<uint8_t> all_valid_mask =
+  cuda::device_buffer<std::byte> mask = cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED);
+  cuda::device_buffer<std::byte> all_valid_mask =
     create_null_mask(num_elements(), cudf::mask_state::ALL_VALID);
-  cuda::device_buffer<uint8_t> all_null_mask =
+  cuda::device_buffer<std::byte> all_null_mask =
     create_null_mask(num_elements(), cudf::mask_state::ALL_NULL);
 };
 

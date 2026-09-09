@@ -72,7 +72,7 @@ column::contents column::release() noexcept
   _null_count = 0;
   _type       = data_type{type_id::EMPTY};
   return column::contents{std::make_unique<rmm::device_buffer>(std::move(_data)),
-                          std::make_unique<cuda::device_buffer<uint8_t>>(std::move(_null_mask)),
+                          std::make_unique<cuda::device_buffer<std::byte>>(std::move(_null_mask)),
                           std::move(_children)};
 }
 
@@ -125,7 +125,7 @@ mutable_column_view column::mutable_view()
                              child_views};
 }
 
-void column::set_null_mask(cuda::device_buffer<uint8_t>&& new_null_mask, size_type new_null_count)
+void column::set_null_mask(cuda::device_buffer<std::byte>&& new_null_mask, size_type new_null_count)
 {
   if (new_null_count > 0) {
     CUDF_EXPECTS(new_null_mask.size() >= cudf::bitmask_allocation_size_bytes(this->size()),
@@ -136,7 +136,7 @@ void column::set_null_mask(cuda::device_buffer<uint8_t>&& new_null_mask, size_ty
   _null_count = new_null_count;
 }
 
-void column::set_null_mask(cuda::device_buffer<uint8_t> const& new_null_mask,
+void column::set_null_mask(cuda::device_buffer<std::byte> const& new_null_mask,
                            size_type new_null_count,
                            cuda::stream_ref stream)
 {
@@ -145,7 +145,7 @@ void column::set_null_mask(cuda::device_buffer<uint8_t> const& new_null_mask,
                  "Column with null values must be nullable and the null mask \
                   buffer size should match the size of the column.");
   }
-  _null_mask = cuda::device_buffer<uint8_t>{
+  _null_mask = cuda::device_buffer<std::byte>{
     stream, cudf::get_current_device_resource_ref(), new_null_mask};  // copy
   _null_count = new_null_count;
 }

@@ -80,7 +80,7 @@ struct group_sum_overflow_fn {
 
     // A group's struct entry is null only when every row in the group is null (mirrors group_sum):
     // reduce per-row validity with logical-or, then build the mask from the per-group result.
-    auto [null_mask, null_count] = [&]() -> std::pair<cuda::device_buffer<uint8_t>, size_type> {
+    auto [null_mask, null_count] = [&]() -> std::pair<cuda::device_buffer<std::byte>, size_type> {
       if (!values.has_nulls()) {
         return {cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED), size_type{0}};
       }

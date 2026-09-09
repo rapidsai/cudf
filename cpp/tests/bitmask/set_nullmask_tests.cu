@@ -55,7 +55,7 @@ struct SetBitmaskTest : public cudf::test::BaseFixture {
   {
     thrust::host_vector<bool> expected(end - begin, valid);
     // TEST
-    cuda::device_buffer<uint8_t> mask = create_null_mask(size, cudf::mask_state::UNINITIALIZED);
+    cuda::device_buffer<std::byte> mask = create_null_mask(size, cudf::mask_state::UNINITIALIZED);
     // valid ? cudf::mask_state::ALL_NULL : cudf::mask_state::ALL_VALID);
     cudf::set_null_mask(reinterpret_cast<cudf::bitmask_type*>(mask.data()), begin, end, valid);
     expect_bitmask_equal(reinterpret_cast<cudf::bitmask_type*>(mask.data()), begin, expected);
@@ -69,7 +69,7 @@ struct SetBitmaskTest : public cudf::test::BaseFixture {
       return (!valid) ^ (i < middle);
     });
     // TEST
-    cuda::device_buffer<uint8_t> mask = create_null_mask(size, cudf::mask_state::UNINITIALIZED);
+    cuda::device_buffer<std::byte> mask = create_null_mask(size, cudf::mask_state::UNINITIALIZED);
     cudf::set_null_mask(reinterpret_cast<cudf::bitmask_type*>(mask.data()), 0, middle, valid);
     cudf::set_null_mask(reinterpret_cast<cudf::bitmask_type*>(mask.data()), middle, size, !valid);
     expect_bitmask_equal(reinterpret_cast<cudf::bitmask_type*>(mask.data()), 0, expected);
@@ -86,8 +86,8 @@ struct SetBitmaskTest : public cudf::test::BaseFixture {
                     expected2[i] = (valid) ^ (i < middle);
                   });
     // TEST
-    cuda::device_buffer<uint8_t> mask1 = create_null_mask(size, cudf::mask_state::UNINITIALIZED);
-    cuda::device_buffer<uint8_t> mask2 = create_null_mask(size, cudf::mask_state::UNINITIALIZED);
+    cuda::device_buffer<std::byte> mask1 = create_null_mask(size, cudf::mask_state::UNINITIALIZED);
+    cuda::device_buffer<std::byte> mask2 = create_null_mask(size, cudf::mask_state::UNINITIALIZED);
 
     std::vector<cudf::bitmask_type*> masks{reinterpret_cast<cudf::bitmask_type*>(mask1.data()),
                                            reinterpret_cast<cudf::bitmask_type*>(mask2.data())};
@@ -121,7 +121,7 @@ struct SetBitmaskTest : public cudf::test::BaseFixture {
       return (!valid) ^ (i < middle);
     });
 
-    cuda::device_buffer<uint8_t> mask = create_null_mask(size, cudf::mask_state::UNINITIALIZED);
+    cuda::device_buffer<std::byte> mask = create_null_mask(size, cudf::mask_state::UNINITIALIZED);
     std::vector<cudf::size_type> begins{0, middle};
     std::vector<cudf::size_type> ends{middle, size};
 

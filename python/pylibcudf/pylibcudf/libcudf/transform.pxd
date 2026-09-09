@@ -22,8 +22,7 @@ from pylibcudf.libcudf.types cimport (
     udf_source_type,
 )
 
-from libc.stdint cimport uint8_t
-from pylibcudf.libcudf.utilities.device_buffer cimport device_buffer
+from pylibcudf.libcudf.utilities.device_buffer cimport byte, device_buffer
 from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.memory_resource cimport device_async_resource_ref
 
@@ -50,7 +49,7 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
 
     ctypedef const transform_output const_transform_output
 
-    cdef pair[unique_ptr[device_buffer[uint8_t]], size_type] bools_to_mask (
+    cdef pair[unique_ptr[device_buffer[byte]], size_type] bools_to_mask (
         const column_view& input,
         cudaStream_t stream,
         device_async_resource_ref mr
@@ -64,7 +63,7 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
-    cdef pair[unique_ptr[device_buffer[uint8_t]], size_type] nans_to_nulls(
+    cdef pair[unique_ptr[device_buffer[byte]], size_type] nans_to_nulls(
         const column_view& input,
         cudaStream_t stream,
         device_async_resource_ref mr

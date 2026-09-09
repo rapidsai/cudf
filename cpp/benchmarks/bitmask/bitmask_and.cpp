@@ -44,7 +44,7 @@ auto setup_masks(nvbench::state& state)
   std::exclusive_scan(segments.begin(), segments.end(), segments.begin(), 0);
 
   // Create masks
-  std::vector<cuda::device_buffer<uint8_t>> masks;
+  std::vector<cuda::device_buffer<std::byte>> masks;
   std::vector<cudf::bitmask_type*> mask_pointers;
   masks.reserve(num_masks);
   std::generate_n(std::back_inserter(masks), num_masks, [mask_size_bits, seed, &mask_pointers]() {

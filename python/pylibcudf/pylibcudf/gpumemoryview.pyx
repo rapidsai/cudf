@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from libc.stddef cimport size_t
-from libc.stdint cimport uintptr_t, uint64_t, uint8_t
+from libc.stdint cimport uintptr_t, uint64_t
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from collections.abc import Mapping
@@ -12,7 +12,7 @@ import operator
 from typing import Any
 
 from .types cimport DataType, size_of, type_id
-from pylibcudf.libcudf.utilities.device_buffer cimport device_buffer
+from pylibcudf.libcudf.utilities.device_buffer cimport byte, device_buffer
 
 
 cdef class _CudaDeviceBuffer:
@@ -27,7 +27,7 @@ cdef class _CudaDeviceBuffer:
 
 
 cdef gpumemoryview _from_cuda_device_buffer(
-    unique_ptr[device_buffer[uint8_t]] buf, object stream, object mr
+    unique_ptr[device_buffer[byte]] buf, object stream, object mr
 ):
     cdef _CudaDeviceBuffer owner = _CudaDeviceBuffer.__new__(_CudaDeviceBuffer)
     owner.c_obj = move(buf)

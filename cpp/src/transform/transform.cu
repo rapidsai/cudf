@@ -59,7 +59,7 @@ struct fixed_width_column {
 
   static auto make(data_type type,
                    size_type size,
-                   cuda::device_buffer<uint8_t> null_mask,
+                   cuda::device_buffer<std::byte> null_mask,
                    size_type null_count,
                    cuda::stream_ref stream,
                    rmm::device_async_resource_ref mr)
@@ -97,12 +97,12 @@ struct mutable_string_views_column_view {
 struct string_views_column {
   rmm::device_buffer _data;
   size_type _size{0};
-  cuda::device_buffer<uint8_t> _null_mask =
+  cuda::device_buffer<std::byte> _null_mask =
     cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED);
   size_type _null_count{0};
 
   static auto make(size_type size,
-                   cuda::device_buffer<uint8_t> null_mask,
+                   cuda::device_buffer<std::byte> null_mask,
                    size_type null_count,
                    cuda::stream_ref stream,
                    rmm::device_async_resource_ref mr)
@@ -143,7 +143,7 @@ struct mutable_strings_column {
   static auto make(size_type size,
                    rmm::device_buffer chars,
                    std::unique_ptr<column> offsets,
-                   cuda::device_buffer<uint8_t> null_mask,
+                   cuda::device_buffer<std::byte> null_mask,
                    size_type null_count)
   {
     return mutable_strings_column{make_strings_column(
@@ -995,7 +995,7 @@ rmm::device_uvector<char> make_chars_buffer(column_view const& offsets_view,
 }
 
 std::unique_ptr<column> make_strings_column(device_span<string_view const> strings,
-                                            cuda::device_buffer<uint8_t> null_mask,
+                                            cuda::device_buffer<std::byte> null_mask,
                                             size_type null_count,
                                             cuda::stream_ref stream,
                                             rmm::device_async_resource_ref mr)

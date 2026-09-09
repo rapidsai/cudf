@@ -11,7 +11,7 @@
 
 namespace cudf::groupby::detail {
 
-std::pair<cuda::device_buffer<uint8_t>, bitmask_type const*> compute_row_bitmask(
+std::pair<cuda::device_buffer<std::byte>, bitmask_type const*> compute_row_bitmask(
   table_view const& keys, cuda::stream_ref stream)
 {
   auto const mr = cudf::get_current_device_resource_ref();

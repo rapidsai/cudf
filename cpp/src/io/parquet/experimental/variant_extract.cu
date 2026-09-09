@@ -1132,7 +1132,7 @@ struct cast_variant_fn {
   size_type num_rows;
   data_type desired_type;
   bitmask_type* d_null_mask;
-  cuda::device_buffer<uint8_t> null_mask{cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED)};
+  cuda::device_buffer<std::byte> null_mask{cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED)};
   cuda::stream_ref stream;
   rmm::device_async_resource_ref mr;
   // In-out status tracking; null when no status was requested.

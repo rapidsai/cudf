@@ -32,7 +32,7 @@ namespace detail {
 std::unique_ptr<column> string_column_from_arrow_host(
   ArrowSchemaView const* schema,
   ArrowArray const* input,
-  std::unique_ptr<cuda::device_buffer<uint8_t>>&& mask,
+  std::unique_ptr<cuda::device_buffer<std::byte>>&& mask,
   size_type null_count,
   cuda::stream_ref stream,
   rmm::device_async_resource_ref mr);

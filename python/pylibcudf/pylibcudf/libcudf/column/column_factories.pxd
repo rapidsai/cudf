@@ -12,8 +12,7 @@ from pylibcudf.libcudf.types cimport (
     type_id,
 )
 
-from libc.stdint cimport uint8_t
-from pylibcudf.libcudf.utilities.device_buffer cimport device_buffer
+from pylibcudf.libcudf.utilities.device_buffer cimport byte, device_buffer
 from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.memory_resource cimport device_async_resource_ref
 
@@ -30,7 +29,7 @@ cdef extern from "cudf/column/column_factories.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] make_numeric_column(
         data_type type,
         size_type size,
-        device_buffer[uint8_t] mask,
+        device_buffer[byte] mask,
         size_type null_count,
         cudaStream_t stream,
         device_async_resource_ref mr
@@ -46,7 +45,7 @@ cdef extern from "cudf/column/column_factories.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] make_fixed_point_column(
         data_type type,
         size_type size,
-        device_buffer[uint8_t] mask,
+        device_buffer[byte] mask,
         size_type null_count,
         cudaStream_t stream,
         device_async_resource_ref mr) except +libcudf_exception_handler
@@ -61,7 +60,7 @@ cdef extern from "cudf/column/column_factories.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] make_timestamp_column(
         data_type type,
         size_type size,
-        device_buffer[uint8_t] mask,
+        device_buffer[byte] mask,
         size_type null_count,
         cudaStream_t stream,
         device_async_resource_ref mr) except +libcudf_exception_handler
@@ -76,7 +75,7 @@ cdef extern from "cudf/column/column_factories.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] make_duration_column(
         data_type type,
         size_type size,
-        device_buffer[uint8_t] mask,
+        device_buffer[byte] mask,
         size_type null_count,
         cudaStream_t stream,
         device_async_resource_ref mr) except +libcudf_exception_handler
@@ -91,7 +90,7 @@ cdef extern from "cudf/column/column_factories.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] make_fixed_width_column(
         data_type type,
         size_type size,
-        device_buffer[uint8_t] mask,
+        device_buffer[byte] mask,
         size_type null_count,
         cudaStream_t stream,
         device_async_resource_ref mr) except +libcudf_exception_handler

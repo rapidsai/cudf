@@ -298,7 +298,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
   };
   auto make_validity =
     [stream, validity_size_check](
-      device_json_column& json_col) -> std::pair<cuda::device_buffer<uint8_t>, size_type> {
+      device_json_column& json_col) -> std::pair<cuda::device_buffer<std::byte>, size_type> {
     validity_size_check(json_col);
     auto null_count = cudf::detail::null_count(
       reinterpret_cast<bitmask_type*>(json_col.validity.data()), 0, json_col.num_rows, stream);

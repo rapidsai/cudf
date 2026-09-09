@@ -791,7 +791,7 @@ struct to_string_view_pair {
 template <typename string_view_pair_it>
 static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
                                             size_type col_size,
-                                            cuda::device_buffer<uint8_t>&& null_mask,
+                                            cuda::device_buffer<std::byte>&& null_mask,
                                             cudf::detail::device_scalar<size_type>& d_null_count,
                                             cudf::io::parse_options_view const& options,
                                             cuda::stream_ref stream,
@@ -921,7 +921,7 @@ std::unique_ptr<column> parse_data(
   cuda::zip_iterator<size_type const*, size_type const*> offset_length_begin,
   size_type col_size,
   data_type col_type,
-  cuda::device_buffer<uint8_t>&& null_mask,
+  cuda::device_buffer<std::byte>&& null_mask,
   size_type null_count,
   cudf::io::parse_options_view const& options,
   cuda::stream_ref stream,

@@ -10,11 +10,11 @@ from pylibcudf.libcudf.column.column_view cimport (
 )
 from pylibcudf.libcudf.types cimport data_type, size_type
 from pylibcudf.libcudf.utilities.device_buffer cimport (
+    byte,
     device_buffer as cuda_device_buffer,
 )
 
 from rmm.librmm.device_buffer cimport device_buffer
-from libc.stdint cimport uint8_t
 from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.memory_resource cimport device_async_resource_ref
 
@@ -22,7 +22,7 @@ from rmm.librmm.memory_resource cimport device_async_resource_ref
 cdef extern from "cudf/column/column.hpp" namespace "cudf" nogil:
     cdef cppclass column_contents "cudf::column::contents":
         unique_ptr[device_buffer] data
-        unique_ptr[cuda_device_buffer[uint8_t]] null_mask
+        unique_ptr[cuda_device_buffer[byte]] null_mask
         vector[unique_ptr[column]] children
 
     cdef cppclass column:

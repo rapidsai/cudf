@@ -38,7 +38,7 @@ namespace cudf {
 namespace detail {
 namespace {
 
-std::pair<cuda::device_buffer<uint8_t>, bitmask_type const*> build_row_bitmask(
+std::pair<cuda::device_buffer<std::byte>, bitmask_type const*> build_row_bitmask(
   table_view const& input, cuda::stream_ref stream)
 {
   auto const nullable_columns = get_nullable_columns(input);

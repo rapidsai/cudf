@@ -39,7 +39,7 @@ namespace detail {
 /**
  * @brief Returns a validity mask for rows without nulls at any nested level, or null when unused.
  */
-std::pair<cuda::device_buffer<uint8_t>, bitmask_type const*> make_filtered_join_row_bitmask(
+std::pair<cuda::device_buffer<std::byte>, bitmask_type const*> make_filtered_join_row_bitmask(
   table_view const& input, null_equality nulls_equal, cuda::stream_ref stream)
 {
   if (nulls_equal == null_equality::EQUAL || !has_nested_nulls(input)) {

@@ -552,7 +552,7 @@ std::vector<std::unique_ptr<column>> enforce_null_consistency(
   // Helper struct to store and manipulate struct column properties
   struct contents {
     size_type null_count                                    = 0;        // Number of null values
-    std::unique_ptr<cuda::device_buffer<uint8_t>> null_mask = nullptr;  // Null mask buffer
+    std::unique_ptr<cuda::device_buffer<std::byte>> null_mask = nullptr;  // Null mask buffer
     size_type num_children                                  = 0;        // Number of child columns
     size_type num_elements                                  = 0;        // Number of rows
   };

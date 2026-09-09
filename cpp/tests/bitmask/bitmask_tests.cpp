@@ -387,7 +387,7 @@ struct CopyBitmaskTest : public cudf::test::BaseFixture, cudf::test::UniformRand
   CopyBitmaskTest() : cudf::test::UniformRandomGenerator<int>{0, 1} {}
 };
 
-void cleanEndWord(cuda::device_buffer<uint8_t>& mask, int begin_bit, int end_bit)
+void cleanEndWord(cuda::device_buffer<std::byte>& mask, int begin_bit, int end_bit)
 {
   auto ptr = reinterpret_cast<cudf::bitmask_type*>(mask.data());
 
@@ -511,7 +511,7 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorContiguous)
                                        760,
                                        num_elements};
   std::vector<cudf::column_view> views              = cudf::slice(original, indices);
-  cuda::device_buffer<uint8_t> concatenated_bitmask = cudf::concatenate_masks(views);
+  cuda::device_buffer<std::byte> concatenated_bitmask = cudf::concatenate_masks(views);
   cleanEndWord(concatenated_bitmask, 0, num_elements);
   CUDF_TEST_EXPECT_EQUAL_BUFFERS(
     concatenated_bitmask.data(), gold_mask.data(), cudf::num_bitmask_words(num_elements));
@@ -542,7 +542,7 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorDiscontiguous)
       null_count);
     views.push_back(cols.back());
   }
-  cuda::device_buffer<uint8_t> concatenated_bitmask = cudf::concatenate_masks(views);
+  cuda::device_buffer<std::byte> concatenated_bitmask = cudf::concatenate_masks(views);
   cleanEndWord(concatenated_bitmask, 0, num_elements);
   CUDF_TEST_EXPECT_EQUAL_BUFFERS(
     concatenated_bitmask.data(), gold_mask.data(), cudf::num_bitmask_words(num_elements));

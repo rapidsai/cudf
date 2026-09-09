@@ -317,7 +317,7 @@ struct streaming_groupby::impl {
   struct batch_insert_result {
     rmm::device_uvector<size_type> target_indices;
     size_type new_insertions;
-    cuda::device_buffer<uint8_t> bitmask_buffer;
+    cuda::device_buffer<std::byte> bitmask_buffer;
   };
 
   batch_insert_result probe_and_insert(table_view const& batch_keys, cuda::stream_ref stream);

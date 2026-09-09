@@ -67,7 +67,7 @@ TEST_F(DictionaryFactoriesTest, ColumnsWithNulls)
   std::vector<int32_t> h_values{1, 2, 3, 1, 2, 3, 0};
   cudf::test::fixed_width_column_wrapper<int32_t> values(h_values.begin(), h_values.end());
   auto size                              = static_cast<cudf::size_type>(h_values.size());
-  cuda::device_buffer<uint8_t> null_mask = create_null_mask(size, cudf::mask_state::ALL_NULL);
+  cuda::device_buffer<std::byte> null_mask = create_null_mask(size, cudf::mask_state::ALL_NULL);
   auto dictionary =
     cudf::make_dictionary_column(keys.release(), values.release(), std::move(null_mask), size);
   cudf::dictionary_column_view view(dictionary->view());

@@ -64,7 +64,7 @@ CUDF_KERNEL void valid_if_kernel(
  *
  * Bit `i` in the output mask will be set if `p(*(begin+i)) == true`.
  *
- * If `distance(begin,end) == 0`, returns an empty `cuda::device_buffer<uint8_t>`.
+ * If `distance(begin,end) == 0`, returns an empty `cuda::device_buffer<std::byte>`.
  *
  * @throws cudf::logic_error if `(begin > end)`
  *
@@ -76,7 +76,7 @@ CUDF_KERNEL void valid_if_kernel(
  * @return A pair containing a `device_buffer` with the new bitmask and its null count
  */
 template <typename InputIterator, typename Predicate>
-std::pair<cuda::device_buffer<uint8_t>, size_type> valid_if(InputIterator begin,
+std::pair<cuda::device_buffer<std::byte>, size_type> valid_if(InputIterator begin,
                                                             InputIterator end,
                                                             Predicate p,
                                                             cuda::stream_ref stream,

@@ -76,7 +76,7 @@ std::unique_ptr<column> make_dictionary_column(
  */
 std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_column,
                                                std::unique_ptr<column> indices_column,
-                                               cuda::device_buffer<uint8_t>&& null_mask,
+                                               cuda::device_buffer<std::byte>&& null_mask,
                                                size_type null_count);
 
 /**

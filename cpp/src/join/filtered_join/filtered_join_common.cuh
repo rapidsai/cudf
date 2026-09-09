@@ -36,7 +36,7 @@ struct precomputed_hash {
   hash_value_type const* _hashes;
 };
 
-std::pair<cuda::device_buffer<uint8_t>, bitmask_type const*> make_filtered_join_row_bitmask(
+std::pair<cuda::device_buffer<std::byte>, bitmask_type const*> make_filtered_join_row_bitmask(
   table_view const& input, null_equality nulls_equal, cuda::stream_ref stream);
 
 class filtered_join_row_is_valid {

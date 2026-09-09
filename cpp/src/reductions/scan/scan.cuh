@@ -20,7 +20,7 @@ namespace cudf {
 namespace detail {
 
 // logical-and scan of the null mask of the input view
-std::pair<cuda::device_buffer<uint8_t>, size_type> mask_scan(column_view const& input_view,
+std::pair<cuda::device_buffer<std::byte>, size_type> mask_scan(column_view const& input_view,
                                                              scan_type inclusive,
                                                              cuda::stream_ref stream,
                                                              rmm::device_async_resource_ref mr);

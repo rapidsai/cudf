@@ -504,7 +504,7 @@ std::unique_ptr<column> column_merger::operator()<cudf::struct_view>(
   auto const merged_size = lcol.size() + rcol.size();
 
   // materialize the output buffer
-  cuda::device_buffer<uint8_t> validity =
+  cuda::device_buffer<std::byte> validity =
     lcol.has_nulls() || rcol.has_nulls()
       ? detail::create_null_mask(merged_size, mask_state::UNINITIALIZED, stream, mr)
       : cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED);

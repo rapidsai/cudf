@@ -84,7 +84,7 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
   auto [offsets_cols, d_chars_sizes] =
     make_offsets_child_column_batch_async<size_type>(input, stream, mr);
 
-  std::vector<cuda::device_buffer<uint8_t>> null_masks;
+  std::vector<cuda::device_buffer<std::byte>> null_masks;
   null_masks.reserve(num_columns);
 
   rmm::device_uvector<size_type> d_valid_counts(num_columns, stream, mr);
@@ -232,7 +232,7 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
                                             std::unique_ptr<column> offsets_column,
                                             rmm::device_buffer&& chars_buffer,
                                             size_type null_count,
-                                            cuda::device_buffer<uint8_t>&& null_mask)
+                                            cuda::device_buffer<std::byte>&& null_mask)
 {
   CUDF_FUNC_RANGE();
 
@@ -255,7 +255,7 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
 std::unique_ptr<column> make_strings_column(size_type num_strings,
                                             rmm::device_uvector<size_type>&& offsets,
                                             rmm::device_uvector<char>&& chars,
-                                            cuda::device_buffer<uint8_t>&& null_mask,
+                                            cuda::device_buffer<std::byte>&& null_mask,
                                             size_type null_count)
 {
   CUDF_FUNC_RANGE();

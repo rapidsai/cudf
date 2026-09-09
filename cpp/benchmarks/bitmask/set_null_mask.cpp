@@ -39,7 +39,7 @@ auto generate_test_data(cudf::size_type num_masks,
 
   auto valids = thrust::host_vector<bool>(num_masks, true);
 
-  std::vector<cuda::device_buffer<uint8_t>> masks;
+  std::vector<cuda::device_buffer<std::byte>> masks;
   masks.reserve(num_masks);
   std::vector<cudf::bitmask_type*> masks_ptr;
   masks_ptr.reserve(num_masks);
@@ -61,7 +61,7 @@ auto generate_test_data(cudf::size_type num_masks,
 void BM_setnullmask(nvbench::state& state)
 {
   auto const mask_size = static_cast<cudf::size_type>(state.get_int64("mask_size"));
-  cuda::device_buffer<uint8_t> mask =
+  cuda::device_buffer<std::byte> mask =
     cudf::create_null_mask(mask_size, cudf::mask_state::UNINITIALIZED);
   auto begin = 0, end = mask_size;
 

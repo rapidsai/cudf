@@ -53,7 +53,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   // if any of the input columns have nulls, construct the output mask
   bool const has_nulls =
     std::any_of(columns.begin(), columns.end(), [](auto const& col) { return col.has_nulls(); });
-  cuda::device_buffer<uint8_t> null_mask =
+  cuda::device_buffer<std::byte> null_mask =
     create_null_mask(total_length,
                      has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED,
                      stream,

@@ -580,7 +580,7 @@ std::unique_ptr<table> concatenate(std::span<table_view const> tables_to_concat,
   return std::make_unique<table>(std::move(concat_columns));
 }
 
-cuda::device_buffer<uint8_t> concatenate_masks(std::span<column_view const> views,
+cuda::device_buffer<std::byte> concatenate_masks(std::span<column_view const> views,
                                                cuda::stream_ref stream,
                                                rmm::device_async_resource_ref mr)
 {
@@ -592,7 +592,7 @@ cuda::device_buffer<uint8_t> concatenate_masks(std::span<column_view const> view
         return accumulator + v.size();
       });
 
-    cuda::device_buffer<uint8_t> null_mask =
+    cuda::device_buffer<std::byte> null_mask =
       cudf::detail::create_null_mask(total_element_count, mask_state::UNINITIALIZED, stream, mr);
 
     detail::concatenate_masks(host_span<column_view const>{views.data(), views.size()},
@@ -607,7 +607,7 @@ cuda::device_buffer<uint8_t> concatenate_masks(std::span<column_view const> view
 
 }  // namespace detail
 
-cuda::device_buffer<uint8_t> concatenate_masks(std::span<column_view const> views,
+cuda::device_buffer<std::byte> concatenate_masks(std::span<column_view const> views,
                                                cuda::stream_ref stream,
                                                rmm::device_async_resource_ref mr)
 {

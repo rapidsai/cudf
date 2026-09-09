@@ -19,7 +19,7 @@ std::unique_ptr<cudf::column> make_structs_column(
   size_type num_rows,
   std::vector<std::unique_ptr<column>>&& child_columns,
   size_type null_count,
-  cuda::device_buffer<uint8_t>&& null_mask,
+  cuda::device_buffer<std::byte>&& null_mask,
   cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
 {
@@ -55,7 +55,7 @@ std::unique_ptr<cudf::column> create_structs_hierarchy(
   size_type num_rows,
   std::vector<std::unique_ptr<column>>&& child_columns,
   size_type null_count,
-  cuda::device_buffer<uint8_t>&& null_mask,
+  cuda::device_buffer<std::byte>&& null_mask,
   cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
 {

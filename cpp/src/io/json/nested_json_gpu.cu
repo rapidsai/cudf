@@ -2103,7 +2103,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
 
   auto make_validity =
     [stream,
-     mr](json_column const& json_col) -> std::pair<cuda::device_buffer<uint8_t>, size_type> {
+     mr](json_column const& json_col) -> std::pair<cuda::device_buffer<std::byte>, size_type> {
     auto const null_count = json_col.current_offset - json_col.valid_count;
     if (null_count == 0) {
       return {cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED), null_count};
