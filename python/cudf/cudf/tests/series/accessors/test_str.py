@@ -101,6 +101,34 @@ def test_string_predicate_extension_dtype(dtype, method, args):
 @pytest.mark.parametrize(
     "method,args",
     [
+        ("match", ("a",)),
+        ("isalpha", ()),
+        ("isdecimal", ()),
+        ("islower", ()),
+        ("isupper", ()),
+        ("istitle", ()),
+        ("isspace", ()),
+    ],
+)
+def test_string_additional_predicate_nullable_dtype(storage, method, args):
+    ps = pd.Series(
+        ["a", None, "12", "", " ", "ABC", "Abc"],
+        dtype=pd.StringDtype(storage=storage),
+    )
+    gs = cudf.from_pandas(ps)
+
+    expected = getattr(ps.str, method)(*args)
+    result = getattr(gs.str, method)(*args)
+
+    assert result.dtype == expected.dtype
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("storage", ["python", "pyarrow"])
+@pytest.mark.parametrize("data", [["aba", None, "abc"], [], [None, None]])
+@pytest.mark.parametrize(
+    "method,args",
+    [
         ("len", ()),
         ("count", ("a",)),
         ("find", ("a",)),
@@ -109,8 +137,8 @@ def test_string_predicate_extension_dtype(dtype, method, args):
         ("rindex", ("a",)),
     ],
 )
-def test_string_numeric_nullable_dtype(storage, method, args):
-    ps = pd.Series(["aba", None, "abc"], dtype=pd.StringDtype(storage=storage))
+def test_string_numeric_nullable_dtype(storage, data, method, args):
+    ps = pd.Series(data, dtype=pd.StringDtype(storage=storage))
     gs = cudf.from_pandas(ps)
 
     expected = getattr(ps.str, method)(*args)
