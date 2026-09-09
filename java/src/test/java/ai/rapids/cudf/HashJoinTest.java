@@ -25,9 +25,11 @@ public class HashJoinTest {
     try (Table t = new Table.TestBuilder().column(1, 2, 3, 4).build()) {
       try (HashJoin hashJoin = new HashJoin(t, false)) {
         assertFalse(hashJoin.getCompareNullsEqual());
+        assertFalse(hashJoin.getCompareNulls());
       }
       try (HashJoin hashJoin = new HashJoin(t, true)) {
         assertTrue(hashJoin.getCompareNullsEqual());
+        assertTrue(hashJoin.getCompareNulls());
       }
     }
   }
