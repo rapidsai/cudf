@@ -234,7 +234,7 @@ jobs:
     permissions:
       contents: read
     needs: telemetry-setup
-    uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@codex/checks-main-cache
+    uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@main
     with:
       enable_check_generated_files: false
       ignored_pr_jobs: "telemetry-summarize cudf-spark-jni cuml-compat-tests"
