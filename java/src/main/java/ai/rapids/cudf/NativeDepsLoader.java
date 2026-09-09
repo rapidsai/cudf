@@ -20,14 +20,17 @@ import java.nio.channels.FileChannel;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -452,11 +455,21 @@ public class NativeDepsLoader {
       throw new IOException("Native dependency destination directory does not exist: " + parent);
     }
 
+    Set<PosixFilePermission> destinationPermissions = null;
+    try {
+      destinationPermissions = Files.getPosixFilePermissions(destinationPath);
+    } catch (NoSuchFileException | UnsupportedOperationException e) {
+      // There are no existing POSIX permissions to preserve.
+    }
+
     Path temporaryPath = Files.createTempFile(parent,
         "." + destinationPath.getFileName(), ".tmp");
     boolean moved = false;
     try {
       extractNativeResource(os, arch, baseName, temporaryPath.toFile());
+      if (destinationPermissions != null) {
+        Files.setPosixFilePermissions(temporaryPath, destinationPermissions);
+      }
       try {
         Files.move(temporaryPath, destinationPath,
             StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
@@ -467,7 +480,11 @@ public class NativeDepsLoader {
       return destinationPath.toFile();
     } finally {
       if (!moved) {
-        Files.deleteIfExists(temporaryPath);
+        try {
+          Files.deleteIfExists(temporaryPath);
+        } catch (IOException e) {
+          log.warn("Could not delete partial native dependency {}", temporaryPath, e);
+        }
       }
     }
   }

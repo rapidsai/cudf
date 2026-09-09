@@ -22,6 +22,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Locale;
@@ -104,12 +106,23 @@ class NativeDepsLoaderExtractionTest {
     Path destinationDirectory = Files.createTempDirectory("native-dep-destination");
     Path destination = destinationDirectory.resolve(System.mapLibraryName(baseName));
     Files.write(destination, "existing contents".getBytes(StandardCharsets.UTF_8));
+    Set<PosixFilePermission> expectedPermissions = null;
+    try {
+      expectedPermissions = PosixFilePermissions.fromString("rw-r-----");
+      Files.setPosixFilePermissions(destination, expectedPermissions);
+    } catch (UnsupportedOperationException e) {
+      // POSIX permissions are not available on this platform.
+      expectedPermissions = null;
+    }
     try {
       File extracted = NativeDepsLoader.extractNativeDep(
           TEST_OS, TEST_ARCH, baseName, destination.toFile());
 
       assertEquals(destination.toAbsolutePath(), extracted.toPath());
       assertArrayEquals(expected, Files.readAllBytes(destination));
+      if (expectedPermissions != null) {
+        assertEquals(expectedPermissions, Files.getPosixFilePermissions(destination));
+      }
     } finally {
       Files.deleteIfExists(destination);
       Files.deleteIfExists(destinationDirectory);
