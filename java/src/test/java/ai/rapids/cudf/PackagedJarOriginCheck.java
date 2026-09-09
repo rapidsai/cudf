@@ -43,8 +43,8 @@ class PackagedJarOriginCheck {
 
   @Test
   void nativeDepUtilRunsWithOnlyPackagedJar() throws Exception {
-    String os = "StandaloneTestOS";
-    String arch = "standalone-test-arch";
+    String os = System.getProperty("os.name");
+    String arch = System.getProperty("os.arch");
     String baseName = "standalonetest";
     byte[] expected = "standalone native library".getBytes(StandardCharsets.UTF_8);
     Path resource = tempDir.resolve(arch).resolve(os).resolve(System.mapLibraryName(baseName));
@@ -60,8 +60,6 @@ class PackagedJarOriginCheck {
     String classPath = packagedJar() + File.pathSeparator + tempDir;
     Process process = new ProcessBuilder(
         java.toString(),
-        "-Dos.name=" + os,
-        "-Dos.arch=" + arch,
         "-cp", classPath,
         NativeDepUtil.class.getName(),
         "extract", baseName, destination.toString())
