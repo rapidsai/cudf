@@ -7,9 +7,9 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/algorithms/reduce.cuh>
-#include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
@@ -30,7 +30,6 @@
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
-#include <thrust/reduce.h>
 #include <thrust/scan.h>
 
 using namespace cudf::tdigest;
@@ -58,13 +57,14 @@ struct make_centroid {
 };
 
 // kernel for computing percentiles on input tdigest (mean, weight) centroid data.
-template <typename CentroidIter>
+template <bool compact_output, typename CentroidIter>
 CUDF_KERNEL void compute_percentiles_kernel(device_span<int32_t const> tdigest_offsets,
                                             column_device_view percentiles,
                                             CentroidIter centroids_,
                                             double const* min_,
                                             double const* max_,
                                             double const* cumulative_weight_,
+                                            int32_t const* output_offsets,
                                             double* output)
 {
   auto const tid = cudf::detail::grid_1d::global_thread_id();
@@ -79,7 +79,15 @@ CUDF_KERNEL void compute_percentiles_kernel(device_span<int32_t const> tdigest_o
   // no work to do. values will be set to null
   if (tdigest_size == 0 || !percentiles.is_valid(pindex)) { return; }
 
-  output[tid] = [&]() {
+  auto const output_index = [&]() {
+    if constexpr (compact_output) {
+      return output_offsets[tdigest_index] + pindex;
+    } else {
+      return tid;
+    }
+  }();
+
+  output[output_index] = [&]() {
     double const percentage         = percentiles.element<double>(pindex);
     double const* cumulative_weight = cumulative_weight_ + tdigest_offsets[tdigest_index];
 
@@ -167,14 +175,18 @@ CUDF_KERNEL void compute_percentiles_kernel(device_span<int32_t const> tdigest_o
  *
  * @param input           tdigest input data. One tdigest per row.
  * @param percentiles     Desired percentiles in range [0, 1].
- * @param stream          CUDA stream used for device memory operations and kernel launches
+ * @param num_output_values Number of elements to allocate in the output column.
+ * @param output_offsets  Optional compact output offsets for inputs containing empty digests.
+ * @param stream          CUDA stream used for device memory operations and kernel launches.
  * @param mr              Device memory resource used to allocate the returned column's device
- * memory
+ *                        memory.
  *
  * @returns Column of doubles containing requested percentile values.
  */
 std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& input,
                                                    column_view const& percentiles,
+                                                   size_type num_output_values,
+                                                   int32_t const* output_offsets,
                                                    cuda::stream_ref stream,
                                                    rmm::device_async_resource_ref mr)
 {
@@ -208,9 +220,6 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
 
   auto percentiles_cdv = column_device_view::create(percentiles, stream);
 
-  // leaf is a column of size input.size() * percentiles.size()
-  auto const num_output_values = input.size() * percentiles.size();
-
   // null percentiles become null results.
   auto [null_mask, null_count] = [&]() {
     return percentiles.null_count() != 0
@@ -232,15 +241,29 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
     0, make_centroid{tdv.means().begin<double>(), tdv.weights().begin<double>()});
 
   constexpr size_type block_size = 256;
-  cudf::detail::grid_1d const grid(percentiles.size() * input.size(), block_size);
-  compute_percentiles_kernel<<<grid.num_blocks, block_size, 0, stream.get()>>>(
-    {offsets.begin<size_type>(), static_cast<size_t>(offsets.size())},
-    *percentiles_cdv,
-    centroids,
-    tdv.min_begin(),
-    tdv.max_begin(),
-    cumulative_weights->view().begin<double>(),
-    result->mutable_view().begin<double>());
+  cudf::detail::grid_1d const grid(thread_index_type{percentiles.size()} * input.size(),
+                                   block_size);
+  if (output_offsets == nullptr) {
+    compute_percentiles_kernel<false><<<grid.num_blocks, block_size, 0, stream.get()>>>(
+      {offsets.begin<size_type>(), static_cast<size_t>(offsets.size())},
+      *percentiles_cdv,
+      centroids,
+      tdv.min_begin(),
+      tdv.max_begin(),
+      cumulative_weights->view().begin<double>(),
+      output_offsets,
+      result->mutable_view().begin<double>());
+  } else {
+    compute_percentiles_kernel<true><<<grid.num_blocks, block_size, 0, stream.get()>>>(
+      {offsets.begin<size_type>(), static_cast<size_t>(offsets.size())},
+      *percentiles_cdv,
+      centroids,
+      tdv.min_begin(),
+      tdv.max_begin(),
+      cumulative_weights->view().begin<double>(),
+      output_offsets,
+      result->mutable_view().begin<double>());
+  }
   CUDF_CUDA_TRY(cudaGetLastError());
 
   return result;
@@ -347,21 +370,26 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
   CUDF_EXPECTS(percentiles.type().id() == type_id::FLOAT64,
                "percentile_approx expects float64 percentile inputs");
 
-  // output is a list column with each row containing percentiles.size() percentile values
-  auto offsets = cudf::make_fixed_width_column(
-    data_type{type_id::INT32}, input.size() + 1, mask_state::UNALLOCATED, stream, mr);
-  auto const all_empty_rows = cudf::detail::count_if(
-                                detail::size_begin(input),
-                                detail::size_begin(input) + input.size(),
-                                [] __device__(auto const x) { return x == 0; },
-                                stream) == static_cast<std::size_t>(input.size());
-  auto row_size_iter = cuda::make_constant_iterator(all_empty_rows ? 0 : percentiles.size());
-  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                         row_size_iter,
-                         row_size_iter + input.size() + 1,
-                         offsets->mutable_view().begin<int32_t>());
+  auto const null_count     = static_cast<size_type>(cudf::detail::count_if(
+    detail::size_begin(input),
+    detail::size_begin(input) + input.size(),
+    [] __device__(auto const x) { return x == 0; },
+    stream));
+  auto const all_empty_rows = null_count == input.size();
+
+  auto make_uniform_offsets = [&](size_type row_size) {
+    auto offsets = cudf::make_fixed_width_column(
+      data_type{type_id::INT32}, input.size() + 1, mask_state::UNALLOCATED, stream, mr);
+    auto const row_size_iter = cuda::make_constant_iterator(row_size);
+    thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                           row_size_iter,
+                           row_size_iter + input.size() + 1,
+                           offsets->mutable_view().begin<int32_t>());
+    return offsets;
+  };
 
   if (percentiles.size() == 0 || all_empty_rows) {
+    auto offsets = make_uniform_offsets(0);
     return cudf::make_lists_column(
       input.size(),
       std::move(offsets),
@@ -371,36 +399,41 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
         input.size(), mask_state::ALL_NULL, cuda::stream_ref(stream), mr));
   }
 
-  // if any of the input digests are empty, nullify the corresponding output rows (values will be
-  // uninitialized)
-  auto [bitmask, null_count] = [stream, mr, &tdv]() {
+  // If any input digests are empty, nullify the corresponding output rows.
+  auto bitmask = [stream, mr, &tdv, null_count]() {
+    if (null_count == 0) { return rmm::device_buffer{}; }
     auto tdigest_is_empty = cuda::transform_iterator(
       detail::size_begin(tdv),
       cuda::proclaim_return_type<size_type>(
         [] __device__(size_type tdigest_size) -> size_type { return tdigest_size == 0; }));
-    auto const null_count =
-      thrust::reduce(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                     tdigest_is_empty,
-                     tdigest_is_empty + tdv.size(),
-                     0);
-    if (null_count == 0) {
-      return std::pair<rmm::device_buffer, size_type>{rmm::device_buffer{}, null_count};
-    }
-    return cudf::detail::valid_if(
+    auto validity = cudf::detail::valid_if(
       tdigest_is_empty, tdigest_is_empty + tdv.size(), cuda::std::logical_not{}, stream, mr);
+    return std::move(validity.first);
   }();
 
-  auto result =
-    cudf::make_lists_column(input.size(),
-                            std::move(offsets),
-                            detail::compute_approx_percentiles(input, percentiles, stream, mr),
-                            null_count,
-                            std::move(bitmask));
+  std::unique_ptr<column> offsets;
+  size_type num_output_values;
+  if (null_count == 0) {
+    offsets           = make_uniform_offsets(percentiles.size());
+    num_output_values = input.size() * percentiles.size();
+  } else {
+    auto const row_size_iter = cuda::transform_iterator(
+      detail::size_begin(tdv),
+      cuda::proclaim_return_type<size_type>(
+        [row_size = percentiles.size()] __device__(size_type tdigest_size) -> size_type {
+          return tdigest_size == 0 ? 0 : row_size;
+        }));
+    auto compact_offsets = cudf::detail::make_offsets_child_column(
+      row_size_iter, row_size_iter + input.size(), stream, mr);
+    offsets           = std::move(compact_offsets.first);
+    num_output_values = compact_offsets.second;
+  }
 
-  // Empty digests produce null rows whose child values are uninitialized. Since list factories do
-  // not sanitize null rows, remove those child values before returning the nested column.
-  return null_count == 0 ? std::move(result)
-                         : cudf::detail::purge_nonempty_nulls(result->view(), stream, mr);
+  auto const output_offsets = null_count == 0 ? nullptr : offsets->view().begin<int32_t>();
+  auto child                = detail::compute_approx_percentiles(
+    input, percentiles, num_output_values, output_offsets, stream, mr);
+  return cudf::make_lists_column(
+    input.size(), std::move(offsets), std::move(child), null_count, std::move(bitmask));
 }
 
 }  // namespace tdigest
