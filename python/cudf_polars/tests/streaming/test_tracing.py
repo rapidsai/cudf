@@ -277,7 +277,7 @@ def test_io_tasks_wait_for_memory_admission(
             True,
             1,
             32 * 1024 * 1024,
-            "ordered",
+            "ordered_aligned",
             "skip",
             "target_not_redistributed",
             None,
