@@ -3388,7 +3388,6 @@ NODEIDS_THAT_FAIL = {
     "tests/series/methods/test_sort_index.py::TestSeriesSortIndexKey::test_sort_index_na_position_key[None]": "AssertionError: Series.index are different",
     "tests/series/methods/test_truncate.py::TestTruncate::test_truncate_datetimeindex_tz": "AssertionError: Series.index are different",
     "tests/series/methods/test_tz_localize.py::TestTZLocalize::test_series_tz_localize_ambiguous_bool": "Failed: DID NOT RAISE <class 'ValueError'>",
-    "tests/series/methods/test_unique.py::TestUnique::test_tz_unique": "TypeError: Cannot interpret 'datetime64[us, US/Eastern]' as a data type",
     "tests/series/test_api.py::TestSeriesMisc::test_index_tab_completion[index0]": "TODO: Add a reason for failure",
     "tests/series/test_api.py::TestSeriesMisc::test_index_tab_completion[index10]": "TODO: Add a reason for failure",
     "tests/series/test_api.py::TestSeriesMisc::test_index_tab_completion[index11]": "TODO: Add a reason for failure",
