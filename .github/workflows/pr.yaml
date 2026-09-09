@@ -1,3 +1,4 @@
+# Full-CI baseline for the pip-cache experiment.
 name: pr
 on:
   push:
