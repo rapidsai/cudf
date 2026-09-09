@@ -12,7 +12,7 @@ import struct
 import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import reduce
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
@@ -37,9 +37,17 @@ from rapidsmpf.streaming.coll.allgather import AllGather
 from rapidsmpf.streaming.core.message import Message
 
 import cudf_polars.dsl.tracing
+import cudf_polars.quent._types
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Cast, Col, NamedExpr, TemporalFunction
-from cudf_polars.dsl.ir import Filter, GroupBy, HStack, Join, Projection, Select
+from cudf_polars.dsl.ir import (
+    Filter,
+    GroupBy,
+    HStack,
+    Join,
+    Projection,
+    Select,
+)
 from cudf_polars.dsl.tracing import Scope
 from cudf_polars.dsl.utils.column_domain import column_domain_bindings
 from cudf_polars.dsl.utils.naming import names_to_indices
@@ -300,6 +308,7 @@ async def shutdown_on_error(
 
     if ir_context is not None:
         contextvars["cudf_polars_query_id"] = str(ir_context.query_id)
+        ir_context = replace(ir_context, tracer=tracer)
 
     with cudf_polars.dsl.tracing.bound_contextvars(**contextvars):
         start = time.monotonic_ns()
@@ -328,6 +337,54 @@ async def shutdown_on_error(
                 "Streaming Actor", start=start, stop=stop, **record
             )
 
+            if (
+                ir_context is not None
+                and (
+                    quent_ir_execution_context := ir_context.quent_ir_execution_context
+                )
+                is not None
+            ):
+                custom_attributes = []
+                if tracer is not None and tracer.chunk_count is not None:
+                    custom_attributes.append(
+                        cudf_polars.quent._types.StatisticsAttribute(
+                            key="chunk_count",
+                            value_type="U64",
+                            value=tracer.chunk_count,
+                        )
+                    )
+                if tracer is not None and tracer.duplicated is not None:
+                    custom_attributes.append(
+                        cudf_polars.quent._types.StatisticsAttribute(
+                            key="duplicated",
+                            value_type="U64",
+                            value=1 if tracer.duplicated else 0,
+                        )
+                    )
+                if tracer is not None and tracer.decision is not None:
+                    custom_attributes.append(
+                        cudf_polars.quent._types.StatisticsAttribute(
+                            key="decision",
+                            value_type="String",
+                            value=tracer.decision,
+                        )
+                    )
+                if tracer is None or tracer.row_count is None:
+                    # TODO: See if `output_rows` is nullable.
+                    output_rows = 0
+                else:
+                    output_rows = tracer.row_count
+                stats = quent_ir_execution_context.quent_operator.statistics(
+                    statistics=cudf_polars.quent._types.Statistics(
+                        output_rows=output_rows,
+                        input_bytes=tracer.input_bytes,
+                        output_bytes=tracer.output_bytes,
+                        custom_attributes=custom_attributes,
+                    )
+                )
+
+                quent_ir_execution_context.logger.emit(stats)
+
 
 def _update_ordering_indices(
     ordering: Ordering, new_indices: tuple[int, ...]
@@ -338,6 +395,36 @@ def _update_ordering_indices(
             for k, idx in zip(ordering.keys, new_indices, strict=True)
         )
     )
+
+
+def _clear_scheme_local_ordering(scheme: PartitioningScheme) -> PartitioningScheme:
+    """Return scheme with local row-order metadata cleared from any orderings."""
+    if isinstance(scheme, OrderScheme):
+        return OrderScheme(
+            tuple(
+                ordering.with_locally_ordered(locally_ordered=False)
+                for ordering in scheme.orderings
+            )
+        )
+    return scheme
+
+
+def clear_local_ordering(partitioning: Partitioning | None) -> Partitioning | None:
+    """Return partitioning with order/range metadata preserved but local row order cleared."""
+    if partitioning is None:
+        return None
+    return Partitioning(
+        inter_rank=_clear_scheme_local_ordering(partitioning.inter_rank),
+        local=_clear_scheme_local_ordering(partitioning.local),
+    )
+
+
+def join_preserves_side_order(
+    maintain_order: Literal["none", "left", "right", "left_right", "right_left"],
+    side: Literal["left", "right"],
+) -> bool:
+    """Return True when join options preserve the requested input side's order."""
+    return maintain_order.startswith(side)
 
 
 def _is_truncate_transparent_cast(expr: Cast) -> bool:
@@ -454,6 +541,7 @@ def _derived_ordering(
         keys,
         boundaries,
         strict_boundaries=strict_boundaries,
+        locally_ordered=ordering.locally_ordered,
     )
 
 
@@ -852,7 +940,7 @@ async def allgather_and_reduce(
     """
     allgather = AllGatherManager(context, comm, collective_id)
     with allgather.inserting() as inserter:
-        inserter.insert(0, local_chunk)
+        await inserter.insert(0, local_chunk)
     stream = ir_context.get_cuda_stream()
     concat_chunk = TableChunk.from_pylibcudf_table(
         await allgather.extract_concatenated(stream, ir_context=ir_context),
@@ -1647,7 +1735,7 @@ def _leading_order_keys(metadata: ChannelMetadata | None) -> OrderingMetadata:
 
     candidates: dict[int, OrderKey | None] = {}
     for ordering in scheme.orderings:
-        if not ordering.keys:
+        if not ordering.locally_ordered or not ordering.keys:
             continue
         key = ordering.keys[0]
         current = candidates.get(key.column_index, key)

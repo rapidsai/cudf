@@ -138,7 +138,7 @@ ConfigureNVBench(FILTER_NVBENCH filter/minmax_filter.cpp)
 # * stream_compaction benchmark -------------------------------------------------------------------
 ConfigureNVBench(
   STREAM_COMPACTION_NVBENCH
-  stream_compaction/apply_boolean_mask.cpp
+  stream_compaction/apply_mask.cpp
   stream_compaction/distinct.cpp
   stream_compaction/stable_distinct.cpp
   stream_compaction/stream_compaction_common.cpp
@@ -419,8 +419,13 @@ add_dependencies(BINARYOP_NVBENCH cudf_benchmark_fragments)
 # * transform benchmark
 # ---------------------------------------------------------------------------------
 ConfigureNVBench(
-  TRANSFORM_NVBENCH transform/encode.cpp transform/polynomials.cpp
-  transform/polynomials_concurrent.cpp transform/transform.cpp transform/transform_widetable.cpp
+  TRANSFORM_NVBENCH
+  transform/encode.cpp
+  transform/polynomials.cpp
+  transform/polynomials_concurrent.cpp
+  transform/transform.cpp
+  transform/transform_dispatch.cpp
+  transform/transform_widetable.cpp
 )
 
 # ##################################################################################################
@@ -437,6 +442,7 @@ ConfigureNVBench(
   text/replace.cpp
   text/subword.cpp
   text/tokenize.cpp
+  text/unicode_normalize.cpp
   text/vocab.cpp
 )
 
@@ -510,8 +516,13 @@ ConfigureNVBench(RESHAPE_NVBENCH reshape/interleave.cpp reshape/table_to_array.c
 # * rolling benchmark
 # ---------------------------------------------------------------------------------
 ConfigureNVBench(
-  ROLLING_NVBENCH rolling/grouped_range_rolling_sum.cu rolling/grouped_rolling_sum.cpp
-  rolling/multi_orderby_range_rolling_sum.cpp rolling/range_rolling_sum.cu rolling/rolling_sum.cpp
+  ROLLING_NVBENCH
+  rolling/grouped_range_rolling_sum.cu
+  rolling/grouped_rolling_sum.cpp
+  rolling/multi_orderby_range_rolling_sum.cpp
+  rolling/range_rolling_column_bounds_sum.cpp
+  rolling/range_rolling_sum.cu
+  rolling/rolling_sum.cpp
 )
 
 # ##################################################################################################
