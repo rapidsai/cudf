@@ -740,6 +740,11 @@ nitpick_ignore = [
     ("py:class", "Statistics"),
     ("py:class", "Communicator"),
     ("py:class", "Options"),
+    # Not yet published in API docs.
+    ("py:class", "rapidsmpf.streaming.core.context.Context"),
+    ("py:class", "rapidsmpf.rrun.rrun.bind"),
+    # kvikio aliases that don't match the public intersphinx targets.
+    ("py:class", "kvikio.Summary"),
     # polars aliases that don't match the public intersphinx targets.
     ("py:class", "pl.DataFrame"),
     ("py:class", "pl.DataType"),
@@ -767,11 +772,8 @@ nitpick_ignore = [
 
 nitpick_ignore_regex = [
     # External libs without configured intersphinx inventories.
-    ("py:.*", r"rapidsmpf(\..*)?"),
-    ("py:.*", r"kvikio(\..*)?"),
     ("py:.*", r"ray(\..*)?"),
     ("py:.*", r"distributed(\..*)?"),
-    ("py:.*", r"dask_cuda(\..*)?"),
 ]
 
 
