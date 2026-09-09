@@ -8,7 +8,10 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/filling.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/sorting.hpp>
 
 #include <nvbench/nvbench.cuh>
@@ -92,3 +95,54 @@ static void bench_groupby_pre_sorted_sum(nvbench::state& state, nvbench::type_li
 NVBENCH_BENCH_TYPES(bench_groupby_pre_sorted_sum, NVBENCH_TYPE_AXES(Types))
   .set_name("pre_sorted_sum")
   .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000, 100'000'000});
+
+static void bench_groupby_decimal128_sum_count_cardinality(nvbench::state& state)
+{
+  auto const num_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
+
+  data_profile const key_profile = data_profile_builder().cardinality(0).no_validity().distribution(
+    cudf::type_to_id<int32_t>(), distribution_id::UNIFORM, 0, cardinality - 1);
+  auto keys = create_random_column(cudf::type_to_id<int32_t>(), row_count{num_rows}, key_profile);
+  // The random generator's cardinality option samples its dictionary with replacement. Seed one
+  // copy of every key explicitly so the 127/128/129 axis measures the requested boundary exactly.
+  auto const zero          = cudf::make_fixed_width_scalar<int32_t>(0);
+  auto const one           = cudf::make_fixed_width_scalar<int32_t>(1);
+  auto const distinct_keys = cudf::sequence(cardinality, *zero, *one);
+  auto mutable_keys        = keys->mutable_view();
+  cudf::copy_range_in_place(distinct_keys->view(), mutable_keys, 0, cardinality, 0);
+
+  data_profile const value_profile =
+    data_profile_builder().cardinality(0).no_validity().distribution(
+      cudf::type_to_id<numeric::decimal128>(),
+      distribution_id::UNIFORM,
+      0,
+      1'000,
+      numeric::scale_type{-4});
+  auto const values = create_random_column(
+    cudf::type_to_id<numeric::decimal128>(), row_count{num_rows}, value_profile);
+
+  std::vector<cudf::groupby::aggregation_request> requests(1);
+  requests[0].values = values->view();
+  requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+  requests[0].aggregations.push_back(
+    cudf::make_count_aggregation<cudf::groupby_aggregation>(cudf::null_policy::EXCLUDE));
+
+  state.add_global_memory_reads<nvbench::int8_t>(keys->alloc_size() + values->alloc_size());
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().get()));
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
+    cudf::groupby::groupby gb(cudf::table_view{std::vector<cudf::column_view>{keys->view()}});
+    auto const result = gb.aggregate(requests);
+  });
+  auto const elapsed_time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
+  state.add_element_count(static_cast<double>(num_rows) / elapsed_time / 1'000'000., "Mrows/s");
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
+}
+
+NVBENCH_BENCH(bench_groupby_decimal128_sum_count_cardinality)
+  .set_name("decimal128_sum_count_cardinality")
+  .add_int64_axis("num_rows", {30'600'000})
+  .add_int64_axis("cardinality",
+                  {64, 120, 127, 128, 129, 130, 160, 175, 256, 1'024, 4'096, 10'000, 1'000'000});

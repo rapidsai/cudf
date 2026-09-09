@@ -16,6 +16,11 @@
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <cstdint>
+#include <numeric>
+#include <string>
+#include <vector>
+
 using namespace cudf::test::iterators;
 
 namespace {
@@ -333,5 +338,81 @@ TEST_F(GroupByDecimal128ShmemAlignmentTest, MultiColumnDecimal128Sum)
       cudf::gather(cudf::table_view({results[c].results[0]->view()}), *sort_order);
     auto const expected = fp128(sums[c].begin(), sums[c].end(), scale);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, sorted->get_column(0));
+  }
+}
+
+// Regression test for https://github.com/NVIDIA/cudf/issues/24026. Exercise the 128-group boundary
+// and the mapped block-private reduction with nullable decimal128 SUM and COUNT results.
+TEST_F(GroupByDecimal128ShmemAlignmentTest, MappedBlockPrivateCardinalitySweep)
+{
+  using namespace numeric;
+  using fp128 = cudf::test::fixed_point_column_wrapper<__int128_t>;
+
+  constexpr cudf::size_type num_rows = 1'000'000;
+  constexpr __int128_t base          = static_cast<__int128_t>(1) << 50;
+  auto const scale                   = scale_type{-2};
+
+  for (auto const cardinality : {127, 128, 129, 130, 175, 256, 1'024}) {
+    SCOPED_TRACE("cardinality=" + std::to_string(cardinality));
+
+    std::vector<int32_t> keys_data(num_rows);
+    std::vector<uint8_t> key_validity(num_rows);
+    std::vector<__int128_t> values_data(num_rows);
+    std::vector<uint8_t> value_validity(num_rows);
+    std::vector<__int128_t> expected_sums(cardinality, 0);
+    std::vector<cudf::size_type> expected_counts(cardinality, 0);
+
+    for (cudf::size_type i = 0; i < num_rows; ++i) {
+      // SplitMix64 gives every aggregation block a deterministic, well-mixed key stream.
+      auto mixed = static_cast<uint64_t>(i) + 0x9e3779b97f4a7c15ULL;
+      mixed      = (mixed ^ (mixed >> 30)) * 0xbf58476d1ce4e5b9ULL;
+      mixed      = (mixed ^ (mixed >> 27)) * 0x94d049bb133111ebULL;
+      mixed      = mixed ^ (mixed >> 31);
+
+      auto const key = static_cast<int32_t>(mixed % cardinality);
+      auto value     = base + static_cast<__int128_t>((i % 1'009) * 101 + key);
+      if (i % 5 == 0) { value = -value; }
+      auto const key_is_valid   = i % 251 != 0;
+      auto const value_is_valid = i % 7 != 0;
+
+      keys_data[i]      = key;
+      key_validity[i]   = key_is_valid;
+      values_data[i]    = value;
+      value_validity[i] = value_is_valid;
+      if (key_is_valid and value_is_valid) {
+        expected_sums[key] += value;
+        ++expected_counts[key];
+      }
+    }
+
+    auto const keys = cudf::test::fixed_width_column_wrapper<int32_t>(
+      keys_data.begin(), keys_data.end(), key_validity.begin());
+    auto const values =
+      fp128(values_data.begin(), values_data.end(), value_validity.begin(), scale);
+
+    std::vector<cudf::groupby::aggregation_request> requests(1);
+    requests[0].values = values;
+    requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+    requests[0].aggregations.push_back(
+      cudf::make_count_aggregation<cudf::groupby_aggregation>(cudf::null_policy::EXCLUDE));
+
+    cudf::groupby::groupby gb(cudf::table_view({keys}), cudf::null_policy::EXCLUDE);
+    auto [result_keys, results] = gb.aggregate(requests);
+    auto const order            = cudf::sorted_order(result_keys->view());
+    auto const sorted_keys      = cudf::gather(result_keys->view(), *order);
+    auto const sorted_results   = cudf::gather(
+      cudf::table_view({results[0].results[0]->view(), results[0].results[1]->view()}), *order);
+
+    std::vector<int32_t> expected_keys(cardinality);
+    std::iota(expected_keys.begin(), expected_keys.end(), 0);
+    auto const expected_key_col =
+      cudf::test::fixed_width_column_wrapper<int32_t>(expected_keys.begin(), expected_keys.end());
+    auto const expected_sum_col   = fp128(expected_sums.begin(), expected_sums.end(), scale);
+    auto const expected_count_col = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
+      expected_counts.begin(), expected_counts.end());
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_key_col, sorted_keys->get_column(0));
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_sum_col, sorted_results->get_column(0));
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_count_col, sorted_results->get_column(1));
   }
 }

@@ -14,7 +14,6 @@
 #include "output_utils.hpp"
 
 #include <cudf/detail/utilities/cuda.hpp>
-#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table_device_view.cuh>
 
@@ -24,7 +23,11 @@
 #include <cuco/static_set.cuh>
 #include <cuda/iterator>
 #include <cuda/stream>
-#include <thrust/for_each.h>
+#include <thrust/transform.h>
+
+#include <algorithm>
+#include <cstddef>
+#include <limits>
 
 namespace cudf::groupby::detail::hash {
 
@@ -72,92 +75,88 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   // empty: empty input should already been handled before reaching here.
   if (grid_size <= 0) { return run_aggs_by_global_mem_kernel(); }
 
-  auto const [can_use_shared_mem_kernel, available_shmem_size] =
-    is_shared_memory_compatible(agg_kinds, values, grid_size);
+  auto const can_use_shared_mem_kernel =
+    is_shared_memory_compatible(agg_kinds, values, grid_size).first;
 
   if (!can_use_shared_mem_kernel) { return run_aggs_by_global_mem_kernel(); }
 
-  // Maps from the global row index of the input table to its block-wise rank.
-  rmm::device_uvector<size_type> local_mapping_indices(num_rows, stream);
-  // Maps from the block-wise rank to the row index of result table.
-  rmm::device_uvector<size_type> global_mapping_indices(grid_size * GROUPBY_CARDINALITY_THRESHOLD,
-                                                        stream);
-  // Initialize it with a sentinel value, so later we can identify which ones are unused and which
-  // ones need to be updated.
-  thrust::uninitialized_fill(
-    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-    global_mapping_indices.begin(),
-    global_mapping_indices.end(),
-    cudf::detail::CUDF_SIZE_TYPE_SENTINEL);
-  // Compute the cardinality (the number of unique keys) encounter by each thread block.
-  rmm::device_uvector<size_type> block_cardinality(grid_size, stream);
+  // Build the ordinary sparse row-to-key mapping once. Unlike the previous shared-memory path,
+  // cardinality does not select an entirely different mapper or require a host-side fallback.
+  rmm::device_uvector<size_type> matching_keys(num_rows, stream);
+  auto mapper_set_ref = global_set.ref(cuco::op::insert_and_find);
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{num_rows},
+                    matching_keys.begin(),
+                    [mapper_set_ref, row_bitmask] __device__(size_type const idx) mutable {
+                      if (!row_bitmask || cudf::bit_is_set(row_bitmask, idx)) {
+                        return *mapper_set_ref.insert_and_find(idx).first;
+                      }
+                      return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
+                    });
 
-  // Flag indicating whether a global memory aggregation fallback is required or not.
-  rmm::device_uvector<cuda::std::atomic_flag> needs_global_memory_fallback(1, stream);
-  CUDF_CUDA_TRY(cudaMemsetAsync(
-    needs_global_memory_fallback.data(), 0, sizeof(cuda::std::atomic_flag), stream.get()));
-
-  auto set_ref_insert = global_set.ref(cuco::op::insert_and_find);
-  compute_mapping_indices(grid_size,
-                          num_rows,
-                          set_ref_insert,
-                          row_bitmask,
-                          local_mapping_indices.data(),
-                          global_mapping_indices.data(),
-                          block_cardinality.data(),
-                          needs_global_memory_fallback.data(),
-                          stream);
-
-  auto const needs_fallback = [&] {
-    cuda::std::atomic_flag h_needs_fallback;
-    // Cannot use a value-returning helper because atomic_flag is not copy-constructible;
-    // copy the raw bytes back to host instead.
-    CUDF_CUDA_TRY(cudf::detail::memcpy_async(&h_needs_fallback,
-                                             needs_global_memory_fallback.data(),
-                                             sizeof(cuda::std::atomic_flag),
-                                             stream));
-    stream.sync();
-    return h_needs_fallback.test(cuda::std::memory_order_relaxed);
-  }();
-  if (needs_fallback) { return run_aggs_by_global_mem_kernel(); }
-
-  auto unique_keys = extract_populated_keys(global_set, num_rows, stream, mr);
-
-  // Now, update the target indices for computing aggregations using the shared memory kernel.
-  {
-    auto key_transform_map = compute_key_transform_map(
-      num_rows, unique_keys, stream, cudf::get_current_device_resource_ref());
-    thrust::for_each_n(
-      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-      cuda::counting_iterator<cudf::size_type>{0},
-      grid_size * GROUPBY_BLOCK_SIZE,
-      [key_transform_map      = key_transform_map.begin(),
-       global_mapping_indices = global_mapping_indices.begin()] __device__(auto const idx) {
-        auto const block_id    = idx / GROUPBY_BLOCK_SIZE;
-        auto const thread_rank = idx % GROUPBY_BLOCK_SIZE;
-        auto const mapping_idx = block_id * GROUPBY_CARDINALITY_THRESHOLD + thread_rank;
-        auto const old_idx     = global_mapping_indices[mapping_idx];
-        if (old_idx != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
-          global_mapping_indices[mapping_idx] = key_transform_map[old_idx];
-        }
-      });
-  }
+  auto unique_keys           = extract_populated_keys(global_set, num_rows, stream, mr);
+  auto const num_output_rows = static_cast<size_type>(unique_keys.size());
+  auto key_transform_map     = compute_key_transform_map(
+    num_rows, unique_keys, stream, cudf::get_current_device_resource_ref());
+  auto agg_results =
+    create_results_table(num_output_rows, values, agg_kinds, is_agg_intermediate, stream, mr);
 
   auto const d_spass_values = table_device_view::create(values, stream);
-  auto agg_results          = create_results_table(
-    static_cast<size_type>(unique_keys.size()), values, agg_kinds, is_agg_intermediate, stream, mr);
-  auto d_results_ptr = mutable_table_device_view::create(*agg_results, stream);
-  compute_shared_memory_aggs(grid_size,
-                             available_shmem_size,
-                             num_rows,
-                             row_bitmask,
-                             local_mapping_indices.data(),
-                             global_mapping_indices.data(),
-                             block_cardinality.data(),
-                             *d_spass_values,
-                             *d_results_ptr,
-                             d_agg_kinds.data(),
-                             stream);
+  auto d_results_ptr        = mutable_table_device_view::create(*agg_results, stream);
+
+  if (num_output_rows > 0) {
+    constexpr size_type block_size                   = 256;
+    constexpr std::size_t block_private_budget_bytes = 16U * 1024U * 1024U;
+    auto const launch_grid_size = cudf::util::div_rounding_up_safe(num_rows, block_size);
+    auto const num_replicas =
+      std::min(launch_grid_size, static_cast<size_type>(cudf::detail::num_multiprocessors()));
+
+    // alloc_size includes result data and validity masks. Multiplying the one-replica allocation
+    // is a conservative bound for the combined allocation because its buffers are rounded only
+    // once. Division performs the budget test without overflowing size_t.
+    auto const per_replica_bytes = agg_results->alloc_size();
+    auto const private_rows_fit =
+      num_output_rows <= std::numeric_limits<size_type>::max() / num_replicas;
+    auto const private_bytes_fit =
+      per_replica_bytes <= block_private_budget_bytes / static_cast<std::size_t>(num_replicas);
+
+    if (private_rows_fit && private_bytes_fit) {
+      auto block_private_results = create_results_table(num_output_rows * num_replicas,
+                                                        values,
+                                                        agg_kinds,
+                                                        is_agg_intermediate,
+                                                        stream,
+                                                        cudf::get_current_device_resource_ref());
+      auto d_block_private_results =
+        mutable_table_device_view::create(*block_private_results, stream);
+      compute_block_private_aggs(launch_grid_size,
+                                 block_size,
+                                 num_replicas,
+                                 num_rows,
+                                 matching_keys.data(),
+                                 key_transform_map.data(),
+                                 *d_spass_values,
+                                 *d_results_ptr,
+                                 *d_block_private_results,
+                                 num_output_rows,
+                                 d_agg_kinds.data(),
+                                 stream);
+    } else {
+      // Reuse the mapping and dense output even when partials exceed the memory budget. This avoids
+      // both a second mapping pass and the num_rows-sized sparse result table/gather.
+      compute_mapped_global_aggs(launch_grid_size,
+                                 block_size,
+                                 num_rows,
+                                 matching_keys.data(),
+                                 key_transform_map.data(),
+                                 *d_spass_values,
+                                 *d_results_ptr,
+                                 num_output_rows,
+                                 d_agg_kinds.data(),
+                                 stream);
+    }
+  }
 
   finalize_output(values, aggs, agg_results, cache, stream);
   return {std::move(unique_keys), has_compound_aggs};

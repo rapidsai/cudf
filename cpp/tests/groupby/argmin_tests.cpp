@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,6 +11,10 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/aggregation.hpp>
+
+#include <cstdint>
+#include <numeric>
+#include <vector>
 
 using namespace cudf::test::iterators;
 
@@ -242,4 +246,69 @@ TEST_F(groupby_argmin_struct_test, null_keys_and_values)
 
   auto agg = cudf::make_argmin_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_indices, std::move(agg));
+}
+
+struct groupby_argminmax_mapped_test : public cudf::test::BaseFixture {};
+
+TEST_F(groupby_argminmax_mapped_test, BlockPrivatePartials)
+{
+  constexpr cudf::size_type num_rows   = 200'000;
+  constexpr cudf::size_type num_groups = 256;
+
+  std::vector<int32_t> keys_data(num_rows);
+  std::vector<uint8_t> key_validity(num_rows);
+  std::vector<int32_t> values_data(num_rows);
+  std::vector<cudf::size_type> expected_argmin(num_groups, 0);
+  std::vector<cudf::size_type> expected_argmax(num_groups, 0);
+  std::vector<uint8_t> expected_initialized(num_groups, false);
+
+  for (cudf::size_type row = 0; row < num_rows; ++row) {
+    auto const key   = row % num_groups;
+    auto const value = static_cast<int32_t>((static_cast<uint64_t>(row) * 48'271) % 2'147'483'647);
+    auto const key_is_valid = row % 251 != 0;
+
+    keys_data[row]    = key;
+    key_validity[row] = key_is_valid;
+    values_data[row]  = value;
+
+    if (key_is_valid) {
+      if (!expected_initialized[key]) {
+        expected_argmin[key]      = row;
+        expected_argmax[key]      = row;
+        expected_initialized[key] = true;
+      } else {
+        if (value < values_data[expected_argmin[key]]) { expected_argmin[key] = row; }
+        if (value > values_data[expected_argmax[key]]) { expected_argmax[key] = row; }
+      }
+    }
+  }
+
+  auto const keys = cudf::test::fixed_width_column_wrapper<int32_t>(
+    keys_data.begin(), keys_data.end(), key_validity.begin());
+  auto const values =
+    cudf::test::fixed_width_column_wrapper<int32_t>(values_data.begin(), values_data.end());
+
+  std::vector<int32_t> expected_keys(num_groups);
+  std::iota(expected_keys.begin(), expected_keys.end(), 0);
+  auto const expected_key_col = cudf::test::fixed_width_column_wrapper<int32_t>(
+    expected_keys.begin(), expected_keys.end(), no_nulls());
+  auto const expected_argmin_col = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
+    expected_argmin.begin(), expected_argmin.end());
+  auto const expected_argmax_col = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
+    expected_argmax.begin(), expected_argmax.end());
+
+  test_single_agg(keys,
+                  values,
+                  expected_key_col,
+                  expected_argmin_col,
+                  cudf::make_argmin_aggregation<cudf::groupby_aggregation>(),
+                  force_use_sort_impl::NO,
+                  cudf::null_policy::EXCLUDE);
+  test_single_agg(keys,
+                  values,
+                  expected_key_col,
+                  expected_argmax_col,
+                  cudf::make_argmax_aggregation<cudf::groupby_aggregation>(),
+                  force_use_sort_impl::NO,
+                  cudf::null_policy::EXCLUDE);
 }

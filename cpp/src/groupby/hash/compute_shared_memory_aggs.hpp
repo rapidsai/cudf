@@ -38,4 +38,33 @@ void compute_shared_memory_aggs(size_type grid_size,
                                 mutable_table_device_view output_values,
                                 aggregation::Kind const* d_agg_kinds,
                                 cuda::stream_ref stream);
+
+/**
+ * @brief Aggregates a sparse-to-dense row mapping into replica-private global-memory partials,
+ * then reduces the partials into the final output.
+ */
+void compute_block_private_aggs(size_type grid_size,
+                                size_type block_size,
+                                size_type num_replicas,
+                                size_type num_input_rows,
+                                size_type const* matching_keys,
+                                size_type const* key_transform_map,
+                                table_device_view input_values,
+                                mutable_table_device_view output_values,
+                                mutable_table_device_view private_values,
+                                size_type num_output_rows,
+                                aggregation::Kind const* d_agg_kinds,
+                                cuda::stream_ref stream);
+
+/** @brief Aggregates a sparse-to-dense row mapping directly into the final dense output. */
+void compute_mapped_global_aggs(size_type grid_size,
+                                size_type block_size,
+                                size_type num_input_rows,
+                                size_type const* matching_keys,
+                                size_type const* key_transform_map,
+                                table_device_view input_values,
+                                mutable_table_device_view output_values,
+                                size_type num_output_rows,
+                                aggregation::Kind const* d_agg_kinds,
+                                cuda::stream_ref stream);
 }  // namespace cudf::groupby::detail::hash
