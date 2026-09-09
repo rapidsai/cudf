@@ -25,6 +25,7 @@
 #include <limits>
 #include <vector>
 
+// Preserve detailed failure output for JIT expression comparisons.
 constexpr cudf::test::debug_output_level VERBOSITY{cudf::test::debug_output_level::ALL_ERRORS};
 
 template <typename T>
