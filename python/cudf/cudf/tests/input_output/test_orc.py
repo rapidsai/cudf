@@ -1173,7 +1173,7 @@ def test_pyspark_struct(datadir):
     assert_eq(pdf, gdf)
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def map_buff():
     size = 100
     rd = random.Random(1)
@@ -1349,11 +1349,9 @@ def dec(num):
     return decimal.Decimal(str(num))
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        # basic + nested strings
-        {
+def _make_orc_list_data(case):
+    if case == "nested":
+        return {
             "lls": [[["a"], ["bb"]] * 5 for i in range(12345)],
             "lls2": [[["ccc", "dddd"]] * 6 for i in range(12345)],
             "ls_dict": [["X"] * 7 for i in range(12345)],
@@ -1361,9 +1359,9 @@ def dec(num):
             "li": [[i] * 11 for i in range(12345)],
             "lf": [[i * 0.5] * 13 for i in range(12345)],
             "ld": [[dec(i / 2)] * 15 for i in range(12345)],
-        },
-        # with nulls
-        {
+        }
+    elif case == "nulls":
+        return {
             "ls": [
                 [str(i) if i % 5 else None, str(2 * i)] if i % 2 else None
                 for i in range(12345)
@@ -1373,9 +1371,9 @@ def dec(num):
                 [dec(i), dec(i / 2) if i % 7 else None] if i % 5 else None
                 for i in range(12345)
             ],
-        },
-        # with empty elements
-        {
+        }
+    elif case == "empty":
+        return {
             "ls": [
                 [str(i), str(2 * i)] if i % 2 else [] for i in range(12345)
             ],
@@ -1391,18 +1389,24 @@ def dec(num):
             "ld": [
                 [dec(i), dec(i / 2)] if i % 5 else [] for i in range(12345)
             ],
-        },
-        # variable list lengths
-        {
+        }
+    elif case == "variable-lengths":
+        return {
             "ls": [[str(i)] * i for i in range(123)],
             "li": [[i, i * i] * i for i in range(123)],
             "ld": [[dec(i), dec(i / 2)] * i for i in range(123)],
-        },
-        # many child elements (more that max_stripe_rows)
-        {"li": [[i] * 1100 for i in range(11000)]},
-    ],
+        }
+    elif case == "many-child-elements":
+        # More child elements than max_stripe_rows.
+        return {"li": [[i] * 1100 for i in range(11000)]}
+
+
+@pytest.mark.parametrize(
+    "case",
+    ["nested", "nulls", "empty", "variable-lengths", "many-child-elements"],
 )
-def test_orc_writer_lists(data):
+def test_orc_writer_lists(case):
+    data = _make_orc_list_data(case)
     buffer = BytesIO()
     cudf.DataFrame(data).to_orc(
         buffer, stripe_size_rows=2048, row_index_stride=512

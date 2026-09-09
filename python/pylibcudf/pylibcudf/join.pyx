@@ -102,7 +102,7 @@ cpdef tuple[Column, Column] inner_join(
     cdef cpp_join.gather_map_pair_type c_result
 
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     mr = _get_memory_resource(mr)
 
     cdef table_view c_left_keys = left_keys.view()
@@ -150,7 +150,7 @@ cpdef tuple[Column, Column] left_join(
     cdef cpp_join.gather_map_pair_type c_result
 
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     mr = _get_memory_resource(mr)
 
     cdef table_view c_left_keys = left_keys.view()
@@ -198,7 +198,7 @@ cpdef tuple[Column, Column] full_join(
     cdef cpp_join.gather_map_pair_type c_result
 
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     mr = _get_memory_resource(mr)
 
     cdef table_view c_left_keys = left_keys.view()
@@ -245,7 +245,7 @@ cpdef Column left_semi_join(
     cdef cpp_join.gather_map_type c_result
 
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     mr = _get_memory_resource(mr)
 
     cdef unique_ptr[cpp_join.filtered_join] join_obj
@@ -296,7 +296,7 @@ cpdef Column left_anti_join(
     cdef cpp_join.gather_map_type c_result
 
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     mr = _get_memory_resource(mr)
 
     cdef unique_ptr[cpp_join.filtered_join] join_obj
@@ -345,7 +345,7 @@ cpdef Table cross_join(
     cdef unique_ptr[table] result
 
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     mr = _get_memory_resource(mr)
 
     cdef table_view c_left = left.view()
@@ -387,7 +387,7 @@ cpdef tuple[Column, Column] conditional_inner_join(
     cdef optional[size_t] output_size
 
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     mr = _get_memory_resource(mr)
 
     cdef table_view c_left = left.view()
@@ -437,7 +437,7 @@ cpdef tuple[Column, Column] conditional_left_join(
     cdef optional[size_t] output_size
 
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     mr = _get_memory_resource(mr)
 
     cdef table_view c_left = left.view()
@@ -486,7 +486,7 @@ cpdef tuple[Column, Column] conditional_full_join(
     cdef cpp_join.gather_map_pair_type c_result
 
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     mr = _get_memory_resource(mr)
 
     cdef table_view c_left = left.view()
@@ -534,7 +534,7 @@ cpdef Column conditional_left_semi_join(
     cdef optional[size_t] output_size
 
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     mr = _get_memory_resource(mr)
 
     cdef table_view c_left = left.view()
@@ -580,7 +580,7 @@ cpdef Column conditional_left_anti_join(
     cdef optional[size_t] output_size
 
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     mr = _get_memory_resource(mr)
 
     cdef table_view c_left = left.view()
@@ -636,7 +636,7 @@ cpdef tuple[Column, Column] mixed_inner_join(
     cdef cpp_join.output_size_data_type empty_optional
 
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     mr = _get_memory_resource(mr)
 
     cdef table_view c_left_keys = left_keys.view()
@@ -700,7 +700,7 @@ cpdef tuple[Column, Column] mixed_left_join(
     cdef cpp_join.output_size_data_type empty_optional
 
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     mr = _get_memory_resource(mr)
 
     cdef table_view c_left_keys = left_keys.view()
@@ -764,7 +764,7 @@ cpdef tuple[Column, Column] mixed_full_join(
     cdef cpp_join.output_size_data_type empty_optional
 
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     mr = _get_memory_resource(mr)
 
     cdef table_view c_left_keys = left_keys.view()
@@ -826,7 +826,7 @@ cpdef Column mixed_left_semi_join(
     cdef cpp_join.gather_map_type c_result
 
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     mr = _get_memory_resource(mr)
 
     cdef table_view c_left_keys = left_keys.view()
@@ -884,7 +884,7 @@ cpdef Column mixed_left_anti_join(
     cdef cpp_join.gather_map_type c_result
 
     cdef Stream _stream = _get_stream(stream)
-    cdef cudaStream_t _cs = _stream.view().value()
+    cdef cudaStream_t _cs = _stream.view().get()
     mr = _get_memory_resource(mr)
 
     cdef table_view c_left_keys = left_keys.view()
@@ -941,7 +941,7 @@ cdef class FilteredJoin:
             CUDA stream used for device memory operations and kernel launches.
         """
         cdef Stream _stream = _get_stream(stream)
-        cdef cudaStream_t _cs = _stream.view().value()
+        cdef cudaStream_t _cs = _stream.view().get()
 
         cdef table_view c_right = right.view()
         with nogil:
@@ -983,7 +983,7 @@ cdef class FilteredJoin:
         cdef cpp_join.gather_map_type c_result
 
         cdef Stream _stream = _get_stream(stream)
-        cdef cudaStream_t _cs = _stream.view().value()
+        cdef cudaStream_t _cs = _stream.view().get()
         mr = _get_memory_resource(mr)
 
         cdef table_view c_left = left.view()
@@ -1024,7 +1024,7 @@ cdef class FilteredJoin:
         cdef cpp_join.gather_map_type c_result
 
         cdef Stream _stream = _get_stream(stream)
-        cdef cudaStream_t _cs = _stream.view().value()
+        cdef cudaStream_t _cs = _stream.view().get()
         mr = _get_memory_resource(mr)
 
         cdef table_view c_left = left.view()
