@@ -181,10 +181,9 @@ struct bloom_filter_caster {
  */
 class bloom_filter_expression_converter : public parquet_expression_simplifier {
  public:
-  bloom_filter_expression_converter(
-    ast::expression const& expr,
-    std::span<cudf::data_type const> output_dtypes,
-    std::span<std::vector<ast::literal*> const> equality_literals)
+  bloom_filter_expression_converter(ast::expression const& expr,
+                                    std::span<cudf::data_type const> output_dtypes,
+                                    std::span<std::vector<ast::literal*> const> equality_literals)
     : parquet_expression_simplifier{output_dtypes}, _equality_literals{equality_literals}
   {
     // Compute and store columns literals offsets

@@ -1145,15 +1145,13 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
   }
 
   {
-    // Filtering - table[0] != 50 and table[0] == 50
-    auto uint_literal_value  = cudf::numeric_scalar<T>(50, true, stream);
-    auto uint_literal_value2 = cudf::numeric_scalar<T>(50, true, stream);
-    auto uint_literal        = cudf::ast::literal(uint_literal_value);
-    auto uint_literal2       = cudf::ast::literal(uint_literal_value2);
+    // Filtering - table[0] != 50 and table[0] == 50, reusing the same literal expression
+    auto uint_literal_value = cudf::numeric_scalar<T>(50, true, stream);
+    auto uint_literal       = cudf::ast::literal(uint_literal_value);
     auto uint_filter_expression =
       cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col0_ref, uint_literal);
     auto uint_filter_expression2 =
-      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col0_ref, uint_literal2);
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col0_ref, uint_literal);
     auto filter_expression = cudf::ast::operation(
       cudf::ast::ast_operator::LOGICAL_AND, uint_filter_expression, uint_filter_expression2);
 

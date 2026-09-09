@@ -31,6 +31,7 @@
 #include <cuda/stream>
 
 #include <optional>
+#include <ranges>
 #include <span>
 
 namespace cudf::io::parquet::experimental::detail {
@@ -1325,8 +1326,9 @@ class dictionary_expression_converter : public parquet_expression_simplifier {
  public:
   dictionary_expression_converter(ast::expression const& expr,
                                   std::span<cudf::data_type const> output_dtypes,
-                                  std::span<std::vector<ast::literal*> const> literals)
-    : parquet_expression_simplifier{output_dtypes}, _literals{literals}
+                                  std::span<std::vector<ast::literal*> const> literals,
+                                  std::span<std::vector<ast::ast_operator> const> operators)
+    : parquet_expression_simplifier{output_dtypes}, _literals{literals}, _operators{operators}
   {
     // Compute and store columns literals offsets
     _col_literals_offsets.reserve(static_cast<cudf::size_type>(_output_dtypes.size()) + 1);
@@ -1366,16 +1368,18 @@ class dictionary_expression_converter : public parquet_expression_simplifier {
 
     if (op != ast_operator::EQUAL and op != ast_operator::NOT_EQUAL) { return std::nullopt; }
 
-    auto const col_idx            = col_ref.get_column_index();
-    auto const& equality_literals = _literals[col_idx];
-    auto const literal_iter =
-      std::find(equality_literals.cbegin(), equality_literals.cend(), &literal);
-    CUDF_EXPECTS(literal_iter != equality_literals.end(),
+    auto const col_idx             = col_ref.get_column_index();
+    auto const& equality_literals  = _literals[col_idx];
+    auto const& equality_operators = _operators[col_idx];
+    auto const literal_indices     = std::views::iota(std::size_t{0}, equality_literals.size());
+    auto const literal_iter        = std::ranges::find_if(literal_indices, [&](auto idx) {
+      return equality_literals[idx] == &literal and equality_operators[idx] == op;
+    });
+    CUDF_EXPECTS(literal_iter != literal_indices.end(),
                  "Dictionary expression converter encountered an unexpected literal");
 
     auto const col_literal_offset =
-      _col_literals_offsets[col_idx] +
-      static_cast<cudf::size_type>(std::distance(equality_literals.cbegin(), literal_iter));
+      _col_literals_offsets[col_idx] + static_cast<cudf::size_type>(*literal_iter);
     auto const& value = _tree.push(ast::column_reference{col_literal_offset});
 
     if (op == ast_operator::NOT_EQUAL) {
@@ -1393,6 +1397,7 @@ class dictionary_expression_converter : public parquet_expression_simplifier {
  private:
   std::vector<cudf::size_type> _col_literals_offsets;
   std::span<std::vector<ast::literal*> const> _literals;
+  std::span<std::vector<ast::ast_operator> const> _operators;
   simplified_expression_opt _dictionary_expr;
 };
 
@@ -1416,7 +1421,7 @@ aggregate_reader_metadata::apply_dictionary_filter(
   // Convert AST to DictionaryAST expression with reference to dictionary membership
   // in above `dictionary_membership_table`
   dictionary_expression_converter dictionary_expr_converter{
-    filter.get(), output_dtypes, literals};
+    filter.get(), output_dtypes, literals, operators};
 
   // Dictionary membership cannot filter anything in the filter, all row groups survive
   auto const dictionary_expr = dictionary_expr_converter.get_dictionary_expr();
