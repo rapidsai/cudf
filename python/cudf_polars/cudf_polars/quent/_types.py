@@ -881,6 +881,29 @@ class Processor:
         )
 
 
+class MemoryReservationPurpose(enum.StrEnum):
+    """
+    Why an operator reserved memory.
+
+    Operators that make more than one reservation use distinct values so a
+    trace can tell the reservations apart. Values are the strings written into
+    Quent ``Allocating`` attributes.
+    """
+
+    PYTHON_SCAN = "python-scan"
+    SCAN = "scan"
+    BROADCAST_JOIN = "broadcast-join"
+    JOIN = "join"
+    ALLGATHER_EXTRACT = "allgather-extract"
+    ORDERING_UNPACK_REMOTE = "ordering-unpack-remote"
+    SHUFFLE_INSERT_HASH = "shuffle-insert-hash"
+    SHUFFLE_INSERT_HASH_KEYS = "shuffle-insert-hash-keys"
+    SHUFFLE_INSERT_SPLIT = "shuffle-insert-split"
+    SHUFFLE_INSERT_INDEX = "shuffle-insert-index"
+    SHUFFLE_EXTRACT = "shuffle-extract"
+    REPARTITION_EXTRACT = "repartition-extract"
+
+
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class MemoryReservationRequest:
     """
@@ -894,8 +917,8 @@ class MemoryReservationRequest:
     Parameters
     ----------
     purpose
-        What the memory is reserved for (e.g. ``"scan"``). Distinguishes
-        reservations made by a single operator.
+        What the memory is reserved for. Distinguishes reservations made by a
+        single operator.
     size_bytes
         The number of bytes requested.
     mem_type
@@ -920,7 +943,7 @@ class MemoryReservationRequest:
     :meth:`~cudf_polars.quent._context.QuentContext._emit_memory_reservation_events`.
     """
 
-    purpose: str
+    purpose: MemoryReservationPurpose
     size_bytes: int
     mem_type: str
     net_memory_delta: int | None = None
@@ -931,12 +954,12 @@ class MemoryReservationRequest:
     @property
     def label(self) -> str:
         """A compact description, e.g. ``scan-256.0MiB-device``."""
-        return f"{self.purpose}-{self.mem_type.lower()}"
+        return f"{self.purpose.value}-{self.mem_type.lower()}"
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to the flat attribute layout used by Quent FSM states."""
         attributes: dict[str, Any] = {
-            "purpose": self.purpose,
+            "purpose": self.purpose.value,
             "size_bytes": self.size_bytes,
             "mem_type": self.mem_type,
             "granted": self.granted,

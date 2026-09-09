@@ -10,7 +10,10 @@ from cudf_streaming.partition_utils import unpack_and_concat, unpack_and_concat_
 from cudf_streaming.table_chunk import make_table_chunks_available_or_wait
 from rapidsmpf.streaming.coll.allgather import AllGather
 
-from cudf_polars.streaming.actor_graph.memory import reserve_memory_traced
+from cudf_polars.streaming.actor_graph.memory import (
+    MemoryReservationPurpose,
+    reserve_memory_traced,
+)
 
 if TYPE_CHECKING:
     import pylibcudf as plc
@@ -123,7 +126,7 @@ class AllGatherManager:
             unpack_and_concat_cost(partitions),
             net_memory_delta=0,
             ir_context=ir_context,
-            purpose="allgather-extract",
+            purpose=MemoryReservationPurpose.ALLGATHER_EXTRACT,
         )
         return await ir_context.to_thread(
             unpack_and_concat,

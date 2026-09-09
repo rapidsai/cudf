@@ -30,7 +30,10 @@ from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
     ir_context_for_node,
 )
-from cudf_polars.streaming.actor_graph.memory import reserve_memory_traced
+from cudf_polars.streaming.actor_graph.memory import (
+    MemoryReservationPurpose,
+    reserve_memory_traced,
+)
 from cudf_polars.streaming.actor_graph.nodes import define_actor, shutdown_on_error
 from cudf_polars.streaming.actor_graph.tracing import (
     send_chunk,
@@ -399,7 +402,7 @@ async def _process_and_send_chunk(
             size=reservation,
             net_memory_delta=net_memory_delta,
             ir_context=ir_context,
-            purpose="python-scan",
+            purpose=MemoryReservationPurpose.PYTHON_SCAN,
             sequence_number=seq_num,
         )
     ):
@@ -571,7 +574,7 @@ async def read_chunk(
         size=reservation_bytes,
         net_memory_delta=estimated_chunk_bytes,
         ir_context=ir_context,
-        purpose="scan",
+        purpose=MemoryReservationPurpose.SCAN,
         sequence_number=seq_num,
     )
     admitted = time.monotonic_ns()

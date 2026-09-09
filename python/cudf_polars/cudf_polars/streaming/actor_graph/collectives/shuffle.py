@@ -41,7 +41,10 @@ from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
     ir_context_for_node,
 )
-from cudf_polars.streaming.actor_graph.memory import reserve_memory_traced
+from cudf_polars.streaming.actor_graph.memory import (
+    MemoryReservationPurpose,
+    reserve_memory_traced,
+)
 from cudf_polars.streaming.actor_graph.nodes import shutdown_on_error
 from cudf_polars.streaming.actor_graph.tracing import (
     trace_channel,
@@ -120,7 +123,7 @@ class ShuffleManager:
                 # nothing lasting is added.
                 net_memory_delta=0,
                 ir_context=self._manager.ir_context,
-                purpose="shuffle-insert-hash",
+                purpose=MemoryReservationPurpose.SHUFFLE_INSERT_HASH,
             )
             self._manager.shuffler.insert(
                 py_partition_and_pack(
@@ -152,7 +155,7 @@ class ShuffleManager:
                 # nothing lasting is added.
                 net_memory_delta=0,
                 ir_context=self._manager.ir_context,
-                purpose="shuffle-insert-hash-keys",
+                purpose=MemoryReservationPurpose.SHUFFLE_INSERT_HASH_KEYS,
             )
             with opaque_memory_usage(reservation.split(chunk_nbytes)):
                 key_table = _evaluate_key_table(chunk, keys, schema)
@@ -184,7 +187,7 @@ class ShuffleManager:
                 # nothing lasting is added.
                 net_memory_delta=0,
                 ir_context=self._manager.ir_context,
-                purpose="shuffle-insert-split",
+                purpose=MemoryReservationPurpose.SHUFFLE_INSERT_SPLIT,
             )
             self._manager.shuffler.insert(
                 py_split_and_pack(
@@ -221,7 +224,7 @@ class ShuffleManager:
                 # nothing lasting is added.
                 net_memory_delta=0,
                 ir_context=self._manager.ir_context,
-                purpose="shuffle-insert-index",
+                purpose=MemoryReservationPurpose.SHUFFLE_INSERT_INDEX,
             )
             reorder_nbytes = py_split_and_pack_cost(
                 chunk.table_view(), chunk.stream, br
@@ -311,7 +314,7 @@ class ShuffleManager:
             # unpacked table is produced, at roughly the same size.
             net_memory_delta=0,
             ir_context=self.ir_context,
-            purpose="shuffle-extract",
+            purpose=MemoryReservationPurpose.SHUFFLE_EXTRACT,
             sequence_number=partition_id,
         )
         return py_unpack_and_concat(
@@ -377,7 +380,7 @@ class LocalRepartitioner:
                     # unpacked table is produced, at roughly the same size.
                     net_memory_delta=0,
                     ir_context=self._global_shuffle.ir_context,
-                    purpose="repartition-extract",
+                    purpose=MemoryReservationPurpose.REPARTITION_EXTRACT,
                     sequence_number=partition_id,
                 )
                 table = py_unpack_and_concat(

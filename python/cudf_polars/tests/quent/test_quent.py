@@ -32,6 +32,7 @@ from cudf_polars.quent._types import (
     Engine,
     Implementation,
     Memory,
+    MemoryReservationPurpose,
     MemoryReservationRequest,
     Network,
     Operator,
@@ -1181,7 +1182,7 @@ def test_emit_task_events_io_node(disk_to_device_channel: Channel) -> None:
 
 def test_memory_reservation_request_serialization() -> None:
     request = MemoryReservationRequest(
-        purpose="scan",
+        purpose=MemoryReservationPurpose.SCAN,
         size_bytes=2 * 1024**2,
         mem_type="DEVICE",
         net_memory_delta=1024**2,
@@ -1198,7 +1199,10 @@ def test_memory_reservation_request_serialization() -> None:
     }
     # The optional attributes are dropped rather than serialized as null.
     minimal = MemoryReservationRequest(
-        purpose="join", size_bytes=0, mem_type="HOST", granted=False
+        purpose=MemoryReservationPurpose.JOIN,
+        size_bytes=0,
+        mem_type="HOST",
+        granted=False,
     )
     assert minimal.to_dict() == {
         "purpose": "join",
@@ -1214,7 +1218,7 @@ def test_emit_memory_reservation_events() -> None:
         operator_id=operator_id
     )
     request = MemoryReservationRequest(
-        purpose="scan",
+        purpose=MemoryReservationPurpose.SCAN,
         size_bytes=1024**2,
         mem_type="DEVICE",
         net_memory_delta=1024**2,

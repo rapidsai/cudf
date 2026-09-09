@@ -40,7 +40,10 @@ from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
     ir_context_for_node,
 )
-from cudf_polars.streaming.actor_graph.memory import reserve_memory_traced
+from cudf_polars.streaming.actor_graph.memory import (
+    MemoryReservationPurpose,
+    reserve_memory_traced,
+)
 from cudf_polars.streaming.actor_graph.nodes import default_node_multi
 from cudf_polars.streaming.actor_graph.tracing import (
     send_chunk,
@@ -317,7 +320,7 @@ async def _broadcast_join_large_chunk(
             size=input_bytes,
             net_memory_delta=0,
             ir_context=ir_context,
-            purpose="broadcast-join",
+            purpose=MemoryReservationPurpose.BROADCAST_JOIN,
             sequence_number=seq_num,
         )
     ):
@@ -625,7 +628,7 @@ async def _join_chunks(
                 size=input_bytes,
                 net_memory_delta=0,
                 ir_context=ir_context,
-                purpose="join",
+                purpose=MemoryReservationPurpose.JOIN,
                 sequence_number=left_msg.sequence_number,
             )
         ):

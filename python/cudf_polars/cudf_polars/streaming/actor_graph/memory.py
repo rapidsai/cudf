@@ -10,7 +10,11 @@ from typing import TYPE_CHECKING
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.streaming.core.memory_reserve_or_wait import reserve_memory
 
-import cudf_polars.quent._types
+from cudf_polars.quent._types import (
+    MemoryReservationPurpose,
+    MemoryReservationRequest,
+    Task,
+)
 
 if TYPE_CHECKING:
     from rapidsmpf.memory.memory_reservation import MemoryReservation
@@ -18,7 +22,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IRExecutionContext
 
-__all__ = ["reserve_memory_traced"]
+__all__ = ["MemoryReservationPurpose", "reserve_memory_traced"]
 
 
 async def reserve_memory_traced(
@@ -27,7 +31,7 @@ async def reserve_memory_traced(
     *,
     net_memory_delta: int,
     ir_context: IRExecutionContext | None,
-    purpose: str,
+    purpose: MemoryReservationPurpose,
     sequence_number: int | None = None,
     mem_type: MemoryType = MemoryType.DEVICE,
     allow_overbooking: bool | None = None,
@@ -56,8 +60,8 @@ async def reserve_memory_traced(
         for a reservation that can't be attributed to an IR node, in which
         case nothing is recorded.
     purpose
-        What the memory is reserved for (e.g. ``"scan"``). Distinguishes
-        reservations made by a single operator.
+        What the memory is reserved for. Distinguishes reservations made by a
+        single operator.
     sequence_number
         The sequence number of the chunk this reservation is for, if any.
     mem_type
@@ -100,7 +104,7 @@ async def reserve_memory_traced(
         granted = True
     finally:
         # A reservation that failed still spent time waiting, so record it too.
-        request = cudf_polars.quent._types.MemoryReservationRequest(
+        request = MemoryReservationRequest(
             purpose=purpose,
             size_bytes=size,
             mem_type=mem_type.name,
@@ -110,9 +114,7 @@ async def reserve_memory_traced(
             granted=granted,
         )
         quent_ir_execution_context.context._emit_memory_reservation_events(
-            cudf_polars.quent._types.Task.for_memory_reservation(
-                request, quent_ir_execution_context
-            ),
+            Task.for_memory_reservation(request, quent_ir_execution_context),
             quent_ir_execution_context,
             request,
             requested_at=requested_at,

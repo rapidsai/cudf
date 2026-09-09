@@ -25,7 +25,10 @@ from rapidsmpf.streaming.coll.sparse_alltoall import SparseAlltoall
 from rapidsmpf.streaming.core.message import Message
 
 from cudf_polars.containers import DataFrame, DataType
-from cudf_polars.streaming.actor_graph.memory import reserve_memory_traced
+from cudf_polars.streaming.actor_graph.memory import (
+    MemoryReservationPurpose,
+    reserve_memory_traced,
+)
 from cudf_polars.streaming.actor_graph.utils import (
     ChunkStore,
     concat_batch,
@@ -339,7 +342,7 @@ async def _unpack_remote_partition(
         unpack_and_concat_cost(partitions),
         net_memory_delta=0,
         ir_context=ir_context,
-        purpose="ordering-unpack-remote",
+        purpose=MemoryReservationPurpose.ORDERING_UNPACK_REMOTE,
         sequence_number=partition_id,
     )
     return TableChunk.from_pylibcudf_table(
