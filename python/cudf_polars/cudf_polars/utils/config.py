@@ -1277,10 +1277,7 @@ class ConfigOptions(Generic[ExecutorType]):
                         user_executor_options["dynamic_planning"] = None
 
                 # Handle join_filter_pushdown: check user config, then env var
-                user_join_filter_pushdown = user_executor_options.get(
-                    "join_filter_pushdown", None
-                )
-                if user_join_filter_pushdown is None:
+                if "join_filter_pushdown" not in user_executor_options:
                     env_join_filter_pushdown = os.environ.get(
                         "CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN", "0"
                     )

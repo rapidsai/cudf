@@ -945,7 +945,10 @@ def test_join_filter_pushdown_from_instance() -> None:
     assert config.executor.join_filter_pushdown is options
 
 
-def test_join_filter_pushdown_disabled_from_options() -> None:
+def test_join_filter_pushdown_disabled_from_options(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN", "1")
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor="streaming",
