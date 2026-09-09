@@ -19,7 +19,7 @@
 # every fallible command is guarded explicitly and the script always exits 0.
 set -uo pipefail
 
-source rapids-init-pip
+source ci/rapids-init-pip-prototype.sh
 # shellcheck source=ci/cudf_pandas_scripts/pandas-tests/shard-results.sh
 source ci/cudf_pandas_scripts/pandas-tests/shard-results.sh
 

@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-source rapids-init-pip
+source ci/rapids-init-pip-prototype.sh
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 DASK_CUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-artifact-name wheel_python dask-cudf cudf --pure --arch any --cuda "$RAPIDS_CUDA_VERSION")")

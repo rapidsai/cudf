@@ -4,7 +4,7 @@
 
 source rapids-configure-sccache
 source rapids-datetime-string
-source rapids-init-pip
+source ci/rapids-init-pip-prototype.sh
 
 export SCCACHE_S3_USE_PREPROCESSOR_CACHE_MODE=true
 

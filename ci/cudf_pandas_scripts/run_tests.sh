@@ -4,7 +4,7 @@
 
 set -eoxu pipefail
 
-source rapids-init-pip
+source ci/rapids-init-pip-prototype.sh
 
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
 RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}

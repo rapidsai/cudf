@@ -8,7 +8,7 @@ set -euo pipefail
 CI_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
 cd "${CI_DIR}/../"
 
-source rapids-init-pip
+source ci/rapids-init-pip-prototype.sh
 
 # Common setup steps shared by Python test jobs
 source ./ci/test_python_common.sh test_python_narwhals

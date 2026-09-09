@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-source rapids-init-pip
+source ci/rapids-init-pip-prototype.sh
 
 EXITCODE=0
 trap "EXITCODE=1" ERR
