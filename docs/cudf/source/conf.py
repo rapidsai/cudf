@@ -1123,7 +1123,7 @@ def setup(app: Sphinx):
         resolve_libcudf_developer_guide_markdown_link,
         priority=100,
     )
-    # And generic missing references.
-    app.connect("missing-reference", on_missing_reference, priority=200)
+    # Let intersphinx and other default-priority resolvers run first.
+    app.connect("missing-reference", on_missing_reference, priority=501)
     app.setup_extension("sphinx.ext.autodoc")
     app.add_autodocumenter(PLCIntEnumDocumenter)
