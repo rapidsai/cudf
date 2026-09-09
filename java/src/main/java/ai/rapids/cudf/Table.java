@@ -603,6 +603,15 @@ public final class Table implements AutoCloseable {
   private static native long[] fullHashJoinGatherMapsWithCount(long leftTable, long rightHashJoin,
                                                                long outputRowCount) throws CudfException;
 
+  private static native long[] filterJoinGatherMaps(long leftGatherMapAddress,
+                                                    long leftGatherMapLength,
+                                                    long rightGatherMapAddress,
+                                                    long rightGatherMapLength,
+                                                    long leftTable,
+                                                    long rightTable,
+                                                    long condition,
+                                                    int joinKind) throws CudfException;
+
   private static native long[] leftSemiJoinGatherMap(long leftKeys, long rightKeys,
                                                      boolean compareNullsEqual) throws CudfException;
 
@@ -2765,6 +2774,42 @@ public final class Table implements AutoCloseable {
     maps[0] = new GatherMap(DeviceMemoryBuffer.fromRmm(leftAddr, bufferSize, leftHandle));
     maps[1] = new GatherMap(DeviceMemoryBuffer.fromRmm(rightAddr, bufferSize, rightHandle));
     return maps;
+  }
+
+  /**
+   * Filters a pair of join gather maps by evaluating a conditional expression on the
+   * corresponding rows from the left and right tables. The input gather maps are not modified or
+   * closed. Two new {@link GatherMap} instances are returned for the left and right tables,
+   * respectively.
+   *
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   *
+   * @param leftGatherMap input gather map for the left table
+   * @param rightGatherMap input gather map for the right table
+   * @param leftTable left table containing the columns referenced by the condition
+   * @param rightTable right table containing the columns referenced by the condition
+   * @param condition conditional expression to evaluate for each pair
+   * @param joinKind join semantics to apply when the condition does not match
+   * @return filtered left and right table gather maps
+   * @throws IllegalArgumentException if the input gather maps have different lengths
+   */
+  public static GatherMap[] filterJoinGatherMaps(GatherMap leftGatherMap,
+                                                 GatherMap rightGatherMap,
+                                                 Table leftTable,
+                                                 Table rightTable,
+                                                 CompiledExpression condition,
+                                                 JoinKind joinKind) {
+    long leftLength = leftGatherMap.getBufferLength();
+    long rightLength = rightGatherMap.getBufferLength();
+    if (leftLength != rightLength) {
+      throw new IllegalArgumentException("left and right gather maps must have the same length");
+    }
+    long[] gatherMapData = filterJoinGatherMaps(
+        leftGatherMap.getBufferAddress(), leftLength,
+        rightGatherMap.getBufferAddress(), rightLength,
+        leftTable.getNativeView(), rightTable.getNativeView(),
+        condition.getNativeHandle(), joinKind.nativeId);
+    return buildJoinGatherMaps(gatherMapData);
   }
 
   /**
