@@ -325,7 +325,7 @@ This will bring up an interactive prompt to select which spelling fixes to apply
 
 ## Developer Guidelines
 
-The [C++ Developer Guide](cpp/doxygen/developer_guide/DEVELOPER_GUIDE.md) includes details on contributing to libcudf C++ code.
+The [C++ Developer Guide](https://docs.nvidia.com/cudf/latest/libcudf/developer_guide/) includes details on contributing to libcudf C++ code.
 
 The [Python Developer Guide](https://docs.nvidia.com/cudf/latest/developer_guide/) includes details on contributing to cuDF Python code.
 

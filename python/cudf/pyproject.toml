@@ -85,7 +85,7 @@ cudf-pandas-tests = [
 
 [project.urls]
 Homepage = "https://github.com/NVIDIA/cudf"
-Documentation = "https://docs.nvidia.com/cudf/latest/"
+Documentation = "https://docs.nvidia.com/cudf/"
 
 [tool.pydistcheck]
 select = [
