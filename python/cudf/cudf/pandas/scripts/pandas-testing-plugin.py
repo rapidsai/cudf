@@ -1422,7 +1422,6 @@ NODEIDS_THAT_FAIL = {
     "tests/frame/test_constructors.py::TestDataFrameConstructors::test_2d_object_array_does_not_copy": "TODO: Add a reason for failure",
     "tests/frame/test_constructors.py::TestDataFrameConstructors::test_construct_from_dict_ea_series": "AttributeError: 'ndarray' object has no attribute '_data'. Did you mean: 'data'?",
     "tests/frame/test_constructors.py::TestDataFrameConstructors::test_construction_nan_value_timedelta64_dtype": "AssertionError: DataFrame.iloc[:, 0] (column name='0') are different",
-    "tests/frame/test_constructors.py::TestDataFrameConstructors::test_constructor_dict": "TODO: Add a reason for failure",
     "tests/frame/test_constructors.py::TestDataFrameConstructors::test_constructor_dict_cast": "TODO: Add a reason for failure",
     "tests/frame/test_constructors.py::TestDataFrameConstructors::test_constructor_dict_multiindex": "TODO: Add a reason for failure",
     "tests/frame/test_constructors.py::TestDataFrameConstructors::test_constructor_dict_nan_key[None]": "TODO: Add a reason for failure",
