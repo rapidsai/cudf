@@ -143,6 +143,7 @@ jobs:
         unit_tests_cudf_pandas:
           - 'python/cudf/cudf/pandas/**'
           - 'ci/cudf_pandas_scripts/run_tests.sh'
+          - 'ci/cudf_pandas_scripts/run_tests_with_pip_cache_prototype.sh'
           - 'ci/utils/get_matrix_values.py'
         test_java:
           - 'java/**'
@@ -672,7 +673,14 @@ jobs:
       # Filter out GB300 due to https://github.com/NVIDIA/cudf/issues/23498
       matrix_filter: group_by([(.ARCH), (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))])) | map(select(.GPU != "gb300" and .GPU != "gh200"))
       build_type: pull-request
-      script: ci/cudf_pandas_scripts/run_tests.sh
+      script: ci/cudf_pandas_scripts/run_tests_with_pip_cache_prototype.sh
+      cache-paths: .cache/pip
+      cache-key-prefix: pip-v1
+      cache-key-files: |
+        dependencies.yaml
+        python/cudf/pyproject.toml
+        python/libcudf/pyproject.toml
+        python/pylibcudf/pyproject.toml
   third-party-integration-tests-cudf-pandas:
     needs: [conda-python-build, conda-python-build-noarch, changed-files]
     permissions:
