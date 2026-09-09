@@ -10,7 +10,6 @@
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/detail/utilities/element_argminmax.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/valid_if.cuh>
@@ -25,16 +24,23 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/detail/env_dispatch.cuh>
 #include <cub/device/device_reduce.cuh>
 #include <cub/device/device_segmented_reduce.cuh>
+#include <cub/device/dispatch/dispatch_segmented_reduce.cuh>
+#include <cub/device/dispatch/tuning/tuning_segmented_reduce.cuh>
+#include <cub/util_device.cuh>
+#include <cuda/devices>
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/memory_resource>
 #include <cuda/std/algorithm>
+#include <cuda/std/cstdint>
 #include <cuda/std/execution>
 #include <cuda/std/functional>
 #include <cuda/std/tuple>
 #include <cuda/stream>
+#include <cuda/version>
 #include <thrust/adjacent_difference.h>
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
@@ -163,43 +169,6 @@ struct split_fused_sums_fn {
   }
 };
 
-/// The by-key scan slows down with wide accumulators, so on that path only the two sums are fused
-/// and the valid count is reduced separately.
-template <typename Result>
-using fused_sum_pair = cuda::std::pair<Result, Result>;
-
-template <typename Result>
-struct fused_sum_pair_plus {
-  __device__ fused_sum_pair<Result> operator()(fused_sum_pair<Result> const& lhs,
-                                               fused_sum_pair<Result> const& rhs) const
-  {
-    return {lhs.first + rhs.first, lhs.second + rhs.second};
-  }
-};
-
-template <typename Source, typename Result>
-struct grouped_fused_sum_pair_fn {
-  size_type const* grouped_rows;
-  value_accessor<Source> value;
-  bool has_nulls;
-
-  __device__ fused_sum_pair<Result> operator()(size_type position) const
-  {
-    auto const row = grouped_rows[position];
-    if (has_nulls && value.col.is_null_nocheck(row)) { return {Result{0}, Result{0}}; }
-    auto const result = static_cast<Result>(value(row));
-    return {result, result * result};
-  }
-};
-
-template <typename Result>
-struct split_fused_sum_pair_fn {
-  __device__ cuda::std::tuple<Result, Result> operator()(fused_sum_pair<Result> const& sums) const
-  {
-    return {sums.first, sums.second};
-  }
-};
-
 constexpr bool is_fusable_sum(aggregation::Kind kind)
 {
   return kind == aggregation::SUM || kind == aggregation::SUM_OF_SQUARES ||
@@ -208,10 +177,128 @@ constexpr bool is_fusable_sum(aggregation::Kind kind)
 
 /// Groups this small on average are reduced by key, since one block per segment would leave most
 /// of the device idle.
-constexpr size_type min_avg_rows_per_segment = 96;
+/// Groups this small on average are reduced as segments packed several per block: one block per
+/// segment would leave most of the device idle.
+constexpr size_type min_avg_rows_per_segment = 128;
 
 /// Groups longer than this are reduced chunk by chunk so that every block has a bounded range.
 constexpr size_type rows_per_chunk = 1 << 14;
+
+/// Chunk length when the segments are packed several per block, so that a thread or a sub-warp
+/// never walks a long group alone.
+constexpr size_type packed_rows_per_chunk = 1 << 10;
+
+/// Threads that share one segment on the packed path.
+constexpr int packed_threads_per_group = 8;
+
+// The packed path calls `cub::detail::segmented_reduce::dispatch` directly, an internal entry point
+// whose namespace, signature and hint semantics were verified in CCCL 3.5 only.
+static_assert(CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION == 5,
+              "re-verify cub::detail::segmented_reduce::dispatch and the max_segment_size hint "
+              "(dispatch_segmented_reduce.cuh, kernels/kernel_segmented_reduce.cuh) for this CCCL");
+
+/**
+ * @brief Policy selector for cub::DeviceSegmentedReduce whose medium path hands each segment to
+ * `packed_threads_per_group` threads instead of a full warp.
+ *
+ * The large (one block per segment) and small (one thread per segment) policies are those of
+ * CUB's own selector, so the large path reduces in exactly the order it does today. Only the
+ * medium tile changes: `packed_threads_per_group * items_per_thread` rows instead of
+ * `32 * items_per_thread`, and `threads_per_block / packed_threads_per_group` segments per block.
+ *
+ * Verified against cub/device/dispatch/tuning/tuning_segmented_reduce.cuh:23-63 (the policy
+ * structs), :101-140 (the default selector) and cub/util_device.cuh:865 (the selector concept:
+ * stateless, `operator()(cuda::compute_capability) -> cub::SegmentedReducePolicy`). The kernel
+ * evaluates it as a constant expression for `__launch_bounds__` (kernel_segmented_reduce.cuh:113),
+ * hence `constexpr` and host/device.
+ */
+template <typename AccumT, typename OffsetT, typename Op>
+struct subwarp_segmented_reduce_policy_selector {
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr cub::SegmentedReducePolicy operator()(
+    cuda::compute_capability cc) const
+  {
+    auto const base =
+      cub::detail::segmented_reduce::policy_selector_from_types<AccumT, OffsetT, Op>{}(cc);
+    auto const& large = base.large_reduce;
+    return cub::SegmentedReducePolicy{large,
+                                      cub::SegmentedReduceWarpReducePolicy{large.threads_per_block,
+                                                                           packed_threads_per_group,
+                                                                           large.items_per_thread,
+                                                                           large.vec_size,
+                                                                           large.load_modifier},
+                                      base.small_reduce};
+  }
+};
+
+/// The stream and temporary-storage resource handed to the CUB algorithms. Spelled out without
+/// class template argument deduction, which the host compiler rejects for these types outside of
+/// a template.
+using cub_stream_prop_t = cuda::std::execution::prop<cuda::get_stream_t, cuda::stream_ref>;
+using cub_mr_prop_t =
+  cuda::std::execution::prop<cuda::mr::get_memory_resource_t, rmm::device_async_resource_ref>;
+using cub_env_t = cuda::std::execution::env<cub_stream_prop_t, cub_mr_prop_t>;
+
+cub_env_t make_cub_env(cuda::stream_ref stream)
+{
+  return cub_env_t{
+    cub_stream_prop_t{cuda::get_stream_t{}, stream},
+    cub_mr_prop_t{cuda::mr::get_memory_resource_t{}, cudf::get_current_device_resource_ref()}};
+}
+
+/**
+ * @brief Reduces every segment with the segmented reduce kernel packing several segments per block.
+ *
+ * `cub::DeviceSegmentedReduce::Reduce` always launches one block per segment. Its dispatch also
+ * accepts a segment size hint, which is what makes it hand every segment to one thread (hint
+ * within the small tile) or to one sub-warp (hint within the medium tile) instead; the kernel's
+ * agents loop over as many tiles as a segment has, so a segment longer than the hint is still
+ * reduced correctly, only by that thread or sub-warp alone. Segments averaging at most the small
+ * tile of the accumulator get a thread each, longer ones a sub-warp each.
+ *
+ * @param avg_rows Average number of rows per segment
+ */
+template <typename ValueIterator, typename OutputIterator, typename Op, typename T>
+void reduce_packed_segments(device_span<size_type const> offsets,
+                            size_type avg_rows,
+                            ValueIterator values,
+                            OutputIterator output,
+                            Op op,
+                            T init,
+                            cuda::stream_ref stream)
+{
+  using offset_type   = cub::detail::common_iterator_value_t<size_type const*, size_type const*>;
+  using accum_type    = cuda::std::__accumulator_t<Op, cub::detail::it_value_t<ValueIterator>, T>;
+  using selector_type = subwarp_segmented_reduce_policy_selector<accum_type, offset_type, Op>;
+
+  // The compute capability the dispatch itself selects the policy with.
+  cuda::compute_capability cc{};
+  CUDF_CUDA_TRY(cub::detail::ptx_compute_cap(cc));
+  auto const policy      = selector_type{}(cc);
+  auto const small_tile  = policy.small_reduce.items_per_tile();
+  auto const medium_tile = policy.medium_reduce.items_per_tile();
+  CUDF_EXPECTS(small_tile + 1 <= medium_tile, "Unexpected segmented reduce tuning");
+  // Only the range the hint falls in matters: 1 selects the one-thread path and small_tile + 1
+  // the one-sub-warp path, whatever the longest segment is.
+  auto const hint =
+    avg_rows <= small_tile ? std::size_t{1} : static_cast<std::size_t>(small_tile) + 1;
+  CUDF_CUDA_TRY(cub::detail::dispatch_with_env(
+    make_cub_env(stream),
+    [&](auto, void* d_temp_storage, std::size_t& temp_storage_bytes, cudaStream_t launch_stream) {
+      return cub::detail::segmented_reduce::dispatch<accum_type, offset_type>(
+        d_temp_storage,
+        temp_storage_bytes,
+        values,
+        output,
+        static_cast<cuda::std::int64_t>(offsets.size() - 1),
+        offsets.begin(),
+        offsets.begin() + 1,
+        op,
+        init,
+        hint,
+        launch_stream,
+        selector_type{});
+    }));
+}
 
 template <typename ValueIterator, typename OutputIterator, typename Op, typename T>
 void reduce_segments(device_span<size_type const> offsets,
@@ -245,29 +332,29 @@ void reduce_groups(grouped_rows const& grouped,
                    T init,
                    cuda::stream_ref stream)
 {
-  if (!grouped.labels.is_empty()) {
-    auto const env = cuda::std::execution::env{
-      cuda::std::execution::prop{cuda::get_stream_t{}, stream},
-      cuda::std::execution::prop{cuda::mr::get_memory_resource_t{},
-                                 cudf::get_current_device_resource_ref()}};
-    CUDF_CUDA_TRY(cub::DeviceReduce::ReduceByKey(grouped.labels.begin(),
-                                                 cuda::make_discard_iterator(),
-                                                 values,
-                                                 output,
-                                                 cuda::make_discard_iterator(),
-                                                 op,
-                                                 grouped.labels.size(),
-                                                 env));
-    return;
-  }
+  auto const packed = grouped.packed_rows > 0;
   if (grouped.group_chunks.is_empty()) {
-    reduce_segments(grouped.offsets, values, output, op, init, stream);
+    if (packed) {
+      reduce_packed_segments(
+        grouped.offsets, grouped.packed_rows, values, output, op, init, stream);
+    } else {
+      reduce_segments(grouped.offsets, values, output, op, init, stream);
+    }
     return;
   }
   rmm::device_uvector<T> partials(
     grouped.chunk_offsets.size() - 1, stream, cudf::get_current_device_resource_ref());
-  reduce_segments(grouped.chunk_offsets, values, partials.begin(), op, init, stream);
-  reduce_segments(grouped.group_chunks, partials.begin(), output, op, init, stream);
+  if (packed) {
+    reduce_packed_segments(
+      grouped.chunk_offsets, grouped.packed_rows, values, partials.begin(), op, init, stream);
+    // Most groups have one partial, but the long group that forced the chunking may have many, so
+    // every group gets a sub-warp.
+    reduce_packed_segments(
+      grouped.group_chunks, packed_rows_per_chunk, partials.begin(), output, op, init, stream);
+  } else {
+    reduce_segments(grouped.chunk_offsets, values, partials.begin(), op, init, stream);
+    reduce_segments(grouped.group_chunks, partials.begin(), output, op, init, stream);
+  }
 }
 
 struct reduction_context {
@@ -504,25 +591,9 @@ struct fused_sums_fn {
     };
     auto sum            = make_output(aggregation::SUM);
     auto sum_of_squares = make_output(aggregation::SUM_OF_SQUARES);
-    auto count          = !ctx.grouped.labels.is_empty() ? count_groups(ctx, true)
-                                                         : make_output(aggregation::COUNT_VALID);
+    auto count          = make_output(aggregation::COUNT_VALID);
     auto const counts   = count->view().template begin<size_type>();
-    if (ctx.num_groups > 0 && !ctx.grouped.labels.is_empty()) {
-      auto const values = cudf::detail::make_counting_transform_iterator(
-        0,
-        grouped_fused_sum_pair_fn<Source, Result>{
-          ctx.grouped.rows.data(), ctx.accessor<Source>(), ctx.values.has_nulls()});
-      auto const outputs = cuda::transform_output_iterator{
-        cuda::make_zip_iterator(sum->mutable_view().template begin<Result>(),
-                                sum_of_squares->mutable_view().template begin<Result>()),
-        split_fused_sum_pair_fn<Result>{}};
-      reduce_groups(ctx.grouped,
-                    values,
-                    outputs,
-                    fused_sum_pair_plus<Result>{},
-                    fused_sum_pair<Result>{Result{0}, Result{0}},
-                    ctx.stream);
-    } else if (ctx.num_groups > 0) {
+    if (ctx.num_groups > 0) {
       auto const values = cudf::detail::make_counting_transform_iterator(
         0,
         grouped_fused_sums_fn<Source, Result>{
@@ -659,21 +730,20 @@ grouped_rows make_grouped_rows(device_span<size_type const> rows,
   grouped_rows grouped{rows,
                        offsets,
                        rmm::device_uvector<size_type>{0, stream, temp_mr},
-                       rmm::device_uvector<size_type>{0, stream, temp_mr},
                        rmm::device_uvector<size_type>{0, stream, temp_mr}};
   if (num_groups == 0) { return grouped; }
 
-  if (num_rows / num_groups < min_avg_rows_per_segment) {
-    grouped.labels.resize(num_rows, stream);
-    cudf::detail::label_segments(
-      offsets.begin(), offsets.end(), grouped.labels.begin(), grouped.labels.end(), stream);
-    return grouped;
-  }
+  // Small groups are packed several per block; every segment is then bounded by a shorter chunk
+  // so that no thread or sub-warp is left walking a long group alone.
+  auto const avg_rows   = num_rows / num_groups;
+  auto const packed     = avg_rows < min_avg_rows_per_segment;
+  auto const chunk_rows = packed ? packed_rows_per_chunk : rows_per_chunk;
+  grouped.packed_rows   = packed ? std::max<size_type>(avg_rows, 1) : 0;
 
   auto const policy       = rmm::exec_policy_nosync(stream, temp_mr);
   auto const chunk_counts = cudf::detail::make_counting_transform_iterator(
-    0, [offsets = offsets.begin()] __device__(size_type group) -> size_type {
-      return cudf::util::div_rounding_up_safe(offsets[group + 1] - offsets[group], rows_per_chunk);
+    0, [offsets = offsets.begin(), chunk_rows] __device__(size_type group) -> size_type {
+      return cudf::util::div_rounding_up_safe(offsets[group + 1] - offsets[group], chunk_rows);
     });
   grouped.group_chunks.resize(num_groups + 1, stream);
   grouped.group_chunks.set_element_to_zero_async(0, stream);
@@ -694,12 +764,13 @@ grouped_rows make_grouped_rows(device_span<size_type const> rows,
                     group_chunks = grouped.group_chunks.begin(),
                     num_groups,
                     num_chunks,
-                    num_rows] __device__(size_type chunk) -> size_type {
+                    num_rows,
+                    chunk_rows] __device__(size_type chunk) -> size_type {
                      if (chunk == num_chunks) { return num_rows; }
                      auto const group = static_cast<size_type>(
                        cuda::std::upper_bound(group_chunks, group_chunks + num_groups + 1, chunk) -
                        group_chunks - 1);
-                     return offsets[group] + (chunk - group_chunks[group]) * rows_per_chunk;
+                     return offsets[group] + (chunk - group_chunks[group]) * chunk_rows;
                    });
   return grouped;
 }
@@ -734,15 +805,6 @@ std::vector<std::unique_ptr<column>> compute_single_pass_aggs(
            std::find(agg_kinds.begin() + begin, agg_kinds.begin() + end, agg_kinds[end]) ==
              agg_kinds.begin() + end) {
       ++end;
-    }
-    // By key, only the two sums are fused, so fusing pays off only when both are requested.
-    auto const has_kind = [&](aggregation::Kind kind) {
-      return std::find(agg_kinds.begin() + begin, agg_kinds.begin() + end, kind) !=
-             agg_kinds.begin() + end;
-    };
-    if (!grouped.labels.is_empty() &&
-        !(has_kind(aggregation::SUM) && has_kind(aggregation::SUM_OF_SQUARES))) {
-      return begin + 1;
     }
     return end;
   };

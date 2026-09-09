@@ -32,18 +32,20 @@ bool is_single_pass_agg_supported(data_type values_type, aggregation::Kind kind)
  * @brief Input rows reordered so that the rows of every group are contiguous, together with the
  * arrays of the reduction strategy chosen for the group size distribution.
  *
- * Groups that are small on average are reduced by key with one label per row. Otherwise every
- * group is reduced as a segment, and groups spanning more than one chunk of rows are first reduced
- * per chunk so that a few large groups still occupy the whole device.
+ * Every group is reduced as a segment: groups that are small on average are packed several per
+ * block, one thread or one sub-warp each, otherwise a block reduces each group. Groups spanning
+ * more than one chunk of rows are first reduced per chunk, so that a few long groups still occupy
+ * the whole device and no thread walks a long group alone.
  */
 struct grouped_rows {
-  device_span<size_type const> rows;      ///< Input row index at each grouped position
-  device_span<size_type const> offsets;   ///< `num_groups + 1` offsets delimiting the groups
-  rmm::device_uvector<size_type> labels;  ///< Group of each position, only when reducing by key
+  device_span<size_type const> rows;             ///< Input row index at each grouped position
+  device_span<size_type const> offsets;          ///< `num_groups + 1` offsets delimiting the groups
   rmm::device_uvector<size_type> chunk_offsets;  ///< `num_chunks + 1` chunk boundaries, only when
                                                  ///< some group spans several chunks
   rmm::device_uvector<size_type> group_chunks;   ///< `num_groups + 1` offsets into the chunks, only
                                                  ///< when some group spans several chunks
+  size_type packed_rows = 0;  ///< Average rows per group when the segments are packed several per
+                              ///< block; 0 when every segment gets a block
 };
 
 /**
