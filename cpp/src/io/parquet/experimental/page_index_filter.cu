@@ -58,7 +58,7 @@ namespace {
  */
 struct page_stats_caster : public stats_caster_base {
   cudf::size_type total_rows;
-  cudf::host_span<metadata_base const> per_file_metadata;
+  std::span<metadata_base const> per_file_metadata;
   std::span<std::vector<size_type> const> row_group_indices;
   bool const has_is_null_operator;
 
@@ -541,7 +541,7 @@ struct page_stats_caster : public stats_caster_base {
  */
 struct page_stats_to_row_mask_converter : public page_stats_caster {
   page_stats_to_row_mask_converter(cudf::size_type total_rows,
-                                   cudf::host_span<metadata_base const> per_file_metadata,
+                                   std::span<metadata_base const> per_file_metadata,
                                    std::span<std::vector<size_type> const> row_group_indices,
                                    bool has_is_null_operator)
     : page_stats_caster{.total_rows           = total_rows,

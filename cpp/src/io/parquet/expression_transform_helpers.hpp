@@ -357,13 +357,14 @@ using simplified_expression_opt = std::optional<std::reference_wrapper<ast::expr
  *
  */
 class parquet_expression_simplifier {
+ public:
+  parquet_expression_simplifier(parquet_expression_simplifier const&)            = delete;
+  parquet_expression_simplifier& operator=(parquet_expression_simplifier const&) = delete;
+
  protected:
   explicit parquet_expression_simplifier(std::span<cudf::data_type const> output_dtypes);
 
   ~parquet_expression_simplifier() = default;
-
-  parquet_expression_simplifier(parquet_expression_simplifier const&)            = delete;
-  parquet_expression_simplifier& operator=(parquet_expression_simplifier const&) = delete;
 
   /**
    * @brief Simplifies a `col op lit` comparison

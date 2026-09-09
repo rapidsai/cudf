@@ -31,6 +31,7 @@
 #include <cuda/stream>
 
 #include <optional>
+#include <span>
 
 namespace cudf::io::parquet::experimental::detail {
 
@@ -1324,7 +1325,7 @@ class dictionary_expression_converter : public parquet_expression_simplifier {
  public:
   dictionary_expression_converter(ast::expression const& expr,
                                   std::span<cudf::data_type const> output_dtypes,
-                                  cudf::host_span<std::vector<ast::literal*> const> literals)
+                                  std::span<std::vector<ast::literal*> const> literals)
     : parquet_expression_simplifier{output_dtypes}, _literals{literals}
   {
     // Compute and store columns literals offsets
@@ -1391,7 +1392,7 @@ class dictionary_expression_converter : public parquet_expression_simplifier {
 
  private:
   std::vector<cudf::size_type> _col_literals_offsets;
-  cudf::host_span<std::vector<ast::literal*> const> _literals;
+  std::span<std::vector<ast::literal*> const> _literals;
   simplified_expression_opt _dictionary_expr;
 };
 
@@ -1415,9 +1416,7 @@ aggregate_reader_metadata::apply_dictionary_filter(
   // Convert AST to DictionaryAST expression with reference to dictionary membership
   // in above `dictionary_membership_table`
   dictionary_expression_converter dictionary_expr_converter{
-    filter.get(),
-    output_dtypes,
-    cudf::host_span<std::vector<ast::literal*> const>{literals.data(), literals.size()}};
+    filter.get(), output_dtypes, literals};
 
   // Dictionary membership cannot filter anything in the filter, all row groups survive
   auto const dictionary_expr = dictionary_expr_converter.get_dictionary_expr();

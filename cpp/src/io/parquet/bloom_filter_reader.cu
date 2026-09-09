@@ -35,6 +35,7 @@
 #include <numeric>
 #include <optional>
 #include <ranges>
+#include <span>
 #include <utility>
 
 namespace cudf::io::parquet::detail {
@@ -182,10 +183,9 @@ class bloom_filter_expression_converter : public parquet_expression_simplifier {
  public:
   bloom_filter_expression_converter(
     ast::expression const& expr,
-    cudf::host_span<cudf::data_type const> output_dtypes,
-    cudf::host_span<std::vector<ast::literal*> const> equality_literals)
-    : parquet_expression_simplifier{std::span{output_dtypes.data(), output_dtypes.size()}},
-      _equality_literals{equality_literals}
+    std::span<cudf::data_type const> output_dtypes,
+    std::span<std::vector<ast::literal*> const> equality_literals)
+    : parquet_expression_simplifier{output_dtypes}, _equality_literals{equality_literals}
   {
     // Compute and store columns literals offsets
     _col_literals_offsets.reserve(static_cast<cudf::size_type>(_output_dtypes.size()) + 1);
@@ -252,7 +252,7 @@ class bloom_filter_expression_converter : public parquet_expression_simplifier {
 
  private:
   std::vector<cudf::size_type> _col_literals_offsets;
-  cudf::host_span<std::vector<ast::literal*> const> _equality_literals;
+  std::span<std::vector<ast::literal*> const> _equality_literals;
   simplified_expression_opt _bloom_filter_expr;
 };
 
@@ -379,7 +379,9 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   // Convert AST to BloomfilterAST expression with reference to bloom filter membership
   // in above `bloom_filter_membership_table`
   bloom_filter_expression_converter bloom_filter_expr_converter{
-    filter.get(), output_dtypes, {literals}};
+    filter.get(),
+    std::span{output_dtypes.data(), output_dtypes.size()},
+    std::span{literals.data(), literals.size()}};
 
   // Return early if bloom filters cannot prune any row groups using the filter
   auto const bloom_filter_expr = bloom_filter_expr_converter.get_bloom_filter_expr();
