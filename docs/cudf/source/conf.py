@@ -1018,12 +1018,15 @@ def rewrite_libcudf_developer_guide_references(
             continue
 
         path, fragment = refuri.split("#", maxsplit=1)
+        # No anchor, nothing to do.
+        if not fragment:
+            continue
         if not path:
             path = _libcudf_developer_guide_source_files[app.env.docname]
         else:
             path = path.removeprefix("./")
         # Paths outside this directory remain ordinary source/external links.
-        if "/" in path or not fragment:
+        if "/" in path:
             continue
 
         target = _libcudf_developer_guide_documents.get(path)
