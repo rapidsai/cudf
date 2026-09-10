@@ -68,7 +68,10 @@ __device__ void transform_kernel(size_type row_size,
     } else {
       auto const active_mask = __ballot_sync(0xFFFF'FFFFu, row < row_size);
 
+      // fully inactive warp, break the loop
       if (active_mask == 0) { break; }
+
+      // partially active warp, continue to next warp iteration if row is out of bounds
       if (row >= row_size) { continue; }
 
       auto ins = InputAccessors::map(
