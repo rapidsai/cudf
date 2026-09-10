@@ -595,8 +595,7 @@ def pytest_collection_modifyitems(
             skips.update(STREAMING_ENGINE_TESTS_TO_SKIP_SMALL_BLOCKSIZE)
             xfails.update(STREAMING_ENGINE_EXPECTED_FAILURES_SMALL_BLOCKSIZE)
     for item in items:
-        skip_reason = skips.get(item.nodeid)
-        if skip_reason is not None:
+        if (skip_reason := skips.get(item.nodeid)) is not None:
             item.add_marker(pytest.mark.skip(reason=skip_reason))
         elif (xfail_reason := xfails.get(item.nodeid)) is not None:
             item.add_marker(pytest.mark.xfail(reason=xfail_reason))
