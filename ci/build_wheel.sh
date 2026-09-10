@@ -37,6 +37,8 @@ add_wheel_constraint() {
   local wheel_glob=$2
   local -a wheel_paths=()
 
+  # auditwheel determines the final platform/ABI tag, so resolve its output
+  # filename before recording the local direct-reference constraint.
   mapfile -t wheel_paths < <(compgen -G "${wheel_glob}")
   if (( ${#wheel_paths[@]} != 1 )); then
     echo "Expected exactly one wheel matching ${wheel_glob}, found ${#wheel_paths[@]}" >&2
