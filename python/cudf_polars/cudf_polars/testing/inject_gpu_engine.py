@@ -535,7 +535,6 @@ STREAMING_ENGINE_TESTS_TO_SKIP: Mapping[str, str] = {
 
 # xfail for tests that produce different results than CPU Polars
 STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
-    "tests/unit/functions/range/test_linear_space.py::test_linear_space_num_samples_expr": "https://github.com/NVIDIA/cudf/issues/22072",
     "tests/unit/functions/test_concat.py::test_concat_horizontal_zero_width_height_mismatch_26876": "https://github.com/NVIDIA/cudf/issues/21644",
     "tests/unit/functions/test_concat.py::test_concat_horizontally_strict": "Correct polars.exceptions.ShapeError raised but it's in a ExceptionGroup",
     "tests/unit/functions/test_when_then.py::test_mismatched_height_should_raise[ternary_expr0-df0]": "Correct polars.exceptions.ShapeError raised but it's in a ExceptionGroup",
@@ -544,11 +543,7 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/functions/test_when_then.py::test_mismatched_height_should_raise[ternary_expr1-df1]": "Correct polars.exceptions.ShapeError raised but it's in a ExceptionGroup",
     "tests/unit/operations/test_slice.py::test_slice_pushdown_literal_projection_14349": "https://github.com/NVIDIA/cudf/issues/22072",
     "tests/unit/operations/test_group_by.py::test_group_by_lit_series": "Incorrect broadcasting of literals in groupby-agg",
-    "tests/unit/operations/test_group_by.py::test_group_by_series_partitioned": "https://github.com/NVIDIA/cudf/issues/22072",
-    "tests/unit/operations/test_group_by.py::test_partitioned_group_by_chunked": "https://github.com/NVIDIA/cudf/issues/22072",
-    "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[1]": "https://github.com/NVIDIA/cudf/issues/22075",
-    "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[4]": "https://github.com/NVIDIA/cudf/issues/22075",
-    "tests/unit/operations/aggregation/test_aggregations.py::test_item_too_many": "Correct polars.exceptions.ComputeError raised but it's in an ExceptionGroup",
+   "tests/unit/operations/aggregation/test_aggregations.py::test_item_too_many": "Correct polars.exceptions.ComputeError raised but it's in an ExceptionGroup",
     "tests/unit/operations/aggregation/test_aggregations.py::test_single_empty": "Correct polars.exceptions.ComputeError raised but it's in an ExceptionGroup",
     "tests/unit/operations/test_join.py::test_empty_outer_join_22206": "https://github.com/NVIDIA/cudf/issues/22084",
     "tests/unit/operations/test_replace.py::test_replace_invalid_old_dtype": "Correct InvalidOperationError raised but it's in an ExceptionGroup",
@@ -561,6 +556,15 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/io/test_io_plugin.py::test_defer_validate_true": "correct SchemaError raised but wrapped in an ExceptionGroup under the streaming engine",
     "tests/unit/lazyframe/test_projections.py::test_merge_sorted_projection_pd": "https://github.com/NVIDIA/cudf/issues/23055",
     "tests/unit/operations/test_slice.py::test_hconcat_tail_unequal_heights_strict_raises_27552": "horizontal-concat strict height-mismatch raised inside an ExceptionGroup under the streaming engine",
+}
+
+# xfail for tests that produce different results than CPU Polars under the small blocksize only
+STREAMING_ENGINE_EXPECTED_FAILURES_SMALL_BLOCKSIZE_ONLY: Mapping[str, str] = {
+    "tests/unit/operations/test_group_by.py::test_group_by_series_partitioned": "https://github.com/NVIDIA/cudf/issues/22072",
+    "tests/unit/operations/test_group_by.py::test_partitioned_group_by_chunked": "https://github.com/NVIDIA/cudf/issues/22072",
+    "tests/unit/functions/range/test_linear_space.py::test_linear_space_num_samples_expr": "https://github.com/NVIDIA/cudf/issues/22072",
+    "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[1]": "https://github.com/NVIDIA/cudf/issues/22075",
+    "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[4]": "https://github.com/NVIDIA/cudf/issues/22075",
 }
 
 
@@ -600,6 +604,11 @@ def pytest_collection_modifyitems(
         elif (
             with_streaming_engine
             and (s_reason := STREAMING_ENGINE_EXPECTED_FAILURES.get(item.nodeid, None))
+            is not None
+        ) or (
+            with_streaming_engine
+            and with_small_blocksize
+            and (s_reason := STREAMING_ENGINE_EXPECTED_FAILURES_SMALL_BLOCKSIZE_ONLY.get(item.nodeid, None))
             is not None
         ):
             item.add_marker(pytest.mark.xfail(reason=s_reason))
