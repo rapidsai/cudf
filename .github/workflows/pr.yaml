@@ -323,7 +323,7 @@ jobs:
       packages: read
       pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@codex/validate-caller-cache-matrix-key
     if: >
       fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs ||
       fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_test_files ||
@@ -353,8 +353,8 @@ jobs:
         GPU
         DRIVER
         DEPENDENCIES
-      # PRs restore a compatible main cache but do not create merge-ref-scoped entries.
-      cache-read-only: true
+      # Validation-only: save PR-scoped entries so this run exposes the computed cache keys.
+      cache-read-only: false
       cache-environment: |
         LIBCUDF_KERNEL_CACHE_PATH=.cache/libcudf
         LIBCUDF_KERNEL_CACHE_PRELOAD=1
