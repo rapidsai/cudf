@@ -19,24 +19,15 @@ rapids-generate-pip-constraints py_test_cudf_polars "${PIP_CONSTRAINT}"
 
 rapids-logger "Installing cudf_polars and TPC test dependencies"
 
-TPCH_REQUIREMENTS=$(mktemp --suffix=.txt)
-rapids-dependency-file-generator \
-    --config dependencies.yaml \
-    --file-key test_cudf_polars_tpch \
-    --output requirements \
-    --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
-    > "${TPCH_REQUIREMENTS}"
-
 rapids-pip-retry install \
     -v \
     --prefer-binary \
     --constraint "${PIP_CONSTRAINT}" \
-    "$(echo "${CUDF_POLARS_WHEELHOUSE}"/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]" \
+    "$(echo "${CUDF_POLARS_WHEELHOUSE}"/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,tpch]" \
     "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
     "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
     "$(echo "${LIBCUDF_STREAMING_WHEELHOUSE}"/libcudf_streaming_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
-    "$(echo "${CUDF_STREAMING_WHEELHOUSE}"/cudf_streaming_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
-    -r "${TPCH_REQUIREMENTS}"
+    "$(echo "${CUDF_STREAMING_WHEELHOUSE}"/cudf_streaming_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
 
 rapids-logger "Check GPU usage"
 nvidia-smi
