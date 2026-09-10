@@ -725,10 +725,6 @@ files:
       polars_compat_version: ["1.35", "1.36", "1.37", "1.38", "1.39", "1.40", "1.41", "1.42"]
     includes:
       - test_cudf_polars_compat
-  test_cudf_polars_tpch:
-    output: none
-    includes:
-      - test_cudf_polars_tpch
 channels:
   - rapidsai-nightly
   - rapidsai
