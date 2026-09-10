@@ -34,9 +34,16 @@ repair_wheel() {
 
 add_wheel_constraint() {
   local package_name=$1
-  local wheel_path=$2
+  local wheel_glob=$2
+  local -a wheel_paths=()
 
-  echo "${package_name}-${RAPIDS_PY_CUDA_SUFFIX} @ file://${wheel_path}" >> "${PIP_CONSTRAINT}"
+  mapfile -t wheel_paths < <(compgen -G "${wheel_glob}")
+  if (( ${#wheel_paths[@]} != 1 )); then
+    echo "Expected exactly one wheel matching ${wheel_glob}, found ${#wheel_paths[@]}" >&2
+    exit 1
+  fi
+
+  echo "${package_name}-${RAPIDS_PY_CUDA_SUFFIX} @ file://${wheel_paths[0]}" >> "${PIP_CONSTRAINT}"
 }
 
 # libcudf

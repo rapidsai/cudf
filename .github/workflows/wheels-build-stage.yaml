@@ -27,9 +27,6 @@ on:
         default: false
         required: false
         type: boolean
-      script:
-        required: true
-        type: string
       sha:
         required: false
         type: string
@@ -115,10 +112,14 @@ jobs:
         id: build-wheels
         run: |
           ulimit -n "$(ulimit -Hn)"
-          source "${INPUTS_SCRIPT}"
+          if [[ "${INPUTS_PURE_WHEEL}" == "true" ]]; then
+            source ci/build_wheel_noarch.sh
+          else
+            source ci/build_wheel.sh
+          fi
         env:
           GH_TOKEN: ${{ github.token }}
-          INPUTS_SCRIPT: ${{ inputs.script }}
+          INPUTS_PURE_WHEEL: ${{ inputs.pure-wheel }}
         shell: bash -leo pipefail {0}
       - name: Save Cython cache
         # PRs restore this cache but do not create merge-ref-scoped entries.

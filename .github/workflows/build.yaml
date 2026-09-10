@@ -207,7 +207,6 @@ jobs:
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
       node_type: cpu16
-      script: ci/build_wheel.sh
   wheel-publish-libcudf:
     needs: wheel-build
     permissions:
@@ -325,7 +324,6 @@ jobs:
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
       node_type: cpu8
-      script: ci/build_wheel_noarch.sh
       pure-wheel: true
   wheel-publish-dask-cudf:
     needs: wheel-python-build-noarch

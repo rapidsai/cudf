@@ -203,6 +203,7 @@ jobs:
           - 'ci/test_narwhals.sh'
         test_python_wheels:
           - 'ci/build_wheel_noarch.sh'
+          - 'ci/build_wheel.sh'
           - 'ci/build_wheel_common.sh'
           - 'ci/validate_wheel.sh'
           - '.github/workflows/build.yaml'
@@ -538,7 +539,6 @@ jobs:
       build_type: pull-request
       build-datetime: ${{ needs.build-details.outputs.build-datetime }}
       node_type: cpu16
-      script: ci/build_wheel.sh
   wheel-python-build-noarch:
     needs: [build-details, checks]
     permissions:
@@ -556,7 +556,6 @@ jobs:
       build-datetime: ${{ needs.build-details.outputs.build-datetime }}
       node_type: cpu8
       pure-wheel: true
-      script: ci/build_wheel_noarch.sh
   wheel-tests-cudf:
     needs: [wheel-build, changed-files]
     permissions:
