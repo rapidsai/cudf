@@ -207,7 +207,7 @@ jobs:
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
       node_type: cpu16
-      script: ci/build_wheel_cpp_python.sh
+      script: ci/build_wheel.sh
       stage: cpp-python
   wheel-publish-libcudf:
     needs: wheel-build
@@ -326,7 +326,7 @@ jobs:
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
       node_type: cpu8
-      script: ci/build_wheel_python_noarch.sh
+      script: ci/build_wheel_noarch.sh
       stage: python-noarch
       pure-wheel: true
   wheel-publish-dask-cudf:
