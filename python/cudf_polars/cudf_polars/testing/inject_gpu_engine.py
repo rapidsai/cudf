@@ -480,28 +480,17 @@ STREAMING_ENGINE_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/streaming/test_streaming_sort.py::test_streaming_sort_varying_order_and_dtypes[sort_by0]": "Too slow for CI",
 }
 
-# xfail for tests that produce different results than CPU Polars
-STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
-    "tests/unit/functions/test_concat.py::test_concat_horizontal_zero_width_height_mismatch_26876": "https://github.com/NVIDIA/cudf/issues/21644",
-    "tests/unit/functions/test_concat.py::test_concat_horizontally_strict": "Correct polars.exceptions.ShapeError raised but it's in a ExceptionGroup",
-    "tests/unit/functions/test_when_then.py::test_mismatched_height_should_raise[ternary_expr0-df0]": "Correct polars.exceptions.ShapeError raised but it's in a ExceptionGroup",
-    "tests/unit/functions/test_when_then.py::test_mismatched_height_should_raise[ternary_expr0-df1]": "Correct polars.exceptions.ShapeError raised but it's in a ExceptionGroup",
-    "tests/unit/functions/test_when_then.py::test_mismatched_height_should_raise[ternary_expr1-df0]": "Correct polars.exceptions.ShapeError raised but it's in a ExceptionGroup",
-    "tests/unit/functions/test_when_then.py::test_mismatched_height_should_raise[ternary_expr1-df1]": "Correct polars.exceptions.ShapeError raised but it's in a ExceptionGroup",
-    "tests/unit/operations/test_group_by.py::test_group_by_lit_series": "Incorrect broadcasting of literals in groupby-agg",
-    "tests/unit/operations/aggregation/test_aggregations.py::test_item_too_many": "Correct polars.exceptions.ComputeError raised but it's in an ExceptionGroup",
-    "tests/unit/operations/aggregation/test_aggregations.py::test_single_empty": "Correct polars.exceptions.ComputeError raised but it's in an ExceptionGroup",
-    "tests/unit/operations/test_join.py::test_empty_outer_join_22206": "https://github.com/NVIDIA/cudf/issues/22084",
-    "tests/unit/operations/test_replace.py::test_replace_invalid_old_dtype": "Correct InvalidOperationError raised but it's in an ExceptionGroup",
-    "tests/unit/operations/test_window.py::test_over_literal_cum_sum_26800": "TODO: https://github.com/NVIDIA/cudf/pull/22048#discussion_r3238041970",
-    "tests/unit/sql/test_joins.py::test_cross_join_unnest_from_cte": "https://github.com/NVIDIA/cudf/issues/22073",
-    "tests/unit/sql/test_window_functions.py::test_over_with_cumulative_window_funcs": "TODO: https://github.com/NVIDIA/cudf/pull/22048#discussion_r3238041970",
-    "tests/unit/sql/test_window_functions.py::test_window_cumulative_agg_with_nulls": "TODO: https://github.com/NVIDIA/cudf/pull/22048#discussion_r3238041970",
-    "tests/unit/sql/test_window_functions.py::test_window_multiple_named_window": "TODO: https://github.com/NVIDIA/cudf/pull/22048#discussion_r3238041970",
-    "tests/unit/functions/test_concat.py::test_concat_horizontal_lazy_strict_raises_shape_error_27415": "horizontal-concat strict height-mismatch raised inside an ExceptionGroup under the streaming engine",
-    "tests/unit/io/test_io_plugin.py::test_defer_validate_true": "correct SchemaError raised but wrapped in an ExceptionGroup under the streaming engine",
-    "tests/unit/lazyframe/test_projections.py::test_merge_sorted_projection_pd": "https://github.com/NVIDIA/cudf/issues/23055",
-    "tests/unit/operations/test_slice.py::test_hconcat_tail_unequal_heights_strict_raises_27552": "horizontal-concat strict height-mismatch raised inside an ExceptionGroup under the streaming engine",
+STREAMING_ENGINE_TESTS_TO_SKIP_SMALL_BLOCKSIZE: Mapping[str, str] = {
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q1": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q2": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q3": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q4": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q5": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q7": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q10": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_join_where.py::test_single_inequality": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_join_where.py::test_non_strict_inequalities": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_join_where.py::test_strict_inequalities": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_many_row_groups_12297": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/io/test_scan.py::test_scan[single-parquet-async]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/io/test_scan.py::test_scan[single-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
@@ -545,24 +534,36 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[UInt32]": "Too slow with --inject-gpu-engine-blocksize=small",
 }
 
-# xfail for tests that produce different results than CPU Polars under the small blocksize only
-STREAMING_ENGINE_EXPECTED_FAILURES_SMALL_BLOCKSIZE_ONLY: Mapping[str, str] = {
+STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
+    "tests/unit/functions/test_concat.py::test_concat_horizontal_zero_width_height_mismatch_26876": "https://github.com/NVIDIA/cudf/issues/21644",
+    "tests/unit/functions/test_concat.py::test_concat_horizontally_strict": "Correct polars.exceptions.ShapeError raised but it's in a ExceptionGroup",
+    "tests/unit/functions/test_when_then.py::test_mismatched_height_should_raise[ternary_expr0-df0]": "Correct polars.exceptions.ShapeError raised but it's in a ExceptionGroup",
+    "tests/unit/functions/test_when_then.py::test_mismatched_height_should_raise[ternary_expr0-df1]": "Correct polars.exceptions.ShapeError raised but it's in a ExceptionGroup",
+    "tests/unit/functions/test_when_then.py::test_mismatched_height_should_raise[ternary_expr1-df0]": "Correct polars.exceptions.ShapeError raised but it's in a ExceptionGroup",
+    "tests/unit/functions/test_when_then.py::test_mismatched_height_should_raise[ternary_expr1-df1]": "Correct polars.exceptions.ShapeError raised but it's in a ExceptionGroup",
+    "tests/unit/operations/test_group_by.py::test_group_by_lit_series": "Incorrect broadcasting of literals in groupby-agg",
+    "tests/unit/operations/aggregation/test_aggregations.py::test_item_too_many": "Correct polars.exceptions.ComputeError raised but it's in an ExceptionGroup",
+    "tests/unit/operations/aggregation/test_aggregations.py::test_single_empty": "Correct polars.exceptions.ComputeError raised but it's in an ExceptionGroup",
+    "tests/unit/operations/test_join.py::test_empty_outer_join_22206": "https://github.com/NVIDIA/cudf/issues/22084",
+    "tests/unit/operations/test_replace.py::test_replace_invalid_old_dtype": "Correct InvalidOperationError raised but it's in an ExceptionGroup",
+    "tests/unit/operations/test_window.py::test_over_literal_cum_sum_26800": "TODO: https://github.com/NVIDIA/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_joins.py::test_cross_join_unnest_from_cte": "https://github.com/NVIDIA/cudf/issues/22073",
+    "tests/unit/sql/test_window_functions.py::test_over_with_cumulative_window_funcs": "TODO: https://github.com/NVIDIA/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_cumulative_agg_with_nulls": "TODO: https://github.com/NVIDIA/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_multiple_named_window": "TODO: https://github.com/NVIDIA/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/functions/test_concat.py::test_concat_horizontal_lazy_strict_raises_shape_error_27415": "horizontal-concat strict height-mismatch raised inside an ExceptionGroup under the streaming engine",
+    "tests/unit/io/test_io_plugin.py::test_defer_validate_true": "correct SchemaError raised but wrapped in an ExceptionGroup under the streaming engine",
+    "tests/unit/lazyframe/test_projections.py::test_merge_sorted_projection_pd": "https://github.com/NVIDIA/cudf/issues/23055",
+    "tests/unit/operations/test_slice.py::test_hconcat_tail_unequal_heights_strict_raises_27552": "horizontal-concat strict height-mismatch raised inside an ExceptionGroup under the streaming engine",
+}
+
+STREAMING_ENGINE_EXPECTED_FAILURES_SMALL_BLOCKSIZE: Mapping[str, str] = {
     "tests/unit/operations/test_slice.py::test_slice_pushdown_literal_projection_14349": "https://github.com/NVIDIA/cudf/issues/22072",
     "tests/unit/operations/test_group_by.py::test_group_by_series_partitioned": "https://github.com/NVIDIA/cudf/issues/22072",
     "tests/unit/operations/test_group_by.py::test_partitioned_group_by_chunked": "https://github.com/NVIDIA/cudf/issues/22072",
     "tests/unit/functions/range/test_linear_space.py::test_linear_space_num_samples_expr": "https://github.com/NVIDIA/cudf/issues/22072",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[1]": "https://github.com/NVIDIA/cudf/issues/22075",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[4]": "https://github.com/NVIDIA/cudf/issues/22075",
-    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q1": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q2": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q3": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q4": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q5": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q7": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q10": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/benchmark/test_join_where.py::test_single_inequality": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/benchmark/test_join_where.py::test_non_strict_inequalities": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/benchmark/test_join_where.py::test_strict_inequalities": "Too slow with --inject-gpu-engine-blocksize=small",
 }
 
 
@@ -585,24 +586,17 @@ def pytest_collection_modifyitems(
         with_streaming_engine
         and config.getoption("--inject-gpu-engine-blocksize") == "small"
     )
-    streaming_xfails = STREAMING_ENGINE_EXPECTED_FAILURES
-    if with_small_blocksize:
-        # STREAMING_ENGINE_EXPECTED_FAILURES wins on overlapping keys.
-        streaming_xfails = {
-            **STREAMING_ENGINE_EXPECTED_FAILURES_SMALL_BLOCKSIZE_ONLY,
-            **STREAMING_ENGINE_EXPECTED_FAILURES,
-        }
-
-    ALL_SKIPS = {**TESTS_TO_SKIP, **STREAMING_ENGINE_TESTS_TO_SKIP}
+    skips = dict(TESTS_TO_SKIP)
+    xfails = dict(EXPECTED_FAILURES)
+    if with_streaming_engine:
+        skips.update(STREAMING_ENGINE_TESTS_TO_SKIP)
+        xfails.update(STREAMING_ENGINE_EXPECTED_FAILURES)
+        if with_small_blocksize:
+            skips.update(STREAMING_ENGINE_TESTS_TO_SKIP_SMALL_BLOCKSIZE)
+            xfails.update(STREAMING_ENGINE_EXPECTED_FAILURES_SMALL_BLOCKSIZE)
     for item in items:
-        skip_reason = ALL_SKIPS.get(item.nodeid)
+        skip_reason = skips.get(item.nodeid)
         if skip_reason is not None:
             item.add_marker(pytest.mark.skip(reason=skip_reason))
-            continue
-        xfail_reason = None
-        if with_streaming_engine:
-            xfail_reason = streaming_xfails.get(item.nodeid)
-        if xfail_reason is None:
-            xfail_reason = EXPECTED_FAILURES.get(item.nodeid)
-        if xfail_reason is not None:
+        elif (xfail_reason := xfails.get(item.nodeid)) is not None:
             item.add_marker(pytest.mark.xfail(reason=xfail_reason))
