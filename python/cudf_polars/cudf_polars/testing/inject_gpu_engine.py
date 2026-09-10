@@ -466,70 +466,17 @@ if packaging.version.parse(sqlite3.sqlite_version) <= packaging.version.parse("3
     )
 
 
-# Generally skip for:
-# 1) Tests that are too slow with --inject-gpu-engine-blocksize=small due to many small partitions for large data
 STREAMING_ENGINE_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/operations/aggregation/test_aggregations.py::test_boolean_aggs": "float difference in std/var in the unit of least precision",
     # No deterministic key sort (https://github.com/NVIDIA/cudf/issues/21641):
     # passes on some streaming runs and fails on others, so skip rather than
     # xfail to avoid a flaky XPASS/FAIL.
     "tests/unit/operations/test_group_by.py::test_group_by_unique_parametric[n_unique-True-True]": "non-deterministic key sort under the streaming engine",
-    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q1": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q2": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q3": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q4": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q5": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q7": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q10": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/benchmark/test_join_where.py::test_single_inequality": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/benchmark/test_join_where.py::test_non_strict_inequalities": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/benchmark/test_join_where.py::test_strict_inequalities": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/io/test_partition.py::test_partition_approximate_size": "Too slow for CI",
-    "tests/unit/io/test_lazy_parquet.py::test_parquet_many_row_groups_12297": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/io/test_scan.py::test_scan[single-parquet-async]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/io/test_scan.py::test_scan[single-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/io/test_scan.py::test_scan_with_filter[glob-parquet-async]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/io/test_scan.py::test_scan_with_filter[glob-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/io/test_scan.py::test_scan_with_filter[single-parquet-async]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/io/test_scan.py::test_scan_with_filter[single-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[glob-parquet-async]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[glob-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[single-parquet-async]": "Takes >60 seconds to run locally",
-    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[single-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[glob-parquet-async]": "Takes >60 seconds to run locally",
-    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[glob-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[single-parquet-async]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[single-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs0-True-None]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs1-True-None]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs2-True-unordered_columns2]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs3-True-None]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs4-True-None]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs5-True-unordered_columns5]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs6-False-unordered_columns6]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs7-False-None]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs8-False-None]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs9-True-unordered_columns9]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs10-True-unordered_columns10]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs11-False-unordered_columns11]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs12-False-None]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs13-False-None]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/lazyframe/test_optimizations.py::test_collapse_joins_combinations": "Too slow for CI",
     "tests/unit/operations/test_index_of.py::test_randomized": "Too slow for CI; marked as pytest.mark.slow",
-    "tests/unit/operations/test_slice.py::test_slice_slice_pushdown": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-10432-False]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-10432-True]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-10432-False]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-10432-True]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[String-10432-False]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[String-10432-True]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Categorical-10432-True]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Categorical-10432-False]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[String-1056-False]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-1056-False]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-1056-False]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[Int32]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[UInt32]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/streaming/test_streaming_sort.py::test_streaming_sort_varying_order_and_dtypes[sort_by0]": "Too slow for CI",
 }
 
@@ -555,6 +502,47 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/io/test_io_plugin.py::test_defer_validate_true": "correct SchemaError raised but wrapped in an ExceptionGroup under the streaming engine",
     "tests/unit/lazyframe/test_projections.py::test_merge_sorted_projection_pd": "https://github.com/NVIDIA/cudf/issues/23055",
     "tests/unit/operations/test_slice.py::test_hconcat_tail_unequal_heights_strict_raises_27552": "horizontal-concat strict height-mismatch raised inside an ExceptionGroup under the streaming engine",
+    "tests/unit/io/test_lazy_parquet.py::test_parquet_many_row_groups_12297": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan[single-parquet-async]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan[single-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan_with_filter[glob-parquet-async]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan_with_filter[glob-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan_with_filter[single-parquet-async]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan_with_filter[single-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[glob-parquet-async]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[glob-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[single-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[glob-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[single-parquet-async]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[single-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs0-True-None]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs1-True-None]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs2-True-unordered_columns2]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs3-True-None]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs4-True-None]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs5-True-unordered_columns5]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs6-False-unordered_columns6]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs7-False-None]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs8-False-None]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs9-True-unordered_columns9]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs10-True-unordered_columns10]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs11-False-unordered_columns11]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs12-False-None]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs13-False-None]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_slice.py::test_slice_slice_pushdown": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-10432-False]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-10432-True]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-10432-False]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-10432-True]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[String-10432-False]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[String-10432-True]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Categorical-10432-True]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Categorical-10432-False]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[String-1056-False]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-1056-False]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-1056-False]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[Int32]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[UInt32]": "Too slow with --inject-gpu-engine-blocksize=small",
 }
 
 # xfail for tests that produce different results than CPU Polars under the small blocksize only
@@ -565,6 +553,16 @@ STREAMING_ENGINE_EXPECTED_FAILURES_SMALL_BLOCKSIZE_ONLY: Mapping[str, str] = {
     "tests/unit/functions/range/test_linear_space.py::test_linear_space_num_samples_expr": "https://github.com/NVIDIA/cudf/issues/22072",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[1]": "https://github.com/NVIDIA/cudf/issues/22075",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[4]": "https://github.com/NVIDIA/cudf/issues/22075",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q1": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q2": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q3": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q4": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q5": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q7": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q10": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_join_where.py::test_single_inequality": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_join_where.py::test_non_strict_inequalities": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/benchmark/test_join_where.py::test_strict_inequalities": "Too slow with --inject-gpu-engine-blocksize=small",
 }
 
 
@@ -594,18 +592,10 @@ def pytest_collection_modifyitems(
             **STREAMING_ENGINE_EXPECTED_FAILURES_SMALL_BLOCKSIZE_ONLY,
             **STREAMING_ENGINE_EXPECTED_FAILURES,
         }
+
+    ALL_SKIPS = {**TESTS_TO_SKIP, **STREAMING_ENGINE_TESTS_TO_SKIP}
     for item in items:
-        skip_reason = TESTS_TO_SKIP.get(item.nodeid)
-        if skip_reason is None and with_streaming_engine:
-            skip_reason = STREAMING_ENGINE_TESTS_TO_SKIP.get(item.nodeid)
-            # Tests skipped only because small partitions are too slow can run
-            # under the default (non-small) blocksize used on PRs.
-            if (
-                skip_reason is not None
-                and "blocksize=small" in skip_reason
-                and not with_small_blocksize
-            ):
-                skip_reason = None
+        skip_reason = ALL_SKIPS.get(item.nodeid)
         if skip_reason is not None:
             item.add_marker(pytest.mark.skip(reason=skip_reason))
             continue
