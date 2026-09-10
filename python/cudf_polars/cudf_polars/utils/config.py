@@ -458,11 +458,11 @@ KVIKIO_CONFIGURABLE_PROPERTIES = (
     "num_threads",
 )
 
-# Subset of KVIKIO_CONFIGURABLE_PROPERTIES that governs kvikio's MULTI_POLL
-# reactor pool. kvikio fixes these for the rest of the process once that pool
-# has started (i.e. after the first MULTI_POLL remote I/O), and
-# kvikio.defaults.set() raises for them from that point on, even to reassign
-# the value they already hold.
+# Process-lifetime settings that govern kvikio's MULTI_POLL reactor pool.
+# KvikIO fixes these once the pool starts (i.e. after the first MULTI_POLL
+# remote I/O), so they must be configured through the individual-setter API.
+# Re-applying an already-active value is skipped; a conflicting value is left
+# for KvikIO to reject with its lifecycle error.
 KVIKIO_REACTOR_POOL_PROPERTIES = frozenset(
     {
         "remote_io_num_reactors",
@@ -505,22 +505,32 @@ def configure_kvikio(
         # to local and remote I/O under both backends, so it is always set.
         "bounce_buffer_size": bounce_buffer_bytes,
     }
+    reactor_settings: dict[str, Any] = {}
     if remote_io_backend == kvikio.RemoteIOBackend.MULTI_POLL:
         # The MULTI_POLL backend ignores kvikio's EASY_THREADPOOL thread pool for
         # remote I/O, so num_threads is not configured here. Local I/O still uses
         # the thread pool created by `_set_up_kvikio` above. The reactor settings
         # below are ignored by kvikio when EASY_THREADPOOL is active, so they are
         # left unset in that case.
-        settings["remote_io_num_reactors"] = reactor_count
-        settings["remote_io_reactor_dispatch"] = reactor_dispatch
-        settings["remote_io_max_concurrent_requests"] = request_ceiling
+        reactor_settings = {
+            "remote_io_num_reactors": reactor_count,
+            "remote_io_reactor_dispatch": reactor_dispatch,
+            "remote_io_max_concurrent_requests": request_ceiling,
+        }
     else:
         if nthreads is None:
             nthreads = resolve_kvikio_nthreads({}, remote_io_backend=remote_io_backend)
             assert nthreads is not None  # EASY_THREADPOOL always resolves to an int
         settings["num_threads"] = nthreads
-    assert set(settings) <= set(KVIKIO_CONFIGURABLE_PROPERTIES)
+    assert set(settings).isdisjoint(KVIKIO_REACTOR_POOL_PROPERTIES)
+    assert set(settings) | set(reactor_settings) <= set(KVIKIO_CONFIGURABLE_PROPERTIES)
     kvikio.defaults.set(settings)
+    # KvikIO does not permit reactor-pool settings in the dict form. Avoid a
+    # no-op individual setter after the pool has started, because KvikIO
+    # correctly rejects all setters at that point.
+    for key, value in reactor_settings.items():
+        if kvikio.defaults.get(key) != value:
+            kvikio.defaults.set(key, value)
 
 
 def _bool_converter(v: str) -> bool:

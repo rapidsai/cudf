@@ -291,8 +291,10 @@ class StreamingEngine(pl.GPUEngine):
     ``kvikio_remote_io_backend`` executor option), along with the
     ``kvikio_task_size`` executor option (16 MiB under ``MULTI_POLL``, 64 MiB
     under ``EASY_THREADPOOL``). Because kvikio's configuration is a global
-    singleton, this overrides any prior ``kvikio.defaults.set(...)`` calls made
-    in the process. When the backend is ``EASY_THREADPOOL``, engine creation
+    singleton, this overrides mutable prior ``kvikio.defaults.set(...)`` calls
+    made in the process. The ``MULTI_POLL`` reactor settings are process-lifetime
+    values: after the first remote I/O, subsequent engines must use the same
+    values. When the backend is ``EASY_THREADPOOL``, engine creation
     also configures kvikio's thread pool (default 256 threads), which blocks
     any concurrent kvikio IO in the process until in-flight IO completes. Use
     the ``kvikio_nthreads`` executor option or the ``KVIKIO_NTHREADS``

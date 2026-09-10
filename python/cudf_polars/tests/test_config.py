@@ -1151,10 +1151,9 @@ def kvikio_defaults_guard():
     )
     # If another test already started the MULTI_POLL reactor pool, kvikio pins
     # these properties for good and this reset is a no-op that raises.
-    with contextlib.suppress(RuntimeError):
-        kvikio.defaults.set(
-            {key: original[key] for key in KVIKIO_REACTOR_POOL_PROPERTIES}
-        )
+    for key in KVIKIO_REACTOR_POOL_PROPERTIES:
+        with contextlib.suppress(RuntimeError):
+            kvikio.defaults.set(key, original[key])
 
 
 def test_configure_kvikio_sets_backend_and_threads(
@@ -1175,7 +1174,34 @@ def test_configure_kvikio_multi_poll_defaults(
     kvikio_defaults_guard: None,
 ) -> None:
     monkeypatch.delenv("KVIKIO_NTHREADS", raising=False)
+    calls = []
+    original_set = kvikio.defaults.set
+    original_reactor_settings = {
+        key: kvikio.defaults.get(key) for key in KVIKIO_REACTOR_POOL_PROPERTIES
+    }
+
+    def record_set(*args):
+        calls.append(args)
+        return original_set(*args)
+
+    monkeypatch.setattr(kvikio.defaults, "set", record_set)
     configure_kvikio(42)
+    reactor_settings = {
+        "remote_io_num_reactors": 24,
+        "remote_io_reactor_dispatch": kvikio.RemoteReactorDispatch.PER_CHUNK,
+        "remote_io_max_concurrent_requests": 256,
+    }
+    assert all(
+        not (
+            len(args) == 1
+            and isinstance(args[0], dict)
+            and KVIKIO_REACTOR_POOL_PROPERTIES.intersection(args[0])
+        )
+        for args in calls
+    )
+    for key, value in reactor_settings.items():
+        if original_reactor_settings[key] != value:
+            assert (key, value) in calls
     assert kvikio.defaults.get("remote_io_backend") == kvikio.RemoteIOBackend.MULTI_POLL
     assert kvikio.defaults.get("remote_io_num_reactors") == 24
     assert (
@@ -1185,6 +1211,28 @@ def test_configure_kvikio_multi_poll_defaults(
     assert kvikio.defaults.get("remote_io_max_concurrent_requests") == 256
     assert kvikio.defaults.get("bounce_buffer_size") == 16 * 1024 * 1024
     assert kvikio.defaults.get("task_size") == 16 * 1024 * 1024
+
+
+def test_configure_kvikio_multi_poll_does_not_reset_reactor_settings(
+    monkeypatch: pytest.MonkeyPatch,
+    kvikio_defaults_guard: None,
+) -> None:
+    configure_kvikio(42)
+
+    calls = []
+    original_set = kvikio.defaults.set
+
+    def record_set(*args):
+        calls.append(args)
+        return original_set(*args)
+
+    monkeypatch.setattr(kvikio.defaults, "set", record_set)
+    configure_kvikio(42)
+
+    assert all(
+        not (len(args) == 2 and args[0] in KVIKIO_REACTOR_POOL_PROPERTIES)
+        for args in calls
+    )
 
 
 def test_configure_kvikio_easy_threadpool_task_size_default(
