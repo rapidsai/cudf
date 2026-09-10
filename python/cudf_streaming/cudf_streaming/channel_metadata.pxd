@@ -9,7 +9,6 @@ from libcpp.utility cimport pair
 from libcpp.vector cimport vector
 from pylibcudf.libcudf.types cimport null_order as cpp_null_order
 from pylibcudf.libcudf.types cimport order as cpp_order
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 
 from rapidsmpf._detail.exception_handling cimport ex_handler
 
@@ -36,18 +35,40 @@ cdef extern from "<cudf_streaming/channel_metadata.hpp>" \
         cpp_null_order null_order
         bool_t operator==(const cpp_OrderKey&) noexcept
 
+    cdef cppclass cpp_Ordering "cudf_streaming::ordering":
+        cpp_Ordering() noexcept
+        cpp_Ordering(
+            vector[cpp_OrderKey], unique_ptr[cpp_TableChunk], bool_t
+        ) except +ex_handler
+        cpp_Ordering(
+            vector[cpp_OrderKey], unique_ptr[cpp_TableChunk], bool_t, bool_t
+        ) except +ex_handler
+        cpp_Ordering(
+            vector[cpp_OrderKey], shared_ptr[cpp_TableChunk], bool_t
+        ) except +ex_handler
+        cpp_Ordering(
+            vector[cpp_OrderKey], shared_ptr[cpp_TableChunk], bool_t, bool_t
+        ) except +ex_handler
+        vector[cpp_OrderKey] keys
+        shared_ptr[cpp_TableChunk] boundaries
+        bool_t strict_boundaries
+        bool_t locally_ordered
+        cpp_Ordering with_keys(vector[cpp_OrderKey]) except +ex_handler
+        cpp_Ordering with_locally_ordered(bool_t) except +ex_handler
+        bool_t boundaries_aligned_with(
+            const cpp_Ordering&, const cpp_BufferResource&
+        ) except +ex_handler
+
     cdef cppclass cpp_OrderScheme "cudf_streaming::order_scheme":
         cpp_OrderScheme() noexcept
         cpp_OrderScheme(
             vector[cpp_OrderKey], unique_ptr[cpp_TableChunk], bool_t
         ) except +ex_handler
-        vector[cpp_OrderKey] keys
-        shared_ptr[cpp_TableChunk] boundaries
-        bool_t strict_boundaries
-        cpp_OrderScheme with_keys(vector[cpp_OrderKey]) except +ex_handler
-        bool_t boundaries_aligned_with(
-            const cpp_OrderScheme&, const cpp_BufferResource&
+        cpp_OrderScheme(
+            vector[cpp_OrderKey], unique_ptr[cpp_TableChunk], bool_t, bool_t
         ) except +ex_handler
+        cpp_OrderScheme(vector[cpp_Ordering]) except +ex_handler
+        vector[cpp_Ordering] orderings
 
     cdef cppclass cpp_PartitioningSpec "cudf_streaming::partitioning_spec":
         enum cpp_Type "cudf_streaming::partitioning_spec::type":
@@ -106,6 +127,13 @@ cdef class OrderKey:
 
     @staticmethod
     cdef OrderKey from_cpp(cpp_OrderKey key)
+
+
+cdef class Ordering:
+    cdef cpp_Ordering _handle
+
+    @staticmethod
+    cdef Ordering from_cpp(cpp_Ordering ordering)
 
 
 cdef class OrderScheme:

@@ -8,7 +8,9 @@
 #include <rapidsmpf/bootstrap/bootstrap.hpp>
 #include <rapidsmpf/bootstrap/utils.hpp>
 #include <rapidsmpf/communicator/communicator.hpp>
+#include <rapidsmpf/communicator/logger.hpp>
 #include <rapidsmpf/error.hpp>
+#include <rapidsmpf/memory/buffer_resource.hpp>
 #include <rapidsmpf/memory/spill.hpp>
 #include <rapidsmpf/nvtx.hpp>
 #include <rapidsmpf/progress_thread.hpp>
@@ -258,7 +260,7 @@ void barrier(std::shared_ptr<rapidsmpf::Communicator>& comm)
 rapidsmpf::Duration do_run(rapidsmpf::shuffler::PartID const total_num_partitions,
                            std::shared_ptr<rapidsmpf::Communicator>& comm,
                            ArgumentParser const& args,
-                           rmm::cuda_stream_view stream,
+                           cuda::stream_ref stream,
                            rapidsmpf::BufferResource* br,
                            std::shared_ptr<rapidsmpf::Statistics> statistics,
                            auto&& shuffle_insert_fn)
@@ -295,7 +297,7 @@ rapidsmpf::Duration do_run(rapidsmpf::shuffler::PartID const total_num_partition
         output_partitions.emplace_back(std::move(output_partition));
       }
     }
-    stream.synchronize();
+    stream.sync();
   }
 
   auto const elapsed = rapidsmpf::Clock::now() - t0_elapsed;
@@ -329,7 +331,7 @@ template <typename TransformFn,
           typename InputPartitionsT =
             std::remove_reference_t<std::invoke_result_t<TransformFn, cudf::table&&>>>
 std::vector<InputPartitionsT> generate_input_partitions(ArgumentParser const& args,
-                                                        rmm::cuda_stream_view stream,
+                                                        cuda::stream_ref stream,
                                                         rapidsmpf::BufferResource* br,
                                                         TransformFn&& transform_fn)
 {
@@ -349,7 +351,7 @@ std::vector<InputPartitionsT> generate_input_partitions(ArgumentParser const& ar
       random_table(num_columns, num_local_rows, min_val, max_val, stream, br->device_mr());
     input_partitions.emplace_back(transform_fn(std::move(table)));
   }
-  stream.synchronize();
+  stream.sync();
   return input_partitions;
 }
 
@@ -395,7 +397,7 @@ void do_insert(rapidsmpf::shuffler::Shuffler& shuffler,
  */
 rapidsmpf::Duration run_hash_partition_inline(std::shared_ptr<rapidsmpf::Communicator>& comm,
                                               ArgumentParser const& args,
-                                              rmm::cuda_stream_view stream,
+                                              cuda::stream_ref stream,
                                               rapidsmpf::BufferResource* br,
                                               std::shared_ptr<rapidsmpf::Statistics> statistics)
 {
@@ -436,7 +438,7 @@ rapidsmpf::Duration run_hash_partition_inline(std::shared_ptr<rapidsmpf::Communi
 rapidsmpf::Duration run_hash_partition_with_datagen(
   std::shared_ptr<rapidsmpf::Communicator>& comm,
   ArgumentParser const& args,
-  rmm::cuda_stream_view stream,
+  cuda::stream_ref stream,
   rapidsmpf::BufferResource* br,
   std::shared_ptr<rapidsmpf::Statistics> statistics)
 {
@@ -501,20 +503,25 @@ int main(int argc, char** argv)
 
   // We're only going to measure the last run, so disable initially.
   stats->disable();
-  auto br = rapidsmpf::BufferResource::create(
-    rmm_mr,
-    args.pinned_mem_disable ? rapidsmpf::PinnedMemoryResource::Disabled
-                            : rapidsmpf::PinnedMemoryResource::make_if_available(),
-    std::move(memory_limits),
-    std::chrono::milliseconds{1},
-    std::make_shared<rmm::cuda_stream_pool>(16, rmm::cuda_stream::flags::non_blocking),
-    stats);
+  RAPIDSMPF_EXPECTS(args.pinned_mem_disable || rapidsmpf::is_pinned_memory_resources_supported(),
+                    "pinned host memory is not supported on this system; pass `-L` to disable it.",
+                    std::runtime_error);
+  auto pinned_pool_properties =
+    args.pinned_mem_disable ? rapidsmpf::PinnedMemoryDisabled : rapidsmpf::PinnedPoolProperties{};
+  auto br = rapidsmpf::BufferResource::create(rmm_mr,
+                                              std::move(pinned_pool_properties),
+                                              std::move(memory_limits),
+                                              std::chrono::milliseconds{1},
+                                              std::make_shared<rapidsmpf::StreamPool>(16),
+                                              stats);
   // `BufferResource` wraps the device resource in an internal tracking
   // `RmmResourceAdaptor` (exposed via `device_mr_adaptor()`). Install the
   // tracking adaptor as the current device resource so libcudf temporary
   // allocations are also tracked.
   auto& stat_enabled_mr = br->device_mr_adaptor();
   rmm::mr::set_current_device_resource(stat_enabled_mr);
+
+  auto log = rapidsmpf::Logger::from_options(options);
 
   std::shared_ptr<rapidsmpf::Communicator> comm;
   auto progress_thread = std::make_shared<rapidsmpf::ProgressThread>(stats);
@@ -527,7 +534,7 @@ int main(int argc, char** argv)
       return 1;
     }
     rapidsmpf::mpi::init(&argc, &argv);
-    comm = std::make_shared<rapidsmpf::MPI>(MPI_COMM_WORLD, options, progress_thread);
+    comm = std::make_shared<rapidsmpf::MPI>(MPI_COMM_WORLD, progress_thread, log);
 #else
     std::cerr << "Error: MPI communicator is not available in this build." << std::endl;
     return 1;
@@ -537,11 +544,11 @@ int main(int argc, char** argv)
     if (use_bootstrap) {
       // Launched with rrun - use bootstrap backend
       comm = rapidsmpf::bootstrap::create_ucxx_comm(
-        progress_thread, rapidsmpf::bootstrap::BackendType::AUTO, options);
+        progress_thread, rapidsmpf::bootstrap::BackendType::AUTO, options, log);
     } else {
 #ifdef CUDF_STREAMING_HAVE_MPI
       // Launched with mpirun - use MPI bootstrap
-      comm = rapidsmpf::ucxx::init_using_mpi(MPI_COMM_WORLD, options, progress_thread);
+      comm = rapidsmpf::ucxx::init_using_mpi(MPI_COMM_WORLD, options, progress_thread, log);
 #else
       std::cerr << "Error: UCXX without MPI support requires bootstrap mode." << std::endl;
       return 1;
@@ -558,8 +565,7 @@ int main(int argc, char** argv)
 
   args.pprint(*comm);
 
-  auto& log                    = comm->logger();
-  rmm::cuda_stream_view stream = cudf::get_default_stream();
+  cuda::stream_ref stream = cudf::get_default_stream();
 
   // Print benchmark/hardware info.
   {

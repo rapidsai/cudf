@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -25,11 +25,13 @@ timeout 30m ./ci/run_dask_cudf_pytests.sh \
   --cov-config=../.coveragerc \
   --cov=dask_cudf \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/dask-cudf-coverage.xml" \
-  --cov-report=term
+  --cov-report=term \
+  --durations=10 --durations-min=10
 
 rapids-logger "pytest cudf_kafka"
 timeout 30m ./ci/run_cudf_kafka_pytests.sh \
-  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-kafka.xml"
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-kafka.xml" \
+  --durations=10 --durations-min=10
 
 rapids-logger "pytest custreamz"
 timeout 30m ./ci/run_custreamz_pytests.sh \
@@ -39,11 +41,13 @@ timeout 30m ./ci/run_custreamz_pytests.sh \
   --cov-config=../.coveragerc \
   --cov=custreamz \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/custreamz-coverage.xml" \
-  --cov-report=term
+  --cov-report=term \
+  --durations=10 --durations-min=10
 
 rapids-logger "pytest cudf-polars"
+# Fail fast (-x) rather than trying to continue because failed tests pollute the state
 ./ci/run_cudf_polars_pytests.sh \
-  -vv \
+  -x \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml" \
   --numprocesses=4 \
   --dist=worksteal \
@@ -51,12 +55,12 @@ rapids-logger "pytest cudf-polars"
   --cov=cudf_polars \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-polars-coverage.xml" \
   --cov-report=term \
-  --durations=10 --durations-min=10 \
-  -ra
+  --durations=10 --durations-min=10
 
 rapids-logger "pytest cudf_streaming"
 timeout 30m ./ci/run_cudf_streaming_pytests.sh \
-  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-streaming.xml"
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-streaming.xml" \
+  --durations=10 --durations-min=10
 
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}

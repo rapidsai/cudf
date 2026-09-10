@@ -11,15 +11,20 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <cuda/stream>
+
 #include <memory>
 #include <span>
+
+/**
+ * @file
+ * @brief Concatenate columns APIs
+ */
 
 namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup copy_concatenate
  * @{
- * @file
- * @brief Concatenate columns APIs
  */
 
 /**
@@ -36,7 +41,7 @@ namespace CUDF_EXPORT cudf {
  */
 rmm::device_buffer concatenate_masks(
   std::span<column_view const> views,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  cuda::stream_ref stream           = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
@@ -53,7 +58,7 @@ rmm::device_buffer concatenate_masks(
  */
 std::unique_ptr<column> concatenate(
   std::span<column_view const> columns_to_concat,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  cuda::stream_ref stream           = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
@@ -82,7 +87,7 @@ std::unique_ptr<column> concatenate(
  */
 std::unique_ptr<table> concatenate(
   std::span<table_view const> tables_to_concat,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  cuda::stream_ref stream           = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group

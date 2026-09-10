@@ -1,12 +1,14 @@
 /**
  * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 #include <cudf/ast/expressions.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/types.hpp>
+
+#include <cuda/stream>
 
 #include <rapidsmpf/communicator/communicator.hpp>
 #include <rapidsmpf/owning_wrapper.hpp>
@@ -23,9 +25,10 @@ namespace cudf_streaming {
  * @brief Filter ast expression with lifetime/stream management.
  */
 struct filter {
-  rmm::cuda_stream_view stream;      ///< Stream the filter's scalars are valid on.
-  cudf::ast::expression& filter;     ///< Filter expression.
-  rapidsmpf::OwningWrapper owner{};  ///< Owner of all objects in the filter.
+  cuda::stream_ref stream{
+    cudaStream_t{cudaStreamDefault}};  ///< Stream the filter's scalars are valid on.
+  cudf::ast::expression& filter;       ///< Filter expression.
+  rapidsmpf::OwningWrapper owner{};    ///< Owner of all objects in the filter.
 };
 
 namespace actor {

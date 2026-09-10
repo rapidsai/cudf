@@ -4,17 +4,21 @@
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
+from pylibcudf.libcudf.types cimport size_type
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+
+from .column cimport Column
 
 cdef class Table:
     # Tuple[pylibcudf.Column]
     cdef tuple _columns
+    cdef size_type _num_rows
 
     cdef table_view view(self)
 
     cpdef int num_columns(self)
     cpdef int num_rows(self)
-    cpdef tuple shape(self)
+    cpdef tuple[int, int] shape(self)
 
     @staticmethod
     cdef Table from_libcudf(
@@ -34,5 +38,5 @@ cdef class Table:
     )
 
     cpdef tuple columns(self)
-    cpdef list release(self)
+    cpdef list[Column] release(self)
     cpdef Table copy(self, object stream = *, DeviceMemoryResource mr=*)

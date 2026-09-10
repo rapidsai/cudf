@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -36,10 +36,10 @@ extern cudf::test::TempDirTestEnvironment* const temp_env;
 
 // Writes `tbl` to a temp Parquet file. If `column_names` is non-empty, it sets the top-level
 // column names in the file metadata.
-[[nodiscard]] std::string write_parquet_temp_file(
-  cudf::table_view const& tbl,
-  std::string_view const filename,
-  std::vector<std::string> const& column_names = {});
+[[nodiscard]] std::string write_parquet_temp_file(cudf::table_view const& tbl,
+                                                  std::string_view const filename,
+                                                  std::vector<std::string> column_names = {},
+                                                  std::vector<int> field_ids            = {});
 
 // TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
 using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;

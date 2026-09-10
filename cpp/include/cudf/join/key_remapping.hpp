@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,16 +12,20 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
+#include <cuda/stream>
 
 #include <memory>
+
+/**
+ * @file
+ * @brief Class and APIs for remapping join keys to unique integer IDs
+ */
 
 namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup column_join
  * @{
- * @file
  */
 
 /**
@@ -53,14 +57,6 @@ constexpr size_type KEY_REMAP_NOT_FOUND = -1;
  * values.
  */
 constexpr size_type KEY_REMAP_RIGHT_NULL = -2;
-
-/**
- * @brief Deprecated alias for `KEY_REMAP_RIGHT_NULL`.
- *
- * @deprecated Use `KEY_REMAP_RIGHT_NULL` instead.
- */
-[[deprecated("Use KEY_REMAP_RIGHT_NULL instead.")]] constexpr size_type KEY_REMAP_BUILD_NULL =
-  KEY_REMAP_RIGHT_NULL;
 
 /**
  * @brief Remaps keys to unique integer IDs
@@ -100,11 +96,14 @@ class key_remapping {
    *        and get_max_duplicate_count(). If NO, skip metrics computation for better performance;
    *        calling get_distinct_count() or get_max_duplicate_count() will throw.
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the internal hash table
    */
   key_remapping(cudf::table_view const& right,
                 null_equality compare_nulls   = null_equality::EQUAL,
                 cudf::compute_metrics metrics = cudf::compute_metrics::YES,
-                rmm::cuda_stream_view stream  = cudf::get_default_stream());
+                cuda::stream_ref stream       = cudf::get_default_stream(),
+                cuda::mr::any_resource<cuda::mr::device_accessible> mr =
+                  cudf::get_current_device_resource_ref());
 
   /**
    * @brief Remap right keys to integer IDs.
@@ -122,26 +121,8 @@ class key_remapping {
    * @return A column of INT32 values with the remapped key IDs
    */
   [[nodiscard]] std::unique_ptr<cudf::column> remap_right_keys(
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    cuda::stream_ref stream           = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
-
-  /**
-   * @brief Deprecated alias for `remap_right_keys()`.
-   *
-   * @deprecated Use `remap_right_keys()` instead.
-   *
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource used to allocate device memory for the returned column
-   *
-   * @return A column of INT32 values with the remapped key IDs
-   */
-  [[deprecated("Use remap_right_keys instead.")]] [[nodiscard]] std::unique_ptr<cudf::column>
-  remap_build_keys(
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const
-  {
-    return remap_right_keys(stream, mr);
-  }
 
   /**
    * @brief Remap left keys to integer IDs.
@@ -162,28 +143,8 @@ class key_remapping {
    */
   [[nodiscard]] std::unique_ptr<cudf::column> remap_left_keys(
     cudf::table_view const& keys,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    cuda::stream_ref stream           = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
-
-  /**
-   * @brief Deprecated alias for `remap_left_keys()`.
-   *
-   * @deprecated Use `remap_left_keys()` instead.
-   *
-   * @param keys The left keys to remap (must have same schema as the right table)
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource used to allocate device memory for the returned column
-   *
-   * @return A column of INT32 values with the remapped key IDs
-   */
-  [[deprecated("Use remap_left_keys instead.")]] [[nodiscard]] std::unique_ptr<cudf::column>
-  remap_probe_keys(
-    cudf::table_view const& keys,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const
-  {
-    return remap_left_keys(keys, stream, mr);
-  }
 
   /**
    * @brief Check if metrics (distinct_count, max_duplicate_count) were computed.

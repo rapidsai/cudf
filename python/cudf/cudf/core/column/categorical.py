@@ -303,9 +303,8 @@ class CategoricalColumn(ColumnBase):
         if arrow_type:
             raise NotImplementedError(f"{arrow_type=} is not supported.")
 
-        signed_dtype = min_signed_type(len(self.categories))
         codes = (
-            self.codes.astype(signed_dtype)
+            self.codes.astype(self.dtype._pandas_codes_dtype)
             .fillna(_DEFAULT_CATEGORICAL_VALUE)
             .to_numpy()
         )
@@ -416,7 +415,7 @@ class CategoricalColumn(ColumnBase):
         if old_plc.null_count() == 1:
             # Get the replacement value for the null in old_col
             old_isnull_plc = plc.unary.is_null(old_plc)
-            filtered_table = plc.stream_compaction.apply_boolean_mask(
+            filtered_table = plc.stream_compaction.apply_retention_mask(
                 plc.Table([new_plc]), old_isnull_plc
             )
             # We know there's exactly 1 null, so filtered result has 1 row
@@ -456,14 +455,14 @@ class CategoricalColumn(ColumnBase):
         if new_plc.null_count() > 0:
             # Any value mapped to null is dropped in the result
             new_isnull_plc = plc.unary.is_null(new_plc)
-            filtered_table = plc.stream_compaction.apply_boolean_mask(
+            filtered_table = plc.stream_compaction.apply_retention_mask(
                 plc.Table([old_plc]), new_isnull_plc
             )
             drop_values = ColumnBase.create(
                 filtered_table.columns()[0], to_replace_col.dtype
             )
             cur_categories = replaced.categories
-            new_categories = cur_categories.apply_boolean_mask(
+            new_categories = cur_categories.apply_retention_mask(
                 cur_categories.isin(drop_values).unary_operator("not")
             )
             replaced = replaced._set_categories(new_categories)
@@ -1002,7 +1001,7 @@ class CategoricalColumn(ColumnBase):
         if not removals_mask.all():
             raise ValueError("removals must all be in old categories")
 
-        new_categories = self.categories.apply_boolean_mask(
+        new_categories = self.categories.apply_retention_mask(
             self.categories.isin(removals).unary_operator("not")
         )
         if not self._categories_equal(new_categories):

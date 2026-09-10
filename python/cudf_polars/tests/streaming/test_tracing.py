@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import subprocess
 import sys
@@ -16,11 +17,16 @@ import pytest
 import polars as pl
 
 from cudf_streaming.table_chunk import TableChunk
+from rapidsmpf.streaming.chunks.arbitrary import ArbitraryChunk
+from rapidsmpf.streaming.core.message import Message
 
 from cudf_polars.containers import DataFrame
+from cudf_polars.streaming.actor_graph.io import Lineariser
 from cudf_polars.streaming.actor_graph.tracing import ActorTracer, send_chunk
 
 if TYPE_CHECKING:
+    import pathlib
+
     from cudf_polars.engine.spmd import SPMDEngine
 
 
@@ -40,12 +46,6 @@ def test_actor_tracer_counts_table_chunk_without_table_view(chunk: TableChunk) -
     tracer.add_chunk(chunk=chunk)
     assert tracer.chunk_count == 1
     assert tracer.row_count == 3
-
-
-def test_actor_tracer_records_extra_metadata() -> None:
-    tracer = ActorTracer()
-    tracer.set_extra("join_prefilter", {"enabled": True})
-    assert tracer.extra == {"join_prefilter": {"enabled": True}}
 
 
 @pytest.mark.spmd
@@ -71,14 +71,61 @@ def test_send_chunk_traces_and_sends_message(
     assert tracer.row_count == 3
 
 
+@pytest.mark.spmd
+def test_lineariser_backpressures_each_producer(spmd_engine: SPMDEngine) -> None:
+    context = spmd_engine.context
+    ch_out = context.create_channel()
+    lineariser = Lineariser(context, ch_out, num_producers=2)
+    produced: list[list[int]] = [[], []]
+    output: list[int] = []
+
+    async def run() -> list[list[int]]:
+        release_gap = asyncio.Event()
+        out_of_order_sent = asyncio.Event()
+
+        async def producer(producer_id: int, sequence_numbers: list[int]) -> None:
+            if producer_id == 1:
+                await release_gap.wait()
+            for sequence_number in sequence_numbers:
+                ch_in = await lineariser.acquire(producer_id)
+                produced[producer_id].append(sequence_number)
+                await ch_in.send(
+                    context,
+                    Message(sequence_number, ArbitraryChunk(sequence_number)),
+                )
+                if sequence_number == 2:
+                    out_of_order_sent.set()
+            await lineariser.input_channels[producer_id].drain(context)
+
+        async def consumer() -> None:
+            while (msg := await ch_out.recv(context)) is not None:
+                output.append(ArbitraryChunk.from_message(msg).release())
+
+        async with asyncio.TaskGroup() as tg:
+            tg.create_task(lineariser.drain())
+            tg.create_task(producer(0, [0, 2, 4]))
+            tg.create_task(producer(1, [1, 3, 5]))
+            tg.create_task(consumer())
+
+            await out_of_order_sent.wait()
+            await asyncio.sleep(0)
+            produced_before_gap = [values.copy() for values in produced]
+            release_gap.set()
+
+        return produced_before_gap
+
+    produced_before_gap = asyncio.run(run())
+
+    assert produced_before_gap == [[0, 2], []]
+    assert output == list(range(6))
+
+
 def test_structlog_streaming_node_events(timeout_seconds: int):
     """Test that structlog emits 'Streaming Actor' events when tracing is enabled."""
     pytest.importorskip("structlog")
     code = textwrap.dedent("""\
-    import rmm
     import polars as pl
 
-    rmm.mr.set_current_device_resource(rmm.mr.ManagedMemoryResource())
     from cudf_polars.engine.spmd import SPMDEngine
 
     df = pl.DataFrame({"x": range(100), "y": ["a", "b"] * 50})
@@ -109,10 +156,8 @@ def test_structlog_contains_expected_ir_types(timeout_seconds: int):
     """Test that structlog output contains expected IR types for a query."""
     pytest.importorskip("structlog")
     code = textwrap.dedent("""\
-    import rmm
     import polars as pl
 
-    rmm.mr.set_current_device_resource(rmm.mr.ManagedMemoryResource())
     from cudf_polars.engine.spmd import SPMDEngine
 
     df = pl.DataFrame({"x": range(100), "y": ["a", "b"] * 50})
@@ -137,14 +182,87 @@ def test_structlog_contains_expected_ir_types(timeout_seconds: int):
     assert b"ir_type=GroupBy" in result
 
 
+def test_io_tasks_wait_for_memory_admission(
+    tmp_path: pathlib.Path, timeout_seconds: int
+) -> None:
+    pytest.importorskip("structlog")
+
+    source = tmp_path / "data.parquet"
+    pl.DataFrame({"x": range(5_000)}).write_parquet(
+        source,
+        compression="uncompressed",
+        row_group_size=2_500,
+    )
+
+    code = textwrap.dedent(f"""\
+    import structlog
+    import polars as pl
+
+    structlog.configure(
+        processors=[
+            structlog.contextvars.merge_contextvars,
+            structlog.processors.JSONRenderer(),
+        ]
+    )
+    from cudf_polars.engine.options import StreamingOptions
+    from cudf_polars.engine.spmd import SPMDEngine
+
+    q = pl.scan_parquet("{source}").select(pl.col("x").sum())
+    options = StreamingOptions(
+        allow_overbooking_by_default=False,
+        max_concurrent_io_tasks=2,
+        memory_reserve_timeout="10s",
+        spill_device_limit="65000",
+        target_partition_size=21_000,
+    )
+    with SPMDEngine.from_options(options) as engine:
+        q.collect(engine=engine)
+    """)
+
+    env = os.environ.copy()
+    env["CUDF_POLARS_LOG_TRACES"] = "1"
+    env["CUDF_POLARS_LOG_TRACES_MEMORY"] = "0"
+
+    with subprocess.Popen(
+        [sys.executable, "-c", code],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    ) as proc:
+        result, _ = proc.communicate(timeout=timeout_seconds)
+        returncode = proc.returncode
+
+    assert returncode == 0, result.decode(errors="replace")
+
+    events = []
+    for line in result.splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("event") == "IO Task":
+            events.append(event)
+
+    assert len(events) == 2, result.decode(errors="replace")
+    assert all(event["scope"] == "io_task" for event in events)
+    assert all(event["ir_type"] == "SplitScan" for event in events)
+    assert all(
+        event["reservation_bytes"] == 2 * event["estimated_output_bytes"]
+        for event in events
+    )
+
+    first, second = sorted(events, key=lambda event: event["admitted"])
+    assert first["start"] <= first["admitted"] <= first["stop"]
+    assert second["start"] <= second["admitted"] <= second["stop"]
+    assert second["admitted"] >= first["stop"]
+
+
 def test_structlog_disabled_by_default(timeout_seconds: int):
     """Test that structlog does NOT emit events when CUDF_POLARS_LOG_TRACES is not set."""
     pytest.importorskip("structlog")
     code = textwrap.dedent("""\
-    import rmm
     import polars as pl
 
-    rmm.mr.set_current_device_resource(rmm.mr.ManagedMemoryResource())
     from cudf_polars.engine.spmd import SPMDEngine
 
     df = pl.DataFrame({"x": range(10), "y": ["a", "b"] * 5})

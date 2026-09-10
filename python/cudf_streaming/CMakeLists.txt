@@ -36,9 +36,18 @@ find_package(CUDAToolkit REQUIRED)
 include(rapids-cython-core)
 rapids_cython_init()
 
+# Enable Cython's translation cache when CI supplies a persistent cache directory.
+if(DEFINED ENV{CYTHON_CACHE_DIR} AND NOT "$ENV{CYTHON_CACHE_DIR}" STREQUAL "")
+  list(PREPEND CYTHON_FLAGS "--cache")
+endif()
+
 set(cython_sources
-    cudf_streaming/bloom_filter.pyx cudf_streaming/channel_metadata.pyx cudf_streaming/parquet.pyx
-    cudf_streaming/partition.pyx cudf_streaming/partition_utils.pyx cudf_streaming/table_chunk.pyx
+    cudf_streaming/approx_distinct_count.pyx
+    cudf_streaming/bloom_filter.pyx
+    cudf_streaming/channel_metadata.pyx
+    cudf_streaming/partition.pyx
+    cudf_streaming/partition_utils.pyx
+    cudf_streaming/table_chunk.pyx
 )
 set(linked_libraries cudf_streaming::cudf_streaming)
 

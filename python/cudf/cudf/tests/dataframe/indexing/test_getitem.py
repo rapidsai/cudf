@@ -211,6 +211,14 @@ def test_dataframe_boolean_mask(mask_fn):
     assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
 
 
+def test_dataframe_getitem_bool_pyarrow_mask():
+    pdf = pd.DataFrame({"x": range(4), "y": range(10, 14)})
+    gdf = cudf.from_pandas(pdf)
+    mask = cudf.Series([True, False, True, False], dtype="bool[pyarrow]")
+
+    assert_eq(pdf[[True, False, True, False]], gdf[mask])
+
+
 @pytest.mark.parametrize(
     "gdf_kwargs",
     [

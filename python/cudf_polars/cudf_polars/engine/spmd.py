@@ -7,8 +7,12 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import json
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
+
+import kvikio
+import kvikio.defaults
 
 import pylibcudf as plc
 import rmm.mr
@@ -27,29 +31,48 @@ from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
 
+import cudf_polars.quent
+import cudf_polars.quent._logging
 from cudf_polars.containers import DataFrame, DataType
+from cudf_polars.engine import persisted_result, rank_local_store
 from cudf_polars.engine.core import (
     ClusterInfo,
     StreamingEngine,
     all_gather_host_data,
     check_reserved_keys,
     evaluate_on_rank,
+    make_kvikio_monitor,
+    reset_kvikio_monitor,
+    reset_statistics_from_options,
     resolve_rapidsmpf_options,
+    take_io_summary,
 )
 from cudf_polars.engine.hardware_binding import (
     HardwareBindingPolicy,
     bind_to_gpu,
 )
+from cudf_polars.engine.persisted_result import (
+    PersistedBackend,
+    execute_persisted_query,
+)
+from cudf_polars.quent._context import (
+    LocalQuentContext,
+    WorkerResources,
+)
+from cudf_polars.quent._types import Worker
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.utils import set_memory_resource
+from cudf_polars.unstable import unstable
 from cudf_polars.utils.config import (
     MemoryResourceConfig,
     SPMDContext,
     StreamingExecutor,
+    configure_kvikio,
+    resolve_kvikio_nthreads,
+    resolve_kvikio_statistics,
 )
 
 if TYPE_CHECKING:
-    import uuid
     from collections.abc import Callable
 
     import polars as pl
@@ -62,6 +85,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.core import T
     from cudf_polars.engine.options import StreamingOptions
+    from cudf_polars.engine.persisted_result import PersistedQueryResult
     from cudf_polars.streaming.parallel import ConfigOptions
     from cudf_polars.utils.config import StreamingExecutor
 
@@ -72,13 +96,13 @@ def evaluate_pipeline_spmd_mode(
     *,
     collect_metadata: bool = False,
     query_id: uuid.UUID,
-) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
+) -> tuple[DataFrame, list[ChannelMetadata] | None]:
     """
     Build and evaluate a RapidsMPF streaming pipeline in SPMD mode.
 
     In SPMD mode every rank executes the same Python/Polars script
     independently.  Each rank owns its local DataFrames, which are
-    treated as rank-local fragments of a larger distributed dataset and
+    treated as rank-local partitions of a larger distributed dataset and
     fed directly into the pipeline.  Collective operations (shuffles,
     all-gathers, etc.) coordinate across ranks to produce a globally
     consistent result.
@@ -101,14 +125,39 @@ def evaluate_pipeline_spmd_mode(
 
     Returns
     -------
-    The concatenated output DataFrame and, if ``collect_metadata`` is
-    True, the list of channel metadata objects; otherwise ``None``.
+    The GPU-resident output :class:`~cudf_polars.containers.DataFrame` and,
+    if ``collect_metadata`` is True, the list of channel metadata objects;
+    otherwise ``None``.
     """
     if config_options.executor.spmd_context is None:
         raise RuntimeError("spmd_context must be set for SPMD mode")
     comm = config_options.executor.spmd_context.comm
     context = config_options.executor.spmd_context.context
     py_executor = config_options.executor.spmd_context.py_executor
+    spmd_context = config_options.executor.spmd_context
+
+    quent_context = config_options.executor.quent_context
+    local_quent_context: LocalQuentContext | None = None
+    if quent_context is not None:
+        quent_logger = config_options.executor.spmd_context.quent_logger
+        assert quent_logger is not None
+        assert spmd_context.worker_resources is not None
+
+        query = quent_context.query_for(query_id)
+        quent_context._emit_query_group_events(quent_logger)
+        quent_context._emit_query_events(quent_logger, query)
+        worker_id = config_options.executor.spmd_context.worker_id
+        local_quent_context = LocalQuentContext(
+            context=quent_context,
+            query=query,
+            worker=Worker(
+                id=worker_id,
+                engine=quent_context.engine,
+                instance_name=f"rank-{comm.rank}",
+            ),
+            logger=quent_logger,
+            worker_resources=spmd_context.worker_resources,
+        )
 
     df, metadata = evaluate_on_rank(
         context,
@@ -116,8 +165,18 @@ def evaluate_pipeline_spmd_mode(
         py_executor,
         ir,
         config_options,
+        local_quent_context=local_quent_context,
         query_id=query_id,
     )
+    if quent_context is not None:
+        assert config_options.executor.spmd_context.quent_logger is not None
+        assert local_quent_context is not None
+        # Device memory and the disk->device channel are engine-scoped and are
+        # finalized once at engine shutdown, not per query.
+        quent_context._emit_query_exit_events(
+            config_options.executor.spmd_context.quent_logger,
+            local_quent_context.query,
+        )
     return df, metadata if collect_metadata else None
 
 
@@ -130,8 +189,8 @@ def allgather_polars_dataframe(
     """
     AllGather a rank-local DataFrame so every rank receives the full result.
 
-    Each rank contributes its local ``local_df`` fragment and receives the
-    concatenation of all ranks' fragments in rank order. This is the SPMD
+    Each rank contributes its local ``local_df`` partition and receives the
+    concatenation of all ranks' partitions in rank order. This is the SPMD
     equivalent of a distributed ``collect``: after the call, every rank holds
     the same complete dataset.
 
@@ -189,6 +248,33 @@ def allgather_polars_dataframe(
     ).to_polars()
 
 
+def synchronize_quent_context(
+    *,
+    comm: Communicator,
+    context: Context,
+) -> cudf_polars.quent.QuentContext:
+    """
+    Ensure all ranks use the same Quent engine ID.
+
+    Rank 0 selects the engine ID (from its local ``quent_context``), then all
+    ranks participate in an AllGather so every process converges on that value.
+    """
+    if comm.rank == 0:
+        quent_context = cudf_polars.quent.QuentContext()
+        data = quent_context._serialize()
+    else:
+        data = b""
+
+    if comm.nranks == 1:
+        # skip the collective
+        return cudf_polars.quent.QuentContext()
+
+    with reserve_op_id() as op_id:
+        all_data = all_gather_host_data(comm, context.br(), op_id, data)
+
+    return cudf_polars.quent.QuentContext._deserialize(all_data[0])
+
+
 class SPMDEngine(StreamingEngine):
     """
     Multi-GPU Polars engine for SPMD executions.
@@ -201,7 +287,7 @@ class SPMDEngine(StreamingEngine):
     process runs the *same* Python script independently on its own slice of data.
     When launched with the RapidsMPF launcher `rrun`, multiple identical processes
     are started. Each process owns a rank-local :class:`~polars.LazyFrame`
-    representing its fragment of the distributed dataset. Collective operations,
+    representing its partition of the distributed dataset. Collective operations,
     such as shuffles, all-gathers, and joins, coordinate across ranks to produce
     a globally consistent result.
 
@@ -249,7 +335,7 @@ class SPMDEngine(StreamingEngine):
     **DataFrame and LazyFrame semantics**
 
     Because every rank runs an independent Python process, a :class:`~polars.DataFrame`
-    is always *rank-local* i.e. it contains only that rank's fragment of the distributed
+    is always *rank-local* i.e. it contains only that rank's partition of the distributed
     dataset.  This is true whether the DataFrame originates from a file reader or from
     Python literals.
 
@@ -314,6 +400,10 @@ class SPMDEngine(StreamingEngine):
     binding is skipped under ``rrun`` (which already performs its own binding),
     see ``HardwareBindingPolicy.skip_under_rrun``.
 
+    If a bootstrapped communicator is provided, the attached statistics
+    object is used for all statistics logging, and enabled/disabled
+    according to any options provided in ``rapidsmpf_options``.
+
     Examples
     --------
     Context-manager style (recommended for scripts):
@@ -340,7 +430,21 @@ class SPMDEngine(StreamingEngine):
         engine_options: dict[str, Any] | None = None,
     ) -> None:
         executor_options = executor_options or {}
+        executor_options.setdefault(
+            "kvikio_nthreads", resolve_kvikio_nthreads(executor_options)
+        )
+        executor_options.setdefault(
+            "kvikio_statistics", resolve_kvikio_statistics(executor_options)
+        )
         engine_options = engine_options or {}
+
+        quent_context: cudf_polars.quent.QuentContext | None = executor_options.get(
+            "quent_context"
+        )
+        if quent_context is not None:
+            self._quent_logger = cudf_polars.quent._logging.QuentLogger()
+        else:
+            self._quent_logger = None
 
         check_reserved_keys(executor_options, engine_options)
         hw_binding = cast(
@@ -349,23 +453,30 @@ class SPMDEngine(StreamingEngine):
         )
         bind_to_gpu(hw_binding)
 
+        configure_kvikio(executor_options["kvikio_nthreads"])
+
         self.rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
         mr_config: MemoryResourceConfig = engine_options.get(
             "memory_resource_config", MemoryResourceConfig.default()
         )
         base_mr = mr_config.create_memory_resource()
         if comm is None:
+            statistics = Statistics.from_options(self.rapidsmpf_options)
             if bootstrap.is_running_with_rrun():
                 comm = bootstrap.create_ucxx_comm(
-                    progress_thread=ProgressThread(),
+                    progress_thread=ProgressThread(statistics),
                     type=bootstrap.BackendType.AUTO,
                     options=self.rapidsmpf_options,
                 )
             else:
                 comm = single_communicator(
-                    progress_thread=ProgressThread(),
+                    progress_thread=ProgressThread(statistics),
                     options=self.rapidsmpf_options,
                 )
+        else:
+            statistics = reset_statistics_from_options(
+                comm.progress_thread.statistics, self.rapidsmpf_options
+            )
         # else: caller-provided comm; the caller retains ownership
 
         self._base_mr: rmm.mr.DeviceMemoryResource = base_mr
@@ -373,15 +484,18 @@ class SPMDEngine(StreamingEngine):
         self._comm: Communicator | None = comm
         self._ctx: Context | None = None
         self._py_executor: ThreadPoolExecutor | None = None
+        self._store_uid = uuid.uuid4().hex
         exit_stack = contextlib.ExitStack()
+        self._kvikio_monitor = make_kvikio_monitor(
+            enabled=executor_options["kvikio_statistics"]
+        )
+        exit_stack.callback(self._stop_kvikio_monitor)
+
+        # TODO: there's no reason our API needs a plain dict[str, Any] rather than
+        # a typed config object here.
         try:
             # Register `_cleanup_ctx`, which shuts down whatever `self._ctx` points
             # to at engine shutdown time, i.e. the `Context` from the latest reset.
-            if self.rapidsmpf_options is not None:
-                statistics = Statistics.from_options(self.rapidsmpf_options)
-            else:
-                statistics = None
-
             self._ctx = Context.from_options(
                 comm.logger, base_mr, self.rapidsmpf_options, statistics
             )
@@ -392,6 +506,36 @@ class SPMDEngine(StreamingEngine):
             self._mr = self._ctx.br().device_mr_adaptor()
             exit_stack.enter_context(set_memory_resource(self._mr))
             exit_stack.callback(self._cleanup_ctx)
+
+            if quent_context is not None:
+                executor_options["quent_context"] = quent_context
+                assert self._quent_logger is not None
+                quent_context._emit_engine_init_events(self._quent_logger)
+                engine_id = quent_context.engine.id
+            else:
+                engine_id = uuid.uuid4()
+
+            self._quent_worker = Worker(
+                id=uuid.uuid4(),
+                engine=cudf_polars.quent.Engine(id=engine_id),
+                instance_name=f"rank-{self.rank}",  # relies on self.comm
+            )
+
+            worker_resources: WorkerResources | None = None
+            if quent_context is not None:
+                assert self._quent_logger is not None
+                self._quent_logger.emit(self._quent_worker._init())
+
+                worker_resources = WorkerResources.build(
+                    instance_suffix=f"rank-{self.rank}",
+                    engine_id=engine_id,
+                    worker_id=self._quent_worker.id,
+                    rank=comm.rank,
+                    nranks=comm.nranks,
+                )
+                worker_resources.declare(self._quent_logger)
+
+            self._worker_resources = worker_resources
 
             # Register after `_cleanup_ctx` so on teardown (LIFO) the
             # executor shuts down first. `wait=True` is safe because
@@ -412,7 +556,13 @@ class SPMDEngine(StreamingEngine):
                     **executor_options,
                     "cluster": "spmd",
                     "spmd_context": SPMDContext(
-                        comm=comm, context=self._ctx, py_executor=self._py_executor
+                        comm=comm,
+                        engine_id=engine_id,
+                        worker_id=self._quent_worker.id,
+                        quent_logger=self._quent_logger,
+                        context=self._ctx,
+                        py_executor=self._py_executor,
+                        worker_resources=self._worker_resources,
                     ),
                 },
                 engine_options={
@@ -424,6 +574,12 @@ class SPMDEngine(StreamingEngine):
         except Exception:
             exit_stack.close()
             raise
+
+    def _stop_kvikio_monitor(self) -> None:
+        """Stop this rank's kvikio monitor if any; called from exit-stack."""
+        if self._kvikio_monitor is not None:
+            self._kvikio_monitor.stop()
+            self._kvikio_monitor = None
 
     def _cleanup_ctx(self) -> None:
         """
@@ -468,6 +624,10 @@ class SPMDEngine(StreamingEngine):
             engine_options=options.to_engine_options(),
         )
 
+    def _drop_persisted(self) -> None:
+        """Drop this engine's persisted partitions from the rank-local store."""
+        rank_local_store.close_store(self._store_uid)
+
     def _reset(
         self,
         *,
@@ -490,21 +650,42 @@ class SPMDEngine(StreamingEngine):
             engine_options=engine_options,
         )
         executor_options = executor_options or {}
+        existing_executor_options = self.config.get("executor_options", {})
+        if isinstance(existing_executor_options, dict):
+            existing_quent_context = existing_executor_options.get("quent_context")
+            if existing_quent_context is not None:
+                executor_options.setdefault("quent_context", existing_quent_context)
+            existing_kvikio_nthreads = existing_executor_options.get("kvikio_nthreads")
+            if existing_kvikio_nthreads is not None:
+                executor_options.setdefault("kvikio_nthreads", existing_kvikio_nthreads)
+        configure_kvikio(executor_options["kvikio_nthreads"])
+        executor_options.setdefault(
+            "kvikio_statistics", resolve_kvikio_statistics(executor_options)
+        )
         engine_options = engine_options or {}
+        quent_context: cudf_polars.quent.QuentContext | None = executor_options.get(
+            "quent_context"
+        )
         rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
+        self.rapidsmpf_options = rapidsmpf_options
 
         # Collective: synchronize all ranks before tearing down the Context.
         if self._comm.nranks > 1:
             barrier(self._comm)
+        # Free persisted partitions before the Context is torn down.
+        self._drop_persisted()
         # Same-thread shutdown, _reset runs on the thread that built the
         # Context (the test driver's main thread). The per-engine RMM
         # resource is kept alive across resets, see :meth:`_cleanup_ctx`.
         self._ctx.shutdown()
 
-        if rapidsmpf_options is not None:
-            statistics = Statistics.from_options(rapidsmpf_options)
-        else:
-            statistics = None
+        statistics = reset_statistics_from_options(
+            self._comm.progress_thread.statistics, rapidsmpf_options
+        )
+        statistics.clear()
+        self._kvikio_monitor = reset_kvikio_monitor(
+            self._kvikio_monitor, enabled=executor_options["kvikio_statistics"]
+        )
 
         self._ctx = Context.from_options(
             self._comm.logger, self._base_mr, rapidsmpf_options, statistics
@@ -515,6 +696,16 @@ class SPMDEngine(StreamingEngine):
         # callback still restores the pre-engine MR at engine shutdown.
         self._mr = self._ctx.br().device_mr_adaptor()
         rmm.mr.set_current_device_resource(self._mr)
+
+        if quent_context is not None:
+            quent_context = synchronize_quent_context(
+                comm=self._comm,
+                context=self._ctx,
+            )
+            executor_options["quent_context"] = quent_context
+            engine_id = quent_context.engine.id
+        else:
+            engine_id = uuid.uuid4()
 
         # Re-run ``StreamingEngine.__init__`` on the existing instance to
         # reconfigure the polars ``GPUEngine`` layer (``self.config``,
@@ -531,6 +722,10 @@ class SPMDEngine(StreamingEngine):
                     comm=self._comm,
                     context=self._ctx,
                     py_executor=self.py_executor,
+                    engine_id=engine_id,
+                    worker_id=self._quent_worker.id,
+                    quent_logger=self._quent_logger,
+                    worker_resources=self._worker_resources,
                 ),
             },
             engine_options={
@@ -649,6 +844,34 @@ class SPMDEngine(StreamingEngine):
             self.context.statistics().clear()
         return [Statistics.deserialize(r) for r in results]
 
+    def gather_io_summary(self, *, clear: bool = False) -> dict[int, kvikio.Summary]:
+        """
+        Collect kvikio I/O statistics from every rank via an all-gather.
+
+        This is a collective operation, every rank must call it.
+
+        Parameters
+        ----------
+        clear
+            If ``True``, restart each rank's measured span after reading.
+
+        Returns
+        -------
+        A :class:`kvikio.Summary` per rank, keyed by rank index, omitting
+        ranks that are not counting.
+        """
+        summary = take_io_summary(self._kvikio_monitor, clear=clear)
+        # A rank that is not counting sends nothing, which is distinguishable
+        # from a zeroed summary because the latter is a fixed, non-empty size.
+        data = b"" if summary is None else summary.serialize()
+        with reserve_op_id() as op_id:
+            results = all_gather_host_data(self.comm, self.context.br(), op_id, data)
+        return {
+            rank: kvikio.Summary.deserialize(r)
+            for rank, r in enumerate(results)
+            if r != b""
+        }
+
     def shutdown(self) -> None:
         """
         Shut down the engine and release all owned resources.
@@ -659,13 +882,36 @@ class SPMDEngine(StreamingEngine):
         if self._ctx is None:
             return  # already shut down
 
+        # Free persisted partitions before _cleanup_ctx tears down the Context.
+        self._drop_persisted()
+
         # Order matters: ``super().shutdown()`` closes ``self._exit_stack``,
         # which invokes ``self._cleanup_ctx``. That requires ``self._ctx`` to
         # still be set so the rapidsmpf Context can be shut down correctly.
+        # But, super().shutdown() clears self.config, so we need to emit the
+        # quent traces before that.
         # Clear the references only after shutdown completes.
+
+        if self._quent_logger is not None:
+            if self._worker_resources is not None:
+                self._worker_resources.finalize(self._quent_logger)
+            self._quent_logger.emit(self._quent_worker._exit())
+
+        quent_context: cudf_polars.quent.QuentContext | None = self.config[
+            "executor_options"
+        ].get("quent_context")
+        if quent_context is not None:
+            assert self._quent_logger is not None
+            quent_context._emit_engine_exit_events(self._quent_logger)
+
         super().shutdown()
+
         self._comm = None
         self._ctx = None
+        # TODO: Figure out multi-rank handling.
+        if self._quent_logger is not None:
+            self._quent_events_raw.extend(self._quent_logger.drain())
+        self._quent_events_raw.sort(key=lambda x: x["timestamp"])
         self._py_executor = None
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
@@ -674,3 +920,80 @@ class SPMDEngine(StreamingEngine):
             results = all_gather_host_data(self.comm, self.context.br(), op_id, data)
 
         return [json.loads(r) for r in results]
+
+    @unstable()
+    def execute(self, lf: pl.LazyFrame) -> PersistedQueryResult:
+        """
+        Execute a :class:`~polars.LazyFrame` and return a GPU-resident result.
+
+        Unlike :meth:`~polars.LazyFrame.collect`, this method does not copy the
+        result to host memory. The returned :class:`~cudf_polars.engine.persisted_result.PersistedQueryResult`
+        keeps each rank's partition GPU-resident in its process. Call its
+        :meth:`~cudf_polars.engine.persisted_result.PersistedQueryResult.lazy` to
+        chain further operations without an intermediate host round-trip.
+
+        This is a collective operation: every rank must call it with an
+        equivalent query.
+
+        Parameters
+        ----------
+        lf
+            The lazy query to execute.
+
+        Returns
+        -------
+        A persisted query result; each rank's partition stays GPU-resident in
+        the process that produced it.
+
+        Examples
+        --------
+        >>> with SPMDEngine() as engine:  # doctest: +SKIP
+        ...     result = engine.execute(pl.scan_parquet("data/*.parquet"))
+        ...     # Chain further work without copying to host:
+        ...     df = result.lazy().filter(pl.col("x") > 0).collect(engine=engine)
+        """
+        backend = SpmdPersistedBackend(
+            self._store_uid, self.context, self.comm, self.py_executor
+        )
+        return execute_persisted_query(self, lf, backend, self._store_uid)
+
+
+class SpmdPersistedBackend(PersistedBackend):
+    """Persisted-result backend for SPMD."""
+
+    def __init__(
+        self,
+        uid: str,
+        ctx: Context,
+        comm: Communicator,
+        py_executor: ThreadPoolExecutor,
+    ) -> None:
+        self._uid = uid
+        self._ctx = ctx
+        self._comm = comm
+        self._py_executor = py_executor
+
+    def execute_persisted(
+        self,
+        ir: IR,
+        config_options: ConfigOptions[StreamingExecutor],
+        query_id: uuid.UUID,
+    ) -> list[int]:
+        """Evaluate and store this rank's partition (see :class:`PersistedBackend`)."""
+        rank = persisted_result.evaluate_and_persist(
+            self._uid,
+            self._ctx,
+            self._comm,
+            self._py_executor,
+            ir,
+            config_options,
+            query_id,
+            # SPMD collects rank-locally: each rank reads its own partition, so a
+            # duplicated output must stay whole on every rank (not deduplicated).
+            deduplicate_replicated=False,
+        )
+        return [rank]
+
+    def drop_persisted(self, query_id: uuid.UUID) -> None:
+        """Drop this rank's partition from this engine's store (see :class:`PersistedBackend`)."""
+        rank_local_store.drop_query(self._uid, query_id)

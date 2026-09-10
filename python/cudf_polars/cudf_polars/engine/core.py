@@ -10,13 +10,16 @@ import json
 import os
 import socket
 import threading
+import uuid
 import weakref
 from typing import TYPE_CHECKING, Any, ClassVar, Self, TypeVar
 
 import cuda.core
+import kvikio
 
 import polars as pl
 
+import pylibcudf as plc
 from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.coll import AllGather
 from rapidsmpf.config import Options, get_environment_variables
@@ -26,19 +29,23 @@ from rapidsmpf.streaming.core.actor import run_actor_network
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IRExecutionContext
+from cudf_polars.dsl.utils.io import (
+    attach_cached_parquet_metadata,
+    prefetch_parquet_file_metadata_for_ir,
+)
+from cudf_polars.quent._plan import build_plan, build_quent_operator_map
 from cudf_polars.streaming.actor_graph.collectives import ReserveOpIDs
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.core import generate_network
 from cudf_polars.streaming.actor_graph.tracing import log_query_plan
 from cudf_polars.streaming.actor_graph.utils import empty_table_chunk
 from cudf_polars.streaming.base import StatsCollector
-from cudf_polars.streaming.parallel import lower_ir_graph
+from cudf_polars.streaming.parallel import lower_ir_graph_with_node_map
 from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.streaming.utils import _concat
-from cudf_polars.utils.config import get_total_device_memory
+from cudf_polars.utils.config import Unspecified, get_total_device_memory
 
 if TYPE_CHECKING:
-    import uuid
     from collections.abc import Callable, MutableMapping
     from concurrent.futures import Executor, ThreadPoolExecutor
 
@@ -48,13 +55,146 @@ if TYPE_CHECKING:
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.context import Context
 
+    import cudf_polars.quent._logging
+    import cudf_polars.quent._types
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.dsl.translate import Translator
+    from cudf_polars.quent._context import LocalQuentContext
     from cudf_polars.streaming.base import PartitionInfo
     from cudf_polars.streaming.parallel import ConfigOptions
     from cudf_polars.utils.config import StreamingExecutor
 
 
 T = TypeVar("T")
+
+
+def reset_statistics_from_options(
+    statistics: Statistics, options: Options
+) -> Statistics:
+    """
+    Reset the enabled state of a statistics object from options.
+
+    Parameters
+    ----------
+    statistics
+        Statistics to reset.
+    options
+        Options providing new enabled setting.
+
+    Returns
+    -------
+    Statistics
+        Reset statistics object.
+
+    Notes
+    -----
+    Does not clear the statistics.
+    """
+    if Statistics.from_options(options).enabled:
+        statistics.enable()
+    else:
+        statistics.disable()
+    return statistics
+
+
+def make_kvikio_monitor(*, enabled: bool) -> kvikio.SummaryMonitor | None:
+    """
+    Create a kvikio I/O monitor if ``enabled``.
+
+    Parameters
+    ----------
+    enabled
+        Whether to count, from the ``kvikio_statistics`` executor option.
+
+    Returns
+    -------
+    kvikio.SummaryMonitor
+        A monitor, already counting, if statistics are enabled.
+    None
+        If they are not.
+
+    Notes
+    -----
+    kvikio has no enable/disable: the existence of a monitor is what turns
+    counting on for the process, so "disabled" means "no monitor".
+
+    With :class:`~cudf_polars.engine.spmd.SPMDEngine` the monitor counts every
+    thread's kvikio I/O in the script's process, so user code performing kvikio
+    reads is counted too. It cannot attribute I/O to a particular query.
+    """
+    if not enabled:
+        return None
+    return kvikio.SummaryMonitor()
+
+
+def reset_kvikio_monitor(
+    monitor: kvikio.SummaryMonitor | None, *, enabled: bool
+) -> kvikio.SummaryMonitor | None:
+    """
+    Bring a kvikio I/O monitor into line with a new ``enabled`` setting.
+
+    Parameters
+    ----------
+    monitor
+        The rank's existing monitor, if it has one.
+    enabled
+        Whether to count, from the ``kvikio_statistics`` executor option.
+
+    Returns
+    -------
+    kvikio.SummaryMonitor
+        The reset or newly created monitor, if statistics are enabled.
+    None
+        If they are not, in which case any existing monitor has been stopped.
+    """
+    if not enabled:
+        if monitor is not None:
+            monitor.stop()
+        return None
+    if monitor is None:
+        return kvikio.SummaryMonitor()
+    monitor.reset()
+    return monitor
+
+
+def take_io_summary(
+    monitor: kvikio.SummaryMonitor | None, *, clear: bool
+) -> kvikio.Summary | None:
+    """
+    Read a rank's I/O totals, optionally restarting the measured span.
+
+    Parameters
+    ----------
+    monitor
+        The rank's monitor, or ``None`` if it is not counting.
+    clear
+        If ``True``, reset the monitor after reading, so the returned summary
+        is the last word on the span that just ended.
+
+    Returns
+    -------
+    kvikio.Summary
+        The totals so far.
+    None
+        If ``monitor`` is ``None``.
+
+    Notes
+    -----
+    ``None`` means "this rank was not counting", which is not the same as a
+    zeroed summary meaning "this rank did no I/O".
+
+    ``get()`` and ``reset()`` are two separate calls, so an operation
+    completing between them is counted in the returned summary but dropped
+    from the next one. Use ``kvikio.Summary.since(previous)`` if you need
+    gapless differencing.
+    """
+    if monitor is None:
+        return None
+    # Read before the reset, so the returned summary still carries the span.
+    summary = monitor.get()
+    if clear:
+        monitor.reset()
+    return summary
 
 
 def resolve_rapidsmpf_options(rapidsmpf_options: Options | None) -> Options:
@@ -146,6 +286,13 @@ class StreamingEngine(pl.GPUEngine):
     destruction and context manager exit must occur on the thread that created
     the instance.
 
+    Creating an engine sets the kvikio remote I/O backend to ``EASY_THREADPOOL``
+    and configures its thread pool (default 256 threads). Because kvikio's pool
+    is a global singleton, this blocks any concurrent kvikio IO in the process
+    until in-flight IO completes and overrides any prior ``kvikio.defaults.set(...)``
+    calls. Use the ``kvikio_nthreads`` executor option or the ``KVIKIO_NTHREADS``
+    environment variable to control the thread count.
+
     Parameters
     ----------
     nranks
@@ -160,6 +307,7 @@ class StreamingEngine(pl.GPUEngine):
         when :meth:`shutdown` is called. If ``None``, an empty stack is created.
     """
 
+    _quent_logger: cudf_polars.quent._logging.QuentLogger | None
     rapidsmpf_options: rapidsmpf.config.Options
     # Process-wide registry of every live :class:`StreamingEngine`. Used by
     # :class:`DefaultSingletonEngine` to enforce that no other engine is
@@ -183,6 +331,7 @@ class StreamingEngine(pl.GPUEngine):
 
         check_no_live_default_singleton(self)
         self._nranks = nranks
+        self._quent_events_raw: list[dict[str, Any]] = []  # populated on shutdown
         self._exit_stack: contextlib.ExitStack | None = (
             exit_stack or contextlib.ExitStack()
         )
@@ -267,6 +416,30 @@ class StreamingEngine(pl.GPUEngine):
         -------
         List of :class:`~rapidsmpf.statistics.Statistics`, one per rank,
         ordered by rank index.
+        """
+        raise NotImplementedError
+
+    def gather_io_summary(self, *, clear: bool = False) -> dict[int, kvikio.Summary]:
+        """
+        Collect kvikio I/O statistics from every rank.
+
+        Parameters
+        ----------
+        clear
+            If ``True``, restart each rank's measured span after reading, so
+            the next call describes only what followed this one.
+
+        Returns
+        -------
+        A :class:`kvikio.Summary` per rank, keyed by rank index and in rank
+        order. A rank that is not counting is absent, so the result is empty
+        unless the ``statistics`` option is enabled.
+
+        Examples
+        --------
+        >>> for rank, summary in engine.gather_io_summary().items():  # doctest: +SKIP
+        ...     print(f"--- rank {rank} ---")
+        ...     print(summary)
         """
         raise NotImplementedError
 
@@ -374,6 +547,12 @@ class StreamingEngine(pl.GPUEngine):
         """Exit the context manager, calling :meth:`shutdown`."""
         self.shutdown()
 
+    @property
+    def _quent_events(self) -> list[dict[str, Any]]:
+        """Return all Quent telemetry events collected during the engine's lifecycle."""
+        # Not ready to make this public yet.
+        return [x["event"] for x in self._quent_events_raw]
+
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
         """
         Execute a function on all ranks.
@@ -408,15 +587,16 @@ def _find_memory_error(exc: BaseException) -> MemoryError | None:
 def execute_ir_on_rank(
     ctx: Context,
     comm: Communicator,
-    py_executor: ThreadPoolExecutor,
     ir: IR,
+    ir_context: IRExecutionContext,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions[StreamingExecutor],
     stats: StatsCollector,
     collective_id_map: dict[IR, list[int]],
     *,
-    query_id: uuid.UUID,
-) -> tuple[pl.DataFrame, list[ChannelMetadata]]:
+    quent_operator_map: dict[IR, cudf_polars.quent._types.Operator] | None = None,
+    local_quent_context: LocalQuentContext | None = None,
+) -> tuple[DataFrame, list[ChannelMetadata]]:
     """
     Execute a Polars IR query on a single rank's GPU.
 
@@ -430,10 +610,10 @@ def execute_ir_on_rank(
         The active RapidsMPF streaming context for this rank.
     comm
         The active RapidsMPF communicator for this rank.
-    py_executor
-        Thread-pool executor used to drive the actor network.
     ir
         Root IR node describing the query.
+    ir_context
+        Execution context reused across scan-task execution.
     partition_info
         Per-node partition metadata.
     config_options
@@ -442,19 +622,20 @@ def execute_ir_on_rank(
         Statistics collector.
     collective_id_map
         Mapping from IR nodes to their pre-allocated collective operation IDs.
-    query_id
-        Unique identifier for the query, propagated into actor traces.
+    quent_operator_map
+        Mapping from IR nodes to their Quent operators, or ``None`` when tracing
+        is disabled.
+    local_quent_context
+        The local Quent context for this rank, or ``None`` when tracing is
+        disabled.
 
     Returns
     -------
     result
-        This rank's output fragment as a Polars DataFrame.
+        This rank's output fragment as a GPU-resident :class:`~cudf_polars.containers.DataFrame`.
     metadata
         Collected channel metadata.
     """
-    ir_context = IRExecutionContext(
-        py_executor, get_cuda_stream=ctx.br().stream_pool.get_stream, query_id=query_id
-    )
     metadata_collector: list[ChannelMetadata] = []
 
     nodes, output = generate_network(
@@ -467,6 +648,8 @@ def execute_ir_on_rank(
         ir_context=ir_context,
         collective_id_map=collective_id_map,
         metadata_collector=metadata_collector,
+        quent_operator_map=quent_operator_map,
+        local_quent_context=local_quent_context,
     )
 
     try:
@@ -512,7 +695,7 @@ def execute_ir_on_rank(
             list(ir.schema.values()),
             stream,
         )
-    return df.to_polars(), metadata_collector
+    return df, metadata_collector
 
 
 _RESERVED_EXECUTOR_KEYS: frozenset[str] = frozenset(
@@ -650,8 +833,10 @@ def evaluate_on_rank(
     ir: IR,
     config_options: ConfigOptions[StreamingExecutor],
     *,
+    collect_metadata: bool = False,
+    local_quent_context: LocalQuentContext | None = None,
     query_id: uuid.UUID,
-) -> tuple[pl.DataFrame, list[ChannelMetadata]]:
+) -> tuple[DataFrame, list[ChannelMetadata]]:
     """
     Evaluate a polars IR plan on a single rank.
 
@@ -675,35 +860,171 @@ def evaluate_on_rank(
         Root of the **pre-lowered** IR graph.
     config_options
         Executor configuration forwarded from the client.
+    collect_metadata
+        Whether to collect channel metadata during execution.
+    local_quent_context
+        The local Quent context for this rank, or ``None`` when tracing is
+        disabled.
     query_id
-        Unique identifier for the query, propagated into actor traces.
+        A unique identifier for the query.
 
     Returns
     -------
     result
-        This rank's output fragment as a Polars DataFrame.
+        This rank's output fragment as a GPU-resident :class:`~cudf_polars.containers.DataFrame`.
     metadata
         Collected channel metadata.
     """
     stats = allgather_stats(comm, ctx.br(), ir, config_options, py_executor)
-    ir, partition_info = lower_ir_graph(
+    # ``get_stable_plan_id`` is a deterministic function of the IR
+    # structure, so every rank derives the same logical plan ID for a
+    # given query (only rank 0 emits the declaration, but physical plans
+    # on every rank reference it as their parent). It is *not* unique
+    # across collects, though: re-running an identical query would reuse
+    # the same plan ID under a different parent query. Namespacing by the
+    # per-collect ``query_id`` (which is identical across ranks but unique
+    # per collect) keeps the cross-rank agreement while making the plan ID
+    # unique per collect.
+    logical_plan_id = uuid.uuid5(query_id, str(ir.get_stable_plan_id()))
+
+    physical_op_by_id: dict[str, cudf_polars.quent._types.Operator] | None = None
+    quent_operator_map: dict[IR, cudf_polars.quent._types.Operator] | None = None
+
+    lowering, node_map = lower_ir_graph_with_node_map(
         ir, config_options, stats, rank=comm.rank, nranks=comm.nranks
     )
+    optimized = lowering.optimized
+    ir = lowering.lowered
+    partition_info = lowering.partition_info
+    # TODO: figure out if we emit anything about optimized.
+    if config_options.executor.quent_context is not None:
+        assert local_quent_context is not None
+        plan, ops, ports, logical_op_by_id = build_plan(
+            optimized,
+            config_options,
+            query=local_quent_context.query,
+            plan_id=logical_plan_id,
+            worker=local_quent_context.worker,
+            instance_name="logical",
+            parent_plan=None,
+            parent_operators_by_node_id=None,
+        )
+        if comm.rank == 0:
+            local_quent_context.context._emit_plan_declarations(
+                local_quent_context.logger, plan, ops, ports
+            )
 
     if comm.rank == 0:
-        # At least for now, the query plan is identical on all ranks,
-        # so we only log it once.
         log_query_plan(ir, config_options)
+
+    if config_options.executor.quent_context is not None:
+        assert local_quent_context is not None
+        physical_plan_id = uuid.uuid4()
+        physical_op_by_id = local_quent_context.context._emit_physical_plan_events(
+            local_quent_context.logger,
+            ir,
+            config_options,
+            plan_id=physical_plan_id,
+            worker=local_quent_context.worker,
+            parent_plan=plan,
+            node_map=node_map,
+            logical_op_by_id=logical_op_by_id,
+        )
+        quent_operator_map = build_quent_operator_map(ir, physical_op_by_id)
+    ir_context = IRExecutionContext(
+        py_executor, get_cuda_stream=ctx.br().stream_pool.get_stream, query_id=query_id
+    )
+
+    prefetch_file_metadata = config_options.parquet_options.prefetch_file_metadata
+    if prefetch_file_metadata is not False:
+        cached_parquet_info_map = prefetch_parquet_file_metadata_for_ir(
+            ir,
+            ir_context.py_executor,
+            stats=stats,
+            remote_only=isinstance(prefetch_file_metadata, Unspecified),
+            parse_hybrid_metadata=config_options.parquet_options.use_hybrid_scan,
+        )
+        attach_cached_parquet_metadata(ir, cached_parquet_info_map)
 
     with ReserveOpIDs(ir, config_options) as collective_id_map:
         return execute_ir_on_rank(
             ctx,
             comm,
-            py_executor,
             ir,
+            ir_context,
             partition_info,
             config_options,
             stats,
             collective_id_map,
-            query_id=query_id,
+            quent_operator_map=quent_operator_map,
+            local_quent_context=local_quent_context,
         )
+
+
+def is_duplicated_output(metadata: list[ChannelMetadata] | None) -> bool:
+    """
+    Return whether a query's output is duplicated across ranks.
+
+    A duplicated output is an identical, complete copy held on every rank (for
+    example the result of a global sort/limit), signalled by the ``duplicated``
+    channel flag on the final output.
+
+    Parameters
+    ----------
+    metadata
+        Channel metadata for the query.
+
+    Returns
+    -------
+    ``True`` if the output is an identical copy held on every rank.
+    """
+    return bool(metadata and metadata[-1].duplicated)
+
+
+def drop_if_replicated(
+    df: DataFrame, rank: int, metadata: list[ChannelMetadata] | None
+) -> DataFrame:
+    """
+    Drop a duplicated output on non-root ranks.
+
+    Parameters
+    ----------
+    df
+        This rank's output partition.
+    rank
+        This rank's index within the cluster.
+    metadata
+        Channel metadata for the query.
+
+    Returns
+    -------
+    ``df`` or a freshly-allocated empty same-schema frame.
+    """
+    if rank != 0 and is_duplicated_output(metadata):
+        return DataFrame.from_table(
+            plc.copying.empty_like(df.table, stream=df.stream),
+            df.column_names,
+            df.dtypes,
+            df.stream,
+        )
+    return df
+
+
+def raise_for_translation_errors(translator: Translator) -> None:
+    """
+    Raise if the translator recorded unsupported operations.
+
+    Parameters
+    ----------
+    translator
+        The translator whose :attr:`~cudf_polars.dsl.translate.Translator.errors`
+        are checked.
+
+    Raises
+    ------
+    NotImplementedError
+        If the query contains operations unsupported on the GPU.
+    """
+    error = translator.unsupported_operations_error()
+    if error is not None:
+        raise error
