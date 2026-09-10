@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
-from typing import cast
+from typing import Any, cast
 
 import kvikio
 import kvikio.defaults
@@ -45,6 +45,9 @@ from cudf_polars.utils.config import (
     Unspecified,
     configure_kvikio,
     resolve_kvikio_bounce_buffer_bytes,
+    resolve_kvikio_nthreads,
+    resolve_kvikio_reactor_dispatch,
+    resolve_kvikio_remote_io_backend,
     resolve_kvikio_task_size,
 )
 from cudf_polars.utils.cuda_stream import get_cuda_stream
@@ -358,6 +361,72 @@ def test_kvikio_nthreads_non_positive_raises() -> None:
                 executor_options={"kvikio_nthreads": 0},
             )
         )
+
+
+def test_kvikio_resolvers_accept_enum_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("KVIKIO_REMOTE_IO_BACKEND", "EASY_THREADPOOL")
+    monkeypatch.setenv("KVIKIO_NTHREADS", "32")
+    monkeypatch.delenv("CUDF_POLARS__EXECUTOR__KVIKIO_TASK_SIZE", raising=False)
+    monkeypatch.delenv("KVIKIO_TASK_SIZE", raising=False)
+    assert (
+        resolve_kvikio_remote_io_backend({}) == kvikio.RemoteIOBackend.EASY_THREADPOOL
+    )
+    assert (
+        resolve_kvikio_remote_io_backend(
+            {"kvikio_remote_io_backend": kvikio.RemoteIOBackend.MULTI_POLL}
+        )
+        == kvikio.RemoteIOBackend.MULTI_POLL
+    )
+    assert resolve_kvikio_nthreads({}) == 32
+    assert resolve_kvikio_task_size({}) == 64 * 1024 * 1024
+    assert (
+        resolve_kvikio_reactor_dispatch(
+            {"kvikio_reactor_dispatch": kvikio.RemoteReactorDispatch.PER_CHUNK}
+        )
+        == kvikio.RemoteReactorDispatch.PER_CHUNK
+    )
+
+
+@pytest.mark.parametrize(
+    "option, value, match",
+    [
+        ("kvikio_task_size", object(), "must be an int"),
+        ("kvikio_task_size", 0, "must be positive"),
+        ("kvikio_bounce_buffer_bytes", object(), "must be an int"),
+        ("kvikio_bounce_buffer_bytes", 0, "must be positive"),
+        ("kvikio_reactor_count", object(), "must be an int"),
+        ("kvikio_reactor_count", 0, "must be positive"),
+        ("kvikio_request_ceiling", object(), "must be an int"),
+        ("kvikio_request_ceiling", -1, "must be non-negative"),
+    ],
+)
+def test_validate_kvikio_options(option: str, value: object, match: str) -> None:
+    with pytest.raises((TypeError, ValueError), match=match):
+        StreamingExecutor(
+            cluster=Cluster.DEFAULT_SINGLETON,
+            **{option: cast("Any", value)},
+        )
+
+
+def test_kvikio_bounce_buffer_must_cover_task_size() -> None:
+    with pytest.raises(ValueError, match="must be at least kvikio_task_size"):
+        StreamingExecutor(
+            cluster=Cluster.DEFAULT_SINGLETON,
+            kvikio_task_size=16,
+            kvikio_bounce_buffer_bytes=15,
+        )
+
+
+def test_streaming_executor_normalizes_kvikio_enum_strings() -> None:
+    executor = StreamingExecutor(
+        cluster=Cluster.DEFAULT_SINGLETON,
+        kvikio_remote_io_backend="EASY_THREADPOOL",
+        kvikio_reactor_dispatch="PER_CHUNK",
+    )
+    assert executor.kvikio_remote_io_backend == kvikio.RemoteIOBackend.EASY_THREADPOOL
+    assert executor.kvikio_reactor_dispatch == kvikio.RemoteReactorDispatch.PER_CHUNK
 
 
 def test_executor_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1244,6 +1313,18 @@ def test_configure_kvikio_easy_threadpool_task_size_default(
     configure_kvikio(42, remote_io_backend=kvikio.RemoteIOBackend.EASY_THREADPOOL)
     assert kvikio.defaults.get("task_size") == 64 * 1024 * 1024
     assert kvikio.defaults.get("num_threads") == 42
+
+
+def test_configure_kvikio_easy_threadpool_resolves_default_threads(
+    monkeypatch: pytest.MonkeyPatch,
+    kvikio_defaults_guard: None,
+) -> None:
+    monkeypatch.delenv("KVIKIO_NTHREADS", raising=False)
+    monkeypatch.setattr(
+        cudf_polars.utils.config.pylibcudf.utils, "_set_up_kvikio", lambda _: None
+    )
+    configure_kvikio(None, remote_io_backend=kvikio.RemoteIOBackend.EASY_THREADPOOL)
+    assert kvikio.defaults.get("num_threads") == 256
 
 
 def test_resolve_kvikio_bounce_buffer_bytes_backend_independent(
