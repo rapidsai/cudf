@@ -44,10 +44,7 @@ from cudf_polars.streaming.actor_graph.dispatch import (
     ir_context_for_node,
 )
 from cudf_polars.streaming.actor_graph.nodes import default_node_multi
-from cudf_polars.streaming.actor_graph.tracing import (
-    send_chunk,
-    trace_channel,
-)
+from cudf_polars.streaming.actor_graph.tracing import send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
     CUDF_ROW_LIMIT,
     MAX_ROWS_PER_PARTITION,
@@ -192,15 +189,11 @@ async def broadcast_join_actor(
     """
     async with shutdown_on_error(
         context,
-        ch_out,
-        ch_left,
-        ch_right,
+        chs_in=(ch_left, ch_right),
+        chs_out=(ch_out,),
         trace_ir=ir,
         ir_context=ir_context,
     ) as tracer:
-        ch_left = trace_channel(ch_left, tracer)
-        ch_right = trace_channel(ch_right, tracer)
-        ch_out = trace_channel(ch_out, tracer)
         ir_context = replace(ir_context, tracer=tracer)
         await _broadcast_join(
             context,
@@ -723,8 +716,7 @@ async def _shuffle_join(
     # note: this is an actor inside of an actor. How should we log that in our traces?
     async with shutdown_on_error(
         context,
-        ch_left_shuffle,
-        ch_right_shuffle,
+        chs_out=(ch_left_shuffle, ch_right_shuffle),
         trace_ir=ir,
         ir_context=ir_context,
     ):
@@ -885,8 +877,7 @@ async def _ordered_join(
     ch_right_adjusted = context.create_channel()
     async with shutdown_on_error(
         context,
-        ch_left_adjusted,
-        ch_right_adjusted,
+        chs_out=(ch_left_adjusted, ch_right_adjusted),
         trace_ir=ir,
         ir_context=ir_context,
     ):
@@ -1310,15 +1301,11 @@ async def join_actor(
     """
     async with shutdown_on_error(
         context,
-        ch_out,
-        ch_left,
-        ch_right,
+        chs_in=(ch_left, ch_right),
+        chs_out=(ch_out,),
         trace_ir=ir,
         ir_context=ir_context,
     ) as tracer:
-        ch_left = trace_channel(ch_left, tracer)
-        ch_right = trace_channel(ch_right, tracer)
-        ch_out = trace_channel(ch_out, tracer)
         ir_context = replace(ir_context, tracer=tracer)
         left_metadata, right_metadata = await gather_in_task_group(
             recv_metadata(ch_left, context),
@@ -1341,8 +1328,7 @@ async def join_actor(
         ch_right_replay = context.create_channel()
         async with shutdown_on_error(
             context,
-            ch_left_replay,
-            ch_right_replay,
+            chs_out=(ch_left_replay, ch_right_replay),
             trace_ir=ir,
             ir_context=ir_context,
         ):

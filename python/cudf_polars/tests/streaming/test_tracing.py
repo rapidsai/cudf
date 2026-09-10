@@ -17,12 +17,17 @@ import pytest
 import polars as pl
 
 from cudf_streaming.table_chunk import TableChunk
+from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.streaming.chunks.arbitrary import ArbitraryChunk
 from rapidsmpf.streaming.core.message import Message
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.streaming.actor_graph.io import Lineariser
-from cudf_polars.streaming.actor_graph.tracing import ActorTracer, send_chunk
+from cudf_polars.streaming.actor_graph.tracing import (
+    ActorTracer,
+    record_channel_metrics,
+    send_chunk,
+)
 
 if TYPE_CHECKING:
     import pathlib
@@ -46,6 +51,34 @@ def test_actor_tracer_counts_table_chunk_without_table_view(chunk: TableChunk) -
     tracer.add_chunk(chunk=chunk)
     assert tracer.chunk_count == 1
     assert tracer.row_count == 3
+
+
+@pytest.mark.spmd
+def test_record_channel_metrics_reads_send_and_recv_bytes(
+    spmd_engine: SPMDEngine, chunk: TableChunk
+) -> None:
+    context = spmd_engine.context
+    ch = context.create_channel()
+
+    async def send_and_recv() -> None:
+        async with asyncio.TaskGroup() as tg:
+            recv_task = tg.create_task(ch.recv(context))
+            tg.create_task(send_chunk(context, ch, chunk, 11, tracer=None))
+        recv_task.result()
+
+    asyncio.run(send_and_recv())
+
+    metrics = ch.metrics()
+    producer_tracer = ActorTracer()
+    consumer_tracer = ActorTracer()
+    record_channel_metrics(producer_tracer, chs_out=(ch,))
+    record_channel_metrics(consumer_tracer, chs_in=(ch,))
+
+    assert producer_tracer.output_bytes == metrics.send_bytes
+    assert consumer_tracer.input_bytes == metrics.recv_bytes
+    assert producer_tracer.output_bytes[MemoryType.DEVICE] > 0
+    assert producer_tracer.output_bytes[MemoryType.HOST] == 0
+    assert producer_tracer.output_bytes[MemoryType.PINNED_HOST] == 0
 
 
 @pytest.mark.spmd
