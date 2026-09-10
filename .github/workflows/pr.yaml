@@ -615,7 +615,7 @@ jobs:
         --cudf-polars-shard-id ${{ matrix.shard_id }}
         --cudf-polars-num-shards ${{ matrix.num_shards }}
   tpc-tests-cudf-polars:
-    needs: [wheel-build-cudf-polars, wheel-build-cudf-streaming, changed-files]
+    needs: [wheel-cpp-build, wheel-python-build, changed-files]
     permissions:
       actions: read
       contents: read
