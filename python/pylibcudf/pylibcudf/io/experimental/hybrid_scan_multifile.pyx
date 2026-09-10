@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from cython.operator cimport dereference
 from libc.stdint cimport uint8_t
 from libc.stddef cimport size_t
 from libcpp cimport bool
@@ -26,13 +25,13 @@ from pylibcudf.libcudf.io.hybrid_scan cimport (
     const_uint8_t,
 )
 from pylibcudf.libcudf.io.hybrid_scan_multifile cimport (
-    const_FileMetaData,
     const_host_span_const_uint8_t,
     const_vector_size_type,
     host_span_const_uint8_t,
     hybrid_scan_multifile as cpp_hybrid_scan_multifile,
 )
-from pylibcudf.libcudf.io.parquet_schema cimport FileMetaData as c_cpp_FileMetaData
+from pylibcudf.libcudf.io.parquet_metadata cimport const_FileMetaData
+from pylibcudf.libcudf.io.parquet_schema cimport FileMetaData as cpp_FileMetaData
 from pylibcudf.libcudf.io.text cimport byte_range_info
 from pylibcudf.libcudf.io.types cimport table_with_metadata
 from pylibcudf.libcudf.types cimport size_type
@@ -109,14 +108,14 @@ cdef class HybridScanMultiFile:
         cdef HybridScanMultiFile reader = HybridScanMultiFile.__new__(
             HybridScanMultiFile
         )
-        cdef vector[c_cpp_FileMetaData] meta_vec
-        cdef c_FileMetaData m
-        for m in parquet_metadatas:
-            meta_vec.push_back(dereference(m.c_obj))
+        cdef vector[cpp_FileMetaData] metadatas
+        cdef c_FileMetaData metadata
+        for metadata in parquet_metadatas:
+            metadatas.push_back(metadata.c_obj.get()[0])
         with nogil:
             reader.c_obj = make_unique[cpp_hybrid_scan_multifile](
                 host_span[const_FileMetaData](
-                    <const_FileMetaData*>meta_vec.data(), meta_vec.size()
+                    <const_FileMetaData*>metadatas.data(), metadatas.size()
                 ),
                 options.c_obj
             )
@@ -130,16 +129,15 @@ cdef class HybridScanMultiFile:
         list[FileMetaData]
             Parquet file footer metadata, one per source
         """
-        cdef vector[c_cpp_FileMetaData] metas
+        cdef vector[cpp_FileMetaData] c_result
         with nogil:
-            metas = move(self.c_obj.get()[0].parquet_metadatas())
-        cdef unique_ptr[c_cpp_FileMetaData] meta_ptr
-        cdef size_t i
-        result = []
-        for i in range(metas.size()):
-            meta_ptr = make_unique[c_cpp_FileMetaData](move(metas[i]))
-            result.append(c_FileMetaData.from_libcudf(move(meta_ptr)))
-        return result
+            c_result = move(self.c_obj.get()[0].parquet_metadatas())
+        return [
+            c_FileMetaData.from_libcudf(
+                make_unique[cpp_FileMetaData](move(c_result[source]))
+            )
+            for source in range(c_result.size())
+        ]
 
     def page_index_byte_ranges(self) -> list[ByteRangeInfo]:
         """Get the byte range of the page index of all sources.
