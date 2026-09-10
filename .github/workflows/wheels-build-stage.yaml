@@ -12,10 +12,6 @@ on:
       build_type:
         required: true
         type: string
-      build_mode:
-        default: cpp-python
-        required: false
-        type: string
       date:
         required: false
         type: string
@@ -122,10 +118,9 @@ jobs:
         id: build-wheels
         run: |
           ulimit -n "$(ulimit -Hn)"
-          source "${INPUTS_SCRIPT}" "${INPUTS_BUILD_MODE}"
+          source "${INPUTS_SCRIPT}"
         env:
           GH_TOKEN: ${{ github.token }}
-          INPUTS_BUILD_MODE: ${{ inputs.build_mode }}
           INPUTS_SCRIPT: ${{ inputs.script }}
         shell: bash -leo pipefail {0}
       - name: Save Cython cache
