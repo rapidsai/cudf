@@ -904,16 +904,8 @@ class orc_writer_options {
   /**
    * @brief Sets the timezone that the written timestamps are relative to.
    *
-   * ORC timestamps are wall-clock values: readers shift them by the difference between the writer's
-   * timezone, recorded in the stripe footers, and their own. libcudf timestamps are UTC instants,
-   * so the default of "UTC" writes them unshifted. Set this to the timezone that gave the values
-   * their meaning to interoperate with writers that record a local timezone, such as Hive and
-   * Spark.
-   *
-   * A non-UTC file does not round-trip through the libcudf reader, which has no session timezone
-   * and so resolves timestamps as if it were reading in UTC: the values come back as the writer's
-   * wall clock rather than the instants that were written. Such a file is intended for a reader
-   * whose session timezone matches `timezone`.
+   * A non-UTC file is meant for a reader whose timezone matches; it does not round-trip through
+   * the libcudf reader, which has no session timezone and returns the writer's wall clock.
    *
    * @param timezone Timezone name, for example "America/Los_Angeles"
    *
@@ -1381,10 +1373,8 @@ class chunked_orc_writer_options {
    * their meaning to interoperate with writers that record a local timezone, such as Hive and
    * Spark.
    *
-   * A non-UTC file does not round-trip through the libcudf reader, which has no session timezone
-   * and so resolves timestamps as if it were reading in UTC: the values come back as the writer's
-   * wall clock rather than the instants that were written. Such a file is intended for a reader
-   * whose session timezone matches `timezone`.
+   * A non-UTC file is meant for a reader whose timezone matches; it does not round-trip through
+   * the libcudf reader, which has no session timezone and returns the writer's wall clock.
    *
    * @param timezone Timezone name, for example "America/Los_Angeles"
    *
