@@ -27,6 +27,8 @@ TEST_F(BinaryOperatorParityTest, CheckedDecimalSupportRequiresOutputScale)
       cudf::data_type{cudf::type_id::DECIMAL32, expected_scale}, lhs_type, rhs_type, op));
     EXPECT_FALSE(cudf::binops::is_supported_operation(
       cudf::data_type{cudf::type_id::DECIMAL32, expected_scale + 1}, lhs_type, rhs_type, op));
+    EXPECT_FALSE(cudf::binops::is_supported_operation(
+      cudf::data_type{cudf::type_id::DECIMAL32, expected_scale - 1}, lhs_type, rhs_type, op));
   };
 
   expect_scale(cudf::binary_operator::ADD_OVERFLOW, -2);
