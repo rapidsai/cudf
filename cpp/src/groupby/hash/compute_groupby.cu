@@ -20,6 +20,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/device_buffer.hpp>
@@ -35,6 +36,7 @@
 #include <thrust/gather.h>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
+#include <thrust/sequence.h>
 
 #include <algorithm>
 #include <cmath>
@@ -83,8 +85,8 @@ struct is_occupied_fn {
  * those rows is corrected for the keys the sample missed: `D` distinct keys show
  * `D * (1 - exp(-s / D))` of themselves in a sample of `s` rows, which is solved for `D`.
  *
- * @return Four slots per estimated distinct key, or the maximum capacity when the sampled rows
- * are nearly all distinct
+ * @return Four slots per estimated distinct key, or the maximum capacity when the estimate
+ * exceeds the representable capacity
  */
 template <typename Equal, typename Hash>
 cuda::std::uint32_t estimate_capacity(size_type num_rows,
@@ -111,7 +113,8 @@ cuda::std::uint32_t estimate_capacity(size_type num_rows,
       d_row_hash,
       counts.data(),
       stream);
-    auto const h_counts = cudf::detail::make_host_vector(counts, stream);
+    auto const h_counts =
+      cudf::detail::make_pinned_vector(device_span<size_type const>{counts}, stream);
     return std::pair{static_cast<double>(h_counts[0]), static_cast<double>(h_counts[1])};
   };
   // One row in 64 is sampled, fewer when that would fill more than half of the sample table.
@@ -120,8 +123,6 @@ cuda::std::uint32_t estimate_capacity(size_type num_rows,
   auto const max_capacity  = std::numeric_limits<cuda::std::uint32_t>::max();
   auto [sampled, distinct] = sample(stride);
   if (sampled == 0) { return hash_csr_min_estimated_capacity; }
-  // Nearly every sampled row has its own key: the keys are (close to) unique.
-  if (distinct >= 0.9 * sampled) { return max_capacity; }
 
   // The expected number of distinct keys seen grows with the population, so bisect on it.
   auto const seen = [sampled](double population) {
@@ -179,15 +180,22 @@ grouped_keys group_keys(size_type num_rows,
   // one row wanted for each group, otherwise the slot indices lead to the counts and rows.
   rmm::device_uvector<size_type> key_rows(0, stream, temp_mr);
   rmm::device_uvector<cuda::std::uint32_t> group_slots(0, stream, temp_mr);
+  bool count_by_representative{};
   while (true) {
     auto const is_full_size = capacity == full_capacity;
+    count_by_representative =
+      need_grouped_rows && static_cast<cuda::std::uint32_t>(num_rows) < capacity;
+    auto const count_capacity =
+      count_by_representative ? static_cast<cuda::std::uint32_t>(num_rows) : capacity;
     entries.resize(capacity, stream);
     CUDF_CUDA_TRY(cudaMemsetAsync(
       entries.data(), 0xff, entries.size() * sizeof(hash_table_entry_type), stream.get()));
     if (need_grouped_rows) {
-      slot_counts.resize(capacity, stream);
-      CUDF_CUDA_TRY(cudaMemsetAsync(
-        slot_counts.data(), 0, slot_counts.size() * sizeof(size_type), stream.get()));
+      slot_counts.resize(count_capacity, stream);
+      if (count_capacity != 0) {
+        CUDF_CUDA_TRY(cudaMemsetAsync(
+          slot_counts.data(), 0, slot_counts.size() * sizeof(size_type), stream.get()));
+      }
     }
     auto const table =
       hash_csr_table_ref{entries.data(), capacity, is_full_size ? capacity : hash_csr_max_probes};
@@ -195,22 +203,28 @@ grouped_keys group_keys(size_type num_rows,
                                  row_bitmask,
                                  need_grouped_rows ? positions.data() : nullptr,
                                  need_grouped_rows ? slot_counts.data() : nullptr,
+                                 count_by_representative,
                                  table,
                                  d_row_equal,
                                  d_row_hash,
                                  is_full_size ? nullptr : overflow->data(),
                                  stream);
+    if (count_by_representative) {
+      // Count indices identify representative rows, so selection no longer needs the table.
+      entries.resize(0, stream);
+      entries.shrink_to_fit(stream);
+    }
     if (!need_grouped_rows) {
-      key_rows.resize(num_rows, stream);
+      key_rows.resize(std::min<std::size_t>(num_rows, capacity), stream);
       auto const key_rows_end =
         thrust::copy_if(policy, entries.begin(), entries.end(), key_rows.begin(), is_occupied_fn{});
       key_rows.resize(cuda::std::distance(key_rows.begin(), key_rows_end), stream);
     } else {
-      group_slots.resize(num_rows, stream);
+      group_slots.resize(std::min<std::size_t>(num_rows, capacity), stream);
       auto const group_slots_end =
         thrust::copy_if(policy,
                         cuda::counting_iterator<cuda::std::uint32_t>{0},
-                        cuda::counting_iterator<cuda::std::uint32_t>{capacity},
+                        cuda::counting_iterator<cuda::std::uint32_t>{count_capacity},
                         slot_counts.begin(),
                         group_slots.begin(),
                         [] __device__(size_type count) -> bool { return count > 0; });
@@ -218,6 +232,16 @@ grouped_keys group_keys(size_type num_rows,
     }
     // The compaction has just synchronized the stream, so reading the flag is cheap here.
     if (is_full_size || overflow->value(stream) == 0) { break; }
+    // The retry overwrites the table, so release it instead of copying it while growing.
+    entries.resize(0, stream);
+    entries.shrink_to_fit(stream);
+    slot_counts.resize(0, stream);
+    slot_counts.shrink_to_fit(stream);
+    key_rows.resize(0, stream);
+    key_rows.shrink_to_fit(stream);
+    group_slots.resize(0, stream);
+    group_slots.shrink_to_fit(stream);
+    overflow.reset();
     capacity = full_capacity;
   }
 
@@ -230,14 +254,41 @@ grouped_keys group_keys(size_type num_rows,
             rmm::device_uvector<size_type>{0, stream, temp_mr}};
   }
 
-  auto const entry_rows = entries.begin();
   auto const num_groups = static_cast<size_type>(group_slots.size());
+  // Every row is an included singleton group, so input order already forms a valid grouping.
+  if (num_groups == num_rows) {
+    entries.resize(0, stream);
+    entries.shrink_to_fit(stream);
+    slot_counts.resize(0, stream);
+    slot_counts.shrink_to_fit(stream);
+    positions.resize(0, stream);
+    positions.shrink_to_fit(stream);
+    group_slots.resize(0, stream);
+    group_slots.shrink_to_fit(stream);
+    overflow.reset();
+
+    key_rows.resize(num_rows, stream);
+    rmm::device_uvector<size_type> group_offsets(
+      static_cast<std::size_t>(num_rows) + 1, stream, temp_mr);
+    rmm::device_uvector<size_type> grouped_rows(num_rows, stream, temp_mr);
+    thrust::sequence(policy, key_rows.begin(), key_rows.end(), size_type{0});
+    thrust::sequence(policy, group_offsets.begin(), group_offsets.end(), size_type{0});
+    thrust::sequence(policy, grouped_rows.begin(), grouped_rows.end(), size_type{0});
+    return {
+      num_groups, num_rows, std::move(key_rows), std::move(group_offsets), std::move(grouped_rows)};
+  }
+
+  auto const entry_rows = entries.begin();
   key_rows.resize(num_groups, stream);
-  thrust::gather(policy, group_slots.begin(), group_slots.end(), entry_rows, key_rows.begin());
+  if (count_by_representative) {
+    thrust::copy(policy, group_slots.begin(), group_slots.end(), key_rows.begin());
+  } else {
+    thrust::gather(policy, group_slots.begin(), group_slots.end(), entry_rows, key_rows.begin());
+  }
   entries.resize(0, stream);
   entries.shrink_to_fit(stream);
 
-  rmm::device_uvector<size_type> group_offsets(num_groups + 1, stream, temp_mr);
+  rmm::device_uvector<size_type> group_offsets(group_slots.size() + 1, stream, temp_mr);
   group_offsets.set_element_to_zero_async(0, stream);
   auto const group_counts =
     cuda::make_permutation_iterator(slot_counts.begin(), group_slots.begin());
@@ -253,6 +304,8 @@ grouped_keys group_keys(size_type num_rows,
                   group_offsets.begin() + num_groups,
                   group_slots.begin(),
                   slot_counts.begin());
+  group_slots.resize(0, stream);
+  group_slots.shrink_to_fit(stream);
   rmm::device_uvector<size_type> grouped_rows(num_grouped_rows, stream, temp_mr);
   launch_hash_csr_fill_kernel(
     num_rows, positions.data(), slot_counts.data(), grouped_rows.data(), stream);

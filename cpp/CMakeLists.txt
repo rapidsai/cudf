@@ -671,6 +671,11 @@ add_library(
   src/groupby/hash/groupby.cu
   src/groupby/hash/hash_compound_agg_finalizer.cu
   src/groupby/hash/output_utils.cu
+  src/groupby/hash/single_pass_argminmax.cu
+  src/groupby/hash/single_pass_minmax.cu
+  src/groupby/hash/single_pass_product.cu
+  src/groupby/hash/single_pass_sum_overflow.cu
+  src/groupby/hash/single_pass_sums.cu
   src/groupby/sort/aggregate.cpp
   src/groupby/sort/group_argmax.cu
   src/groupby/sort/group_argmin.cu

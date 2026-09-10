@@ -14,8 +14,11 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <cub/thread/thread_load.cuh>
 #include <cuco/pair.cuh>
 #include <cuda/atomic>
+#include <cuda/bit>
+#include <cuda/std/bit>
 #include <cuda/std/cstdint>
 #include <cuda/std/limits>
 #include <cuda/std/utility>
@@ -26,7 +29,7 @@ namespace cudf::groupby::detail::hash {
 /// One open-addressed slot: the first input row that claimed the slot.
 using hash_table_entry_type = size_type;
 
-/// Where an input row landed: the slot owned by its key and its rank among the rows of that slot.
+/// Each input row records its group count index and its rank among the rows of that group.
 using build_position_type = cuco::pair<cuda::std::uint32_t, size_type>;
 
 /// Slot recorded for rows that are excluded from the groupby because their keys contain nulls.
@@ -62,32 +65,29 @@ struct hash_csr_table_ref {
    * Most groupby rows repeat a key that is already in the table, so each slot is read before any
    * attempt to claim it and the compare-and-swap only runs on empty slots.
    *
+   * @param representative Receives the row stored in the matching slot, or the empty sentinel
    * @return The slot and whether `row` claimed it, or `capacity` when `max_probes` slots were
    * probed without success
    */
   template <typename Equal>
-  __device__ cuda::std::pair<cuda::std::uint32_t, bool> insert_or_find(size_type row,
-                                                                       hash_value_type hash,
-                                                                       Equal const& equal) const
+  __device__ cuda::std::pair<cuda::std::uint32_t, bool> insert_or_find(
+    size_type row, hash_value_type hash, Equal const& equal, size_type& representative) const
   {
-    auto slot = static_cast<cuda::std::uint32_t>(hash % capacity);
+    representative = cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
+    auto slot      = static_cast<cuda::std::uint32_t>(hash % capacity);
     for (cuda::std::uint32_t step = 0; step < max_probes; ++step) {
-      // A claimed slot never changes, so the first look may come from L1 (block scope). Only an
-      // empty value can be stale; it is checked again at device scope before the slot is claimed,
-      // so that a hot slot cached as empty costs one L2 load rather than a failed atomic.
-      auto current =
-        cuda::atomic_ref<hash_table_entry_type, cuda::thread_scope_block>{entries[slot]}.load(
-          cuda::memory_order_relaxed);
-      if (current == cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
-        auto entry_ref =
-          cuda::atomic_ref<hash_table_entry_type, cuda::thread_scope_device>{entries[slot]};
-        current = entry_ref.load(cuda::memory_order_relaxed);
-        if (current == cudf::detail::CUDF_SIZE_TYPE_SENTINEL &&
-            entry_ref.compare_exchange_strong(current, row, cuda::memory_order_relaxed)) {
-          return {slot, true};
-        }
+      auto entry_ref =
+        cuda::atomic_ref<hash_table_entry_type, cuda::thread_scope_device>{entries[slot]};
+      auto current = entry_ref.load(cuda::memory_order_relaxed);
+      if (current == cudf::detail::CUDF_SIZE_TYPE_SENTINEL &&
+          entry_ref.compare_exchange_strong(current, row, cuda::memory_order_relaxed)) {
+        representative = row;
+        return {slot, true};
       }
-      if (equal(row, current)) { return {slot, false}; }
+      if (equal(row, current)) {
+        representative = current;
+        return {slot, false};
+      }
       slot = slot + 1 == capacity ? 0 : slot + 1;
     }
     return {capacity, false};
@@ -110,17 +110,22 @@ CUDF_KERNEL void hash_csr_build_kernel(size_type num_rows,
                                        bitmask_type const* valid_rows,
                                        build_position_type* positions,
                                        size_type* slot_counts,
+                                       bool count_by_representative,
                                        hash_csr_table_ref table,
                                        Equal equal,
                                        Hasher hasher,
                                        int* overflow)
 {
-  auto const lane    = static_cast<cuda::std::uint32_t>(threadIdx.x % cudf::detail::warp_size);
-  auto const stride  = cudf::detail::grid_1d::grid_stride();
-  auto const is_full = [overflow] {
-    return overflow != nullptr && cuda::atomic_ref<int, cuda::thread_scope_block>{*overflow}.load(
-                                    cuda::memory_order_relaxed) != 0;
-  };
+  auto const lane   = static_cast<cuda::std::uint32_t>(threadIdx.x % cudf::detail::warp_size);
+  auto const stride = cudf::detail::grid_1d::grid_stride();
+  // One thread checks the cross-block abort flag. A block that starts before an overflow
+  // finishes its bounded probes; the host still discards the partial build and retries.
+  if (overflow != nullptr) {
+    auto const stop =
+      threadIdx.x == 0 && cuda::atomic_ref<int, cuda::thread_scope_device>{*overflow}.load(
+                            cuda::memory_order_relaxed) != 0;
+    if (__syncthreads_or(stop)) { return; }
+  }
   // Every lane of a warp runs the same number of iterations so the warp-wide match and shuffle
   // below always see a converged warp; lanes past the last row simply do not participate.
   for (auto first_row = cudf::detail::grid_1d::global_thread_id() - lane; first_row < num_rows;
@@ -130,13 +135,16 @@ CUDF_KERNEL void hash_csr_build_kernel(size_type num_rows,
       row < num_rows &&
       (valid_rows == nullptr || cudf::bit_is_set(valid_rows, static_cast<size_type>(row)));
     auto slot = hash_csr_no_slot;
-    if (is_active && !is_full()) {
+    if (is_active) {
       auto const index = static_cast<size_type>(row);
-      slot             = table.insert_or_find(index, hasher(index), equal).first;
+      size_type representative{};
+      slot = table.insert_or_find(index, hasher(index), equal, representative).first;
       if (slot == table.capacity) {
         cuda::atomic_ref<int, cuda::thread_scope_device>{*overflow}.store(
           1, cuda::memory_order_relaxed);
         slot = hash_csr_no_slot;
+      } else if (count_by_representative) {
+        slot = static_cast<cuda::std::uint32_t>(representative);
       }
     }
     // Without aggregations only the distinct keys matter, and the table alone provides them.
@@ -146,16 +154,16 @@ CUDF_KERNEL void hash_csr_build_kernel(size_type num_rows,
     auto const active_mask = __ballot_sync(0xffff'ffffu, has_slot);
     if (has_slot) {
       auto const peers  = __match_any_sync(active_mask, slot);
-      auto const leader = __ffs(static_cast<int>(peers)) - 1;
+      auto const leader = cuda::std::countr_zero(peers);
       size_type first_rank{};
       if (lane == static_cast<cuda::std::uint32_t>(leader)) {
         first_rank =
           cuda::atomic_ref<size_type, cuda::thread_scope_device>{slot_counts[slot]}.fetch_add(
-            static_cast<size_type>(__popc(static_cast<int>(peers))), cuda::memory_order_relaxed);
+            static_cast<size_type>(cuda::std::popcount(peers)), cuda::memory_order_relaxed);
       }
       first_rank = __shfl_sync(peers, first_rank, leader);
       auto const rank_in_warp =
-        static_cast<size_type>(__popc(static_cast<int>(peers & ((1u << lane) - 1u))));
+        static_cast<size_type>(cuda::std::popcount(peers & ((1u << lane) - 1u)));
       positions[row] = {slot, first_rank + rank_in_warp};
     } else if (row < num_rows) {
       positions[row] = {hash_csr_no_slot, cudf::detail::CUDF_SIZE_TYPE_SENTINEL};
@@ -187,7 +195,8 @@ CUDF_KERNEL void hash_csr_sample_kernel(size_type num_rows,
   auto is_new = false;
   if (is_valid) {
     auto const index = static_cast<size_type>(row);
-    is_new           = table.insert_or_find(index, hasher(index), equal).second;
+    size_type representative{};
+    is_new = table.insert_or_find(index, hasher(index), equal, representative).second;
   }
   // Every thread of the block reaches both counts, which is what they require.
   auto const num_valid = __syncthreads_count(is_valid);
@@ -206,16 +215,13 @@ CUDF_KERNEL void hash_csr_fill_kernel(size_type num_rows,
                                       size_type const* slot_offsets,
                                       size_type* grouped_rows)
 {
-  static_assert(sizeof(build_position_type) == sizeof(unsigned long long));
   auto const stride = cudf::detail::grid_1d::grid_stride();
   for (auto row = cudf::detail::grid_1d::global_thread_id(); row < num_rows; row += stride) {
     // The positions are read once, so they stream past the caches and leave them to the slot
     // offsets, which every row looks up, and to the grouped rows, which the aggregations read next.
-    auto const packed = __ldcs(reinterpret_cast<unsigned long long const*>(positions) + row);
-    auto const slot   = static_cast<cuda::std::uint32_t>(packed & 0xffff'ffffu);
-    auto const rank   = static_cast<size_type>(packed >> 32);
-    if (slot == hash_csr_no_slot) { continue; }
-    grouped_rows[slot_offsets[slot] + rank] = static_cast<size_type>(row);
+    auto const position = cub::ThreadLoad<cub::LOAD_CS>(positions + row);
+    if (position.first == hash_csr_no_slot) { continue; }
+    grouped_rows[slot_offsets[position.first] + position.second] = static_cast<size_type>(row);
   }
 }
 
@@ -224,6 +230,7 @@ void launch_hash_csr_build_kernel(size_type num_rows,
                                   bitmask_type const* valid_rows,
                                   build_position_type* positions,
                                   size_type* slot_counts,
+                                  bool count_by_representative,
                                   hash_csr_table_ref table,
                                   Equal equal,
                                   Hasher hasher,
@@ -233,7 +240,15 @@ void launch_hash_csr_build_kernel(size_type num_rows,
   if (num_rows == 0) { return; }
   auto const config = cudf::detail::grid_1d{num_rows, hash_csr_block_size};
   hash_csr_build_kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream.get()>>>(
-    num_rows, valid_rows, positions, slot_counts, table, equal, hasher, overflow);
+    num_rows,
+    valid_rows,
+    positions,
+    slot_counts,
+    count_by_representative,
+    table,
+    equal,
+    hasher,
+    overflow);
   CUDF_CUDA_TRY(cudaGetLastError());
 }
 
