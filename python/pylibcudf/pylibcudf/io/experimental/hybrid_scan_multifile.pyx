@@ -65,7 +65,8 @@ cdef vector[vector[size_type]] _get_row_group_indices(
 cdef class HybridScanMultiFile:
     """Experimental multi-source Parquet reader for highly selective filters.
 
-    Vectorizes the :class:`HybridScanReader` APIs over multiple Parquet sources.
+    Vectorizes the :class:`~pylibcudf.io.experimental.hybrid_scan.HybridScanReader`
+    APIs over multiple Parquet sources.
     Inputs and outputs are indexed by source order, except for the row mask which
     is a single boolean column spanning all rows of all sources concatenated in
     source order, then in row-group order within a source.
