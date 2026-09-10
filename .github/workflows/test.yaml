@@ -116,13 +116,15 @@ jobs:
       packages: read
       pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@main
+    # TODO: Return to @main after rapidsai/shared-workflows#629 merges.
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@e7287514746a7f81aa65e99a4a5783f9882bcc52
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: "ci/test_python_cudf.sh"
+      numba-cache-key-prefix: cudf-numba-udf-v1
       # https://github.com/NVIDIA/cudf/issues/23498
       matrix_filter: map(select(.GPU != "gb300" and .GPU != "gh200"))
   conda-python-other-tests:
@@ -200,13 +202,15 @@ jobs:
       packages: read
       pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
+    # TODO: Return to @main after rapidsai/shared-workflows#629 merges.
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@e7287514746a7f81aa65e99a4a5783f9882bcc52
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: ci/test_wheel_cudf.sh
+      numba-cache-key-prefix: cudf-numba-udf-v1
   wheel-tests-dask-cudf:
     permissions:
       actions: read

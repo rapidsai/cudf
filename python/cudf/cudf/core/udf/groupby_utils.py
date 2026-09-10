@@ -197,6 +197,11 @@ class GroupByApplyKernel(ApplyKernelBase):
     def kernel_type(self):
         return "groupby_apply"
 
+    @property
+    def _requires_linked_udf_shim(self):
+        # GroupBy UDF reductions call the device functions in UDF_SHIM_FILE.
+        return True
+
     def _get_frame_type(self):
         return _get_frame_groupby_type(
             np.dtype(list(_all_dtypes_from_frame(self.frame).items())),

@@ -1,9 +1,12 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
 from abc import ABC, abstractmethod
 from contextlib import nullcontext
+from hashlib import sha256
+from pickle import dumps
+from textwrap import indent
 
 import numpy as np
 from numba import cuda, typeof
@@ -12,6 +15,7 @@ from numba.np import numpy_support
 from numba.types import CPointer, Poison, Tuple, boolean, int64, void
 
 from cudf.api.types import is_scalar
+from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.core.udf.masked_typing import MaskedType
 from cudf.core.udf.nrt_utils import CaptureNRTUsage, nrt_enabled
 from cudf.core.udf.strings_typing import str_view_arg_handler
@@ -74,6 +78,11 @@ class ApplyKernelBase(ABC):
         Get a dict of globals needed to exec the kernel
         string.
         """
+
+    @property
+    def _requires_linked_udf_shim(self):
+        """Whether this API has device-library dependencies beyond NRT."""
+        return False
 
     @staticmethod
     def _format_arg_list(prefix, count):
@@ -156,12 +165,65 @@ class ApplyKernelBase(ABC):
 
         return kernel, return_type
 
+    def _disk_cache_identity(self):
+        """Return a stable identity for globals used by a generated kernel."""
+        key = _generate_cache_key(
+            self.frame, self.func, self.args, suffix=self.kernel_type
+        )
+        return int.from_bytes(sha256(dumps(key)).digest()[:8], "big")
+
+    def _can_use_disk_cache(self, nrt):
+        return (
+            not self._requires_linked_udf_shim
+            and not nrt
+            and not any(
+                is_dtype_obj_string(col.dtype) for col in self.frame._columns
+            )
+        )
+
     def compile_kernel_string(self, kernel_string, nrt=False):
         global_exec_context = self._get_kernel_string_exec_context()
-        global_exec_context["f_"] = self.device_func
+        use_disk_cache = self._can_use_disk_cache(nrt)
+        if use_disk_cache:
+            # The closure carries the UDF and generated-kernel globals into
+            # Numba's cache key. Compiling with this module's filename gives
+            # the dispatcher a persistent source locator.
+            kernel_lines = indent(
+                kernel_string, "    ", lambda _line: True
+            ).splitlines()
+            kernel_def_idx = next(
+                i
+                for i, line in enumerate(kernel_lines)
+                if line.startswith("    def _kernel")
+            )
+            kernel_lines[kernel_def_idx + 1 : kernel_def_idx + 1] = [
+                "        if cache_identity < 0:",
+                "            return",
+            ]
+            factory_string = "\n".join(
+                [
+                    "def _make_kernel(f_, cache_identity):",
+                    *kernel_lines,
+                    "    return _kernel",
+                ]
+            )
+            exec(
+                compile(factory_string, __file__, "exec"), global_exec_context
+            )
+            _kernel = global_exec_context["_make_kernel"](
+                self.device_func, self._disk_cache_identity()
+            )
+        else:
+            global_exec_context["f_"] = self.device_func
+            exec(kernel_string, global_exec_context)
+            _kernel = global_exec_context["_kernel"]
 
-        exec(kernel_string, global_exec_context)
-        _kernel = global_exec_context["_kernel"]
+        jit_kwargs = {}
+        if use_disk_cache:
+            jit_kwargs["cache"] = True
+        else:
+            jit_kwargs["link"] = [UDF_SHIM_FILE]
+            jit_kwargs["extensions"] = [str_view_arg_handler]
         ctx = nrt_enabled() if nrt else nullcontext()
         with ctx:
             with warnings.catch_warnings():
@@ -174,8 +236,7 @@ class ApplyKernelBase(ABC):
                 )
                 kernel = cuda.jit(
                     self.sig,
-                    link=[UDF_SHIM_FILE],
-                    extensions=[str_view_arg_handler],
+                    **jit_kwargs,
                 )(_kernel)
         return kernel
 
