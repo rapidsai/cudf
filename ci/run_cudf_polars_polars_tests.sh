@@ -7,8 +7,6 @@ set -euo pipefail
 TIMEOUT_TOOL_PATH="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/timeout_with_stack.py
 
 ENGINE="both"
-# Match polars-version testing: PRs use the faster default (non-small) SPMD
-# blocksize; nightly/branch CI passes --inject-gpu-engine-blocksize small.
 BLOCKSIZE="default"
 PYTEST_ARGS=()
 while (($#)); do
