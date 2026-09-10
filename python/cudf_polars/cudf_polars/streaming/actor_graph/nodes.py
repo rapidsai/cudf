@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from cudf_streaming.channel_metadata import ChannelMetadata
 from cudf_streaming.table_chunk import (
@@ -18,18 +18,24 @@ from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
 
-from cudf_polars.dsl.ir import IR, Empty
+from cudf_polars.dsl.ir import IR, Empty, Join
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
+    ir_context_for_node,
 )
-from cudf_polars.streaming.actor_graph.tracing import send_chunk
+from cudf_polars.streaming.actor_graph.tracing import (
+    send_chunk,
+    trace_channel,
+)
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
     _leading_order_keys,
     chunk_to_frame,
     chunkwise_evaluate,
+    clear_local_ordering,
     empty_table_chunk,
     gather_in_task_group,
+    join_preserves_side_order,
     make_spill_function,
     maybe_remap_partitioning,
     process_children,
@@ -46,6 +52,17 @@ if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
+
+
+def _preserves_local_order(ir: IR, partitioning_index: int | None = None) -> bool:
+    """Return True when this IR node preserves advertised local row order."""
+    if isinstance(ir, Join) and partitioning_index is not None:
+        # partitioning_index is the child whose partitioning we forwarded
+        # (0 = left, 1 = right). Local row order holds only when join
+        # maintain_order covers that side.
+        side: Literal["left", "right"] = "left" if partitioning_index == 0 else "right"
+        return join_preserves_side_order(ir.options[5], side)
+    return ir.preserves_output_order
 
 
 @define_actor()
@@ -79,15 +96,23 @@ async def default_node_single(
     async with shutdown_on_error(
         context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
     ) as tracer:
+        ch_in = trace_channel(ch_in, tracer)
+        ch_out = trace_channel(ch_out, tracer)
         # Recv metadata and prepare output metadata
         metadata_in = await recv_metadata(ch_in, context)
+        partitioning = maybe_remap_partitioning(
+            ir, metadata_in.partitioning, context=context
+        )
+        if not _preserves_local_order(ir):
+            partitioning = clear_local_ordering(partitioning)
         metadata_out = ChannelMetadata(
             local_count=metadata_in.local_count,
-            partitioning=maybe_remap_partitioning(
-                ir, metadata_in.partitioning, context=context
-            ),
+            partitioning=partitioning,
             duplicated=metadata_in.duplicated,
         )
+        import dataclasses
+
+        ir_context = dataclasses.replace(ir_context, tracer=tracer)
 
         # Process chunks (handle empty input for aggregation-like operations)
         await chunkwise_evaluate(
@@ -135,6 +160,8 @@ async def default_node_multi(
     async with shutdown_on_error(
         context, *chs_in, ch_out, trace_ir=ir, ir_context=ir_context
     ) as tracer:
+        chs_in = tuple(trace_channel(ch, tracer) for ch in chs_in)
+        ch_out = trace_channel(ch_out, tracer)
         # Merge and forward basic metadata.
         local_count = 1
         duplicated = True
@@ -159,6 +186,8 @@ async def default_node_multi(
                     child_ir=ir.children[idx],
                     context=context,
                 )
+                if not _preserves_local_order(ir, partitioning_index):
+                    partitioning = clear_local_ordering(partitioning)
         metadata = ChannelMetadata(
             local_count=local_count,
             partitioning=partitioning,
@@ -544,6 +573,7 @@ def _(
 
     # Create output ChannelManager
     channels[ir] = ChannelManager(rec.state["context"])
+    ir_context = ir_context_for_node(rec, ir)
 
     if len(ir.children) == 1:
         # Single-channel default node
@@ -551,7 +581,7 @@ def _(
             default_node_single(
                 rec.state["context"],
                 ir,
-                rec.state["ir_context"],
+                ir_context,
                 channels[ir].reserve_input_slot(),
                 channels[ir.children[0]].reserve_output_slot(),
             )
@@ -562,7 +592,7 @@ def _(
             default_node_multi(
                 rec.state["context"],
                 ir,
-                rec.state["ir_context"],
+                ir_context,
                 channels[ir].reserve_input_slot(),
                 tuple(channels[c].reserve_output_slot() for c in ir.children),
             )
@@ -592,7 +622,10 @@ async def empty_node(
     ch_out
         The output Channel[TableChunk].
     """
-    async with shutdown_on_error(context, ch_out, ir_context=ir_context, trace_ir=ir):
+    async with shutdown_on_error(
+        context, ch_out, ir_context=ir_context, trace_ir=ir
+    ) as tracer:
+        ch_out = trace_channel(ch_out, tracer)
         # Send metadata indicating a single empty chunk
         await send_metadata(
             ch_out,
@@ -619,7 +652,7 @@ def _(
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     """Generate network for Empty node - produces one empty chunk."""
     context = rec.state["context"]
-    ir_context = rec.state["ir_context"]
+    ir_context = ir_context_for_node(rec, ir)
     channels: dict[IR, ChannelManager] = {ir: ChannelManager(rec.state["context"])}
     nodes: dict[IR, list[Any]] = {
         ir: [empty_node(context, ir, ir_context, channels[ir].reserve_input_slot())]
@@ -654,6 +687,7 @@ def generate_ir_sub_network_wrapper(
     if (fanout_info := rec.state["fanout_nodes"].get(ir)) is not None:
         count = fanout_info.num_consumers
         manager = ChannelManager(rec.state["context"], count=count)
+        ir_context = ir_context_for_node(rec, ir)
         fanout_node: Any
         if fanout_info.unbounded:
             fanout_node = fanout_node_unbounded(
@@ -661,7 +695,7 @@ def generate_ir_sub_network_wrapper(
                 channels[ir].reserve_output_slot(),
                 *[manager.reserve_input_slot() for _ in range(count)],
                 trace_ir=ir,
-                ir_context=rec.state["ir_context"],
+                ir_context=ir_context,
             )
         else:  # "bounded"
             fanout_node = fanout_node_bounded(
@@ -669,7 +703,7 @@ def generate_ir_sub_network_wrapper(
                 channels[ir].reserve_output_slot(),
                 *[manager.reserve_input_slot() for _ in range(count)],
                 trace_ir=ir,
-                ir_context=rec.state["ir_context"],
+                ir_context=ir_context,
             )
         nodes[ir].append(fanout_node)
         channels[ir] = manager

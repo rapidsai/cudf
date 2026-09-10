@@ -32,8 +32,12 @@ from cudf_polars.streaming.actor_graph.collectives.ordering import (
 from cudf_polars.streaming.actor_graph.collectives.shuffle import ShuffleManager
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
+    ir_context_for_node,
 )
-from cudf_polars.streaming.actor_graph.tracing import send_chunk
+from cudf_polars.streaming.actor_graph.tracing import (
+    send_chunk,
+    trace_channel,
+)
 from cudf_polars.streaming.actor_graph.utils import (
     MAX_ROWS_PER_PARTITION,
     ChannelManager,
@@ -42,6 +46,7 @@ from cudf_polars.streaming.actor_graph.utils import (
     allgather_and_reduce,
     allgather_reduce,
     chunkwise_evaluate,
+    clear_local_ordering,
     empty_table_chunk,
     evaluate_batch,
     evaluate_chunk,
@@ -479,6 +484,7 @@ def _groupby_output_metadata(
     duplicated: bool,  # noqa: FBT001
     *,
     context: Context,
+    preserves_output_order: bool,
 ) -> ChannelMetadata:
     """Return groupby output metadata after final reduction/select."""
     partitioning = maybe_remap_partitioning(
@@ -501,6 +507,10 @@ def _groupby_output_metadata(
             child_ir=ir.children[0],
             context=context,
         )
+    if not preserves_output_order:
+        # Partitioning-level helper: clear local order on every Ordering
+        # in the inter-rank and local schemes.
+        partitioning = clear_local_ordering(partitioning)
     return ChannelMetadata(
         local_count=local_count,
         partitioning=partitioning,
@@ -557,6 +567,7 @@ async def _ordered_adjust_reduce(
     aggregated: TableChunk,
     input_drained: bool,
     input_ordering: Ordering,
+    preserves_output_order: bool,
     tracer: ActorTracer | None = None,
 ) -> None:
     """Adjust locally aggregated data to strict ordering boundaries."""
@@ -564,6 +575,13 @@ async def _ordered_adjust_reduce(
         input_ordering,
         decomposed.shuffle_indices[: len(input_ordering.keys)],
     )
+    if not preserves_output_order:
+        # Ordering-level helper: this is a single Ordering passed into
+        # adjust_ordering, not a Partitioning, so clear_local_ordering
+        # does not apply.
+        partial_input_ordering = partial_input_ordering.with_locally_ordered(
+            locally_ordered=False
+        )
     partial_output_ordering = partial_input_ordering.as_strict()
     ch_local = context.create_channel()
     ch_adjusted = context.create_channel()
@@ -577,6 +595,7 @@ async def _ordered_adjust_reduce(
         adjusted_metadata.partitioning,
         adjusted_metadata.duplicated,
         context=context,
+        preserves_output_order=preserves_output_order,
     )
     if tracer is not None:
         tracer.decision = "adjust_ordering"
@@ -859,6 +878,8 @@ async def groupby_actor(
     async with shutdown_on_error(
         context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
     ) as tracer:
+        ch_in = trace_channel(ch_in, tracer)
+        ch_out = trace_channel(ch_out, tracer)
         metadata_in = await recv_metadata(ch_in, context)
 
         nranks = comm.nranks
@@ -872,8 +893,16 @@ async def groupby_actor(
             "local" if metadata_in.duplicated else "flat"
         )
         maintain_order = _maintain_order(ir)
+        preserves_output_order = ir.preserves_output_order
         fully_partitioned = partitioning.is_strictly_partitioned(
             level=partitioning_level,
+        )
+        input_ordering = None if metadata_in.duplicated else partitioning.get_ordering()
+        can_adjust_preserving_order = (
+            isinstance(ir, GroupBy)
+            and preserves_output_order
+            and input_ordering is not None
+            and not _has_stable_sorted_agg(ir.agg_requests)
         )
         fallback_case = (
             # NOTE: This criteria means that we fell back
@@ -886,14 +915,17 @@ async def groupby_actor(
         if fully_partitioned or fallback_case:
             if tracer is not None:
                 tracer.decision = "chunkwise"
+            output_partitioning = maybe_remap_partitioning(
+                ir,
+                metadata_in.partitioning,
+                child_ir=ir.children[0],
+                context=context,
+            )
+            if not preserves_output_order:
+                output_partitioning = clear_local_ordering(output_partitioning)
             metadata_out = ChannelMetadata(
                 local_count=metadata_in.local_count,
-                partitioning=maybe_remap_partitioning(
-                    ir,
-                    metadata_in.partitioning,
-                    child_ir=ir.children[0],
-                    context=context,
-                ),
+                partitioning=output_partitioning,
                 duplicated=metadata_in.duplicated,
             )
             await chunkwise_evaluate(
@@ -917,7 +949,7 @@ async def groupby_actor(
             ir_context,
             ch_in,
             target_partition_size,
-            allow_early_exit=not maintain_order,
+            allow_early_exit=not maintain_order or can_adjust_preserving_order,
         )
 
         skip_global_comm = metadata_in.duplicated or isinstance(
@@ -933,7 +965,7 @@ async def groupby_actor(
             collective_ids,
             target_partition_size,
             skip_global_comm,
-            maintain_order,
+            maintain_order and not can_adjust_preserving_order,
             tracer,
         )
 
@@ -950,17 +982,7 @@ async def groupby_actor(
                 aggregated=aggregated,
                 tracer=tracer,
             )
-        elif (
-            # adjust_ordering requires row-ordered chunks. maintain_order=True
-            # preserves key order through local aggregation for ordered input.
-            maintain_order
-            and not metadata_in.duplicated
-            and partitioning.is_ordered(
-                group_keys,
-                level="flat",
-            )
-        ):
-            assert isinstance(partitioning.inter_rank_scheme, OrderScheme)
+        elif input_ordering is not None:
             await _ordered_adjust_reduce(
                 context,
                 comm,
@@ -973,7 +995,8 @@ async def groupby_actor(
                 target_partition_size,
                 aggregated=aggregated,
                 input_drained=input_drained,
-                input_ordering=partitioning.inter_rank_scheme.orderings[0],
+                input_ordering=input_ordering,
+                preserves_output_order=preserves_output_order,
                 tracer=tracer,
             )
         else:
@@ -1011,6 +1034,7 @@ def _(
     actors, channels = process_children(ir, rec)
     channels[ir] = ChannelManager(rec.state["context"])
     collective_ids = list(rec.state["collective_id_map"].get(ir, []))
+    ir_context = ir_context_for_node(rec, ir)
     assert len(collective_ids) == 2, (
         f"{type(ir).__name__} requires 2 collective IDs, got {len(collective_ids)}"
     )
@@ -1019,7 +1043,7 @@ def _(
             rec.state["context"],
             rec.state["comm"],
             ir,
-            rec.state["ir_context"],
+            ir_context,
             channels[ir].reserve_input_slot(),
             channels[ir.children[0]].reserve_output_slot(),
             config_options.executor.target_partition_size,

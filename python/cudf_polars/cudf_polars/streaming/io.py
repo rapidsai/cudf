@@ -262,7 +262,10 @@ def _read_with_hybrid_scan(
                 )
                 if bloom_ranges:
                     bloom_chunks = plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
-                        source_info, bloom_ranges, stream=stream
+                        source_info,
+                        bloom_ranges,
+                        plc.io.parquet_io_utils.IOSubmissionPolicy.SERIALIZE,
+                        stream=stream,
                     )
                     row_group_indices = reader.filter_row_groups_with_bloom_filters(
                         bloom_chunks, row_group_indices, options, stream=stream
@@ -293,6 +296,7 @@ def _read_with_hybrid_scan(
         filter_chunks = plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
             source_info,
             reader.filter_column_chunks_byte_ranges(row_group_indices, options),
+            plc.io.parquet_io_utils.IOSubmissionPolicy.SERIALIZE,
             stream=stream,
         )
         filter_tbl_w_meta = reader.materialize_filter_columns(
@@ -318,6 +322,7 @@ def _read_with_hybrid_scan(
             payload_chunks = plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
                 source_info,
                 reader.payload_column_chunks_byte_ranges(row_group_indices, options),
+                plc.io.parquet_io_utils.IOSubmissionPolicy.SERIALIZE,
                 stream=stream,
             )
             payload_tbl_w_meta = reader.materialize_payload_columns(
@@ -349,6 +354,8 @@ class SplitScan(IR):
     a partial read of the underlying file. The range
     (skip_rows and n_rows) is calculated at IO time.
     """
+
+    is_io_node: bool = True
 
     __slots__ = (
         "base_scan",
@@ -575,6 +582,8 @@ class FusedScan(IR):
     SINGLE_FILE (N = 1).
     """
 
+    is_io_node: bool = True
+
     __slots__ = (
         "base_scan",
         "cached_parquet_info",
@@ -740,6 +749,8 @@ def _(
 
 class StreamingScan(IR):
     """A streaming scan node."""
+
+    is_io_node: bool = True
 
     __slots__ = (
         "base_scan",
