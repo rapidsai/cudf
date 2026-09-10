@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <src/io/parquet/compact_protocol_reader.hpp>
