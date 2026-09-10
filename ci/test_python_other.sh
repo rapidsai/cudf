@@ -33,14 +33,14 @@ if [[ "${RUN_DASK_CUDF_TESTS}" == "true" ]]; then
     --cov=dask_cudf \
     --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/dask-cudf-coverage.xml" \
     --cov-report=term \
-    --durations=10 --durations-min=10
+    --durations=50 --durations-min=1
 fi
 
 if [[ "${RUN_CUDF_KAFKA_TESTS}" == "true" ]]; then
   rapids-logger "pytest cudf_kafka"
   timeout 30m ./ci/run_cudf_kafka_pytests.sh \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-kafka.xml" \
-    --durations=10 --durations-min=10
+    --durations=50 --durations-min=1
 fi
 
 if [[ "${RUN_CUSTREAMZ_TESTS}" == "true" ]]; then
@@ -53,7 +53,7 @@ if [[ "${RUN_CUSTREAMZ_TESTS}" == "true" ]]; then
     --cov=custreamz \
     --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/custreamz-coverage.xml" \
     --cov-report=term \
-    --durations=10 --durations-min=10
+    --durations=50 --durations-min=1
 fi
 
 if [[ "${RUN_CUDF_POLARS_TESTS}" == "true" ]]; then
@@ -68,14 +68,14 @@ if [[ "${RUN_CUDF_POLARS_TESTS}" == "true" ]]; then
     --cov=cudf_polars \
     --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-polars-coverage.xml" \
     --cov-report=term \
-    --durations=10 --durations-min=10
+    --durations=50 --durations-min=1
 fi
 
 if [[ "${RUN_CUDF_STREAMING_TESTS}" == "true" ]]; then
   rapids-logger "pytest cudf_streaming"
   timeout 30m ./ci/run_cudf_streaming_pytests.sh \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-streaming.xml" \
-    --durations=10 --durations-min=10
+    --durations=50 --durations-min=1
 fi
 
 rapids-logger "Test script exiting with value: $EXITCODE"

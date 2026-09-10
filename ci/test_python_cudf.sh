@@ -31,7 +31,7 @@ if [[ "${RUN_PYLIBCUDF_TESTS}" == "true" ]]; then
     --cov=pylibcudf \
     --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/pylibcudf-coverage.xml" \
     --cov-report=term \
-    --durations=10 --durations-min=10
+    --durations=50 --durations-min=1
 fi
 
 version_gte() {
@@ -48,7 +48,7 @@ if [[ "${RUN_CUDF_TESTS}" == "true" ]]; then
     --cov=cudf \
     --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-coverage.xml" \
     --cov-report=term \
-    --durations=10 --durations-min=10
+    --durations=50 --durations-min=1
 fi
 
 # Run benchmarks with both cudf and pandas to ensure compatibility is maintained.
@@ -66,7 +66,7 @@ if [[ "${RUN_CUDF_BENCHMARK_TESTS}" == "true" ]]; then
     --cov=cudf \
     --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-benchmark-coverage.xml" \
     --cov-report=term \
-    --durations=10 --durations-min=10
+    --durations=50 --durations-min=1
 
   rapids-logger "pytest for cudf benchmarks using pandas"
   timeout 40m ./ci/run_cudf_pandas_pytest_benchmarks.sh \
@@ -77,7 +77,7 @@ if [[ "${RUN_CUDF_BENCHMARK_TESTS}" == "true" ]]; then
     --cov=cudf \
     --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-benchmark-pandas-coverage.xml" \
     --cov-report=term \
-    --durations=10 --durations-min=10
+    --durations=50 --durations-min=1
 fi
 
 rapids-logger "Test script exiting with value: $EXITCODE"
