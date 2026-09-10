@@ -456,8 +456,7 @@ static int64_t get_transition_time(dst_transition_s const& trans, int year)
  * @brief Host-side timezone transition table.
  *
  * Mirrors the layout of the table returned by `make_timezone_transition_table`: entries from the
- * TZif file, followed by `solar_cycle_entry_count` future entries. Empty when the timezone has a
- * zero offset at all times, in which case the conversion is a no-op.
+ * TZif file, followed by `solar_cycle_entry_count` future entries.
  */
 struct host_transition_table {
   std::vector<timestamp_s::rep> times;
@@ -466,8 +465,8 @@ struct host_transition_table {
   [[nodiscard]] bool empty() const { return times.empty(); }
 };
 
-host_transition_table build_transition_table(std::optional<std::string_view> tzif_dir,
-                                             std::string_view timezone_name)
+[[nodiscard]] host_transition_table build_transition_table(std::optional<std::string_view> tzif_dir,
+                                                           std::string_view timezone_name)
 {
   if (timezone_name == "UTC" || timezone_name.empty()) { return {}; }
 
@@ -563,7 +562,7 @@ host_transition_table build_transition_table(std::optional<std::string_view> tzi
  * @brief Returns the UT offset for a timestamp, using the same lookup as the device-side
  * `cudf::detail::get_ut_offset`.
  */
-duration_s lookup_ut_offset(host_transition_table const& tz_table, timestamp_s ts)
+[[nodiscard]] duration_s lookup_ut_offset(host_transition_table const& tz_table, timestamp_s ts)
 {
   if (tz_table.empty()) { return duration_s{0}; }
 
