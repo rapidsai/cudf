@@ -272,8 +272,24 @@ std::unique_ptr<column> binary_operation(
   cuda::stream_ref stream           = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
-/** @copydoc binary_operation(scalar const&, column_view const&, binary_operator, data_type,
- * error_policy, cuda::stream_ref, rmm::device_async_resource_ref)
+/**
+ * @brief Performs a checked binary operation between a column and a scalar.
+ *
+ * `PROPAGATE` throws `cudf::evaluation_error` when any row fails; `NULLIFY` makes failing rows
+ * null.
+ *
+ * @param lhs Left operand column
+ * @param rhs Right operand scalar
+ * @param op Checked binary operator
+ * @param output_type Desired output type
+ * @param policy Error handling policy
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column
+ * @return Output column
+ * @throws cudf::evaluation_error if @p policy is `error_policy::PROPAGATE` and any row fails
+ * @throws cudf::logic_error if @p op is not a checked arithmetic operator
+ * @throws cudf::data_type_error if the input and output types do not match, are not supported
+ * arithmetic or fixed-point types, or @p output_type has an invalid fixed-point scale
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
@@ -284,9 +300,24 @@ std::unique_ptr<column> binary_operation(
   cuda::stream_ref stream           = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
-/** @copydoc binary_operation(scalar const&, column_view const&, binary_operator, data_type,
- * error_policy, cuda::stream_ref, rmm::device_async_resource_ref)
+/**
+ * @brief Performs a checked binary operation between two columns.
  *
+ * `PROPAGATE` throws `cudf::evaluation_error` when any row fails; `NULLIFY` makes failing rows
+ * null.
+ *
+ * @param lhs Left operand column
+ * @param rhs Right operand column
+ * @param op Checked binary operator
+ * @param output_type Desired output type
+ * @param policy Error handling policy
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column
+ * @return Output column
+ * @throws cudf::evaluation_error if @p policy is `error_policy::PROPAGATE` and any row fails
+ * @throws cudf::logic_error if @p op is not a checked arithmetic operator
+ * @throws cudf::data_type_error if the input and output types do not match, are not supported
+ * arithmetic or fixed-point types, or @p output_type has an invalid fixed-point scale
  * @throws std::invalid_argument if @p lhs and @p rhs have different sizes
  */
 std::unique_ptr<column> binary_operation(
