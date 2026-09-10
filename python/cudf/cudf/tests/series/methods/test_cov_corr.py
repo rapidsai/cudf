@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 
@@ -11,33 +11,46 @@ import cudf
 from cudf.testing import assert_eq
 from cudf.testing._utils import expect_warning_if
 
-
-@pytest.mark.parametrize(
-    "data1",
-    [
+COV_CORR_DATA_PAIRS = [
+    pytest.param(
         np.random.default_rng(seed=0).normal(-100, 100, 1000),
         np.random.default_rng(seed=0).integers(-50, 50, 1000),
-        np.zeros(100),
-        np.repeat(np.nan, 100),
+        id="normal-integers",
+    ),
+    pytest.param(
+        np.random.default_rng(seed=0).integers(-50, 50, 1000),
+        np.random.default_rng(seed=0).normal(-100, 100, 1000),
+        id="integers-normal",
+    ),
+    pytest.param(np.zeros(100), np.zeros(100), id="constant"),
+    pytest.param(
+        np.repeat(np.nan, 100), np.repeat(np.nan, 100), id="all-null"
+    ),
+    pytest.param(
         np.array([1.123, 2.343, np.nan, 0.0]),
+        np.array([1.123, 2.343, np.nan, 0.0]),
+        id="nullable",
+    ),
+    pytest.param(
         pa.array([5, 10, 53, None, np.nan, None]),
+        np.array([1.0, 4.0, 9.0, np.nan, 16.0, 25.0]),
+        id="arrow",
+    ),
+    pytest.param(
         pd.Series([1.1, 2.32, 43.4], index=[0, 4, 3]),
-        np.array([], dtype="float64"),
+        pd.Series([43.4, 1.1, 2.32], index=[3, 0, 4]),
+        id="indexed-series",
+    ),
+    pytest.param(np.array([], dtype="float64"), np.array([5]), id="empty"),
+    pytest.param(
         np.array([-3]),
-    ],
-)
-@pytest.mark.parametrize(
-    "data2",
-    [
         np.random.default_rng(seed=0).normal(-100, 100, 1000),
-        np.random.default_rng(seed=0).integers(-50, 50, 1000),
-        np.zeros(100),
-        np.repeat(np.nan, 100),
-        np.array([1.123, 2.343, np.nan, 0.0]),
-        pd.Series([1.1, 2.32, 43.4], index=[0, 500, 4000]),
-        np.array([5]),
-    ],
-)
+        id="singleton",
+    ),
+]
+
+
+@pytest.mark.parametrize(("data1", "data2"), COV_CORR_DATA_PAIRS)
 def test_cov1d(data1, data2):
     gs1 = cudf.Series(data1)
     gs2 = cudf.Series(data2)
@@ -56,32 +69,7 @@ def test_cov1d(data1, data2):
     np.testing.assert_approx_equal(got, expected, significant=8)
 
 
-@pytest.mark.parametrize(
-    "data1",
-    [
-        np.random.default_rng(seed=0).normal(-100, 100, 1000),
-        np.random.default_rng(seed=0).integers(-50, 50, 1000),
-        np.zeros(100),
-        np.repeat(np.nan, 100),
-        np.array([1.123, 2.343, np.nan, 0.0]),
-        pa.array([5, 10, 53, None, np.nan, None]),
-        pd.Series([1.1032, 2.32, 43.4], index=[0, 4, 3]),
-        np.array([], dtype="float64"),
-        np.array([-3]),
-    ],
-)
-@pytest.mark.parametrize(
-    "data2",
-    [
-        np.random.default_rng(seed=0).normal(-100, 100, 1000),
-        np.random.default_rng(seed=0).integers(-50, 50, 1000),
-        np.zeros(100),
-        np.repeat(np.nan, 100),
-        np.array([1.123, 2.343, np.nan, 0.0]),
-        pd.Series([1.1, 2.32, 43.4], index=[0, 500, 4000]),
-        np.array([5]),
-    ],
-)
+@pytest.mark.parametrize(("data1", "data2"), COV_CORR_DATA_PAIRS)
 def test_corr1d(data1, data2, corr_method):
     if corr_method == "spearman":
         # Pandas uses scipy.stats.spearmanr code-path
