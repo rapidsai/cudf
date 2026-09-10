@@ -29,6 +29,7 @@ jobs:
       - java-tests
       - conda-notebook-tests
       - docs-build
+      - docs-build-matrix
       - publish-api-docs
       - wheel-cpp-build
       - wheel-python-build
@@ -478,8 +479,15 @@ jobs:
       arch: "amd64"
       container_image: "rapidsai/ci-conda:26.12-latest"
       script: "ci/test_notebooks.sh"
+  docs-build-matrix:
+    permissions:
+      contents: read
+    uses: rapidsai/shared-workflows/.github/workflows/compute-matrix.yaml@main
+    with:
+      build_type: pull-request
+      matrix_name: docs-build
   docs-build:
-    needs: [conda-python-build, conda-python-build-noarch, changed-files]
+    needs: [docs-build-matrix, conda-python-build, conda-python-build-noarch, changed-files]
     permissions:
       actions: read
       contents: read
@@ -488,12 +496,15 @@ jobs:
       pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.docs-build-matrix.outputs.matrix) }}
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).build_docs || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all
     with:
       build_type: pull-request
-      node_type: "gpu-rtxpro6000-latest-1"
-      arch: "amd64"
-      container_image: "rapidsai/ci-conda:26.12-latest"
+      node_type: "gpu-${{ matrix.GPU }}-${{ matrix.DRIVER }}-1"
+      arch: "${{ matrix.arch }}"
+      container_image: "rapidsai/ci-conda:26.12-cuda${{ matrix.CUDA_VER }}-${{ matrix.LINUX_VER }}-py${{ matrix.PY_VER }}"
       script: "ci/build_docs.sh"
   publish-api-docs:
     needs: [docs-build]
@@ -753,7 +764,7 @@ jobs:
     steps:
       - id: shards
         env:
-          NUM_SHARDS: 2
+          NUM_SHARDS: 3
         run: |
           {
             echo "num_shards=${NUM_SHARDS}"
