@@ -142,6 +142,12 @@ class rmm_host_allocator {
   {
     if (cnt > this->max_size()) { throw std::bad_alloc(); }  // end if
     auto const result = mr.allocate(stream, cnt * sizeof(value_type), alignof(value_type));
+    // Synchronize so the CPU can safely initialize the returned memory.  Without this,
+    // cudaMallocFromPoolAsync may recycle a block whose stream-ordered free hasn't been
+    // executed yet (the pool returns the pointer to the CPU immediately), creating a race
+    // between the CPU's value-initialization and a prior GPU operation (e.g. an H->D copy)
+    // that is still reading or writing that same block.
+    cudf::detail::sync_stream(stream);
     return static_cast<pointer>(result);
   }
 
