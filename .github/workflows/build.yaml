@@ -137,9 +137,16 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
+  docs-build-matrix:
+    permissions:
+      contents: read
+    uses: rapidsai/shared-workflows/.github/workflows/compute-matrix.yaml@release/26.10
+    with:
+      build_type: ${{ inputs.build_type || 'branch' }}
+      matrix_name: docs-build
   docs-build:
     if: github.ref_type == 'branch'
-    needs: [python-build, python-build-noarch]
+    needs: [docs-build-matrix, python-build, python-build-noarch]
     permissions:
       actions: read
       contents: read
@@ -148,13 +155,16 @@ jobs:
       pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.docs-build-matrix.outputs.matrix) }}
     with:
-      arch: "amd64"
+      arch: "${{ matrix.arch }}"
       branch: ${{ inputs.branch }}
       build_type: ${{ inputs.build_type || 'branch' }}
-      container_image: "rapidsai/ci-conda:26.12-latest"
+      container_image: "rapidsai/ci-conda:26.12-cuda${{ matrix.CUDA_VER }}-${{ matrix.LINUX_VER }}-py${{ matrix.PY_VER }}"
       date: ${{ inputs.date }}
-      node_type: "gpu-rtxpro6000-latest-1"
+      node_type: "gpu-${{ matrix.GPU }}-${{ matrix.DRIVER }}-1"
       script: "ci/build_docs.sh"
       sha: ${{ inputs.sha }}
   publish-api-docs:
@@ -407,6 +417,7 @@ jobs:
       id-token: write
     needs:
       - docs-build
+      - docs-build-matrix
       - upload-conda
       - wheel-publish-cudf
       - wheel-publish-cudf-polars
