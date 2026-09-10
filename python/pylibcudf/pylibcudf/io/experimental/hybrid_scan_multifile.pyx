@@ -74,35 +74,19 @@ cdef class HybridScanMultiFile:
     For details, see
     :cpp:class:`cudf::io::parquet::experimental::hybrid_scan_multifile`
 
-    Parameters
-    ----------
-    footer_bytes : list[Buffer]
-        Parquet file footer bytes, one per source
-    options : ParquetReaderOptions
-        Parquet reader options
-
     Examples
     --------
     >>> import pylibcudf as plc
-    >>> reader = plc.io.experimental.HybridScanMultiFile(footer_bytes, options)
+    >>> reader = plc.io.experimental.HybridScanMultiFile.from_parquet_metadatas(
+    ...     metadatas, options)
     >>> row_groups = reader.all_row_groups(options)
     """
 
-    def __init__(self, list footer_bytes, ParquetReaderOptions options):
-        cdef vector[host_span_const_uint8_t] spans_vec
-        cdef const uint8_t[::1] footer_view
-        for footer in footer_bytes:
-            footer_view = footer
-            spans_vec.push_back(
-                host_span[const_uint8_t](&footer_view[0], len(footer_view))
-            )
-        with nogil:
-            self.c_obj = make_unique[cpp_hybrid_scan_multifile](
-                host_span[const_host_span_const_uint8_t](
-                    <const_host_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
-                ),
-                options.c_obj
-            )
+    def __init__(self):
+        raise ValueError(
+            "HybridScanMultiFile cannot be constructed directly. "
+            "Use from_parquet_metadatas()."
+        )
 
     @staticmethod
     def from_parquet_metadatas(

@@ -19,9 +19,6 @@ except ImportError:
     from typing_extensions import Buffer
 
 class HybridScanMultiFile:
-    def __init__(
-        self, footer_bytes: list[Buffer], options: ParquetReaderOptions
-    ) -> None: ...
     @staticmethod
     def from_parquet_metadatas(
         parquet_metadatas: Sequence[FileMetaData],

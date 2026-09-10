@@ -140,6 +140,12 @@ def hybrid_scan_multifile_reader(
     return reader
 
 
+def test_hybrid_scan_multifile_construct_directly_raises() -> None:
+    """Test that a HybridScanMultiFile cannot be constructed directly."""
+    with pytest.raises(ValueError, match="cannot be constructed directly"):
+        HybridScanMultiFile()
+
+
 def test_hybrid_scan_multifile_metadata(
     hybrid_scan_multifile_reader: HybridScanMultiFile,
     row_groups: list[list[int]],
@@ -339,7 +345,13 @@ def multifile_hybrid_scan_reader(
     multifile_parquet_options fixture.
     """
     footer_mvs = [extract_parquet_footer(b) for b in multifile_parquet_bytes]
-    return HybridScanMultiFile(footer_mvs, multifile_parquet_options)
+    metadatas = [
+        plc.io.parquet_metadata.FileMetaData.from_bytes(footer_mv)
+        for footer_mv in footer_mvs
+    ]
+    return HybridScanMultiFile.from_parquet_metadatas(
+        metadatas, multifile_parquet_options
+    )
 
 
 def test_hybrid_scan_multifile_basic(
