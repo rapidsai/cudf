@@ -8,6 +8,7 @@
  * @brief cuDF-IO ORC writer class implementation
  */
 
+#include "datetime/timezone_utils.hpp"
 #include "io/comp/compression.hpp"
 #include "io/orc/orc_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
