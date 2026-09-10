@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Sequence
+
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 
 from pylibcudf.column import Column
@@ -16,17 +18,20 @@ try:
 except ImportError:
     from typing_extensions import Buffer
 
-class HybridScanMultifile:
+class HybridScanMultiFile:
     def __init__(
         self, footer_bytes: list[Buffer], options: ParquetReaderOptions
     ) -> None: ...
     @staticmethod
-    def from_parquet_metadata(
-        metadata: list[FileMetaData], options: ParquetReaderOptions
-    ) -> HybridScanMultifile: ...
+    def from_parquet_metadatas(
+        parquet_metadatas: Sequence[FileMetaData],
+        options: ParquetReaderOptions,
+    ) -> HybridScanMultiFile: ...
     def parquet_metadatas(self) -> list[FileMetaData]: ...
     def page_index_byte_ranges(self) -> list[ByteRangeInfo]: ...
-    def setup_page_indexes(self, page_index_bytes: list[Buffer]) -> None: ...
+    def setup_page_indexes(
+        self, page_index_bytes: Sequence[Buffer]
+    ) -> None: ...
     def all_row_groups(
         self, options: ParquetReaderOptions
     ) -> list[list[int]]: ...
@@ -81,3 +86,31 @@ class HybridScanMultifile:
         stream: CudaStreamLike | None = None,
         mr: DeviceMemoryResource | None = None,
     ) -> TableWithMetadata: ...
+    def payload_pages_byte_ranges(
+        self,
+        row_group_indices: list[list[int]],
+        row_mask: Column,
+        options: ParquetReaderOptions,
+        stream: CudaStreamLike | None = None,
+    ) -> tuple[list[ByteRangeInfo], list[int]]: ...
+    def setup_chunking_for_payload_columns(
+        self,
+        chunk_read_limit: int,
+        pass_read_limit: int,
+        row_group_indices: list[list[int]],
+        row_mask: Column,
+        page_data: Sequence[Span | None],
+        options: ParquetReaderOptions,
+        stream: CudaStreamLike | None = None,
+        mr: DeviceMemoryResource | None = None,
+    ) -> None: ...
+    def materialize_payload_columns_chunk(
+        self,
+        row_mask: Column,
+    ) -> TableWithMetadata: ...
+    def construct_row_group_passes(
+        self,
+        row_group_indices: list[list[int]],
+        pass_read_limit: int,
+    ) -> list[list[list[int]]]: ...
+    def has_next_table_chunk(self) -> bool: ...
