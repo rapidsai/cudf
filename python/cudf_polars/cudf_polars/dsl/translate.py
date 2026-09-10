@@ -41,6 +41,7 @@ from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_140,
     POLARS_VERSION_LT_141,
     POLARS_VERSION_LT_142,
+    POLARS_VERSION_LT_143,
 )
 
 if TYPE_CHECKING:
@@ -207,7 +208,7 @@ class Translator:
         # IR is versioned with major.minor, minor is bumped for backwards
         # compatible changes (e.g. adding new nodes), major is bumped for
         # incompatible changes (e.g. renaming nodes).
-        if (version := self.visitor.version()) >= (14, 4):
+        if (version := self.visitor.version()) >= (14, 8):
             e = NotImplementedError(
                 f"No support for polars IR {version=}"
             )  # pragma: no cover; no such version for now.
@@ -812,6 +813,11 @@ def _(
     node: plrs._ir_nodes.MergeSorted, translator: Translator, schema: Schema
 ) -> ir.IR:
     key = node.key
+    if not POLARS_VERSION_LT_143:
+        # node.key became a list of keys in polars 1.43.
+        if len(key) != 1:
+            raise NotImplementedError("Merging on multiple keys is not supported")
+        key = key[0]
     inp_left = translator.translate_ir(n=node.input_left)
     inp_right = translator.translate_ir(n=node.input_right)
     return ir.MergeSorted(
