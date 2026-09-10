@@ -910,7 +910,14 @@ class orc_writer_options {
    * their meaning to interoperate with writers that record a local timezone, such as Hive and
    * Spark.
    *
+   * A non-UTC file does not round-trip through the libcudf reader, which has no session timezone
+   * and so resolves timestamps as if it were reading in UTC: the values come back as the writer's
+   * wall clock rather than the instants that were written. Such a file is intended for a reader
+   * whose session timezone matches `timezone`.
+   *
    * @param timezone Timezone name, for example "America/Los_Angeles"
+   *
+   * @throw cudf::logic_error when writing, if `timezone` does not resolve to a timezone file
    */
   void set_writer_timezone(std::string timezone) { _writer_timezone = std::move(timezone); }
 };
@@ -1070,6 +1077,8 @@ class orc_writer_options_builder {
    *
    * @param timezone Timezone name, for example "America/Los_Angeles"
    * @return this for chaining
+   *
+   * @throw cudf::logic_error when writing, if `timezone` does not resolve to a timezone file
    */
   orc_writer_options_builder& writer_timezone(std::string timezone)
   {
@@ -1109,6 +1118,8 @@ class orc_writer_options_builder {
  *
  * @param options Settings for controlling reading behavior
  * @param stream CUDA stream used for device memory operations and kernel launches
+ *
+ * @throw cudf::logic_error if the writer timezone does not resolve to a timezone file
  */
 void write_orc(orc_writer_options const& options,
                cuda::stream_ref stream = cudf::get_default_stream());
@@ -1370,7 +1381,14 @@ class chunked_orc_writer_options {
    * their meaning to interoperate with writers that record a local timezone, such as Hive and
    * Spark.
    *
+   * A non-UTC file does not round-trip through the libcudf reader, which has no session timezone
+   * and so resolves timestamps as if it were reading in UTC: the values come back as the writer's
+   * wall clock rather than the instants that were written. Such a file is intended for a reader
+   * whose session timezone matches `timezone`.
+   *
    * @param timezone Timezone name, for example "America/Los_Angeles"
+   *
+   * @throw cudf::logic_error when writing, if `timezone` does not resolve to a timezone file
    */
   void set_writer_timezone(std::string timezone) { _writer_timezone = std::move(timezone); }
 };
@@ -1516,6 +1534,8 @@ class chunked_orc_writer_options_builder {
    *
    * @param timezone Timezone name, for example "America/Los_Angeles"
    * @return this for chaining
+   *
+   * @throw cudf::logic_error when writing, if `timezone` does not resolve to a timezone file
    */
   chunked_orc_writer_options_builder& writer_timezone(std::string timezone)
   {

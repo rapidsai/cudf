@@ -43,9 +43,9 @@ std::unique_ptr<table> make_timezone_transition_table(
  *
  * @return Offset from UT, in seconds
  */
-duration_s get_ut_offset(std::optional<std::string_view> tzif_dir,
-                         std::string_view timezone_name,
-                         timestamp_s ts);
+[[nodiscard]] duration_s get_ut_offset(std::optional<std::string_view> tzif_dir,
+                                       std::string_view timezone_name,
+                                       timestamp_s ts);
 
 }  // namespace detail
 }  // namespace cudf

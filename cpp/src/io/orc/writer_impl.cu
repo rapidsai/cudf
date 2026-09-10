@@ -2652,7 +2652,14 @@ auto convert_table_to_orc_data(table_view const& input,
  * ORC timestamps are wall-clock values: they are stored relative to the ORC epoch as it occurs in
  * the writer's timezone, which is what lets a reader in that timezone recover the original value.
  * This mirrors how the reader derives its epoch in `decode_column_data`, so that the two agree on
- * the meaning of `writerTimezone`.
+ * the meaning of `writerTimezone`. Note that the offset is looked up at the ORC epoch as a UTC
+ * instant, whereas the Apache writer resolves it as a local time in `timezone`; the two differ
+ * only for a timezone with a transition inside that offset-wide window, and agreeing with the
+ * libcudf reader is the more important property.
+ *
+ * @param timezone Timezone name, or an empty string for UTC
+ *
+ * @return The timezone name paired with the epoch that timestamps are encoded relative to
  *
  * @throw cudf::logic_error if `timezone` does not resolve to a TZif file
  */
