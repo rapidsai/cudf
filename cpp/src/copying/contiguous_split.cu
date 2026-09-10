@@ -13,7 +13,6 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -1411,7 +1410,7 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
 
   partition_buf_size_and_dst_buf_info->copy_to_host();
 
-  cudf::detail::sync_stream(stream);
+  stream.sync();
 
   return partition_buf_size_and_dst_buf_info;
 }
@@ -1702,7 +1701,7 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
           d_batched_dst_buf_info[i].dst_offset -= *prior_iteration_size;
         });
     }
-    cudf::detail::sync_stream(stream);
+    stream.sync();
     return std::make_unique<chunk_iteration_state>(std::move(d_batched_dst_buf_info),
                                                    std::move(d_batch_offsets),
                                                    std::move(num_batches_per_iteration),

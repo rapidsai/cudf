@@ -10,7 +10,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/interop.hpp>
-#include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/interop.hpp>
@@ -114,7 +113,7 @@ std::unique_ptr<column> from_arrow_stringview(ArrowSchemaView const* schema,
       return {data, size};
     });
 
-  cudf::detail::sync_stream(stream);  // variadic_ptrs goes out of scope
+  stream.sync();  // variadic_ptrs goes out of scope
   return cudf::make_strings_column(d_indices, stream, mr);
 }
 
