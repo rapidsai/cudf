@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -30,9 +30,24 @@ struct fake_driver {
   int close_count{};
 };
 
-fake_driver* active_driver;
+fake_driver* active_driver{};
 int fake_library_handle;
 int failures{};
+
+class active_driver_guard {
+ public:
+  explicit active_driver_guard(fake_driver& driver) : previous_driver{active_driver}
+  {
+    active_driver = &driver;
+  }
+  ~active_driver_guard() { active_driver = previous_driver; }
+
+  active_driver_guard(active_driver_guard const&)            = delete;
+  active_driver_guard& operator=(active_driver_guard const&) = delete;
+
+ private:
+  fake_driver* previous_driver;
+};
 
 void expect(bool condition, char const* message)
 {
@@ -127,7 +142,7 @@ dynamic_loader const fake_loader{fake_open, fake_symbol, fake_error, fake_close}
 void test_unavailable_driver_library()
 {
   fake_driver driver;
-  active_driver            = &driver;
+  active_driver_guard guard{driver};
   driver.library_available = false;
 
   auto const result = probe_cuda_driver(fake_loader);
@@ -140,7 +155,7 @@ void test_unavailable_driver_library()
 void test_missing_required_symbols()
 {
   fake_driver driver;
-  active_driver         = &driver;
+  active_driver_guard guard{driver};
   driver.missing_symbol = "cuDeviceGetCount";
 
   auto const result = probe_cuda_driver(fake_loader);
@@ -153,7 +168,7 @@ void test_missing_required_symbols()
 void test_driver_initialization_failure()
 {
   fake_driver driver;
-  active_driver      = &driver;
+  active_driver_guard guard{driver};
   driver.init_status = CUDA_ERROR_SYSTEM_DRIVER_MISMATCH;
 
   auto const result = probe_cuda_driver(fake_loader);
@@ -169,7 +184,7 @@ void test_driver_initialization_failure()
 void test_driver_version_and_device_count()
 {
   fake_driver driver;
-  active_driver         = &driver;
+  active_driver_guard guard{driver};
   driver.driver_version = 12080;
   driver.device_count   = 2;
 
@@ -184,7 +199,7 @@ void test_driver_version_and_device_count()
 void test_query_failures()
 {
   fake_driver driver;
-  active_driver                = &driver;
+  active_driver_guard guard{driver};
   driver.driver_version_status = CUDA_ERROR_UNKNOWN;
   driver.device_count_status   = CUDA_ERROR_NO_DEVICE;
 
