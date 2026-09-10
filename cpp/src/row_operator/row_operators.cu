@@ -14,6 +14,7 @@
 #include <cudf/detail/row_operator/preprocessed_table.cuh>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/linked_column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -648,7 +649,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
     null_precedence, stream, cudf::get_current_device_resource_ref());
   auto d_depths = detail::make_device_uvector_async(
     verticalized_col_depths, stream, cudf::get_current_device_resource_ref());
-  stream.sync();
+  cudf::detail::sync_stream(stream);
 
   if (detail::has_nested_columns(preprocessed_input)) {
     auto [dremel_data, d_dremel_device_view] = list_lex_preprocess(preprocessed_input, stream);
