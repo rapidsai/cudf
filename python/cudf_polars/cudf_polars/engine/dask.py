@@ -1331,8 +1331,11 @@ class DaskEngine(StreamingEngine):
         )
         return dict(sorted(results.values(), key=lambda pair: pair[0]))
 
+    # TODO: adopt polars' Engine.execute(lf, *, optimizations) contract
+    # (added in polars>=1.43) so we can return our own result type from
+    # LazyFrame.execute(engine=...) too (See https://github.com/NVIDIA/cudf/issues/22917).
     @unstable()
-    def execute(self, lf: pl.LazyFrame) -> PersistedQueryResult:
+    def execute(self, lf: pl.LazyFrame) -> PersistedQueryResult:  # type: ignore[override]
         """
         Execute a :class:`~polars.LazyFrame` and return a distributed result.
 

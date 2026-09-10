@@ -893,8 +893,11 @@ class SPMDEngine(StreamingEngine):
 
         return [json.loads(r) for r in results]
 
+    # TODO: adopt polars' Engine.execute(lf, *, optimizations) contract
+    # (added in polars>=1.43) so we can return our own result type from
+    # LazyFrame.execute(engine=...) too (See https://github.com/NVIDIA/cudf/issues/22917).
     @unstable()
-    def execute(self, lf: pl.LazyFrame) -> PersistedQueryResult:
+    def execute(self, lf: pl.LazyFrame) -> PersistedQueryResult:  # type: ignore[override]
         """
         Execute a :class:`~polars.LazyFrame` and return a GPU-resident result.
 
