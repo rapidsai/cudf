@@ -170,15 +170,6 @@ def _from_polars(dtype: pl.DataType) -> plc.DataType:
         return plc.DataType(plc.TypeId.UINT32)
     elif isinstance(dtype, pl.UInt64):
         return plc.DataType(plc.TypeId.UINT64)
-    elif isinstance(dtype, pl.UInt128):
-        # libcudf has no 128-bit integer type; size_type is 32-bit today.
-        # See https://github.com/NVIDIA/cudf/issues/13159. polars emits
-        # UInt128 when summing len() across concat/union branches, widening
-        # before the sum so it can't overflow, then narrowing back down, e.g.
-        # col("len").cast(UInt128).sum().cast(IDX_DTYPE). No libcudf table
-        # can hold anywhere near 2**64 rows, so backing UInt128 with UInt64
-        # is fine for now.
-        return plc.DataType(plc.TypeId.UINT64)
     elif isinstance(dtype, pl.Float32):
         return plc.DataType(plc.TypeId.FLOAT32)
     elif isinstance(dtype, pl.Float64):

@@ -42,6 +42,7 @@ from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_141,
     POLARS_VERSION_LT_142,
     POLARS_VERSION_LT_143,
+    POLARS_VERSION_LT_144,
 )
 
 if TYPE_CHECKING:
@@ -152,6 +153,28 @@ def _unsupported_fill_over_window(value: expr.Expr) -> bool:
         and isinstance(child, expr.UnaryFunction)
         and child.name == "cum_sum"
     )
+
+
+def _is_len_sum_uint128_node(visitor: NodeTraverser, node: Any) -> bool:
+    """
+    Whether ``node`` is part of polars' ``col("len").cast(UInt128).sum()``.
+
+    polars rewrites ``concat(...).select(len())`` into
+    ``col("len").cast(UInt128).sum().cast(IDX_DTYPE)``. Both the ``sum`` and
+    its ``"len"`` cast independently report a ``UInt128`` dtype during
+    translation, so both must be recognized here.
+    """
+    # TODO: this matches the exact shape of that one rewrite, not UInt128 in
+    # general; if polars changes it, or introduces UInt128 elsewhere, this
+    # will stop matching (and fall back to CPU / raise cleanly, not silently
+    # misbehave, since general UInt128 use is still unconditionally rejected
+    # elsewhere). See https://github.com/NVIDIA/cudf/issues/24108.
+    if isinstance(node, plrs._expr_nodes.Agg):
+        return node.name == "sum"
+    if isinstance(node, plrs._expr_nodes.Cast):
+        child = visitor.view_expression(node.expr)
+        return isinstance(child, plrs._expr_nodes.Column) and child.name == "len"
+    return False
 
 
 class Translator:
@@ -295,7 +318,20 @@ class Translator:
         to determine if the query is supported.
         """
         node = self.visitor.view_expression(n)
-        dtype = DataType(self.visitor.get_dtype(n))
+        polars_dtype = self.visitor.get_dtype(n)
+        if isinstance(polars_dtype, pl.UInt128) and _is_len_sum_uint128_node(
+            self.visitor, node
+        ):
+            # libcudf has no 128-bit integer type (size_type is 32-bit today;
+            # see https://github.com/NVIDIA/cudf/issues/13159). polars
+            # rewrites concat(...).select(len()) into
+            # col("len").cast(UInt128).sum().cast(IDX_DTYPE), widening before
+            # the sum so it can't overflow, then narrowing back down. This
+            # value is never materialized as real UInt128 data, so represent
+            # it as UInt64 instead: no libcudf table can hold anywhere near
+            # 2**64 rows, so the sum can't overflow it either.
+            polars_dtype = pl.UInt64()
+        dtype = DataType(polars_dtype)
         is_array_passthrough = (
             allow_array_passthrough
             and isinstance(dtype.polars_type, pl.Array)
@@ -1078,6 +1114,12 @@ def _(
             return expr.Cast(dtype, True, result_expr)  # noqa: FBT003
         return result_expr
     elif isinstance(name, plrs._expr_nodes.StructFunction):
+        if (
+            not POLARS_VERSION_LT_144
+            and name == plrs._expr_nodes.StructFunction.RenameFields
+        ):
+            (new_field_names,) = options
+            options = (tuple(new_field_names),)
         return expr.StructFunction(
             dtype,
             expr.StructFunction.Name.from_polars(name),
