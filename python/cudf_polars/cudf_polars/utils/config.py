@@ -334,7 +334,8 @@ class ParquetOptions:
         Maximum number of file footers to sample for metadata. This
         option is currently used by the streaming executor to gather
         datasource statistics before generating a physical plan. Set to
-        0 to avoid metadata sampling. Default is 3.
+        0 to avoid metadata sampling. By default, metadata sampling is disabled
+        for remote scans and samples 3 footers for local-only scans.
     max_row_group_samples
         Maximum number of row-groups to sample for unique-value statistics.
         This option may be used by the streaming executor to optimize
@@ -345,9 +346,8 @@ class ParquetOptions:
     prefetch_file_metadata
         Whether to prefetch parquet file metadata and pass it through
         `parquet_metadatas` to avoid rereading file footers. Not supported
-        by the in-memory executor, where it defaults to disabled. For the
-        streaming executor, it defaults to being enabled for remote URIs
-        (e.g. ``s3://``) only; pass ``True`` to also prefetch local files.
+        by the in-memory executor. It defaults to disabled; enabling
+        ``use_hybrid_scan`` implicitly enables it.
     use_jit_filter
         Whether to use JIT compilation for post-read filtering in Parquet scans.
         When enabled, filter predicates are JIT-compiled to CUDA kernels for
@@ -381,9 +381,9 @@ class ParquetOptions:
             f"{_env_prefix}__PASS_READ_LIMIT", int, default=0
         )
     )
-    max_footer_samples: int = dataclasses.field(
+    max_footer_samples: int | None = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__MAX_FOOTER_SAMPLES", int, default=3
+            f"{_env_prefix}__MAX_FOOTER_SAMPLES", int, default=None
         )
     )
     max_row_group_samples: int = dataclasses.field(
@@ -434,14 +434,16 @@ class ParquetOptions:
             raise TypeError("chunk_read_limit must be an int")
         if not isinstance(self.pass_read_limit, int):
             raise TypeError("pass_read_limit must be an int")
-        if not isinstance(self.max_footer_samples, int):
-            raise TypeError("max_footer_samples must be an int")
+        if not isinstance(self.max_footer_samples, (int, type(None))):
+            raise TypeError("max_footer_samples must be an int or None")
         if not isinstance(self.max_row_group_samples, int):
             raise TypeError("max_row_group_samples must be an int")
         if not isinstance(self.prefetch_file_metadata, (bool, Unspecified)):
             raise TypeError("prefetch_file_metadata must be a bool when specified")
         if not isinstance(self.use_hybrid_scan, bool):
             raise TypeError("use_hybrid_scan must be a bool")
+        if isinstance(self.prefetch_file_metadata, Unspecified):
+            object.__setattr__(self, "prefetch_file_metadata", self.use_hybrid_scan)
         if self.use_hybrid_scan and self.prefetch_file_metadata is False:
             raise ValueError(
                 "use_hybrid_scan requires prefetch_file_metadata to be enabled"
@@ -1202,31 +1204,10 @@ class ConfigOptions(Generic[ExecutorType]):
         if user_parquet_options is None:
             user_parquet_options = {}
 
-        # Engine-dependent default: only prefetch for the streaming executor.
-        # Skipped if the user or the environment has already set a value.
-        prefetch_default = UNSPECIFIED if user_executor == "streaming" else False
-        prefetch_env_set = (
-            os.environ.get(f"{ParquetOptions._env_prefix}__PREFETCH_FILE_METADATA")
-            is not None
-        )
-
         if isinstance(user_parquet_options, dict):
             user_parquet_options = dict(user_parquet_options)
-            if (
-                "prefetch_file_metadata" not in user_parquet_options
-                and not prefetch_env_set
-            ):
-                user_parquet_options["prefetch_file_metadata"] = prefetch_default
             parquet_options = ParquetOptions(**user_parquet_options)
         else:
-            if (
-                isinstance(user_parquet_options.prefetch_file_metadata, Unspecified)
-                and not prefetch_env_set
-            ):
-                user_parquet_options = dataclasses.replace(
-                    user_parquet_options,
-                    prefetch_file_metadata=prefetch_default,
-                )
             parquet_options = user_parquet_options
         # This is set in polars, and so can't be overridden by the environment
         user_raise_on_fail = engine.config.get("raise_on_fail", False)
