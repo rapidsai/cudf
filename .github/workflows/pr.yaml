@@ -169,6 +169,9 @@ jobs:
           - '.github/workflows/pr.yaml'
         test_python_cudf:
           - 'python/cudf/**'
+        test_python_cudf_benchmarks:
+          - 'python/cudf/**'
+          - '!python/cudf/cudf/pandas/**'
         test_python_other:
           - 'ci/test_python_other.sh'
         test_python_dask_cudf:
@@ -197,7 +200,11 @@ jobs:
           - 'ci/test_python_common.sh'
         test_python_conda_cudf:
           - 'ci/test_python_cudf.sh'
+        test_python_conda_pylibcudf:
+          - 'ci/run_pylibcudf_pytests.sh'
+        test_python_conda_cudf_tests:
           - 'ci/run_cudf_pytests.sh'
+        test_python_conda_cudf_benchmarks:
           - 'ci/run_cudf_pytest_benchmarks.sh'
           - 'ci/run_cudf_pandas_pytest_benchmarks.sh'
           - 'ci/run_pylibcudf_pytests.sh'
@@ -360,10 +367,15 @@ jobs:
       pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_builds || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_common || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_cudf
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf_benchmarks || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_builds || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_common || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_cudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_pylibcudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_cudf_tests || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_cudf_benchmarks
     with:
       build_type: pull-request
-      script: "ci/test_python_cudf.sh"
+      script: >-
+        env
+        RUN_PYLIBCUDF_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_builds || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_common || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_cudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_pylibcudf }}
+        RUN_CUDF_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_builds || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_common || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_cudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_cudf_tests }}
+        RUN_CUDF_BENCHMARK_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf_benchmarks || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_builds || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_common || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_cudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_cudf_benchmarks }}
+        ci/test_python_cudf.sh
       # https://github.com/NVIDIA/cudf/issues/23498
       matrix_filter: map(select(.GPU != "gb300" and .GPU != "gh200"))
   conda-python-other-tests:
