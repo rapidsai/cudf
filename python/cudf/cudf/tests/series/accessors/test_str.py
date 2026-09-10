@@ -2613,21 +2613,27 @@ def _assert_string_index_cat(
 
 
 @pytest.mark.parametrize(
-    "data, sep, na_rep, name",
+    "data, others, sep, na_rep, name",
     [
-        pytest.param(["1", "2", "3", "4", "5"], None, None, None),
-        pytest.param(["a", "b", "c", "d", "e"], "", None, "index name"),
-        pytest.param(["a", "b", "c", "d", "e"], " ", None, None),
-        pytest.param(["a", "b", "c", "d", "e"], ",", None, None),
-        pytest.param(["a", "b", "c", "d", "e"], "|", None, None),
-        pytest.param(["a", "b", "c", "d", "e"], "|||", None, None),
-        pytest.param(["a", None, "c", None, "e"], "|", "", None),
-        pytest.param(["a", None, "c", None, "e"], "|", "null", None),
-        pytest.param(["a", None, "c", None, "e"], "|", "a", None),
+        (["1", "2", "3", "4", "5"], None, None, None, None),
+        (
+            ["a", "b", "c", "d", "e"],
+            ["f", "g", "h", "i", "j"],
+            "",
+            None,
+            "index name",
+        ),
+        (["a", "b", "c", "d", "e"], None, " ", None, None),
+        (["a", "b", "c", "d", "e"], None, ",", None, None),
+        (["a", "b", "c", "d", "e"], None, "|", None, None),
+        (["a", "b", "c", "d", "e"], None, "|||", None, None),
+        (["a", None, "c", None, "e"], None, "|", "", None),
+        (["a", None, "c", None, "e"], None, "|", "null", None),
+        (["a", None, "c", None, "e"], None, "|", "a", None),
     ],
 )
-def test_string_index_str_cat_join(data, sep, na_rep, name):
-    _assert_string_index_cat(data, None, sep, na_rep, name)
+def test_string_index_str_cat_join(data, others, sep, na_rep, name):
+    _assert_string_index_cat(data, others, sep, na_rep, name)
 
 
 def _assert_string_cat(data, others, sep, na_rep, index=None):
@@ -2650,14 +2656,14 @@ def _assert_string_cat(data, others, sep, na_rep, index=None):
 @pytest.mark.parametrize(
     "data, sep, na_rep",
     [
-        pytest.param(["AbC", "de", "FGHI", "j", "kLm"], None, None),
-        pytest.param(["AbC", "de", "FGHI", "j", "kLm"], "", None),
-        pytest.param(["AbC", "de", "FGHI", "j", "kLm"], "|", None),
-        pytest.param(["AbC", "de", "FGHI", "j", "kLm"], "|||", None),
-        pytest.param(["nOPq", None, "RsT", None, "uVw"], "|", None),
-        pytest.param(["nOPq", None, "RsT", None, "uVw"], "|", ""),
-        pytest.param(["nOPq", None, "RsT", None, "uVw"], "|", "null"),
-        pytest.param([None, None, None, None, None], "|", "null"),
+        (["AbC", "de", "FGHI", "j", "kLm"], None, None),
+        (["AbC", "de", "FGHI", "j", "kLm"], "", None),
+        (["AbC", "de", "FGHI", "j", "kLm"], "|", None),
+        (["AbC", "de", "FGHI", "j", "kLm"], "|||", None),
+        (["nOPq", None, "RsT", None, "uVw"], "|", None),
+        (["nOPq", None, "RsT", None, "uVw"], "|", ""),
+        (["nOPq", None, "RsT", None, "uVw"], "|", "null"),
+        ([None, None, None, None, None], "|", "null"),
     ],
 )
 def test_string_cat_join(data, sep, na_rep):
