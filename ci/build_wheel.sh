@@ -62,8 +62,7 @@ finalize_package_wheel \
   "$(rapids-artifact-name wheel_cpp libcudf cudf --cuda "${RAPIDS_CUDA_VERSION}")"
 
 # libcudf-streaming uses the libcudf wheel built above.
-LIBCUDF_WHEELHOUSE="${RAPIDS_WHEEL_BLD_OUTPUT_DIR}"
-add_wheel_constraint libcudf "${LIBCUDF_WHEELHOUSE}/libcudf_*.whl"
+add_wheel_constraint libcudf "${RAPIDS_WHEEL_BLD_OUTPUT_DIR}/libcudf_*.whl"
 
 build_package_wheel libcudf_streaming libcudf_streaming python/libcudf_streaming
 
@@ -75,8 +74,7 @@ finalize_package_wheel \
   100M \
   "$(rapids-artifact-name wheel_cpp libcudf-streaming cudf --cuda "${RAPIDS_CUDA_VERSION}")"
 
-LIBCUDF_STREAMING_WHEELHOUSE="${RAPIDS_WHEEL_BLD_OUTPUT_DIR}"
-add_wheel_constraint libcudf-streaming "${LIBCUDF_STREAMING_WHEELHOUSE}/libcudf_streaming_*.whl"
+add_wheel_constraint libcudf-streaming "${RAPIDS_WHEEL_BLD_OUTPUT_DIR}/libcudf_streaming_*.whl"
 
 # All wheels in this stage use the stable Python ABI.
 export RAPIDS_PY_API="cp${RAPIDS_PY_VERSION//./}"
@@ -99,8 +97,7 @@ finalize_package_wheel \
   "$(rapids-artifact-name wheel_python pylibcudf cudf --stable --cuda "${RAPIDS_CUDA_VERSION}")"
 
 # cudf
-PYLIBCUDF_WHEELHOUSE="${RAPIDS_WHEEL_BLD_OUTPUT_DIR}"
-add_wheel_constraint pylibcudf "${PYLIBCUDF_WHEELHOUSE}/pylibcudf_*.whl"
+add_wheel_constraint pylibcudf "${RAPIDS_WHEEL_BLD_OUTPUT_DIR}/pylibcudf_*.whl"
 build_package_wheel cudf cudf python/cudf --stable
 
 repair_wheel python/cudf/dist/*
