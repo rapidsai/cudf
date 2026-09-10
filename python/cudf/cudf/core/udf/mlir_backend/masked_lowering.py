@@ -213,7 +213,12 @@ def _needs_datetimelike_delegate(
       ``1_000_000_000 < 2``, not ``1 < 2``).
 
     So delegate for add/sub and all comparison operators when either operand is
-    temporal.
+    temporal. This is a lowering-time gate downstream of typing: invalid
+    temporal combinations (``datetime + datetime``, ``datetime < timedelta``,
+    ...) are already rejected during typing, so the permissive operand-type
+    check here never actually fires for them. Extending support to other
+    unit-sensitive ops (e.g. ``int * timedelta``) would mean adding those
+    operators to the set below.
     """
     if op not in (operator.add, operator.sub, *comparison_ops):
         return False

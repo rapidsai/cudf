@@ -792,40 +792,17 @@ def test_masked_int_cast(valid):
 # allocated as int64 and viewed as the temporal dtype (the same trick
 # ``cudf.core.udf.utils._return_arr_from_dtype`` uses).
 
-_DT = types.NPDatetime("ns")
-_TD = types.NPTimedelta("ns")
-
-
-def _dt_in(values):
-    return cp.asarray(np.array(values, dtype="int64")).view("datetime64[ns]")
-
-
-def _td_in(values):
-    return cp.asarray(np.array(values, dtype="int64")).view("timedelta64[ns]")
-
-
-def _dt_out():
-    return cp.zeros(1, dtype=np.int64).view("datetime64[ns]")
-
-
-def _td_out():
-    return cp.zeros(1, dtype=np.int64).view("timedelta64[ns]")
-
-
-def _bool(v):
-    return cp.array([v], dtype=np.bool_)
-
 
 def test_masked_datetime_minus_datetime_is_timedelta():
     """Masked ``datetime - datetime`` yields a Masked timedelta."""
 
     @cuda.jit(
         types.void(
-            _TD[::1],
+            types.NPTimedelta("ns")[::1],
             types.boolean[::1],
-            _DT[::1],
+            types.NPDatetime("ns")[::1],
             types.boolean[::1],
-            _DT[::1],
+            types.NPDatetime("ns")[::1],
             types.boolean[::1],
         )
     )
@@ -834,16 +811,16 @@ def test_masked_datetime_minus_datetime_is_timedelta():
         out_v[0] = m.value
         out_valid[0] = m.valid
 
-    out_v = _td_out()
+    out_v = cp.zeros(1, dtype=np.int64).view("timedelta64[ns]")
     out_valid = cp.zeros(1, dtype=np.bool_)
     _launch(
         k,
         out_v,
         out_valid,
-        _dt_in([1000]),
-        _bool(True),
-        _dt_in([400]),
-        _bool(True),
+        cp.asarray(np.array([1000], dtype="int64")).view("datetime64[ns]"),
+        cp.array([True], dtype=np.bool_),
+        cp.asarray(np.array([400], dtype="int64")).view("datetime64[ns]"),
+        cp.array([True], dtype=np.bool_),
     )
     assert int(out_v.get().view("int64")[0]) == 600
     assert bool(out_valid.get()[0]) is True
@@ -854,18 +831,25 @@ def test_masked_datetime_plus_timedelta_is_datetime():
 
     @cuda.jit(
         types.void(
-            _DT[::1],
-            _DT[::1],
+            types.NPDatetime("ns")[::1],
+            types.NPDatetime("ns")[::1],
             types.boolean[::1],
-            _TD[::1],
+            types.NPTimedelta("ns")[::1],
             types.boolean[::1],
         )
     )
     def k(out_v, a, av, t, tv):
         out_v[0] = (Masked(a[0], av[0]) + Masked(t[0], tv[0])).value
 
-    out_v = _dt_out()
-    _launch(k, out_v, _dt_in([1000]), _bool(True), _td_in([250]), _bool(True))
+    out_v = cp.zeros(1, dtype=np.int64).view("datetime64[ns]")
+    _launch(
+        k,
+        out_v,
+        cp.asarray(np.array([1000], dtype="int64")).view("datetime64[ns]"),
+        cp.array([True], dtype=np.bool_),
+        cp.asarray(np.array([250], dtype="int64")).view("timedelta64[ns]"),
+        cp.array([True], dtype=np.bool_),
+    )
     assert int(out_v.get().view("int64")[0]) == 1250
 
 
@@ -874,18 +858,25 @@ def test_masked_timedelta_plus_timedelta_is_timedelta():
 
     @cuda.jit(
         types.void(
-            _TD[::1],
-            _TD[::1],
+            types.NPTimedelta("ns")[::1],
+            types.NPTimedelta("ns")[::1],
             types.boolean[::1],
-            _TD[::1],
+            types.NPTimedelta("ns")[::1],
             types.boolean[::1],
         )
     )
     def k(out_v, a, av, b, bv):
         out_v[0] = (Masked(a[0], av[0]) + Masked(b[0], bv[0])).value
 
-    out_v = _td_out()
-    _launch(k, out_v, _td_in([300]), _bool(True), _td_in([120]), _bool(True))
+    out_v = cp.zeros(1, dtype=np.int64).view("timedelta64[ns]")
+    _launch(
+        k,
+        out_v,
+        cp.asarray(np.array([300], dtype="int64")).view("timedelta64[ns]"),
+        cp.array([True], dtype=np.bool_),
+        cp.asarray(np.array([120], dtype="int64")).view("timedelta64[ns]"),
+        cp.array([True], dtype=np.bool_),
+    )
     assert int(out_v.get().view("int64")[0]) == 420
 
 
@@ -896,9 +887,9 @@ def test_masked_datetime_comparison(op):
     @cuda.jit(
         types.void(
             types.boolean[::1],
-            _DT[::1],
+            types.NPDatetime("ns")[::1],
             types.boolean[::1],
-            _DT[::1],
+            types.NPDatetime("ns")[::1],
             types.boolean[::1],
         )
     )
@@ -906,7 +897,14 @@ def test_masked_datetime_comparison(op):
         out[0] = op(Masked(a[0], av[0]), Masked(b[0], bv[0])).value
 
     out = cp.zeros(1, dtype=np.bool_)
-    _launch(k, out, _dt_in([400]), _bool(True), _dt_in([1000]), _bool(True))
+    _launch(
+        k,
+        out,
+        cp.asarray(np.array([400], dtype="int64")).view("datetime64[ns]"),
+        cp.array([True], dtype=np.bool_),
+        cp.asarray(np.array([1000], dtype="int64")).view("datetime64[ns]"),
+        cp.array([True], dtype=np.bool_),
+    )
     assert bool(out.get()[0]) == op(400, 1000)
 
 
@@ -933,7 +931,14 @@ def test_masked_datetime_comparison_mixed_units():
     a = cp.asarray(np.array([1], dtype="int64")).view("datetime64[s]")
     b = cp.asarray(np.array([2], dtype="int64")).view("datetime64[ns]")
     out = cp.zeros(1, dtype=np.bool_)
-    _launch(k, out, a, _bool(True), b, _bool(True))
+    _launch(
+        k,
+        out,
+        a,
+        cp.array([True], dtype=np.bool_),
+        b,
+        cp.array([True], dtype=np.bool_),
+    )
     # 1 second (1e9 ns) > 2 ns is True; a raw i64 compare would give 1 > 2 = False.
     assert bool(out.get()[0]) is True
 
@@ -945,11 +950,11 @@ def test_masked_datetime_arith_validity_propagates():
 
     @cuda.jit(
         types.void(
-            _TD[::1],
+            types.NPTimedelta("ns")[::1],
             types.boolean[::1],
-            _DT[::1],
+            types.NPDatetime("ns")[::1],
             types.boolean[::1],
-            _DT[::1],
+            types.NPDatetime("ns")[::1],
             types.boolean[::1],
         )
     )
@@ -958,15 +963,15 @@ def test_masked_datetime_arith_validity_propagates():
         out_v[0] = m.value
         out_valid[0] = m.valid
 
-    out_v = _td_out()
+    out_v = cp.zeros(1, dtype=np.int64).view("timedelta64[ns]")
     out_valid = cp.ones(1, dtype=np.bool_)
     _launch(
         k,
         out_v,
         out_valid,
-        _dt_in([1000]),
-        _bool(True),
-        _dt_in([400]),
-        _bool(False),
+        cp.asarray(np.array([1000], dtype="int64")).view("datetime64[ns]"),
+        cp.array([True], dtype=np.bool_),
+        cp.asarray(np.array([400], dtype="int64")).view("datetime64[ns]"),
+        cp.array([False], dtype=np.bool_),
     )
     assert bool(out_valid.get()[0]) is False
