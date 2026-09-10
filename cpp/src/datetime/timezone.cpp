@@ -463,6 +463,45 @@ struct host_transition_table {
   std::vector<duration_s::rep> offsets;
 
   [[nodiscard]] bool empty() const { return times.empty(); }
+
+  /**
+   * @brief Returns the UT offset for a timestamp, using the same lookup as the device-side
+   * `cudf::detail::get_ut_offset`.
+   */
+  [[nodiscard]] duration_s ut_offset(timestamp_s ts) const
+  {
+    if (empty()) { return duration_s{0}; }
+
+    auto const last_less_equal = [](auto begin, auto end, auto value) {
+      auto const first_larger = std::upper_bound(begin, end, value);
+      // Return start of the range if all elements are larger than the value
+      if (first_larger == begin) { return begin; }
+      // Element before the first larger element is the last one less or equal
+      return std::prev(first_larger);
+    };
+
+    auto const ts_count       = ts.time_since_epoch().count();
+    auto const file_entry_end = times.cbegin() + (times.size() - solar_cycle_entry_count);
+
+    auto const ttime_it = [&]() {
+      if (ts_count <= *std::prev(file_entry_end)) {
+        // Search the file entries if the timestamp is in range
+        return last_less_equal(times.cbegin(), file_entry_end, ts_count);
+      }
+      // Years divisible by four are leap years
+      // Exceptions are years divisible by 100, but not divisible by 400
+      static constexpr int32_t num_leap_years_in_cycle =
+        solar_cycle_years / 4 - (solar_cycle_years / 100 - solar_cycle_years / 400);
+      static constexpr auto cycle_s =
+        cuda::std::chrono::duration_cast<duration_s>(
+          duration_D{365 * solar_cycle_years + num_leap_years_in_cycle})
+          .count();
+      // Search the 400-year cycle if outside of the file entries range
+      return last_less_equal(file_entry_end, times.cend(), (ts_count + cycle_s) % cycle_s);
+    }();
+
+    return duration_s{offsets[std::distance(times.cbegin(), ttime_it)]};
+  }
 };
 
 [[nodiscard]] host_transition_table build_transition_table(std::optional<std::string_view> tzif_dir,
@@ -558,45 +597,6 @@ struct host_transition_table {
   return {std::move(transition_times), std::move(offsets)};
 }
 
-/**
- * @brief Returns the UT offset for a timestamp, using the same lookup as the device-side
- * `cudf::detail::get_ut_offset`.
- */
-[[nodiscard]] duration_s lookup_ut_offset(host_transition_table const& tz_table, timestamp_s ts)
-{
-  if (tz_table.empty()) { return duration_s{0}; }
-
-  auto const last_less_equal = [](auto begin, auto end, auto value) {
-    auto const first_larger = std::upper_bound(begin, end, value);
-    // Return start of the range if all elements are larger than the value
-    if (first_larger == begin) { return begin; }
-    // Element before the first larger element is the last one less or equal
-    return std::prev(first_larger);
-  };
-
-  auto const ts_count = ts.time_since_epoch().count();
-  auto const file_entry_end =
-    tz_table.times.cbegin() + (tz_table.times.size() - solar_cycle_entry_count);
-
-  auto const ttime_it = [&]() {
-    if (ts_count <= *std::prev(file_entry_end)) {
-      // Search the file entries if the timestamp is in range
-      return last_less_equal(tz_table.times.cbegin(), file_entry_end, ts_count);
-    }
-    // Years divisible by four are leap years
-    // Exceptions are years divisible by 100, but not divisible by 400
-    static constexpr int32_t num_leap_years_in_cycle =
-      solar_cycle_years / 4 - (solar_cycle_years / 100 - solar_cycle_years / 400);
-    static constexpr auto cycle_s = cuda::std::chrono::duration_cast<duration_s>(
-                                      duration_D{365 * solar_cycle_years + num_leap_years_in_cycle})
-                                      .count();
-    // Search the 400-year cycle if outside of the file entries range
-    return last_less_equal(file_entry_end, tz_table.times.cend(), (ts_count + cycle_s) % cycle_s);
-  }();
-
-  return duration_s{tz_table.offsets[std::distance(tz_table.times.cbegin(), ttime_it)]};
-}
-
 }  // namespace
 
 std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_view> tzif_dir,
@@ -649,7 +649,7 @@ duration_s get_ut_offset(std::optional<std::string_view> tzif_dir,
                          timestamp_s ts)
 {
   CUDF_FUNC_RANGE();
-  return lookup_ut_offset(build_transition_table(tzif_dir, timezone_name), ts);
+  return build_transition_table(tzif_dir, timezone_name).ut_offset(ts);
 }
 
 }  // namespace detail
