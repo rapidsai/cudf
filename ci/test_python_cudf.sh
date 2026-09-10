@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -25,7 +25,8 @@ timeout 40m ./ci/run_pylibcudf_pytests.sh \
   --cov-config=.coveragerc \
   --cov=pylibcudf \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/pylibcudf-coverage.xml" \
-  --cov-report=term
+  --cov-report=term \
+  --durations=10 --durations-min=10
 
 version_gte() {
   [ "$2" = "$(echo -e "$2\n$1" | sort -V | head -n1)" ]
@@ -39,7 +40,8 @@ timeout 40m ./ci/run_cudf_pytests.sh \
   --cov-config=../.coveragerc \
   --cov=cudf \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-coverage.xml" \
-  --cov-report=term
+  --cov-report=term \
+  --durations=10 --durations-min=10
 
 # Run benchmarks with both cudf and pandas to ensure compatibility is maintained.
 # Benchmarks are run in DEBUG_ONLY mode, meaning that only small data sizes are used.
@@ -54,7 +56,8 @@ timeout 40m ./ci/run_cudf_pytest_benchmarks.sh \
   --cov-config=.coveragerc \
   --cov=cudf \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-benchmark-coverage.xml" \
-  --cov-report=term
+  --cov-report=term \
+  --durations=10 --durations-min=10
 
 rapids-logger "pytest for cudf benchmarks using pandas"
 timeout 40m ./ci/run_cudf_pandas_pytest_benchmarks.sh \
@@ -64,7 +67,8 @@ timeout 40m ./ci/run_cudf_pandas_pytest_benchmarks.sh \
   --cov-config=.coveragerc \
   --cov=cudf \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-benchmark-pandas-coverage.xml" \
-  --cov-report=term
+  --cov-report=term \
+  --durations=10 --durations-min=10
 
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}

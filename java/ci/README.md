@@ -24,7 +24,7 @@ For local testing only, `java/ci/test_java_build_local.sh` runs Steps 1-3 end-to
 ### Step 1 - Build the static libcudf install tree
 
 ```bash
-./java/ci/build_static_libcudf.sh --output-dir /tmp/libcudf-cuda12 --cuda-version 12.9
+./java/ci/build_static_libcudf.sh --output-dir /tmp/libcudf-cuda12 --cuda-version 12.9.2
 ```
 
 This produces a static libcudf install tree (`lib/libcudf.a` plus its static
@@ -37,7 +37,7 @@ so plain `rm -rf` works.
 ./java/ci/build_cudf_java_jar.sh \
   --libcudf-dir /tmp/libcudf-cuda12 \
   --output-dir /tmp/jars \
-  --cuda-version 12.9
+  --cuda-version 12.9.2
 ```
 
 Optional `GITHUB_REF` selects release tag vs SNAPSHOT versioning. Unset means
@@ -81,12 +81,12 @@ lays them out as:
 
 ```text
 /tmp/maven-repo/ai/rapids/cudf/<CUDF_VERSION>-SNAPSHOT/
-    cudf-<CUDF_VERSION>-SNAPSHOT.jar
-    cudf-<CUDF_VERSION>-SNAPSHOT-cuda12.jar
-    cudf-<CUDF_VERSION>-SNAPSHOT-cuda13.jar
-    cudf-<CUDF_VERSION>-SNAPSHOT-sources.jar
-    cudf-<CUDF_VERSION>-SNAPSHOT-javadoc.jar
-    cudf-<CUDF_VERSION>-SNAPSHOT.pom
+    cudf-26.10.0-SNAPSHOT.jar
+    cudf-26.10.0-SNAPSHOT-cuda12.jar
+    cudf-26.10.0-SNAPSHOT-cuda13.jar
+    cudf-26.10.0-SNAPSHOT-sources.jar
+    cudf-26.10.0-SNAPSHOT-javadoc.jar
+    cudf-26.10.0-SNAPSHOT.pom
 ```
 
 The set of classifiers is whatever subdirectories are present under
@@ -99,7 +99,7 @@ it, so an `aarch64`-only set of subdirectories is not a valid gather input.
 ### Release Tag vs SNAPSHOT Versioning
 
 Release tag CI runs (`GITHUB_REF=refs/tags/vYY.MM.PP`) produce release-versioned
-JARs (`cudf-<CUDF_VERSION>-*.jar`). All other runs produce `-SNAPSHOT`. Gated by
+JARs (`cudf-26.10.0-SNAPSHOT`. Gated by
 [`rapids-is-release-build`](https://github.com/rapidsai/gha-tools/blob/main/tools/rapids-is-release-build).
 `GITHUB_REF` is optional. Unset or non-tag values stay SNAPSHOT.
 
@@ -159,7 +159,7 @@ nvidia-docker run -it cudf-build:12.9.1-devel-rocky8 bash
 You can download the cuDF repo in the docker container or you can mount it into the container.
 Here I choose to download again in the container.
 ```bash
-git clone --recursive https://github.com/NVIDIA/cudf.git -b main
+git clone --recursive https://github.com/NVIDIA/cudf.git -b release/26.10
 ```
 
 ```bash
