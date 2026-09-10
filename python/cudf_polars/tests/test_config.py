@@ -643,6 +643,18 @@ def test_use_hybrid_scan_requires_prefetch_file_metadata() -> None:
         )
 
 
+def test_use_hybrid_scan_enables_prefetch_file_metadata_by_default() -> None:
+    assert ParquetOptions(use_hybrid_scan=True).prefetch_file_metadata is True
+
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            parquet_options={"use_hybrid_scan": True},
+        )
+    )
+    assert config.parquet_options.prefetch_file_metadata is True
+
+
 def test_prefetch_file_metadata_default() -> None:
     config = ConfigOptions.from_polars_engine(pl.GPUEngine(executor="streaming"))
     assert config.parquet_options.prefetch_file_metadata is False

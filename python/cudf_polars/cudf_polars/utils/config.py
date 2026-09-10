@@ -346,8 +346,8 @@ class ParquetOptions:
     prefetch_file_metadata
         Whether to prefetch parquet file metadata and pass it through
         `parquet_metadatas` to avoid rereading file footers. Not supported
-        by the in-memory executor. It defaults to disabled; pass ``True`` to
-        enable it for local or remote files.
+        by the in-memory executor. It defaults to disabled; enabling
+        ``use_hybrid_scan`` implicitly enables it.
     use_jit_filter
         Whether to use JIT compilation for post-read filtering in Parquet scans.
         When enabled, filter predicates are JIT-compiled to CUDA kernels for
@@ -391,11 +391,11 @@ class ParquetOptions:
             f"{_env_prefix}__MAX_ROW_GROUP_SAMPLES", int, default=1
         )
     )
-    prefetch_file_metadata: bool = dataclasses.field(
+    prefetch_file_metadata: bool | Unspecified = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__PREFETCH_FILE_METADATA",
             _bool_converter,
-            default=False,
+            default=UNSPECIFIED,
         )
     )
     use_hybrid_scan: bool = dataclasses.field(
@@ -438,10 +438,12 @@ class ParquetOptions:
             raise TypeError("max_footer_samples must be an int or None")
         if not isinstance(self.max_row_group_samples, int):
             raise TypeError("max_row_group_samples must be an int")
-        if not isinstance(self.prefetch_file_metadata, bool):
-            raise TypeError("prefetch_file_metadata must be a bool")
+        if not isinstance(self.prefetch_file_metadata, (bool, Unspecified)):
+            raise TypeError("prefetch_file_metadata must be a bool when specified")
         if not isinstance(self.use_hybrid_scan, bool):
             raise TypeError("use_hybrid_scan must be a bool")
+        if isinstance(self.prefetch_file_metadata, Unspecified):
+            object.__setattr__(self, "prefetch_file_metadata", self.use_hybrid_scan)
         if self.use_hybrid_scan and self.prefetch_file_metadata is False:
             raise ValueError(
                 "use_hybrid_scan requires prefetch_file_metadata to be enabled"

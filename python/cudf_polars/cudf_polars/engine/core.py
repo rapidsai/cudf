@@ -43,7 +43,7 @@ from cudf_polars.streaming.base import StatsCollector
 from cudf_polars.streaming.parallel import lower_ir_graph_with_node_map
 from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.streaming.utils import _concat
-from cudf_polars.utils.config import Unspecified, get_total_device_memory
+from cudf_polars.utils.config import get_total_device_memory
 
 if TYPE_CHECKING:
     from collections.abc import Callable, MutableMapping
@@ -926,7 +926,6 @@ def evaluate_on_rank(
             ir,
             ir_context.py_executor,
             stats=stats,
-            remote_only=isinstance(prefetch_file_metadata, Unspecified),
             parse_hybrid_metadata=config_options.parquet_options.use_hybrid_scan,
         )
         attach_cached_parquet_metadata(ir, cached_parquet_info_map)

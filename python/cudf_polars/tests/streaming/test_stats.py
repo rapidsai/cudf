@@ -60,7 +60,7 @@ def df_and_schema() -> tuple[pl.DataFrame, Schema]:
 
 
 @pytest.mark.parametrize(
-    "paths", "expected",
+    "paths, expected",
     [
         (("s3://bucket/data.parquet",), 0),
         (("/tmp/data.parquet",), 3),
