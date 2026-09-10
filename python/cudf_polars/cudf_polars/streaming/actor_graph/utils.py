@@ -278,7 +278,7 @@ async def shutdown_on_error(
     chs_out: Sequence[Channel[Any]] = (),
     trace_ir: IR,
     ir_context: IRExecutionContext | None = None,
-) -> AsyncIterator[ActorTracer | None]:
+) -> AsyncIterator[ActorTracer]:
     """
     Actor-level shutdown and tracing for rapidsmpf.
 
@@ -311,7 +311,7 @@ async def shutdown_on_error(
     """
     channels = (*chs_in, *chs_out)
     # Create tracer only if LOG_TRACES is enabled and IR is provided
-    tracer: ActorTracer | None = None
+    # tracer: ActorTracer | None = None
     contextvars: dict[str, Any] = {}
 
     ir_id = trace_ir.get_stable_id()

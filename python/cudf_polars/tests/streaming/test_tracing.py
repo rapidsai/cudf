@@ -22,12 +22,10 @@ from rapidsmpf.streaming.chunks.arbitrary import ArbitraryChunk
 from rapidsmpf.streaming.core.message import Message
 
 from cudf_polars.containers import DataFrame
+from cudf_polars.dsl.ir import Empty
 from cudf_polars.streaming.actor_graph.io import Lineariser
-from cudf_polars.streaming.actor_graph.tracing import (
-    ActorTracer,
-    record_channel_metrics,
-    send_chunk,
-)
+from cudf_polars.streaming.actor_graph.tracing import ActorTracer, send_chunk
+from cudf_polars.streaming.actor_graph.utils import shutdown_on_error
 
 if TYPE_CHECKING:
     import pathlib
@@ -54,25 +52,36 @@ def test_actor_tracer_counts_table_chunk_without_table_view(chunk: TableChunk) -
 
 
 @pytest.mark.spmd
-def test_record_channel_metrics_reads_send_and_recv_bytes(
-    spmd_engine: SPMDEngine, chunk: TableChunk
-) -> None:
+def test_send_and_recv_bytes(spmd_engine: SPMDEngine, chunk: TableChunk) -> None:
     context = spmd_engine.context
     ch = context.create_channel()
+    ir = Empty({})
 
-    async def send_and_recv() -> None:
+    async def run() -> tuple[ActorTracer, ActorTracer]:
+
+        async def producer() -> ActorTracer:
+            async with shutdown_on_error(context, chs_out=(ch,), trace_ir=ir) as tracer:
+                await send_chunk(context, ch, chunk, 11, tracer=tracer)
+                await ch.drain(context)
+            return tracer
+
+        async def consumer() -> ActorTracer:
+            async with shutdown_on_error(context, chs_in=(ch,), trace_ir=ir) as tracer:
+                msg = await ch.recv(context)
+                assert msg is not None
+            return tracer
+
         async with asyncio.TaskGroup() as tg:
-            recv_task = tg.create_task(ch.recv(context))
-            tg.create_task(send_chunk(context, ch, chunk, 11, tracer=None))
-        recv_task.result()
+            producer_tracer_task = tg.create_task(producer())
+            consumer_tracer_task = tg.create_task(consumer())
 
-    asyncio.run(send_and_recv())
+        producer_tracer = await producer_tracer_task
+        consumer_tracer = await consumer_tracer_task
 
+        return producer_tracer, consumer_tracer
+
+    producer_tracer, consumer_tracer = asyncio.run(run())
     metrics = ch.metrics()
-    producer_tracer = ActorTracer()
-    consumer_tracer = ActorTracer()
-    record_channel_metrics(producer_tracer, chs_out=(ch,))
-    record_channel_metrics(consumer_tracer, chs_in=(ch,))
 
     assert producer_tracer.output_bytes == metrics.send_bytes
     assert consumer_tracer.input_bytes == metrics.recv_bytes
