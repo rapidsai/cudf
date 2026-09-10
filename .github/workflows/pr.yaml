@@ -539,7 +539,6 @@ jobs:
       build-datetime: ${{ needs.build-details.outputs.build-datetime }}
       node_type: cpu16
       script: ci/build_wheel.sh
-      stage: cpp-python
   wheel-python-build-noarch:
     needs: [build-details, checks]
     permissions:
@@ -558,7 +557,6 @@ jobs:
       node_type: cpu8
       pure-wheel: true
       script: ci/build_wheel_noarch.sh
-      stage: python-noarch
   wheel-tests-cudf:
     needs: [wheel-build, changed-files]
     permissions:
