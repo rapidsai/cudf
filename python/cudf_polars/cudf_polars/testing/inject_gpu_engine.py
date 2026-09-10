@@ -10,7 +10,6 @@ import sqlite3
 from functools import partialmethod
 from typing import TYPE_CHECKING
 
-import numpy
 import packaging.version
 import pytest
 
@@ -223,7 +222,8 @@ EXPECTED_FAILURES: dict[str, str] = {
     "tests/unit/io/test_iceberg.py::test_scan_iceberg_extra_struct_fields": "Iceberg support not yet implemented in cudf-polars",
     "tests/unit/io/test_iceberg.py::test_scan_iceberg_column_deletion": "Iceberg schema evolution not yet implemented in cudf-polars",
     "tests/unit/io/test_iceberg.py::test_scan_iceberg_nested_column_cast_deletion_rename": "Iceberg column_mapping (schema evolution) not yet implemented in cudf-polars",
-    "tests/unit/io/test_iceberg.py::test_scan_iceberg_parquet_prefilter_with_column_mapping": "Iceberg column_mapping (schema evolution) not yet implemented in cudf-polars",
+    "tests/unit/io/test_iceberg.py::test_scan_iceberg_parquet_prefilter_with_column_mapping[True]": "Iceberg column_mapping (schema evolution) not yet implemented in cudf-polars",
+    "tests/unit/io/test_iceberg.py::test_scan_iceberg_parquet_prefilter_with_column_mapping[False]": "Iceberg column_mapping (schema evolution) not yet implemented in cudf-polars",
     "tests/unit/io/test_iceberg.py::test_fill_missing_fields_with_identity_partition_values_nested": "Iceberg partition column injection not yet implemented in cudf-polars",
     "tests/unit/io/test_iceberg.py::test_scan_iceberg_fast_count[native]": "Iceberg fast count from metadata not yet supported in cudf-polars",
     "tests/unit/io/test_iceberg.py::test_iceberg_filter_bool_26474": "Iceberg support not yet implemented in cudf-polars",
@@ -298,6 +298,9 @@ EXPECTED_FAILURES: dict[str, str] = {
     "tests/unit/io/test_parquet.py::test_binary_offset_roundtrip": "binary offset type unsupported",
     "tests/unit/lazyframe/test_engine_selection.py::test_engine_import_error_raises[gpu]": "Expect this to pass because cudf-polars is installed",
     "tests/unit/lazyframe/test_engine_selection.py::test_engine_import_error_raises[engine1]": "Expect this to pass because cudf-polars is installed",
+    "tests/unit/lazyframe/test_engine.py::test_object_engine_affinity_drives_collect": "This plugin forces engine=<injected GPU engine> on LazyFrame.collect via partialmethod, so Config.set_engine_affinity's custom engine is never reached",
+    "tests/unit/lazyframe/test_projections.py::test_projection_pushdown_union_len_pushdown_28657[concat]": "https://github.com/NVIDIA/cudf/issues/24112",
+    "tests/unit/lazyframe/test_projections.py::test_projection_pushdown_union_len_pushdown_28657[union]": "https://github.com/NVIDIA/cudf/issues/24112",
     "tests/unit/lazyframe/test_lazyframe.py::test_round[dtype2-123.55-1-123.6]": "libcudf HALF_EVEN rounding bug for Float64 with decimal_places > 0. See https://github.com/NVIDIA/cudf/issues/21319",
     "tests/unit/lazyframe/test_lazyframe.py::test_cast_frame": "Casting that raises not supported on GPU",
     "tests/unit/lazyframe/test_lazyframe.py::test_lazy_cache_hit": "Debug output on stderr doesn't match",
@@ -313,10 +316,6 @@ EXPECTED_FAILURES: dict[str, str] = {
     "tests/unit/operations/test_group_by.py::test_group_by_median_by_dtype[input16-expected16-input_dtype16-output_dtype16]": "Unsupported groupby-agg for a particular dtype",
     "tests/unit/operations/test_group_by.py::test_grouped_slice_literals[False]": "List literal loses nesting in groupby-agg: cudf#19610",
     "tests/unit/operations/test_group_by.py::test_grouped_slice_literals[True]": "List literal loses nesting in groupby-agg: cudf#19610",
-    "tests/unit/operations/test_group_by.py::test_group_broadcast_binary_apply_expr_25046[pow-rhs1-lhs0]": "libcudf integer pow uses float exp/log, so 3**1 rounds to 2",
-    "tests/unit/operations/test_group_by.py::test_group_broadcast_binary_apply_expr_25046[pow-rhs2-lhs0]": "libcudf integer pow uses float exp/log, so 3**1 rounds to 2",
-    "tests/unit/operations/test_group_by.py::test_group_broadcast_binary_apply_expr_25046[pow-rhs3-lhs0]": "libcudf integer pow uses float exp/log, so 3**1 rounds to 2",
-    "tests/unit/operations/test_group_by.py::test_group_broadcast_binary_apply_expr_25046[pow-rhs4-lhs0]": "libcudf integer pow uses float exp/log, so 3**1 rounds to 2",
     "tests/unit/operations/test_group_by.py::test_group_by_lit_series": "Incorrect broadcasting of literals in groupby-agg",
     "tests/unit/operations/test_join.py::test_cross_join_slice_pushdown": "Need to implement slice pushdown for cross joins",
     # TODO: As of polars 1.34, the column names for left and right came in unaligned, which causes the dtypes to mismatch when calling plc.replace.replace_nulls
@@ -359,9 +358,6 @@ EXPECTED_FAILURES: dict[str, str] = {
     "tests/unit/sql/test_window_functions.py::test_window_named_window": "TODO: https://github.com/NVIDIA/cudf/pull/22048#discussion_r3238041970",
     "tests/unit/operations/test_window.py::test_over_literal_cum_sum_26800": "TODO: https://github.com/NVIDIA/cudf/pull/22048#discussion_r3238041970",
     "tests/unit/operations/namespaces/array/test_array.py::test_array_idx_size_limit_eval": "polars-internal IdxSize chunking debug assertion does not apply with the GPU engine",
-    "tests/unit/operations/aggregation/test_aggregations.py::test_implode_and_agg": "implode + agg returns a mismatched dtype",
-    "tests/unit/operations/aggregation/test_aggregations.py::test_duration_aggs": "Unsupported libcudf reduction operator for Duration dtype",
-    "tests/unit/operations/aggregation/test_aggregations.py::test_boolean_aggs": "boolean-agg mean floating-point precision mismatch",
     "tests/unit/io/test_scan.py::test_scan_sink_metrics_multiple_phases": "sink metrics are not reported by the GPU engine",
     "tests/unit/io/test_parquet.py::test_read_parquet_legacy_nested_maps_27159": "legacy nested-map parquet read produces a mismatched result",
     "tests/unit/datatypes/test_struct.py::test_struct_equal_missing_null_25360": "struct equality with a null raises libcudf 'Index out of bounds' (get_element)",
@@ -432,15 +428,6 @@ TESTS_TO_SKIP: dict[str, str] = {
 }
 
 
-if packaging.version.parse(numpy.__version__) >= packaging.version.parse("2.5.0"):
-    # TODO: remove once cudf-polars supports polars==1.44
-    EXPECTED_FAILURES.update(
-        {
-            "tests/unit/constructors/test_series.py::test_series_init_np_temporal_with_nat_15518": "DeprecationWarning from Numpy: https://github.com/pola-rs/polars/pull/28782",
-        }
-    )
-
-
 if packaging.version.parse(sqlite3.sqlite_version) <= packaging.version.parse("3.44.0"):
     # These tests rely on features not available in older versions of sqlite.
     TESTS_TO_SKIP.update(
@@ -470,6 +457,11 @@ if packaging.version.parse(sqlite3.sqlite_version) <= packaging.version.parse("3
 # 1) Tests that are too slow with --inject-gpu-engine-blocksize=small due to many small partitions for large data
 STREAMING_ENGINE_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/operations/aggregation/test_aggregations.py::test_boolean_aggs": "float difference in std/var in the unit of least precision",
+    # Crashes the worker instead of raising cleanly; skip rather than xfail
+    # since a crashed worker never reports a result. See
+    # https://github.com/NVIDIA/cudf/issues/24112
+    "tests/unit/lazyframe/test_projections.py::test_projection_pushdown_union_len_pushdown_28657[concat]": "Materializing a huge virtual literal frame crashes the worker under the streaming engine",
+    "tests/unit/lazyframe/test_projections.py::test_projection_pushdown_union_len_pushdown_28657[union]": "Materializing a huge virtual literal frame crashes the worker under the streaming engine",
     # No deterministic key sort (https://github.com/NVIDIA/cudf/issues/21641):
     # passes on some streaming runs and fails on others, so skip rather than
     # xfail to avoid a flaky XPASS/FAIL.
@@ -544,7 +536,6 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/functions/test_when_then.py::test_mismatched_height_should_raise[ternary_expr1-df1]": "Correct polars.exceptions.ShapeError raised but it's in a ExceptionGroup",
     "tests/unit/operations/test_slice.py::test_slice_pushdown_literal_projection_14349": "https://github.com/NVIDIA/cudf/issues/22072",
     "tests/unit/operations/test_group_by.py::test_group_by_lit_series": "Incorrect broadcasting of literals in groupby-agg",
-    "tests/unit/operations/test_group_by.py::test_group_by_series_partitioned": "https://github.com/NVIDIA/cudf/issues/22072",
     "tests/unit/operations/test_group_by.py::test_partitioned_group_by_chunked": "https://github.com/NVIDIA/cudf/issues/22072",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[1]": "https://github.com/NVIDIA/cudf/issues/22075",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[4]": "https://github.com/NVIDIA/cudf/issues/22075",
