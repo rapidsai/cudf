@@ -32,6 +32,8 @@
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
 
+#include <limits>
+
 using namespace cudf::tdigest;
 
 namespace cudf {
@@ -179,7 +181,8 @@ CUDF_KERNEL void compute_percentiles_kernel(device_span<int32_t const> tdigest_o
 std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& input,
                                                    column_view const& percentiles,
                                                    device_span<int32_t const> output_offsets,
-                                                   size_type num_empty_tdigests,
+                                                   size_type num_output_values,
+                                                   bool output_is_dense,
                                                    cuda::stream_ref stream,
                                                    rmm::device_async_resource_ref mr)
 {
@@ -213,9 +216,6 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
 
   auto percentiles_cdv = column_device_view::create(percentiles, stream);
 
-  // Empty input digests have zero-length output ranges, so the leaf is compact.
-  auto const num_output_values = (input.size() - num_empty_tdigests) * percentiles.size();
-
   // null percentiles become null results.
   auto [null_mask, null_count] = [&]() {
     return percentiles.null_count() != 0
@@ -246,7 +246,7 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
   compute_percentiles_kernel<<<grid.num_blocks, block_size, 0, stream.get()>>>(
     {offsets.begin<size_type>(), static_cast<size_t>(offsets.size())},
     output_offsets,
-    num_empty_tdigests == 0,
+    output_is_dense,
     *percentiles_cdv,
     centroids,
     tdv.min_begin(),
@@ -377,6 +377,12 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
       tdigest_is_empty, tdigest_is_empty + tdv.size(), cuda::std::logical_not{}, stream, mr);
   }();
 
+  auto const compact_child_size =
+    static_cast<int64_t>(input.size() - null_count) * percentiles.size();
+  CUDF_EXPECTS(compact_child_size <= std::numeric_limits<size_type>::max(),
+               "The percentile_approx output exceeds the maximum column size");
+  auto const num_output_values = static_cast<size_type>(compact_child_size);
+
   auto offsets = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, input.size() + 1, mask_state::UNALLOCATED, stream, mr);
   auto const tdigest_sizes = detail::size_begin(tdv);
@@ -407,7 +413,8 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
   return cudf::make_lists_column(
     input.size(),
     std::move(offsets),
-    detail::compute_approx_percentiles(input, percentiles, output_offsets, null_count, stream, mr),
+    detail::compute_approx_percentiles(
+      input, percentiles, output_offsets, num_output_values, null_count == 0, stream, mr),
     null_count,
     std::move(bitmask));
 }
