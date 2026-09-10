@@ -37,7 +37,6 @@ from cudf_polars.utils.config import (
     MemoryResourceConfig,
     ParquetOptions,
     StreamingExecutor,
-    Unspecified,
     configure_kvikio,
 )
 from cudf_polars.utils.cuda_stream import get_cuda_stream
@@ -646,7 +645,7 @@ def test_use_hybrid_scan_requires_prefetch_file_metadata() -> None:
 
 def test_prefetch_file_metadata_default() -> None:
     config = ConfigOptions.from_polars_engine(pl.GPUEngine(executor="streaming"))
-    assert isinstance(config.parquet_options.prefetch_file_metadata, Unspecified)
+    assert config.parquet_options.prefetch_file_metadata is False
 
     config = ConfigOptions.from_polars_engine(pl.GPUEngine(executor="in-memory"))
     assert config.parquet_options.prefetch_file_metadata is False
@@ -667,12 +666,9 @@ def test_parquet_options_object_passthrough() -> None:
     assert config.parquet_options is parquet_options
 
 
-def test_parquet_options_object_engine_default() -> None:
-    # If a user passes in a ParquetOptions object instead of a plain dict, and
-    # doesn't set prefetch_file_metadata on it, we still need to fill in the
-    # right default for the chosen executor.
+def test_parquet_options_object_default() -> None:
     parquet_options = ParquetOptions()
-    assert isinstance(parquet_options.prefetch_file_metadata, Unspecified)
+    assert parquet_options.prefetch_file_metadata is False
 
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(executor="in-memory", parquet_options=parquet_options)
@@ -682,17 +678,17 @@ def test_parquet_options_object_engine_default() -> None:
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(executor="streaming", parquet_options=parquet_options)
     )
-    assert isinstance(config.parquet_options.prefetch_file_metadata, Unspecified)
+    assert config.parquet_options.prefetch_file_metadata is False
 
 
-def test_parquet_options_unspecified_dict_factory() -> None:
+def test_parquet_options_default_dict_factory() -> None:
     parquet_options = ParquetOptions()
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(executor="streaming", parquet_options=parquet_options)
     )
-    assert isinstance(config.parquet_options.prefetch_file_metadata, Unspecified)
+    assert config.parquet_options.prefetch_file_metadata is False
     result = dataclasses.asdict(config, dict_factory=ConfigOptions.dict_factory)
-    assert result["parquet_options"]["prefetch_file_metadata"] is None
+    assert result["parquet_options"]["prefetch_file_metadata"] is False
     assert result["executor"]["max_concurrent_io_tasks"] == {"local": 2, "remote": 8}
 
 
