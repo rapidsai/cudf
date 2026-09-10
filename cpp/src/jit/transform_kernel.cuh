@@ -43,8 +43,10 @@ __device__ void transform_kernel(size_type row_size,
   auto const stride = grid_1d::grid_stride();
   auto thread_error = errc::SUCCESS;
 
-  for (auto row = start; row < row_size; row += stride) {
+  for (auto row = start;; row += stride) {
     if constexpr (!IsNullAware) {
+      if (row >= row_size) { break; }
+
       if (stencil != nullptr && !bit_is_set(stencil, row)) { continue; }
 
       auto ins = InputAccessors::map(
@@ -64,7 +66,10 @@ __device__ void transform_kernel(size_type row_size,
 
       thread_error = cuda::std::max(thread_error, row_error);
     } else {
-      auto const active_mask = __ballot_sync(__activemask(), row < row_size);
+      auto const active_mask = __ballot_sync(0xFFFF'FFFFu, row < row_size);
+
+      if (active_mask == 0) { break; }
+      if (row >= row_size) { continue; }
 
       auto ins = InputAccessors::map(
         [&]<typename... A>() { return cuda::std::tuple{A::nullable_element(input_cols, row)...}; });
