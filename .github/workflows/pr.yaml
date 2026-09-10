@@ -238,6 +238,9 @@ jobs:
     with:
       enable_check_generated_files: false
       ignored_pr_jobs: "telemetry-summarize cudf-spark-jni cuml-compat-tests"
+      # Main builds seed this cache. PR merge refs can restore it but should not create
+      # duplicate archives that are inaccessible to other PRs.
+      pre-commit-cache-read-only: true
   conda-cpp-build:
     needs: [build-details, checks]
     permissions:
@@ -723,7 +726,7 @@ jobs:
     steps:
       - id: shards
         env:
-          NUM_SHARDS: 2
+          NUM_SHARDS: 3
         run: |
           {
             echo "num_shards=${NUM_SHARDS}"
