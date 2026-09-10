@@ -317,7 +317,6 @@ async def shutdown_on_error(
     """
     channels = (*chs_in, *chs_out)
     # Create tracer only if LOG_TRACES is enabled and IR is provided
-    # tracer: ActorTracer | None = None
     contextvars: dict[str, Any] = {}
 
     ir_id = trace_ir.get_stable_id()
