@@ -459,8 +459,8 @@ static int64_t get_transition_time(dst_transition_s const& trans, int year)
  * TZif file, followed by `solar_cycle_entry_count` future entries.
  */
 struct host_transition_table {
-  std::vector<timestamp_s::rep> times;
-  std::vector<duration_s::rep> offsets;
+  std::vector<timestamp_s> times;
+  std::vector<duration_s> offsets;
 
   [[nodiscard]] bool empty() const { return times.empty(); }
 
@@ -479,27 +479,25 @@ struct host_transition_table {
       return std::prev(first_larger);
     };
 
-    auto const ts_count       = ts.time_since_epoch().count();
     auto const file_entry_end = times.cbegin() + (times.size() - solar_cycle_entry_count);
 
     auto const ttime_it = [&]() {
-      if (ts_count <= *std::prev(file_entry_end)) {
+      if (ts <= *std::prev(file_entry_end)) {
         // Search the file entries if the timestamp is in range
-        return last_less_equal(times.cbegin(), file_entry_end, ts_count);
+        return last_less_equal(times.cbegin(), file_entry_end, ts);
       }
       // Years divisible by four are leap years
       // Exceptions are years divisible by 100, but not divisible by 400
       static constexpr int32_t num_leap_years_in_cycle =
         solar_cycle_years / 4 - (solar_cycle_years / 100 - solar_cycle_years / 400);
-      static constexpr auto cycle_s =
-        cuda::std::chrono::duration_cast<duration_s>(
-          duration_D{365 * solar_cycle_years + num_leap_years_in_cycle})
-          .count();
+      static constexpr auto cycle_s = cuda::std::chrono::duration_cast<duration_s>(
+        duration_D{365 * solar_cycle_years + num_leap_years_in_cycle});
       // Search the 400-year cycle if outside of the file entries range
-      return last_less_equal(file_entry_end, times.cend(), (ts_count + cycle_s) % cycle_s);
+      return last_less_equal(
+        file_entry_end, times.cend(), timestamp_s{(ts.time_since_epoch() + cycle_s) % cycle_s});
     }();
 
-    return duration_s{offsets[std::distance(times.cbegin(), ttime_it)]};
+    return offsets[std::distance(times.cbegin(), ttime_it)];
   }
 };
 
@@ -510,8 +508,8 @@ struct host_transition_table {
 
   timezone_file const tzf(tzif_dir, timezone_name);
 
-  std::vector<timestamp_s::rep> transition_times(1);
-  std::vector<duration_s::rep> offsets(1);
+  std::vector<timestamp_s> transition_times(1);
+  std::vector<duration_s> offsets(1);
   // One ancient rule entry, one per TZ file entry, 2 entries per year in the future cycle
   transition_times.reserve(1 + tzf.timecnt() + solar_cycle_entry_count);
   offsets.reserve(1 + tzf.timecnt() + solar_cycle_entry_count);
@@ -520,9 +518,8 @@ struct host_transition_table {
     auto const ttime = tzf.transition_times[t];
     auto const idx   = tzf.ttime_idx[t];
     CUDF_EXPECTS(idx < tzf.typecnt(), "Out-of-range type index");
-    auto const utcoff = tzf.ttype[idx].utcoff;
-    transition_times.push_back(ttime);
-    offsets.push_back(utcoff);
+    transition_times.emplace_back(duration_s{ttime});
+    offsets.emplace_back(tzf.ttype[idx].utcoff);
     if (!earliest_std_idx && !tzf.ttype[idx].isdst) {
       earliest_std_idx = transition_times.size() - 1;
     }
@@ -539,12 +536,12 @@ struct host_transition_table {
       return {};
     }
     // No transitions to use for the time/offset - use the first offset and apply to all timestamps
-    transition_times[0] = std::numeric_limits<int64_t>::max();
-    offsets[0]          = tzf.ttype[0].utcoff;
+    transition_times[0] = timestamp_s::max();
+    offsets[0]          = duration_s{tzf.ttype[0].utcoff};
   }
 
   // Generate entries for times after the last transition
-  auto future_std_offset = offsets[tzf.timecnt()];
+  auto future_std_offset = offsets[tzf.timecnt()].count();
   auto future_dst_offset = future_std_offset;
   dst_transition_s dst_start{};
   dst_transition_s dst_end{};
@@ -574,10 +571,10 @@ struct host_transition_table {
     auto const dst_end_time   = get_transition_time(dst_end, year);
 
     // Two entries per year, since there are two transitions
-    transition_times.push_back(year_timestamp + dst_start_time - future_std_offset);
-    offsets.push_back(future_dst_offset);
-    transition_times.push_back(year_timestamp + dst_end_time - future_dst_offset);
-    offsets.push_back(future_std_offset);
+    transition_times.emplace_back(duration_s{year_timestamp + dst_start_time - future_std_offset});
+    offsets.emplace_back(future_dst_offset);
+    transition_times.emplace_back(duration_s{year_timestamp + dst_end_time - future_dst_offset});
+    offsets.emplace_back(future_std_offset);
 
     // Swap the newly added transitions if in descending order
     if (transition_times.rbegin()[1] > transition_times.rbegin()[0]) {
@@ -617,19 +614,8 @@ std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_
   auto const tz_table = build_transition_table(tzif_dir, timezone_name);
   if (tz_table.empty()) { return std::make_unique<cudf::table>(); }
 
-  auto ttimes_typed = make_empty_host_vector<timestamp_s>(tz_table.times.size(), stream);
-  std::transform(
-    tz_table.times.cbegin(), tz_table.times.cend(), std::back_inserter(ttimes_typed), [](auto ts) {
-      return timestamp_s{duration_s{ts}};
-    });
-  auto offsets_typed = make_empty_host_vector<duration_s>(tz_table.offsets.size(), stream);
-  std::transform(tz_table.offsets.cbegin(),
-                 tz_table.offsets.cend(),
-                 std::back_inserter(offsets_typed),
-                 [](auto ts) { return duration_s{ts}; });
-
-  auto d_ttimes  = cudf::detail::make_device_uvector_async(ttimes_typed, stream, mr);
-  auto d_offsets = cudf::detail::make_device_uvector_async(offsets_typed, stream, mr);
+  auto d_ttimes  = cudf::detail::make_device_uvector_async(tz_table.times, stream, mr);
+  auto d_offsets = cudf::detail::make_device_uvector_async(tz_table.offsets, stream, mr);
 
   std::vector<std::unique_ptr<column>> tz_table_columns;
   tz_table_columns.emplace_back(
