@@ -43,7 +43,7 @@
     "ground_truth": "A successful answer uses the provided cudf-groupby-agg starter files, especially code/groupby_analysis.py, to run the DataFrame loading and groupby work with cuDF. It preserves grouping keys, sum, mean, std, count, nunique, named aggregation, transform semantics or a documented compatibility boundary, output column names, and reports validation performed or the runtime blocker.",
     "expected_behavior": [
       "Uses the provided cudf-groupby-agg starter workspace and edits code/groupby_analysis.py.",
-      "Runs DataFrame loading and groupby work with cuDF while preserving grouping keys, aggregate functions, named aggregation, and output column names.",
+      "Runs DataFrame loading and groupby work with cuDF while preserving grouping keys, sum, mean, std, count, nunique, named aggregation, and output column names.",
       "Handles transform semantics with cuDF or documents a compatibility boundary, and reports validation performed or the runtime blocker."
     ]
   },
