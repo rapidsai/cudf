@@ -474,7 +474,6 @@ struct host_transition_table {
 
     auto const last_less_equal = [](auto begin, auto end, auto value) {
       auto const first_larger = std::upper_bound(begin, end, value);
-      // Return start of the range if all elements are larger than the value
       if (first_larger == begin) { return begin; }
       // Element before the first larger element is the last one less or equal
       return std::prev(first_larger);
@@ -648,7 +647,6 @@ duration_s get_ut_offset(std::optional<std::string_view> tzif_dir,
                          std::string_view timezone_name,
                          timestamp_s ts)
 {
-  CUDF_FUNC_RANGE();
   return build_transition_table(tzif_dir, timezone_name).ut_offset(ts);
 }
 
