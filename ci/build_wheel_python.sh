@@ -29,7 +29,7 @@ export RAPIDS_PY_API="cp${RAPIDS_PY_VERSION//./}"
 
 # pylibcudf
 cp "${BASE_PIP_CONSTRAINT}" "${PIP_CONSTRAINT}"
-LIBCUDF_WHEELHOUSE="$(rapids-download-from-github "$(rapids-artifact-name wheel_cpp libcudf cudf --cuda "${RAPIDS_CUDA_VERSION}")")"
+LIBCUDF_WHEELHOUSE="${RAPIDS_LIBCUDF_WHEELHOUSE:-$(rapids-download-from-github "$(rapids-artifact-name wheel_cpp libcudf cudf --cuda "${RAPIDS_CUDA_VERSION}")")}"
 echo "libcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_*.whl)" >> "${PIP_CONSTRAINT}"
 build_package_wheel \
   pylibcudf \

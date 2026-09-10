@@ -31,8 +31,7 @@ jobs:
       - docs-build
       - docs-build-matrix
       - publish-api-docs
-      - wheel-cpp-build
-      - wheel-python-build
+      - wheel-build
       - wheel-tests-cudf
       - wheel-tests-cudf-polars
       - cudf-polars-polars-tests
@@ -526,7 +525,7 @@ jobs:
       docs-projects: cudf,dask-cudf,libcudf
       dry-run: true
       version-map: ${{ vars.VERSION_MAP }}
-  wheel-cpp-build:
+  wheel-build:
     needs: [build-details, checks]
     permissions:
       actions: read
@@ -537,31 +536,13 @@ jobs:
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: ./.github/workflows/wheels-build-stage.yaml
     with:
-      # build for every combination of arch and CUDA version, but only for the latest Python
-      matrix_filter: group_by([.ARCH, (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by(.PY_VER|split(".")|map(tonumber)))
-      build_type: pull-request
-      build-datetime: ${{ needs.build-details.outputs.build-datetime }}
-      node_type: cpu16
-      script: ci/build_wheel_cpp.sh
-      stage: cpp
-  wheel-python-build:
-    needs: [build-details, checks, wheel-cpp-build]
-    permissions:
-      actions: read
-      contents: read
-      id-token: write
-      packages: read
-      pull-requests: read
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: ./.github/workflows/wheels-build-stage.yaml
-    with:
-      # Build a wheel for each CUDA x ARCH x minimum supported Python version
+      # Build all non-noarch wheels for each CUDA x ARCH x minimum Python.
       matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
       build_type: pull-request
       build-datetime: ${{ needs.build-details.outputs.build-datetime }}
       node_type: cpu16
-      script: ci/build_wheel_python.sh
-      stage: python
+      script: ci/build_wheel_cpp_python.sh
+      stage: cpp-python
   wheel-python-build-noarch:
     needs: [build-details, checks]
     permissions:
@@ -582,7 +563,7 @@ jobs:
       script: ci/build_wheel_python_noarch.sh
       stage: python-noarch
   wheel-tests-cudf:
-    needs: [wheel-python-build, changed-files]
+    needs: [wheel-build, changed-files]
     permissions:
       actions: read
       contents: read
@@ -603,7 +584,7 @@ jobs:
       # https://github.com/NVIDIA/cudf/issues/23498
       matrix_filter: map(select(.GPU != "gb300" and .GPU != "gh200"))
   wheel-tests-cudf-polars:
-    needs: [wheel-python-build, wheel-python-build-noarch, changed-files]
+    needs: [wheel-build, wheel-python-build-noarch, changed-files]
     permissions:
       actions: read
       contents: read
@@ -620,7 +601,7 @@ jobs:
       container-options: "--cap-add CAP_SYS_PTRACE --shm-size=8g --ulimit=nofile=1000000:1000000"
       script: "env POLARS_VERSIONS=endpoints ci/test_wheel_cudf_polars.sh"
   cudf-polars-polars-tests:
-    needs: [wheel-python-build, wheel-python-build-noarch, changed-files]
+    needs: [wheel-build, wheel-python-build-noarch, changed-files]
     strategy:
       fail-fast: false
       matrix:
@@ -655,7 +636,7 @@ jobs:
         --cudf-polars-shard-id ${{ matrix.shard_id }}
         --cudf-polars-num-shards ${{ matrix.num_shards }}
   wheel-tests-dask-cudf:
-    needs: [wheel-python-build, wheel-python-build-noarch, changed-files]
+    needs: [wheel-build, wheel-python-build-noarch, changed-files]
     permissions:
       actions: read
       contents: read
@@ -695,7 +676,7 @@ jobs:
         build-all -j0 --verbose -DBUILD_BENCHMARKS=ON 2>&1 | tee telemetry-artifacts/build.log;
         sccache --show-adv-stats | tee telemetry-artifacts/sccache-stats.txt;
   unit-tests-cudf-pandas:
-    needs: [wheel-python-build, changed-files]
+    needs: [wheel-build, changed-files]
     permissions:
       actions: read
       contents: read
@@ -772,7 +753,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
   pandas-tests:
     # run the Pandas unit tests using PR branch, sharded across runners.
-    needs: [wheel-python-build, changed-files, pandas-tests-shards]
+    needs: [wheel-build, changed-files, pandas-tests-shards]
     strategy:
       fail-fast: false
       matrix:

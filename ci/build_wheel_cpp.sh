@@ -39,7 +39,8 @@ finalize_package_wheel \
   "$(rapids-artifact-name wheel_cpp libcudf cudf --cuda "${RAPIDS_CUDA_VERSION}")"
 
 # libcudf-streaming uses the libcudf wheel built above.
-LIBCUDF_WHEELHOUSE="${RAPIDS_WHEEL_BLD_OUTPUT_DIR}"
+export RAPIDS_LIBCUDF_WHEELHOUSE="${RAPIDS_WHEEL_BLD_OUTPUT_DIR}"
+LIBCUDF_WHEELHOUSE="${RAPIDS_LIBCUDF_WHEELHOUSE}"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 echo "libcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_*.whl)" >> "${PIP_CONSTRAINT}"
@@ -61,3 +62,5 @@ finalize_package_wheel \
   python/libcudf_streaming \
   100M \
   "$(rapids-artifact-name wheel_cpp libcudf-streaming cudf --cuda "${RAPIDS_CUDA_VERSION}")"
+
+export RAPIDS_LIBCUDF_STREAMING_WHEELHOUSE="${RAPIDS_WHEEL_BLD_OUTPUT_DIR}"

@@ -2,14 +2,17 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-source rapids-configure-sccache
-source rapids-datetime-string
-source rapids-init-pip
+if [[ "${RAPIDS_WHEEL_COMMON_INITIALIZED:-}" != "true" ]]; then
+  source rapids-configure-sccache
+  source rapids-datetime-string
+  source rapids-init-pip
 
-export SCCACHE_S3_USE_PREPROCESSOR_CACHE_MODE=true
+  export SCCACHE_S3_USE_PREPROCESSOR_CACHE_MODE=true
 
-RAPIDS_VERSION_SUFFIX=".post${RAPIDS_DATETIME_STRING}" \
-  rapids-generate-version | tee ./VERSION > ./python/cudf/cudf/VERSION
+  RAPIDS_VERSION_SUFFIX=".post${RAPIDS_DATETIME_STRING}" \
+    rapids-generate-version | tee ./VERSION > ./python/cudf/cudf/VERSION
+  export RAPIDS_WHEEL_COMMON_INITIALIZED=true
+fi
 
 build_package_wheel() {
   local package_key=$1
