@@ -44,7 +44,7 @@ namespace strings {
  * @param chars_table Table of UTF-8 character mappings
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return New column with padded strings
+ * @return New column with translated strings
  */
 [[deprecated("Use std::span version instead")]] std::unique_ptr<column> translate(
   strings_column_view const& input,
@@ -71,7 +71,7 @@ namespace strings {
  * @param chars_table Table of UTF-8 character mappings
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return New column with padded strings
+ * @return New column with translated strings
  */
 std::unique_ptr<column> translate(
   strings_column_view const& input,
