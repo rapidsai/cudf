@@ -36,7 +36,7 @@ automatically **falling back to pandas** for other operations.
 
 ``cudf.pandas`` is available as part of the ``cudf`` package. See the
 `installation and deployment guide
-<https://developer.nvidia.com/topics/ai/data-science/cuda-x-for-data-science#section-install-and-deploy-in-your-environment>_`
+<https://docs.rapids.ai/install/#install-rapids>_`
 to get up-and-running with cuDF.
 
 .. toctree::
