@@ -373,6 +373,8 @@ class ParquetScanTaskBounds(NamedTuple):
 class ScanTask(IR):
     """Generic streaming scan task."""
 
+    is_io_node: bool = True
+
     __slots__ = (
         "base_scan",
         "paths",
@@ -477,6 +479,8 @@ class ScanTask(IR):
 
 class ParquetScanTask(ScanTask):
     """Parquet-specific streaming scan task."""
+
+    is_io_node: bool = True
 
     __slots__ = ("parquet_options",)
     _non_child: ClassVar[tuple[str, ...]] = (
@@ -755,6 +759,8 @@ def _(
 
 class StreamingScan(IR):
     """A streaming scan node."""
+
+    is_io_node: bool = True
 
     __slots__ = (
         "base_scan",
