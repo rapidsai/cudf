@@ -9,20 +9,41 @@ source ./ci/build_wheel_common.sh
 
 # Build all non-noarch wheels in one local dependency chain.
 
+RAPIDS_CUDA_MAJOR="${RAPIDS_CUDA_VERSION%%.*}"
+RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
+AUDITWHEEL_EXCLUDES=(
+  --exclude libcudf.so
+  --exclude libcudf_streaming.so
+  --exclude libkvikio.so
+  --exclude libnvcomp.so.5
+  --exclude librapids_logger.so
+  --exclude librapidsmpf.so
+  --exclude librmm.so
+  --exclude libucp.so.0
+  --exclude libucxx.so
+  --exclude "libnvrtc.so.${RAPIDS_CUDA_MAJOR}"
+  --exclude "libnvJitLink.so.${RAPIDS_CUDA_MAJOR}"
+)
+
+repair_wheel() {
+  python -m auditwheel repair \
+    "${AUDITWHEEL_EXCLUDES[@]}" \
+    -w "${RAPIDS_WHEEL_BLD_OUTPUT_DIR}" \
+    "$@"
+}
+
+add_wheel_constraint() {
+  local package_name=$1
+  local wheel_path=$2
+
+  echo "${package_name}-${RAPIDS_PY_CUDA_SUFFIX} @ file://${wheel_path}" >> "${PIP_CONSTRAINT}"
+}
+
 # libcudf
 SKBUILD_CMAKE_ARGS="-DUSE_NVCOMP_RUNTIME_WHEEL=ON" \
   build_package_wheel libcudf libcudf python/libcudf
 
-RAPIDS_CUDA_MAJOR="${RAPIDS_CUDA_VERSION%%.*}"
-python -m auditwheel repair \
-  --exclude libkvikio.so \
-  --exclude libnvcomp.so.5 \
-  --exclude librapids_logger.so \
-  --exclude librmm.so \
-  --exclude "libnvrtc.so.${RAPIDS_CUDA_MAJOR}" \
-  --exclude "libnvJitLink.so.${RAPIDS_CUDA_MAJOR}" \
-  -w "${RAPIDS_WHEEL_BLD_OUTPUT_DIR}" \
-  python/libcudf/dist/*
+repair_wheel python/libcudf/dist/*
 
 WHEEL_EXPORT_DIR="$(mktemp -d)"
 unzip -d "${WHEEL_EXPORT_DIR}" "${RAPIDS_WHEEL_BLD_OUTPUT_DIR}"/*
@@ -41,23 +62,12 @@ finalize_package_wheel \
   "$(rapids-artifact-name wheel_cpp libcudf cudf --cuda "${RAPIDS_CUDA_VERSION}")"
 
 # libcudf-streaming uses the libcudf wheel built above.
-export RAPIDS_LIBCUDF_WHEELHOUSE="${RAPIDS_WHEEL_BLD_OUTPUT_DIR}"
-LIBCUDF_WHEELHOUSE="${RAPIDS_LIBCUDF_WHEELHOUSE}"
-
-RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
-echo "libcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_*.whl)" >> "${PIP_CONSTRAINT}"
+LIBCUDF_WHEELHOUSE="${RAPIDS_WHEEL_BLD_OUTPUT_DIR}"
+add_wheel_constraint libcudf "${LIBCUDF_WHEELHOUSE}/libcudf_*.whl"
 
 build_package_wheel libcudf_streaming libcudf_streaming python/libcudf_streaming
 
-python -m auditwheel repair \
-  --exclude libcudf.so \
-  --exclude librapidsmpf.so \
-  --exclude librapids_logger.so \
-  --exclude librmm.so \
-  --exclude libucxx.so \
-  --exclude libucp.so.0 \
-  -w "${RAPIDS_WHEEL_BLD_OUTPUT_DIR}" \
-  python/libcudf_streaming/dist/*
+repair_wheel python/libcudf_streaming/dist/*
 
 finalize_package_wheel \
   libcudf_streaming \
@@ -65,18 +75,13 @@ finalize_package_wheel \
   100M \
   "$(rapids-artifact-name wheel_cpp libcudf-streaming cudf --cuda "${RAPIDS_CUDA_VERSION}")"
 
-export RAPIDS_LIBCUDF_STREAMING_WHEELHOUSE="${RAPIDS_WHEEL_BLD_OUTPUT_DIR}"
-
-BASE_PIP_CONSTRAINT="$(mktemp)"
-cp "${PIP_CONSTRAINT}" "${BASE_PIP_CONSTRAINT}"
-trap 'rm -f "${BASE_PIP_CONSTRAINT}"' EXIT
+LIBCUDF_STREAMING_WHEELHOUSE="${RAPIDS_WHEEL_BLD_OUTPUT_DIR}"
+add_wheel_constraint libcudf-streaming "${LIBCUDF_STREAMING_WHEELHOUSE}/libcudf_streaming_*.whl"
 
 # All wheels in this stage use the stable Python ABI.
 export RAPIDS_PY_API="cp${RAPIDS_PY_VERSION//./}"
 
 # pylibcudf
-cp "${BASE_PIP_CONSTRAINT}" "${PIP_CONSTRAINT}"
-echo "libcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_*.whl)" >> "${PIP_CONSTRAINT}"
 build_package_wheel \
   pylibcudf \
   pylibcudf \
@@ -85,12 +90,7 @@ build_package_wheel \
   --stable
 check_cython_performance_hints pylibcudf pylibcudf-wheel-build-output.log
 
-python -m auditwheel repair \
-  --exclude libcudf.so \
-  --exclude librapids_logger.so \
-  --exclude librmm.so \
-  -w "${RAPIDS_WHEEL_BLD_OUTPUT_DIR}" \
-  python/pylibcudf/dist/*
+repair_wheel python/pylibcudf/dist/*
 
 finalize_package_wheel \
   pylibcudf \
@@ -100,17 +100,10 @@ finalize_package_wheel \
 
 # cudf
 PYLIBCUDF_WHEELHOUSE="${RAPIDS_WHEEL_BLD_OUTPUT_DIR}"
-cp "${BASE_PIP_CONSTRAINT}" "${PIP_CONSTRAINT}"
-echo "libcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_*.whl)" >> "${PIP_CONSTRAINT}"
-echo "pylibcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_*.whl)" >> "${PIP_CONSTRAINT}"
+add_wheel_constraint pylibcudf "${PYLIBCUDF_WHEELHOUSE}/pylibcudf_*.whl"
 build_package_wheel cudf cudf python/cudf --stable
 
-python -m auditwheel repair \
-  --exclude libcudf.so \
-  --exclude librapids_logger.so \
-  --exclude librmm.so \
-  -w "${RAPIDS_WHEEL_BLD_OUTPUT_DIR}" \
-  python/cudf/dist/*
+repair_wheel python/cudf/dist/*
 
 finalize_package_wheel \
   cudf \
@@ -119,12 +112,6 @@ finalize_package_wheel \
   "$(rapids-artifact-name wheel_python cudf cudf --stable --cuda "${RAPIDS_CUDA_VERSION}")"
 
 # cudf-streaming
-cp "${BASE_PIP_CONSTRAINT}" "${PIP_CONSTRAINT}"
-LIBCUDF_STREAMING_WHEELHOUSE="${RAPIDS_LIBCUDF_STREAMING_WHEELHOUSE}"
-echo "libcudf-streaming-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo "${LIBCUDF_STREAMING_WHEELHOUSE}"/libcudf_streaming_*.whl)" >> "${PIP_CONSTRAINT}"
-echo "libcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_*.whl)" >> "${PIP_CONSTRAINT}"
-echo "pylibcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_*.whl)" >> "${PIP_CONSTRAINT}"
-
 build_package_wheel \
   cudf_streaming \
   cudf-streaming \
@@ -133,16 +120,7 @@ build_package_wheel \
   --stable
 check_cython_performance_hints cudf-streaming cudf-streaming-wheel-build-output.log
 
-python -m auditwheel repair \
-  --exclude libcudf.so \
-  --exclude libcudf_streaming.so \
-  --exclude librapidsmpf.so \
-  --exclude librapids_logger.so \
-  --exclude librmm.so \
-  --exclude libucxx.so \
-  --exclude libucp.so.0 \
-  -w "${RAPIDS_WHEEL_BLD_OUTPUT_DIR}" \
-  python/cudf_streaming/dist/*
+repair_wheel python/cudf_streaming/dist/*
 
 finalize_package_wheel \
   cudf_streaming \
