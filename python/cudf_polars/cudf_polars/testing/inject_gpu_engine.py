@@ -587,6 +587,13 @@ def pytest_collection_modifyitems(
         with_streaming_engine
         and config.getoption("--inject-gpu-engine-blocksize") == "small"
     )
+    streaming_xfails = STREAMING_ENGINE_EXPECTED_FAILURES
+    if with_small_blocksize:
+        # STREAMING_ENGINE_EXPECTED_FAILURES wins on overlapping keys.
+        streaming_xfails = {
+            **STREAMING_ENGINE_EXPECTED_FAILURES_SMALL_BLOCKSIZE_ONLY,
+            **STREAMING_ENGINE_EXPECTED_FAILURES,
+        }
     for item in items:
         skip_reason = TESTS_TO_SKIP.get(item.nodeid)
         if skip_reason is None and with_streaming_engine:
@@ -601,16 +608,11 @@ def pytest_collection_modifyitems(
                 skip_reason = None
         if skip_reason is not None:
             item.add_marker(pytest.mark.skip(reason=skip_reason))
-        elif (
-            with_streaming_engine
-            and (s_reason := STREAMING_ENGINE_EXPECTED_FAILURES.get(item.nodeid, None))
-            is not None
-        ) or (
-            with_streaming_engine
-            and with_small_blocksize
-            and (s_reason := STREAMING_ENGINE_EXPECTED_FAILURES_SMALL_BLOCKSIZE_ONLY.get(item.nodeid, None))
-            is not None
-        ):
-            item.add_marker(pytest.mark.xfail(reason=s_reason))
-        elif (reason := EXPECTED_FAILURES.get(item.nodeid)) is not None:
-            item.add_marker(pytest.mark.xfail(reason=reason))
+            continue
+        xfail_reason = None
+        if with_streaming_engine:
+            xfail_reason = streaming_xfails.get(item.nodeid)
+        if xfail_reason is None:
+            xfail_reason = EXPECTED_FAILURES.get(item.nodeid)
+        if xfail_reason is not None:
+            item.add_marker(pytest.mark.xfail(reason=xfail_reason))
