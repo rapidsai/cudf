@@ -1065,12 +1065,8 @@ class orc_writer_options_builder {
   }
 
   /**
-   * @brief Sets the timezone that the written timestamps are relative to.
-   *
-   * @param timezone Timezone name, for example "America/Los_Angeles"
+   * @copydoc orc_writer_options::set_writer_timezone
    * @return this for chaining
-   *
-   * @throw cudf::logic_error when writing, if `timezone` does not resolve to a timezone file
    */
   orc_writer_options_builder& writer_timezone(std::string timezone)
   {
@@ -1520,12 +1516,8 @@ class chunked_orc_writer_options_builder {
   }
 
   /**
-   * @brief Sets the timezone that the written timestamps are relative to.
-   *
-   * @param timezone Timezone name, for example "America/Los_Angeles"
+   * @copydoc chunked_orc_writer_options::set_writer_timezone
    * @return this for chaining
-   *
-   * @throw cudf::logic_error when writing, if `timezone` does not resolve to a timezone file
    */
   chunked_orc_writer_options_builder& writer_timezone(std::string timezone)
   {
