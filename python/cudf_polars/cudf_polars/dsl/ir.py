@@ -2756,7 +2756,12 @@ class Join(IR):
     """A join of two dataframes."""
 
     __slots__ = ("left_on", "options", "right_on")
-    _non_child = ("schema", "left_on", "right_on", "options")
+    _non_child: ClassVar[tuple[str, ...]] = (
+        "schema",
+        "left_on",
+        "right_on",
+        "options",
+    )
     _n_non_child_args = 3
     left_on: tuple[expr.NamedExpr, ...]
     """List of expressions used as keys in the left frame."""
@@ -3589,6 +3594,10 @@ class MapFunction(IR):
                 # polars requires that all to-explode columns have the
                 # same sub-shapes
                 raise NotImplementedError("Explode with more than one column")
+            if any(
+                isinstance(df.schema[name].polars_type, pl.Array) for name in to_explode
+            ):
+                raise NotImplementedError("Explode on Array is not supported")
             self.options = (tuple(to_explode),)
         elif self.name == "unpivot":
             indices, pivotees, variable_name, value_name = self.options
