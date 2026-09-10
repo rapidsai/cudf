@@ -697,6 +697,9 @@
                                     <arg value="--parallel"/>
                                     <arg value="${parallel.level}"/>
                                 </exec>
+                                <exec dir="${native.build.path}"
+                                      failonerror="true"
+                                      executable="${native.build.path}/CUDA_ERROR_DIAGNOSTICS_TEST"/>
                                 <mkdir dir="${project.build.directory}/extra-resources"/>
                                 <exec executable="bash"
                                       output="${project.build.directory}/extra-resources/cudf-java-version-info.properties">
