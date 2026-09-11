@@ -47,9 +47,10 @@ jobs:
       packages: read
       pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@codex/matrix-type-union
     with:
       build_type: ${{ inputs.build_type }}
+      matrix_type: nightly,pull-request
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       script: ci/test_cpp.sh
