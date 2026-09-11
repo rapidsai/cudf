@@ -245,7 +245,7 @@ TEST_F(SparkMurmurHashTest, MultiValueWithSeeds)
   // Note that Spark >= 3.2 normalizes the float/double value of -0. to +0. so that both values
   // hash to the same result, and libcudf normalizes signed zero to match. The reference values
   // for -0. below are therefore the Spark >= 3.2 values, which are the ones for 0., and the
-  // combined hash values follow from them. The Spark RAPIDS plugin applies the same
+  // combined hash values follow from them. cuDF for Spark applies the same
   // normalization in its calling code, so normalizing here is idempotent for that caller.
 
   /*
@@ -691,9 +691,9 @@ TEST_F(SparkMurmurHashTest, ListOfStructValues)
   auto list_column = cudf::make_lists_column(
     8, offsets.release(), struct_column.release(), null_count, std::move(null_mask));
 
-  // Lists of structs are rejected, matching the Spark RAPIDS JNI implementation, which raises the
+  // Lists of structs are rejected, matching the cudf-spark-jni implementation, which raises the
   // same error from check_hash_compatibility.
-  // https://github.com/NVIDIA/spark-rapids-jni/blob/09bae9c7dccf050b5db53a70282c3001cba5a015/src/main/cpp/src/hash/murmur_hash.cu#L167-L182
+  // https://github.com/NVIDIA/cudf-spark-jni/blob/09bae9c7dccf050b5db53a70282c3001cba5a015/src/main/cpp/src/hash/murmur_hash.cu#L167-L182
   EXPECT_THROW(cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({*list_column}), 42),
                cudf::logic_error);
 }
