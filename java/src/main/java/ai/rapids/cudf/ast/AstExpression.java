@@ -64,7 +64,7 @@ public abstract class AstExpression {
   }
 
   private CompiledExpression compile(CompiledExpression.CompilationMode mode) {
-    validateCompilationMode(mode);
+    validateRootCompilationMode(mode);
     int size = getSerializedSize();
     ByteBuffer bb = ByteBuffer.allocate(size);
     bb.order(ByteOrder.nativeOrder());
@@ -72,7 +72,14 @@ public abstract class AstExpression {
     return new CompiledExpression(bb.array(), mode);
   }
 
-  void validateCompilationMode(CompiledExpression.CompilationMode mode) {}
+  /**
+   * Validate this node as the root of the expression being compiled.
+   * Overrides must not recurse into children: root restrictions do not apply to nested literals.
+   *
+   * @param mode requested compilation mode
+   * @throws IllegalArgumentException if this root is unsupported in the requested mode
+   */
+  void validateRootCompilationMode(CompiledExpression.CompilationMode mode) {}
 
   /** Get the size in bytes of the serialized form of this node and all child nodes */
   abstract int getSerializedSize();

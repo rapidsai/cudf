@@ -36,20 +36,21 @@ public class CompiledExpression implements AutoCloseable {
 
     @Override
     protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
-      long origAddress = nativeHandle;
-      boolean neededCleanup = nativeHandle != 0;
-      if (neededCleanup) {
-        try {
-          destroy(nativeHandle);
-        } finally {
-          nativeHandle = 0;
-        }
-        if (logErrorIfNotClean) {
-          log.error("AN AST COMPILED EXPRESSION WAS LEAKED (ID: " +
-              id + " " + Long.toHexString(origAddress));
-        }
+      boolean alreadyClean = nativeHandle == 0;
+      if (alreadyClean) {
+        return false;
       }
-      return neededCleanup;
+      long origAddress = nativeHandle;
+      try {
+        destroy(nativeHandle);
+      } finally {
+        nativeHandle = 0;
+      }
+      if (logErrorIfNotClean) {
+        log.error("AN AST COMPILED EXPRESSION WAS LEAKED (ID: {} {})", id,
+            Long.toHexString(origAddress));
+      }
+      return true;
     }
 
     @Override
@@ -73,10 +74,10 @@ public class CompiledExpression implements AutoCloseable {
     CompiledExpressionCleaner newCleaner = null;
     try {
       newCleaner = new CompiledExpressionCleaner(nativeHandle);
-      this.cleaner = newCleaner;
       this.mode = mode;
-      MemoryCleaner.register(this, cleaner);
-      cleaner.addRef();
+      MemoryCleaner.register(this, newCleaner);
+      newCleaner.addRef();
+      this.cleaner = newCleaner;
     } catch (Throwable t) {
       try {
         if (newCleaner == null) {
@@ -127,10 +128,7 @@ public class CompiledExpression implements AutoCloseable {
    */
   public static Table computeTableJit(Table table, CompiledExpression... expressions) {
     long tableHandle = Objects.requireNonNull(table, "table").getNativeView();
-    JitExpressionArgs expressionArgs = getJitExpressionArgs(expressions);
-    if (tableHandle == 0) {
-      throw new IllegalStateException("Table is closed");
-    }
+    JitExpressionArgs expressionArgs = getJitExpressionArgs(expressions, tableHandle);
 
     try {
       return new Table(computeTableJitNative(expressionArgs.nativeHandles, tableHandle));
@@ -150,12 +148,16 @@ public class CompiledExpression implements AutoCloseable {
     }
   }
 
-  static JitExpressionArgs getJitExpressionArgs(CompiledExpression[] expressions) {
-    CompiledExpression[] expressionRefs =
-        Objects.requireNonNull(expressions, "expressions").clone();
-    if (expressionRefs.length == 0) {
+  static JitExpressionArgs getJitExpressionArgs(
+      CompiledExpression[] expressions, long tableHandle) {
+    if (Objects.requireNonNull(expressions, "expressions").length == 0) {
       throw new IllegalArgumentException("At least one expression is required");
     }
+    // Preserve array validation before the table check, and element validation after it.
+    if (tableHandle == 0) {
+      throw new IllegalStateException("Table is closed");
+    }
+    CompiledExpression[] expressionRefs = expressions.clone();
 
     long[] nativeHandles = new long[expressionRefs.length];
     for (int i = 0; i < expressionRefs.length; i++) {

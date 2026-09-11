@@ -1517,7 +1517,13 @@ transform_program::transform_program(
                            args.user_data,
                            jit_transform::make_input_specs(args.inputs),
                            jit_transform::make_output_specs(args.outputs, args.string_offsets));
-  for (auto& input : args.inputs) {
+  CUDF_EXPECTS(args.inputs.size() == args.input_column_indices.size(),
+               "AST transform input metadata size mismatch");
+  for (auto i = std::size_t{0}; i < args.inputs.size(); ++i) {
+    auto& input = args.inputs[i];
+    CUDF_EXPECTS(
+      args.input_column_indices[i].has_value() == std::holds_alternative<column_view>(input),
+      "AST transform inputs must be table columns or scalar literals");
     impl_->ast_input_types_.push_back(std::visit([](auto& view) { return view.type(); }, input));
     impl_->ast_input_nullable_.push_back(
       std::visit([](auto& view) { return view.nullable(); }, input));
@@ -1580,9 +1586,13 @@ std::unique_ptr<table> transform_program::run(table_view const& table,
                    std::invalid_argument);
       inputs.emplace_back(input);
     } else {
+      CUDF_EXPECTS(scalar_index < impl_->ast_scalar_columns_.size(),
+                   "AST transform scalar input metadata mismatch");
       inputs.emplace_back(scalar_column_view{impl_->ast_scalar_columns_[scalar_index++]->view()});
     }
   }
+  CUDF_EXPECTS(scalar_index == impl_->ast_scalar_columns_.size(),
+               "AST transform scalar input metadata mismatch");
   return run(inputs, impl_->ast_outputs_, {}, table.num_rows(), stream, mr);
 }
 

@@ -78,6 +78,7 @@ class compiled_expr {
   template <typename F>
   cudf::ast::expression const& add_jit_expression(F&& factory)
   {
+    // Defensively enforce the precondition even though compile_jit_expression checks it first.
     if (!is_jit()) {
       throw std::invalid_argument("JIT operations require an expression compiled for JIT");
     }

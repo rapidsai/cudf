@@ -666,6 +666,16 @@ public class CompiledExpressionTest extends CudfTestBase {
       closedTable.close();
       Assertions.assertThrows(IllegalStateException.class,
           () -> CompiledExpression.computeTableJit(closedTable, compiled));
+      Assertions.assertThrows(NullPointerException.class,
+          () -> CompiledExpression.computeTableJit(closedTable, (CompiledExpression[]) null));
+      Assertions.assertThrows(IllegalArgumentException.class,
+          () -> CompiledExpression.computeTableJit(closedTable));
+      Assertions.assertThrows(IllegalStateException.class,
+          () -> CompiledExpression.computeTableJit(closedTable, compiled, null));
+      try (CompiledExpression nonJitExpression = Literal.ofInt(1).compile()) {
+        Assertions.assertThrows(IllegalStateException.class,
+            () -> CompiledExpression.computeTableJit(closedTable, nonJitExpression));
+      }
     }
 
     AstExpression defaultExpr = new BinaryOperation(BinaryOperator.ADD,

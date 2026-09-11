@@ -128,8 +128,10 @@ public final class Literal extends AstExpression {
    * Construct a decimal literal with the specified type and unscaled value.
    * A null {@code unscaledValue} produces a null literal of the requested type.
    * Root literals of type {@code DECIMAL32} or {@code DECIMAL64} can use either compilation mode.
-   * A {@code DECIMAL128} root literal must use {@link AstExpression#compileJit()}; the default AST
-   * executor cannot materialize it correctly.
+   * A {@code DECIMAL128} root literal is rejected by {@link AstExpression#compile()} with an
+   * {@link IllegalArgumentException} and must use {@link AstExpression#compileJit()}, because the
+   * default AST executor cannot materialize it correctly. Nested {@code DECIMAL128} literals are
+   * not checked at compile time.
    *
    * @param type decimal storage type and scale
    * @param unscaledValue unscaled decimal value, or null
@@ -253,7 +255,7 @@ public final class Literal extends AstExpression {
   }
 
   @Override
-  void validateCompilationMode(CompiledExpression.CompilationMode mode) {
+  void validateRootCompilationMode(CompiledExpression.CompilationMode mode) {
     if (mode == CompiledExpression.CompilationMode.DEFAULT &&
         type.getTypeId() == DType.DTypeEnum.DECIMAL128) {
       throw new IllegalArgumentException(

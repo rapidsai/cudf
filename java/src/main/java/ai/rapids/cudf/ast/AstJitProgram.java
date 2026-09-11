@@ -65,9 +65,9 @@ public final class AstJitProgram implements AutoCloseable {
     AstJitProgramCleaner newCleaner = null;
     try {
       newCleaner = new AstJitProgramCleaner(nativeHandle);
+      MemoryCleaner.register(this, newCleaner);
+      newCleaner.addRef();
       cleaner = newCleaner;
-      MemoryCleaner.register(this, cleaner);
-      cleaner.addRef();
     } catch (Throwable t) {
       try {
         if (newCleaner == null) {
@@ -99,10 +99,7 @@ public final class AstJitProgram implements AutoCloseable {
   public static AstJitProgram compile(Table schemaTable, CompiledExpression... expressions) {
     long tableHandle = Objects.requireNonNull(schemaTable, "schemaTable").getNativeView();
     CompiledExpression.JitExpressionArgs expressionArgs =
-        CompiledExpression.getJitExpressionArgs(expressions);
-    if (tableHandle == 0) {
-      throw new IllegalStateException("Table is closed");
-    }
+        CompiledExpression.getJitExpressionArgs(expressions, tableHandle);
 
     try {
       return new AstJitProgram(create(expressionArgs.nativeHandles, tableHandle));

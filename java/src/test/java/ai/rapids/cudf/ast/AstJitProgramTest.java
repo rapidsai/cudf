@@ -96,8 +96,12 @@ public class AstJitProgramTest extends CudfTestBase {
     try (AstJitProgram closeableProgram = program;
          Table input = new Table.TestBuilder().column("a", "ccc", "dddd").build();
          Table result = closeableProgram.computeTable(input);
-         ColumnVector expected = ColumnVector.fromBooleans(true, false, false)) {
+         ColumnVector expected = ColumnVector.fromBooleans(true, false, false);
+         Table secondInput = new Table.TestBuilder().column("zzz", "b").build();
+         Table secondResult = closeableProgram.computeTable(secondInput);
+         ColumnVector secondExpected = ColumnVector.fromBooleans(false, true)) {
       assertColumnsAreEqual(expected, result.getColumn(0));
+      assertColumnsAreEqual(secondExpected, secondResult.getColumn(0));
     }
   }
 
@@ -151,6 +155,16 @@ public class AstJitProgramTest extends CudfTestBase {
       closedTable.close();  // idempotent
       Assertions.assertThrows(IllegalStateException.class,
           () -> AstJitProgram.compile(closedTable, compiled));
+      Assertions.assertThrows(NullPointerException.class,
+          () -> AstJitProgram.compile(closedTable, (CompiledExpression[]) null));
+      Assertions.assertThrows(IllegalArgumentException.class,
+          () -> AstJitProgram.compile(closedTable));
+      Assertions.assertThrows(IllegalStateException.class,
+          () -> AstJitProgram.compile(closedTable, compiled, null));
+      try (CompiledExpression nonJitExpression = defaultExpression.compile()) {
+        Assertions.assertThrows(IllegalStateException.class,
+            () -> AstJitProgram.compile(closedTable, nonJitExpression));
+      }
     }
   }
 
