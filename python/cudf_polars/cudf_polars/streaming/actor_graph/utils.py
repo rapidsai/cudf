@@ -282,6 +282,7 @@ async def shutdown_on_error(
     *,
     chs_in: Sequence[Channel[Any]] = (),
     chs_out: Sequence[Channel[Any]] = (),
+    auxiliary_channels: Sequence[Channel[Any]] = (),
     trace_ir: IR,
     ir_context: IRExecutionContext | None = None,
 ) -> AsyncIterator[ActorTracer]:
@@ -301,6 +302,9 @@ async def shutdown_on_error(
     chs_out
         Boundary output channels. Shut down on error, and used to record
         ``output_bytes`` from ``Channel.metrics().send_bytes``.
+    auxiliary_channels
+        Auxiliary channels. Shut down on error. Statistics from these channels
+        are not included in the actor tracing.
     trace_ir
         Optional IR node to enable tracing for this streaming actor.
         When provided and LOG_TRACES is enabled, an ActorTracer
@@ -315,7 +319,7 @@ async def shutdown_on_error(
     ActorTracer | None
         An actor tracer for collecting stats (if tracing enabled), else None.
     """
-    channels = (*chs_in, *chs_out)
+    channels = (*chs_in, *chs_out, *auxiliary_channels)
     # Create tracer only if LOG_TRACES is enabled and IR is provided
     contextvars: dict[str, Any] = {}
 

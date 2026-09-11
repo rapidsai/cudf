@@ -1691,8 +1691,9 @@ async def join_actor(
     """
     async with shutdown_on_error(
         context,
-        chs_in=(ch_left, ch_right, *ch_prefilter_domains),
+        chs_in=(ch_left, ch_right),
         chs_out=(ch_out,),
+        auxiliary_channels=ch_prefilter_domains,
         trace_ir=ir,
         ir_context=ir_context,
     ) as tracer:
