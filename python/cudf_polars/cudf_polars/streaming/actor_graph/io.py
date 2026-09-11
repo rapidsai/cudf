@@ -233,15 +233,15 @@ async def dataframescan_node(
         # offsets for Array columns with outer nulls
         # (https://github.com/pola-rs/polars/pull/28602).
         dtypes = ir.df.dtypes()
-        has_struct = any(
-            isinstance(dt, pl.Struct)
-            for dt in pl.datatypes.unpack_dtypes(dtypes, include_compound=True)
-        )
-        array_columns = tuple(
-            name
-            for name, dtype in zip(ir.df.columns(), dtypes, strict=True)
-            if isinstance(dtype, pl.Array)
-        )
+        has_struct = False
+        array_columns = []
+        for name, dtype in zip(ir.df.columns(), dtypes, strict=True):
+            has_struct = has_struct or any(
+                isinstance(dt, pl.Struct)
+                for dt in pl.datatypes.unpack_dtypes(dtype, include_compound=True)
+            )
+            if isinstance(dtype, pl.Array):
+                array_columns.append(name)
 
         for seq_num in range(local_count):
             offset = local_offset * rows_per_partition + seq_num * rows_per_partition
