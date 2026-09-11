@@ -514,9 +514,10 @@ void parquet_expression_simplifier::validate_column_reference(
   CUDF_EXPECTS(col_ref.get_table_source() == ast::table_reference::LEFT,
                "Parquet filter expressions only support left-table column references",
                std::invalid_argument);
-  CUDF_EXPECTS(std::cmp_less(col_ref.get_column_index(), _output_dtypes.size()),
+  auto const col_index = col_ref.get_column_index();
+  CUDF_EXPECTS(col_index >= 0 and std::cmp_less(col_index, _output_dtypes.size()),
                std::format("Parquet filter column index {} is out of range of {} output columns",
-                           col_ref.get_column_index(),
+                           col_index,
                            _output_dtypes.size()),
                std::out_of_range);
 }
