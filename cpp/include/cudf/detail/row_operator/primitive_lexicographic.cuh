@@ -16,10 +16,6 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <cuda/std/optional>
-
-#include <memory>
-
 namespace cudf::detail::row::primitive {
 
 /**
@@ -29,7 +25,7 @@ namespace cudf::detail::row::primitive {
  * numeric rows do not instantiate comparators for strings, dictionaries, or nested types.
  * NaNs compare equivalent to other NaNs and greater than all other non-null values.
  *
- * The preprocessed table must outlive the device use of this comparator.
+ * The table and ordering metadata must remain valid for the device use of this comparator.
  */
 class row_lexicographic_comparator {
  public:
@@ -37,14 +33,18 @@ class row_lexicographic_comparator {
    * @brief Constructs a comparator for rows in the same numeric table.
    *
    * @param has_nulls Indicates if the input contains nulls
-   * @param table Preprocessed table whose columns must all be numeric
+   * @param table Device view of a table whose columns must all be numeric
+   * @param column_order Per-column sort order, or an empty span for all ascending
+   * @param null_precedence Per-column null order, or an empty span for all nulls before
    */
   row_lexicographic_comparator(nullate::DYNAMIC has_nulls,
-                               std::shared_ptr<lexicographic::preprocessed_table> const& table)
+                               table_device_view table,
+                               device_span<order const> column_order,
+                               device_span<null_order const> null_precedence)
     : _has_nulls{has_nulls},
-      _table{*table},
-      _column_order{table->column_order()},
-      _null_precedence{table->null_precedence()}
+      _table{table},
+      _column_order{column_order},
+      _null_precedence{null_precedence}
   {
   }
 
@@ -66,7 +66,7 @@ class row_lexicographic_comparator {
         bool const rhs_is_null = col.is_null(rhs_index);
         if (lhs_is_null or rhs_is_null) {
           auto const null_precedence =
-            _null_precedence.has_value() ? (*_null_precedence)[i] : null_order::BEFORE;
+            _null_precedence.empty() ? null_order::BEFORE : _null_precedence[i];
           state          = null_compare(lhs_is_null, rhs_is_null, null_precedence);
           compare_values = false;
         }
@@ -79,8 +79,7 @@ class row_lexicographic_comparator {
 
       if (state == weak_ordering::EQUIVALENT) { continue; }
 
-      bool const ascending =
-        _column_order.has_value() ? (*_column_order)[i] == order::ASCENDING : true;
+      bool const ascending = _column_order.empty() || _column_order[i] == order::ASCENDING;
       return ascending
                ? state
                : (state == weak_ordering::LESS ? weak_ordering::GREATER : weak_ordering::LESS);
@@ -112,8 +111,8 @@ class row_lexicographic_comparator {
 
   nullate::DYNAMIC _has_nulls;
   table_device_view _table;
-  cuda::std::optional<device_span<order const>> _column_order;
-  cuda::std::optional<device_span<null_order const>> _null_precedence;
+  device_span<order const> _column_order;
+  device_span<null_order const> _null_precedence;
 };
 
 }  // namespace cudf::detail::row::primitive
