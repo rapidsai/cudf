@@ -436,6 +436,7 @@ TEST_F(SparkMurmurHashTest, NonCanonicalBool)
   auto const host   = cudf::test::to_host<int32_t>(output->view()).first;
 
   ASSERT_EQ(raw.size(), host.size());
+  ASSERT_GT(host.size(), 3);
   EXPECT_EQ(host[1], host[2]) << "byte 2 must hash the same as byte 1";
   EXPECT_EQ(host[1], host[3]) << "byte 255 must hash the same as byte 1";
   EXPECT_NE(host[0], host[1]) << "false and true must differ";
