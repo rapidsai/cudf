@@ -514,16 +514,18 @@ TEST_F(RowOperatorTest, TestSparkMurmurRowHasher)
                     hasher);
 
   // Values produced by Apache Spark for the same input and seed.
-  auto const expected = cudf::test::fixed_width_column_wrapper<int32_t>{-1721723333,
-                                                                        1151116018,
-                                                                        1549484878,
-                                                                        -1287750896,
-                                                                        -1980733329,
-                                                                        -36760162,
-                                                                        -1141491041,
-                                                                        -1676088145,
-                                                                        -1252530078,
-                                                                        363576572};
+  auto const expected = cudf::test::fixed_width_column_wrapper<int32_t>{{-1721723333,
+                                                                         1151116018,
+                                                                         1549484878,
+                                                                         -1287750896,
+                                                                         -1980733329,
+                                                                         -36760162,
+                                                                         -1141491041,
+                                                                         -1676088145,
+                                                                         -1252530078,
+                                                                         363576572},
+                                                                        stream,
+                                                                        mr};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     results, expected, cudf::test::debug_output_level::FIRST_ERROR, stream, mr);
 }
