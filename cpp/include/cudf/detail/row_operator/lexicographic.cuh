@@ -34,6 +34,10 @@
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
+namespace detail::row::primitive {
+class row_lexicographic_comparator;
+}  // namespace detail::row::primitive
+
 namespace detail::row::lexicographic {
 
 /**
@@ -740,6 +744,7 @@ struct preprocessed_table {
  private:
   friend class self_comparator;
   friend class two_table_comparator;
+  friend class ::cudf::detail::row::primitive::row_lexicographic_comparator;
 
   /**
    * @brief Create the output preprocessed table from intermediate preprocessing results

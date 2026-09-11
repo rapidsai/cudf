@@ -10,6 +10,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/row_operator/lexicographic.cuh>
+#include <cudf/detail/row_operator/primitive_lexicographic.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -81,6 +82,14 @@ std::unique_ptr<column> sorted_order(table_view input,
                    comparator);
     }
   };
+
+  if (is_primitive_row_op_compatible(input)) {
+    auto const preprocessed =
+      row::lexicographic::preprocessed_table::create(input, column_order, null_precedence, stream);
+    do_sort(row::lexicographic::less_comparator{row::primitive::row_lexicographic_comparator{
+      nullate::DYNAMIC{has_nulls(input)}, preprocessed}});
+    return sorted_indices;
+  }
 
   auto const comp =
     cudf::detail::row::lexicographic::self_comparator(input, column_order, null_precedence, stream);
