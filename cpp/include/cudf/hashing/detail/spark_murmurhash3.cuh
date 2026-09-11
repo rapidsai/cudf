@@ -141,8 +141,8 @@ struct Spark_MurmurHash3_x86_32 {
    */
   template <typename T>
   [[nodiscard]] uint32_t __device__ inline hash_low_bytes(T value, std::size_t length) const
+    requires(cuda::std::is_integral_v<T>)
   {
-    static_assert(cuda::std::is_integral_v<T>);
     auto const nblocks = length / 4;
     uint32_t h         = m_seed;
     for (std::size_t i = 0; i < nblocks; ++i) {
