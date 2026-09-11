@@ -119,19 +119,13 @@ int blocks_per_dictionary(Kernel kernel,
 
 /**
  * @brief Builds the hash map of unique values for every stripe dictionary.
- *
- * `blockIdx.x` selects the dictionary and `blockIdx.y` splits its rows across blocks. Splitting
- * requires `Scope` to be `cuda::thread_scope_device`, so that inserts from different blocks stay
- * atomic; the launcher uses the cheaper block scope when the y extent is one.
- *
- * Which of several equal strings wins a slot depends on block order, but a slot is chosen by string
- * content, so the dictionary contents and the encoded output are unaffected.
  */
 template <int block_size, cuda::thread_scope Scope>
 CUDF_KERNEL void __launch_bounds__(block_size)
   populate_dictionary_hash_maps_kernel(device_2dspan<stripe_dictionary> dictionaries,
                                        device_span<orc_column_device_view const> columns)
 {
+  // blockIdx.x selects the dictionary, blockIdx.y splits its rows across blocks
   auto const num_stripes = dictionaries.size().second;
   auto const t           = threadIdx.x;
   auto& dict             = dictionaries[blockIdx.x / num_stripes][blockIdx.x % num_stripes];
@@ -142,7 +136,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto const equality_fn = equality_functor{col};
 
   storage_ref_type const storage_ref{dict.map_slots.size(), dict.map_slots.data()};
-  // Make a view of the hash map.
+  // Scope must be device when several blocks share a dictionary, so that their inserts stay
+  // atomic; the launcher picks the cheaper block scope when the y extent is one
   auto hash_map_ref = cuco::static_map_ref{cuco::empty_key{KEY_SENTINEL},
                                            cuco::empty_value{VALUE_SENTINEL},
                                            equality_fn,
@@ -166,7 +161,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     auto const is_valid = cur_row < end_row and col.is_valid(cur_row);
 
     if (is_valid) {
-      // insert element at cur_row to hash map and count successful insertions
+      // Insert element at cur_row to hash map and count successful insertions. Which of several
+      // equal strings wins a slot depends on block order, but the slot is chosen by string
+      // content, so the dictionary contents and the encoded output are unaffected.
       auto const is_unique = has_map_insert_ref.insert(cuco::pair{cur_row, cur_row});
 
       if (is_unique) {
@@ -224,16 +221,13 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
 /**
  * @brief Looks up the dictionary index of every row of every stripe dictionary.
- *
- * `blockIdx.x` selects the dictionary and `blockIdx.y` splits its rows across blocks; the y extent
- * need not cover all of the rows, since blocks stride until they run out. The maps are only read
- * here, so `cuco::thread_scope_block` stays correct when a dictionary is shared by several blocks.
  */
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
   get_dictionary_indices_kernel(device_2dspan<stripe_dictionary> dictionaries,
                                 device_span<orc_column_device_view const> columns)
 {
+  // blockIdx.x selects the dictionary, blockIdx.y splits its rows across blocks
   auto const num_stripes = dictionaries.size().second;
   auto const& dict       = dictionaries[blockIdx.x / num_stripes][blockIdx.x % num_stripes];
   if (not dict.is_enabled) { return; }
@@ -245,7 +239,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto const equality_fn = equality_functor{col};
 
   storage_ref_type const storage_ref{dict.map_slots.size(), dict.map_slots.data()};
-  // Make a view of the hash map.
+  // The maps are only read here, so block scope stays correct even when several blocks share a
+  // dictionary: the scope governs the atomicity of modifications, and there are none
   auto hash_map_ref = cuco::static_map_ref{cuco::empty_key{KEY_SENTINEL},
                                            cuco::empty_value{VALUE_SENTINEL},
                                            equality_fn,
@@ -256,6 +251,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   // Create a map ref with `cuco::find` operator
   auto has_map_find_ref = hash_map_ref.rebind_operators(cuco::find);
 
+  // The y extent need not cover all of the rows; blocks stride until they run out
   auto const end_row = dict.start_row + dict.num_rows;
   auto const first_row =
     dict.start_row + static_cast<thread_index_type>(blockIdx.y) * block_size + threadIdx.x;
