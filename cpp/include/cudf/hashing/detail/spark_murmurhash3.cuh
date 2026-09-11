@@ -256,12 +256,9 @@ __device__ inline auto Spark_MurmurHash3_x86_32<numeric::decimal128>::operator()
   // `BigInteger.toByteArray().length`, which is `bitLength() / 8 + 1`. Negative values are
   // complemented first so that leading sign bits count as leading zeros. Both 0 and -1 have a
   // bit length of 0 and so keep a single byte.
-  auto const magnitude = static_cast<__uint128_t>(val < 0 ? ~val : val);
-  auto const mag_hi    = static_cast<cuda::std::uint64_t>(magnitude >> 64);
-  auto const mag_lo    = static_cast<cuda::std::uint64_t>(magnitude);
-  auto const bit_length =
-    mag_hi != 0 ? 128 - cuda::std::countl_zero(mag_hi) : 64 - cuda::std::countl_zero(mag_lo);
-  auto const length = static_cast<std::size_t>(bit_length / 8) + 1;
+  auto const magnitude  = static_cast<__uint128_t>(val < 0 ? ~val : val);
+  auto const bit_length = 128 - cuda::std::countl_zero(magnitude);
+  auto const length     = static_cast<std::size_t>(bit_length / 8) + 1;
 
   // Spark hashes the big-endian representation, so reverse the bytes and shift the significant
   // ones down. Doing this in registers avoids staging a byte buffer in local memory.
