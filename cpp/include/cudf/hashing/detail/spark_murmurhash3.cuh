@@ -34,7 +34,7 @@ struct Spark_MurmurHash3_x86_32 {
 
   CUDF_HOST_DEVICE constexpr Spark_MurmurHash3_x86_32() = delete;
   /// The seed is mixed as an unsigned value, matching `MurmurHash3_x86_32` and the Spark JNI
-  /// hasher. The result stays signed because Spark's hash returns a signed `Int`.
+  /// hasher.
   CUDF_HOST_DEVICE constexpr Spark_MurmurHash3_x86_32(uint32_t seed) : m_seed(seed) {}
 
   [[nodiscard]] __device__ static inline uint32_t fmix32(uint32_t h)
