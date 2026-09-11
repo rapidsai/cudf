@@ -5,8 +5,20 @@
 
 #pragma once
 
-#include <cudf/detail/row_operator/lexicographic.cuh>
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/row_operator/common_utils.cuh>
+#include <cudf/detail/row_operator/lexicographic_common.cuh>
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
+#include <cudf/detail/utilities/assert.cuh>
+#include <cudf/table/table_device_view.cuh>
+#include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+
+#include <cuda/std/optional>
+
+#include <memory>
 
 namespace cudf::detail::row::primitive {
 
