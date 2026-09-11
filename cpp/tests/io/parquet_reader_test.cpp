@@ -45,6 +45,16 @@
 
 using ParquetDecompressionTest = DecompressionTest<ParquetReaderTest>;
 
+namespace {
+
+auto page_boundary_slices(cudf::size_type const num_rows)
+{
+  return std::array<std::pair<cudf::size_type, cudf::size_type>, 5>{
+    {{0, num_rows}, {31, 3}, {32, 3}, {33, 3}, {255, 2}}};
+}
+
+}  // namespace
+
 TEST_F(ParquetReaderTest, ManyTinyStringPages)
 {
   // This creates enough pages to cross the scan-by-key tile boundary implicated in
@@ -243,8 +253,7 @@ TEST_F(ParquetReaderTest, RequiredStructUserBoundsAcrossPages)
                     .max_page_fragment_size(32);
   cudf::io::write_parquet(out_opts);
 
-  for (auto const [skip_rows, num_rows_to_read] :
-       std::vector<std::pair<int, int>>{{0, num_rows}, {31, 3}, {32, 3}, {33, 3}, {255, 2}}) {
+  for (auto const [skip_rows, num_rows_to_read] : page_boundary_slices(num_rows)) {
     auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
                        .skip_rows(skip_rows)
                        .num_rows(num_rows_to_read);
@@ -320,8 +329,7 @@ TEST_F(ParquetReaderTest, NullableStructBoolAndStringUserBounds)
       .max_page_fragment_size(32)
       .write_v2_headers(true));
 
-  for (auto const [skip_rows, num_rows_to_read] :
-       std::vector<std::pair<int, int>>{{0, row_count}, {31, 3}, {32, 3}, {33, 3}, {255, 2}}) {
+  for (auto const [skip_rows, num_rows_to_read] : page_boundary_slices(row_count)) {
     auto const result = cudf::io::read_parquet(
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
         .skip_rows(skip_rows)
@@ -404,8 +412,7 @@ TEST_F(ParquetReaderTest, NullableStructDictionaryAndByteStreamSplit)
     bss_encodings.end());
 
   for (auto const& filepath : {dictionary_filepath, bss_filepath}) {
-    for (auto const [skip_rows, num_rows_to_read] :
-         std::vector<std::pair<int, int>>{{0, row_count}, {31, 3}, {32, 3}, {33, 3}, {255, 2}}) {
+    for (auto const [skip_rows, num_rows_to_read] : page_boundary_slices(row_count)) {
       auto const result = cudf::io::read_parquet(
         cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
           .skip_rows(skip_rows)
@@ -483,9 +490,7 @@ TEST_F(ParquetReaderTest, ByteStreamSplitNestedListFloat)
     std::find(encodings.begin(), encodings.end(), cudf::io::parquet::Encoding::BYTE_STREAM_SPLIT),
     encodings.end());
 
-  for (auto const [skip_rows, num_rows_to_read] :
-       std::vector<std::pair<cudf::size_type, cudf::size_type>>{
-         {0, num_rows}, {31, 3}, {32, 3}, {33, 3}, {255, 2}}) {
+  for (auto const [skip_rows, num_rows_to_read] : page_boundary_slices(num_rows)) {
     auto const result = cudf::io::read_parquet(
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
         .skip_rows(skip_rows)
@@ -691,8 +696,7 @@ TEST_F(ParquetReaderTest, NullableListAllNullPages)
       .max_page_size_rows(32)
       .max_page_fragment_size(32));
 
-  for (auto const [skip_rows, num_rows_to_read] :
-       std::vector<std::pair<int, int>>{{0, num_rows}, {31, 3}, {32, 3}, {33, 3}, {255, 2}}) {
+  for (auto const [skip_rows, num_rows_to_read] : page_boundary_slices(num_rows)) {
     auto const result = cudf::io::read_parquet(
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
         .skip_rows(skip_rows)
