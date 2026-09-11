@@ -24,6 +24,7 @@
 
 #include <rmm/device_buffer.hpp>
 
+#include <array>
 #include <cstdint>
 #include <limits>
 #include <memory>
@@ -153,6 +154,33 @@ TEST_F(SparkMurmurHashTest, IterativeSeeding)
   cudf::test::fixed_width_column_wrapper<int32_t> const expected(
     {-1721723333, 1151116018, 1549484878, -1287750896, -1980733329});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(), expected);
+}
+
+TEST_F(SparkMurmurHashTest, MultipleDeviceBlocks)
+{
+  constexpr cudf::size_type num_rows = 10003;
+  constexpr std::array<int32_t, 5> first_values{0, 1, -1, 42, 123456789};
+  constexpr std::array<int32_t, 5> second_values{10, 20, 30, -40, -987654321};
+  // Repeat the independent Spark reference rows from IterativeSeeding across several device
+  // blocks, including a partial final block.
+  constexpr std::array<int32_t, 5> expected_values{
+    -1721723333, 1151116018, 1549484878, -1287750896, -1980733329};
+  std::vector<int32_t> first(num_rows), second(num_rows), expected(num_rows);
+  for (cudf::size_type row = 0; row < num_rows; ++row) {
+    auto const index = row % first_values.size();
+    first[row]       = first_values[index];
+    second[row]      = second_values[index];
+    expected[row]    = expected_values[index];
+  }
+
+  cudf::test::fixed_width_column_wrapper<int32_t> const first_column(first.begin(), first.end());
+  cudf::test::fixed_width_column_wrapper<int32_t> const second_column(second.begin(), second.end());
+  cudf::test::fixed_width_column_wrapper<int32_t> const expected_column(expected.begin(),
+                                                                        expected.end());
+  auto const output =
+    cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({first_column, second_column}), 42);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column, *output, verbosity);
 }
 
 TEST_F(SparkMurmurHashTest, MultiValueNulls)
