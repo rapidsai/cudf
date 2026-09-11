@@ -6,10 +6,14 @@
 
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <cuda/stream_ref>
+
+#include <cstdint>
+#include <memory>
 
 /**
  * @file

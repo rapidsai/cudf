@@ -10,22 +10,38 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_device_view_base.cuh>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/column/column_view.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/row_operator/lexicographic.cuh>
+#include <cudf/detail/row_operator/preprocessed_table.cuh>
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
 #include <cudf/detail/row_operator/spark_hashing.cuh>
+#include <cudf/hashing.hpp>
 #include <cudf/hashing/detail/spark_murmurhash3.cuh>
 #include <cudf/hashing/detail/xxhash_64.cuh>
-#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/table/table_device_view.cuh>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/iterator>
-#include <cuda/stream>
+#include <cuda/stream_ref>
 #include <thrust/transform.h>
 
+#include <cmath>
+#include <cstdint>
 #include <limits>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 template <typename T>
 struct TypedTableViewTest : public cudf::test::BaseFixtureWithHarness {};

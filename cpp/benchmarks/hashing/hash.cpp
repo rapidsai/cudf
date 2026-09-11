@@ -8,6 +8,7 @@
 
 #include <cudf/hashing.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <nvbench/nvbench.cuh>

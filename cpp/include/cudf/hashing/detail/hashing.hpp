@@ -5,14 +5,16 @@
 #pragma once
 
 #include <cudf/hashing.hpp>
-#include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/memory_resource.hpp>
+#include <cudf/types.hpp>
 
-#include <cuda/stream>
+#include <rmm/resource_ref.hpp>
+
+#include <cuda/stream_ref>
 
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <memory>
 
 namespace cudf {
 namespace hashing::detail {

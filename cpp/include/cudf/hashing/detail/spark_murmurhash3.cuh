@@ -8,21 +8,19 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/hashing/detail/hash_functions.cuh>
 #include <cudf/strings/string_view.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <cuda/std/array>
 #include <cuda/std/bit>
 #include <cuda/std/cstddef>
 #include <cuda/std/cstdint>
-#include <cuda/std/iterator>
 #include <cuda/std/type_traits>
-#include <thrust/execution_policy.h>
-#include <thrust/find.h>
-#include <thrust/reverse.h>
 
 #include <vector_types.h>
 
 #include <cstddef>
+#include <cstdint>
 
 namespace cudf::hashing::detail {
 

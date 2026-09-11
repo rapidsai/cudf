@@ -10,7 +10,10 @@
 
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/hashing.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/wrappers/timestamps.hpp>
 
+#include <cstdint>
 #include <limits>
 
 class HashTest : public cudf::test::BaseFixture {};

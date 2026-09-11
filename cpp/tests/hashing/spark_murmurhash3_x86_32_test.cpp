@@ -9,10 +9,25 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/hashing.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/wrappers/durations.hpp>
+#include <cudf/wrappers/timestamps.hpp>
+
+#include <rmm/device_buffer.hpp>
+
+#include <cstdint>
+#include <limits>
+#include <memory>
+#include <utility>
+#include <vector>
 
 constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
 

@@ -2,22 +2,32 @@
  * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/column/column_view.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/row_operator/spark_hashing.cuh>
 #include <cudf/hashing.hpp>
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/hashing/detail/spark_murmurhash3.cuh>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cub/device/device_for.cuh>
-#include <cuda/std/type_traits>
 #include <cuda/stream_ref>
 
+#include <cstdint>
 #include <functional>
+#include <memory>
 
 namespace cudf {
 namespace hashing {

@@ -5,15 +5,24 @@
 
 #pragma once
 
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/row_operator/common_utils.cuh>
 #include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/utilities/accumulate.cuh>
+#include <cudf/hashing.hpp>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/structs/structs_column_device_view.cuh>
+#include <cudf/table/table_device_view.cuh>
+#include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/std/type_traits>
+
+#include <cstdint>
 
 namespace CUDF_EXPORT cudf {
 namespace detail::row::hash {
