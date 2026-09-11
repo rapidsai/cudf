@@ -331,13 +331,10 @@ jobs:
             num_shards: 1
           - engine: spmd
             shard_id: 0
-            num_shards: 3
+            num_shards: 2
           - engine: spmd
             shard_id: 1
-            num_shards: 3
-          - engine: spmd
-            shard_id: 2
-            num_shards: 3
+            num_shards: 2
     permissions:
       actions: read
       contents: read
