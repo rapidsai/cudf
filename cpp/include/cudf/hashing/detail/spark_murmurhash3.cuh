@@ -82,9 +82,8 @@ struct Spark_MurmurHash3_x86_32 {
     requires(sizeof(T) % 4 == 0)
   uint32_t __device__ inline compute(T const& key) const
   {
-    // A whole number of blocks with no tail. Hashing the words directly lets the compiler use
-    // wide aligned loads instead of reassembling each block byte by byte. The word order is the
-    // device's own, which is little-endian, so this matches `getblock32`.
+    // A whole number of four-byte blocks with no tail. Mix the words directly in the
+    // device's little-endian order, matching `getblock32`.
     auto const words = cuda::std::bit_cast<cuda::std::array<uint32_t, sizeof(T) / 4>>(key);
     uint32_t h       = m_seed;
     for (auto const word : words) {
