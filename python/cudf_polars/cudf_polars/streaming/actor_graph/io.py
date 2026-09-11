@@ -227,14 +227,20 @@ async def dataframescan_node(
 
         # Build list of IR slices to read
         ir_slices = []
-        # Partial workaround for
-        # https://github.com/pola-rs/polars/issues/23214 If a struct column
-        # has nulls and is sliced then polars exports invalid validity
-        # buffers. We can't detect this exact state because we can't know
-        # when the column is sliced.
-        copy_slice = any(
+        # Partial workarounds for sliced nested columns. Polars exports invalid
+        # validity buffers for struct columns with nulls
+        # (https://github.com/pola-rs/polars/issues/23214), and double-counts
+        # offsets for Array columns with outer nulls
+        # (https://github.com/pola-rs/polars/pull/28602).
+        dtypes = ir.df.dtypes()
+        has_struct = any(
             isinstance(dt, pl.Struct)
-            for dt in pl.datatypes.unpack_dtypes(ir.df.dtypes(), include_compound=True)
+            for dt in pl.datatypes.unpack_dtypes(dtypes, include_compound=True)
+        )
+        array_columns = tuple(
+            name
+            for name, dtype in zip(ir.df.columns(), dtypes, strict=True)
+            if isinstance(dtype, pl.Array)
         )
 
         for seq_num in range(local_count):
@@ -242,11 +248,10 @@ async def dataframescan_node(
             if offset >= nrows:
                 break
             sliced = ir.df.slice(offset, rows_per_partition)
-            if copy_slice:
-                # OK, we have structs that might have nulls, and we're
-                # slicing. So let's copy to contiguous storage. This is
-                # hacky and doesn't handle the case where we didn't slice
-                # but the user sliced the input.
+            if has_struct or any(
+                sliced.get_column(name).null_count() > 0 for name in array_columns
+            ):
+                # Copy the affected slice to contiguous storage before Arrow export.
                 f = io.BytesIO()
                 sliced.serialize_binary(f)
                 f.seek(0)
