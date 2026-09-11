@@ -71,7 +71,10 @@ def _align_decimal_float_for_comparison(
     """
     has_decimal = any(plc.traits.is_fixed_point(op.dtype.plc_type) for op in operands)
     has_float = any(plc.traits.is_floating_point(op.dtype.plc_type) for op in operands)
-    if has_decimal and has_float:
+    if has_decimal and has_float:  # pragma: no cover
+        # Polars now inserts this cast itself under the latest supported
+        # version (coverage only runs against latest), but older supported
+        # versions still need this workaround.
         f64 = DataType(pl.Float64())
         return tuple(
             expr.Cast(f64, False, op)  # noqa: FBT003
@@ -174,7 +177,7 @@ def _is_len_sum_uint128_node(visitor: NodeTraverser, node: Any) -> bool:
     if isinstance(node, plrs._expr_nodes.Cast):
         child = visitor.view_expression(node.expr)
         return isinstance(child, plrs._expr_nodes.Column) and child.name == "len"
-    return False
+    return False  # pragma: no cover
 
 
 class Translator:

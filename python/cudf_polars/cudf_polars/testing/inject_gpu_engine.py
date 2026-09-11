@@ -225,6 +225,8 @@ EXPECTED_FAILURES: dict[str, str] = {
     "tests/unit/io/test_iceberg.py::test_scan_iceberg_parquet_prefilter_with_column_mapping[True]": "Iceberg column_mapping (schema evolution) not yet implemented in cudf-polars",
     "tests/unit/io/test_iceberg.py::test_scan_iceberg_parquet_prefilter_with_column_mapping[False]": "Iceberg column_mapping (schema evolution) not yet implemented in cudf-polars",
     "tests/unit/io/test_iceberg.py::test_fill_missing_fields_with_identity_partition_values_nested": "Iceberg partition column injection not yet implemented in cudf-polars",
+    "tests/unit/io/test_iceberg.py::test_sink_iceberg_schema_merge": "Iceberg column_mapping (schema evolution) not yet implemented in cudf-polars",
+    "tests/unit/io/test_iceberg.py::test_sink_iceberg_schema_merge_nested": "Iceberg column_mapping (schema evolution) not yet implemented in cudf-polars",
     "tests/unit/io/test_iceberg.py::test_scan_iceberg_fast_count[native]": "Iceberg fast count from metadata not yet supported in cudf-polars",
     "tests/unit/io/test_iceberg.py::test_iceberg_filter_bool_26474": "Iceberg support not yet implemented in cudf-polars",
     "tests/unit/io/test_io_plugin.py::test_defer_validate_false": "cudf-polars always validates the IO source schema, so validate_schema=False dtype mismatches are unsupported on GPU",
@@ -296,16 +298,19 @@ EXPECTED_FAILURES: dict[str, str] = {
     "tests/unit/io/test_parquet.py::test_allow_missing_columns[projection1-True-columns]": "Mismatching column read cudf#16394",
     "tests/unit/io/test_parquet.py::test_scan_parquet_filter_statistics_load_missing_column_21391": "Mismatching column read cudf#16394",
     "tests/unit/io/test_parquet.py::test_binary_offset_roundtrip": "binary offset type unsupported",
+    "tests/unit/io/test_lazy_csv.py::test_scan_csv_schema_new_columns_dtypes[foods1.csv]": "CSV reader's use_cols_names picks the wrong columns when combined with a column_names_overwrite rename",
+    "tests/unit/io/test_lazy_csv.py::test_scan_csv_schema_new_columns_dtypes[foods*.csv]": "CSV reader's use_cols_names picks the wrong columns when combined with a column_names_overwrite rename",
     "tests/unit/lazyframe/test_engine_selection.py::test_engine_import_error_raises[gpu]": "Expect this to pass because cudf-polars is installed",
     "tests/unit/lazyframe/test_engine_selection.py::test_engine_import_error_raises[engine1]": "Expect this to pass because cudf-polars is installed",
     "tests/unit/lazyframe/test_engine.py::test_object_engine_affinity_drives_collect": "This plugin forces engine=<injected GPU engine> on LazyFrame.collect via partialmethod, so Config.set_engine_affinity's custom engine is never reached",
+    "tests/unit/lazyframe/test_query_monitoring.py::test_config_enable_monitoring": "This plugin forces engine=<injected GPU engine> on LazyFrame.collect via partialmethod, so Config.enable_monitoring's streaming-affinity/observer hooks don't see the expected call counts",
+    "tests/unit/lazyframe/test_query_monitoring.py::test_config_scope_monitoring": "This plugin forces engine=<injected GPU engine> on LazyFrame.collect via partialmethod, so Config.enable_monitoring's streaming-affinity/observer hooks don't see the expected call counts",
     "tests/unit/lazyframe/test_projections.py::test_projection_pushdown_union_len_pushdown_28657[concat]": "https://github.com/NVIDIA/cudf/issues/24112",
     "tests/unit/lazyframe/test_projections.py::test_projection_pushdown_union_len_pushdown_28657[union]": "https://github.com/NVIDIA/cudf/issues/24112",
     "tests/unit/lazyframe/test_lazyframe.py::test_round[dtype2-123.55-1-123.6]": "libcudf HALF_EVEN rounding bug for Float64 with decimal_places > 0. See https://github.com/NVIDIA/cudf/issues/21319",
     "tests/unit/lazyframe/test_lazyframe.py::test_cast_frame": "Casting that raises not supported on GPU",
     "tests/unit/lazyframe/test_lazyframe.py::test_lazy_cache_hit": "Debug output on stderr doesn't match",
     "tests/unit/operations/aggregation/test_aggregations.py::test_binary_op_agg_context_no_simplify_expr_12423": "groupby-agg of just literals should not produce collect_list",
-    "tests/unit/operations/aggregation/test_aggregations.py::test_nan_inf_aggregation": "treatment of nans and nulls together is different in libcudf and polars in groupby-agg context",
     "tests/unit/operations/test_abs.py::test_abs_duration": "Need to raise for unsupported uops on timelike values",
     "tests/unit/operations/test_group_by.py::test_group_by_mean_by_dtype[input10-expected10-Date-output_dtype10]": "Unsupported groupby-agg for a particular dtype",
     "tests/unit/operations/test_group_by.py::test_group_by_mean_by_dtype[input11-expected11-input_dtype11-output_dtype11]": "Unsupported groupby-agg for a particular dtype",
@@ -321,11 +326,10 @@ EXPECTED_FAILURES: dict[str, str] = {
     # TODO: As of polars 1.34, the column names for left and right came in unaligned, which causes the dtypes to mismatch when calling plc.replace.replace_nulls
     # Need to investigate what changed in polars
     "tests/unit/operations/test_join.py::test_join_coalesce_column_order_23177": "Misaligned left/right column names left and right tables in join op",
+    "tests/unit/operations/test_inequality_join.py::test_join_where_how_left": "join_where(how='left'/'right') is translated through the equi-join path using the predicate's columns as literal equality keys, ignoring the actual inequality condition",
+    "tests/unit/operations/test_inequality_join.py::test_join_where_how_right": "join_where(how='left'/'right') is translated through the equi-join path using the predicate's columns as literal equality keys, ignoring the actual inequality condition",
+    "tests/unit/operations/test_inequality_join.py::test_join_where_how_left_external_filter_not_folded_into_on_nested_loop": "join_where(how='left'/'right') is translated through the equi-join path using the predicate's columns as literal equality keys, ignoring the actual inequality condition",
     "tests/unit/operations/namespaces/string/test_pad.py::test_str_zfill_unicode_not_respected": "polars doesn't add zeros for unicode characters.",
-    "tests/unit/sql/test_cast.py::test_cast_errors[values0-values::uint8-conversion from `f64` to `u64` failed]": "Casting that raises not supported on GPU",
-    "tests/unit/sql/test_cast.py::test_cast_errors[values1-values::uint4-conversion from `i64` to `u32` failed]": "Casting that raises not supported on GPU",
-    "tests/unit/sql/test_cast.py::test_cast_errors[values2-values::int1-conversion from `i64` to `i8` failed]": "Casting that raises not supported on GPU",
-    "tests/unit/sql/test_cast.py::test_cast_errors[values5-values::int4-conversion from `str` to `i32` failed]": "Cast raises, but error user receives is wrong",
     "tests/unit/lazyframe/test_predicates.py::test_predicate_pushdown_split_pushable": "Casting that raises not supported on GPU",
     "tests/unit/lazyframe/test_predicates.py::test_filter_contradiction_fallible_error_handling": "Casting that raises not supported on GPU",
     "tests/unit/sql/test_miscellaneous.py::test_read_csv": "Incorrect handling of missing_is_null in read_csv",
@@ -342,7 +346,6 @@ EXPECTED_FAILURES: dict[str, str] = {
     "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[False-prefiltered]": "allow_missing_columns argument in read_parquet not translated in IR",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[False-none]": "allow_missing_columns argument in read_parquet not translated in IR",
     "tests/unit/io/test_multiscan.py::test_multiscan_row_index[scan_csv-write_csv]": "CSV multiscan with row_index and no row limit is not yet supported.",
-    "tests/unit/operations/namespaces/test_binary.py::test_binary_compounded_literal_aggstate_24460": "List literal loses nesting in gather: cudf#19610",
     "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit1-0-False]": "List literal loses nesting in gather: cudf#19610",
     "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit1-idx1-False]": "List literal loses nesting in gather: cudf#19610",
     "tests/unit/operations/test_slice.py::test_schema_gather_get_on_literal_24101[lit1-idx2-False]": "List literal loses nesting in gather: cudf#19610",
@@ -367,6 +370,13 @@ EXPECTED_FAILURES: dict[str, str] = {
 
 TESTS_TO_SKIP: dict[str, str] = {
     "tests/unit/operations/test_profile.py::test_profile_with_cse": "Shape assertion won't match",
+    # CI has shown two different failure modes across runs (a PanicException on
+    # an invalid datetime, and garbage/uninitialized-looking datetime values),
+    # suggesting a real non-deterministic bug in CSV datetime fallback parsing
+    # under ignore_errors=True. Locally this hangs indefinitely instead of
+    # reproducing either failure, so it can't be xfailed; skip instead.
+    "tests/unit/io/test_csv.py::test_csv_datetime_fallback_contract[chunk-size-default]": "Non-deterministic CSV datetime fallback parsing; hangs locally instead of reproducing",
+    "tests/unit/io/test_csv.py::test_csv_datetime_fallback_contract[chunk-size-7]": "Non-deterministic CSV datetime fallback parsing; hangs locally instead of reproducing",
     # value_counts / struct-expansion row ordering is not guaranteed, so the GPU
     # result may or may not match CPU. Skip rather than xfail to avoid a flaky
     # XPASS/FAIL (these pass on some runs and fail on others).
@@ -536,7 +546,6 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/functions/test_when_then.py::test_mismatched_height_should_raise[ternary_expr1-df1]": "Correct polars.exceptions.ShapeError raised but it's in a ExceptionGroup",
     "tests/unit/operations/test_slice.py::test_slice_pushdown_literal_projection_14349": "https://github.com/NVIDIA/cudf/issues/22072",
     "tests/unit/operations/test_group_by.py::test_group_by_lit_series": "Incorrect broadcasting of literals in groupby-agg",
-    "tests/unit/operations/test_group_by.py::test_partitioned_group_by_chunked": "https://github.com/NVIDIA/cudf/issues/22072",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[1]": "https://github.com/NVIDIA/cudf/issues/22075",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[4]": "https://github.com/NVIDIA/cudf/issues/22075",
     "tests/unit/operations/aggregation/test_aggregations.py::test_item_too_many": "Correct polars.exceptions.ComputeError raised but it's in an ExceptionGroup",
