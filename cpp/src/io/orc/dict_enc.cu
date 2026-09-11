@@ -101,11 +101,6 @@ constexpr int target_waves = 4;
  * Splitting a dictionary keeps one block from having to work through a whole stripe, but extra
  * blocks sharing a hash map cost locality and atomic contention, so the split collapses to one
  * block per dictionary once the dictionaries alone fill the device.
- *
- * @param kernel Kernel to be launched, used to query its occupancy
- * @param block_size Threads per block the kernel will be launched with
- * @param num_dictionaries Number of dictionaries the grid has to cover
- * @param max_dict_rows Largest row count of any dictionary
  */
 template <typename Kernel>
 int blocks_per_dictionary(Kernel kernel,
