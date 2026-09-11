@@ -16,10 +16,8 @@ namespace detail {
 /**
  * @brief Returns the UT offset of a timezone at a given point in time.
  *
- * The offset is the number of seconds to add to UT to get the local time in `timezone_name`, as in
- * the transition table produced by `make_timezone_transition_table`. Host-side counterpart of
- * `cudf::detail::get_ut_offset(table_device_view, timestamp_s)`, for the cases where a single
- * offset is needed and building a device table would be wasteful.
+ * Host-side counterpart of `cudf::detail::get_ut_offset(table_device_view, timestamp_s)`, for when
+ * a single offset is needed and building a device table would be wasteful.
  *
  * @throw cudf::logic_error if `timezone_name` does not resolve to a TZif file in `tzif_dir`
  *
