@@ -220,6 +220,8 @@ def check_memory_reservations(
         assert state["mem_type"] == "DEVICE"
         assert state["size_bytes"] > 0
         assert state["granted"] is True
+        assert state["net_memory_delta"] > 0
+        assert state["sequence_number"] == 0
 
 
 def test_quent_events_multiple_collects(
