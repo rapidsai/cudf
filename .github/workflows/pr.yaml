@@ -321,7 +321,7 @@ jobs:
       packages: read
       pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@codex/matrix-type-union
     if: >
       fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs ||
       fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_test_files ||
