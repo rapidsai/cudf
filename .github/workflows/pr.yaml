@@ -24,6 +24,7 @@ jobs:
       - conda-python-build
       - conda-python-build-noarch
       - conda-python-cudf-tests
+      - conda-python-cudf-polars-tests
       - conda-python-other-tests
       - java-build-matrix
       - java-build
