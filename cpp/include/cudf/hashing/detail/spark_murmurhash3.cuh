@@ -37,7 +37,7 @@ struct Spark_MurmurHash3_x86_32 {
   /// hasher. The result stays signed because Spark's hash returns a signed `Int`.
   CUDF_HOST_DEVICE constexpr Spark_MurmurHash3_x86_32(uint32_t seed) : m_seed(seed) {}
 
-  [[nodiscard]] __device__ inline uint32_t fmix32(uint32_t h) const
+  [[nodiscard]] __device__ static inline uint32_t fmix32(uint32_t h)
   {
     h ^= h >> 16;
     h *= 0x85ebca6b;
@@ -47,8 +47,23 @@ struct Spark_MurmurHash3_x86_32 {
     return h;
   }
 
-  [[nodiscard]] __device__ inline uint32_t getblock32(cuda::std::byte const* data,
-                                                      std::size_t offset) const
+  /*
+   * Mix one four-byte block into the running hash. Spark applies this to every trailing byte as
+   * well, which is where it departs from MurmurHash3.
+   */
+  [[nodiscard]] __device__ static inline uint32_t mix_block(uint32_t k1, uint32_t h)
+  {
+    k1 *= c1;
+    k1 = rotate_bits_left(k1, rot_c1);
+    k1 *= c2;
+    h ^= k1;
+    h = rotate_bits_left(h, rot_c2);
+    h = h * 5 + c3;
+    return h;
+  }
+
+  [[nodiscard]] __device__ static inline uint32_t getblock32(cuda::std::byte const* data,
+                                                             std::size_t offset)
   {
     // Read a 4-byte value from the data pointer as individual bytes for safe
     // unaligned access (very likely for string types). The bytes are combined in
@@ -78,21 +93,6 @@ struct Spark_MurmurHash3_x86_32 {
     // Finalize hash.
     h ^= static_cast<uint32_t>(sizeof(T));
     h = fmix32(h);
-    return h;
-  }
-
-  /*
-   * Mix one four-byte block into the running hash. Spark applies this to every trailing byte as
-   * well, which is where it departs from MurmurHash3.
-   */
-  [[nodiscard]] __device__ inline uint32_t mix_block(uint32_t k1, uint32_t h) const
-  {
-    k1 *= c1;
-    k1 = rotate_bits_left(k1, rot_c1);
-    k1 *= c2;
-    h ^= k1;
-    h = rotate_bits_left(h, rot_c2);
-    h = h * 5 + c3;
     return h;
   }
 
