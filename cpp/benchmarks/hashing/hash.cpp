@@ -14,6 +14,7 @@
 #include <nvbench/nvbench.cuh>
 
 #include <array>
+#include <initializer_list>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -40,6 +41,22 @@ constexpr auto column_types = std::to_array<std::pair<column_type, std::string_v
     if (type_name == name) { return type; }
   }
   return column_type::UNKNOWN;
+}
+
+[[nodiscard]] std::vector<std::string> column_type_names(
+  std::initializer_list<column_type> selected_types)
+{
+  std::vector<std::string> result;
+  result.reserve(selected_types.size());
+  for (auto const selected_type : selected_types) {
+    for (auto const& [type, name] : column_types) {
+      if (type == selected_type) {
+        result.emplace_back(name);
+        break;
+      }
+    }
+  }
+  return result;
 }
 
 [[nodiscard]] std::vector<std::string> column_type_names()
@@ -165,7 +182,7 @@ static void bench_hash(nvbench::state& state)
 NVBENCH_BENCH(bench_hash)
   .set_name("hashing")
   .add_int64_axis("num_rows", {65536, 16777216})
-  .add_string_axis("data_type", {"mixed"})
+  .add_string_axis("data_type", column_type_names({column_type::MIXED}))
   .add_int64_axis("num_cols", {2, 64})
   .add_float64_axis("nulls", {0.0, 0.1})
   .add_string_axis("hash_name",
