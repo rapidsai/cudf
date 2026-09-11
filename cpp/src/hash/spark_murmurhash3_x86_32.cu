@@ -69,7 +69,8 @@ std::unique_ptr<column> spark_murmurhash3_x86_32(table_view const& input,
   // Return early if there's nothing to hash
   if (input.num_rows() == 0) { return output; }
 
-  // Lists of structs are not supported
+  // Reject lists of structs and unsupported chrono units.
+  // cudf-spark-jni's check_hash_compatibility does not validate chrono units.
   check_spark_murmurhash3_compatibility(input);
 
   auto const nullable = nullate::DYNAMIC{has_nested_nulls(input)};
