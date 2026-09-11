@@ -183,9 +183,15 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto const block_char_count = block_reduce(reduce_storage).Sum(char_count);
 
   if (t == 0) {
-    // Accumulated, since several blocks may share a dictionary; zeroed on the host before launch
-    atomicAdd(&dict.entry_count, block_entry_count);
-    atomicAdd(&dict.char_count, block_char_count);
+    if constexpr (Scope == cuda::thread_scope_block) {
+      // One block per dictionary, so this block owns the counts outright
+      dict.entry_count = block_entry_count;
+      dict.char_count  = block_char_count;
+    } else {
+      // Shared with other blocks, so accumulate; the counts are zeroed on the host before launch
+      atomicAdd(&dict.entry_count, block_entry_count);
+      atomicAdd(&dict.char_count, block_char_count);
+    }
   }
 }
 
