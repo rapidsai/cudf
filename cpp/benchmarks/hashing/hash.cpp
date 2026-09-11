@@ -188,6 +188,8 @@ NVBENCH_BENCH(bench_hash)
   .add_string_axis("hash_name",
                    {"murmurhash3_x86_32", "md5", "sha1", "sha224", "sha256", "sha384", "sha512"});
 
+// Register the Spark type sweep separately so the other hashers keep their historical
+// mixed INT64/STRING workload.
 NVBENCH_BENCH(bench_hash)
   .set_name("spark_hashing")
   .add_int64_axis("num_rows", {65536, 16777216})
