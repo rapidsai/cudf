@@ -2650,11 +2650,6 @@ auto convert_table_to_orc_data(table_view const& input,
 /**
  * @brief Resolves the timezone option into the epoch that timestamps are encoded relative to.
  *
- * ORC timestamps are wall-clock values, stored relative to the ORC epoch as it occurs in the
- * writer's timezone. The offset is looked up at the ORC epoch as a UTC instant, matching how the
- * reader derives its epoch in `decode_column_data`; the Apache writer resolves it as a local time,
- * which differs only for a timezone with a transition inside that offset-wide window.
- *
  * @param timezone Timezone name, or an empty string for UTC
  * @return The timezone name paired with the epoch that timestamps are encoded relative to
  *
