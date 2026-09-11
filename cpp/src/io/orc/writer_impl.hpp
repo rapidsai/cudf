@@ -211,6 +211,19 @@ struct writer_timezone {
   // `name`. Equal to `orc_utc_epoch` when writing UTC.
   duration_s base_epoch;
 
+  /**
+   * @brief Resolves a timezone name into the epoch that timestamps are encoded relative to.
+   *
+   * The offset is looked up at the ORC epoch as a UTC instant, matching how the reader derives its
+   * epoch in `decode_column_data`; the Apache writer resolves it as a local time, which differs
+   * only for a timezone with a transition inside that offset-wide window.
+   *
+   * @param timezone Timezone name, or an empty string for UTC
+   *
+   * @throw cudf::logic_error if `timezone` does not resolve to a TZif file
+   */
+  explicit writer_timezone(std::string timezone);
+
   [[nodiscard]] bool is_utc() const { return name == "UTC" or name.empty(); }
 };
 

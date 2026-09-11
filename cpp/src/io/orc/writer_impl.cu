@@ -2647,26 +2647,17 @@ auto convert_table_to_orc_data(table_view const& input,
                     std::move(bounce_buffer)};
 }
 
-/**
- * @brief Resolves the timezone option into the epoch that timestamps are encoded relative to.
- *
- * @param timezone Timezone name, or an empty string for UTC
- * @return The timezone name paired with the epoch that timestamps are encoded relative to
- *
- * @throw cudf::logic_error if `timezone` does not resolve to a TZif file
- */
-writer_timezone resolve_timezone(std::string timezone)
-{
-  static constexpr duration_s orc_epoch{orc_utc_epoch};
-  writer_timezone tz{std::move(timezone), orc_epoch};
-  if (not tz.is_utc()) {
-    tz.base_epoch =
-      orc_epoch - cudf::detail::get_ut_offset(std::nullopt, tz.name, timestamp_s{orc_epoch});
-  }
-  return tz;
-}
-
 }  // namespace
+
+// ORC timestamps are wall-clock values, stored relative to the ORC epoch as it occurs in the
+// writer's timezone.
+writer_timezone::writer_timezone(std::string timezone)
+  : name{std::move(timezone)}, base_epoch{orc_utc_epoch}
+{
+  if (not is_utc()) {
+    base_epoch -= cudf::detail::get_ut_offset(std::nullopt, name, timestamp_s{base_epoch});
+  }
+}
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
                    orc_writer_options const& options,
@@ -2682,7 +2673,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     _sort_dictionaries{options.get_enable_dictionary_sort()},
     _single_write_mode(mode),
     _kv_meta(options.get_key_value_metadata()),
-    _timezone(resolve_timezone(options.get_writer_timezone())),
+    _timezone(options.get_writer_timezone()),
     _out_sink(std::move(sink))
 {
   if (options.get_metadata()) {
@@ -2706,7 +2697,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     _sort_dictionaries{options.get_enable_dictionary_sort()},
     _single_write_mode(mode),
     _kv_meta(options.get_key_value_metadata()),
-    _timezone(resolve_timezone(options.get_writer_timezone())),
+    _timezone(options.get_writer_timezone()),
     _out_sink(std::move(sink))
 {
   if (options.get_metadata()) {
