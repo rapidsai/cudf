@@ -1180,16 +1180,21 @@ def test_emit_task_events_io_node(disk_to_device_channel: Channel) -> None:
     assert "Exit" in task_events[4]["data"]["Task"]["state"]
 
 
-def test_memory_reservation_request_serialization() -> None:
+@pytest.mark.parametrize("allow_overbooking", [True, False, None])
+def test_memory_reservation_request_serialization(
+    *, allow_overbooking: bool | None
+) -> None:
     request = MemoryReservationRequest(
         purpose=MemoryReservationPurpose.SCAN,
         size_bytes=2 * 1024**2,
         mem_type="DEVICE",
         net_memory_delta=1024**2,
         sequence_number=3,
+        allow_overbooking=allow_overbooking,
     )
     assert request.label == "scan-device"
-    assert request.to_dict() == {
+    result = request.to_dict()
+    expected = {
         "purpose": "scan",
         "size_bytes": 2 * 1024**2,
         "mem_type": "DEVICE",
@@ -1197,6 +1202,9 @@ def test_memory_reservation_request_serialization() -> None:
         "net_memory_delta": 1024**2,
         "sequence_number": 3,
     }
+    if allow_overbooking is not None:
+        expected["allow_overbooking"] = allow_overbooking
+    assert result == expected
     # The optional attributes are dropped rather than serialized as null.
     minimal = MemoryReservationRequest(
         purpose=MemoryReservationPurpose.JOIN,
