@@ -2160,10 +2160,8 @@ TEST_F(OrcWriterTest, UnorderedDictionary)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*from_sorted, *from_unsorted);
 }
 
-// The dictionary index lookup gives each stripe dictionary one block per 1024 rows, so a stripe
-// needs more rows than that before more than one block participates. The row count here spans
-// several blocks and deliberately does not land on a block boundary, so the last block gets a
-// partial range.
+// The dictionary kernels give each stripe dictionary one block per 1024 rows, so this row count
+// spans several blocks and deliberately does not land on a block boundary.
 TEST_F(OrcWriterTest, DictionaryMultipleBlocksPerStripe)
 {
   constexpr cudf::size_type num_rows = 5000;
