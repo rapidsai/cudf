@@ -7,6 +7,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column.hpp>
@@ -668,15 +669,54 @@ TEST_F(SparkMurmurHashTest, ListOfStructValues)
                cudf::logic_error);
 }
 
-TEST_F(SparkMurmurHashTest, UnsupportedChronoUnits)
-{
-  cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep> const
-    timestamps{0};
-  cudf::test::fixed_width_column_wrapper<cudf::duration_ns, cudf::duration_ns::rep> const durations{
-    0};
+template <typename T>
+class SparkMurmurHashTestUnsupportedChronoTyped : public cudf::test::BaseFixture {};
 
-  EXPECT_THROW(cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({timestamps}), 42),
+using UnsupportedSparkChronoTypes =
+  cudf::test::RemoveIf<cudf::test::ContainedIn<SparkChronoTypes>, cudf::test::ChronoTypes>;
+TYPED_TEST_SUITE(SparkMurmurHashTestUnsupportedChronoTyped, UnsupportedSparkChronoTypes);
+
+TYPED_TEST(SparkMurmurHashTestUnsupportedChronoTyped, UnsupportedChronoUnits)
+{
+  using T = TypeParam;
+  cudf::test::fixed_width_column_wrapper<T, typename T::rep> column{0};
+  cudf::test::lists_column_wrapper<T, typename T::rep> lists{0};
+  cudf::test::structs_column_wrapper const structs{{column}};
+  cudf::test::structs_column_wrapper const structs_of_lists{{lists}};
+
+  EXPECT_THROW(cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({column}), 42),
                cudf::logic_error);
-  EXPECT_THROW(cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({durations}), 42),
+  EXPECT_THROW(cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({lists}), 42),
                cudf::logic_error);
+  EXPECT_THROW(cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({structs}), 42),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({structs_of_lists}), 42),
+               cudf::logic_error);
+}
+
+template <typename T>
+class SparkMurmurHashTestChronoTyped : public cudf::test::BaseFixture {};
+
+TYPED_TEST_SUITE(SparkMurmurHashTestChronoTyped, SparkChronoTypes);
+
+TYPED_TEST(SparkMurmurHashTestChronoTyped, NestedChronoValues)
+{
+  using T   = TypeParam;
+  using LCW = cudf::test::lists_column_wrapper<T, typename T::rep>;
+  cudf::test::fixed_width_column_wrapper<T, typename T::rep> column{0, 1, -1};
+  LCW lists{LCW{0}, LCW{1}, LCW{-1}};
+  cudf::test::structs_column_wrapper const structs{{column}};
+  cudf::test::structs_column_wrapper const structs_of_lists{{lists}};
+
+  // Each nested row contains the same single chrono value as the corresponding flat row.
+  auto const expected    = cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({column}), 42);
+  auto const list_output = cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({lists}), 42);
+  auto const struct_output =
+    cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({structs}), 42);
+  auto const struct_of_list_output =
+    cudf::hashing::spark_murmurhash3_x86_32(cudf::table_view({structs_of_lists}), 42);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *list_output, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *struct_output, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *struct_of_list_output, verbosity);
 }
