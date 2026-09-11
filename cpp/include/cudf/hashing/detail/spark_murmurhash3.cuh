@@ -265,7 +265,7 @@ __device__ inline auto Spark_MurmurHash3_x86_32<numeric::decimal128>::operator()
 
   // Spark hashes the big-endian representation, so reverse the bytes and shift the significant
   // ones down. Doing this in registers avoids staging a byte buffer in local memory.
-  auto const swap128 = [](__uint128_t v) {
+  auto const swap128 = [](__int128_t v) {
     auto const words    = cuda::std::bit_cast<uint4>(v);
     auto const permuted = uint4{.x = __byte_perm(words.w, 0, 0x0123),
                                 .y = __byte_perm(words.z, 0, 0x0123),
@@ -273,9 +273,7 @@ __device__ inline auto Spark_MurmurHash3_x86_32<numeric::decimal128>::operator()
                                 .w = __byte_perm(words.x, 0, 0x0123)};
     return cuda::std::bit_cast<__uint128_t>(permuted);
   };
-  auto const value      = static_cast<__uint128_t>(val);
-  auto const swapped    = swap128(value);
-  auto const big_endian = swapped >> (8 * (key_size - length));
+  auto const big_endian = swap128(val) >> (8 * (key_size - length));
 
   // Hash the low `length` bytes of `big_endian`, matching what `compute_bytes` would do over the
   // equivalent byte buffer.
