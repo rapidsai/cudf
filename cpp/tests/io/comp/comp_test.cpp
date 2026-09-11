@@ -457,7 +457,7 @@ void roundtrip_test(cudf::io::compression_type compression)
       d_comp.resize(hd_stats[0].bytes_written, stream);
     }
 
-    auto d_got = rmm::device_uvector<uint8_t>(test_input.size(), stream);
+    auto d_got = rmm::device_uvector<uint8_t>(test_input.size(), stream, mr);
     {
       auto hd_srcs = cudf::detail::hostdevice_vector<device_span<uint8_t const>>(1, stream);
       hd_srcs[0]   = d_comp;
