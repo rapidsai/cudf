@@ -182,7 +182,7 @@ async def pushdown_filter_actor(
                 )
                 async with shutdown_on_error(
                     context,
-                    *execution.channels,
+                    auxiliary_channels=execution.channels,
                     trace_ir=ir,
                     ir_context=ir_context,
                 ):
