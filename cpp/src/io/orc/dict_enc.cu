@@ -91,10 +91,6 @@ struct hash_functor {
 // Probing scheme to use for the hash map
 using probing_scheme_type = cuco::linear_probing<map_cg_size, hash_functor>;
 
-// How many times over to fill the device before splitting a dictionary any further. Chosen
-// empirically to speed up narrow tables without slowing down wide ones.
-constexpr int target_waves = 4;
-
 /**
  * @brief Number of blocks to assign to each stripe dictionary.
  *
@@ -108,6 +104,10 @@ int blocks_per_dictionary(Kernel kernel,
                           std::size_t num_dictionaries,
                           size_type max_dict_rows)
 {
+  // How many times over to fill the device before splitting a dictionary any further. Chosen
+  // empirically to speed up narrow tables without slowing down wide ones.
+  constexpr int target_waves = 4;
+
   int blocks_per_sm = 0;
   CUDF_CUDA_TRY(
     cudaOccupancyMaxActiveBlocksPerMultiprocessor(&blocks_per_sm, kernel, block_size, 0));
