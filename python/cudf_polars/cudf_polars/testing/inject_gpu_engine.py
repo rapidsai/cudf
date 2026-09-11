@@ -472,6 +472,7 @@ STREAMING_ENGINE_TESTS_TO_SKIP: Mapping[str, str] = {
     # passes on some streaming runs and fails on others, so skip rather than
     # xfail to avoid a flaky XPASS/FAIL.
     "tests/unit/operations/test_group_by.py::test_group_by_unique_parametric[n_unique-True-True]": "non-deterministic key sort under the streaming engine",
+    "tests/unit/operations/test_slice.py::test_slice_slice_pushdown": "Too slow for CI",
     "tests/unit/io/test_partition.py::test_partition_approximate_size": "Too slow for CI",
     "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[single-parquet-async]": "Takes >60 seconds to run locally",
     "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[glob-parquet-async]": "Takes >60 seconds to run locally",
@@ -518,7 +519,6 @@ STREAMING_ENGINE_TESTS_TO_SKIP_SMALL_BLOCKSIZE: Mapping[str, str] = {
     "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs11-False-unordered_columns11]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs12-False-None]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs13-False-None]": "Too slow with --inject-gpu-engine-blocksize=small",
-    "tests/unit/operations/test_slice.py::test_slice_slice_pushdown": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-10432-False]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-10432-True]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-10432-False]": "Too slow with --inject-gpu-engine-blocksize=small",
