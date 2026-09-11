@@ -24,6 +24,9 @@ from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.coll import AllGather
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.packed_data import PackedData
+from rapidsmpf.memory.pinned_memory_resource import (
+    is_pinned_memory_resources_supported,
+)
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.actor import run_actor_network
 
@@ -211,8 +214,9 @@ def resolve_rapidsmpf_options(rapidsmpf_options: Options | None) -> Options:
 
     - ``num_streaming_threads=4``: moderate worker count for the rapidsmpf
       streaming runtime, shared across frontends.
-    - ``pinned_memory=true``, ``pinned_initial_pool_size=0``: pinned host
-      memory enabled by default.
+    - ``pinned_memory``, ``pinned_initial_pool_size=0``: pinned host memory
+      enabled by default, but only on systems that support it (CUDA 12.6+
+      with async memory pool support).
 
     Parameters
     ----------
@@ -228,10 +232,13 @@ def resolve_rapidsmpf_options(rapidsmpf_options: Options | None) -> Options:
     if rapidsmpf_options is None:
         rapidsmpf_options = Options(get_environment_variables())
 
+    pinned_memory_default = (
+        "true" if is_pinned_memory_resources_supported() else "false"
+    )
     rapidsmpf_options.insert_if_absent(
         {
             "num_streaming_threads": "4",
-            "pinned_memory": "true",
+            "pinned_memory": pinned_memory_default,
             "pinned_initial_pool_size": "0",
         }
     )
