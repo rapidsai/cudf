@@ -356,7 +356,7 @@ class stats_columns_collector : public ast::detail::expression_transformer {
  * statistics max value of a column is referenced by column_index*3+1
  * statistics all_nulls value of a column is referenced by column_index*3+2
  */
-class stats_expression_converter : public parquet_expression_simplifier {
+class stats_expression_converter final : public parquet_expression_simplifier {
  public:
   stats_expression_converter(ast::expression const& expr,
                              std::span<cudf::data_type const> output_dtypes);

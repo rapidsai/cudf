@@ -179,7 +179,7 @@ struct bloom_filter_caster {
  * @brief Converts AST expression to bloom filter membership (BloomfilterAST) expression.
  * This is used in row group filtering based on equality predicate.
  */
-class bloom_filter_expression_converter : public parquet_expression_simplifier {
+class bloom_filter_expression_converter final : public parquet_expression_simplifier {
  public:
   bloom_filter_expression_converter(ast::expression const& expr,
                                     std::span<cudf::data_type const> output_dtypes,

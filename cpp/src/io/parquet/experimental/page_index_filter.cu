@@ -872,14 +872,6 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
                "set of row groups",
                std::invalid_argument);
 
-  // Convert the filter to an expression over page statistics
-  parquet::detail::stats_expression_converter const stats_expr_converter{filter.get(),
-                                                                         output_dtypes};
-
-  // Return early if statistics cannot prune any pages using the filter
-  auto const stats_expr = stats_expr_converter.get_stats_expr();
-  if (not stats_expr.has_value()) { return build_all_true_row_mask(row_group_indices, stream, mr); }
-
   auto const num_columns = output_dtypes.size();
 
   // Get a boolean mask indicating which columns will participate in stats based filtering
@@ -913,6 +905,14 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
                "Filter column page pruning using page-statistics requires both column and "
                "offset indexes to be present",
                std::runtime_error);
+
+  // Convert the filter to an expression over page statistics
+  parquet::detail::stats_expression_converter const stats_expr_converter{filter.get(),
+                                                                         output_dtypes};
+
+  // Return early if statistics cannot prune any pages using the filter
+  auto const stats_expr = stats_expr_converter.get_stats_expr();
+  if (not stats_expr.has_value()) { return build_all_true_row_mask(row_group_indices, stream, mr); }
 
   // Optimization for single column filter: Directly build the row mask from page statistics
   if (num_columns == 1) {

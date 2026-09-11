@@ -523,7 +523,7 @@ void parquet_expression_simplifier::validate_column_reference(
 
 void parquet_expression_simplifier::validate_operands(ast::expression const& expr) const
 {
-  // Validate column references and traverse operations. Literals don't need really validation.
+  // Validate column references and traverse operations. Literals don't really need validation.
   if (auto const* col_ref = dynamic_cast<ast::column_reference const*>(&expr); col_ref != nullptr) {
     validate_column_reference(*col_ref);
   } else if (auto const* operation = dynamic_cast<ast::operation const*>(&expr);
@@ -537,26 +537,25 @@ void parquet_expression_simplifier::validate_operands(ast::expression const& exp
   }
 }
 
-parquet_expression_simplifier::negation_result parquet_expression_simplifier::simplify_negation(
+simplified_expression_opt parquet_expression_simplifier::simplify_negation(
   ast::expression const& operand)
 {
   auto const* operation = dynamic_cast<ast::operation const*>(&operand);
-  if (operation == nullptr) { return {.handled = false, .expr = std::nullopt}; }
+  if (operation == nullptr) { return std::nullopt; }
 
   // Unary operation
   if (cudf::ast::detail::ast_operator_arity(operation->get_operator()) == 1) {
     auto const [kind, col_ref] = extract_unary_operand(*operation);
-    if (kind != operand_kind::COLUMN_REF) { return {.handled = false, .expr = std::nullopt}; }
-    return {.handled = true,
-            .expr    = simplify_negated_unary_op(operation->get_operator(), *col_ref)};
+    if (kind != operand_kind::COLUMN_REF) { return std::nullopt; }
+    return simplify_negated_unary_op(operation->get_operator(), *col_ref);
   }
 
   // Binary operation
   auto const [op, lhs_kind, rhs_kind, col_ref, literal] = extract_binary_operands(*operation);
   if (lhs_kind != operand_kind::COLUMN_REF or rhs_kind != operand_kind::LITERAL) {
-    return {.handled = false, .expr = std::nullopt};
+    return std::nullopt;
   }
-  return {.handled = true, .expr = simplify_negated_comparison(op, *col_ref, *literal)};
+  return simplify_negated_comparison(op, *col_ref, *literal);
 }
 
 simplified_expression_opt parquet_expression_simplifier::combine_logical_operands(
@@ -614,8 +613,7 @@ simplified_expression_opt parquet_expression_simplifier::simplify_expr_impl(
     // `parquet_filter_normalizer` has already pushed negations to the leaves, but only where an
     // exact rewrite exists, so `NOT` over an operation still reaches here.
     if (input_op == ast_operator::NOT) {
-      auto const [handled, negated] = simplify_negation(operation->get_operands().front().get());
-      if (handled) { return negated; }
+      return simplify_negation(operation->get_operands().front().get());
     }
 
     return std::nullopt;

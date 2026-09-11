@@ -419,17 +419,12 @@ class parquet_expression_simplifier {
 
  private:
   /**
-   * @brief Result of simplifying a `NOT` operand
-   */
-  struct negation_result {
-    bool handled;  ///< Indicates whether a negated unary or comparison operation was simplified
-    simplified_expression_opt expr;  ///< Simplified expression, or std::nullopt otherwise
-  };
-
-  /**
    * @brief Simplifies a `NOT` operation
+   *
+   * @param operand Operand of the `NOT` operation
+   * @return Simplified expression, or std::nullopt if the negated operand filters nothing
    */
-  [[nodiscard]] negation_result simplify_negation(ast::expression const& operand);
+  [[nodiscard]] simplified_expression_opt simplify_negation(ast::expression const& operand);
 
   /**
    * @brief Implementation of recursive simplification of `expr` for filtering row groups or pages
