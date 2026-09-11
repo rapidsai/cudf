@@ -33,7 +33,7 @@ from cudf_polars.dsl.utils.io import (
     attach_cached_parquet_metadata,
     prefetch_parquet_file_metadata_for_ir,
 )
-from cudf_polars.quent._plan import build_plan
+from cudf_polars.quent._plan import build_plan, build_quent_operator_map
 from cudf_polars.streaming.actor_graph.collectives import ReserveOpIDs
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.core import generate_network
@@ -43,7 +43,7 @@ from cudf_polars.streaming.base import StatsCollector
 from cudf_polars.streaming.parallel import lower_ir_graph_with_node_map
 from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.streaming.utils import _concat
-from cudf_polars.utils.config import Unspecified, get_total_device_memory
+from cudf_polars.utils.config import get_total_device_memory
 
 if TYPE_CHECKING:
     from collections.abc import Callable, MutableMapping
@@ -55,8 +55,8 @@ if TYPE_CHECKING:
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.context import Context
 
-    import cudf_polars.quent
     import cudf_polars.quent._logging
+    import cudf_polars.quent._types
     from cudf_polars.dsl.ir import IR
     from cudf_polars.dsl.translate import Translator
     from cudf_polars.quent._context import LocalQuentContext
@@ -211,6 +211,8 @@ def resolve_rapidsmpf_options(rapidsmpf_options: Options | None) -> Options:
 
     - ``num_streaming_threads=4``: moderate worker count for the rapidsmpf
       streaming runtime, shared across frontends.
+    - ``pinned_memory=true``, ``pinned_initial_pool_size=0``: pinned host
+      memory enabled by default.
 
     Parameters
     ----------
@@ -226,7 +228,13 @@ def resolve_rapidsmpf_options(rapidsmpf_options: Options | None) -> Options:
     if rapidsmpf_options is None:
         rapidsmpf_options = Options(get_environment_variables())
 
-    rapidsmpf_options.insert_if_absent({"num_streaming_threads": "4"})
+    rapidsmpf_options.insert_if_absent(
+        {
+            "num_streaming_threads": "4",
+            "pinned_memory": "true",
+            "pinned_initial_pool_size": "0",
+        }
+    )
     return rapidsmpf_options
 
 
@@ -593,6 +601,9 @@ def execute_ir_on_rank(
     config_options: ConfigOptions[StreamingExecutor],
     stats: StatsCollector,
     collective_id_map: dict[IR, list[int]],
+    *,
+    quent_operator_map: dict[IR, cudf_polars.quent._types.Operator] | None = None,
+    local_quent_context: LocalQuentContext | None = None,
 ) -> tuple[DataFrame, list[ChannelMetadata]]:
     """
     Execute a Polars IR query on a single rank's GPU.
@@ -619,6 +630,12 @@ def execute_ir_on_rank(
         Statistics collector.
     collective_id_map
         Mapping from IR nodes to their pre-allocated collective operation IDs.
+    quent_operator_map
+        Mapping from IR nodes to their Quent operators, or ``None`` when tracing
+        is disabled.
+    local_quent_context
+        The local Quent context for this rank, or ``None`` when tracing is
+        disabled.
 
     Returns
     -------
@@ -639,6 +656,8 @@ def execute_ir_on_rank(
         ir_context=ir_context,
         collective_id_map=collective_id_map,
         metadata_collector=metadata_collector,
+        quent_operator_map=quent_operator_map,
+        local_quent_context=local_quent_context,
     )
 
     try:
@@ -649,7 +668,7 @@ def execute_ir_on_rank(
             hint = (
                 f"Try lowering `target_partition_size` (current {target_partition_size}) "
                 f"and/or RAPIDSMPF_SPILL_DEVICE_LIMIT (default '80%') to reduce peak memory."
-                f"\nSee https://docs.rapids.ai/api/cudf/stable/cudf_polars/memory_errors/ "
+                f"\nSee https://docs.nvidia.com/cudf/latest/cudf_polars/memory_errors/ "
                 f"for troubleshooting guidance."
                 f"\nOriginal error:\n{mem_error}"
             )
@@ -876,6 +895,9 @@ def evaluate_on_rank(
     # unique per collect.
     logical_plan_id = uuid.uuid5(query_id, str(ir.get_stable_plan_id()))
 
+    physical_op_by_id: dict[str, cudf_polars.quent._types.Operator] | None = None
+    quent_operator_map: dict[IR, cudf_polars.quent._types.Operator] | None = None
+
     lowering, node_map = lower_ir_graph_with_node_map(
         ir, config_options, stats, rank=comm.rank, nranks=comm.nranks
     )
@@ -906,7 +928,7 @@ def evaluate_on_rank(
     if config_options.executor.quent_context is not None:
         assert local_quent_context is not None
         physical_plan_id = uuid.uuid4()
-        local_quent_context.context._emit_physical_plan_events(
+        physical_op_by_id = local_quent_context.context._emit_physical_plan_events(
             local_quent_context.logger,
             ir,
             config_options,
@@ -916,6 +938,7 @@ def evaluate_on_rank(
             node_map=node_map,
             logical_op_by_id=logical_op_by_id,
         )
+        quent_operator_map = build_quent_operator_map(ir, physical_op_by_id)
     ir_context = IRExecutionContext(
         py_executor, get_cuda_stream=ctx.br().stream_pool.get_stream, query_id=query_id
     )
@@ -926,7 +949,6 @@ def evaluate_on_rank(
             ir,
             ir_context.py_executor,
             stats=stats,
-            remote_only=isinstance(prefetch_file_metadata, Unspecified),
             parse_hybrid_metadata=config_options.parquet_options.use_hybrid_scan,
         )
         attach_cached_parquet_metadata(ir, cached_parquet_info_map)
@@ -941,6 +963,8 @@ def evaluate_on_rank(
             config_options,
             stats,
             collective_id_map,
+            quent_operator_map=quent_operator_map,
+            local_quent_context=local_quent_context,
         )
 
 
