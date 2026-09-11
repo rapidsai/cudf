@@ -182,6 +182,24 @@ set(CUDF_CUDA_FLAGS "")
 set(CUDF_CXX_DEFINITIONS "")
 set(CUDF_CUDA_DEFINITIONS "")
 
+if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13.0.0)
+  set(DEFAULT_CUDF_LTO_ARCHITECTURE 75)
+else()
+  set(DEFAULT_CUDF_LTO_ARCHITECTURE 70)
+endif()
+
+# LTO IR can only be linked for targets greater than or equal to its architecture. An explicit
+# override must therefore not exceed the architecture of any target GPU on which it will be linked.
+set(CUDF_LTO_ARCHITECTURE
+    "${DEFAULT_CUDF_LTO_ARCHITECTURE}"
+    CACHE STRING "LTO fragment architecture"
+)
+
+if(NOT CUDF_LTO_ARCHITECTURE MATCHES "^[0-9]+$")
+  message(FATAL_ERROR "CUDF_LTO_ARCHITECTURE must be a numeric architecture")
+endif()
+message(VERBOSE "CUDF: Using ${CUDF_LTO_ARCHITECTURE} as the common LTO architecture")
+
 # For now, disable CMake's automatic module scanning for C++ files. There is an sccache bug in the
 # version RAPIDS uses in CI that causes it to handle the resulting -M* flags incorrectly with
 # gcc>=14. We can remove this once we upgrade to a newer sccache version.
@@ -197,10 +215,6 @@ set_property(
                                        "OFF"
 )
 message(VERBOSE "CUDF: LIBCUDF_LOGGING_LEVEL = '${LIBCUDF_LOGGING_LEVEL}'.")
-
-if(NOT CUDF_GENERATED_INCLUDE_DIR)
-  set(CUDF_GENERATED_INCLUDE_DIR ${CUDF_BINARY_DIR})
-endif()
 
 # ##################################################################################################
 # * linter configuration ---------------------------------------------------------------------------
@@ -431,6 +445,9 @@ if(NOT BUILD_SHARED_LIBS)
   endif()
 endif()
 
+# ##################################################################################################
+# * JIT embedding ----------------------------------------------------------------------------------
+
 rtcx_add_embed(cudf_cuda_embed)
 
 rtcx_embed_includes(
@@ -459,11 +476,6 @@ rtcx_embed_includes(
 )
 
 rtcx_embed_includes(
-  cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/rolling DEST_DIRECTORY
-  cudf/cpp/src/rolling INCLUDE_DIRECTORIES cudf/cpp/src
-)
-
-rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/transform/jit DEST_DIRECTORY
   cudf/cpp/src/transform/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
@@ -479,50 +491,19 @@ foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
   )
 endforeach()
 
-rtcx_embed(
-  cudf_cuda_embed COMPRESSION zstd OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
-)
+rtcx_embed(cudf_cuda_embed COMPRESSION zstd OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/embed")
 
 rtcx_add_embed(cudf_fragments)
 
-list(APPEND CUDF_PRECOMPILE_PHYSICAL_TYPES uint8_t uint16_t uint32_t uint64_t numeric::decimal32
-     numeric::decimal64 numeric::decimal128
-)
-
-foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_PHYSICAL_TYPES})
-  set(FRAGMENT_NAME transform_kernel)
-  get_property(
-    FILE_INDEX
-    TARGET cudf_fragments__embed_props
-    PROPERTY EMBED_FILE_INDEX
+# This function precompiles the unary and binary transform kernel fragments for all fixed-width
+# types. This helps amortize the cost of JIT compilation for kernels that have matching signatures
+# and reduces the amount of time spent on source-based runtime JIT compilation for LTO-based JIT.
+function(precompile_fixed_width_kernel_fragments)
+  list(APPEND CUDF_PRECOMPILE_PHYSICAL_TYPES uint8_t uint16_t uint32_t uint64_t numeric::decimal32
+       numeric::decimal64 numeric::decimal128
   )
-  set(VARIANT_NAME transform_kernel_${FILE_INDEX})
-  set(INSTANCE
-      "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::column_device_view_core, ${TYPE}, false, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::mutable_column_device_view_core, ${TYPE}, false, 0>>>"
-  )
-  add_fragment(
-    cudf_fragments
-    FRAGMENT
-    ${VARIANT_NAME}
-    SOURCE
-    src/transform/jit/kernel.cu
-    KERNEL_INSTANCE
-    ${INSTANCE}
-    UDF_TYPE
-    "int(${TYPE} *, ${TYPE})"
-    DEFINITIONS
-    CUDF_LTO_MODE
-    ARRAY_IDS
-    ${FRAGMENT_NAME}_FILE_INDEX
-    ${FRAGMENT_NAME}_INSTANCE
-    ARRAY_VALUES
-    ${FILE_INDEX}
-    "${INSTANCE}"
-  )
-endforeach()
-
-foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_PHYSICAL_TYPES})
-  foreach(RHS_IS_SCALAR IN ITEMS "false" "true")
+  # Pre-compile unary-op kernel fragments for fixed-width types.
+  foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_PHYSICAL_TYPES})
     set(FRAGMENT_NAME transform_kernel)
     get_property(
       FILE_INDEX
@@ -531,7 +512,7 @@ foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_PHYSICAL_TYPES})
     )
     set(VARIANT_NAME transform_kernel_${FILE_INDEX})
     set(INSTANCE
-        "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::column_device_view_core, ${TYPE}, false, 0>, cudf::jit::column_accessor<1ULL, cudf::column_device_view_core, ${TYPE}, ${RHS_IS_SCALAR}, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::mutable_column_device_view_core, ${TYPE}, false, 0>>>"
+        "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::column_device_view_core, ${TYPE}, false, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::mutable_column_device_view_core, ${TYPE}, false, 0>>>"
     )
     add_fragment(
       cudf_fragments
@@ -542,7 +523,7 @@ foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_PHYSICAL_TYPES})
       KERNEL_INSTANCE
       ${INSTANCE}
       UDF_TYPE
-      "int(${TYPE} *, ${TYPE}, ${TYPE})"
+      "int(${TYPE} *, ${TYPE})"
       DEFINITIONS
       CUDF_LTO_MODE
       ARRAY_IDS
@@ -552,12 +533,117 @@ foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_PHYSICAL_TYPES})
       ${FILE_INDEX}
       "${INSTANCE}"
     )
-  endforeach()
-endforeach()
 
-rtcx_embed(
-  cudf_fragments COMPRESSION none OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
-)
+  endforeach()
+
+  # Precompile binary-op kernel fragments for fixed-width types.
+  foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_PHYSICAL_TYPES})
+    foreach(RHS_IS_SCALAR IN ITEMS "false" "true")
+      set(FRAGMENT_NAME transform_kernel)
+      get_property(
+        FILE_INDEX
+        TARGET cudf_fragments__embed_props
+        PROPERTY EMBED_FILE_INDEX
+      )
+      set(VARIANT_NAME transform_kernel_${FILE_INDEX})
+      set(INSTANCE
+          "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::column_device_view_core, ${TYPE}, false, 0>, cudf::jit::column_accessor<1ULL, cudf::column_device_view_core, ${TYPE}, ${RHS_IS_SCALAR}, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::mutable_column_device_view_core, ${TYPE}, false, 0>>>"
+      )
+      add_fragment(
+        cudf_fragments
+        FRAGMENT
+        ${VARIANT_NAME}
+        SOURCE
+        src/transform/jit/kernel.cu
+        KERNEL_INSTANCE
+        ${INSTANCE}
+        UDF_TYPE
+        "int(${TYPE} *, ${TYPE}, ${TYPE})"
+        DEFINITIONS
+        CUDF_LTO_MODE
+        ARRAY_IDS
+        ${FRAGMENT_NAME}_FILE_INDEX
+        ${FRAGMENT_NAME}_INSTANCE
+        ARRAY_VALUES
+        ${FILE_INDEX}
+        "${INSTANCE}"
+      )
+    endforeach()
+  endforeach()
+endfunction()
+
+# This function precompiles kernel fragments for string transforms. It precompiles kernel fragments
+# for common string transform operations: multi-extract, multi-split, string-parsing. This helps
+# amortize the cost of JIT compilation for kernels that have matching signatures
+function(precompile_string_kernel_fragments)
+  list(APPEND CUDF_PRECOMPILE_STRING_OUTPUT_PHYSICAL_TYPES uint8_t uint16_t uint32_t uint64_t
+       cuda::std::span<char>
+  )
+  list(
+    APPEND
+    CUDF_PRECOMPILE_STRING_OUTPUT_COLUMN_TYPES
+    cudf::mutable_column_device_view_core
+    cudf::mutable_column_device_view_core
+    cudf::mutable_column_device_view_core
+    cudf::mutable_column_device_view_core
+    cudf::jit::mutable_strings_column_device_view
+  )
+  foreach(OUTPUT_TYPE OUTPUT_COLUMN_TYPE IN ZIP_LISTS CUDF_PRECOMPILE_STRING_OUTPUT_PHYSICAL_TYPES
+                      CUDF_PRECOMPILE_STRING_OUTPUT_COLUMN_TYPES
+  )
+    # Pre-compile for up to 8 output columns
+    foreach(OUTPUT_INDICES IN ITEMS "0" "0;1" "0;1;2" "0;1;2;3" "0;1;2;3;4" "0;1;2;3;4;5"
+                                    "0;1;2;3;4;5;6" "0;1;2;3;4;5;6;7"
+    )
+      set(FRAGMENT_NAME transform_kernel)
+      get_property(
+        FILE_INDEX
+        TARGET cudf_fragments__embed_props
+        PROPERTY EMBED_FILE_INDEX
+      )
+      set(VARIANT_NAME transform_kernel_${FILE_INDEX})
+      set(OUTPUT_ACCESSORS "")
+      set(OUTPUT_POINTERS "")
+      foreach(OUTPUT_INDEX IN LISTS OUTPUT_INDICES)
+        list(
+          APPEND
+          OUTPUT_ACCESSORS
+          "cudf::jit::column_accessor<${OUTPUT_INDEX}ULL, ${OUTPUT_COLUMN_TYPE}, ${OUTPUT_TYPE}, false, 0>"
+        )
+        list(APPEND OUTPUT_POINTERS "${OUTPUT_TYPE} *")
+      endforeach()
+      list(JOIN OUTPUT_ACCESSORS " ," OUTPUT_ACCESSORS_STR)
+      list(JOIN OUTPUT_POINTERS " ," OUTPUT_POINTERS_STR)
+      set(INSTANCE
+          "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::column_device_view_core, cudf::string_view, false, 0>>, cudf::jit::type_list<${OUTPUT_ACCESSORS_STR}>>"
+      )
+      add_fragment(
+        cudf_fragments
+        FRAGMENT
+        ${VARIANT_NAME}
+        SOURCE
+        src/transform/jit/kernel.cu
+        KERNEL_INSTANCE
+        ${INSTANCE}
+        UDF_TYPE
+        "int(${OUTPUT_POINTERS_STR}, cudf::string_view)"
+        DEFINITIONS
+        CUDF_LTO_MODE
+        ARRAY_IDS
+        ${FRAGMENT_NAME}_FILE_INDEX
+        ${FRAGMENT_NAME}_INSTANCE
+        ARRAY_VALUES
+        ${FILE_INDEX}
+        "${INSTANCE}"
+      )
+    endforeach()
+  endforeach()
+endfunction()
+
+precompile_fixed_width_kernel_fragments()
+precompile_string_kernel_fragments()
+
+rtcx_embed(cudf_fragments COMPRESSION none OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/embed")
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
@@ -805,6 +891,7 @@ add_library(
   src/io/parquet/reader_impl_preprocess.cu
   src/io/parquet/reader_impl_preprocess_utils.cu
   src/io/parquet/stats_filter_helpers.cpp
+  src/io/parquet/synthetic_column_helpers.cu
   src/io/parquet/writer_impl.cu
   src/io/parquet/writer_impl_helpers.cpp
   src/io/parquet/decode_fixed.cu
@@ -854,7 +941,6 @@ add_library(
   src/join/hash_join/full_join_match_context.cpp
   src/join/hash_join/full_join_retrieve.cu
   src/join/hash_join/full_join_size.cu
-  src/join/hash_join/full_join_size_impl.cu
   src/join/hash_join/hash_join.cu
   src/join/hash_join/inner_join_match_context.cpp
   src/join/hash_join/inner_join_retrieve.cu
@@ -863,14 +949,10 @@ add_library(
   src/join/hash_join/left_join_retrieve.cu
   src/join/hash_join/left_join_size.cu
   src/join/hash_join/match_context.cu
-  src/join/hash_join/partitioned_count.cu
-  src/join/hash_join/partitioned_count_outer.cu
   src/join/hash_join/partitioned_full_join.cu
   src/join/hash_join/partitioned_inner_join.cu
   src/join/hash_join/partitioned_join_retrieve.cu
   src/join/hash_join/partitioned_left_join.cu
-  src/join/hash_join/partitioned_retrieve.cu
-  src/join/hash_join/partitioned_retrieve_outer.cu
   src/join/join.cu
   src/join/join_utils.cu
   src/join/key_remapping.cu
@@ -879,6 +961,7 @@ add_library(
   src/join/mixed_join_kernels_semi.cu
   src/join/mixed_join_semi.cu
   src/join/sort_merge_join.cu
+  src/join/streaming_hash_join.cu
   src/json/json_path.cu
   src/lists/contains.cu
   src/lists/combine/concatenate_list_elements.cu
@@ -899,7 +982,7 @@ add_library(
   src/lists/segmented_sort.cu
   src/lists/sequences.cu
   src/lists/set_operations.cu
-  src/lists/stream_compaction/apply_boolean_mask.cu
+  src/lists/stream_compaction/apply_mask.cu
   src/lists/stream_compaction/distinct.cu
   src/lists/utilities.cu
   src/merge/merge.cu
@@ -969,7 +1052,9 @@ add_library(
   src/rolling/grouped_rolling.cu
   src/rolling/range_rolling.cu
   src/rolling/range_rolling_bounded_closed.cu
+  src/rolling/range_rolling_bounded_closed_column.cu
   src/rolling/range_rolling_bounded_open.cu
+  src/rolling/range_rolling_bounded_open_column.cu
   src/rolling/range_rolling_current_row.cu
   src/rolling/range_rolling_multi_column.cu
   src/rolling/range_rolling_unbounded.cu
@@ -994,11 +1079,10 @@ add_library(
   src/sort/sort_column.cu
   src/sort/sort_radix.cu
   src/sort/sorted_order_radix.cu
-  src/sort/stable_segmented_sort.cu
   src/sort/stable_sort_column.cu
   src/sort/stable_sort.cu
   src/sort/top_k.cu
-  src/stream_compaction/apply_boolean_mask.cu
+  src/stream_compaction/apply_mask.cu
   src/stream_compaction/distinct.cu
   src/stream_compaction/distinct_helpers.cu
   src/stream_compaction/distinct_helpers_flat_nan_equal_any.cu
@@ -1103,6 +1187,7 @@ add_library(
   src/text/bpe/byte_pair_encoding.cu
   src/text/bpe/load_merge_pairs.cu
   src/text/tokenize.cu
+  src/text/unicode_normalize.cu
   src/text/vocabulary_tokenize.cu
   src/text/wordpiece_tokenize.cu
   src/transform/bools_to_mask.cu
@@ -1207,7 +1292,7 @@ target_compile_options(
 target_include_directories(
   cudf
   PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>" "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
-         "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
+         "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
@@ -1218,8 +1303,10 @@ target_include_directories(
 )
 
 target_compile_definitions(
-  cudf PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_DEFINITIONS}>"
-              "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>>"
+  cudf
+  PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_DEFINITIONS}>"
+         "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>>"
+         "CUDF_LTO_ARCHITECTURE=${CUDF_LTO_ARCHITECTURE}"
 )
 
 # Per-thread default stream

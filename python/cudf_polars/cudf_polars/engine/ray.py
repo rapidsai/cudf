@@ -10,7 +10,6 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
-import kvikio.defaults
 import ray
 import ray.exceptions
 import ucxx._lib.libucxx as ucx_api
@@ -35,8 +34,11 @@ from cudf_polars.engine.core import (
     check_reserved_keys,
     drop_if_replicated,
     evaluate_on_rank,
+    make_kvikio_monitor,
+    reset_kvikio_monitor,
     reset_statistics_from_options,
     resolve_rapidsmpf_options,
+    take_io_summary,
 )
 from cudf_polars.engine.hardware_binding import (
     HardwareBindingPolicy,
@@ -46,18 +48,24 @@ from cudf_polars.engine.persisted_result import (
     PersistedBackend,
     execute_persisted_query,
 )
-from cudf_polars.quent._context import LocalQuentContext
+from cudf_polars.quent._context import (
+    LocalQuentContext,
+    WorkerResources,
+)
 from cudf_polars.quent._types import Worker
 from cudf_polars.unstable import unstable
 from cudf_polars.utils.config import (
     MemoryResourceConfig,
     RayContext,
+    configure_kvikio,
     resolve_kvikio_nthreads,
+    resolve_kvikio_statistics,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    import kvikio
     from ray import ObjectRef
     from ray.actor import ActorHandle
 
@@ -168,8 +176,9 @@ def evaluate_pipeline_ray_mode(
     if quent_context is not None:
         quent_logger = config_options.executor.ray_context.quent_logger
         assert quent_logger is not None
+        query = quent_context.query_for(query_id)
         quent_context._emit_query_group_events(quent_logger)
-        quent_context._emit_query_events(quent_logger)
+        quent_context._emit_query_events(quent_logger, query)
 
     # Serialize the IR into the Ray object store so actors fetch by reference
     # instead of receiving N copies.
@@ -200,7 +209,7 @@ def evaluate_pipeline_ray_mode(
     if quent_context is not None:
         quent_logger = config_options.executor.ray_context.quent_logger
         assert quent_logger is not None
-        quent_context._emit_query_exit_events(quent_logger)
+        quent_context._emit_query_exit_events(quent_logger, query)
     return pl.concat(dfs), metadata_collector or None
 
 
@@ -248,6 +257,7 @@ class RankActor:
         rapidsmpf_options_as_bytes: bytes,
         num_py_executors: int,
         kvikio_nthreads: int,
+        kvikio_statistics: bool,
         hardware_binding: HardwareBindingPolicy,
         memory_resource_config: MemoryResourceConfig | None,
         worker_id: uuid.UUID,
@@ -255,7 +265,7 @@ class RankActor:
         quent_enabled: bool,
     ) -> None:
         bind_to_gpu(hardware_binding)
-        kvikio.defaults.set("num_threads", kvikio_nthreads)
+        configure_kvikio(kvikio_nthreads)
         memory_resource_config = (
             memory_resource_config or MemoryResourceConfig.default()
         )
@@ -269,6 +279,7 @@ class RankActor:
             rapidsmpf_options_as_bytes
         )
         self._rapidsmpf_statistics = Statistics.from_options(self._rapidsmpf_options)
+        self._kvikio_monitor = make_kvikio_monitor(enabled=kvikio_statistics)
         self._nranks: int = nranks
         self._py_executor = ThreadPoolExecutor(
             max_workers=num_py_executors,
@@ -282,13 +293,15 @@ class RankActor:
             )
         else:
             self._quent_logger = None
+        self._quent_engine = engine
+        self._worker_id = worker_id
         self._quent_worker = Worker(
             id=worker_id,
             engine=engine,
             instance_name=f"RankActor-{worker_id.hex[:8]}",
         )
-        if self._quent_logger is not None:
-            self._quent_logger.emit(self._quent_worker._init())
+        # Initialized later in setup_worker once ``comm`` is available.
+        self.worker_resources: WorkerResources | None = None
 
     def setup_root(self) -> bytes:
         """
@@ -337,6 +350,18 @@ class RankActor:
                 progress_thread=ProgressThread(self._rapidsmpf_statistics),
             )
         barrier(self._comm)
+        # Now we can declare the Quent worker resources, which depends on self._comm
+        if self._quent_logger is not None:
+            self._quent_logger.emit(self._quent_worker._init())
+            self.worker_resources = WorkerResources.build(
+                instance_suffix=f"RankActor-{self._quent_worker.id.hex[:8]}",
+                engine_id=self._quent_engine.id,
+                worker_id=self._worker_id,
+                rank=self._comm.rank,
+                nranks=self._nranks,
+            )
+            self.worker_resources.declare(self._quent_logger)
+
         assert self._base_mr is not None
         self._ctx = Context.from_options(
             self._comm.logger,
@@ -352,7 +377,13 @@ class RankActor:
         self._mr = self._ctx.br().device_mr_adaptor()
         rmm.mr.set_current_device_resource(self._mr)
 
-    def reset(self, *, rapidsmpf_options_as_bytes: bytes, kvikio_nthreads: int) -> None:
+    def reset(
+        self,
+        *,
+        rapidsmpf_options_as_bytes: bytes,
+        kvikio_nthreads: int,
+        kvikio_statistics: bool,
+    ) -> None:
         """
         Rebuild the streaming Context with new options.
 
@@ -365,10 +396,12 @@ class RankActor:
             Serialized :class:`Options` to install.
         kvikio_nthreads
             Number of kvikio threads to configure on this worker process.
+        kvikio_statistics
+            Whether to collect KvikIO I/O statistics on this rank.
         """
         if self._ctx is None:
             raise RuntimeError("reset() requires setup_worker() to have run")
-        kvikio.defaults.set("num_threads", kvikio_nthreads)
+        configure_kvikio(kvikio_nthreads)
         assert self._comm is not None
         # Collective: all ranks idle before any rank tears down its Context.
         if self._comm.nranks > 1:
@@ -382,6 +415,9 @@ class RankActor:
             self._rapidsmpf_statistics, self._rapidsmpf_options
         )
         self._rapidsmpf_statistics.clear()
+        self._kvikio_monitor = reset_kvikio_monitor(
+            self._kvikio_monitor, enabled=kvikio_statistics
+        )
         assert self._base_mr is not None
         self._ctx = Context.from_options(
             self._comm.logger,
@@ -400,6 +436,9 @@ class RankActor:
         # Maybe generalize this to all application-level things,
         # followed by framework (ray) level things.
         if self._quent_worker is not None and self._quent_logger is not None:
+            if self.worker_resources is not None:
+                self.worker_resources.finalize(self._quent_logger)
+
             self._quent_logger.emit(self._quent_worker._exit())
             return self._drain_quent_events()
         return []
@@ -410,6 +449,10 @@ class RankActor:
 
         Raises `ray.exceptions.RayActorError`.
         """
+        # First, so that a failure below cannot leave it counting.
+        if self._kvikio_monitor is not None:
+            self._kvikio_monitor.stop()
+            self._kvikio_monitor = None
         self._py_executor.shutdown(wait=True, cancel_futures=True)
         # Release resources in dependency order before exit_actor() terminates
         # the process. Shut down the Context explicitly on the same thread
@@ -464,6 +507,24 @@ class RankActor:
             stats.clear()
             return self._comm.rank, detached
         return self._comm.rank, stats
+
+    def get_io_summary(
+        self, *, clear: bool = False
+    ) -> tuple[int, kvikio.Summary | None]:
+        """
+        Return this rank's index and its kvikio I/O totals.
+
+        Parameters
+        ----------
+        clear
+            If ``True``, restart this rank's measured span after reading.
+
+        Returns
+        -------
+        This rank's index, and its totals or ``None`` if it is not counting.
+        """
+        assert self._comm is not None
+        return self._comm.rank, take_io_summary(self._kvikio_monitor, clear=clear)
 
     def evaluate_polars_ir(
         self,
@@ -520,10 +581,13 @@ class RankActor:
         local_quent_context: LocalQuentContext | None = None
         if quent_context is not None:
             assert self._quent_logger is not None
+            assert self.worker_resources is not None
             local_quent_context = LocalQuentContext(
                 context=quent_context,
+                query=quent_context.query_for(query_id),
                 worker=self._quent_worker,
                 logger=self._quent_logger,
+                worker_resources=self.worker_resources,
             )
         # evaluate_on_rank always collects metadata internally so we can read
         # metadata[-1].duplicated to decide whether to suppress this rank's
@@ -749,6 +813,9 @@ class RayEngine(StreamingEngine):
         executor_options.setdefault(
             "kvikio_nthreads", resolve_kvikio_nthreads(executor_options)
         )
+        executor_options.setdefault(
+            "kvikio_statistics", resolve_kvikio_statistics(executor_options)
+        )
         engine_options = engine_options or {}
         ray_init_options = ray_init_options or {}
 
@@ -766,15 +833,11 @@ class RayEngine(StreamingEngine):
         )
         if quent_context is not None:
             self._quent_logger = cudf_polars.quent._logging.QuentLogger()
-        else:
-            self._quent_logger = None
-
-        if quent_context is not None:
             executor_options.setdefault("quent_context", quent_context)
-            assert self._quent_logger is not None
             quent_context._emit_engine_init_events(self._quent_logger)
             engine = quent_context.engine
         else:
+            self._quent_logger = None
             engine = cudf_polars.quent.Engine(id=uuid.uuid4())
 
         # This engine's store uid, used to key its partitions in each actor's process rank-local store.
@@ -829,6 +892,7 @@ class RayEngine(StreamingEngine):
                         executor_options.get("num_py_executors", 8),
                     ),
                     kvikio_nthreads=executor_options["kvikio_nthreads"],
+                    kvikio_statistics=executor_options["kvikio_statistics"],
                     hardware_binding=hw_binding,
                     memory_resource_config=mr_config,
                     worker_id=worker_id,
@@ -888,10 +952,12 @@ class RayEngine(StreamingEngine):
             existing_kvikio_nthreads = existing_executor_options.get("kvikio_nthreads")
             if existing_kvikio_nthreads is not None:
                 executor_options.setdefault("kvikio_nthreads", existing_kvikio_nthreads)
+        executor_options.setdefault(
+            "kvikio_statistics", resolve_kvikio_statistics(executor_options)
+        )
         engine_options = engine_options or {}
-        rapidsmpf_options_as_bytes = resolve_rapidsmpf_options(
-            rapidsmpf_options
-        ).serialize()
+        self.rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
+        rapidsmpf_options_as_bytes = self.rapidsmpf_options.serialize()
 
         # Reset all actor Contexts collectively. ``ray.get`` blocks until
         # every actor's reset returns; the per-actor barrier inside
@@ -901,6 +967,7 @@ class RayEngine(StreamingEngine):
                 rank.reset.remote(
                     rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
                     kvikio_nthreads=executor_options["kvikio_nthreads"],
+                    kvikio_statistics=executor_options["kvikio_statistics"],
                 )
                 for rank in self._rank_actors
             ]
@@ -1029,6 +1096,27 @@ class RayEngine(StreamingEngine):
                 [rank.get_statistics.remote(clear=clear) for rank in self.rank_actors]
             ).values()
         )
+
+    def gather_io_summary(self, *, clear: bool = False) -> dict[int, kvikio.Summary]:
+        """
+        Collect kvikio I/O statistics from every rank via Ray.
+
+        Parameters
+        ----------
+        clear
+            If ``True``, restart each rank's measured span after reading.
+
+        Returns
+        -------
+        A :class:`kvikio.Summary` per rank, keyed by rank index, omitting
+        ranks that are not counting.
+        """
+        summaries = self._gather_by_rank(
+            [rank.get_io_summary.remote(clear=clear) for rank in self.rank_actors]
+        )
+        return {
+            rank: summary for rank, summary in summaries.items() if summary is not None
+        }
 
     def shutdown(self) -> None:
         """

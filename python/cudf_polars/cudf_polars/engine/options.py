@@ -21,6 +21,7 @@ from cudf_polars.engine.hardware_binding import (
 from cudf_polars.utils.config import (
     UNSPECIFIED,
     DynamicPlanningOptions,
+    MaxConcurrentIOTasks,
     MemoryResourceConfig,
     Unspecified,
 )
@@ -45,6 +46,7 @@ def _opt(
     category: str,
     env_var: str | None = None,
     coerce: Callable[[str], Any] = str,
+    default: Any = UNSPECIFIED,
 ) -> Any:
     """
     Factory for ``StreamingOptions`` fields with category and env-var metadata.
@@ -59,10 +61,14 @@ def _opt(
         :class:`StreamingOptions` is instantiated without an explicit value for
         this field, the factory reads the environment variable (if set) on the constructing
         process.  ``None`` means no environment variable; the field defaults to
-        :data:`UNSPECIFIED`.
+        *default*.
     coerce
         Callable used to convert the raw env-var string to the field's type.
         Defaults to ``str`` (no conversion).
+    default
+        Value used when neither an explicit value nor the environment variable
+        is set. Defaults to :data:`UNSPECIFIED`, which defers to rapidsmpf's
+        built-in default.
     """
 
     def _default() -> Any:
@@ -70,7 +76,7 @@ def _opt(
             raw = os.environ.get(env_var)
             if raw is not None:
                 return coerce(raw)
-        return UNSPECIFIED
+        return default
 
     return dataclasses.field(
         default_factory=_default,
@@ -160,7 +166,7 @@ class StreamingOptions:
     pinned_memory
         Enable pinned host memory.
         Env: ``RAPIDSMPF_PINNED_MEMORY``.
-        Default: ``False``.
+        Default: ``True``.
         Category: rapidsmpf.
     pinned_initial_pool_size
         Initial pinned memory pool size (bytes).
@@ -201,10 +207,19 @@ class StreamingOptions:
         Env: ``CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS``.
         Default: ``8``.
         Category: executor.
+    kvikio_statistics
+        Collect KvikIO I/O statistics, reachable through
+        :meth:`~cudf_polars.engine.core.StreamingEngine.gather_io_summary`.
+        Env: ``CUDF_POLARS__EXECUTOR__KVIKIO_STATISTICS``.
+        Default: ``False``.
+        Category: executor.
     max_concurrent_io_tasks
         Maximum concurrent IO tasks for each scan node.
         Env: ``CUDF_POLARS__EXECUTOR__MAX_CONCURRENT_IO_TASKS``.
-        Default: ``2``.
+        Default: automatic, resolved separately for each scan based on its paths.
+        Python and config values may be an ``int``, a dict with ``local``
+        and/or ``remote`` keys, or omitted/``None`` for the default policy.
+        The environment variable accepts an int or a JSON dict.
         Category: executor.
     fallback_mode
         Fallback behavior (``"warn"``, ``"raise"``, ``"silent"``).
@@ -238,7 +253,7 @@ class StreamingOptions:
         disables the rewrite.
         Env: ``CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN`` and
         ``CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN__*``.
-        Default: enabled.
+        Default: disabled.
         Category: executor.
     sink_to_directory
         Whether multi-partition sink operations should write to a directory
@@ -329,8 +344,13 @@ class StreamingOptions:
     kvikio_nthreads: int | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__KVIKIO_NTHREADS", int
     )
-    max_concurrent_io_tasks: int | Unspecified = _opt(
-        "executor", "CUDF_POLARS__EXECUTOR__MAX_CONCURRENT_IO_TASKS", int
+    kvikio_statistics: bool | Unspecified = _opt(
+        "executor", "CUDF_POLARS__EXECUTOR__KVIKIO_STATISTICS", parse_boolean
+    )
+    max_concurrent_io_tasks: int | dict[str, int] | Unspecified | None = _opt(
+        "executor",
+        "CUDF_POLARS__EXECUTOR__MAX_CONCURRENT_IO_TASKS",
+        MaxConcurrentIOTasks.parse_env,
     )
     fallback_mode: str | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__FALLBACK_MODE"
@@ -418,8 +438,8 @@ class StreamingOptions:
 
         Examples
         --------
-        >>> StreamingOptions(fallback_mode="silent").to_dict()
-        {'fallback_mode': 'silent'}
+        >>> StreamingOptions(fallback_mode="silent").to_dict()  # doctest: +ELLIPSIS
+        {..., 'fallback_mode': 'silent'}
         >>> StreamingOptions.from_dict(
         ...     StreamingOptions(fallback_mode="silent").to_dict()
         ... )  # doctest: +ELLIPSIS
@@ -624,7 +644,7 @@ class StreamingOptions:
             action=argparse.BooleanOptionalAction,
             help=textwrap.dedent("""\
                 Enable pinned host memory if available on the system.
-                Env: RAPIDSMPF_PINNED_MEMORY. Built-in default: false."""),
+                Env: RAPIDSMPF_PINNED_MEMORY. Default: true."""),
         )
         g.add_argument(
             "--pinned-initial-pool-size",
@@ -633,7 +653,7 @@ class StreamingOptions:
             type=int,
             help=textwrap.dedent("""\
                 Starting allocation for the pinned memory pool in bytes.
-                Env: RAPIDSMPF_PINNED_INITIAL_POOL_SIZE. Built-in default: 0."""),
+                Env: RAPIDSMPF_PINNED_INITIAL_POOL_SIZE. Default: 0."""),
         )
         g.add_argument(
             "--pinned-max-pool-size",
@@ -697,6 +717,16 @@ class StreamingOptions:
                 Built-in default: 8."""),
         )
         g.add_argument(
+            "--kvikio-statistics",
+            dest="kvikio_statistics",
+            default=None,
+            action=argparse.BooleanOptionalAction,
+            help=textwrap.dedent("""\
+                Collect KvikIO I/O statistics, reported per rank.
+                Env: CUDF_POLARS__EXECUTOR__KVIKIO_STATISTICS.
+                Built-in default: false."""),
+        )
+        g.add_argument(
             "--max-concurrent-io-tasks",
             dest="max_concurrent_io_tasks",
             default=None,
@@ -704,7 +734,7 @@ class StreamingOptions:
             help=textwrap.dedent("""\
                 Maximum concurrent IO tasks for each scan node.
                 Env: CUDF_POLARS__EXECUTOR__MAX_CONCURRENT_IO_TASKS.
-                Built-in default: 2."""),
+                Omit to use the path-dependent default."""),
         )
         g.add_argument(
             "--raise-on-fail",

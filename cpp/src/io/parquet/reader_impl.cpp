@@ -8,6 +8,7 @@
 #include "column_path_helpers.hpp"
 #include "error.hpp"
 #include "runtime/context.hpp"
+#include "synthetic_column_helpers.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/stream_compaction.hpp>
@@ -495,7 +496,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   _stream.sync();
 }
 
-reader_impl::reader_impl() : _stream{cudaStream_t{nullptr}}, _options{} {}
+reader_impl::reader_impl() : _stream{cudaStream_t{cudaStreamDefault}}, _options{} {}
 
 reader_impl::reader_impl(std::vector<std::unique_ptr<datasource>>&& sources,
                          std::vector<FileMetaData>&& parquet_metadatas,
@@ -989,8 +990,9 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
   // Prepend the source and row index columns if requested
   {
     if (_options.prepend_row_index_column) {
-      out_columns.emplace(out_columns.begin(),
-                          synthesize_row_index_column(read_info, _stream, _mr));
+      out_columns.emplace(
+        out_columns.begin(),
+        synthesize_row_index_column(_file_itm_data.row_groups, read_info, _stream, _mr));
       out_metadata.schema_info.emplace(out_metadata.schema_info.begin(),
                                        column_name_info{.name = "row_index", .is_nullable = false});
     }
