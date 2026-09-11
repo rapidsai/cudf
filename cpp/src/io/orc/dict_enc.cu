@@ -91,17 +91,13 @@ struct hash_functor {
 // Probing scheme to use for the hash map
 using probing_scheme_type = cuco::linear_probing<map_cg_size, hash_functor>;
 
-/**
- * @brief Number of blocks to assign to each stripe dictionary.
- */
 template <typename Kernel>
 int blocks_per_dictionary(Kernel kernel,
                           int block_size,
                           std::size_t num_dictionaries,
                           size_type max_dict_rows)
 {
-  // Splitting a dictionary keeps one block from working through a whole stripe, but only pays off
-  // while there are idle SMs. Fill the device this many times over before splitting any further;
+  // Fill the device this many times over before splitting any further;
   // chosen empirically to speed up narrow tables without slowing down wide ones.
   constexpr int target_waves = 4;
 
@@ -112,9 +108,9 @@ int blocks_per_dictionary(Kernel kernel,
   // dictionary once the dictionaries alone fill the device
   auto const budget =
     target_waves * blocks_per_sm * cudf::detail::num_multiprocessors() / num_dictionaries;
-  // Splitting past what covers the largest dictionary in one stride leaves blocks with no rows
-  auto const blocks_to_cover = cudf::util::div_rounding_up_safe(max_dict_rows, block_size);
-  return std::clamp<int>(budget, 1, std::max(blocks_to_cover, size_type{1}));
+  auto const blocks_to_cover =
+    std::max(cudf::util::div_rounding_up_safe(max_dict_rows, block_size), size_type{1});
+  return std::clamp<int>(budget, 1, blocks_to_cover);
 }
 
 /**
@@ -161,9 +157,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     auto const is_valid = cur_row < end_row and col.is_valid(cur_row);
 
     if (is_valid) {
-      // Insert element at cur_row to hash map and count successful insertions. Which of several
-      // equal strings wins a slot depends on block order, but the slot is chosen by string
-      // content, so the dictionary contents and the encoded output are unaffected.
+      // Insert element at cur_row to hash map and count successful insertions
       auto const is_unique = has_map_insert_ref.insert(cuco::pair{cur_row, cur_row});
 
       if (is_unique) {
@@ -184,11 +178,11 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
   if (t == 0) {
     if constexpr (Scope == cuda::thread_scope_block) {
-      // One block per dictionary, so this block owns the counts outright
+      // One block per dictionary, so this block owns the counts
       dict.entry_count = block_entry_count;
       dict.char_count  = block_char_count;
     } else {
-      // Shared with other blocks, so accumulate; the counts are zeroed on the host before launch
+      // Shared with other blocks, so accumulate
       atomicAdd(&dict.entry_count, block_entry_count);
       atomicAdd(&dict.char_count, block_char_count);
     }
@@ -225,9 +219,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   }
 }
 
-/**
- * @brief Looks up the dictionary index of every row of every stripe dictionary.
- */
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
   get_dictionary_indices_kernel(device_2dspan<stripe_dictionary> dictionaries,
@@ -245,8 +236,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto const equality_fn = equality_functor{col};
 
   storage_ref_type const storage_ref{dict.map_slots.size(), dict.map_slots.data()};
-  // The maps are only read here, so block scope stays correct even when several blocks share a
-  // dictionary: the scope governs the atomicity of modifications, and there are none
+  // Make a view of the hash map.
   auto hash_map_ref = cuco::static_map_ref{cuco::empty_key{KEY_SENTINEL},
                                            cuco::empty_value{VALUE_SENTINEL},
                                            equality_fn,
@@ -257,7 +247,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   // Create a map ref with `cuco::find` operator
   auto has_map_find_ref = hash_map_ref.rebind_operators(cuco::find);
 
-  // The y extent need not cover all of the rows; blocks stride until they run out
   auto const end_row = dict.start_row + dict.num_rows;
   auto const first_row =
     dict.start_row + static_cast<thread_index_type>(blockIdx.y) * block_size + threadIdx.x;
@@ -291,7 +280,6 @@ void populate_dictionary_hash_maps(device_2dspan<stripe_dictionary> dictionaries
   dim3 const grid{static_cast<unsigned int>(dictionaries.count()),
                   static_cast<unsigned int>(blocks_per_dict)};
 
-  // Device-scoped inserts are more expensive, so use them only when a dictionary is shared
   if (blocks_per_dict == 1) {
     populate_dictionary_hash_maps_kernel<block_size, cuda::thread_scope_block>
       <<<grid, block_size, 0, stream.get()>>>(dictionaries, columns);
