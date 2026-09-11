@@ -79,8 +79,7 @@ std::unique_ptr<column> murmurhash3_x86_32(
  * resolutions are rejected.
  *
  * LIST columns whose child is a STRUCT are not supported yet, and a non-empty table containing
- * one is rejected. Row preprocessing only decomposes top level structs, so a struct nested in a
- * list still carries every child and the hasher has no single child to descend into.
+ * one is rejected.
  *
  * @param input The table of columns to hash
  * @param seed Optional initial seed value, interpreted as unsigned. Defaults to `DEFAULT_HASH_SEED`
