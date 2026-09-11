@@ -446,12 +446,12 @@ TEST_F(SparkMurmurHashTest, Decimal128RepresentationBoundaries)
 {
   auto const two_to_64 = static_cast<__int128_t>(1) << 64;
   cudf::test::fixed_point_column_wrapper<__int128_t> const input(
-    {(static_cast<__int128_t>(1) << 32) + 0xff,
-     static_cast<__int128_t>(128),
-     static_cast<__int128_t>(127),
-     static_cast<__int128_t>(-129),
-     two_to_64,
-     two_to_64 - 1},
+    {(static_cast<__int128_t>(1) << 32) + 0xff,  // 5 bytes: one block plus a high-bit tail.
+     static_cast<__int128_t>(128),   // 2 bytes: first positive value needing a sign byte.
+     static_cast<__int128_t>(127),   // 1 byte: just before needing a sign byte.
+     static_cast<__int128_t>(-129),  // 2 bytes: a negative value just beyond the one-byte range.
+     two_to_64,                      // 9 bytes: crosses the 64-bit magnitude boundary.
+     two_to_64 - 1},                 // 9 bytes: eight value bytes plus a leading sign byte.
     numeric::scale_type{0});
   // Expected values were generated with Spark's Murmur3HashFunction over DecimalType values.
   cudf::test::fixed_width_column_wrapper<int32_t> const expected{
