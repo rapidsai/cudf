@@ -42,6 +42,16 @@ namespace test {
 template <typename T, typename SourceElementT>
 class lists_column_wrapper;
 
+template <typename Iterator>
+concept iterator_like = requires(Iterator i) {
+  *i;
+  ++i;
+};
+
+template <typename Iterator>
+concept validity_iterator =
+  iterator_like<Iterator> && requires(Iterator i) { static_cast<bool>(*i); };
+
 /**
  * @brief Host-side recursive initializer tree for constructing list columns with an
  * explicit stream and memory resources at every nesting level.
@@ -104,11 +114,7 @@ class lists_column_initializer {
       });
   }
 
-  template <typename InputIterator>
-    requires requires(InputIterator i) {
-      *i;
-      ++i;
-    }
+  template <iterator_like InputIterator>
   lists_column_initializer(InputIterator begin, InputIterator end) : values_(begin, end)
   {
   }
@@ -120,14 +126,10 @@ class lists_column_initializer {
    * @param values Leaf element values
    * @param v Validity iterator over `values.size()` elements
    */
-  template <typename ValidityIterator>
-    requires requires(ValidityIterator i) {
-      *i;
-      ++i;
-    }
+  template <validity_iterator ValidityIterator>
   lists_column_initializer(std::initializer_list<T> values, ValidityIterator v)
     requires(!std::is_same_v<T, std::string>)
-    : values_{values}
+    : values_{values}, has_validity_{true}
   {
     value_validity_.reserve(values_.size());
     for (std::size_t i = 0; i < values_.size(); ++i) {
@@ -135,12 +137,10 @@ class lists_column_initializer {
     }
   }
 
-  template <typename ValidityIterator>
+  template <validity_iterator ValidityIterator>
   lists_column_initializer(std::initializer_list<string_element> values, ValidityIterator v)
-    requires(std::is_same_v<T, std::string> && requires(ValidityIterator i) {
-      *i;
-      ++i;
-    })
+    requires(std::is_same_v<T, std::string>)
+    : has_validity_{true}
   {
     values_.reserve(values.size());
     value_validity_.reserve(values.size());
@@ -186,7 +186,7 @@ class lists_column_initializer {
     return lists_column_initializer(children);
   }
 
-  template <typename ValidityIterator>
+  template <validity_iterator ValidityIterator>
   static lists_column_initializer nested(std::initializer_list<lists_column_initializer> children,
                                          ValidityIterator v)
   {
@@ -200,10 +200,9 @@ class lists_column_initializer {
    * @param children Child list initializers
    * @param v Validity iterator over `children.size()` rows
    */
-  template <typename ValidityIterator, typename NestedInit = lists_column_initializer>
+  template <validity_iterator ValidityIterator, typename NestedInit = lists_column_initializer>
   lists_column_initializer(std::initializer_list<NestedInit> children, ValidityIterator v)
-    requires(std::is_same_v<NestedInit, lists_column_initializer> &&
-             std::is_convertible_v<std::iter_reference_t<ValidityIterator>, bool>)
+    requires(std::is_same_v<NestedInit, lists_column_initializer>)
     : nested_{true}, has_validity_{true}
   {
     children_.reserve(children.size());
@@ -242,6 +241,11 @@ class lists_column_initializer {
    */
   [[nodiscard]] auto const& value_validity() const { return value_validity_; }
   /**
+   * @brief True if validity was explicitly provided.
+   * @return Whether this initializer has explicit validity
+   */
+  [[nodiscard]] bool has_validity() const { return has_validity_; }
+  /**
    * @brief Child initializers when `nested()` is true.
    * @return Reference to the child initializers
    */
@@ -263,26 +267,22 @@ class lists_column_initializer {
   template <typename ElementT, typename SourceElementT = ElementT>
   [[nodiscard]] std::pair<std::vector<lists_column_wrapper<ElementT, SourceElementT>>,
                           std::vector<bool>>
-  build(cuda::stream_ref stream, cudf::memory_resources mr) const
+  build(cuda::stream_ref stream, cudf::memory_resources mr) &&
   {
     std::vector<lists_column_wrapper<ElementT, SourceElementT>> children;
     std::vector<bool> validity;
     children.reserve(children_.size());
     validity.reserve(children_.size());
-    for (auto const& child : children_) {
+    for (auto&& child : children_) {
       validity.push_back(child.valid());
-      children.emplace_back(child, stream, mr);
+      children.emplace_back(std::move(child), stream, mr);
     }
     return {std::move(children), has_validity_ ? std::move(validity) : std::vector<bool>{}};
   }
 
  private:
-  template <typename ValidityIterator>
+  template <validity_iterator ValidityIterator>
   lists_column_initializer with_validity(ValidityIterator validity) &&
-    requires requires(ValidityIterator i) {
-      static_cast<bool>(*i);
-      ++i;
-    }
   {
     has_validity_ = true;
     if (nested_) {
@@ -343,7 +343,7 @@ class lists_column_wrapper : public detail::column_wrapper {
     return initializer_type::nested(children);
   }
 
-  template <typename ValidityIterator>
+  template <validity_iterator ValidityIterator>
   static initializer_type nested(std::initializer_list<initializer_type> children,
                                  ValidityIterator validity)
   {
@@ -673,7 +673,7 @@ class lists_column_wrapper : public detail::column_wrapper {
     : column_wrapper{}
   {
     if (!init.nested()) {
-      if (init.value_validity().empty()) {
+      if (!init.has_validity()) {
         *this = lists_column_wrapper(init.values().begin(), init.values().end(), stream, mr);
       } else {
         *this = lists_column_wrapper(
@@ -688,19 +688,15 @@ class lists_column_wrapper : public detail::column_wrapper {
       return;
     }
 
-    auto [children, validity] = init.template build<T, SourceElementT>(stream, mr);
+    auto [children, validity] = std::move(init).template build<T, SourceElementT>(stream, mr);
     build_from_nested(children, validity, stream, mr);
   }
 
-  template <typename ValidityIterator>
+  template <validity_iterator ValidityIterator>
   lists_column_wrapper(initializer_type init,
                        ValidityIterator validity,
                        cuda::stream_ref stream   = cudf::test::get_default_stream(),
                        cudf::memory_resources mr = cudf::get_current_device_resource_ref())
-    requires requires(ValidityIterator i) {
-      static_cast<bool>(*i);
-      ++i;
-    }
     : lists_column_wrapper(std::move(init).with_validity(validity), stream, mr)
   {
   }
@@ -713,14 +709,14 @@ class lists_column_wrapper : public detail::column_wrapper {
    * @param mr Memory resources used to allocate the returned column
    * @return A list column containing a single empty row
    */
-  static lists_column_wrapper<T> make_one_empty_row_column(
+  static lists_column_wrapper make_one_empty_row_column(
     bool valid                = true,
     cuda::stream_ref stream   = cudf::test::get_default_stream(),
     cudf::memory_resources mr = cudf::get_current_device_resource_ref())
   {
     cudf::test::fixed_width_column_wrapper<int32_t> offsets({0, 0}, stream, mr);
-    cudf::test::fixed_width_column_wrapper<int> values{};
-    return lists_column_wrapper<T>(
+    leaf_wrapper_t values(std::initializer_list<host_element_t>{}, stream, mr);
+    return lists_column_wrapper(
       1,
       offsets.release(),
       values.release(),

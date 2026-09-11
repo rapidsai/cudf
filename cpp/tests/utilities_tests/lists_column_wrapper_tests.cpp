@@ -1606,3 +1606,25 @@ TEST_F(ListsColumnInitializerHarnessTest, SingleChildNestedInitUsesExplicitResou
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *built, expected, cudf::test::debug_output_level::FIRST_ERROR, st, mr);
 }
+
+TEST_F(ListsColumnInitializerHarnessTest, EmptyStringRowUsesExplicitResources)
+{
+  using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+
+  auto const st = this->stream();
+  auto const mr = this->resources();
+
+  std::unique_ptr<cudf::column> built;
+  {
+    auto fail_on_current = this->harness().fail_on_current_device_resource_use();
+    auto list            = LCW::make_one_empty_row_column(false, st, mr);
+    this->harness().synchronize(st);
+    built = list.release();
+  }
+
+  cudf::lists_column_view list{*built};
+  EXPECT_EQ(list.size(), 1);
+  EXPECT_EQ(list.null_count(), 1);
+  EXPECT_EQ(list.child().type().id(), cudf::type_id::STRING);
+  EXPECT_EQ(list.child().size(), 0);
+}
