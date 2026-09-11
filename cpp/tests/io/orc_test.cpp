@@ -653,19 +653,14 @@ TEST_F(OrcWriterTest, negTimestampsNano)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
-// Tests for the `writer_timezone` option.
-//
-// ORC timestamps are wall-clock values, stored relative to the ORC epoch as it occurs in the
-// writer's timezone. A reader adds that epoch back and then shifts by the writer's offset, so for a
-// file written with timezone `W` holding instant `I`, cudf's reader returns `I + offset(W, I)`, and
-// a reader that ignores `writerTimezone` returns `I + offset(W, 2015-01-01)`. The tests below pin
-// both, which is what distinguishes a correctly re-based data stream from one that only carries the
-// timezone name in its footer.
+// Tests for the `writer_timezone` option. ORC timestamps are wall-clock values, stored relative to
+// the ORC epoch as it occurs in the writer's timezone, so reading a file written with timezone `W`
+// holding instant `I` gives `I + offset(W, I)`, or `I + offset(W, 2015-01-01)` when the timezone is
+// ignored. The tests pin both, which is what a footer-only change would fail.
 namespace {
 // Offsets from UT at the ORC epoch, 2015-01-01
-constexpr int64_t shanghai_offset = 8 * 60 * 60;
-constexpr int64_t new_york_offset = -5 * 60 * 60;
-// America/New_York is on daylight saving time in July
+constexpr int64_t shanghai_offset     = 8 * 60 * 60;
+constexpr int64_t new_york_offset     = -5 * 60 * 60;
 constexpr int64_t new_york_dst_offset = -4 * 60 * 60;
 
 std::vector<char> write_orc_with_timezone(cudf::table_view const& table,
@@ -697,7 +692,6 @@ TEST_F(OrcWriterTest, WriterTimezoneDefaultsToUtc)
     column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{-3000, -1, 0, 1, 1420070400};
   table_view expected({timestamps});
 
-  // The default must not change the output at all, down to the bytes
   auto const with_default = write_orc_with_timezone(expected, std::nullopt);
   auto const with_utc     = write_orc_with_timezone(expected, "UTC");
   EXPECT_EQ(with_default, with_utc);
@@ -728,8 +722,7 @@ TEST_F(OrcWriterTest, WriterTimezoneNonUtc)
 
 TEST_F(OrcWriterTest, WriterTimezoneUsesFixedEpochOffsetAcrossDst)
 {
-  // 2015-01-15T12:00:00Z and 2015-07-01T12:00:00Z: standard time and daylight saving time in
-  // America/New_York
+  // 2015-01-15T12:00:00Z (standard time) and 2015-07-01T12:00:00Z (daylight saving time)
   auto const winter     = cudf::timestamp_s::rep{1421323200};
   auto const summer     = cudf::timestamp_s::rep{1435752000};
   auto const timestamps = column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{winter, summer};
@@ -737,8 +730,7 @@ TEST_F(OrcWriterTest, WriterTimezoneUsesFixedEpochOffsetAcrossDst)
 
   auto const buffer = write_orc_with_timezone(input, "America/New_York");
 
-  // The stored values are re-based on the offset at the ORC epoch, which is a single value for the
-  // whole file; reading without the timezone exposes exactly that.
+  // The whole file is re-based on the offset at the ORC epoch, which ignoring the timezone exposes
   auto const stored = column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
     winter + new_york_offset, summer + new_york_offset};
   CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({stored}), read_orc_buffer(buffer, true).tbl->view());
@@ -782,9 +774,7 @@ TEST_F(OrcWriterTest, WriterTimezoneStatistics)
     return std::get<cudf::io::timestamp_statistics>(stats.file_stats[1].type_specific_stats);
   };
 
-  // Statistics are the input instants and do not depend on the writer timezone: only the data
-  // stream is re-based on the writer's epoch, matching Apache, which writes instant statistics
-  // alongside a re-based stream for a UTC-valued column.
+  // Statistics are the input instants regardless of the timezone; only the data stream is re-based
   for (auto const& timezone :
        {std::optional<std::string>{std::nullopt}, std::optional<std::string>{"Asia/Shanghai"}}) {
     auto const stats = timestamp_stats(timezone);
