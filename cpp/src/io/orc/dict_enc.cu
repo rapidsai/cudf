@@ -93,10 +93,6 @@ using probing_scheme_type = cuco::linear_probing<map_cg_size, hash_functor>;
 
 /**
  * @brief Number of blocks to assign to each stripe dictionary.
- *
- * Splitting a dictionary keeps one block from having to work through a whole stripe, but extra
- * blocks sharing a hash map cost locality and atomic contention, so the split collapses to one
- * block per dictionary once the dictionaries alone fill the device.
  */
 template <typename Kernel>
 int blocks_per_dictionary(Kernel kernel,
@@ -104,15 +100,19 @@ int blocks_per_dictionary(Kernel kernel,
                           std::size_t num_dictionaries,
                           size_type max_dict_rows)
 {
-  // How many times over to fill the device before splitting a dictionary any further. Chosen
-  // empirically to speed up narrow tables without slowing down wide ones.
+  // Splitting a dictionary keeps one block from working through a whole stripe, but only pays off
+  // while there are idle SMs. Fill the device this many times over before splitting any further;
+  // chosen empirically to speed up narrow tables without slowing down wide ones.
   constexpr int target_waves = 4;
 
   int blocks_per_sm = 0;
   CUDF_CUDA_TRY(
     cudaOccupancyMaxActiveBlocksPerMultiprocessor(&blocks_per_sm, kernel, block_size, 0));
+  // Blocks sharing a hash map cost locality and atomic contention, so this drops to one block per
+  // dictionary once the dictionaries alone fill the device
   auto const budget =
     target_waves * blocks_per_sm * cudf::detail::num_multiprocessors() / num_dictionaries;
+  // Splitting past what covers the largest dictionary in one stride leaves blocks with no rows
   auto const blocks_to_cover = cudf::util::div_rounding_up_safe(max_dict_rows, block_size);
   return std::clamp<int>(budget, 1, std::max(blocks_to_cover, size_type{1}));
 }
