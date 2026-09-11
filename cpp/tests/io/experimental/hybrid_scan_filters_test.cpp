@@ -1338,8 +1338,8 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
   }
 
   {
-    // Filtering - table[0] == 1000 or table[0] < 100. Dictionary membership cannot evaluate the
-    // second operand of the disjunction, so no row group is pruned
+    // Filtering - table[0] == 1000 or table[0] < 100. Dictionaries cannot evaluate table[0] < 100
+    // so the filter cannot prune anything.
     auto uint_literal_value  = cudf::numeric_scalar<T>(1000, true, stream);
     auto uint_literal_value2 = cudf::numeric_scalar<T>(100, true, stream);
     auto uint_literal        = cudf::ast::literal(uint_literal_value);
