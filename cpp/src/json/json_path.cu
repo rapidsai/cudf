@@ -372,7 +372,7 @@ class json_state : private parser {
       return result;
     }
 
-    // a name is present, so the next char must be a :
+    // a name is present, so the next non-whitespace char must be a ':'
     if (!parse_whitespace()) { return parse_result::ERROR; }
     if (*pos == ':') {
       pos++;
