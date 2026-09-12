@@ -37,6 +37,7 @@
 #include <functional>
 #include <future>
 #include <iterator>
+#include <limits>
 #include <numeric>
 #include <optional>
 #include <regex>
@@ -45,6 +46,34 @@
 #include <utility>
 
 namespace cudf::io::parquet::detail {
+
+// Compute the page index (column index and/or offset index) byte range
+text::byte_range_info page_index_byte_range(FileMetaData const& file_metadata)
+{
+  int64_t min_offset       = std::numeric_limits<int64_t>::max();
+  int64_t max_offset       = 0;
+  auto const include_index = [&](int64_t offset, int32_t length) {
+    if (offset > 0 and length > 0) {
+      CUDF_EXPECTS(offset <= std::numeric_limits<int64_t>::max() - length,
+                   "Parquet page index range exceeds the supported offset range",
+                   std::invalid_argument);
+      min_offset = std::min(min_offset, offset);
+      max_offset = std::max(max_offset, offset + length);
+    }
+  };
+
+  // Indexes are optional for each column chunk. The first and last chunks need not have either
+  // index, so inspect all chunks to include every index that setup_page_index will parse.
+  for (auto const& row_group : file_metadata.row_groups) {
+    for (auto const& column : row_group.columns) {
+      include_index(column.column_index_offset, column.column_index_length);
+      include_index(column.offset_index_offset, column.offset_index_length);
+    }
+  }
+
+  return max_offset > min_offset ? text::byte_range_info{min_offset, max_offset - min_offset}
+                                 : text::byte_range_info{};
+}
 
 std::size_t derive_pass_read_limit(std::size_t chunk_read_limit)
 {
@@ -529,19 +558,22 @@ metadata::metadata(datasource* source, bool read_page_indexes)
   auto const has_strings = std::any_of(
     schema.begin(), schema.end(), [](auto const& elem) { return elem.type == Type::BYTE_ARRAY; });
 
-  if (read_page_indexes and has_strings and not row_groups.empty() and
-      not row_groups.front().columns.empty()) {
-    // column index and offset index are encoded back to back.
-    // the first column of the first row group will have the first column index, the last
-    // column of the last row group will have the final offset index.
-    int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
-    auto const& last_col     = row_groups.back().columns.back();
-    int64_t const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
+  // Without offset indexes the decode paths cannot use column-index-derived information.
+  auto const has_offset_index =
+    std::any_of(row_groups.begin(), row_groups.end(), [](auto const& rg) {
+      return std::any_of(rg.columns.begin(), rg.columns.end(), [](auto const& col) {
+        return col.offset_index_offset > 0 and col.offset_index_length > 0;
+      });
+    });
 
-    if (max_offset > min_offset) {
-      size_t const length     = max_offset - min_offset;
-      auto const page_idx_buf = source->host_read(min_offset, length);
-      setup_page_index({page_idx_buf->data(), length}, min_offset);
+  if (read_page_indexes and has_strings and has_offset_index) {
+    auto const page_index_range = page_index_byte_range(*this);
+    if (not page_index_range.is_empty()) {
+      auto const page_idx_buf =
+        source->host_read(page_index_range.offset(), page_index_range.size());
+      CUDF_EXPECTS(std::cmp_equal(page_idx_buf->size(), page_index_range.size()),
+                   "Encountered an invalid page index buffer");
+      setup_page_index({page_idx_buf->data(), page_idx_buf->size()}, page_index_range.offset());
     }
   }
 
