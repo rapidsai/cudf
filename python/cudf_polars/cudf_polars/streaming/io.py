@@ -49,6 +49,7 @@ if TYPE_CHECKING:
     from cudf_polars.containers import DataType
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import CachedParquetInfo, IRExecutionContext
+    from cudf_polars.dsl.utils.per_path import PerPathValues
     from cudf_polars.streaming.base import (
         DataSourceInfo,
         SerializedDataSourceInfo,
@@ -210,6 +211,7 @@ def hybrid_scan_eligible(
     row_index: tuple[str, int] | None,
     include_file_paths: str | None,
     predicate: NamedExpr | None,
+    hive_parts: PerPathValues | None,
 ) -> bool:
     """Whether a parquet split is eligible for the HybridScanReader path."""
     return (
@@ -218,6 +220,8 @@ def hybrid_scan_eligible(
         and row_index is None
         and include_file_paths is None
         and predicate is not None
+        # TODO: Support hive partitioning
+        and hive_parts is None
     )
 
 
@@ -360,6 +364,7 @@ class SplitScan(IR):
     __slots__ = (
         "base_scan",
         "cached_parquet_info",
+        "hive_parts",
         "parquet_options",
         "paths",
         "schema",
@@ -373,8 +378,9 @@ class SplitScan(IR):
         "split_index",
         "total_splits",
         "parquet_options",
+        "hive_parts",
     )
-    _n_non_child_args = 13
+    _n_non_child_args = 14
     base_scan: Scan
     """Scan operation this node is based on."""
     paths: list[str]
@@ -385,6 +391,8 @@ class SplitScan(IR):
     """Total number of splits."""
     parquet_options: ParquetOptions
     """Parquet-specific options."""
+    hive_parts: PerPathValues | None
+    """Hive partition values for this split's path."""
     cached_parquet_info: list[CachedParquetInfo] | None
 
     def __init__(
@@ -395,6 +403,7 @@ class SplitScan(IR):
         split_index: int,
         total_splits: int,
         parquet_options: ParquetOptions,
+        hive_parts: PerPathValues | None = None,
         cached_parquet_info: list[CachedParquetInfo] | None = None,
     ):
         self.schema = schema
@@ -416,9 +425,11 @@ class SplitScan(IR):
             base_scan.include_file_paths,
             base_scan.predicate,
             parquet_options,
+            hive_parts,
             cached_parquet_info,
         )
         self.parquet_options = parquet_options
+        self.hive_parts = hive_parts
         self.cached_parquet_info = cached_parquet_info
         self.children = ()
         if base_scan.typ not in ("parquet",):  # pragma: no cover
@@ -436,6 +447,7 @@ class SplitScan(IR):
             self.split_index,
             self.total_splits,
             self.parquet_options,
+            self.hive_parts,
         )
 
     @classmethod
@@ -454,6 +466,7 @@ class SplitScan(IR):
         include_file_paths: str | None,
         predicate: NamedExpr | None,
         parquet_options: ParquetOptions,
+        hive_parts: PerPathValues | None,
         cached_parquet_info: list[CachedParquetInfo] | None,
         *,
         context: IRExecutionContext,
@@ -512,6 +525,7 @@ class SplitScan(IR):
                 row_index=row_index,
                 include_file_paths=include_file_paths,
                 predicate=predicate,
+                hive_parts=hive_parts,
             ):
                 assert predicate is not None
                 assert cached_parquet_info is not None
@@ -569,7 +583,8 @@ class SplitScan(IR):
                 include_file_paths,
                 predicate,
                 parquet_options,
-                cached_parquet_info,
+                hive_parts=hive_parts,
+                cached_parquet_info=cached_parquet_info,
                 context=context,
             )
 
@@ -587,6 +602,7 @@ class FusedScan(IR):
     __slots__ = (
         "base_scan",
         "cached_parquet_info",
+        "hive_parts",
         "parquet_options",
         "paths",
         "schema",
@@ -596,14 +612,17 @@ class FusedScan(IR):
         "base_scan",
         "paths",
         "parquet_options",
+        "hive_parts",
     )
-    _n_non_child_args = 11
+    _n_non_child_args = 12
     base_scan: Scan
     """Scan operation this node is based on."""
     paths: list[str]
     """File paths assigned to this task."""
     parquet_options: ParquetOptions
     """Parquet-specific options."""
+    hive_parts: PerPathValues | None
+    """Hive partition values for this task's paths."""
     cached_parquet_info: list[CachedParquetInfo] | None
     """Cached parquet metadata."""
 
@@ -613,12 +632,14 @@ class FusedScan(IR):
         base_scan: Scan,
         paths: list[str],
         parquet_options: ParquetOptions,
+        hive_parts: PerPathValues | None = None,
         cached_parquet_info: list[CachedParquetInfo] | None = None,
     ):
         self.schema = schema
         self.base_scan = base_scan
         self.paths = paths
         self.parquet_options = parquet_options
+        self.hive_parts = hive_parts
         self.cached_parquet_info = cached_parquet_info
         self._non_child_args = (
             base_scan.schema,
@@ -632,6 +653,7 @@ class FusedScan(IR):
             base_scan.include_file_paths,
             base_scan.predicate,
             parquet_options,
+            hive_parts,
             cached_parquet_info,
         )
         self.children = ()
@@ -644,6 +666,7 @@ class FusedScan(IR):
             self.base_scan.get_hashable(),
             tuple(self.paths),
             self.parquet_options,
+            self.hive_parts,
         )
 
     @classmethod
@@ -660,6 +683,7 @@ class FusedScan(IR):
         include_file_paths: str | None,
         predicate: NamedExpr | None,
         parquet_options: ParquetOptions,
+        hive_parts: PerPathValues | None,
         cached_parquet_info: list[CachedParquetInfo] | None,
         *,
         context: IRExecutionContext,
@@ -678,7 +702,8 @@ class FusedScan(IR):
                 include_file_paths,
                 predicate,
                 parquet_options,
-                cached_parquet_info,
+                hive_parts=hive_parts,
+                cached_parquet_info=cached_parquet_info,
                 context=context,
             )
 
@@ -799,7 +824,12 @@ class StreamingScan(IR):
         sindex = local_offset % plan.factor
         scans: list[SplitScan] = []
         splits_created = 0
-        for path in local_paths:
+        for path_index, path in enumerate(local_paths, start=path_offset):
+            hive_parts = (
+                None
+                if base_scan.hive_parts is None
+                else base_scan.hive_parts.slice(path_index, path_index + 1)
+            )
             while sindex < plan.factor and splits_created < local_count:
                 scans.append(
                     SplitScan(
@@ -809,6 +839,7 @@ class StreamingScan(IR):
                         sindex,
                         plan.factor,
                         parquet_options,
+                        hive_parts,
                         None,
                     )
                 )
@@ -838,6 +869,9 @@ class StreamingScan(IR):
                 base_scan,
                 base_scan.paths[offset : offset + plan.factor],
                 parquet_options,
+                None
+                if base_scan.hive_parts is None
+                else base_scan.hive_parts.slice(offset, offset + plan.factor),
                 None,
             )
             for offset in range(paths_start, paths_end, plan.factor)
