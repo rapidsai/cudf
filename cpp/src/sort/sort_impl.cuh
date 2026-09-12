@@ -10,6 +10,10 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/row_operator/lexicographic.cuh>
+#include <cudf/detail/row_operator/primitive_lexicographic.cuh>
+#include <cudf/detail/utilities/cuda.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -81,6 +85,21 @@ std::unique_ptr<column> sorted_order(table_view input,
                    comparator);
     }
   };
+
+  if (is_primitive_row_op_compatible(input)) {
+    auto const d_table = table_device_view::create(input, stream);
+    auto const d_column_order =
+      make_device_uvector_async(column_order, stream, cudf::get_current_device_resource_ref());
+    auto const d_null_precedence =
+      make_device_uvector_async(null_precedence, stream, cudf::get_current_device_resource_ref());
+    if (not column_order.empty() or not null_precedence.empty()) {
+      // Finish copying the host policies before the caller can release them after this call.
+      cudf::detail::sync_stream(stream);
+    }
+    do_sort(row::lexicographic::less_comparator{row::primitive::row_lexicographic_comparator{
+      nullate::DYNAMIC{has_nulls(input)}, *d_table, d_column_order, d_null_precedence}});
+    return sorted_indices;
+  }
 
   auto const comp =
     cudf::detail::row::lexicographic::self_comparator(input, column_order, null_precedence, stream);
