@@ -1,16 +1,23 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <tests/groupby/groupby_test_util.hpp>
 
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/default_stream.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/aggregation.hpp>
+#include <cudf/sorting.hpp>
+
+#include <cuda/iterator>
+
+#include <vector>
 
 using namespace cudf::test::iterators;
 
@@ -105,6 +112,68 @@ TYPED_TEST(groupby_keys_test, include_null_keys)
                   std::move(agg),
                   force_use_sort_impl::NO,
                   cudf::null_policy::INCLUDE);
+}
+
+TYPED_TEST(groupby_keys_test, distinct_keys_with_nullable_values)
+{
+  using K = TypeParam;
+  cudf::test::fixed_width_column_wrapper<K> keys({3, 1, 0, 2}, {1, 1, 0, 1});
+  cudf::test::fixed_width_column_wrapper<int32_t> vals({30, 99, 7, 20}, {1, 0, 1, 1});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> included_counts{1, 0, 1, 1};
+
+  cudf::test::fixed_width_column_wrapper<K> excluded_keys({1, 2, 3}, no_nulls());
+  cudf::test::fixed_width_column_wrapper<int32_t> excluded_vals({0, 20, 30}, {0, 1, 1});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> excluded_counts{0, 1, 1};
+
+  // Including the null key yields one group per input row; excluding it must omit that row.
+  for (auto null_handling : {cudf::null_policy::INCLUDE, cudf::null_policy::EXCLUDE}) {
+    auto const include_null   = null_handling == cudf::null_policy::INCLUDE;
+    auto const& expect_keys   = include_null ? keys : excluded_keys;
+    auto const& expect_vals   = include_null ? vals : excluded_vals;
+    auto const& expect_counts = include_null ? included_counts : excluded_counts;
+    test_single_agg(keys,
+                    vals,
+                    expect_keys,
+                    expect_vals,
+                    cudf::make_max_aggregation<cudf::groupby_aggregation>(),
+                    force_use_sort_impl::NO,
+                    null_handling);
+    test_single_agg(
+      keys,
+      vals,
+      expect_keys,
+      expect_counts,
+      cudf::make_count_aggregation<cudf::groupby_aggregation>(cudf::null_policy::EXCLUDE),
+      force_use_sort_impl::NO,
+      null_handling);
+  }
+}
+
+TYPED_TEST(groupby_keys_test, one_duplicate_key_with_nullable_values)
+{
+  using K = TypeParam;
+  // Exactly one repeated key gives one fewer group than input rows, including the null key.
+  cudf::test::fixed_width_column_wrapper<K> keys({3, 1, 0, 3}, {1, 1, 0, 1});
+  cudf::test::fixed_width_column_wrapper<int32_t> vals({30, 99, 7, 20}, {1, 0, 1, 1});
+  cudf::test::fixed_width_column_wrapper<K> expect_keys({1, 3, 0}, {1, 1, 0});
+  cudf::test::fixed_width_column_wrapper<int32_t> expect_vals({0, 30, 7}, {0, 1, 1});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expect_counts{0, 2, 1};
+
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals,
+                  cudf::make_max_aggregation<cudf::groupby_aggregation>(),
+                  force_use_sort_impl::NO,
+                  cudf::null_policy::INCLUDE);
+  test_single_agg(
+    keys,
+    vals,
+    expect_keys,
+    expect_counts,
+    cudf::make_count_aggregation<cudf::groupby_aggregation>(cudf::null_policy::EXCLUDE),
+    force_use_sort_impl::NO,
+    cudf::null_policy::INCLUDE);
 }
 
 TYPED_TEST(groupby_keys_test, pre_sorted_keys)
@@ -406,4 +475,122 @@ TEST_F(groupby_cache_test, duplicate_columns)
   requests[0].aggregations.push_back(
     cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0));
   EXPECT_NO_THROW(gb_obj.aggregate(requests));
+}
+
+using groupby_sampling_test = groupby_keys_test<int32_t>;
+
+TEST_F(groupby_sampling_test, NearlyDistinctSampleUnderestimatesPopulation)
+{
+  constexpr cudf::size_type num_rows    = 1 << 21;
+  constexpr cudf::size_type stride      = 64;
+  constexpr cudf::size_type sample_keys = 31'000;
+  constexpr cudf::size_type num_samples = num_rows / stride;
+
+  // The periodic sample is almost entirely distinct, but still has far fewer keys than the
+  // complete input. Every row outside the sample has a unique key. An undersized table must
+  // restart the build without dropping rows or duplicating groups.
+  std::vector<int32_t> keys_data(num_rows);
+  std::vector<int32_t> expected_keys;
+  std::vector<cudf::size_type> expected_counts;
+  std::vector<int32_t> expected_maxima;
+  expected_keys.reserve(num_rows - num_samples + sample_keys);
+  expected_counts.reserve(num_rows - num_samples + sample_keys);
+  expected_maxima.reserve(num_rows - num_samples + sample_keys);
+  for (cudf::size_type key = 0; key < sample_keys; ++key) {
+    expected_keys.push_back(key);
+    expected_counts.push_back(num_samples / sample_keys + (key < num_samples % sample_keys));
+    auto const last_sample = key + ((num_samples - 1 - key) / sample_keys) * sample_keys;
+    expected_maxima.push_back(last_sample * stride);
+  }
+  for (cudf::size_type row = 0; row < num_rows; ++row) {
+    if (row % stride == 0) {
+      keys_data[row] = (row / stride) % sample_keys;
+    } else {
+      keys_data[row] = sample_keys + row;
+      expected_keys.push_back(keys_data[row]);
+      expected_counts.push_back(1);
+      expected_maxima.push_back(row);
+    }
+  }
+
+  auto const keys =
+    cudf::test::fixed_width_column_wrapper<int32_t>(keys_data.begin(), keys_data.end());
+  auto const expect_keys =
+    cudf::test::fixed_width_column_wrapper<int32_t>(expected_keys.begin(), expected_keys.end());
+  auto const expect_counts = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
+    expected_counts.begin(), expected_counts.end());
+  test_single_agg(keys,
+                  keys,
+                  expect_keys,
+                  expect_counts,
+                  cudf::make_count_aggregation<cudf::groupby_aggregation>());
+
+  // COUNT only needs the group offsets. MAX of the row indices also verifies that the retry
+  // rebuilt the row positions and filled the grouped row order correctly.
+  auto const values = cudf::test::fixed_width_column_wrapper<int32_t>(
+    cuda::counting_iterator<int32_t>{0}, cuda::counting_iterator<int32_t>{num_rows});
+  auto const expect_maxima =
+    cudf::test::fixed_width_column_wrapper<int32_t>(expected_maxima.begin(), expected_maxima.end());
+  test_single_agg(keys,
+                  values,
+                  expect_keys,
+                  expect_maxima,
+                  cudf::make_max_aggregation<cudf::groupby_aggregation>());
+
+  // Without requests the retry rebuilds the representative key rows instead of group slots.
+  cudf::groupby::groupby gb_obj(cudf::table_view({keys}));
+  auto const result = gb_obj.aggregate({}, cudf::test::get_default_stream());
+  auto const sorted_keys =
+    cudf::sort(result.first->view(), {}, {}, cudf::test::get_default_stream());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect_keys, sorted_keys->view().column(0));
+  EXPECT_TRUE(result.second.empty());
+}
+
+TEST_F(groupby_sampling_test, NullableMaxConsumesFullPackedSegment)
+{
+  constexpr cudf::size_type num_groups       = 1'000;
+  constexpr cudf::size_type long_group_rows  = 1'024;
+  constexpr cudf::size_type short_group_rows = 5;
+  constexpr cudf::size_type num_rows = long_group_rows + (num_groups - 1) * short_group_rows;
+
+  // Groups average six rows, but fewer than one in four values is valid. The density hint
+  // chooses one thread per segment; it must still consume all 1,024 rows of the longest group.
+  std::vector<int32_t> keys_data;
+  std::vector<double> values_data;
+  std::vector<bool> validity;
+  std::vector<double> expected_maxima;
+  std::vector<bool> expected_validity;
+  keys_data.reserve(num_rows);
+  values_data.reserve(num_rows);
+  validity.reserve(num_rows);
+  expected_maxima.reserve(num_groups);
+  expected_validity.reserve(num_groups);
+
+  for (cudf::size_type group = 0; group < num_groups; ++group) {
+    auto const group_rows = group == 0 ? long_group_rows : short_group_rows;
+    auto const maximum    = static_cast<double>(group * long_group_rows + group_rows - 1);
+    expected_maxima.push_back(maximum);
+    expected_validity.push_back(group != 1);
+    for (cudf::size_type row = 0; row < group_rows; ++row) {
+      auto const valid = group != 1 && row == group_rows - 1;
+      keys_data.push_back(group);
+      // Null payloads exceed every valid maximum, so loading one as valid also fails the test.
+      values_data.push_back(valid ? maximum : 1.0e9);
+      validity.push_back(valid);
+    }
+  }
+
+  auto const keys =
+    cudf::test::fixed_width_column_wrapper<int32_t>(keys_data.begin(), keys_data.end());
+  auto const values = cudf::test::fixed_width_column_wrapper<double>(
+    values_data.begin(), values_data.end(), validity.begin());
+  auto const expect_keys = cudf::test::fixed_width_column_wrapper<int32_t>(
+    cuda::counting_iterator<int32_t>{0}, cuda::counting_iterator<int32_t>{num_groups});
+  auto const expect_maxima = cudf::test::fixed_width_column_wrapper<double>(
+    expected_maxima.begin(), expected_maxima.end(), expected_validity.begin());
+  test_single_agg(keys,
+                  values,
+                  expect_keys,
+                  expect_maxima,
+                  cudf::make_max_aggregation<cudf::groupby_aggregation>());
 }
