@@ -7,6 +7,7 @@ set -euo pipefail
 TIMEOUT_TOOL_PATH="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/timeout_with_stack.py
 
 ENGINE="both"
+BLOCKSIZE="default"
 PYTEST_ARGS=()
 while (($#)); do
     case "$1" in
@@ -22,6 +23,18 @@ while (($#)); do
             ENGINE="${1#*=}"
             shift
             ;;
+        --inject-gpu-engine-blocksize)
+            if (($# < 2)); then
+                echo "Missing value for --inject-gpu-engine-blocksize." >&2
+                exit 2
+            fi
+            BLOCKSIZE="$2"
+            shift 2
+            ;;
+        --inject-gpu-engine-blocksize=*)
+            BLOCKSIZE="${1#*=}"
+            shift
+            ;;
         *)
             PYTEST_ARGS+=("$1")
             shift
@@ -31,6 +44,10 @@ done
 
 if [[ "${ENGINE}" != "both" && "${ENGINE}" != "in-memory" && "${ENGINE}" != "spmd" ]]; then
     echo "Unknown engine: ${ENGINE}. Expected one of: both, in-memory, spmd." >&2
+    exit 2
+fi
+if [[ "${BLOCKSIZE}" != "default" && "${BLOCKSIZE}" != "small" ]]; then
+    echo "Unknown blocksize: ${BLOCKSIZE}. Expected one of: default, small." >&2
     exit 2
 fi
 
@@ -114,7 +131,7 @@ fi
 
 # TODO(ResourceWarning): https://github.com/NVIDIA/cudf/issues/22181
 if [[ "${ENGINE}" == "both" || "${ENGINE}" == "spmd" ]]; then
-    echo "Run polars tests with injected SPMD GPU engine, small blocksize"
+    echo "Run polars tests with injected SPMD GPU engine, ${BLOCKSIZE} blocksize"
     CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE=805306368 \
     CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
     python "${TIMEOUT_TOOL_PATH}" --enable-python 5400 \
@@ -133,5 +150,5 @@ if [[ "${ENGINE}" == "both" || "${ENGINE}" == "spmd" ]]; then
            "${PYTEST_ARGS[@]}" \
            py-polars/tests \
            --inject-gpu-engine spmd \
-           --inject-gpu-engine-blocksize small
+           --inject-gpu-engine-blocksize "${BLOCKSIZE}"
 fi
