@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <format>
 #include <memory>
 #include <numeric>
 #include <random>
@@ -422,8 +423,8 @@ std::vector<uint8_t> build_object(
 // lexicographic order, so key `n` sits at dictionary index `n - 1`.
 std::string item_key(int n)
 {
-  auto const digits = std::to_string(n);
-  return "item" + std::string(3 - digits.size(), '0') + digits;
+  CUDF_EXPECTS(n >= 0 && n < 1000, "item key index does not fit the zero-padded key width");
+  return std::format("item{:03}", n);
 }
 
 // A bare VARIANT short string value.
@@ -847,7 +848,7 @@ struct status_columns {
 
 status_columns make_status_columns(std::size_t num_paths,
                                    cudf::size_type num_rows,
-                                   rmm::cuda_stream_view stream,
+                                   cuda::stream_ref stream,
                                    rmm::device_async_resource_ref mr)
 {
   status_columns out;
@@ -858,10 +859,10 @@ status_columns make_status_columns(std::size_t num_paths,
       cudf::data_type{cudf::type_id::UINT8}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr));
     auto view = out.columns.back()->mutable_view();
     CUDF_CUDA_TRY(
-      cudaMemsetAsync(view.data<uint8_t>(), 0, static_cast<std::size_t>(num_rows), stream.value()));
+      cudaMemsetAsync(view.data<uint8_t>(), 0, static_cast<std::size_t>(num_rows), stream.get()));
     out.views.push_back(view);
   }
-  CUDF_CUDA_TRY(cudaStreamSynchronize(stream.value()));
+  CUDF_CUDA_TRY(cudaStreamSynchronize(stream.get()));
   return out;
 }
 
@@ -906,7 +907,7 @@ static void bench_variant_extract_multi_field(nvbench::state& state)
   std::vector<std::span<uint8_t const>> meta_spans(num_rows, std::span<uint8_t const>{meta_blob});
   auto val_spans = fill_val_rows(num_rows, hit_val, miss_val, hit_rate);
   auto col       = build_variant_column(meta_spans, val_spans, stream, mr);
-  CUDF_CUDA_TRY(cudaStreamSynchronize(stream.value()));
+  CUDF_CUDA_TRY(cudaStreamSynchronize(stream.get()));
 
   std::vector<std::string> path_strings;
   path_strings.reserve(num_fields);
@@ -923,7 +924,7 @@ static void bench_variant_extract_multi_field(nvbench::state& state)
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   mr                    = cudf::get_current_device_resource_ref();
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.get()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
     if (batched) {
       std::ignore = cudf::io::parquet::experimental::extract_variant_fields(
@@ -980,7 +981,7 @@ static void bench_variant_extract_workload(nvbench::state& state)
   std::vector<std::span<uint8_t const>> meta_spans(num_rows, std::span<uint8_t const>{meta_blob});
   std::vector<std::span<uint8_t const>> val_spans(num_rows, std::span<uint8_t const>{val_blob});
   auto col = build_variant_column(meta_spans, val_spans, stream, mr);
-  CUDF_CUDA_TRY(cudaStreamSynchronize(stream.value()));
+  CUDF_CUDA_TRY(cudaStreamSynchronize(stream.get()));
 
   auto const path_strings = workload_paths();
   std::vector<std::string_view> const paths(path_strings.begin(), path_strings.end());
@@ -993,7 +994,7 @@ static void bench_variant_extract_workload(nvbench::state& state)
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   mr                    = cudf::get_current_device_resource_ref();
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.get()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
     if (batched) {
       std::ignore = cudf::io::parquet::experimental::extract_variant_fields(

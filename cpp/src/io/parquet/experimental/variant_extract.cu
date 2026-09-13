@@ -12,6 +12,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -34,6 +35,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/device/device_segmented_reduce.cuh>
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/numeric>
@@ -44,6 +46,7 @@
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
 #include <cuda/stream>
+#include <thrust/scan.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -998,13 +1001,19 @@ __device__ device_span<uint8_t const> slot_span(device_span<uint8_t const> val,
   return val.subspan(result.src_offset, result.size);
 }
 
-// Tries up to this deep are walked with a per-thread stack the compiler can keep in registers or
-// local memory; a deeper one uses a global scratch allocation instead.
+// Tries up to this deep are walked with a per-thread stack in local memory. The stack is indexed
+// by depth at run time, so it cannot live in registers, but local memory is per-thread and the
+// hardware coalesces it across a warp. A deeper trie uses a global scratch allocation instead.
 constexpr size_type max_local_trie_depth = 16;
 
 // Global scratch is allocated per thread, so the grid has to be capped for the allocation to stay
 // independent of the row count. This many blocks still saturates the walk.
 constexpr int max_global_scratch_blocks = 256;
+
+// The block cap alone still scales the allocation with the trie depth, which is bounded only by the
+// number of paths, so the total is capped as well. A trie deep enough to hit this is pathological,
+// and running it on fewer threads is a fair price for a bounded temporary.
+constexpr std::size_t max_global_scratch_bytes = std::size_t{32} * 1024 * 1024;
 
 /**
  * @brief Resolves a whole trie of VARIANT paths in each row, recording each path's result.
@@ -1047,15 +1056,19 @@ CUDF_KERNEL __launch_bounds__(block_size) void locate_variant_field_trie_kernel(
   auto const tid       = cudf::detail::grid_1d::global_thread_id<block_size>();
   auto const stride    = cudf::detail::grid_1d::grid_stride<block_size>();
 
+  // The local stack is private to the thread and indexed directly. Global scratch is depth-major
+  // (`depth * stride + tid`, `stride` being the thread count) so that at each level the threads of
+  // a warp touch consecutive entries, rather than striding by the depth as a thread-major layout
+  // would.
   [[maybe_unused]] cuda::std::array<slot_result, UseLocalScratch ? max_local_trie_depth : 1>
     local_stack;
-  auto* const located = [&]() -> slot_result* {
+  auto located = [&](size_type depth) -> slot_result& {
     if constexpr (UseLocalScratch) {
-      return local_stack.data();
+      return local_stack[depth];
     } else {
-      return d_scratch.data() + tid * trie_depth;
+      return d_scratch[static_cast<std::size_t>(depth) * stride + tid];
     }
-  }();
+  };
 
   for (auto row = tid; row < num_rows; row += stride) {
     bool const row_valid = d_row_valid == nullptr || cudf::bit_is_set(d_row_valid, row);
@@ -1077,26 +1090,27 @@ CUDF_KERNEL __launch_bounds__(block_size) void locate_variant_field_trie_kernel(
       auto const depth = slot_depth[slot];
       // An empty value blob resolves nothing, and a slot under one that did not resolve reports
       // its parent's reason rather than what probing an empty value would say.
-      auto const parent = depth == 0 ? val : slot_span(val, located[depth - 1]);
+      auto const parent = depth == 0 ? val : slot_span(val, located(depth - 1));
       auto const parent_status =
         depth == 0 ? (val.empty() ? op_status::MALFORMED_VARIANT : op_status::SUCCESS)
-                   : located[depth - 1].status;
+                   : located(depth - 1).status;
 
+      auto& result = located(depth);
       if (parent.empty()) {
-        located[depth] = {0, invalid_slot_size, parent_status};
+        result = {0, invalid_slot_size, parent_status};
       } else {
         auto const [field, status] =
           resolve_steps(meta, parent, steps, slot_steps[slot], slot_steps[slot + 1]);
-        located[depth] = make_slot_result(field, val.data(), status);
+        result = make_slot_result(field, val.data(), status);
       }
 
       for (auto out_idx = output_offsets[slot]; out_idx < output_offsets[slot + 1]; ++out_idx) {
         auto const path = output_paths[out_idx];
         auto const out  = path * num_rows + static_cast<size_type>(row);
-        if (!d_statuses.empty()) { d_statuses[path][row] = located[depth].status; }
-        if (slot_is_valid(located[depth])) {
-          d_sizes[out]       = located[depth].size;
-          d_src_offsets[out] = located[depth].src_offset;
+        if (!d_statuses.empty()) { d_statuses[path][row] = result.status; }
+        if (slot_is_valid(result)) {
+          d_sizes[out]       = result.size;
+          d_src_offsets[out] = result.src_offset;
         } else {
           d_sizes[out]       = 0;
           d_src_offsets[out] = 0;
@@ -1304,7 +1318,7 @@ void validate_variant_child(column_view const& child)
 // `input_name` names the column the row count must match, for the error message.
 void validate_status_column(std::optional<mutable_column_view> const& status,
                             size_type num_rows,
-                            std::string const& input_name)
+                            std::string_view input_name)
 {
   if (!status.has_value()) { return; }
   CUDF_EXPECTS(!status->nullable(),
@@ -1313,8 +1327,45 @@ void validate_status_column(std::optional<mutable_column_view> const& status,
   CUDF_EXPECTS(
     status->type().id() == type_id::UINT8, "status column must be UINT8", std::invalid_argument);
   CUDF_EXPECTS(status->size() == num_rows,
-               "status column must have the same number of rows as " + input_name,
+               "status column must have the same number of rows as " + std::string{input_name},
                std::invalid_argument);
+}
+
+// The output types a VARIANT value can be decoded into, i.e. those `cast_variant` dispatches on.
+void validate_cast_type(data_type desired_type)
+{
+  switch (desired_type.id()) {
+    case type_id::INT8:
+    case type_id::INT16:
+    case type_id::INT32:
+    case type_id::INT64:
+    case type_id::FLOAT32:
+    case type_id::FLOAT64:
+    case type_id::BOOL8:
+    case type_id::STRING:
+    case type_id::DECIMAL32:
+    case type_id::DECIMAL64:
+    case type_id::DECIMAL128: break;
+    default: CUDF_FAIL("unsupported type for variant cast", std::invalid_argument);
+  }
+}
+
+// Copy a host array to the device, staging it in pinned memory first.
+//
+// `cuda_memcpy_async` does not necessarily read its source during the call: for a pinned source it
+// launches a copy kernel, and on CUDA 13+ a pageable one goes through `cudaMemcpyBatchAsync` with
+// `cudaMemcpySrcAccessOrderStream`. A pageable `std::vector` that dies when the caller returns is
+// therefore not a safe source. Pinned memory from cudf's pool is released stream-ordered, so a
+// staging buffer stays valid for the copy that reads it even once this function has returned.
+template <typename Container>
+auto stage_to_device_async(Container const& source,
+                           cuda::stream_ref stream,
+                           rmm::device_async_resource_ref mr)
+{
+  auto staged =
+    cudf::detail::make_pinned_vector_async<typename Container::value_type>(source.size(), stream);
+  std::ranges::copy(source, staged.begin());
+  return cudf::detail::make_device_uvector_async(staged, stream, mr);
 }
 
 // The device view of a status buffer, empty when the caller asked for no status.
@@ -1583,6 +1634,11 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
   CUDF_EXPECTS(total_bytes <= std::numeric_limits<size_type>::max(),
                "VARIANT extracted bytes exceed cudf size_type limit",
                std::overflow_error);
+  // Past the large-strings threshold the offsets come back as INT64, which a LIST column cannot
+  // use and which the size_type span below would misread
+  CUDF_EXPECTS(offsets_column->type().id() == type_id::INT32,
+               "VARIANT extracted bytes exceed the list offset limit",
+               std::overflow_error);
   device_span<size_type const> d_offsets{offsets_column->view().data<size_type>(),
                                          static_cast<std::size_t>(num_rows + 1)};
 
@@ -1669,16 +1725,12 @@ std::unique_ptr<table> get_variant_fields(column_view const& variant_column,
 
   auto const temp_mr = cudf::get_current_device_resource_ref();
 
-  auto steps_column      = build_path_column(trie.steps, stream, temp_mr);
-  auto steps_device_view = column_device_view::create(steps_column->view(), stream);
-  auto const d_slot_steps =
-    cudf::detail::make_device_uvector_async(trie.slot_steps, stream, temp_mr);
-  auto const d_slot_depth =
-    cudf::detail::make_device_uvector_async(trie.slot_depth, stream, temp_mr);
-  auto const d_output_offsets =
-    cudf::detail::make_device_uvector_async(trie.output_offsets, stream, temp_mr);
-  auto const d_output_paths =
-    cudf::detail::make_device_uvector_async(trie.output_paths, stream, temp_mr);
+  auto steps_column           = build_path_column(trie.steps, stream, temp_mr);
+  auto steps_device_view      = column_device_view::create(steps_column->view(), stream);
+  auto const d_slot_steps     = stage_to_device_async(trie.slot_steps, stream, temp_mr);
+  auto const d_slot_depth     = stage_to_device_async(trie.slot_depth, stream, temp_mr);
+  auto const d_output_offsets = stage_to_device_async(trie.output_offsets, stream, temp_mr);
+  auto const d_output_paths   = stage_to_device_async(trie.output_paths, stream, temp_mr);
 
   // Resolve children with respect to any slice/offset on the parent struct
   structs_column_view const variant_struct{variant_column};
@@ -1696,8 +1748,10 @@ std::unique_ptr<table> get_variant_fields(column_view const& variant_column,
                               : rmm::device_buffer{};
   auto const* d_row_valid = static_cast<bitmask_type const*>(row_mask.data());
 
-  // Per-path outputs are contiguous, so each path's sizes can be scanned on their own
-  CUDF_EXPECTS(static_cast<int64_t>(num_paths) * num_rows <= std::numeric_limits<size_type>::max(),
+  // Per-path outputs are contiguous, so each path's sizes can be scanned on their own. The scan
+  // below runs over one extra element per path, so bound that rather than just the output count.
+  CUDF_EXPECTS(static_cast<int64_t>(num_paths) * (static_cast<int64_t>(num_rows) + 1) <=
+                 std::numeric_limits<size_type>::max(),
                "VARIANT paths times rows exceeds cudf size_type limit",
                std::overflow_error);
   auto const num_outputs = num_paths * num_rows;
@@ -1707,7 +1761,7 @@ std::unique_ptr<table> get_variant_fields(column_view const& variant_column,
   // One null mask per output column, narrowed from all-valid by the walk
   std::vector<rmm::device_buffer> null_masks;
   null_masks.reserve(num_paths);
-  std::vector<bitmask_type*> h_null_masks(num_paths);
+  auto h_null_masks = cudf::detail::make_pinned_vector_async<bitmask_type*>(num_paths, stream);
   for (size_type p = 0; p < num_paths; ++p) {
     null_masks.push_back(cudf::create_null_mask(num_rows, mask_state::ALL_VALID, stream, mr));
     h_null_masks[p] = static_cast<bitmask_type*>(null_masks.back().data());
@@ -1715,7 +1769,8 @@ std::unique_ptr<table> get_variant_fields(column_view const& variant_column,
   auto const d_null_masks = cudf::detail::make_device_uvector_async(h_null_masks, stream, temp_mr);
 
   // One caller-owned status buffer per path, written by the walk
-  std::vector<op_status*> h_statuses(want_status ? num_paths : 0);
+  auto h_statuses =
+    cudf::detail::make_pinned_vector_async<op_status*>(want_status ? num_paths : 0, stream);
   for (size_type p = 0; p < static_cast<size_type>(h_statuses.size()); ++p) {
     h_statuses[p] = reinterpret_cast<op_status*>(statuses[p].data<uint8_t>());
   }
@@ -1726,10 +1781,15 @@ std::unique_ptr<table> get_variant_fields(column_view const& variant_column,
   auto const trie_depth = 1 + *std::max_element(trie.slot_depth.begin(), trie.slot_depth.end());
   bool const use_local_scratch = trie_depth <= max_local_trie_depth;
   auto const grid              = cudf::detail::grid_1d{num_rows, block_size};
+  // Blocks that fit in the scratch budget, at least one however deep the trie is
+  auto const scratch_per_block =
+    static_cast<std::size_t>(block_size) * trie_depth * sizeof(slot_result);
+  auto const scratch_blocks = std::max(std::size_t{1},
+                                       std::min(static_cast<std::size_t>(max_global_scratch_blocks),
+                                                max_global_scratch_bytes / scratch_per_block));
   auto const num_blocks =
-    use_local_scratch
-      ? grid.num_blocks
-      : std::min(grid.num_blocks, static_cast<thread_index_type>(max_global_scratch_blocks));
+    use_local_scratch ? grid.num_blocks
+                      : std::min(grid.num_blocks, static_cast<thread_index_type>(scratch_blocks));
   rmm::device_uvector<slot_result> d_scratch(
     use_local_scratch ? 0 : static_cast<std::size_t>(num_blocks) * block_size * trie_depth,
     stream,
@@ -1760,39 +1820,116 @@ std::unique_ptr<table> get_variant_fields(column_view const& variant_column,
   }
   CUDF_CUDA_TRY(cudaGetLastError());
 
-  // Convert each path's sizes to offsets and allocate its output bytes
+  // Convert each path's sizes to offsets. Every path's total byte count and null count is left on
+  // the device and read back together below: going through the host once per path instead would
+  // cost two blocking transfers per path, which is the one cost that would still scale with the
+  // number of paths.
+  rmm::device_uvector<int64_t> d_totals_and_nulls(
+    2 * static_cast<std::size_t>(num_paths), stream, temp_mr);
   std::vector<std::unique_ptr<column>> offsets_columns;
-  std::vector<std::unique_ptr<column>> value_children;
   offsets_columns.reserve(num_paths);
+  auto h_offsets = cudf::detail::make_pinned_vector_async<size_type*>(num_paths, stream);
+  for (size_type p = 0; p < num_paths; ++p) {
+    auto offsets_column = make_numeric_column(
+      data_type{type_id::INT32}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
+    h_offsets[p] = offsets_column->mutable_view().data<size_type>();
+    offsets_columns.push_back(std::move(offsets_column));
+  }
+  auto const d_offsets = cudf::detail::make_device_uvector_async(h_offsets, stream, temp_mr);
+
+  // One scan per path rather than a single `exclusive_scan_by_key` over all of them: a plain scan
+  // has no segment bookkeeping, and measuring the two showed the extra launches cost far less than
+  // the key handling does once the rows per path outnumber the paths.
+  for (size_type p = 0; p < num_paths; ++p) {
+    // The scan takes one input per output; the extra trailing input is never read for its own
+    // output element.
+    auto const path_sizes = cudf::detail::make_counting_transform_iterator(
+      size_type{0},
+      cuda::proclaim_return_type<size_type>(
+        [sizes = d_sizes.data(), base = p * num_rows, num_rows] __device__(
+          size_type row) -> size_type { return row < num_rows ? sizes[base + row] : 0; }));
+    // Offsets are narrowed to size_type on the way out while the scan accumulates in 64 bits, so
+    // the total still reveals an overflow that the offsets themselves would have wrapped away.
+    auto const offsets_out = cudf::detail::make_sizes_to_offsets_iterator(
+      h_offsets[p], h_offsets[p] + num_rows + 1, d_totals_and_nulls.data() + p);
+    thrust::exclusive_scan(rmm::exec_policy_nosync(stream, temp_mr),
+                           path_sizes,
+                           path_sizes + num_rows + 1,
+                           offsets_out,
+                           int64_t{0});
+  }
+
+  // Every path's valid count in one pass, into the second half of the same buffer. Each path's mask
+  // is its own allocation, so this counts through the pointer array rather than with
+  // `segmented_count_set_bits`, which needs one contiguous bitmask. Reducing over whole mask words
+  // rather than over a per-row predicate keeps the pass 32x shorter, which matters because it runs
+  // over every path at once.
+  auto constexpr bits_per_word = static_cast<size_type>(cudf::detail::size_in_bits<bitmask_type>());
+  auto const words_per_path    = static_cast<size_type>(num_bitmask_words(num_rows));
+  auto const set_bits_in_word  = cudf::detail::make_counting_transform_iterator(
+    size_type{0},
+    cuda::proclaim_return_type<int64_t>(
+      [masks = d_null_masks.data(), words_per_path, num_rows] __device__(size_type i) -> int64_t {
+        auto const word_index = i % words_per_path;
+        auto word             = masks[i / words_per_path][word_index];
+        // `create_null_mask(ALL_VALID)` sets the whole last word, including the bits past the last
+        // row, so those have to come off before they are counted as valid rows
+        auto const rows_in_word = num_rows - word_index * bits_per_word;
+        if (rows_in_word < bits_per_word) {
+          word &= cudf::set_least_significant_bits(rows_in_word);
+        }
+        return __popc(word);
+      }));
+  auto const path_bounds = cudf::detail::make_counting_transform_iterator(
+    size_type{0},
+    cuda::proclaim_return_type<size_type>(
+      [words_per_path] __device__(size_type p) -> size_type { return p * words_per_path; }));
+  auto* const d_valid_counts    = d_totals_and_nulls.data() + num_paths;
+  std::size_t reduce_temp_bytes = 0;
+  CUDF_CUDA_TRY(cub::DeviceSegmentedReduce::Sum(nullptr,
+                                                reduce_temp_bytes,
+                                                set_bits_in_word,
+                                                d_valid_counts,
+                                                num_paths,
+                                                path_bounds,
+                                                path_bounds + 1,
+                                                stream.get()));
+  rmm::device_buffer reduce_temp{reduce_temp_bytes, stream, temp_mr};
+  CUDF_CUDA_TRY(cub::DeviceSegmentedReduce::Sum(reduce_temp.data(),
+                                                reduce_temp_bytes,
+                                                set_bits_in_word,
+                                                d_valid_counts,
+                                                num_paths,
+                                                path_bounds,
+                                                path_bounds + 1,
+                                                stream.get()));
+
+  // The only transfer back to the host, and the only synchronization, in the batched path
+  auto const totals_and_nulls = cudf::detail::make_host_vector(d_totals_and_nulls, stream);
+
+  // Allocate each path's output bytes now that its total is known
+  std::vector<std::unique_ptr<column>> value_children;
   value_children.reserve(num_paths);
-  std::vector<size_type const*> h_offsets(num_paths);
-  std::vector<uint8_t*> h_out(num_paths);
+  auto h_out              = cudf::detail::make_pinned_vector_async<uint8_t*>(num_paths, stream);
   int64_t all_paths_bytes = 0;
   for (size_type p = 0; p < num_paths; ++p) {
-    device_span<size_type const> const path_sizes{
-      d_sizes.data() + static_cast<std::size_t>(p) * num_rows, static_cast<std::size_t>(num_rows)};
-    auto [offsets_column, total_bytes] =
-      cudf::strings::detail::make_offsets_child_column(path_sizes, stream, mr);
+    auto const total_bytes = totals_and_nulls[p];
     CUDF_EXPECTS(total_bytes <= std::numeric_limits<size_type>::max(),
                  "VARIANT extracted bytes exceed cudf size_type limit",
                  std::overflow_error);
-
     auto value_child = make_numeric_column(data_type{type_id::UINT8},
                                            static_cast<size_type>(total_bytes),
                                            mask_state::UNALLOCATED,
                                            stream,
                                            mr);
-    h_offsets[p]     = offsets_column->view().data<size_type>();
     h_out[p]         = value_child->mutable_view().data<uint8_t>();
     all_paths_bytes += total_bytes;
-    offsets_columns.push_back(std::move(offsets_column));
     value_children.push_back(std::move(value_child));
   }
 
   // Copy the located values of every (path, row) pair in one pass
   if (all_paths_bytes > 0) {
-    auto const d_offsets = cudf::detail::make_device_uvector_async(h_offsets, stream, temp_mr);
-    auto const d_out     = cudf::detail::make_device_uvector_async(h_out, stream, temp_mr);
+    auto const d_out = cudf::detail::make_device_uvector_async(h_out, stream, temp_mr);
 
     auto src_iter = cudf::detail::make_counting_transform_iterator(
       size_type{0},
@@ -1813,8 +1950,7 @@ std::unique_ptr<table> get_variant_fields(column_view const& variant_column,
   }
 
   for (size_type p = 0; p < num_paths; ++p) {
-    auto const null_count =
-      num_rows - cudf::detail::count_set_bits(h_null_masks[p], 0, num_rows, stream);
+    auto const null_count = num_rows - static_cast<size_type>(totals_and_nulls[num_paths + p]);
     output.push_back(
       make_lists_column(num_rows,
                         std::move(offsets_columns[p]),
@@ -1833,21 +1969,7 @@ std::unique_ptr<column> cast_variant(column_view const& values,
                                      rmm::device_async_resource_ref mr)
 {
   validate_variant_child(values);
-
-  switch (desired_type.id()) {
-    case type_id::INT8:
-    case type_id::INT16:
-    case type_id::INT32:
-    case type_id::INT64:
-    case type_id::FLOAT32:
-    case type_id::FLOAT64:
-    case type_id::BOOL8:
-    case type_id::STRING:
-    case type_id::DECIMAL32:
-    case type_id::DECIMAL64:
-    case type_id::DECIMAL128: break;
-    default: CUDF_FAIL("unsupported type for variant cast", std::invalid_argument);
-  }
+  validate_cast_type(desired_type);
 
   size_type const num_rows = values.size();
 
@@ -1888,6 +2010,12 @@ std::unique_ptr<table> extract_variant_fields(column_view const& variant_column,
   CUDF_EXPECTS(paths.size() == desired_types.size(),
                "VARIANT paths and desired types must have the same size",
                std::invalid_argument);
+
+  // Validate every desired type before extracting anything, so that an unsupported type on the
+  // last path does not throw only after the whole extraction has been paid for
+  for (auto const desired_type : desired_types) {
+    validate_cast_type(desired_type);
+  }
 
   auto const temp_mr     = cudf::get_current_device_resource_ref();
   auto const want_status = !statuses.empty();

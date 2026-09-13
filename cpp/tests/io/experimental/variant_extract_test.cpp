@@ -1417,9 +1417,10 @@ TEST_F(GetVariantFieldsTest, NullRowsAndSlicedInput)
   expect_matches_looped_get(cudf::slice(col, {1, 3}).front(), {"x", "y"});
 }
 
-TEST_F(GetVariantFieldsTest, ManyPathsUseGlobalScratch)
+TEST_F(GetVariantFieldsTest, ManyShallowPaths)
 {
-  // More leaves than `max_local_trie_slots`, so the walk falls back to global slot scratch.
+  // A wide trie that is only one level deep, so it stays on the per-thread stack however many
+  // paths there are -- the scratch choice follows the depth, not the path count.
   auto paths = std::vector<std::string>{"x", "y", "z"};
   for (int i = 0; i < 40; ++i) {
     paths.push_back(std::format("$.field_{}", i));
@@ -1436,6 +1437,33 @@ TEST_F(GetVariantFieldsTest, DeepTrieUsesGlobalScratch)
     paths.push_back(std::format("{}.s{}", paths.back(), i));
   }
   expect_matches_looped_get(make_xyz_three_row_variant(), paths);
+}
+
+TEST_F(GetVariantFieldsTest, WideAndDeepTrieUsesGlobalScratch)
+{
+  // Global scratch again, but over a trie whose slots mostly resolve: a 20-level nest of
+  // single-field objects, where each level is both a requested output and the parent of a sibling
+  // path that misses. Several slots therefore share a depth and each has to find its own parent,
+  // which the chain in DeepTrieUsesGlobalScratch cannot check because nothing below "x" resolves.
+  constexpr int depth = 20;
+  auto const keys     = make_numeric_keys(depth + 1);
+  auto value          = enc_int32(7);
+  for (int level = depth - 1; level >= 0; --level) {
+    value = build_single_field_object(static_cast<uint8_t>(level), value);
+  }
+  auto const col = wrap_single_variant(build_metadata(keys, /*sorted=*/true), value);
+
+  // The last key is in the dictionary but in no object, so the sibling paths fail at their own
+  // step rather than inheriting a failed prefix.
+  auto const missing_key = std::format(".k{:02}", depth);
+  std::vector<std::string> paths;
+  std::string prefix = "$";
+  for (int level = 0; level < depth; ++level) {
+    prefix += std::format(".k{:02}", level);
+    paths.push_back(prefix);
+    paths.push_back(prefix + missing_key);
+  }
+  expect_matches_looped_get(col, paths);
 }
 
 TEST_F(GetVariantFieldsTest, NoPathsYieldsNoColumns)
