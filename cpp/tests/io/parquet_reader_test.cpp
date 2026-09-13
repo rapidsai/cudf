@@ -39,10 +39,44 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <utility>
 
 using ParquetDecompressionTest = DecompressionTest<ParquetReaderTest>;
+
+TEST_F(ParquetReaderTest, ManyTinyStringPages)
+{
+  // This creates enough pages to cross the scan-by-key tile boundary implicated in
+  // https://github.com/NVIDIA/cccl/issues/11167.
+  constexpr cudf::size_type num_rows    = 1000;
+  constexpr cudf::size_type num_columns = 4;
+
+  std::vector<std::string> values;
+  values.reserve(num_rows);
+  for (cudf::size_type i = 0; i < num_rows; ++i) {
+    values.push_back(std::to_string(i) + std::string(static_cast<std::size_t>(i % 12), 'a'));
+  }
+  cudf::test::strings_column_wrapper strings(values.begin(), values.end());
+  cudf::table_view const input{std::vector<cudf::column_view>(num_columns, strings)};
+
+  auto const filepath = temp_env->get_temp_filepath("ManyTinyStringPages.parquet");
+  auto const write_options =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, input)
+      .compression(cudf::io::compression_type::NONE)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER)
+      .row_group_size_rows(num_rows)
+      .max_page_size_rows(1)
+      .max_page_fragment_size(1)
+      .build();
+  cudf::io::write_parquet(write_options);
+
+  auto const read_options =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).build();
+  auto const result = cudf::io::read_parquet(read_options);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(input, result.tbl->view());
+}
 
 TEST_F(ParquetReaderTest, UserBounds)
 {
@@ -6430,6 +6464,40 @@ TEST_F(ParquetReaderTest, MismatchedSchemaColumnValidation)
         .column_names({"id", "price"})
         .build();
     EXPECT_THROW(cudf::io::read_parquet(opts), std::invalid_argument);
+  }
+
+  // Sources that disagree on field-ID presence but agree on names and types should succeed.
+  {
+    auto const id = i64{1, 2, 3};
+    auto const with_ids =
+      write_parquet_temp_file(cudf::table_view{{id}}, "FieldIdExists.parquet", {"id"}, {1});
+    auto const without_ids =
+      write_parquet_temp_file(cudf::table_view{{id}}, "FieldIdAbsent.parquet", {"id"});
+
+    auto const expected_id = i64{1, 2, 3, 1, 2, 3};
+    cudf::table_view const expected{{expected_id}};
+
+    for (auto const& paths : {std::vector<std::string>{with_ids, with_ids},
+                              std::vector<std::string>{with_ids, without_ids},
+                              std::vector<std::string>{without_ids, with_ids},
+                              std::vector<std::string>{without_ids, without_ids}}) {
+      auto result = cudf::io::table_with_metadata{};
+      ASSERT_NO_THROW(result = cudf::io::read_parquet(
+                        cudf::io::parquet_reader_options::builder(cudf::io::source_info{paths})
+                          .allow_mismatched_pq_schemas(true)
+                          .column_names({"id"})
+                          .build()));
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+    }
+
+    for (auto const& paths : {std::vector<std::string>{with_ids, without_ids},
+                              std::vector<std::string>{without_ids, with_ids}}) {
+      auto const opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{paths})
+                          .allow_mismatched_pq_schemas(true)
+                          .column_field_ids({1})
+                          .build();
+      EXPECT_THROW(cudf::io::read_parquet(opts), std::invalid_argument);
+    }
   }
 }
 
