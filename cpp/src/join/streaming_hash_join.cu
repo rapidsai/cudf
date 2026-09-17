@@ -946,6 +946,10 @@ class streaming_hash_join_impl {
                                 {dynamic_key_map->data(), dynamic_csr->num_buckets()},
                                 dynamic_equal,
                                 stream);
+            // `dynamic_equal` references the batch-local device comparator vector. Keep that
+            // vector alive until this append has consumed it; unlike cuco's insert path, the
+            // segmented map invokes equality during construction to split equal-hash keys.
+            stream.sync();
           }
         } else {
           hash_table.insert_if_async(
@@ -963,6 +967,7 @@ class streaming_hash_join_impl {
                                 {dynamic_key_map->data(), dynamic_csr->num_buckets()},
                                 dynamic_equal,
                                 stream);
+            stream.sync();
           }
         }
       };
@@ -1441,7 +1446,12 @@ class streaming_hash_join_impl {
       auto probe_slots = rmm::device_uvector<size_type>{
         static_cast<std::size_t>(left.num_rows()), stream, resources.get_temporary_mr()};
       auto match_counts = rmm::device_uvector<size_type>{
-        static_cast<std::size_t>(left.num_rows()), stream, resources.get_temporary_mr()};
+        // `sizes_to_offsets` consumes a zero sentinel after the per-probe counts, matching the
+        // HashCSR retrieval path. Without it, its returned exclusive-scan total omits the final
+        // probe row and a one-row probe always produces an empty output.
+        static_cast<std::size_t>(left.num_rows()) + 1,
+        stream,
+        resources.get_temporary_mr()};
       launch_segmented_dynamic_csr_probe_count_kernel(
         left.num_rows(),
         probe_slots.data(),

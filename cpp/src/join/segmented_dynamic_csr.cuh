@@ -40,6 +40,10 @@ struct dynamic_csr_slot {
 
 constexpr auto dynamic_csr_no_segment = std::numeric_limits<cuda::std::uint32_t>::max();
 constexpr auto dynamic_csr_empty_hash = std::numeric_limits<hash_value_type>::max();
+// A key slot is claimed before its representative row can be published. Keep that transient
+// state distinct from both an empty slot and a usable row hash so colliding inserters never call
+// the row comparator with an uninitialized representative.
+constexpr auto dynamic_csr_pending_hash = dynamic_csr_empty_hash - 1;
 
 struct dynamic_csr_key_slot {
   hash_value_type hash;
@@ -56,19 +60,49 @@ struct dynamic_csr_key_map_ref {
                                       cuda::std::uint64_t representative,
                                       Equal equal) const
   {
-    auto const normalized_hash = hash == dynamic_csr_empty_hash ? hash - 1 : hash;
+    // Reserve empty and pending state values. Mapping the two largest hashes to the same usable
+    // hash is safe because equality remains the authority within a probe sequence.
+    auto const normalized_hash =
+      hash >= dynamic_csr_pending_hash ? dynamic_csr_pending_hash - 1 : hash;
     for (size_type step = 0; step < capacity; ++step) {
-      auto const slot = (static_cast<size_type>(normalized_hash) + step) % capacity;
+      // `size_type` is signed. Do the modulo in an unsigned wide type before converting so row
+      // hashes with the high bit set cannot produce a negative, out-of-bounds slot index.
+      auto const slot = static_cast<size_type>((static_cast<cuda::std::uint64_t>(normalized_hash) +
+                                                static_cast<cuda::std::uint64_t>(step)) %
+                                               static_cast<cuda::std::uint64_t>(capacity));
       auto entry_hash =
         cuda::atomic_ref<hash_value_type, cuda::thread_scope_device>{entries[slot].hash};
-      auto expected = dynamic_csr_empty_hash;
-      if (entry_hash.compare_exchange_strong(
-            expected, normalized_hash, cuda::memory_order_acq_rel)) {
-        entries[slot].representative = representative;
-        return slot;
-      }
-      if (expected == normalized_hash && equal(representative, entries[slot].representative)) {
-        return slot;
+      while (true) {
+        auto current = entry_hash.load(cuda::memory_order_acquire);
+        if (current == dynamic_csr_pending_hash) {
+          // The claiming thread publishes the representative with a release store below.
+          continue;
+        }
+        if (current == dynamic_csr_empty_hash) {
+          auto expected = dynamic_csr_empty_hash;
+          if (entry_hash.compare_exchange_strong(
+                expected, dynamic_csr_pending_hash, cuda::memory_order_acq_rel)) {
+            cuda::atomic_ref<cuda::std::uint64_t, cuda::thread_scope_device>{
+              entries[slot].representative}
+              .store(representative, cuda::memory_order_release);
+            // The hash is the publication state. A reader may not decode the representative
+            // until this fence and the following release store have made its payload visible.
+            __threadfence();
+            entry_hash.store(normalized_hash, cuda::memory_order_release);
+            return slot;
+          }
+          // Another thread changed this exact slot. Reinspect it before moving onward so an
+          // equal key cannot be assigned a second CSR chain.
+          continue;
+        }
+        auto const stored_representative =
+          cuda::atomic_ref<cuda::std::uint64_t, cuda::thread_scope_device>{
+            entries[slot].representative}
+            .load(cuda::memory_order_acquire);
+        if (current == normalized_hash && equal(representative, stored_representative)) {
+          return slot;
+        }
+        break;
       }
     }
     return capacity;
@@ -77,12 +111,24 @@ struct dynamic_csr_key_map_ref {
   template <typename Equal>
   __device__ size_type find(hash_value_type hash, cuda::std::uint64_t probe, Equal equal) const
   {
-    auto const normalized_hash = hash == dynamic_csr_empty_hash ? hash - 1 : hash;
+    auto const normalized_hash =
+      hash >= dynamic_csr_pending_hash ? dynamic_csr_pending_hash - 1 : hash;
     for (size_type step = 0; step < capacity; ++step) {
-      auto const slot  = (static_cast<size_type>(normalized_hash) + step) % capacity;
-      auto const entry = entries[slot];
-      if (entry.hash == dynamic_csr_empty_hash) { return capacity; }
-      if (entry.hash == normalized_hash && equal(probe, entry.representative)) { return slot; }
+      auto const slot = static_cast<size_type>((static_cast<cuda::std::uint64_t>(normalized_hash) +
+                                                static_cast<cuda::std::uint64_t>(step)) %
+                                               static_cast<cuda::std::uint64_t>(capacity));
+      auto entry_hash =
+        cuda::atomic_ref<hash_value_type, cuda::thread_scope_device>{entries[slot].hash};
+      auto current = entry_hash.load(cuda::memory_order_acquire);
+      while (current == dynamic_csr_pending_hash) {
+        current = entry_hash.load(cuda::memory_order_acquire);
+      }
+      if (current == dynamic_csr_empty_hash) { return capacity; }
+      auto const stored_representative =
+        cuda::atomic_ref<cuda::std::uint64_t, cuda::thread_scope_device>{
+          entries[slot].representative}
+          .load(cuda::memory_order_acquire);
+      if (current == normalized_hash && equal(probe, stored_representative)) { return slot; }
     }
     return capacity;
   }
@@ -135,10 +181,19 @@ CUDF_KERNEL void segmented_dynamic_csr_retrieve_kernel(size_type output_size,
 {
   for (auto output = grid_1d::global_thread_id(); output < output_size;
        output += grid_1d::grid_stride()) {
-    auto probe = size_type{0};
-    while (probe + 1 < num_probe_rows && offsets[probe + 1] <= output) {
-      ++probe;
+    // Find the final offset no greater than `output`. A linear search here makes a distinct-key
+    // join quadratic; the binary search preserves the CSR layout with logarithmic lookup work.
+    auto lower = size_type{0};
+    auto upper = num_probe_rows;
+    while (lower + 1 < upper) {
+      auto const middle = lower + (upper - lower) / 2;
+      if (offsets[middle] <= static_cast<cuda::std::int64_t>(output)) {
+        lower = middle;
+      } else {
+        upper = middle;
+      }
     }
+    auto const probe     = lower;
     left_indices[output] = probe;
     row_refs[output] = csr.at(probe_slots[probe], static_cast<size_type>(output - offsets[probe]));
   }
