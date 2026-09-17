@@ -15,6 +15,7 @@
 #include <cudf/detail/row_operator/primitive_equality.cuh>
 #include <cudf/detail/row_operator/primitive_hashing.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/join/hash_join.hpp>
 #include <cudf/join/streaming_hash_join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -25,6 +26,7 @@
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/device_buffer.hpp>
+#include <rmm/exec_policy.hpp>
 #include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/hash_functions.cuh>
@@ -34,10 +36,13 @@
 #include <cuda/std/functional>
 #include <cuda/std/tuple>
 #include <cuda/stream>
+#include <thrust/copy.h>
+#include <thrust/fill.h>
 
 #include <algorithm>
 #include <atomic>
 #include <bit>
+#include <cstdlib>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -125,6 +130,22 @@ size_type checked_batch_count(size_type batches)
   CUDF_EXPECTS(
     batches > 0, "streaming_hash_join requires max_num_batches > 0.", std::invalid_argument);
   return batches;
+}
+
+/**
+ * @brief Whether this process selected the base-CSR + batch-delta experiment.
+ *
+ * The integration branch owns the public selector.  Keeping the same bit here makes this branch
+ * independently runnable and, importantly, leaves the production streaming implementation as the
+ * default while the experiment is incomplete.
+ */
+bool use_base_csr_batch_deltas()
+{
+  auto const value = std::getenv("CUDF_STREAMING_HASH_JOIN_IMPL_MASK");
+  if (value == nullptr) { return false; }
+  char* end{};
+  auto const mask = std::strtoul(value, &end, 0);
+  return end != value && (*end == '\0') && (mask & 0x1UL) != 0;
 }
 
 /**
@@ -275,10 +296,12 @@ class streaming_hash_join_impl {
   size_type max_num_batches;
   bool has_nulls;
   null_equality compare_nulls;
+  double load_factor;
   std::atomic<size_type> inserted_rows{0};
   std::atomic<size_type> inserted_batches{0};
   bool has_nested_keys{false};
   batch_hash_layout layout;
+  bool const use_base_deltas;
 
   // Declared before the hash table so the resource outlives allocations that refer to it.
   cudf::memory_resources mr;
@@ -288,6 +311,13 @@ class streaming_hash_join_impl {
   // Views of the inserted partitions, indexed by batch ID so callers can resolve the batch IDs
   // reported by `inner_join()` without tracking concurrent insert ordering themselves.
   std::vector<table_view> right_partitions;
+
+  // Each inserted partition is an immutable HashCSR delta.  This deliberately keeps the table
+  // views caller-owned (as required by streaming_hash_join), while avoiding the old packed-hash
+  // batch ID representation.  `probe_base_deltas` materializes the logical concatenation of the
+  // immutable deltas into the result; a later compaction pass can replace the per-delta probes
+  // without changing this state or the public API.
+  std::vector<std::unique_ptr<cudf::hash_join>> batch_delta_csrs;
 
   streaming_hash_join_impl(table_view const& schema,
                            std::span<size_type const> key_indices,
@@ -307,7 +337,9 @@ class streaming_hash_join_impl {
       max_num_batches{checked_batch_count(maximum_batches)},
       has_nulls{nullable == nullable_join::YES},
       compare_nulls{nulls_equal},
+      load_factor{checked_load_factor(load_factor)},
       layout{max_num_batches},
+      use_base_deltas{use_base_csr_batch_deltas()},
       mr{resource},
       hash_table{
         cuco::extent{[&] {
@@ -325,7 +357,8 @@ class streaming_hash_join_impl {
         rmm::mr::polymorphic_allocator<char>{mr.get_output_mr()},
         stream.get()},
       preprocessed_right(static_cast<std::size_t>(max_num_batches)),
-      right_partitions(static_cast<std::size_t>(max_num_batches))
+      right_partitions(static_cast<std::size_t>(max_num_batches)),
+      batch_delta_csrs(static_cast<std::size_t>(max_num_batches))
   {
     CUDF_EXPECTS(right_schema->num_columns() > 0,
                  "streaming_hash_join requires at least one right-side column.",
@@ -387,6 +420,18 @@ class streaming_hash_join_impl {
     right_partitions[batch_id]   = right_partition;
 
     if (batch_rows > 0) {
+      if (use_base_deltas) {
+        // HashCSR owns only the index structures; `keys` remains a non-owning view of the
+        // caller-retained partition.  Every batch therefore contributes an immutable delta CSR.
+        batch_delta_csrs[batch_id] =
+          std::make_unique<cudf::hash_join>(keys,
+                                            nullable_join{has_nulls},
+                                            compare_nulls,
+                                            checked_load_factor(load_factor),
+                                            stream,
+                                            mr.get_output_mr());
+        return;
+      }
       auto const nulls = nullate::DYNAMIC{has_nulls};
       auto insert_rows = [&](auto const& row_hasher) {
         auto const input_begin = cudf::detail::make_counting_transform_iterator(
@@ -410,6 +455,67 @@ class streaming_hash_join_impl {
         insert_rows(row::hash::row_hasher{preprocessed_right[batch_id]}.device_hasher(nulls));
       }
     }
+  }
+
+  auto probe_base_deltas(table_view const& left,
+                         std::optional<std::size_t> output_size,
+                         cuda::stream_ref stream,
+                         cudf::memory_resources resources) const
+  {
+    auto const num_batches = inserted_batches.load(std::memory_order_relaxed);
+    std::vector<std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>>
+      results;
+    results.reserve(static_cast<std::size_t>(num_batches));
+    std::size_t total_size{};
+
+    // This is the sparse-delta probe path.  A batch that contains no rows has no HashCSR object
+    // and contributes no range.  Individual HashCSR instances perform their normal compact CSR
+    // count/retrieve work, so duplicate keys in different batches are concatenated, never merged.
+    for (size_type batch = 0; batch < num_batches; ++batch) {
+      if (!batch_delta_csrs[batch]) { continue; }
+      auto result = batch_delta_csrs[batch]->inner_join(
+        left, std::nullopt, stream, resources.get_temporary_mr());
+      total_size += result.first->size();
+      results.push_back(std::move(result));
+    }
+    CUDF_EXPECTS(!output_size || *output_size == total_size,
+                 "The provided join output size is incorrect");
+
+    auto left_indices = std::make_unique<rmm::device_uvector<size_type>>(
+      total_size, stream, resources.get_output_mr());
+    auto batch_indices = std::make_unique<rmm::device_uvector<size_type>>(
+      total_size, stream, resources.get_output_mr());
+    auto row_indices = std::make_unique<rmm::device_uvector<size_type>>(
+      total_size, stream, resources.get_output_mr());
+    std::size_t output_offset{};
+    size_type batch{};
+    for (auto& result : results) {
+      // `results` contains only nonempty build batches. Recover the source batch by advancing
+      // across the fixed state array instead of relying on a compacted result position.
+      while (batch < num_batches && !batch_delta_csrs[batch]) {
+        ++batch;
+      }
+      auto const result_size = result.first->size();
+      if (result_size != 0) {
+        thrust::copy(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                     result.first->begin(),
+                     result.first->end(),
+                     left_indices->begin() + output_offset);
+        thrust::copy(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                     result.second->begin(),
+                     result.second->end(),
+                     row_indices->begin() + output_offset);
+        thrust::fill(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                     batch_indices->begin() + output_offset,
+                     batch_indices->begin() + output_offset + result_size,
+                     batch);
+      }
+      output_offset += result_size;
+      ++batch;
+    }
+    return std::pair{std::move(left_indices),
+                     std::pair{std::move(batch_indices), std::move(row_indices)}};
   }
 
   template <bool has_nested, bool use_primitive>
@@ -514,6 +620,7 @@ class streaming_hash_join_impl {
           std::make_unique<rmm::device_uvector<size_type>>(0, stream, resources.get_output_mr()),
           std::make_unique<rmm::device_uvector<size_type>>(0, stream, resources.get_output_mr())}};
     }
+    if (use_base_deltas) { return probe_base_deltas(left, output_size, stream, resources); }
     if (cudf::detail::is_primitive_row_op_compatible(left)) {
       return probe<false, true>(left, output_size, stream, resources);
     }
