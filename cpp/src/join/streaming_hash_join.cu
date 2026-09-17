@@ -288,13 +288,115 @@ struct decode_slot_fn {
   }
 };
 
-// The experimental representation deliberately uses the same open-addressed key table as
-// HashCSR, but stores a *global build-row ordinal* as its representative.  The ordinal is decoded
-// through `batch_starts`, so equal keys from any batch claim one collision-aware slot while every
-// physical row remains represented in a sparse batch delta.
+// The experimental representation stores a stable, lossless build-row reference separately from
+// the 32-bit row hash.  Keeping batch identity out of the hash preserves all hash entropy while
+// avoiding a binary search through batch boundaries in equality and retrieval.
+using streaming_row_ref = cuda::std::uint64_t;
+
+__device__ constexpr streaming_row_ref make_streaming_row_ref(size_type batch, size_type row)
+{
+  return (static_cast<streaming_row_ref>(static_cast<cuda::std::uint32_t>(batch)) << 32) |
+         static_cast<cuda::std::uint32_t>(row);
+}
+
+__device__ constexpr size_type streaming_ref_batch(streaming_row_ref ref)
+{
+  return static_cast<size_type>(ref >> 32);
+}
+
+__device__ constexpr size_type streaming_ref_row(streaming_row_ref ref)
+{
+  return static_cast<size_type>(ref);
+}
+
+constexpr auto streaming_empty_hash   = std::numeric_limits<hash_value_type>::max();
+constexpr auto streaming_pending_hash = streaming_empty_hash - 1;
+
+struct streaming_key_slot {
+  hash_value_type hash;
+  streaming_row_ref representative;
+};
+
+/** @brief Collision-aware, power-of-two open-addressed map for the base+deltas experiment. */
+struct streaming_hash_table_ref {
+  streaming_key_slot* entries;
+  cuda::std::uint32_t capacity;
+
+  [[nodiscard]] __device__ cuda::std::uint32_t mask() const { return capacity - 1; }
+
+  template <typename Equal>
+  __device__ cuda::std::uint32_t insert(hash_value_type hash,
+                                        streaming_row_ref representative,
+                                        Equal equal) const
+  {
+    auto const normalized = hash >= streaming_pending_hash ? streaming_pending_hash - 1 : hash;
+    for (cuda::std::uint32_t step = 0; step < capacity; ++step) {
+      auto const slot = (static_cast<cuda::std::uint32_t>(normalized) + step) & mask();
+      auto key = cuda::atomic_ref<hash_value_type, cuda::thread_scope_device>{entries[slot].hash};
+      while (true) {
+        auto current = key.load(cuda::memory_order_acquire);
+        if (current == streaming_pending_hash) { continue; }
+        if (current == streaming_empty_hash) {
+          auto expected = streaming_empty_hash;
+          if (key.compare_exchange_strong(
+                expected, streaming_pending_hash, cuda::memory_order_acq_rel)) {
+            cuda::atomic_ref<streaming_row_ref, cuda::thread_scope_device>{
+              entries[slot].representative}
+              .store(representative, cuda::memory_order_release);
+            key.store(normalized, cuda::memory_order_release);
+            return slot;
+          }
+          continue;
+        }
+        auto const stored =
+          cuda::atomic_ref<streaming_row_ref, cuda::thread_scope_device>{
+            entries[slot].representative}
+            .load(cuda::memory_order_acquire);
+        if (current == normalized && equal(representative, stored)) { return slot; }
+        break;
+      }
+    }
+    return capacity;
+  }
+
+  template <typename Equal>
+  __device__ cuda::std::uint32_t find(hash_value_type hash, size_type probe, Equal equal) const
+  {
+    auto const normalized = hash >= streaming_pending_hash ? streaming_pending_hash - 1 : hash;
+    for (cuda::std::uint32_t step = 0; step < capacity; ++step) {
+      auto const slot = (static_cast<cuda::std::uint32_t>(normalized) + step) & mask();
+      auto key = cuda::atomic_ref<hash_value_type, cuda::thread_scope_device>{entries[slot].hash};
+      auto current = key.load(cuda::memory_order_acquire);
+      while (current == streaming_pending_hash) {
+        current = key.load(cuda::memory_order_acquire);
+      }
+      if (current == streaming_empty_hash) { return capacity; }
+      auto const stored =
+        cuda::atomic_ref<streaming_row_ref, cuda::thread_scope_device>{entries[slot].representative}
+          .load(cuda::memory_order_acquire);
+      if (current == normalized && equal(probe, stored)) { return slot; }
+    }
+    return capacity;
+  }
+};
+
+struct streaming_csr_ref {
+  size_type const* cumulative_ends;
+  streaming_row_ref const* values;
+
+  [[nodiscard]] __device__ size_type begin(size_type slot) const
+  {
+    return slot == 0 ? size_type{0} : cumulative_ends[slot - 1];
+  }
+  [[nodiscard]] __device__ size_type size(size_type slot) const
+  {
+    return cumulative_ends[slot] - begin(slot);
+  }
+};
+
 struct streaming_delta {
   std::unique_ptr<rmm::device_uvector<cuda::std::uint32_t>> slots;
-  std::unique_ptr<rmm::device_uvector<size_type>> rows;
+  std::unique_ptr<rmm::device_uvector<streaming_row_ref>> rows;
 };
 
 constexpr auto streaming_empty_slot = cuda::std::uint32_t{-1};
@@ -310,76 +412,46 @@ inline cuda::std::uint32_t streaming_hash_csr_capacity(size_type rows, double lo
   return static_cast<cuda::std::uint32_t>(capacity);
 }
 
-__device__ inline size_type find_batch(size_type global_row,
-                                       size_type const* batch_starts,
-                                       size_type num_batches)
-{
-  // Batches are few (and bounded at construction), which makes this short binary search
-  // preferable to carrying a lossy batch ID in the hash value.
-  size_type first = 0;
-  size_type last  = num_batches;
-  while (first + 1 < last) {
-    auto const middle = first + (last - first) / 2;
-    if (batch_starts[middle] <= global_row) {
-      first = middle;
-    } else {
-      last = middle;
-    }
-  }
-  return first;
-}
-
 template <typename Equal>
 struct streaming_build_equal {
   Equal const* comparators;
-  size_type const* batch_starts;
-  size_type num_batches;
 
-  __device__ bool operator()(hash_table_entry_type const& candidate,
-                             hash_table_entry_type const& existing) const noexcept
+  __device__ bool operator()(streaming_row_ref candidate, streaming_row_ref existing) const noexcept
   {
-    if (candidate.first != existing.first) { return false; }
-    auto const candidate_batch = find_batch(candidate.second, batch_starts, num_batches);
-    auto const existing_batch  = find_batch(existing.second, batch_starts, num_batches);
-    return comparators[existing_batch](candidate.second - batch_starts[candidate_batch],
-                                       existing.second - batch_starts[existing_batch]);
+    auto const existing_batch = streaming_ref_batch(existing);
+    return comparators[existing_batch](streaming_ref_row(candidate), streaming_ref_row(existing));
   }
 };
 
 template <typename Equal>
 struct streaming_probe_equal {
   Equal const* comparators;
-  size_type const* batch_starts;
-  size_type num_batches;
 
-  __device__ bool operator()(hash_table_entry_type const& probe,
-                             hash_table_entry_type const& existing) const noexcept
+  __device__ bool operator()(size_type probe, streaming_row_ref existing) const noexcept
   {
-    if (probe.first != existing.first) { return false; }
-    auto const batch = find_batch(existing.second, batch_starts, num_batches);
-    return comparators[batch](probe.second, existing.second - batch_starts[batch]);
+    return comparators[streaming_ref_batch(existing)](probe, streaming_ref_row(existing));
   }
 };
 
 template <typename Equal, typename Hasher>
 CUDF_KERNEL void streaming_delta_build_kernel(size_type rows,
                                               bitmask_type const* valid_rows,
-                                              size_type batch_start,
+                                              size_type batch_id,
                                               cuda::std::uint32_t* slots,
-                                              size_type* global_rows,
-                                              hash_table_ref map,
+                                              streaming_row_ref* row_refs,
+                                              streaming_hash_table_ref map,
                                               Equal equal,
                                               Hasher hasher)
 {
   for (auto row = grid_1d::global_thread_id(); row < rows; row += grid_1d::grid_stride()) {
-    auto const index      = static_cast<size_type>(row);
-    auto const global_row = batch_start + index;
-    global_rows[index]    = global_row;
+    auto const index   = static_cast<size_type>(row);
+    auto const row_ref = make_streaming_row_ref(batch_id, index);
+    row_refs[index]    = row_ref;
     if (valid_rows != nullptr && !cudf::bit_is_set(valid_rows, index)) {
       slots[index] = streaming_empty_slot;
       continue;
     }
-    auto const slot = map.insert({hasher(index), global_row}, equal);
+    auto const slot = map.insert(hasher(index), row_ref, equal);
     slots[index]    = slot == map.capacity ? streaming_empty_slot : slot;
   }
 }
@@ -399,10 +471,10 @@ CUDF_KERNEL void streaming_delta_count_kernel(size_type rows,
 
 CUDF_KERNEL void streaming_delta_fill_kernel(size_type rows,
                                              cuda::std::uint32_t const* slots,
-                                             size_type const* global_rows,
+                                             streaming_row_ref const* row_refs,
                                              size_type const* cumulative_ends,
                                              size_type* cursors,
-                                             size_type* values)
+                                             streaming_row_ref* values)
 {
   for (auto row = grid_1d::global_thread_id(); row < rows; row += grid_1d::grid_stride()) {
     auto const index = static_cast<size_type>(row);
@@ -412,7 +484,7 @@ CUDF_KERNEL void streaming_delta_fill_kernel(size_type rows,
     auto const rank =
       cuda::atomic_ref<size_type, cuda::thread_scope_device>{cursors[slot]}.fetch_add(
         size_type{1}, cuda::memory_order_relaxed);
-    values[begin + rank] = global_rows[index];
+    values[begin + rank] = row_refs[index];
   }
 }
 
@@ -421,8 +493,8 @@ CUDF_KERNEL void streaming_probe_count_kernel(size_type rows,
                                               bitmask_type const* valid_rows,
                                               cuda::std::uint32_t* slots,
                                               size_type* counts,
-                                              hash_table_ref map,
-                                              csr_ref csr,
+                                              streaming_hash_table_ref map,
+                                              streaming_csr_ref csr,
                                               Equal equal,
                                               Hasher hasher)
 {
@@ -430,7 +502,7 @@ CUDF_KERNEL void streaming_probe_count_kernel(size_type rows,
     auto const index = static_cast<size_type>(row);
     auto slot        = map.capacity;
     if (valid_rows == nullptr || cudf::bit_is_set(valid_rows, index)) {
-      slot = map.find({hasher(index), index}, equal);
+      slot = map.find(hasher(index), index, equal);
     }
     slots[index]  = slot == map.capacity ? streaming_empty_slot : slot;
     counts[index] = slot == map.capacity ? size_type{0} : csr.size(slot);
@@ -440,9 +512,7 @@ CUDF_KERNEL void streaming_probe_count_kernel(size_type rows,
 CUDF_KERNEL void streaming_probe_fill_kernel(size_type rows,
                                              cuda::std::uint32_t const* slots,
                                              size_type const* offsets,
-                                             csr_ref csr,
-                                             size_type const* batch_starts,
-                                             size_type num_batches,
+                                             streaming_csr_ref csr,
                                              size_type* left_indices,
                                              size_type* batch_indices,
                                              size_type* row_indices)
@@ -454,11 +524,11 @@ CUDF_KERNEL void streaming_probe_fill_kernel(size_type rows,
     auto const output_begin = left == 0 ? size_type{0} : offsets[left - 1];
     auto const build_begin  = csr.begin(slot);
     for (auto i = size_type{0}; i < csr.size(slot); ++i) {
-      auto const global_row           = csr.values[build_begin + i];
-      auto const batch                = find_batch(global_row, batch_starts, num_batches);
+      auto const row_ref              = csr.values[build_begin + i];
+      auto const batch                = streaming_ref_batch(row_ref);
       left_indices[output_begin + i]  = left;
       batch_indices[output_begin + i] = batch;
-      row_indices[output_begin + i]   = global_row - batch_starts[batch];
+      row_indices[output_begin + i]   = streaming_ref_row(row_ref);
     }
   }
 }
@@ -494,11 +564,10 @@ class streaming_hash_join_impl {
   // row per equality class). Every insert appends only a sparse (slot, global-row) delta. The
   // CSR is materialized exactly once, on the first probe after the build is sealed.
   cuda::std::uint32_t const base_delta_capacity;
-  mutable rmm::device_uvector<hash_table_entry_type> base_delta_entries;
-  rmm::device_uvector<size_type> base_delta_batch_starts;
+  mutable rmm::device_uvector<streaming_key_slot> base_delta_entries;
   std::vector<std::unique_ptr<streaming_delta>> base_delta_batches;
   mutable std::unique_ptr<rmm::device_uvector<size_type>> canonical_ends;
-  mutable std::unique_ptr<rmm::device_uvector<size_type>> canonical_values;
+  mutable std::unique_ptr<rmm::device_uvector<streaming_row_ref>> canonical_values;
   mutable std::mutex base_delta_mutex;
   mutable bool base_delta_sealed{false};
 
@@ -544,8 +613,6 @@ class streaming_hash_join_impl {
       base_delta_capacity{
         streaming_hash_csr_capacity(total_rows, checked_load_factor(load_factor))},
       base_delta_entries(base_delta_capacity, stream, mr.get_output_mr()),
-      base_delta_batch_starts(
-        static_cast<std::size_t>(max_num_batches) + 1, stream, mr.get_output_mr()),
       base_delta_batches(static_cast<std::size_t>(max_num_batches))
   {
     CUDF_EXPECTS(right_schema->num_columns() > 0,
@@ -567,11 +634,7 @@ class streaming_hash_join_impl {
     if (use_base_deltas) {
       CUDF_CUDA_TRY(cudaMemsetAsync(base_delta_entries.data(),
                                     0xff,
-                                    base_delta_entries.size() * sizeof(hash_table_entry_type),
-                                    stream.get()));
-      CUDF_CUDA_TRY(cudaMemsetAsync(base_delta_batch_starts.data(),
-                                    0,
-                                    base_delta_batch_starts.size() * sizeof(size_type),
+                                    base_delta_entries.size() * sizeof(streaming_key_slot),
                                     stream.get()));
     }
   }
@@ -630,25 +693,14 @@ class streaming_hash_join_impl {
         // Publish both boundaries before launching. The equality object decodes every persisted
         // representative through these boundaries, so full hash collisions are resolved by row
         // equality across *all* prior batches rather than by a batch ID packed into the hash.
-        auto const batch_start = old_inserted_rows;
-        auto const batch_end   = batch_start + batch_rows;
-        cudf::detail::cuda_memcpy_async(
-          cudf::device_span<size_type>{base_delta_batch_starts.data() + batch_id, 1},
-          cudf::host_span<size_type const>{&batch_start, 1},
-          stream);
-        cudf::detail::cuda_memcpy_async(
-          cudf::device_span<size_type>{base_delta_batch_starts.data() + batch_id + 1, 1},
-          cudf::host_span<size_type const>{&batch_end, 1},
-          stream);
         auto delta   = std::make_unique<streaming_delta>();
         delta->slots = std::make_unique<rmm::device_uvector<cuda::std::uint32_t>>(
           batch_rows, stream, mr.get_output_mr());
-        delta->rows =
-          std::make_unique<rmm::device_uvector<size_type>>(batch_rows, stream, mr.get_output_mr());
-        auto const map   = hash_table_ref{base_delta_entries.data(), base_delta_capacity};
+        delta->rows = std::make_unique<rmm::device_uvector<streaming_row_ref>>(
+          batch_rows, stream, mr.get_output_mr());
+        auto const map   = streaming_hash_table_ref{base_delta_entries.data(), base_delta_capacity};
         auto build_delta = [&](auto const& comparators, auto const& row_hasher) {
-          auto const equal =
-            streaming_build_equal{comparators.data(), base_delta_batch_starts.data(), batch_id + 1};
+          auto const equal  = streaming_build_equal{comparators.data()};
           auto const config = grid_1d{batch_rows, 256};
           streaming_delta_build_kernel<<<config.num_blocks,
                                          config.num_threads_per_block,
@@ -656,7 +708,7 @@ class streaming_hash_join_impl {
                                          stream.get()>>>(
             batch_rows,
             row_bitmask ? static_cast<bitmask_type const*>(row_bitmask->data()) : nullptr,
-            batch_start,
+            batch_id,
             delta->slots->data(),
             delta->rows->data(),
             map,
@@ -771,7 +823,7 @@ class streaming_hash_join_impl {
       cudf::device_span<size_type const>{canonical_ends->data() + base_delta_capacity - 1, 1},
       stream);
     stream.sync();
-    canonical_values = std::make_unique<rmm::device_uvector<size_type>>(
+    canonical_values = std::make_unique<rmm::device_uvector<streaming_row_ref>>(
       total, stream, cudf::get_current_device_resource_ref());
     auto cursors =
       rmm::device_uvector<size_type>{base_delta_capacity, stream, mr.get_temporary_mr()};
@@ -804,15 +856,13 @@ class streaming_hash_join_impl {
                               cuda::stream_ref stream,
                               cudf::memory_resources resources) const
   {
-    auto const num_batches = inserted_batches.load(std::memory_order_relaxed);
-    auto const map         = hash_table_ref{base_delta_entries.data(), base_delta_capacity};
-    auto const csr         = csr_ref{canonical_ends->data(), canonical_values->data()};
-    auto slots             = rmm::device_uvector<cuda::std::uint32_t>{
+    auto const map = streaming_hash_table_ref{base_delta_entries.data(), base_delta_capacity};
+    auto const csr = streaming_csr_ref{canonical_ends->data(), canonical_values->data()};
+    auto slots     = rmm::device_uvector<cuda::std::uint32_t>{
       static_cast<std::size_t>(left.num_rows()), stream, resources.get_temporary_mr()};
     auto offsets = rmm::device_uvector<size_type>{
       static_cast<std::size_t>(left.num_rows()), stream, resources.get_temporary_mr()};
-    auto const equal =
-      streaming_probe_equal{comparators.data(), base_delta_batch_starts.data(), num_batches};
+    auto const equal  = streaming_probe_equal{comparators.data()};
     auto const config = grid_1d{left.num_rows(), 256};
     streaming_probe_count_kernel<<<config.num_blocks,
                                    config.num_threads_per_block,
@@ -826,14 +876,22 @@ class streaming_hash_join_impl {
     auto temp = rmm::device_buffer{temp_bytes, stream, resources.get_temporary_mr()};
     CUDF_CUDA_TRY(cub::DeviceScan::InclusiveSum(
       temp.data(), temp_bytes, offsets.data(), offsets.data(), left.num_rows(), stream.get()));
+    // An internal caller that already owns the exact cardinality need not pay a D2H copy and
+    // host synchronization merely to rediscover it.  Preserve the validation path for the
+    // public/no-size contract.
     size_type join_size{};
-    cudf::detail::cuda_memcpy_async(
-      cudf::host_span<size_type>{&join_size, 1},
-      cudf::device_span<size_type const>{offsets.data() + left.num_rows() - 1, 1},
-      stream);
-    stream.sync();
-    CUDF_EXPECTS(!output_size || *output_size == static_cast<std::size_t>(join_size),
-                 "The provided join output size is incorrect");
+    if (output_size) {
+      CUDF_EXPECTS(*output_size <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+                   "The provided join output size is too large",
+                   std::overflow_error);
+      join_size = static_cast<size_type>(*output_size);
+    } else {
+      cudf::detail::cuda_memcpy_async(
+        cudf::host_span<size_type>{&join_size, 1},
+        cudf::device_span<size_type const>{offsets.data() + left.num_rows() - 1, 1},
+        stream);
+      stream.sync();
+    }
     auto left_indices = std::make_unique<rmm::device_uvector<size_type>>(
       join_size, stream, resources.get_output_mr());
     auto batch_indices = std::make_unique<rmm::device_uvector<size_type>>(
@@ -848,8 +906,6 @@ class streaming_hash_join_impl {
                                                     slots.data(),
                                                     offsets.data(),
                                                     csr,
-                                                    base_delta_batch_starts.data(),
-                                                    num_batches,
                                                     left_indices->data(),
                                                     batch_indices->data(),
                                                     row_indices->data());
