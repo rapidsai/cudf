@@ -103,6 +103,34 @@ TEST_F(StreamingHashJoinTest, MultiplePartitionsReturnBatchLocalIndices)
   EXPECT_EQ(actual, expected);
 }
 
+TEST_F(StreamingHashJoinTest, InsertAfterProbeIncludesNewBatch)
+{
+  auto const stream = cudf::test::get_default_stream();
+  column_wrapper<int32_t> right0{1, 2};
+  column_wrapper<int32_t> right1{2, 3};
+  column_wrapper<int32_t> left{2, 3};
+  cudf::table_view const right0_view{{right0}};
+  cudf::table_view const right1_view{{right1}};
+  cudf::table_view const left_view{{left}};
+  std::vector<size_type> const keys{0};
+  cudf::streaming_hash_join joiner{right0_view,
+                                   keys,
+                                   /*total_right_rows=*/4,
+                                   /*max_num_batches=*/2,
+                                   cudf::nullable_join::NO,
+                                   cudf::null_equality::EQUAL};
+
+  joiner.insert(right0_view, stream);
+  auto [first_left, first_right] = joiner.inner_join(left_view, {}, stream);
+  EXPECT_EQ(to_sorted_host_matches(*first_left, *first_right.first, *first_right.second, stream),
+            (std::vector<join_match>{{0, 0, 1}}));
+
+  joiner.insert(right1_view, stream);
+  auto [second_left, second_right] = joiner.inner_join(left_view, {}, stream);
+  EXPECT_EQ(to_sorted_host_matches(*second_left, *second_right.first, *second_right.second, stream),
+            (std::vector<join_match>{{0, 0, 1}, {0, 1, 0}, {1, 1, 1}}));
+}
+
 TEST_F(StreamingHashJoinTest, ConcurrentInsert)
 {
   auto const stream               = cudf::test::get_default_stream();

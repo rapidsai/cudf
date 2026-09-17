@@ -644,10 +644,12 @@ class streaming_hash_join_impl {
     std::unique_lock base_delta_lock{base_delta_mutex, std::defer_lock};
     if (use_base_deltas) {
       base_delta_lock.lock();
-      CUDF_EXPECTS(!base_delta_sealed,
-                   "streaming_hash_join: cannot insert after the base-CSR delta state is sealed "
-                   "by inner_join().",
-                   std::logic_error);
+      // A probe seals the currently visible batches into a canonical CSR, but does not close the
+      // streaming lifecycle.  A later insertion starts a new delta epoch; seal_base_deltas()
+      // will publish a replacement CSR before its next probe.  This establishes the public
+      // insert -> probe -> insert -> probe contract while the sparse-generation compactor owns
+      // the next refinement of this path.
+      if (base_delta_sealed) { base_delta_sealed = false; }
     }
     CUDF_EXPECTS(right_partition.num_columns() == right_schema->num_columns(),
                  "streaming_hash_join: inserted partition column count does not match schema.",
