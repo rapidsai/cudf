@@ -53,7 +53,8 @@ struct dynamic_csr_key_slot {
 /** @brief Open-addressed key map whose equality is supplied by the batch-aware caller. */
 struct dynamic_csr_key_map_ref {
   dynamic_csr_key_slot* entries;
-  size_type capacity;
+  cuda::std::uint32_t capacity;
+  cuda::std::uint32_t capacity_mask;
 
   template <typename Equal>
   __device__ size_type find_or_insert(hash_value_type hash,
@@ -64,12 +65,10 @@ struct dynamic_csr_key_map_ref {
     // hash is safe because equality remains the authority within a probe sequence.
     auto const normalized_hash =
       hash >= dynamic_csr_pending_hash ? dynamic_csr_pending_hash - 1 : hash;
-    for (size_type step = 0; step < capacity; ++step) {
-      // `size_type` is signed. Do the modulo in an unsigned wide type before converting so row
-      // hashes with the high bit set cannot produce a negative, out-of-bounds slot index.
-      auto const slot = static_cast<size_type>((static_cast<cuda::std::uint64_t>(normalized_hash) +
-                                                static_cast<cuda::std::uint64_t>(step)) %
-                                               static_cast<cuda::std::uint64_t>(capacity));
+    for (cuda::std::uint32_t step = 0; step < capacity; ++step) {
+      // The map capacity is a power of two, so this avoids an expensive 64-bit modulo in every
+      // probe step and keeps the full-hash probe sequence intact.
+      auto const slot = (static_cast<cuda::std::uint32_t>(normalized_hash) + step) & capacity_mask;
       auto entry_hash =
         cuda::atomic_ref<hash_value_type, cuda::thread_scope_device>{entries[slot].hash};
       while (true) {
@@ -113,10 +112,8 @@ struct dynamic_csr_key_map_ref {
   {
     auto const normalized_hash =
       hash >= dynamic_csr_pending_hash ? dynamic_csr_pending_hash - 1 : hash;
-    for (size_type step = 0; step < capacity; ++step) {
-      auto const slot = static_cast<size_type>((static_cast<cuda::std::uint64_t>(normalized_hash) +
-                                                static_cast<cuda::std::uint64_t>(step)) %
-                                               static_cast<cuda::std::uint64_t>(capacity));
+    for (cuda::std::uint32_t step = 0; step < capacity; ++step) {
+      auto const slot = (static_cast<cuda::std::uint32_t>(normalized_hash) + step) & capacity_mask;
       auto entry_hash =
         cuda::atomic_ref<hash_value_type, cuda::thread_scope_device>{entries[slot].hash};
       auto current = entry_hash.load(cuda::memory_order_acquire);
@@ -258,6 +255,7 @@ CUDF_KERNEL void append_dynamic_csr_rows_kernel(size_type num_rows,
                                                 dynamic_csr_slot* slots,
                                                 dynamic_csr_segment* segments,
                                                 cuda::std::uint64_t* values,
+                                                int* key_map_exhausted,
                                                 Hasher hasher,
                                                 dynamic_csr_key_map_ref key_map,
                                                 Equal equal)
@@ -272,7 +270,13 @@ CUDF_KERNEL void append_dynamic_csr_rows_kernel(size_type num_rows,
       (static_cast<cuda::std::uint64_t>(static_cast<cuda::std::uint32_t>(batch_id)) << 32) |
       static_cast<cuda::std::uint32_t>(index);
     auto const bucket = key_map.find_or_insert(hasher(index), row_ref, equal);
-    if (bucket == num_buckets) { continue; }
+    if (bucket == num_buckets) {
+      // Do not silently lose a build row if a future sizing policy violates the map-capacity
+      // invariant. The host reports this at the next externally visible operation.
+      cuda::atomic_ref<int, cuda::thread_scope_device>{*key_map_exhausted}.store(
+        1, cuda::memory_order_relaxed);
+      continue;
+    }
     values[base_row + index] = row_ref;
     segments[segment_id]     = {dynamic_csr_no_segment, base_row + index, size_type{1}};
 
@@ -312,10 +316,12 @@ class segmented_dynamic_csr {
     : _num_buckets{num_buckets},
       _slots{static_cast<std::size_t>(num_buckets), stream, mr},
       _segments{static_cast<std::size_t>(max_rows), stream, mr},
-      _values{static_cast<std::size_t>(max_rows), stream, mr}
+      _values{static_cast<std::size_t>(max_rows), stream, mr},
+      _key_map_exhausted{1, stream, mr}
   {
     CUDF_CUDA_TRY(
       cudaMemsetAsync(_slots.data(), 0xff, _slots.size() * sizeof(dynamic_csr_slot), stream.get()));
+    CUDF_CUDA_TRY(cudaMemsetAsync(_key_map_exhausted.data(), 0, sizeof(int), stream.get()));
     // The size field is overwritten by memset above, so initialize the complete slot state in a
     // tiny kernel-free host staging copy is not possible. The first append resets its slot size;
     // the constructor therefore uses a dedicated initialization kernel below.
@@ -343,6 +349,7 @@ class segmented_dynamic_csr {
                                                                          _slots.data(),
                                                                          _segments.data(),
                                                                          _values.data(),
+                                                                         _key_map_exhausted.data(),
                                                                          hasher,
                                                                          key_map,
                                                                          equal);
@@ -355,6 +362,18 @@ class segmented_dynamic_csr {
   }
 
   [[nodiscard]] size_type num_buckets() const { return _num_buckets; }
+
+  void throw_if_key_map_exhausted(cuda::stream_ref stream) const
+  {
+    int exhausted{};
+    cudf::detail::cuda_memcpy_async(cudf::host_span<int>{&exhausted, 1},
+                                    cudf::device_span<int const>{_key_map_exhausted.data(), 1},
+                                    stream);
+    stream.sync();
+    CUDF_EXPECTS(exhausted == 0,
+                 "streaming_hash_join segmented dynamic key map exhausted its capacity",
+                 std::overflow_error);
+  }
 
  private:
   void initialize(cuda::stream_ref stream)
@@ -370,6 +389,7 @@ class segmented_dynamic_csr {
   rmm::device_uvector<dynamic_csr_slot> _slots;
   rmm::device_uvector<dynamic_csr_segment> _segments;
   rmm::device_uvector<cuda::std::uint64_t> _values;
+  rmm::device_uvector<int> _key_map_exhausted;
 };
 
 }  // namespace cudf::detail

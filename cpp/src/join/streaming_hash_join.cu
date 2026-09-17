@@ -165,6 +165,25 @@ bool use_base_csr_batch_deltas()
 }
 
 /**
+ * @brief Capacity for the segmented key map.
+ *
+ * The append store needs one row of payload capacity per declared build row, whereas the
+ * open-addressed key map benefits substantially from a lower load factor.  Keep these two
+ * resources independent: at 0.5 load the map is a power-of-two sized probe table and all probe
+ * arithmetic is a mask rather than an integer divide.
+ */
+size_type segmented_dynamic_key_map_capacity(size_type total_rows)
+{
+  auto const requested = std::max<std::uint64_t>(
+    1, static_cast<std::uint64_t>(total_rows) * 2);  // ceil(total_rows / 0.5)
+  auto const capacity = std::bit_ceil(requested);
+  CUDF_EXPECTS(capacity <= static_cast<std::uint64_t>(std::numeric_limits<size_type>::max()),
+               "streaming_hash_join segmented key-map capacity overflowed",
+               std::overflow_error);
+  return static_cast<size_type>(capacity);
+}
+
+/**
  * @brief Describes how a slot's first 32-bit word is divided between hash and batch ID.
  *
  * The high `batch_bits` store the batch ID and the remaining low bits store the truncated row hash.
@@ -795,11 +814,9 @@ class streaming_hash_join_impl {
         std::make_unique<rmm::device_buffer>(scan_temp_bytes, stream, mr.get_temporary_mr());
     }
     if (use_segmented_dynamic_csr() && total_right_rows > 0) {
-      // A power-of-two-ish bucket count is deliberately bounded by the known build-row capacity.
-      dynamic_csr.emplace(
-        total_right_rows, std::max(size_type{1}, total_right_rows), stream, mr.get_output_mr());
-      dynamic_key_map.emplace(
-        static_cast<std::size_t>(dynamic_csr->num_buckets()), stream, mr.get_output_mr());
+      auto const map_capacity = segmented_dynamic_key_map_capacity(total_right_rows);
+      dynamic_csr.emplace(total_right_rows, map_capacity, stream, mr.get_output_mr());
+      dynamic_key_map.emplace(static_cast<std::size_t>(map_capacity), stream, mr.get_output_mr());
       CUDF_CUDA_TRY(cudaMemsetAsync(dynamic_key_map->data(),
                                     0xff,
                                     dynamic_key_map->size() * sizeof(dynamic_csr_key_slot),
@@ -943,13 +960,13 @@ class streaming_hash_join_impl {
                                 batch_id,
                                 old_inserted_rows,
                                 row_hasher,
-                                {dynamic_key_map->data(), dynamic_csr->num_buckets()},
+                                {dynamic_key_map->data(),
+                                 static_cast<cuda::std::uint32_t>(dynamic_csr->num_buckets()),
+                                 static_cast<cuda::std::uint32_t>(dynamic_csr->num_buckets() - 1)},
                                 dynamic_equal,
                                 stream);
-            // `dynamic_equal` references the batch-local device comparator vector. Keep that
-            // vector alive until this append has consumed it; unlike cuco's insert path, the
-            // segmented map invokes equality during construction to split equal-hash keys.
-            stream.sync();
+            // The temporary allocator defers the comparator-vector release on this stream, so
+            // the append kernel observes it without a host-side synchronization.
           }
         } else {
           hash_table.insert_if_async(
@@ -964,10 +981,11 @@ class streaming_hash_join_impl {
                                 batch_id,
                                 old_inserted_rows,
                                 row_hasher,
-                                {dynamic_key_map->data(), dynamic_csr->num_buckets()},
+                                {dynamic_key_map->data(),
+                                 static_cast<cuda::std::uint32_t>(dynamic_csr->num_buckets()),
+                                 static_cast<cuda::std::uint32_t>(dynamic_csr->num_buckets() - 1)},
                                 dynamic_equal,
                                 stream);
-            stream.sync();
           }
         }
       };
@@ -1443,6 +1461,7 @@ class streaming_hash_join_impl {
       cudf::detail::make_counting_transform_iterator(0, probe_pair_fn{row_hasher, layout});
 
     if (dynamic_csr) {
+      dynamic_csr->throw_if_key_map_exhausted(stream);
       auto probe_slots = rmm::device_uvector<size_type>{
         static_cast<std::size_t>(left.num_rows()), stream, resources.get_temporary_mr()};
       auto match_counts = rmm::device_uvector<size_type>{
@@ -1457,7 +1476,9 @@ class streaming_hash_join_impl {
         probe_slots.data(),
         match_counts.data(),
         dynamic_csr->ref(),
-        {const_cast<dynamic_csr_key_slot*>(dynamic_key_map->data()), dynamic_csr->num_buckets()},
+        {const_cast<dynamic_csr_key_slot*>(dynamic_key_map->data()),
+         static_cast<cuda::std::uint32_t>(dynamic_csr->num_buckets()),
+         static_cast<cuda::std::uint32_t>(dynamic_csr->num_buckets() - 1)},
         row_hasher,
         dynamic_probe_ref_equal{comparators.data()},
         stream);
