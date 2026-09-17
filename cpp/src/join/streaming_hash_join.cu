@@ -5,6 +5,7 @@
 
 #include "join/hash_join/hash_csr.cuh"
 #include "join/join_common_utils.cuh"
+#include "join/segmented_dynamic_csr.cuh"
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -17,6 +18,7 @@
 #include <cudf/detail/row_operator/primitive_hashing.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/join/streaming_hash_join.hpp>
 #include <cudf/table/table.hpp>
@@ -136,6 +138,14 @@ size_type checked_batch_count(size_type batches)
   CUDF_EXPECTS(
     batches > 0, "streaming_hash_join requires max_num_batches > 0.", std::invalid_argument);
   return batches;
+}
+
+bool use_segmented_dynamic_csr()
+{
+  // This branch intentionally consumes only its own bit. The integration branch owns the final
+  // process-wide selector validation and other implementation bits.
+  auto const* const value = std::getenv("CUDF_STREAMING_HASH_JOIN_IMPL_MASK");
+  return value != nullptr && (std::strtoul(value, nullptr, 0) & 0x2UL) != 0;
 }
 
 /**
@@ -627,6 +637,31 @@ CUDF_KERNEL void streaming_probe_fill_kernel(size_type rows,
   }
 }
 
+template <typename RowEqual>
+struct dynamic_build_ref_equal {
+  RowEqual const* comparators;
+
+  __device__ bool operator()(cuda::std::uint64_t candidate,
+                             cuda::std::uint64_t representative) const noexcept
+  {
+    auto const candidate_row        = static_cast<size_type>(candidate);
+    auto const representative_row   = static_cast<size_type>(representative);
+    auto const representative_batch = static_cast<size_type>(representative >> 32);
+    return comparators[representative_batch](candidate_row, representative_row);
+  }
+};
+
+template <typename RowEqual>
+struct dynamic_probe_ref_equal {
+  RowEqual const* comparators;
+  __device__ bool operator()(cuda::std::uint64_t probe,
+                             cuda::std::uint64_t representative) const noexcept
+  {
+    return comparators[static_cast<size_type>(representative >> 32)](
+      static_cast<size_type>(probe), static_cast<size_type>(representative));
+  }
+};
+
 }  // namespace
 
 class streaming_hash_join_impl {
@@ -648,6 +683,13 @@ class streaming_hash_join_impl {
   // Declared before the hash table so the resource outlives allocations that refer to it.
   cudf::memory_resources mr;
   hash_table_type hash_table;
+  // Kept as a collision-safe shadow index until the comparator-aware segmented probe kernels land.
+  // The cuco multiset remains the result authority because it distinguishes row-equality from
+  // identical 32-bit hashes.
+  std::optional<segmented_dynamic_csr> dynamic_csr;
+  // One representative build-row reference per distinct key slot. The dynamic CSR pages are
+  // indexed by these slots rather than by raw hashes, so equal-hash unequal keys stay separate.
+  std::optional<rmm::device_uvector<dynamic_csr_key_slot>> dynamic_key_map;
 
   std::vector<std::shared_ptr<row::equality::preprocessed_table>> preprocessed_right;
   // Views of the inserted partitions, indexed by batch ID so callers can resolve the batch IDs
@@ -751,6 +793,17 @@ class streaming_hash_join_impl {
                                                   stream.get()));
       base_delta_scan_temp =
         std::make_unique<rmm::device_buffer>(scan_temp_bytes, stream, mr.get_temporary_mr());
+    }
+    if (use_segmented_dynamic_csr() && total_right_rows > 0) {
+      // A power-of-two-ish bucket count is deliberately bounded by the known build-row capacity.
+      dynamic_csr.emplace(
+        total_right_rows, std::max(size_type{1}, total_right_rows), stream, mr.get_output_mr());
+      dynamic_key_map.emplace(
+        static_cast<std::size_t>(dynamic_csr->num_buckets()), stream, mr.get_output_mr());
+      CUDF_CUDA_TRY(cudaMemsetAsync(dynamic_key_map->data(),
+                                    0xff,
+                                    dynamic_key_map->size() * sizeof(dynamic_csr_key_slot),
+                                    stream.get()));
     }
   }
 
@@ -878,12 +931,22 @@ class streaming_hash_join_impl {
         return;
       }
       auto const nulls = nullate::DYNAMIC{has_nulls};
-      auto insert_rows = [&](auto const& row_hasher) {
+      auto insert_rows = [&](auto const& row_hasher, auto const& dynamic_equal) {
         auto const input_begin = cudf::detail::make_counting_transform_iterator(
           0, build_pair_fn{row_hasher, layout, batch_id});
 
         if (compare_nulls == null_equality::EQUAL || !nullable(keys)) {
           hash_table.insert_async(input_begin, input_begin + batch_rows, stream.get());
+          if (dynamic_csr) {
+            dynamic_csr->append(batch_rows,
+                                nullptr,
+                                batch_id,
+                                old_inserted_rows,
+                                row_hasher,
+                                {dynamic_key_map->data(), dynamic_csr->num_buckets()},
+                                dynamic_equal,
+                                stream);
+          }
         } else {
           hash_table.insert_if_async(
             input_begin,
@@ -891,13 +954,51 @@ class streaming_hash_join_impl {
             cuda::counting_iterator<size_type>{0},
             row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask->data())},
             stream.get());
+          if (dynamic_csr) {
+            dynamic_csr->append(batch_rows,
+                                reinterpret_cast<bitmask_type const*>(row_bitmask->data()),
+                                batch_id,
+                                old_inserted_rows,
+                                row_hasher,
+                                {dynamic_key_map->data(), dynamic_csr->num_buckets()},
+                                dynamic_equal,
+                                stream);
+          }
         }
       };
 
       if (cudf::detail::is_primitive_row_op_compatible(keys)) {
-        insert_rows(row::primitive::row_hasher{nulls, preprocessed_right[batch_id]});
+        auto comparators = make_device_primitive_row_comparators(
+          preprocessed_right[batch_id],
+          std::span{preprocessed_right}.first(static_cast<std::size_t>(batch_id + 1)),
+          nulls,
+          compare_nulls,
+          stream,
+          mr.get_temporary_mr());
+        insert_rows(row::primitive::row_hasher{nulls, preprocessed_right[batch_id]},
+                    dynamic_build_ref_equal{comparators.data()});
       } else {
-        insert_rows(row::hash::row_hasher{preprocessed_right[batch_id]}.device_hasher(nulls));
+        if (has_nested_keys) {
+          auto comparators = make_device_row_comparators<true>(
+            preprocessed_right[batch_id],
+            std::span{preprocessed_right}.first(static_cast<std::size_t>(batch_id + 1)),
+            nulls,
+            compare_nulls,
+            stream,
+            mr.get_temporary_mr());
+          insert_rows(row::hash::row_hasher{preprocessed_right[batch_id]}.device_hasher(nulls),
+                      dynamic_build_ref_equal{comparators.data()});
+        } else {
+          auto comparators = make_device_row_comparators<false>(
+            preprocessed_right[batch_id],
+            std::span{preprocessed_right}.first(static_cast<std::size_t>(batch_id + 1)),
+            nulls,
+            compare_nulls,
+            stream,
+            mr.get_temporary_mr());
+          insert_rows(row::hash::row_hasher{preprocessed_right[batch_id]}.device_hasher(nulls),
+                      dynamic_build_ref_equal{comparators.data()});
+        }
       }
     }
   }
@@ -1335,6 +1436,67 @@ class streaming_hash_join_impl {
     }();
     auto const input_begin =
       cudf::detail::make_counting_transform_iterator(0, probe_pair_fn{row_hasher, layout});
+
+    if (dynamic_csr) {
+      auto probe_slots = rmm::device_uvector<size_type>{
+        static_cast<std::size_t>(left.num_rows()), stream, resources.get_temporary_mr()};
+      auto match_counts = rmm::device_uvector<size_type>{
+        static_cast<std::size_t>(left.num_rows()), stream, resources.get_temporary_mr()};
+      launch_segmented_dynamic_csr_probe_count_kernel(
+        left.num_rows(),
+        probe_slots.data(),
+        match_counts.data(),
+        dynamic_csr->ref(),
+        {const_cast<dynamic_csr_key_slot*>(dynamic_key_map->data()), dynamic_csr->num_buckets()},
+        row_hasher,
+        dynamic_probe_ref_equal{comparators.data()},
+        stream);
+      auto offsets = cudf::detail::make_zeroed_device_uvector_async<cuda::std::int64_t>(
+        static_cast<std::size_t>(left.num_rows()) + 1, stream, resources.get_temporary_mr());
+      auto const dynamic_size = cudf::detail::sizes_to_offsets(match_counts.begin(),
+                                                               match_counts.end(),
+                                                               offsets.begin(),
+                                                               0,
+                                                               stream,
+                                                               resources.get_temporary_mr());
+      CUDF_EXPECTS(
+        dynamic_size >= 0, "streaming dynamic join output size overflowed", std::overflow_error);
+      auto const result_size = static_cast<std::size_t>(dynamic_size);
+      auto left_indices      = std::make_unique<rmm::device_uvector<size_type>>(
+        result_size, stream, resources.get_output_mr());
+      auto batch_indices = std::make_unique<rmm::device_uvector<size_type>>(
+        result_size, stream, resources.get_output_mr());
+      auto row_indices = std::make_unique<rmm::device_uvector<size_type>>(
+        result_size, stream, resources.get_output_mr());
+      auto row_refs =
+        rmm::device_uvector<cuda::std::uint64_t>{result_size, stream, resources.get_temporary_mr()};
+      if (result_size > 0) {
+        constexpr auto threads = 256;
+        auto const blocks      = static_cast<unsigned int>((result_size + threads - 1) / threads);
+        segmented_dynamic_csr_retrieve_kernel<<<blocks, threads, 0, stream.get()>>>(
+          static_cast<size_type>(result_size),
+          left.num_rows(),
+          probe_slots.data(),
+          offsets.data(),
+          dynamic_csr->ref(),
+          row_refs.data(),
+          left_indices->data());
+        unpack_segmented_dynamic_refs_kernel<<<blocks, threads, 0, stream.get()>>>(
+          static_cast<size_type>(result_size),
+          row_refs.data(),
+          batch_indices->data(),
+          row_indices->data());
+        CUDF_CUDA_TRY(cudaGetLastError());
+      }
+      return std::pair{std::move(left_indices),
+                       std::pair{std::move(batch_indices), std::move(row_indices)}};
+    }
+
+    // The dynamic implementation resolves a single persistent key-map slot per probe row and
+    // derives multiplicity from that slot's append-only segment chain. The existing multiset path
+    // remains below while the experimental selector is integrated through the public dispatcher.
+    // `probe_slots` and `match_counts` deliberately have the same shape as HashCSR's count pass,
+    // so offsets/retrieval can share the normal join-output layout.
 
     auto const join_size = output_size ? *output_size
                                        : hash_table.count(input_begin,
