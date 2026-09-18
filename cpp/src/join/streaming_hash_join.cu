@@ -1330,12 +1330,11 @@ class streaming_hash_join_impl {
     // The real slots sort before the invalid-row sentinel, so the CSR's logical range is the
     // final end offset. Sorting 32-bit local rows halves radix payload traffic; pack the batch
     // ID only into the final capacity-backed CSR values without a D2H size query.
-    // `base_delta_capacity` is a power of two. Sorting its log2 bits plus one preserves the
-    // existing UINT_MAX invalid sentinel after every real slot while avoiding work on the
-    // remaining high bits.
-    auto const sort_end_bit = static_cast<int>(
-      cuda::std::bit_width(static_cast<cuda::std::uint32_t>(base_delta_capacity - 1)) + 1);
-    delta.values = std::make_unique<rmm::device_uvector<streaming_row_ref>>(
+    // Slots are dense CSR IDs, not physical map positions. Sorting only the CSR-ID bit width
+    // preserves the UINT_MAX invalid sentinel above every valid ID, including when capacity is a
+    // power of two, while avoiding unnecessary radix passes from the larger hash-map domain.
+    auto const sort_end_bit = static_cast<int>(cuda::std::bit_width(base_delta_csr_capacity));
+    delta.values            = std::make_unique<rmm::device_uvector<streaming_row_ref>>(
       static_cast<std::size_t>(rows), stream, cudf::get_current_device_resource_ref());
     std::size_t sort_temp_bytes{};
     CUDF_CUDA_TRY(cub::DeviceRadixSort::SortPairs(nullptr,
