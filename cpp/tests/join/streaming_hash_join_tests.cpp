@@ -196,6 +196,35 @@ TEST_F(StreamingHashJoinTest, InsertAfterProbeCompactsAtGenerationLimit)
   EXPECT_EQ(actual, expected);
 }
 
+TEST_F(StreamingHashJoinTest, HighDuplicateBuildKeySpansFixedPages)
+{
+  auto const stream = cudf::test::get_default_stream();
+  // 1,024 rows require 32 32-reference pages in the segmented implementation.
+  std::vector<int32_t> duplicate_values(1024, 42);
+  column_wrapper<int32_t> right(duplicate_values.begin(), duplicate_values.end());
+  column_wrapper<int32_t> left{42};
+  cudf::table_view const right_view{{right}};
+  cudf::table_view const left_view{{left}};
+  std::vector<size_type> const keys{0};
+  cudf::streaming_hash_join joiner{right_view,
+                                   keys,
+                                   right_view.num_rows(),
+                                   /*max_num_batches=*/1,
+                                   cudf::nullable_join::NO,
+                                   cudf::null_equality::EQUAL};
+  joiner.insert(right_view, stream);
+
+  auto [left_indices, right_indices] = joiner.inner_join(left_view, {}, stream);
+  auto const actual =
+    to_sorted_host_matches(*left_indices, *right_indices.first, *right_indices.second, stream);
+  std::vector<join_match> expected;
+  expected.reserve(duplicate_values.size());
+  for (size_type row = 0; row < static_cast<size_type>(duplicate_values.size()); ++row) {
+    expected.emplace_back(0, 0, row);
+  }
+  EXPECT_EQ(actual, expected);
+}
+
 TEST_F(StreamingHashJoinTest, ConcurrentInsert)
 {
   auto const stream               = cudf::test::get_default_stream();
