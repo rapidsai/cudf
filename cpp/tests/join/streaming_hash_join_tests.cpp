@@ -196,6 +196,41 @@ TEST_F(StreamingHashJoinTest, InsertAfterProbeCompactsAtGenerationLimit)
   EXPECT_EQ(actual, expected);
 }
 
+TEST_F(StreamingHashJoinTest, InsertAfterProbeCompactsQueuedSparseGenerations)
+{
+  auto const stream = cudf::test::get_default_stream();
+  // Applications may enqueue more batches than the generation threshold before the next probe.
+  // This covers ordering and compaction of the sparse overlay's non-fast-path traversal.
+  column_wrapper<int32_t> base{0, 1, 2, 3, 4, 5, 6, 7};
+  column_wrapper<int32_t> duplicate{0};
+  column_wrapper<int32_t> left{0};
+  cudf::table_view const base_view{{base}};
+  cudf::table_view const duplicate_view{{duplicate}};
+  cudf::table_view const left_view{{left}};
+  std::vector<size_type> const keys{0};
+  cudf::streaming_hash_join joiner{base_view,
+                                   keys,
+                                   /*total_right_rows=*/18,
+                                   /*max_num_batches=*/11,
+                                   cudf::nullable_join::NO,
+                                   cudf::null_equality::EQUAL};
+
+  joiner.insert(base_view, stream);
+  static_cast<void>(joiner.inner_join(left_view, {}, stream));
+  for (size_type batch = 0; batch < 10; ++batch) {
+    joiner.insert(duplicate_view, stream);
+  }
+
+  auto [left_indices, right_indices] = joiner.inner_join(left_view, {}, stream);
+  auto const actual =
+    to_sorted_host_matches(*left_indices, *right_indices.first, *right_indices.second, stream);
+  std::vector<join_match> expected{{0, 0, 0}};
+  for (size_type batch = 1; batch < 11; ++batch) {
+    expected.emplace_back(0, batch, 0);
+  }
+  EXPECT_EQ(actual, expected);
+}
+
 TEST_F(StreamingHashJoinTest, HighDuplicateBuildKeySpansFixedPages)
 {
   auto const stream = cudf::test::get_default_stream();
