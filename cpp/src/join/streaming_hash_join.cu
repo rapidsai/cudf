@@ -508,6 +508,7 @@ struct streaming_csr_generations_ref {
   [[nodiscard]] __device__ size_type size(size_type slot) const
   {
     auto count = base.size(slot);
+    if (heads == nullptr) { return count; }
     for (auto node = heads[slot]; node != nullptr; node = node->next) {
       count += node->end - node->begin;
     }
@@ -518,6 +519,7 @@ struct streaming_csr_generations_ref {
   {
     auto const base_size = base.size(slot);
     if (ordinal < base_size) { return base.values[base.begin(slot) + ordinal]; }
+    if (heads == nullptr) { return streaming_row_ref{0}; }
     ordinal -= base_size;
     // The compaction policy materializes at most eight active generations before replacing the
     // base.  Gather and insertion-sort their one run per CSR ID, rather than binary-searching
@@ -774,16 +776,22 @@ CUDF_KERNEL void streaming_delta_fill_batches_kernel(
 {
   for (auto row = grid_1d::global_thread_id(); row < rows; row += grid_1d::grid_stride()) {
     auto const index = static_cast<size_type>(row);
-    // The descriptor list is bounded by the configured number of batches. A linear lookup avoids
-    // a second device-side scan for a one-time sealing operation.
-    auto descriptor_index = size_type{0};
-    while (descriptor_index + 1 < num_descriptors &&
-           descriptors[descriptor_index + 1].begin <= index) {
-      ++descriptor_index;
+    // Initial sealing consumes up to the configured batch count. Find the owning descriptor with
+    // a bounded binary search rather than walking all prior batch boundaries per input row.
+    auto first = size_type{0};
+    auto last  = num_descriptors;
+    while (first + 1 < last) {
+      auto const middle = first + (last - first) / 2;
+      if (descriptors[middle].begin <= index) {
+        first = middle;
+      } else {
+        last = middle;
+      }
     }
-    auto const descriptor = descriptors[descriptor_index];
-    auto const local_row  = index - descriptor.begin;
-    auto const slot       = descriptor.slots[local_row];
+    auto const descriptor_index = first;
+    auto const descriptor       = descriptors[descriptor_index];
+    auto const local_row        = index - descriptor.begin;
+    auto const slot             = descriptor.slots[local_row];
     if (slot == streaming_empty_slot) { continue; }
     auto const begin = slot == 0 ? size_type{0} : cumulative_ends[slot - 1];
     auto const rank =
@@ -1071,7 +1079,7 @@ class streaming_hash_join_impl {
   // Heads are persistent across active post-seal generations.  A generation contributes a node
   // only for CSR IDs that it actually touched, avoiding an O(CSR-capacity) end-array expansion
   // for every small streaming batch.
-  mutable rmm::device_uvector<streaming_sparse_node*> base_delta_sparse_heads;
+  mutable std::unique_ptr<rmm::device_uvector<streaming_sparse_node*>> base_delta_sparse_heads;
   // Sealing is part of the streaming lifecycle and may happen repeatedly after new batches are
   // inserted. Keep its fixed-capacity scratch in the join state so a re-seal does not allocate
   // and free O(table_capacity) temporaries before every scan/fill pass.
@@ -1131,8 +1139,7 @@ class streaming_hash_join_impl {
       base_delta_counts(base_delta_csr_capacity, stream, mr.get_temporary_mr()),
       base_delta_cursors(base_delta_csr_capacity, stream, mr.get_temporary_mr()),
       base_delta_fill_descriptors(
-        static_cast<std::size_t>(max_num_batches), stream, mr.get_temporary_mr()),
-      base_delta_sparse_heads(base_delta_csr_capacity, stream, mr.get_temporary_mr())
+        static_cast<std::size_t>(max_num_batches), stream, mr.get_temporary_mr())
   {
     CUDF_EXPECTS(right_schema->num_columns() > 0,
                  "streaming_hash_join requires at least one right-side column.",
@@ -1178,10 +1185,6 @@ class streaming_hash_join_impl {
       // compaction only after the canonical CSR has been published.
       CUDF_CUDA_TRY(cudaMemsetAsync(
         base_delta_counts.data(), 0, base_delta_counts.size() * sizeof(size_type), stream.get()));
-      CUDF_CUDA_TRY(cudaMemsetAsync(base_delta_sparse_heads.data(),
-                                    0,
-                                    base_delta_sparse_heads.size() * sizeof(streaming_sparse_node*),
-                                    stream.get()));
       std::size_t scan_temp_bytes{};
       CUDF_CUDA_TRY(cub::DeviceScan::InclusiveSum(nullptr,
                                                   scan_temp_bytes,
@@ -1191,18 +1194,6 @@ class streaming_hash_join_impl {
                                                   stream.get()));
       base_delta_scan_temp =
         std::make_unique<rmm::device_buffer>(scan_temp_bytes, stream, mr.get_temporary_mr());
-      base_delta_sorted_slots = std::make_unique<rmm::device_uvector<cuda::std::uint32_t>>(
-        base_delta_csr_capacity, stream, mr.get_temporary_mr());
-      base_delta_sorted_rows = std::make_unique<rmm::device_uvector<cuda::std::uint32_t>>(
-        base_delta_csr_capacity, stream, mr.get_temporary_mr());
-      base_delta_unique_slots = std::make_unique<rmm::device_uvector<cuda::std::uint32_t>>(
-        base_delta_csr_capacity, stream, mr.get_temporary_mr());
-      base_delta_run_lengths = std::make_unique<rmm::device_uvector<size_type>>(
-        base_delta_csr_capacity, stream, mr.get_temporary_mr());
-      base_delta_run_ends = std::make_unique<rmm::device_uvector<size_type>>(
-        base_delta_csr_capacity, stream, mr.get_temporary_mr());
-      base_delta_num_runs =
-        std::make_unique<rmm::device_uvector<int>>(1, stream, mr.get_temporary_mr());
     }
     if (use_segmented_dynamic_csr() && total_right_rows > 0) {
       auto const map_capacity = segmented_dynamic_key_map_capacity(total_right_rows);
@@ -1226,6 +1217,7 @@ class streaming_hash_join_impl {
       // A sealed canonical CSR is immutable. Later batches are independently materialized and
       // concatenated at probe time until the compaction policy replaces the base.
       append_base_delta_generation = base_delta_sealed;
+      if (append_base_delta_generation) { ensure_post_seal_delta_workspace(stream); }
     }
     CUDF_EXPECTS(right_partition.num_columns() == right_schema->num_columns(),
                  "streaming_hash_join: inserted partition column count does not match schema.",
@@ -1431,10 +1423,41 @@ class streaming_hash_join_impl {
     }
   }
 
+  /**
+   * @brief Materialize storage used exclusively by post-seal sparse generations.
+   *
+   * One-shot build-and-probe joins never need this state. Deferring it removes several
+   * capacity-sized allocations and clears from the normal initial-seal path while retaining the
+   * existing grow-only workspace policy once streaming appends begin.
+   */
+  void ensure_post_seal_delta_workspace(cuda::stream_ref stream) const
+  {
+    if (base_delta_sparse_heads) { return; }
+    base_delta_sparse_heads = std::make_unique<rmm::device_uvector<streaming_sparse_node*>>(
+      base_delta_csr_capacity, stream, mr.get_temporary_mr());
+    CUDF_CUDA_TRY(cudaMemsetAsync(base_delta_sparse_heads->data(),
+                                  0,
+                                  base_delta_sparse_heads->size() * sizeof(streaming_sparse_node*),
+                                  stream.get()));
+    base_delta_sorted_slots = std::make_unique<rmm::device_uvector<cuda::std::uint32_t>>(
+      base_delta_csr_capacity, stream, mr.get_temporary_mr());
+    base_delta_sorted_rows = std::make_unique<rmm::device_uvector<cuda::std::uint32_t>>(
+      base_delta_csr_capacity, stream, mr.get_temporary_mr());
+    base_delta_unique_slots = std::make_unique<rmm::device_uvector<cuda::std::uint32_t>>(
+      base_delta_csr_capacity, stream, mr.get_temporary_mr());
+    base_delta_run_lengths = std::make_unique<rmm::device_uvector<size_type>>(
+      base_delta_csr_capacity, stream, mr.get_temporary_mr());
+    base_delta_run_ends = std::make_unique<rmm::device_uvector<size_type>>(
+      base_delta_csr_capacity, stream, mr.get_temporary_mr());
+    base_delta_num_runs =
+      std::make_unique<rmm::device_uvector<int>>(1, stream, mr.get_temporary_mr());
+  }
+
   void materialize_delta_generation(streaming_delta& delta, cuda::stream_ref stream) const
   {
     cudf::scoped_range range{"streaming_hash_join::base_deltas::delta_materialization"};
     if (delta.nodes) { return; }
+    ensure_post_seal_delta_workspace(stream);
     auto const rows = static_cast<size_type>(delta.slots->size());
     // The real slots sort before the invalid-row sentinel, so the CSR's logical range is the
     // final end offset. Sorting 32-bit local rows halves radix payload traffic; pack the batch
@@ -1535,7 +1558,7 @@ class streaming_hash_join_impl {
                                                                delta.batch_id,
                                                                delta.values->data(),
                                                                delta.nodes->data(),
-                                                               base_delta_sparse_heads.data());
+                                                               base_delta_sparse_heads->data());
     CUDF_CUDA_TRY(cudaGetLastError());
     // The stream-ordered resource keeps these inputs alive until the sort has consumed them.
     // Retaining only sparse run nodes and sorted values bounds long-lived delta storage.
@@ -1557,7 +1580,7 @@ class streaming_hash_join_impl {
     cudf::scoped_range range{"streaming_hash_join::base_deltas::compaction"};
     if (base_delta_generations.empty()) { return; }
     auto const source = streaming_csr_generations_ref{
-      {canonical_ends->data(), canonical_values->data()}, base_delta_sparse_heads.data()};
+      {canonical_ends->data(), canonical_values->data()}, base_delta_sparse_heads->data()};
     auto const config = grid_1d{static_cast<size_type>(base_delta_csr_capacity), 256};
     streaming_csr_merge_count_kernel<<<config.num_blocks,
                                        config.num_threads_per_block,
@@ -1597,9 +1620,9 @@ class streaming_hash_join_impl {
     canonical_values = std::move(merged_values);
     // The merge kernels above have consumed every linked node.  Clear the persistent overlay
     // before retiring generations so future probes see only the replacement canonical CSR.
-    CUDF_CUDA_TRY(cudaMemsetAsync(base_delta_sparse_heads.data(),
+    CUDF_CUDA_TRY(cudaMemsetAsync(base_delta_sparse_heads->data(),
                                   0,
-                                  base_delta_sparse_heads.size() * sizeof(streaming_sparse_node*),
+                                  base_delta_sparse_heads->size() * sizeof(streaming_sparse_node*),
                                   stream.get()));
     for (auto* generation : base_delta_generations) {
       generation->nodes->set_stream(stream);
@@ -1620,13 +1643,16 @@ class streaming_hash_join_impl {
     auto const num_batches = inserted_batches.load(std::memory_order_relaxed);
     canonical_ends         = std::make_unique<rmm::device_uvector<size_type>>(
       base_delta_csr_capacity, stream, cudf::get_current_device_resource_ref());
-    auto canonical_scan_bytes = base_delta_scan_temp->size();
-    CUDF_CUDA_TRY(cub::DeviceScan::InclusiveSum(base_delta_scan_temp->data(),
-                                                canonical_scan_bytes,
-                                                base_delta_counts.data(),
-                                                canonical_ends->data(),
-                                                base_delta_csr_capacity,
-                                                stream.get()));
+    {
+      cudf::scoped_range scan_range{"streaming_hash_join::base_deltas::seal_scan"};
+      auto canonical_scan_bytes = base_delta_scan_temp->size();
+      CUDF_CUDA_TRY(cub::DeviceScan::InclusiveSum(base_delta_scan_temp->data(),
+                                                  canonical_scan_bytes,
+                                                  base_delta_counts.data(),
+                                                  canonical_ends->data(),
+                                                  base_delta_csr_capacity,
+                                                  stream.get()));
+    }
     canonical_values = std::make_unique<rmm::device_uvector<streaming_row_ref>>(
       static_cast<std::size_t>(inserted_rows.load(std::memory_order_relaxed)),
       stream,
@@ -1648,6 +1674,7 @@ class streaming_hash_join_impl {
                                                            base_delta_fill_descriptors_host.size()},
         cudf::host_span<streaming_delta_fill_descriptor const>{base_delta_fill_descriptors_host},
         stream);
+      cudf::scoped_range fill_range{"streaming_hash_join::base_deltas::seal_fill"};
       auto const config = grid_1d{input_begin, 256};
       streaming_delta_fill_batches_kernel<<<config.num_blocks,
                                             config.num_threads_per_block,
@@ -1792,7 +1819,8 @@ class streaming_hash_join_impl {
       base_delta_lifecycle_event.record(stream);
     }
     auto const csr = streaming_csr_generations_ref{
-      {canonical_ends->data(), canonical_values->data()}, base_delta_sparse_heads.data()};
+      {canonical_ends->data(), canonical_values->data()},
+      base_delta_sparse_heads ? base_delta_sparse_heads->data() : nullptr};
     // The sparse head array is the probe snapshot.  Record its completion after count/fill have
     // been queued, so a later stream cannot publish another generation into the overlay while
     // this stream is traversing it.

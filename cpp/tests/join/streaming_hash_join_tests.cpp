@@ -260,6 +260,45 @@ TEST_F(StreamingHashJoinTest, HighDuplicateBuildKeySpansFixedPages)
   EXPECT_EQ(actual, expected);
 }
 
+TEST_F(StreamingHashJoinTest, SixteenUniquePreSealBatches)
+{
+  auto const stream               = cudf::test::get_default_stream();
+  constexpr size_type num_batches = 16;
+  std::vector<int32_t> values(num_batches);
+  std::iota(values.begin(), values.end(), 0);
+  column_wrapper<int32_t> right(values.begin(), values.end());
+  cudf::table_view const right_view{{right}};
+  std::vector<size_type> slice_indices;
+  slice_indices.reserve(2 * num_batches);
+  for (size_type i = 0; i < num_batches; ++i) {
+    slice_indices.push_back(i);
+    slice_indices.push_back(i + 1);
+  }
+  auto const right_partitions = cudf::slice(right_view, slice_indices);
+  column_wrapper<int32_t> left(values.begin(), values.end());
+
+  std::vector<size_type> const keys{0};
+  cudf::streaming_hash_join joiner{right_view,
+                                   keys,
+                                   /*total_right_rows=*/num_batches,
+                                   /*max_num_batches=*/num_batches,
+                                   cudf::nullable_join::NO,
+                                   cudf::null_equality::EQUAL};
+  for (auto const& partition : right_partitions) {
+    joiner.insert(partition, stream);
+  }
+
+  auto [left_indices, right_indices] = joiner.inner_join(cudf::table_view{{left}}, {}, stream);
+  auto const actual =
+    to_sorted_host_matches(*left_indices, *right_indices.first, *right_indices.second, stream);
+  std::vector<join_match> expected;
+  expected.reserve(num_batches);
+  for (size_type i = 0; i < num_batches; ++i) {
+    expected.emplace_back(i, i, 0);
+  }
+  EXPECT_EQ(actual, expected);
+}
+
 TEST_F(StreamingHashJoinTest, ConcurrentInsert)
 {
   auto const stream               = cudf::test::get_default_stream();
