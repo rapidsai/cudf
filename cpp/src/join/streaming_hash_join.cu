@@ -190,9 +190,9 @@ size_type segmented_dynamic_key_map_capacity(size_type total_rows)
 /**
  * @brief Experimental base+deltas compaction policy, configurable for benchmark sweeps.
  *
- * The defaults retain the existing 25%-of-base or eight-generation behavior.  These are not
- * public join options; they let the selector-`0x1` prototype measure policy sensitivity without
- * rebuilding between trials.
+ * The defaults are the measured streaming compromise: defer base rewrites until active delta
+ * rows equal the base, or 16 generations are live. These are not public join options; they let
+ * the selector-`0x1` prototype measure policy sensitivity without rebuilding between trials.
  */
 struct base_delta_compaction_policy {
   size_type row_percent;
@@ -213,8 +213,8 @@ base_delta_compaction_policy get_base_delta_compaction_policy()
     }
     return static_cast<size_type>(parsed);
   };
-  return {parse("CUDF_STREAMING_HASH_JOIN_BASE_DELTA_COMPACTION_ROW_PERCENT", 25, 1, 100),
-          parse("CUDF_STREAMING_HASH_JOIN_BASE_DELTA_COMPACTION_GENERATION_LIMIT", 8, 1, 1024)};
+  return {parse("CUDF_STREAMING_HASH_JOIN_BASE_DELTA_COMPACTION_ROW_PERCENT", 100, 1, 100),
+          parse("CUDF_STREAMING_HASH_JOIN_BASE_DELTA_COMPACTION_GENERATION_LIMIT", 16, 1, 1024)};
 }
 
 /**
@@ -571,6 +571,61 @@ struct streaming_csr_generations_ref {
     }
     return streaming_row_ref{0};  // Unreachable when ordinal < size(slot).
   }
+
+  /** Copy one CSR row while resolving every sparse source range only once. */
+  __device__ void copy_to(size_type slot, streaming_row_ref* destination) const
+  {
+    auto output = size_type{0};
+    for (auto index = base.begin(slot); index < base.cumulative_ends[slot]; ++index) {
+      destination[output++] = base.values[index];
+    }
+
+    streaming_sparse_node const* ordered[streaming_max_active_generations];
+    auto count                = size_type{0};
+    auto too_many_generations = false;
+    for (auto node = heads[slot]; node != nullptr; node = node->next) {
+      if (count == streaming_max_active_generations) {
+        too_many_generations = true;
+        break;
+      }
+      auto position = count;
+      while (position > 0 && ordered[position - 1]->generation > node->generation) {
+        ordered[position] = ordered[position - 1];
+        --position;
+      }
+      ordered[position] = node;
+      ++count;
+    }
+    if (!too_many_generations) {
+      for (auto ordered_index = size_type{0}; ordered_index < count; ++ordered_index) {
+        auto const node = ordered[ordered_index];
+        for (auto index = node->begin; index < node->end; ++index) {
+          destination[output++] = node->values[index];
+        }
+      }
+      return;
+    }
+
+    // Queued inserts may briefly exceed the fixed local fast path. Preserve chronological order
+    // without allocating device memory; compaction immediately replaces this overlay afterwards.
+    auto previous_generation = size_type{0};
+    auto have_previous       = false;
+    while (true) {
+      streaming_sparse_node const* next = nullptr;
+      for (auto node = heads[slot]; node != nullptr; node = node->next) {
+        if ((!have_previous || node->generation > previous_generation) &&
+            (next == nullptr || node->generation < next->generation)) {
+          next = node;
+        }
+      }
+      if (next == nullptr) { return; }
+      for (auto index = next->begin; index < next->end; ++index) {
+        destination[output++] = next->values[index];
+      }
+      previous_generation = next->generation;
+      have_previous       = true;
+    }
+  }
 };
 
 struct streaming_delta {
@@ -689,30 +744,52 @@ CUDF_KERNEL void streaming_delta_build_kernel(size_type rows,
     auto const csr_id = map.insert(hasher(index), row_ref, equal);
     slots[index]      = csr_id;
     if (preseal_counts != nullptr && csr_id != streaming_empty_slot) {
-      cuda::atomic_ref<size_type, cuda::thread_scope_device>{preseal_counts[csr_id]}.fetch_add(
-        size_type{1}, cuda::memory_order_relaxed);
+      // Aggregate equal IDs in a warp before touching the canonical count array. This turns a
+      // duplicate-heavy build from one contended atomic per row into one atomic per subgroup.
+      auto const active  = __activemask();
+      auto const matches = __match_any_sync(active, csr_id);
+      auto const leader  = __ffs(static_cast<int>(matches)) - 1;
+      if (static_cast<int>(threadIdx.x & (cudf::detail::warp_size - 1)) == leader) {
+        cuda::atomic_ref<size_type, cuda::thread_scope_device>{preseal_counts[csr_id]}.fetch_add(
+          static_cast<size_type>(__popc(matches)), cuda::memory_order_relaxed);
+      }
     }
   }
 }
 
-CUDF_KERNEL void streaming_delta_fill_kernel(size_type rows,
-                                             cuda::std::uint32_t const* slots,
-                                             cuda::std::uint32_t const* local_rows,
-                                             size_type batch_id,
-                                             size_type const* cumulative_ends,
-                                             size_type* cursors,
-                                             streaming_row_ref* values)
+struct streaming_delta_fill_descriptor {
+  cuda::std::uint32_t const* slots;
+  size_type rows;
+  size_type begin;
+  size_type batch_id;
+};
+
+CUDF_KERNEL void streaming_delta_fill_batches_kernel(
+  size_type rows,
+  streaming_delta_fill_descriptor const* descriptors,
+  size_type num_descriptors,
+  size_type const* cumulative_ends,
+  size_type* cursors,
+  streaming_row_ref* values)
 {
   for (auto row = grid_1d::global_thread_id(); row < rows; row += grid_1d::grid_stride()) {
     auto const index = static_cast<size_type>(row);
-    auto const slot  = slots[index];
+    // The descriptor list is bounded by the configured number of batches. A linear lookup avoids
+    // a second device-side scan for a one-time sealing operation.
+    auto descriptor_index = size_type{0};
+    while (descriptor_index + 1 < num_descriptors &&
+           descriptors[descriptor_index + 1].begin <= index) {
+      ++descriptor_index;
+    }
+    auto const descriptor = descriptors[descriptor_index];
+    auto const local_row  = index - descriptor.begin;
+    auto const slot       = descriptor.slots[local_row];
     if (slot == streaming_empty_slot) { continue; }
     auto const begin = slot == 0 ? size_type{0} : cumulative_ends[slot - 1];
     auto const rank =
       cuda::atomic_ref<size_type, cuda::thread_scope_device>{cursors[slot]}.fetch_add(
         size_type{1}, cuda::memory_order_relaxed);
-    values[begin + rank] = make_streaming_row_ref(
-      batch_id, local_rows == nullptr ? index : static_cast<size_type>(local_rows[index]));
+    values[begin + rank] = make_streaming_row_ref(descriptor.batch_id, local_row);
   }
 }
 
@@ -779,9 +856,7 @@ CUDF_KERNEL void streaming_csr_merge_fill_kernel(size_type slots,
   for (auto slot = grid_1d::global_thread_id(); slot < slots; slot += grid_1d::grid_stride()) {
     auto const index = static_cast<size_type>(slot);
     auto const begin = index == 0 ? size_type{0} : cumulative_ends[index - 1];
-    for (auto ordinal = size_type{0}; ordinal < source.size(index); ++ordinal) {
-      values[begin + ordinal] = source.at(index, ordinal);
-    }
+    source.copy_to(index, values + begin);
   }
 }
 
@@ -790,6 +865,7 @@ CUDF_KERNEL void streaming_probe_count_kernel(size_type rows,
                                               bitmask_type const* valid_rows,
                                               cuda::std::uint32_t* slots,
                                               size_type* counts,
+                                              int* all_matches_exactly_one,
                                               streaming_hash_table_ref map,
                                               streaming_csr_generations_ref csr,
                                               Equal equal,
@@ -804,6 +880,14 @@ CUDF_KERNEL void streaming_probe_count_kernel(size_type rows,
     slots[index]     = slot;
     auto const count = slot == streaming_empty_slot ? size_type{0} : csr.size(slot);
     counts[index]    = count;
+    // A warp reports the negative result once. This flag is only an optimization hint; the
+    // normal offset-based fill remains authoritative whenever any row has zero or multiple hits.
+    auto const active = __activemask();
+    auto const failed = __ballot_sync(active, count != size_type{1});
+    if ((threadIdx.x & (cudf::detail::warp_size - 1)) == 0 && failed != 0) {
+      cuda::atomic_ref<int, cuda::thread_scope_device>{*all_matches_exactly_one}.store(
+        0, cuda::memory_order_relaxed);
+    }
   }
 }
 
@@ -820,6 +904,7 @@ CUDF_KERNEL void streaming_probe_fill_kernel(size_type output_size,
                                              size_type outputs_per_warp,
                                              cuda::std::uint32_t const* slots,
                                              size_type const* offsets,
+                                             int const* all_matches_exactly_one,
                                              streaming_csr_generations_ref csr,
                                              size_type* left_indices,
                                              size_type* batch_indices,
@@ -834,6 +919,19 @@ CUDF_KERNEL void streaming_probe_fill_kernel(size_type output_size,
   auto const range_begin = outputs_per_warp * global_warp;
   if (range_begin >= output_size) { return; }
   auto const range_end = cuda::std::min<size_type>(range_begin + outputs_per_warp, output_size);
+
+  if (*all_matches_exactly_one != 0) {
+    for (size_type item = 0; item < streaming_probe_outputs_per_lane; ++item) {
+      auto const output =
+        range_begin + lane_id + item * static_cast<size_type>(cudf::detail::warp_size);
+      if (output >= range_end) { continue; }
+      auto const row_ref    = csr.at(slots[output], 0);
+      left_indices[output]  = output;
+      batch_indices[output] = streaming_ref_batch(row_ref);
+      row_indices[output]   = streaming_ref_row(row_ref);
+    }
+    return;
+  }
 
   size_type endpoint_probe{};
   if (lane_id < 2) {
@@ -866,6 +964,7 @@ void launch_streaming_probe_fill_kernel(size_type output_size,
                                         size_type rows,
                                         cuda::std::uint32_t const* slots,
                                         size_type const* offsets,
+                                        int const* all_matches_exactly_one,
                                         streaming_csr_generations_ref csr,
                                         size_type* left_indices,
                                         size_type* batch_indices,
@@ -888,6 +987,7 @@ void launch_streaming_probe_fill_kernel(size_type output_size,
     outputs_per_warp,
     slots,
     offsets,
+    all_matches_exactly_one,
     csr,
     left_indices,
     batch_indices,
@@ -977,6 +1077,11 @@ class streaming_hash_join_impl {
   // and free O(table_capacity) temporaries before every scan/fill pass.
   mutable rmm::device_uvector<size_type> base_delta_counts;
   mutable rmm::device_uvector<size_type> base_delta_cursors;
+  // One descriptor per non-empty initial batch lets seal fill the canonical CSR in one launch.
+  // Both vectors are owned by the join state so the host descriptors remain valid until their
+  // asynchronous H2D copy has completed.
+  mutable rmm::device_uvector<streaming_delta_fill_descriptor> base_delta_fill_descriptors;
+  mutable std::vector<streaming_delta_fill_descriptor> base_delta_fill_descriptors_host;
   mutable std::unique_ptr<rmm::device_buffer> base_delta_scan_temp;
   // Delta materialization is serialized by `base_delta_mutex`, so retain one grow-only CUB
   // workspace rather than allocating and releasing six buffers per post-seal generation.
@@ -1025,6 +1130,8 @@ class streaming_hash_join_impl {
       base_delta_batches(static_cast<std::size_t>(max_num_batches)),
       base_delta_counts(base_delta_csr_capacity, stream, mr.get_temporary_mr()),
       base_delta_cursors(base_delta_csr_capacity, stream, mr.get_temporary_mr()),
+      base_delta_fill_descriptors(
+        static_cast<std::size_t>(max_num_batches), stream, mr.get_temporary_mr()),
       base_delta_sparse_heads(base_delta_csr_capacity, stream, mr.get_temporary_mr())
   {
     CUDF_EXPECTS(right_schema->num_columns() > 0,
@@ -1110,6 +1217,7 @@ class streaming_hash_join_impl {
 
   void insert(table_view const& right_partition, cuda::stream_ref stream)
   {
+    cudf::scoped_range range{"streaming_hash_join::base_deltas::insert"};
     std::unique_lock base_delta_lock{base_delta_mutex, std::defer_lock};
     auto append_base_delta_generation = false;
     if (use_base_deltas) {
@@ -1325,6 +1433,7 @@ class streaming_hash_join_impl {
 
   void materialize_delta_generation(streaming_delta& delta, cuda::stream_ref stream) const
   {
+    cudf::scoped_range range{"streaming_hash_join::base_deltas::delta_materialization"};
     if (delta.nodes) { return; }
     auto const rows = static_cast<size_type>(delta.slots->size());
     // The real slots sort before the invalid-row sentinel, so the CSR's logical range is the
@@ -1445,6 +1554,7 @@ class streaming_hash_join_impl {
 
   void compact_delta_generations(cuda::stream_ref stream) const
   {
+    cudf::scoped_range range{"streaming_hash_join::base_deltas::compaction"};
     if (base_delta_generations.empty()) { return; }
     auto const source = streaming_csr_generations_ref{
       {canonical_ends->data(), canonical_values->data()}, base_delta_sparse_heads.data()};
@@ -1503,6 +1613,7 @@ class streaming_hash_join_impl {
 
   void seal_base_deltas(cuda::stream_ref stream) const
   {
+    cudf::scoped_range range{"streaming_hash_join::base_deltas::seal"};
     std::lock_guard lock{base_delta_mutex};
     base_delta_lifecycle_event.wait(stream);
     if (base_delta_sealed) { return; }
@@ -1522,20 +1633,32 @@ class streaming_hash_join_impl {
       cudf::get_current_device_resource_ref());
     CUDF_CUDA_TRY(cudaMemsetAsync(
       base_delta_cursors.data(), 0, base_delta_cursors.size() * sizeof(size_type), stream.get()));
+    base_delta_fill_descriptors_host.clear();
+    auto input_begin = size_type{0};
     for (size_type batch = 0; batch < num_batches; ++batch) {
       auto const& delta = base_delta_batches[batch];
       if (!delta || delta->slots->size() == 0) { continue; }
-      auto const config = grid_1d{static_cast<size_type>(delta->slots->size()), 256};
-      streaming_delta_fill_kernel<<<config.num_blocks,
-                                    config.num_threads_per_block,
-                                    0,
-                                    stream.get()>>>(static_cast<size_type>(delta->slots->size()),
-                                                    delta->slots->data(),
-                                                    delta->rows ? delta->rows->data() : nullptr,
-                                                    delta->batch_id,
-                                                    canonical_ends->data(),
-                                                    base_delta_cursors.data(),
-                                                    canonical_values->data());
+      base_delta_fill_descriptors_host.push_back(
+        {delta->slots->data(), static_cast<size_type>(delta->slots->size()), input_begin, batch});
+      input_begin += static_cast<size_type>(delta->slots->size());
+    }
+    if (!base_delta_fill_descriptors_host.empty()) {
+      cudf::detail::cuda_memcpy_async(
+        cudf::device_span<streaming_delta_fill_descriptor>{base_delta_fill_descriptors.data(),
+                                                           base_delta_fill_descriptors_host.size()},
+        cudf::host_span<streaming_delta_fill_descriptor const>{base_delta_fill_descriptors_host},
+        stream);
+      auto const config = grid_1d{input_begin, 256};
+      streaming_delta_fill_batches_kernel<<<config.num_blocks,
+                                            config.num_threads_per_block,
+                                            0,
+                                            stream.get()>>>(
+        input_begin,
+        base_delta_fill_descriptors.data(),
+        static_cast<size_type>(base_delta_fill_descriptors_host.size()),
+        canonical_ends->data(),
+        base_delta_cursors.data(),
+        canonical_values->data());
       CUDF_CUDA_TRY(cudaGetLastError());
     }
     // Count/fill work for every pre-seal batch is now enqueued.  Retire the sparse inputs on
@@ -1562,6 +1685,7 @@ class streaming_hash_join_impl {
                               cuda::stream_ref stream,
                               cudf::memory_resources resources) const
   {
+    cudf::scoped_range range{"streaming_hash_join::base_deltas::probe"};
     if (left.num_rows() == 0) {
       CUDF_EXPECTS(!output_size || *output_size == 0,
                    "The provided join output size does not match an empty left table",
@@ -1583,13 +1707,24 @@ class streaming_hash_join_impl {
       static_cast<std::size_t>(left.num_rows()), stream, resources.get_temporary_mr()};
     auto offsets = rmm::device_uvector<size_type>{
       static_cast<std::size_t>(left.num_rows()), stream, resources.get_temporary_mr()};
+    auto all_matches_exactly_one =
+      rmm::device_uvector<int>{1, stream, resources.get_temporary_mr()};
+    // Any non-zero byte pattern is true; memset avoids a host-to-device staging dependency.
+    CUDF_CUDA_TRY(cudaMemsetAsync(all_matches_exactly_one.data(), 1, sizeof(int), stream.get()));
     auto const equal  = streaming_probe_equal{comparators.data()};
     auto const config = grid_1d{left.num_rows(), 256};
     streaming_probe_count_kernel<<<config.num_blocks,
                                    config.num_threads_per_block,
                                    0,
-                                   stream.get()>>>(
-      left.num_rows(), valid_rows, slots.data(), offsets.data(), map, csr, equal, row_hasher);
+                                   stream.get()>>>(left.num_rows(),
+                                                   valid_rows,
+                                                   slots.data(),
+                                                   offsets.data(),
+                                                   all_matches_exactly_one.data(),
+                                                   map,
+                                                   csr,
+                                                   equal,
+                                                   row_hasher);
     CUDF_CUDA_TRY(cudaGetLastError());
     std::size_t temp_bytes{};
     CUDF_CUDA_TRY(cub::DeviceScan::InclusiveSum(
@@ -1624,6 +1759,7 @@ class streaming_hash_join_impl {
                                          left.num_rows(),
                                          slots.data(),
                                          offsets.data(),
+                                         all_matches_exactly_one.data(),
                                          csr,
                                          left_indices->data(),
                                          batch_indices->data(),
