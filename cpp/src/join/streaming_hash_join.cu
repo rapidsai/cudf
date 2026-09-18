@@ -426,14 +426,16 @@ struct streaming_hash_table_ref {
           }
           continue;
         }
-        auto const stored =
-          cuda::atomic_ref<streaming_row_ref, cuda::thread_scope_device>{
-            entries[slot].representative}
-            .load(cuda::memory_order_acquire);
-        if (current == normalized && equal(representative, stored)) {
-          return cuda::atomic_ref<cuda::std::uint32_t, cuda::thread_scope_device>{
-            entries[slot].csr_id}
-            .load(cuda::memory_order_acquire);
+        if (current == normalized) {
+          auto const stored =
+            cuda::atomic_ref<streaming_row_ref, cuda::thread_scope_device>{
+              entries[slot].representative}
+              .load(cuda::memory_order_acquire);
+          if (equal(representative, stored)) {
+            return cuda::atomic_ref<cuda::std::uint32_t, cuda::thread_scope_device>{
+              entries[slot].csr_id}
+              .load(cuda::memory_order_acquire);
+          }
         }
         break;
       }
@@ -453,13 +455,16 @@ struct streaming_hash_table_ref {
         current = key.load(cuda::memory_order_acquire);
       }
       if (current == streaming_empty_hash) { return cuda::std::uint32_t{-1}; }
-      auto const stored =
-        cuda::atomic_ref<streaming_row_ref, cuda::thread_scope_device>{entries[slot].representative}
-          .load(cuda::memory_order_acquire);
-      if (current == normalized && equal(probe, stored)) {
-        return cuda::atomic_ref<cuda::std::uint32_t, cuda::thread_scope_device>{
-          entries[slot].csr_id}
-          .load(cuda::memory_order_acquire);
+      if (current == normalized) {
+        auto const stored =
+          cuda::atomic_ref<streaming_row_ref, cuda::thread_scope_device>{
+            entries[slot].representative}
+            .load(cuda::memory_order_acquire);
+        if (equal(probe, stored)) {
+          return cuda::atomic_ref<cuda::std::uint32_t, cuda::thread_scope_device>{
+            entries[slot].csr_id}
+            .load(cuda::memory_order_acquire);
+        }
       }
     }
     return cuda::std::uint32_t{-1};
