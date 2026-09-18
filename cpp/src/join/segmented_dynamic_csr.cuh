@@ -8,7 +8,11 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/hashing.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
@@ -186,6 +190,17 @@ struct dynamic_csr_key_map_ref {
     return capacity;
   }
 };
+
+inline void throw_if_dynamic_key_map_exhausted(int const* exhausted_flag, cuda::stream_ref stream)
+{
+  int exhausted{};
+  cudf::detail::cuda_memcpy_async(
+    cudf::host_span<int>{&exhausted, 1}, cudf::device_span<int const>{exhausted_flag, 1}, stream);
+  stream.sync();
+  CUDF_EXPECTS(exhausted == 0,
+               "streaming_hash_join segmented dynamic key map exhausted its capacity",
+               std::overflow_error);
+}
 
 /**
  * @brief Device view of an append-only, segmented CSR.
@@ -552,14 +567,7 @@ class segmented_dynamic_csr {
 
   void throw_if_key_map_exhausted(cuda::stream_ref stream) const
   {
-    int exhausted{};
-    cudf::detail::cuda_memcpy_async(cudf::host_span<int>{&exhausted, 1},
-                                    cudf::device_span<int const>{_key_map_exhausted.data(), 1},
-                                    stream);
-    stream.sync();
-    CUDF_EXPECTS(exhausted == 0,
-                 "streaming_hash_join segmented dynamic key map exhausted its capacity",
-                 std::overflow_error);
+    throw_if_dynamic_key_map_exhausted(_key_map_exhausted.data(), stream);
   }
 
  private:

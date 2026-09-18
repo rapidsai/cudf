@@ -702,9 +702,9 @@ class streaming_hash_join_impl {
   // Declared before the hash table so the resource outlives allocations that refer to it.
   cudf::memory_resources mr;
   hash_table_type hash_table;
-  // Kept as a collision-safe shadow index until the comparator-aware segmented probe kernels land.
-  // The cuco multiset remains the result authority because it distinguishes row-equality from
-  // identical 32-bit hashes.
+  // The segmented key map is the result authority when this implementation is selected. It
+  // resolves equal hashes with full row equality, so it does not need the legacy multiset as a
+  // shadow index.
   std::optional<segmented_dynamic_csr> dynamic_csr;
   // One representative build-row reference per distinct key slot. The dynamic CSR pages are
   // indexed by these slots rather than by raw hashes, so equal-hash unequal keys stay separate.
@@ -953,7 +953,6 @@ class streaming_hash_join_impl {
           0, build_pair_fn{row_hasher, layout, batch_id});
 
         if (compare_nulls == null_equality::EQUAL || !nullable(keys)) {
-          hash_table.insert_async(input_begin, input_begin + batch_rows, stream.get());
           if (dynamic_csr) {
             dynamic_csr->append(batch_rows,
                                 nullptr,
@@ -967,14 +966,10 @@ class streaming_hash_join_impl {
                                 stream);
             // The temporary allocator defers the comparator-vector release on this stream, so
             // the append kernel observes it without a host-side synchronization.
+          } else {
+            hash_table.insert_async(input_begin, input_begin + batch_rows, stream.get());
           }
         } else {
-          hash_table.insert_if_async(
-            input_begin,
-            input_begin + batch_rows,
-            cuda::counting_iterator<size_type>{0},
-            row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask->data())},
-            stream.get());
           if (dynamic_csr) {
             dynamic_csr->append(batch_rows,
                                 reinterpret_cast<bitmask_type const*>(row_bitmask->data()),
@@ -986,6 +981,13 @@ class streaming_hash_join_impl {
                                  static_cast<cuda::std::uint32_t>(dynamic_csr->num_buckets() - 1)},
                                 dynamic_equal,
                                 stream);
+          } else {
+            hash_table.insert_if_async(
+              input_begin,
+              input_begin + batch_rows,
+              cuda::counting_iterator<size_type>{0},
+              row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask->data())},
+              stream.get());
           }
         }
       };
