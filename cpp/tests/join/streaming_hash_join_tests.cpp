@@ -586,7 +586,9 @@ TEST_F(StreamingHashJoinTest, MemoryResources)
   // Probe scratch goes to the temporary resource and is released before the call returns.
   EXPECT_GT(scratch_mr.get_bytes_counter().peak, 0);
   EXPECT_EQ(scratch_mr.get_bytes_counter().value, 0);
-  EXPECT_EQ(persistent_mr.get_bytes_counter().value, persistent_bytes_before);
+  // Sealing may retire sparse pre-seal inputs while publishing the canonical CSR. The output
+  // itself must not increase the caller's persistent allocation footprint.
+  EXPECT_LE(persistent_mr.get_bytes_counter().value, persistent_bytes_before);
   EXPECT_EQ(left_indices->size(), 1);
   EXPECT_EQ(right_indices.first->size(), 1);
   EXPECT_EQ(right_indices.second->size(), 1);
