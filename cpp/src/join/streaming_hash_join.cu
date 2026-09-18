@@ -44,6 +44,7 @@
 #include <cuda/std/functional>
 #include <cuda/std/tuple>
 #include <cuda/stream>
+#include <thrust/scan.h>
 
 #include <algorithm>
 #include <atomic>
@@ -1466,13 +1467,11 @@ class streaming_hash_join_impl {
       dynamic_csr->throw_if_key_map_exhausted(stream);
       auto probe_slots = rmm::device_uvector<size_type>{
         static_cast<std::size_t>(left.num_rows()), stream, resources.get_temporary_mr()};
-      auto match_counts = rmm::device_uvector<size_type>{
-        // `sizes_to_offsets` consumes a zero sentinel after the per-probe counts, matching the
-        // HashCSR retrieval path. Without it, its returned exclusive-scan total omits the final
-        // probe row and a one-row probe always produces an empty output.
-        static_cast<std::size_t>(left.num_rows()) + 1,
-        stream,
-        resources.get_temporary_mr()};
+      // `sizes_to_offsets` consumes a zero sentinel after the per-probe counts, matching the
+      // HashCSR retrieval path. The count kernel writes only [0, left.num_rows()), so the
+      // terminal element must be initialized explicitly.
+      auto match_counts = cudf::detail::make_zeroed_device_uvector_async<size_type>(
+        static_cast<std::size_t>(left.num_rows()) + 1, stream, resources.get_temporary_mr());
       launch_segmented_dynamic_csr_probe_count_kernel(
         left.num_rows(),
         probe_slots.data(),
@@ -1486,16 +1485,32 @@ class streaming_hash_join_impl {
         stream);
       auto offsets = cudf::detail::make_zeroed_device_uvector_async<cuda::std::int64_t>(
         static_cast<std::size_t>(left.num_rows()) + 1, stream, resources.get_temporary_mr());
-      auto const dynamic_size = cudf::detail::sizes_to_offsets(match_counts.begin(),
-                                                               match_counts.end(),
-                                                               offsets.begin(),
-                                                               0,
-                                                               stream,
-                                                               resources.get_temporary_mr());
-      CUDF_EXPECTS(
-        dynamic_size >= 0, "streaming dynamic join output size overflowed", std::overflow_error);
-      auto const result_size = static_cast<std::size_t>(dynamic_size);
-      auto left_indices      = std::make_unique<rmm::device_uvector<size_type>>(
+      std::size_t result_size{};
+      if (output_size) {
+        CUDF_EXPECTS(
+          *output_size <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+          "The provided join output size is too large",
+          std::overflow_error);
+        // The caller owns the exact cardinality, so construct offsets without the D2H transfer
+        // and host synchronization required to discover the scan total.
+        thrust::exclusive_scan(rmm::exec_policy_nosync(stream, resources.get_temporary_mr()),
+                               match_counts.begin(),
+                               match_counts.end(),
+                               offsets.begin(),
+                               size_type{0});
+        result_size = *output_size;
+      } else {
+        auto const dynamic_size = cudf::detail::sizes_to_offsets(match_counts.begin(),
+                                                                 match_counts.end(),
+                                                                 offsets.begin(),
+                                                                 0,
+                                                                 stream,
+                                                                 resources.get_temporary_mr());
+        CUDF_EXPECTS(
+          dynamic_size >= 0, "streaming dynamic join output size overflowed", std::overflow_error);
+        result_size = static_cast<std::size_t>(dynamic_size);
+      }
+      auto left_indices = std::make_unique<rmm::device_uvector<size_type>>(
         result_size, stream, resources.get_output_mr());
       auto batch_indices = std::make_unique<rmm::device_uvector<size_type>>(
         result_size, stream, resources.get_output_mr());
