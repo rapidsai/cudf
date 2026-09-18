@@ -188,6 +188,36 @@ size_type segmented_dynamic_key_map_capacity(size_type total_rows)
 }
 
 /**
+ * @brief Experimental base+deltas compaction policy, configurable for benchmark sweeps.
+ *
+ * The defaults retain the existing 25%-of-base or eight-generation behavior.  These are not
+ * public join options; they let the selector-`0x1` prototype measure policy sensitivity without
+ * rebuilding between trials.
+ */
+struct base_delta_compaction_policy {
+  size_type row_percent;
+  size_type generation_limit;
+};
+
+base_delta_compaction_policy get_base_delta_compaction_policy()
+{
+  auto const parse = [](
+                       char const* name, size_type fallback, size_type minimum, size_type maximum) {
+    auto const value = std::getenv(name);
+    if (value == nullptr) { return fallback; }
+    char* end{};
+    auto const parsed = std::strtoul(value, &end, 0);
+    if (end == value || *end != '\0' || parsed < static_cast<unsigned long>(minimum) ||
+        parsed > static_cast<unsigned long>(maximum)) {
+      return fallback;
+    }
+    return static_cast<size_type>(parsed);
+  };
+  return {parse("CUDF_STREAMING_HASH_JOIN_BASE_DELTA_COMPACTION_ROW_PERCENT", 25, 1, 100),
+          parse("CUDF_STREAMING_HASH_JOIN_BASE_DELTA_COMPACTION_GENERATION_LIMIT", 8, 1, 1024)};
+}
+
+/**
  * @brief Describes how a slot's first 32-bit word is divided between hash and batch ID.
  *
  * The high `batch_bits` store the batch ID and the remaining low bits store the truncated row hash.
@@ -1612,9 +1642,12 @@ class streaming_hash_join_impl {
       base_delta_lifecycle_event.wait(stream);
       materialize_delta_generations(stream);
       auto const base_rows = static_cast<size_type>(canonical_values->size());
-      compact_generations  = base_delta_generations.size() >= 8 ||
-                            (base_delta_generation_rows > 0 &&
-                             (base_rows == 0 || base_delta_generation_rows >= (base_rows + 3) / 4));
+      auto const policy    = get_base_delta_compaction_policy();
+      compact_generations =
+        base_delta_generations.size() >= static_cast<std::size_t>(policy.generation_limit) ||
+        (base_delta_generation_rows > 0 &&
+         (base_rows == 0 || static_cast<cuda::std::uint64_t>(base_delta_generation_rows) * 100 >=
+                              static_cast<cuda::std::uint64_t>(base_rows) * policy.row_percent));
       if (compact_generations) { compact_delta_generations(stream); }
       base_delta_lifecycle_event.record(stream);
     }
