@@ -488,12 +488,30 @@ struct streaming_csr_ref {
  * `next` links runs for the same dense CSR ID.  The append is intentionally unordered: the
  * `generation` field restores base-then-batch order when a probe materializes a match.
  */
+constexpr auto streaming_sparse_page_rows = size_type{32};
+
+struct streaming_sparse_page {
+  streaming_row_ref values[streaming_sparse_page_rows];
+  size_type count;
+  cuda::std::uint32_t next;
+};
+
 struct streaming_sparse_node {
   size_type begin;
   size_type end;
   size_type generation;
   streaming_sparse_node* next;
   streaming_row_ref const* values;
+  streaming_sparse_page const* pages;
+  cuda::std::uint32_t first_page;
+  cuda::std::uint32_t tail_page;
+  size_type page_size;
+  int page_lock;
+};
+
+struct streaming_sparse_directory_entry {
+  cuda::std::uint32_t slot;
+  cuda::std::uint32_t node;
 };
 
 constexpr auto streaming_max_active_generations = size_type{8};
@@ -502,12 +520,29 @@ struct streaming_csr_generations_ref {
   streaming_csr_ref base;
   streaming_sparse_node* const* heads;
 
+  [[nodiscard]] __device__ static size_type node_size(streaming_sparse_node const* node)
+  {
+    return node->pages == nullptr ? node->end - node->begin : node->page_size;
+  }
+
+  [[nodiscard]] __device__ static streaming_row_ref node_at(streaming_sparse_node const* node,
+                                                            size_type ordinal)
+  {
+    if (node->pages == nullptr) { return node->values[node->begin + ordinal]; }
+    auto page_index = node->first_page;
+    while (ordinal >= streaming_sparse_page_rows) {
+      ordinal -= streaming_sparse_page_rows;
+      page_index = node->pages[page_index].next;
+    }
+    return node->pages[page_index].values[ordinal];
+  }
+
   [[nodiscard]] __device__ size_type size(size_type slot) const
   {
     auto count = base.size(slot);
     if (heads == nullptr) { return count; }
     for (auto node = heads[slot]; node != nullptr; node = node->next) {
-      count += node->end - node->begin;
+      count += node_size(node);
     }
     return count;
   }
@@ -542,9 +577,9 @@ struct streaming_csr_generations_ref {
     }
     if (!too_many_generations) {
       for (auto index = size_type{0}; index < count; ++index) {
-        auto const node_size = ordered[index]->end - ordered[index]->begin;
-        if (ordinal < node_size) { return ordered[index]->values[ordered[index]->begin + ordinal]; }
-        ordinal -= node_size;
+        auto const size = node_size(ordered[index]);
+        if (ordinal < size) { return node_at(ordered[index], ordinal); }
+        ordinal -= size;
       }
     } else {
       // The host policy will compact this overlay immediately after the current materialization,
@@ -561,9 +596,9 @@ struct streaming_csr_generations_ref {
           }
         }
         if (next == nullptr) { break; }
-        auto const node_size = next->end - next->begin;
-        if (ordinal < node_size) { return next->values[next->begin + ordinal]; }
-        ordinal -= node_size;
+        auto const size = node_size(next);
+        if (ordinal < size) { return node_at(next, ordinal); }
+        ordinal -= size;
         previous_generation = next->generation;
         have_previous       = true;
       }
@@ -598,8 +633,8 @@ struct streaming_csr_generations_ref {
     if (!too_many_generations) {
       for (auto ordered_index = size_type{0}; ordered_index < count; ++ordered_index) {
         auto const node = ordered[ordered_index];
-        for (auto index = node->begin; index < node->end; ++index) {
-          destination[output++] = node->values[index];
+        for (auto ordinal = size_type{0}; ordinal < node_size(node); ++ordinal) {
+          destination[output++] = node_at(node, ordinal);
         }
       }
       return;
@@ -618,8 +653,8 @@ struct streaming_csr_generations_ref {
         }
       }
       if (next == nullptr) { return; }
-      for (auto index = next->begin; index < next->end; ++index) {
-        destination[output++] = next->values[index];
+      for (auto ordinal = size_type{0}; ordinal < node_size(next); ++ordinal) {
+        destination[output++] = node_at(next, ordinal);
       }
       previous_generation = next->generation;
       have_previous       = true;
@@ -634,6 +669,10 @@ struct streaming_delta {
   std::unique_ptr<rmm::device_uvector<cuda::std::uint32_t>> rows;
   std::unique_ptr<rmm::device_uvector<streaming_sparse_node>> nodes;
   std::unique_ptr<rmm::device_uvector<streaming_row_ref>> values;
+  std::unique_ptr<rmm::device_uvector<streaming_sparse_directory_entry>> directory;
+  std::unique_ptr<rmm::device_uvector<streaming_sparse_page>> pages;
+  std::unique_ptr<rmm::device_uvector<cuda::std::uint32_t>> directory_next_node;
+  std::unique_ptr<rmm::device_uvector<cuda::std::uint32_t>> directory_next_page;
 };
 
 /**
@@ -912,6 +951,97 @@ CUDF_KERNEL void streaming_delta_pack_rows_kernel(size_type rows,
   for (auto row = grid_1d::global_thread_id(); row < rows; row += grid_1d::grid_stride()) {
     auto const index = static_cast<size_type>(row);
     values[index]    = make_streaming_row_ref(batch_id, local_rows[index]);
+  }
+}
+
+CUDF_KERNEL void streaming_delta_append_pages_kernel(size_type rows,
+                                                     size_type batch_id,
+                                                     cuda::std::uint32_t const* slots,
+                                                     cuda::std::uint32_t directory_mask,
+                                                     streaming_sparse_directory_entry* directory,
+                                                     streaming_sparse_node* nodes,
+                                                     streaming_sparse_page* pages,
+                                                     cuda::std::uint32_t* next_page)
+{
+  for (auto row = grid_1d::global_thread_id(); row < rows; row += grid_1d::grid_stride()) {
+    auto const index = static_cast<size_type>(row);
+    auto const slot  = slots[index];
+    if (slot == streaming_empty_slot) { continue; }
+    auto entry_index = (slot * cuda::std::uint32_t{0x9e3779b9}) & directory_mask;
+    while (true) {
+      auto key =
+        cuda::atomic_ref<cuda::std::uint32_t, cuda::thread_scope_device>{
+          directory[entry_index].slot}
+          .load(cuda::memory_order_acquire);
+      if (key == streaming_empty_slot) {
+        auto expected = streaming_empty_slot;
+        if (cuda::atomic_ref<cuda::std::uint32_t, cuda::thread_scope_device>{
+              directory[entry_index].slot}
+              .compare_exchange_strong(
+                expected, streaming_pending_hash, cuda::memory_order_acq_rel)) {
+          auto& node                  = nodes[entry_index];
+          node.begin                  = 0;
+          node.end                    = 0;
+          node.next                   = nullptr;
+          node.values                 = nullptr;
+          node.pages                  = pages;
+          node.first_page             = streaming_empty_slot;
+          node.tail_page              = streaming_empty_slot;
+          node.page_size              = 0;
+          node.page_lock              = 0;
+          directory[entry_index].node = entry_index;
+          cuda::atomic_ref<cuda::std::uint32_t, cuda::thread_scope_device>{
+            directory[entry_index].slot}
+            .store(slot, cuda::memory_order_release);
+          key = slot;
+        }
+      }
+      if (key == streaming_pending_hash) { continue; }
+      if (key == slot) { break; }
+      entry_index = (entry_index + 1) & directory_mask;
+    }
+    auto& node = nodes[directory[entry_index].node];
+    while (cuda::atomic_ref<int, cuda::thread_scope_device>{node.page_lock}.exchange(
+             1, cuda::memory_order_acquire) != 0) {}
+    if (node.tail_page == streaming_empty_slot ||
+        pages[node.tail_page].count == streaming_sparse_page_rows) {
+      auto const page =
+        cuda::atomic_ref<cuda::std::uint32_t, cuda::thread_scope_device>{*next_page}.fetch_add(
+          1, cuda::memory_order_relaxed);
+      pages[page].count = 0;
+      pages[page].next  = streaming_empty_slot;
+      if (node.tail_page == streaming_empty_slot) {
+        node.first_page = page;
+      } else {
+        pages[node.tail_page].next = page;
+      }
+      node.tail_page = page;
+    }
+    auto& page                = pages[node.tail_page];
+    page.values[page.count++] = make_streaming_row_ref(batch_id, index);
+    ++node.page_size;
+    cuda::atomic_ref<int, cuda::thread_scope_device>{node.page_lock}.store(
+      0, cuda::memory_order_release);
+  }
+}
+
+CUDF_KERNEL void streaming_delta_emit_page_nodes_kernel(
+  size_type directory_capacity,
+  cuda::std::uint32_t csr_capacity,
+  size_type generation,
+  streaming_sparse_directory_entry const* directory,
+  streaming_sparse_node* nodes,
+  streaming_sparse_node** heads)
+{
+  for (auto index = grid_1d::global_thread_id(); index < directory_capacity;
+       index += grid_1d::grid_stride()) {
+    auto const entry = directory[static_cast<size_type>(index)];
+    if (entry.slot >= csr_capacity) { continue; }
+    auto& node      = nodes[entry.node];
+    node.generation = generation;
+    node.next =
+      cuda::atomic_ref<streaming_sparse_node*, cuda::thread_scope_device>{heads[entry.slot]}
+        .exchange(&node, cuda::memory_order_acq_rel);
   }
 }
 
@@ -1539,7 +1669,55 @@ class streaming_hash_join_impl {
     cudf::scoped_range range{"streaming_hash_join::base_deltas::delta_materialization"};
     if (delta.nodes) { return; }
     ensure_post_seal_delta_workspace(stream);
-    auto const rows = static_cast<size_type>(delta.slots->size());
+    auto const rows               = static_cast<size_type>(delta.slots->size());
+    auto const directory_capacity = streaming_hash_csr_capacity(rows, 0.5);
+    delta.directory = std::make_unique<rmm::device_uvector<streaming_sparse_directory_entry>>(
+      directory_capacity, stream, cudf::get_current_device_resource_ref());
+    delta.nodes = std::make_unique<rmm::device_uvector<streaming_sparse_node>>(
+      directory_capacity, stream, cudf::get_current_device_resource_ref());
+    // At most one 32-row page is needed for each input row (the all-distinct upper bound).
+    // Duplicate-heavy batches reserve dramatically fewer pages through `next_page`.
+    delta.pages = std::make_unique<rmm::device_uvector<streaming_sparse_page>>(
+      static_cast<std::size_t>(rows), stream, cudf::get_current_device_resource_ref());
+    delta.directory_next_page =
+      std::make_unique<rmm::device_uvector<cuda::std::uint32_t>>(1, stream, mr.get_temporary_mr());
+    CUDF_CUDA_TRY(
+      cudaMemsetAsync(delta.directory->data(),
+                      0xff,
+                      delta.directory->size() * sizeof(streaming_sparse_directory_entry),
+                      stream.get()));
+    CUDF_CUDA_TRY(cudaMemsetAsync(
+      delta.directory_next_page->data(), 0, sizeof(cuda::std::uint32_t), stream.get()));
+    auto const page_config = grid_1d{rows, 256};
+    streaming_delta_append_pages_kernel<<<page_config.num_blocks,
+                                          page_config.num_threads_per_block,
+                                          0,
+                                          stream.get()>>>(rows,
+                                                          delta.batch_id,
+                                                          delta.slots->data(),
+                                                          directory_capacity - 1,
+                                                          delta.directory->data(),
+                                                          delta.nodes->data(),
+                                                          delta.pages->data(),
+                                                          delta.directory_next_page->data());
+    CUDF_CUDA_TRY(cudaGetLastError());
+    auto const emit_config = grid_1d{static_cast<size_type>(directory_capacity), 256};
+    streaming_delta_emit_page_nodes_kernel<<<emit_config.num_blocks,
+                                             emit_config.num_threads_per_block,
+                                             0,
+                                             stream.get()>>>(
+      static_cast<size_type>(directory_capacity),
+      base_delta_csr_capacity,
+      delta.batch_id,
+      delta.directory->data(),
+      delta.nodes->data(),
+      base_delta_sparse_heads->data());
+    CUDF_CUDA_TRY(cudaGetLastError());
+    delta.slots->set_stream(stream);
+    delta.rows->set_stream(stream);
+    delta.slots.reset();
+    delta.rows.reset();
+    return;
     // The real slots sort before the invalid-row sentinel, so the CSR's logical range is the
     // final end offset. Sorting 32-bit local rows halves radix payload traffic; pack the batch
     // ID only into the final capacity-backed CSR values without a D2H size query.
@@ -1707,9 +1885,17 @@ class streaming_hash_join_impl {
                                   stream.get()));
     for (auto* generation : base_delta_generations) {
       generation->nodes->set_stream(stream);
-      generation->values->set_stream(stream);
+      if (generation->values) { generation->values->set_stream(stream); }
+      if (generation->directory) { generation->directory->set_stream(stream); }
+      if (generation->pages) { generation->pages->set_stream(stream); }
+      if (generation->directory_next_node) { generation->directory_next_node->set_stream(stream); }
+      if (generation->directory_next_page) { generation->directory_next_page->set_stream(stream); }
       generation->nodes.reset();
       generation->values.reset();
+      generation->directory.reset();
+      generation->pages.reset();
+      generation->directory_next_node.reset();
+      generation->directory_next_page.reset();
     }
     base_delta_generations.clear();
     base_delta_generation_rows = 0;
