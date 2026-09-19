@@ -388,7 +388,6 @@ struct streaming_key_slot {
 struct streaming_hash_table_ref {
   streaming_key_slot* entries;
   cuda::std::uint32_t map_capacity;
-  cuda::std::uint32_t* next_csr_id;
   cuda::std::uint32_t csr_capacity;
 
   [[nodiscard]] __device__ cuda::std::uint32_t mask() const { return map_capacity - 1; }
@@ -396,6 +395,7 @@ struct streaming_hash_table_ref {
   template <typename Equal>
   __device__ cuda::std::uint32_t insert(hash_value_type hash,
                                         streaming_row_ref representative,
+                                        cuda::std::uint32_t candidate_csr_id,
                                         Equal equal) const
   {
     auto const normalized = hash >= streaming_pending_hash ? streaming_pending_hash - 1 : hash;
@@ -409,10 +409,7 @@ struct streaming_hash_table_ref {
           auto expected = streaming_empty_hash;
           if (key.compare_exchange_strong(
                 expected, streaming_pending_hash, cuda::memory_order_acq_rel)) {
-            auto const csr_id =
-              cuda::atomic_ref<cuda::std::uint32_t, cuda::thread_scope_device>{*next_csr_id}
-                .fetch_add(1, cuda::memory_order_relaxed);
-            if (csr_id >= csr_capacity) {
+            if (candidate_csr_id >= csr_capacity) {
               key.store(streaming_empty_hash, cuda::memory_order_release);
               return cuda::std::uint32_t{-1};
             }
@@ -420,9 +417,9 @@ struct streaming_hash_table_ref {
               entries[slot].representative}
               .store(representative, cuda::memory_order_release);
             cuda::atomic_ref<cuda::std::uint32_t, cuda::thread_scope_device>{entries[slot].csr_id}
-              .store(csr_id, cuda::memory_order_release);
+              .store(candidate_csr_id, cuda::memory_order_release);
             key.store(normalized, cuda::memory_order_release);
-            return csr_id;
+            return candidate_csr_id;
           }
           continue;
         }
@@ -728,6 +725,7 @@ template <typename Equal, typename Hasher>
 CUDF_KERNEL void streaming_delta_build_kernel(size_type rows,
                                               bitmask_type const* valid_rows,
                                               size_type batch_id,
+                                              size_type global_row_begin,
                                               cuda::std::uint32_t* slots,
                                               cuda::std::uint32_t* local_rows,
                                               size_type* preseal_counts,
@@ -743,8 +741,9 @@ CUDF_KERNEL void streaming_delta_build_kernel(size_type rows,
       slots[index] = streaming_empty_slot;
       continue;
     }
-    auto const csr_id = map.insert(hasher(index), row_ref, equal);
-    slots[index]      = csr_id;
+    auto const csr_id = map.insert(
+      hasher(index), row_ref, static_cast<cuda::std::uint32_t>(global_row_begin + index), equal);
+    slots[index] = csr_id;
     if (preseal_counts != nullptr && csr_id != streaming_empty_slot) {
       // Aggregate equal IDs in a warp before touching the canonical count array. This turns a
       // duplicate-heavy build from one contended atomic per row into one atomic per subgroup.
@@ -1068,7 +1067,6 @@ class streaming_hash_join_impl {
   cuda::std::uint32_t const base_delta_capacity;
   cuda::std::uint32_t const base_delta_csr_capacity;
   mutable rmm::device_uvector<streaming_key_slot> base_delta_entries;
-  mutable rmm::device_uvector<cuda::std::uint32_t> base_delta_next_csr_id;
   std::vector<std::unique_ptr<streaming_delta>> base_delta_batches;
   // Batches inserted after the canonical base is sealed.  They stay as independently
   // materialized CSRs until the compaction policy publishes their replacement base.
@@ -1134,7 +1132,6 @@ class streaming_hash_join_impl {
         streaming_hash_csr_capacity(total_rows, checked_load_factor(load_factor))},
       base_delta_csr_capacity{streaming_hash_csr_id_capacity(total_rows)},
       base_delta_entries(base_delta_capacity, stream, mr.get_output_mr()),
-      base_delta_next_csr_id(1, stream, mr.get_output_mr()),
       base_delta_batches(static_cast<std::size_t>(max_num_batches)),
       base_delta_counts(base_delta_csr_capacity, stream, mr.get_temporary_mr()),
       base_delta_cursors(base_delta_csr_capacity, stream, mr.get_temporary_mr()),
@@ -1179,8 +1176,6 @@ class streaming_hash_join_impl {
                                     0xff,
                                     base_delta_entries.size() * sizeof(streaming_key_slot),
                                     stream.get()));
-      CUDF_CUDA_TRY(cudaMemsetAsync(
-        base_delta_next_csr_id.data(), 0, sizeof(cuda::std::uint32_t), stream.get()));
       // Pre-seal build kernels accumulate slot counts directly. The buffer is repurposed by
       // compaction only after the canonical CSR has been published.
       CUDF_CUDA_TRY(cudaMemsetAsync(
@@ -1273,10 +1268,8 @@ class streaming_hash_join_impl {
           delta->rows = std::make_unique<rmm::device_uvector<cuda::std::uint32_t>>(
             batch_rows, stream, mr.get_output_mr());
         }
-        auto const map   = streaming_hash_table_ref{base_delta_entries.data(),
-                                                  base_delta_capacity,
-                                                  base_delta_next_csr_id.data(),
-                                                  base_delta_csr_capacity};
+        auto const map = streaming_hash_table_ref{
+          base_delta_entries.data(), base_delta_capacity, base_delta_csr_capacity};
         auto build_delta = [&](auto const& comparators, auto const& row_hasher) {
           auto const equal  = streaming_build_equal{comparators.data()};
           auto const config = grid_1d{batch_rows, 256};
@@ -1287,6 +1280,7 @@ class streaming_hash_join_impl {
             batch_rows,
             row_bitmask ? static_cast<bitmask_type const*>(row_bitmask->data()) : nullptr,
             batch_id,
+            old_inserted_rows,
             delta->slots->data(),
             delta->rows ? delta->rows->data() : nullptr,
             append_base_delta_generation ? nullptr : base_delta_counts.data(),
@@ -1726,11 +1720,9 @@ class streaming_hash_join_impl {
       return std::pair{std::move(empty_left),
                        std::pair{std::move(empty_batches), std::move(empty_rows)}};
     }
-    auto const map = streaming_hash_table_ref{base_delta_entries.data(),
-                                              base_delta_capacity,
-                                              base_delta_next_csr_id.data(),
-                                              base_delta_csr_capacity};
-    auto slots     = rmm::device_uvector<cuda::std::uint32_t>{
+    auto const map = streaming_hash_table_ref{
+      base_delta_entries.data(), base_delta_capacity, base_delta_csr_capacity};
+    auto slots = rmm::device_uvector<cuda::std::uint32_t>{
       static_cast<std::size_t>(left.num_rows()), stream, resources.get_temporary_mr()};
     auto offsets = rmm::device_uvector<size_type>{
       static_cast<std::size_t>(left.num_rows()), stream, resources.get_temporary_mr()};
