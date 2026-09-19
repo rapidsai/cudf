@@ -191,8 +191,8 @@ size_type segmented_dynamic_key_map_capacity(size_type total_rows)
  * @brief Experimental base+deltas compaction policy, configurable for benchmark sweeps.
  *
  * The defaults are the measured streaming compromise: defer base rewrites until active delta
- * rows equal the base, or 16 generations are live. These are not public join options; they let
- * the selector-`0x1` prototype measure policy sensitivity without rebuilding between trials.
+ * rows reach twice the base, or 16 generations are live. These are not public join options; they
+ * let the selector-`0x1` prototype measure policy sensitivity without rebuilding between trials.
  */
 struct base_delta_compaction_policy {
   size_type row_percent;
@@ -213,8 +213,8 @@ base_delta_compaction_policy get_base_delta_compaction_policy()
     }
     return static_cast<size_type>(parsed);
   };
-  return {parse("CUDF_STREAMING_HASH_JOIN_BASE_DELTA_COMPACTION_ROW_PERCENT", 100, 1, 100),
-          parse("CUDF_STREAMING_HASH_JOIN_BASE_DELTA_COMPACTION_GENERATION_LIMIT", 16, 1, 1024)};
+  return {parse("CUDF_STREAMING_HASH_JOIN_BASE_DELTA_COMPACTION_ROW_PERCENT", 200, 1, 1600),
+          parse("CUDF_STREAMING_HASH_JOIN_BASE_DELTA_COMPACTION_GENERATION_LIMIT", 16, 1, 32)};
 }
 
 /**
