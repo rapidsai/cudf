@@ -218,6 +218,26 @@ base_delta_compaction_policy get_base_delta_compaction_policy()
 }
 
 /**
+ * @brief Internal benchmark control for the experimental cooperative map lookup.
+ *
+ * A value of 0 keeps the scalar lookup.  Values 2 and 4 assign that many CUDA lanes to one
+ * probe row and load a consecutive linear-probe window cooperatively.  This is deliberately an
+ * implementation-only knob: selector semantics remain unchanged while the profile determines
+ * whether either variant is worth retaining as the default.
+ */
+int get_base_delta_probe_group_size()
+{
+  auto const value = std::getenv("CUDF_STREAMING_HASH_JOIN_BASE_DELTA_PROBE_GROUP_SIZE");
+  // The 4-lane window wins the sustained probe and interleaved measurements.  Keep the scalar
+  // path explicitly selectable for shallow-probe comparisons and future workload-specific tuning.
+  if (value == nullptr) { return 4; }
+  char* end{};
+  auto const parsed = std::strtol(value, &end, 0);
+  return end != value && *end == '\0' && (parsed == 2 || parsed == 4) ? static_cast<int>(parsed)
+                                                                      : 0;
+}
+
+/**
  * @brief Describes how a slot's first 32-bit word is divided between hash and batch ID.
  *
  * The high `batch_bits` store the batch ID and the remaining low bits store the truncated row hash.
@@ -1093,6 +1113,85 @@ CUDF_KERNEL void streaming_probe_count_kernel(size_type rows,
     if ((threadIdx.x & (cudf::detail::warp_size - 1)) == 0 && failed != 0) {
       cuda::atomic_ref<int, cuda::thread_scope_device>{*all_matches_exactly_one}.store(
         0, cuda::memory_order_relaxed);
+    }
+  }
+}
+
+/**
+ * @brief Probe a power-of-two window of the open-addressed map with one CUDA tile per input row.
+ *
+ * The lowest empty slot terminates a linear probe sequence, so matching-hash slots after it must
+ * not be considered.  The tile first evaluates every slot in order, then selects the earliest
+ * full-row-equality match preceding that terminator.  This preserves scalar collision and pending
+ * publication semantics while coalescing map metadata reads for long probe sequences.
+ */
+template <int GroupSize, typename Equal, typename Hasher>
+CUDF_KERNEL void streaming_probe_count_cooperative_kernel(size_type rows,
+                                                          bitmask_type const* valid_rows,
+                                                          cuda::std::uint32_t* slots,
+                                                          size_type* counts,
+                                                          int* all_matches_exactly_one,
+                                                          streaming_hash_table_ref map,
+                                                          streaming_csr_generations_ref csr,
+                                                          Equal equal,
+                                                          Hasher hasher)
+{
+  static_assert(GroupSize == 2 || GroupSize == 4);
+  auto const block  = cooperative_groups::this_thread_block();
+  auto const tile   = cooperative_groups::tiled_partition<GroupSize>(block);
+  auto const rank   = static_cast<int>(tile.thread_rank());
+  auto const row    = (static_cast<size_type>(blockIdx.x) * blockDim.x + threadIdx.x) / GroupSize;
+  auto const stride = (static_cast<size_type>(gridDim.x) * blockDim.x) / GroupSize;
+
+  for (auto index = row; index < rows; index += stride) {
+    auto resolved = streaming_empty_slot;
+    if (valid_rows == nullptr || cudf::bit_is_set(valid_rows, index)) {
+      auto const hash       = hasher(index);
+      auto const normalized = hash >= streaming_pending_hash ? streaming_pending_hash - 1 : hash;
+      for (cuda::std::uint32_t base = 0; base < map.map_capacity; base += GroupSize) {
+        auto const slot = (static_cast<cuda::std::uint32_t>(normalized) + base + rank) & map.mask();
+        auto key =
+          cuda::atomic_ref<hash_value_type, cuda::thread_scope_device>{map.entries[slot].hash};
+        auto current = key.load(cuda::memory_order_acquire);
+        while (current == streaming_pending_hash) {
+          current = key.load(cuda::memory_order_acquire);
+        }
+
+        auto const empty_mask = tile.ballot(current == streaming_empty_hash);
+        auto const first_empty =
+          empty_mask == 0 ? GroupSize : __ffs(static_cast<int>(empty_mask)) - 1;
+        auto matches                  = false;
+        cuda::std::uint32_t candidate = streaming_empty_slot;
+        if (rank < first_empty && current == normalized) {
+          auto const stored =
+            cuda::atomic_ref<streaming_row_ref, cuda::thread_scope_device>{
+              map.entries[slot].representative}
+              .load(cuda::memory_order_acquire);
+          if (equal(index, stored)) {
+            matches = true;
+            candidate =
+              cuda::atomic_ref<cuda::std::uint32_t, cuda::thread_scope_device>{
+                map.entries[slot].csr_id}
+                .load(cuda::memory_order_acquire);
+          }
+        }
+        auto const match_mask = tile.ballot(matches);
+        if (match_mask != 0) {
+          auto const winner = __ffs(static_cast<int>(match_mask)) - 1;
+          resolved          = tile.shfl(candidate, winner);
+          break;
+        }
+        if (empty_mask != 0) { break; }
+      }
+    }
+    if (rank == 0) {
+      slots[index]     = resolved;
+      auto const count = resolved == streaming_empty_slot ? size_type{0} : csr.size(resolved);
+      counts[index]    = count;
+      if (count != size_type{1}) {
+        cuda::atomic_ref<int, cuda::thread_scope_device>{*all_matches_exactly_one}.store(
+          0, cuda::memory_order_relaxed);
+      }
     }
   }
 }
@@ -2074,20 +2173,53 @@ class streaming_hash_join_impl {
       rmm::device_uvector<int>{1, stream, resources.get_temporary_mr()};
     // Any non-zero byte pattern is true; memset avoids a host-to-device staging dependency.
     CUDF_CUDA_TRY(cudaMemsetAsync(all_matches_exactly_one.data(), 1, sizeof(int), stream.get()));
-    auto const equal  = streaming_probe_equal{comparators.data()};
-    auto const config = grid_1d{left.num_rows(), 256};
-    streaming_probe_count_kernel<<<config.num_blocks,
-                                   config.num_threads_per_block,
-                                   0,
-                                   stream.get()>>>(left.num_rows(),
-                                                   valid_rows,
-                                                   slots.data(),
-                                                   offsets.data(),
-                                                   all_matches_exactly_one.data(),
-                                                   map,
-                                                   csr,
-                                                   equal,
-                                                   row_hasher);
+    auto const equal      = streaming_probe_equal{comparators.data()};
+    auto const group_size = get_base_delta_probe_group_size();
+    if (group_size == 0) {
+      auto const config = grid_1d{left.num_rows(), 256};
+      streaming_probe_count_kernel<<<config.num_blocks,
+                                     config.num_threads_per_block,
+                                     0,
+                                     stream.get()>>>(left.num_rows(),
+                                                     valid_rows,
+                                                     slots.data(),
+                                                     offsets.data(),
+                                                     all_matches_exactly_one.data(),
+                                                     map,
+                                                     csr,
+                                                     equal,
+                                                     row_hasher);
+    } else {
+      CUDF_EXPECTS(left.num_rows() <= std::numeric_limits<size_type>::max() / group_size,
+                   "streaming_hash_join cooperative probe launch size overflowed",
+                   std::overflow_error);
+      auto const config = grid_1d{left.num_rows() * group_size, 256};
+      if (group_size == 2) {
+        streaming_probe_count_cooperative_kernel<2>
+          <<<config.num_blocks, config.num_threads_per_block, 0, stream.get()>>>(
+            left.num_rows(),
+            valid_rows,
+            slots.data(),
+            offsets.data(),
+            all_matches_exactly_one.data(),
+            map,
+            csr,
+            equal,
+            row_hasher);
+      } else {
+        streaming_probe_count_cooperative_kernel<4>
+          <<<config.num_blocks, config.num_threads_per_block, 0, stream.get()>>>(
+            left.num_rows(),
+            valid_rows,
+            slots.data(),
+            offsets.data(),
+            all_matches_exactly_one.data(),
+            map,
+            csr,
+            equal,
+            row_hasher);
+      }
+    }
     CUDF_CUDA_TRY(cudaGetLastError());
     std::size_t temp_bytes{};
     CUDF_CUDA_TRY(cub::DeviceScan::InclusiveSum(
