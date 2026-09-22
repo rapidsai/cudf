@@ -550,8 +550,8 @@ struct streaming_csr_generations_ref {
   {
     if (node->pages == nullptr) { return node->values[node->begin + ordinal]; }
     auto page_index = node->first_page;
-    while (ordinal >= streaming_sparse_page_rows) {
-      ordinal -= streaming_sparse_page_rows;
+    while (ordinal >= node->pages[page_index].count) {
+      ordinal -= node->pages[page_index].count;
       page_index = node->pages[page_index].next;
     }
     return node->pages[page_index].values[ordinal];
@@ -984,64 +984,88 @@ CUDF_KERNEL void streaming_delta_append_pages_kernel(size_type rows,
                                                      cuda::std::uint32_t* next_page)
 {
   for (auto row = grid_1d::global_thread_id(); row < rows; row += grid_1d::grid_stride()) {
-    auto const index = static_cast<size_type>(row);
-    auto const slot  = slots[index];
+    auto const index  = static_cast<size_type>(row);
+    auto const slot   = slots[index];
+    auto const active = __activemask();
+    auto const group  = __match_any_sync(active, slot);
     if (slot == streaming_empty_slot) { continue; }
-    auto entry_index = (slot * cuda::std::uint32_t{0x9e3779b9}) & directory_mask;
-    while (true) {
-      auto key =
-        cuda::atomic_ref<cuda::std::uint32_t, cuda::thread_scope_device>{
-          directory[entry_index].slot}
-          .load(cuda::memory_order_acquire);
-      if (key == streaming_empty_slot) {
-        auto expected = streaming_empty_slot;
-        if (cuda::atomic_ref<cuda::std::uint32_t, cuda::thread_scope_device>{
-              directory[entry_index].slot}
-              .compare_exchange_strong(
-                expected, streaming_pending_hash, cuda::memory_order_acq_rel)) {
-          auto& node                  = nodes[entry_index];
-          node.begin                  = 0;
-          node.end                    = 0;
-          node.next                   = nullptr;
-          node.values                 = nullptr;
-          node.pages                  = pages;
-          node.first_page             = streaming_empty_slot;
-          node.tail_page              = streaming_empty_slot;
-          node.page_size              = 0;
-          node.page_lock              = 0;
-          directory[entry_index].node = entry_index;
+    auto const lane       = threadIdx.x & (cudf::detail::warp_size - 1);
+    auto const leader     = __ffs(static_cast<int>(group)) - 1;
+    auto const population = static_cast<size_type>(__popc(group));
+    auto const rank       = static_cast<size_type>(
+      __popc(group & ((cuda::std::uint32_t{1} << lane) - cuda::std::uint32_t{1})));
+    auto page       = streaming_empty_slot;
+    auto page_begin = size_type{0};
+
+    // A single lane per equal-slot warp subgroup owns directory lookup and page reservation.
+    // Keeping the lock only around the reservation permits the group to write its contiguous
+    // range in parallel, removing duplicate-heavy per-row lock traffic.
+    if (lane == leader) {
+      auto entry_index = (slot * cuda::std::uint32_t{0x9e3779b9}) & directory_mask;
+      while (true) {
+        auto key =
           cuda::atomic_ref<cuda::std::uint32_t, cuda::thread_scope_device>{
             directory[entry_index].slot}
-            .store(slot, cuda::memory_order_release);
-          key = slot;
+            .load(cuda::memory_order_acquire);
+        if (key == streaming_empty_slot) {
+          auto expected = streaming_empty_slot;
+          if (cuda::atomic_ref<cuda::std::uint32_t, cuda::thread_scope_device>{
+                directory[entry_index].slot}
+                .compare_exchange_strong(
+                  expected, streaming_pending_hash, cuda::memory_order_acq_rel)) {
+            auto& node                  = nodes[entry_index];
+            node.begin                  = 0;
+            node.end                    = 0;
+            node.next                   = nullptr;
+            node.values                 = nullptr;
+            node.pages                  = pages;
+            node.first_page             = streaming_empty_slot;
+            node.tail_page              = streaming_empty_slot;
+            node.page_size              = 0;
+            node.page_lock              = 0;
+            directory[entry_index].node = entry_index;
+            cuda::atomic_ref<cuda::std::uint32_t, cuda::thread_scope_device>{
+              directory[entry_index].slot}
+              .store(slot, cuda::memory_order_release);
+            key = slot;
+          }
         }
+        if (key == streaming_pending_hash) { continue; }
+        if (key == slot) {
+          auto& node = nodes[directory[entry_index].node];
+          while (cuda::atomic_ref<int, cuda::thread_scope_device>{node.page_lock}.exchange(
+                   1, cuda::memory_order_acquire) != 0) {}
+          // A subgroup may straddle the current page boundary. Start it on a fresh page so every
+          // lane receives one contiguous reservation; readers honor page counts, including any
+          // intentionally unused tail capacity in the preceding page.
+          if (node.tail_page == streaming_empty_slot ||
+              pages[node.tail_page].count + population > streaming_sparse_page_rows) {
+            page = cuda::atomic_ref<cuda::std::uint32_t, cuda::thread_scope_device>{*next_page}
+                     .fetch_add(1, cuda::memory_order_relaxed);
+            pages[page].count = 0;
+            pages[page].next  = streaming_empty_slot;
+            if (node.tail_page == streaming_empty_slot) {
+              node.first_page = page;
+            } else {
+              pages[node.tail_page].next = page;
+            }
+            node.tail_page = page;
+          } else {
+            page = node.tail_page;
+          }
+          page_begin = pages[page].count;
+          pages[page].count += population;
+          node.page_size += population;
+          cuda::atomic_ref<int, cuda::thread_scope_device>{node.page_lock}.store(
+            0, cuda::memory_order_release);
+          break;
+        }
+        entry_index = (entry_index + 1) & directory_mask;
       }
-      if (key == streaming_pending_hash) { continue; }
-      if (key == slot) { break; }
-      entry_index = (entry_index + 1) & directory_mask;
     }
-    auto& node = nodes[directory[entry_index].node];
-    while (cuda::atomic_ref<int, cuda::thread_scope_device>{node.page_lock}.exchange(
-             1, cuda::memory_order_acquire) != 0) {}
-    if (node.tail_page == streaming_empty_slot ||
-        pages[node.tail_page].count == streaming_sparse_page_rows) {
-      auto const page =
-        cuda::atomic_ref<cuda::std::uint32_t, cuda::thread_scope_device>{*next_page}.fetch_add(
-          1, cuda::memory_order_relaxed);
-      pages[page].count = 0;
-      pages[page].next  = streaming_empty_slot;
-      if (node.tail_page == streaming_empty_slot) {
-        node.first_page = page;
-      } else {
-        pages[node.tail_page].next = page;
-      }
-      node.tail_page = page;
-    }
-    auto& page                = pages[node.tail_page];
-    page.values[page.count++] = make_streaming_row_ref(batch_id, index);
-    ++node.page_size;
-    cuda::atomic_ref<int, cuda::thread_scope_device>{node.page_lock}.store(
-      0, cuda::memory_order_release);
+    page                                  = __shfl_sync(group, page, leader);
+    page_begin                            = __shfl_sync(group, page_begin, leader);
+    pages[page].values[page_begin + rank] = make_streaming_row_ref(batch_id, index);
   }
 }
 
