@@ -35,8 +35,6 @@
 #include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cooperative_groups.h>
-#include <cub/device/device_radix_sort.cuh>
-#include <cub/device/device_run_length_encode.cuh>
 #include <cub/device/device_scan.cuh>
 #include <cuco/hash_functions.cuh>
 #include <cuco/pair.cuh>
@@ -688,10 +686,8 @@ struct streaming_delta {
   std::unique_ptr<rmm::device_uvector<cuda::std::uint32_t>> slots;
   std::unique_ptr<rmm::device_uvector<cuda::std::uint32_t>> rows;
   std::unique_ptr<rmm::device_uvector<streaming_sparse_node>> nodes;
-  std::unique_ptr<rmm::device_uvector<streaming_row_ref>> values;
   std::unique_ptr<rmm::device_uvector<streaming_sparse_directory_entry>> directory;
   std::unique_ptr<rmm::device_uvector<streaming_sparse_page>> pages;
-  std::unique_ptr<rmm::device_uvector<cuda::std::uint32_t>> directory_next_node;
   std::unique_ptr<rmm::device_uvector<cuda::std::uint32_t>> directory_next_page;
 };
 
@@ -925,52 +921,6 @@ CUDF_KERNEL void streaming_delta_fill_batches_kernel(
       cuda::atomic_ref<size_type, cuda::thread_scope_device>{cursors[slot]}.fetch_add(
         size_type{1}, cuda::memory_order_relaxed);
     values[begin + rank] = make_streaming_row_ref(descriptor.batch_id, local_row);
-  }
-}
-
-/**
- * @brief Link one sparse run node for every touched CSR ID in a delta generation.
- *
- * Sorting places invalid-row sentinels after all real map slots. The RLE output therefore lets
- * this kernel create exactly one linked node per real CSR ID, without atomics on row values or a
- * full-capacity end-array expansion.
- */
-CUDF_KERNEL void streaming_delta_make_sparse_nodes_kernel(cuda::std::uint32_t const* unique_slots,
-                                                          size_type const* run_ends,
-                                                          int const* num_runs,
-                                                          cuda::std::uint32_t csr_capacity,
-                                                          size_type generation,
-                                                          streaming_row_ref const* values,
-                                                          streaming_sparse_node* nodes,
-                                                          streaming_sparse_node** heads)
-{
-  for (auto run = grid_1d::global_thread_id(); run < static_cast<size_type>(*num_runs);
-       run += grid_1d::grid_stride()) {
-    auto const index = static_cast<size_type>(run);
-    auto const slot  = unique_slots[index];
-    // Null-unequal rows carry the UINT_MAX sentinel through sort/RLE.  It has no CSR row and
-    // must not be linked through the dense-ID head array.
-    if (slot >= csr_capacity) { continue; }
-    auto const begin = index == 0 ? size_type{0} : run_ends[index - 1];
-    auto& node       = nodes[index];
-    node.begin       = begin;
-    node.end         = run_ends[index];
-    node.generation  = generation;
-    node.values      = values;
-    node.next =
-      cuda::atomic_ref<streaming_sparse_node*, cuda::thread_scope_device>{heads[slot]}.exchange(
-        &node, cuda::memory_order_acq_rel);
-  }
-}
-
-CUDF_KERNEL void streaming_delta_pack_rows_kernel(size_type rows,
-                                                  size_type batch_id,
-                                                  cuda::std::uint32_t const* local_rows,
-                                                  streaming_row_ref* values)
-{
-  for (auto row = grid_1d::global_thread_id(); row < rows; row += grid_1d::grid_stride()) {
-    auto const index = static_cast<size_type>(row);
-    values[index]    = make_streaming_row_ref(batch_id, local_rows[index]);
   }
 }
 
@@ -1413,17 +1363,6 @@ class streaming_hash_join_impl {
   mutable rmm::device_uvector<streaming_delta_build_descriptor> base_delta_build_descriptors;
   mutable std::vector<streaming_delta_build_descriptor> base_delta_build_descriptors_host;
   mutable std::unique_ptr<rmm::device_buffer> base_delta_scan_temp;
-  // Delta materialization is serialized by `base_delta_mutex`, so retain one grow-only CUB
-  // workspace rather than allocating and releasing six buffers per post-seal generation.
-  mutable std::unique_ptr<rmm::device_uvector<cuda::std::uint32_t>> base_delta_sorted_slots;
-  mutable std::unique_ptr<rmm::device_uvector<cuda::std::uint32_t>> base_delta_sorted_rows;
-  mutable std::unique_ptr<rmm::device_uvector<cuda::std::uint32_t>> base_delta_unique_slots;
-  mutable std::unique_ptr<rmm::device_uvector<size_type>> base_delta_run_lengths;
-  mutable std::unique_ptr<rmm::device_uvector<size_type>> base_delta_run_ends;
-  mutable std::unique_ptr<rmm::device_uvector<int>> base_delta_num_runs;
-  mutable std::unique_ptr<rmm::device_buffer> base_delta_sort_temp;
-  mutable std::unique_ptr<rmm::device_buffer> base_delta_encode_temp;
-  mutable std::unique_ptr<rmm::device_buffer> base_delta_materialize_scan_temp;
   mutable std::mutex base_delta_mutex;
   mutable streaming_lifecycle_event base_delta_lifecycle_event;
   mutable bool base_delta_sealed{false};
@@ -1772,18 +1711,6 @@ class streaming_hash_join_impl {
                                   0,
                                   base_delta_sparse_heads->size() * sizeof(streaming_sparse_node*),
                                   stream.get()));
-    base_delta_sorted_slots = std::make_unique<rmm::device_uvector<cuda::std::uint32_t>>(
-      base_delta_csr_capacity, stream, mr.get_temporary_mr());
-    base_delta_sorted_rows = std::make_unique<rmm::device_uvector<cuda::std::uint32_t>>(
-      base_delta_csr_capacity, stream, mr.get_temporary_mr());
-    base_delta_unique_slots = std::make_unique<rmm::device_uvector<cuda::std::uint32_t>>(
-      base_delta_csr_capacity, stream, mr.get_temporary_mr());
-    base_delta_run_lengths = std::make_unique<rmm::device_uvector<size_type>>(
-      base_delta_csr_capacity, stream, mr.get_temporary_mr());
-    base_delta_run_ends = std::make_unique<rmm::device_uvector<size_type>>(
-      base_delta_csr_capacity, stream, mr.get_temporary_mr());
-    base_delta_num_runs =
-      std::make_unique<rmm::device_uvector<int>>(1, stream, mr.get_temporary_mr());
   }
 
   void materialize_delta_generation(streaming_delta& delta, cuda::stream_ref stream) const
@@ -1835,114 +1762,6 @@ class streaming_hash_join_impl {
       delta.nodes->data(),
       base_delta_sparse_heads->data());
     CUDF_CUDA_TRY(cudaGetLastError());
-    delta.slots->set_stream(stream);
-    delta.rows->set_stream(stream);
-    delta.slots.reset();
-    delta.rows.reset();
-    return;
-    // The real slots sort before the invalid-row sentinel, so the CSR's logical range is the
-    // final end offset. Sorting 32-bit local rows halves radix payload traffic; pack the batch
-    // ID only into the final capacity-backed CSR values without a D2H size query.
-    // Slots are dense CSR IDs, not physical map positions. Sorting only the CSR-ID bit width
-    // preserves the UINT_MAX invalid sentinel above every valid ID, including when capacity is a
-    // power of two, while avoiding unnecessary radix passes from the larger hash-map domain.
-    auto const sort_end_bit = static_cast<int>(cuda::std::bit_width(base_delta_csr_capacity));
-    delta.values            = std::make_unique<rmm::device_uvector<streaming_row_ref>>(
-      static_cast<std::size_t>(rows), stream, cudf::get_current_device_resource_ref());
-    std::size_t sort_temp_bytes{};
-    CUDF_CUDA_TRY(cub::DeviceRadixSort::SortPairs(nullptr,
-                                                  sort_temp_bytes,
-                                                  delta.slots->data(),
-                                                  base_delta_sorted_slots->data(),
-                                                  delta.rows->data(),
-                                                  base_delta_sorted_rows->data(),
-                                                  rows,
-                                                  0,
-                                                  sort_end_bit,
-                                                  stream.get()));
-    if (!base_delta_sort_temp || base_delta_sort_temp->size() < sort_temp_bytes) {
-      if (base_delta_sort_temp) { base_delta_sort_temp->set_stream(stream); }
-      base_delta_sort_temp =
-        std::make_unique<rmm::device_buffer>(sort_temp_bytes, stream, mr.get_temporary_mr());
-    }
-    CUDF_CUDA_TRY(cub::DeviceRadixSort::SortPairs(base_delta_sort_temp->data(),
-                                                  sort_temp_bytes,
-                                                  delta.slots->data(),
-                                                  base_delta_sorted_slots->data(),
-                                                  delta.rows->data(),
-                                                  base_delta_sorted_rows->data(),
-                                                  rows,
-                                                  0,
-                                                  sort_end_bit,
-                                                  stream.get()));
-    std::size_t encode_temp_bytes{};
-    CUDF_CUDA_TRY(cub::DeviceRunLengthEncode::Encode(nullptr,
-                                                     encode_temp_bytes,
-                                                     base_delta_sorted_slots->data(),
-                                                     base_delta_unique_slots->data(),
-                                                     base_delta_run_lengths->data(),
-                                                     base_delta_num_runs->data(),
-                                                     rows,
-                                                     stream.get()));
-    if (!base_delta_encode_temp || base_delta_encode_temp->size() < encode_temp_bytes) {
-      if (base_delta_encode_temp) { base_delta_encode_temp->set_stream(stream); }
-      base_delta_encode_temp =
-        std::make_unique<rmm::device_buffer>(encode_temp_bytes, stream, mr.get_temporary_mr());
-    }
-    CUDF_CUDA_TRY(cub::DeviceRunLengthEncode::Encode(base_delta_encode_temp->data(),
-                                                     encode_temp_bytes,
-                                                     base_delta_sorted_slots->data(),
-                                                     base_delta_unique_slots->data(),
-                                                     base_delta_run_lengths->data(),
-                                                     base_delta_num_runs->data(),
-                                                     rows,
-                                                     stream.get()));
-    std::size_t scan_temp_bytes{};
-    CUDF_CUDA_TRY(cub::DeviceScan::InclusiveSum(nullptr,
-                                                scan_temp_bytes,
-                                                base_delta_run_lengths->data(),
-                                                base_delta_run_ends->data(),
-                                                rows,
-                                                stream.get()));
-    if (!base_delta_materialize_scan_temp ||
-        base_delta_materialize_scan_temp->size() < scan_temp_bytes) {
-      if (base_delta_materialize_scan_temp) {
-        base_delta_materialize_scan_temp->set_stream(stream);
-      }
-      base_delta_materialize_scan_temp =
-        std::make_unique<rmm::device_buffer>(scan_temp_bytes, stream, mr.get_temporary_mr());
-    }
-    CUDF_CUDA_TRY(cub::DeviceScan::InclusiveSum(base_delta_materialize_scan_temp->data(),
-                                                scan_temp_bytes,
-                                                base_delta_run_lengths->data(),
-                                                base_delta_run_ends->data(),
-                                                rows,
-                                                stream.get()));
-    // There can be no more runs than input rows.  Capacity-backing the sparse nodes removes the
-    // old host cardinality transfer while retaining only O(rows) generation state.
-    delta.nodes = std::make_unique<rmm::device_uvector<streaming_sparse_node>>(
-      static_cast<std::size_t>(rows), stream, cudf::get_current_device_resource_ref());
-    auto const pack_config = grid_1d{rows, 256};
-    streaming_delta_pack_rows_kernel<<<pack_config.num_blocks,
-                                       pack_config.num_threads_per_block,
-                                       0,
-                                       stream.get()>>>(
-      rows, delta.batch_id, base_delta_sorted_rows->data(), delta.values->data());
-    CUDF_CUDA_TRY(cudaGetLastError());
-    streaming_delta_make_sparse_nodes_kernel<<<pack_config.num_blocks,
-                                               pack_config.num_threads_per_block,
-                                               0,
-                                               stream.get()>>>(base_delta_unique_slots->data(),
-                                                               base_delta_run_ends->data(),
-                                                               base_delta_num_runs->data(),
-                                                               base_delta_csr_capacity,
-                                                               delta.batch_id,
-                                                               delta.values->data(),
-                                                               delta.nodes->data(),
-                                                               base_delta_sparse_heads->data());
-    CUDF_CUDA_TRY(cudaGetLastError());
-    // The stream-ordered resource keeps these inputs alive until the sort has consumed them.
-    // Retaining only sparse run nodes and sorted values bounds long-lived delta storage.
     delta.slots->set_stream(stream);
     delta.rows->set_stream(stream);
     delta.slots.reset();
@@ -2007,16 +1826,12 @@ class streaming_hash_join_impl {
                                   stream.get()));
     for (auto* generation : base_delta_generations) {
       generation->nodes->set_stream(stream);
-      if (generation->values) { generation->values->set_stream(stream); }
       if (generation->directory) { generation->directory->set_stream(stream); }
       if (generation->pages) { generation->pages->set_stream(stream); }
-      if (generation->directory_next_node) { generation->directory_next_node->set_stream(stream); }
       if (generation->directory_next_page) { generation->directory_next_page->set_stream(stream); }
       generation->nodes.reset();
-      generation->values.reset();
       generation->directory.reset();
       generation->pages.reset();
-      generation->directory_next_node.reset();
       generation->directory_next_page.reset();
     }
     base_delta_generations.clear();
