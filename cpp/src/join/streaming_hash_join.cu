@@ -1524,11 +1524,10 @@ class streaming_hash_join_impl {
                  "to the constructor.",
                  cudf::data_type_error);
     auto const keys = right_partition.select(right_key_indices);
-    // The descriptor-driven first-seal flush currently specializes the primitive row operators.
-    // Retain the established immediate path for nested layouts while that specialization is
-    // brought up; this preserves the selector's existing key-type coverage.
-    auto const defer_preseal_build = use_base_deltas && !append_base_delta_generation &&
-                                     cudf::detail::is_primitive_row_op_compatible(keys);
+    // Queue every pre-seal batch.  The descriptor-driven flush builds the persistent map once,
+    // including nested and non-primitive equality specializations, immediately before the first
+    // seal.  Post-seal batches still materialize independently as sparse generations.
+    auto const defer_preseal_build = use_base_deltas && !append_base_delta_generation;
 
     auto preprocessed = row::equality::preprocessed_table::create(keys, stream, mr.get_output_mr());
     auto const batch_rows = keys.num_rows();
@@ -2049,6 +2048,7 @@ class streaming_hash_join_impl {
   void flush_preseal_base_deltas(size_type num_batches, cuda::stream_ref stream) const
   {
     cudf::scoped_range range{"streaming_hash_join::base_deltas::preseal_flush"};
+    if (num_batches == 0) { return; }
     auto const rights = std::span{preprocessed_right}.first(static_cast<std::size_t>(num_batches));
     auto const keys   = right_schema->view().select(right_key_indices);
     auto const nulls  = nullate::DYNAMIC{has_nulls};
@@ -2065,6 +2065,50 @@ class streaming_hash_join_impl {
       hashers.reserve(num_batches);
       for (auto const& right : rights) {
         hashers.emplace_back(nulls, right);
+      }
+      flush_preseal_base_deltas_impl(num_batches, comparators, hashers, stream);
+    } else if (has_nested_keys) {
+      using equal_type =
+        row::equality::device_row_comparator<true,
+                                             nullate::DYNAMIC,
+                                             row::equality::nan_equal_physical_equality_comparator>;
+      std::vector<equal_type> comparators;
+      comparators.reserve(static_cast<std::size_t>(num_batches) * num_batches);
+      for (size_type candidate = 0; candidate < num_batches; ++candidate) {
+        for (auto const& existing : rights) {
+          auto const comparator =
+            row::equality::two_table_comparator{preprocessed_right[candidate], existing};
+          comparators.push_back(comparator.equal_to<true>(nulls, compare_nulls).comparator);
+        }
+      }
+      using hasher_type = decltype(row::hash::row_hasher{preprocessed_right.front()}.device_hasher(
+        nullate::DYNAMIC{false}));
+      std::vector<hasher_type> hashers;
+      hashers.reserve(static_cast<std::size_t>(num_batches));
+      for (auto const& right : rights) {
+        hashers.push_back(row::hash::row_hasher{right}.device_hasher(nulls));
+      }
+      flush_preseal_base_deltas_impl(num_batches, comparators, hashers, stream);
+    } else {
+      using equal_type =
+        row::equality::device_row_comparator<false,
+                                             nullate::DYNAMIC,
+                                             row::equality::nan_equal_physical_equality_comparator>;
+      std::vector<equal_type> comparators;
+      comparators.reserve(static_cast<std::size_t>(num_batches) * num_batches);
+      for (size_type candidate = 0; candidate < num_batches; ++candidate) {
+        for (auto const& existing : rights) {
+          auto const comparator =
+            row::equality::two_table_comparator{preprocessed_right[candidate], existing};
+          comparators.push_back(comparator.equal_to<false>(nulls, compare_nulls).comparator);
+        }
+      }
+      using hasher_type = decltype(row::hash::row_hasher{preprocessed_right.front()}.device_hasher(
+        nullate::DYNAMIC{false}));
+      std::vector<hasher_type> hashers;
+      hashers.reserve(static_cast<std::size_t>(num_batches));
+      for (auto const& right : rights) {
+        hashers.push_back(row::hash::row_hasher{right}.device_hasher(nulls));
       }
       flush_preseal_base_deltas_impl(num_batches, comparators, hashers, stream);
     }
