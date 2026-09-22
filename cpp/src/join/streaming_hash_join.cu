@@ -534,9 +534,30 @@ struct streaming_sparse_directory_entry {
 
 constexpr auto streaming_max_active_generations = size_type{8};
 
+struct streaming_singleton_generation_descriptor {
+  size_type candidate_begin;
+  size_type candidate_end;
+  size_type batch_id;
+  size_type generation;
+};
+
 struct streaming_csr_generations_ref {
   streaming_csr_ref base;
   streaming_sparse_node* const* heads;
+  streaming_singleton_generation_descriptor const* singleton_generations;
+  size_type num_singleton_generations;
+
+  [[nodiscard]] __device__ streaming_singleton_generation_descriptor const* singleton_for(
+    size_type slot) const
+  {
+    for (auto index = size_type{0}; index < num_singleton_generations; ++index) {
+      auto const& generation = singleton_generations[index];
+      if (slot >= generation.candidate_begin && slot < generation.candidate_end) {
+        return &generation;
+      }
+    }
+    return nullptr;
+  }
 
   [[nodiscard]] __device__ static size_type node_size(streaming_sparse_node const* node)
   {
@@ -558,6 +579,7 @@ struct streaming_csr_generations_ref {
   [[nodiscard]] __device__ size_type size(size_type slot) const
   {
     auto count = base.size(slot);
+    if (singleton_for(slot) != nullptr) { ++count; }
     if (heads == nullptr) { return count; }
     for (auto node = heads[slot]; node != nullptr; node = node->next) {
       count += node_size(node);
@@ -569,8 +591,12 @@ struct streaming_csr_generations_ref {
   {
     auto const base_size = base.size(slot);
     if (ordinal < base_size) { return base.values[base.begin(slot) + ordinal]; }
-    if (heads == nullptr) { return streaming_row_ref{0}; }
     ordinal -= base_size;
+    auto const singleton = singleton_for(slot);
+    if ((heads == nullptr || heads[slot] == nullptr) && singleton != nullptr) {
+      return make_streaming_row_ref(singleton->batch_id, slot - singleton->candidate_begin);
+    }
+    if (heads == nullptr) { return streaming_row_ref{0}; }
     // The compaction policy materializes at most eight active generations before replacing the
     // base.  Gather and insertion-sort their one run per CSR ID, rather than binary-searching
     // every generation's sparse run table for every probe output.
@@ -593,7 +619,7 @@ struct streaming_csr_generations_ref {
       ordered[position] = node;
       ++count;
     }
-    if (!too_many_generations) {
+    if (!too_many_generations && singleton == nullptr) {
       for (auto index = size_type{0}; index < count; ++index) {
         auto const size = node_size(ordered[index]);
         if (ordinal < size) { return node_at(ordered[index], ordinal); }
@@ -603,22 +629,39 @@ struct streaming_csr_generations_ref {
       // The host policy will compact this overlay immediately after the current materialization,
       // but an application may have accumulated more than eight batches without probing.  Select
       // the next oldest node without a fixed-size local allocation in that exceptional case.
-      auto previous_generation = size_type{0};
-      auto have_previous       = false;
+      auto previous_generation                   = size_type{0};
+      auto have_previous                         = false;
+      auto singleton_consumed                    = false;
+      streaming_sparse_node const* previous_node = nullptr;
       while (true) {
         streaming_sparse_node const* next = nullptr;
         for (auto node = heads[slot]; node != nullptr; node = node->next) {
-          if ((!have_previous || node->generation > previous_generation) &&
+          if (node != previous_node &&
+              (!have_previous || node->generation >= previous_generation) &&
               (next == nullptr || node->generation < next->generation)) {
             next = node;
           }
         }
-        if (next == nullptr) { break; }
-        auto const size = node_size(next);
-        if (ordinal < size) { return node_at(next, ordinal); }
-        ordinal -= size;
-        previous_generation = next->generation;
-        have_previous       = true;
+        auto const singleton_is_next =
+          singleton != nullptr && !singleton_consumed &&
+          (!have_previous || singleton->generation >= previous_generation) &&
+          (next == nullptr || singleton->generation <= next->generation);
+        if (next == nullptr && !singleton_is_next) { break; }
+        if (singleton_is_next) {
+          if (ordinal == 0) {
+            return make_streaming_row_ref(singleton->batch_id, slot - singleton->candidate_begin);
+          }
+          --ordinal;
+          previous_generation = singleton->generation;
+          singleton_consumed  = true;
+        } else {
+          auto const size = node_size(next);
+          if (ordinal < size) { return node_at(next, ordinal); }
+          ordinal -= size;
+          previous_generation = next->generation;
+          previous_node       = next;
+        }
+        have_previous = true;
       }
     }
     return streaming_row_ref{0};  // Unreachable when ordinal < size(slot).
@@ -631,6 +674,14 @@ struct streaming_csr_generations_ref {
     for (auto index = base.begin(slot); index < base.cumulative_ends[slot]; ++index) {
       destination[output++] = base.values[index];
     }
+
+    auto const singleton = singleton_for(slot);
+    if ((heads == nullptr || heads[slot] == nullptr) && singleton != nullptr) {
+      destination[output++] =
+        make_streaming_row_ref(singleton->batch_id, slot - singleton->candidate_begin);
+      return;
+    }
+    if (heads == nullptr) { return; }
 
     streaming_sparse_node const* ordered[streaming_max_active_generations];
     auto count                = size_type{0};
@@ -648,7 +699,7 @@ struct streaming_csr_generations_ref {
       ordered[position] = node;
       ++count;
     }
-    if (!too_many_generations) {
+    if (!too_many_generations && singleton == nullptr) {
       for (auto ordered_index = size_type{0}; ordered_index < count; ++ordered_index) {
         auto const node = ordered[ordered_index];
         for (auto ordinal = size_type{0}; ordinal < node_size(node); ++ordinal) {
@@ -660,31 +711,48 @@ struct streaming_csr_generations_ref {
 
     // Queued inserts may briefly exceed the fixed local fast path. Preserve chronological order
     // without allocating device memory; compaction immediately replaces this overlay afterwards.
-    auto previous_generation = size_type{0};
-    auto have_previous       = false;
+    auto previous_generation                   = size_type{0};
+    auto have_previous                         = false;
+    auto singleton_consumed                    = false;
+    streaming_sparse_node const* previous_node = nullptr;
     while (true) {
       streaming_sparse_node const* next = nullptr;
       for (auto node = heads[slot]; node != nullptr; node = node->next) {
-        if ((!have_previous || node->generation > previous_generation) &&
+        if (node != previous_node && (!have_previous || node->generation >= previous_generation) &&
             (next == nullptr || node->generation < next->generation)) {
           next = node;
         }
       }
-      if (next == nullptr) { return; }
-      for (auto ordinal = size_type{0}; ordinal < node_size(next); ++ordinal) {
-        destination[output++] = node_at(next, ordinal);
+      auto const singleton_is_next =
+        singleton != nullptr && !singleton_consumed &&
+        (!have_previous || singleton->generation >= previous_generation) &&
+        (next == nullptr || singleton->generation <= next->generation);
+      if (next == nullptr && !singleton_is_next) { return; }
+      if (singleton_is_next) {
+        destination[output++] =
+          make_streaming_row_ref(singleton->batch_id, slot - singleton->candidate_begin);
+        previous_generation = singleton->generation;
+        singleton_consumed  = true;
+      } else {
+        for (auto ordinal = size_type{0}; ordinal < node_size(next); ++ordinal) {
+          destination[output++] = node_at(next, ordinal);
+        }
+        previous_generation = next->generation;
+        previous_node       = next;
       }
-      previous_generation = next->generation;
-      have_previous       = true;
+      have_previous = true;
     }
   }
 };
 
 struct streaming_delta {
   size_type batch_id;
+  size_type candidate_begin;
+  size_type candidate_end;
+  size_type generation;
   std::unique_ptr<rmm::device_buffer> valid_rows;
+  std::unique_ptr<rmm::device_uvector<int>> overlaps_prior;
   std::unique_ptr<rmm::device_uvector<cuda::std::uint32_t>> slots;
-  std::unique_ptr<rmm::device_uvector<cuda::std::uint32_t>> rows;
   std::unique_ptr<rmm::device_uvector<streaming_sparse_node>> nodes;
   std::unique_ptr<rmm::device_uvector<streaming_sparse_directory_entry>> directory;
   std::unique_ptr<rmm::device_uvector<streaming_sparse_page>> pages;
@@ -783,7 +851,7 @@ CUDF_KERNEL void streaming_delta_build_kernel(size_type rows,
                                               size_type batch_id,
                                               size_type global_row_begin,
                                               cuda::std::uint32_t* slots,
-                                              cuda::std::uint32_t* local_rows,
+                                              int* overlaps_prior,
                                               size_type* preseal_counts,
                                               streaming_hash_table_ref map,
                                               Equal equal,
@@ -792,7 +860,6 @@ CUDF_KERNEL void streaming_delta_build_kernel(size_type rows,
   for (auto row = grid_1d::global_thread_id(); row < rows; row += grid_1d::grid_stride()) {
     auto const index   = static_cast<size_type>(row);
     auto const row_ref = make_streaming_row_ref(batch_id, index);
-    if (local_rows != nullptr) { local_rows[index] = static_cast<cuda::std::uint32_t>(index); }
     if (valid_rows != nullptr && !cudf::bit_is_set(valid_rows, index)) {
       slots[index] = streaming_empty_slot;
       continue;
@@ -800,6 +867,11 @@ CUDF_KERNEL void streaming_delta_build_kernel(size_type rows,
     auto const csr_id = map.insert(
       hasher(index), row_ref, static_cast<cuda::std::uint32_t>(global_row_begin + index), equal);
     slots[index] = csr_id;
+    if (overlaps_prior != nullptr && csr_id != streaming_empty_slot &&
+        csr_id != static_cast<cuda::std::uint32_t>(global_row_begin + index)) {
+      cuda::atomic_ref<int, cuda::thread_scope_device>{*overlaps_prior}.store(
+        1, cuda::memory_order_relaxed);
+    }
     if (preseal_counts != nullptr && csr_id != streaming_empty_slot) {
       // Aggregate equal IDs in a warp before touching the canonical count array. This turns a
       // duplicate-heavy build from one contended atomic per row into one atomic per subgroup.
@@ -926,19 +998,27 @@ CUDF_KERNEL void streaming_delta_fill_batches_kernel(
 
 CUDF_KERNEL void streaming_delta_append_pages_kernel(size_type rows,
                                                      size_type batch_id,
+                                                     size_type generation,
+                                                     size_type candidate_begin,
                                                      cuda::std::uint32_t const* slots,
                                                      cuda::std::uint32_t directory_mask,
                                                      streaming_sparse_directory_entry* directory,
                                                      streaming_sparse_node* nodes,
                                                      streaming_sparse_page* pages,
-                                                     cuda::std::uint32_t* next_page)
+                                                     cuda::std::uint32_t* next_page,
+                                                     streaming_sparse_node** heads)
 {
   for (auto row = grid_1d::global_thread_id(); row < rows; row += grid_1d::grid_stride()) {
-    auto const index  = static_cast<size_type>(row);
-    auto const slot   = slots[index];
-    auto const active = __activemask();
-    auto const group  = __match_any_sync(active, slot);
-    if (slot == streaming_empty_slot) { continue; }
+    auto const index = static_cast<size_type>(row);
+    auto const slot  = slots[index];
+    // A row that claims its own candidate CSR ID is represented directly by the generation
+    // range. Rows resolving to an earlier ID, including a same-batch duplicate, need pages.
+    if (slot == streaming_empty_slot ||
+        slot == static_cast<cuda::std::uint32_t>(candidate_begin + index)) {
+      continue;
+    }
+    auto const active     = __activemask();
+    auto const group      = __match_any_sync(active, slot);
     auto const lane       = threadIdx.x & (cudf::detail::warp_size - 1);
     auto const leader     = __ffs(static_cast<int>(group)) - 1;
     auto const population = static_cast<size_type>(__popc(group));
@@ -963,16 +1043,19 @@ CUDF_KERNEL void streaming_delta_append_pages_kernel(size_type rows,
                 directory[entry_index].slot}
                 .compare_exchange_strong(
                   expected, streaming_pending_hash, cuda::memory_order_acq_rel)) {
-            auto& node                  = nodes[entry_index];
-            node.begin                  = 0;
-            node.end                    = 0;
-            node.next                   = nullptr;
-            node.values                 = nullptr;
-            node.pages                  = pages;
-            node.first_page             = streaming_empty_slot;
-            node.tail_page              = streaming_empty_slot;
-            node.page_size              = 0;
-            node.page_lock              = 0;
+            auto& node      = nodes[entry_index];
+            node.begin      = 0;
+            node.end        = 0;
+            node.values     = nullptr;
+            node.pages      = pages;
+            node.first_page = streaming_empty_slot;
+            node.tail_page  = streaming_empty_slot;
+            node.page_size  = 0;
+            node.page_lock  = 0;
+            node.generation = generation;
+            node.next =
+              cuda::atomic_ref<streaming_sparse_node*, cuda::thread_scope_device>{heads[slot]}
+                .exchange(&node, cuda::memory_order_acq_rel);
             directory[entry_index].node = entry_index;
             cuda::atomic_ref<cuda::std::uint32_t, cuda::thread_scope_device>{
               directory[entry_index].slot}
@@ -1019,26 +1102,6 @@ CUDF_KERNEL void streaming_delta_append_pages_kernel(size_type rows,
   }
 }
 
-CUDF_KERNEL void streaming_delta_emit_page_nodes_kernel(
-  size_type directory_capacity,
-  cuda::std::uint32_t csr_capacity,
-  size_type generation,
-  streaming_sparse_directory_entry const* directory,
-  streaming_sparse_node* nodes,
-  streaming_sparse_node** heads)
-{
-  for (auto index = grid_1d::global_thread_id(); index < directory_capacity;
-       index += grid_1d::grid_stride()) {
-    auto const entry = directory[static_cast<size_type>(index)];
-    if (entry.slot >= csr_capacity) { continue; }
-    auto& node      = nodes[entry.node];
-    node.generation = generation;
-    node.next =
-      cuda::atomic_ref<streaming_sparse_node*, cuda::thread_scope_device>{heads[entry.slot]}
-        .exchange(&node, cuda::memory_order_acq_rel);
-  }
-}
-
 CUDF_KERNEL void streaming_csr_merge_count_kernel(size_type slots,
                                                   streaming_csr_generations_ref source,
                                                   size_type* counts)
@@ -1065,6 +1128,7 @@ CUDF_KERNEL void streaming_probe_count_kernel(size_type rows,
                                               bitmask_type const* valid_rows,
                                               cuda::std::uint32_t* slots,
                                               size_type* counts,
+                                              int* all_matches_at_most_one,
                                               int* all_matches_exactly_one,
                                               streaming_hash_table_ref map,
                                               streaming_csr_generations_ref csr,
@@ -1080,10 +1144,15 @@ CUDF_KERNEL void streaming_probe_count_kernel(size_type rows,
     slots[index]     = slot;
     auto const count = slot == streaming_empty_slot ? size_type{0} : csr.size(slot);
     counts[index]    = count;
-    // A warp reports the negative result once. This flag is only an optimization hint; the
-    // normal offset-based fill remains authoritative whenever any row has zero or multiple hits.
-    auto const active = __activemask();
-    auto const failed = __ballot_sync(active, count != size_type{1});
+    // A warp reports each negative result once. The flags select fill schedules only; the
+    // count/scan path remains authoritative for ordinary unhinted probes.
+    auto const active   = __activemask();
+    auto const multiple = __ballot_sync(active, count > size_type{1});
+    auto const failed   = __ballot_sync(active, count != size_type{1});
+    if ((threadIdx.x & (cudf::detail::warp_size - 1)) == 0 && multiple != 0) {
+      cuda::atomic_ref<int, cuda::thread_scope_device>{*all_matches_at_most_one}.store(
+        0, cuda::memory_order_relaxed);
+    }
     if ((threadIdx.x & (cudf::detail::warp_size - 1)) == 0 && failed != 0) {
       cuda::atomic_ref<int, cuda::thread_scope_device>{*all_matches_exactly_one}.store(
         0, cuda::memory_order_relaxed);
@@ -1104,6 +1173,7 @@ CUDF_KERNEL void streaming_probe_count_cooperative_kernel(size_type rows,
                                                           bitmask_type const* valid_rows,
                                                           cuda::std::uint32_t* slots,
                                                           size_type* counts,
+                                                          int* all_matches_at_most_one,
                                                           int* all_matches_exactly_one,
                                                           streaming_hash_table_ref map,
                                                           streaming_csr_generations_ref csr,
@@ -1162,6 +1232,10 @@ CUDF_KERNEL void streaming_probe_count_cooperative_kernel(size_type rows,
       slots[index]     = resolved;
       auto const count = resolved == streaming_empty_slot ? size_type{0} : csr.size(resolved);
       counts[index]    = count;
+      if (count > size_type{1}) {
+        cuda::atomic_ref<int, cuda::thread_scope_device>{*all_matches_at_most_one}.store(
+          0, cuda::memory_order_relaxed);
+      }
       if (count != size_type{1}) {
         cuda::atomic_ref<int, cuda::thread_scope_device>{*all_matches_exactly_one}.store(
           0, cuda::memory_order_relaxed);
@@ -1183,12 +1257,28 @@ CUDF_KERNEL void streaming_probe_fill_kernel(size_type output_size,
                                              size_type outputs_per_warp,
                                              cuda::std::uint32_t const* slots,
                                              size_type const* offsets,
+                                             int const* all_matches_at_most_one,
                                              int const* all_matches_exactly_one,
                                              streaming_csr_generations_ref csr,
                                              size_type* left_indices,
                                              size_type* batch_indices,
                                              size_type* row_indices)
 {
+  if (*all_matches_at_most_one != 0) {
+    auto const first_probe = static_cast<size_type>(blockIdx.x) * blockDim.x + threadIdx.x;
+    auto const stride      = static_cast<size_type>(gridDim.x) * blockDim.x;
+    for (auto probe = first_probe; probe < rows; probe += stride) {
+      auto const slot = slots[probe];
+      if (slot == streaming_empty_slot) { continue; }
+      auto const output     = *all_matches_exactly_one != 0 ? probe : offsets[probe] - 1;
+      auto const row_ref    = csr.at(slot, 0);
+      left_indices[output]  = probe;
+      batch_indices[output] = streaming_ref_batch(row_ref);
+      row_indices[output]   = streaming_ref_row(row_ref);
+    }
+    return;
+  }
+
   auto const warp = cooperative_groups::tiled_partition<cudf::detail::warp_size>(
     cooperative_groups::this_thread_block());
   auto const lane_id       = static_cast<size_type>(warp.thread_rank());
@@ -1198,19 +1288,6 @@ CUDF_KERNEL void streaming_probe_fill_kernel(size_type output_size,
   auto const range_begin = outputs_per_warp * global_warp;
   if (range_begin >= output_size) { return; }
   auto const range_end = cuda::std::min<size_type>(range_begin + outputs_per_warp, output_size);
-
-  if (*all_matches_exactly_one != 0) {
-    for (size_type item = 0; item < streaming_probe_outputs_per_lane; ++item) {
-      auto const output =
-        range_begin + lane_id + item * static_cast<size_type>(cudf::detail::warp_size);
-      if (output >= range_end) { continue; }
-      auto const row_ref    = csr.at(slots[output], 0);
-      left_indices[output]  = output;
-      batch_indices[output] = streaming_ref_batch(row_ref);
-      row_indices[output]   = streaming_ref_row(row_ref);
-    }
-    return;
-  }
 
   size_type endpoint_probe{};
   if (lane_id < 2) {
@@ -1243,6 +1320,7 @@ void launch_streaming_probe_fill_kernel(size_type output_size,
                                         size_type rows,
                                         cuda::std::uint32_t const* slots,
                                         size_type const* offsets,
+                                        int const* all_matches_at_most_one,
                                         int const* all_matches_exactly_one,
                                         streaming_csr_generations_ref csr,
                                         size_type* left_indices,
@@ -1266,6 +1344,7 @@ void launch_streaming_probe_fill_kernel(size_type output_size,
     outputs_per_warp,
     slots,
     offsets,
+    all_matches_at_most_one,
     all_matches_exactly_one,
     csr,
     left_indices,
@@ -1350,6 +1429,11 @@ class streaming_hash_join_impl {
   // only for CSR IDs that it actually touched, avoiding an O(CSR-capacity) end-array expansion
   // for every small streaming batch.
   mutable std::unique_ptr<rmm::device_uvector<streaming_sparse_node*>> base_delta_sparse_heads;
+  mutable std::unique_ptr<rmm::device_uvector<streaming_singleton_generation_descriptor>>
+    base_delta_singleton_generations;
+  mutable std::vector<streaming_singleton_generation_descriptor>
+    base_delta_singleton_generations_host;
+  mutable std::vector<int> base_delta_overlap_host;
   // Sealing is part of the streaming lifecycle and may happen repeatedly after new batches are
   // inserted. Keep its fixed-capacity scratch in the join state so a re-seal does not allocate
   // and free O(table_capacity) temporaries before every scan/fill pass.
@@ -1527,19 +1611,23 @@ class streaming_hash_join_impl {
         // Publish both boundaries before launching. The equality object decodes every persisted
         // representative through these boundaries, so full hash collisions are resolved by row
         // equality across *all* prior batches rather than by a batch ID packed into the hash.
-        auto delta      = std::make_unique<streaming_delta>();
-        delta->batch_id = batch_id;
+        auto delta             = std::make_unique<streaming_delta>();
+        delta->batch_id        = batch_id;
+        delta->candidate_begin = old_inserted_rows;
+        delta->candidate_end   = old_inserted_rows + batch_rows;
+        delta->generation      = batch_id;
+        if (append_base_delta_generation) {
+          delta->overlaps_prior =
+            std::make_unique<rmm::device_uvector<int>>(1, stream, mr.get_temporary_mr());
+          CUDF_CUDA_TRY(
+            cudaMemsetAsync(delta->overlaps_prior->data(), 0, sizeof(int), stream.get()));
+        }
         if (defer_preseal_build && row_bitmask) {
           delta->valid_rows = std::make_unique<rmm::device_buffer>(std::move(*row_bitmask));
         }
         delta->slots = std::make_unique<rmm::device_uvector<cuda::std::uint32_t>>(
           batch_rows, stream, mr.get_output_mr());
-        // Before the first seal, a delta's local row is its input index, so retain local rows
-        // only for post-seal generations that need a radix-sort payload.
-        if (append_base_delta_generation) {
-          delta->rows = std::make_unique<rmm::device_uvector<cuda::std::uint32_t>>(
-            batch_rows, stream, mr.get_output_mr());
-        } else if (defer_preseal_build) {
+        if (defer_preseal_build) {
           // The first probe seals all queued build batches in one descriptor-driven map kernel.
           // Retain the batch's device views and validity mask until that kernel consumes them.
           base_delta_batches[batch_id] = std::move(delta);
@@ -1560,7 +1648,7 @@ class streaming_hash_join_impl {
             batch_id,
             old_inserted_rows,
             delta->slots->data(),
-            delta->rows ? delta->rows->data() : nullptr,
+            delta->overlaps_prior ? delta->overlaps_prior->data() : nullptr,
             append_base_delta_generation ? nullptr : base_delta_counts.data(),
             map,
             equal,
@@ -1707,10 +1795,47 @@ class streaming_hash_join_impl {
     if (base_delta_sparse_heads) { return; }
     base_delta_sparse_heads = std::make_unique<rmm::device_uvector<streaming_sparse_node*>>(
       base_delta_csr_capacity, stream, mr.get_temporary_mr());
+    base_delta_singleton_generations =
+      std::make_unique<rmm::device_uvector<streaming_singleton_generation_descriptor>>(
+        static_cast<std::size_t>(max_num_batches), stream, mr.get_temporary_mr());
+    base_delta_singleton_generations_host.reserve(static_cast<std::size_t>(max_num_batches));
+    base_delta_overlap_host.reserve(static_cast<std::size_t>(max_num_batches));
     CUDF_CUDA_TRY(cudaMemsetAsync(base_delta_sparse_heads->data(),
                                   0,
                                   base_delta_sparse_heads->size() * sizeof(streaming_sparse_node*),
                                   stream.get()));
+  }
+
+  void refresh_singleton_generations(cuda::stream_ref stream) const
+  {
+    base_delta_singleton_generations_host.clear();
+    for (auto const* generation : base_delta_generations) {
+      base_delta_singleton_generations_host.push_back({generation->candidate_begin,
+                                                       generation->candidate_end,
+                                                       generation->batch_id,
+                                                       generation->generation});
+    }
+    if (!base_delta_singleton_generations_host.empty()) {
+      cudf::detail::cuda_memcpy_async(
+        cudf::device_span<streaming_singleton_generation_descriptor>{
+          base_delta_singleton_generations->data(), base_delta_singleton_generations_host.size()},
+        cudf::host_span<streaming_singleton_generation_descriptor const>{
+          base_delta_singleton_generations_host},
+        stream);
+    }
+  }
+
+  void queue_overlap_copy(cuda::stream_ref stream) const
+  {
+    base_delta_overlap_host.assign(base_delta_generations.size(), 0);
+    if (base_delta_overlap_host.empty()) { return; }
+    for (auto index = std::size_t{0}; index < base_delta_generations.size(); ++index) {
+      auto const* generation = base_delta_generations[index];
+      cudf::detail::cuda_memcpy_async(
+        cudf::host_span<int>{base_delta_overlap_host.data() + index, 1},
+        cudf::device_span<int const>{generation->overlaps_prior->data(), 1},
+        stream);
+    }
   }
 
   void materialize_delta_generation(streaming_delta& delta, cuda::stream_ref stream) const
@@ -1743,29 +1868,18 @@ class streaming_hash_join_impl {
                                           0,
                                           stream.get()>>>(rows,
                                                           delta.batch_id,
+                                                          delta.generation,
+                                                          delta.candidate_begin,
                                                           delta.slots->data(),
                                                           directory_capacity - 1,
                                                           delta.directory->data(),
                                                           delta.nodes->data(),
                                                           delta.pages->data(),
-                                                          delta.directory_next_page->data());
-    CUDF_CUDA_TRY(cudaGetLastError());
-    auto const emit_config = grid_1d{static_cast<size_type>(directory_capacity), 256};
-    streaming_delta_emit_page_nodes_kernel<<<emit_config.num_blocks,
-                                             emit_config.num_threads_per_block,
-                                             0,
-                                             stream.get()>>>(
-      static_cast<size_type>(directory_capacity),
-      base_delta_csr_capacity,
-      delta.batch_id,
-      delta.directory->data(),
-      delta.nodes->data(),
-      base_delta_sparse_heads->data());
+                                                          delta.directory_next_page->data(),
+                                                          base_delta_sparse_heads->data());
     CUDF_CUDA_TRY(cudaGetLastError());
     delta.slots->set_stream(stream);
-    delta.rows->set_stream(stream);
     delta.slots.reset();
-    delta.rows.reset();
   }
 
   void materialize_delta_generations(cuda::stream_ref stream) const
@@ -1773,6 +1887,7 @@ class streaming_hash_join_impl {
     for (auto* generation : base_delta_generations) {
       materialize_delta_generation(*generation, stream);
     }
+    refresh_singleton_generations(stream);
   }
 
   void compact_delta_generations(cuda::stream_ref stream) const
@@ -1780,7 +1895,10 @@ class streaming_hash_join_impl {
     cudf::scoped_range range{"streaming_hash_join::base_deltas::compaction"};
     if (base_delta_generations.empty()) { return; }
     auto const source = streaming_csr_generations_ref{
-      {canonical_ends->data(), canonical_values->data()}, base_delta_sparse_heads->data()};
+      {canonical_ends->data(), canonical_values->data()},
+      base_delta_sparse_heads->data(),
+      base_delta_singleton_generations->data(),
+      static_cast<size_type>(base_delta_singleton_generations_host.size())};
     auto const config = grid_1d{static_cast<size_type>(base_delta_csr_capacity), 256};
     streaming_csr_merge_count_kernel<<<config.num_blocks,
                                        config.num_threads_per_block,
@@ -1829,12 +1947,16 @@ class streaming_hash_join_impl {
       if (generation->directory) { generation->directory->set_stream(stream); }
       if (generation->pages) { generation->pages->set_stream(stream); }
       if (generation->directory_next_page) { generation->directory_next_page->set_stream(stream); }
+      if (generation->overlaps_prior) { generation->overlaps_prior->set_stream(stream); }
       generation->nodes.reset();
       generation->directory.reset();
       generation->pages.reset();
       generation->directory_next_page.reset();
+      generation->overlaps_prior.reset();
     }
     base_delta_generations.clear();
+    base_delta_singleton_generations_host.clear();
+    base_delta_overlap_host.clear();
     base_delta_generation_rows = 0;
   }
 
@@ -2014,9 +2136,7 @@ class streaming_hash_join_impl {
       auto const& delta = base_delta_batches[batch];
       if (!delta || !delta->slots) { continue; }
       delta->slots->set_stream(stream);
-      if (delta->rows) { delta->rows->set_stream(stream); }
       delta->slots.reset();
-      delta->rows.reset();
     }
     base_delta_sealed = true;
     base_delta_lifecycle_event.record(stream);
@@ -2052,9 +2172,12 @@ class streaming_hash_join_impl {
       static_cast<std::size_t>(left.num_rows()), stream, resources.get_temporary_mr()};
     auto offsets = rmm::device_uvector<size_type>{
       static_cast<std::size_t>(left.num_rows()), stream, resources.get_temporary_mr()};
+    auto all_matches_at_most_one =
+      rmm::device_uvector<int>{1, stream, resources.get_temporary_mr()};
     auto all_matches_exactly_one =
       rmm::device_uvector<int>{1, stream, resources.get_temporary_mr()};
     // Any non-zero byte pattern is true; memset avoids a host-to-device staging dependency.
+    CUDF_CUDA_TRY(cudaMemsetAsync(all_matches_at_most_one.data(), 1, sizeof(int), stream.get()));
     CUDF_CUDA_TRY(cudaMemsetAsync(all_matches_exactly_one.data(), 1, sizeof(int), stream.get()));
     auto const equal      = streaming_probe_equal{comparators.data()};
     auto const group_size = get_base_delta_probe_group_size();
@@ -2067,6 +2190,7 @@ class streaming_hash_join_impl {
                                                      valid_rows,
                                                      slots.data(),
                                                      offsets.data(),
+                                                     all_matches_at_most_one.data(),
                                                      all_matches_exactly_one.data(),
                                                      map,
                                                      csr,
@@ -2084,6 +2208,7 @@ class streaming_hash_join_impl {
             valid_rows,
             slots.data(),
             offsets.data(),
+            all_matches_at_most_one.data(),
             all_matches_exactly_one.data(),
             map,
             csr,
@@ -2096,6 +2221,7 @@ class streaming_hash_join_impl {
             valid_rows,
             slots.data(),
             offsets.data(),
+            all_matches_at_most_one.data(),
             all_matches_exactly_one.data(),
             map,
             csr,
@@ -2137,6 +2263,7 @@ class streaming_hash_join_impl {
                                          left.num_rows(),
                                          slots.data(),
                                          offsets.data(),
+                                         all_matches_at_most_one.data(),
                                          all_matches_exactly_one.data(),
                                          csr,
                                          left_indices->data(),
@@ -2154,29 +2281,54 @@ class streaming_hash_join_impl {
                          cudf::memory_resources resources) const
   {
     seal_base_deltas(stream);
-    bool compact_generations = false;
+    // An ordinary probe already waits for its cardinality copy below.  Queue the overlap copies
+    // before that wait and use their result to avoid rebuilding an otherwise disjoint overlay.
+    // Hinted probes deliberately retain the previous policy: they do not synchronize on the
+    // host, so consulting the device overlap flags there would add a new synchronization point.
+    bool compact_before_probe = false;
     {
       std::lock_guard lock{base_delta_mutex};
       base_delta_lifecycle_event.wait(stream);
       materialize_delta_generations(stream);
-      auto const base_rows = static_cast<size_type>(canonical_values->size());
-      auto const policy    = get_base_delta_compaction_policy();
-      compact_generations =
-        base_delta_generations.size() >= static_cast<std::size_t>(policy.generation_limit) ||
-        (base_delta_generation_rows > 0 &&
-         (base_rows == 0 || static_cast<cuda::std::uint64_t>(base_delta_generation_rows) * 100 >=
-                              static_cast<cuda::std::uint64_t>(base_rows) * policy.row_percent));
-      if (compact_generations) { compact_delta_generations(stream); }
-      base_delta_lifecycle_event.record(stream);
+      if (output_size) {
+        auto const base_rows = static_cast<size_type>(canonical_values->size());
+        auto const policy    = get_base_delta_compaction_policy();
+        compact_before_probe =
+          base_delta_generations.size() >= static_cast<std::size_t>(policy.generation_limit) ||
+          (base_delta_generation_rows > 0 &&
+           (base_rows == 0 || static_cast<cuda::std::uint64_t>(base_delta_generation_rows) * 100 >=
+                                static_cast<cuda::std::uint64_t>(base_rows) * policy.row_percent));
+        if (compact_before_probe) { compact_delta_generations(stream); }
+      } else if (left.num_rows() > 0) {
+        queue_overlap_copy(stream);
+      }
     }
     auto const csr = streaming_csr_generations_ref{
       {canonical_ends->data(), canonical_values->data()},
-      base_delta_sparse_heads ? base_delta_sparse_heads->data() : nullptr};
+      base_delta_sparse_heads ? base_delta_sparse_heads->data() : nullptr,
+      base_delta_singleton_generations ? base_delta_singleton_generations->data() : nullptr,
+      static_cast<size_type>(base_delta_singleton_generations_host.size())};
     // The sparse head array is the probe snapshot.  Record its completion after count/fill have
     // been queued, so a later stream cannot publish another generation into the overlay while
     // this stream is traversing it.
     auto record_probe_completion = [&] {
       std::lock_guard lock{base_delta_mutex};
+      if (!output_size && left.num_rows() > 0) {
+        // `probe_base_deltas_impl` synchronizes after its cardinality D2H copy, which also makes
+        // the overlap copies queued above visible here.  Do not suppress the generation cap: it
+        // bounds descriptor/page memory even when every generation is disjoint.
+        auto const any_overlap = std::any_of(base_delta_overlap_host.begin(),
+                                             base_delta_overlap_host.end(),
+                                             [](auto const overlap) { return overlap != 0; });
+        auto const base_rows   = static_cast<size_type>(canonical_values->size());
+        auto const policy      = get_base_delta_compaction_policy();
+        auto const compact_generations =
+          base_delta_generations.size() >= static_cast<std::size_t>(policy.generation_limit) ||
+          (any_overlap && base_delta_generation_rows > 0 &&
+           (base_rows == 0 || static_cast<cuda::std::uint64_t>(base_delta_generation_rows) * 100 >=
+                                static_cast<cuda::std::uint64_t>(base_rows) * policy.row_percent));
+        if (compact_generations) { compact_delta_generations(stream); }
+      }
       base_delta_lifecycle_event.record(stream);
     };
     auto preprocessed_left =

@@ -169,6 +169,89 @@ TEST_F(StreamingHashJoinTest, InsertAfterProbeIncludesNewBatch)
             (std::vector<join_match>{{0, 0, 1}, {0, 1, 0}, {1, 1, 1}}));
 }
 
+TEST_F(StreamingHashJoinTest, InsertAfterProbeHandlesDirectSingletonsDuplicatesAndNullHoles)
+{
+  auto const stream = cudf::test::get_default_stream();
+  column_wrapper<int32_t> base{1};
+  // The post-seal batch has one newly-created key, one null-excluded candidate hole, and a
+  // same-batch duplicate of the new key. This exercises direct singleton ranges and their
+  // page-backed fallback together.
+  column_wrapper<int32_t> delta{{2, 0, 2}, {1, 0, 1}};
+  column_wrapper<int32_t> seal_left{1};
+  column_wrapper<int32_t> left{1, 2};
+  cudf::table_view const base_view{{base}};
+  cudf::table_view const delta_view{{delta}};
+  cudf::table_view const seal_left_view{{seal_left}};
+  cudf::table_view const left_view{{left}};
+  std::vector<size_type> const keys{0};
+  cudf::streaming_hash_join joiner{base_view,
+                                   keys,
+                                   /*total_right_rows=*/4,
+                                   /*max_num_batches=*/2,
+                                   cudf::nullable_join::YES,
+                                   cudf::null_equality::UNEQUAL};
+
+  joiner.insert(base_view, stream);
+  static_cast<void>(joiner.inner_join(seal_left_view, {}, stream));
+  joiner.insert(delta_view, stream);
+
+  auto [left_indices, right_indices] = joiner.inner_join(left_view, {}, stream);
+  EXPECT_EQ(
+    to_sorted_host_matches(*left_indices, *right_indices.first, *right_indices.second, stream),
+    (std::vector<join_match>{{0, 0, 0}, {1, 1, 0}, {1, 1, 2}}));
+}
+
+TEST_F(StreamingHashJoinTest, InsertAfterProbeAtMostOneProbeRowsCompactsMisses)
+{
+  auto const stream = cudf::test::get_default_stream();
+  column_wrapper<int32_t> base{1, 3};
+  column_wrapper<int32_t> delta{2};
+  column_wrapper<int32_t> seal_left{1};
+  column_wrapper<int32_t> left{0, 1, 2, 3};
+  cudf::table_view const base_view{{base}};
+  cudf::table_view const delta_view{{delta}};
+  cudf::table_view const seal_left_view{{seal_left}};
+  cudf::table_view const left_view{{left}};
+  std::vector<size_type> const keys{0};
+  cudf::streaming_hash_join joiner{base_view,
+                                   keys,
+                                   /*total_right_rows=*/3,
+                                   /*max_num_batches=*/2,
+                                   cudf::nullable_join::NO,
+                                   cudf::null_equality::EQUAL};
+
+  joiner.insert(base_view, stream);
+  static_cast<void>(joiner.inner_join(seal_left_view, {}, stream));
+  joiner.insert(delta_view, stream);
+
+  auto [left_indices, right_indices] = joiner.inner_join(left_view, {}, stream);
+  EXPECT_EQ(
+    to_sorted_host_matches(*left_indices, *right_indices.first, *right_indices.second, stream),
+    (std::vector<join_match>{{1, 0, 0}, {2, 1, 0}, {3, 0, 1}}));
+}
+
+TEST_F(StreamingHashJoinTest, ExactOutputSizeHintWithOneMatchPerProbe)
+{
+  auto const stream = cudf::test::get_default_stream();
+  column_wrapper<int32_t> right{1, 2};
+  column_wrapper<int32_t> left{2, 1};
+  cudf::table_view const right_view{{right}};
+  cudf::table_view const left_view{{left}};
+  std::vector<size_type> const keys{0};
+  cudf::streaming_hash_join joiner{right_view,
+                                   keys,
+                                   /*total_right_rows=*/2,
+                                   /*max_num_batches=*/1,
+                                   cudf::nullable_join::NO,
+                                   cudf::null_equality::EQUAL};
+
+  joiner.insert(right_view, stream);
+  auto [left_indices, right_indices] = joiner.inner_join(left_view, /*output_size=*/2, stream);
+  EXPECT_EQ(
+    to_sorted_host_matches(*left_indices, *right_indices.first, *right_indices.second, stream),
+    (std::vector<join_match>{{0, 0, 1}, {1, 0, 0}}));
+}
+
 TEST_F(StreamingHashJoinTest, InsertAfterProbeReadsBaseAndUncompactedGeneration)
 {
   auto const stream = cudf::test::get_default_stream();
