@@ -550,11 +550,22 @@ struct streaming_csr_generations_ref {
   [[nodiscard]] __device__ streaming_singleton_generation_descriptor const* singleton_for(
     size_type slot) const
   {
-    for (auto index = size_type{0}; index < num_singleton_generations; ++index) {
-      auto const& generation = singleton_generations[index];
-      if (slot >= generation.candidate_begin && slot < generation.candidate_end) {
-        return &generation;
+    // Candidate CSR-ID ranges are reserved monotonically with batch insertion. Find the final
+    // range beginning no later than `slot` instead of loading every active generation for every
+    // probe-count and retrieval lookup.
+    auto first = size_type{0};
+    auto last  = num_singleton_generations;
+    while (first < last) {
+      auto const middle = first + (last - first) / 2;
+      if (singleton_generations[middle].candidate_begin <= slot) {
+        first = middle + 1;
+      } else {
+        last = middle;
       }
+    }
+    if (first != 0) {
+      auto const& generation = singleton_generations[first - 1];
+      if (slot < generation.candidate_end) { return &generation; }
     }
     return nullptr;
   }
