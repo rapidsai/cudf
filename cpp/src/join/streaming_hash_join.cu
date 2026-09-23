@@ -212,7 +212,9 @@ base_delta_compaction_policy get_base_delta_compaction_policy()
     return static_cast<size_type>(parsed);
   };
   return {parse("CUDF_STREAMING_HASH_JOIN_BASE_DELTA_COMPACTION_ROW_PERCENT", 200, 1, 1600),
-          parse("CUDF_STREAMING_HASH_JOIN_BASE_DELTA_COMPACTION_GENERATION_LIMIT", 16, 1, 32)};
+          // Small, disjoint direct-singleton overlays are inexpensive to merge but expensive to
+          // revisit across every full probe. Two generations wins the interleaved steady state.
+          parse("CUDF_STREAMING_HASH_JOIN_BASE_DELTA_COMPACTION_GENERATION_LIMIT", 2, 1, 32)};
 }
 
 /**
