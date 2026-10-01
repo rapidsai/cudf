@@ -1261,9 +1261,10 @@ std::unique_ptr<table> execute_ast_runtime(detail::row_ir::transform_args&& args
   }
   // The error read below synchronizes evaluation, keeping the pinned source alive until this copy
   // completes without an extra synchronization before launching the kernel.
-  auto device_descriptors = detail::make_device_uvector_async(descriptors, stream, mr);
+  auto const scratch_mr   = cudf::get_current_device_resource_ref();
+  auto device_descriptors = detail::make_device_uvector_async(descriptors, stream, scratch_mr);
   auto* device_bytes      = reinterpret_cast<std::byte*>(device_descriptors.data());
-  detail::device_scalar<int32_t> max_error(static_cast<int32_t>(errc::SUCCESS), stream, mr);
+  detail::device_scalar<int32_t> max_error(static_cast<int32_t>(errc::SUCCESS), stream, scratch_mr);
   auto* stencil_arg = stencil.has_value() && stencil->second > 0 ? stencil->first : nullptr;
   jit_transform::launch(kernel,
                         row_size,

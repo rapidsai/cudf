@@ -25,6 +25,7 @@
 #include <rmm/cuda_stream.hpp>
 
 #include <cuda/iterator>
+#include <cuda_runtime_api.h>
 
 #include <array>
 #include <functional>
@@ -124,7 +125,62 @@ TEST_F(JITExpressionTest, LtoIntegerOverflow)
     SCOPED_TRACE(i);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected[i]->view(), result->view().column(i), VERBOSITY);
   }
-  EXPECT_THROW(cudf::compute_table_jit(table, throwing), cudf::evaluation_error);
+  // An earlier PROPAGATE failure must not mask an unchecked later type. Substituting safe
+  // inputs preserves the nullable schema and expression graph, so every check reuses one kernel.
+  for (size_t base = 0; base < views.size(); base += 3) {
+    views[base + 1] = views[base];
+  }
+  ASSERT_NO_THROW(cudf::compute_table_jit(cudf::table_view{views}, throwing));
+  for (size_t base = 0; base < views.size(); base += 3) {
+    SCOPED_TRACE(cudf::type_to_name(views[base].type()));
+    views[base + 1] = inputs[base + 1]->view();
+    EXPECT_THROW(cudf::compute_table_jit(cudf::table_view{views}, throwing),
+                 cudf::evaluation_error);
+    views[base + 1] = views[base];
+  }
+}
+
+TEST_F(JITExpressionTest, LtoNullableGridStrideAndTails)
+{
+  int device{}, multiprocessors{}, threads_per_multiprocessor{};
+  ASSERT_EQ(cudaSuccess, cudaGetDevice(&device));
+  ASSERT_EQ(cudaSuccess,
+            cudaDeviceGetAttribute(&multiprocessors, cudaDevAttrMultiProcessorCount, device));
+  ASSERT_EQ(cudaSuccess,
+            cudaDeviceGetAttribute(
+              &threads_per_multiprocessor, cudaDevAttrMaxThreadsPerMultiProcessor, device));
+  // Exceed the occupancy grid's resident-thread capacity to exercise repeated loop iterations.
+  auto const large_rows = 2 * multiprocessors * threads_per_multiprocessor + 31;
+  auto values           = cudf::detail::make_counting_transform_iterator(0, [](auto i) -> int32_t {
+    return i % 67 == 0 ? std::numeric_limits<int32_t>::max() : i % 251 - 100;
+  });
+  auto validity =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 7 != 0; });
+  auto expected_sub =
+    cudf::detail::make_counting_transform_iterator(0, [values](auto i) { return values[i] - 1; });
+  auto expected_add = cudf::detail::make_counting_transform_iterator(
+    0, [values](auto i) { return i % 67 == 0 ? 0 : values[i] + 1; });
+  auto add_validity = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i % 7 != 0 && i % 67 != 0; });
+  auto scalar     = cudf::numeric_scalar<int32_t>(1);
+  auto tree       = cudf::ast::tree{};
+  auto input_ref  = cudf::ast::column_reference(0);
+  auto& literal   = tree.push(cudf::ast::literal(scalar));
+  auto& subtract  = cudf::ast::jit::operation(tree, cudf::ast::jit::op::SUB, {input_ref, literal});
+  auto& nullified = cudf::ast::jit::operation(
+    tree, cudf::ast::jit::op::ADD_OVERFLOW, {input_ref, literal}, cudf::error_policy::NULLIFY);
+  std::array<std::reference_wrapper<cudf::ast::expression const>, 2> expressions{subtract,
+                                                                                 nullified};
+  for (auto const rows : std::array{31, 32, 33, large_rows}) {
+    SCOPED_TRACE(rows);
+    auto input               = column_wrapper<int32_t>(values, values + rows, validity);
+    auto expected_sub_column = column_wrapper<int32_t>(expected_sub, expected_sub + rows, validity);
+    auto expected_add_column =
+      column_wrapper<int32_t>(expected_add, expected_add + rows, add_validity);
+    auto result = cudf::compute_table_jit(cudf::table_view{{input}}, expressions);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sub_column, result->view().column(0), VERBOSITY);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_add_column, result->view().column(1), VERBOSITY);
+  }
 }
 
 TEST_F(JITExpressionTest, LtoFallbackDecimal)
