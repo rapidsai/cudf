@@ -96,7 +96,8 @@ TEST_F(JITExpressionTest, LtoIntegerOverflow)
   auto append = [&]<typename T>() {
     auto const base = static_cast<cudf::size_type>(inputs.size());
     inputs.push_back(column_wrapper<T>{{1, 2, 3}, {1, 1, 0}}.release());
-    inputs.push_back(column_wrapper<T>{{1, std::numeric_limits<T>::max(), 3}, {1, 1, 0}}.release());
+    inputs.push_back(
+      column_wrapper<T>{{T{1}, std::numeric_limits<T>::max(), T{3}}, {1, 1, 0}}.release());
     inputs.push_back(column_wrapper<T>{2, 1, 4}.release());
     auto& lhs  = tree.push(cudf::ast::column_reference(base));
     auto& fail = tree.push(cudf::ast::column_reference(base + 1));

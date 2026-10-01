@@ -17,6 +17,7 @@
 #define XXH_INLINE_ALL
 #include <xxhash.h>
 
+#include <array>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -571,12 +572,12 @@ bundle={}
   // The source encodes types, nullability, operations, and error policies; the bundle covers
   // both embedded fragments. Defer resolving their IR until the linked library actually misses.
   auto compile = [&] {
-    auto udf                        = jit::get_ast_udf_lto_fragment(cuda_source);
-    char const* const expressions[] = {"cudf_kernel_entry"};
+    auto udf = jit::get_ast_udf_lto_fragment(cuda_source);
+    std::array<char const*, 1> const expressions{"cudf_kernel_entry"};
     auto driver = get_kernel_fragment(name, name, {}, {}, "cudf_kernel_entry", expressions);
-    rtcx::memory_fragment const fragments[] = {
-      {.data = driver->view(), .type = rtcx::binary_type::LTO_IR, .name = nullptr},
-      {.data = udf->view(), .type = rtcx::binary_type::LTO_IR, .name = nullptr}};
+    std::array<rtcx::memory_fragment, 2> const fragments{
+      {{.data = driver->view(), .type = rtcx::binary_type::LTO_IR, .name = nullptr},
+       {.data = udf->view(), .type = rtcx::binary_type::LTO_IR, .name = nullptr}}};
     return link_library_uncached(name.c_str(), {}, fragments);
   };
 
