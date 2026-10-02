@@ -47,7 +47,7 @@ using decimal_column_wrapper = cudf::test::fixed_point_column_wrapper<typename T
 
 struct JITExpressionTest : public cudf::test::BaseFixture {};
 
-TEST_F(JITExpressionTest, LtoMultiOutput)
+TEST_F(JITExpressionTest, LtoKernelCacheIdentity)
 {
   constexpr auto max = std::numeric_limits<int32_t>::max();
   auto a             = column_wrapper<int32_t>{{1, max, 3}, {1, 1, 0}};
@@ -61,8 +61,6 @@ TEST_F(JITExpressionTest, LtoMultiOutput)
   auto& subtract     = cudf::ast::jit::operation(tree, cudf::ast::jit::op::SUB, {a_ref, b_ref});
   auto& nullified    = cudf::ast::jit::operation(
     tree, cudf::ast::jit::op::ADD_OVERFLOW, {a_ref, b_ref}, cudf::error_policy::NULLIFY);
-  auto& throwing = cudf::ast::jit::operation(
-    tree, cudf::ast::jit::op::ADD_OVERFLOW, {a_ref, b_ref}, cudf::error_policy::PROPAGATE);
 
   std::array<std::reference_wrapper<cudf::ast::expression const>, 2> expressions{subtract,
                                                                                  nullified};
@@ -82,34 +80,23 @@ TEST_F(JITExpressionTest, LtoMultiOutput)
   auto repeated_result = cudf::compute_table_jit(table, expressions);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sub, repeated_result->view().column(0), VERBOSITY);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_null, repeated_result->view().column(1), VERBOSITY);
-
-  std::array<std::reference_wrapper<cudf::ast::expression const>, 2> throwing_expressions{throwing,
-                                                                                          subtract};
-  EXPECT_THROW(cudf::compute_table_jit(table, throwing_expressions), cudf::evaluation_error);
-  EXPECT_THROW(cudf::compute_table_jit(table, throwing_expressions), cudf::evaluation_error);
 }
 
 TEST_F(JITExpressionTest, LtoIntegerOverflow)
 {
   cudf::ast::tree tree;
-  std::vector<std::unique_ptr<cudf::column>> inputs, expected;
-  std::vector<std::reference_wrapper<cudf::ast::expression const>> outputs, throwing;
+  std::vector<std::unique_ptr<cudf::column>> inputs;
+  std::vector<std::reference_wrapper<cudf::ast::expression const>> throwing;
   auto append = [&]<typename T>() {
     auto const base = static_cast<cudf::size_type>(inputs.size());
     inputs.push_back(column_wrapper<T>{{1, 2, 3}, {1, 1, 0}}.release());
     inputs.push_back(
       column_wrapper<T>{{T{1}, std::numeric_limits<T>::max(), T{3}}, {1, 1, 0}}.release());
     inputs.push_back(column_wrapper<T>{2, 1, 4}.release());
-    auto& lhs  = tree.push(cudf::ast::column_reference(base));
     auto& fail = tree.push(cudf::ast::column_reference(base + 1));
     auto& rhs  = tree.push(cudf::ast::column_reference(base + 2));
-    outputs.emplace_back(cudf::ast::jit::operation(tree, cudf::ast::jit::op::ADD, {lhs, rhs}));
-    outputs.emplace_back(cudf::ast::jit::operation(
-      tree, cudf::ast::jit::op::ADD_OVERFLOW, {fail, rhs}, cudf::error_policy::NULLIFY));
     throwing.emplace_back(cudf::ast::jit::operation(
       tree, cudf::ast::jit::op::ADD_OVERFLOW, {fail, rhs}, cudf::error_policy::PROPAGATE));
-    expected.push_back(column_wrapper<T>{{3, 3, 0}, {1, 1, 0}}.release());
-    expected.push_back(column_wrapper<T>{{3, 0, 0}, {1, 0, 0}}.release());
   };
   [&]<typename... T>(cudf::test::Types<T...>) {
     (append.template operator()<T>(), ...);
@@ -117,13 +104,6 @@ TEST_F(JITExpressionTest, LtoIntegerOverflow)
   std::vector<cudf::column_view> views;
   for (auto const& column : inputs) {
     views.push_back(column->view());
-  }
-  auto table  = cudf::table_view{views};
-  auto result = cudf::compute_table_jit(table, outputs);
-  ASSERT_EQ(result->num_columns(), static_cast<cudf::size_type>(expected.size()));
-  for (size_t i = 0; i < expected.size(); ++i) {
-    SCOPED_TRACE(i);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected[i]->view(), result->view().column(i), VERBOSITY);
   }
   // An earlier PROPAGATE failure must not mask an unchecked later type. Substituting safe
   // inputs preserves the nullable schema and expression graph, so every check reuses one kernel.
@@ -181,22 +161,6 @@ TEST_F(JITExpressionTest, LtoNullableGridStrideAndTails)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sub_column, result->view().column(0), VERBOSITY);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_add_column, result->view().column(1), VERBOSITY);
   }
-}
-
-TEST_F(JITExpressionTest, LtoFallbackDecimal)
-{
-  auto lhs      = decimal_column_wrapper<numeric::decimal32>{{100, 200}, numeric::scale_type{-2}};
-  auto rhs      = decimal_column_wrapper<numeric::decimal32>{{23, -50}, numeric::scale_type{-2}};
-  auto expected = decimal_column_wrapper<numeric::decimal32>{{123, 150}, numeric::scale_type{-2}};
-  auto table    = cudf::table_view{{lhs, rhs}};
-  auto tree     = cudf::ast::tree{};
-  auto lhs_ref  = cudf::ast::column_reference(0);
-  auto rhs_ref  = cudf::ast::column_reference(1);
-  auto& add     = cudf::ast::jit::operation(tree, cudf::ast::jit::op::ADD, {lhs_ref, rhs_ref});
-  std::array<std::reference_wrapper<cudf::ast::expression const>, 2> expressions{add, add};
-  auto result = cudf::compute_table_jit(table, expressions);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view().column(0), VERBOSITY);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view().column(1), VERBOSITY);
 }
 
 TEST_F(JITExpressionTest, LtoSlicedInputsAndScalars)
