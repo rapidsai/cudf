@@ -145,6 +145,10 @@ struct subpass_intermediate_data {
   // during processing. notably, page_buf will not be allocated to hold a compacted
   // copy of the pages specific to the subpass.
   bool single_subpass{false};
+
+  // whether any of the columns being read has a list parent. the page sizes trimmed to the row
+  // bounds of each output chunk are only used for these columns.
+  bool has_lists{false};
 };
 
 /**
