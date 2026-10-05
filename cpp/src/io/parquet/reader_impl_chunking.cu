@@ -207,6 +207,19 @@ void reader_impl::setup_next_pass(read_mode mode)
 
 void reader_impl::setup_next_subpass(read_mode mode)
 {
+  setup_subpass(mode, false);
+  // A subpass whose pages end before its first complete row is left empty (see
+  // preprocess_subpass_pages). The real row counts of those pages are known then, so select it
+  // again, which gives the column that came up short at least one more page.
+  for (size_t attempt = 1; _pass_itm_data->subpass->num_rows == 0; ++attempt) {
+    CUDF_EXPECTS(
+      attempt < _pass_itm_data->pages.size(), "Unexpected short subpass", std::underflow_error);
+    setup_subpass(mode, true);
+  }
+}
+
+void reader_impl::setup_subpass(read_mode mode, bool is_retry)
+{
   auto& pass    = *_pass_itm_data;
   pass.subpass  = std::make_unique<subpass_intermediate_data>(_stream);
   auto& subpass = *pass.subpass;
@@ -219,6 +232,10 @@ void reader_impl::setup_next_subpass(read_mode mode)
 
   // Check if this the first subpass in this pass
   auto const is_first_subpass = pass.processed_rows == 0;
+  // The pass level setup below (scratch sizes and dictionaries) is done by the first selection of
+  // the first subpass. A retry (see setup_next_subpass) must not repeat it, since the dictionary
+  // pages it reads as compressed input are decompressed by then.
+  auto const setup_pass = is_first_subpass and not is_retry;
 
   // what do we do if the base memory size (the compressed data) itself is approaching or larger
   // than the overall read limit? we are still going to be decompressing in subpasses, but we have
@@ -266,7 +283,7 @@ void reader_impl::setup_next_subpass(read_mode mode)
 
     // include scratch space needed for decompression and string offset buffers.
     // for certain codecs (eg ZSTD) this an be considerable.
-    if (is_first_subpass) {
+    if (setup_pass) {
       pass.decomp_scratch_sizes =
         compute_decompression_scratch_sizes(pass.chunks, pass.pages, _stream);
       pass.string_offset_sizes = compute_string_offset_sizes(
@@ -345,17 +362,17 @@ void reader_impl::setup_next_subpass(read_mode mode)
   _subpass_page_mask->host_to_device_async(_stream);
 
   // decompress the data pages in this subpass; also decompress the dictionary pages in this pass,
-  // if this is the first subpass in the pass
+  // if this is the first selection of the first subpass in the pass
   if (pass.has_compressed_data) {
     auto [pass_data, subpass_data] =
       decompress_page_data(pass.chunks,
-                           is_first_subpass ? pass.pages : host_span<PageInfo>{},
+                           setup_pass ? pass.pages : host_span<PageInfo>{},
                            subpass.pages,
                            subpass_page_mask_span(),
                            _stream,
                            _mr);
 
-    if (is_first_subpass) {
+    if (setup_pass) {
       pass.decomp_dict_data = std::move(pass_data);
       pass.pages.host_to_device_async(_stream);
     }
@@ -366,7 +383,7 @@ void reader_impl::setup_next_subpass(read_mode mode)
 
   // since there is only ever 1 dictionary per chunk (the first page), do it at the
   // pass level.
-  if (is_first_subpass) { build_string_dict_indices(); }
+  if (setup_pass) { build_string_dict_indices(); }
 
   // buffers needed by the decode kernels
   {

@@ -178,6 +178,18 @@ class reader_impl {
   void setup_next_subpass(read_mode mode);
 
   /**
+   * @brief Selects, decompresses and preprocesses the pages of the next subpass.
+   *
+   * Leaves the subpass empty if estimated list row counts made its pages end before its first
+   * complete row (see `preprocess_subpass_pages`).
+   *
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param is_retry Whether this subpass was selected before, so that the pass level setup
+   *        (scratch sizes and dictionaries) is already done
+   */
+  void setup_subpass(read_mode mode, bool is_retry);
+
+  /**
    * @brief Preprocess string length and bounds information for the subpass.
    *
    * At the end of this process, the `str_bytes` field of the the PageInfo struct

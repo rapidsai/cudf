@@ -914,7 +914,9 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
   // each chunk came from those estimates, so it has to be recomputed too, or it drifts until the
   // page looks like it starts past the end of the pass and is never read at all. This condition is
   // where setup_next_pass forced it: generate_list_column_row_counts(is_estimate_row_counts::YES).
-  if (pass.has_compressed_data and _input_pass_read_limit != 0 and not _has_offset_index) {
+  auto const has_estimated_row_counts =
+    pass.has_compressed_data and _input_pass_read_limit != 0 and not _has_offset_index;
+  if (has_estimated_row_counts) {
     thrust::for_each(rmm::exec_policy_nosync(_stream, cudf::get_current_device_resource_ref()),
                      iter,
                      iter + pass.pages.size(),
@@ -993,6 +995,7 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
   // rows were capped at the end of the pass still is the last page of it.
   auto const last_pass_row = std::min<size_t>(
     _file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass + 1], pass_end);
+  bool is_short_subpass = false;
   // for each column
   for (size_t idx = 0; idx < subpass.column_page_count.size(); idx++) {
     // compute max row for this column in the subpass
@@ -1017,9 +1020,14 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
       auto const min_col_row =
         static_cast<size_t>(first_chunk.start_row) + static_cast<size_t>(first_page.chunk_row);
 
-      // must have at least 2 rows in the subpass.
-      CUDF_EXPECTS((max_col_row - min_col_row) > 1, "Unexpected short subpass");
-      max_col_row--;
+      // must have at least 2 rows in the subpass. Estimated row counts can select fewer, in which
+      // case the subpass is selected again (see below).
+      if ((max_col_row - min_col_row) > 1) {
+        max_col_row--;
+      } else {
+        CUDF_EXPECTS(has_estimated_row_counts, "Unexpected short subpass");
+        is_short_subpass = true;
+      }
     }
 
     max_row = std::min<size_t>(max_row, max_col_row);
@@ -1028,7 +1036,17 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
   }
   subpass.skip_rows = pass.skip_rows + pass.processed_rows;
   max_row           = std::min<size_t>(max_row, pass_end);
-  CUDF_EXPECTS(max_row > subpass.skip_rows, "Unexpected short subpass", std::underflow_error);
+  // Estimated list row counts can be far too high when the rows of a column differ a lot in size,
+  // so the pages selected for this subpass can end before its first complete row. Their real row
+  // counts are in the pass pages now, so leave this subpass empty and let setup_next_subpass
+  // select it again.
+  if (is_short_subpass or max_row <= subpass.skip_rows) {
+    CUDF_EXPECTS(has_estimated_row_counts and not subpass.single_subpass,
+                 "Unexpected short subpass",
+                 std::underflow_error);
+    subpass.num_rows = 0;
+    return;
+  }
   // Limit the number of rows to read in this subpass to the cudf's column size limit - 1 (for
   // lists). Only apply this limit when chunking is enabled.
   auto const max_num_rows = max_row - subpass.skip_rows;

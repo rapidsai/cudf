@@ -32,9 +32,13 @@
 
 #include <cuda/iterator>
 
+#include <algorithm>
 #include <format>
+#include <iterator>
 #include <limits>
+#include <numeric>
 #include <stdexcept>
+#include <vector>
 
 namespace {
 
@@ -1488,6 +1492,76 @@ TEST_F(HybridScanTest, RowGroupPassesMatchesChunkedReader)
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(cuda::std::get<0>(iter)->view(),
                                        cuda::std::get<1>(iter)->view());
   });
+}
+
+TEST_F(HybridScanTest, ListRowsOfVeryDifferentSizes)
+{
+  // A list column whose first rows are much larger than the others, without a page index, read
+  // in subpasses whose pages are picked by estimated list rows
+  auto constexpr num_rows   = 1'000;
+  auto constexpr num_large  = 10;
+  auto constexpr large_size = 1'000;
+
+  // List size of each row, shifted by one so that a scan turns them into offsets
+  std::vector<cudf::size_type> offsets(num_rows + 1, 1);
+  offsets.front() = 0;
+  std::fill(offsets.begin() + 1, offsets.begin() + 1 + num_large, large_size);
+  std::inclusive_scan(offsets.begin(), offsets.end(), offsets.begin());
+  auto const values = cuda::counting_iterator<int32_t>{0};
+  auto const list   = cudf::make_lists_column(
+    num_rows,
+    cudf::test::fixed_width_column_wrapper<int32_t>(offsets.begin(), offsets.end()).release(),
+    cudf::test::fixed_width_column_wrapper<int32_t>(values, values + offsets.back()).release(),
+    0,
+    cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
+  auto const expected = cudf::table_view{{*list}};
+
+  auto const stream = cudf::get_default_stream();
+  auto const mr     = cudf::get_current_device_resource_ref();
+
+  auto const filepath =
+    temp_env->get_temp_filepath("HybridScanListRowsOfVeryDifferentSizes.parquet");
+  cudf::io::write_parquet(
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .compression(cudf::io::compression_type::ZSTD)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER)
+      .max_page_size_bytes(1024)
+      .max_page_fragment_size(1)
+      .build());
+
+  std::size_t constexpr pass_read_limit = 1;
+  std::vector<std::unique_ptr<cudf::table>> tables;
+  {
+    auto options    = cudf::io::parquet_reader_options::builder().build();
+    auto datasource = cudf::io::datasource::create(filepath);
+
+    auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
+    auto reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
+      *footer_buffer, options);
+
+    auto const row_groups           = reader->all_row_groups(options);
+    auto const chunk_byte_ranges    = reader->all_column_chunks_byte_ranges(row_groups, options);
+    auto [buffers, col_data, tasks] = cudf::io::parquet::fetch_byte_ranges_to_device_async(
+      *datasource,
+      chunk_byte_ranges,
+      cudf::io::parquet::io_submission_policy::SERIALIZE,
+      stream,
+      mr);
+    tasks.get();
+
+    reader->setup_chunking_for_all_columns(
+      0, pass_read_limit, row_groups, col_data, options, stream, mr);
+    while (reader->has_next_table_chunk()) {
+      tables.push_back(reader->materialize_all_columns_chunk().tbl);
+    }
+  }
+
+  std::vector<cudf::table_view> views;
+  std::transform(tables.begin(), tables.end(), std::back_inserter(views), [](auto const& t) {
+    return t->view();
+  });
+  EXPECT_GT(tables.size(), 1);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, cudf::concatenate(views)->view());
 }
 
 TEST_F(HybridScanTest, RowGroupPassesUseSelectedColumns)
