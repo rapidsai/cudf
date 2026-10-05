@@ -636,6 +636,7 @@ ConfigureTest(
   large_strings/case_tests.cpp
   large_strings/json_tests.cpp
   large_strings/large_strings_fixture.cpp
+  large_strings/lists_tests.cpp
   large_strings/merge_tests.cpp
   large_strings/parquet_tests.cpp
   large_strings/replace_tests.cpp

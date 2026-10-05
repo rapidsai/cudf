@@ -24,6 +24,7 @@
 #include <thrust/gather.h>
 
 #include <functional>
+#include <limits>
 
 namespace cudf::detail {
 namespace {
@@ -289,6 +290,13 @@ dremel_data get_encoding(column_view h_col,
     auto [empties, empties_idx, empties_size] =
       get_empties(nesting_levels[level], column_offsets[level], column_ends[level]);
 
+    // The level values are indexed with size_type, so the merged count must fit
+    CUDF_EXPECTS(
+      static_cast<int64_t>(column_ends[level + 1]) - column_offsets[level + 1] + empties_size <=
+        std::numeric_limits<size_type>::max(),
+      "Number of list level values exceeds the column size limit",
+      std::overflow_error);
+
     // Merge empty at deepest parent level with the rep, def level vals at leaf level
 
     auto input_parent_rep_it = cuda::make_constant_iterator(level);
@@ -375,6 +383,10 @@ dremel_data get_encoding(column_view h_col,
     // Get empties at this level
     auto [empties, empties_idx, empties_size] =
       get_empties(nesting_levels[level], column_offsets[level], column_ends[level]);
+    CUDF_EXPECTS(static_cast<int64_t>(curr_rep_values_size) + empties_size <=
+                   std::numeric_limits<size_type>::max(),
+                 "Number of list level values exceeds the column size limit",
+                 std::overflow_error);
 
     auto offset_transformer = cuda::proclaim_return_type<size_type>(
       [new_child_offsets = new_offsets.data(),
