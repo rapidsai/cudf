@@ -91,10 +91,10 @@ rmm::device_uvector<PageInfo> make_page_header_scratch(size_t num_chunks,
                                                        cuda::stream_ref stream);
 
 /**
- * @brief Return the number of total pages, retaining descriptors when scratch is supplied.
+ * @brief Return the number of total pages, retaining descriptors when scratch has sufficient capacity.
  *
  * @param chunks Host-device span of column chunk descriptors
- * @param scratch Equal per-chunk scratch slices; empty selects count-only parsing
+ * @param scratch Equal per-chunk scratch slices; fewer slots than chunks selects count-only parsing
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return The total number of pages
@@ -141,7 +141,8 @@ std::string encoding_to_string(Encoding encoding);
  * @param pass The struct containing pass information
  * @param unsorted_pages Device span of page information to decode
  * @param has_offset_index Boolean indicating if the offset index is available
- * @param scratch Descriptors retained by counting; empty selects separate header decoding
+ * @param scratch Descriptors retained by counting; fewer slots than chunks selects separate
+ * header decoding
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void decode_page_headers(pass_intermediate_data& pass,

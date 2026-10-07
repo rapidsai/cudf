@@ -230,11 +230,11 @@ rmm::device_uvector<PageInfo> make_page_header_scratch(size_t num_chunks,
                                                        bool has_offset_index,
                                                        cuda::stream_ref stream)
 {
-  // Bound speculative storage independently of file size. Count/parse continues on overflow;
-  // finish reparses those chunks after exact output allocation. Indexed reads need no scratch.
+  // Bound speculative storage independently of file size. Count/parse continues on overflow; 
+  // in which case, we reparse those chunks after exact output allocation.
   if (has_offset_index || num_chunks == 0) { return rmm::device_uvector<PageInfo>(0, stream); }
 
-  constexpr size_t max_pages_per_chunk = 16'384;
+  constexpr size_t max_pages_per_chunk = 16'192;
   constexpr size_t mib                 = 1024 * 1024;
   size_t scratch_mib                   = 64;
   if (auto const* value = std::getenv("LIBCUDF_PARQUET_PAGE_HEADER_SCRATCH_MIB")) {
@@ -259,7 +259,8 @@ rmm::device_uvector<PageInfo> make_page_header_scratch(size_t num_chunks,
 
   kernel_error error_code(stream);
   chunks.host_to_device_async(stream);
-  if (scratch.empty()) {
+  // Retaining headers requires space for at least one descriptor per chunk.
+  if (scratch.size() < chunks.size()) {
     count_page_headers(chunks, error_code.data(), stream);
   } else {
     count_and_decode_page_headers(device_span<ColumnChunkDesc>{chunks.device_ptr(), chunks.size()},
@@ -611,7 +612,8 @@ void decode_page_headers_impl(pass_intermediate_data& pass,
       error_code.data(),
       stream);
   } else {
-    if (scratch.empty()) {
+    // Match the count-stage capacity check: insufficient scratch retained no descriptors.
+    if (scratch.size() < pass.chunks.size()) {
       // (Slow) decode page headers, one warp (lane) per pages of a column chunk
       decode_page_headers(
         device_span<ColumnChunkDesc const>(pass.chunks.device_ptr(), pass.chunks.size()),
