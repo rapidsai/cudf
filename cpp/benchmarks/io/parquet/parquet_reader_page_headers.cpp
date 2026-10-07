@@ -18,14 +18,12 @@
 #include <optional>
 
 // End-to-end read benchmark emphasizing page-header parsing. Input generation and writing are
-// outside the timed region. Uncompressed, non-nullable INT32 data keeps payload processing cheap.
-// Holding row count fixed while varying page size changes the length of each chunk's serial header
-// chain. Column and row-group counts vary the number of independently parsed chunks.
+// outside the timed region. Holding row count fixed while varying page size changes the length of
+// each chunk's serial header chain. Column and row-group counts vary the number of independently
+// parsed chunks.
 //
 // No offset index is written, so reads exercise header counting/parsing, including the fused path.
-// This measures the complete read, including scratch/output allocation and downstream decoding;
-// use a profiler to attribute changes to individual kernels. Page counts below are requested shape
-// estimates: writer sizing limits and partial pages can change the actual number of headers.
+// This measures the complete read, including scratch/output allocation and downstream decoding.
 void BM_parquet_read_page_headers(nvbench::state& state)
 {
   auto constexpr d_type = cudf::type_id::INT32;
@@ -46,9 +44,6 @@ void BM_parquet_read_page_headers(nvbench::state& state)
   auto const num_chunks         = static_cast<int64_t>(num_columns) * num_row_groups;
   auto const total_pages        = num_chunks * pages_per_chunk;
 
-  // A page needs at least one row, so the sweep cannot ask for more pages than there are rows in a
-  // row group. Skipping keeps an over-ambitious axis combination from silently measuring a file
-  // with a different shape than the one requested.
   if (rows_per_page < 1) {
     state.skip("pages_per_chunk exceeds the number of rows available in a row group");
     return;
@@ -68,9 +63,6 @@ void BM_parquet_read_page_headers(nvbench::state& state)
       .dictionary_policy(cudf::io::dictionary_policy::NEVER)
       .row_group_size_rows(rows_per_row_group)
       .max_page_size_rows(rows_per_page)
-      // Pages are assembled out of fragments, so a page cannot be smaller than one. Left at its
-      // default of 5000 rows this silently caps the page count: every request for a page shorter
-      // than a fragment yields the fragment instead, and the sweep flattens out without saying so.
       .max_page_fragment_size(rows_per_page)
       .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP);
   cudf::io::write_parquet(write_opts);
@@ -104,9 +96,9 @@ NVBENCH_BENCH(BM_parquet_read_page_headers)
   .add_string_axis("io_type", {"DEVICE_BUFFER"})
   // Hold payload size fixed while varying the requested page count for each column configuration.
   .add_int64_axis("num_rows", {4'000'000})
-  // The axis that sets the serial chain length, and the one that matters most here.
+  // The axis that sets the serial chain length.
   .add_int64_axis("pages_per_chunk", {10, 100, 1000, 10000})
-  // Chunk count, i.e. how many chains are walked at once. Together these separate the length of a
-  // chain from the number of them, which the row group based benchmarks conflate.
+  // The requested chunk count is num_columns * num_row_groups. More columns increase total
+  // payload; more row groups reduce rows per chunk and per page at fixed pages_per_chunk.
   .add_int64_axis("num_columns", {1, 16})
   .add_int64_axis("num_row_groups", {1, 8});

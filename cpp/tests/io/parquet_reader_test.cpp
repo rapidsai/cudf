@@ -57,6 +57,8 @@ auto page_boundary_slices(cudf::size_type const num_rows)
 
 }  // namespace
 
+// Verify reads when page indexes are not provided, with configurable scratch budgets, including zero (separate count/decode),
+// and reject malformed or overflowing budget values.
 TEST_F(ParquetReaderTest, PageHeaderScratchBudget)
 {
   auto const expected = create_random_fixed_table<int>(2, 100, false);
@@ -81,6 +83,7 @@ TEST_F(ParquetReaderTest, PageHeaderScratchBudget)
   }
 }
 
+// Verify indexed reads ignore an invalid scratch setting because they do not use header scratch.
 TEST_F(ParquetReaderTest, IndexedReadIgnoresPageHeaderScratchBudget)
 {
   cudf::test::strings_column_wrapper strings{{"one", "two", "three"}};
@@ -96,6 +99,8 @@ TEST_F(ParquetReaderTest, IndexedReadIgnoresPageHeaderScratchBudget)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
+// Verify mixed fitting/overflowing chunks preserve string values and nulls with V1/V2 headers
+// and plain/dictionary encoding, exercising cached descriptors and overflow reparsing together.
 TEST_F(ParquetReaderTest, FusedPageHeadersOverflow)
 {
   // One source fits in scratch; the other has more pages than the per-chunk capacity.
