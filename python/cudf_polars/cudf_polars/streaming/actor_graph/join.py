@@ -30,6 +30,7 @@ from rapidsmpf.streaming.core.message import Message
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Join, Projection
+from cudf_polars.dsl.tracing import LOG_TRACES
 from cudf_polars.dsl.utils.naming import names_to_indices
 from cudf_polars.streaming.actor_graph.collectives.allgather import (
     AllGatherManager,
@@ -50,10 +51,7 @@ from cudf_polars.streaming.actor_graph.prefilter import (
     add_bloom_prefilter,
     choose_prefilter,
 )
-from cudf_polars.streaming.actor_graph.tracing import (
-    LOG_TRACES,
-    send_chunk,
-)
+from cudf_polars.streaming.actor_graph.tracing import send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
     CUDF_ROW_LIMIT,
     MAX_ROWS_PER_PARTITION,

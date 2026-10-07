@@ -38,6 +38,7 @@ from cudf_polars.streaming.join import (
 from cudf_polars.streaming.join_filter_pushdown import (
     CompositeCandidate,
     Decision,
+    JoinFilterPushdownDecision,
     PlanFacts,
     SimpleCandidate,
     _select_candidate,
@@ -53,6 +54,7 @@ from cudf_polars.streaming.parallel import (
     optimize_with_stats,
     remove_cache_nodes,
 )
+from cudf_polars.streaming.plan_metadata import PlanMetadata
 from cudf_polars.streaming.repartition import Repartition
 from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
@@ -81,7 +83,7 @@ def make_config(
     *, dynamic_planning: bool = True, join_filter_pushdown: bool = True
 ) -> ConfigOptions:
     executor_options: dict[str, Any] = {
-        "join_filter_pushdown": {"trace": False} if join_filter_pushdown else None
+        "join_filter_pushdown": {} if join_filter_pushdown else None
     }
     if not dynamic_planning:
         executor_options["dynamic_planning"] = None
@@ -185,15 +187,24 @@ def test_filter_pushdown_is_independent_of_dynamic_planning(
 ) -> None:
     root = translate_query(simple_query, engine)
     config = make_config(dynamic_planning=False)
+    plan_metadata = PlanMetadata()
 
     optimized = optimize_join_filter_pushdown(
         root,
         StatsCollector(),
         config,
+        plan_metadata=plan_metadata,
     )
 
     assert find_hints(optimized)
+    (details,) = plan_metadata.operator_details(optimized)
+    assert isinstance(details, JoinFilterPushdownDecision)
+    assert details.threshold == 0.5
+    assert details.decision.reason == "applied"
     lowering = lower_ir_graph(root, config, StatsCollector())
+    (details,) = lowering.plan_metadata.operator_details(lowering.optimized)
+    assert isinstance(details, JoinFilterPushdownDecision)
+    assert details.decision.reason == "applied"
     assert not any(
         isinstance(node, JoinWithPrefilter) for node in traversal([lowering.lowered])
     )

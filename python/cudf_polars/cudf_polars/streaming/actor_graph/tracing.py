@@ -10,18 +10,12 @@ from typing import TYPE_CHECKING, Any
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.streaming.core.message import Message
 
-from cudf_polars.dsl.tracing import LOG_TRACES, Scope
-from cudf_polars.streaming.explain import SerializablePlan
-
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from cudf_streaming.table_chunk import TableChunk
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
-
-    from cudf_polars.dsl.ir import IR
-    from cudf_polars.utils.config import ConfigOptions
 
 
 def _zero_bytes_by_tier() -> dict[MemoryType, int]:
@@ -155,34 +149,3 @@ async def send_chunk(
     if tracer is not None:
         tracer.add_chunk(chunk=chunk)
     await ch_out.send(context, Message(sequence_number, chunk))
-
-
-def log_query_plan(ir: IR, config_options: ConfigOptions) -> None:
-    """
-    Log the IR tree structure as a structlog event.
-
-    This should be called once on the client process after lowering,
-    before distributed execution begins. The structure can be used
-    by post-processing tools to reconstruct annotated plans.
-
-    Parameters
-    ----------
-    ir
-        The root IR node of the lowered query plan.
-    config_options
-        The GPU engine configuration options.
-
-    Notes
-    -----
-    This function is a no-op if ``CUDF_POLARS_LOG_TRACES`` is not set.
-    """
-    if not LOG_TRACES:
-        return
-
-    import structlog
-
-    dag = SerializablePlan.from_ir(ir, config_options=config_options)
-    raw = dataclasses.asdict(dag)
-
-    log = structlog.get_logger()
-    log.info("Query Plan", scope=Scope.PLAN.value, plan=raw)

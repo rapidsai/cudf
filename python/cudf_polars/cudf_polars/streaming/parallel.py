@@ -43,6 +43,7 @@ from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.streaming.base import PartitionInfo
 from cudf_polars.streaming.dispatch import lower_ir_node
 from cudf_polars.streaming.io import _clear_source_info_cache
+from cudf_polars.streaming.plan_metadata import PlanMetadata
 from cudf_polars.streaming.repartition import Repartition
 from cudf_polars.streaming.utils import (
     _contains_over,
@@ -85,6 +86,7 @@ class LoweringInfo:
     partition_info: MutableMapping[
         IR, PartitionInfo
     ]  # Partition mapping for nodes in the lowered IR.
+    plan_metadata: PlanMetadata
 
 
 def remove_cache_nodes(ir: IR) -> IR:
@@ -100,7 +102,11 @@ def remove_cache_nodes(ir: IR) -> IR:
 
 
 def optimize_with_stats(
-    ir: IR, config_options: ConfigOptions[StreamingExecutor], stats: StatsCollector
+    ir: IR,
+    config_options: ConfigOptions[StreamingExecutor],
+    stats: StatsCollector,
+    *,
+    plan_metadata: PlanMetadata | None = None,
 ) -> IR:
     """
     Optimize an IR graph given some statistics.
@@ -113,6 +119,9 @@ def optimize_with_stats(
         GPUEngine configuration options.
     stats
         Pre-computed statistics.
+    plan_metadata
+        Optional place to record details about lowering / optimization
+        decisions.
 
     Returns
     -------
@@ -124,7 +133,12 @@ def optimize_with_stats(
     )
 
     ir = remove_cache_nodes(ir)
-    return optimize_join_filter_pushdown(ir, stats, config_options)
+    return optimize_join_filter_pushdown(
+        ir,
+        stats,
+        config_options,
+        plan_metadata=plan_metadata,
+    )
 
 
 def _lower_ir_graph_impl(
@@ -141,11 +155,20 @@ def _lower_ir_graph_impl(
         "rank": rank,
         "nranks": nranks,
     }
-    optimized = optimize_with_stats(ir, config_options, stats)
+    plan_metadata = PlanMetadata()
+    optimized = optimize_with_stats(
+        ir,
+        config_options,
+        stats,
+        plan_metadata=plan_metadata,
+    )
     mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
     lowered, partition_info = mapper(optimized)
     return LoweringInfo(
-        optimized=optimized, lowered=lowered, partition_info=partition_info
+        optimized=optimized,
+        lowered=lowered,
+        partition_info=partition_info,
+        plan_metadata=plan_metadata,
     ), mapper
 
 

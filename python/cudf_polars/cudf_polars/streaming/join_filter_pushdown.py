@@ -68,7 +68,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias, TypedDict
+from typing import TYPE_CHECKING, Literal, TypeAlias, TypedDict
 
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import (
@@ -88,7 +88,6 @@ from cudf_polars.dsl.ir import (
     Sort,
     Union,
 )
-from cudf_polars.dsl.tracing import Scope, log
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
     collect_refcount,
@@ -108,6 +107,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.streaming.base import StatsCollector
     from cudf_polars.streaming.filter_hint import HintPlacement
+    from cudf_polars.streaming.plan_metadata import PlanMetadata
     from cudf_polars.typing import GenericTransformer
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
@@ -203,6 +203,14 @@ class Decision:
 
 
 @dataclass(frozen=True)
+class JoinFilterPushdownDecision:
+    """Telemetry for one join-filter-pushdown decision."""
+
+    threshold: float
+    decision: Decision
+
+
+@dataclass(frozen=True)
 class PlanFacts:
     """Facts derived in one bottom-up traversal of an IR DAG."""
 
@@ -217,9 +225,9 @@ class _RewriteState(TypedDict):
     """State shared by the join-domain prefilter DAG rewrite."""
 
     threshold: float
-    trace: bool
     stats: StatsCollector
     facts: PlanFacts
+    plan_metadata: PlanMetadata | None
 
 
 def analyze_plan(ir: IR, stats: StatsCollector) -> PlanFacts:
@@ -399,6 +407,8 @@ def optimize_join_filter_pushdown(
     ir: IR,
     stats: StatsCollector,
     config_options: ConfigOptions[StreamingExecutor],
+    *,
+    plan_metadata: PlanMetadata | None = None,
 ) -> IR:
     """
     Rewrite an IR DAG to apply filter pushdown of keys.
@@ -417,6 +427,9 @@ def optimize_join_filter_pushdown(
         Pre-populated statistics.
     config_options
         Configuration options controlling the rewrite.
+    plan_metadata
+        Optional place to record details about lowering / optimization
+        decisions.
 
     Returns
     -------
@@ -426,15 +439,14 @@ def optimize_join_filter_pushdown(
     if options is None:
         return ir
     threshold = options.threshold
-    trace = options.trace
     if threshold == 0:
         return ir
 
     state = _RewriteState(
         threshold=threshold,
-        trace=trace,
         stats=stats,
         facts=analyze_plan(ir, stats),
+        plan_metadata=plan_metadata,
     )
     mapper: GenericTransformer[IR, IR, _RewriteState] = CachingVisitor(
         _rewrite, state=state
@@ -470,11 +482,20 @@ def _(node: Join, rec: GenericTransformer[IR, IR, _RewriteState]) -> IR:
         rec.state["threshold"],
         facts,
     )
-    if rec.state["trace"]:
-        _trace_decision(node, rec.state["threshold"], decision)
-    if decision.candidate is None:
-        return node
-    return apply_candidate(node, decision.candidate)
+    result = (
+        node
+        if decision.candidate is None
+        else apply_candidate(node, decision.candidate)
+    )
+    if rec.state["plan_metadata"] is not None:
+        rec.state["plan_metadata"].add_operator_detail(
+            result,
+            JoinFilterPushdownDecision(
+                threshold=rec.state["threshold"],
+                decision=decision,
+            ),
+        )
+    return result
 
 
 def apply_candidate(ir: Join, candidate: Candidate) -> IR:
@@ -907,41 +928,3 @@ def has_filtering_hint_ancestor(root: IR, path: Sequence[int]) -> bool:
             return True
         node = node.children[child_index]
     return False
-
-
-def _trace_decision(ir: Join, threshold: float, decision: Decision) -> None:
-    join_filter_pushdown: dict[str, Any] = {
-        "considered": True,
-        "threshold": threshold,
-        "reason": decision.reason,
-    }
-    record = {
-        "scope": Scope.PLAN.value,
-        "join_filter_pushdown": join_filter_pushdown,
-        "actor_ir_id": ir.get_stable_id(),
-        "actor_ir_type": type(ir).__name__,
-    }
-    if (candidate := decision.candidate) is not None:
-        join_filter_pushdown.update(
-            {
-                "mode": candidate.mode,
-                "target_side": candidate.target_side,
-                "target_key": candidate.target_key.name,
-                "domain_key": candidate.domain_key.name,
-                "estimated_target_rows": candidate.target.rows,
-                "estimated_domain_rows": candidate.domain.rows,
-                "estimated_target_cost": candidate.target.cost,
-                "estimated_domain_cost": candidate.domain.cost,
-                "target_node_type": type(candidate.target.node).__name__,
-                "domain_node_type": type(candidate.domain.node).__name__,
-            }
-        )
-        if isinstance(candidate, CompositeCandidate):
-            join_filter_pushdown.update(
-                {
-                    "constraint_key": candidate.target_constraint_key.name,
-                    "estimated_constraint_rows": candidate.constraint_domain.rows,
-                    "estimated_constraint_cost": candidate.constraint_domain.cost,
-                }
-            )
-    log("Join Filter Pushdown", **record)

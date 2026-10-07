@@ -410,6 +410,7 @@ impl EntityEventAccumulator for OperatorData {
                 instance_name,
                 type_name,
                 node_id,
+                schemas,
             } => {
                 self.plan_id = Some(plan.target);
                 self.parent_operator_ids = parent_operators
@@ -419,6 +420,8 @@ impl EntityEventAccumulator for OperatorData {
                 self.instance_name = Some(instance_name);
                 self.type_name = Some(type_name);
                 self.custom_attributes.add("node_id", node_id);
+                self.add_serialized_attribute("input_schemas", &schemas.input_schemas);
+                self.add_serialized_attribute("output_schema", &schemas.output_schema);
             }
             OperatorEvent::Statistics { values } => self.statistics = Some(values),
             OperatorEvent::ScanDetails { values } => {
@@ -429,6 +432,9 @@ impl EntityEventAccumulator for OperatorData {
             }
             OperatorEvent::JoinDetails { values } => {
                 self.add_serialized_attribute("join_details", &values);
+            }
+            OperatorEvent::JoinFilterPushdownDetails { values } => {
+                self.add_serialized_attribute("join_filter_pushdown_details", &values);
             }
             OperatorEvent::JoinWithPrefilterDetails { values } => {
                 self.add_serialized_attribute("join_with_prefilter_details", &values);
@@ -463,24 +469,25 @@ fn to_ui_operator_statistics(statistics: &OperatorStatistics) -> ui::OperatorSta
         value: Some(value),
         quantity: quantity.map(str::to_owned),
     };
-    let mut custom_statistics = HashMap::from([
-        (
-            "input_bytes".to_owned(),
-            statistic(statistics.input_bytes.into(), Some("bytes")),
-        ),
-        (
-            "output_bytes".to_owned(),
-            statistic(statistics.output_bytes.into(), Some("bytes")),
-        ),
-        (
-            "chunk_count".to_owned(),
-            statistic(statistics.chunk_count.into(), None),
-        ),
-        (
-            "duplicated".to_owned(),
-            statistic(statistics.duplicated.into(), None),
-        ),
-    ]);
+    let mut custom_statistics: HashMap<String, quent_query_engine_ui::OperatorStatistic> =
+        HashMap::from([
+            (
+                "input_bytes".to_owned(),
+                statistic(statistics.input_bytes.into(), Some("bytes")),
+            ),
+            (
+                "output_bytes".to_owned(),
+                statistic(statistics.output_bytes.into(), Some("bytes")),
+            ),
+            (
+                "chunk_count".to_owned(),
+                statistic(statistics.chunk_count.into(), None),
+            ),
+            (
+                "duplicated".to_owned(),
+                statistic(statistics.duplicated.into(), None),
+            ),
+        ]);
     if let Some(value) = statistics.output_rows {
         custom_statistics.insert("output_rows".to_owned(), statistic(value.into(), None));
     }

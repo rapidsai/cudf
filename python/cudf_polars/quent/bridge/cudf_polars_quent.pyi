@@ -107,6 +107,17 @@ class PlanEdgeDict(TypedDict):
     source: PortHandle | _uuid.UUID
     target: PortHandle | _uuid.UUID
 
+class ColumnSchemaDict(TypedDict):
+    name: str
+    dtype: str
+
+class DataFrameSchemaDict(TypedDict):
+    columns: Iterable[ColumnSchemaDict]
+
+class OperatorSchemasDict(TypedDict):
+    input_schemas: Iterable[DataFrameSchemaDict]
+    output_schema: DataFrameSchemaDict
+
 class OperatorStatisticsDict(TypedDict):
     input_bytes: int
     output_bytes: int
@@ -130,6 +141,23 @@ class JoinDetailsDict(TypedDict):
     how: str
     left_on: Iterable[str]
     right_on: Iterable[str]
+
+class JoinFilterPushdownDetailsDict(TypedDict):
+    threshold: float
+    reason: str
+    mode: str | None
+    target_side: str | None
+    target_key: str | None
+    domain_key: str | None
+    estimated_target_rows: int | None
+    estimated_domain_rows: int | None
+    estimated_target_cost: int | None
+    estimated_domain_cost: int | None
+    target_node_type: str | None
+    domain_node_type: str | None
+    constraint_key: str | None
+    estimated_constraint_rows: int | None
+    estimated_constraint_cost: int | None
 
 class PrefilterDomainDict(TypedDict):
     type_name: str
@@ -250,7 +278,7 @@ class OperatorHandle:
     @property
     def id(self) -> _uuid.UUID: ...
     def __repr__(self) -> str: ...
-    def declared(self, *, plan: PlanHandle | _uuid.UUID, parent_operators: Iterable[OperatorHandle | _uuid.UUID], instance_name: str, type_name: str, node_id: str) -> None: ...
+    def declared(self, *, plan: PlanHandle | _uuid.UUID, parent_operators: Iterable[OperatorHandle | _uuid.UUID], instance_name: str, type_name: str, node_id: str, schemas: OperatorSchemasDict) -> None: ...
     def declared_emitted(self) -> bool: ...
     def scan_details(self, *, values: ScanDetailsDict) -> None: ...
     def scan_details_emitted(self) -> bool: ...
@@ -258,6 +286,8 @@ class OperatorHandle:
     def streaming_scan_details_emitted(self) -> bool: ...
     def join_details(self, *, values: JoinDetailsDict) -> None: ...
     def join_details_emitted(self) -> bool: ...
+    def join_filter_pushdown_details(self, *, values: JoinFilterPushdownDetailsDict) -> None: ...
+    def join_filter_pushdown_details_emitted(self) -> bool: ...
     def join_with_prefilter_details(self, *, values: JoinWithPrefilterDetailsDict) -> None: ...
     def join_with_prefilter_details_emitted(self) -> bool: ...
     def pushdown_filter_hint_details(self, *, values: PushdownFilterHintDetailsDict) -> None: ...

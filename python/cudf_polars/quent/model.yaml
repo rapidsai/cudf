@@ -18,6 +18,20 @@ records:
       source: { ref: Port }
       target: { ref: Port }
 
+  ColumnSchema:
+    fields:
+      name: string
+      dtype: string
+
+  DataFrameSchema:
+    fields:
+      columns: { list: ColumnSchema }
+
+  OperatorSchemas:
+    fields:
+      input_schemas: { list: DataFrameSchema }
+      output_schema: DataFrameSchema
+
   OperatorStatistics:
     fields:
       input_bytes: u64
@@ -45,6 +59,24 @@ records:
       how: string
       left_on: { list: string }
       right_on: { list: string }
+
+  JoinFilterPushdownDetails:
+    fields:
+      threshold: f64
+      reason: string
+      mode: { option: string }
+      target_side: { option: string }
+      target_key: { option: string }
+      domain_key: { option: string }
+      estimated_target_rows: { option: u64 }
+      estimated_domain_rows: { option: u64 }
+      estimated_target_cost: { option: u64 }
+      estimated_domain_cost: { option: u64 }
+      target_node_type: { option: string }
+      domain_node_type: { option: string }
+      constraint_key: { option: string }
+      estimated_constraint_rows: { option: u64 }
+      estimated_constraint_cost: { option: u64 }
 
   PrefilterDomain:
     fields:
@@ -122,6 +154,7 @@ entities:
           instance_name: string
           type_name: string
           node_id: string
+          schemas: OperatorSchemas
       scan_details:
         attributes:
           values: ScanDetails
@@ -131,6 +164,9 @@ entities:
       join_details:
         attributes:
           values: JoinDetails
+      join_filter_pushdown_details:
+        attributes:
+          values: JoinFilterPushdownDetails
       join_with_prefilter_details:
         attributes:
           values: JoinWithPrefilterDetails

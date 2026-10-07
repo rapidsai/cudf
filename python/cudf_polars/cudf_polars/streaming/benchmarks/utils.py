@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import argparse
-import contextlib
 import dataclasses
 import importlib
 import io
@@ -77,11 +76,7 @@ try:
         ValidationError,
         assert_tpch_result_equal,
     )
-    from cudf_polars.streaming.explain import (
-        SerializablePlan,
-        explain_query,
-        serialize_query,
-    )
+    from cudf_polars.streaming.explain import explain_query
     from cudf_polars.streaming.parallel import evaluate_streaming
     from cudf_polars.utils.config import ConfigOptions
 
@@ -94,7 +89,6 @@ if TYPE_CHECKING:
 
     from cudf_polars.engine.options import StreamingOptions
     from cudf_polars.quent import QuentConfig
-    from cudf_polars.streaming.explain import SerializablePlan
 
 POLARS_VALIDATION_OPTIONS = {
     "check_row_order": True,
@@ -322,7 +316,6 @@ class QueryRunResult:
     """Result of running a single query (all iterations)."""
 
     query_records: list[SuccessRecord | FailedRecord]
-    plan: SerializablePlan | None
     iteration_failures: list[tuple[int, int]]
     validation_failed: bool
     partition_plan_rows: list = dataclasses.field(default_factory=list)
@@ -593,7 +586,6 @@ class RunConfig:
     records: dict[int, list[SuccessRecord | FailedRecord]] = dataclasses.field(
         default_factory=dict
     )
-    plans: dict[int, Any] = dataclasses.field(default_factory=dict)
     hardware: HardwareInfo = dataclasses.field(default_factory=HardwareInfo.collect)
     run_id: uuid.UUID = dataclasses.field(default_factory=uuid.uuid4)
     timestamp: str = dataclasses.field(
@@ -777,7 +769,6 @@ class RunConfig:
             "records": {
                 k: [dataclasses.asdict(r) for r in v] for k, v in self.records.items()
             },
-            "plans": {},
             "versions": dataclasses.asdict(self.versions),
             "hardware": dataclasses.asdict(self.hardware),
             "validation_method": dataclasses.asdict(self.validation_method)
@@ -1145,7 +1136,6 @@ def run_polars_query(
     numeric_type: str,
     date_type: str,
     prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
-    plan: SerializablePlan | None = None,
 ) -> QueryRunResult:
     """Run all iterations for a single query. Caller must wrap in try/except."""
     q = query_result.frame
@@ -1275,7 +1265,6 @@ def run_polars_query(
 
     return QueryRunResult(
         query_records=query_records,
-        plan=plan,
         iteration_failures=iteration_failures,
         validation_failed=validation_failed,
         partition_plan_rows=part_plan_rows,
@@ -1292,13 +1281,11 @@ def _run_query_loop(
     prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
 ) -> tuple[
     defaultdict[int, list[SuccessRecord | FailedRecord]],
-    dict[int, Any],
     list[int],
     list[tuple[int, int]],
 ]:
     """Execute all queries in ``run_config`` and return accumulated results."""
     records: defaultdict[int, list[SuccessRecord | FailedRecord]] = defaultdict(list)
-    plans: dict[int, SerializablePlan] = {}
     validation_failures: list[int] = []
     query_failures: list[tuple[int, int]] = []
     all_partition_plan_rows: list = []
@@ -1320,16 +1307,8 @@ def _run_query_loop(
                     )
                 )
 
-        plan = None
-
         try:
             query_result: QueryResult = getattr(benchmark, f"q{q_id}")(run_config)
-            if (args.explain or args.explain_logical) and engine is not None:
-                # If this fails during serialization, we have issues. But we'd
-                # rather see what the issues are with execution than query serialization,
-                # so ignore exceptions here.
-                with contextlib.suppress(Exception):
-                    plan = serialize_query(query_result.frame, engine)
 
             result = run_polars_query(
                 q_id=q_id,
@@ -1341,7 +1320,6 @@ def _run_query_loop(
                 numeric_type=numeric_type,
                 date_type=date_type,
                 prepare_validation_result=prepare_validation_result,
-                plan=plan,
             )
         except Exception:
             print(f"❌ query={q_id} failed (setup or execution)!")
@@ -1354,14 +1332,11 @@ def _run_query_loop(
             )
             result = QueryRunResult(
                 query_records=[record],
-                plan=plan,
                 iteration_failures=[],
                 validation_failed=False,
             )
 
         records[q_id] = result.query_records
-        if result.plan is not None:
-            plans[q_id] = result.plan
         query_failures.extend(result.iteration_failures)
         if result.validation_failed:
             validation_failures.append(q_id)
@@ -1372,7 +1347,7 @@ def _run_query_loop(
 
         print(format_partition_plan_table(all_partition_plan_rows), flush=True)
 
-    return records, plans, validation_failures, query_failures
+    return records, validation_failures, query_failures
 
 
 def _elapsed_ms(begin: float) -> float:
@@ -1431,7 +1406,7 @@ def run_polars_cpu(
     date_type: str,
 ) -> None:
     """Run benchmark queries using the Polars CPU streaming engine."""
-    records, plans, validation_failures, query_failures = _run_query_loop(
+    records, validation_failures, query_failures = _run_query_loop(
         benchmark,
         args,
         run_config,
@@ -1439,7 +1414,7 @@ def run_polars_cpu(
         numeric_type=numeric_type,
         date_type=date_type,
     )
-    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+    run_config = dataclasses.replace(run_config, records=dict(records))
     _finalize_benchmark_run(
         args,
         run_config,
@@ -1473,7 +1448,7 @@ def run_polars_in_memory(
         **engine_options,
     )
     startup_duration_ms = _elapsed_ms(start_time_begin)
-    records, plans, validation_failures, query_failures = _run_query_loop(
+    records, validation_failures, query_failures = _run_query_loop(
         benchmark,
         args,
         run_config,
@@ -1481,7 +1456,7 @@ def run_polars_in_memory(
         numeric_type=numeric_type,
         date_type=date_type,
     )
-    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+    run_config = dataclasses.replace(run_config, records=dict(records))
     run_config = _consolidate_logs(run_config, engine=None)
     _finalize_benchmark_run(
         args,
@@ -1538,7 +1513,7 @@ def run_polars_spmd(
                 )
 
         run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
-        records, plans, validation_failures, query_failures = _run_query_loop(
+        records, validation_failures, query_failures = _run_query_loop(
             benchmark,
             args,
             run_config,
@@ -1549,7 +1524,7 @@ def run_polars_spmd(
         )
         if engine.rank > 0:
             sys.exit(benchmark_exit_code(query_failures, validation_failures))
-        run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+        run_config = dataclasses.replace(run_config, records=dict(records))
         run_config = _consolidate_logs(
             run_config, engine=engine, gather_client_logs=False
         )
@@ -1616,7 +1591,7 @@ def run_polars_ray(
     ) as engine:
         startup_duration_ms = _elapsed_ms(start_time_begin)
         run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
-        records, plans, validation_failures, query_failures = _run_query_loop(
+        records, validation_failures, query_failures = _run_query_loop(
             benchmark,
             args,
             run_config,
@@ -1624,7 +1599,7 @@ def run_polars_ray(
             numeric_type,
             date_type,
         )
-        run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+        run_config = dataclasses.replace(run_config, records=dict(records))
         run_config = _consolidate_logs(run_config, engine=engine)
         # We need to create this before StreamingEngine.shutdown(), which clears engine.config
         if run_config.collect_traces:
@@ -1700,12 +1675,10 @@ def run_polars_dask(
         ) as engine:
             startup_duration_ms = _elapsed_ms(start_time_begin)
             run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
-            records, plans, validation_failures, query_failures = _run_query_loop(
+            records, validation_failures, query_failures = _run_query_loop(
                 benchmark, args, run_config, engine, numeric_type, date_type
             )
-            run_config = dataclasses.replace(
-                run_config, records=dict(records), plans=plans
-            )
+            run_config = dataclasses.replace(run_config, records=dict(records))
             run_config = _consolidate_logs(run_config, engine)
             # We need to create this before StreamingEngine.shutdown(), which clears engine.config
             if run_config.collect_traces:

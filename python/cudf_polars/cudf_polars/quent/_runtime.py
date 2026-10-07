@@ -28,7 +28,6 @@ if TYPE_CHECKING:
         QuentQueryWorkerState,
         WorkerResources,
     )
-    from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 try:
     import cudf_polars_quent as _quent
@@ -99,7 +98,12 @@ class QuentSession:
 
 @dataclasses.dataclass
 class QuentControllerRuntime:
-    """Own controller-side Engine, Query, session, and Collector state."""
+    """
+    Own controller-side Engine, Query, session, and Collector state.
+
+    This is used in the "controller" process (e.g. Dask / Ray Client, or the SPMD engine's rank 0).
+    Compare with :class:`QuentWorkerRuntime`, which is used in the "worker" process.
+    """
 
     config: QuentConfig
     session: QuentSession
@@ -239,7 +243,6 @@ class QuentWorkerRuntime:
         self,
         state: QuentQueryWorkerState,
         ir: IR,
-        config_options: ConfigOptions[StreamingExecutor],
         plan_id: uuid.UUID,
         *,
         parent_plan_id: uuid.UUID,
@@ -253,7 +256,6 @@ class QuentWorkerRuntime:
         return emit_plan(
             self.session,
             ir,
-            config_options,
             query_id=state.query_id,
             plan_id=plan_id,
             worker_id=self.worker_resources.worker_id,

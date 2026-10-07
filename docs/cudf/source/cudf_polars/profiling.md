@@ -149,29 +149,18 @@ before starting your process.
 
 cudf-polars logs traces at three scopes (levels):
 
-1. `plan`: These generally happen once per query. This will include things like the (serialized)
-   query plan.
-2. `actor`: (streaming engines only). There will be roughly one `actor` trace per node in the
+1. `actor`: (streaming engines only). There will be roughly one `actor` trace per node in the
    logical plan.
-3. `evaluate_ir_node`: Logs the evaluation of a physical node in the query plan. Note that one
+2. `evaluate_ir_node`: Logs the evaluation of a physical node in the query plan. Note that one
    logical node might expand to more than one physical nodes.
+3. `io_task`: Logs asynchronous I/O work performed for a physical node.
 
-Each trace includes a `scope` key indicating which level that trace belongs to. `actor`-scoped
-nodes will be nested under a `plan`-scoped node. When using a streaming engine,
-`evaluate_ir_node`-scoped nodes will be nested under an `actor`-scoped node.
+Each trace includes a `scope` key indicating which level that trace belongs to. When using a
+streaming engine, `evaluate_ir_node`-scoped nodes will be nested under an `actor`-scoped node.
 
 ### Schemas
 
 The different scopes have different schemas. Fields in **bold** are required / always present.
-
-#### scope=plan
-
-| Field Name | Type  | Description |
-| ---------- | ----- | ----------- |
-| **scope**  | Literal["plan"] | The string literal `"plan"`. Useful for distinguishing from other types of traces. |
-| **cudf_polars_query_id** | UUID4 | A unique identifier for the polars query being executed. All traces logged as part of this query use this ID. |
-| **plan**   | `PlanObject` | A serialized representation of the query plan. |
-| **event**  | String | A message like "Query Plan" |
 
 #### scope=actor
 

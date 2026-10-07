@@ -18,8 +18,9 @@ use uuid::Uuid;
 use crate::{
     CudfPolarsUiAnalyzer, Viewer,
     generated::{
-        ActorEvent, CudfPolars, CudfPolarsEvent, EngineEvent, EvaluateEvent, Implementation,
-        OperatorEvent, OperatorStatistics, PlanEvent, ProcessorEvent, QueryEvent, QueryGroupEvent,
+        ActorEvent, ColumnSchema, CudfPolars, CudfPolarsEvent, DataFrameSchema, EngineEvent,
+        EvaluateEvent, Implementation, JoinFilterPushdownDetails, OperatorEvent, OperatorSchemas,
+        OperatorStatistics, PlanEvent, ProcessorEvent, QueryEvent, QueryGroupEvent,
         ThreadPoolEvent, WorkerEvent,
     },
     resource::{EVALUATE_ENTITY_TYPE, PROCESSOR_RESOURCE_TYPE},
@@ -185,6 +186,38 @@ fn builds_query_bundle_from_generated_events() {
                 instance_name: "scan".to_owned(),
                 type_name: "Scan".to_owned(),
                 node_id: "0".to_owned(),
+                schemas: OperatorSchemas {
+                    input_schemas: vec![],
+                    output_schema: DataFrameSchema {
+                        columns: vec![ColumnSchema {
+                            name: "a".to_owned(),
+                            dtype: "INT64".to_owned(),
+                        }],
+                    },
+                },
+            }),
+        ),
+        Event::new(
+            operator_id,
+            8,
+            CudfPolarsEvent::Operator(OperatorEvent::JoinFilterPushdownDetails {
+                values: JoinFilterPushdownDetails {
+                    threshold: 0.5,
+                    reason: "applied".to_owned(),
+                    mode: Some("simple".to_owned()),
+                    target_side: Some("right".to_owned()),
+                    target_key: Some("a".to_owned()),
+                    domain_key: Some("a".to_owned()),
+                    estimated_target_rows: Some(100),
+                    estimated_domain_rows: Some(10),
+                    estimated_target_cost: Some(100),
+                    estimated_domain_cost: Some(10),
+                    target_node_type: Some("DataFrameScan".to_owned()),
+                    domain_node_type: Some("DataFrameScan".to_owned()),
+                    constraint_key: None,
+                    estimated_constraint_rows: None,
+                    estimated_constraint_cost: None,
+                },
             }),
         ),
         Event::new(
@@ -341,6 +374,11 @@ fn builds_query_bundle_from_generated_events() {
     assert!(
         bundle.entities.operators[&operator_id]
             .active_span
+            .is_some()
+    );
+    assert!(bundle.entities.operators[&operator_id].custom_attributes["output_schema"].is_some());
+    assert!(
+        bundle.entities.operators[&operator_id].custom_attributes["join_filter_pushdown_details"]
             .is_some()
     );
     let statistics = bundle.entities.operators[&operator_id]

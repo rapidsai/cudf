@@ -235,7 +235,17 @@ def test_quent_lifecycle(
     query_events = _of_type(events, "Query")
     assert len(query_events) == 12
     assert _of_type(events, "Plan")
-    assert _of_type(events, "Operator")
+    operator_declarations = [
+        event["data"]["Operator"]["Declared"]
+        for event in _of_type(events, "Operator")
+        if "Declared" in event["data"]["Operator"]
+    ]
+    assert operator_declarations
+    assert all(
+        "input_schemas" in declaration["schemas"]
+        and "columns" in declaration["schemas"]["output_schema"]
+        for declaration in operator_declarations
+    )
     assert _of_type(events, "Actor")
     assert _of_type(events, "DeviceMemory")
     assert _of_type(events, "Storage")

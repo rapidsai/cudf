@@ -86,48 +86,6 @@ def test_import_without_structlog(timeout_seconds: int) -> None:
     subprocess.check_call([sys.executable, "-c", code], timeout=timeout_seconds)
 
 
-def test_log_query_plan(timeout_seconds: int) -> None:
-    """Test that log_query_plan emits a Query Plan event."""
-    import os
-
-    pytest.importorskip("cudf_polars_quent")
-
-    code = textwrap.dedent("""\
-    import polars as pl
-    import rmm
-
-    df = pl.DataFrame({"x": range(10), "y": ["a", "b"] * 5})
-    q = df.lazy().filter(pl.col("x") > 5).group_by("y").agg(pl.col("x").sum())
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "cluster": "default_singleton",
-            "max_rows_per_partition": 5,
-        },
-        memory_resource=rmm.mr.ManagedMemoryResource(),
-    )
-    q.collect(engine=engine)
-    """)
-
-    env = os.environ.copy()
-    env["CUDF_POLARS_LOG_TRACES"] = "1"
-
-    result = subprocess.check_output(
-        [sys.executable, "-c", code],
-        env=env,
-        stderr=subprocess.STDOUT,
-        timeout=timeout_seconds,
-    )
-
-    # Check for Query Plan event generated from SerializablePlan
-    assert b"Query Plan" in result
-    assert b"scope=plan" in result or b"'scope': 'plan'" in result
-    assert b"actor_ir_id" in result
-    assert b"actor_ir_type" in result
-    assert b"children" in result
-
-
 @pytest.mark.skipif(
     os.environ.get("CUDF_POLARS_LOG_TRACES") != "1",
     reason="Requires CUDF_POLARS_LOG_TRACES=1.",
@@ -151,11 +109,8 @@ def test_sets_cudf_polars_query_id():
         q.collect(engine=engine)
 
     assert len(cap) > 0
-    plan_log = cap[0]
-    assert "scope" in plan_log
-    assert plan_log["scope"] == "plan"
-    assert "cudf_polars_query_id" in plan_log
-    query_id = plan_log["cudf_polars_query_id"]
+    assert "cudf_polars_query_id" in cap[0]
+    query_id = cap[0]["cudf_polars_query_id"]
 
     for log in cap:
         assert "scope" in log
@@ -164,8 +119,6 @@ def test_sets_cudf_polars_query_id():
         keys = set(log.keys())
 
         match log["scope"]:
-            case "plan":
-                expected_keys = {"plan"}
             case "actor":
                 expected_keys = {
                     "actor_ir_id",
