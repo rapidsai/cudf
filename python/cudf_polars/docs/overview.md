@@ -667,9 +667,12 @@ with `quent-open` and might be helpful for users and developers of cudf-polars.
 ### Enabling Quent Telemetry
 
 Set `CUDF_POLARS__EXECUTOR__QUENT_CONTEXT=1` to export plans, actor lifetimes,
-aggregate actor statistics, and runtime decisions. Also set
-`CUDF_POLARS_LOG_TRACES=1` to enable the remaining evaluation- and I/O-level
-instrumentation. These must be set before the `cudf_polars` module is imported.
+aggregate actor statistics, runtime decisions, and per-node `Evaluate`
+lifecycles. Set `CUDF_POLARS_LOG_TRACES=1` separately to enable legacy
+structlog records for asynchronous I/O tasks. Set
+`CUDF_POLARS_LOG_TRACES_DATAFRAMES=0` to omit per-dataframe shape and byte-size
+details from Quent `Evaluate` events. These must be set before the
+`cudf_polars` module is imported.
 
 ### Schema
 

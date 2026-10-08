@@ -266,6 +266,12 @@ fn builds_query_bundle_from_generated_events() {
                 seq: 1,
                 io: false,
                 input_bytes: 10,
+                input: crate::generated::EvaluateInput {
+                    dataframes: None,
+                    sequence_number: None,
+                    content_sizes: None,
+                    spillable: None,
+                },
                 processor: EntityRef::new(processor_id, crate::generated::ProcessorUsage {}),
                 channel: None,
             }),
@@ -276,6 +282,7 @@ fn builds_query_bundle_from_generated_events() {
             CudfPolarsEvent::Evaluate(EvaluateEvent::Completed {
                 seq: 2,
                 output_bytes: 20,
+                output_dataframe: None,
             }),
         ),
         Event::new(

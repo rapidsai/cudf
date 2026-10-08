@@ -7,7 +7,6 @@ import os
 import subprocess
 import sys
 import textwrap
-from typing import Any
 
 import pytest
 
@@ -24,47 +23,6 @@ def fixture_log_output():
 @pytest.fixture(autouse=True)
 def fixture_configure_structlog(log_output):
     structlog.configure(processors=[log_output])
-
-
-def test_trace_basic(
-    log_output: Any,
-    monkeypatch: pytest.MonkeyPatch,
-    timeout_seconds: int,
-) -> None:
-    # Whether tracing is enabled is determined when cudf_polars is imported.
-    # So our best way of testing this is to run things in a subprocess
-    # to control the environment and isolate it from the rest of the test suite.
-    pytest.importorskip("cudf_polars_quent")
-    code = textwrap.dedent("""\
-    import polars as pl
-    import rmm
-
-    q = pl.DataFrame({"a": [1, 2, 3]}).lazy().select(pl.col("a").sum())
-    q.collect(
-        engine=pl.GPUEngine(
-            executor="streaming", memory_resource=rmm.mr.ManagedMemoryResource()
-        )
-    )
-    """)
-
-    env = {
-        "CUDF_POLARS_LOG_TRACES": "1",
-    }
-
-    result = subprocess.check_output(
-        [sys.executable, "-c", code], env=env, timeout=timeout_seconds
-    )
-    # Just ensure that the default structlog output is in the result
-    assert b"Execute IR" in result
-    assert b"frames_output" in result
-    assert b"frames_input" in result
-    assert b"total_bytes_output" in result
-    assert b"total_bytes_input" in result
-    # TODO: With rapidsmpf are the rmm fields not supposed to be logged?
-    assert b"rmm_total_bytes_output" not in result
-    assert b"rmm_total_bytes_input" not in result
-    assert b"rmm_current_bytes_output" not in result
-    assert b"overhead_duration" in result
 
 
 def test_import_without_structlog(timeout_seconds: int) -> None:
@@ -118,35 +76,21 @@ def test_sets_cudf_polars_query_id():
         assert log["cudf_polars_query_id"] == query_id
         keys = set(log.keys())
 
-        match log["scope"]:
-            case "evaluate_ir_node":
-                expected_keys = {
-                    "start",
-                    "stop",
-                    "cudf_polars_query_id",
-                    "type",
-                    "overhead_duration",
-                    "scope",
-                    "actor_ir_id",
-                }
-            case "io_task":
-                expected_keys = {
-                    "actor_ir_id",
-                    "actor_ir_type",
-                    "admitted",
-                    "cudf_polars_query_id",
-                    "estimated_output_bytes",
-                    "event",
-                    "ir_id",
-                    "ir_type",
-                    "log_level",
-                    "reservation_bytes",
-                    "scope",
-                    "sequence_number",
-                    "start",
-                    "stop",
-                }
-            case _:
-                pytest.fail(f"Unexpected scope: {log['scope']}")
-
+        assert log["scope"] == "io_task"
+        expected_keys = {
+            "actor_ir_id",
+            "actor_ir_type",
+            "admitted",
+            "cudf_polars_query_id",
+            "estimated_output_bytes",
+            "event",
+            "ir_id",
+            "ir_type",
+            "log_level",
+            "reservation_bytes",
+            "scope",
+            "sequence_number",
+            "start",
+            "stop",
+        }
         assert expected_keys.issubset(keys)

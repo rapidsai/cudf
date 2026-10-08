@@ -8,13 +8,17 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import ipaddress
+import os
 import socket
 import threading
 from typing import TYPE_CHECKING
 
+from cudf_polars.utils.cleanup import run_cleanup_steps
+from cudf_polars.utils.config import _bool_converter
+
 if TYPE_CHECKING:
     import uuid
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator, Sequence
     from os import PathLike
 
     import cudf_polars_quent as quent_bindings
@@ -33,6 +37,19 @@ try:
     import cudf_polars_quent as _quent
 except ImportError:  # pragma: no cover - depends on optional extension
     _quent = None  # type: ignore[assignment]
+
+# TODO: think about just always having this on?
+PROFILE_DATAFRAMES = _bool_converter(
+    os.environ.get("CUDF_POLARS_LOG_TRACES_DATAFRAMES", "1")
+)
+
+
+def _dataframe_statistics(frame: DataFrame) -> quent_bindings.DataFrameStatisticsDict:
+    """Return typed shape and byte-size statistics for one dataframe."""
+    return {
+        "shape": frame.table.shape(),
+        "bytes": frame._size_bytes,
+    }
 
 
 def _local_ipv4_address() -> str:
@@ -89,11 +106,11 @@ class QuentSession:
         """Close active handles and flush generated events to the collector."""
         if self._closed:
             return
+        self._closed = True
         self._queries.clear()
         self._evaluations.clear()
         self._actors.clear()
         self._binding_context.close()
-        self._closed = True
 
 
 @dataclasses.dataclass
@@ -180,13 +197,17 @@ class QuentControllerRuntime:
 
     def close(self) -> None:
         """Close the Engine, session, and Collector in dependency order."""
-        if self._engine_handle is not None:
-            self._engine_handle.exit()
-            self._engine_handle = None
-        self.session.close()
-        if self.collector is not None:
-            self.collector.close()
-            self.collector = None
+        engine_handle = self._engine_handle
+        collector = self.collector
+        self._engine_handle = None
+        self.collector = None
+        steps: list[Callable[[], object]] = []
+        if engine_handle is not None:
+            steps.append(engine_handle.exit)
+        steps.append(self.session.close)
+        if collector is not None:
+            steps.append(lambda: collector.close(timeout=10.0))
+        run_cleanup_steps("Quent controller shutdown failed", *steps)
 
 
 @dataclasses.dataclass
@@ -270,9 +291,10 @@ class QuentWorkerRuntime:
         evaluate_id: uuid.UUID,
         instance_name: str,
         state: QuentIRExecutionState,
-        input_frames_bytes: int,
+        frames: Sequence[DataFrame],
     ) -> None:
         """Emit Evaluate queued/running events."""
+        input_frames_bytes = sum(frame._size_bytes for frame in frames)
         processor_id = state.query_worker_state.get_or_declare_processor(
             threading.get_ident()
         )
@@ -287,6 +309,16 @@ class QuentWorkerRuntime:
         self.session._evaluations[evaluate_id] = queued.running(
             io=ir_type.is_io_node,
             input_bytes=input_frames_bytes,
+            input={
+                "dataframes": (
+                    [_dataframe_statistics(frame) for frame in frames]
+                    if PROFILE_DATAFRAMES
+                    else None
+                ),
+                "sequence_number": state.sequence_number,
+                "content_sizes": state.content_sizes,
+                "spillable": state.spillable,
+            },
             processor={"target": processor_id, "data": {}},
             channel={
                 "target": self.worker_resources.disk_to_device_channel_id,
@@ -309,14 +341,20 @@ class QuentWorkerRuntime:
             assert result is not None
             self.session._evaluations.pop(evaluate_id).completed(
                 output_bytes=result._size_bytes,
+                output_dataframe=(
+                    _dataframe_statistics(result) if PROFILE_DATAFRAMES else None
+                ),
             )
 
     def close(self) -> None:
         """Close the Worker and its process-local Collector client."""
-        if self._worker_handle is not None:
-            self._worker_handle.exit()
-            self._worker_handle = None
-        self.session.close()
+        worker_handle = self._worker_handle
+        self._worker_handle = None
+        steps: list[Callable[[], object]] = []
+        if worker_handle is not None:
+            steps.append(worker_handle.exit)
+        steps.append(self.session.close)
+        run_cleanup_steps("Quent worker shutdown failed", *steps)
 
 
 def start_collector(

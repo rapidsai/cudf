@@ -27,6 +27,18 @@ records:
     fields:
       columns: { list: ColumnSchema }
 
+  DataFrameStatistics:
+    fields:
+      shape: { list: u64 }
+      bytes: u64
+
+  EvaluateInput:
+    fields:
+      dataframes: { option: { list: DataFrameStatistics } }
+      sequence_number: { option: u64 }
+      content_sizes: { option: { list: u64 } }
+      spillable: { option: bool }
+
   OperatorSchemas:
     fields:
       input_schemas: { list: DataFrameSchema }
@@ -337,12 +349,14 @@ fsms:
         attributes:
           io: bool
           input_bytes: u64
+          input: EvaluateInput
           processor: { uses: Processor }
           channel: { option: { uses: DataChannel } }
         to: [completed, failed]
       completed:
         attributes:
           output_bytes: u64
+          output_dataframe: { option: DataFrameStatistics }
       failed:
         attributes:
           error: string

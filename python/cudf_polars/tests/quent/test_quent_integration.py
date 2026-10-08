@@ -11,6 +11,7 @@ import json
 import logging
 import uuid
 from typing import TYPE_CHECKING, Any
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -21,7 +22,7 @@ from cudf_polars.utils.config import ConfigOptions
 pytest.importorskip("cudf_polars_quent")
 
 import cudf_polars.quent
-from cudf_polars.dsl.tracing import LOG_TRACES
+import cudf_polars.quent._runtime
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterator
@@ -141,6 +142,42 @@ def suppress_worker_exceptions(
         logging.disable(previous_logging_disable)
         if dask_client is not None:
             dask_client.run(_disable_logging, logging.NOTSET)
+
+
+def test_quent_worker_cleanup_continues_after_handle_failure() -> None:
+    session = MagicMock()
+    worker_handle = MagicMock()
+    worker_handle.exit.side_effect = RuntimeError("worker exit failed")
+    runtime = cudf_polars.quent._runtime.QuentWorkerRuntime(
+        config=MagicMock(),
+        session=session,
+        worker_resources=MagicMock(),
+        _worker_handle=worker_handle,
+    )
+
+    with pytest.raises(ExceptionGroup, match="Quent worker shutdown failed"):
+        runtime.close()
+
+    session.close.assert_called_once_with()
+
+
+def test_quent_controller_cleanup_continues_after_handle_failure() -> None:
+    session = MagicMock()
+    engine_handle = MagicMock()
+    engine_handle.exit.side_effect = RuntimeError("engine exit failed")
+    collector = MagicMock()
+    runtime = cudf_polars.quent._runtime.QuentControllerRuntime(
+        config=MagicMock(),
+        session=session,
+        collector=collector,
+        _engine_handle=engine_handle,
+    )
+
+    with pytest.raises(ExceptionGroup, match="Quent controller shutdown failed"):
+        runtime.close()
+
+    session.close.assert_called_once_with()
+    collector.close.assert_called_once_with(timeout=10.0)
 
 
 @pytest.mark.filterwarnings("ignore:Rolling.*:UserWarning")
@@ -278,8 +315,58 @@ def test_quent_lifecycle(
     )
     assert _of_type(events, "DeviceMemory")
     assert _of_type(events, "Storage")
-    if LOG_TRACES:
-        assert _of_type(events, "Evaluate")
+    evaluate_events = _of_type(events, "Evaluate")
+    assert evaluate_events
+    evaluate_states: dict[str, list[str]] = {}
+    for event in evaluate_events:
+        evaluate_states.setdefault(event["id"], []).append(
+            next(iter(event["data"]["Evaluate"]))
+        )
+    assert all(
+        states[:2] == ["Queued", "Running"]
+        and states[-1] in {"Completed", "Failed"}
+        and len(states) == 3
+        for states in evaluate_states.values()
+    )
+    running_evaluations = [
+        event["data"]["Evaluate"]["Running"]
+        for event in evaluate_events
+        if "Running" in event["data"]["Evaluate"]
+    ]
+    assert all(
+        {"io", "input_bytes", "input", "processor", "channel"} <= running.keys()
+        for running in running_evaluations
+    )
+    assert all(
+        all(
+            set(dataframe) == {"shape", "bytes"}
+            for dataframe in running["input"]["dataframes"]
+        )
+        for running in running_evaluations
+        if running["input"]["dataframes"] is not None
+    )
+    chunk_evaluations = [
+        running
+        for running in running_evaluations
+        if running["input"]["sequence_number"] is not None
+    ]
+    assert chunk_evaluations
+    assert all(
+        running["input"]["content_sizes"] is not None
+        and running["input"]["spillable"] is not None
+        for running in chunk_evaluations
+    )
+    completed_evaluations = [
+        event["data"]["Evaluate"]["Completed"]
+        for event in evaluate_events
+        if "Completed" in event["data"]["Evaluate"]
+    ]
+    assert completed_evaluations
+    assert all(
+        completed["output_dataframe"] is not None
+        and set(completed["output_dataframe"]) == {"shape", "bytes"}
+        for completed in completed_evaluations
+    )
 
     initialized_queries = [
         event

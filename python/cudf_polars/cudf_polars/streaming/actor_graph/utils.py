@@ -1140,18 +1140,24 @@ async def chunkwise_evaluate(
         received_any = True
         cd = msg.get_content_description()
         seq_num = msg.sequence_number
-        with cudf_polars.dsl.tracing.bound_contextvars(
-            content_sizes=cd.content_sizes,
-            spillable=cd.spillable,
-            sequence_number=msg.sequence_number,
-        ):
-            result = await evaluate_chunk(
-                context,
-                TableChunk.from_message(msg, br=context.br()),
-                ir,
-                ir_context=ir_context,
-                ordering_metadata=input_ordering_metadata,
+        chunk_ir_context = ir_context
+        if (quent_state := ir_context.quent_ir_execution_state) is not None:
+            chunk_ir_context = replace(
+                ir_context,
+                quent_ir_execution_state=replace(
+                    quent_state,
+                    sequence_number=seq_num,
+                    content_sizes=tuple(cd.content_sizes),
+                    spillable=cd.spillable,
+                ),
             )
+        result = await evaluate_chunk(
+            context,
+            TableChunk.from_message(msg, br=context.br()),
+            ir,
+            ir_context=chunk_ir_context,
+            ordering_metadata=input_ordering_metadata,
+        )
         del msg, cd
         await send_chunk(context, ch_out, result, seq_num, tracer=tracer)
 

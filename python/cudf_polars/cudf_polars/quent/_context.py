@@ -217,6 +217,9 @@ class QuentIRExecutionState:
     query_worker_state: QuentQueryWorkerState
     operator_id: uuid.UUID
     actor_id: uuid.UUID | None = None
+    sequence_number: int | None = None
+    content_sizes: tuple[int, ...] | None = None
+    spillable: bool | None = None
 
     @classmethod
     def from_query_worker_state(

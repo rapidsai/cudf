@@ -5,12 +5,22 @@ use quent_analyzer::{
     AnalyzerError, AnalyzerResult,
     resource::{CapacityValue, Usage},
 };
-use quent_dynamic_attributes::DynamicAttribute;
+use quent_dynamic_attributes::{DynamicAttribute, DynamicList, DynamicStruct};
 use quent_time::{TimeUnixNanoSec, span::SpanUnixNanoSec, to_secs_relative};
 use quent_ui::{FiniteStateMachine, FsmTransition, FsmUsage};
 use uuid::Uuid;
 
-use crate::{generated::EvaluateEvent, resource::EVALUATE_ENTITY_TYPE};
+use crate::{
+    generated::{DataFrameStatistics, EvaluateEvent},
+    resource::EVALUATE_ENTITY_TYPE,
+};
+
+fn dataframe_statistics(value: &DataFrameStatistics) -> DynamicStruct {
+    DynamicStruct(vec![
+        DynamicAttribute::list("shape", DynamicList::U64(value.shape.clone())),
+        DynamicAttribute::u64("bytes", value.bytes),
+    ])
+}
 
 #[derive(Default)]
 pub(crate) struct EvaluateBuilder {
@@ -20,6 +30,7 @@ pub(crate) struct EvaluateBuilder {
     channel: Option<(Uuid, u64)>,
     queued_at: Option<TimeUnixNanoSec>,
     running_at: Option<TimeUnixNanoSec>,
+    running_attributes: Vec<DynamicAttribute>,
     finished_at: Option<TimeUnixNanoSec>,
     finished_state: Option<&'static str>,
     finished_attributes: Vec<DynamicAttribute>,
@@ -38,19 +49,60 @@ impl EvaluateBuilder {
                 self.queued_at = Some(timestamp);
             }
             EvaluateEvent::Running {
-                processor, channel, ..
+                io,
+                input_bytes,
+                input,
+                processor,
+                channel,
+                ..
             } => {
                 self.processor_id = Some(processor.target);
                 self.channel = channel
                     .as_ref()
                     .map(|channel| (channel.target, channel.data.bytes));
+                self.running_attributes = vec![
+                    DynamicAttribute::u8("io", u8::from(*io)),
+                    DynamicAttribute::u64("input_bytes", *input_bytes),
+                ];
+                if let Some(input_dataframes) = &input.dataframes {
+                    self.running_attributes.push(DynamicAttribute::list(
+                        "input_dataframes",
+                        DynamicList::Struct(
+                            input_dataframes.iter().map(dataframe_statistics).collect(),
+                        ),
+                    ));
+                }
+                if let Some(sequence_number) = input.sequence_number {
+                    self.running_attributes
+                        .push(DynamicAttribute::u64("sequence_number", sequence_number));
+                }
+                if let Some(content_sizes) = &input.content_sizes {
+                    self.running_attributes.push(DynamicAttribute::list(
+                        "content_sizes",
+                        DynamicList::U64(content_sizes.clone()),
+                    ));
+                }
+                if let Some(spillable) = input.spillable {
+                    self.running_attributes
+                        .push(DynamicAttribute::u8("spillable", u8::from(spillable)));
+                }
                 self.running_at = Some(timestamp);
             }
-            EvaluateEvent::Completed { output_bytes, .. } => {
+            EvaluateEvent::Completed {
+                output_bytes,
+                output_dataframe,
+                ..
+            } => {
                 self.finished_at = Some(timestamp);
                 self.finished_state = Some("completed");
                 self.finished_attributes =
                     vec![DynamicAttribute::u64("output_bytes", *output_bytes)];
+                if let Some(output_dataframe) = output_dataframe {
+                    self.finished_attributes.push(DynamicAttribute::structure(
+                        "output_dataframe",
+                        dataframe_statistics(output_dataframe),
+                    ));
+                }
             }
             EvaluateEvent::Failed { error, .. } => {
                 self.finished_at = Some(timestamp);
@@ -89,6 +141,7 @@ impl EvaluateBuilder {
             channel: self.channel,
             queued_at,
             span: SpanUnixNanoSec::try_new(start, end)?,
+            running_attributes: self.running_attributes,
             finished_state,
             finished_attributes: self.finished_attributes,
             processor_unit: CapacityValue::new("unit", 1),
@@ -105,6 +158,7 @@ pub(crate) struct EvaluateSpan {
     pub(crate) channel: Option<(Uuid, u64)>,
     pub(crate) queued_at: TimeUnixNanoSec,
     pub(crate) span: SpanUnixNanoSec,
+    running_attributes: Vec<DynamicAttribute>,
     finished_state: &'static str,
     finished_attributes: Vec<DynamicAttribute>,
     pub(crate) processor_unit: CapacityValue,
@@ -160,7 +214,12 @@ impl EvaluateSpan {
             instance_name: self.instance_name.clone(),
             transitions: vec![
                 transition("queued", self.queued_at, vec![], vec![]),
-                transition("running", self.span.start(), running_usages, vec![]),
+                transition(
+                    "running",
+                    self.span.start(),
+                    running_usages,
+                    self.running_attributes.clone(),
+                ),
                 transition(
                     self.finished_state,
                     self.span.end(),
@@ -195,6 +254,15 @@ mod tests {
                 seq: 1,
                 io: false,
                 input_bytes: 10,
+                input: crate::generated::EvaluateInput {
+                    dataframes: Some(vec![DataFrameStatistics {
+                        shape: vec![2, 3],
+                        bytes: 10,
+                    }]),
+                    sequence_number: Some(4),
+                    content_sizes: Some(vec![6, 4]),
+                    spillable: Some(true),
+                },
                 processor: EntityRef::new(Uuid::now_v7(), crate::generated::ProcessorUsage {}),
                 channel: None,
             },
@@ -225,6 +293,39 @@ mod tests {
     }
 
     #[test]
+    fn includes_running_attributes_in_ui_fsm() {
+        let mut builder = running_builder();
+        builder.push(
+            3,
+            &EvaluateEvent::Completed {
+                seq: 2,
+                output_bytes: 20,
+                output_dataframe: None,
+            },
+        );
+
+        let fsm = builder.try_build(Uuid::now_v7()).unwrap().to_ui_fsm(0);
+
+        assert_eq!(
+            fsm.transitions[1].attributes,
+            vec![
+                DynamicAttribute::u8("io", 0),
+                DynamicAttribute::u64("input_bytes", 10),
+                DynamicAttribute::list(
+                    "input_dataframes",
+                    DynamicList::Struct(vec![DynamicStruct(vec![
+                        DynamicAttribute::list("shape", DynamicList::U64(vec![2, 3])),
+                        DynamicAttribute::u64("bytes", 10),
+                    ])]),
+                ),
+                DynamicAttribute::u64("sequence_number", 4),
+                DynamicAttribute::list("content_sizes", DynamicList::U64(vec![6, 4])),
+                DynamicAttribute::u8("spillable", 1),
+            ]
+        );
+    }
+
+    #[test]
     fn includes_completed_attributes_in_ui_fsm() {
         let mut builder = running_builder();
         builder.push(
@@ -232,6 +333,10 @@ mod tests {
             &EvaluateEvent::Completed {
                 seq: 2,
                 output_bytes: 20,
+                output_dataframe: Some(DataFrameStatistics {
+                    shape: vec![4, 5],
+                    bytes: 20,
+                }),
             },
         );
 
@@ -239,7 +344,16 @@ mod tests {
 
         assert_eq!(
             fsm.transitions[2].attributes,
-            vec![DynamicAttribute::u64("output_bytes", 20)]
+            vec![
+                DynamicAttribute::u64("output_bytes", 20),
+                DynamicAttribute::structure(
+                    "output_dataframe",
+                    DynamicStruct(vec![
+                        DynamicAttribute::list("shape", DynamicList::U64(vec![4, 5])),
+                        DynamicAttribute::u64("bytes", 20),
+                    ]),
+                ),
+            ]
         );
     }
 

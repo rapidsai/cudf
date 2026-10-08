@@ -143,83 +143,26 @@ The result is `(result_df, timings_df)`, see the Polars docs link above for the 
 
 ## Tracing
 
-cudf-polars can optionally trace execution of each node in the query plan. To enable tracing, set
-the environment variable ``CUDF_POLARS_LOG_TRACES`` to a true value ("1", "true", "y", "yes")
-before starting your process.
+Streaming node evaluation is exported through Quent. Enable a Quent context to
+record each physical node evaluation as an `Evaluate` lifecycle with timestamps,
+input and output byte counts, processor and I/O-channel usage, failures, and
+incoming chunk metadata.
 
-cudf-polars logs traces at two scopes (levels):
+By default, `Evaluate` events also include the shape and byte size of every
+input dataframe and the output dataframe. Set
+`CUDF_POLARS_LOG_TRACES_DATAFRAMES=0` before importing `cudf_polars` to omit
+these dataframe details. Aggregate input and output byte counts are always
+recorded.
 
-1. `evaluate_ir_node`: Logs the evaluation of a physical node in the query plan. Note that one
-   logical node might expand to more than one physical nodes.
-2. `io_task`: Logs asynchronous I/O work performed for a physical node.
+The legacy structlog tracing path now records only asynchronous I/O tasks. Set
+`CUDF_POLARS_LOG_TRACES=1` before starting the process to emit records with
+`scope="io_task"`. These records include their query and actor identifiers,
+sequence number, timing, reservation and estimated-output byte counts, and IR
+type.
 
-Each trace includes a `scope` key indicating which level that trace belongs to. When using a
-streaming engine, records also include the ID of their enclosing actor. Actor lifetimes and
-aggregate execution statistics are exported through Quent telemetry.
-
-### Schemas
-
-The different scopes have different schemas. Fields in **bold** are required / always present.
-
-#### scope=evaluate_ir_node
-
-| Field Name | Type  | Description |
-| ---------- | ----- | ----------- |
-| **scope** | `Literal["evaluate_ir_node"]` | The string literal `"evaluate_ir_node"`. Useful for distinguishing from other types of traces. |
-| **cudf_polars_query_id** | UUID4 | A unique identifier for the polars query being executed. All traces logged as part of this query use this ID. |
-| **type**       | string | The name of the IR node |
-| **start**      | int    | A nanosecond-precision counter indicating when this node started executing |
-| **stop**       | int    | A nanosecond-precision counter indicating when this node finished executing |
-| **overhead_duration**   | int    | The overhead, in nanoseconds, added by tracing |
-| `count_frames_{phase}` | int | The number of dataframes for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_DATAFRAMES=0`. |
-| `frames_{phase}` | `list[dict]` | A list with dictionaries with "shape" and "size" fields, one per input dataframe, for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_DATAFRAMES=0`. |
-| `total_bytes_{phase}` | int | The sum of the size (in bytes) of the dataframes for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_DATAFRAMES=0`. |
-| `rmm_current_bytes_{phase}` | int | The current number of bytes allocated by RMM Memory Resource used by cudf-polars for the input / output `phase`. This metric can be enabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=1`. |
-| `rmm_current_count_{phase}` | int | The current number of allocations made by RMM Memory Resource used by cudf-polars for the input / output `phase`. This metric can be enabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=1`. |
-| `rmm_peak_bytes_{phase}` | int | The peak number of bytes allocated by RMM Memory Resource used by cudf-polars for the input / output `phase`. This metric can be enabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=1`. |
-| `rmm_peak_count_{phase}` | int | The peak number of allocations made by RMM Memory Resource used by cudf-polars for the input / output `phase`. This metric can be enabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=1`. |
-| `rmm_total_bytes_{phase}` | int | The total number of bytes allocated by RMM Memory Resource used by cudf-polars for the input / output `phase`. This metric can be enabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=1`. |
-| `rmm_total_count_{phase}` | int | The total number of allocations made by RMM Memory Resource used by cudf-polars for the input / output `phase`. This metric can be enabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=1`. |
-| `nvml_current_bytes_{phase}` | int | The device memory usage of this process, as reported by NVML, for the input / output `phase`. This metric can be enabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=1`. |
-| actor_ir_id   | int    | A unique identifier for the parent actor (streaming engines only). |
-
-Setting `CUDF_POLARS_LOG_TRACES=1` enables basic metrics including the type and
-duration of tasks, and the shape of input and output dataframes. Memory related
-metrics are disabled by default. You can enable or disable some metrics through
-additional environment variables. For example, to enable the memory-related
-metrics, set:
-
-```bash
-CUDF_POLARS_LOG_TRACES=1 CUDF_POLARS_LOG_TRACES_MEMORY=1
-```
-
-And to disable the memory and dataframe metrics, which essentially leaves just the duration
-metrics, set
-```bash
-CUDF_POLARS_LOG_TRACES=1 CUDF_POLARS_LOG_TRACES_DATAFRAMES=0
-```
-
-Note that tracing still needs to be enabled with `CUDF_POLARS_LOG_TRACES=1`.
-
-The implementation uses [structlog] to build log records. You can configure the output using
-structlog's [configuration][structlog-configure] and enrich the records with
+You can configure this output using [structlog]'s
+[configuration][structlog-configure] and enrich the records with
 [context variables][structlog-context].
-
-```python
->>> df = pl.DataFrame({"a": ["a", "a", "b"], "b": [1, 2, 3]}).lazy()
->>> df.group_by("a").agg(pl.col("b").min().alias("min"), pl.col("b").max().alias("max")).collect(engine=pl.GPUEngine(executor="in-memory"))
-2025-09-10 07:44:01 [info     ] Execute IR      count_frames_input=0 count_frames_output=1 ... type=DataFrameScan
-2025-09-10 07:44:01 [info     ] Execute IR      count_frames_input=1 count_frames_output=1 ... type=GroupBy
-shape: (2, 3)
-┌─────┬─────┬─────┐
-│ a   ┆ min ┆ max │
-│ --- ┆ --- ┆ --- │
-│ str ┆ i64 ┆ i64 │
-╞═════╪═════╪═════╡
-│ b   ┆ 3   ┆ 3   │
-│ a   ┆ 1   ┆ 2   │
-└─────┴─────┴─────┘
-```
 
 [nsight]: https://developer.nvidia.com/nsight-systems
 [nvtx]: https://nvidia.github.io/NVTX/
