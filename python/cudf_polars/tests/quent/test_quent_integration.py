@@ -246,7 +246,36 @@ def test_quent_lifecycle(
         and "columns" in declaration["schemas"]["output_schema"]
         for declaration in operator_declarations
     )
-    assert _of_type(events, "Actor")
+    actor_events = _of_type(events, "Actor")
+    assert actor_events
+    actor_states: dict[str, list[str]] = {}
+    for event in actor_events:
+        actor_states.setdefault(event["id"], []).append(
+            next(iter(event["data"]["Actor"]))
+        )
+    assert all(
+        states[:2] == ["Started", "Running"]
+        and states[-1] in {"Completed", "Failed"}
+        and len(states) == 3
+        for states in actor_states.values()
+    )
+    terminal_actor_events = [
+        next(iter(event["data"]["Actor"].values()))
+        for event in actor_events
+        if set(event["data"]["Actor"]) & {"Completed", "Failed"}
+    ]
+    assert all(
+        {
+            "input_bytes",
+            "output_bytes",
+            "output_rows",
+            "chunk_count",
+            "duplicated",
+            "decision",
+        }
+        <= terminal["values"].keys()
+        for terminal in terminal_actor_events
+    )
     assert _of_type(events, "DeviceMemory")
     assert _of_type(events, "Storage")
     if LOG_TRACES:

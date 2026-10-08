@@ -41,6 +41,24 @@ records:
       duplicated: bool
       decision: { option: string }
 
+  RuntimePrefilterStatistics:
+    fields:
+      placement: string
+      method: string
+      reason: string
+      target_side: { option: string }
+      domain_side: { option: string }
+      domain: { option: string }
+      target_on: { list: string }
+      domain_on: { list: string }
+      target_bytes: u64
+      domain_rows: { option: u64 }
+      estimated_cardinality: { option: u64 }
+      bloom_bytes: { option: u64 }
+      exact_bytes: { option: u64 }
+      input_rows: { option: u64 }
+      output_rows: { option: u64 }
+
   ScanDetails:
     fields:
       typ: string
@@ -191,6 +209,11 @@ entities:
       hstack_details:
         attributes:
           values: ColumnsDetails
+      runtime_prefilter_statistics:
+        multi: true
+        attributes:
+          actor: { ref: Actor }
+          values: RuntimePrefilterStatistics
       statistics:
         multi: true
         attributes:

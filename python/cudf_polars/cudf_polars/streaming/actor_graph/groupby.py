@@ -64,7 +64,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
-    from cudf_polars.streaming.actor_graph.tracing import ActorTracer
+    from cudf_polars.streaming.actor_graph.tracing import ActorMetrics
     from cudf_polars.streaming.actor_graph.utils import PartitioningLevel
     from cudf_polars.typing import Schema
 
@@ -280,7 +280,7 @@ async def _tree_reduce(
     *,
     local: bool,
     aggregated: TableChunk,
-    tracer: ActorTracer | None = None,
+    tracer: ActorMetrics | None = None,
 ) -> None:
     """
     Execute groupby or distinct using tree reduction to a single output.
@@ -351,7 +351,7 @@ async def _shuffle_reduce(
     local: bool,
     aggregated: TableChunk,
     input_drained: bool = False,
-    tracer: ActorTracer | None = None,
+    tracer: ActorMetrics | None = None,
 ) -> None:
     """
     Shuffle-based groupby or distinct.
@@ -563,7 +563,7 @@ async def _ordered_adjust_reduce(
     input_drained: bool,
     input_ordering: Ordering,
     preserves_output_order: bool,
-    tracer: ActorTracer | None = None,
+    tracer: ActorMetrics | None = None,
 ) -> None:
     """Adjust locally aggregated data to strict ordering boundaries."""
     partial_input_ordering = _remap_ordering_keys(
@@ -733,7 +733,7 @@ async def _choose_strategy(
     target_partition_size: int,
     skip_global_comm: bool,  # noqa: FBT001
     maintain_order: bool,  # noqa: FBT001
-    tracer: ActorTracer | None,
+    tracer: ActorMetrics | None,
 ) -> int:
     """
     Select the best algorithm for the given context and metadata.

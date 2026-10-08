@@ -666,9 +666,10 @@ with `quent-open` and might be helpful for users and developers of cudf-polars.
 
 ### Enabling Quent Telemetry
 
-Set `CUDF_POLARS__EXECUTOR__QUENT_CONTEXT=1` and `CUDF_POLARS_LOG_TRACES=1` to
-enable full instrumentation. These must be set before the `cudf_polars` module
-is imported.
+Set `CUDF_POLARS__EXECUTOR__QUENT_CONTEXT=1` to export plans, actor lifetimes,
+aggregate actor statistics, and runtime decisions. Also set
+`CUDF_POLARS_LOG_TRACES=1` to enable the remaining evaluation- and I/O-level
+instrumentation. These must be set before the `cudf_polars` module is imported.
 
 ### Schema
 

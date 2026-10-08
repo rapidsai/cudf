@@ -17,24 +17,22 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
+    from cudf_polars.streaming.actor_graph.prefilter import RuntimePrefilterStatistics
+
 
 def _zero_bytes_by_tier() -> dict[MemoryType, int]:
     return dict.fromkeys(MemoryType, 0)
 
 
 @dataclasses.dataclass(slots=True)
-class ActorTracer:
+class ActorMetrics:
     """
     Tracer for a single streaming actor (IR node).
 
-    Collects execution statistics and emits structured log events.
+    Collects execution statistics for Quent actor telemetry.
 
     Attributes
     ----------
-    ir_id
-        Stable identifier for the IR node (for tracing/logging).
-    ir_type
-        Type name of the IR node (e.g., "Sort", "Join").
     row_count
         Total row count produced by this node during execution.
         None if row counting is not available for this node.
@@ -52,8 +50,6 @@ class ActorTracer:
         (e.g., after an allgather). Affects how rows are merged.
     """
 
-    ir_id: int | None = None
-    ir_type: str | None = None
     row_count: int | None = None
     chunk_count: int = 0
     input_bytes: dict[MemoryType, int] = dataclasses.field(
@@ -64,7 +60,9 @@ class ActorTracer:
     )
     decision: str | None = None
     duplicated: bool = False
-    extra: dict[str, Any] = dataclasses.field(default_factory=dict)
+    prefilters: list[RuntimePrefilterStatistics] = dataclasses.field(
+        default_factory=list
+    )
 
     def add_chunk(self, *, chunk: TableChunk | None = None) -> None:
         """
@@ -86,18 +84,9 @@ class ActorTracer:
         """Mark output rows as duplicated across ranks."""
         self.duplicated = duplicated
 
-    def set_extra(self, key: str, value: Any) -> None:
-        """
-        Attach structured metadata to the current actor trace event.
-
-        This is useful for nested runtime decisions that do not have a
-        separate IR node, but should still be logged with their parent actor.
-        """
-        self.extra[key] = value
-
 
 def record_channel_metrics(
-    tracer: ActorTracer,
+    tracer: ActorMetrics,
     *,
     chs_in: Sequence[Channel[Any]],
     chs_out: Sequence[Channel[Any]],
@@ -128,7 +117,7 @@ async def send_chunk(
     chunk: TableChunk,
     sequence_number: int,
     *,
-    tracer: ActorTracer | None,
+    tracer: ActorMetrics | None,
 ) -> None:
     """
     Trace and send a TableChunk.

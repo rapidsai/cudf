@@ -58,7 +58,6 @@ if TYPE_CHECKING:
 class Scope(enum.StrEnum):
     """Scope values for structured logging."""
 
-    ACTOR = "actor"
     IO_TASK = "io_task"
     EVALUATE_IR_NODE = "evaluate_ir_node"
 

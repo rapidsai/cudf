@@ -78,7 +78,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
-    from cudf_polars.streaming.actor_graph.tracing import ActorTracer
+    from cudf_polars.streaming.actor_graph.tracing import ActorMetrics
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import StreamingExecutor
 
@@ -304,7 +304,7 @@ async def _simple_top_or_bottom_k(
     ir_context: IRExecutionContext,
     metadata_in: ChannelMetadata,
     collective_ids: list[int],
-    tracer: ActorTracer | None,
+    tracer: ActorMetrics | None,
 ) -> None:
     """Sort + simple head/tail slice."""
     # TODO: We may need to gate this optimization on the slice size.
@@ -643,7 +643,7 @@ async def _extract_partitions_and_send(
     ir_context: IRExecutionContext,
     output_schema: Schema,
     *,
-    tracer: ActorTracer | None,
+    tracer: ActorMetrics | None,
 ) -> None:
     """Extract each local partition from the shuffle, sort if needed, and send."""
     ncols_out = len(output_schema)
@@ -763,7 +763,7 @@ async def _global_sort(
     sort_boundaries_df: DataFrame,
     collective_ids: list[int],
     *,
-    tracer: ActorTracer | None,
+    tracer: ActorMetrics | None,
 ) -> None:
     """Global sort."""
     output_metadata = ChannelMetadata(

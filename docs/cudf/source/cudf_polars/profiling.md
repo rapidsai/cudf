@@ -147,37 +147,19 @@ cudf-polars can optionally trace execution of each node in the query plan. To en
 the environment variable ``CUDF_POLARS_LOG_TRACES`` to a true value ("1", "true", "y", "yes")
 before starting your process.
 
-cudf-polars logs traces at three scopes (levels):
+cudf-polars logs traces at two scopes (levels):
 
-1. `actor`: (streaming engines only). There will be roughly one `actor` trace per node in the
-   logical plan.
-2. `evaluate_ir_node`: Logs the evaluation of a physical node in the query plan. Note that one
+1. `evaluate_ir_node`: Logs the evaluation of a physical node in the query plan. Note that one
    logical node might expand to more than one physical nodes.
-3. `io_task`: Logs asynchronous I/O work performed for a physical node.
+2. `io_task`: Logs asynchronous I/O work performed for a physical node.
 
 Each trace includes a `scope` key indicating which level that trace belongs to. When using a
-streaming engine, `evaluate_ir_node`-scoped nodes will be nested under an `actor`-scoped node.
+streaming engine, records also include the ID of their enclosing actor. Actor lifetimes and
+aggregate execution statistics are exported through Quent telemetry.
 
 ### Schemas
 
 The different scopes have different schemas. Fields in **bold** are required / always present.
-
-#### scope=actor
-
-`actor`-scoped traces only appear when running on a streaming engine.
-
-| Field Name | Type  | Description |
-| ---------- | ----- | ----------- |
-| **scope**      | Literal["actor"] | The string literal `"actor"`. Useful for distinguishing from other types of traces. |
-| **cudf_polars_query_id** | UUID4 | A unique identifier for the polars query being executed. All traces logged as part of this query use this ID. |
-| **start**      | int   | A nanosecond-resolution counter indicating when the actor started. Note: actors generally start early in the query and suspend waiting for data. |
-| **stop**      | int   | A nanosecond-resolution counter indicating when the actor completed. |
-| **event**      | String | A message like "Streaming Actor". |
-| **actor_ir_type** | String | The type of the actor, like `"Scan"`. |
-| **actor_ir_id**   | int    | A unique identifier for the actor. All traces logged under this actor will include this value. |
-| chunk_count | int | A counter for how many table chunks have been processed by this actor at the time of logging. |
-| duplicated | bool | Whether the output rows are duplicated across ranks (e.g. after an allgather). |
-| row_count       | int  | Total row count produced by this node during execution. |
 
 #### scope=evaluate_ir_node
 

@@ -21,7 +21,7 @@ use crate::{
         ActorEvent, ColumnSchema, CudfPolars, CudfPolarsEvent, DataFrameSchema, EngineEvent,
         EvaluateEvent, Implementation, JoinFilterPushdownDetails, OperatorEvent, OperatorSchemas,
         OperatorStatistics, PlanEvent, ProcessorEvent, QueryEvent, QueryGroupEvent,
-        ThreadPoolEvent, WorkerEvent,
+        RuntimePrefilterStatistics, ThreadPoolEvent, WorkerEvent,
     },
     resource::{EVALUATE_ENTITY_TYPE, PROCESSOR_RESOURCE_TYPE},
 };
@@ -279,6 +279,30 @@ fn builds_query_bundle_from_generated_events() {
             }),
         ),
         Event::new(
+            operator_id,
+            19,
+            CudfPolarsEvent::Operator(OperatorEvent::RuntimePrefilterStatistics {
+                actor: EntityRef::new(actor_id, ()),
+                values: RuntimePrefilterStatistics {
+                    placement: "standalone".to_owned(),
+                    method: "bloom".to_owned(),
+                    reason: "bloom_fits".to_owned(),
+                    target_side: None,
+                    domain_side: None,
+                    domain: None,
+                    target_on: vec!["target_key".to_owned()],
+                    domain_on: vec!["domain_key".to_owned()],
+                    target_bytes: 1024,
+                    domain_rows: Some(10),
+                    estimated_cardinality: Some(5),
+                    bloom_bytes: Some(32),
+                    exact_bytes: Some(80),
+                    input_rows: Some(100),
+                    output_rows: Some(20),
+                },
+            }),
+        ),
+        Event::new(
             actor_id,
             20,
             CudfPolarsEvent::Actor(ActorEvent::Completed {
@@ -379,6 +403,10 @@ fn builds_query_bundle_from_generated_events() {
     assert!(bundle.entities.operators[&operator_id].custom_attributes["output_schema"].is_some());
     assert!(
         bundle.entities.operators[&operator_id].custom_attributes["join_filter_pushdown_details"]
+            .is_some()
+    );
+    assert!(
+        bundle.entities.operators[&operator_id].custom_attributes["runtime_prefilter_statistics"]
             .is_some()
     );
     let statistics = bundle.entities.operators[&operator_id]

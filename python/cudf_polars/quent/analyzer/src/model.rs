@@ -24,7 +24,7 @@ use uuid::Uuid;
 
 use crate::generated::{
     EngineEvent, OperatorEvent, OperatorStatistics, PlanEvent, PortEvent, QueryEvent,
-    QueryGroupEvent, WorkerEvent,
+    QueryGroupEvent, RuntimePrefilterStatistics, WorkerEvent,
 };
 
 macro_rules! entity_impl {
@@ -389,6 +389,13 @@ struct OperatorData {
     type_name: Option<String>,
     custom_attributes: DynamicAttributes,
     statistics: Option<OperatorStatistics>,
+    runtime_prefilter_statistics: Vec<RuntimePrefilterData>,
+}
+
+#[derive(serde::Serialize)]
+struct RuntimePrefilterData {
+    actor_id: Uuid,
+    values: RuntimePrefilterStatistics,
 }
 
 impl OperatorData {
@@ -459,6 +466,13 @@ impl EntityEventAccumulator for OperatorData {
             }
             OperatorEvent::HstackDetails { values } => {
                 self.add_serialized_attribute("hstack_details", &values);
+            }
+            OperatorEvent::RuntimePrefilterStatistics { actor, values } => {
+                self.runtime_prefilter_statistics
+                    .push(RuntimePrefilterData {
+                        actor_id: actor.target,
+                        values,
+                    });
             }
         }
     }
@@ -540,17 +554,26 @@ impl OperatorEntity for Operator {
     }
     fn to_ui(&self, epoch: TimeUnixNanoSec) -> ui::Operator {
         let data = self.entity.accumulator();
+        let mut custom_attributes: HashMap<String, Option<DynamicValue>> = data
+            .custom_attributes
+            .iter()
+            .map(|attribute| (attribute.key.clone(), attribute.value.clone()))
+            .collect();
+        if !data.runtime_prefilter_statistics.is_empty()
+            && let Ok(value) = serde_json::to_string(&data.runtime_prefilter_statistics)
+        {
+            custom_attributes.insert(
+                "runtime_prefilter_statistics".to_owned(),
+                Some(value.into()),
+            );
+        }
         ui::Operator {
             id: self.id(),
             plan_id: data.plan_id,
             parent_operator_ids: data.parent_operator_ids.clone(),
             instance_name: data.instance_name.clone(),
             operator_type_name: data.type_name.clone(),
-            custom_attributes: data
-                .custom_attributes
-                .iter()
-                .map(|attribute| (attribute.key.clone(), attribute.value.clone()))
-                .collect(),
+            custom_attributes,
             statistics: data.statistics.as_ref().map(to_ui_operator_statistics),
             active_span: self
                 .active_span

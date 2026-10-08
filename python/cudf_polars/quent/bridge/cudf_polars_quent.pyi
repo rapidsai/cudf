@@ -126,6 +126,23 @@ class OperatorStatisticsDict(TypedDict):
     duplicated: bool
     decision: str | None
 
+class RuntimePrefilterStatisticsDict(TypedDict):
+    placement: str
+    method: str
+    reason: str
+    target_side: str | None
+    domain_side: str | None
+    domain: str | None
+    target_on: Iterable[str]
+    domain_on: Iterable[str]
+    target_bytes: int
+    domain_rows: int | None
+    estimated_cardinality: int | None
+    bloom_bytes: int | None
+    exact_bytes: int | None
+    input_rows: int | None
+    output_rows: int | None
+
 class ScanDetailsDict(TypedDict):
     typ: str
     prefix: str
@@ -304,6 +321,7 @@ class OperatorHandle:
     def select_details_emitted(self) -> bool: ...
     def hstack_details(self, *, values: ColumnsDetailsDict) -> None: ...
     def hstack_details_emitted(self) -> bool: ...
+    def runtime_prefilter_statistics(self, *, actor: ActorHandle | ActorDynamicFsmHandle | ActorStartedHandle | ActorRunningHandle | ActorCompletedHandle | ActorFailedHandle | _uuid.UUID, values: RuntimePrefilterStatisticsDict) -> None: ...
     def statistics(self, *, values: OperatorStatisticsDict) -> None: ...
 
 class PortObserver:

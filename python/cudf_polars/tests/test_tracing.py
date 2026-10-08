@@ -119,16 +119,6 @@ def test_sets_cudf_polars_query_id():
         keys = set(log.keys())
 
         match log["scope"]:
-            case "actor":
-                expected_keys = {
-                    "actor_ir_id",
-                    "actor_ir_type",
-                    "cudf_polars_query_id",
-                    "duplicated",
-                    "scope",
-                    "start",
-                    "stop",
-                }
             case "evaluate_ir_node":
                 expected_keys = {
                     "start",

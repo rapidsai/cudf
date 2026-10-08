@@ -30,7 +30,6 @@ from rapidsmpf.streaming.core.message import Message
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Join, Projection
-from cudf_polars.dsl.tracing import LOG_TRACES
 from cudf_polars.dsl.utils.naming import names_to_indices
 from cudf_polars.streaming.actor_graph.collectives.allgather import (
     AllGatherManager,
@@ -48,6 +47,7 @@ from cudf_polars.streaming.actor_graph.join_planning import JoinPlanningState
 from cudf_polars.streaming.actor_graph.nodes import default_node_multi
 from cudf_polars.streaming.actor_graph.prefilter import (
     JoinPrefilterExecution,
+    RuntimePrefilterStatistics,
     add_bloom_prefilter,
     choose_prefilter,
 )
@@ -100,7 +100,7 @@ if TYPE_CHECKING:
         PrefilterDecision,
         PrefilterExecution,
     )
-    from cudf_polars.streaming.actor_graph.tracing import ActorTracer
+    from cudf_polars.streaming.actor_graph.tracing import ActorMetrics
     from cudf_polars.streaming.base import PartitionInfo
     from cudf_polars.streaming.filter_hint import (
         JoinSide,
@@ -400,7 +400,7 @@ async def _broadcast_join_large_chunk(
     small_size: int,
     broadcast_side: Literal["left", "right"],
     *,
-    tracer: ActorTracer | None,
+    tracer: ActorMetrics | None,
 ) -> int:
     """Join one large-side chunk with the small DataFrame(s) and send the result."""
     large_df = chunk_to_frame(large_chunk, large_child)
@@ -450,8 +450,8 @@ async def broadcast_join(
     collective_id: int,
     target_partition_size: int | None,
     *,
-    tracer: ActorTracer | None,
-    trace_stats: dict[str, Any] | None = None,
+    tracer: ActorMetrics | None,
+    prefilter_statistics: RuntimePrefilterStatistics | None = None,
 ) -> None:
     """
     Execute a broadcast join after initial sampling.
@@ -558,9 +558,9 @@ async def broadcast_join(
             tracer=tracer,
         )
 
-    if trace_stats is not None:
-        trace_stats["input_rows"] = input_rows
-        trace_stats["output_rows"] = output_rows
+    if prefilter_statistics is not None:
+        prefilter_statistics.input_rows = input_rows
+        prefilter_statistics.output_rows = output_rows
     await ch_out.drain(context)
 
 
@@ -577,7 +577,7 @@ def add_prefilter(
     ch_filtered: Channel[TableChunk],
     collective_id: int,
     ir_context: IRExecutionContext,
-    trace_stats: dict[str, Any] | None,
+    prefilter_statistics: RuntimePrefilterStatistics | None,
 ) -> None:
     """Add the actors and channels that apply one selected prefilter."""
     context = execution.context
@@ -594,7 +594,7 @@ def add_prefilter(
             ch_target,
             ch_filtered,
             collective_id,
-            trace_stats,
+            prefilter_statistics,
         )
     elif decision.method == "broadcast_semi_join":
         domain_schema = {key.name: key.value.dtype for key in spec.domain_on}
@@ -621,7 +621,7 @@ def add_prefilter(
                 collective_id,
                 target_partition_size=None,
                 tracer=None,
-                trace_stats=trace_stats,
+                prefilter_statistics=prefilter_statistics,
             )
         )
     else:
@@ -688,7 +688,7 @@ def make_prefilter_execution(
         target = candidate.target.node
         ch_target = execution.join_inputs[target_side]
         ch_filtered: Channel[TableChunk] = context.create_channel()
-        trace_stats = candidate.trace
+        prefilter_statistics = candidate.statistics
 
         add_prefilter(
             execution,
@@ -702,7 +702,7 @@ def make_prefilter_execution(
             ch_filtered=ch_filtered,
             collective_id=collective_ids.prefilter(strategy, target_side),
             ir_context=ir_context,
-            trace_stats=trace_stats,
+            prefilter_statistics=prefilter_statistics,
         )
         execution.replace_join_input(target_side, ch_filtered)
 
@@ -840,7 +840,7 @@ async def _join_chunks(
     ch_out: Channel[TableChunk],
     ch_left: Channel[TableChunk],
     ch_right: Channel[TableChunk],
-    tracer: ActorTracer | None,
+    tracer: ActorMetrics | None,
 ) -> None:
     # Consume metadata from both shuffle outputs before reading data
     await gather_in_task_group(
@@ -951,7 +951,7 @@ async def _shuffle_join(
     left_collective_id: int,
     right_collective_id: int,
     *,
-    tracer: ActorTracer | None,
+    tracer: ActorMetrics | None,
 ) -> None:
     """Execute a shuffle (hash) join."""
     # Send output metadata
@@ -1096,7 +1096,7 @@ async def _ordered_join(
     strategy: OrderedJoinStrategy,
     collective_ids: JoinCollectiveIds,
     *,
-    tracer: ActorTracer | None,
+    tracer: ActorMetrics | None,
 ) -> None:
     """Align ordered inputs to common boundaries, then join partition-wise."""
     left_boundaries_aligned = strategy.left_input_ordering.boundaries_aligned_with(
@@ -1272,7 +1272,7 @@ def _choose_strategy_from_samples(
     left_sample: TableSizeStats,
     right_sample: TableSizeStats,
     chunkwise: bool,
-    tracer: ActorTracer | None,
+    tracer: ActorMetrics | None,
     allow_broadcast: bool = True,
 ) -> JoinStrategy:
     """
@@ -1696,7 +1696,7 @@ async def choose_strategy(
     executor: StreamingExecutor,
     collective_ids: JoinCollectiveIds,
     *,
-    tracer: ActorTracer | None,
+    tracer: ActorMetrics | None,
 ) -> JoinStrategy:
     """Collect any required samples and choose broadcast vs shuffle."""
     left, right = ir.children[:2]
@@ -1934,16 +1934,16 @@ async def join_actor(
             collective_ids,
             tracer=tracer,
         )
-        prefilter_traces = []
         for candidate in join_state.candidates:
             if candidate.decision is None:
                 raise ValueError("Join prefilter has no runtime decision")
-            trace = candidate.decision.trace(candidate.spec)
-            prefilter_traces.append(trace)
-            if LOG_TRACES:
-                candidate.trace = trace
-        if tracer is not None and prefilter_traces:
-            tracer.set_extra("join_prefilters", prefilter_traces)
+            if tracer is not None:
+                statistics = RuntimePrefilterStatistics.from_decision_prefilter(
+                    candidate.decision,
+                    candidate.spec,
+                )
+                candidate.statistics = statistics
+                tracer.prefilters.append(statistics)
         left_sample = join_state.left.sample
         right_sample = join_state.right.sample
         if left_sample is None or right_sample is None:
