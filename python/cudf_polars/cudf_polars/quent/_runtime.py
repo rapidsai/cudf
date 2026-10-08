@@ -40,7 +40,7 @@ except ImportError:  # pragma: no cover - depends on optional extension
 
 # TODO: think about just always having this on?
 PROFILE_DATAFRAMES = _bool_converter(
-    os.environ.get("CUDF_POLARS_LOG_TRACES_DATAFRAMES", "1")
+    os.environ.get("CUDF_POLARS_QUENT_DATAFRAMES", "1")
 )
 
 
@@ -301,31 +301,54 @@ class QuentWorkerRuntime:
         assert state.actor_id is not None, (
             "Evaluate events must be emitted from an Actor scope"
         )
+        channel_bytes = (
+            state.io_bytes
+            if state.io_bytes is not None
+            else input_frames_bytes
+            if ir_type.is_io_node
+            else None
+        )
+        input_attributes: quent_bindings.EvaluateInputDict = {
+            "dataframes": (
+                [_dataframe_statistics(frame) for frame in frames]
+                if PROFILE_DATAFRAMES
+                else None
+            ),
+            "sequence_number": state.sequence_number,
+            "content_sizes": state.content_sizes,
+            "spillable": state.spillable,
+        }
+        processor: quent_bindings.ProcessorUsageRefDict = {
+            "target": processor_id,
+            "data": {},
+        }
+        channel: quent_bindings.DataChannelUsageRefDict | None = (
+            {
+                "target": self.worker_resources.disk_to_device_channel_id,
+                "data": {"bytes": channel_bytes},
+            }
+            if channel_bytes is not None
+            else None
+        )
+        task: quent_bindings.EvaluateTaskDict | None = (
+            {
+                "node_id": state.task_node_id,
+                "node_type": state.task_node_type,
+            }
+            if state.task_node_id is not None and state.task_node_type is not None
+            else None
+        )
         queued = (
             self.session.binding_context.evaluate_observer()
             .handle(evaluate_id)
-            .queued(instance_name=instance_name, actor=state.actor_id)
+            .queued(instance_name=instance_name, actor=state.actor_id, task=task)
         )
         self.session._evaluations[evaluate_id] = queued.running(
             io=ir_type.is_io_node,
             input_bytes=input_frames_bytes,
-            input={
-                "dataframes": (
-                    [_dataframe_statistics(frame) for frame in frames]
-                    if PROFILE_DATAFRAMES
-                    else None
-                ),
-                "sequence_number": state.sequence_number,
-                "content_sizes": state.content_sizes,
-                "spillable": state.spillable,
-            },
-            processor={"target": processor_id, "data": {}},
-            channel={
-                "target": self.worker_resources.disk_to_device_channel_id,
-                "data": {"bytes": input_frames_bytes},
-            }
-            if ir_type.is_io_node
-            else None,
+            input=input_attributes,
+            processor=processor,
+            channel=channel,
         )
 
     def emit_evaluate_end(

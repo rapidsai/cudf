@@ -39,6 +39,20 @@ records:
       content_sizes: { option: { list: u64 } }
       spillable: { option: bool }
 
+  EvaluateTask:
+    fields:
+      node_id: string
+      node_type: string
+
+  MemoryReservationRequest:
+    fields:
+      purpose: string
+      size_bytes: u64
+      memory_type: string
+      net_memory_delta: i64
+      allow_overbooking: { option: bool }
+      sequence_number: { option: u64 }
+
   OperatorSchemas:
     fields:
       input_schemas: { list: DataFrameSchema }
@@ -344,6 +358,7 @@ fsms:
         attributes:
           instance_name: string
           actor: { scope-ref: Actor }
+          task: { option: EvaluateTask }
         to: [running]
       running:
         attributes:
@@ -357,6 +372,21 @@ fsms:
         attributes:
           output_bytes: u64
           output_dataframe: { option: DataFrameStatistics }
+      failed:
+        attributes:
+          error: string
+
+  MemoryReservation:
+    doc: One request for admission from the streaming runtime's memory manager.
+    states:
+      requested:
+        initial: true
+        attributes:
+          instance_name: string
+          actor: { scope-ref: Actor }
+          request: MemoryReservationRequest
+        to: [granted, failed]
+      granted: {}
       failed:
         attributes:
           error: string

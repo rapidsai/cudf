@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import subprocess
 import sys
 import textwrap
@@ -146,13 +145,13 @@ def test_lineariser_backpressures_each_producer(spmd_engine: SPMDEngine) -> None
     assert output == list(range(6))
 
 
-def test_io_tasks_wait_for_memory_admission(
+def test_memory_reservations_gate_io_evaluations(
     tmp_path: pathlib.Path, timeout_seconds: int
 ) -> None:
-    pytest.importorskip("structlog")
     pytest.importorskip("cudf_polars_quent")
 
     source = tmp_path / "data.parquet"
+    output_root = tmp_path / "quent-admission"
     pl.DataFrame({"x": range(5_000)}).write_parquet(
         source,
         compression="uncompressed",
@@ -160,17 +159,11 @@ def test_io_tasks_wait_for_memory_admission(
     )
 
     code = textwrap.dedent(f"""\
-    import structlog
     import polars as pl
 
-    structlog.configure(
-        processors=[
-            structlog.contextvars.merge_contextvars,
-            structlog.processors.JSONRenderer(),
-        ]
-    )
     from cudf_polars.engine.options import StreamingOptions
     from cudf_polars.engine.spmd import SPMDEngine
+    from cudf_polars.quent import QuentConfig
 
     q = pl.scan_parquet("{source}").select(pl.col("x").sum())
     options = StreamingOptions(
@@ -179,17 +172,14 @@ def test_io_tasks_wait_for_memory_admission(
         memory_reserve_timeout="10s",
         spill_device_limit="65000",
         target_partition_size=21_000,
+        quent_context=QuentConfig(output_root={str(output_root)!r}),
     )
     with SPMDEngine.from_options(options) as engine:
         q.collect(engine=engine)
     """)
 
-    env = os.environ.copy()
-    env["CUDF_POLARS_LOG_TRACES"] = "1"
-
     with subprocess.Popen(
         [sys.executable, "-c", code],
-        env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     ) as proc:
@@ -198,27 +188,69 @@ def test_io_tasks_wait_for_memory_admission(
 
     assert returncode == 0, result.decode(errors="replace")
 
-    events = []
-    for line in result.splitlines():
-        try:
+    evaluations: dict[str, list[tuple[int, str, dict]]] = {}
+    for path in output_root.glob("*/*/Evaluate/*.ndjson"):
+        for line in path.read_text().splitlines():
             event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if event.get("event") == "IO Task":
-            events.append(event)
+            state, attributes = next(iter(event["data"].items()))
+            evaluations.setdefault(event["id"], []).append(
+                (event["timestamp"], state, attributes)
+            )
 
-    assert len(events) == 2, result.decode(errors="replace")
-    assert all(event["scope"] == "io_task" for event in events)
-    assert all(event["ir_type"] == "ParquetScanTask" for event in events)
+    evaluations = {
+        evaluate_id: lifecycle
+        for evaluate_id, lifecycle in evaluations.items()
+        if lifecycle[0][1] == "Queued"
+        and lifecycle[0][2]["task"] is not None
+        and lifecycle[0][2]["task"]["node_type"] == "ParquetScanTask"
+    }
+    assert len(evaluations) == 2, result.decode(errors="replace")
     assert all(
-        event["reservation_bytes"] == 2 * event["estimated_output_bytes"]
-        for event in events
+        [state for _, state, _ in lifecycle] == ["Queued", "Running", "Completed"]
+        for lifecycle in evaluations.values()
     )
 
-    first, second = sorted(events, key=lambda event: event["admitted"])
-    assert first["start"] <= first["admitted"] <= first["stop"]
-    assert second["start"] <= second["admitted"] <= second["stop"]
-    assert second["admitted"] >= first["stop"]
+    reservations: dict[str, list[tuple[int, str, dict]]] = {}
+    for path in output_root.glob("*/*/MemoryReservation/*.ndjson"):
+        for line in path.read_text().splitlines():
+            event = json.loads(line)
+            state, attributes = next(iter(event["data"].items()))
+            reservations.setdefault(event["id"], []).append(
+                (event["timestamp"], state, attributes)
+            )
+    reservations = {
+        reservation_id: lifecycle
+        for reservation_id, lifecycle in reservations.items()
+        if lifecycle[0][1] == "Requested"
+        and lifecycle[0][2]["request"]["purpose"] == "scan"
+    }
+    assert len(reservations) == 2, result.decode(errors="replace")
+    assert all(
+        [state for _, state, _ in lifecycle] == ["Requested", "Granted"]
+        for lifecycle in reservations.values()
+    )
+
+    evaluations_by_sequence = {
+        lifecycle[1][2]["input"]["sequence_number"]: lifecycle
+        for lifecycle in evaluations.values()
+    }
+    reservations_by_sequence = {
+        lifecycle[0][2]["request"]["sequence_number"]: lifecycle
+        for lifecycle in reservations.values()
+    }
+    assert evaluations_by_sequence.keys() == reservations_by_sequence.keys()
+    for sequence_number, reservation in reservations_by_sequence.items():
+        evaluation = evaluations_by_sequence[sequence_number]
+        assert (
+            reservation[0][2]["request"]["size_bytes"]
+            == 2 * evaluation[1][2]["channel"]["data"]["bytes"]
+        )
+        assert reservation[0][0] <= reservation[1][0] <= evaluation[0][0]
+        assert evaluation[0][0] <= evaluation[1][0] <= evaluation[2][0]
+
+    first = evaluations_by_sequence[0]
+    second_reservation = reservations_by_sequence[1]
+    assert second_reservation[1][0] >= first[2][0]
 
 
 @pytest.mark.skipif(

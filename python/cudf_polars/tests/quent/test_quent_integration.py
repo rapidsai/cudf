@@ -323,9 +323,8 @@ def test_quent_lifecycle(
             next(iter(event["data"]["Evaluate"]))
         )
     assert all(
-        states[:2] == ["Queued", "Running"]
+        states == ["Queued", "Running", states[-1]]
         and states[-1] in {"Completed", "Failed"}
-        and len(states) == 3
         for states in evaluate_states.values()
     )
     running_evaluations = [
@@ -334,7 +333,14 @@ def test_quent_lifecycle(
         if "Running" in event["data"]["Evaluate"]
     ]
     assert all(
-        {"io", "input_bytes", "input", "processor", "channel"} <= running.keys()
+        {
+            "io",
+            "input_bytes",
+            "input",
+            "processor",
+            "channel",
+        }
+        <= running.keys()
         for running in running_evaluations
     )
     assert all(
@@ -348,11 +354,11 @@ def test_quent_lifecycle(
     chunk_evaluations = [
         running
         for running in running_evaluations
-        if running["input"]["sequence_number"] is not None
+        if running["input"]["content_sizes"] is not None
     ]
     assert chunk_evaluations
     assert all(
-        running["input"]["content_sizes"] is not None
+        running["input"]["sequence_number"] is not None
         and running["input"]["spillable"] is not None
         for running in chunk_evaluations
     )
@@ -366,6 +372,46 @@ def test_quent_lifecycle(
         completed["output_dataframe"] is not None
         and set(completed["output_dataframe"]) == {"shape", "bytes"}
         for completed in completed_evaluations
+    )
+    queued_io_evaluations = [
+        event["data"]["Evaluate"]["Queued"]
+        for event in evaluate_events
+        if "Queued" in event["data"]["Evaluate"]
+        and event["data"]["Evaluate"]["Queued"]["task"] is not None
+    ]
+    assert queued_io_evaluations
+    assert all(
+        {"node_id", "node_type"} <= queued["task"].keys()
+        for queued in queued_io_evaluations
+    )
+    memory_reservation_events = _of_type(events, "MemoryReservation")
+    assert memory_reservation_events
+    reservation_states: dict[str, list[str]] = {}
+    for event in memory_reservation_events:
+        reservation_states.setdefault(event["id"], []).append(
+            next(iter(event["data"]["MemoryReservation"]))
+        )
+    assert all(
+        states[0] == "Requested" and states[-1] in {"Granted", "Failed"}
+        for states in reservation_states.values()
+    )
+    requested_reservations = [
+        event["data"]["MemoryReservation"]["Requested"]
+        for event in memory_reservation_events
+        if "Requested" in event["data"]["MemoryReservation"]
+    ]
+    assert all(
+        {"actor", "request"} <= requested.keys()
+        and {
+            "purpose",
+            "size_bytes",
+            "memory_type",
+            "net_memory_delta",
+            "allow_overbooking",
+            "sequence_number",
+        }
+        <= requested["request"].keys()
+        for requested in requested_reservations
     )
 
     initialized_queries = [

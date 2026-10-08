@@ -16,7 +16,6 @@ files:
       - clang
       - cuda
       - cuda_version
-      - cudf_polars_trace
       - depends_on_cupy
       - depends_on_cuda_bindings
       - depends_on_dask_cuda
@@ -480,18 +479,6 @@ files:
       - depends_on_dask_cuda
       - test_python_common
       - test_python_cudf_polars
-      - cudf_polars_trace
-  py_trace_cudf_polars:
-    output: pyproject
-    matrix:
-      use_cuda_wheels: ["true"]
-      cuda_suffixed: ["false"]
-    pyproject_dir: python/cudf_polars
-    extras:
-      table: project.optional-dependencies
-      key: trace
-    includes:
-      - cudf_polars_trace
   py_build_dask_cudf:
     output: pyproject
     matrix:
@@ -1848,11 +1835,6 @@ dependencies:
       - output_types: [conda, requirements, constraints, pyproject]
         packages:
           - narwhals==2.24.0
-  cudf_polars_trace:
-    common:
-      - output_types: [conda, requirements, constraints, pyproject]
-        packages:
-          - structlog
   test_cudf_pandas_compat:
     specific:
       - output_types: [requirements, constraints]

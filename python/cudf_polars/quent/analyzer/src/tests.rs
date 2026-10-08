@@ -257,6 +257,7 @@ fn builds_query_bundle_from_generated_events() {
                 seq: 0,
                 instance_name: "Scan-evaluate".to_owned(),
                 actor: EntityRef::new(actor_id, ()),
+                task: None,
             }),
         ),
         Event::new(
@@ -354,6 +355,7 @@ fn builds_query_bundle_from_generated_events() {
                 seq: 0,
                 instance_name: "incomplete-evaluate".to_owned(),
                 actor: EntityRef::new(incomplete_actor_id, ()),
+                task: None,
             }),
         ),
         Event::new(

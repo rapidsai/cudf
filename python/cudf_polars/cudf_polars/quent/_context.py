@@ -220,6 +220,9 @@ class QuentIRExecutionState:
     sequence_number: int | None = None
     content_sizes: tuple[int, ...] | None = None
     spillable: bool | None = None
+    task_node_id: str | None = None
+    task_node_type: str | None = None
+    io_bytes: int | None = None
 
     @classmethod
     def from_query_worker_state(

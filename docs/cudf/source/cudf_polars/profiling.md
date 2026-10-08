@@ -146,29 +146,25 @@ The result is `(result_df, timings_df)`, see the Polars docs link above for the 
 Streaming node evaluation is exported through Quent. Enable a Quent context to
 record each physical node evaluation as an `Evaluate` lifecycle with timestamps,
 input and output byte counts, processor and I/O-channel usage, failures, and
-incoming chunk metadata.
+incoming chunk metadata. Asynchronous scan work uses the same `Evaluate`
+lifecycle and includes the scan-task type and ID, sequence number, and
+disk-to-device channel usage.
+
+Calls into the streaming runtime's memory-admission control are recorded
+separately as `MemoryReservation` lifecycles. Their requested state identifies
+the actor, purpose, memory tier, requested bytes, expected net memory change,
+overbooking policy, and optional chunk sequence number. The terminal state
+reports whether the request was granted or failed, so the lifecycle duration is
+the time spent waiting for admission.
 
 By default, `Evaluate` events also include the shape and byte size of every
 input dataframe and the output dataframe. Set
-`CUDF_POLARS_LOG_TRACES_DATAFRAMES=0` before importing `cudf_polars` to omit
+`CUDF_POLARS_QUENT_DATAFRAMES=0` before importing `cudf_polars` to omit
 these dataframe details. Aggregate input and output byte counts are always
 recorded.
-
-The legacy structlog tracing path now records only asynchronous I/O tasks. Set
-`CUDF_POLARS_LOG_TRACES=1` before starting the process to emit records with
-`scope="io_task"`. These records include their query and actor identifiers,
-sequence number, timing, reservation and estimated-output byte counts, and IR
-type.
-
-You can configure this output using [structlog]'s
-[configuration][structlog-configure] and enrich the records with
-[context variables][structlog-context].
 
 [nsight]: https://developer.nvidia.com/nsight-systems
 [nvtx]: https://nvidia.github.io/NVTX/
 [kvikio-stats]: inv:kvikio:std:doc:#statistics
 [kvikio-busy]: <inv:kvikio:std:label:#statistics:busy time and bandwidth>
 [rapidsmpf-stats]: inv:rapidsmpf:std:doc:#statistics
-[structlog]: https://www.structlog.org/en/stable/
-[structlog-configure]: https://www.structlog.org/en/stable/configuration.html
-[structlog-context]: https://www.structlog.org/en/stable/contextvars.html

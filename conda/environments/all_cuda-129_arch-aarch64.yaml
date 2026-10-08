@@ -113,7 +113,6 @@ dependencies:
 - sphinx>=8.1.0
 - sphinxcontrib-websupport
 - streamz
-- structlog
 - sysroot_linux-aarch64==2.28
 - typing_extensions>=4.0.0
 - ucxx==0.53.*,>=0.0.0a0

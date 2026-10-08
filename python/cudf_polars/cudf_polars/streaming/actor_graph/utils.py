@@ -36,7 +36,6 @@ from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.streaming.coll.allgather import AllGather
 from rapidsmpf.streaming.core.message import Message
 
-import cudf_polars.dsl.tracing
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Cast, Col, NamedExpr, TemporalFunction
 from cudf_polars.dsl.ir import (
@@ -327,13 +326,7 @@ async def shutdown_on_error(
         Actor metrics and the Actor-bound IR execution context.
     """
     channels = (*chs_in, *chs_out, *chs_aux)
-    ir_id = trace_ir.get_stable_id()
-    ir_type = type(trace_ir).__name__
-    contextvars = {"actor_ir_id": ir_id, "actor_ir_type": ir_type}
     tracer = None if ir_context is None else ir_context.tracer
-
-    if ir_context is not None:
-        contextvars["cudf_polars_query_id"] = str(ir_context.query_id)
 
     # We might have nested calls to `shutdown_on_error` for a given actor.
     # We always want to trace the outermost call, so record a little state here
@@ -367,74 +360,71 @@ async def shutdown_on_error(
         runtime.session._actors[actor_id] = started.running()
 
     actor_error: BaseException | None = None
-    with cudf_polars.dsl.tracing.bound_contextvars(**contextvars):
-        try:
-            yield ActorScope(tracer=tracer, ir_context=ir_context)
-        except BaseException as caught:
-            actor_error = caught
-            await shutdown_channels(context, *channels)
-            raise
-        finally:
-            if (
-                created_quent_actor
-                and tracer is not None
-                and ir_context is not None
-                and (quent_ir_execution_state := ir_context.quent_ir_execution_state)
-                is not None
-            ):
-                record_channel_metrics(tracer, chs_in=chs_in, chs_out=chs_out)
-                values: _quent.OperatorStatisticsDict = {
-                    "output_rows": tracer.row_count,
-                    "input_bytes": sum(tracer.input_bytes.values()),
-                    "output_bytes": sum(tracer.output_bytes.values()),
-                    "chunk_count": tracer.chunk_count,
-                    "duplicated": tracer.duplicated,
-                    "decision": tracer.decision,
+    try:
+        yield ActorScope(tracer=tracer, ir_context=ir_context)
+    except BaseException as caught:
+        actor_error = caught
+        await shutdown_channels(context, *channels)
+        raise
+    finally:
+        if (
+            created_quent_actor
+            and tracer is not None
+            and ir_context is not None
+            and (quent_ir_execution_state := ir_context.quent_ir_execution_state)
+            is not None
+        ):
+            record_channel_metrics(tracer, chs_in=chs_in, chs_out=chs_out)
+            values: _quent.OperatorStatisticsDict = {
+                "output_rows": tracer.row_count,
+                "input_bytes": sum(tracer.input_bytes.values()),
+                "output_bytes": sum(tracer.output_bytes.values()),
+                "chunk_count": tracer.chunk_count,
+                "duplicated": tracer.duplicated,
+                "decision": tracer.decision,
+            }
+            prefilters: list[_quent.RuntimePrefilterStatisticsDict] = [
+                {
+                    "placement": value.placement,
+                    "method": value.decision.method,
+                    "reason": value.decision.reason,
+                    "target_side": value.target_side,
+                    "domain_side": value.domain_side,
+                    "domain": value.domain,
+                    "target_on": value.target_on,
+                    "domain_on": value.domain_on,
+                    "target_bytes": value.decision.target_bytes,
+                    "domain_rows": value.decision.domain_rows,
+                    "estimated_cardinality": value.decision.estimated_cardinality,
+                    "bloom_bytes": value.decision.bloom_bytes,
+                    "exact_bytes": value.decision.exact_bytes,
+                    "input_rows": value.input_rows,
+                    "output_rows": value.output_rows,
                 }
-                prefilters: list[_quent.RuntimePrefilterStatisticsDict] = [
-                    {
-                        "placement": value.placement,
-                        "method": value.decision.method,
-                        "reason": value.decision.reason,
-                        "target_side": value.target_side,
-                        "domain_side": value.domain_side,
-                        "domain": value.domain,
-                        "target_on": value.target_on,
-                        "domain_on": value.domain_on,
-                        "target_bytes": value.decision.target_bytes,
-                        "domain_rows": value.decision.domain_rows,
-                        "estimated_cardinality": value.decision.estimated_cardinality,
-                        "bloom_bytes": value.decision.bloom_bytes,
-                        "exact_bytes": value.decision.exact_bytes,
-                        "input_rows": value.input_rows,
-                        "output_rows": value.output_rows,
-                    }
-                    for value in tracer.prefilters
-                ]
-                assert quent_ir_execution_state.actor_id is not None
-                runtime = quent_ir_execution_state.query_worker_state.runtime
-                operator = runtime.session.binding_context.operator_observer().handle(
-                    quent_ir_execution_state.operator_id
+                for value in tracer.prefilters
+            ]
+            assert quent_ir_execution_state.actor_id is not None
+            runtime = quent_ir_execution_state.query_worker_state.runtime
+            operator = runtime.session.binding_context.operator_observer().handle(
+                quent_ir_execution_state.operator_id
+            )
+            for prefilter in prefilters:
+                operator.runtime_prefilter_statistics(
+                    actor=quent_ir_execution_state.actor_id,
+                    values=prefilter,
                 )
-                for prefilter in prefilters:
-                    operator.runtime_prefilter_statistics(
-                        actor=quent_ir_execution_state.actor_id,
-                        values=prefilter,
-                    )
-                if actor_error is None:
-                    runtime.session._actors.pop(
-                        quent_ir_execution_state.actor_id
-                    ).completed(
-                        values=values,
-                    )
-                else:
-                    runtime.session._actors.pop(
-                        quent_ir_execution_state.actor_id
-                    ).failed(
-                        error=str(actor_error),
-                        values=values,
-                    )
-                operator.statistics(values=values)
+            if actor_error is None:
+                runtime.session._actors.pop(
+                    quent_ir_execution_state.actor_id
+                ).completed(
+                    values=values,
+                )
+            else:
+                runtime.session._actors.pop(quent_ir_execution_state.actor_id).failed(
+                    error=str(actor_error),
+                    values=values,
+                )
+            operator.statistics(values=values)
 
 
 def _update_ordering_indices(

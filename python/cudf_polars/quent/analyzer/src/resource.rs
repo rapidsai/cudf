@@ -5,8 +5,10 @@ use quent_analyzer::resource::{CapacityDecl, ResourceTypeDecl};
 use uuid::Uuid;
 
 pub(crate) const PROCESSOR_RESOURCE_TYPE: &str = "processor";
+pub(crate) const DEVICE_MEMORY_RESOURCE_TYPE: &str = "device_memory";
 pub(crate) const DATA_CHANNEL_RESOURCE_TYPE: &str = "data_channel";
 pub(crate) const EVALUATE_ENTITY_TYPE: &str = "Evaluate";
+pub(crate) const MEMORY_RESERVATION_ENTITY_TYPE: &str = "MemoryReservation";
 
 #[derive(Clone)]
 pub(crate) struct DeclaredResource {
@@ -24,16 +26,21 @@ pub(crate) struct DeclaredResourceGroup {
     pub(crate) parent_group_id: Uuid,
 }
 
-pub(crate) fn evaluate_resource_type(name: &str) -> ResourceTypeDecl {
+pub(crate) fn resource_type(name: &str) -> ResourceTypeDecl {
     let mut resource_type = match name {
         PROCESSOR_RESOURCE_TYPE => ResourceTypeDecl::unit(name),
+        DEVICE_MEMORY_RESOURCE_TYPE => {
+            ResourceTypeDecl::new(name, [CapacityDecl::new_occupancy("bytes")])
+        }
         DATA_CHANNEL_RESOURCE_TYPE => {
             ResourceTypeDecl::new(name, [CapacityDecl::new_rate("bytes")])
         }
         _ => unreachable!("resource type validated by caller"),
     };
-    resource_type
-        .used_by
-        .insert(EVALUATE_ENTITY_TYPE.to_owned());
+    if name != DEVICE_MEMORY_RESOURCE_TYPE {
+        resource_type
+            .used_by
+            .insert(EVALUATE_ENTITY_TYPE.to_owned());
+    }
     resource_type
 }

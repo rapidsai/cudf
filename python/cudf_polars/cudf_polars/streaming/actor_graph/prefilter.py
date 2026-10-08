@@ -14,9 +14,12 @@ from cudf_streaming.channel_metadata import ChannelMetadata
 from cudf_streaming.table_chunk import TableChunk
 from pylibcudf.hashing import LIBCUDF_DEFAULT_HASH_SEED
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
-from rapidsmpf.streaming.core.memory_reserve_or_wait import reserve_memory
 from rapidsmpf.streaming.core.message import Message
 
+from cudf_polars.streaming.actor_graph.memory import (
+    MemoryReservationPurpose,
+    reserve_memory_traced,
+)
 from cudf_polars.streaming.actor_graph.utils import (
     ChunkStore,
     recv_metadata,
@@ -37,6 +40,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataType
     from cudf_polars.dsl.expr import NamedExpr
+    from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.streaming.actor_graph.utils import TableSizeStats
     from cudf_polars.streaming.filter_hint import (
         JoinSide,
@@ -140,13 +144,24 @@ class RuntimePrefilterStatistics:
 
 
 async def project_key_chunk(
-    context: Context, chunk: TableChunk, indices: Iterable[int]
+    context: Context,
+    chunk: TableChunk,
+    indices: Iterable[int],
+    ir_context: IRExecutionContext,
+    sequence_number: int,
 ) -> TableChunk:
     """Copy selected columns into an owning key chunk."""
     columns = tuple(chunk.table_view().columns()[index] for index in indices)
     bytes = sum(column.device_buffer_size() for column in columns)
     with opaque_memory_usage(
-        await reserve_memory(context, size=bytes, net_memory_delta=0)
+        await reserve_memory_traced(
+            context,
+            size=bytes,
+            net_memory_delta=0,
+            ir_context=ir_context,
+            purpose=MemoryReservationPurpose.PREFILTER_PROJECT_KEYS,
+            sequence_number=sequence_number,
+        )
     ):
         table = plc.Table(columns).copy(stream=chunk.stream, mr=context.br().device_mr)
     return TableChunk.from_pylibcudf_table(
@@ -163,6 +178,7 @@ async def buffer_and_project_keys(
     ch_keys: Channel[TableChunk],
     ch_replay: Channel[TableChunk],
     indices: Iterable[int],
+    ir_context: IRExecutionContext,
 ) -> None:
     """
     Project owning key chunks while spill-buffering an input for replay.
@@ -187,7 +203,13 @@ async def buffer_and_project_keys(
                 chunk = await TableChunk.from_message(
                     msg, br=context.br()
                 ).make_available_or_wait(context, net_memory_delta=0)
-                key_chunk = await project_key_chunk(context, chunk, indices)
+                key_chunk = await project_key_chunk(
+                    context,
+                    chunk,
+                    indices,
+                    ir_context,
+                    sequence_number,
+                )
                 chunks.insert(Message(sequence_number, chunk))
                 await ch_keys.send(context, Message(sequence_number, key_chunk))
 
@@ -247,8 +269,10 @@ class JoinPrefilterExecution(PrefilterExecution):
         context: Context,
         ch_left: Channel[TableChunk],
         ch_right: Channel[TableChunk],
+        ir_context: IRExecutionContext,
     ) -> None:
         super().__init__(context)
+        self.ir_context = ir_context
         self.source_inputs = {"left": ch_left, "right": ch_right}
         self.join_inputs = dict(self.source_inputs)
         self.buffered_domains: set[JoinSide] = set()
@@ -271,6 +295,7 @@ class JoinPrefilterExecution(PrefilterExecution):
                 ch_keys,
                 ch_replay,
                 indices,
+                self.ir_context,
             )
         )
         self.channels.extend((ch_keys, ch_replay))

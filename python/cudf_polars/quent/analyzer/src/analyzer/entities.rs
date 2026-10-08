@@ -12,7 +12,7 @@ use quent_time::{span::SpanUnixNanoSec, to_nanosecs};
 use quent_ui::entities::request::{EntityListRequest, EntityScope, SortDir};
 
 use super::CudfPolarsUiAnalyzer;
-use crate::resource::EVALUATE_ENTITY_TYPE;
+use crate::resource::{EVALUATE_ENTITY_TYPE, MEMORY_RESERVATION_ENTITY_TYPE};
 
 impl CudfPolarsUiAnalyzer {
     pub(super) fn build_entity_list(
@@ -30,7 +30,9 @@ impl CudfPolarsUiAnalyzer {
             .filter
             .entity_type_name
             .as_deref()
-            .is_some_and(|name| name != EVALUATE_ENTITY_TYPE)
+            .is_some_and(|name| {
+                name != EVALUATE_ENTITY_TYPE && name != MEMORY_RESERVATION_ENTITY_TYPE
+            })
         {
             return Ok(EntityListResponse {
                 items: vec![],
@@ -70,9 +72,25 @@ impl CudfPolarsUiAnalyzer {
             None => None,
         };
         let min_usage = entry.filter.min_usage_s.map(to_nanosecs);
+        let include_evaluates = entry
+            .filter
+            .entity_type_name
+            .as_deref()
+            .is_none_or(|name| name == EVALUATE_ENTITY_TYPE);
+        let include_memory_reservations = entry
+            .filter
+            .entity_type_name
+            .as_deref()
+            .is_none_or(|name| name == MEMORY_RESERVATION_ENTITY_TYPE);
+        let uses_scope = |resource_id| {
+            scope
+                .as_ref()
+                .is_none_or(|resource_ids| resource_ids.contains(&resource_id))
+        };
         let mut ranked: Vec<_> = self
             .evaluates
             .iter()
+            .filter(|_| include_evaluates)
             .filter_map(|evaluate| {
                 let operator_id = self.evaluate_operator_id(evaluate)?;
                 if !query_operator_ids.contains(&operator_id)
@@ -86,11 +104,6 @@ impl CudfPolarsUiAnalyzer {
                 if !lifecycle.intersects(&window) {
                     return None;
                 }
-                let uses_scope = |resource_id| {
-                    scope
-                        .as_ref()
-                        .is_none_or(|resource_ids| resource_ids.contains(&resource_id))
-                };
                 let metric = [
                     Some(evaluate.processor_id),
                     evaluate.channel.map(|(id, _)| id),
@@ -108,17 +121,44 @@ impl CudfPolarsUiAnalyzer {
                 if min_usage.is_some_and(|minimum| metric < minimum) {
                     return None;
                 }
-                Some((evaluate, operator_id, metric))
+                Some((evaluate.to_ui_fsm(epoch), operator_id, metric, evaluate.id))
             })
+            .chain(
+                self.memory_reservations
+                    .iter()
+                    .filter(|_| include_memory_reservations && scope.is_none())
+                    .filter_map(|reservation| {
+                        let operator_id = self.memory_reservation_operator_id(reservation)?;
+                        if !query_operator_ids.contains(&operator_id)
+                            || (!requested_operator_ids.is_empty()
+                                && !requested_operator_ids.contains(&operator_id))
+                        {
+                            return None;
+                        }
+                        let span = reservation.span.intersection(&window)?;
+                        let metric = span.duration();
+                        if min_usage.is_some_and(|minimum| metric < minimum) {
+                            return None;
+                        }
+                        Some((
+                            reservation.to_ui_fsm(epoch),
+                            operator_id,
+                            metric,
+                            reservation.id,
+                        ))
+                    }),
+            )
             .collect();
-        ranked.sort_by(|(left, _, left_metric), (right, _, right_metric)| {
-            let order = left_metric.cmp(right_metric);
-            let order = match entry.sort.dir {
-                SortDir::Asc => order,
-                SortDir::Desc => order.reverse(),
-            };
-            order.then_with(|| left.id.cmp(&right.id))
-        });
+        ranked.sort_by(
+            |(_, _, left_metric, left_id), (_, _, right_metric, right_id)| {
+                let order = left_metric.cmp(right_metric);
+                let order = match entry.sort.dir {
+                    SortDir::Asc => order,
+                    SortDir::Desc => order.reverse(),
+                };
+                order.then_with(|| left_id.cmp(right_id))
+            },
+        );
         let total = ranked.len() as u32;
         let mut ranked = ranked.into_iter();
         let items: Vec<_> = if let Some(page) = entry.page {
@@ -133,9 +173,9 @@ impl CudfPolarsUiAnalyzer {
         Ok(EntityListResponse {
             items: items
                 .into_iter()
-                .map(|(evaluate, operator_id, usage_duration)| EntityListItem {
+                .map(|(fsm, operator_id, usage_duration, _)| EntityListItem {
                     entity: QueryEngineFsm {
-                        fsm: evaluate.to_ui_fsm(epoch),
+                        fsm,
                         operator_id: Some(operator_id),
                     },
                     usage_duration_s: quent_time::to_secs(usage_duration),

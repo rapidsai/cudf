@@ -29,6 +29,7 @@ pub(crate) struct EvaluateBuilder {
     processor_id: Option<Uuid>,
     channel: Option<(Uuid, u64)>,
     queued_at: Option<TimeUnixNanoSec>,
+    queued_attributes: Vec<DynamicAttribute>,
     running_at: Option<TimeUnixNanoSec>,
     running_attributes: Vec<DynamicAttribute>,
     finished_at: Option<TimeUnixNanoSec>,
@@ -42,11 +43,18 @@ impl EvaluateBuilder {
             EvaluateEvent::Queued {
                 instance_name,
                 actor,
+                task,
                 ..
             } => {
                 self.instance_name = Some(instance_name.clone());
                 self.actor_id = Some(actor.target);
                 self.queued_at = Some(timestamp);
+                if let Some(task) = task {
+                    self.queued_attributes = vec![
+                        DynamicAttribute::string("task_node_id", task.node_id.clone()),
+                        DynamicAttribute::string("task_node_type", task.node_type.clone()),
+                    ];
+                }
             }
             EvaluateEvent::Running {
                 io,
@@ -141,6 +149,7 @@ impl EvaluateBuilder {
             channel: self.channel,
             queued_at,
             span: SpanUnixNanoSec::try_new(start, end)?,
+            queued_attributes: self.queued_attributes,
             running_attributes: self.running_attributes,
             finished_state,
             finished_attributes: self.finished_attributes,
@@ -158,6 +167,7 @@ pub(crate) struct EvaluateSpan {
     pub(crate) channel: Option<(Uuid, u64)>,
     pub(crate) queued_at: TimeUnixNanoSec,
     pub(crate) span: SpanUnixNanoSec,
+    queued_attributes: Vec<DynamicAttribute>,
     running_attributes: Vec<DynamicAttribute>,
     finished_state: &'static str,
     finished_attributes: Vec<DynamicAttribute>,
@@ -213,7 +223,12 @@ impl EvaluateSpan {
             type_name: EVALUATE_ENTITY_TYPE.to_owned(),
             instance_name: self.instance_name.clone(),
             transitions: vec![
-                transition("queued", self.queued_at, vec![], vec![]),
+                transition(
+                    "queued",
+                    self.queued_at,
+                    vec![],
+                    self.queued_attributes.clone(),
+                ),
                 transition(
                     "running",
                     self.span.start(),
@@ -246,6 +261,7 @@ mod tests {
                 seq: 0,
                 instance_name: "evaluate".to_owned(),
                 actor: EntityRef::new(Uuid::now_v7(), ()),
+                task: None,
             },
         );
         builder.push(
@@ -280,6 +296,7 @@ mod tests {
                 seq: 0,
                 instance_name: "evaluate".to_owned(),
                 actor: EntityRef::new(Uuid::now_v7(), ()),
+                task: None,
             },
         );
 

@@ -5,29 +5,11 @@
 
 from __future__ import annotations
 
-import contextlib
-import enum
+import dataclasses
 import functools
-import importlib.util
-import os
-from typing import TYPE_CHECKING, Any, Concatenate, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, Concatenate, ParamSpec, TypeVar
 
 import nvtx
-
-from cudf_polars.utils.config import _bool_converter
-
-try:  # pragma: no cover; requires structlog and cudf_polars_quent
-    import structlog
-except ImportError:  # pragma: no cover; requires no structlog
-    _HAS_STRUCTLOG = False
-else:  # pragma: no cover; requires structlog
-    _HAS_STRUCTLOG = True
-_HAS_QUENT = importlib.util.find_spec("cudf_polars_quent") is not None
-
-
-LOG_TRACES = _HAS_STRUCTLOG and _bool_converter(
-    os.environ.get("CUDF_POLARS_LOG_TRACES", "0")
-)
 
 CUDF_POLARS_NVTX_DOMAIN = "cudf_polars"
 
@@ -36,17 +18,11 @@ nvtx_annotate_cudf_polars = functools.partial(
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator
+    from collections.abc import Callable
 
     import cudf_polars.containers
     from cudf_polars.dsl import ir
     from cudf_polars.dsl.ir import IRExecutionContext
-
-
-class Scope(enum.StrEnum):
-    """Scope values for structured logging."""
-
-    IO_TASK = "io_task"
 
 
 IRType = TypeVar("IRType", bound="ir.IR")
@@ -87,6 +63,16 @@ def log_do_evaluate(
             quent_state,
             frames,
         )
+        if quent_state.task_node_id is not None:
+            kwargs["context"] = dataclasses.replace(
+                ir_execution_context,
+                quent_ir_execution_state=dataclasses.replace(
+                    quent_state,
+                    task_node_id=None,
+                    task_node_type=None,
+                    io_bytes=None,
+                ),
+            )
         try:
             result = func(cls, *args, **kwargs)
         except BaseException as error:
@@ -97,20 +83,3 @@ def log_do_evaluate(
             return result
 
     return wrapper
-
-
-@contextlib.contextmanager
-def bound_contextvars(**kwargs: Any) -> Generator[None, None, None]:
-    """Wrapper around structlog.contextvars.bound_contextvars."""
-    if LOG_TRACES:  # pragma: no cover; requires CUDF_POLARS_LOG_TRACES=1
-        with structlog.contextvars.bound_contextvars(**kwargs):
-            yield
-    else:
-        yield
-
-
-def log(message: str, **kwargs: Any) -> None:
-    """Wrapper around structlog.get_logger().info."""
-    if LOG_TRACES:  # pragma: no cover; requires CUDF_POLARS_LOG_TRACES=1
-        log = structlog.get_logger()
-        log.info(message, **kwargs)

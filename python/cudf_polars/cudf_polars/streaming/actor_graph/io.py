@@ -9,7 +9,6 @@ import dataclasses
 import functools
 import io
 import math
-import time
 from typing import TYPE_CHECKING, Any, cast
 
 import polars as pl
@@ -22,15 +21,17 @@ from cudf_streaming.table_chunk import (
 )
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.coll.sparse_alltoall import SparseAlltoall
-from rapidsmpf.streaming.core.memory_reserve_or_wait import reserve_memory
 from rapidsmpf.streaming.core.message import Message
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, CallbackSink, DataFrameScan, PythonScan, Sink
-from cudf_polars.dsl.tracing import Scope, log
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
     ir_context_for_node,
+)
+from cudf_polars.streaming.actor_graph.memory import (
+    MemoryReservationPurpose,
+    reserve_memory_traced,
 )
 from cudf_polars.streaming.actor_graph.nodes import define_actor, shutdown_on_error
 from cudf_polars.streaming.actor_graph.scan_ordering import (
@@ -428,8 +429,13 @@ async def _process_and_send_chunk(
         net_memory_delta = input_bytes
         reservation = input_bytes * (1 + (ir.predicate is not None))
     with opaque_memory_usage(
-        await reserve_memory(
-            context, size=reservation, net_memory_delta=net_memory_delta
+        await reserve_memory_traced(
+            context,
+            size=reservation,
+            net_memory_delta=net_memory_delta,
+            ir_context=ir_context,
+            purpose=MemoryReservationPurpose.PYTHON_SCAN,
+            sequence_number=seq_num,
         )
     ):
         df = await ir_context.to_thread(process)
@@ -598,13 +604,27 @@ async def read_chunk(
         if isinstance(task, DataFrameScan)
         else 2 * estimated_chunk_bytes
     )
-    start = time.monotonic_ns()
-    reservation = await reserve_memory(
+    quent_state = ir_context.quent_ir_execution_state
+    if quent_state is not None:
+        ir_context = dataclasses.replace(
+            ir_context,
+            quent_ir_execution_state=dataclasses.replace(
+                quent_state,
+                sequence_number=seq_num,
+                task_node_id=str(task.get_stable_id()),
+                task_node_type=type(task).__name__,
+                io_bytes=estimated_chunk_bytes,
+            ),
+        )
+
+    reservation = await reserve_memory_traced(
         context,
         size=reservation_bytes,
         net_memory_delta=estimated_chunk_bytes,
+        ir_context=ir_context,
+        purpose=MemoryReservationPurpose.SCAN,
+        sequence_number=seq_num,
     )
-    admitted = time.monotonic_ns()
     with opaque_memory_usage(reservation):
         df = await ir_context.to_thread(
             task.do_evaluate,
@@ -617,19 +637,7 @@ async def read_chunk(
             exclusive_view=True,
             br=context.br(),
         )
-    stop = time.monotonic_ns()
-    log(
-        "IO Task",
-        scope=Scope.IO_TASK.value,
-        start=start,
-        admitted=admitted,
-        stop=stop,
-        ir_id=task.get_stable_id(),
-        ir_type=type(task).__name__,
-        sequence_number=seq_num,
-        estimated_output_bytes=estimated_chunk_bytes,
-        reservation_bytes=reservation_bytes,
-    )
+
     await send_chunk(context, ch_out, chunk, seq_num, tracer=tracer)
 
 
