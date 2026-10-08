@@ -125,8 +125,8 @@ struct variance_reduce_policy {
   {
     auto policy = cub::detail::reduce::
       policy_selector_from_types<State, std::make_unsigned_t<size_type>, BinaryOp>{}(cc);
-    // Combing the states for variance is quite expensive. By using raking block reduce,
-    // we use significantly less collective FP64 arithmetic then CUB's default policy.
+    // Combining the states for variance is quite expensive. By using raking block reduce,
+    // we use significantly less collective FP64 arithmetic than CUB's default policy.
     policy.multi_tile.reduce_algorithm  = cub::BLOCK_REDUCE_RAKING;
     policy.single_tile.reduce_algorithm = cub::BLOCK_REDUCE_RAKING;
     return policy;

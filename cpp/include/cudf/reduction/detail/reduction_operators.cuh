@@ -25,12 +25,14 @@ struct var_std {
   // https://doi.org/10.1080/00031305.1983.10483115
   // Also http://www.cs.yale.edu/publications/techreports/tr222.pdf
   // This is a modification of Youngs and Cramer's online approach.
+  // We track the running mean, rather than the running sum so that columns whose sum
+  // overflows but whose mean does not produce finite variance.
   ResultType running_mean;
   ResultType running_square_deviations;
   size_type count;
 
-  CUDF_HOST_DEVICE inline var_std(ResultType t = 0, ResultType s = 0, size_type n = 0)
-    : running_mean(t), running_square_deviations(s), count(n){};
+  CUDF_HOST_DEVICE inline var_std(ResultType mean = 0, ResultType m2 = 0, size_type n = 0)
+    : running_mean(mean), running_square_deviations(m2), count(n){};
 
   using this_t = var_std<ResultType>;
 
