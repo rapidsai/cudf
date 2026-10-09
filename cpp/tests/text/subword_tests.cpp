@@ -38,17 +38,17 @@ TEST(TextSubwordTest, WordPiece)
 
   using LCW = cudf::test::lists_column_wrapper<cudf::size_type>;
   // clang-format off
-  auto expected = LCW({LCW{ 9, 7, 1, 4, 5, 8},
-                       LCW{ 9, 6, 1, 3},
-                       LCW{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}});
+  auto expected = LCW({{ 9, 7, 1, 4, 5, 8},
+                       { 9, 6, 1, 3},
+                       { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}});
   // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   results = nvtext::wordpiece_tokenize(sv, *vocab, 5);
   // clang-format off
-  expected = LCW({LCW{ 9, 7, 1, 4, 5},
-                  LCW{ 9, 6, 1, 3},
-                  LCW{ 0, 1, 2, 3, 4}});
+  expected = LCW({{ 9, 7, 1, 4, 5},
+                  { 9, 6, 1, 3},
+                  { 0, 1, 2, 3, 4}});
   // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
@@ -66,9 +66,9 @@ TEST(TextSubwordTest, WordPieceWithSubwords)
 
   using LCW = cudf::test::lists_column_wrapper<cudf::size_type>;
   // clang-format off
-  auto expected = LCW({LCW{4, 6, 3, 5, 7, 8, 2},
-                       LCW{1, 1, 6, 3, 1},
-                       LCW{1, 1}});
+  auto expected = LCW({{4, 6, 3, 5, 7, 8, 2},
+                       {1, 1, 6, 3, 1},
+                       {1, 1}});
   // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
@@ -78,9 +78,9 @@ TEST(TextSubwordTest, WordPieceWithSubwords)
 
   results = nvtext::wordpiece_tokenize(sv, *vocab, 4);
   // clang-format off
-  expected = LCW({LCW{4, 6, 3, 5, 7, 8},
-                  LCW{1, 1, 6, 3},
-                  LCW{1, 1}});
+  expected = LCW({{4, 6, 3, 5, 7, 8},
+                  {1, 1, 6, 3},
+                  {1, 1}});
   // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
@@ -104,17 +104,17 @@ TEST(TextSubwordTest, WordPieceSliced)
 
   using LCW = cudf::test::lists_column_wrapper<cudf::size_type>;
   // clang-format off
-  auto expected = LCW({LCW{ 9, 7, 1, 4, 5, 8},
-                       LCW{ 9, 6, 1, 3},
-                       LCW{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}});
+  auto expected = LCW({{ 9, 7, 1, 4, 5, 8},
+                       { 9, 6, 1, 3},
+                       { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}});
   // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   results = nvtext::wordpiece_tokenize(sv, *vocab, 5);
   // clang-format off
-  expected = LCW({LCW{ 9, 7, 1, 4, 5},
-                  LCW{ 9, 6, 1, 3},
-                  LCW{ 0, 1, 2, 3, 4}});
+  expected = LCW({{ 9, 7, 1, 4, 5},
+                  { 9, 6, 1, 3},
+                  { 0, 1, 2, 3, 4}});
   // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
@@ -139,7 +139,7 @@ TEST(TextSubwordTest, WordPieceAllNulls)
   auto sv         = cudf::strings_column_view(input);
   auto results    = nvtext::wordpiece_tokenize(sv, *vocab);
   using LCW       = cudf::test::lists_column_wrapper<cudf::size_type>;
-  auto expected   = LCW({LCW{}, LCW{}, LCW{}}, cudf::test::iterators::all_nulls());
+  auto expected   = LCW({{}, {}, {}}, cudf::test::iterators::all_nulls());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   results = nvtext::wordpiece_tokenize(sv, *vocab, 10);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
@@ -153,7 +153,7 @@ TEST(TextSubwordTest, WordPieceNoTokens)
   auto sv         = cudf::strings_column_view(input);
   auto results    = nvtext::wordpiece_tokenize(sv, *vocab);
   using LCW       = cudf::test::lists_column_wrapper<cudf::size_type>;
-  LCW expected({LCW{}, LCW{-1}, LCW{-1}});  // -1 indicates [unk] not found in vocabulary
+  LCW expected({{}, {-1}, {-1}});  // -1 indicates [unk] not found in vocabulary
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   results = nvtext::wordpiece_tokenize(sv, *vocab, 10);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
