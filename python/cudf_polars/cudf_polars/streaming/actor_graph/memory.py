@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import enum
 from typing import TYPE_CHECKING
 
@@ -62,26 +61,25 @@ async def reserve_memory_traced(
             "Memory reservations must be emitted from an Actor scope"
         )
         reservation_id = _quent.now_v7()
-        with contextlib.suppress(Exception):
-            handle = (
-                quent_state.query_worker_state.runtime.session.binding_context.memory_reservation_observer()
-                .handle(reservation_id)
-                .requested(
-                    instance_name=(
-                        f"reserve-{purpose.value}-{quent_state.operator_id.hex[:8]}-"
-                        f"{reservation_id.hex[:8]}"
-                    ),
-                    actor=quent_state.actor_id,
-                    request={
-                        "purpose": purpose.value,
-                        "size_bytes": size,
-                        "memory_type": mem_type.name,
-                        "net_memory_delta": net_memory_delta,
-                        "allow_overbooking": allow_overbooking,
-                        "sequence_number": sequence_number,
-                    },
-                )
+        handle = (
+            quent_state.query_worker_state.runtime.session.binding_context.memory_reservation_observer()
+            .handle(reservation_id)
+            .requested(
+                instance_name=(
+                    f"reserve-{purpose.value}-{quent_state.operator_id.hex[:8]}-"
+                    f"{reservation_id.hex[:8]}"
+                ),
+                actor=quent_state.actor_id,
+                request={
+                    "purpose": purpose.value,
+                    "size_bytes": size,
+                    "memory_type": mem_type.name,
+                    "net_memory_delta": net_memory_delta,
+                    "allow_overbooking": allow_overbooking,
+                    "sequence_number": sequence_number,
+                },
             )
+        )
 
     try:
         reservation = await reserve_memory(
@@ -93,11 +91,9 @@ async def reserve_memory_traced(
         )
     except BaseException as error:
         if handle is not None:
-            with contextlib.suppress(Exception):
-                handle.failed(error=str(error))
+            handle.failed(error=str(error))
         raise
     else:
         if handle is not None:
-            with contextlib.suppress(Exception):
-                handle.granted()
+            handle.granted()
         return reservation

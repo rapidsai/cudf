@@ -16,10 +16,10 @@ use crate::{
 };
 
 fn dataframe_statistics(value: &DataFrameStatistics) -> DynamicStruct {
-    DynamicStruct(vec![
-        DynamicAttribute::list("shape", DynamicList::U64(value.shape.clone())),
-        DynamicAttribute::u64("bytes", value.bytes),
-    ])
+    DynamicStruct(vec![DynamicAttribute::list(
+        "shape",
+        DynamicList::U64(value.shape.clone()),
+    )])
 }
 
 #[derive(Default)]
@@ -72,14 +72,12 @@ impl EvaluateBuilder {
                     DynamicAttribute::u8("io", u8::from(*io)),
                     DynamicAttribute::u64("input_bytes", *input_bytes),
                 ];
-                if let Some(input_dataframes) = &input.dataframes {
-                    self.running_attributes.push(DynamicAttribute::list(
-                        "input_dataframes",
-                        DynamicList::Struct(
-                            input_dataframes.iter().map(dataframe_statistics).collect(),
-                        ),
-                    ));
-                }
+                self.running_attributes.push(DynamicAttribute::list(
+                    "input_dataframes",
+                    DynamicList::Struct(
+                        input.dataframes.iter().map(dataframe_statistics).collect(),
+                    ),
+                ));
                 if let Some(sequence_number) = input.sequence_number {
                     self.running_attributes
                         .push(DynamicAttribute::u64("sequence_number", sequence_number));
@@ -103,14 +101,13 @@ impl EvaluateBuilder {
             } => {
                 self.finished_at = Some(timestamp);
                 self.finished_state = Some("completed");
-                self.finished_attributes =
-                    vec![DynamicAttribute::u64("output_bytes", *output_bytes)];
-                if let Some(output_dataframe) = output_dataframe {
-                    self.finished_attributes.push(DynamicAttribute::structure(
+                self.finished_attributes = vec![
+                    DynamicAttribute::u64("output_bytes", *output_bytes),
+                    DynamicAttribute::structure(
                         "output_dataframe",
                         dataframe_statistics(output_dataframe),
-                    ));
-                }
+                    ),
+                ];
             }
             EvaluateEvent::Failed { error, .. } => {
                 self.finished_at = Some(timestamp);
@@ -271,10 +268,7 @@ mod tests {
                 io: false,
                 input_bytes: 10,
                 input: crate::generated::EvaluateInput {
-                    dataframes: Some(vec![DataFrameStatistics {
-                        shape: vec![2, 3],
-                        bytes: 10,
-                    }]),
+                    dataframes: vec![DataFrameStatistics { shape: vec![2, 3] }],
                     sequence_number: Some(4),
                     content_sizes: Some(vec![6, 4]),
                     spillable: Some(true),
@@ -317,7 +311,7 @@ mod tests {
             &EvaluateEvent::Completed {
                 seq: 2,
                 output_bytes: 20,
-                output_dataframe: None,
+                output_dataframe: DataFrameStatistics { shape: vec![4, 5] },
             },
         );
 
@@ -330,10 +324,10 @@ mod tests {
                 DynamicAttribute::u64("input_bytes", 10),
                 DynamicAttribute::list(
                     "input_dataframes",
-                    DynamicList::Struct(vec![DynamicStruct(vec![
-                        DynamicAttribute::list("shape", DynamicList::U64(vec![2, 3])),
-                        DynamicAttribute::u64("bytes", 10),
-                    ])]),
+                    DynamicList::Struct(vec![DynamicStruct(vec![DynamicAttribute::list(
+                        "shape",
+                        DynamicList::U64(vec![2, 3])
+                    ),])]),
                 ),
                 DynamicAttribute::u64("sequence_number", 4),
                 DynamicAttribute::list("content_sizes", DynamicList::U64(vec![6, 4])),
@@ -350,10 +344,7 @@ mod tests {
             &EvaluateEvent::Completed {
                 seq: 2,
                 output_bytes: 20,
-                output_dataframe: Some(DataFrameStatistics {
-                    shape: vec![4, 5],
-                    bytes: 20,
-                }),
+                output_dataframe: DataFrameStatistics { shape: vec![4, 5] },
             },
         );
 
@@ -365,10 +356,10 @@ mod tests {
                 DynamicAttribute::u64("output_bytes", 20),
                 DynamicAttribute::structure(
                     "output_dataframe",
-                    DynamicStruct(vec![
-                        DynamicAttribute::list("shape", DynamicList::U64(vec![4, 5])),
-                        DynamicAttribute::u64("bytes", 20),
-                    ]),
+                    DynamicStruct(vec![DynamicAttribute::list(
+                        "shape",
+                        DynamicList::U64(vec![4, 5]),
+                    )]),
                 ),
             ]
         );

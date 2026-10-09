@@ -21,7 +21,7 @@ records:
   ColumnSchema:
     fields:
       name: string
-      dtype: string
+      dtype: dynamic
 
   DataFrameSchema:
     fields:
@@ -30,11 +30,10 @@ records:
   DataFrameStatistics:
     fields:
       shape: { list: u64 }
-      bytes: u64
 
   EvaluateInput:
     fields:
-      dataframes: { option: { list: DataFrameStatistics } }
+      dataframes: { list: DataFrameStatistics }
       sequence_number: { option: u64 }
       content_sizes: { option: { list: u64 } }
       spillable: { option: bool }
@@ -371,7 +370,7 @@ fsms:
       completed:
         attributes:
           output_bytes: u64
-          output_dataframe: { option: DataFrameStatistics }
+          output_dataframe: DataFrameStatistics
       failed:
         attributes:
           error: string

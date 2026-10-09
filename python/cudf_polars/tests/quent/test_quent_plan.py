@@ -21,8 +21,8 @@ from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.dsl.ir import Filter, GroupBy, HStack, Join, Scan, Select, Sort
 from cudf_polars.quent._plan import (
     _dataframe_schema,
-    _emit_operator_details,
     _emit_plan_detail,
+    _operator_details,
     port_names_for_node,
 )
 from cudf_polars.streaming.filter_hint import (
@@ -139,7 +139,7 @@ from cudf_polars.streaming.shuffle import Shuffle
         ),
     ],
 )
-def test_emit_operator_details(
+def test_operator_details(
     node_type: type,
     method_name: str,
     expected: dict,
@@ -204,18 +204,67 @@ def test_emit_operator_details(
     else:  # pragma: no cover
         raise AssertionError(f"Missing test setup for {node_type}")
 
-    _emit_operator_details(node, operator)
+    details = _operator_details(node, operator)
+    assert details is not None
+    emit, values = details
 
-    getattr(operator, method_name).assert_called_once_with(values=expected)
+    assert emit == getattr(operator, method_name)
+    assert values == expected
 
 
 def test_dataframe_schema() -> None:
-    schema = {"a": DataType(pl.Int64()), "b": DataType(pl.String())}
+    schema = {
+        "a": DataType(pl.Int64()),
+        "b": DataType(pl.Datetime("us", "UTC")),
+        "c": DataType(
+            pl.Struct(
+                {
+                    "decimal": pl.Decimal(18, 2),
+                    "values": pl.List(pl.String),
+                }
+            )
+        ),
+        "d": DataType(pl.Array(pl.Int16, 2)),
+    }
 
     assert _dataframe_schema(schema) == {
         "columns": [
-            {"name": "a", "dtype": "INT64"},
-            {"name": "b", "dtype": "STRING"},
+            {"name": "a", "dtype": {"name": "Int64"}},
+            {
+                "name": "b",
+                "dtype": {
+                    "name": "Datetime",
+                    "time_unit": "us",
+                    "time_zone": "UTC",
+                },
+            },
+            {
+                "name": "c",
+                "dtype": {
+                    "name": "Struct",
+                    "fields": {
+                        "decimal": {
+                            "name": "Decimal",
+                            "precision": 18,
+                            "scale": 2,
+                        },
+                        "values": {
+                            "name": "List",
+                            "inner": {
+                                "name": "String",
+                            },
+                        },
+                    },
+                },
+            },
+            {
+                "name": "d",
+                "dtype": {
+                    "name": "Array",
+                    "shape": {"0": 2},
+                    "inner": {"name": "Int16"},
+                },
+            },
         ]
     }
 

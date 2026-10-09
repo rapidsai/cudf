@@ -8,13 +8,11 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import ipaddress
-import os
 import socket
 import threading
 from typing import TYPE_CHECKING
 
 from cudf_polars.utils.cleanup import run_cleanup_steps
-from cudf_polars.utils.config import _bool_converter
 
 if TYPE_CHECKING:
     import uuid
@@ -38,18 +36,10 @@ try:
 except ImportError:  # pragma: no cover - depends on optional extension
     _quent = None  # type: ignore[assignment]
 
-# TODO: think about just always having this on?
-PROFILE_DATAFRAMES = _bool_converter(
-    os.environ.get("CUDF_POLARS_QUENT_DATAFRAMES", "1")
-)
-
 
 def _dataframe_statistics(frame: DataFrame) -> quent_bindings.DataFrameStatisticsDict:
-    """Return typed shape and byte-size statistics for one dataframe."""
-    return {
-        "shape": frame.table.shape(),
-        "bytes": frame._size_bytes,
-    }
+    """Return typed shape statistics for one dataframe."""
+    return {"shape": frame.table.shape()}
 
 
 def _local_ipv4_address() -> str:
@@ -309,11 +299,7 @@ class QuentWorkerRuntime:
             else None
         )
         input_attributes: quent_bindings.EvaluateInputDict = {
-            "dataframes": (
-                [_dataframe_statistics(frame) for frame in frames]
-                if PROFILE_DATAFRAMES
-                else None
-            ),
+            "dataframes": [_dataframe_statistics(frame) for frame in frames],
             "sequence_number": state.sequence_number,
             "content_sizes": state.content_sizes,
             "spillable": state.spillable,
@@ -365,9 +351,7 @@ class QuentWorkerRuntime:
             assert result is not None
             self.session._evaluations.pop(evaluate_id).completed(
                 output_bytes=result._size_bytes,
-                output_dataframe=(
-                    _dataframe_statistics(result) if PROFILE_DATAFRAMES else None
-                ),
+                output_dataframe=_dataframe_statistics(result),
             )
 
     def close(self) -> None:

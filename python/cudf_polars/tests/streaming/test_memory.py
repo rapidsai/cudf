@@ -42,17 +42,17 @@ async def test_traced_reservation_granted(
     reserve.return_value = reservation
     handle.granted.side_effect = RuntimeError("telemetry failed")
 
-    result = await memory.reserve_memory_traced(
-        MagicMock(),
-        20,
-        net_memory_delta=10,
-        ir_context=ir_context,
-        purpose=memory.MemoryReservationPurpose.SCAN,
-        sequence_number=2,
-        allow_overbooking=False,
-    )
+    with pytest.raises(RuntimeError, match="telemetry failed"):
+        await memory.reserve_memory_traced(
+            MagicMock(),
+            20,
+            net_memory_delta=10,
+            ir_context=ir_context,
+            purpose=memory.MemoryReservationPurpose.SCAN,
+            sequence_number=2,
+            allow_overbooking=False,
+        )
 
-    assert result is reservation
     assert requested.call_args.kwargs["request"] == {
         "purpose": "scan",
         "size_bytes": 20,
@@ -66,23 +66,23 @@ async def test_traced_reservation_granted(
 
 
 @pytest.mark.asyncio
-async def test_traced_reservation_start_failure_does_not_affect_admission(
+async def test_traced_reservation_start_failure_is_raised(
     traced_reservation: tuple[MagicMock, MagicMock, AsyncMock, MagicMock],
 ) -> None:
     ir_context, handle, reserve, requested = traced_reservation
-    reservation = MagicMock()
-    reserve.return_value = reservation
+    reserve.return_value = MagicMock()
     requested.side_effect = RuntimeError("telemetry failed")
 
-    result = await memory.reserve_memory_traced(
-        MagicMock(),
-        20,
-        net_memory_delta=10,
-        ir_context=ir_context,
-        purpose=memory.MemoryReservationPurpose.SCAN,
-    )
+    with pytest.raises(RuntimeError, match="telemetry failed"):
+        await memory.reserve_memory_traced(
+            MagicMock(),
+            20,
+            net_memory_delta=10,
+            ir_context=ir_context,
+            purpose=memory.MemoryReservationPurpose.SCAN,
+        )
 
-    assert result is reservation
+    reserve.assert_not_awaited()
     handle.granted.assert_not_called()
     handle.failed.assert_not_called()
 
@@ -95,7 +95,7 @@ async def test_traced_reservation_failed(
     reserve.side_effect = RuntimeError("admission failed")
     handle.failed.side_effect = RuntimeError("telemetry failed")
 
-    with pytest.raises(RuntimeError, match="admission failed"):
+    with pytest.raises(RuntimeError, match="telemetry failed"):
         await memory.reserve_memory_traced(
             MagicMock(),
             20,

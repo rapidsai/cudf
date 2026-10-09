@@ -191,7 +191,7 @@ fn builds_query_bundle_from_generated_events() {
                     output_schema: DataFrameSchema {
                         columns: vec![ColumnSchema {
                             name: "a".to_owned(),
-                            dtype: "INT64".to_owned(),
+                            dtype: DynamicAttributes::new(),
                         }],
                     },
                 },
@@ -268,7 +268,7 @@ fn builds_query_bundle_from_generated_events() {
                 io: false,
                 input_bytes: 10,
                 input: crate::generated::EvaluateInput {
-                    dataframes: None,
+                    dataframes: vec![],
                     sequence_number: None,
                     content_sizes: None,
                     spillable: None,
@@ -283,7 +283,7 @@ fn builds_query_bundle_from_generated_events() {
             CudfPolarsEvent::Evaluate(EvaluateEvent::Completed {
                 seq: 2,
                 output_bytes: 20,
-                output_dataframe: None,
+                output_dataframe: crate::generated::DataFrameStatistics { shape: vec![1, 1] },
             }),
         ),
         Event::new(

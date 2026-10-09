@@ -9,8 +9,12 @@ import functools
 import json
 import os
 import uuid
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal
 
+import polars as pl
+
+from cudf_polars.containers import DataType
 from cudf_polars.dsl.expressions.base import Col, NamedExpr
 from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.dsl.expressions.literal import Literal as LiteralExpr
@@ -22,10 +26,7 @@ from cudf_polars.streaming.filter_hint import (
     PushdownFilterHint,
 )
 from cudf_polars.streaming.io import StreamingScan
-from cudf_polars.streaming.join_filter_pushdown import (
-    CompositeCandidate,
-    JoinFilterPushdownDecision,
-)
+from cudf_polars.streaming.join_filter_pushdown import CompositeCandidate
 from cudf_polars.streaming.shuffle import Shuffle
 
 if TYPE_CHECKING:
@@ -35,108 +36,130 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.quent._runtime import QuentSession
     from cudf_polars.streaming.filter_hint import Prefilter
+    from cudf_polars.streaming.join_filter_pushdown import JoinFilterPushdownDecision
     from cudf_polars.streaming.plan_metadata import PlanMetadata
     from cudf_polars.typing import Schema
 
 _JOIN_TYPES = frozenset({"Join", "ConditionalJoin"})
+OperatorDetails = tuple[Callable[..., object], object]
 
 
 @functools.singledispatch
-def _emit_operator_details(node: IR, operator: quent_bindings.OperatorHandle) -> None:
-    """Emit schema-defined details for an operator, when available."""
-    # TODO: figure out if this should raise...
+def _operator_details(
+    node: IR, operator: quent_bindings.OperatorHandle
+) -> OperatorDetails | None:
+    """Build schema-defined details for an operator, when available."""
+    return None
 
 
-@_emit_operator_details.register(Scan)
-def _(node: Scan, operator: quent_bindings.OperatorHandle) -> None:
-    operator.scan_details(
-        values={
+@_operator_details.register(Scan)
+def _(node: Scan, operator: quent_bindings.OperatorHandle) -> OperatorDetails:
+    return (
+        operator.scan_details,
+        {
             "typ": node.typ,
             "prefix": os.path.commonprefix(node.paths),
             "predicate": _json_expr(node.predicate),
-        }
+        },
     )
 
 
-@_emit_operator_details.register(StreamingScan)
-def _(node: StreamingScan, operator: quent_bindings.OperatorHandle) -> None:
-    operator.streaming_scan_details(
-        values={
+@_operator_details.register(StreamingScan)
+def _(node: StreamingScan, operator: quent_bindings.OperatorHandle) -> OperatorDetails:
+    return (
+        operator.streaming_scan_details,
+        {
             "typ": node.base_scan.typ,
             "task_count": len(node.tasks),
             "prefix": os.path.commonprefix(node.base_scan.paths),
             "predicate": _json_expr(node.base_scan.predicate),
-        }
+        },
     )
 
 
-@_emit_operator_details.register(Join)
-def _(node: Join, operator: quent_bindings.OperatorHandle) -> None:
-    operator.join_details(values=_join_details(node))
+@_operator_details.register(Join)
+def _(node: Join, operator: quent_bindings.OperatorHandle) -> OperatorDetails:
+    return operator.join_details, _join_details(node)
 
 
-@_emit_operator_details.register(JoinWithPrefilter)
-def _(node: JoinWithPrefilter, operator: quent_bindings.OperatorHandle) -> None:
-    operator.join_with_prefilter_details(
-        values={
+@_operator_details.register(JoinWithPrefilter)
+def _(
+    node: JoinWithPrefilter, operator: quent_bindings.OperatorHandle
+) -> OperatorDetails:
+    return (
+        operator.join_with_prefilter_details,
+        {
             **_join_details(node),
             "prefilters": [_prefilter_details(value) for value in node.prefilters],
-        }
+        },
     )
 
 
-@_emit_operator_details.register(PushdownFilterHint)
-def _(node: PushdownFilterHint, operator: quent_bindings.OperatorHandle) -> None:
-    operator.pushdown_filter_hint_details(
-        values={
+@_operator_details.register(PushdownFilterHint)
+def _(
+    node: PushdownFilterHint, operator: quent_bindings.OperatorHandle
+) -> OperatorDetails:
+    return (
+        operator.pushdown_filter_hint_details,
+        {
             "target_on": [value.name for value in node.target_on],
             "domain_on": [value.name for value in node.domain_on],
             "nulls_equal": node.nulls_equal,
             "placement": node.placement,
-        }
+        },
     )
 
 
-@_emit_operator_details.register(GroupBy)
-def _(node: GroupBy, operator: quent_bindings.OperatorHandle) -> None:
-    operator.group_by_details(values={"keys": [value.name for value in node.keys]})
+@_operator_details.register(GroupBy)
+def _(node: GroupBy, operator: quent_bindings.OperatorHandle) -> OperatorDetails:
+    return operator.group_by_details, {"keys": [value.name for value in node.keys]}
 
 
-@_emit_operator_details.register(Shuffle)
-def _(node: Shuffle, operator: quent_bindings.OperatorHandle) -> None:
-    operator.shuffle_details(values={"keys": [value.name for value in node.keys]})
+@_operator_details.register(Shuffle)
+def _(node: Shuffle, operator: quent_bindings.OperatorHandle) -> OperatorDetails:
+    return operator.shuffle_details, {"keys": [value.name for value in node.keys]}
 
 
-@_emit_operator_details.register(Sort)
-def _(node: Sort, operator: quent_bindings.OperatorHandle) -> None:
-    operator.sort_details(
-        values={
+@_operator_details.register(Sort)
+def _(node: Sort, operator: quent_bindings.OperatorHandle) -> OperatorDetails:
+    return (
+        operator.sort_details,
+        {
             "by": [value.name for value in node.by],
             "order": [value.name for value in node.order],
-        }
+        },
     )
 
 
-@_emit_operator_details.register(Filter)
-def _(node: Filter, operator: quent_bindings.OperatorHandle) -> None:
+@_operator_details.register(Filter)
+def _(node: Filter, operator: quent_bindings.OperatorHandle) -> OperatorDetails:
     expression = _json_expr(node.mask.value)
     assert expression is not None
-    operator.filter_details(
-        values={
+    return (
+        operator.filter_details,
+        {
             "predicate": node.mask.name,
             "expression": expression,
-        }
+        },
     )
 
 
-@_emit_operator_details.register(Select)
-def _(node: Select, operator: quent_bindings.OperatorHandle) -> None:
-    operator.select_details(values={"columns": [value.name for value in node.exprs]})
+@_operator_details.register(Select)
+def _(node: Select, operator: quent_bindings.OperatorHandle) -> OperatorDetails:
+    return operator.select_details, {"columns": [value.name for value in node.exprs]}
 
 
-@_emit_operator_details.register(HStack)
-def _(node: HStack, operator: quent_bindings.OperatorHandle) -> None:
-    operator.hstack_details(values={"columns": [value.name for value in node.columns]})
+@_operator_details.register(HStack)
+def _(node: HStack, operator: quent_bindings.OperatorHandle) -> OperatorDetails:
+    return operator.hstack_details, {"columns": [value.name for value in node.columns]}
+
+
+def _emit_operator_details(node: IR, operator: quent_bindings.OperatorHandle) -> None:
+    """Build and emit schema-defined details for an operator, when available."""
+    details = _operator_details(node, operator)
+    if details is not None:
+        emit, values = details
+        emit(values=values)
 
 
 def _join_details(node: Join) -> quent_bindings.JoinDetailsDict:
@@ -200,28 +223,56 @@ def _serialize_expr(expr: Expr | NamedExpr) -> dict[str, Any]:
             return {"type": type(expr).__name__}
 
 
+def _dtype_details(dtype: DataType) -> dict[str, Any]:
+    """Return a structured description of a Polars dtype."""
+    polars_type = dtype.polars_type
+    details: dict[str, Any] = {"name": type(polars_type).__name__}
+    if isinstance(polars_type, pl.Decimal):
+        details.update(precision=polars_type.precision, scale=polars_type.scale)
+    elif isinstance(polars_type, pl.Datetime):
+        details.update(
+            time_unit=polars_type.time_unit,
+            time_zone=polars_type.time_zone,
+        )
+    elif isinstance(polars_type, pl.Duration):
+        details["time_unit"] = polars_type.time_unit
+    elif isinstance(polars_type, pl.List):
+        details["inner"] = _dtype_details(DataType(polars_type.inner))
+    elif isinstance(polars_type, pl.Array):
+        details.update(
+            shape={str(i): size for i, size in enumerate(polars_type.shape)},
+            inner=_dtype_details(DataType(polars_type.inner)),
+        )
+    elif isinstance(polars_type, pl.Struct):
+        details["fields"] = {
+            field.name: _dtype_details(DataType(field.dtype))
+            for field in polars_type.fields
+        }
+    elif isinstance(polars_type, pl.Enum):
+        details["categories"] = {
+            str(i): value for i, value in enumerate(polars_type.categories)
+        }
+    elif isinstance(polars_type, pl.Categorical):
+        details["ordering"] = polars_type.ordering
+    return details
+
+
 def _dataframe_schema(schema: Schema) -> quent_bindings.DataFrameSchemaDict:
-    return {
-        "columns": [
-            {"name": name, "dtype": dtype.id().name} for name, dtype in schema.items()
-        ]
-    }
+    columns: list[quent_bindings.ColumnSchemaDict] = []
+    for name, dtype in schema.items():
+        column: quent_bindings.ColumnSchemaDict = {
+            "name": name,
+            "dtype": _dtype_details(dtype),
+        }
+        columns.append(column)
+    return {"columns": columns}
 
 
-@functools.singledispatch
 def _emit_plan_detail(
-    details: object,
-    operator: quent_bindings.OperatorHandle,
-) -> None:
-    """Emit one typed detail payload collected while building the plan."""
-    raise TypeError(f"Unsupported plan detail type: {type(details).__name__}")
-
-
-@_emit_plan_detail.register(JoinFilterPushdownDecision)
-def _(
     details: JoinFilterPushdownDecision,
     operator: quent_bindings.OperatorHandle,
 ) -> None:
+    """Emit one typed detail payload collected while building the plan."""
     decision = details.decision
     candidate = decision.candidate
     values: quent_bindings.JoinFilterPushdownDetailsDict = {

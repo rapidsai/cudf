@@ -299,7 +299,7 @@ def test_quent_lifecycle(
     terminal_actor_events = [
         next(iter(event["data"]["Actor"].values()))
         for event in actor_events
-        if set(event["data"]["Actor"]) & {"Completed", "Failed"}
+        if not set(event["data"]["Actor"]).isdisjoint({"Completed", "Failed"})
     ]
     assert all(
         {
@@ -309,8 +309,7 @@ def test_quent_lifecycle(
             "chunk_count",
             "duplicated",
             "decision",
-        }
-        <= terminal["values"].keys()
+        }.issubset(terminal["values"])
         for terminal in terminal_actor_events
     )
     assert _of_type(events, "DeviceMemory")
@@ -339,17 +338,12 @@ def test_quent_lifecycle(
             "input",
             "processor",
             "channel",
-        }
-        <= running.keys()
+        }.issubset(running)
         for running in running_evaluations
     )
     assert all(
-        all(
-            set(dataframe) == {"shape", "bytes"}
-            for dataframe in running["input"]["dataframes"]
-        )
+        all(set(dataframe) == {"shape"} for dataframe in running["input"]["dataframes"])
         for running in running_evaluations
-        if running["input"]["dataframes"] is not None
     )
     chunk_evaluations = [
         running
@@ -369,8 +363,7 @@ def test_quent_lifecycle(
     ]
     assert completed_evaluations
     assert all(
-        completed["output_dataframe"] is not None
-        and set(completed["output_dataframe"]) == {"shape", "bytes"}
+        set(completed["output_dataframe"]) == {"shape"}
         for completed in completed_evaluations
     )
     queued_io_evaluations = [
@@ -381,7 +374,7 @@ def test_quent_lifecycle(
     ]
     assert queued_io_evaluations
     assert all(
-        {"node_id", "node_type"} <= queued["task"].keys()
+        {"node_id", "node_type"}.issubset(queued["task"])
         for queued in queued_io_evaluations
     )
     memory_reservation_events = _of_type(events, "MemoryReservation")
@@ -401,7 +394,7 @@ def test_quent_lifecycle(
         if "Requested" in event["data"]["MemoryReservation"]
     ]
     assert all(
-        {"actor", "request"} <= requested.keys()
+        {"actor", "request"}.issubset(requested)
         and {
             "purpose",
             "size_bytes",
@@ -409,8 +402,7 @@ def test_quent_lifecycle(
             "net_memory_delta",
             "allow_overbooking",
             "sequence_number",
-        }
-        <= requested["request"].keys()
+        }.issubset(requested["request"])
         for requested in requested_reservations
     )
 
