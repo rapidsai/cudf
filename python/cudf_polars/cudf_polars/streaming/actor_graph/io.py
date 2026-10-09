@@ -611,8 +611,8 @@ async def read_chunk(
             quent_ir_execution_state=dataclasses.replace(
                 quent_state,
                 sequence_number=seq_num,
-                task_node_id=str(task.get_stable_id()),
-                task_node_type=type(task).__name__,
+                scan_task_node_id=str(task.get_stable_id()),
+                scan_task_node_type=type(task).__name__,
                 io_bytes=estimated_chunk_bytes,
             ),
         )

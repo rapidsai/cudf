@@ -63,13 +63,13 @@ def log_do_evaluate(
             quent_state,
             frames,
         )
-        if quent_state.task_node_id is not None:
+        if quent_state.scan_task_node_id is not None:
             kwargs["context"] = dataclasses.replace(
                 ir_execution_context,
                 quent_ir_execution_state=dataclasses.replace(
                     quent_state,
-                    task_node_id=None,
-                    task_node_type=None,
+                    scan_task_node_id=None,
+                    scan_task_node_type=None,
                     io_bytes=None,
                 ),
             )

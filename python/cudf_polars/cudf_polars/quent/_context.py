@@ -212,7 +212,36 @@ class QuentQueryWorkerState:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class QuentIRExecutionState:
-    """Query-worker state bound to an Operator and, while running, an Actor."""
+    """
+    Quent state associated with an IR execution context.
+
+    Parameters
+    ----------
+    query_worker_state
+        State for the query on the worker performing the evaluation.
+    operator_id
+        ID of the physical-plan Operator represented by the IR context.
+    actor_id
+        ID of the Actor executing the Operator, or None before entering an
+        Actor scope.
+    sequence_number
+        Sequence number of the input chunk being evaluated, when applicable.
+    content_sizes
+        Sizes of the input message's contents, when the input originated from
+        a streaming channel.
+    spillable
+        Whether the input message was spillable, when the input originated
+        from a streaming channel.
+    scan_task_node_id
+        Stable node ID of the scan task being evaluated, or None for
+        evaluations that are not the root of a scan task.
+    scan_task_node_type
+        Node type of the scan task being evaluated, or None for evaluations
+        that are not the root of a scan task.
+    io_bytes
+        Estimated number of bytes read by a scan task, used to report data
+        channel usage.
+    """
 
     query_worker_state: QuentQueryWorkerState
     operator_id: uuid.UUID
@@ -220,8 +249,8 @@ class QuentIRExecutionState:
     sequence_number: int | None = None
     content_sizes: tuple[int, ...] | None = None
     spillable: bool | None = None
-    task_node_id: str | None = None
-    task_node_type: str | None = None
+    scan_task_node_id: str | None = None
+    scan_task_node_type: str | None = None
     io_bytes: int | None = None
 
     @classmethod

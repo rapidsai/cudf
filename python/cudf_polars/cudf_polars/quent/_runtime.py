@@ -332,10 +332,11 @@ class QuentWorkerRuntime:
         )
         task: quent_bindings.EvaluateTaskDict | None = (
             {
-                "node_id": state.task_node_id,
-                "node_type": state.task_node_type,
+                "node_id": state.scan_task_node_id,
+                "node_type": state.scan_task_node_type,
             }
-            if state.task_node_id is not None and state.task_node_type is not None
+            if state.scan_task_node_id is not None
+            and state.scan_task_node_type is not None
             else None
         )
         queued = (
