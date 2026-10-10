@@ -19,6 +19,9 @@ from rapidsmpf.streaming.core.actor import define_actor
 
 from cudf_polars.dsl.ir import IR, MapFunction
 from cudf_polars.dsl.utils.naming import names_to_indices
+from cudf_polars.streaming.actor_graph.collectives.sort import (
+    extract_orderscheme_partitioning,
+)
 from cudf_polars.streaming.actor_graph.dispatch import generate_ir_sub_network
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
@@ -37,6 +40,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
+    from cudf_polars.streaming.actor_graph.utils import ChunkStore
 
 
 HintSortedOptions: TypeAlias = tuple[
@@ -82,6 +86,31 @@ def _metadata_satisfies_hint(metadata: ChannelMetadata, keys: list[OrderKey]) ->
     return isinstance(scheme, OrderScheme) and _order_scheme_has_keys(scheme, keys)
 
 
+def _with_extracted_ordering(
+    metadata: ChannelMetadata, partitioning: Partitioning | None
+) -> ChannelMetadata:
+    """Return metadata with extracted ordering when extraction succeeded."""
+    if partitioning is None:
+        return metadata
+
+    orderings: list[Ordering] = []
+    local = partitioning.local
+    if metadata.partitioning is not None:
+        local = metadata.partitioning.local
+        if isinstance(metadata.partitioning.inter_rank, OrderScheme):
+            orderings.extend(metadata.partitioning.inter_rank.orderings)
+
+    scheme = partitioning.inter_rank
+    if isinstance(scheme, OrderScheme):
+        orderings.extend(scheme.orderings)
+
+    return ChannelMetadata(
+        local_count=metadata.local_count,
+        partitioning=Partitioning(OrderScheme(orderings), local),
+        duplicated=metadata.duplicated,
+    )
+
+
 def _trivial_ordering_metadata(
     context: Context,
     comm: Communicator,
@@ -89,7 +118,7 @@ def _trivial_ordering_metadata(
     metadata: ChannelMetadata,
     keys: list[OrderKey],
 ) -> ChannelMetadata | None:
-    """Temporary policy: attach ordering only when boundaries are trivial."""
+    """Attach ordering without scanning data when the boundaries are trivial."""
     if comm.nranks != 1 or metadata.local_count > 1:
         return None
 
@@ -129,24 +158,27 @@ async def extract_hint_sorted_metadata(
     ir_context: IRExecutionContext,
     metadata: ChannelMetadata,
     ch_in: Channel[TableChunk],
-    ch_replay: Channel[TableChunk],
-) -> tuple[ChannelMetadata, Channel[TableChunk]]:
-    """Resolve output metadata and the channel to forward for ``hint_sorted``."""
+    collective_id: int,
+) -> tuple[ChannelMetadata, ChunkStore | None]:
+    """Resolve output metadata and any chunks consumed during extraction."""
     keys = _hint_sorted_order_keys(ir)
     if not keys or _metadata_satisfies_hint(metadata, keys):
-        return metadata, ch_in
+        return metadata, None
 
-    # Future policy hook: use downstream partitioning hints to decide whether
-    # to extract real boundaries. The extraction path will consume ``ch_in``,
-    # replay consumed data through ``ch_replay``, and return ``ch_replay`` as
-    # the forwarding channel.
-    # TODO: Integrate replay-capable ``extract_orderscheme_partitioning``.
-    # See https://github.com/NVIDIA/cudf/pull/22526.
-
-    # For now, only the trivial single-partition case can synthesize correct
-    # strict boundaries without a collective.
     trivial_metadata = _trivial_ordering_metadata(context, comm, ir, metadata, keys)
-    return (metadata if trivial_metadata is None else trivial_metadata), ch_in
+    if trivial_metadata is not None:
+        return trivial_metadata, None
+
+    result = await extract_orderscheme_partitioning(
+        context,
+        comm,
+        ir,
+        ir_context,
+        ch_in,
+        keys,
+        collective_id,
+    )
+    return _with_extracted_ordering(metadata, result.partitioning), result.chunks
 
 
 @define_actor()
@@ -157,31 +189,34 @@ async def hint_sorted_actor(
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
     ch_in: Channel[TableChunk],
-    ch_replay: Channel[TableChunk],
+    collective_id: int,
 ) -> None:
     """Forward data and attach safe ordering metadata for ``hint_sorted``."""
     async with shutdown_on_error(
         context,
         chs_in=(ch_in,),
         chs_out=(ch_out,),
-        chs_aux=(ch_replay,),
         trace_ir=ir,
         ir_context=ir_context,
     ) as actor_scope:
         ir_context = actor_scope.require_ir_context()
         metadata = await recv_metadata(ch_in, context)
-        metadata, ch_forward = await extract_hint_sorted_metadata(
+        metadata, buffered_chunks = await extract_hint_sorted_metadata(
             context,
             comm,
             ir,
             ir_context,
             metadata,
             ch_in,
-            ch_replay,
+            collective_id,
         )
         await send_metadata(ch_out, context, metadata)
-        while (msg := await ch_forward.recv(context)) is not None:
-            await ch_out.send(context, msg)
+        if buffered_chunks is None:
+            while (msg := await ch_in.recv(context)) is not None:
+                await ch_out.send(context, msg)
+        else:
+            for msg in buffered_chunks:
+                await ch_out.send(context, msg)
         await ch_out.drain(context)
 
 
@@ -194,7 +229,7 @@ def _(
 
     nodes, channels = process_children(ir, rec)
     channels[ir] = ChannelManager(rec.state["context"])
-    ch_replay = rec.state["context"].create_channel()
+    (collective_id,) = rec.state["collective_id_map"][ir]
     nodes[ir] = [
         hint_sorted_actor(
             rec.state["context"],
@@ -203,7 +238,7 @@ def _(
             rec.state["ir_context"],
             channels[ir].reserve_input_slot(),
             channels[ir.children[0]].reserve_output_slot(),
-            ch_replay,
+            collective_id,
         )
     ]
     return nodes, channels

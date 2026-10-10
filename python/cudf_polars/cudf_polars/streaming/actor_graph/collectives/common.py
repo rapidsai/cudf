@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Literal
 
 from rapidsmpf.shuffler import Shuffler
 
-from cudf_polars.dsl.ir import Distinct, GroupBy, Rolling, Sort
+from cudf_polars.dsl.ir import Distinct, GroupBy, MapFunction, Rolling, Sort
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.streaming.filter_hint import PushdownFilterHint
 from cudf_polars.streaming.io import StreamingScan, StreamingSink
@@ -116,7 +116,10 @@ class ReserveOpIDs:
             )
 
         self.collective_nodes: list[IR] = [
-            node for node in traversal([ir]) if isinstance(node, collective_types)
+            node
+            for node in traversal([ir])
+            if isinstance(node, collective_types)
+            or (isinstance(node, MapFunction) and node.name == "hint_sorted")
         ]
         self.collective_id_map: dict[IR, list[int]] = {}
 
