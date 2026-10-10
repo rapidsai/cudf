@@ -46,7 +46,7 @@ from pylibcudf import expressions as plc_expr
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.containers.dataframe import NamedColumn
-from cudf_polars.containers.datatype import _contains_categorical
+from cudf_polars.containers.datatype import _contains_dtype
 from cudf_polars.dsl.expressions import rolling, unary
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
@@ -3849,7 +3849,8 @@ class MapFunction(IR):
                 f"Unhandled map function {self.name}"
             )  # pragma: no cover
         if self.name == "unpivot" and any(
-            _contains_categorical(dtype.polars_type) for dtype in df.schema.values()
+            _contains_dtype(dtype.polars_type, (pl.Categorical, pl.Enum))
+            for dtype in df.schema.values()
         ):
             raise NotImplementedError(
                 f"{self.name} with Categorical/Enum columns is not supported"

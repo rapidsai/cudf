@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import datetime
+
 import pytest
 
 import polars as pl
@@ -229,5 +231,19 @@ def test_sink_compression_raises(
         path,
         in_memory_engine,
         {"compression": compression, "check_extension": False},
+        NotImplementedError,
+    )
+
+
+def test_sink_parquet_time_falls_back(in_memory_engine, tmp_path):
+    df = pl.LazyFrame(
+        {"a": pl.Series([datetime.datetime(2024, 1, 1, 12)], dtype=pl.Datetime("us"))}
+    ).select(pl.col("a").dt.time())
+
+    assert_sink_ir_translation_raises(
+        df,
+        tmp_path / "time.parquet",
+        in_memory_engine,
+        {},
         NotImplementedError,
     )
