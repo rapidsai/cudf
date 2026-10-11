@@ -152,8 +152,14 @@ main() {
             printf '::endgroup::\n'
         fi
         if [[ -f "${INTEGRATION_RUN_DIR}/${lib}/env/conda-meta/history" ]]; then
-            integration_run_timed "$lib" cleanup rapids-mamba-retry env remove --yes \
-                --prefix "${INTEGRATION_RUN_DIR}/${lib}/env" || status=1
+            printf '::group::Remove integration environment: %s\n' "$lib"
+            if ! integration_run_timed "$lib" cleanup rapids-mamba-retry env remove --yes \
+                --prefix "${INTEGRATION_RUN_DIR}/${lib}/env"; then
+                printf '::endgroup::\n'
+                printf 'Failed to remove %s environment; stopping before creating more environments.\n' "$lib" >&2
+                return 1
+            fi
+            printf '::endgroup::\n'
         fi
         if ((next_started == 0 && index + 1 < ${#libraries[@]})); then
             launch_preparation "${libraries[index + 1]}"
