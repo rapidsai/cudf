@@ -33,8 +33,8 @@ run_library() {
     integration_run_timed "$lib" package-manifest conda list --explicit
     integration_run_timed "$lib" gpu-diagnostics nvidia-smi
 
-    local workers=${NUM_PROCESSES:-8}
-    local comparison_workers=${COMPARE_NUM_PROCESSES:-$workers}
+    local workers=${NUM_PROCESSES:-0}
+    local comparison_workers=${COMPARE_NUM_PROCESSES:-0}
     if [[ $lib == tensorflow ]]; then
         workers=1
         comparison_workers=1
@@ -84,7 +84,7 @@ launch_preparation() {
 
 main() {
     script_started_ms=$(integration_timestamp_ms)
-    local dependencies_yaml=$1 prefetch=${INTEGRATION_ENV_PREFETCH:-0}
+    local dependencies_yaml=$1 prefetch=${INTEGRATION_ENV_PREFETCH:-1}
     if [[ $prefetch != 0 && $prefetch != 1 ]]; then
         printf 'INTEGRATION_ENV_PREFETCH must be 0 or 1.\n' >&2
         return 1
