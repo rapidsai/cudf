@@ -362,6 +362,7 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
                              size_t min_row,
                              size_t num_rows,
                              cudf::device_span<bool const> page_mask,
+                             bool has_flat_nz_map,
                              kernel_error::pointer error_code)
 {
   __shared__ __align__(16) delta_binary_decoder db_state;
@@ -378,7 +379,10 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
   // Exit early if the page is pruned
   if (page_mask.size() > 0 and not page_mask[page_idx]) { return; }
   // A page carrying an nz map is decoded by `decode_delta_binary_kernel_with_nz_map` instead.
-  if (pages[page_idx].has_nz_map(nz_map_kind::DELTA_FLAT)) { return; }
+  // Conditional on the same flag that launches that kernel, so the two routing decisions are one
+  // bit: were they derived separately, a disagreement would leave a page decoded by neither, with
+  // its rows already marked valid by the null mask fill.
+  if (has_flat_nz_map and pages[page_idx].has_nz_map(nz_map_kind::DELTA_FLAT)) { return; }
 
   [[maybe_unused]] null_count_back_copier _{s, static_cast<int>(block.thread_rank())};
 
@@ -1160,11 +1164,11 @@ void decode_delta_binary(cudf::detail::hostdevice_span<PageInfo> pages,
 
   if (level_type_size == 1) {
     decode_delta_binary_kernel<uint8_t><<<dim_grid, dim_block, 0, stream.get()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
+      pages.device_ptr(), chunks, min_row, num_rows, page_mask, has_flat_nz_map, error_code);
     CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     decode_delta_binary_kernel<uint16_t><<<dim_grid, dim_block, 0, stream.get()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
+      pages.device_ptr(), chunks, min_row, num_rows, page_mask, has_flat_nz_map, error_code);
     CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
