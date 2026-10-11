@@ -121,7 +121,7 @@ main() {
     trap 'exit 130' INT
     trap 'exit 143' TERM
 
-    local index status=0 ready next_started
+    local index status=0 ready next_started test_status
     launch_preparation "${libraries[0]}"
     for ((index = 0; index < ${#libraries[@]}; index++)); do
         lib=${libraries[index]}
@@ -145,10 +145,14 @@ main() {
             printf '::group::Integration tests: %s\n' "$lib"
             setsid timeout 45m bash "${BASH_SOURCE[0]}" --test "$lib" &
             test_pid=$!
-            if ! wait "$test_pid"; then
+            if wait "$test_pid"; then
+                test_status=0
+            else
+                test_status=$?
                 status=1
             fi
             test_pid=0
+            printf 'INTEGRATION_LIBRARY library=%s status=%s\n' "$lib" "$test_status"
             printf '::endgroup::\n'
         fi
         if [[ -f "${INTEGRATION_RUN_DIR}/${lib}/env/conda-meta/history" ]]; then
