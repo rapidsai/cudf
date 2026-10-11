@@ -67,6 +67,7 @@ from cudf_polars.streaming.sort import (
     find_sort_splits,
 )
 from cudf_polars.utils.cuda_stream import get_joined_cuda_stream, stream_ordered_after
+from cudf_polars.utils.dtypes import make_empty_column
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -84,13 +85,21 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class OrderSchemePartitioningResult:
+class OrderingMetadataResult:
+    """Metadata and optional buffered chunks after ensuring ordering."""
+
+    metadata: ChannelMetadata
+    """The metadata with ordering attached when available."""
+    chunks: ChunkStore | None
+    """Consumed input chunks, or ``None`` when the original channel is untouched."""
+
+
+@dataclass(frozen=True)
+class _OrderSchemePartitioningResult:
     """OrderScheme partitioning and buffered chunks consumed to derive it."""
 
     partitioning: Partitioning | None
-    """The extracted partitioning, or ``None`` if extraction was not possible."""
     chunks: ChunkStore
-    """The consumed chunks, stored in replay order."""
 
 
 def _extract_boundaries_from_endpoint_rows(
@@ -160,7 +169,88 @@ def _extract_boundaries_from_endpoint_rows(
     return next_partition_starts, strict
 
 
-async def extract_orderscheme_partitioning(
+def _order_scheme_has_keys(scheme: OrderScheme, keys: Sequence[OrderKey]) -> bool:
+    """Return whether ``scheme`` has an ordering for ``keys``."""
+    keys = tuple(keys)
+    return any(tuple(ordering.keys) == keys for ordering in scheme.orderings)
+
+
+def _metadata_has_ordering(metadata: ChannelMetadata, keys: Sequence[OrderKey]) -> bool:
+    """Return whether metadata already has the requested ordering."""
+    if metadata.partitioning is None:
+        return False
+    scheme = metadata.partitioning.inter_rank
+    return isinstance(scheme, OrderScheme) and _order_scheme_has_keys(scheme, keys)
+
+
+def _with_extracted_ordering(
+    metadata: ChannelMetadata, partitioning: Partitioning | None
+) -> ChannelMetadata:
+    """Return metadata with extracted ordering when extraction succeeded."""
+    if partitioning is None:
+        return metadata
+
+    orderings: list[Ordering] = []
+    local = partitioning.local
+    if metadata.partitioning is not None:
+        if metadata.partitioning.local is not None:
+            local = metadata.partitioning.local
+        if isinstance(metadata.partitioning.inter_rank, OrderScheme):
+            orderings.extend(metadata.partitioning.inter_rank.orderings)
+
+    scheme = partitioning.inter_rank
+    if isinstance(scheme, OrderScheme):
+        orderings.extend(scheme.orderings)
+
+    return ChannelMetadata(
+        local_count=metadata.local_count,
+        partitioning=Partitioning(OrderScheme(orderings), local),
+        duplicated=metadata.duplicated,
+    )
+
+
+def _trivial_ordering_metadata(
+    context: Context,
+    comm: Communicator,
+    schema_ir: IR,
+    metadata: ChannelMetadata,
+    keys: Sequence[OrderKey],
+) -> ChannelMetadata | None:
+    """Attach ordering without scanning data when the boundaries are trivial."""
+    if comm.nranks != 1 or metadata.local_count > 1:
+        return None
+
+    partitioning = metadata.partitioning
+    existing_orderings: list[Ordering] = []
+    local = "inherit"
+    if partitioning is not None:
+        if partitioning.local is not None:
+            local = partitioning.local
+        if isinstance(partitioning.inter_rank, OrderScheme):
+            existing_orderings = list(partitioning.inter_rank.orderings)
+
+    dtypes = tuple(schema_ir.schema.values())
+    stream = context.br().stream_pool.get_stream()
+    boundaries = TableChunk.from_pylibcudf_table(
+        plc.Table(
+            [make_empty_column(dtypes[key.column_index], stream) for key in keys]
+        ),
+        stream,
+        exclusive_view=False,
+        br=context.br(),
+    )
+    ordering = Ordering(keys, boundaries, strict_boundaries=True)
+    return ChannelMetadata(
+        local_count=metadata.local_count,
+        partitioning=Partitioning(
+            OrderScheme([*existing_orderings, ordering]),
+            local,
+        ),
+        duplicated=metadata.duplicated,
+    )
+
+
+async def _extract_orderscheme_partitioning(
     context: Context,
     comm: Communicator,
     schema_ir: IR,
@@ -168,7 +258,7 @@ async def extract_orderscheme_partitioning(
     ch_in: Channel[TableChunk],
     order_keys: Sequence[OrderKey],
     collective_id: int,
-) -> OrderSchemePartitioningResult:
+) -> _OrderSchemePartitioningResult:
     """
     Extract the partitioning metadata for a sorted channel.
 
@@ -260,7 +350,7 @@ async def extract_orderscheme_partitioning(
 
     # Return None if there are insufficient endpoints to process.
     if endpoint_table is None or (num_partitions := endpoint_table.num_rows() // 2) < 2:
-        return OrderSchemePartitioningResult(None, chunks)
+        return _OrderSchemePartitioningResult(None, chunks)
 
     key_indices = [key.column_index for key in order_keys]
     endpoint_key_rows = plc.Table(
@@ -274,7 +364,7 @@ async def extract_orderscheme_partitioning(
     if not plc.sorting.is_sorted(
         endpoint_key_rows, column_order, null_order, stream=stream
     ):
-        return OrderSchemePartitioningResult(None, chunks)
+        return _OrderSchemePartitioningResult(None, chunks)
 
     # Extract boundaries and construct the Partitioning
     boundaries, strict = _extract_boundaries_from_endpoint_rows(
@@ -284,7 +374,7 @@ async def extract_orderscheme_partitioning(
     boundaries_chunk = TableChunk.from_pylibcudf_table(
         boundaries, stream, exclusive_view=True, br=context.br()
     )
-    return OrderSchemePartitioningResult(
+    return _OrderSchemePartitioningResult(
         Partitioning(
             inter_rank=OrderScheme(
                 [Ordering(order_keys, boundaries_chunk, strict_boundaries=strict)]
@@ -292,6 +382,74 @@ async def extract_orderscheme_partitioning(
             local="inherit",
         ),
         chunks,
+    )
+
+
+async def ensure_ordering_metadata(
+    context: Context,
+    comm: Communicator,
+    schema_ir: IR,
+    ir_context: IRExecutionContext,
+    metadata: ChannelMetadata,
+    ch_in: Channel[TableChunk],
+    order_keys: Sequence[OrderKey],
+    collective_id: int,
+) -> OrderingMetadataResult:
+    """
+    Ensure channel metadata advertises ``order_keys`` when possible.
+
+    Parameters
+    ----------
+    context
+        The RapidsMPF context.
+    comm
+        The RapidsMPF communicator.
+    schema_ir
+        The IR node whose schema defines the input channel columns.
+    ir_context
+        The IR execution context.
+    metadata
+        The input channel metadata.
+    ch_in
+        The input channel.
+    order_keys
+        The requested order keys.
+    collective_id
+        The collective ID for boundary extraction.
+
+    Returns
+    -------
+    OrderingMetadataResult
+        The updated metadata and buffered chunks when extraction consumed
+        ``ch_in``.
+
+    Notes
+    -----
+    If the requested ordering is already present, the input channel is left
+    untouched and ``chunks`` is ``None``. Otherwise the input channel is
+    consumed to extract boundaries, and the consumed messages are returned in
+    ``chunks`` for replay by the caller.
+    """
+    if not order_keys or _metadata_has_ordering(metadata, order_keys):
+        return OrderingMetadataResult(metadata, None)
+
+    trivial_metadata = _trivial_ordering_metadata(
+        context, comm, schema_ir, metadata, order_keys
+    )
+    if trivial_metadata is not None:
+        return OrderingMetadataResult(trivial_metadata, None)
+
+    result = await _extract_orderscheme_partitioning(
+        context,
+        comm,
+        schema_ir,
+        ir_context,
+        ch_in,
+        order_keys,
+        collective_id,
+    )
+    return OrderingMetadataResult(
+        _with_extracted_ordering(metadata, result.partitioning), result.chunks
     )
 
 

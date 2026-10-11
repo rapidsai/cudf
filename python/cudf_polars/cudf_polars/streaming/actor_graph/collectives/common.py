@@ -56,6 +56,13 @@ def _release_collective_id_unsafe(collective_id: int) -> None:
     _collective_id_vacancy[collective_id] = None
 
 
+def _needs_collective_id(node: IR, collective_types: tuple[type, ...]) -> bool:
+    """Return whether a node uses a collective operation."""
+    if isinstance(node, MapFunction):
+        return node.name == "hint_sorted"
+    return isinstance(node, collective_types)
+
+
 class ReserveOpIDs:
     """
     Context manager to reserve collective IDs for pipeline execution.
@@ -118,8 +125,7 @@ class ReserveOpIDs:
         self.collective_nodes: list[IR] = [
             node
             for node in traversal([ir])
-            if isinstance(node, collective_types)
-            or (isinstance(node, MapFunction) and node.name == "hint_sorted")
+            if _needs_collective_id(node, collective_types)
         ]
         self.collective_id_map: dict[IR, list[int]] = {}
 

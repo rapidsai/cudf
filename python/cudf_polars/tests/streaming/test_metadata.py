@@ -626,11 +626,29 @@ def test_hint_sorted_metadata_attaches_single_partition_ordering(spmd_engine) ->
 
     assert result.partitioning is not None
     assert isinstance(result.partitioning.inter_rank, OrderScheme)
+    assert result.partitioning.local == "inherit"
     (ordering,) = result.partitioning.inter_rank.orderings
     assert list(ordering.keys) == [
         OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE)
     ]
     assert ordering.strict_boundaries is True
+    assert buffered_chunks is None
+
+
+def test_hint_sorted_metadata_reuses_existing_ordering(spmd_engine) -> None:
+    metadata = ChannelMetadata(
+        local_count=2,
+        partitioning=Partitioning(
+            _make_order_scheme(spmd_engine.context, key_indices=(0,), strict=True),
+            "inherit",
+        ),
+    )
+
+    result, buffered_chunks = asyncio.run(
+        _extract_hint_sorted_metadata(spmd_engine, metadata)
+    )
+
+    assert result is metadata
     assert buffered_chunks is None
 
 
