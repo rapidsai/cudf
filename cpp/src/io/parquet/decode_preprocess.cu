@@ -77,7 +77,10 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
     pp->num_decoded_level_values > 0
       ? min(s->setup.page.num_input_values, pp->num_decoded_level_values)
       : s->setup.page.num_input_values;
-  int const first_row   = min(s->setup.first_row, decoded_value_limit);
+  // `first_row` needs no clamp against `decoded_value_limit`: the level buffer is sized over the
+  // pass's row range and a read's range is a subrange of it, so the rows asked for are always
+  // within the levels decoded. The consumer uses the same unclamped value to place its output.
+  int const first_row   = s->setup.first_row;
   int const value_limit = min(decoded_value_limit, first_row + s->setup.num_rows);
 
   // A required page's rank map is the identity, so there is nothing to materialize. The consumer

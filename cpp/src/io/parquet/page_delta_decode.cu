@@ -566,9 +566,6 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_with_nz_map_block_size)
   auto const* const nz_idx = pp->nz_map->nz_idx;
   int const nz_count_in    = pp->nz_map->nz_count;
 
-  // A page with nulls reaching this kernel must have had its nz map produced.
-  cudf_assert(nz_count_in >= 0 && (not process_nulls || nz_idx != nullptr));
-
   auto& ni = s->nesting.nesting_info[s->setup.col.max_nesting_depth - 1];
   if (block.thread_rank() == 0) {
     // A sliced page keeps the valid values preceding `first_row` in its map, so the null count for

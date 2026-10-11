@@ -365,9 +365,6 @@ struct page_nz_map {
   uint32_t* nz_idx{};
   // Negative until the producer runs; the page's valid count afterwards.
   int32_t nz_count{not_yet_produced};
-  // A second producer-written count, for map kinds that need one. Unused by `DELTA_FLAT`, whose
-  // consumer derives the null count from `nz_idx` and `nz_count` itself.
-  int32_t aux_count{};
 };
 
 /**
