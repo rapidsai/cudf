@@ -12,15 +12,7 @@ integration_run_timed() {
     shift 2
     local started_ms status=0 elapsed_ms
     started_ms=$(integration_timestamp_ms)
-    if [[ ${INTEGRATION_PROFILE:-1} == 1 && $(type -t "$1") == file && -x /usr/bin/time ]]; then
-        /usr/bin/time -f "INTEGRATION_RESOURCE library=${library} phase=${phase} user_seconds=%U system_seconds=%S max_rss_kb=%M cpu_percent=%P" "$@" || status=$?
-    elif [[ ${INTEGRATION_PROFILE:-1} == 1 ]]; then
-        # CI images may lack GNU time; Bash still accounts for completed child processes.
-        local TIMEFORMAT="INTEGRATION_RESOURCE library=${library} phase=${phase} user_seconds=%U system_seconds=%S cpu_percent=%P"
-        time "$@" || status=$?
-    else
-        "$@" || status=$?
-    fi
+    "$@" || status=$?
     elapsed_ms=$(($(integration_timestamp_ms) - started_ms))
     printf 'INTEGRATION_TIMING library=%s phase=%s elapsed_ms=%s status=%s\n' \
         "$library" "$phase" "$elapsed_ms" "$status" >&2

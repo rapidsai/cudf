@@ -13,7 +13,7 @@ prepare_environment() {
     if [[ $RAPIDS_BUILD_TYPE == pull-request ]]; then
         channels=(--prepend-channel "$CPP_CHANNEL" --prepend-channel "$PYTHON_CHANNEL" --prepend-channel "$PYTHON_NOARCH_CHANNEL")
     fi
-    integration_run_timed "$lib" dependencies rapids-dependency-file-generator \
+    rapids-dependency-file-generator \
         --config "$INTEGRATION_DEPENDENCIES_YAML" --output conda --file-key "test_${lib}" \
         --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
         "${channels[@]}" | tee "${directory}/env.yaml" || return 1
@@ -26,12 +26,12 @@ run_library() {
     # Each test shell owns its activation; preparing another environment must not change it.
     set +u
     source /opt/conda/etc/profile.d/conda.sh
-    integration_run_timed "$lib" activation conda activate "${INTEGRATION_RUN_DIR}/${lib}/env"
+    conda activate "${INTEGRATION_RUN_DIR}/${lib}/env"
     set -u
 
-    integration_run_timed "$lib" environment-diagnostics rapids-print-env
-    integration_run_timed "$lib" package-manifest conda list --explicit
-    integration_run_timed "$lib" gpu-diagnostics nvidia-smi
+    rapids-print-env
+    conda list --explicit
+    nvidia-smi
 
     local workers=${NUM_PROCESSES:-0}
     local comparison_workers=${COMPARE_NUM_PROCESSES:-0}
@@ -42,14 +42,12 @@ run_library() {
     TEST_DIR="${INTEGRATION_REPO_ROOT}/python/cudf/cudf_pandas_tests/third_party_integration_tests/tests" \
     NUM_PROCESSES=$workers \
     COMPARE_NUM_PROCESSES=$comparison_workers \
-        integration_run_timed "$lib" tests \
         bash "${INTEGRATION_REPO_ROOT}/ci/cudf_pandas_scripts/third-party-integration/run-library-tests.sh" "$lib"
 }
 
 prepare_pid=0
 test_pid=0
 INTEGRATION_RUN_DIR=${INTEGRATION_RUN_DIR:-}
-script_started_ms=0
 
 cleanup() {
     local pid
@@ -69,8 +67,6 @@ cleanup() {
 finish() {
     local status=$?
     cleanup || status=1
-    printf 'INTEGRATION_TIMING library=all phase=script elapsed_ms=%s status=%s\n' \
-        "$(($(integration_timestamp_ms) - script_started_ms))" "$status" >&2
     return "$status"
 }
 
@@ -83,7 +79,6 @@ launch_preparation() {
 }
 
 main() {
-    script_started_ms=$(integration_timestamp_ms)
     local dependencies_yaml=$1 prefetch=${INTEGRATION_ENV_PREFETCH:-1}
     if [[ $prefetch != 0 && $prefetch != 1 ]]; then
         printf 'INTEGRATION_ENV_PREFETCH must be 0 or 1.\n' >&2
@@ -104,13 +99,13 @@ main() {
             return 1
         fi
     done
-    integration_run_timed all package-manager-version mamba --version
-    integration_run_timed all available-memory free -m
-    integration_run_timed all available-disk df -h . /tmp
+    mamba --version
+    free -m
+    df -h . /tmp
     if [[ $RAPIDS_BUILD_TYPE == pull-request ]]; then
-        CPP_CHANNEL=$(integration_run_timed all download-cpp rapids-download-from-github "$(rapids-artifact-name conda_cpp libcudf cudf --cuda "$RAPIDS_CUDA_VERSION")")
-        PYTHON_CHANNEL=$(integration_run_timed all download-python rapids-download-from-github "$(rapids-artifact-name conda_python cudf cudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
-        PYTHON_NOARCH_CHANNEL=$(integration_run_timed all download-noarch rapids-download-from-github "$(rapids-artifact-name conda_python cudf cudf --pure --cuda "$RAPIDS_CUDA_VERSION" --arch any)")
+        CPP_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_cpp libcudf cudf --cuda "$RAPIDS_CUDA_VERSION")")
+        PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_python cudf cudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
+        PYTHON_NOARCH_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_python cudf cudf --pure --cuda "$RAPIDS_CUDA_VERSION" --arch any)")
         export CPP_CHANNEL PYTHON_CHANNEL PYTHON_NOARCH_CHANNEL
     fi
     INTEGRATION_REPO_ROOT=$(git rev-parse --show-toplevel)
@@ -157,7 +152,7 @@ main() {
         fi
         if [[ -f "${INTEGRATION_RUN_DIR}/${lib}/env/conda-meta/history" ]]; then
             printf '::group::Remove integration environment: %s\n' "$lib"
-            if ! integration_run_timed "$lib" cleanup rapids-mamba-retry env remove --yes \
+            if ! rapids-mamba-retry env remove --yes \
                 --prefix "${INTEGRATION_RUN_DIR}/${lib}/env"; then
                 printf '::endgroup::\n'
                 printf 'Failed to remove %s environment; stopping before creating more environments.\n' "$lib" >&2
