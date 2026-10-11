@@ -55,9 +55,9 @@ cleanup() {
     local pid
     for pid in "$prepare_pid" "$test_pid"; do
         if ((pid > 0)); then
-            # Terminate the entire isolated process group, including solvers and pytest workers.
-            kill -TERM -- "-${pid}" 2>/dev/null || true
-            kill -KILL -- "-${pid}" 2>/dev/null || true
+            # Retry-helper timeouts create additional process groups inside this session.
+            pkill -TERM --session "$pid" 2>/dev/null || true
+            pkill -KILL --session "$pid" 2>/dev/null || true
             wait "$pid" 2>/dev/null || true
         fi
     done
