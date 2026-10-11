@@ -1147,6 +1147,15 @@ auto finalize_outputs(null_aware is_null_aware,
   return results;
 }
 
+void check_transform_error(detail::device_scalar<int32_t>& max_error, cuda::stream_ref stream)
+{
+  auto const error = static_cast<errc>(max_error.value(stream));
+  if (error != errc::SUCCESS) {
+    throw evaluation_error(
+      error, std::format("Transform UDF evaluation failed with error `{}`", to_string(error)));
+  }
+}
+
 bool has_supported_ast_lto_abi(data_type type)
 {
   switch (type.id()) {
@@ -1274,11 +1283,7 @@ std::unique_ptr<table> execute_ast_runtime(detail::row_ir::transform_args&& args
                         reinterpret_cast<output_descriptor const*>(device_bytes + input_bytes),
                         max_error.data(),
                         stream);
-  auto const error = static_cast<errc>(max_error.value(stream));
-  if (error != errc::SUCCESS) {
-    throw evaluation_error(
-      error, std::format("Transform UDF evaluation failed with error `{}`", to_string(error)));
-  }
+  check_transform_error(max_error, stream);
   return std::make_unique<table>(
     finalize_outputs(args.is_null_aware, row_size, std::move(outputs), stream, mr));
 }
@@ -1337,14 +1342,7 @@ std::unique_ptr<table> execute_transform(std::string const& udf,
                        mr);
   }
 
-  auto error = static_cast<errc>(d_max_error.value(stream));
-
-  switch (error) {
-    case errc::SUCCESS: break;
-    default:
-      throw evaluation_error(
-        error, std::format("Transform UDF evaluation failed with error `{}`", to_string(error)));
-  }
+  check_transform_error(d_max_error, stream);
 
   auto finalized = finalize_outputs(is_null_aware, row_size, std::move(output_columns), stream, mr);
   return std::make_unique<table>(std::move(finalized));
@@ -1451,7 +1449,7 @@ std::unique_ptr<table> compute_table_jit(
 {
   CUDF_FUNC_RANGE();
   auto args = detail::row_ir::ast_converter::compute_table(
-    detail::row_ir::target::CUDA, expressions, table, {}, "compute_operation", stream, mr, true);
+    detail::row_ir::target::CUDA, expressions, table, {}, "compute_operation", stream, mr);
   if (args.outputs.size() > 1 && can_use_ast_lto(args.inputs, args.outputs)) {
     return execute_ast_runtime(std::move(args), stream, mr);
   }
@@ -1558,13 +1556,7 @@ std::unique_ptr<table> transform_lto(std::span<uint8_t const> udf,
                          stream,
                          mr);
 
-  auto error = static_cast<errc>(d_max_error.value(stream));
-  switch (error) {
-    case errc::SUCCESS: break;
-    default:
-      throw evaluation_error(
-        error, std::format("Transform UDF evaluation failed with error `{}`", to_string(error)));
-  }
+  check_transform_error(d_max_error, stream);
 
   auto finalized = finalize_outputs(is_null_aware, row_size, std::move(output_columns), stream, mr);
   return std::make_unique<table>(std::move(finalized));

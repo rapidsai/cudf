@@ -887,8 +887,7 @@ bool is_nullable(column_input const& in) { return in.column.nullable(); }
 std::tuple<std::string, null_aware, std::vector<output_nullability>> ast_converter::generate_code(
   target target_id,
   std::span<std::reference_wrapper<ast::expression const> const> expressions,
-  std::string_view function_name,
-  bool use_c_linkage)
+  std::string_view function_name)
 {
   CUDF_EXPECTS(!expressions.empty(), "At least one output expression is required");
 
@@ -965,8 +964,7 @@ std::tuple<std::string, null_aware, std::vector<output_nullability>> ast_convert
   }();
 
   code_sink sink;
-  sink.emit(std::format(
-    "{}__device__ cudf::errc {}(", use_c_linkage ? "extern \"C\" " : "", function_name));
+  sink.emit(std::format("__device__ cudf::errc {}(", function_name));
   sink.emit(args_decl);
   sink.emit(")\n{\n");
   for (auto& ir : output_irs_) {
@@ -1000,8 +998,7 @@ transform_args ast_converter::compute_table(
   table_view const& right_table,
   std::string_view function_name,
   cuda::stream_ref stream,
-  rmm::device_async_resource_ref mr,
-  bool use_c_linkage)
+  rmm::device_async_resource_ref mr)
 {
   ast_converter converter{stream, mr, left_table, right_table};
 
@@ -1009,7 +1006,7 @@ transform_args ast_converter::compute_table(
   // TransformTest/1.DeeplyNestedArithmeticLogicalExpression for reference
 
   auto [code, is_null_aware, output_nullabilities] =
-    converter.generate_code(target_id, expressions, function_name, use_c_linkage);
+    converter.generate_code(target_id, expressions, function_name);
   std::vector<transform_input> inputs;
   std::vector<std::unique_ptr<column>> scalar_columns;
   std::vector<std::optional<int32_t>> table_sources;

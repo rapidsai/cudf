@@ -526,14 +526,12 @@ struct [[nodiscard]] ast_converter {
    * @param target Code generation target
    * @param expressions AST expressions, one for each output column
    * @param function_name Name of the generated transform function
-   * @param use_c_linkage Emit C linkage to match the standalone LTO transform driver ABI
    * @return Generated source, function null-awareness, and nullability policy for each output
    */
   [[nodiscard]] std::tuple<std::string, null_aware, std::vector<output_nullability>> generate_code(
     target target,
     std::span<std::reference_wrapper<ast::expression const> const> expressions,
-    std::string_view function_name,
-    bool use_c_linkage = false);
+    std::string_view function_name);
 
   /**
    * @brief Converts AST expressions to arguments for a multi-output `cudf::transform`.
@@ -544,7 +542,6 @@ struct [[nodiscard]] ast_converter {
    * @param function_name The name of the generated function
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource used to allocate the returned table's device memory
-   * @param use_c_linkage Emit C linkage to match the standalone LTO transform driver ABI
    * @return The result of the conversion, containing the transform arguments and scalar columns
    */
   static transform_args compute_table(
@@ -554,8 +551,7 @@ struct [[nodiscard]] ast_converter {
     table_view const& right_table,
     std::string_view function_name,
     cuda::stream_ref stream,
-    rmm::device_async_resource_ref mr,
-    bool use_c_linkage = false);
+    rmm::device_async_resource_ref mr);
 
   /**
    * @brief Convert an AST `filter` expression to a `cudf::filter`
