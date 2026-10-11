@@ -5,8 +5,10 @@
 # shellcheck source=ci/cudf_pandas_scripts/third-party-integration/timing.sh
 source "$(dirname "${BASH_SOURCE[0]}")/timing.sh"
 
+set -uo pipefail
+
 cleanup() {
-    rm "${TEST_DIR}"/results-*.pickle
+    rm -f "${TEST_DIR}"/results-*.pickle
 }
 
 trap cleanup EXIT
@@ -34,10 +36,17 @@ runtest() {
 
 main() {
     local lib=$1
+    local status=0 workers
+    for workers in "${NUM_PROCESSES}" "${COMPARE_NUM_PROCESSES:-${NUM_PROCESSES}}"; do
+        if [[ ! $workers =~ ^(0|[1-9][0-9]*)$ ]]; then
+            printf 'Worker counts must be nonnegative integers: %s\n' "$workers" >&2
+            return 1
+        fi
+    done
 
     # generation phase
-    runtest "${lib}" "gold"
-    runtest "${lib}" "cudf"
+    runtest "${lib}" "gold" || status=1
+    runtest "${lib}" "cudf" || status=1
 
     # assertion phase
     integration_run_timed "$lib" compare pytest \
@@ -47,9 +56,11 @@ main() {
     --continue-on-collection-errors \
     --cache-clear \
     --durations=50 --durations-min=1 \
-    --numprocesses="${NUM_PROCESSES}" \
+    --numprocesses="${COMPARE_NUM_PROCESSES:-${NUM_PROCESSES}}" \
     --dist=worksteal \
-    "${TEST_DIR}"/test_"${lib}"*.py
+    "${TEST_DIR}"/test_"${lib}"*.py || status=1
+
+    return "$status"
 }
 
 main "$@"

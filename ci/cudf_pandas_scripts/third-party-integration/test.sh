@@ -36,6 +36,7 @@ main() {
     fi
 
     ANY_FAILURES=0
+    local generation_num_processes=${NUM_PROCESSES:-8}
 
     for lib in ${LIBS//,/ }; do
         lib=$(echo "$lib" | tr -d '""')
@@ -80,7 +81,7 @@ main() {
 
         rapids-logger "pytest ${lib}"
 
-        NUM_PROCESSES=8
+        NUM_PROCESSES=$generation_num_processes
         serial_libraries=(
             "tensorflow"
         )
