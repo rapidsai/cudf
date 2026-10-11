@@ -42,7 +42,7 @@ run_library() {
     TEST_DIR="${INTEGRATION_REPO_ROOT}/python/cudf/cudf_pandas_tests/third_party_integration_tests/tests" \
     NUM_PROCESSES=$workers \
     COMPARE_NUM_PROCESSES=$comparison_workers \
-        integration_run_timed "$lib" tests timeout 45m \
+        integration_run_timed "$lib" tests \
         bash "${INTEGRATION_REPO_ROOT}/ci/cudf_pandas_scripts/third-party-integration/run-library-tests.sh" "$lib"
 }
 
@@ -143,7 +143,7 @@ main() {
         fi
         if ((ready)); then
             printf '::group::Integration tests: %s\n' "$lib"
-            setsid bash "${BASH_SOURCE[0]}" --test "$lib" &
+            setsid timeout 45m bash "${BASH_SOURCE[0]}" --test "$lib" &
             test_pid=$!
             if ! wait "$test_pid"; then
                 status=1
