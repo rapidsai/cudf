@@ -34,11 +34,14 @@ run_library() {
     integration_run_timed "$lib" gpu-diagnostics nvidia-smi
 
     local workers=${NUM_PROCESSES:-8}
+    local comparison_workers=${COMPARE_NUM_PROCESSES:-$workers}
     if [[ $lib == tensorflow ]]; then
         workers=1
+        comparison_workers=1
     fi
     TEST_DIR="${INTEGRATION_REPO_ROOT}/python/cudf/cudf_pandas_tests/third_party_integration_tests/tests" \
     NUM_PROCESSES=$workers \
+    COMPARE_NUM_PROCESSES=$comparison_workers \
         integration_run_timed "$lib" tests timeout 45m \
         bash "${INTEGRATION_REPO_ROOT}/ci/cudf_pandas_scripts/third-party-integration/run-library-tests.sh" "$lib"
 }
@@ -46,6 +49,7 @@ run_library() {
 prepare_pid=0
 test_pid=0
 INTEGRATION_RUN_DIR=${INTEGRATION_RUN_DIR:-}
+script_started_ms=0
 
 cleanup() {
     local pid
@@ -62,6 +66,14 @@ cleanup() {
     fi
 }
 
+finish() {
+    local status=$?
+    cleanup || status=1
+    printf 'INTEGRATION_TIMING library=all phase=script elapsed_ms=%s status=%s\n' \
+        "$(($(integration_timestamp_ms) - script_started_ms))" "$status" >&2
+    return "$status"
+}
+
 launch_preparation() {
     local lib=$1
     mkdir -p "${INTEGRATION_RUN_DIR}/${lib}"
@@ -71,6 +83,7 @@ launch_preparation() {
 }
 
 main() {
+    script_started_ms=$(integration_timestamp_ms)
     local dependencies_yaml=$1 prefetch=${INTEGRATION_ENV_PREFETCH:-0}
     if [[ $prefetch != 0 && $prefetch != 1 ]]; then
         printf 'INTEGRATION_ENV_PREFETCH must be 0 or 1.\n' >&2
@@ -104,7 +117,7 @@ main() {
     INTEGRATION_RUN_DIR=$(mktemp -d "${TMPDIR:-/tmp}/cudf-pandas-integration.XXXXXX")
     INTEGRATION_DEPENDENCIES_YAML=$dependencies_yaml
     export INTEGRATION_REPO_ROOT INTEGRATION_RUN_DIR INTEGRATION_DEPENDENCIES_YAML
-    trap cleanup EXIT
+    trap finish EXIT
     trap 'exit 130' INT
     trap 'exit 143' TERM
 
