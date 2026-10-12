@@ -11,6 +11,9 @@ import pytest
 from cudf_polars.dsl.ir import IRExecutionContext
 
 
+# The internal offload API lets us hold a worker in flight during cancellation.
+# This reliably tests the lifetime bug behind the crash without depending on
+# native read timing or scheduling, as reproducing it through queries alone would.
 @pytest.mark.parametrize("cancellations", [1, 3])
 @pytest.mark.parametrize("worker_raises", [False, True])
 def test_to_thread_cancellation_drains_worker(cancellations, worker_raises):
