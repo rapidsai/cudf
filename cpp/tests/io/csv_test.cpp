@@ -1190,7 +1190,8 @@ TEST_P(CsvStringStagingTest, WorkerAllocationFailureAndRecovery)
     worker_allocations = 0;
     injected           = false;
     fail_at            = point;
-    EXPECT_THROW(cudf::io::read_csv(options, stream, failing_mr), rmm::out_of_memory);
+    // CUB's env-based temp allocation reports allocator exceptions as cudaErrorMemoryAllocation
+    EXPECT_ANY_THROW(cudf::io::read_csv(options, stream, failing_mr));
     EXPECT_TRUE(injected);
     stream.sync();
     EXPECT_EQ(live_bytes.load(), 0);
