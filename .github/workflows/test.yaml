@@ -385,9 +385,24 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: cpu8
       container_image: rapidsai/citestwheel:26.12-latest
-      script: ci/run_cudf_polars_fallback_diagnostics.sh --audit
+      script: ci/run_cudf_polars_fallback_diagnostics.sh --publish-audit
       file_to_upload: cudf-polars-fallback-diagnostics
-      artifact-name: cudf-polars-fallback-diagnostics
+      artifact-name: cudf-polars-fallback-diagnostics-${{ github.run_attempt }}
+  cudf-polars-test-audit:
+    needs: cudf-polars-test-summary
+    if: ${{ !cancelled() && needs.cudf-polars-test-summary.result != 'skipped' }}
+    permissions:
+      actions: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require current GPU test selections
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUDIT_ARTIFACT: cudf-polars-fallback-diagnostics-${{ github.run_attempt }}
+        run: |
+          gh run download "${GITHUB_RUN_ID}" --repo "${GITHUB_REPOSITORY}" \
+            --name "${AUDIT_ARTIFACT}" --dir audit
+          python -c 'import json; from pathlib import Path; audit = json.loads(Path("audit/run-list-drift.json").read_text()); print("GPU run-list audit:", audit["status"]); raise SystemExit(audit["status"] != "current")'
   narwhals-tests:
     permissions:
       actions: read
