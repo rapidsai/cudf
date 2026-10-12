@@ -45,6 +45,7 @@
 #include <cuda/std/algorithm>
 #include <cuda/std/bit>
 #include <cuda/std/execution>
+#include <cuda/std/iterator>
 #include <cuda/std/span>
 #include <cuda/std/utility>
 #include <cuda/stream>
@@ -428,7 +429,7 @@ unicode_normalizer::unicode_normalizer(cudf::table_view const& unicode_data,
   auto kv_begin        = cuda::make_zip_iterator(d_comp_keys.data(), d_comp_values.data());
   auto kv_end          = kv_begin + num_rows;
   auto const end_itr   = thrust::remove_if(policy, kv_begin, kv_end, detail::is_zero_comp_key_fn{});
-  auto const comp_size = end_itr - kv_begin;
+  auto const comp_size = cuda::std::distance(kv_begin, end_itr);
 
   // Copy only the compacted prefix into exact-size allocations; the tail past
   // comp_size holds unspecified leftovers from remove_if.
@@ -697,12 +698,11 @@ struct reorder_fn {
       auto const ccc_j = ccc_of(d_cps[j]);
       // upper_bound(begin, end, value, comp): returns first element where comp(value, elem)
       // is true, i.e., first packed slot whose CCC exceeds ccc_j.
-      auto const ins =
-        cuda::std::upper_bound(d_cps.begin() + run_start,
-                               d_cps.begin() + j,
-                               ccc_j,
-                               [](uint8_t val, uint32_t packed) { return val < ccc_of(packed); }) -
-        d_cps.begin();
+      auto const itr = cuda::std::upper_bound(
+        d_cps.begin() + run_start, d_cps.begin() + j, ccc_j, [](uint8_t val, uint32_t packed) {
+          return val < ccc_of(packed);
+        });
+      auto const ins = cuda::std::distance(d_cps.begin(), itr);
       if (ins < j) {
         cuda::std::rotate(d_cps.begin() + ins, d_cps.begin() + j, d_cps.begin() + j + 1);
       }
