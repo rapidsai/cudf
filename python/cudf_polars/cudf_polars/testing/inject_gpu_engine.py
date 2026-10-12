@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
-from functools import partialmethod
+from functools import partialmethod, wraps
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -24,6 +24,7 @@ from cudf_polars.testing.engine_utils import (
 from cudf_polars.testing.fallback import (
     Observation,
     begin_observation,
+    bind_observation,
     end_observation,
     fallback_used,
     gpu_attempted,
@@ -33,7 +34,7 @@ from cudf_polars.testing.fallback_report import COLLECTION, FallbackReport
 from cudf_polars.utils.config import StreamingFallbackMode
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Mapping
+    from collections.abc import Callable, Generator, Mapping
 
     from pluggy import Result
 
@@ -233,6 +234,20 @@ def pytest_configure(config: pytest.Config) -> None:
     config._inject_gpu_engine = engine  # type: ignore[attr-defined]
     _verify_collect_patch(engine)
 
+    post_opt_callback = polars.GPUEngine._post_opt_callback
+
+    @wraps(post_opt_callback)
+    def attributed_callback(
+        self: polars.GPUEngine, *, background: bool, eager: bool
+    ) -> Callable[..., None] | None:
+        callback = post_opt_callback(self, background=background, eager=eager)
+        # Capture ownership before Rust can invoke translation on another thread,
+        # including after the originating item's observation has been retired.
+        return None if callback is None else bind_observation(callback)
+
+    polars.GPUEngine._post_opt_callback = attributed_callback  # type: ignore[method-assign]
+    config._cudf_polars_post_opt_callback = post_opt_callback  # type: ignore[attr-defined]
+
     config.addinivalue_line(
         "filterwarnings",
         "ignore:.*GPU engine does not support streaming or background collection",
@@ -371,6 +386,9 @@ def _verify_collect_patch(engine: object) -> None:
 
 def pytest_unconfigure(config: pytest.Config) -> None:
     """Tear down the injected engine."""
+    post_opt_callback = getattr(config, "_cudf_polars_post_opt_callback", None)
+    if post_opt_callback is not None:
+        polars.GPUEngine._post_opt_callback = post_opt_callback  # type: ignore[method-assign]
     engine = getattr(config, "_inject_gpu_engine", None)
     if engine is None:
         return
