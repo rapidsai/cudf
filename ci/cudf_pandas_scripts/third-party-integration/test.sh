@@ -8,19 +8,15 @@ prepare_pid=0
 INTEGRATION_RUN_DIR=${INTEGRATION_RUN_DIR:-}
 
 cleanup() {
+    local status=$?
     if ((prepare_pid > 0)); then
         # Retry-helper timeouts create additional process groups inside this session.
         pkill -KILL --session "$prepare_pid" 2>/dev/null || true
         wait "$prepare_pid" 2>/dev/null || true
     fi
     if [[ -n $INTEGRATION_RUN_DIR ]]; then
-        rm -rf -- "$INTEGRATION_RUN_DIR"
+        rm -rf -- "$INTEGRATION_RUN_DIR" || status=1
     fi
-}
-
-finish() {
-    local status=$?
-    cleanup || status=1
     return "$status"
 }
 
@@ -44,7 +40,7 @@ main() {
     INTEGRATION_RUN_DIR=$(mktemp -d "${TMPDIR:-/tmp}/cudf-pandas-integration.XXXXXX")
     INTEGRATION_DEPENDENCIES_YAML=$dependencies_yaml
     export INTEGRATION_RUN_DIR INTEGRATION_DEPENDENCIES_YAML
-    trap finish EXIT
+    trap cleanup EXIT
     trap 'exit 130' INT
     trap 'exit 143' TERM
 
