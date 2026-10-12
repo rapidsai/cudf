@@ -3104,7 +3104,7 @@ struct pack_plan::impl {
     } else if (uncompressed_bytes > 0) {
       if (layouts.empty()) { layouts = input.state->compute_compression_regions(); }
       plan_regions(layouts, configured_regions, options, mr);
-      plan_blocks();
+      plan_compression_blocks();
       destination_bytes = plan_block_windows(options.staging_buffer_bytes);
       d_blocks =
         cudf::detail::make_device_uvector(blocks, input.state->get_stream(), mr.get_output_mr());
@@ -3207,7 +3207,7 @@ struct pack_plan::impl {
   }
 
   /// Groups regions into batches by codec and lays out their blocks batch by batch.
-  void plan_blocks()
+  void plan_compression_blocks()
   {
     // Blocks of all regions that share a codec, and for Cascaded its options, form one batch.
     std::vector<std::size_t> region_batch;
@@ -3224,23 +3224,24 @@ struct pack_plan::impl {
       target.max_block_bytes = std::max(target.max_block_bytes, region.block_bytes);
       target.total_bytes += region.layout.data_bytes;
     }
-    for (std::size_t b = 0; b < batches.size(); ++b) {
-      auto const raw         = batches[b].codec == pack_compression::none;
-      auto const slot_bytes  = raw ? 0 : max_compressed_block_bytes(batches[b]);
-      auto const alignment   = raw ? sizeof(uint64_t) : block_alignment(batches[b].codec);
-      batches[b].block_begin = blocks.size();
-      for (std::size_t i = 0; i < regions.size(); ++i) {
-        if (region_batch[i] != b) { continue; }
-        auto& region       = regions[i];
+    for (std::size_t batch_idx = 0; batch_idx < batches.size(); ++batch_idx) {
+      auto const raw        = batches[batch_idx].codec == pack_compression::none;
+      auto const slot_bytes = raw ? 0 : max_compressed_block_bytes(batches[batch_idx]);
+      auto const alignment  = raw ? sizeof(uint64_t) : block_alignment(batches[batch_idx].codec);
+      batches[batch_idx].block_begin = blocks.size();
+      for (std::size_t region_idx = 0; region_idx < regions.size(); ++region_idx) {
+        if (region_batch[region_idx] != batch_idx) { continue; }
+        auto& region       = regions[region_idx];
         region.block_begin = blocks.size();
         region.alignment   = alignment;
         for (std::size_t offset = 0; offset < region.layout.data_bytes;
              offset += region.block_bytes) {
           auto const bytes = std::min(region.block_bytes, region.layout.data_bytes - offset);
-          blocks.emplace_back(region.source + offset, bytes, raw ? bytes : slot_bytes, i, raw);
+          blocks.emplace_back(
+            region.source + offset, bytes, raw ? bytes : slot_bytes, region_idx, raw);
         }
       }
-      batches[b].block_end = blocks.size();
+      batches[batch_idx].block_end = blocks.size();
     }
   }
 
@@ -3251,20 +3252,20 @@ struct pack_plan::impl {
     // A slot also fits the raw block, which bounds output with uncompressed fallback.
     auto destination_bytes =
       cudf::util::round_up_safe(blocks.size() * sizeof(uint64_t), split_align);
-    for (std::size_t c = 0; c < blocks.size(); ++c) {
-      auto& block = blocks[c];
+    for (std::size_t block_idx = 0; block_idx < blocks.size(); ++block_idx) {
+      auto& block = blocks[block_idx];
       auto const extent =
         cudf::util::round_up_safe(std::max(block.output_bytes, block.input_bytes), split_align);
       CUDF_EXPECTS(extent <= window_budget,
                    "The staging buffer is too small for the compression block size");
       if (windows.empty() ||
           destination_bytes + extent - windows.back().payload_offset > window_budget) {
-        windows.emplace_back(c, c, destination_bytes, 0);
+        windows.emplace_back(block_idx, block_idx, destination_bytes, 0);
       }
       auto& window        = windows.back();
       block.window_offset = destination_bytes - window.payload_offset;
       destination_bytes += extent;
-      window.end_item   = c + 1;
+      window.end_item   = block_idx + 1;
       window.bytes      = destination_bytes - window.payload_offset;
       max_window_bytes  = std::max(max_window_bytes, window.bytes);
       max_window_blocks = std::max(max_window_blocks, window.end_item - window.first_item);
@@ -3484,10 +3485,10 @@ pack_result pack_into(pack_plan const& plan,
     sources.clear();
     targets.clear();
     copy_bytes.clear();
-    for (auto c = window.first_item; c < window.end_item; ++c) {
-      auto const& block  = impl.blocks[c];
+    for (auto block_idx = window.first_item; block_idx < window.end_item; ++block_idx) {
+      auto const& block  = impl.blocks[block_idx];
       auto const& region = impl.regions[block.region];
-      auto const& result = h_results[c - window.first_item];
+      auto const& result = h_results[block_idx - window.first_item];
       auto raw           = block.raw;
       if (!raw) {
         auto const failed = result.status != codec_status::SUCCESS;
@@ -3499,8 +3500,8 @@ pack_result pack_into(pack_plan const& plan,
       auto const bytes = raw ? block.input_bytes : result.bytes_written;
       payload_bytes =
         cudf::util::round_up_safe(payload_bytes, raw ? sizeof(uint64_t) : region.alignment);
-      block_offsets[c] = payload_bytes;
-      table[c]         = raw ? (raw_block_flag | bytes) : bytes;
+      block_offsets[block_idx] = payload_bytes;
+      table[block_idx]         = raw ? (raw_block_flag | bytes) : bytes;
       sources.push_back(raw ? block.input : slots + block.window_offset);
       targets.push_back(to_host ? compacted + (payload_bytes - window_begin)
                                 : destination.data() + payload_bytes);
@@ -3634,17 +3635,17 @@ std::unique_ptr<table> materialize_selection(packed_data_view input,
         : type_id::UINT8;
     auto* const output = static_cast<uint8_t*>(destination);
     for (std::size_t k = 0; k < entry.num_blocks; ++k) {
-      auto const c        = entry.block_begin + k;
-      auto const offset   = k * entry.block_bytes;
-      auto const expected = std::min<std::size_t>(entry.block_bytes, entry.data_bytes - offset);
-      auto const raw      = (block_sizes[c] & raw_block_flag) != 0;
-      auto const bytes    = block_sizes[c] & ~raw_block_flag;
+      auto const block_idx = entry.block_begin + k;
+      auto const offset    = k * entry.block_bytes;
+      auto const expected  = std::min<std::size_t>(entry.block_bytes, entry.data_bytes - offset);
+      auto const raw       = (block_sizes[block_idx] & raw_block_flag) != 0;
+      auto const bytes     = block_sizes[block_idx] & ~raw_block_flag;
       CUDF_EXPECTS((raw ? bytes == expected : compression != pack_compression::none && bytes > 0) &&
-                     payload_contains(parsed.block_offsets[c], bytes),
+                     payload_contains(parsed.block_offsets[block_idx], bytes),
                    "Compressed block is missing or truncated");
       auto& task =
         raw ? task_for(pack_compression::none, type_id::UINT8) : task_for(compression, cascaded);
-      auto const block = input.payload.subspan(parsed.block_offsets[c], bytes);
+      auto const block = input.payload.subspan(parsed.block_offsets[block_idx], bytes);
       loader.request(block);
       task.inputs.emplace_back(block.data(), block.size());
       task.outputs.emplace_back(output + offset, expected);
