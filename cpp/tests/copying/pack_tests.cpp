@@ -616,7 +616,7 @@ TEST_F(ExperimentalPackUnpackTest, RegionColumnPaths)
   cudf::test::fixed_width_column_wrapper<int32_t> second({4, 5, 6});
   cudf::test::structs_column_wrapper structs({first, second}, {true, false, true});
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
-  lcw lists{lcw{lcw{1, 2}, lcw{3}}, lcw{lcw{4}}, lcw{lcw{5, 6}}};
+  lcw lists{{{1, 2}, {3}}, {{4}}, {{5, 6}}};
   cudf::test::dictionary_column_wrapper<std::string> dictionary({"a", "bb", "a"});
   auto const input = cudf::table_view{{structs, lists, dictionary}};
 
@@ -645,7 +645,7 @@ TEST_F(ExperimentalPackUnpackTest, GetPackedRegionInfo)
   cudf::test::strings_column_wrapper words({"a", "", "ccc", "dd"}, {true, false, true, true});
   cudf::test::structs_column_wrapper structs({first, words}, {true, true, false, true});
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
-  lcw lists{lcw{lcw{1, 2}, lcw{3}}, lcw{lcw{4}}, lcw{}, lcw{lcw{5, 6}}};
+  lcw lists{{{1, 2}, {3}}, {{4}}, {}, {{5, 6}}};
   cudf::test::strings_column_wrapper empty_words({"", "", "", ""});
   cudf::test::fixed_width_column_wrapper<double> doubles({1.5, 2.5, 3.5, 4.5});
   cudf::test::dictionary_column_wrapper<std::string> dictionary({"a", "bb", "a", "ccc"});
