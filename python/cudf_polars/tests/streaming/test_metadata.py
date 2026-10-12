@@ -41,15 +41,17 @@ from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.collectives.sort import (
     _can_sort_chunkwise,
     _sort_to_order_keys,
+    ensure_ordering_metadata,
 )
 from cudf_polars.streaming.actor_graph.core import evaluate_logical_plan
-from cudf_polars.streaming.actor_graph.hint_sorted import extract_hint_sorted_metadata
 from cudf_polars.streaming.actor_graph.utils import (
     NormalizedPartitioning,
     _apply_ordering_metadata,
     _leading_order_keys,
     gather_in_task_group,
     maybe_remap_partitioning,
+    recv_metadata,
+    send_metadata,
 )
 from cudf_polars.utils.config import ConfigOptions
 from cudf_polars.utils.dtypes import make_empty_column
@@ -560,6 +562,12 @@ def _hint_sorted_ir() -> MapFunction:
     return MapFunction(schema, "hint_sorted", [[("a", False, False)]], child)
 
 
+def _hint_sorted_order_keys(*key_indices: int) -> list[OrderKey]:
+    asc = plc.types.Order.ASCENDING
+    before = plc.types.NullOrder.BEFORE
+    return [OrderKey(index, asc, before) for index in key_indices or (0,)]
+
+
 async def _send_hint_sorted_frames(context, ch, frames: list[pl.DataFrame]) -> None:
     stream = context.br().stream_pool.get_stream()
     for sequence_number, frame in enumerate(frames):
@@ -571,9 +579,27 @@ async def _send_hint_sorted_frames(context, ch, frames: list[pl.DataFrame]) -> N
     await ch.drain(context)
 
 
-def _buffered_hint_sorted_rows(context, chunks) -> list[dict[str, list[int]]]:
+async def _send_hint_sorted_input(
+    context, ch, metadata: ChannelMetadata, frames: list[pl.DataFrame] | None
+) -> None:
+    await send_metadata(ch, context, metadata)
+    if frames is None:
+        await ch.drain(context)
+    else:
+        await _send_hint_sorted_frames(context, ch, frames)
+
+
+async def _recv_hint_sorted_output(context, ch):
+    metadata = await recv_metadata(ch, context)
+    messages = []
+    while (msg := await ch.recv(context)) is not None:
+        messages.append(msg)
+    return metadata, messages
+
+
+def _hint_sorted_rows(context, messages) -> list[dict[str, list[int]]]:
     rows = []
-    for msg in chunks:
+    for msg in messages:
         chunk = TableChunk.from_message(msg, br=context.br())
         df = DataFrame.from_table(
             chunk.table_view(),
@@ -585,44 +611,38 @@ def _buffered_hint_sorted_rows(context, chunks) -> list[dict[str, list[int]]]:
     return rows
 
 
-async def _extract_hint_sorted_metadata(
-    spmd_engine, metadata: ChannelMetadata, frames: list[pl.DataFrame] | None = None
+async def _ensure_hint_sorted_metadata(
+    spmd_engine,
+    metadata: ChannelMetadata,
+    frames: list[pl.DataFrame] | None = None,
+    *,
+    order_keys: list[OrderKey] | None = None,
 ):
     context = spmd_engine.context
     ch_in = context.create_channel()
+    ch_out = context.create_channel()
     with reserve_op_id() as collective_id:
-        if frames is None:
-            result = await extract_hint_sorted_metadata(
+        _, _, result = await gather_in_task_group(
+            _send_hint_sorted_input(context, ch_in, metadata, frames),
+            ensure_ordering_metadata(
                 context,
                 spmd_engine.comm,
                 _hint_sorted_ir(),
                 IRExecutionContext(),
-                metadata,
                 ch_in,
+                ch_out,
+                _hint_sorted_order_keys() if order_keys is None else order_keys,
                 collective_id,
-            )
-        else:
-            _, result = await gather_in_task_group(
-                _send_hint_sorted_frames(context, ch_in, frames),
-                extract_hint_sorted_metadata(
-                    context,
-                    spmd_engine.comm,
-                    _hint_sorted_ir(),
-                    IRExecutionContext(),
-                    metadata,
-                    ch_in,
-                    collective_id,
-                ),
-            )
+            ),
+            _recv_hint_sorted_output(context, ch_out),
+        )
     return result
 
 
 def test_hint_sorted_metadata_attaches_single_partition_ordering(spmd_engine) -> None:
     metadata = ChannelMetadata(local_count=1)
 
-    result, buffered_chunks = asyncio.run(
-        _extract_hint_sorted_metadata(spmd_engine, metadata)
-    )
+    result, messages = asyncio.run(_ensure_hint_sorted_metadata(spmd_engine, metadata))
 
     assert result.partitioning is not None
     assert isinstance(result.partitioning.inter_rank, OrderScheme)
@@ -632,7 +652,7 @@ def test_hint_sorted_metadata_attaches_single_partition_ordering(spmd_engine) ->
         OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE)
     ]
     assert ordering.strict_boundaries is True
-    assert buffered_chunks is None
+    assert messages == []
 
 
 def test_hint_sorted_metadata_reuses_existing_ordering(spmd_engine) -> None:
@@ -643,13 +663,29 @@ def test_hint_sorted_metadata_reuses_existing_ordering(spmd_engine) -> None:
             "inherit",
         ),
     )
+    frames = [
+        pl.DataFrame({"a": [1, 2], "b": [20, 10]}),
+        pl.DataFrame({"a": [3, 4], "b": [40, 30]}),
+    ]
 
-    result, buffered_chunks = asyncio.run(
-        _extract_hint_sorted_metadata(spmd_engine, metadata)
+    result, messages = asyncio.run(
+        _ensure_hint_sorted_metadata(
+            spmd_engine,
+            metadata,
+            frames,
+            order_keys=_hint_sorted_order_keys(0, 1),
+        )
     )
 
-    assert result is metadata
-    assert buffered_chunks is None
+    assert result.partitioning is not None
+    assert isinstance(result.partitioning.inter_rank, OrderScheme)
+    assert [
+        list(ordering.keys) for ordering in result.partitioning.inter_rank.orderings
+    ] == [_hint_sorted_order_keys(0)]
+    assert _hint_sorted_rows(spmd_engine.context, messages) == [
+        {"a": [1, 2], "b": [20, 10]},
+        {"a": [3, 4], "b": [40, 30]},
+    ]
 
 
 def test_hint_sorted_metadata_extracts_multi_partition_ordering(
@@ -662,11 +698,10 @@ def test_hint_sorted_metadata_extracts_multi_partition_ordering(
         pl.DataFrame({"a": [start + 2, start + 3], "b": [30, 40]}),
     ]
 
-    result, buffered_chunks = asyncio.run(
-        _extract_hint_sorted_metadata(spmd_engine, metadata, frames)
+    result, messages = asyncio.run(
+        _ensure_hint_sorted_metadata(spmd_engine, metadata, frames)
     )
 
-    assert buffered_chunks is not None
     assert result.partitioning is not None
     assert isinstance(result.partitioning.inter_rank, OrderScheme)
     (ordering,) = result.partitioning.inter_rank.orderings
@@ -674,7 +709,7 @@ def test_hint_sorted_metadata_extracts_multi_partition_ordering(
         OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE)
     ]
     assert ordering.strict_boundaries is True
-    assert _buffered_hint_sorted_rows(spmd_engine.context, buffered_chunks) == [
+    assert _hint_sorted_rows(spmd_engine.context, messages) == [
         {"a": [start, start + 1], "b": [10, 20]},
         {"a": [start + 2, start + 3], "b": [30, 40]},
     ]

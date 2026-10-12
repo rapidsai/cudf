@@ -85,16 +85,6 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class OrderingMetadataResult:
-    """Metadata and optional buffered chunks after ensuring ordering."""
-
-    metadata: ChannelMetadata
-    """The metadata with ordering attached when available."""
-    chunks: ChunkStore | None
-    """Consumed input chunks, or ``None`` when the original channel is untouched."""
-
-
-@dataclass(frozen=True)
 class _OrderSchemePartitioningResult:
     """OrderScheme partitioning and buffered chunks consumed to derive it."""
 
@@ -169,18 +159,24 @@ def _extract_boundaries_from_endpoint_rows(
     return next_partition_starts, strict
 
 
-def _order_scheme_has_keys(scheme: OrderScheme, keys: Sequence[OrderKey]) -> bool:
-    """Return whether ``scheme`` has an ordering for ``keys``."""
+def _order_scheme_has_key_prefix(scheme: OrderScheme, keys: Sequence[OrderKey]) -> bool:
+    """Return whether ``scheme`` has ordering for ``keys`` or a leading prefix."""
     keys = tuple(keys)
-    return any(tuple(ordering.keys) == keys for ordering in scheme.orderings)
+    return any(
+        len(ordering.keys) <= len(keys)
+        and tuple(ordering.keys) == keys[: len(ordering.keys)]
+        for ordering in scheme.orderings
+    )
 
 
 def _metadata_has_ordering(metadata: ChannelMetadata, keys: Sequence[OrderKey]) -> bool:
-    """Return whether metadata already has the requested ordering."""
+    """Return whether metadata already has compatible ordering."""
     if metadata.partitioning is None:
         return False
     scheme = metadata.partitioning.inter_rank
-    return isinstance(scheme, OrderScheme) and _order_scheme_has_keys(scheme, keys)
+    return isinstance(scheme, OrderScheme) and _order_scheme_has_key_prefix(
+        scheme, keys
+    )
 
 
 def _with_extracted_ordering(
@@ -390,13 +386,13 @@ async def ensure_ordering_metadata(
     comm: Communicator,
     schema_ir: IR,
     ir_context: IRExecutionContext,
-    metadata: ChannelMetadata,
     ch_in: Channel[TableChunk],
+    ch_out: Channel[TableChunk],
     order_keys: Sequence[OrderKey],
     collective_id: int,
-) -> OrderingMetadataResult:
+) -> None:
     """
-    Ensure channel metadata advertises ``order_keys`` when possible.
+    Forward a channel after attaching ordering metadata when possible.
 
     Parameters
     ----------
@@ -408,49 +404,51 @@ async def ensure_ordering_metadata(
         The IR node whose schema defines the input channel columns.
     ir_context
         The IR execution context.
-    metadata
-        The input channel metadata.
     ch_in
         The input channel.
+    ch_out
+        The output channel.
     order_keys
         The requested order keys.
     collective_id
         The collective ID for boundary extraction.
 
-    Returns
-    -------
-    OrderingMetadataResult
-        The updated metadata and buffered chunks when extraction consumed
-        ``ch_in``.
-
     Notes
     -----
-    If the requested ordering is already present, the input channel is left
-    untouched and ``chunks`` is ``None``. Otherwise the input channel is
-    consumed to extract boundaries, and the consumed messages are returned in
-    ``chunks`` for replay by the caller.
+    If the requested ordering is missing, this consumes the input data to
+    extract boundaries before replaying the consumed messages.
     """
-    if not order_keys or _metadata_has_ordering(metadata, order_keys):
-        return OrderingMetadataResult(metadata, None)
+    metadata = await recv_metadata(ch_in, context)
+    buffered_chunks: ChunkStore | None = None
 
-    trivial_metadata = _trivial_ordering_metadata(
-        context, comm, schema_ir, metadata, order_keys
-    )
-    if trivial_metadata is not None:
-        return OrderingMetadataResult(trivial_metadata, None)
+    if order_keys and not _metadata_has_ordering(metadata, order_keys):
+        if (
+            extracted_metadata := _trivial_ordering_metadata(
+                context, comm, schema_ir, metadata, order_keys
+            )
+        ) is not None:
+            metadata = extracted_metadata
+        else:
+            result = await _extract_orderscheme_partitioning(
+                context,
+                comm,
+                schema_ir,
+                ir_context,
+                ch_in,
+                order_keys,
+                collective_id,
+            )
+            metadata = _with_extracted_ordering(metadata, result.partitioning)
+            buffered_chunks = result.chunks
 
-    result = await _extract_orderscheme_partitioning(
-        context,
-        comm,
-        schema_ir,
-        ir_context,
-        ch_in,
-        order_keys,
-        collective_id,
-    )
-    return OrderingMetadataResult(
-        _with_extracted_ordering(metadata, result.partitioning), result.chunks
-    )
+    await send_metadata(ch_out, context, metadata)
+    if buffered_chunks is None:
+        while (msg := await ch_in.recv(context)) is not None:
+            await ch_out.send(context, msg)
+    else:
+        for msg in buffered_chunks:
+            await ch_out.send(context, msg)
+    await ch_out.drain(context)
 
 
 async def _simple_top_or_bottom_k(

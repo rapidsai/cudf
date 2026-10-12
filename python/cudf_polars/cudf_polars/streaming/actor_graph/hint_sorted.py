@@ -18,14 +18,11 @@ from cudf_polars.streaming.actor_graph.dispatch import generate_ir_sub_network
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
     process_children,
-    recv_metadata,
-    send_metadata,
     shutdown_on_error,
 )
 from cudf_polars.utils import sorting
 
 if TYPE_CHECKING:
-    from cudf_streaming.channel_metadata import ChannelMetadata
     from cudf_streaming.table_chunk import TableChunk
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
@@ -33,7 +30,6 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
-    from cudf_polars.streaming.actor_graph.utils import ChunkStore
 
 
 HintSortedOptions: TypeAlias = tuple[
@@ -66,29 +62,6 @@ def _hint_sorted_order_keys(ir: MapFunction) -> list[OrderKey]:
     ]
 
 
-async def extract_hint_sorted_metadata(
-    context: Context,
-    comm: Communicator,
-    ir: MapFunction,
-    ir_context: IRExecutionContext,
-    metadata: ChannelMetadata,
-    ch_in: Channel[TableChunk],
-    collective_id: int,
-) -> tuple[ChannelMetadata, ChunkStore | None]:
-    """Resolve output metadata and any chunks consumed during extraction."""
-    result = await ensure_ordering_metadata(
-        context,
-        comm,
-        ir,
-        ir_context,
-        metadata,
-        ch_in,
-        _hint_sorted_order_keys(ir),
-        collective_id,
-    )
-    return result.metadata, result.chunks
-
-
 @define_actor()
 async def hint_sorted_actor(
     context: Context,
@@ -108,24 +81,16 @@ async def hint_sorted_actor(
         ir_context=ir_context,
     ) as actor_scope:
         ir_context = actor_scope.require_ir_context()
-        metadata = await recv_metadata(ch_in, context)
-        metadata, buffered_chunks = await extract_hint_sorted_metadata(
+        await ensure_ordering_metadata(
             context,
             comm,
             ir,
             ir_context,
-            metadata,
             ch_in,
+            ch_out,
+            _hint_sorted_order_keys(ir),
             collective_id,
         )
-        await send_metadata(ch_out, context, metadata)
-        if buffered_chunks is None:
-            while (msg := await ch_in.recv(context)) is not None:
-                await ch_out.send(context, msg)
-        else:
-            for msg in buffered_chunks:
-                await ch_out.send(context, msg)
-        await ch_out.drain(context)
 
 
 @generate_ir_sub_network.register(MapFunction)
