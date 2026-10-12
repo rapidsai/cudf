@@ -9,16 +9,26 @@ source "$(dirname "${BASH_SOURCE[0]}")/timing.sh"
 
 prepare_environment() {
     local lib=$1 directory="${INTEGRATION_RUN_DIR}/$1"
-    local channels=()
+    local status=0 channels=()
+    mkdir -p "$directory"
     if [[ $RAPIDS_BUILD_TYPE == pull-request ]]; then
         channels=(--prepend-channel "$CPP_CHANNEL" --prepend-channel "$PYTHON_CHANNEL" --prepend-channel "$PYTHON_NOARCH_CHANNEL")
     fi
-    rapids-dependency-file-generator \
-        --config "$INTEGRATION_DEPENDENCIES_YAML" --output conda --file-key "test_${lib}" \
-        --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
-        "${channels[@]}" | tee "${directory}/env.yaml" || return 1
-    integration_run_timed "$lib" environment rapids-mamba-retry env create --yes \
-        -f "${directory}/env.yaml" --prefix "${directory}/env"
+    {
+        if rapids-dependency-file-generator \
+            --config "$INTEGRATION_DEPENDENCIES_YAML" --output conda --file-key "test_${lib}" \
+            --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
+            "${channels[@]}" | tee "${directory}/env.yaml" &&
+            integration_run_timed "$lib" environment rapids-mamba-retry env create --yes \
+                -f "${directory}/env.yaml" --prefix "${directory}/env"; then
+            status=0
+        else
+            status=$?
+        fi
+    } > "${directory}/prepare.log" 2>&1
+    # Atomic publication prevents consumers from reading an empty status file.
+    printf '%s\n' "$status" > "${directory}/status.tmp"
+    mv "${directory}/status.tmp" "${directory}/status"
 }
 
 run_library() {
@@ -46,19 +56,15 @@ run_library() {
 }
 
 prepare_pid=0
-test_pid=0
 INTEGRATION_RUN_DIR=${INTEGRATION_RUN_DIR:-}
 
 cleanup() {
-    local pid
-    for pid in "$prepare_pid" "$test_pid"; do
-        if ((pid > 0)); then
-            # Retry-helper timeouts create additional process groups inside this session.
-            pkill -TERM --session "$pid" 2>/dev/null || true
-            pkill -KILL --session "$pid" 2>/dev/null || true
-            wait "$pid" 2>/dev/null || true
-        fi
-    done
+    if ((prepare_pid > 0)); then
+        # Retry-helper timeouts create additional process groups inside this session.
+        pkill -TERM --session "$prepare_pid" 2>/dev/null || true
+        pkill -KILL --session "$prepare_pid" 2>/dev/null || true
+        wait "$prepare_pid" 2>/dev/null || true
+    fi
     if [[ -n $INTEGRATION_RUN_DIR ]]; then
         rm -rf -- "$INTEGRATION_RUN_DIR"
     fi
@@ -68,14 +74,6 @@ finish() {
     local status=$?
     cleanup || status=1
     return "$status"
-}
-
-launch_preparation() {
-    local lib=$1
-    mkdir -p "${INTEGRATION_RUN_DIR}/${lib}"
-    setsid bash "${BASH_SOURCE[0]}" --prepare "$lib" \
-        > "${INTEGRATION_RUN_DIR}/${lib}/prepare.log" 2>&1 &
-    prepare_pid=$!
 }
 
 main() {
@@ -116,57 +114,68 @@ main() {
     trap 'exit 130' INT
     trap 'exit 143' TERM
 
-    local index status=0 ready test_status
-    launch_preparation "${libraries[0]}"
-    for ((index = 0; index < ${#libraries[@]}; index++)); do
-        lib=${libraries[index]}
-        ready=0
-        if wait "$prepare_pid"; then
-            ready=1
-        else
-            status=1
+    local status=0 test_status
+    if [[ $prefetch == 1 ]]; then
+        prepare_environment "${libraries[0]}"
+        if ((${#libraries[@]} > 1)); then
+            setsid bash "${BASH_SOURCE[0]}" --prepare "${libraries[@]:1}" &
+            prepare_pid=$!
         fi
-        prepare_pid=0
+    fi
+    for lib in "${libraries[@]}"; do
+        if [[ $prefetch == 0 ]]; then
+            prepare_environment "$lib"
+        fi
+        while [[ ! -f "${INTEGRATION_RUN_DIR}/${lib}/status" ]]; do
+            if ! kill -0 "$prepare_pid" 2>/dev/null; then
+                printf 'Environment producer exited before preparing %s.\n' "$lib" >&2
+                return 1
+            fi
+            sleep 1
+        done
         printf '::group::Prepare integration environment: %s\n' "$lib"
         cat "${INTEGRATION_RUN_DIR}/${lib}/prepare.log"
         printf '::endgroup::\n'
 
-        if [[ $prefetch == 1 ]] && ((index + 1 < ${#libraries[@]})); then
-            launch_preparation "${libraries[index + 1]}"
-        fi
-        if ((ready)); then
+        if [[ $(< "${INTEGRATION_RUN_DIR}/${lib}/status") == 0 ]]; then
             printf '::group::Integration tests: %s\n' "$lib"
-            setsid timeout 45m bash "${BASH_SOURCE[0]}" --test "$lib" &
-            test_pid=$!
-            if wait "$test_pid"; then
+            if timeout 45m bash "${BASH_SOURCE[0]}" --test "$lib"; then
                 test_status=0
             else
                 test_status=$?
                 status=1
             fi
-            test_pid=0
             printf 'INTEGRATION_LIBRARY library=%s status=%s\n' "$lib" "$test_status"
             printf '::endgroup::\n'
+        else
+            printf 'Failed to prepare %s environment.\n' "$lib" >&2
+            status=1
         fi
         if [[ -f "${INTEGRATION_RUN_DIR}/${lib}/env/conda-meta/history" ]]; then
             printf '::group::Remove integration environment: %s\n' "$lib"
             if ! rapids-mamba-retry env remove --yes \
                 --prefix "${INTEGRATION_RUN_DIR}/${lib}/env"; then
                 printf '::endgroup::\n'
-                printf 'Failed to remove %s environment; stopping before creating more environments.\n' "$lib" >&2
+                printf 'Failed to remove %s environment.\n' "$lib" >&2
                 return 1
             fi
             printf '::endgroup::\n'
         fi
-        if [[ $prefetch == 0 ]] && ((index + 1 < ${#libraries[@]})); then
-            launch_preparation "${libraries[index + 1]}"
-        fi
     done
+    if ((prepare_pid > 0)); then
+        wait "$prepare_pid" || status=1
+        prepare_pid=0
+    fi
     return "$status"
 }
 
 case ${1:-} in
-    --prepare) prepare_environment "$2" ;;
+    --prepare)
+        shift
+        for library in "$@"; do
+            prepare_environment "$library"
+        done
+        ;;
     --test) run_library "$2" ;;
     *) main "$@" ;;
 esac
