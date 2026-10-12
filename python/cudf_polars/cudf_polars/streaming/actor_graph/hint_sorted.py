@@ -1,15 +1,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Streaming actor for ``MapFunction("hint_sorted")``."""
+"""Streaming actor for sortedness hints."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, TypeAlias, cast
+from typing import TYPE_CHECKING, Any
 
 from cudf_streaming.channel_metadata import OrderKey
 from rapidsmpf.streaming.core.actor import define_actor
 
-from cudf_polars.dsl.ir import IR, MapFunction
 from cudf_polars.dsl.utils.naming import names_to_indices
 from cudf_polars.streaming.actor_graph.collectives.ordering import (
     ensure_ordering_metadata,
@@ -20,6 +19,7 @@ from cudf_polars.streaming.actor_graph.utils import (
     process_children,
     shutdown_on_error,
 )
+from cudf_polars.streaming.hint_sorted import HintSorted
 from cudf_polars.utils import sorting
 
 if TYPE_CHECKING:
@@ -28,26 +28,13 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
-    from cudf_polars.dsl.ir import IRExecutionContext
+    from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
 
 
-HintSortedOptions: TypeAlias = tuple[
-    tuple[str, ...], tuple[bool, ...], tuple[bool, ...]
-]
-
-
-def _hint_sorted_options(
-    ir: MapFunction,
-) -> HintSortedOptions:
-    """Return normalized ``hint_sorted`` options."""
-    assert ir.name == "hint_sorted"
-    return cast("HintSortedOptions", ir.options)
-
-
-def _hint_sorted_order_keys(ir: MapFunction) -> list[OrderKey]:
-    """Convert ``MapFunction("hint_sorted")`` options to ordering keys."""
-    column_names, descending, nulls_last = _hint_sorted_options(ir)
+def _hint_sorted_order_keys(ir: HintSorted) -> list[OrderKey]:
+    """Convert hint-sorted options to ordering keys."""
+    column_names, descending, nulls_last = ir.options
     orders, null_orders = sorting.sort_order(
         descending, nulls_last=nulls_last, num_keys=len(column_names)
     )
@@ -66,7 +53,7 @@ def _hint_sorted_order_keys(ir: MapFunction) -> list[OrderKey]:
 async def hint_sorted_actor(
     context: Context,
     comm: Communicator,
-    ir: MapFunction,
+    ir: HintSorted,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
     ch_in: Channel[TableChunk],
@@ -93,13 +80,10 @@ async def hint_sorted_actor(
         )
 
 
-@generate_ir_sub_network.register(MapFunction)
+@generate_ir_sub_network.register(HintSorted)
 def _(
-    ir: MapFunction, rec: SubNetGenerator
+    ir: HintSorted, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
-    if ir.name != "hint_sorted":
-        return generate_ir_sub_network.dispatch(IR)(ir, rec)
-
     nodes, channels = process_children(ir, rec)
     channels[ir] = ChannelManager(rec.state["context"])
     (collective_id,) = rec.state["collective_id_map"][ir]
