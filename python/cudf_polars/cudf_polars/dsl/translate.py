@@ -22,7 +22,7 @@ from polars import polars as plrs  # type: ignore[attr-defined]
 import pylibcudf as plc
 
 from cudf_polars.containers import DataType
-from cudf_polars.containers.datatype import _contains_array, _contains_categorical
+from cudf_polars.containers.datatype import _contains_dtype
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.to_ast import insert_colrefs
@@ -89,20 +89,24 @@ def _align_decimal_float_for_comparison(
 def _contains_array_input(expression: expr.Expr) -> bool:
     """Return whether an expression consumes an Array-typed input."""
     return any(
-        _contains_array(node.dtype.polars_type) for node in traversal([expression])
+        _contains_dtype(node.dtype.polars_type, (pl.Array,))
+        for node in traversal([expression])
     )
 
 
 def _contains_categorical_input(expression: expr.Expr) -> bool:
     """Return whether an expression consumes a Categorical or Enum input."""
     return any(
-        _contains_categorical(node.dtype.polars_type)
+        _contains_dtype(node.dtype.polars_type, (pl.Categorical, pl.Enum))
         for node in traversal([expression])
     )
 
 
 def _contains_categorical_key(keys: Sequence[expr.NamedExpr]) -> bool:
-    return any(_contains_categorical(k.value.dtype.polars_type) for k in keys)
+    return any(
+        _contains_dtype(k.value.dtype.polars_type, (pl.Categorical, pl.Enum))
+        for k in keys
+    )
 
 
 def _supports_categorical(config_options: config.ConfigOptions) -> bool:
@@ -283,6 +287,32 @@ class Translator:
             except Exception as e:
                 self.errors.append(e)
                 return ir.ErrorNode(schema, str(e))
+            if not isinstance(
+                node,
+                (
+                    plrs._ir_nodes.Select,
+                    plrs._ir_nodes.HStack,
+                    plrs._ir_nodes.Filter,
+                    plrs._ir_nodes.Slice,
+                    plrs._ir_nodes.Sort,
+                    plrs._ir_nodes.Cache,
+                    plrs._ir_nodes.SimpleProjection,
+                    plrs._ir_nodes.Union,
+                    plrs._ir_nodes.HConcat,
+                    plrs._ir_nodes.Join,
+                    plrs._ir_nodes.GroupBy,
+                ),
+            ) and any(
+                _contains_dtype(dtype.polars_type, (pl.Time,))
+                for ir_node in (result, *result.children)
+                for dtype in ir_node.schema.values()
+            ):
+                error = NotImplementedError(
+                    "Only dt.time() and pass-through of Time columns are supported; "
+                    f"unsupported node {type(node).__name__}"
+                )
+                self.errors.append(error)
+                return ir.ErrorNode(schema, str(error))
             if any(
                 isinstance(dtype, pl.Null)
                 for dtype in pl.datatypes.unpack_dtypes(*polars_schema.values())
@@ -331,7 +361,7 @@ class Translator:
         return NotImplementedError(message, unique_errors)
 
     def translate_expr(
-        self, *, n: int, schema: Schema, allow_array_passthrough: bool = False
+        self, *, n: int, schema: Schema, allow_passthrough: bool = False
     ) -> expr.Expr:
         """
         Translate a polars-internal expression IR into our representation.
@@ -342,8 +372,8 @@ class Translator:
             Node to translate, an integer referencing a polars internal node.
         schema
             Schema of the IR node this expression uses as evaluation context.
-        allow_array_passthrough
-            Whether a direct Array column may be returned unchanged.
+        allow_passthrough
+            Whether a direct Array or Time column, or a ``dt.time()`` result, may be returned.
 
         Returns
         -------
@@ -372,7 +402,7 @@ class Translator:
             polars_dtype = pl.UInt64()
         dtype = DataType(polars_dtype)
         is_array_passthrough = (
-            allow_array_passthrough
+            allow_passthrough
             and isinstance(dtype.polars_type, pl.Array)
             and isinstance(node, plrs._expr_nodes.Column)
         )
@@ -381,7 +411,9 @@ class Translator:
             self.errors.append(error)
             return expr.ErrorExpr(dtype, str(error))
         is_column = isinstance(node, plrs._expr_nodes.Column)
-        if not is_column and _contains_categorical(dtype.polars_type):
+        if not is_column and _contains_dtype(
+            dtype.polars_type, (pl.Categorical, pl.Enum)
+        ):
             error = NotImplementedError(
                 "Only pass-through of Categorical/Enum columns is supported"
             )
@@ -399,6 +431,30 @@ class Translator:
         if not is_column and _contains_categorical_input(translated):
             error = NotImplementedError(
                 "Only pass-through of Categorical/Enum columns is supported"
+            )
+            self.errors.append(error)
+            return expr.ErrorExpr(dtype, str(error))
+        is_time_function = (
+            isinstance(translated, expr.TemporalFunction)
+            and translated.name is expr.TemporalFunction.Name.Time
+        )
+        is_time_passthrough = (
+            allow_passthrough
+            and isinstance(dtype.polars_type, pl.Time)
+            and (isinstance(translated, expr.Col) or is_time_function)
+        )
+        if (
+            _contains_dtype(dtype.polars_type, (pl.Time,)) and not is_time_passthrough
+        ) or (
+            # dt.time() children were already validated with allow_passthrough=True.
+            not is_time_function
+            and any(
+                _contains_dtype(child.dtype.polars_type, (pl.Time,))
+                for child in traversal(list(translated.children))
+            )
+        ):
+            error = NotImplementedError(
+                "Only dt.time() and pass-through of Time columns are supported"
             )
             self.errors.append(error)
             return expr.ErrorExpr(dtype, str(error))
@@ -569,7 +625,10 @@ def _(node: plrs._ir_nodes.PythonScan, translator: Translator, schema: Schema) -
 @_translate_ir.register
 def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.IR:
     typ, *options = node.scan_type
-    if any(_contains_categorical(dtype.polars_type) for dtype in schema.values()):
+    if any(
+        _contains_dtype(dtype.polars_type, (pl.Categorical, pl.Enum))
+        for dtype in schema.values()
+    ):
         raise NotImplementedError("Reading Categorical/Enum columns is not supported")
     paths = [_strip_file_uri(p) for p in node.paths]
     # Polars can produce a Scan with an empty ``node.paths`` (eg. the native
@@ -684,7 +743,7 @@ def _(node: plrs._ir_nodes.Select, translator: Translator, schema: Schema) -> ir
                     translator,
                     n=e,
                     schema=inp.schema,
-                    allow_array_passthrough=True,
+                    allow_passthrough=True,
                 )
                 for e in node.expr
             ]
@@ -814,7 +873,7 @@ def _(node: plrs._ir_nodes.HStack, translator: Translator, schema: Schema) -> ir
                     translator,
                     n=e,
                     schema=inp.schema,
-                    allow_array_passthrough=True,
+                    allow_passthrough=True,
                 )
                 for e in node.exprs
             ]
@@ -840,9 +899,12 @@ def _(node: plrs._ir_nodes.Distinct, translator: Translator, schema: Schema) -> 
     subset = frozenset(subset) if subset is not None else None
     inp = translator.translate_ir(n=node.input)
     keys = inp.schema if subset is None else subset
-    if any(_contains_array(inp.schema[name].polars_type) for name in keys):
+    if any(_contains_dtype(inp.schema[name].polars_type, (pl.Array,)) for name in keys):
         raise NotImplementedError(_ARRAY_PASSTHROUGH_ERROR)
-    if any(_contains_categorical(inp.schema[name].polars_type) for name in keys):
+    if any(
+        _contains_dtype(inp.schema[name].polars_type, (pl.Categorical, pl.Enum))
+        for name in keys
+    ):
         raise NotImplementedError(
             "Distinct on Categorical/Enum columns is not supported"
         )
@@ -924,7 +986,7 @@ def _(
         key = key[0]
     inp_left = translator.translate_ir(n=node.input_left)
     inp_right = translator.translate_ir(n=node.input_right)
-    if _contains_categorical(inp_left.schema[key].polars_type):
+    if _contains_dtype(inp_left.schema[key].polars_type, (pl.Categorical, pl.Enum)):
         raise NotImplementedError("Merging on Categorical/Enum keys is not supported")
     return ir.MergeSorted(
         schema,
@@ -1019,9 +1081,14 @@ def _(node: plrs._ir_nodes.Sink, translator: Translator, schema: Schema) -> ir.I
         path = file["target"]["inner"]
 
     df = translator.translate_ir(n=node.input)
-    if any(_contains_array(dtype.polars_type) for dtype in df.schema.values()):
+    if any(
+        _contains_dtype(dtype.polars_type, (pl.Array,)) for dtype in df.schema.values()
+    ):
         raise NotImplementedError(_ARRAY_PASSTHROUGH_ERROR)
-    if any(_contains_categorical(dtype.polars_type) for dtype in df.schema.values()):
+    if any(
+        _contains_dtype(dtype.polars_type, (pl.Categorical, pl.Enum))
+        for dtype in df.schema.values()
+    ):
         raise NotImplementedError("Writing Categorical/Enum columns is not supported")
 
     return ir.Sink(
@@ -1040,7 +1107,7 @@ def translate_named_expr(
     *,
     n: plrs._expr_nodes.PyExprIR,
     schema: Schema,
-    allow_array_passthrough: bool = False,
+    allow_passthrough: bool = False,
 ) -> expr.NamedExpr:
     """
     Translate a polars-internal named expression IR object into our representation.
@@ -1053,8 +1120,8 @@ def translate_named_expr(
         Node to translate, a named expression node.
     schema
         Schema of the IR node this expression uses as evaluation context.
-    allow_array_passthrough
-        Whether a direct Array column may be returned unchanged.
+    allow_passthrough
+        Whether a direct Array or Time column, or a ``dt.time()`` result, may be returned.
 
     Returns
     -------
@@ -1077,7 +1144,7 @@ def translate_named_expr(
         translator.translate_expr(
             n=n.node,
             schema=schema,
-            allow_array_passthrough=allow_array_passthrough,
+            allow_passthrough=allow_passthrough,
         ),
     )
 
@@ -1180,7 +1247,14 @@ def _(
             dtype,
             expr.TemporalFunction.Name.from_polars(name),
             options,
-            *(translator.translate_expr(n=n, schema=schema) for n in node.input),
+            *(
+                translator.translate_expr(
+                    n=n,
+                    schema=schema,
+                    allow_passthrough=name == plrs._expr_nodes.TemporalFunction.Time,
+                )
+                for n in node.input
+            ),
         )
         if name in needs_cast:
             return expr.Cast(dtype, True, result_expr)  # noqa: FBT003
