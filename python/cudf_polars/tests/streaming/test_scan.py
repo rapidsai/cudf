@@ -4,9 +4,6 @@
 from __future__ import annotations
 
 import math
-import subprocess
-import sys
-import textwrap
 from typing import TYPE_CHECKING, cast
 
 import pytest
@@ -1189,40 +1186,27 @@ def test_hive_only_projection_with_prefetched_metadata(
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
-def test_scan_error_does_not_crash_engine(tmp_path: Path, timeout_seconds: int) -> None:
+def test_scan_error_does_not_crash_engine(
+    tmp_path: Path,
+    spmd_engine_factory: Callable[[StreamingOptions], StreamingEngine],
+) -> None:
     pl.DataFrame({"x": [1], "y": [1]}).write_parquet(tmp_path / "0.parquet")
     pl.DataFrame({"x": [2]}).write_parquet(tmp_path / "1.parquet")
-
-    code = textwrap.dedent("""\
-        import sys
-        import polars as pl
-        from cudf_polars.engine.spmd import SPMDEngine
-
-        query = pl.scan_parquet(sys.argv[1], missing_columns="insert").filter(
-            pl.col("y") == 1
+    query = pl.scan_parquet(tmp_path, missing_columns="insert").filter(pl.col("y") == 1)
+    engine = spmd_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=4,
+            target_partition_size=10,
+            fallback_mode="silent",
         )
-        with SPMDEngine(executor_options={
-            "max_rows_per_partition": 4,
-            "target_partition_size": 10,
-            "fallback_mode": "silent",
-        }) as engine:
-            for _ in range(100):
-                try:
-                    result = query.collect(engine=engine)
-                except ExceptionGroup as error:
-                    assert error.subgroup(ValueError) is not None
-                else:
-                    assert result.to_dict(as_series=False) == {"x": [1], "y": [1]}
-                result = pl.LazyFrame({"value": [1]}).collect(engine=engine)
-                assert result.to_dict(as_series=False) == {"value": [1]}
-        """)
-
-    # Isolate native crashes so they become test failures without killing pytest.
-    result = subprocess.run(
-        [sys.executable, "-c", code, str(tmp_path)],
-        capture_output=True,
-        text=True,
-        timeout=timeout_seconds,
-        check=False,
     )
-    assert result.returncode == 0, result.stdout + result.stderr
+    for _ in range(100):
+        try:
+            result = query.collect(engine=engine)
+        except ExceptionGroup as error:
+            if error.subgroup(ValueError) is None:
+                raise
+        else:
+            assert result.to_dict(as_series=False) == {"x": [1], "y": [1]}
+        result = pl.LazyFrame({"value": [1]}).collect(engine=engine)
+        assert result.to_dict(as_series=False) == {"value": [1]}
