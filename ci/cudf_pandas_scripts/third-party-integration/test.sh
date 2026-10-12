@@ -90,11 +90,6 @@ main() {
             fi
             printf 'INTEGRATION_LIBRARY library=%s status=%s\n' "$lib" "$test_status"
             printf '::endgroup::\n'
-        else
-            printf 'Failed to prepare %s environment.\n' "$lib" >&2
-            status=1
-        fi
-        if [[ -f "${INTEGRATION_RUN_DIR}/${lib}/env/conda-meta/history" ]]; then
             printf '::group::Remove integration environment: %s\n' "$lib"
             if ! rapids-mamba-retry env remove --yes \
                 --prefix "${INTEGRATION_RUN_DIR}/${lib}/env"; then
@@ -103,6 +98,9 @@ main() {
                 return 1
             fi
             printf '::endgroup::\n'
+        else
+            printf 'Failed to prepare %s environment.\n' "$lib" >&2
+            status=1
         fi
     done
     if ((prepare_pid > 0)); then
