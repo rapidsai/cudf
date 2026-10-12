@@ -19,8 +19,10 @@ import contextvars
 import functools
 import itertools
 import json
+import pickle
 import random
 import reprlib
+import sys
 import time
 import uuid
 from collections.abc import Sized
@@ -46,6 +48,7 @@ from pylibcudf import expressions as plc_expr
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.containers.dataframe import NamedColumn
+from cudf_polars.containers.datatype import _contains_dtype
 from cudf_polars.dsl.expressions import rolling, unary
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
@@ -87,7 +90,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers.dataframe import NamedColumn
     from cudf_polars.dsl.utils.io import CachedParquetInfo
-    from cudf_polars.quent._context import QuentIRExecutionContext
+    from cudf_polars.quent._context import QuentIRExecutionState
     from cudf_polars.streaming.actor_graph.tracing import ActorTracer
     from cudf_polars.streaming.rank_aware_source import RankAwareSource
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
@@ -100,6 +103,7 @@ if TYPE_CHECKING:
 __all__ = [
     "IR",
     "Cache",
+    "CallbackSink",
     "ConditionalJoin",
     "DataFrameScan",
     "Distinct",
@@ -143,7 +147,7 @@ class IRExecutionContext:
         A zero-argument callable that returns a CUDA stream.
     query_id
         Identifier for the query being executed.
-    quent_ir_execution_context
+    quent_ir_execution_state
         Optional Quent tracing context bound to a physical operator.
     tracer
         The actor tracer. Used to propagate statistics.
@@ -152,7 +156,7 @@ class IRExecutionContext:
     py_executor: concurrent.futures.ThreadPoolExecutor | None = field(default=None)
     get_cuda_stream: Callable[[], Stream] = field(default=get_cuda_stream)
     query_id: uuid.UUID = field(default_factory=uuid.uuid4)
-    quent_ir_execution_context: QuentIRExecutionContext | None = None
+    quent_ir_execution_state: QuentIRExecutionState | None = None
     tracer: ActorTracer | None = None
 
     async def to_thread(
@@ -1486,6 +1490,65 @@ class Scan(IR):
             c.obj.type() == schema[name].plc_type for name, c in df.column_map.items()
         )
         return apply_predicate(df, effective_predicate)
+
+
+class CallbackSink(IR):
+    """Pass the input dataframe to a Polars batch callback."""
+
+    __slots__ = ("chunk_size", "function", "maintain_order")
+    _non_child = ("schema", "function", "chunk_size", "maintain_order")
+    _n_non_child_args = 3
+
+    def __init__(
+        self,
+        schema: Schema,
+        function: bytes,
+        chunk_size: int | None,
+        maintain_order: bool,  # noqa: FBT001
+        df: IR,
+    ) -> None:
+        self.schema = schema
+        self.function = function
+        self.chunk_size = chunk_size
+        self.maintain_order = maintain_order
+        self._non_child_args = (function, chunk_size, maintain_order)
+        self.children = (df,)
+
+    @staticmethod
+    def load_function(function: bytes) -> Callable[[polars.PyDataFrame], bool]:
+        """Decode the callback stored in Polars' Sink payload."""
+        # Polars prefixes the pickle payload with a cloudpickle flag and the
+        # Python minor and micro versions used to serialize the function.
+        if len(function) <= 3 or function[0] not in (0, 1):
+            raise ValueError("Invalid Polars callback serialization")
+        if function[0] and tuple(function[1:3]) != sys.version_info[1:3]:
+            raise ValueError(
+                "Cannot deserialize a cloudpickled callback from a different "
+                "Python version"
+            )
+        return pickle.loads(function[3:])
+
+    @classmethod
+    def do_evaluate(
+        cls,
+        function: bytes,
+        chunk_size: int | None,
+        maintain_order: bool,  # noqa: FBT001
+        df: DataFrame,
+        *,
+        context: IRExecutionContext,
+    ) -> DataFrame:
+        """Execute the callback for the in-memory executor."""
+        # The input is already one materialized DataFrame, so its order is fixed.
+        callback = cls.load_function(function)
+        host_df = df.to_polars()
+        if chunk_size is None:
+            callback(host_df._df)
+        else:
+            for offset in range(0, host_df.height, chunk_size):
+                if callback(host_df.slice(offset, chunk_size)._df):
+                    break
+        return DataFrame([], stream=df.stream)
 
 
 class Sink(IR):
@@ -3847,6 +3910,13 @@ class MapFunction(IR):
             raise NotImplementedError(
                 f"Unhandled map function {self.name}"
             )  # pragma: no cover
+        if self.name == "unpivot" and any(
+            _contains_dtype(dtype.polars_type, (pl.Categorical, pl.Enum))
+            for dtype in df.schema.values()
+        ):
+            raise NotImplementedError(
+                f"{self.name} with Categorical/Enum columns is not supported"
+            )
         if self.name == "explode":
             if POLARS_VERSION_LT_136 or len(self.options) == 1:
                 (to_explode,) = self.options
@@ -3922,6 +3992,10 @@ class MapFunction(IR):
                     tuple(column_names),
                     tuple(descending),
                     tuple(nulls_last),
+                )
+            if any(df.schema[name].is_categorical for name in self.options[0]):
+                raise NotImplementedError(
+                    "Sortedness hints on Categorical/Enum columns are not supported"
                 )
         self._non_child_args = (schema, name, self.options)
 
@@ -4081,7 +4155,6 @@ class Union(IR):
         self.maintain_order = maintain_order
         self._non_child_args = (zlice,)
         self.children = children
-        schema = self.children[0].schema
 
     @classmethod
     @log_do_evaluate
