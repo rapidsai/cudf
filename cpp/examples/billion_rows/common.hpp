@@ -19,10 +19,10 @@
  */
 cuda::mr::any_resource<cuda::mr::device_accessible> create_memory_resource(std::string const& name)
 {
+  rmm::mr::cuda_memory_resource cuda_mr{};
   if (name == "pool") {
-    return rmm::mr::pool_memory_resource{rmm::mr::cuda_memory_resource{},
-                                         rmm::percent_of_free_device_memory(50)};
+    return rmm::mr::pool_memory_resource{cuda_mr, rmm::percent_of_free_device_memory(50)};
   }
-  if (name == "cuda") { return rmm::mr::cuda_memory_resource{}; }
+  if (name == "cuda") { return cuda_mr; }
   return rmm::mr::cuda_async_memory_resource{};
 }

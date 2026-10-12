@@ -155,30 +155,29 @@ std::unique_ptr<cudf::table> sort_keys(cudf::table_view input)
  * Command line parameters:
  * 1. JSON input file name/path (default: "example.json")
  * 2. JSON output file name/path (default: "output.json")
- * 3. Memory resource (optional): "async" (default), "pool", or "cuda"
+ * 3. Memory resource (optional): "async", "pool", or "cuda" (default: "async")
  *
  * Example invocation from directory `cudf/cpp/examples/nested_types`:
- * ./build/deduplication example.json output.json
+ * ./build/deduplication example.json output.json async
  *
  */
 int main(int argc, char const** argv)
 {
   std::string input_filepath;
   std::string output_filepath;
-  std::string mr_name = "async";
-  if (argc != 4 && argc != 3 && argc != 1) {
-    std::cout
-      << "Provide input and output paths with an optional memory resource, or none to use defaults"
-      << std::endl;
+  std::string mr_name;
+  if (argc != 4 && argc != 1) {
+    std::cout << "Either provide all command-line arguments, or none to use defaults" << std::endl;
     return 1;
   }
   if (argc == 1) {
     input_filepath  = "example.json";
     output_filepath = "output.json";
+    mr_name         = "async";
   } else {
     input_filepath  = argv[1];
     output_filepath = argv[2];
-    if (argc == 4) { mr_name = argv[3]; }
+    mr_name         = argv[3];
   }
 
   auto resource = create_memory_resource(mr_name);

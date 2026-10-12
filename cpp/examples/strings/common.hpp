@@ -11,7 +11,6 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_device.hpp>
 #include <rmm/mr/cuda_async_memory_resource.hpp>
@@ -22,7 +21,6 @@
 
 #include <chrono>
 #include <iostream>
-#include <stdexcept>
 #include <string>
 
 /**
@@ -65,9 +63,8 @@ int main(int argc, char const** argv)
       return rmm::mr::pool_memory_resource{rmm::mr::cuda_memory_resource{},
                                            rmm::percent_of_free_device_memory(50)};
     }
-    if (mr_name == "cuda") { return rmm::mr::cuda_memory_resource{}; }
     if (mr_name == "async") { return rmm::mr::cuda_async_memory_resource{}; }
-    CUDF_FAIL("Unrecognized memory resource name: " + mr_name, std::invalid_argument);
+    return rmm::mr::cuda_memory_resource{};
   }();
   cudf::set_current_device_resource(mr);
 
