@@ -45,10 +45,6 @@ main() {
     conda activate "$environment"
     set -u
 
-    rapids-print-env
-    conda list --explicit
-    nvidia-smi
-
     NUM_PROCESSES=${NUM_PROCESSES:-0}
     COMPARE_NUM_PROCESSES=${COMPARE_NUM_PROCESSES:-0}
     if [[ $lib == tensorflow ]]; then
