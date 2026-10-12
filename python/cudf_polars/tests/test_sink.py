@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import datetime
+import json
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -14,6 +16,9 @@ from cudf_polars.testing.asserts import (
 )
 from cudf_polars.testing.engine_utils import get_blocksize_mode
 from cudf_polars.utils.versions import POLARS_VERSION_LT_138
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture(scope="module")
@@ -247,3 +252,30 @@ def test_sink_parquet_time_falls_back(in_memory_engine, tmp_path):
         {},
         NotImplementedError,
     )
+
+
+@pytest.mark.parametrize("chunk_size", [None, 3])
+def test_sink_batches(
+    in_memory_engine: pl.GPUEngine,
+    df: pl.LazyFrame,
+    tmp_path: Path,
+    chunk_size: int | None,
+) -> None:
+    output = tmp_path / "batches.jsonl"
+
+    def write_batch(batch: pl.DataFrame) -> bool | None:
+        with output.open("a") as file:
+            file.write(json.dumps(batch.to_dict(as_series=False)) + "\n")
+        return None
+
+    sink = df.sink_batches(write_batch, chunk_size=chunk_size, lazy=True)
+    assert not output.exists()
+    assert sink.collect(engine=in_memory_engine).shape == (0, 0)
+    batches = [json.loads(line) for line in output.read_text().splitlines()]
+
+    if chunk_size is None:
+        expected_sizes = [6]
+    else:
+        expected_sizes = [chunk_size, chunk_size]
+
+    assert [len(batch["a"]) for batch in batches] == expected_sizes
