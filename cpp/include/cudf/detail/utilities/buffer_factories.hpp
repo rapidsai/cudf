@@ -25,8 +25,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 
 /**
  * @brief Asynchronously construct a `device_buffer` and set all elements to zero.
@@ -197,5 +196,4 @@ cuda::device_buffer<T> make_device_buffer(std::vector<T, Allocator> const& sourc
   return make_device_buffer(host_span<T const>{source_data}, stream, mr);
 }
 
-}  // namespace detail
-}  // namespace cudf
+}  // namespace cudf::detail
