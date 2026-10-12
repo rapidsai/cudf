@@ -9,8 +9,7 @@ import functools
 import json
 import os
 import uuid
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeAlias, TypeVar
 
 import polars as pl
 
@@ -41,19 +40,51 @@ if TYPE_CHECKING:
     from cudf_polars.typing import Schema
 
 _JOIN_TYPES = frozenset({"Join", "ConditionalJoin"})
-OperatorDetails = tuple[Callable[..., object], object]
+# These type variables / protocol ensures that the callable and dictionary values
+# emitted from each `_operator_details` dispatch are compatible.
+DetailsT = TypeVar("DetailsT")
+DetailsT_contra = TypeVar("DetailsT_contra", contravariant=True)
+
+
+class DetailsEmitter(Protocol[DetailsT_contra]):
+    """Callable that emits one schema-defined operator-details payload."""
+
+    def __call__(self, *, values: DetailsT_contra) -> None: ...
+
+
+OperatorDetails: TypeAlias = tuple[DetailsEmitter[DetailsT], DetailsT]
 
 
 @functools.singledispatch
 def _operator_details(
     node: IR, operator: quent_bindings.OperatorHandle
-) -> OperatorDetails | None:
-    """Build schema-defined details for an operator, when available."""
+) -> OperatorDetails[Any] | None:
+    """
+    Build the specific emitter and details dictionary for an operator.
+
+    This dispatches based on the type of the node. By default, no emitter /
+    details dictionary are returned. Nodes with specific details can register
+    their own emitter and details dictionary. These details are included in the
+    emitted Quent plan.
+
+    Parameters
+    ----------
+    node
+        The IR node being evaluated.
+    operator
+        The Quent operator handle for the node.
+
+    Returns
+    -------
+    A tuple containing the emitter callable and the details dictionary.
+    """
     return None
 
 
 @_operator_details.register(Scan)
-def _(node: Scan, operator: quent_bindings.OperatorHandle) -> OperatorDetails:
+def _(
+    node: Scan, operator: quent_bindings.OperatorHandle
+) -> OperatorDetails[quent_bindings.ScanDetailsDict]:
     return (
         operator.scan_details,
         {
@@ -65,7 +96,9 @@ def _(node: Scan, operator: quent_bindings.OperatorHandle) -> OperatorDetails:
 
 
 @_operator_details.register(StreamingScan)
-def _(node: StreamingScan, operator: quent_bindings.OperatorHandle) -> OperatorDetails:
+def _(
+    node: StreamingScan, operator: quent_bindings.OperatorHandle
+) -> OperatorDetails[quent_bindings.StreamingScanDetailsDict]:
     return (
         operator.streaming_scan_details,
         {
@@ -78,14 +111,16 @@ def _(node: StreamingScan, operator: quent_bindings.OperatorHandle) -> OperatorD
 
 
 @_operator_details.register(Join)
-def _(node: Join, operator: quent_bindings.OperatorHandle) -> OperatorDetails:
+def _(
+    node: Join, operator: quent_bindings.OperatorHandle
+) -> OperatorDetails[quent_bindings.JoinDetailsDict]:
     return operator.join_details, _join_details(node)
 
 
 @_operator_details.register(JoinWithPrefilter)
 def _(
     node: JoinWithPrefilter, operator: quent_bindings.OperatorHandle
-) -> OperatorDetails:
+) -> OperatorDetails[quent_bindings.JoinWithPrefilterDetailsDict]:
     return (
         operator.join_with_prefilter_details,
         {
@@ -98,7 +133,7 @@ def _(
 @_operator_details.register(PushdownFilterHint)
 def _(
     node: PushdownFilterHint, operator: quent_bindings.OperatorHandle
-) -> OperatorDetails:
+) -> OperatorDetails[quent_bindings.PushdownFilterHintDetailsDict]:
     return (
         operator.pushdown_filter_hint_details,
         {
@@ -111,17 +146,23 @@ def _(
 
 
 @_operator_details.register(GroupBy)
-def _(node: GroupBy, operator: quent_bindings.OperatorHandle) -> OperatorDetails:
+def _(
+    node: GroupBy, operator: quent_bindings.OperatorHandle
+) -> OperatorDetails[quent_bindings.KeysDetailsDict]:
     return operator.group_by_details, {"keys": [value.name for value in node.keys]}
 
 
 @_operator_details.register(Shuffle)
-def _(node: Shuffle, operator: quent_bindings.OperatorHandle) -> OperatorDetails:
+def _(
+    node: Shuffle, operator: quent_bindings.OperatorHandle
+) -> OperatorDetails[quent_bindings.KeysDetailsDict]:
     return operator.shuffle_details, {"keys": [value.name for value in node.keys]}
 
 
 @_operator_details.register(Sort)
-def _(node: Sort, operator: quent_bindings.OperatorHandle) -> OperatorDetails:
+def _(
+    node: Sort, operator: quent_bindings.OperatorHandle
+) -> OperatorDetails[quent_bindings.SortDetailsDict]:
     return (
         operator.sort_details,
         {
@@ -132,7 +173,9 @@ def _(node: Sort, operator: quent_bindings.OperatorHandle) -> OperatorDetails:
 
 
 @_operator_details.register(Filter)
-def _(node: Filter, operator: quent_bindings.OperatorHandle) -> OperatorDetails:
+def _(
+    node: Filter, operator: quent_bindings.OperatorHandle
+) -> OperatorDetails[quent_bindings.FilterDetailsDict]:
     expression = _json_expr(node.mask.value)
     assert expression is not None
     return (
@@ -145,12 +188,16 @@ def _(node: Filter, operator: quent_bindings.OperatorHandle) -> OperatorDetails:
 
 
 @_operator_details.register(Select)
-def _(node: Select, operator: quent_bindings.OperatorHandle) -> OperatorDetails:
+def _(
+    node: Select, operator: quent_bindings.OperatorHandle
+) -> OperatorDetails[quent_bindings.ColumnsDetailsDict]:
     return operator.select_details, {"columns": [value.name for value in node.exprs]}
 
 
 @_operator_details.register(HStack)
-def _(node: HStack, operator: quent_bindings.OperatorHandle) -> OperatorDetails:
+def _(
+    node: HStack, operator: quent_bindings.OperatorHandle
+) -> OperatorDetails[quent_bindings.ColumnsDetailsDict]:
     return operator.hstack_details, {"columns": [value.name for value in node.columns]}
 
 
