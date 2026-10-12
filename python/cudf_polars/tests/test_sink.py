@@ -279,7 +279,7 @@ def test_sink_batches(
     batches = [json.loads(line) for line in output.read_text().splitlines()]
 
     if chunk_size is None:
-        expected_sizes = [6]
+        expected_sizes = [df.collect().height]
     elif return_early:
         expected_sizes = [chunk_size]
     else:
