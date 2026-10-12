@@ -427,9 +427,7 @@ async def _process_and_send_chunk(
         reservation = input_bytes * (1 + (ir.predicate is not None))
     with opaque_memory_usage(
         await reserve_memory(
-            context,
-            size=reservation,
-            net_memory_delta=net_memory_delta,
+            context, size=reservation, net_memory_delta=net_memory_delta
         )
     ):
         df = await ir_context.to_thread(process)

@@ -148,11 +148,7 @@ async def project_key_chunk(
     columns = tuple(chunk.table_view().columns()[index] for index in indices)
     bytes = sum(column.device_buffer_size() for column in columns)
     with opaque_memory_usage(
-        await reserve_memory(
-            context,
-            size=bytes,
-            net_memory_delta=0,
-        )
+        await reserve_memory(context, size=bytes, net_memory_delta=0)
     ):
         table = plc.Table(columns).copy(stream=chunk.stream, mr=context.br().device_mr)
     return TableChunk.from_pylibcudf_table(
@@ -193,11 +189,7 @@ async def buffer_and_project_keys(
                 chunk = await TableChunk.from_message(
                     msg, br=context.br()
                 ).make_available_or_wait(context, net_memory_delta=0)
-                key_chunk = await project_key_chunk(
-                    context,
-                    chunk,
-                    indices,
-                )
+                key_chunk = await project_key_chunk(context, chunk, indices)
                 chunks.insert(Message(sequence_number, chunk))
                 await ch_keys.send(context, Message(sequence_number, key_chunk))
 

@@ -542,12 +542,7 @@ async def _global_shuffle(
     # Other ranks still participate in the shuffle protocol.
     skip_insert = metadata_in.duplicated and comm.rank != 0
 
-    shuffle = ShuffleManager(
-        context,
-        comm,
-        num_partitions,
-        collective_id,
-    )
+    shuffle = ShuffleManager(context, comm, num_partitions, collective_id)
     async with shuffle.inserting() as inserter:
         while (msg := await ch_in.recv(context)) is not None:
             if not skip_insert:
