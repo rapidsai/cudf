@@ -23,7 +23,7 @@ from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 if TYPE_CHECKING:
     from typing import Self
 
-    from polars import polars  # type: ignore[attr-defined]
+    from polars import _plr as polars
 
     from rmm.pylibrmm.stream import Stream
 
@@ -1146,8 +1146,6 @@ class TemporalFunction(Expr):
             child_dtype = self.children[0].dtype.polars_type
             if isinstance(child_dtype, pl.Datetime):
                 self.tz_descs = (_get_tz_desc(child_dtype.time_zone), None)
-            elif not isinstance(child_dtype, pl.Time):
-                raise NotImplementedError(f"dt.time on {child_dtype} input")
         elif self.name in {
             TemporalFunction.Name.Truncate,
             TemporalFunction.Name.Round,
