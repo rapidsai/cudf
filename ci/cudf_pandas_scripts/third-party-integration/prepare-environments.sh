@@ -4,9 +4,6 @@
 
 set -euo pipefail
 
-# shellcheck source=ci/cudf_pandas_scripts/third-party-integration/timing.sh
-source "$(dirname "${BASH_SOURCE[0]}")/timing.sh"
-
 prepare_environment() {
     local lib=$1 directory="${INTEGRATION_RUN_DIR}/$1"
     local status=0 channels=()
@@ -19,7 +16,7 @@ prepare_environment() {
             --config "$INTEGRATION_DEPENDENCIES_YAML" --output conda --file-key "test_${lib}" \
             --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
             "${channels[@]}" | tee "${directory}/env.yaml" &&
-            integration_run_timed "$lib" environment rapids-mamba-retry env create --yes \
+            rapids-mamba-retry env create --yes \
                 -f "${directory}/env.yaml" --prefix "${directory}/env"; then
             status=0
         else

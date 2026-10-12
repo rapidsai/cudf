@@ -2,9 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# shellcheck source=ci/cudf_pandas_scripts/third-party-integration/timing.sh
-source "$(dirname "${BASH_SOURCE[0]}")/timing.sh"
-
 set -euo pipefail
 
 cleanup() {
@@ -25,7 +22,7 @@ runtest() {
             ;;
     esac
 
-    integration_run_timed "$lib" "$mode" pytest \
+    pytest \
     "${args[@]}" \
     -v \
     --continue-on-collection-errors \
