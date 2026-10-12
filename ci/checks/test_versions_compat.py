@@ -170,6 +170,47 @@ def test_find_stale_flags_raises_on_unrecognized_flag_form(
         )
 
 
+def test_find_stale_flags_raises_on_unparseable_duplicate_flag(
+    tmp_path: Path,
+) -> None:
+    versions_py = tmp_path / "versions.py"
+    # A parseable assignment must not hide an unparseable one that
+    # uses the same name.
+    versions_py.write_text(
+        "if True:\n"
+        '    POLARS_VERSION_LT_140 = POLARS_VERSION < parse("1.40.0")\n'
+        "else:\n"
+        '    POLARS_VERSION_LT_140 = parse("1.40.0") > POLARS_VERSION\n'
+    )
+    with pytest.raises(
+        versions_compat.UnparseableFlagError,
+        match="POLARS_VERSION_LT_140",
+    ):
+        versions_compat.find_stale_flags(
+            versions_py, versions_compat.Version("1.38")
+        )
+
+
+def test_find_stale_flags_detects_stale_duplicate_flag(
+    tmp_path: Path,
+) -> None:
+    versions_py = tmp_path / "versions.py"
+    # A later fresh assignment must not hide an earlier stale one that
+    # uses the same name.
+    versions_py.write_text(
+        "if True:\n"
+        '    POLARS_VERSION_LT_140 = POLARS_VERSION < parse("1.36.0")\n'
+        "else:\n"
+        '    POLARS_VERSION_LT_140 = POLARS_VERSION < parse("1.40.0")\n'
+    )
+    stale = versions_compat.find_stale_flags(
+        versions_py, versions_compat.Version("1.38")
+    )
+    assert stale == [
+        versions_compat.StaleFlag("POLARS_VERSION_LT_140", "1.36.0", 2)
+    ]
+
+
 def test_find_stale_flags_raises_on_indented_flag(tmp_path: Path) -> None:
     versions_py = tmp_path / "versions.py"
     versions_py.write_text(

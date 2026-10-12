@@ -87,9 +87,18 @@ def find_stale_flags(versions_py: Path, minimum: Version) -> list[StaleFlag]:
     """
     content = versions_py.read_text(encoding="utf-8")
 
-    matches = {m.group("name"): m for m in FLAG_PATTERN.finditer(content)}
-    all_names = {m.group("name") for m in ASSIGNMENT_PATTERN.finditer(content)}
-    unparseable = sorted(all_names - matches.keys())
+    # Track each assignment by its position, not its name, so that a
+    # name assigned more than once (e.g. in an if/else) is checked at
+    # every assignment.
+    matches = list(FLAG_PATTERN.finditer(content))
+    parsed_starts = {m.start() for m in matches}
+    unparseable = sorted(
+        {
+            m.group("name")
+            for m in ASSIGNMENT_PATTERN.finditer(content)
+            if m.start() not in parsed_starts
+        }
+    )
     if unparseable:
         raise UnparseableFlagError(
             f"{versions_py} defines {unparseable} in a form this "
@@ -100,7 +109,7 @@ def find_stale_flags(versions_py: Path, minimum: Version) -> list[StaleFlag]:
         )
 
     stale = []
-    for match in matches.values():
+    for match in matches:
         version = Version(match.group("version"))
         if version <= minimum:
             lineno = content.count("\n", 0, match.start()) + 1
