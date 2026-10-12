@@ -254,18 +254,23 @@ def test_sink_parquet_time_falls_back(in_memory_engine, tmp_path):
     )
 
 
-@pytest.mark.parametrize("chunk_size", [None, 3])
+@pytest.mark.parametrize(
+    "chunk_size_return_early", [(None, False), (3, False), (3, True)]
+)
 def test_sink_batches(
     in_memory_engine: pl.GPUEngine,
     df: pl.LazyFrame,
     tmp_path: Path,
-    chunk_size: int | None,
+    chunk_size_return_early: tuple[int | None, bool],
 ) -> None:
+    chunk_size, return_early = chunk_size_return_early
     output = tmp_path / "batches.jsonl"
 
     def write_batch(batch: pl.DataFrame) -> bool | None:
         with output.open("a") as file:
             file.write(json.dumps(batch.to_dict(as_series=False)) + "\n")
+        if return_early:
+            return True
         return None
 
     sink = df.sink_batches(write_batch, chunk_size=chunk_size, lazy=True)
@@ -275,6 +280,8 @@ def test_sink_batches(
 
     if chunk_size is None:
         expected_sizes = [6]
+    elif return_early:
+        expected_sizes = [chunk_size]
     else:
         expected_sizes = [chunk_size, chunk_size]
 
