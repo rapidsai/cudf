@@ -77,11 +77,7 @@ finish() {
 }
 
 main() {
-    local dependencies_yaml=$1 prefetch=${INTEGRATION_ENV_PREFETCH:-1}
-    if [[ $prefetch != 0 && $prefetch != 1 ]]; then
-        printf 'INTEGRATION_ENV_PREFETCH must be 0 or 1.\n' >&2
-        return 1
-    fi
+    local dependencies_yaml=$1
     local library_json
     library_json=$(yq -o json "$dependencies_yaml" | jq -c '.files | keys | map(select(startswith("test_")) | sub("^test_"; ""))')
     local libraries=()
@@ -115,17 +111,12 @@ main() {
     trap 'exit 143' TERM
 
     local status=0 test_status
-    if [[ $prefetch == 1 ]]; then
-        prepare_environment "${libraries[0]}"
-        if ((${#libraries[@]} > 1)); then
-            setsid bash "${BASH_SOURCE[0]}" --prepare "${libraries[@]:1}" &
-            prepare_pid=$!
-        fi
+    prepare_environment "${libraries[0]}"
+    if ((${#libraries[@]} > 1)); then
+        setsid bash "${BASH_SOURCE[0]}" --prepare "${libraries[@]:1}" &
+        prepare_pid=$!
     fi
     for lib in "${libraries[@]}"; do
-        if [[ $prefetch == 0 ]]; then
-            prepare_environment "$lib"
-        fi
         while [[ ! -f "${INTEGRATION_RUN_DIR}/${lib}/status" ]]; do
             if ! kill -0 "$prepare_pid" 2>/dev/null; then
                 printf 'Environment producer exited before preparing %s.\n' "$lib" >&2
