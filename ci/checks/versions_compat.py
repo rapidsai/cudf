@@ -62,13 +62,14 @@ def minimum_polars_version(pyproject: Path) -> Version:
         req = Requirement(dep)
         if req.name != "polars":
             continue
-        specs = {spec.operator: spec.version for spec in req.specifier}
-        for operator in (">=", "==", "~="):
-            if operator in specs:
-                return Version(specs[operator])
-        if ">" in specs:
-            # A strict > floor uses its bound intentionally to avoid over-flagging.
-            return Version(specs[">"])
+        # A strict > floor uses its bound intentionally to avoid over-flagging.
+        floors = [
+            Version(spec.version)
+            for spec in req.specifier
+            if spec.operator in (">=", "==", "~=", ">")
+        ]
+        if floors:
+            return max(floors)
         raise ValueError(
             f"'polars' dependency in {pyproject} has no '>=', '==', "
             f"'~=', or '>' specifier to establish a minimum version: "
@@ -84,7 +85,7 @@ def find_stale_flags(versions_py: Path, minimum: Version) -> list[StaleFlag]:
     assignment is found that doesn't match the expected form, rather
     than silently skipping it.
     """
-    content = versions_py.read_text()
+    content = versions_py.read_text(encoding="utf-8")
 
     matches = {m.group("name"): m for m in FLAG_PATTERN.finditer(content)}
     all_names = {m.group("name") for m in ASSIGNMENT_PATTERN.finditer(content)}

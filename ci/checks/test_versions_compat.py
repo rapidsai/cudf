@@ -299,7 +299,7 @@ def test_flag_pattern_matches_real_versions_file() -> None:
     versions_py = (
         repo_root / "python/cudf_polars/cudf_polars/utils/versions.py"
     )
-    content = versions_py.read_text()
+    content = versions_py.read_text(encoding="utf-8")
     all_names = {
         m.group("name")
         for m in versions_compat.ASSIGNMENT_PATTERN.finditer(content)
