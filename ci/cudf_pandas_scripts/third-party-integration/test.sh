@@ -62,6 +62,9 @@ main() {
     local status=0 test_status
     bash "${scripts_dir}/prepare-environments.sh" "${libraries[0]}"
     if ((${#libraries[@]} > 1)); then
+        # A background function would share the coordinator's session. Keep the producer
+        # in a separate script so setsid isolates all its descendants for session-based
+        # cleanup, including the additional process groups created by nested timeouts.
         setsid bash "${scripts_dir}/prepare-environments.sh" "${libraries[@]:1}" &
         prepare_pid=$!
     fi
