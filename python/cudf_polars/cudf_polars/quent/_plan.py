@@ -11,9 +11,6 @@ import os
 import uuid
 from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeAlias, TypeVar
 
-import polars as pl
-
-from cudf_polars.containers import DataType
 from cudf_polars.dsl.expressions.base import Col, NamedExpr
 from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.dsl.expressions.literal import Literal as LiteralExpr
@@ -270,46 +267,12 @@ def _serialize_expr(expr: Expr | NamedExpr) -> dict[str, Any]:
             return {"type": type(expr).__name__}
 
 
-def _dtype_details(dtype: DataType) -> dict[str, Any]:
-    """Return a structured description of a Polars dtype."""
-    polars_type = dtype.polars_type
-    details: dict[str, Any] = {"name": type(polars_type).__name__}
-    if isinstance(polars_type, pl.Decimal):
-        details.update(precision=polars_type.precision, scale=polars_type.scale)
-    elif isinstance(polars_type, pl.Datetime):
-        details.update(
-            time_unit=polars_type.time_unit,
-            time_zone=polars_type.time_zone,
-        )
-    elif isinstance(polars_type, pl.Duration):
-        details["time_unit"] = polars_type.time_unit
-    elif isinstance(polars_type, pl.List):
-        details["inner"] = _dtype_details(DataType(polars_type.inner))
-    elif isinstance(polars_type, pl.Array):
-        details.update(
-            shape={str(i): size for i, size in enumerate(polars_type.shape)},
-            inner=_dtype_details(DataType(polars_type.inner)),
-        )
-    elif isinstance(polars_type, pl.Struct):
-        details["fields"] = {
-            field.name: _dtype_details(DataType(field.dtype))
-            for field in polars_type.fields
-        }
-    elif isinstance(polars_type, pl.Enum):
-        details["categories"] = {
-            str(i): value for i, value in enumerate(polars_type.categories)
-        }
-    elif isinstance(polars_type, pl.Categorical):
-        details["ordering"] = polars_type.ordering
-    return details
-
-
 def _dataframe_schema(schema: Schema) -> quent_bindings.DataFrameSchemaDict:
     columns: list[quent_bindings.ColumnSchemaDict] = []
     for name, dtype in schema.items():
         column: quent_bindings.ColumnSchemaDict = {
             "name": name,
-            "dtype": _dtype_details(dtype),
+            "dtype": dtype.id().name,
         }
         columns.append(column)
     return {"columns": columns}

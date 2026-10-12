@@ -213,58 +213,12 @@ def test_operator_details(
 
 
 def test_dataframe_schema() -> None:
-    schema = {
-        "a": DataType(pl.Int64()),
-        "b": DataType(pl.Datetime("us", "UTC")),
-        "c": DataType(
-            pl.Struct(
-                {
-                    "decimal": pl.Decimal(18, 2),
-                    "values": pl.List(pl.String),
-                }
-            )
-        ),
-        "d": DataType(pl.Array(pl.Int16, 2)),
-    }
+    schema = {"a": DataType(pl.Int64()), "b": DataType(pl.String())}
 
     assert _dataframe_schema(schema) == {
         "columns": [
-            {"name": "a", "dtype": {"name": "Int64"}},
-            {
-                "name": "b",
-                "dtype": {
-                    "name": "Datetime",
-                    "time_unit": "us",
-                    "time_zone": "UTC",
-                },
-            },
-            {
-                "name": "c",
-                "dtype": {
-                    "name": "Struct",
-                    "fields": {
-                        "decimal": {
-                            "name": "Decimal",
-                            "precision": 18,
-                            "scale": 2,
-                        },
-                        "values": {
-                            "name": "List",
-                            "inner": {
-                                "name": "String",
-                            },
-                        },
-                    },
-                },
-            },
-            {
-                "name": "d",
-                "dtype": {
-                    "name": "Array",
-                    "shape": {"0": 2},
-                    "inner": {"name": "Int16"},
-                },
-            },
+            {"name": "a", "dtype": "INT64"},
+            {"name": "b", "dtype": "STRING"},
         ]
     }
 

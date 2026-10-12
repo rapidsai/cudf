@@ -21,7 +21,7 @@ records:
   ColumnSchema:
     fields:
       name: string
-      dtype: dynamic
+      dtype: string
 
   DataFrameSchema:
     fields:

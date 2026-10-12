@@ -191,7 +191,7 @@ fn builds_query_bundle_from_generated_events() {
                     output_schema: DataFrameSchema {
                         columns: vec![ColumnSchema {
                             name: "a".to_owned(),
-                            dtype: DynamicAttributes::new(),
+                            dtype: "INT64".to_owned(),
                         }],
                     },
                 },

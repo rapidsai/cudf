@@ -109,7 +109,7 @@ class PlanEdgeDict(TypedDict):
 
 class ColumnSchemaDict(TypedDict):
     name: str
-    dtype: DynamicAttributes
+    dtype: str
 
 class DataFrameSchemaDict(TypedDict):
     columns: Iterable[ColumnSchemaDict]
