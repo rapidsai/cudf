@@ -6,7 +6,6 @@
 #include "cuda/std/__utility/cmp.h"
 #include "error.hpp"
 #include "io/utilities/block_utils.cuh"
-#include "parquet_common.hpp"
 #include "parquet_gpu.hpp"
 
 #include <cudf/detail/utilities/cuda.cuh>
@@ -32,6 +31,10 @@ namespace {
 auto constexpr decode_page_headers_block_size     = 4 * cudf::detail::warp_size;
 auto constexpr count_page_headers_block_size      = 4 * cudf::detail::warp_size;
 auto constexpr build_string_dict_index_block_size = cudf::detail::warp_size;
+
+// Shared-memory window size in bytes for parsing BYTE_ARRAY string dictionaries.
+// Default value chosen for best balance between memory usage, occupancy and performance.
+constexpr int string_dict_index_window_size = 4096;
 
 namespace cg = cooperative_groups;
 
@@ -879,8 +882,9 @@ CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
                                        int32_t num_chunks,
                                        kernel_error::pointer error_code)
 {
-  constexpr int warp_size = cudf::detail::warp_size;
-  constexpr int load_size = sizeof(int4);
+  constexpr int batch_size = 64;
+  constexpr int warp_size  = cudf::detail::warp_size;
+  constexpr int load_size  = sizeof(int4);
 
   static_assert(string_dict_index_window_size % load_size == 0);
 
@@ -897,8 +901,8 @@ CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
     int window_start;  ///< Page-relative byte offset of window[0]; may be negative.
     int window_bytes;  ///< Active window size in bytes, including leading padding.
     bool invalid;      ///< Whether parsing detected a truncated prefix or string.
-    cuda::std::array<int, warp_size> offsets;  ///< Page-relative character-data offsets.
-    cuda::std::array<int, warp_size> lengths;  ///< String lengths in bytes.
+    cuda::std::array<int, batch_size> offsets;  ///< Page-relative character-data offsets.
+    cuda::std::array<int, batch_size> lengths;  ///< String lengths in bytes.
   };
 
   // Fields needed. No need to copy whole of ColumnChunkDesc
@@ -1010,7 +1014,7 @@ CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
     cg::invoke_one(warp, [&] {
       int cur             = state.cursor;
       int count           = 0;
-      int const max_count = min(warp_size, num_entries - first);
+      int const max_count = min(batch_size, num_entries - first);
       while (count < max_count) {
         // Check if the dictionary is too small to fit the next 4 bytes
         if (dict_size - cur < 4) {
@@ -1045,9 +1049,13 @@ CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
     warp.sync();
     if (state.invalid) { return; }
     int const count = state.batch;
-    if (lane < count) {
-      ck.str_dict_index[first + lane] = {reinterpret_cast<char const*>(dict + state.offsets[lane]),
-                                         state.lengths[lane]};
+#pragma unroll
+    for (int batch_offset = 0; batch_offset < batch_size; batch_offset += warp_size) {
+      auto const i = lane + batch_offset;
+      if (i < count) {
+        ck.str_dict_index[first + i] = {reinterpret_cast<char const*>(dict + state.offsets[i]),
+                                        state.lengths[i]};
+      }
     }
     // Finish consuming the batch before the parser can overwrite it or refill the window.
     warp.sync();

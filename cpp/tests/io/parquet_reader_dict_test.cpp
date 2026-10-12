@@ -26,8 +26,6 @@
 
 #include <rmm/device_buffer.hpp>
 
-#include <src/io/parquet/parquet_common.hpp>
-
 #include <algorithm>
 #include <array>
 #include <memory>
@@ -201,13 +199,10 @@ struct ParquetReaderDictTest : public cudf::test::BaseFixture {};
 TEST_F(ParquetReaderDictTest, FlatStringDictTranscode)
 {
   auto const short_strings = make_low_cardinality_strings();
-  // Append a final row group whose dictionary entries all exceed the parser window.
+  // Append a final row group whose dictionary entries all exceed the 4 KiB parser window.
   // Each length prefix advances the cursor beyond the window, requiring another refill.
-  auto constexpr window_size = cudf::io::parquet::detail::string_dict_index_window_size;
-  auto const long_strings =
-    cudf::test::strings_column_wrapper{std::string(window_size + 1, 'a'),
-                                       std::string(2 * window_size + 1, 'b'),
-                                       std::string(3 * window_size + 1, 'c')};
+  auto const long_strings = cudf::test::strings_column_wrapper{
+    std::string(4097, 'a'), std::string(8193, 'b'), std::string(12289, 'c')};
   auto const input_col =
     cudf::concatenate(std::vector<cudf::column_view>{short_strings, long_strings});
   auto const input_view = input_col->view();
