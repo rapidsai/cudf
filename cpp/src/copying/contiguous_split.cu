@@ -2689,7 +2689,7 @@ struct block_descriptor {
   std::size_t input_bytes;
   std::size_t output_bytes;  ///< Worst-case output size; equals `input_bytes` for raw blocks
   std::size_t region;
-  bool raw;
+  bool is_raw;
   std::size_t window_offset = 0;  ///< Offset of the slot within its window's staging buffer
 };
 
@@ -3102,7 +3102,7 @@ void set_block_spans(device_span<block_descriptor const> blocks,
                                  prepared_compression_region const& region,
                                  codec_exec_result const& result)
 {
-  if (block.raw) { return true; }
+  if (block.is_raw) { return true; }
   auto const failed = result.status != codec_status::SUCCESS;
   CUDF_EXPECTS(!failed || region.allow_uncompressed_fallback, "Compression failed");
   return region.allow_uncompressed_fallback &&
@@ -3286,13 +3286,13 @@ class pack_plan::impl {
         auto const& block  = blocks[block_idx];
         auto const& region = regions[block.region];
         auto const& result = h_results[block_idx - window.first_item];
-        auto const raw     = is_stored_raw(block, region, result);
-        auto const bytes   = raw ? block.input_bytes : result.bytes_written;
+        auto const is_raw  = is_stored_raw(block, region, result);
+        auto const bytes   = is_raw ? block.input_bytes : result.bytes_written;
         payload_bytes =
-          cudf::util::round_up_safe(payload_bytes, raw ? sizeof(uint64_t) : region.alignment);
+          cudf::util::round_up_safe(payload_bytes, is_raw ? sizeof(uint64_t) : region.alignment);
         block_offsets[block_idx] = payload_bytes;
-        table[block_idx]         = raw ? (raw_block_flag | bytes) : bytes;
-        sources.push_back(raw ? block.input : slots + block.window_offset);
+        table[block_idx]         = is_raw ? (raw_block_flag | bytes) : bytes;
+        sources.push_back(is_raw ? block.input : slots + block.window_offset);
         targets.push_back(to_host ? compacted + (payload_bytes - window_begin)
                                   : destination.data() + payload_bytes);
         copy_bytes.push_back(bytes);
@@ -3420,9 +3420,9 @@ class pack_plan::impl {
       target.total_bytes += region.layout.data_bytes;
     }
     for (std::size_t batch_idx = 0; batch_idx < batches.size(); ++batch_idx) {
-      auto const raw        = batches[batch_idx].codec == pack_compression::none;
-      auto const slot_bytes = raw ? 0 : max_compressed_block_bytes(batches[batch_idx]);
-      auto const alignment  = raw ? sizeof(uint64_t) : block_alignment(batches[batch_idx].codec);
+      auto const is_raw     = batches[batch_idx].codec == pack_compression::none;
+      auto const slot_bytes = is_raw ? 0 : max_compressed_block_bytes(batches[batch_idx]);
+      auto const alignment  = is_raw ? sizeof(uint64_t) : block_alignment(batches[batch_idx].codec);
       batches[batch_idx].block_begin = blocks.size();
       for (std::size_t region_idx = 0; region_idx < regions.size(); ++region_idx) {
         if (region_batch[region_idx] != batch_idx) { continue; }
@@ -3433,7 +3433,7 @@ class pack_plan::impl {
              offset += region.block_bytes) {
           auto const bytes = std::min(region.block_bytes, region.layout.data_bytes - offset);
           blocks.emplace_back(
-            region.source + offset, bytes, raw ? bytes : slot_bytes, region_idx, raw);
+            region.source + offset, bytes, is_raw ? bytes : slot_bytes, region_idx, is_raw);
         }
       }
       batches[batch_idx].block_end = blocks.size();
@@ -3664,7 +3664,7 @@ std::unique_ptr<table> materialize_selection(packed_data_view input,
     device_span{reinterpret_cast<uint64_t const*>(input.payload.data()), num_blocks}, stream);
 
   std::vector<decompression_task> tasks;
-  auto const task_for = [&](pack_compression codec, type_id cascaded_type) -> auto& {
+  auto const find_or_add_task = [&](pack_compression codec, type_id cascaded_type) -> auto& {
     auto iter = std::ranges::find_if(tasks, [&](auto const& item) {
       return item.codec == codec && item.cascaded_type == cascaded_type;
     });
@@ -3679,18 +3679,19 @@ std::unique_ptr<table> materialize_selection(packed_data_view input,
       compression == pack_compression::cascaded
         ? cascaded_type(static_cast<type_id>(entry.type), entry.is_validity != 0)
         : type_id::UINT8;
-    auto* const output = static_cast<uint8_t*>(destination);
-    for (std::size_t k = 0; k < entry.num_blocks; ++k) {
-      auto const block_idx = entry.block_begin + k;
-      auto const offset    = k * entry.block_bytes;
-      auto const expected  = std::min<std::size_t>(entry.block_bytes, entry.data_bytes - offset);
-      auto const raw       = (block_sizes[block_idx] & raw_block_flag) != 0;
-      auto const bytes     = block_sizes[block_idx] & ~raw_block_flag;
-      CUDF_EXPECTS((raw ? bytes == expected : compression != pack_compression::none && bytes > 0) &&
-                     payload_contains(parsed.block_offsets[block_idx], bytes),
-                   "Compressed block is missing or truncated");
-      auto& task =
-        raw ? task_for(pack_compression::none, type_id::UINT8) : task_for(compression, cascaded);
+    auto* const output   = static_cast<uint8_t*>(destination);
+    auto const block_end = entry.block_begin + entry.num_blocks;
+    for (auto block_idx = entry.block_begin; block_idx < block_end; ++block_idx) {
+      auto const offset   = (block_idx - entry.block_begin) * entry.block_bytes;
+      auto const expected = std::min<std::size_t>(entry.block_bytes, entry.data_bytes - offset);
+      auto const is_raw   = (block_sizes[block_idx] & raw_block_flag) != 0;
+      auto const bytes    = block_sizes[block_idx] & ~raw_block_flag;
+      CUDF_EXPECTS(
+        (is_raw ? bytes == expected : compression != pack_compression::none && bytes > 0) &&
+          payload_contains(parsed.block_offsets[block_idx], bytes),
+        "Compressed block is missing or truncated");
+      auto& task       = is_raw ? find_or_add_task(pack_compression::none, type_id::UINT8)
+                                : find_or_add_task(compression, cascaded);
       auto const block = input.payload.subspan(parsed.block_offsets[block_idx], bytes);
       loader.request(block);
       task.inputs.emplace_back(block.data(), block.size());
@@ -3725,7 +3726,6 @@ std::unique_ptr<table> materialize_selection(packed_data_view input,
   auto columns = materialize_columns(
     packed_metadata_view{parsed.legacy_metadata}, selection, source, stream, mr);
   loader.load(stream, mr);
-  auto const temp_mr = mr.get_temporary_mr();
   for (auto& task : tasks) {
     for (auto& block : task.inputs) {
       block = {loader.device_pointer(block.data()), block.size()};
@@ -3749,6 +3749,7 @@ std::unique_ptr<table> materialize_selection(packed_data_view input,
     outputs.insert(outputs.end(), task.outputs.begin(), task.outputs.end());
     task_offsets.push_back(inputs.size());
   }
+  auto const temp_mr   = mr.get_temporary_mr();
   auto const d_inputs  = cudf::detail::make_device_uvector_async(inputs, stream, temp_mr);
   auto const d_outputs = cudf::detail::make_device_uvector_async(outputs, stream, temp_mr);
   rmm::device_uvector<codec_exec_result> results(inputs.size(), stream, temp_mr);
@@ -3817,7 +3818,7 @@ namespace {
 struct packed_buffer {
   std::size_t offset;
   pack_region_info info;
-  std::size_t data_bytes;  ///< Unpadded size, or 0 for string characters, whose size is unknown
+  std::optional<std::size_t> data_bytes;  ///< Unpadded size, unknown for string characters
 };
 
 /// Lists the buffers of `column` in payload order, matching the regions planning discovers.
@@ -3826,10 +3827,11 @@ void append_packed_buffers(packed_metadata_view::column_view const& column,
                            pack_region_kind data_kind,
                            std::vector<packed_buffer>& buffers)
 {
-  auto const add = [&](int64_t offset, pack_region_kind kind, type_id type, std::size_t bytes) {
-    if (offset == -1) { return; }
-    buffers.emplace_back(offset, pack_region_info{0, path, kind, type, 0}, bytes);
-  };
+  auto const add =
+    [&](int64_t offset, pack_region_kind kind, type_id type, std::optional<std::size_t> bytes) {
+      if (offset == -1) { return; }
+      buffers.emplace_back(offset, pack_region_info{0, path, kind, type, 0}, bytes);
+    };
   auto const rows = static_cast<std::size_t>(column.num_rows());
   auto const type = column.type();
   add(column.null_mask_offset(),
@@ -3837,10 +3839,12 @@ void append_packed_buffers(packed_metadata_view::column_view const& column,
       type_id::INT32,
       cudf::util::div_rounding_up_safe(rows, std::size_t{32}) * sizeof(bitmask_type));
   if (type.id() == type_id::STRING) {
-    add(column.data_offset(), pack_region_kind::string_characters, type.id(), 0);
+    add(column.data_offset(), pack_region_kind::string_characters, type.id(), std::nullopt);
   } else {
-    add(
-      column.data_offset(), data_kind, type.id(), is_fixed_width(type) ? rows * size_of(type) : 0);
+    add(column.data_offset(),
+        data_kind,
+        type.id(),
+        is_fixed_width(type) ? std::optional{rows * size_of(type)} : std::nullopt);
   }
 
   auto const has_offsets_child = type.id() == type_id::STRING || type.id() == type_id::LIST;
@@ -3881,12 +3885,12 @@ std::vector<pack_region_info> get_packed_region_info(std::span<uint8_t const> me
   for (std::size_t i = 0; i < buffers.size(); ++i) {
     auto& buffer = buffers[i];
     // String characters always precede their offsets, so the last buffer has a known size.
-    CUDF_EXPECTS(i + 1 < buffers.size() || parsed.has_value() || buffer.data_bytes > 0,
+    CUDF_EXPECTS(i + 1 < buffers.size() || parsed.has_value() || buffer.data_bytes.has_value(),
                  "Packed metadata is malformed");
     auto const end = i + 1 < buffers.size() ? buffers[i + 1].offset
                      : parsed.has_value()
                        ? parsed->uncompressed_payload_bytes
-                       : cudf::util::round_up_safe(buffer.offset + buffer.data_bytes, split_align);
+                       : cudf::util::round_up_safe(buffer.offset + *buffer.data_bytes, split_align);
     CUDF_EXPECTS(end >= buffer.offset, "Packed metadata is malformed");
     if (end == buffer.offset) { continue; }
     buffer.info.region_index       = regions.size();
