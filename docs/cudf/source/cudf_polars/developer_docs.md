@@ -574,10 +574,11 @@ including execution during setup or teardown. Existing skips and failures
 retain their normal behavior.
 
 Nightlies run the full suite with telemetry for in-memory, default-blocksize
-SPMD, and small-blocksize SPMD. The summary job fails for newly observed GPU
+SPMD, and small-blocksize SPMD. The audit job fails for newly observed GPU
 nodes missing from the lists, lost GPU execution, stale IDs, or incomplete
 evidence. Skips and unavailable optional modules are not removal evidence.
-The artifact includes an exact diff and candidate lists for review.
+The summary publishes an exact diff and candidate lists before the audit job
+enforces the result, so failed audits retain their diagnostics.
 
 To regenerate candidates from the downloaded nightly diagnostic artifact:
 

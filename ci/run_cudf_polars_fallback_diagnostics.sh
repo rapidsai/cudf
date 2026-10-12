@@ -8,7 +8,9 @@ source rapids-init-pip
 
 report_dir=$(mktemp -d)
 audit_args=()
-if [[ "${1:-}" == "--audit" ]]; then
+publish_audit=false
+if [[ "${1:-}" == "--audit" || "${1:-}" == "--publish-audit" ]]; then
+    [[ "$1" == "--publish-audit" ]] && publish_audit=true
     shift
     gh api --paginate --slurp \
         "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest" \
@@ -25,8 +27,15 @@ aws s3 cp "$(rapids-s3-path)" "${report_dir}/" --recursive \
     --include "*.cudf-polars-fallback-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-*.json" \
     --only-show-errors
 
+audit_status=0
 python ci/analyze_cudf_polars_fallbacks.py \
     --reports-dir "${report_dir}" \
     --output-dir "${output_dir}" \
     --summary-file "${GITHUB_STEP_SUMMARY}" \
-    "${audit_args[@]}"
+    "${audit_args[@]}" || audit_status=$?
+
+# The shared workflow uploads artifacts only after a successful script step.
+# Nightlies publish first, then gate on the uploaded audit in a dependent job.
+if ! ${publish_audit}; then
+    exit "${audit_status}"
+fi
