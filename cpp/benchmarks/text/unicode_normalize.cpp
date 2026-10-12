@@ -26,6 +26,7 @@
 #include <random>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -413,8 +414,9 @@ std::vector<std::string> create_rows(synthetic_unicode_data const& data,
   for (auto& row : rows) {
     while (true) {
       auto const word = words.word(text_type);
-      if (row.size() + word.size() + 1 > static_cast<std::size_t>(row_width)) { break; }
-      if (!row.empty()) { row += words.chance(0.08) ? ", " : " "; }
+      auto const sep  = std::string_view{row.empty() ? "" : (words.chance(0.08) ? ", " : " ")};
+      if (row.size() + sep.size() + word.size() > static_cast<std::size_t>(row_width)) { break; }
+      row += sep;
       row += word;
     }
   }
