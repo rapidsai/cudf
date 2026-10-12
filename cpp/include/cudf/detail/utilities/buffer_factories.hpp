@@ -25,7 +25,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace detail {
 
 /**
@@ -198,4 +198,4 @@ cuda::device_buffer<T> make_device_buffer(std::vector<T, Allocator> const& sourc
 }
 
 }  // namespace detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf
