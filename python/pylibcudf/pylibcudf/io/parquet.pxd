@@ -87,6 +87,8 @@ cdef class ChunkedParquetReader:
     cdef Stream _stream
     cdef DeviceMemoryResource mr
     cdef unique_ptr[cpp_chunked_parquet_reader] reader
+    # Hold on to the filter expression since the C++ reader references it across chunks
+    cdef Expression _filter
 
     cpdef bool has_next(self)
     cpdef TableWithMetadata read_chunk(self, DeviceMemoryResource mr=*)

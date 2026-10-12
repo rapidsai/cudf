@@ -496,25 +496,30 @@ class parquet_reader_options {
    * For a parquet with columns ["A", "B", "C", ... "X", "Y", "Z"],
    * Example 1: with/without column projection
    * @code
-   * use_columns({"A", "X", "Z"})
-   * .filter(operation(ast_operator::LESS, column_name_reference{"C"}, literal{100}));
+   * auto const value  = cudf::numeric_scalar<int32_t>{100};
+   * auto const lit    = literal{value};
+   * auto const col_c  = column_name_reference{"C"};
+   * auto const filter = operation(ast_operator::LESS, col_c, lit);
+   * builder.column_names({"A", "X", "Z"}).filter(filter);
    * @endcode
    * Column "C" need not be present in output table.
    * Example 2: without column projection
    * @code
-   * filter(operation(ast_operator::LESS, column_reference{1}, literal{100}));
+   * auto const col_1  = column_reference{1};
+   * auto const filter = operation(ast_operator::LESS, col_1, lit);
+   * builder.filter(filter);
    * @endcode
    * Here, `1` will refer to column "B" because output will contain all columns in
    * order ["A", ..., "Z"].
    * Example 3: with column projection
    * @code
-   * use_columns({"A", "Z", "X"})
-   * .filter(operation(ast_operator::LESS, column_reference{1}, literal{100}));
+   * builder.column_names({"A", "Z", "X"}).filter(filter);
    * @endcode
    * Here, `1` will refer to column "Z" because output will contain 3 columns in
    * order ["A", "Z", "X"].
    *
-   * Only a reference to `filter` is stored, so it must outlive these options.
+   * Only references to `filter` and its operands are stored, so they must outlive these options
+   * and any reader created from them.
    *
    * @param filter AST expression to use as filter
    */

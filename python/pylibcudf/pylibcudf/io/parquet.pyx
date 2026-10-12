@@ -668,6 +668,7 @@ cdef class ChunkedParquetReader:
     ):
         self._stream = _get_stream(stream)
         self.mr = _get_memory_resource(mr)
+        self._filter = options._filter
         cdef vector[unique_ptr[datasource]] sources
         cdef vector[cpp_FileMetaData] c_metadatas
         cdef vector[cpp_FileMetaData*] metadata_ptrs
