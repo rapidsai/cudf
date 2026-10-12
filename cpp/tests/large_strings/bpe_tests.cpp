@@ -36,7 +36,9 @@ std::vector<cudf::size_type> make_splits(cudf::size_type rows, int multiplier)
 }
 }  // namespace
 
-TEST_F(BPETest, LargeOutput)
+// Disabled since the current implementation requires about 30GB of device memory for this test.
+// Run with --gtest_also_run_disabled_tests to verify more than max size_type chars.
+TEST_F(BPETest, DISABLED_LargeOutput)
 {
   // synthetic GPT-2 style table and byte-mapped text
   namespace bpe = cudf::test::bpe;
