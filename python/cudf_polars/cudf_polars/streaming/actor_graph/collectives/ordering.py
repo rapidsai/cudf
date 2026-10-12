@@ -146,6 +146,8 @@ def _metadata_has_ordering(metadata: ChannelMetadata, keys: Sequence[OrderKey]) 
         return False
     scheme = metadata.partitioning.inter_rank
     keys = tuple(keys)
+    # Boundaries for a leading prefix are sufficient for inter-rank partitioning
+    # of any extension of that prefix.
     return isinstance(scheme, OrderScheme) and any(
         len(ordering.keys) <= len(keys)
         and tuple(ordering.keys) == keys[: len(ordering.keys)]
@@ -161,12 +163,10 @@ def _with_extracted_ordering(
         return metadata
 
     orderings: list[Ordering] = []
-    local = partitioning.local
-    if metadata.partitioning is not None:
-        if metadata.partitioning.local is not None:
-            local = metadata.partitioning.local
-        if isinstance(metadata.partitioning.inter_rank, OrderScheme):
-            orderings.extend(metadata.partitioning.inter_rank.orderings)
+    if metadata.partitioning is not None and isinstance(
+        metadata.partitioning.inter_rank, OrderScheme
+    ):
+        orderings.extend(metadata.partitioning.inter_rank.orderings)
 
     scheme = partitioning.inter_rank
     if isinstance(scheme, OrderScheme):
@@ -174,7 +174,7 @@ def _with_extracted_ordering(
 
     return ChannelMetadata(
         local_count=metadata.local_count,
-        partitioning=Partitioning(OrderScheme(orderings), local),
+        partitioning=Partitioning(OrderScheme(orderings), partitioning.local),
         duplicated=metadata.duplicated,
     )
 
@@ -192,12 +192,8 @@ def _trivial_ordering_metadata(
 
     partitioning = metadata.partitioning
     existing_orderings: list[Ordering] = []
-    local = "inherit"
-    if partitioning is not None:
-        if partitioning.local is not None:
-            local = partitioning.local
-        if isinstance(partitioning.inter_rank, OrderScheme):
-            existing_orderings = list(partitioning.inter_rank.orderings)
+    if partitioning is not None and isinstance(partitioning.inter_rank, OrderScheme):
+        existing_orderings = list(partitioning.inter_rank.orderings)
 
     dtypes = tuple(schema_ir.schema.values())
     stream = context.br().stream_pool.get_stream()
@@ -214,7 +210,7 @@ def _trivial_ordering_metadata(
         local_count=metadata.local_count,
         partitioning=Partitioning(
             OrderScheme([*existing_orderings, ordering]),
-            local,
+            "inherit",
         ),
         duplicated=metadata.duplicated,
     )
@@ -266,6 +262,7 @@ async def extract_orderscheme_partitioning(
     Boundaries are not collected for empty chunks.
     """
     # Collect the first and last row from each non-empty sorted chunk.
+    key_indices = [key.column_index for key in order_keys]
     endpoint_rows: list[plc.Table] = []
     chunks = ChunkStore(context)
     stream = ir_context.get_cuda_stream()
@@ -282,13 +279,14 @@ async def extract_orderscheme_partitioning(
             net_memory_delta=0,
         )
         tbl = chunk.table_view()
-        if tbl.num_rows() == 0:
+        key_tbl = plc.Table([tbl.columns()[index] for index in key_indices])
+        if key_tbl.num_rows() == 0:
             chunks.insert(Message(msg.sequence_number, chunk))
             continue
         with stream_ordered_after(lambda: stream, upstreams=(chunk.stream,)):
             endpoint_rows.append(
                 plc.copying.gather(
-                    tbl,
+                    key_tbl,
                     row_indices,
                     plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                     stream=stream,
@@ -304,12 +302,20 @@ async def extract_orderscheme_partitioning(
 
     # Allgather endpoint rows across all ranks.
     if comm.nranks > 1:
+        dtypes = tuple(schema_ir.schema.values())
         local_chunk = (
             TableChunk.from_pylibcudf_table(
                 endpoint_table, stream, exclusive_view=True, br=context.br()
             )
             if endpoint_table is not None
-            else empty_table_chunk(schema_ir, context, stream)
+            else TableChunk.from_pylibcudf_table(
+                plc.Table(
+                    [make_empty_column(dtypes[index], stream) for index in key_indices]
+                ),
+                stream,
+                exclusive_view=False,
+                br=context.br(),
+            )
         )
         allgather = AllGatherManager(context, comm, collective_id)
         with allgather.inserting() as inserter:
@@ -322,25 +328,19 @@ async def extract_orderscheme_partitioning(
     if endpoint_table is None or (num_partitions := endpoint_table.num_rows() // 2) < 2:
         return OrderSchemePartitioningResult(None, chunks)
 
-    key_indices = [key.column_index for key in order_keys]
-    endpoint_key_rows = plc.Table(
-        [endpoint_table.columns()[index] for index in key_indices]
-    )
-    del endpoint_table
-
     # Return None if chunk endpoints are not globally sorted.
     column_order = [key.order for key in order_keys]
     null_order = [key.null_order for key in order_keys]
     if not plc.sorting.is_sorted(
-        endpoint_key_rows, column_order, null_order, stream=stream
+        endpoint_table, column_order, null_order, stream=stream
     ):
         return OrderSchemePartitioningResult(None, chunks)
 
     # Extract boundaries and construct the Partitioning
     boundaries, strict = _extract_boundaries_from_endpoint_rows(
-        endpoint_key_rows, num_partitions, stream
+        endpoint_table, num_partitions, stream
     )
-    del endpoint_key_rows
+    del endpoint_table
     boundaries_chunk = TableChunk.from_pylibcudf_table(
         boundaries, stream, exclusive_view=True, br=context.br()
     )
