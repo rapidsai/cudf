@@ -564,6 +564,33 @@ def test_whatever():
 
 This test will fail if translation does not raise.
 
+## Upstream Polars GPU test selection
+
+PR CI selects upstream nodes from `ci/cudf_polars/gpu_test_run_list.json`, keyed
+by the exact Polars version, engine, and blocksize. Admission requires observed
+GPU execution; a translation attempt alone is insufficient. Mixed GPU/CPU
+tests remain eligible. Passing selected items must still execute on the GPU,
+including execution during setup or teardown. Existing skips and failures
+retain their normal behavior.
+
+Nightlies run the full suite with telemetry for in-memory, default-blocksize
+SPMD, and small-blocksize SPMD. The summary job fails for newly observed GPU
+nodes missing from the lists, lost GPU execution, stale IDs, or incomplete
+evidence. Skips and unavailable optional modules are not removal evidence.
+The artifact includes an exact diff and candidate lists for review.
+
+To regenerate candidates from the downloaded nightly diagnostic artifact:
+
+```bash
+python ci/analyze_cudf_polars_fallbacks.py --diagnostics-file fallback-diagnostics.json \
+    --output-dir diagnostics --audit-run-list ci/cudf_polars/gpu_test_run_list.json \
+    --generate-run-list gpu-test-run-list-candidate.json
+```
+
+The command exits nonzero for drift or incomplete evidence. Review the diff
+before committing a replacement. New Polars versions require full discovery
+and matching list entries before selected PR runs can use them.
+
 # Debugging
 
 If the callback execution fails during the polars `collect` call, we

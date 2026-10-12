@@ -29,7 +29,12 @@ from cudf_polars.dsl.ir import (
 )
 from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
 from cudf_polars.dsl.translate import Translator
-from cudf_polars.testing.fallback import gpu_attempted, gpu_executed, record_fallback
+from cudf_polars.testing.fallback import (
+    bind_observation,
+    record_fallback,
+    record_gpu_attempt,
+    record_gpu_execution,
+)
 from cudf_polars.utils.config import (
     MemoryResourceConfig,
     _env_get_int,
@@ -304,7 +309,7 @@ def _callback(
         if config_options.executor.name == "in-memory":
             context = IRExecutionContext()
             df = ir.evaluate(cache={}, timer=timer, context=context).to_polars()
-            gpu_executed.set(True)
+            record_gpu_execution()
             if timer is None:
                 return df
             else:
@@ -321,7 +326,7 @@ def _callback(
                 raise NotImplementedError(msg)
 
             df = evaluate_streaming(ir, config_options)
-            gpu_executed.set(True)
+            record_gpu_execution()
             return df
         assert_never(config_options.executor)
 
@@ -356,7 +361,7 @@ def execute_with_cudf(
     The NodeTraverser is mutated if the libcudf executor can handle the plan.
     """
     # Translation can decline a plan before the execution callback is installed.
-    gpu_attempted.set(True)
+    record_gpu_attempt()
     if duration_since_start is None:
         timer = None
     else:
@@ -381,11 +386,13 @@ def execute_with_cudf(
             record_fallback()
         else:
             nt.set_udf(
-                partial(
-                    _callback,
-                    ir,
-                    memory_resource=memory_resource,
-                    config_options=translator.config_options,
-                    timer=timer,
+                bind_observation(
+                    partial(
+                        _callback,
+                        ir,
+                        memory_resource=memory_resource,
+                        config_options=translator.config_options,
+                        timer=timer,
+                    )
                 )
             )
