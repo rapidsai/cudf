@@ -26,3 +26,7 @@ for package in pylibcudf cudf cudf_kafka cudf_streaming; do
     rapids-logger "Import ${package} on a CPU-only runner"
     python -c "import ${package}"
 done
+
+rapids-logger "Check cudf.pandas CLI with initialization disabled"
+RAPIDS_NO_INITIALIZE=1 python -m cudf.pandas -c "import pandas as pd; print(pd.Series([1, 2, 3]))"
+CUDF_NO_INITIALIZE=1 python -m cudf.pandas -c "import pandas as pd; print(pd.Series([1, 2, 3]))"
