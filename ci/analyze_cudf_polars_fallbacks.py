@@ -283,6 +283,29 @@ def audit_report(
             "Missing required in-memory/default-SPMD/small-SPMD discovery runs for a Polars version"
         )
     if jobs is not None:
+        if not isinstance(jobs, list) or not all(
+            isinstance(job, dict)
+            and isinstance(job.get("name"), str)
+            and isinstance(job.get("conclusion"), str)
+            and isinstance(job.get("id"), int)
+            and not isinstance(job["id"], bool)
+            and job["id"] >= 0
+            for job in jobs
+        ):
+            errors.append("Invalid GitHub producer-job inventory")
+            jobs = []
+        if len({job["id"] for job in jobs}) != len(jobs):
+            errors.append("Duplicated GitHub producer jobs")
+        # Cancelled producers may have no steps. Identify helpers by name rather
+        # than requiring a test step that might never have been scheduled.
+        helpers = [
+            job for job in jobs if job["name"].endswith(" / compute-matrix")
+        ]
+        if any(job["conclusion"] != "success" for job in helpers):
+            errors.append(
+                "A GitHub producer matrix did not finish successfully"
+            )
+        jobs = [job for job in jobs if job not in helpers]
         expected = {str(job["id"]) for job in jobs}
         producers = [run.get("producer") for run in runs]
         if (
