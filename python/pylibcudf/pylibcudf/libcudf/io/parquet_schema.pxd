@@ -7,9 +7,64 @@ from libcpp.optional cimport optional
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 from pylibcudf.exception_handler cimport libcudf_exception_handler
+from pylibcudf.libcudf.types cimport size_type, type_id
+
+
+cdef extern from "<cuda/std/optional>" nogil:
+    cdef cppclass cuda_optional "cuda::std::optional" [T]:
+        bool has_value()
+        T& value()
 
 
 cdef extern from "cudf/io/parquet_schema.hpp" namespace "cudf::io::parquet" nogil:
+    cpdef enum class LogicalTypeId "cudf::io::parquet::LogicalType::Type" (uint8_t):
+        UNDEFINED
+        STRING
+        MAP
+        LIST
+        ENUM
+        DECIMAL
+        DATE
+        TIME
+        TIMESTAMP
+        INTEGER
+        UNKNOWN
+        JSON
+        BSON
+        VARIANT
+
+    cpdef enum class TimeUnit "cudf::io::parquet::TimeUnit::Type" (uint8_t):
+        UNDEFINED
+        MILLIS
+        MICROS
+        NANOS
+
+    cdef cppclass DecimalType:
+        int32_t scale
+        int32_t precision
+
+    cdef cppclass TimeUnitInfo "cudf::io::parquet::TimeUnit":
+        TimeUnit type
+
+    cdef cppclass TimeType:
+        bool isAdjustedToUTC
+        TimeUnitInfo unit
+
+    cdef cppclass TimestampType:
+        bool isAdjustedToUTC
+        TimeUnitInfo unit
+
+    cdef cppclass IntType:
+        int8_t bitWidth
+        bool isSigned
+
+    cdef cppclass LogicalType:
+        LogicalTypeId type
+        cuda_optional[DecimalType] decimal_type
+        cuda_optional[TimeType] time_type
+        cuda_optional[TimestampType] timestamp_type
+        cuda_optional[IntType] int_type
+
     cpdef enum class Type(int8_t):
         UNDEFINED
         BOOLEAN
@@ -20,6 +75,12 @@ cdef extern from "cudf/io/parquet_schema.hpp" namespace "cudf::io::parquet" nogi
         DOUBLE
         BYTE_ARRAY
         FIXED_LEN_BYTE_ARRAY
+
+    cpdef enum class FieldRepetitionType(int8_t):
+        UNSPECIFIED
+        REQUIRED
+        OPTIONAL
+        REPEATED
 
     cdef cppclass Statistics:
         optional[vector[uint8_t]] max
@@ -71,6 +132,17 @@ cdef extern from "cudf/io/parquet_schema.hpp" namespace "cudf::io::parquet" nogi
         string name
         int32_t num_children
         optional[int32_t] field_id
+        cuda_optional[LogicalType] logical_type
+        FieldRepetitionType repetition_type
+        bool output_as_byte_array
+        optional[type_id] arrow_type
+        int max_definition_level
+        int max_repetition_level
+        size_type parent_idx
+        vector[size_type] children_idx
+        bool is_stub()
+        bool is_one_level_list(const SchemaElement& parent)
+        bool is_struct()
 
     cdef cppclass FileMetaData:
         FileMetaData() except +libcudf_exception_handler
