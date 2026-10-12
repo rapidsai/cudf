@@ -57,6 +57,16 @@ def test_minimum_polars_version_accepts_other_floor_operators(
     )
 
 
+def test_minimum_polars_version_uses_maximum_floor(tmp_path: Path) -> None:
+    path = tmp_path / "pyproject.toml"
+    path.write_text(
+        '[project]\ndependencies = ["polars>=1.35,==1.40,<1.43"]\n'
+    )
+    assert versions_compat.minimum_polars_version(path) == (
+        versions_compat.Version("1.40")
+    )
+
+
 def test_find_stale_flags_none_stale(tmp_path: Path) -> None:
     versions_py = tmp_path / "versions.py"
     versions_py.write_text(
