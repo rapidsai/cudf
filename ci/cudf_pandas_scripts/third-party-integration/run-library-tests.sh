@@ -18,25 +18,29 @@ runtest() {
     local mode=$2
 
     echo "Running tests for $lib in $mode mode"
-    local plugin=()
-    if [ "$mode" = "cudf" ]; then
-        plugin=("-p cudf.pandas")
-    fi
+    local workers=${NUM_PROCESSES} args=()
+    case $mode in
+        cudf) args=("-p cudf.pandas") ;;
+        compare)
+            args=(--compare -p cudf.pandas)
+            workers=${COMPARE_NUM_PROCESSES:-${NUM_PROCESSES}}
+            ;;
+    esac
 
     integration_run_timed "$lib" "$mode" pytest \
-    "${plugin[@]}" \
+    "${args[@]}" \
     -v \
     --continue-on-collection-errors \
     --cache-clear \
     --durations=50 --durations-min=1 \
-    --numprocesses="${NUM_PROCESSES}" \
+    --numprocesses="${workers}" \
     --dist=worksteal \
     "${TEST_DIR}"/test_"${lib}"*.py
 }
 
 main() {
     local lib=$1
-    local status=0 workers
+    local status=0 workers mode
     for workers in "${NUM_PROCESSES}" "${COMPARE_NUM_PROCESSES:-${NUM_PROCESSES}}"; do
         if [[ ! $workers =~ ^(0|[1-9][0-9]*)$ ]]; then
             printf 'Worker counts must be nonnegative integers: %s\n' "$workers" >&2
@@ -44,21 +48,9 @@ main() {
         fi
     done
 
-    # generation phase
-    runtest "${lib}" "gold" || status=1
-    runtest "${lib}" "cudf" || status=1
-
-    # assertion phase
-    integration_run_timed "$lib" compare pytest \
-    --compare \
-    -p cudf.pandas \
-    -v \
-    --continue-on-collection-errors \
-    --cache-clear \
-    --durations=50 --durations-min=1 \
-    --numprocesses="${COMPARE_NUM_PROCESSES:-${NUM_PROCESSES}}" \
-    --dist=worksteal \
-    "${TEST_DIR}"/test_"${lib}"*.py || status=1
+    for mode in gold cudf compare; do
+        runtest "${lib}" "$mode" || status=1
+    done
 
     return "$status"
 }

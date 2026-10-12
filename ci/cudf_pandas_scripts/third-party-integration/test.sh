@@ -116,7 +116,7 @@ main() {
     trap 'exit 130' INT
     trap 'exit 143' TERM
 
-    local index status=0 ready next_started test_status
+    local index status=0 ready test_status
     launch_preparation "${libraries[0]}"
     for ((index = 0; index < ${#libraries[@]}; index++)); do
         lib=${libraries[index]}
@@ -131,10 +131,8 @@ main() {
         cat "${INTEGRATION_RUN_DIR}/${lib}/prepare.log"
         printf '::endgroup::\n'
 
-        next_started=0
         if [[ $prefetch == 1 ]] && ((index + 1 < ${#libraries[@]})); then
             launch_preparation "${libraries[index + 1]}"
-            next_started=1
         fi
         if ((ready)); then
             printf '::group::Integration tests: %s\n' "$lib"
@@ -160,7 +158,7 @@ main() {
             fi
             printf '::endgroup::\n'
         fi
-        if ((next_started == 0 && index + 1 < ${#libraries[@]})); then
+        if [[ $prefetch == 0 ]] && ((index + 1 < ${#libraries[@]})); then
             launch_preparation "${libraries[index + 1]}"
         fi
     done
