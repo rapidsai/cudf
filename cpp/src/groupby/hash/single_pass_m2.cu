@@ -49,8 +49,8 @@ struct m2_value {
 };
 
 struct merge_m2 {
-  // Chan merges are expensive: raking avoids the overlapping partial reductions
-  // performed by the default warp-based block algorithm.
+  // Merging the intermediate states is expensive: raking avoids the overlapping partial reductions
+  // performed by the default warp-based block algorithm, and benchmarks as more performant.
   // Although this operator is commutative, cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY
   // benchmarked as slower on B200.
   static constexpr auto block_reduce_algorithm = cub::BLOCK_REDUCE_RAKING;
