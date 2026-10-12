@@ -31,7 +31,7 @@ from cudf_polars.utils.config import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from cudf_polars.quent import QuentContext
+    from cudf_polars.quent import QuentConfig
     from cudf_polars.utils.config import (
         JoinFilterPushdownOptions,
         ParquetOptions,
@@ -450,7 +450,7 @@ class StreamingOptions:
     parallel_sink_batches: bool | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__PARALLEL_SINK_BATCHES", parse_boolean
     )
-    quent_context: QuentContext | None | Unspecified = _opt(
+    quent_context: QuentConfig | None | Unspecified = _opt(
         "executor",
     )
 

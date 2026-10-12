@@ -53,6 +53,7 @@ from cudf_polars.streaming.io import (
     _sink_to_file,
 )
 from cudf_polars.streaming.rank_aware_source import RankAwareSource
+from cudf_polars.streaming.utils import _fallback_inform
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
@@ -210,7 +211,9 @@ async def dataframescan_node(
         chs_out=(ch_out,),
         trace_ir=ir,
         ir_context=ir_context,
-    ) as tracer:
+    ) as actor_scope:
+        tracer = actor_scope.tracer
+        ir_context = actor_scope.require_ir_context()
         # Find local partition count.
         nrows = ir.df.shape()[0]
         global_count = math.ceil(nrows / rows_per_partition) if nrows > 0 else 0
@@ -317,14 +320,13 @@ async def dataframescan_node(
                 )
             await ch_out.drain(context)
 
-        async with (
-            shutdown_on_error(
-                context,
-                chs_aux=lineariser.input_channels,
-                trace_ir=ir,
-                ir_context=ir_context,
-            ),
-        ):
+        async with shutdown_on_error(
+            context,
+            chs_aux=lineariser.input_channels,
+            trace_ir=ir,
+            ir_context=ir_context,
+        ) as inner_actor_scope:
+            ir_context = inner_actor_scope.require_ir_context()
             await gather_in_task_group(
                 lineariser.drain(),
                 *(_producer(i) for i in range(num_producers)),
@@ -466,7 +468,9 @@ async def python_scan_node(
         chs_out=(ch_out,),
         trace_ir=ir,
         ir_context=ir_context,
-    ) as tracer:
+    ) as actor_scope:
+        tracer = actor_scope.tracer
+        ir_context = actor_scope.require_ir_context()
         rank_aware_source = _find_rank_aware_source(ir.options[0])
         if rank_aware_source is None and comm.nranks > 1 and comm.rank != 0:
             # A plain (rank-unaware) source runs on rank 0 only; other ranks
@@ -680,7 +684,9 @@ async def scan_node(
         chs_out=(ch_out,),
         trace_ir=ir,
         ir_context=ir_context,
-    ) as tracer:
+    ) as actor_scope:
+        tracer = actor_scope.tracer
+        ir_context = actor_scope.require_ir_context()
         # Send basic metadata
         ir_context = dataclasses.replace(ir_context, tracer=tracer)
         partitioning = (
@@ -751,14 +757,13 @@ async def scan_node(
                 )
             await ch_out.drain(context)
 
-        async with (
-            shutdown_on_error(
-                context,
-                chs_aux=lineariser.input_channels,
-                trace_ir=ir,
-                ir_context=ir_context,
-            ),
-        ):
+        async with shutdown_on_error(
+            context,
+            chs_aux=lineariser.input_channels,
+            trace_ir=ir,
+            ir_context=ir_context,
+        ) as inner_actor_scope:
+            ir_context = inner_actor_scope.require_ir_context()
             await gather_in_task_group(
                 lineariser.drain(),
                 *(_producer(i) for i in range(num_producers)),
@@ -831,7 +836,7 @@ class _CallbackConsumer:
     async def consume(self, chunk: TableChunk) -> None:
         """Convert a table chunk and invoke the callback on complete batches."""
         if self.stopped:
-            return
+            raise RuntimeError("Cannot consume data after the callback requested stop")
         chunk, _ = await make_table_chunks_available_or_wait(
             self.context,
             chunk,
@@ -840,6 +845,7 @@ class _CallbackConsumer:
         )
         df = chunk_to_frame(chunk, self.input_ir)
         host_df = await self.ir_context.to_thread(df.to_polars)
+        del chunk, df
         if self.chunk_size is None:
             self.stopped = bool(
                 await self.ir_context.to_thread(self.callback, host_df._df)
@@ -963,6 +969,17 @@ def _(
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
     nodes, channels = process_children(ir, rec)
     channels[ir] = ChannelManager(rec.state["context"])
+    parallel = (
+        rec.state["config_options"].executor.parallel_sink_batches
+        and not ir.maintain_order
+    )
+    if rec.state["comm"].nranks > 1 and not parallel:
+        _fallback_inform(
+            "sink_batches callbacks are executed on rank 0 for multi-rank "
+            "streaming unless parallel_sink_batches=True and "
+            "maintain_order=False.",
+            rec.state["config_options"],
+        )
     nodes[ir] = [
         callback_sink_actor(
             rec.state["context"],
@@ -972,8 +989,7 @@ def _(
             channels[ir.children[0]].reserve_output_slot(),
             channels[ir].reserve_input_slot(),
             rec.state["collective_id_map"][ir][0],
-            rec.state["config_options"].executor.parallel_sink_batches
-            and not ir.maintain_order,
+            parallel,
         )
     ]
     return nodes, channels
@@ -1025,7 +1041,8 @@ async def sink_node(
         chs_out=(ch_out,),
         ir_context=ir_context,
         trace_ir=ir,
-    ):
+    ) as actor_scope:
+        ir_context = actor_scope.require_ir_context()
         metadata = await recv_metadata(ch_in, context)
         await send_metadata(
             ch_out, context, ChannelMetadata(local_count=1, duplicated=True)
