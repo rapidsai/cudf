@@ -23,9 +23,10 @@
 /**
  * @brief Create memory resource for libcudf functions
  *
+ * @param is_pool_used Whether to use a pool memory resource
  * @return Memory resource instance
  */
-cuda::mr::any_resource<cuda::mr::device_accessible> create_memory_resource();
+cuda::mr::any_resource<cuda::mr::device_accessible> create_memory_resource(bool is_pool_used);
 
 /**
  * @brief Reads parquet metadata (FileMetaData struct) from a file

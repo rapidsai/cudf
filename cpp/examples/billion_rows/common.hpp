@@ -4,7 +4,10 @@
  */
 #pragma once
 
+#include <rmm/cuda_device.hpp>
 #include <rmm/mr/cuda_async_memory_resource.hpp>
+#include <rmm/mr/cuda_memory_resource.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <cuda/memory_resource>
@@ -14,7 +17,12 @@
 /**
  * @brief Create memory resource for libcudf functions
  */
-cuda::mr::any_resource<cuda::mr::device_accessible> create_memory_resource()
+cuda::mr::any_resource<cuda::mr::device_accessible> create_memory_resource(std::string const& name)
 {
+  if (name == "pool") {
+    return rmm::mr::pool_memory_resource{rmm::mr::cuda_memory_resource{},
+                                         rmm::percent_of_free_device_memory(50)};
+  }
+  if (name == "cuda") { return rmm::mr::cuda_memory_resource{}; }
   return rmm::mr::cuda_async_memory_resource{};
 }

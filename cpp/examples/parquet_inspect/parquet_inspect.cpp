@@ -71,7 +71,7 @@ int main(int argc, char const** argv)
   auto const filename = std::filesystem::path(input_filepath).stem().string();
 
   auto const stream = cudf::get_default_stream();
-  auto mr           = create_memory_resource();
+  auto mr           = create_memory_resource(false);
   cudf::set_current_device_resource(mr);
 
   // Read parquet footer metadata

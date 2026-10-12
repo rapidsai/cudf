@@ -29,8 +29,8 @@ cmake -S . -B build/
 cmake --build build/ --parallel $PARALLEL_LEVEL
 # Execute using the included example.json and the CUDA async memory resource
 build/deduplication
-# Execute with explicit input and output files
-build/deduplication example.json output.json
+# Execute with explicit arguments: input file, output file, and memory resource ("async", "pool", or "cuda")
+build/deduplication example.json output.json async
 ```
 
 If your machine does not come with a pre-built libcudf binary, expect the

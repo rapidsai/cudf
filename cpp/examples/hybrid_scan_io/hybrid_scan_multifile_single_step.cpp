@@ -143,7 +143,7 @@ int main(int argc, char const** argv)
   }
 
   // Initialize mr, stream pool and default stream
-  auto resource    = create_memory_resource();
+  auto resource    = create_memory_resource(false);
   auto stream_pool = rmm::cuda_stream_pool(1 + num_threads, rmm::cuda_stream::flags::non_blocking);
   auto default_stream = stream_pool.get_stream();
   auto stats_mr       = rmm::mr::statistics_resource_adaptor{resource};

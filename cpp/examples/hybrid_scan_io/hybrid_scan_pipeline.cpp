@@ -360,7 +360,7 @@ int main(int argc, char const** argv)
   auto stream_pool =
     rmm::cuda_stream_pool(1 + num_partitions, rmm::cuda_stream::flags::non_blocking);
   auto default_stream = stream_pool.get_stream();
-  auto mr             = create_memory_resource();
+  auto mr             = create_memory_resource(false);
   auto stats_mr       = rmm::mr::statistics_resource_adaptor{mr};
   rmm::mr::set_current_device_resource(stats_mr);
 

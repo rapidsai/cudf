@@ -125,7 +125,7 @@ int main(int argc, char const** argv)
     default: print_usage(); throw std::runtime_error("");
   }
 
-  auto resource = create_memory_resource();
+  auto resource = create_memory_resource(false);
   cudf::set_current_device_resource(resource);
 
   // Read input parquet file

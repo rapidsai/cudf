@@ -38,9 +38,10 @@
 /**
  * @brief Create memory resource for libcudf functions
  *
+ * @param is_pool_used Whether to use a pool memory resource
  * @return Memory resource instance
  */
-cuda::mr::any_resource<cuda::mr::device_accessible> create_memory_resource();
+cuda::mr::any_resource<cuda::mr::device_accessible> create_memory_resource(bool is_pool_used);
 
 /**
  * @brief Create a filter expression of the form `column_name == literal` for string type point

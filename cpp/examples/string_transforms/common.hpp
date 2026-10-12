@@ -13,14 +13,21 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_device.hpp>
 #include <rmm/mr/cuda_async_memory_resource.hpp>
+#include <rmm/mr/cuda_memory_resource.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
 #include <rmm/mr/statistics_resource_adaptor.hpp>
+
+#include <cuda/memory_resource>
 
 #include <chrono>
 #include <iostream>
 #include <numeric>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -50,7 +57,8 @@ void write_csv(cudf::table_view const& tbl_view,
  * 1. CSV file name/path
  * 2. Out file name/path
  * 3. Number of rows from the CSV to transform
- * 4. Memory resource (optional): 'async' or 'async-stats'
+ * 4. Memory resource (optional): 'async' (default), 'pool', or 'cuda';
+ *    append '-stats' to report allocation statistics
  *
  * The stdout includes the number of rows in the input and the output size in bytes.
  */
@@ -71,11 +79,19 @@ int main(int argc, char const** argv)
 
   auto stream = cudf::get_default_stream();
 
-  rmm::mr::cuda_async_memory_resource async_mr{};
-  if (memory_resource_name != "async" && memory_resource_name != "async-stats") {
+  auto const base_name = enable_stats
+                           ? memory_resource_name.substr(0, memory_resource_name.size() - 6)
+                           : memory_resource_name;
+  auto resource        = [&]() -> cuda::mr::any_resource<cuda::mr::device_accessible> {
+    if (base_name == "pool") {
+      return rmm::mr::pool_memory_resource{rmm::mr::cuda_memory_resource{},
+                                           rmm::percent_of_free_device_memory(50)};
+    }
+    if (base_name == "cuda") { return rmm::mr::cuda_memory_resource{}; }
+    if (base_name == "async") { return rmm::mr::cuda_async_memory_resource{}; }
     CUDF_FAIL("Unrecognized memory resource name: " + memory_resource_name, std::invalid_argument);
-  }
-  cudf::set_current_device_resource(async_mr);
+  }();
+  cudf::set_current_device_resource(resource);
 
   rmm::mr::statistics_resource_adaptor stats_adaptor{cudf::get_current_device_resource_ref()};
 
