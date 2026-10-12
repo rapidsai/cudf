@@ -1223,38 +1223,33 @@ std::string make_ast_runtime_source(detail::row_ir::transform_args const& args)
   return source;
 }
 
-std::unique_ptr<table> execute_ast_runtime(detail::row_ir::transform_args&& args,
+std::unique_ptr<table> execute_ast_runtime(kernel const& kernel,
+                                           null_aware is_null_aware,
+                                           std::span<transform_input const> inputs,
+                                           std::span<transform_output const> output_specs,
+                                           std::optional<size_type> in_row_size,
                                            cuda::stream_ref stream,
                                            rmm::device_async_resource_ref mr)
 {
-  auto const row_size =
-    args.row_size.has_value() ? *args.row_size : jit::get_projection_size(args.inputs);
-  auto output_may_be_nullable =
-    get_null_transformation(args.is_null_aware, args.inputs, args.outputs);
-  auto [outputs, stencil] = make_outputs(args.is_null_aware,
-                                         row_size,
-                                         args.inputs,
-                                         args.outputs,
-                                         output_may_be_nullable,
-                                         std::move(args.string_offsets),
-                                         stream,
-                                         mr);
-  auto kernel             = get_ast_runtime_kernel(make_ast_runtime_source(args));
+  auto const row_size = in_row_size.has_value() ? *in_row_size : jit::get_projection_size(inputs);
+  auto output_may_be_nullable = get_null_transformation(is_null_aware, inputs, output_specs);
+  auto [outputs, stencil]     = make_outputs(
+    is_null_aware, row_size, inputs, output_specs, output_may_be_nullable, {}, stream, mr);
 
   using input_descriptor  = jit::ast_runtime::input_descriptor;
   using output_descriptor = jit::ast_runtime::output_descriptor;
   static_assert(alignof(std::max_align_t) >= alignof(input_descriptor));
   static_assert(alignof(std::max_align_t) >= alignof(output_descriptor));
   static_assert(sizeof(input_descriptor) % alignof(output_descriptor) == 0);
-  auto const input_bytes = args.inputs.size() * sizeof(input_descriptor);
+  auto const input_bytes = inputs.size() * sizeof(input_descriptor);
   auto const bytes       = input_bytes + outputs.size() * sizeof(output_descriptor);
   // One aligned allocation avoids vector growth and lets both descriptor arrays share a transfer.
   detail::host_vector<std::max_align_t> descriptors(
     (bytes + sizeof(std::max_align_t) - 1) / sizeof(std::max_align_t),
     {get_pinned_memory_resource(), stream});
   auto* host_bytes = reinterpret_cast<std::byte*>(descriptors.data());
-  for (size_t i = 0; i < args.inputs.size(); ++i) {
-    auto const& input = args.inputs[i];
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    auto const& input = inputs[i];
     auto view = std::visit([](auto const& column) { return as_column_view(column); }, input);
     input_descriptor descriptor{view.head<void>(),
                                 view.null_mask(),
@@ -1285,7 +1280,7 @@ std::unique_ptr<table> execute_ast_runtime(detail::row_ir::transform_args&& args
                         stream);
   check_transform_error(max_error, stream);
   return std::make_unique<table>(
-    finalize_outputs(args.is_null_aware, row_size, std::move(outputs), stream, mr));
+    finalize_outputs(is_null_aware, row_size, std::move(outputs), stream, mr));
 }
 
 std::unique_ptr<table> execute_transform(std::string const& udf,
@@ -1425,18 +1420,7 @@ std::unique_ptr<column> compute_column_jit(table_view const& table,
 {
   CUDF_FUNC_RANGE();
   std::array<std::reference_wrapper<ast::expression const>, 1> expressions{expr};
-  auto args = detail::row_ir::ast_converter::compute_table(
-    detail::row_ir::target::CUDA, expressions, table, {}, "compute_operation", stream, mr);
-  auto result = transform(args.udf,
-                          args.source_type,
-                          args.is_null_aware,
-                          args.user_data,
-                          args.inputs,
-                          args.outputs,
-                          std::move(args.string_offsets),
-                          args.row_size,
-                          stream,
-                          mr);
+  auto result = compute_table_jit(table, expressions, stream, mr);
   auto cols   = result->release();
   return std::move(cols[0]);
 }
@@ -1450,10 +1434,11 @@ std::unique_ptr<table> compute_table_jit(
   CUDF_FUNC_RANGE();
   auto args = detail::row_ir::ast_converter::compute_table(
     detail::row_ir::target::CUDA, expressions, table, {}, "compute_operation", stream, mr);
-  if (args.outputs.size() > 1 && can_use_ast_lto(args.inputs, args.outputs)) {
-    return execute_ast_runtime(std::move(args), stream, mr);
+  if (can_use_ast_lto(args.inputs, args.outputs)) {
+    auto kernel = get_ast_runtime_kernel(make_ast_runtime_source(args));
+    return execute_ast_runtime(
+      kernel, args.is_null_aware, args.inputs, args.outputs, args.row_size, stream, mr);
   }
-
   return transform(args.udf,
                    args.source_type,
                    args.is_null_aware,
@@ -1582,17 +1567,20 @@ struct transform_program::impl {
        null_aware is_null_aware,
        std::optional<void*> user_data,
        std::vector<transform_input_spec> inputs,
-       std::vector<transform_output_spec> outputs)
+       std::vector<transform_output_spec> outputs,
+       std::optional<kernel> runtime_kernel = std::nullopt)
     : reflection_{jit_transform::reflect(source_type, inputs, outputs)},
       source_type_{source_type},
       is_null_aware_{is_null_aware},
       user_data_{user_data},
-      kernel_{jit_transform::get_kernel(is_null_aware_ == null_aware::YES,
-                                        user_data_.has_value(),
-                                        inputs,
-                                        outputs,
-                                        udf,
-                                        source_type_)}
+      ast_runtime_{runtime_kernel.has_value()},
+      kernel_{runtime_kernel ? std::move(*runtime_kernel)
+                             : jit_transform::get_kernel(is_null_aware_ == null_aware::YES,
+                                                         user_data_.has_value(),
+                                                         inputs,
+                                                         outputs,
+                                                         udf,
+                                                         source_type_)}
   {
   }
 
@@ -1601,6 +1589,8 @@ struct transform_program::impl {
   udf_source_type source_type_;
   null_aware is_null_aware_;
   std::optional<void*> user_data_;
+  // Reflection checks the schema, but the retained kernel also determines the descriptor ABI.
+  bool ast_runtime_;
   kernel kernel_;
   std::vector<std::unique_ptr<column>> ast_scalar_columns_;
   std::optional<std::vector<std::optional<int32_t>>> ast_input_column_indices_;
@@ -1651,13 +1641,18 @@ transform_program::transform_program(
   CUDF_FUNC_RANGE();
   auto args = detail::row_ir::ast_converter::compute_table(
     detail::row_ir::target::CUDA, expressions, table, {}, "compute_operation", stream, mr);
+  std::optional<kernel> runtime_kernel;
+  if (can_use_ast_lto(args.inputs, args.outputs)) {
+    runtime_kernel = get_ast_runtime_kernel(make_ast_runtime_source(args));
+  }
   impl_ =
     std::make_unique<impl>(args.udf,
                            args.source_type,
                            args.is_null_aware,
                            args.user_data,
                            jit_transform::make_input_specs(args.inputs),
-                           jit_transform::make_output_specs(args.outputs, args.string_offsets));
+                           jit_transform::make_output_specs(args.outputs, args.string_offsets),
+                           std::move(runtime_kernel));
   CUDF_EXPECTS(args.inputs.size() == args.input_column_indices.size(),
                "AST transform input metadata size mismatch");
   for (auto i = std::size_t{0}; i < args.inputs.size(); ++i) {
@@ -1694,6 +1689,10 @@ std::unique_ptr<table> transform_program::run(std::span<transform_input const> i
   impl_->validate(impl_->source_type_, inputs, outputs, string_offsets);
   perform_checks(
     impl_->source_type_, impl_->is_null_aware_, row_size, inputs, outputs, string_offsets);
+  if (impl_->ast_runtime_) {
+    return execute_ast_runtime(
+      impl_->kernel_, impl_->is_null_aware_, inputs, outputs, row_size, stream, mr);
+  }
   return execute_transform({},
                            impl_->source_type_,
                            impl_->is_null_aware_,

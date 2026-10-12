@@ -116,6 +116,8 @@ TEST_F(JITExpressionTest, LtoIntegerOverflow)
     views[base + 1] = inputs[base + 1]->view();
     EXPECT_THROW(cudf::compute_table_jit(cudf::table_view{views}, throwing),
                  cudf::evaluation_error);
+    EXPECT_THROW(cudf::compute_column_jit(cudf::table_view{views}, throwing[base / 3]),
+                 cudf::evaluation_error);
     views[base + 1] = views[base];
   }
 }
@@ -160,6 +162,17 @@ TEST_F(JITExpressionTest, LtoNullableGridStrideAndTails)
     auto result = cudf::compute_table_jit(cudf::table_view{{input}}, expressions);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sub_column, result->view().column(0), VERBOSITY);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_add_column, result->view().column(1), VERBOSITY);
+
+    std::array<std::reference_wrapper<cudf::ast::expression const>, 1> single_output{nullified};
+    auto table         = cudf::table_view{{input}};
+    auto column_result = cudf::compute_column_jit(table, nullified);
+    auto table_result  = cudf::compute_table_jit(table, single_output);
+    cudf::transform_program program{table, single_output};
+    auto program_result = program.run(table);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_add_column, column_result->view(), VERBOSITY);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_add_column, table_result->view().column(0), VERBOSITY);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+      expected_add_column, program_result->view().column(0), VERBOSITY);
   }
 }
 
