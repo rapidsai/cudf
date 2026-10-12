@@ -9,6 +9,7 @@
 #include "groupby/hash/hash_compound_agg_finalizer.hpp"
 #include "groupby/hash/output_utils.hpp"
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_stream.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/concatenate.hpp>
@@ -455,7 +456,7 @@ streaming_groupby::impl::finalize_gathered(std::unique_ptr<table> keys,
                              cache.get_result(req.values, *make_sum_aggregation()),
                              cache.get_result(req.values, *make_count_aggregation()),
                              stream,
-                             mr));
+                             mr.get_output_mr()));
           }
         }
         cudf::detail::aggregation_dispatcher(agg->kind, finalizer, *agg);
