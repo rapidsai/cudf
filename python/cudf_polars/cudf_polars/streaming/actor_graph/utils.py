@@ -50,7 +50,7 @@ from cudf_polars.dsl.utils.column_domain import column_domain_bindings
 from cudf_polars.dsl.utils.naming import indices_to_names, names_to_indices
 from cudf_polars.streaming.actor_graph.collectives.allgather import AllGatherManager
 from cudf_polars.streaming.actor_graph.tracing import (
-    ActorMetrics,
+    ActorTracer,
     record_channel_metrics,
     send_chunk,
 )
@@ -277,7 +277,7 @@ async def shutdown_channels_on_error(
 class ActorScope:
     """Metrics and explicit execution context for one Actor lifetime."""
 
-    tracer: ActorMetrics | None
+    tracer: ActorTracer | None
     ir_context: IRExecutionContext | None
 
     def require_ir_context(self) -> IRExecutionContext:
@@ -340,7 +340,7 @@ async def shutdown_on_error(
         import cudf_polars_quent as _quent
 
         created_quent_actor = True
-        tracer = ActorMetrics()
+        tracer = ActorTracer()
         actor_id = _quent.now_v7()
         quent_execution = replace(quent_execution, actor_id=actor_id)
         ir_context = replace(
@@ -1086,7 +1086,7 @@ async def chunkwise_evaluate(
     *,
     input_metadata: ChannelMetadata | None = None,
     handle_empty_input: bool = False,
-    tracer: ActorMetrics | None = None,
+    tracer: ActorTracer | None = None,
 ) -> None:
     """
     Apply IR evaluation chunk-by-chunk.

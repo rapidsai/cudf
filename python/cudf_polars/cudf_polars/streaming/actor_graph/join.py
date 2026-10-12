@@ -101,7 +101,7 @@ if TYPE_CHECKING:
         PrefilterDecision,
         PrefilterExecution,
     )
-    from cudf_polars.streaming.actor_graph.tracing import ActorMetrics
+    from cudf_polars.streaming.actor_graph.tracing import ActorTracer
     from cudf_polars.streaming.base import PartitionInfo
     from cudf_polars.streaming.filter_hint import (
         JoinSide,
@@ -401,7 +401,7 @@ async def _broadcast_join_large_chunk(
     small_size: int,
     broadcast_side: Literal["left", "right"],
     *,
-    tracer: ActorMetrics | None,
+    tracer: ActorTracer | None,
 ) -> int:
     """Join one large-side chunk with the small DataFrame(s) and send the result."""
     large_df = chunk_to_frame(large_chunk, large_child)
@@ -458,7 +458,7 @@ async def broadcast_join(
     collective_id: int,
     target_partition_size: int | None,
     *,
-    tracer: ActorMetrics | None,
+    tracer: ActorTracer | None,
     prefilter_statistics: RuntimePrefilterStatistics | None = None,
 ) -> None:
     """
@@ -848,7 +848,7 @@ async def _join_chunks(
     ch_out: Channel[TableChunk],
     ch_left: Channel[TableChunk],
     ch_right: Channel[TableChunk],
-    tracer: ActorMetrics | None,
+    tracer: ActorTracer | None,
 ) -> None:
     # Consume metadata from both shuffle outputs before reading data
     await gather_in_task_group(
@@ -966,7 +966,7 @@ async def _shuffle_join(
     left_collective_id: int,
     right_collective_id: int,
     *,
-    tracer: ActorMetrics | None,
+    tracer: ActorTracer | None,
 ) -> None:
     """Execute a shuffle (hash) join."""
     # Send output metadata
@@ -1111,7 +1111,7 @@ async def _ordered_join(
     strategy: OrderedJoinStrategy,
     collective_ids: JoinCollectiveIds,
     *,
-    tracer: ActorMetrics | None,
+    tracer: ActorTracer | None,
 ) -> None:
     """Align ordered inputs to common boundaries, then join partition-wise."""
     left_boundaries_aligned = strategy.left_input_ordering.boundaries_aligned_with(
@@ -1287,7 +1287,7 @@ def _choose_strategy_from_samples(
     left_sample: TableSizeStats,
     right_sample: TableSizeStats,
     chunkwise: bool,
-    tracer: ActorMetrics | None,
+    tracer: ActorTracer | None,
     allow_broadcast: bool = True,
 ) -> JoinStrategy:
     """
@@ -1711,7 +1711,7 @@ async def choose_strategy(
     executor: StreamingExecutor,
     collective_ids: JoinCollectiveIds,
     *,
-    tracer: ActorMetrics | None,
+    tracer: ActorTracer | None,
 ) -> JoinStrategy:
     """Collect any required samples and choose broadcast vs shuffle."""
     left, right = ir.children[:2]

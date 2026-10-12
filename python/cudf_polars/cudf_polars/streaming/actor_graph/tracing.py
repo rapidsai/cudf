@@ -25,7 +25,7 @@ def _zero_bytes_by_tier() -> dict[MemoryType, int]:
 
 
 @dataclasses.dataclass(slots=True)
-class ActorMetrics:
+class ActorTracer:
     """
     Tracer for a single streaming actor (IR node).
 
@@ -86,7 +86,7 @@ class ActorMetrics:
 
 
 def record_channel_metrics(
-    tracer: ActorMetrics,
+    tracer: ActorTracer,
     *,
     chs_in: Sequence[Channel[Any]],
     chs_out: Sequence[Channel[Any]],
@@ -117,7 +117,7 @@ async def send_chunk(
     chunk: TableChunk,
     sequence_number: int,
     *,
-    tracer: ActorMetrics | None,
+    tracer: ActorTracer | None,
 ) -> None:
     """
     Trace and send a TableChunk.

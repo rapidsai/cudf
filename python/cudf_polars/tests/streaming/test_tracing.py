@@ -24,7 +24,7 @@ from rapidsmpf.streaming.core.message import Message
 from cudf_polars.containers import DataFrame
 from cudf_polars.streaming.actor_graph.io import Lineariser
 from cudf_polars.streaming.actor_graph.tracing import (
-    ActorMetrics,
+    ActorTracer,
     record_channel_metrics,
     send_chunk,
 )
@@ -48,7 +48,7 @@ def chunk(spmd_engine: SPMDEngine) -> TableChunk:
 
 @pytest.mark.spmd
 def test_actor_metrics_count_table_chunk_without_table_view(chunk: TableChunk) -> None:
-    tracer = ActorMetrics()
+    tracer = ActorTracer()
     tracer.add_chunk(chunk=chunk)
     assert tracer.chunk_count == 1
     assert tracer.row_count == 3
@@ -65,7 +65,7 @@ def test_record_channel_metrics_sums_all_memory_types() -> None:
         MemoryType.DEVICE: 7,
         MemoryType.HOST: 3,
     }
-    tracer = ActorMetrics()
+    tracer = ActorTracer()
 
     record_channel_metrics(tracer, chs_in=(input_channel,), chs_out=(output_channel,))
 
@@ -79,7 +79,7 @@ def test_send_chunk_traces_and_sends_message(
 ) -> None:
     context = spmd_engine.context
     ch_out = context.create_channel()
-    tracer = ActorMetrics()
+    tracer = ActorTracer()
 
     async def send_and_recv():
         async with asyncio.TaskGroup() as tg:

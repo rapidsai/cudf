@@ -91,7 +91,7 @@ if TYPE_CHECKING:
     from cudf_polars.containers.dataframe import NamedColumn
     from cudf_polars.dsl.utils.io import CachedParquetInfo
     from cudf_polars.quent._context import QuentIRExecutionState
-    from cudf_polars.streaming.actor_graph.tracing import ActorMetrics
+    from cudf_polars.streaming.actor_graph.tracing import ActorTracer
     from cudf_polars.streaming.rank_aware_source import RankAwareSource
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
     from cudf_polars.utils.config import ParquetOptions
@@ -157,7 +157,7 @@ class IRExecutionContext:
     get_cuda_stream: Callable[[], Stream] = field(default=get_cuda_stream)
     query_id: uuid.UUID = field(default_factory=uuid.uuid4)
     quent_ir_execution_state: QuentIRExecutionState | None = None
-    tracer: ActorMetrics | None = None
+    tracer: ActorTracer | None = None
 
     async def to_thread(
         self, func: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs

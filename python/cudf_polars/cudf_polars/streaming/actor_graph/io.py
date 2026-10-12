@@ -67,7 +67,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.streaming.actor_graph.core import SubNetGenerator
-    from cudf_polars.streaming.actor_graph.tracing import ActorMetrics
+    from cudf_polars.streaming.actor_graph.tracing import ActorTracer
     from cudf_polars.streaming.base import (
         IOPartitionPlan,
         PartitionInfo,
@@ -402,7 +402,7 @@ async def _process_and_send_chunk(
     ch_out: Channel[TableChunk],
     ir: PythonScan,
     ir_context: IRExecutionContext,
-    tracer: ActorMetrics | None,
+    tracer: ActorTracer | None,
     chunk: pl.DataFrame | DataFrame,
     seq_num: int,
 ) -> None:
@@ -576,7 +576,7 @@ async def read_chunk(
     ch_out: Channel[TableChunk],
     ir_context: IRExecutionContext,
     estimated_chunk_bytes: int,
-    tracer: ActorMetrics | None = None,
+    tracer: ActorTracer | None = None,
 ) -> None:
     """
     Read a chunk from disk and send it to the output channel.
