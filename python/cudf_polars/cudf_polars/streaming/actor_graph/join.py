@@ -22,7 +22,10 @@ from cudf_streaming.table_chunk import (
 )
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.actor import define_actor
-from rapidsmpf.streaming.core.memory_reserve_or_wait import missing_net_memory_delta
+from rapidsmpf.streaming.core.memory_reserve_or_wait import (
+    missing_net_memory_delta,
+    reserve_memory,
+)
 from rapidsmpf.streaming.core.message import Message
 
 from cudf_polars.containers import DataFrame
@@ -41,10 +44,6 @@ from cudf_polars.streaming.actor_graph.dispatch import (
     ir_context_for_node,
 )
 from cudf_polars.streaming.actor_graph.join_planning import JoinPlanningState
-from cudf_polars.streaming.actor_graph.memory import (
-    MemoryReservationPurpose,
-    reserve_memory_traced,
-)
 from cudf_polars.streaming.actor_graph.nodes import default_node_multi
 from cudf_polars.streaming.actor_graph.prefilter import (
     JoinPrefilterExecution,
@@ -416,13 +415,10 @@ async def _broadcast_join_large_chunk(
     join_results: list[DataFrame] = []
     input_bytes = large_chunk_size + small_size
     with opaque_memory_usage(
-        await reserve_memory_traced(
+        await reserve_memory(
             context,
             size=input_bytes,
             net_memory_delta=0,
-            ir_context=ir_context,
-            purpose=MemoryReservationPurpose.BROADCAST_JOIN,
-            sequence_number=seq_num,
         )
     ):
         for sdf in dfs_to_join:
@@ -648,7 +644,7 @@ def make_prefilter_execution(
     collective_ids: JoinCollectiveIds,
 ) -> JoinPrefilterExecution:
     """Create the actors and channels that realize selected prefilters."""
-    execution = JoinPrefilterExecution(context, ch_left, ch_right, ir_context)
+    execution = JoinPrefilterExecution(context, ch_left, ch_right)
 
     # Prepare every required domain before connecting target-side filters. This
     # is important for opposing direct filters: each filter must consume the
@@ -896,13 +892,10 @@ async def _join_chunks(
             )
         )
         with opaque_memory_usage(
-            await reserve_memory_traced(
+            await reserve_memory(
                 context,
                 size=input_bytes,
                 net_memory_delta=0,
-                ir_context=ir_context,
-                purpose=MemoryReservationPurpose.JOIN,
-                sequence_number=left_msg.sequence_number,
             )
         ):
             df = await ir_context.to_thread(

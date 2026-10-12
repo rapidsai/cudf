@@ -20,7 +20,7 @@ use uuid::Uuid;
 use super::CudfPolarsUiAnalyzer;
 use crate::resource::{
     DATA_CHANNEL_RESOURCE_TYPE, DEVICE_MEMORY_RESOURCE_TYPE, EVALUATE_ENTITY_TYPE,
-    MEMORY_RESERVATION_ENTITY_TYPE, PROCESSOR_RESOURCE_TYPE,
+    PROCESSOR_RESOURCE_TYPE,
 };
 
 impl CudfPolarsUiAnalyzer {
@@ -218,33 +218,6 @@ impl CudfPolarsUiAnalyzer {
                         FsmTransitionDecl::Transition("running".to_owned(), "completed".to_owned()),
                         FsmTransitionDecl::Transition("running".to_owned(), "failed".to_owned()),
                         FsmTransitionDecl::Exit("completed".to_owned()),
-                        FsmTransitionDecl::Exit("failed".to_owned()),
-                    ],
-                },
-            ),
-            (
-                MEMORY_RESERVATION_ENTITY_TYPE.to_owned(),
-                FsmTypeDecl {
-                    name: MEMORY_RESERVATION_ENTITY_TYPE.to_owned(),
-                    states: vec![
-                        FsmStateTypeDecl {
-                            name: "requested".to_owned(),
-                            usages: vec![],
-                        },
-                        FsmStateTypeDecl {
-                            name: "granted".to_owned(),
-                            usages: vec![],
-                        },
-                        FsmStateTypeDecl {
-                            name: "failed".to_owned(),
-                            usages: vec![],
-                        },
-                    ],
-                    transitions: vec![
-                        FsmTransitionDecl::Entry("requested".to_owned()),
-                        FsmTransitionDecl::Transition("requested".to_owned(), "granted".to_owned()),
-                        FsmTransitionDecl::Transition("requested".to_owned(), "failed".to_owned()),
-                        FsmTransitionDecl::Exit("granted".to_owned()),
                         FsmTransitionDecl::Exit("failed".to_owned()),
                     ],
                 },

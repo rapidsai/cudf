@@ -28,7 +28,6 @@ use crate::{
     actor::ActorSpan,
     evaluate::EvaluateSpan,
     generated::CudfPolarsEvent,
-    memory_reservation::MemoryReservationSpan,
     model::CudfPolarsModel,
     resource::{DeclaredResource, DeclaredResourceGroup},
 };
@@ -39,7 +38,6 @@ pub struct CudfPolarsUiAnalyzer {
     pub(super) actors: HashMap<Uuid, ActorSpan>,
     pub(super) evaluates: Vec<EvaluateSpan>,
     pub(super) evaluate_indices: HashMap<Uuid, usize>,
-    pub(super) memory_reservations: Vec<MemoryReservationSpan>,
     pub(super) resources: HashMap<Uuid, DeclaredResource>,
     pub(super) resource_groups: HashMap<Uuid, DeclaredResourceGroup>,
 }
@@ -64,15 +62,6 @@ impl CudfPolarsUiAnalyzer {
         self.evaluate_indices
             .get(&id)
             .and_then(|&index| self.evaluates.get(index))
-    }
-
-    pub(super) fn memory_reservation_operator_id(
-        &self,
-        reservation: &MemoryReservationSpan,
-    ) -> Option<Uuid> {
-        self.actors
-            .get(&reservation.actor_id)
-            .map(|actor| actor.operator_id)
     }
 
     pub(super) fn is_known_resource_group(&self, group_id: Uuid, engine_id: Uuid) -> bool {

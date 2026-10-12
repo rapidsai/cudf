@@ -377,35 +377,6 @@ def test_quent_lifecycle(
         {"node_id", "node_type"}.issubset(queued["task"])
         for queued in queued_io_evaluations
     )
-    memory_reservation_events = _of_type(events, "MemoryReservation")
-    assert memory_reservation_events
-    reservation_states: dict[str, list[str]] = {}
-    for event in memory_reservation_events:
-        reservation_states.setdefault(event["id"], []).append(
-            next(iter(event["data"]["MemoryReservation"]))
-        )
-    assert all(
-        states[0] == "Requested" and states[-1] in {"Granted", "Failed"}
-        for states in reservation_states.values()
-    )
-    requested_reservations = [
-        event["data"]["MemoryReservation"]["Requested"]
-        for event in memory_reservation_events
-        if "Requested" in event["data"]["MemoryReservation"]
-    ]
-    assert all(
-        {"actor", "request"}.issubset(requested)
-        and {
-            "purpose",
-            "size_bytes",
-            "memory_type",
-            "net_memory_delta",
-            "allow_overbooking",
-            "sequence_number",
-        }.issubset(requested["request"])
-        for requested in requested_reservations
-    )
-
     initialized_queries = [
         event
         for event in query_events

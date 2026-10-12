@@ -43,15 +43,6 @@ records:
       node_id: string
       node_type: string
 
-  MemoryReservationRequest:
-    fields:
-      purpose: string
-      size_bytes: u64
-      memory_type: string
-      net_memory_delta: i64
-      allow_overbooking: { option: bool }
-      sequence_number: { option: u64 }
-
   OperatorSchemas:
     fields:
       input_schemas: { list: DataFrameSchema }
@@ -371,21 +362,6 @@ fsms:
         attributes:
           output_bytes: u64
           output_dataframe: DataFrameStatistics
-      failed:
-        attributes:
-          error: string
-
-  MemoryReservation:
-    doc: One request for admission from the streaming runtime's memory manager.
-    states:
-      requested:
-        initial: true
-        attributes:
-          instance_name: string
-          actor: { scope-ref: Actor }
-          request: MemoryReservationRequest
-        to: [granted, failed]
-      granted: {}
       failed:
         attributes:
           error: string

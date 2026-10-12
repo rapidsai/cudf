@@ -8,7 +8,6 @@ pub(crate) const PROCESSOR_RESOURCE_TYPE: &str = "processor";
 pub(crate) const DEVICE_MEMORY_RESOURCE_TYPE: &str = "device_memory";
 pub(crate) const DATA_CHANNEL_RESOURCE_TYPE: &str = "data_channel";
 pub(crate) const EVALUATE_ENTITY_TYPE: &str = "Evaluate";
-pub(crate) const MEMORY_RESERVATION_ENTITY_TYPE: &str = "MemoryReservation";
 
 #[derive(Clone)]
 pub(crate) struct DeclaredResource {

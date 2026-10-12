@@ -407,7 +407,6 @@ async def _shuffle_reduce(
         shuffle_comm,
         modulus,
         collective_id,
-        ir_context=ir_context,
     )
     async with shuffle.inserting() as inserter:
         await inserter.insert_hash(

@@ -14,10 +14,9 @@ use crate::{
     evaluate::{EvaluateBuilder, EvaluateSpan},
     generated::{
         ActorEvent, CudfPolarsEvent, DataChannelEvent, DeviceMemoryEvent, EngineEvent,
-        EvaluateEvent, MemoryReservationEvent, OperatorEvent, PlanEvent, PortEvent, ProcessorEvent,
-        QueryEvent, QueryGroupEvent, StorageEvent, ThreadPoolEvent, WorkerEvent,
+        EvaluateEvent, OperatorEvent, PlanEvent, PortEvent, ProcessorEvent, QueryEvent,
+        QueryGroupEvent, StorageEvent, ThreadPoolEvent, WorkerEvent,
     },
-    memory_reservation::{MemoryReservationBuilder, MemoryReservationSpan},
     model::CudfPolarsModelBuilder,
     resource::{
         DATA_CHANNEL_RESOURCE_TYPE, DEVICE_MEMORY_RESOURCE_TYPE, DeclaredResource,
@@ -34,7 +33,6 @@ impl CudfPolarsUiAnalyzer {
         let mut builder = CudfPolarsModelBuilder::try_new(engine_id)?;
         let mut actor_builders = HashMap::<Uuid, ActorBuilder>::new();
         let mut evaluate_builders = HashMap::<Uuid, EvaluateBuilder>::new();
-        let mut memory_reservation_builders = HashMap::<Uuid, MemoryReservationBuilder>::new();
         let mut resources = HashMap::new();
         let mut resource_groups = HashMap::new();
         for event in events {
@@ -50,12 +48,6 @@ impl CudfPolarsUiAnalyzer {
                         .entry(event.id)
                         .or_default()
                         .push(event.timestamp, evaluate_event);
-                }
-                CudfPolarsEvent::MemoryReservation(reservation_event) => {
-                    memory_reservation_builders
-                        .entry(event.id)
-                        .or_default()
-                        .push(event.timestamp, reservation_event);
                 }
                 CudfPolarsEvent::ThreadPool(ThreadPoolEvent::Declared {
                     instance_name,
@@ -135,14 +127,6 @@ impl CudfPolarsUiAnalyzer {
                 Err(error) => Some(Err(error)),
             })
             .collect::<AnalyzerResult<Vec<_>>>()?;
-        let memory_reservations: Vec<MemoryReservationSpan> = memory_reservation_builders
-            .into_iter()
-            .filter_map(|(id, builder)| match builder.try_build(id) {
-                Ok(reservation) => Some(Ok(reservation)),
-                Err(AnalyzerError::IncompleteEntity(_)) => None,
-                Err(error) => Some(Err(error)),
-            })
-            .collect::<AnalyzerResult<Vec<_>>>()?;
         let mut model = builder.try_build()?;
         for actor in &actors {
             if let Ok(operator) = model.operator_mut(actor.operator_id) {
@@ -160,7 +144,6 @@ impl CudfPolarsUiAnalyzer {
             actors,
             evaluates,
             evaluate_indices,
-            memory_reservations,
             resources,
             resource_groups,
         })
@@ -231,10 +214,6 @@ fn events_for_engine(
                 CudfPolarsEvent::Evaluate(EvaluateEvent::Queued { actor, .. }) => {
                     Some(actor.target)
                 }
-                CudfPolarsEvent::MemoryReservation(MemoryReservationEvent::Requested {
-                    actor,
-                    ..
-                }) => Some(actor.target),
                 _ => None,
             };
             parent_id.map(|parent_id| (event.id, parent_id))

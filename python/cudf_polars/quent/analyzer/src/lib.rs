@@ -4,7 +4,6 @@
 mod actor;
 mod analyzer;
 mod evaluate;
-mod memory_reservation;
 mod model;
 mod resource;
 mod viewer;

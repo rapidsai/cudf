@@ -21,6 +21,7 @@ from cudf_streaming.table_chunk import (
 )
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.coll.sparse_alltoall import SparseAlltoall
+from rapidsmpf.streaming.core.memory_reserve_or_wait import reserve_memory
 from rapidsmpf.streaming.core.message import Message
 
 from cudf_polars.containers import DataFrame
@@ -28,10 +29,6 @@ from cudf_polars.dsl.ir import IR, CallbackSink, DataFrameScan, PythonScan, Sink
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
     ir_context_for_node,
-)
-from cudf_polars.streaming.actor_graph.memory import (
-    MemoryReservationPurpose,
-    reserve_memory_traced,
 )
 from cudf_polars.streaming.actor_graph.nodes import define_actor, shutdown_on_error
 from cudf_polars.streaming.actor_graph.scan_ordering import (
@@ -429,13 +426,10 @@ async def _process_and_send_chunk(
         net_memory_delta = input_bytes
         reservation = input_bytes * (1 + (ir.predicate is not None))
     with opaque_memory_usage(
-        await reserve_memory_traced(
+        await reserve_memory(
             context,
             size=reservation,
             net_memory_delta=net_memory_delta,
-            ir_context=ir_context,
-            purpose=MemoryReservationPurpose.PYTHON_SCAN,
-            sequence_number=seq_num,
         )
     ):
         df = await ir_context.to_thread(process)
@@ -617,13 +611,10 @@ async def read_chunk(
             ),
         )
 
-    reservation = await reserve_memory_traced(
+    reservation = await reserve_memory(
         context,
         size=reservation_bytes,
         net_memory_delta=estimated_chunk_bytes,
-        ir_context=ir_context,
-        purpose=MemoryReservationPurpose.SCAN,
-        sequence_number=seq_num,
     )
     with opaque_memory_usage(reservation):
         df = await ir_context.to_thread(

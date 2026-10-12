@@ -670,12 +670,9 @@ Set `CUDF_POLARS__EXECUTOR__QUENT_CONTEXT=1` to export plans, actor lifetimes,
 aggregate actor statistics, runtime decisions, and per-node `Evaluate`
 lifecycles. Asynchronous scan work uses the same lifecycle with task metadata,
 disk-to-device transfer usage, failures, and actual output bytes. Calls into
-memory-admission control are exported separately as `MemoryReservation`
-lifecycles with their purpose, memory tier, requested bytes, net memory delta,
-overbooking policy, chunk sequence number, wait duration, and outcome. Set
-`CUDF_POLARS_QUENT_DATAFRAMES=0` to omit per-dataframe shape and byte-size
-details from Quent `Evaluate` events. This must be set before the `cudf_polars`
-module is imported.
+Set `CUDF_POLARS_QUENT_DATAFRAMES=0` to omit per-dataframe shape and byte-size
+details from Quent `Evaluate` events. This must be set before the
+`cudf_polars` module is imported.
 
 ### Schema
 

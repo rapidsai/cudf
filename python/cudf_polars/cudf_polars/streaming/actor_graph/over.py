@@ -667,7 +667,6 @@ async def _shuffle_and_reassemble(
         comm,
         forward_modulus,
         forward_shuffle_collective_id,
-        ir_context=ir_context,
     )
     return_shuffle = ShuffleManager(
         context,
@@ -675,7 +674,6 @@ async def _shuffle_and_reassemble(
         comm.nranks,
         return_shuffle_collective_id,
         partition_assignment=PartitionAssignment.CONTIGUOUS,
-        ir_context=ir_context,
     )
 
     ch_replay = context.create_channel()
