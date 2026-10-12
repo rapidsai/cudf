@@ -26,10 +26,12 @@ from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import (
     GroupBy,
     HStack,
+    MapFunction,
     Projection,
     Select,
     Sort,
 )
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.actor_graph.collectives.sort import (
     _can_sort_chunkwise,
@@ -44,6 +46,7 @@ from cudf_polars.streaming.actor_graph.utils import (
 )
 from cudf_polars.utils.config import ConfigOptions
 from cudf_polars.utils.dtypes import make_empty_column
+from cudf_polars.utils.versions import POLARS_VERSION_LT_138
 
 
 @pytest.fixture(scope="module")
@@ -543,6 +546,57 @@ def _make_order_scheme(
             )
         ]
     )
+
+
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_138, reason="set_sorted lowers to unsupported hint ir"
+)
+def test_set_sorted_dataframe_extracts_ordering_boundaries(spmd_engine_factory):
+    engine = spmd_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=1,
+            target_partition_size=1,
+            fallback_mode="raise",
+            raise_on_fail=True,
+        )
+    )
+    q = (
+        pl.LazyFrame({"k": [1, 2, 3], "v": [10, 20, 30]})
+        .set_sorted("k")
+        .sort("k")
+        .select("k")
+    )
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    nodes = list(traversal([ir]))
+    assert any(
+        isinstance(node, MapFunction) and node.name == "hint_sorted" for node in nodes
+    )
+    assert not any(isinstance(node, Sort) for node in nodes)
+
+    result, metadata_collector = evaluate_logical_plan(
+        ir, ConfigOptions.from_polars_engine(engine), collect_metadata=True
+    )
+
+    assert result["k"].to_list() == [1, 2, 3]
+    assert metadata_collector is not None
+    assert len(metadata_collector) == 1
+    metadata = metadata_collector[0]
+    assert metadata.local_count == 3
+    assert metadata.partitioning is not None
+    assert metadata.partitioning.local == "inherit"
+    assert isinstance(metadata.partitioning.inter_rank, OrderScheme)
+    (ordering,) = metadata.partitioning.inter_rank.orderings
+    assert tuple(key.column_index for key in ordering.keys) == (0,)
+    assert ordering.strict_boundaries is True
+
+    boundaries = ordering.get_boundaries(engine.context.br())
+    boundary_df = DataFrame.from_table(
+        boundaries.table_view(),
+        ["k"],
+        [DataType(pl.Int64())],
+        boundaries.stream,
+    ).to_polars()
+    assert boundary_df["k"].to_list() == [2, 3]
 
 
 def test_apply_ordering_metadata_marks_leading_key_only(spmd_engine) -> None:

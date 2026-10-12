@@ -235,6 +235,8 @@ def _order_partitioning(
 def _set_sorted_join_metadata(spmd_engine_factory) -> ChannelMetadata:
     engine = spmd_engine_factory(
         StreamingOptions(
+            # Force hint_sorted to extract/replay boundaries instead of using
+            # the single-partition metadata shortcut.
             max_rows_per_partition=1,
             target_partition_size=1,
             broadcast_limit=1,
