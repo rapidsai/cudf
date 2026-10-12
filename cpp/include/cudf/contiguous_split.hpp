@@ -386,7 +386,7 @@ class pack_plan {
   [[nodiscard]] pack_sizes sizes() const;
 
  private:
-  struct impl;
+  class impl;
   std::unique_ptr<impl> _impl;
 
   explicit pack_plan(std::unique_ptr<impl>&& implementation);
@@ -506,8 +506,10 @@ pack_plan prepare_pack(cudf::table_view const& input,
  * @brief Host metadata and payload size produced by `pack_into()`.
  */
 struct pack_result {
-  std::vector<uint8_t> metadata;  ///< Metadata describing the packed payload
-  std::size_t payload_bytes;      ///< Number of payload bytes written
+  /// Metadata describing the packed payload. Uncompressed output has the same metadata as
+  /// `packed_columns`; compressed output extends it with each region's codec and block layout.
+  std::vector<uint8_t> metadata;
+  std::size_t payload_bytes;  ///< Number of payload bytes written
 };
 
 /**
