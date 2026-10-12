@@ -11,7 +11,7 @@ from rapidsmpf.streaming.core.actor import define_actor
 
 from cudf_polars.dsl.ir import IR, MapFunction
 from cudf_polars.dsl.utils.naming import names_to_indices
-from cudf_polars.streaming.actor_graph.collectives.sort import (
+from cudf_polars.streaming.actor_graph.collectives.ordering import (
     ensure_ordering_metadata,
 )
 from cudf_polars.streaming.actor_graph.dispatch import generate_ir_sub_network
