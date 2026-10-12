@@ -1397,10 +1397,20 @@ TEST_F(CastVariantTest, ApachePrimitiveTimestamps)
          ns{ns::duration{0x1805AFB76C3A4115}});
   expect(cast_apache_primitive<ns>(avf::primitive_timestampntz_nanos),
          ns{ns::duration{0x1805AFB76C3A4115}});
-  // No unit conversion: a mismatched unit or a plain int64 yields null.
-  EXPECT_EQ(cast_apache_primitive<ns>(avf::primitive_timestamp)->null_count(), 1);
-  EXPECT_EQ(cast_apache_primitive<us>(avf::primitive_timestamp_nanos)->null_count(), 1);
-  EXPECT_EQ(cast_apache_primitive<us>(avf::primitive_int64)->null_count(), 1);
+  // No unit conversion: a mismatched unit or a plain int64 yields null with TYPE_MISMATCH.
+  auto const expect_mismatch = [](cudf::type_id target, auto const& fixture) {
+    auto const stream = cudf::test::get_default_stream();
+    auto col          = make_apache_variant(fixture);
+    auto const value  = cudf::structs_column_view{col}.get_sliced_child(1, stream);
+    auto status       = make_status_buffer(value.size());
+    auto got          = cudf::io::parquet::experimental::cast_variant(
+      value, cudf::data_type{target}, status->mutable_view(), stream);
+    EXPECT_EQ(got->null_count(), 1);
+    expect_status_values(*status, {ST_MISMATCH});
+  };
+  expect_mismatch(cudf::type_id::TIMESTAMP_NANOSECONDS, avf::primitive_timestamp);
+  expect_mismatch(cudf::type_id::TIMESTAMP_MICROSECONDS, avf::primitive_timestamp_nanos);
+  expect_mismatch(cudf::type_id::TIMESTAMP_MICROSECONDS, avf::primitive_int64);
 }
 
 TEST_F(CastVariantTest, ApachePrimitiveBooleans)
