@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from cudf_streaming.channel_metadata import ChannelMetadata
 from cudf_streaming.table_chunk import (
@@ -53,7 +53,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
 
-    PartitioningCallback: TypeAlias = Callable[
+    type PartitioningCallback = Callable[
         [IR, Sequence[ChannelMetadata], Context],
         Partitioning | None,
     ]
