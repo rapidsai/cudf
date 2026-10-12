@@ -340,6 +340,7 @@ def test_validate_cluster() -> None:
         "target_partition_size",
         "broadcast_limit",
         "sink_to_directory",
+        "parallel_sink_batches",
         "client_device_threshold",
         "max_concurrent_io_tasks",
         "num_py_executors",
