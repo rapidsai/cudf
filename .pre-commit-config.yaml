@@ -173,7 +173,7 @@ repos:
         entry: python ci/checks/versions_compat.py
         language: python
         additional_dependencies: [packaging]
-        files: ^python/cudf_polars/(pyproject\.toml|cudf_polars/utils/versions\.py)$
+        files: ^(dependencies\.yaml|python/cudf_polars/(pyproject\.toml|cudf_polars/utils/versions\.py))$
         pass_filenames: false
         verbose: true
       - id: cmake-format
