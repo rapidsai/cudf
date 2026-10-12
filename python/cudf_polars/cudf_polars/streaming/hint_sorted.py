@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TYPE_CHECKING
 
 from cudf_polars.dsl.ir import IR
 
@@ -12,9 +12,7 @@ if TYPE_CHECKING:
     from cudf_polars.typing import Schema
 
 
-HintSortedOptions: TypeAlias = tuple[
-    tuple[str, ...], tuple[bool, ...], tuple[bool, ...]
-]
+type HintSortedOptions = tuple[tuple[str, ...], tuple[bool, ...], tuple[bool, ...]]
 
 
 class HintSorted(IR):
