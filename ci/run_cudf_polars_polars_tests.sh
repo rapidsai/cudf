@@ -14,7 +14,7 @@ if [[ -n "${CUDF_POLARS_GPU_RUN_LIST:-}" ]]; then
 fi
 if [[ "${CI:-false}" == "true" ]]; then
     producer_json=$(gh api --paginate \
-        "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest" \
+        "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest&per_page=100" \
         | jq -c --arg runner "${RUNNER_NAME}" \
             '.jobs[] | select(.runner_name == $runner and .status == "in_progress") | {id, configuration: (.name | split(" / ") | last)}')
     CUDF_POLARS_REPORT_PRODUCER=$(printf '%s' "${producer_json}" | jq -r .id)

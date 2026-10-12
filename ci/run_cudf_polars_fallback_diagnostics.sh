@@ -13,7 +13,7 @@ if [[ "${1:-}" == "--audit" || "${1:-}" == "--publish-audit" ]]; then
     [[ "$1" == "--publish-audit" ]] && publish_audit=true
     shift
     gh api --paginate --slurp \
-        "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest" \
+        "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest&per_page=100" \
         | jq '[.[].jobs[] | select(.name | startswith("cudf-polars-polars-tests"))]' \
         > "${report_dir}/expected-jobs"
     audit_args=(--audit-run-list ci/cudf_polars/gpu_test_run_list.json --expected-jobs "${report_dir}/expected-jobs")
