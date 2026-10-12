@@ -26,6 +26,7 @@
 #include <random>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -120,7 +121,9 @@ synthetic_unicode_data create_unicode_data(std::mt19937& gen)
                                  0x0327,
                                  0x0328,
                                  0x0331};
-  std::vector<std::pair<uint32_t, uint32_t>> second_level;  // (composite, first mark)
+  // marks whose composites get a second level of composition (e.g. U+00C2 + U+0301 -> U+1EA4)
+  std::set<uint32_t> const stacking_marks = {0x0302, 0x0304, 0x0306, 0x0308};
+  std::vector<std::pair<uint32_t, uint32_t>> second_level;  // (composite, base letter)
   std::string const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
   for (auto letter : letters) {
     std::shuffle(marks.begin(), marks.end(), gen);
@@ -128,7 +131,7 @@ synthetic_unicode_data create_unicode_data(std::mt19937& gen)
       auto const cp = *next_slot++;
       data.add(cp, 0, hex(static_cast<uint32_t>(letter)) + " " + hex(marks[m]));
       data.latin_composites[letter].push_back(cp);
-      if (marks[m] == 0x0302 || marks[m] == 0x0304 || marks[m] == 0x0306 || marks[m] == 0x0308) {
+      if (stacking_marks.contains(marks[m])) {
         second_level.emplace_back(cp, static_cast<uint32_t>(letter));
       }
     }
@@ -411,8 +414,9 @@ std::vector<std::string> create_rows(synthetic_unicode_data const& data,
   for (auto& row : rows) {
     while (true) {
       auto const word = words.word(text_type);
-      if (row.size() + word.size() + 1 > static_cast<std::size_t>(row_width)) { break; }
-      if (!row.empty()) { row += words.chance(0.08) ? ", " : " "; }
+      auto const sep  = std::string_view{row.empty() ? "" : (words.chance(0.08) ? ", " : " ")};
+      if (row.size() + sep.size() + word.size() > static_cast<std::size_t>(row_width)) { break; }
+      row += sep;
       row += word;
     }
   }
