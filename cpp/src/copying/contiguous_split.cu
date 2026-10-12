@@ -47,9 +47,9 @@
 #include <thrust/transform.h>
 
 #include <algorithm>
-#include <concepts>
 #include <cstddef>
 #include <cstring>
+#include <functional>
 #include <limits>
 #include <numeric>
 #include <optional>
@@ -2785,62 +2785,50 @@ struct compression_metadata {
           metadata.subspan(legacy_offset, header.legacy_metadata_bytes)};
 }
 
-using null_mask_buffer = cuda::device_buffer<std::byte>;
+/// Supplies the packed column buffers that materialization allocates.
+struct buffer_source {
+  /// Returns the allocation size of the buffer at `offset`, which must hold `required_bytes`.
+  std::function<std::size_t(int64_t offset, std::size_t required_bytes, bool is_validity)> size;
+  /// Schedules filling `destination` with the buffer at `offset`.
+  std::function<void(int64_t offset, device_span<uint8_t> destination)> fill;
+};
 
-template <typename Buffer>
-concept validity_buffer = std::same_as<Buffer, null_mask_buffer>;
-
-template <typename Buffer>
-concept output_buffer = validity_buffer<Buffer> || std::same_as<Buffer, rmm::device_buffer>;
-
-template <output_buffer Buffer>
-Buffer allocate_output_buffer(std::size_t bytes, cuda::stream_ref stream, cudf::memory_resources mr)
-{
-  if constexpr (validity_buffer<Buffer>) {
-    auto const env = cuda::std::execution::prop{cuda::allocation_alignment, alignof(bitmask_type)};
-    return Buffer(stream, mr.get_output_mr(), bytes, cuda::no_init, env);
-  } else {
-    return Buffer(bytes, stream, mr.get_output_mr());
-  }
-}
-
-template <output_buffer Buffer>
-[[nodiscard]] uint8_t* buffer_data(Buffer& buffer)
-{
-  return reinterpret_cast<uint8_t*>(buffer.data());
-}
-
-/// `allocate_buffer()` callback returns an owning buffer for a packed column buffer at `offset`
-/// and schedules filling it. the buffer type is `cuda::device_buffer<std::byte>` for validity
-/// and `rmm::device_buffer` for data.
-template <typename AllocateBuffer>
 std::unique_ptr<column> allocate_materialized_column(
-  packed_metadata_view::column_view const& metadata, AllocateBuffer& allocate_buffer)
+  packed_metadata_view::column_view const& metadata,
+  buffer_source const& source,
+  cuda::stream_ref stream,
+  cudf::memory_resources mr)
 {
-  null_mask_buffer null_mask = cudf::create_null_mask(0, mask_state::UNALLOCATED);
-  if (metadata.null_mask_offset() != -1) {
-    null_mask = allocate_buffer(std::type_identity<null_mask_buffer>{},
-                                metadata.null_mask_offset(),
-                                bitmask_allocation_size_bytes(metadata.num_rows()));
+  cuda::device_buffer<std::byte> null_mask = cudf::create_null_mask(0, mask_state::UNALLOCATED);
+  if (auto const offset = metadata.null_mask_offset(); offset != -1) {
+    auto const bytes =
+      source.size(offset, bitmask_allocation_size_bytes(metadata.num_rows()), true);
+    auto const env = cuda::std::execution::prop{cuda::allocation_alignment, alignof(bitmask_type)};
+    null_mask =
+      cuda::device_buffer<std::byte>(stream, mr.get_output_mr(), bytes, cuda::no_init, env);
+    source.fill(offset, {reinterpret_cast<uint8_t*>(null_mask.data()), bytes});
   } else {
     CUDF_EXPECTS(metadata.null_count() == 0, "Packed column with nulls has no validity buffer");
   }
 
   rmm::device_buffer data;
-  if (metadata.data_offset() != -1) {
+  if (auto const offset = metadata.data_offset(); offset != -1) {
     auto const required_bytes = is_fixed_width(metadata.type())
                                   ? metadata.num_rows() * size_of(metadata.type())
                                   : std::size_t{0};
-    data                      = allocate_buffer(
-      std::type_identity<rmm::device_buffer>{}, metadata.data_offset(), required_bytes);
+    auto const bytes          = source.size(offset, required_bytes, false);
+    data                      = rmm::device_buffer(bytes, stream, mr.get_output_mr());
+    source.fill(offset, {static_cast<uint8_t*>(data.data()), bytes});
   }
 
   std::vector<std::unique_ptr<column>> children;
   children.reserve(metadata.num_children());
-  std::ranges::transform(
-    std::views::iota(size_type{0}, metadata.num_children()),
-    std::back_inserter(children),
-    [&](size_type i) { return allocate_materialized_column(metadata.child(i), allocate_buffer); });
+  std::ranges::transform(std::views::iota(size_type{0}, metadata.num_children()),
+                         std::back_inserter(children),
+                         [&](size_type i) {
+                           return allocate_materialized_column(
+                             metadata.child(i), source, stream, mr);
+                         });
 
   return std::make_unique<column>(metadata.type(),
                                   metadata.num_rows(),
@@ -2944,11 +2932,12 @@ class byte_range_loader {
 };
 
 /// Materializes the selected top-level columns, or every column when `selection` is empty.
-template <typename AllocateBuffer>
 std::vector<std::unique_ptr<column>> materialize_columns(
   packed_metadata_view const& metadata,
   std::optional<std::span<size_type const>> selection,
-  AllocateBuffer& allocate_buffer)
+  buffer_source const& source,
+  cuda::stream_ref stream,
+  cudf::memory_resources mr)
 {
   auto const count =
     selection.has_value() ? selection->size() : static_cast<std::size_t>(metadata.num_columns());
@@ -2956,7 +2945,7 @@ std::vector<std::unique_ptr<column>> materialize_columns(
   columns.reserve(count);
   for (std::size_t i = 0; i < count; ++i) {
     auto const index = selection.has_value() ? (*selection)[i] : static_cast<size_type>(i);
-    columns.push_back(allocate_materialized_column(metadata.column(index), allocate_buffer));
+    columns.push_back(allocate_materialized_column(metadata.column(index), source, stream, mr));
   }
   return columns;
 }
@@ -2987,22 +2976,24 @@ std::unique_ptr<table> materialize_uncompressed(packed_data_view input,
 
   std::vector<std::span<uint8_t const>> payload_ranges;
   std::vector<void*> destinations;
-  auto allocate_buffer = [&]<output_buffer Buffer>(
-                           std::type_identity<Buffer>, int64_t offset, std::size_t required_bytes) {
-    auto const next = std::ranges::upper_bound(offsets, offset);
-    auto const end = next == offsets.end() ? input.payload.size() : static_cast<std::size_t>(*next);
-    // A payload span longer than the packed data would otherwise oversize its last buffer.
-    auto const bytes = next == offsets.end() && required_bytes > 0
-                         ? std::min(required_bytes, end - offset)
-                         : end - offset;
-    CUDF_EXPECTS(bytes >= required_bytes, "Packed column buffer is smaller than its column");
-    auto buffer = allocate_output_buffer<Buffer>(bytes, stream, mr);
-    payload_ranges.push_back(input.payload.subspan(offset, bytes));
-    loader.request(payload_ranges.back());
-    destinations.push_back(buffer_data(buffer));
-    return buffer;
-  };
-  auto columns = materialize_columns(metadata, selection, allocate_buffer);
+  buffer_source const source{
+    [&](int64_t offset, std::size_t required_bytes, bool) {
+      auto const next = std::ranges::upper_bound(offsets, offset);
+      auto const end =
+        next == offsets.end() ? input.payload.size() : static_cast<std::size_t>(*next);
+      // A payload span longer than the packed data would otherwise oversize its last buffer.
+      auto const bytes = next == offsets.end() && required_bytes > 0
+                           ? std::min(required_bytes, end - offset)
+                           : end - offset;
+      CUDF_EXPECTS(bytes >= required_bytes, "Packed column buffer is smaller than its column");
+      return bytes;
+    },
+    [&](int64_t offset, device_span<uint8_t> destination) {
+      payload_ranges.push_back(input.payload.subspan(offset, destination.size()));
+      loader.request(payload_ranges.back());
+      destinations.push_back(destination.data());
+    }};
+  auto columns = materialize_columns(metadata, selection, source, stream, mr);
   loader.load(stream, mr);
   std::vector<void const*> sources;
   std::vector<std::size_t> sizes;
@@ -3026,12 +3017,6 @@ std::unique_ptr<table> materialize_uncompressed(packed_data_view input,
                                                             : pack_compression::cascaded;
 }
 
-struct plan_input {
-  std::unique_ptr<detail::contiguous_split_state> state;
-  std::vector<uint8_t> metadata;
-  cudf::device_span<uint8_t const> packed_source;  ///< Borrowed allocation of packed_columns input
-};
-
 std::unique_ptr<detail::contiguous_split_state> make_split_state(cudf::table_view const& input,
                                                                  pack_options const& options,
                                                                  cuda::stream_ref stream,
@@ -3049,39 +3034,44 @@ std::unique_ptr<detail::contiguous_split_state> make_split_state(cudf::table_vie
     input, 0, stream, std::nullopt, mr.get_output_mr());
 }
 
-plan_input make_plan_input(cudf::table_view const& input,
-                           pack_options const& options,
-                           cuda::stream_ref stream,
-                           cudf::memory_resources mr)
-{
-  auto state    = make_split_state(input, options, stream, mr);
-  auto metadata = state->build_packed_column_metadata();
-  return {
-    std::move(state), metadata == nullptr ? std::vector<uint8_t>{} : std::move(*metadata), {}};
-}
+struct plan_input {
+  plan_input(cudf::table_view const& input,
+             pack_options const& options,
+             cuda::stream_ref stream,
+             cudf::memory_resources mr)
+    : state{make_split_state(input, options, stream, mr)}
+  {
+    if (auto planned = state->build_packed_column_metadata(); planned != nullptr) {
+      metadata = std::move(*planned);
+    }
+  }
 
-plan_input make_plan_input(cudf::packed_columns const& input,
-                           pack_options const& options,
-                           cuda::stream_ref stream,
-                           cudf::memory_resources mr)
-{
-  CUDF_EXPECTS(input.metadata != nullptr && input.gpu_data != nullptr,
-               "Packed input must contain metadata and a device allocation",
-               std::invalid_argument);
-  auto state = make_split_state(cudf::unpack(input), options, stream, mr);
-  // The metadata records every buffer offset, so equal metadata means the planned layout matches
-  // the existing allocation. Empty columns may be described in several ways, but with no bytes
-  // there is no layout to match.
-  auto const planned = state->build_packed_column_metadata();
-  CUDF_EXPECTS(
-    state->get_total_contiguous_size() == input.gpu_data->size() &&
-      (input.gpu_data->size() == 0 || (planned != nullptr && *planned == *input.metadata)),
-    "Packed metadata does not describe the layout of the device allocation",
-    std::invalid_argument);
-  return {std::move(state),
-          *input.metadata,
-          {static_cast<uint8_t const*>(input.gpu_data->data()), input.gpu_data->size()}};
-}
+  plan_input(cudf::packed_columns const& input,
+             pack_options const& options,
+             cuda::stream_ref stream,
+             cudf::memory_resources mr)
+  {
+    CUDF_EXPECTS(input.metadata != nullptr && input.gpu_data != nullptr,
+                 "Packed input must contain metadata and a device allocation",
+                 std::invalid_argument);
+    state = make_split_state(cudf::unpack(input), options, stream, mr);
+    // The metadata records every buffer offset, so equal metadata means the planned layout matches
+    // the existing allocation. Empty columns may be described in several ways, but with no bytes
+    // there is no layout to match.
+    auto const planned = state->build_packed_column_metadata();
+    CUDF_EXPECTS(
+      state->get_total_contiguous_size() == input.gpu_data->size() &&
+        (input.gpu_data->size() == 0 || (planned != nullptr && *planned == *input.metadata)),
+      "Packed metadata does not describe the layout of the device allocation",
+      std::invalid_argument);
+    metadata      = *input.metadata;
+    packed_source = {static_cast<uint8_t const*>(input.gpu_data->data()), input.gpu_data->size()};
+  }
+
+  std::unique_ptr<detail::contiguous_split_state> state;
+  std::vector<uint8_t> metadata;
+  cudf::device_span<uint8_t const> packed_source;  ///< Borrowed allocation of packed_columns input
+};
 
 }  // namespace
 
@@ -3334,8 +3324,8 @@ pack_plan_builder make_pack_plan_builder(cudf::table_view const& input,
                                          cudf::memory_resources mr)
 {
   CUDF_FUNC_RANGE();
-  return pack_plan_builder{std::make_unique<pack_plan_builder::impl>(
-    make_plan_input(input, options, stream, mr), options, mr)};
+  return pack_plan_builder{
+    std::make_unique<pack_plan_builder::impl>(plan_input{input, options, stream, mr}, options, mr)};
 }
 
 pack_plan_builder make_pack_plan_builder(cudf::packed_columns const& input,
@@ -3344,8 +3334,8 @@ pack_plan_builder make_pack_plan_builder(cudf::packed_columns const& input,
                                          cudf::memory_resources mr)
 {
   CUDF_FUNC_RANGE();
-  return pack_plan_builder{std::make_unique<pack_plan_builder::impl>(
-    make_plan_input(input, options, stream, mr), options, mr)};
+  return pack_plan_builder{
+    std::make_unique<pack_plan_builder::impl>(plan_input{input, options, stream, mr}, options, mr)};
 }
 
 pack_plan prepare_pack(cudf::table_view const& input,
@@ -3355,7 +3345,7 @@ pack_plan prepare_pack(cudf::table_view const& input,
 {
   CUDF_FUNC_RANGE();
   return pack_plan{
-    std::make_unique<pack_plan::impl>(make_plan_input(input, options, stream, mr), options, mr)};
+    std::make_unique<pack_plan::impl>(plan_input{input, options, stream, mr}, options, mr)};
 }
 
 pack_result pack_into(pack_plan const& plan,
@@ -3632,25 +3622,30 @@ std::unique_ptr<table> materialize_selection(packed_data_view input,
     }
   };
 
-  auto allocate_buffer = [&]<output_buffer Buffer>(
-                           std::type_identity<Buffer>, int64_t offset, std::size_t required_bytes) {
-    constexpr bool is_validity = validity_buffer<Buffer>;
-    CUDF_EXPECTS(offset >= 0, "Compressed column buffer has no packed offset");
-    auto const target = static_cast<uint64_t>(offset);
-    auto const entry  = std::ranges::lower_bound(
-      parsed.entries, target, {}, &compression_metadata_entry::uncompressed_offset);
-    CUDF_EXPECTS(entry != parsed.entries.end() && entry->uncompressed_offset == target &&
-                   (entry->is_validity != 0) == is_validity,
-                 "Compressed regions do not match the packed column schema at offset " +
-                   std::to_string(target));
-    CUDF_EXPECTS(entry->uncompressed_bytes >= required_bytes,
-                 "Compressed region is smaller than its column buffer");
-    auto buffer = allocate_output_buffer<Buffer>(entry->uncompressed_bytes, stream, mr);
-    submit_decompression(*entry, buffer_data(buffer));
-    return buffer;
+  auto const find_entry = [&](int64_t offset) {
+    return std::ranges::lower_bound(parsed.entries,
+                                    static_cast<uint64_t>(offset),
+                                    {},
+                                    &compression_metadata_entry::uncompressed_offset);
   };
-  auto columns =
-    materialize_columns(packed_metadata_view{parsed.legacy_metadata}, selection, allocate_buffer);
+  buffer_source const source{
+    [&](int64_t offset, std::size_t required_bytes, bool is_validity) {
+      CUDF_EXPECTS(offset >= 0, "Compressed column buffer has no packed offset");
+      auto const entry = find_entry(offset);
+      CUDF_EXPECTS(entry != parsed.entries.end() &&
+                     std::cmp_equal(entry->uncompressed_offset, offset) &&
+                     (entry->is_validity != 0) == is_validity,
+                   "Compressed regions do not match the packed column schema at offset " +
+                     std::to_string(offset));
+      CUDF_EXPECTS(entry->uncompressed_bytes >= required_bytes,
+                   "Compressed region is smaller than its column buffer");
+      return static_cast<std::size_t>(entry->uncompressed_bytes);
+    },
+    [&](int64_t offset, device_span<uint8_t> destination) {
+      submit_decompression(*find_entry(offset), destination.data());
+    }};
+  auto columns = materialize_columns(
+    packed_metadata_view{parsed.legacy_metadata}, selection, source, stream, mr);
   loader.load(stream, mr);
   auto const temp_mr = mr.get_temporary_mr();
   for (auto& task : tasks) {
