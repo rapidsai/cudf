@@ -43,9 +43,6 @@ main() {
             return 1
         fi
     done
-    mamba --version
-    free -m
-    df -h . /tmp
     if [[ $RAPIDS_BUILD_TYPE == pull-request ]]; then
         CPP_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_cpp libcudf cudf --cuda "$RAPIDS_CUDA_VERSION")")
         PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_python cudf cudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
