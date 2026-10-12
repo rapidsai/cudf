@@ -568,12 +568,11 @@ This test will fail if translation does not raise.
 
 The local cudf-polars suite and upstream Polars suite serve different purposes.
 The broad upstream run remains a compatibility test and may use CPU fallback
-for functionality that is not GPU-supported. A separate strict upstream subset
-makes an explicit GPU-support claim: it runs with `raise_on_fail=True`, so
-fallback is a failure.
+for functionality that is not GPU-supported. An additional upstream run uses
+`raise_on_fail=True`, except for tests explicitly listed as CPU fallbacks.
 
-Strict GPU runs are exception-driven: every lazy query is strict by default,
-while versioned fallback and expected-failure maps in
+Strict GPU runs are exception-driven: injected lazy queries use a strict engine,
+while fallback and expected-failure maps in
 `cudf_polars/testing/inject_gpu_engine.py` document the exceptions. In-memory
 exceptions form the base policy and small-blocksize SPMD adds its own
 exceptions. CPU-fallback entries must actually fall back; stale entries and
@@ -603,21 +602,38 @@ The local-test classification covers every collected local node. It retains
 scan/IO, streaming/engine, unsupported/fallback, numeric/dtype, and internal
 contracts; flags IR/repr tests for behavioral rewrites; and marks a test for
 deletion review only when it has no local-only covered lines and every covered
-line is exercised by the strict no-fallback upstream subset. A deletion-review
-candidate still requires manual confirmation that both tests assert the same
-public contract.
+line is exercised by the additional strict-policy run. That run still permits
+listed CPU fallbacks, so its coverage alone is not proof of GPU execution.
+A deletion-review candidate requires execution diagnostics and manual
+confirmation that both tests assert the same public contract on the GPU.
 
 This evidence is required for follow-up pruning. Retain local tests for
 unsupported/fallback behavior, GPU numeric and dtype edge cases,
 engine/config/optimizer internals, and SPMD execution semantics. Rewrite IR or
 repr assertions into public-API behavioral tests where they cover the same
 contract, and upstream ordinary engine-agnostic Polars behavior that is absent
-upstream. Delete a local test only when this comparison and the strict
-supported-node run demonstrate equivalent upstream GPU coverage.
+upstream. Delete a local test only when this comparison and verified upstream
+GPU execution demonstrate equivalent coverage and public behavior.
 
 Scan and IO local tests are explicitly deferred from pruning: the upstream
 scan/IO suite is currently too slow for this comparison, so coverage overlap
 alone is not enough to remove them.
+
+### Initial behavioral review candidates
+
+These pairs are starting points for review, not approved test removals. Recheck
+the upstream assertions and execution diagnostics on the current versions
+before acting on them.
+
+| Local test | Upstream lazy counterpart | Public contract to compare |
+| --- | --- | --- |
+| `tests/test_hconcat.py::test_hconcat` | `tests/unit/functions/test_concat.py::test_concat_lazyframe_horizontal` | Horizontal concatenation of equal-height inputs, including the local computed-column variant |
+| `tests/test_hconcat.py::test_hconcat_different_heights` | `tests/unit/functions/test_concat.py::test_concat_lazyframe_horizontal` | Null padding for unequal-height inputs |
+| `tests/test_join.py::test_join_where` | `tests/unit/lazyframe/test_lazyframe.py::test_join_where` | Non-equi joins with multiple predicates and unordered result comparison |
+
+Keep strict-height error cases and tests that construct cudf-polars IR directly
+unless equivalent GPU error-path or internal-contract coverage is demonstrated.
+Eager-only upstream counterparts cannot establish cudf-polars GPU coverage.
 
 # Debugging
 
