@@ -4,14 +4,14 @@ This directory contains NVIDIA-authored skill instructions, C++ evaluation start
 
 ## CPU evaluation environment
 
-The two C++ fixtures simulate queued backend work on the CPU. Each run_checks.py uses only Python's standard library, including Linux/POSIX process and resource controls, to compile the submitted adapter with the image's system g++ or clang++ and execute the tests. The supplied Dockerfile installs g++. The Dockerfile fetches the official python:3.12-slim image and installs g++ with the image's package manager when the evaluation environment is built. The downloaded image and packages are separate runtime dependencies; they are not files in this skill directory.
+The two C++ fixtures simulate queued backend work on the CPU. Each run_checks.py uses only Python's standard library, including Linux/POSIX process and resource controls, to compile the submitted adapter with the image's system g++ or clang++ and execute the tests. NVCARPS CI uses separately supplied signed sandbox images selected by `evals/config.yml`. The retained recipe at `evals/.reference/Dockerfile.cudf-cpp` starts from the official python:3.12-slim image and installs g++ with the image's package manager. Sandbox images and their installed packages are separate runtime dependencies; they are not files in this skill directory.
 
 | Component | Use | Upstream terms |
 | --- | --- | --- |
 | Python | Runs the shipped compile-and-test scripts | [PSF license and accompanying notices](https://docs.python.org/3/license.html) |
 | GCC / g++ | Compiles the C++20 test programs | [GPLv3 license text](https://gcc.gnu.org/onlinedocs/gcc/Copying.html) |
 | libstdc++ | C++ standard library used by the compiled tests | [GPLv3 with GCC Runtime Library Exception 3.1](https://gcc.gnu.org/onlinedocs/libstdc++/manual/license.html) |
-| Official Python slim image | Provides Python and the Debian-based build environment | [Image source and license information](https://hub.docker.com/_/python); included packages retain their own terms and notices |
+| Official Python slim image | Base image in the retained reference recipe | [Image source and license information](https://hub.docker.com/_/python); included packages retain their own terms and notices |
 
 The image contains multiple independently licensed components. Its published source and each installed package's copyright files supply the applicable notices. No single license is asserted for the complete image.
 

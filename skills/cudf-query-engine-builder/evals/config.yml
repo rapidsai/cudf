@@ -3,7 +3,10 @@
 schema_version: 1
 harbor:
   task_source: evals_json
-  custom_dockerfile_mode: rebase
+  sandbox:
+    templates:
+      codex: harbor-eval-cudf-cpp-codex-0f56b9bd
+      claude-code: harbor-eval-cudf-cpp-claude-code-0f56b9bd
   n_attempts: 1
   n_concurrent: 1
   stop_on_pass: false

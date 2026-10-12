@@ -28,7 +28,9 @@ The two fixtures are staged into /workspace/input/async-copy-cleanup and /worksp
 python3 run_checks.py
 ```
 
-The command compiles the candidate with a C++20 compiler and runs the supplied checks. The checker requires Linux and uses only Python's standard library. evals/environment/Dockerfile provides Python and g++ for CPU runners. File selections are explicit in evals.json so unrelated fixtures are not staged into a task.
+The command compiles the candidate with a C++20 compiler and runs the supplied checks. The checker requires Linux and uses only Python's standard library. File selections are explicit in evals.json so unrelated fixtures are not staged into a task.
+
+NVCARPS CI uses signed sandbox images selected by `harbor.sandbox.templates` in `evals/config.yml`. The images provide Python and g++ for the CPU tests. The reference recipe is retained at `evals/.reference/Dockerfile.cudf-cpp`, outside the automatic image-build path. Maintainers changing the required packages must update the recipe and arrange corresponding signed images and template updates before running CI. Other runners must provide equivalent dependencies and isolation.
 
 These fixtures simulate asynchronous backend work deterministically on the CPU. A passing simulator test establishes only the checked host-side ordering and lifetime behavior. It does not establish CUDA execution, actual libcudf correctness, native allocator behavior or query speed. Native validation must separately build and run a real cuDF adapter, compare the returned values with an independent CPU/reference result, and establish that the result came from the required cuDF operations.
 
