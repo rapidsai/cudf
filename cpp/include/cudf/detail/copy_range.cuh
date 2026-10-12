@@ -173,14 +173,14 @@ void copy_range(SourceValueIterator source_value_begin,
 
 /**
  * @copydoc cudf::copy_range_in_place
- * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 void copy_range_in_place(column_view const& source,
                          mutable_column_view& target,
                          size_type source_begin,
                          size_type source_end,
                          size_type target_begin,
-                         cuda::stream_ref stream);
+                         cuda::stream_ref stream,
+                         cudf::memory_resources mr);
 
 /**
  * @copydoc cudf::copy_range
