@@ -271,10 +271,16 @@ def audit_report(
         errors.append(
             "A Polars version has conflicting upstream checkout revisions"
         )
-    configurations = {cohort[0].split("|", 1)[1] for cohort in cohorts}
-    if configurations != {"in-memory|default", "spmd|default", "spmd|small"}:
+    configurations = defaultdict(set)
+    for key, _ in cohorts:
+        version, configuration = key.split("|", 1)
+        configurations[version].add(configuration)
+    if not configurations or any(
+        observed != {"in-memory|default", "spmd|default", "spmd|small"}
+        for observed in configurations.values()
+    ):
         errors.append(
-            "Missing required in-memory/default-SPMD/small-SPMD discovery runs"
+            "Missing required in-memory/default-SPMD/small-SPMD discovery runs for a Polars version"
         )
     if jobs is not None:
         expected = {str(job["id"]) for job in jobs}
