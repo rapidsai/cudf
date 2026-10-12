@@ -10,7 +10,6 @@ INTEGRATION_RUN_DIR=${INTEGRATION_RUN_DIR:-}
 cleanup() {
     if ((prepare_pid > 0)); then
         # Retry-helper timeouts create additional process groups inside this session.
-        pkill -TERM --session "$prepare_pid" 2>/dev/null || true
         pkill -KILL --session "$prepare_pid" 2>/dev/null || true
         wait "$prepare_pid" 2>/dev/null || true
     fi
