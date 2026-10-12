@@ -76,12 +76,11 @@ main() {
             fi
             sleep 1
         done
-        printf '::group::Prepare integration environment: %s\n' "$lib"
+        printf 'Prepare integration environment: %s\n' "$lib"
         cat "${INTEGRATION_RUN_DIR}/${lib}/prepare.log"
-        printf '::endgroup::\n'
 
         if [[ $(< "${INTEGRATION_RUN_DIR}/${lib}/status") == 0 ]]; then
-            printf '::group::Integration tests: %s\n' "$lib"
+            printf 'Integration tests: %s\n' "$lib"
             if timeout 45m bash "${scripts_dir}/run-library-tests.sh" "$lib" "${INTEGRATION_RUN_DIR}/${lib}/env"; then
                 test_status=0
             else
@@ -89,15 +88,12 @@ main() {
                 status=1
             fi
             printf 'INTEGRATION_LIBRARY library=%s status=%s\n' "$lib" "$test_status"
-            printf '::endgroup::\n'
-            printf '::group::Remove integration environment: %s\n' "$lib"
+            printf 'Remove integration environment: %s\n' "$lib"
             if ! rapids-mamba-retry env remove --yes \
                 --prefix "${INTEGRATION_RUN_DIR}/${lib}/env"; then
-                printf '::endgroup::\n'
                 printf 'Failed to remove %s environment.\n' "$lib" >&2
                 return 1
             fi
-            printf '::endgroup::\n'
         else
             printf 'Failed to prepare %s environment.\n' "$lib" >&2
             status=1
