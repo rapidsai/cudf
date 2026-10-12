@@ -249,6 +249,7 @@ def audit_report(
                 or observed != inventory
                 or len(inventory) != len(run["collected_nodeids"])
                 or not all(test.get("complete") is True for test in tests)
+                or any(test["outcome"] == "incomplete" for test in tests)
                 or any(execution_category(test) == "unknown" for test in tests)
             ):
                 errors.append(f"Incomplete full-suite evidence: {run['run']}")
