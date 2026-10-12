@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextvars
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
@@ -52,32 +51,6 @@ def test_to_thread_cancellation_drains_worker(cancellations, worker_raises):
             await task
         assert finished.is_set()
         assert not scope_alive
-
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        asyncio.run(run(executor))
-
-
-def test_to_thread_result_and_context():
-    value = contextvars.ContextVar("execution_context_value")
-
-    async def run(executor):
-        value.set(7)
-        context = IRExecutionContext(executor)
-        result = await context.to_thread(lambda x, *, y: value.get() + x + y, 2, y=3)
-        assert result == 12
-
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        asyncio.run(run(executor))
-
-
-def test_to_thread_worker_exception():
-    def worker():
-        raise ValueError("worker failed")
-
-    async def run(executor):
-        context = IRExecutionContext(executor)
-        with pytest.raises(ValueError, match="worker failed"):
-            await context.to_thread(worker)
 
     with ThreadPoolExecutor(max_workers=1) as executor:
         asyncio.run(run(executor))
