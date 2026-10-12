@@ -7,6 +7,15 @@ set -euo pipefail
 source rapids-init-pip
 
 report_dir=$(mktemp -d)
+audit_args=()
+if [[ "${1:-}" == "--audit" ]]; then
+    shift
+    gh api --paginate --slurp \
+        "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest" \
+        | jq '[.[].jobs[] | select(.name | startswith("cudf-polars-polars-tests")) | select(any(.steps[]?; .name == "Run tests"))]' \
+        > "${report_dir}/expected-jobs"
+    audit_args=(--audit-run-list ci/cudf_polars/gpu_test_run_list.json --expected-jobs "${report_dir}/expected-jobs")
+fi
 output_dir="${1:-cudf-polars-fallback-diagnostics}"
 
 # The shared test workflows upload RAPIDS_ARTIFACTS_DIR even after test failures.
@@ -19,4 +28,5 @@ aws s3 cp "$(rapids-s3-path)" "${report_dir}/" --recursive \
 python ci/analyze_cudf_polars_fallbacks.py \
     --reports-dir "${report_dir}" \
     --output-dir "${output_dir}" \
-    --summary-file "${GITHUB_STEP_SUMMARY}"
+    --summary-file "${GITHUB_STEP_SUMMARY}" \
+    "${audit_args[@]}"

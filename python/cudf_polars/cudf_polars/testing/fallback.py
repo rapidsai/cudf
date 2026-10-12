@@ -6,12 +6,126 @@
 from __future__ import annotations
 
 from contextvars import ContextVar
+from dataclasses import dataclass, field
+from functools import wraps
+from threading import Lock
+from typing import TYPE_CHECKING, ParamSpec, TypeVar
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from contextvars import Token
 
 fallback_used: ContextVar[bool] = ContextVar("cudf_polars_fallback_used", default=False)
 gpu_attempted: ContextVar[bool] = ContextVar("cudf_polars_gpu_attempted", default=False)
 gpu_executed: ContextVar[bool] = ContextVar("cudf_polars_gpu_executed", default=False)
 
+P = ParamSpec("P")
+T = TypeVar("T")
+
+
+@dataclass
+class Observation:
+    """Thread-safe observations owned by a single pytest item."""
+
+    signals: dict[str, bool] = field(
+        default_factory=lambda: dict.fromkeys(
+            ("fallback", "gpu_attempted", "gpu_executed"), False
+        )
+    )
+    active: bool = True
+    lock: Lock = field(default_factory=Lock)
+    context_token: Token[Observation | None | bool] | None = None
+
+    def record(self, name: str) -> bool:
+        """Ignore callbacks belonging to a completed item."""
+        with self.lock:
+            if not self.active:
+                return False
+            self.signals[name] = True
+            return True
+
+    def snapshot(self) -> dict[str, str]:
+        """Return consistent, report-ready signal values."""
+        with self.lock:
+            return {name: str(value).lower() for name, value in self.signals.items()}
+
+
+# Rust worker threads do not inherit ContextVars. Within each xdist process only
+# one item runs at a time; callbacks capture its record before changing context.
+_active: Observation | None = None
+_active_lock = Lock()
+_bound: ContextVar[Observation | None | bool] = ContextVar(
+    "cudf_polars_query_observation", default=False
+)
+
+
+def begin_observation() -> Observation:
+    """Install the worker process's active pytest observation."""
+    global _active  # noqa: PLW0603
+    with _active_lock:
+        if _active is not None:
+            raise RuntimeError("Overlapping cudf-polars pytest items")
+        _active = Observation()
+        _active.context_token = _bound.set(_active)
+        return _active
+
+
+def end_observation(observation: Observation) -> None:
+    """Retire an item without redirecting its callbacks to another item."""
+    global _active  # noqa: PLW0603
+    with _active_lock, observation.lock:
+        observation.active = False
+        if _active is observation:
+            _active = None
+    if observation.context_token is not None:
+        _bound.reset(observation.context_token)
+        observation.context_token = None
+
+
+def _observation() -> Observation | None:
+    bound = _bound.get()
+    if bound is False:
+        with _active_lock:
+            return _active
+    return bound if isinstance(bound, Observation) else None
+
+
+def bind_observation(callback: Callable[P, T]) -> Callable[P, T]:  # noqa: UP047
+    """Carry query ownership across Polars callback/thread boundaries."""
+    observation = _observation()
+
+    @wraps(callback)
+    def wrapped(*args: P.args, **kwargs: P.kwargs) -> T:
+        token = _bound.set(observation)
+        try:
+            return callback(*args, **kwargs)
+        finally:
+            _bound.reset(token)
+
+    return wrapped
+
+
+def _record(name: str, signal: ContextVar[bool]) -> None:
+    observation = _observation()
+    if observation is not None and not observation.record(name):
+        return
+    if observation is None and _bound.get() is None:
+        with _active_lock:
+            if _active is not None:
+                return
+    signal.set(True)
+
+
+def record_gpu_attempt() -> None:
+    """Record entry into cudf-polars translation."""
+    _record("gpu_attempted", gpu_attempted)
+
+
+def record_gpu_execution() -> None:
+    """Record a GPU executor returning a result."""
+    _record("gpu_executed", gpu_executed)
+
 
 def record_fallback() -> None:
     """Record that the active test's query fell back to Polars CPU execution."""
-    fallback_used.set(True)
+    _record("fallback", fallback_used)

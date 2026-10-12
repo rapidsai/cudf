@@ -258,6 +258,7 @@ jobs:
           - 'ci/test_cudf_polars_polars_tests.sh'
           - 'ci/run_cudf_polars_polars_tests.sh'
           - 'ci/cudf_polars/polars_test_deselections*.txt'
+          - 'ci/cudf_polars/gpu_test_run_list.json'
         test_python_cudf_polars_runner:
           - 'ci/run_cudf_polars_pytests.sh'
         test_cudf_pandas_third_party_integration:
@@ -792,6 +793,7 @@ jobs:
       node_type: gpu-rtxpro6000-latest-1
       container_image: rapidsai/citestwheel:26.12-latest
       script: >-
+        env CUDF_POLARS_GPU_RUN_LIST=ci/cudf_polars/gpu_test_run_list.json
         ci/test_cudf_polars_polars_tests.sh --engine ${{ matrix.engine }}
         --inject-gpu-engine-blocksize default
         --cudf-polars-shard-id ${{ matrix.shard_id }}
