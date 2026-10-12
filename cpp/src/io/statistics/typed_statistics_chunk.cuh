@@ -54,7 +54,7 @@ class union_member {
 
   template <typename T, typename U>
   __device__ static type<T, U> get(U& val)
-    requires(std::is_integral_v<T> and std::is_signed_v<T>)
+    requires(std::is_integral_v<T> and std::is_signed_v<T> and !std::is_same_v<T, __int128_t>)
   {
     return val.i_val;
   }
@@ -249,7 +249,8 @@ get_untyped_chunk(typed_statistics_chunk<T, include_aggregate> const& chunk)
   stat.has_nan    = chunk.has_nan;
   stat.has_sum    = [&]() {
     // invalidate the sum if overflow or underflow is possible
-    if constexpr (std::is_floating_point_v<E> or std::is_integral_v<E>) {
+    if constexpr (std::is_floating_point_v<E> or
+                  (std::is_integral_v<E> and !std::is_same_v<E, __int128_t>)) {
       if (!chunk.has_minmax) { return true; }
       return cuda::std::numeric_limits<E>::max() / chunk.non_nulls >=
                static_cast<E>(chunk.maximum_value) and
