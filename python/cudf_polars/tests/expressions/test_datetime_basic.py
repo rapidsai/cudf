@@ -723,6 +723,13 @@ def test_datetime_time_from_integers(engine: pl.GPUEngine, time_unit):
     assert_gpu_result_equal(ldf.select(pl.col("a").dt.time()), engine=engine)
 
 
+@pytest.mark.parametrize("dtype", [pl.Date(), pl.Duration("us"), pl.Int64()], ids=repr)
+def test_datetime_time_unsupported_input_dtype(in_memory_engine: pl.GPUEngine, dtype):
+    ldf = pl.LazyFrame({"a": pl.Series([None], dtype=dtype)})
+    q = ldf.select(pl.col("a").dt.time())
+    assert_ir_translation_raises(q, in_memory_engine, NotImplementedError)
+
+
 @pytest.mark.parametrize(
     "make_query",
     [
