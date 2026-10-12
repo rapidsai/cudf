@@ -44,6 +44,12 @@ main() {
     trap 'exit 130' INT
     trap 'exit 143' TERM
 
+    rapids-logger "Check GPU availability"
+    if ! nvidia-smi; then
+        printf 'GPU availability check failed.\n' >&2
+        return 1
+    fi
+
     local status=0 test_status lib
     bash "${scripts_dir}/prepare-environments.sh" "${libraries[0]}"
     if ((${#libraries[@]} > 1)); then
