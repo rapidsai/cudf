@@ -650,3 +650,78 @@ def test_masked_string_contains_propagates_validity():
     for i in range(n):
         if valid[i]:
             assert bool(out.get()[i]) is ("ab" in strings[i])
+
+
+def test_string_search_empty_target():
+    """Empty-target search matches Python and never over-reads the source."""
+    strings = ["abc", "", "h\u00e9llo"]
+    arr, _k = _make_mlir_string_array(strings)
+    n = len(strings)
+    finds = cp.zeros(n, dtype=np.int32)
+    rfinds = cp.zeros(n, dtype=np.int32)
+    counts = cp.zeros(n, dtype=np.int32)
+    has = cp.zeros(n, dtype=np.bool_)
+
+    @cuda.jit(
+        types.void(
+            types.int32[::1],
+            types.int32[::1],
+            types.int32[::1],
+            types.boolean[::1],
+            types.CPointer(mlir_string),
+        ),
+        extensions=[mlir_string_arg_handler],
+    )
+    def k(fo, ro, co, ho, s):
+        i = cuda.grid(1)
+        if i < fo.size:
+            fo[i] = s[i].find("")
+            ro[i] = s[i].rfind("")
+            co[i] = s[i].count("")
+            ho[i] = "" in s[i]
+
+    with MLIRNumbaCudaConfig():
+        k[1, n](finds, rfinds, counts, has, arr)
+    cuda.synchronize()
+    assert finds.get().tolist() == [s.find("") for s in strings]
+    assert rfinds.get().tolist() == [s.rfind("") for s in strings]
+    assert counts.get().tolist() == [s.count("") for s in strings]
+    assert has.get().tolist() == ["" in s for s in strings]
+
+
+def test_masked_string_empty_target_null_row():
+    """Empty-target search on a null row must not over-read its payload.
+
+    A null row carries a null ``data`` pointer; with the empty target the scan
+    must be skipped entirely (otherwise the char-position load would dereference
+    the null pointer). Validity still propagates.
+    """
+    strings = ["abc", None]
+    valid = [True, False]
+    arr, _k = _make_mlir_string_array(strings)
+    n = len(strings)
+    out = cp.zeros(n, dtype=np.int32)
+    out_valid = cp.zeros(n, dtype=np.bool_)
+
+    @cuda.jit(
+        types.void(
+            types.int32[::1],
+            types.boolean[::1],
+            types.CPointer(mlir_string),
+            types.boolean[::1],
+        ),
+        extensions=[mlir_string_arg_handler],
+    )
+    def k(o, ov, s, sv):
+        i = cuda.grid(1)
+        if i < o.size:
+            r = Masked(s[i], sv[i]).find("")
+            o[i] = r.value
+            ov[i] = r.valid
+
+    with MLIRNumbaCudaConfig():
+        k[1, n](out, out_valid, arr, cp.array(valid, dtype=np.bool_))
+    cuda.synchronize()
+    assert out_valid.get().tolist() == valid
+    # value only meaningful where valid; "abc".find("") == 0
+    assert int(out.get()[0]) == 0

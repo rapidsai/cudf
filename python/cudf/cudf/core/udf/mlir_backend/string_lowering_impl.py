@@ -232,8 +232,11 @@ def _lower_find(str_view: ir.Value, target: ir.Value) -> ir.Value:
     )
     too_long = arith.cmpi(arith.CmpIPredicate.sgt, tgt_nb, src_nb)
     # number of candidate start offsets = src_nb - tgt_nb + 1 (0 if target longer)
+    # Skip the scan entirely for an empty target (handled by the result select
+    # below); this also avoids the char-position load reading one byte past the
+    # source when ``search_len`` would otherwise be ``src_nb + 1``.
     search_len = arith.select(
-        too_long,
+        arith.ori(too_long, tgt_empty),
         arith.constant(T.i64(), 0),
         arith.addi(arith.subi(src_nb, tgt_nb), one_i64),
     )
@@ -280,8 +283,11 @@ def _lower_rfind(str_view: ir.Value, target: ir.Value) -> ir.Value:
         arith.CmpIPredicate.eq, tgt_nb, arith.constant(T.i64(), 0)
     )
     too_long = arith.cmpi(arith.CmpIPredicate.sgt, tgt_nb, src_nb)
+    # Skip the scan entirely for an empty target (handled by the result select
+    # below); this also avoids the char-position load reading one byte past the
+    # source when ``search_len`` would otherwise be ``src_nb + 1``.
     search_len = arith.select(
-        too_long,
+        arith.ori(too_long, tgt_empty),
         arith.constant(T.i64(), 0),
         arith.addi(arith.subi(src_nb, tgt_nb), one_i64),
     )
