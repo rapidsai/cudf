@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import datetime
 import sys
 import types
 import uuid
@@ -207,6 +208,37 @@ def test_execute_unsupported_raises(streaming_engine):
     """execute() rejects a query with a translation error before dispatching it."""
     with pytest.raises(NotImplementedError, match="unsupported operations"):
         streaming_engine.execute(_unsupported_lf())
+
+
+def test_execute_time_output_raises(streaming_engine):
+    lf = pl.LazyFrame(
+        {
+            "a": [
+                datetime.datetime(2024, 1, 1, 12, 30, 15),
+                datetime.datetime(2024, 6, 2, 3, 4, 5),
+            ]
+        }
+    ).with_columns(t=pl.col("a").dt.time())
+    with pytest.raises(NotImplementedError, match="containing Time columns"):
+        streaming_engine.execute(lf)
+
+
+def test_execute_time_dropped_before_output_roundtrips(streaming_engine):
+    lf = (
+        pl.LazyFrame(
+            {
+                "a": [
+                    datetime.datetime(2024, 1, 1, 12, 30, 15),
+                    datetime.datetime(2024, 6, 2, 3, 4, 5),
+                ]
+            }
+        )
+        .with_columns(t=pl.col("a").dt.time())
+        .select("a")
+    )
+    result = streaming_engine.execute(lf)
+    collected = result.lazy().collect(engine=streaming_engine)
+    assert_frame_equal(collected, lf.collect())
 
 
 def test_spmd_execute_collect_consumes_result(spmd_engine):
