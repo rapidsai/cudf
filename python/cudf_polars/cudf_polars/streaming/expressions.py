@@ -32,13 +32,9 @@ and concatenate them to the input-IR node using ``HConcat``.
 from __future__ import annotations
 
 import operator
+import typing
 from functools import reduce
-from typing import (
-    TYPE_CHECKING,
-    Literal as TypingLiteral,
-    TypeAlias,
-    TypedDict,
-)
+from typing import TYPE_CHECKING, TypedDict
 
 import polars as pl
 
@@ -94,13 +90,9 @@ class State(TypedDict):
     unique_names: Generator[str, None, None]
 
 
-HConcatShape: TypeAlias = TypingLiteral["row_aligned", "broadcast", "unaligned"]
-DecomposedExpr: TypeAlias = (
-    "tuple[Expr, IR, MutableMapping[IR, PartitionInfo], HConcatShape]"
-)
-
-
-ExprDecomposer: TypeAlias = "GenericTransformer[Expr, DecomposedExpr, State]"
+type HConcatShape = typing.Literal["row_aligned", "broadcast", "unaligned"]
+type DecomposedExpr = tuple[Expr, IR, MutableMapping[IR, PartitionInfo], HConcatShape]
+type ExprDecomposer = GenericTransformer[Expr, DecomposedExpr, State]
 """Protocol for decomposing expressions."""
 
 
