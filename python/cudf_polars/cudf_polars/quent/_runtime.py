@@ -24,8 +24,8 @@ if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.ir import IR
     from cudf_polars.quent._context import (
+        ActorBoundQuentIRExecutionState,
         QuentConfig,
-        QuentIRExecutionState,
         QuentQueryConfig,
         QuentQueryWorkerState,
         WorkerResources,
@@ -280,16 +280,13 @@ class QuentWorkerRuntime:
         ir_type: type[IR],
         evaluate_id: uuid.UUID,
         instance_name: str,
-        state: QuentIRExecutionState,
+        state: ActorBoundQuentIRExecutionState,
         frames: Sequence[DataFrame],
     ) -> None:
         """Emit Evaluate queued/running events."""
         input_frames_bytes = sum(frame._size_bytes for frame in frames)
         processor_id = state.query_worker_state.get_or_declare_processor(
             threading.get_ident()
-        )
-        assert state.actor_id is not None, (
-            "Evaluate events must be emitted from an Actor scope"
         )
         channel_bytes = (
             state.io_bytes

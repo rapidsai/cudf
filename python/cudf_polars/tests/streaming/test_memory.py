@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from cudf_polars.quent._context import ActorBoundQuentIRExecutionState
 from cudf_polars.streaming.actor_graph import memory
 
 
@@ -21,13 +22,15 @@ def traced_reservation(
     observer = MagicMock()
     requested = observer.handle.return_value.requested
     requested.return_value = handle
-    state = MagicMock(
+    query_worker_state = MagicMock()
+    binding_context = query_worker_state.runtime.session.binding_context
+    binding_context.memory_reservation_observer.return_value = observer
+    state = ActorBoundQuentIRExecutionState(
+        query_worker_state=query_worker_state,
         actor_id=uuid.uuid4(),
         operator_id=uuid.uuid4(),
     )
-    binding_context = state.query_worker_state.runtime.session.binding_context
-    binding_context.memory_reservation_observer.return_value = observer
-    ir_context = MagicMock(quent_ir_execution_state=state)
+    ir_context = MagicMock(actor_bound_quent_ir_execution_state=state)
     reserve = AsyncMock()
     monkeypatch.setattr(memory, "reserve_memory", reserve)
     return ir_context, handle, reserve, requested

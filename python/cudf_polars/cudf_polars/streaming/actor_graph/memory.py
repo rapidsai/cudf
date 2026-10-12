@@ -52,14 +52,13 @@ async def reserve_memory_traced(
     allow_overbooking: bool | None = None,
 ) -> MemoryReservation:
     """Reserve memory and trace the time spent waiting for admission."""
-    quent_state = None if ir_context is None else ir_context.quent_ir_execution_state
+    quent_state = (
+        None if ir_context is None else ir_context.actor_bound_quent_ir_execution_state
+    )
     handle: quent_bindings.MemoryReservationRequestedHandle | None = None
     if quent_state is not None:
         import cudf_polars_quent as _quent
 
-        assert quent_state.actor_id is not None, (
-            "Memory reservations must be emitted from an Actor scope"
-        )
         reservation_id = _quent.now_v7()
         handle = (
             quent_state.query_worker_state.runtime.session.binding_context.memory_reservation_observer()

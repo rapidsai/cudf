@@ -143,28 +143,15 @@ The result is `(result_df, timings_df)`, see the Polars docs link above for the 
 
 ## Tracing
 
-Streaming node evaluation is exported through Quent. Enable a Quent context to
-record each physical node evaluation as an `Evaluate` lifecycle with timestamps,
-input and output byte counts, processor and I/O-channel usage, failures, and
-incoming chunk metadata. Asynchronous scan work uses the same `Evaluate`
-lifecycle and includes the scan-task type and ID, sequence number, and
-disk-to-device channel usage.
+The streaming runtime uses [Quent] to provide observability into how queries are executed.
 
-Calls into the streaming runtime's memory-admission control are recorded
-separately as `MemoryReservation` lifecycles. Their requested state identifies
-the actor, purpose, memory tier, requested bytes, expected net memory change,
-overbooking policy, and optional chunk sequence number. The terminal state
-reports whether the request was granted or failed, so the lifecycle duration is
-the time spent waiting for admission.
-
-By default, `Evaluate` events also include the shape and byte size of every
-input dataframe and the output dataframe. Set
-`CUDF_POLARS_QUENT_DATAFRAMES=0` before importing `cudf_polars` to omit
-these dataframe details. Aggregate input and output byte counts are always
-recorded.
+TODO: how to enable
+TODO: how to open
+TODO: data model / what is traced
 
 [nsight]: https://developer.nvidia.com/nsight-systems
 [nvtx]: https://nvidia.github.io/NVTX/
 [kvikio-stats]: inv:kvikio:std:doc:#statistics
 [kvikio-busy]: <inv:kvikio:std:label:#statistics:busy time and bandwidth>
 [rapidsmpf-stats]: inv:rapidsmpf:std:doc:#statistics
+[Quent]: https://github.com/rapidsai/quent

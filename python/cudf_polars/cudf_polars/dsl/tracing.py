@@ -41,7 +41,9 @@ def log_do_evaluate(
         **kwargs: P.kwargs,
     ) -> cudf_polars.containers.DataFrame:
         ir_execution_context: IRExecutionContext = kwargs["context"]  # type: ignore[assignment]
-        if (quent_state := ir_execution_context.quent_ir_execution_state) is None:
+        if (
+            quent_state := ir_execution_context.actor_bound_quent_ir_execution_state
+        ) is None:
             return func(cls, *args, **kwargs)
 
         import cudf_polars_quent as _quent
@@ -66,7 +68,7 @@ def log_do_evaluate(
         if quent_state.scan_task_node_id is not None:
             kwargs["context"] = dataclasses.replace(
                 ir_execution_context,
-                quent_ir_execution_state=dataclasses.replace(
+                actor_bound_quent_ir_execution_state=dataclasses.replace(
                     quent_state,
                     scan_task_node_id=None,
                     scan_task_node_type=None,

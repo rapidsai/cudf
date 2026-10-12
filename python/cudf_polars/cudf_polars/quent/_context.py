@@ -24,10 +24,11 @@ if TYPE_CHECKING:
     from cudf_polars.quent._runtime import QuentSession, QuentWorkerRuntime
 
 __all__ = [
+    "ActorBoundQuentIRExecutionState",
     "QuentConfig",
-    "QuentIRExecutionState",
     "QuentQueryConfig",
     "QuentQueryWorkerState",
+    "UnboundQuentIRExecutionState",
     "WorkerResources",
 ]
 
@@ -211,19 +212,49 @@ class QuentQueryWorkerState:
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class QuentIRExecutionState:
+class UnboundQuentIRExecutionState:
     """
-    Quent state associated with an IR execution context.
+    Quent IR execution state before entering an Actor scope.
+
+    Calling :meth:`bind_actor` adds the Actor ID and returns the corresponding
+    :class:`ActorBoundQuentIRExecutionState`.
+    """
+
+    query_worker_state: QuentQueryWorkerState
+    operator_id: uuid.UUID
+
+    @classmethod
+    def from_query_worker_state(
+        cls, query_worker_state: QuentQueryWorkerState, operator_id: uuid.UUID
+    ) -> Self:
+        return cls(
+            query_worker_state=query_worker_state,
+            operator_id=operator_id,
+        )
+
+    def bind_actor(self, actor_id: uuid.UUID) -> ActorBoundQuentIRExecutionState:
+        """Return this execution state bound to an Actor."""
+        return ActorBoundQuentIRExecutionState(
+            query_worker_state=self.query_worker_state,
+            operator_id=self.operator_id,
+            actor_id=actor_id,
+        )
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class ActorBoundQuentIRExecutionState:
+    """
+    Quent IR execution state bound to an Actor.
 
     Parameters
     ----------
     query_worker_state
         State for the query on the worker performing the evaluation.
     operator_id
-        ID of the physical-plan Operator represented by the IR context.
+        ID of the physical-plan Operator being evaluated in the current
+        IR context.
     actor_id
-        ID of the Actor executing the Operator, or None before entering an
-        Actor scope.
+        ID of the Actor executing the Operator.
     sequence_number
         Sequence number of the input chunk being evaluated, when applicable.
     content_sizes
@@ -245,19 +276,10 @@ class QuentIRExecutionState:
 
     query_worker_state: QuentQueryWorkerState
     operator_id: uuid.UUID
-    actor_id: uuid.UUID | None = None
+    actor_id: uuid.UUID
     sequence_number: int | None = None
     content_sizes: tuple[int, ...] | None = None
     spillable: bool | None = None
     scan_task_node_id: str | None = None
     scan_task_node_type: str | None = None
     io_bytes: int | None = None
-
-    @classmethod
-    def from_query_worker_state(
-        cls, query_worker_state: QuentQueryWorkerState, operator_id: uuid.UUID
-    ) -> Self:
-        return cls(
-            query_worker_state=query_worker_state,
-            operator_id=operator_id,
-        )

@@ -332,21 +332,25 @@ async def shutdown_on_error(
     # We always want to trace the outermost call, so record a little state here
     # to know whether we're the outermost call and so created the quent actor.
     created_quent_actor = False
+    unbound_quent_execution = (
+        None if ir_context is None else ir_context.unbound_quent_ir_execution_state
+    )
     if (
         ir_context is not None
-        and (quent_execution := ir_context.quent_ir_execution_state) is not None
-        and quent_execution.actor_id is None
+        and ir_context.actor_bound_quent_ir_execution_state is None
+        and unbound_quent_execution is not None
     ):
         import cudf_polars_quent as _quent
 
         created_quent_actor = True
         tracer = ActorTracer()
         actor_id = _quent.now_v7()
-        quent_execution = replace(quent_execution, actor_id=actor_id)
+        quent_execution = unbound_quent_execution.bind_actor(actor_id)
         ir_context = replace(
             ir_context,
             tracer=tracer,
-            quent_ir_execution_state=quent_execution,
+            actor_bound_quent_ir_execution_state=quent_execution,
+            unbound_quent_ir_execution_state=None,
         )
         runtime = quent_execution.query_worker_state.runtime
         started = (
@@ -371,7 +375,11 @@ async def shutdown_on_error(
             created_quent_actor
             and tracer is not None
             and ir_context is not None
-            and (quent_ir_execution_state := ir_context.quent_ir_execution_state)
+            and (
+                quent_ir_execution_state := (
+                    ir_context.actor_bound_quent_ir_execution_state
+                )
+            )
             is not None
         ):
             record_channel_metrics(tracer, chs_in=chs_in, chs_out=chs_out)
@@ -403,7 +411,6 @@ async def shutdown_on_error(
                 }
                 for value in tracer.prefilters
             ]
-            assert quent_ir_execution_state.actor_id is not None
             runtime = quent_ir_execution_state.query_worker_state.runtime
             operator = runtime.session.binding_context.operator_observer().handle(
                 quent_ir_execution_state.operator_id
@@ -1131,10 +1138,10 @@ async def chunkwise_evaluate(
         cd = msg.get_content_description()
         seq_num = msg.sequence_number
         chunk_ir_context = ir_context
-        if (quent_state := ir_context.quent_ir_execution_state) is not None:
+        if (quent_state := ir_context.actor_bound_quent_ir_execution_state) is not None:
             chunk_ir_context = replace(
                 ir_context,
-                quent_ir_execution_state=replace(
+                actor_bound_quent_ir_execution_state=replace(
                     quent_state,
                     sequence_number=seq_num,
                     content_sizes=tuple(cd.content_sizes),

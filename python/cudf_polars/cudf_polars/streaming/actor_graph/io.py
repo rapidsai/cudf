@@ -604,11 +604,11 @@ async def read_chunk(
         if isinstance(task, DataFrameScan)
         else 2 * estimated_chunk_bytes
     )
-    quent_state = ir_context.quent_ir_execution_state
+    quent_state = ir_context.actor_bound_quent_ir_execution_state
     if quent_state is not None:
         ir_context = dataclasses.replace(
             ir_context,
-            quent_ir_execution_state=dataclasses.replace(
+            actor_bound_quent_ir_execution_state=dataclasses.replace(
                 quent_state,
                 sequence_number=seq_num,
                 scan_task_node_id=str(task.get_stable_id()),
