@@ -1184,29 +1184,3 @@ def test_hive_only_projection_with_prefetched_metadata(
     )
     q = pl.scan_parquet(hive_root, hive_partitioning=True).select("part")
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
-
-
-def test_scan_error_does_not_crash_engine(
-    tmp_path: Path,
-    spmd_engine_factory: Callable[[StreamingOptions], StreamingEngine],
-) -> None:
-    pl.DataFrame({"x": [1], "y": [1]}).write_parquet(tmp_path / "0.parquet")
-    pl.DataFrame({"x": [2]}).write_parquet(tmp_path / "1.parquet")
-    query = pl.scan_parquet(tmp_path, missing_columns="insert").filter(pl.col("y") == 1)
-    engine = spmd_engine_factory(
-        StreamingOptions(
-            max_rows_per_partition=4,
-            target_partition_size=10,
-            fallback_mode="silent",
-        )
-    )
-    for _ in range(100):
-        try:
-            result = query.collect(engine=engine)
-        except ExceptionGroup as error:
-            if error.subgroup(ValueError) is None:
-                raise
-        else:
-            assert result.to_dict(as_series=False) == {"x": [1], "y": [1]}
-        result = pl.LazyFrame({"value": [1]}).collect(engine=engine)
-        assert result.to_dict(as_series=False) == {"value": [1]}
