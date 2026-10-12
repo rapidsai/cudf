@@ -32,6 +32,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/iterator>
+#include <cuda/std/algorithm.max.h>
 #include <cuda/stream>
 #include <thrust/tabulate.h>
 
@@ -78,7 +79,9 @@ struct m2_functor {
                        if (group_count == 0) { return Target{}; }
                        auto const group_sum_sqr = static_cast<Target>(sum_sqr[idx]);
                        auto const group_sum     = static_cast<Target>(sum[idx]);
-                       auto const result = group_sum_sqr - group_sum * group_sum / group_count;
+                       // Ensure sum of square differences is never negative.
+                       auto const result = cuda::std::max(
+                         Target{0}, group_sum_sqr - group_sum * group_sum / group_count);
                        return result;
                      });
   }
