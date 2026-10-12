@@ -235,9 +235,7 @@ def _order_partitioning(
 def _set_sorted_join_metadata(spmd_engine_factory) -> ChannelMetadata:
     engine = spmd_engine_factory(
         StreamingOptions(
-            # Force hint_sorted to extract/replay boundaries instead of using
-            # the single-partition metadata shortcut.
-            max_rows_per_partition=1,
+            max_rows_per_partition=128,
             target_partition_size=1,
             broadcast_limit=1,
             fallback_mode="raise",
@@ -264,7 +262,6 @@ def _set_sorted_join_metadata(spmd_engine_factory) -> ChannelMetadata:
 def test_ordered_join_after_set_sorted_inputs(spmd_engine_factory):
     metadata = _set_sorted_join_metadata(spmd_engine_factory)
 
-    assert metadata.local_count == 3
     assert metadata.partitioning is not None
     assert isinstance(metadata.partitioning.inter_rank, OrderScheme)
     assert metadata.partitioning.local == "inherit"

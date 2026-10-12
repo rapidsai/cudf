@@ -33,6 +33,9 @@ from cudf_polars.dsl.ir import (
 )
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.engine.options import StreamingOptions
+from cudf_polars.streaming.actor_graph.collectives.ordering import (
+    _metadata_has_ordering,
+)
 from cudf_polars.streaming.actor_graph.collectives.sort import (
     _can_sort_chunkwise,
     _sort_to_order_keys,
@@ -1179,3 +1182,29 @@ def test_get_ordering(
             )
             assert mismatched_nested.get_ordering(level="inter_rank") is None
             assert mismatched_nested.get_ordering(level="local") is None
+
+
+@pytest.mark.parametrize(
+    "scheme_key_count,strict_boundaries,expected",
+    [
+        (1, True, True),
+        (1, False, False),
+        (2, True, True),
+        (2, False, True),
+    ],
+)
+def test_metadata_has_ordering(
+    spmd_engine, scheme_key_count, strict_boundaries, expected
+) -> None:
+    asc, before = plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE
+    order_keys = (OrderKey(0, asc, before), OrderKey(1, asc, before))
+    scheme = _make_order_scheme(
+        spmd_engine.context,
+        key_indices=tuple(range(scheme_key_count)),
+        strict=strict_boundaries,
+    )
+    metadata = ChannelMetadata(
+        3, partitioning=Partitioning(inter_rank=scheme, local="inherit")
+    )
+
+    assert _metadata_has_ordering(metadata, order_keys) is expected

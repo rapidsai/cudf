@@ -146,10 +146,13 @@ def _metadata_has_ordering(metadata: ChannelMetadata, keys: Sequence[OrderKey]) 
         return False
     scheme = metadata.partitioning.inter_rank
     keys = tuple(keys)
-    # Boundaries for a leading prefix are sufficient for inter-rank partitioning
-    # of any extension of that prefix.
+    # Exact metadata is always useful. Prefix metadata is only enough for a
+    # longer ordering when its boundaries are strict.
     return isinstance(scheme, OrderScheme) and any(
-        len(ordering.keys) <= len(keys)
+        (
+            len(ordering.keys) == len(keys)
+            or (ordering.strict_boundaries and len(ordering.keys) < len(keys))
+        )
         and tuple(ordering.keys) == keys[: len(ordering.keys)]
         for ordering in scheme.orderings
     )
