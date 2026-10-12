@@ -81,7 +81,6 @@ jobs:
       cache-read-only: ${{ inputs.branch != 'main' }}
       cache-environment: |
         LIBCUDF_KERNEL_CACHE_PATH=.cache/libcudf
-        LIBCUDF_KERNEL_CACHE_PRELOAD=1
       # https://github.com/NVIDIA/cudf/issues/23498
       matrix_filter: map(select(.GPU != "gb300" and .GPU != "gh200"))
   conda-cpp-benchmark-tests:
