@@ -17,6 +17,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/unary.hpp>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -26,8 +27,11 @@
 #include <cuda_runtime_api.h>
 
 #include <atomic>
-#include <limits>
+#include <cmath>
 #include <cstddef>
+#include <limits>
+#include <numeric>
+#include <string>
 #include <thread>
 #include <tuple>
 #include <vector>
@@ -1794,8 +1798,8 @@ void nan_with_nulls_min_max()
   auto [out_keys, results] = streaming_agg.finalize();
 
   cudf::test::fixed_width_column_wrapper<int32_t> expect_keys{1, 2, 3, 4, 5, 6, 7};
-  cudf::test::fixed_width_column_wrapper<T> expect_vals{{nan, nan, nan, T{0}, nan, T{1}, T{2}},
-                                                        {true, true, true, false, true, true, true}};
+  cudf::test::fixed_width_column_wrapper<T> expect_vals{
+    {nan, nan, nan, T{0}, nan, T{1}, T{2}}, {true, true, true, false, true, true, true}};
   check(out_keys, results, cudf::table_view{{expect_keys}}, {expect_vals, expect_vals});
 }
 
@@ -1805,6 +1809,99 @@ TEST_F(StreamingGroupbyTest, MinMaxNaNWithNulls)
 {
   nan_with_nulls_min_max<float>();
   nan_with_nulls_min_max<double>();
+}
+
+namespace {
+
+template <typename T>
+void mixed_nan_min_max(cudf::size_type shift, int num_batches)
+{
+  SCOPED_TRACE("shift " + std::to_string(shift) + ", " + std::to_string(num_batches) + " batches");
+  auto constexpr nan                  = std::numeric_limits<T>::quiet_NaN();
+  std::vector<std::string> const runs = {"vn_",
+                                         "_nv",
+                                         "n_v",
+                                         "nv",
+                                         "vn",
+                                         "_vn_",
+                                         "__n",
+                                         "v__",
+                                         "___",
+                                         "n",
+                                         "v",
+                                         std::string(30, '_') + "v___n",
+                                         "n" + std::string(40, '_') + "v",
+                                         "v" + std::string(64, '_') + "n",
+                                         std::string(31, '_') + "nv" + std::string(31, '_')};
+  auto const group_value = [](std::size_t group) { return static_cast<T>(group) + T{0.5}; };
+
+  std::vector<int32_t> keys(shift, 0);
+  std::vector<T> vals(shift, T{0});
+  std::vector<bool> valid(shift, true);
+  for (std::size_t g = 0; g < runs.size(); ++g) {
+    for (auto const c : runs[g]) {
+      keys.push_back(static_cast<int32_t>(g + 1));
+      vals.push_back(c == 'n' ? nan : group_value(g + 1));
+      valid.push_back(c != '_');
+    }
+  }
+  cudf::test::fixed_width_column_wrapper<int32_t> key_col(keys.begin(), keys.end());
+  cudf::test::fixed_width_column_wrapper<T> val_col(vals.begin(), vals.end(), valid.begin());
+  cudf::table_view batch{{key_col, val_col}};
+
+  std::vector<cudf::groupby::streaming_aggregation_request> reqs;
+  reqs.push_back(make_req(1, cudf::make_min_aggregation<cudf::groupby_aggregation>()));
+  reqs.push_back(make_req(1, cudf::make_max_aggregation<cudf::groupby_aggregation>()));
+  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, DEFAULT_MAX_DISTINCT_KEYS);
+  for (int i = 0; i < num_batches; ++i) {
+    streaming_agg.aggregate(batch);
+  }
+  auto [out_keys, results] = streaming_agg.finalize();
+
+  auto const order       = cudf::sorted_order(out_keys->view());
+  auto const sorted_keys = cudf::gather(out_keys->view(), *order);
+  auto const first_group = shift == 0 ? 1 : 0;
+  std::vector<int32_t> expect_keys(runs.size() + 1 - first_group);
+  std::iota(expect_keys.begin(), expect_keys.end(), first_group);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    cudf::test::fixed_width_column_wrapper<int32_t>(expect_keys.begin(), expect_keys.end()),
+    sorted_keys->get_column(0));
+
+  for (auto const& result : results) {
+    auto const sorted = cudf::gather(cudf::table_view{{result.results.front()->view()}}, *order);
+    auto const [data, mask] = cudf::test::to_host<T>(sorted->get_column(0));
+    for (auto const key : expect_keys) {
+      auto const row     = key - first_group;
+      auto const& run    = key == 0 ? std::string(shift, 'v') : runs[key - 1];
+      auto const has_v   = run.find('v') != std::string::npos;
+      auto const has_nan = run.find('n') != std::string::npos;
+      auto const v       = key == 0 ? T{0} : group_value(key);
+      SCOPED_TRACE("group " + std::to_string(key) + " \"" + run + "\"");
+      auto const is_valid = mask.empty() || cudf::bit_is_set(mask.data(), row);
+      ASSERT_EQ(is_valid, has_v || has_nan);
+      if (!is_valid) { continue; }
+      auto const x = data[row];
+      if (has_v && has_nan) {
+        EXPECT_TRUE(std::isnan(x) || x == v) << x;
+      } else if (has_nan) {
+        EXPECT_TRUE(std::isnan(x)) << x;
+      } else {
+        EXPECT_EQ(x, v);
+      }
+    }
+  }
+}
+
+}  // namespace
+
+TEST_F(StreamingGroupbyTest, MinMaxMixedNaNAndNullRuns)
+{
+  for (cudf::size_type shift : {0, 1, 17, 31, 32}) {
+    for (int num_batches : {1, 2, 3}) {
+      mixed_nan_min_max<float>(shift, num_batches);
+      mixed_nan_min_max<double>(shift, num_batches);
+    }
+  }
 }
 
 // Without requests no aggregation kernel is launched, and only the distinct keys are returned.

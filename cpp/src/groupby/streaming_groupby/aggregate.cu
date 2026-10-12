@@ -4,9 +4,9 @@
  */
 
 #include "common.cuh"
-#include "groupby/hash/global_memory_aggregator.cuh"
 #include "groupby/hash/single_pass_functors.cuh"
 
+#include <cudf/detail/aggregation/device_aggregators.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
@@ -21,7 +21,6 @@
 
 #include <cub/warp/warp_reduce.cuh>
 #include <cuda/iterator>
-#include <cuda/std/limits>
 #include <cuda/std/type_traits>
 #include <cuda/stream>
 #include <thrust/for_each.h>
@@ -60,6 +59,24 @@ struct has_warp_reduce_path_fn {
   }
 };
 
+template <typename T>
+struct nullable_partial {
+  T value;
+  bool valid;
+};
+
+template <typename Op>
+struct skip_nulls_op {
+  template <typename T>
+  __device__ nullable_partial<T> operator()(nullable_partial<T> const& lhs,
+                                            nullable_partial<T> const& rhs) const
+  {
+    if (!lhs.valid) { return rhs; }
+    if (!rhs.valid) { return lhs; }
+    return {Op{}(lhs.value, rhs.value), true};
+  }
+};
+
 /*
  * Element aggregator that first reduces runs of consecutive lanes updating the same target.
  *
@@ -86,16 +103,18 @@ struct warp_reduce_aggregator {
     if constexpr (!has_warp_reduce_path<Source, k>) {
       return;
     } else {
-      using Target     = cudf::detail::target_type_t<Source, k>;
-      using T          = cudf::device_storage_type_t<Target>;
-      using S          = cudf::device_storage_type_t<Source>;
-      using WarpReduce = cub::WarpReduce<T>;
-      // A full warp reduces with shuffles only, so the temporary storage is empty and need not be
-      // shared.
+      using Target = cudf::detail::target_type_t<Source, k>;
+      using T      = cudf::device_storage_type_t<Target>;
+      using S      = cudf::device_storage_type_t<Source>;
+
+      constexpr bool skips_nulls = is_minmax && cudf::is_floating_point<T>();
+      using Partial              = cuda::std::conditional_t<skips_nulls, nullable_partial<T>, T>;
+      using Op = cuda::std::conditional_t<k == aggregation::MIN, cudf::DeviceMin, cudf::DeviceMax>;
+      using WarpReduce = cub::WarpReduce<Partial>;
+
       static_assert(cuda::std::is_empty_v<typename WarpReduce::InternalWarpReduce::TempStorage>);
       typename WarpReduce::TempStorage warp_storage;
 
-      // Lanes without a valid input contribute the identity of the aggregation.
       auto const valid = active && (k == aggregation::COUNT_ALL || source.is_valid(source_index));
       auto const value = [&]() -> T {
         if constexpr (is_count) {
@@ -112,39 +131,40 @@ struct warp_reduce_aggregator {
       auto const lane          = threadIdx.x % cudf::detail::warp_size;
       auto const prev_key      = __shfl_up_sync(full_mask, key, 1);
       int const is_head        = lane == 0 || prev_key != key;
-      auto const head_mask     = __ballot_sync(full_mask, is_head);
-      auto const valid_mask    = __ballot_sync(full_mask, valid);
-      auto const nan_mask      = [&] {
-        if constexpr (is_minmax && cudf::is_floating_point<T>()) {
-          return __ballot_sync(full_mask, valid && cuda::std::isnan(value));
-        } else {
-          return 0u;
-        }
-      }();
-      auto reduced             = [&] {
-        if constexpr (k == aggregation::MIN) {
-          return WarpReduce(warp_storage).HeadSegmentedReduce(value, is_head, cudf::DeviceMin{});
-        } else if constexpr (k == aggregation::MAX) {
-          return WarpReduce(warp_storage).HeadSegmentedReduce(value, is_head, cudf::DeviceMax{});
+      auto const reduced       = [&] {
+        if constexpr (skips_nulls) {
+          return WarpReduce(warp_storage)
+            .HeadSegmentedReduce(Partial{value, valid}, is_head, skip_nulls_op<Op>{});
+        } else if constexpr (is_minmax) {
+          return WarpReduce(warp_storage).HeadSegmentedReduce(value, is_head, Op{});
         } else {
           return WarpReduce(warp_storage).HeadSegmentedSum(value, is_head);
         }
       }();
 
-      if (!active || !is_head) { return; }
-      auto const later_heads = lane == cudf::detail::warp_size - 1 ? 0u : head_mask >> (lane + 1);
-      auto const run_size = later_heads == 0 ? cudf::detail::warp_size - lane : __ffs(later_heads);
-      auto const run_mask =
-        (run_size == cudf::detail::warp_size ? full_mask : (1u << run_size) - 1u) << lane;
-      if ((valid_mask & run_mask) == 0) { return; }
-      if constexpr (is_minmax && cudf::is_floating_point<T>()) {
-        if ((nan_mask & run_mask) == (valid_mask & run_mask)) {
-          reduced = cuda::std::numeric_limits<T>::quiet_NaN();
+      auto const element_aggregator = cudf::detail::element_aggregator{};
+      if constexpr (skips_nulls) {
+        if (active && is_head) {
+          element_aggregator.template operator()<Source, k>(
+            target, target_row, reduced.value, reduced.valid);
         }
+      } else if constexpr (is_count) {
+        if (active && is_head) {
+          element_aggregator.template operator()<Source, k>(
+            target, target_row, reduced, reduced != 0);
+        }
+      } else {
+        auto const head_mask  = __ballot_sync(full_mask, is_head);
+        auto const valid_mask = __ballot_sync(full_mask, valid);
+        if (!active || !is_head) { return; }
+        auto const later_heads = lane == cudf::detail::warp_size - 1 ? 0u : head_mask >> (lane + 1);
+        auto const run_size =
+          later_heads == 0 ? cudf::detail::warp_size - lane : __ffs(later_heads);
+        auto const run_mask =
+          (run_size == cudf::detail::warp_size ? full_mask : (1u << run_size) - 1u) << lane;
+        element_aggregator.template operator()<Source, k>(
+          target, target_row, reduced, (valid_mask & run_mask) != 0);
       }
-      bool has_valid = true;
-      detail::hash::gmem_element_aggregator{}.template operator()<Source, k>(
-        target, target_row, source, reinterpret_cast<cuda::std::byte*>(&reduced), &has_valid, 0);
     }
   }
 };

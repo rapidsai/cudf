@@ -36,31 +36,44 @@ template <typename Source>
   requires(is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
            !is_fixed_point<Source>())
 struct update_target_element<Source, aggregation::MIN> {
+  using Target = target_type_t<Source, aggregation::MIN>;
+
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
                              size_type source_index) const noexcept
   {
-    using Target = target_type_t<Source, aggregation::MIN>;
-    cudf::detail::atomic_min(&target.element<Target>(target_index),
-                             static_cast<Target>(source.element<Source>(source_index)));
+    (*this)(target, target_index, static_cast<Target>(source.element<Source>(source_index)));
+  }
+
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             Target reduced) const noexcept
+  {
+    cudf::detail::atomic_min(&target.element<Target>(target_index), reduced);
   }
 };
 
 template <typename Source>
   requires(is_fixed_point<Source>() && cudf::has_atomic_support<device_storage_type_t<Source>>())
 struct update_target_element<Source, aggregation::MIN> {
+  using DeviceTarget = device_storage_type_t<target_type_t<Source, aggregation::MIN>>;
+  using DeviceSource = device_storage_type_t<Source>;
+
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
                              size_type source_index) const noexcept
   {
-    using Target       = target_type_t<Source, aggregation::MIN>;
-    using DeviceTarget = device_storage_type_t<Target>;
-    using DeviceSource = device_storage_type_t<Source>;
+    (*this)(
+      target, target_index, static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+  }
 
-    cudf::detail::atomic_min(&target.element<DeviceTarget>(target_index),
-                             static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             DeviceTarget reduced) const noexcept
+  {
+    cudf::detail::atomic_min(&target.element<DeviceTarget>(target_index), reduced);
   }
 };
 
@@ -68,31 +81,44 @@ template <typename Source>
   requires(is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
            !is_fixed_point<Source>())
 struct update_target_element<Source, aggregation::MAX> {
+  using Target = target_type_t<Source, aggregation::MAX>;
+
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
                              size_type source_index) const noexcept
   {
-    using Target = target_type_t<Source, aggregation::MAX>;
-    cudf::detail::atomic_max(&target.element<Target>(target_index),
-                             static_cast<Target>(source.element<Source>(source_index)));
+    (*this)(target, target_index, static_cast<Target>(source.element<Source>(source_index)));
+  }
+
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             Target reduced) const noexcept
+  {
+    cudf::detail::atomic_max(&target.element<Target>(target_index), reduced);
   }
 };
 
 template <typename Source>
   requires(is_fixed_point<Source>() && cudf::has_atomic_support<device_storage_type_t<Source>>())
 struct update_target_element<Source, aggregation::MAX> {
+  using DeviceTarget = device_storage_type_t<target_type_t<Source, aggregation::MAX>>;
+  using DeviceSource = device_storage_type_t<Source>;
+
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
                              size_type source_index) const noexcept
   {
-    using Target       = target_type_t<Source, aggregation::MAX>;
-    using DeviceTarget = device_storage_type_t<Target>;
-    using DeviceSource = device_storage_type_t<Source>;
+    (*this)(
+      target, target_index, static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+  }
 
-    cudf::detail::atomic_max(&target.element<DeviceTarget>(target_index),
-                             static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             DeviceTarget reduced) const noexcept
+  {
+    cudf::detail::atomic_max(&target.element<DeviceTarget>(target_index), reduced);
   }
 };
 
@@ -100,31 +126,44 @@ template <typename Source>
   requires(cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
            !cudf::is_fixed_point<Source>() && !cudf::is_timestamp<Source>())
 struct update_target_element<Source, aggregation::SUM> {
+  using Target = target_type_t<Source, aggregation::SUM>;
+
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
                              size_type source_index) const noexcept
   {
-    using Target = target_type_t<Source, aggregation::SUM>;
-    cudf::detail::atomic_add(&target.element<Target>(target_index),
-                             static_cast<Target>(source.element<Source>(source_index)));
+    (*this)(target, target_index, static_cast<Target>(source.element<Source>(source_index)));
+  }
+
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             Target reduced) const noexcept
+  {
+    cudf::detail::atomic_add(&target.element<Target>(target_index), reduced);
   }
 };
 
 template <typename Source>
   requires(is_fixed_point<Source>())
 struct update_target_element<Source, aggregation::SUM> {
+  using DeviceTarget = device_storage_type_t<target_type_t<Source, aggregation::SUM>>;
+  using DeviceSource = device_storage_type_t<Source>;
+
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
                              size_type source_index) const noexcept
   {
-    using Target       = target_type_t<Source, aggregation::SUM>;
-    using DeviceTarget = device_storage_type_t<Target>;
-    using DeviceSource = device_storage_type_t<Source>;
+    (*this)(
+      target, target_index, static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+  }
 
-    cudf::detail::atomic_add(&target.element<DeviceTarget>(target_index),
-                             static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             DeviceTarget reduced) const noexcept
+  {
+    cudf::detail::atomic_add(&target.element<DeviceTarget>(target_index), reduced);
   }
 };
 
@@ -309,14 +348,24 @@ struct update_target_element<dictionary32, k> {
 template <typename Source>
   requires(is_product_supported<Source>())
 struct update_target_element<Source, aggregation::SUM_OF_SQUARES> {
+  using Target = target_type_t<Source, aggregation::SUM_OF_SQUARES>;
+
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
                              size_type source_index) const noexcept
   {
-    using Target = target_type_t<Source, aggregation::SUM_OF_SQUARES>;
-    auto value   = static_cast<Target>(source.element<Source>(source_index));
-    cudf::detail::atomic_add(&target.element<Target>(target_index), value * value);
+    auto const value  = static_cast<Target>(source.element<Source>(source_index));
+    auto const square = value * value;
+    (*this)(target, target_index, square);
+  }
+
+  /// `reduced` is a sum of squares, so it is added without squaring.
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             Target reduced) const noexcept
+  {
+    cudf::detail::atomic_add(&target.element<Target>(target_index), reduced);
   }
 };
 
@@ -337,26 +386,44 @@ struct update_target_element<Source, aggregation::PRODUCT> {
 template <typename Source>
   requires(is_valid_aggregation<Source, aggregation::COUNT_VALID>())
 struct update_target_element<Source, aggregation::COUNT_VALID> {
+  using Target = target_type_t<Source, aggregation::COUNT_VALID>;
+
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
-                             column_device_view source,
-                             size_type source_index) const noexcept
+                             column_device_view,
+                             size_type) const noexcept
   {
-    using Target = target_type_t<Source, aggregation::COUNT_VALID>;
-    cudf::detail::atomic_add(&target.element<Target>(target_index), Target{1});
+    (*this)(target, target_index, Target{1});
+  }
+
+  /// `reduced` is a count of source elements, so it is added as is.
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             Target reduced) const noexcept
+  {
+    cudf::detail::atomic_add(&target.element<Target>(target_index), reduced);
   }
 };
 
 template <typename Source>
   requires(is_valid_aggregation<Source, aggregation::COUNT_ALL>())
 struct update_target_element<Source, aggregation::COUNT_ALL> {
+  using Target = target_type_t<Source, aggregation::COUNT_ALL>;
+
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
-                             column_device_view source,
-                             size_type source_index) const noexcept
+                             column_device_view,
+                             size_type) const noexcept
   {
-    using Target = target_type_t<Source, aggregation::COUNT_ALL>;
-    cudf::detail::atomic_add(&target.element<Target>(target_index), Target{1});
+    (*this)(target, target_index, Target{1});
+  }
+
+  /// `reduced` is a count of source elements, so it is added as is.
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             Target reduced) const noexcept
+  {
+    cudf::detail::atomic_add(&target.element<Target>(target_index), reduced);
   }
 };
 
@@ -442,6 +509,35 @@ struct element_aggregator {
     }
 
     update_target_element<Source, k>{}(target, target_index, source, source_index);
+  }
+
+  /**
+   * @brief Updates `target[target_index]` with a partial aggregation already reduced from
+   * several source elements, e.g. a run of equal keys within a warp.
+   *
+   * The partial of MIN, MAX and SUM is combined into the target like a single source element,
+   * while the partial of SUM_OF_SQUARES, COUNT_VALID and COUNT_ALL is added to the target as is.
+   * Only MIN, MAX, SUM, SUM_OF_SQUARES, COUNT_VALID and COUNT_ALL of non-dictionary sources
+   * support partials.
+   *
+   * @param reduced The partial aggregation, in the device storage type of the target
+   * @param reduced_valid Whether any of the reduced source elements is valid; for COUNT_ALL,
+   * whether there is any reduced element
+   */
+  template <typename Source, aggregation::Kind k>
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             device_storage_type_t<target_type_t<Source, k>> reduced,
+                             bool reduced_valid) const noexcept
+  {
+    if (!reduced_valid) { return; }
+
+    // The output for COUNT_VALID and COUNT_ALL is initialized to be all valid
+    if constexpr (!(k == cudf::aggregation::COUNT_VALID or k == cudf::aggregation::COUNT_ALL)) {
+      if (target.is_null(target_index)) { target.set_valid(target_index); }
+    }
+
+    update_target_element<Source, k>{}(target, target_index, reduced);
   }
 };
 

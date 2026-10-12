@@ -38,23 +38,17 @@ struct merge_element_aggregator {
     if constexpr (!cudf::detail::is_valid_aggregation<Source, k>()) {
       return;
     } else {
-      if constexpr (k != aggregation::COUNT_ALL) {
-        if (source.is_null(source_index)) { return; }
-      }
-      if constexpr (!(k == aggregation::COUNT_VALID || k == aggregation::COUNT_ALL)) {
-        if (target.is_null(target_index)) { target.set_valid(target_index); }
-      }
-
-      if constexpr (k == aggregation::COUNT_VALID || k == aggregation::COUNT_ALL) {
+      if constexpr (k == aggregation::COUNT_VALID || k == aggregation::COUNT_ALL ||
+                    k == aggregation::SUM_OF_SQUARES) {
+        // Counts and sums of squares are partials, which are added to the target as they are.
         using Target = cudf::detail::target_type_t<Source, k>;
-        cudf::detail::atomic_add(&target.element<Target>(target_index),
-                                 source.element<Target>(source_index));
-      } else if constexpr (k == aggregation::SUM_OF_SQUARES) {
-        using Target = cudf::detail::target_type_t<Source, k>;
-        cudf::detail::atomic_add(&target.element<Target>(target_index),
-                                 static_cast<Target>(source.element<Source>(source_index)));
+        cudf::detail::element_aggregator{}.template operator()<Source, k>(
+          target,
+          target_index,
+          source.element<Target>(source_index),
+          k == aggregation::COUNT_ALL || source.is_valid(source_index));
       } else {
-        cudf::detail::update_target_element<Source, k>{}(
+        cudf::detail::element_aggregator{}.template operator()<Source, k>(
           target, target_index, source, source_index);
       }
     }
