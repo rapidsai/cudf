@@ -228,6 +228,8 @@ void build_column_metadata(metadata_builder& mb,
     });
 }
 
+}  // anonymous namespace
+
 table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
 {
   // gpu data can be null if everything is empty but the metadata must always be valid
@@ -266,7 +268,12 @@ table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
   return table_view{cols};
 }
 
-}  // anonymous namespace
+table_view unpack(std::span<uint8_t const> metadata, uint8_t const* gpu_data)
+{
+  if (metadata.empty()) { return table_view{}; }
+  std::ignore = packed_metadata_view{metadata};  // validate the metadata before unpacking
+  return unpack(metadata.data(), gpu_data);
+}
 
 /**
  * @copydoc cudf::detail::pack
@@ -483,9 +490,7 @@ table_view unpack(packed_columns const& input)
 table_view unpack(std::span<uint8_t const> const metadata, uint8_t const* gpu_data)
 {
   CUDF_FUNC_RANGE();
-  if (metadata.empty()) { return table_view{}; }
-  std::ignore = packed_metadata_view{metadata};  // validate the metadata before unpacking
-  return detail::unpack(metadata.data(), gpu_data);
+  return detail::unpack(metadata, gpu_data);
 }
 
 table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)

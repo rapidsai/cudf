@@ -1891,8 +1891,8 @@ void copy_data(int num_batches_to_copy,
                uint8_t** d_dst_bufs,
                device_span<dst_buf_info> d_dst_buf_info,
                uint8_t* user_buffer,
-               cuda::stream_ref stream,
-               std::size_t dst_offset_base = 0)
+               std::size_t dst_offset_base,
+               cuda::stream_ref stream)
 {
   constexpr size_type block_size = 256;
   if (user_buffer != nullptr) {
@@ -2054,6 +2054,7 @@ struct contiguous_split_state {
               src_and_dst_pointers->d_dst_bufs,
               chunk_iter_state->d_batched_dst_buf_info,
               nullptr,
+              0,
               stream);
 
     // these "orig" dst_buf_info pointers describe the prior-to-batching destination
@@ -2106,6 +2107,7 @@ struct contiguous_split_state {
               src_and_dst_pointers->d_dst_bufs,
               chunk_iter_state->d_batched_dst_buf_info,
               user_buffer.data(),
+              0,
               stream);
 
     // We do not need to post-process null counts since the null count info is
@@ -2166,8 +2168,8 @@ struct contiguous_split_state {
               src_and_dst_pointers->d_dst_bufs,
               chunk_iter_state->d_batched_dst_buf_info,
               buffer,
-              stream,
-              window.payload_offset);
+              window.payload_offset,
+              stream);
   }
 
   std::unique_ptr<std::vector<uint8_t>> build_packed_column_metadata()
@@ -2799,7 +2801,7 @@ std::unique_ptr<column> allocate_materialized_column(
   cuda::stream_ref stream,
   cudf::memory_resources mr)
 {
-  cuda::device_buffer<std::byte> null_mask = cudf::create_null_mask(0, mask_state::UNALLOCATED);
+  auto null_mask = cudf::detail::create_null_mask(0, mask_state::UNALLOCATED, stream, mr);
   if (auto const offset = metadata.null_mask_offset(); offset != -1) {
     auto const bytes =
       source.size(offset, bitmask_allocation_size_bytes(metadata.num_rows()), true);
@@ -3026,10 +3028,8 @@ std::unique_ptr<detail::contiguous_split_state> make_split_state(cudf::table_vie
   CUDF_EXPECTS(options.staging_buffer_bytes >= desired_batch_size,
                "The staging buffer must hold at least 1 MiB",
                std::invalid_argument);
-  // A zero user-buffer size selects the existing whole-table layout. std::nullopt suppresses the
-  // output allocation while preserving the already-computed source buffers, destination offsets,
-  // batching, and metadata state for pack_into().
-  // Plan state is owned by the returned plan, so it comes from the output resource.
+  // Whole-table layout with no output allocation; pack_into() writes to the caller's destination.
+  // The plan owns this state, so it uses the output resource.
   return std::make_unique<detail::contiguous_split_state>(
     input, 0, stream, std::nullopt, mr.get_output_mr());
 }
@@ -3054,7 +3054,11 @@ struct plan_input {
     CUDF_EXPECTS(input.metadata != nullptr && input.gpu_data != nullptr,
                  "Packed input must contain metadata and a device allocation",
                  std::invalid_argument);
-    state = make_split_state(cudf::unpack(input), options, stream, mr);
+    state = make_split_state(
+      cudf::detail::unpack(*input.metadata, static_cast<uint8_t const*>(input.gpu_data->data())),
+      options,
+      stream,
+      mr);
     // The metadata records every buffer offset, so equal metadata means the planned layout matches
     // the existing allocation. Empty columns may be described in several ways, but with no bytes
     // there is no layout to match.
@@ -3076,11 +3080,16 @@ struct plan_input {
 }  // namespace
 
 struct pack_plan::impl {
+  impl(plan_input&& source, pack_options const& options, cudf::memory_resources mr)
+    : impl(std::move(source), options, {}, {}, std::move(mr))
+  {
+  }
+
   impl(plan_input&& source,
        pack_options const& options,
-       cudf::memory_resources mr,
-       std::vector<compression_region_layout> layouts  = {},
-       std::span<pack_region const> configured_regions = {})
+       std::vector<compression_region_layout> layouts,
+       std::span<pack_region const> configured_regions,
+       cudf::memory_resources mr)
     : input(std::move(source))
   {
     auto const plan_mr                  = mr.get_output_mr();
@@ -3307,9 +3316,9 @@ pack_plan pack_plan_builder::build() &&
   auto const builder = std::move(_impl);
   return pack_plan{std::make_unique<pack_plan::impl>(std::move(builder->input),
                                                      builder->options,
-                                                     builder->mr,
                                                      std::move(builder->layouts),
-                                                     builder->regions)};
+                                                     builder->regions,
+                                                     builder->mr)};
 }
 
 pack_sizes pack_plan::sizes() const
@@ -3532,7 +3541,7 @@ table_view unpack_view(packed_data_view input)
         return access != 0;
       }(),
     "A zero-copy view requires a device-accessible payload");
-  return cudf::unpack(input.metadata, input.payload.data());
+  return cudf::detail::unpack(input.metadata, input.payload.data());
 }
 
 namespace {
