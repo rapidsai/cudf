@@ -274,13 +274,13 @@ namespace experimental {
 /**
  * @brief Compression algorithms supported by prepared pack operations.
  *
- * A concrete codec is applied to every chunk of a region, even when that expands the chunk.
+ * A concrete codec is applied to every block of a region, even when that expands the block.
  * Values are recorded in packed metadata and must not change.
  */
 enum class pack_compression : int32_t {
   none      = 0,  ///< Preserve the current uncompressed packed representation
   automatic = 1,  ///< Cascaded, except that string characters and small regions stay
-                  ///< uncompressed, and so do chunks that Cascaded shrinks too little
+                  ///< uncompressed, and so do blocks that Cascaded shrinks too little
   cascaded = 2,   ///< nvCOMP Cascaded, on values of each region's native width and signedness.
                   ///< Values wider than 64 bits, such as `DECIMAL128`, and string characters are
                   ///< treated as bytes.
@@ -481,7 +481,7 @@ pack_plan_builder make_pack_plan_builder(
  * @brief Prepare a reusable pack plan for `input`.
  *
  * Each physical column buffer (data, offsets, characters or validity) is compressed independently,
- * in chunks. For compressed plans, `sizes().payload_bytes` is an upper bound; `pack_into()`
+ * in blocks. For compressed plans, `sizes().payload_bytes` is an upper bound; `pack_into()`
  * reports the actual size.
  *
  * Payloads are compressed with `pack_compression::automatic` by default. Only

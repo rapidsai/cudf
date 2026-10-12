@@ -39,9 +39,9 @@ struct compressed_region_entry {
   uint64_t uncompressed_offset;
   uint64_t uncompressed_bytes;
   uint64_t data_bytes;
-  uint64_t chunk_bytes;
-  uint64_t chunk_begin;
-  uint64_t num_chunks;
+  uint64_t block_bytes;
+  uint64_t block_begin;
+  uint64_t num_blocks;
   int32_t type;
   uint32_t is_validity;
   int32_t compression;
