@@ -85,11 +85,13 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class _OrderSchemePartitioningResult:
+class OrderSchemePartitioningResult:
     """OrderScheme partitioning and buffered chunks consumed to derive it."""
 
     partitioning: Partitioning | None
+    """The extracted partitioning, or ``None`` if extraction was not possible."""
     chunks: ChunkStore
+    """The consumed chunks, stored in replay order."""
 
 
 def _extract_boundaries_from_endpoint_rows(
@@ -159,23 +161,16 @@ def _extract_boundaries_from_endpoint_rows(
     return next_partition_starts, strict
 
 
-def _order_scheme_has_key_prefix(scheme: OrderScheme, keys: Sequence[OrderKey]) -> bool:
-    """Return whether ``scheme`` has ordering for ``keys`` or a leading prefix."""
-    keys = tuple(keys)
-    return any(
-        len(ordering.keys) <= len(keys)
-        and tuple(ordering.keys) == keys[: len(ordering.keys)]
-        for ordering in scheme.orderings
-    )
-
-
 def _metadata_has_ordering(metadata: ChannelMetadata, keys: Sequence[OrderKey]) -> bool:
     """Return whether metadata already has compatible ordering."""
     if metadata.partitioning is None:
         return False
     scheme = metadata.partitioning.inter_rank
-    return isinstance(scheme, OrderScheme) and _order_scheme_has_key_prefix(
-        scheme, keys
+    keys = tuple(keys)
+    return isinstance(scheme, OrderScheme) and any(
+        len(ordering.keys) <= len(keys)
+        and tuple(ordering.keys) == keys[: len(ordering.keys)]
+        for ordering in scheme.orderings
     )
 
 
@@ -246,7 +241,7 @@ def _trivial_ordering_metadata(
     )
 
 
-async def _extract_orderscheme_partitioning(
+async def extract_orderscheme_partitioning(
     context: Context,
     comm: Communicator,
     schema_ir: IR,
@@ -254,7 +249,7 @@ async def _extract_orderscheme_partitioning(
     ch_in: Channel[TableChunk],
     order_keys: Sequence[OrderKey],
     collective_id: int,
-) -> _OrderSchemePartitioningResult:
+) -> OrderSchemePartitioningResult:
     """
     Extract the partitioning metadata for a sorted channel.
 
@@ -346,7 +341,7 @@ async def _extract_orderscheme_partitioning(
 
     # Return None if there are insufficient endpoints to process.
     if endpoint_table is None or (num_partitions := endpoint_table.num_rows() // 2) < 2:
-        return _OrderSchemePartitioningResult(None, chunks)
+        return OrderSchemePartitioningResult(None, chunks)
 
     key_indices = [key.column_index for key in order_keys]
     endpoint_key_rows = plc.Table(
@@ -360,7 +355,7 @@ async def _extract_orderscheme_partitioning(
     if not plc.sorting.is_sorted(
         endpoint_key_rows, column_order, null_order, stream=stream
     ):
-        return _OrderSchemePartitioningResult(None, chunks)
+        return OrderSchemePartitioningResult(None, chunks)
 
     # Extract boundaries and construct the Partitioning
     boundaries, strict = _extract_boundaries_from_endpoint_rows(
@@ -370,7 +365,7 @@ async def _extract_orderscheme_partitioning(
     boundaries_chunk = TableChunk.from_pylibcudf_table(
         boundaries, stream, exclusive_view=True, br=context.br()
     )
-    return _OrderSchemePartitioningResult(
+    return OrderSchemePartitioningResult(
         Partitioning(
             inter_rank=OrderScheme(
                 [Ordering(order_keys, boundaries_chunk, strict_boundaries=strict)]
@@ -391,33 +386,7 @@ async def ensure_ordering_metadata(
     order_keys: Sequence[OrderKey],
     collective_id: int,
 ) -> None:
-    """
-    Forward a channel after attaching ordering metadata when possible.
-
-    Parameters
-    ----------
-    context
-        The RapidsMPF context.
-    comm
-        The RapidsMPF communicator.
-    schema_ir
-        The IR node whose schema defines the input channel columns.
-    ir_context
-        The IR execution context.
-    ch_in
-        The input channel.
-    ch_out
-        The output channel.
-    order_keys
-        The requested order keys.
-    collective_id
-        The collective ID for boundary extraction.
-
-    Notes
-    -----
-    If the requested ordering is missing, this consumes the input data to
-    extract boundaries before replaying the consumed messages.
-    """
+    """Forward a channel, extracting ordering boundaries when metadata lacks them."""
     metadata = await recv_metadata(ch_in, context)
     buffered_chunks: ChunkStore | None = None
 
@@ -429,7 +398,7 @@ async def ensure_ordering_metadata(
         ) is not None:
             metadata = extracted_metadata
         else:
-            result = await _extract_orderscheme_partitioning(
+            result = await extract_orderscheme_partitioning(
                 context,
                 comm,
                 schema_ir,

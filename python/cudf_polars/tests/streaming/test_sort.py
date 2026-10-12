@@ -20,7 +20,7 @@ from cudf_polars.dsl.ir import Empty, IRExecutionContext
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.collectives.sort import (
-    _extract_orderscheme_partitioning,
+    extract_orderscheme_partitioning,
 )
 from cudf_polars.streaming.actor_graph.utils import gather_in_task_group
 from cudf_polars.testing.asserts import assert_gpu_result_equal
@@ -210,7 +210,7 @@ def _run_extract_orderscheme_partitioning(
             )
             _, result = await gather_in_task_group(
                 _send_frames(context, ch, frames),
-                _extract_orderscheme_partitioning(
+                extract_orderscheme_partitioning(
                     context, comm, schema_ir, ir_context, ch, order_keys, op_id
                 ),
             )
