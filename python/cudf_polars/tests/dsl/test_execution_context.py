@@ -11,9 +11,10 @@ import pytest
 from cudf_polars.dsl.ir import IRExecutionContext
 
 
-# The internal offload API lets us hold a worker in flight during cancellation.
-# This reliably tests the lifetime bug behind the crash without depending on
-# native read timing or scheduling, as reproducing it through queries alone would.
+# Cancelling an await does not stop a running executor worker. Unwinding the
+# caller can therefore release resources that the worker is still using.
+# The internal offload API lets us coordinate this situation explicitly,
+# making the lifetime check independent of native I/O timing or scheduling.
 @pytest.mark.parametrize("cancellations", [1, 3])
 @pytest.mark.parametrize("worker_raises", [False, True])
 def test_to_thread_cancellation_drains_worker(cancellations, worker_raises):
