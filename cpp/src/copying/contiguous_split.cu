@@ -2868,9 +2868,9 @@ void collect_buffer_offsets(packed_metadata_view::column_view const& metadata,
  * are copied from a pageable payload, so materializing a column subset transfers only its bytes and
  * their alignment padding.
  */
-class payload_loader {
+class byte_range_loader {
  public:
-  explicit payload_loader(std::span<uint8_t const> payload)
+  explicit byte_range_loader(std::span<uint8_t const> payload)
     : _payload{payload},
       _is_pageable{!payload.empty() && memory_type(payload.data()) == cudaMemoryTypeUnregistered}
   {
@@ -2888,10 +2888,10 @@ class payload_loader {
   void load(cuda::stream_ref stream, cudf::memory_resources mr)
   {
     if (_ranges.empty()) { return; }
-    // Ranges separated only by alignment padding, such as consecutive chunks, merge into one copy.
     std::ranges::sort(_ranges, {}, &range::begin);
     std::vector<range> merged{_ranges.front()};
     for (auto const& next : _ranges) {
+      // Ranges separated by alignment padding, such as consecutive chunks, merge into one copy.
       if (next.begin <= merged.back().end + split_align) {
         merged.back().end = std::max(merged.back().end, next.end);
       } else {
@@ -2961,12 +2961,11 @@ std::vector<std::unique_ptr<column>> materialize_columns(
   return columns;
 }
 
-// Copies column buffers out of an uncompressed payload, synchronizing only when copies read host
-// memory. A buffer's extent runs to the next buffer's offset, so no buffer sizes are read back from
-// the device.
+// Copies column buffers out of an uncompressed payload, syncing only when copies read host memory.
+// Each buffer extends to the next buffer's offset, so no sizes are read back from the device.
 std::unique_ptr<table> materialize_uncompressed(packed_data_view input,
                                                 std::optional<std::span<size_type const>> selection,
-                                                payload_loader& loader,
+                                                byte_range_loader& loader,
                                                 cuda::stream_ref stream,
                                                 cudf::memory_resources mr)
 {
@@ -2987,7 +2986,7 @@ std::unique_ptr<table> materialize_uncompressed(packed_data_view input,
                "Packed column buffer lies outside the payload");
 
   std::vector<std::span<uint8_t const>> payload_ranges;
-  std::vector<uint8_t*> destinations;
+  std::vector<void*> destinations;
   auto allocate_buffer = [&]<output_buffer Buffer>(
                            std::type_identity<Buffer>, int64_t offset, std::size_t required_bytes) {
     auto const next = std::ranges::upper_bound(offsets, offset);
@@ -3005,32 +3004,18 @@ std::unique_ptr<table> materialize_uncompressed(packed_data_view input,
   };
   auto columns = materialize_columns(metadata, selection, allocate_buffer);
   loader.load(stream, mr);
-  std::vector<uint8_t const*> sources;
+  std::vector<void const*> sources;
   std::vector<std::size_t> sizes;
   for (auto const range : payload_ranges) {
     sources.push_back(loader.device_pointer(range.data()));
     sizes.push_back(range.size());
   }
-
-  // Uploading the batch descriptors costs more than a few individual copies.
-  constexpr std::size_t max_individual_copies = 16;
-  auto const has_pending_host_reads =
-    loader.has_pending_host_reads() || sources.size() > max_individual_copies;
-  if (sources.size() <= max_individual_copies) {
-    for (std::size_t i = 0; i < sources.size(); ++i) {
-      CUDF_CUDA_TRY(cudf::detail::memcpy_async(destinations[i], sources[i], sizes[i], stream));
-    }
-  } else {
-    auto const temp_mr   = mr.get_temporary_mr();
-    auto const d_sources = cudf::detail::make_device_uvector_async(sources, stream, temp_mr);
-    auto const d_destinations =
-      cudf::detail::make_device_uvector_async(destinations, stream, temp_mr);
-    auto const d_sizes = cudf::detail::make_device_uvector_async(sizes, stream, temp_mr);
-    cudf::detail::batched_memcpy_async(
-      d_sources.begin(), d_destinations.begin(), d_sizes.begin(), sources.size(), stream);
+  if (!sources.empty()) {
+    CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(
+      destinations.data(), sources.data(), sizes.data(), sources.size(), stream));
   }
   // Host sources are read when the stream reaches each copy, so they must outlive this call.
-  if (has_pending_host_reads) { stream.sync(); }
+  if (loader.has_pending_host_reads()) { stream.sync(); }
   return std::make_unique<table>(std::move(columns));
 }
 
@@ -3275,13 +3260,16 @@ struct pack_plan_builder::impl {
       layouts(this->input.state->compute_compression_regions())
   {
     regions.reserve(layouts.size());
-    for (std::size_t i = 0; i < layouts.size(); ++i) {
-      auto const& layout = layouts[i];
-      regions.emplace_back(
-        pack_region_info{
-          i, layout.column_path, layout.kind, layout.type, layout.uncompressed_bytes},
-        options.compression);
-    }
+    std::ranges::transform(
+      std::views::iota(std::size_t{0}, layouts.size()),
+      std::back_inserter(regions),
+      [&](std::size_t i) {
+        auto const& layout = layouts[i];
+        return pack_region{
+          pack_region_info{
+            i, layout.column_path, layout.kind, layout.type, layout.uncompressed_bytes},
+          this->options.compression};
+      });
   }
 
   plan_input input;
@@ -3564,7 +3552,7 @@ std::unique_ptr<table> materialize_selection(packed_data_view input,
                                              cuda::stream_ref stream,
                                              cudf::memory_resources mr)
 {
-  payload_loader loader{input.payload};
+  byte_range_loader loader{input.payload};
   if (!selection.has_value()) { loader.request(input.payload); }
   if (!has_compression_metadata(input.metadata)) {
     return materialize_uncompressed(input, selection, loader, stream, mr);
@@ -3722,11 +3710,12 @@ std::unique_ptr<table> materialize_selection(packed_data_view input,
   auto const h_results = cudf::detail::make_pinned_vector(results, stream);
   for (std::size_t i = 0; i < tasks.size(); ++i) {
     if (tasks[i].codec == pack_compression::none) { continue; }
-    for (std::size_t k = task_offsets[i]; k < task_offsets[i + 1]; ++k) {
-      CUDF_EXPECTS(h_results[k].status == codec_status::SUCCESS &&
-                     h_results[k].bytes_written == outputs[k].size(),
-                   "Decompression failed");
-    }
+    CUDF_EXPECTS(std::ranges::all_of(std::views::iota(task_offsets[i], task_offsets[i + 1]),
+                                     [&](std::size_t k) {
+                                       return h_results[k].status == codec_status::SUCCESS &&
+                                              h_results[k].bytes_written == outputs[k].size();
+                                     }),
+                 "Decompression failed");
   }
   return std::make_unique<table>(std::move(columns));
 }
