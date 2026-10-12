@@ -42,6 +42,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 from polars.io.plugins import register_io_source
 
+from cudf_polars.containers.datatype import _contains_dtype
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.engine import rank_local_store
 from cudf_polars.engine.core import (
@@ -589,6 +590,12 @@ def execute_persisted_query(
     translator = Translator(lf._ldf.visit(), engine)
     ir = translator.translate_ir()
     raise_for_translation_errors(translator)
+    if any(
+        _contains_dtype(dtype.polars_type, (pl.Time,)) for dtype in ir.schema.values()
+    ):
+        raise NotImplementedError(
+            "Persisting query results containing Time columns is not supported"
+        )
     query_id = uuid.uuid4()
     ranks = backend.execute_persisted(ir, translator.config_options, query_id)
     schema = {name: dtype.polars_type for name, dtype in ir.schema.items()}
