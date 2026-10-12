@@ -36,13 +36,6 @@ main() {
         printf 'No integration libraries selected.\n' >&2
         return 1
     fi
-    local lib
-    for lib in "${libraries[@]}"; do
-        if [[ ! $lib =~ ^[a-zA-Z0-9_-]+$ ]]; then
-            printf 'Invalid library identifier: %s\n' "$lib" >&2
-            return 1
-        fi
-    done
     if [[ $RAPIDS_BUILD_TYPE == pull-request ]]; then
         CPP_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_cpp libcudf cudf --cuda "$RAPIDS_CUDA_VERSION")")
         PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_python cudf cudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
@@ -56,7 +49,7 @@ main() {
     trap 'exit 130' INT
     trap 'exit 143' TERM
 
-    local status=0 test_status
+    local status=0 test_status lib
     bash "${scripts_dir}/prepare-environments.sh" "${libraries[0]}"
     if ((${#libraries[@]} > 1)); then
         # A background function would share the coordinator's session. Keep the producer
