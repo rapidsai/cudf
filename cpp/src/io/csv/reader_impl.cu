@@ -49,7 +49,6 @@
 #include <cuda/stream>
 #include <thrust/count.h>
 #include <thrust/fill.h>
-#include <thrust/host_vector.h>
 
 #include <algorithm>
 #include <exception>
