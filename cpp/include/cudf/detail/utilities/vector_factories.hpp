@@ -29,7 +29,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /**
@@ -621,4 +621,4 @@ host_vector<T> make_pinned_vector(host_span<T const> v, cuda::stream_ref stream)
 
 }  // namespace detail
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
