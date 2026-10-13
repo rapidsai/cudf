@@ -881,6 +881,31 @@ TEST_F(OrcWriterTest, WriterTimezoneStatisticsAcrossDst)
   CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expected}), read_back.tbl->view());
 }
 
+TEST_F(OrcWriterTest, WriterTimezoneStatisticsNestedTimestamps)
+{
+  // A timestamp column nested in a list holds as many rows as the lists have elements, which is
+  // unrelated to the row count of the table and of the other columns
+  auto constexpr standard_time = 1421323200L;  // 2015-01-15T12:00:00Z
+  auto constexpr summer_time   = 1435752000L;  // 2015-07-01T12:00:00Z
+  auto const timestamps =
+    column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{standard_time, summer_time};
+  cudf::test::lists_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> const
+    nested_timestamps{{standard_time}, {summer_time, standard_time}};
+  table_view input({timestamps, nested_timestamps});
+
+  auto const buffer = write_orc_with_timezone(input, "America/New_York");
+
+  // Entry zero of the schema is the root struct that wraps the table, one and two are its columns,
+  // and three is the timestamp child of the list
+  auto const stats =
+    cudf::io::read_parsed_orc_statistics(cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}});
+  auto const nested_stats =
+    std::get<cudf::io::timestamp_statistics>(stats.file_stats[3].type_specific_stats);
+  EXPECT_EQ(*nested_stats.minimum_utc, (standard_time + new_york_offset) * 1000);
+  EXPECT_EQ(*nested_stats.maximum_utc, (summer_time + new_york_dst_offset) * 1000);
+}
+
 TEST_F(OrcWriterTest, WriterTimezoneInvalid)
 {
   auto const timestamps = column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{0, 1};

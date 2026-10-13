@@ -1289,7 +1289,9 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
  */
 struct wall_clock_columns {
   std::vector<rmm::device_uvector<int64_t>> data;  // shifted values, one per timestamp column
-  std::unique_ptr<table_device_view, std::function<void(table_device_view*)>> columns;
+  // Views of `data`, in the same order. Not a table, because a timestamp column nested in a list
+  // has as many rows as the list has elements, which differs from the table's row count.
+  rmm::device_uvector<column_device_view> columns;
   rmm::device_uvector<size_type> indices;  // index into `columns` per ORC column, or `absent`
 
   static constexpr size_type absent = -1;
@@ -1315,7 +1317,8 @@ wall_clock_columns make_wall_clock_columns(orc_table_view const& orc_table,
 
   auto host_indices = std::vector<size_type>(orc_table.num_columns(), wall_clock_columns::absent);
   auto data         = std::vector<rmm::device_uvector<int64_t>>{};
-  auto views        = std::vector<column_view>{};
+  auto views =
+    cudf::detail::make_empty_host_vector<column_device_view>(orc_table.num_columns(), stream);
 
   // Writing UTC leaves the input instants on the wall clock already
   if (timezone.transitions->num_rows() != 0) {
@@ -1348,19 +1351,22 @@ wall_clock_columns make_wall_clock_columns(orc_table_view const& orc_table,
                           return value + offset.count() * ticks_per_s;
                         });
 
+      auto const shifted_view = column_view{input.type(),
+                                            input.size(),
+                                            shifted.data(),
+                                            input.null_mask(),
+                                            input.null_count(),
+                                            input.offset()};
+      // Timestamps have no children, so the view owns no device memory of its own and can be
+      // copied into an array of its own
       host_indices[column.index()] = views.size();
-      views.emplace_back(input.type(),
-                         input.size(),
-                         shifted.data(),
-                         input.null_mask(),
-                         input.null_count(),
-                         input.offset());
+      views.push_back(*column_device_view::create(shifted_view, stream));
       data.emplace_back(std::move(shifted));
     }
   }
 
   return {std::move(data),
-          table_device_view::create(cudf::table_view{views}, stream),
+          cudf::detail::make_device_uvector_async(views, stream, mr),
           cudf::detail::make_device_uvector_async(host_indices, stream, mr)};
 }
 
@@ -1370,7 +1376,7 @@ void set_stat_desc_leaf_cols(device_span<orc_column_device_view const> columns,
                              cuda::stream_ref stream)
 {
   auto const indices         = device_span<size_type const>{wall_clock.indices};
-  auto const wall_clock_cols = *wall_clock.columns;
+  auto const wall_clock_cols = device_span<column_device_view const>{wall_clock.columns};
   thrust::for_each(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    cuda::counting_iterator<size_t>{0},
                    cuda::counting_iterator{stat_desc.size()},
@@ -1379,7 +1385,7 @@ void set_stat_desc_leaf_cols(device_span<orc_column_device_view const> columns,
                      stat_desc[idx].leaf_column =
                        (wall_clock_idx == wall_clock_columns::absent)
                          ? static_cast<column_device_view const*>(&columns[idx])
-                         : &wall_clock_cols.column(wall_clock_idx);
+                         : &wall_clock_cols[wall_clock_idx];
                    });
 }
 
