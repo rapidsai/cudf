@@ -437,6 +437,12 @@ void persisted_statistics::persist(uint64_t num_table_rows,
     }
   }
 
+  if (num_table_rows > 0) {
+    if (string_pool.has_value()) { string_pools.reserve(string_pools.size() + 1); }
+    stripe_stat_chunks.reserve(stripe_stat_chunks.size() + 1);
+    stripe_stat_merge.reserve(stripe_stat_merge.size() + 1);
+  }
+
   col_types = std::move(intermediate_stats.col_types);
   num_rows += num_table_rows;
   if (num_table_rows == 0) { return; }
