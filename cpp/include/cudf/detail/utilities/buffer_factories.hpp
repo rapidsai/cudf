@@ -14,9 +14,8 @@
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
-
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/buffer>
 #include <cuda/stream>
@@ -41,9 +40,9 @@ namespace cudf::detail {
 template <typename T>
 cuda::device_buffer<T> make_zeroed_device_buffer_async(std::size_t size,
                                                        cuda::stream_ref stream,
-                                                       rmm::device_async_resource_ref mr)
+                                                       cudf::memory_resources mr)
 {
-  cuda::device_buffer<T> ret(stream, mr, size, cuda::no_init);
+  cuda::device_buffer<T> ret(stream, mr.get_output_mr(), size, cuda::no_init);
   if (size != 0) { CUDF_CUDA_TRY(cudaMemsetAsync(ret.data(), 0, size * sizeof(T), stream.get())); }
   return ret;
 }
@@ -62,9 +61,9 @@ cuda::device_buffer<T> make_zeroed_device_buffer_async(std::size_t size,
 template <typename T>
 cuda::device_buffer<T> make_zeroed_device_buffer(std::size_t size,
                                                  cuda::stream_ref stream,
-                                                 rmm::device_async_resource_ref mr)
+                                                 cudf::memory_resources mr)
 {
-  cuda::device_buffer<T> ret(stream, mr, size, cuda::no_init);
+  cuda::device_buffer<T> ret(stream, mr.get_output_mr(), size, cuda::no_init);
   if (size != 0) { CUDF_CUDA_TRY(cudaMemsetAsync(ret.data(), 0, size * sizeof(T), stream.get())); }
   cudf::detail::sync_stream(stream);
   return ret;
@@ -85,10 +84,11 @@ cuda::device_buffer<T> make_zeroed_device_buffer(std::size_t size,
 template <typename T>
 cuda::device_buffer<std::remove_cv_t<T>> make_device_buffer_async(host_span<T> source_data,
                                                                   cuda::stream_ref stream,
-                                                                  rmm::device_async_resource_ref mr)
+                                                                  cudf::memory_resources mr)
 {
   using value_type = std::remove_cv_t<T>;
-  cuda::device_buffer<value_type> ret(stream, mr, source_data.size(), cuda::no_init);
+  cuda::device_buffer<value_type> ret(
+    stream, mr.get_output_mr(), source_data.size(), cuda::no_init);
   CUDF_CUDA_TRY(cudf::detail::memcpy_async(
     ret.data(), source_data.data(), source_data.size() * sizeof(value_type), stream));
   return ret;
@@ -108,10 +108,11 @@ cuda::device_buffer<std::remove_cv_t<T>> make_device_buffer_async(host_span<T> s
  */
 template <typename Container>
 cuda::device_buffer<typename Container::value_type> make_device_buffer_async(
-  Container const& c, cuda::stream_ref stream, rmm::device_async_resource_ref mr)
+  Container const& c, cuda::stream_ref stream, cudf::memory_resources mr)
   requires(std::is_convertible_v<Container, host_span<typename Container::value_type const>>)
 {
-  return make_device_buffer_async(host_span<typename Container::value_type const>{c}, stream, mr);
+  return make_device_buffer_async(
+    host_span<typename Container::value_type const>{c}, stream, mr.get_output_mr());
 }
 
 /**
@@ -129,9 +130,9 @@ cuda::device_buffer<typename Container::value_type> make_device_buffer_async(
 template <typename T, typename Allocator>
 cuda::device_buffer<T> make_device_buffer_async(std::vector<T, Allocator> const& source_data,
                                                 cuda::stream_ref stream,
-                                                rmm::device_async_resource_ref mr)
+                                                cudf::memory_resources mr)
 {
-  return make_device_buffer_async(host_span<T const>{source_data}, stream, mr);
+  return make_device_buffer_async(host_span<T const>{source_data}, stream, mr.get_output_mr());
 }
 
 /**
@@ -149,9 +150,9 @@ cuda::device_buffer<T> make_device_buffer_async(std::vector<T, Allocator> const&
 template <typename T>
 cuda::device_buffer<T> make_device_buffer(host_span<T const> source_data,
                                           cuda::stream_ref stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources mr)
 {
-  auto ret = make_device_buffer_async(source_data, stream, mr);
+  auto ret = make_device_buffer_async(source_data, stream, mr.get_output_mr());
   cudf::detail::sync_stream(stream);
   return ret;
 }
@@ -169,11 +170,13 @@ cuda::device_buffer<T> make_device_buffer(host_span<T const> source_data,
  * @return A device_buffer containing the copied data
  */
 template <typename Container>
-cuda::device_buffer<typename Container::value_type> make_device_buffer(
-  Container const& c, cuda::stream_ref stream, rmm::device_async_resource_ref mr)
+cuda::device_buffer<typename Container::value_type> make_device_buffer(Container const& c,
+                                                                       cuda::stream_ref stream,
+                                                                       cudf::memory_resources mr)
   requires(std::is_convertible_v<Container, host_span<typename Container::value_type const>>)
 {
-  return make_device_buffer(host_span<typename Container::value_type const>{c}, stream, mr);
+  return make_device_buffer(
+    host_span<typename Container::value_type const>{c}, stream, mr.get_output_mr());
 }
 
 /**
@@ -191,9 +194,9 @@ cuda::device_buffer<typename Container::value_type> make_device_buffer(
 template <typename T, typename Allocator>
 cuda::device_buffer<T> make_device_buffer(std::vector<T, Allocator> const& source_data,
                                           cuda::stream_ref stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources mr)
 {
-  return make_device_buffer(host_span<T const>{source_data}, stream, mr);
+  return make_device_buffer(host_span<T const>{source_data}, stream, mr.get_output_mr());
 }
 
 }  // namespace cudf::detail
