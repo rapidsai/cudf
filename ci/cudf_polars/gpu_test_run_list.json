@@ -11,7 +11,9 @@
           "dependencies": null,
           "producer": null,
           "python": "3.14.8",
+          "report_sha256": "f5d8bcf02389183672b18447b05b611208e46574aad63a9caa01bb8b0c08199b",
           "run": "in-memory.json",
+          "source_artifact": "test-results/gpu-selection-baseline/reports/in-memory.json",
           "upstream_sha": "1bd8ec12f42d40fcec62badf32ef2177d2377d8d"
         }
       ],
@@ -6327,7 +6329,9 @@
           "dependencies": null,
           "producer": null,
           "python": "3.14.8",
+          "report_sha256": "6f0487b665f82af120c6f195555c13836e70ac95fe9588079c45c832500267e9",
           "run": "spmd-default.json",
+          "source_artifact": "test-results/gpu-selection-baseline/reports/spmd-default.json",
           "upstream_sha": "1bd8ec12f42d40fcec62badf32ef2177d2377d8d"
         }
       ],
@@ -12630,7 +12634,9 @@
           "dependencies": null,
           "producer": null,
           "python": "3.14.8",
+          "report_sha256": "359a0eeb4a55508213bf1da8f163f62df7b57958e7bab882d3991bbef0005d1b",
           "run": "spmd-small.json",
+          "source_artifact": "test-results/gpu-selection-baseline/reports/spmd-small.json",
           "upstream_sha": "1bd8ec12f42d40fcec62badf32ef2177d2377d8d"
         }
       ],

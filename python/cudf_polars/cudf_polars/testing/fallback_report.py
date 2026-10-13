@@ -108,6 +108,9 @@ class FallbackReport:
             text=True,
             check=True,
         ).stdout.strip()
+        run_id = os.environ.get("GITHUB_RUN_ID")
+        repository = os.environ.get("GITHUB_REPOSITORY")
+        server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
         report = {
             "polars_version": polars.__version__,
             "upstream_sha": upstream_sha,
@@ -116,6 +119,12 @@ class FallbackReport:
             ),
             "producer": os.environ.get("CUDF_POLARS_REPORT_PRODUCER"),
             "configuration": os.environ.get("CUDF_POLARS_REPORT_CONFIGURATION"),
+            "workflow_run": (
+                f"{server}/{repository}/actions/runs/{run_id}"
+                if repository and run_id
+                else None
+            ),
+            "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
             **collection,
             "engine": config.getoption("--inject-gpu-engine"),
             "blocksize": config.getoption("--inject-gpu-engine-blocksize"),

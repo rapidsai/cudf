@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -82,7 +83,8 @@ def build_report(paths: list[Path]) -> dict[str, Any]:
     unreadable = []
     for path in paths:
         try:
-            run = json.loads(path.read_text())
+            raw_report = path.read_bytes()
+            run = json.loads(raw_report)
             engine = run["engine"]
             if engine == "spmd":
                 engine += f"-{run['blocksize']}"
@@ -106,7 +108,15 @@ def build_report(paths: list[Path]) -> dict[str, Any]:
             ]
             validate_report(run, run_tests)
             tests.extend(run_tests)
-            runs.append({**run, "engine": engine, "run": path.name})
+            runs.append(
+                {
+                    **run,
+                    "engine": engine,
+                    "run": path.name,
+                    "source_artifact": path.as_posix(),
+                    "report_sha256": hashlib.sha256(raw_report).hexdigest(),
+                }
+            )
         except (OSError, ValueError, KeyError, TypeError) as error:
             unreadable.append({"run": path.name, "error": str(error)})
 
@@ -208,6 +218,7 @@ def audit_report(
             if (
                 not isinstance(run["collected_nodeids"], list)
                 or not isinstance(run["collection_nodeids"], list)
+                or not isinstance(run.get("collection_skips"), list)
                 or not isinstance(run["polars_version"], str)
                 or not run["polars_version"]
                 or any(
@@ -230,6 +241,9 @@ def audit_report(
                 )
                 or not all(
                     isinstance(node, str) for node in run["collection_nodeids"]
+                )
+                or not all(
+                    isinstance(node, str) for node in run["collection_skips"]
                 )
                 or not isinstance(run["num_shards"], int)
                 or run["num_shards"] < 1
@@ -262,6 +276,15 @@ def audit_report(
         ids = [run["shard_id"] for run in shards]
         if len(counts) != 1 or sorted(ids) != list(range(next(iter(counts)))):
             errors.append(f"Missing or duplicated shards: {cohort}")
+        if len({tuple(run["collection_nodeids"]) for run in shards}) != 1:
+            errors.append(f"Inconsistent collection across shards: {cohort}")
+        if (
+            len({tuple(run.get("collection_skips", [])) for run in shards})
+            != 1
+        ):
+            errors.append(
+                f"Inconsistent collection skips across shards: {cohort}"
+            )
     validated_runs = [run for shards in cohorts.values() for run in shards]
     if len({run["cudf_sha"] for run in validated_runs}) != 1:
         errors.append("Discovery reports span multiple cuDF revisions")
@@ -370,13 +393,19 @@ def audit_report(
                         "cudf_sha",
                         "upstream_sha",
                         "run",
+                        "source_artifact",
                         "producer",
                         "configuration",
+                        "workflow_run",
+                        "run_attempt",
+                        "report_sha256",
                         "python",
                         "arch",
                         "cuda",
                         "dependencies",
                     )
+                    if name not in {"workflow_run", "run_attempt"}
+                    or run.get(name) is not None
                 }
                 for run in sorted(key_runs, key=lambda run: run["run"])
             ],

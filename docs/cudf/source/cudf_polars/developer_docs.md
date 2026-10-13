@@ -579,6 +579,9 @@ nodes missing from the lists, lost GPU execution, stale IDs, or incomplete
 evidence. Skips and unavailable optional modules are not removal evidence.
 The summary publishes an exact diff and candidate lists before the audit job
 enforces the result, so failed audits retain their diagnostics.
+Each candidate entry records the source report path and SHA-256. CI reports
+also record their workflow run so a reviewed update can be traced to its
+telemetry artifact.
 
 To regenerate candidates from the downloaded nightly diagnostic artifact:
 
