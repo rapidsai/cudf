@@ -18,6 +18,7 @@ from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import HConcat, HStack, Projection, Select
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.engine.options import StreamingOptions
+from cudf_polars.streaming.actor_graph.core import evaluate_logical_plan
 from cudf_polars.streaming.base import StatsCollector
 from cudf_polars.streaming.parallel import lower_ir_graph
 from cudf_polars.streaming.select import _inline_hstack_false, _sub_expr
@@ -198,6 +199,16 @@ def test_select_fused_reductions_keep_unaligned_hconcat_unsafe(
 
     assert hconcats
     assert not any(node.streaming_safe for node in hconcats)
+
+    metadata_collector = evaluate_logical_plan(
+        ir, ConfigOptions.from_polars_engine(engine), collect_metadata=True
+    )[1]
+    assert metadata_collector is not None
+    assert len(metadata_collector) == 1
+    partitioning = metadata_collector[0].partitioning
+    assert partitioning is None or (
+        partitioning.inter_rank is None and partitioning.local is None
+    )
 
 
 def test_select_with_cse_no_agg(df, engine):
