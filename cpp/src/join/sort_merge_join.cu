@@ -878,7 +878,7 @@ sort_merge_join::left_join(table_view const& left,
       cudf::detail::copy_if_async(cuda::counting_iterator<size_type>{0},
                                   cuda::counting_iterator<size_type>{left.num_rows()},
                                   cuda::counting_iterator<size_type>{0},
-                                  null_left_indices.dbeginata(),
+                                  null_left_indices.begin(),
                                   is_row_null{validity_mask},
                                   stream);
 
@@ -936,7 +936,7 @@ std::unique_ptr<cudf::join_match_context> sort_merge_join::inner_join_match_cont
         thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                         matches_per_row->begin(),
                         matches_per_row->end(),
-                        mapping.data(),
+                        mapping.begin(),
                         unprocessed_matches_per_row.begin());
         return std::make_unique<sort_merge_join_match_context>(
           left,
