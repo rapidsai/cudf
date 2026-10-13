@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-from typing import TYPE_CHECKING, Concatenate, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, Concatenate, TypeVar
 
 import nvtx
 
@@ -26,10 +26,9 @@ if TYPE_CHECKING:
 
 
 IRType = TypeVar("IRType", bound="ir.IR")
-P = ParamSpec("P")
 
 
-def log_do_evaluate(
+def log_do_evaluate[IRType: ir.IR, **P](
     func: Callable[Concatenate[type[IRType], P], cudf_polars.containers.DataFrame],
 ) -> Callable[Concatenate[type[IRType], P], cudf_polars.containers.DataFrame]:
     """Emit a Quent lifecycle around an ``IR.do_evaluate`` method."""
