@@ -190,10 +190,13 @@ bool shared_memory_aggregate(size_type num_rows,
   auto const agg_storage_size =
     static_cast<size_type>(shmem_size - 2 * sizeof(size_type) * output_values.num_columns());
 
+  // The attribute is shared by all launches of the kernel on the device, including those from
+  // concurrent `aggregate()` calls, so always raise it to the device maximum rather than to this
+  // launch's size: a smaller value set by another caller could otherwise fail this launch.
   if (shmem_size > 48 * 1024) {
     CUDF_CUDA_TRY(cudaFuncSetAttribute(streaming_shmem_aggs_kernel,
                                        cudaFuncAttributeMaxDynamicSharedMemorySize,
-                                       static_cast<int>(shmem_size)));
+                                       static_cast<int>(max_shmem_per_block)));
   }
 
   int max_active_blocks{};
