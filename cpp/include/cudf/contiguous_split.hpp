@@ -299,7 +299,10 @@ enum class pack_region_kind {
 };
 
 /**
- * @brief Read-only description passed to a per-region codec selector.
+ * @brief One physical buffer of a column in the packed payload.
+ *
+ * A column has a region for each of its data, validity, offsets and characters buffers, and each
+ * region is compressed independently with its own codec.
  */
 struct pack_region_info {
   std::size_t region_index;  ///< Stable index within this prepared pack operation
@@ -531,7 +534,8 @@ struct pack_result {
  *
  * @param plan Prepared pack plan
  * @param destination Caller-owned output span
- * @param mr Memory resources used for temporary allocations, including the staging buffers
+ * @param mr Memory resources for allocations freed before the call returns, including the staging
+ *           buffers; allocations that live as long as the plan use the resources given to it
  * @return Host metadata and the number of payload bytes written
  */
 pack_result pack_into(pack_plan const& plan,
