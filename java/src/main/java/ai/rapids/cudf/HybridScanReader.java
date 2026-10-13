@@ -297,6 +297,10 @@ public class HybridScanReader implements AutoCloseable {
       return new DictionaryByteRange[0];
     }
     // Layout: [off0, size0, extent0, off1, size1, extent1, ...]
+    if (packed.length % 3 != 0) {
+      throw new IllegalStateException(
+          "Expected dictionary page ranges packed in threes, got " + packed.length + " longs");
+    }
     int n = packed.length / 3;
     DictionaryByteRange.Extent[] extents = DictionaryByteRange.Extent.values();
     DictionaryByteRange[] out = new DictionaryByteRange[n];
@@ -332,13 +336,13 @@ public class HybridScanReader implements AutoCloseable {
     if (pageData == null) {
       throw new IllegalArgumentException("pageData must not be null");
     }
-    long[] addrs = new long[pageData.length];
-    long[] lens = new long[pageData.length];
-    for (int i = 0; i < pageData.length; i++) {
-      addrs[i] = pageData[i].getAddress();
-      lens[i] = pageData[i].getLength();
+    try {
+      return dictionaryPageLengths(bufferAddrs(pageData), bufferLens(pageData));
+    } finally {
+      synchronized (pageData) {
+        // The monitor operation is a Java 8 reachability fence.
+      }
     }
-    return dictionaryPageLengths(addrs, lens);
   }
 
   // TODO: add filterRowGroupsWithBloomFilters(int[] rowGroups) once the Java Parquet
@@ -731,7 +735,7 @@ public class HybridScanReader implements AutoCloseable {
     }
   }
 
-  private static long[] bufferAddrs(DeviceMemoryBuffer[] buffers) {
+  private static long[] bufferAddrs(MemoryBuffer[] buffers) {
     if (buffers == null) {
       throw new IllegalArgumentException("buffers must not be null");
     }
@@ -745,7 +749,7 @@ public class HybridScanReader implements AutoCloseable {
     return addrs;
   }
 
-  private static long[] bufferLens(DeviceMemoryBuffer[] buffers) {
+  private static long[] bufferLens(MemoryBuffer[] buffers) {
     if (buffers == null) {
       throw new IllegalArgumentException("buffers must not be null");
     }

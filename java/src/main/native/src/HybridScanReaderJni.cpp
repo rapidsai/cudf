@@ -220,8 +220,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_HybridScanReader_dictionaryPage
 }
 
 // Like dictionaryPagesByteRanges, but also returns a range for a column chunk whose footer does not
-// pin its dictionary page down exactly. Each range is packed as three longs [offset, size, extent],
-// where extent mirrors DictionaryByteRange.Extent.ordinal().
+// pin its dictionary page down exactly. Each range is packed as three longs [offset, size, extent].
 JNIEXPORT jlongArray JNICALL
 Java_ai_rapids_cudf_HybridScanReader_dictionaryPagesByteRangesIncludeUnbounded(
   JNIEnv* env, jclass, jlong handle, jintArray j_row_groups)
@@ -235,19 +234,7 @@ Java_ai_rapids_cudf_HybridScanReader_dictionaryPagesByteRangesIncludeUnbounded(
     auto holder   = make_row_group_span(env, j_row_groups);
     auto ranges   = wrapper->reader->dictionary_pages_byte_ranges_include_unbounded(holder.span(),
                                                                                   wrapper->options);
-    auto result   = env->NewLongArray(static_cast<jsize>(ranges.size() * 3));
-    if (result == nullptr) { return nullptr; }
-    std::vector<jlong> data;
-    data.reserve(ranges.size() * 3);
-    for (auto const& r : ranges) {
-      data.push_back(static_cast<jlong>(r.byte_range.offset()));
-      data.push_back(static_cast<jlong>(r.byte_range.size()));
-      data.push_back(static_cast<jlong>(r.extent));
-    }
-    if (not data.empty()) {
-      env->SetLongArrayRegion(result, 0, static_cast<jsize>(data.size()), data.data());
-    }
-    return result;
+    return ranges_to_jlong_array(env, ranges);
   }
   JNI_CATCH(env, nullptr);
 }

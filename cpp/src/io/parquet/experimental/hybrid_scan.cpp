@@ -18,7 +18,7 @@
 
 namespace cudf::io::parquet::experimental {
 
-std::optional<int64_t> dictionary_page_length(cudf::host_span<uint8_t const> page_bytes)
+std::optional<int64_t> dictionary_page_length(std::span<uint8_t const> page_bytes)
 {
   auto header = PageHeader{};
   auto reader = parquet::detail::CompactProtocolReader{page_bytes.data(), page_bytes.size()};
@@ -30,6 +30,8 @@ std::optional<int64_t> dictionary_page_length(cudf::host_span<uint8_t const> pag
   } catch (std::exception const&) {
     return std::nullopt;
   }
+  // A header cut off by the end of what was read does not throw, it only sets the overread flag.
+  if (reader.overread()) { return std::nullopt; }
 
   // A chunk that claims dictionary encoding may have been written without a dictionary page, in
   // which case these bytes are the chunk's first data page.
@@ -37,8 +39,7 @@ std::optional<int64_t> dictionary_page_length(cudf::host_span<uint8_t const> pag
     return std::nullopt;
   }
 
-  // A header cut off by the end of what was read stops parsing without complaint, and a page longer
-  // than what was read cannot be pruned with either way.
+  // A page longer than what was read cannot be pruned with.
   auto const page_length = static_cast<int64_t>(reader.bytecount()) + header.compressed_page_size;
   if (std::cmp_greater(page_length, page_bytes.size())) { return std::nullopt; }
 

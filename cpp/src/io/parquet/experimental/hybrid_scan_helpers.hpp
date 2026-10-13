@@ -82,17 +82,14 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @brief Implements `dictionary_pages_byte_ranges` and
    *        `dictionary_pages_byte_ranges_include_unbounded`
    *
-   * @tparam include_unbounded Whether to also return `upper_bound_if_present` ranges
+   * @param include_unbounded Whether to also return `upper_bound_if_present` ranges
    */
-  template <bool include_unbounded>
-  [[nodiscard]] std::pair<std::vector<std::conditional_t<include_unbounded,
-                                                         dictionary_byte_range,
-                                                         cudf::io::text::byte_range_info>>,
-                          std::vector<cudf::size_type>>
+  [[nodiscard]] std::pair<std::vector<dictionary_byte_range>, std::vector<cudf::size_type>>
   dictionary_pages_byte_ranges_impl(std::span<std::vector<size_type> const> row_group_indices,
                                     std::span<data_type const> output_dtypes,
                                     std::span<cudf::size_type const> output_column_schemas,
-                                    std::reference_wrapper<ast::expression const> filter);
+                                    std::reference_wrapper<ast::expression const> filter,
+                                    bool include_unbounded);
 
  public:
   /**

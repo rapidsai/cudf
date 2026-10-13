@@ -96,15 +96,12 @@ void decode_dictionary_page_headers(
         // dictionary, reading past the end of compressed data or pruning with data values, so reset
         // the chunk to the state an empty span leaves it in.
         auto const src_col_schema = page.src_col_schema;
-        page                      = PageInfo{};
-        page.chunk_idx            = static_cast<int32_t>(chunk_idx);
-        page.src_col_schema       = src_col_schema;
-        page.skipped_values       = -1;
-        page.is_compressed        = true;
-        page.kernel_mask          = parquet::detail::decode_kernel_mask::NONE;
-        chunk.compressed_data     = nullptr;
-        chunk.compressed_size     = 0;
-        chunk.num_dict_pages      = 0;
+        parquet::detail::reset_page_info(page);
+        page.chunk_idx        = static_cast<int32_t>(chunk_idx);
+        page.src_col_schema   = src_col_schema;
+        chunk.compressed_data = nullptr;
+        chunk.compressed_size = 0;
+        chunk.num_dict_pages  = 0;
       }
     });
 

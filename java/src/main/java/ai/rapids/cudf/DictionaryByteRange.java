@@ -16,7 +16,10 @@ import java.util.Objects;
  */
 @Experimental
 public final class DictionaryByteRange {
-  /** How closely a range describes the dictionary page it points at. */
+  /**
+   * How closely a range describes the dictionary page it points at. The order must match the
+   * native packing in {@code ranges_to_jlong_array}.
+   */
   public enum Extent {
     /** The range is exactly the dictionary page. */
     EXACT,

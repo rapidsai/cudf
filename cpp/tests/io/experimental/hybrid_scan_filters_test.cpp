@@ -2225,7 +2225,7 @@ std::vector<std::pair<int64_t, int64_t>> to_offsets_and_sizes(
   std::vector<cudf::io::text::byte_range_info> const& ranges)
 {
   auto result = std::vector<std::pair<int64_t, int64_t>>{};
-  std::transform(ranges.cbegin(), ranges.cend(), std::back_inserter(result), [](auto const& r) {
+  std::ranges::transform(ranges, std::back_inserter(result), [](auto const& r) {
     return std::pair{r.offset(), r.size()};
   });
   return result;
@@ -2311,13 +2311,11 @@ TEST_F(HybridScanFiltersTest, DictionaryPagesByteRangesIncludeUnboundedMatchesEx
       // Empty the upper-bound ranges in place, since each entry maps to a column chunk, and expect
       // no ranges at all when nothing is left
       auto bounded = std::vector<cudf::io::text::byte_range_info>{};
-      std::transform(
-        unbounded.cbegin(), unbounded.cend(), std::back_inserter(bounded), [](auto const& r) {
-          return r.extent == dictionary_page_extent::exact ? r.byte_range
-                                                           : cudf::io::text::byte_range_info{};
-        });
-      if (std::all_of(
-            bounded.cbegin(), bounded.cend(), [](auto const& r) { return r.size() == 0; })) {
+      std::ranges::transform(unbounded, std::back_inserter(bounded), [](auto const& r) {
+        return r.extent == dictionary_page_extent::exact ? r.byte_range
+                                                         : cudf::io::text::byte_range_info{};
+      });
+      if (std::ranges::all_of(bounded, [](auto const& r) { return r.size() == 0; })) {
         bounded.clear();
       }
 

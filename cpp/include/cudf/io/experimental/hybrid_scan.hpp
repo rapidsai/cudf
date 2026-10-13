@@ -98,8 +98,7 @@ struct dictionary_byte_range {
  * @return Length of the dictionary page, or `std::nullopt` if these bytes do not begin with a whole
  *         dictionary page, which is the case for a column chunk that has none to prune with
  */
-[[nodiscard]] std::optional<int64_t> dictionary_page_length(
-  cudf::host_span<uint8_t const> page_bytes);
+[[nodiscard]] std::optional<int64_t> dictionary_page_length(std::span<uint8_t const> page_bytes);
 
 /**
  * @brief Shareable, pre-parsed Parquet file metadata for the Hybrid Scan reader.
