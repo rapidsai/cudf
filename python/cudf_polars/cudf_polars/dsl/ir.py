@@ -33,9 +33,6 @@ from typing import (
     TYPE_CHECKING,
     Any,
     ClassVar,
-    ParamSpec,
-    TypeAlias,
-    TypeVar,
     assert_never,
     overload,
 )
@@ -97,9 +94,6 @@ if TYPE_CHECKING:
     from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
 
-    P = ParamSpec("P")
-    T = TypeVar("T")
-
 __all__ = [
     "IR",
     "Cache",
@@ -159,7 +153,7 @@ class IRExecutionContext:
     quent_ir_execution_state: QuentIRExecutionState | None = None
     tracer: ActorTracer | None = None
 
-    async def to_thread(
+    async def to_thread[**P, T](
         self, func: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs
     ) -> T:
         """
@@ -189,7 +183,23 @@ class IRExecutionContext:
         loop = asyncio.get_running_loop()
         ctx = contextvars.copy_context()
         func_call = functools.partial(ctx.run, func, *args, **kwargs)
-        return await loop.run_in_executor(self.py_executor, func_call)
+        future = loop.run_in_executor(self.py_executor, func_call)
+        try:
+            return await asyncio.shield(future)
+        except asyncio.CancelledError:
+            # Cancelling an asyncio future cannot stop running native work. Keep
+            # the caller's resource scopes alive until that work has finished.
+            while not future.done():
+                try:
+                    await asyncio.shield(future)
+                except asyncio.CancelledError:
+                    continue
+                except Exception:
+                    break
+            if not future.cancelled():
+                # Cancellation remains the caller's outcome even if cleanup fails.
+                future.exception()
+            raise
 
     @contextlib.contextmanager
     def stream_ordered_after(self, *dfs: DataFrame) -> Generator[Stream, None, None]:
@@ -2834,7 +2844,7 @@ def _strip_predicate_casts(node: expr.Expr) -> expr.Expr:
     return node.reconstruct([_strip_predicate_casts(child) for child in node.children])
 
 
-_ColumnKey: TypeAlias = tuple[plc_expr.TableReference, str]
+type _ColumnKey = tuple[plc_expr.TableReference, str]
 
 
 def _colref_comparisons(
