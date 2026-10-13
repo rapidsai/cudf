@@ -19,6 +19,7 @@
 #include <cudf/detail/timezone.cuh>
 #include <cudf/detail/timezone.hpp>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
+#include <cudf/detail/utilities/buffer_factories.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
@@ -1288,11 +1289,11 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
  * types are absent, and the statistics read them from the table itself.
  */
 struct wall_clock_columns {
-  std::vector<rmm::device_uvector<int64_t>> data;  // shifted values, one per timestamp column
+  std::vector<cuda::device_buffer<int64_t>> data;  // shifted values, one per timestamp column
   // Views of `data`, in the same order. Not a table, because a timestamp column nested in a list
   // has as many rows as the list has elements, which differs from the table's row count.
-  rmm::device_uvector<column_device_view> columns;
-  rmm::device_uvector<size_type> indices;  // index into `columns` per ORC column, or `absent`
+  cuda::device_buffer<column_device_view> columns;
+  cuda::device_buffer<size_type> indices;  // index into `columns` per ORC column, or `absent`
 
   static constexpr size_type absent = -1;
 };
@@ -1316,7 +1317,7 @@ wall_clock_columns make_wall_clock_columns(orc_table_view const& orc_table,
   auto const mr = cudf::get_current_device_resource_ref();
 
   auto host_indices = std::vector<size_type>(orc_table.num_columns(), wall_clock_columns::absent);
-  auto data         = std::vector<rmm::device_uvector<int64_t>>{};
+  auto data         = std::vector<cuda::device_buffer<int64_t>>{};
   auto views =
     cudf::detail::make_empty_host_vector<column_device_view>(orc_table.num_columns(), stream);
 
@@ -1329,14 +1330,15 @@ wall_clock_columns make_wall_clock_columns(orc_table_view const& orc_table,
 
       auto const& input = column.cudf_view();
       // The null mask is shared with the input, so the shifted values keep its row offset
-      auto shifted       = rmm::device_uvector<int64_t>(input.offset() + input.size(), stream, mr);
-      auto const d_input = column_device_view::create(input, stream);
+      auto shifted =
+        cuda::device_buffer<int64_t>(stream, mr, input.offset() + input.size(), cuda::no_init);
+      auto const d_input     = column_device_view::create(input, stream);
       auto const ticks_per_s = ticks_per_second[column.scale()];
 
       thrust::transform(rmm::exec_policy_nosync(stream, mr),
                         cuda::counting_iterator<size_type>{0},
                         cuda::counting_iterator{input.size()},
-                        shifted.begin() + input.offset(),
+                        shifted.data() + input.offset(),
                         [input = *d_input, transitions = *d_transitions, ticks_per_s] __device__(
                           size_type idx) -> int64_t {
                           if (not input.is_valid(idx)) { return 0; }
@@ -1366,8 +1368,8 @@ wall_clock_columns make_wall_clock_columns(orc_table_view const& orc_table,
   }
 
   return {std::move(data),
-          cudf::detail::make_device_uvector_async(views, stream, mr),
-          cudf::detail::make_device_uvector_async(host_indices, stream, mr)};
+          cudf::detail::make_device_buffer_async(views, stream, mr),
+          cudf::detail::make_device_buffer_async(host_indices, stream, mr)};
 }
 
 void set_stat_desc_leaf_cols(device_span<orc_column_device_view const> columns,
