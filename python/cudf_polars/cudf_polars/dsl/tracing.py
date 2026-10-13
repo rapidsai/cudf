@@ -38,7 +38,9 @@ def log_do_evaluate[IRType: ir.IR, **P](
         cls: type[IRType],
         *args: P.args,
         **kwargs: P.kwargs,
-    ) -> cudf_polars.containers.DataFrame:
+    ) -> (
+        cudf_polars.containers.DataFrame
+    ):  # pragma: no cover; requires cudf_polars_quent
         ir_execution_context: IRExecutionContext = kwargs["context"]  # type: ignore[assignment]
         if (
             quent_state := ir_execution_context.actor_bound_quent_ir_execution_state
