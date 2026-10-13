@@ -25,6 +25,7 @@ from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import (
     GroupBy,
+    HConcat,
     HStack,
     MapFunction,
     Projection,
@@ -47,6 +48,8 @@ from cudf_polars.streaming.actor_graph.utils import (
     _leading_order_keys,
     maybe_remap_partitioning,
 )
+from cudf_polars.streaming.base import StatsCollector
+from cudf_polars.streaming.parallel import lower_ir_graph
 from cudf_polars.utils.config import ConfigOptions
 from cudf_polars.utils.dtypes import make_empty_column
 from cudf_polars.utils.versions import POLARS_VERSION_LT_138
@@ -467,9 +470,17 @@ def test_decomposed_select_preserves_row_ordering_metadata(
     q = (
         pl.LazyFrame({"a": [3, 1, 2], "b": [6, 4, 5]})
         .sort("a")
-        .select("a", (pl.col("b") + 1).alias("b1"))
+        .select("a", (pl.col("b") - pl.col("b").mean()).alias("b_centered"))
     )
     ir = Translator(q._ldf.visit(), engine).translate_ir()
+    lowered = lower_ir_graph(
+        ir,
+        ConfigOptions.from_polars_engine(engine),
+        StatsCollector(),
+    ).lowered
+    hconcats = [node for node in traversal([lowered]) if isinstance(node, HConcat)]
+    assert hconcats
+    assert all(node.streaming_safe for node in hconcats)
 
     metadata_collector = evaluate_logical_plan(
         ir, ConfigOptions.from_polars_engine(engine), collect_metadata=True

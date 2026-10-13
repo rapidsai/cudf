@@ -171,6 +171,7 @@ def decompose_select(
         _partition_info[partial_input_ir] = pi
         partition_info.update(_partition_info)
         selections.append(partial_input_ir)
+    streaming_safe = hconcat_streaming_safe(hconcat_shapes)
 
     # Concatenate partial selections
     new_ir: Select | HConcat
@@ -178,13 +179,14 @@ def decompose_select(
     selections, partition_info = _fuse_simple_reductions(
         selections,
         partition_info,
+        streaming_safe=streaming_safe,
     )
     if len(selections) > 1:
         new_ir = HConcat(
             select_ir.schema,
             True,  # noqa: FBT003
             False,  # noqa: FBT003
-            hconcat_streaming_safe(hconcat_shapes),
+            streaming_safe,
             *selections,
         )
         partition_info[new_ir] = PartitionInfo(
@@ -199,6 +201,8 @@ def decompose_select(
 def _fuse_simple_reductions(
     decomposed_select_irs: Sequence[Select],
     pi: MutableMapping[IR, PartitionInfo],
+    *,
+    streaming_safe: bool,
 ) -> tuple[list[Select], MutableMapping[IR, PartitionInfo]]:
     """
     Fuse simple reductions that are part of the same Select node.
@@ -209,6 +213,9 @@ def _fuse_simple_reductions(
         The decomposed Select nodes.
     pi
         Partition information.
+    streaming_safe
+        Whether the original decomposed selections may be concatenated
+        partition-wise.
 
     Returns
     -------
@@ -360,7 +367,7 @@ def _fuse_simple_reductions(
             hconcat_schema,
             True,  # noqa: FBT003
             False,  # noqa: FBT003
-            True,  # noqa: FBT003
+            streaming_safe,
             *new_decomposed_select_irs,
         )
         count = max(pi[c].count for c in new_decomposed_select_irs)

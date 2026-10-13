@@ -257,8 +257,6 @@ def _decompose_agg_node(
         GPUEngine configuration options.
     names
         Generator of unique names for temporaries.
-    hconcat_shape
-        How this expression lines up with sibling expressions.
 
     Returns
     -------
@@ -468,6 +466,8 @@ def _decompose_expr_node(
     elif isinstance(expr, UnaryFunction) and expr.name == "drop_nulls":
         return expr, input_ir, partition_info, "unaligned"
     elif isinstance(expr, UnaryFunction) and expr.name == "unique":
+        if partition_count == 1 and not dynamic_planning:
+            return expr, input_ir, partition_info, "unaligned"
         expr, input_ir, partition_info = _decompose_unique(
             expr,
             input_ir,
@@ -495,11 +495,13 @@ def _decompose_expr_node(
         )
         (expr,) = columns
         return expr, input_ir, partition_info, "broadcast"
-    elif isinstance(expr, GroupedWindow) and _dynamic_planning_on(config_options):
-        expr, input_ir, partition_info = _decompose_grouped_window_node(
-            expr, input_ir, partition_info, config_options, names=names
-        )
-        return expr, input_ir, partition_info, "row_aligned"
+    elif isinstance(expr, GroupedWindow):
+        if dynamic_planning:
+            expr, input_ir, partition_info = _decompose_grouped_window_node(
+                expr, input_ir, partition_info, config_options, names=names
+            )
+            return expr, input_ir, partition_info, "row_aligned"
+        return expr, input_ir, partition_info, hconcat_shape
     elif partition_count == 1 and not dynamic_planning:
         # A single-partition expression can be evaluated as-is, but it may not
         # preserve row alignment with other decomposed expressions.

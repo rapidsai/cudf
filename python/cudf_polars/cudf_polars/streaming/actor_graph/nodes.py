@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+from functools import partial
 from typing import TYPE_CHECKING, Any, cast
 
 from cudf_streaming.channel_metadata import ChannelMetadata
@@ -54,7 +55,7 @@ if TYPE_CHECKING:
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
 
     type PartitioningCallback = Callable[
-        [IR, Sequence[ChannelMetadata], Context],
+        [Sequence[ChannelMetadata], Context],
         Partitioning | None,
     ]
 
@@ -177,7 +178,7 @@ async def default_node_multi(
             # find a non-duplicated child.
             duplicated = duplicated and md_child.duplicated
         if partitioning_callback is not None:
-            partitioning = partitioning_callback(ir, child_metadatas, context)
+            partitioning = partitioning_callback(child_metadatas, context)
         metadata = ChannelMetadata(
             local_count=local_count,
             partitioning=partitioning,
@@ -594,7 +595,9 @@ def _(
                 channels[ir].reserve_input_slot(),
                 tuple(channels[c].reserve_output_slot() for c in ir.children),
                 partitioning_callback=(
-                    build_hconcat_partitioning if isinstance(ir, HConcat) else None
+                    partial(build_hconcat_partitioning, ir)
+                    if isinstance(ir, HConcat)
+                    else None
                 ),
             )
         ]

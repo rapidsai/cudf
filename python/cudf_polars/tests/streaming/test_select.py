@@ -15,13 +15,17 @@ import pylibcudf as plc
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
-from cudf_polars.dsl.ir import HStack, Projection, Select
+from cudf_polars.dsl.ir import HConcat, HStack, Projection, Select
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.engine.options import StreamingOptions
+from cudf_polars.streaming.base import StatsCollector
+from cudf_polars.streaming.parallel import lower_ir_graph
 from cudf_polars.streaming.select import _inline_hstack_false, _sub_expr
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
 )
 from cudf_polars.testing.engine_utils import warns_on_spmd
+from cudf_polars.utils.config import ConfigOptions
 
 
 @pytest.fixture
@@ -155,6 +159,45 @@ def test_select_drop_nulls_aggs(engine, aggs):
     df = pl.LazyFrame({"a": [1, 2, None, 2, 3, None, 1, 4]})
     query = df.select(*aggs)
     assert_gpu_result_equal(query, engine=engine)
+
+
+def test_select_fused_reductions_keep_unaligned_hconcat_unsafe(
+    spmd_engine_factory,
+) -> None:
+    engine = spmd_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=2,
+            dynamic_planning=None,
+            fallback_mode="raise",
+            raise_on_fail=True,
+        )
+    )
+    df = pl.LazyFrame(
+        {
+            "a": [1, 2, 3, 1, 2, 3],
+            "b": [4, 5, 6, 4, 5, 6],
+            "c": [1, 2, 3, 4, 5, 6],
+        }
+    )
+    query = df.select(
+        pl.col("a").unique(),
+        pl.col("b").unique(),
+        pl.col("c").sum().alias("c_sum"),
+        pl.col("c").max().alias("c_max"),
+    )
+
+    ir = Translator(query._ldf.visit(), engine).translate_ir()
+    lowering = lower_ir_graph(
+        ir,
+        ConfigOptions.from_polars_engine(engine),
+        StatsCollector(),
+    )
+    hconcats = [
+        node for node in traversal([lowering.lowered]) if isinstance(node, HConcat)
+    ]
+
+    assert hconcats
+    assert not any(node.streaming_safe for node in hconcats)
 
 
 def test_select_with_cse_no_agg(df, engine):

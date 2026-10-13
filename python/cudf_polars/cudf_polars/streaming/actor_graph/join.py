@@ -2074,12 +2074,11 @@ def _use_pwise_join(
 
 
 def _forward_join_partitioning(
-    ir: IR,
+    ir: Join,
     child_metadatas: Sequence[ChannelMetadata],
     context: Context,
 ) -> Partitioning | None:
     """Build partitioning metadata for a partition-wise join."""
-    assert isinstance(ir, Join)
     child_index = 1 if ir.options[0] == "Right" else 0
     side: Literal["left", "right"] = "left" if child_index == 0 else "right"
     partitioning = maybe_remap_partitioning(
@@ -2130,7 +2129,7 @@ def _(
                     channels[left].reserve_output_slot(),
                     channels[right].reserve_output_slot(),
                 ),
-                partitioning_callback=_forward_join_partitioning,
+                partitioning_callback=partial(_forward_join_partitioning, ir),
             )
         ]
         return actors, channels

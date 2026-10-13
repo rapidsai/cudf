@@ -12,7 +12,6 @@ from cudf_streaming.channel_metadata import (
     Partitioning,
 )
 
-from cudf_polars.dsl.ir import HConcat
 from cudf_polars.streaming.actor_graph.utils import (
     maybe_remap_partitioning,
 )
@@ -23,7 +22,7 @@ if TYPE_CHECKING:
     from cudf_streaming.channel_metadata import ChannelMetadata
     from rapidsmpf.streaming.core.context import Context
 
-    from cudf_polars.dsl.ir import IR
+    from cudf_polars.dsl.ir import HConcat
     from cudf_polars.streaming.actor_graph.utils import PartitioningScheme
 
 
@@ -56,14 +55,11 @@ def _combine_hconcat_scheme(
 
 
 def build_hconcat_partitioning(
-    ir: IR,
+    ir: HConcat,
     child_metadatas: Sequence[ChannelMetadata],
     context: Context,
 ) -> Partitioning | None:
     """Build partitioning metadata for an internal, row-aligned HConcat."""
-    if not isinstance(ir, HConcat) or not ir.streaming_safe:
-        return None
-
     indices = [
         i for i, metadata in enumerate(child_metadatas) if not metadata.duplicated
     ]
