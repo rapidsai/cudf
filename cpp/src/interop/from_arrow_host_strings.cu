@@ -100,8 +100,8 @@ std::unique_ptr<column> from_arrow_stringview(
   }
 
   // copy variadic device pointers to device
-  auto d_variadic_ptrs =
-    cudf::detail::make_device_buffer_async(variadic_ptrs, stream, cudf::memory_resources{mr, mr});
+  auto d_variadic_ptrs = cudf::detail::make_device_buffer_async(
+    variadic_ptrs, stream, cudf::get_current_device_resource_ref());
   auto d_ptrs = d_variadic_ptrs.data();
   auto d_mask = reinterpret_cast<cudf::bitmask_type*>(mask->data());
 
