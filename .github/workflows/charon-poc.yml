@@ -64,6 +64,12 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
+      - name: Install the Teleport tunnel client
+        uses: teleport-actions/setup@10b5e9f760190f027a1e04e342178d8d6e7eae30 # v2
+        with:
+          version: auto
+          proxy: ext-nv-stg-apps.teleport.sh:443
+          cache: false
       - name: Verify the staging Charon tunnel
         run: |
           command -v tbot
@@ -85,6 +91,12 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
+      - name: Install the Teleport tunnel client
+        uses: teleport-actions/setup@10b5e9f760190f027a1e04e342178d8d6e7eae30 # v2
+        with:
+          version: auto
+          proxy: ext-nv-stg-apps.teleport.sh:443
+          cache: false
       - name: Start the staging Charon tunnel
         run: |
           command -v tbot
