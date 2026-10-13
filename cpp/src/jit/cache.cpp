@@ -10,14 +10,12 @@
 
 #include <cudf_cuda_embed.hpp>
 #include <jit/cache.hpp>
-#include <jit/helpers.hpp>
 #include <rtcx/rtcx.hpp>
 #include <runtime/context.hpp>
 
 #define XXH_INLINE_ALL
 #include <xxhash.h>
 
-#include <array>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -537,15 +535,16 @@ std::tuple<rtcx::library, rtcx::blob> link_library_uncached(
   return std::make_tuple(library, std::make_shared<rtcx::blob_t>(std::move(blob)));
 }
 
-kernel get_ast_runtime_kernel(std::string const& cuda_source)
+kernel get_lto_linked_kernel(std::string const& name,
+                             std::string const& source_identity,
+                             std::function<std::vector<rtcx::blob>()> const& get_fragments)
 {
   CUDF_FUNC_RANGE();
 
   auto& ctx               = cudf::get_context();
   auto& cache             = ctx.rtcx_cache();
   auto& device_properties = ctx.get_device_properties();
-  std::string const name  = "cudf/cpp/src/transform/jit/ast_runtime_driver.cuh";
-  auto spec               = std::format(R"***(cuLibraryASTRuntimeLTOv1
+  auto spec               = std::format(R"***(cuLibrarySourceLTOv1
 name={}
 binary_type=CUBIN
 cuda_runtime={}
@@ -565,19 +564,19 @@ bundle={}
   XXH3_INITSTATE(&state);
   XXH3_128bits_reset(&state);
   hash(&state, spec);
-  hash(&state, cuda_source);
+  hash(&state, source_identity);
   auto digest = XXH3_128bits_digest(&state);
   auto key    = rtcx::hash128{digest.high64, digest.low64};
 
-  // The source encodes types, nullability, operations, and error policies; the bundle covers
-  // both embedded fragments. Defer resolving their IR until the linked library actually misses.
+  // Resolving fragments before this lookup would compile IR even when a linked library is cached.
   auto compile = [&] {
-    auto udf = jit::get_ast_udf_lto_fragment(cuda_source);
-    std::array<char const*, 1> const expressions{"cudf_kernel_entry"};
-    auto driver = get_kernel_fragment(name, name, {}, {}, "cudf_kernel_entry", expressions);
-    std::array<rtcx::memory_fragment, 2> const fragments{
-      {{.data = driver->view(), .type = rtcx::binary_type::LTO_IR, .name = nullptr},
-       {.data = udf->view(), .type = rtcx::binary_type::LTO_IR, .name = nullptr}}};
+    auto blobs = get_fragments();
+    std::vector<rtcx::memory_fragment> fragments;
+    fragments.reserve(blobs.size());
+    for (auto const& blob : blobs) {
+      fragments.push_back(
+        {.data = blob->view(), .type = rtcx::binary_type::LTO_IR, .name = nullptr});
+    }
     return link_library_uncached(name.c_str(), {}, fragments);
   };
 

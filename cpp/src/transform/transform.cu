@@ -44,6 +44,29 @@
 namespace cudf {
 namespace {
 
+kernel get_ast_runtime_kernel(std::string const& cuda_source)
+{
+  std::string const driver_name = "cudf/cpp/src/transform/jit/ast_runtime_driver.cuh";
+  std::string const udf_name    = "cudf/cpp/src/transform/jit/ast_runtime_udf.cuh";
+  // Generated source covers the operation and typed access; the embedded bundle covers the
+  // static driver, UDF wrapper, and headers. Only an executable miss needs their IR fragments.
+  return get_lto_linked_kernel(driver_name, cuda_source, [&] {
+    std::array<char const*, 1> const include_names{"cudf/detail/operation_udf.cuh"};
+    std::array<char const*, 1> const include_headers{cuda_source.c_str()};
+    std::array<char const*, 1> const udf_expressions{"cudf_ast_runtime_entry"};
+    auto udf = get_kernel_fragment(udf_name,
+                                   udf_name,
+                                   include_names,
+                                   include_headers,
+                                   "cudf_ast_runtime_entry",
+                                   udf_expressions);
+    std::array<char const*, 1> const driver_expressions{"cudf_kernel_entry"};
+    auto driver = get_kernel_fragment(
+      driver_name, driver_name, {}, {}, "cudf_kernel_entry", driver_expressions);
+    return std::vector<rtcx::blob>{std::move(driver), std::move(udf)};
+  });
+}
+
 column_view as_column_view(scalar_column_view const& scalar) { return scalar.as_column_view(); }
 
 column_view as_column_view(column_view const& column) { return column; }
@@ -1548,6 +1571,8 @@ std::unique_ptr<table> transform_lto(std::span<uint8_t const> udf,
 }
 
 struct transform_program::impl {
+  enum class driver_kind { column_views, ast_descriptors };
+
   void validate(udf_source_type source_type,
                 std::span<transform_input const> actual_inputs,
                 std::span<transform_output const> actual_outputs,
@@ -1562,25 +1587,19 @@ struct transform_program::impl {
                  std::invalid_argument);
   }
 
-  impl(std::string const& udf,
-       udf_source_type source_type,
+  impl(udf_source_type source_type,
        null_aware is_null_aware,
        std::optional<void*> user_data,
        std::vector<transform_input_spec> inputs,
        std::vector<transform_output_spec> outputs,
-       std::optional<kernel> runtime_kernel = std::nullopt)
+       kernel compiled_kernel,
+       driver_kind driver)
     : reflection_{jit_transform::reflect(source_type, inputs, outputs)},
       source_type_{source_type},
       is_null_aware_{is_null_aware},
       user_data_{user_data},
-      ast_runtime_{runtime_kernel.has_value()},
-      kernel_{runtime_kernel ? std::move(*runtime_kernel)
-                             : jit_transform::get_kernel(is_null_aware_ == null_aware::YES,
-                                                         user_data_.has_value(),
-                                                         inputs,
-                                                         outputs,
-                                                         udf,
-                                                         source_type_)}
+      driver_{driver},
+      kernel_{std::move(compiled_kernel)}
   {
   }
 
@@ -1590,7 +1609,7 @@ struct transform_program::impl {
   null_aware is_null_aware_;
   std::optional<void*> user_data_;
   // Reflection checks the schema, but the retained kernel also determines the descriptor ABI.
-  bool ast_runtime_;
+  driver_kind driver_;
   kernel kernel_;
   std::vector<std::unique_ptr<column>> ast_scalar_columns_;
   std::optional<std::vector<std::optional<int32_t>>> ast_input_column_indices_;
@@ -1623,13 +1642,15 @@ transform_program::transform_program(std::string const& udf,
                                      std::span<transform_output_spec const> outputs)
 {
   CUDF_FUNC_RANGE();
-  impl_ =
-    std::make_unique<impl>(udf,
-                           source_type,
-                           is_null_aware,
-                           user_data,
-                           std::vector<transform_input_spec>{inputs.begin(), inputs.end()},
-                           std::vector<transform_output_spec>{outputs.begin(), outputs.end()});
+  impl_ = std::make_unique<impl>(
+    source_type,
+    is_null_aware,
+    user_data,
+    std::vector<transform_input_spec>{inputs.begin(), inputs.end()},
+    std::vector<transform_output_spec>{outputs.begin(), outputs.end()},
+    jit_transform::get_kernel(
+      is_null_aware == null_aware::YES, user_data.has_value(), inputs, outputs, udf, source_type),
+    impl::driver_kind::column_views);
 }
 
 transform_program::transform_program(
@@ -1641,18 +1662,26 @@ transform_program::transform_program(
   CUDF_FUNC_RANGE();
   auto args = detail::row_ir::ast_converter::compute_table(
     detail::row_ir::target::CUDA, expressions, table, {}, "compute_operation", stream, mr);
-  std::optional<kernel> runtime_kernel;
-  if (can_use_ast_lto(args.inputs, args.outputs)) {
-    runtime_kernel = get_ast_runtime_kernel(make_ast_runtime_source(args));
-  }
-  impl_ =
-    std::make_unique<impl>(args.udf,
-                           args.source_type,
-                           args.is_null_aware,
-                           args.user_data,
-                           jit_transform::make_input_specs(args.inputs),
-                           jit_transform::make_output_specs(args.outputs, args.string_offsets),
-                           std::move(runtime_kernel));
+  auto inputs          = jit_transform::make_input_specs(args.inputs);
+  auto outputs         = jit_transform::make_output_specs(args.outputs, args.string_offsets);
+  auto const driver    = can_use_ast_lto(args.inputs, args.outputs)
+                           ? impl::driver_kind::ast_descriptors
+                           : impl::driver_kind::column_views;
+  auto compiled_kernel = driver == impl::driver_kind::ast_descriptors
+                           ? get_ast_runtime_kernel(make_ast_runtime_source(args))
+                           : jit_transform::get_kernel(args.is_null_aware == null_aware::YES,
+                                                       args.user_data.has_value(),
+                                                       inputs,
+                                                       outputs,
+                                                       args.udf,
+                                                       args.source_type);
+  impl_                = std::make_unique<impl>(args.source_type,
+                                 args.is_null_aware,
+                                 args.user_data,
+                                 std::move(inputs),
+                                 std::move(outputs),
+                                 std::move(compiled_kernel),
+                                 driver);
   CUDF_EXPECTS(args.inputs.size() == args.input_column_indices.size(),
                "AST transform input metadata size mismatch");
   for (auto i = std::size_t{0}; i < args.inputs.size(); ++i) {
@@ -1689,7 +1718,7 @@ std::unique_ptr<table> transform_program::run(std::span<transform_input const> i
   impl_->validate(impl_->source_type_, inputs, outputs, string_offsets);
   perform_checks(
     impl_->source_type_, impl_->is_null_aware_, row_size, inputs, outputs, string_offsets);
-  if (impl_->ast_runtime_) {
+  if (impl_->driver_ == impl::driver_kind::ast_descriptors) {
     return execute_ast_runtime(
       impl_->kernel_, impl_->is_null_aware_, inputs, outputs, row_size, stream, mr);
   }

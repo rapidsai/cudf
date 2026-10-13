@@ -4,6 +4,7 @@
  */
 
 #include <cudf/errc.hpp>
+#include <cudf/utilities/bit.hpp>
 
 #include <transform/jit/ast_runtime_descriptor.hpp>
 
@@ -31,7 +32,7 @@ extern "C" __global__ void cudf_kernel_entry(
   auto thread_error      = cudf::errc::SUCCESS;
   for (auto row = start; row < padded_rows; row += stride) {
     auto const active =
-      row < row_size && (stencil == nullptr || (stencil[row / 32] & (1u << (row % 32))));
+      row < row_size && cudf::bit_value_or(stencil, static_cast<cudf::size_type>(row), true);
     auto const active_mask = __ballot_sync(0xffffffffu, active);
     if (!active) { continue; }
     auto const error = cudf::jit::ast_runtime::transform_row(

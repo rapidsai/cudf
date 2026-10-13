@@ -10,6 +10,8 @@
 
 #include <rtcx/rtcx.hpp>
 
+#include <functional>
+
 namespace CUDF_EXPORT cudf {
 
 struct [[nodiscard]] jit_bundle_t {
@@ -113,19 +115,22 @@ rtcx::blob get_kernel_fragment(std::string const& name,
  * @param name Debug name for the kernel (used for caching and logging)
  * @param file_fragments Paths of the fragments to link together to form the kernel
  * @param memory_fragments Memory fragments to link
- * @param extra_options Additional linking options
  */
 kernel get_lto_linked_kernel(std::string const& name,
                              std::span<rtcx::file_fragment const> file_fragments,
                              std::span<rtcx::memory_fragment const> memory_fragments);
 
 /**
- * @brief Gets the runtime-descriptor AST kernel from its generated operation source.
+ * @brief Gets an LTO-linked kernel without resolving its fragments on an executable-cache hit.
  *
- * Source and embedded-bundle identity allow a linked-kernel hit without resolving its LTO
- * fragments. Fragment compilation and linking use the same context cache on a miss.
- * @param cuda_source Generated operation and typed column-access source
+ * The source identity must cover every generated fragment; the embedded bundle covers static
+ * sources and headers. The supplier's owning blobs remain alive until linking completes.
+ * @param name Debug and cache identity for the linked kernel
+ * @param source_identity Complete identity of generated fragment sources
+ * @param get_fragments Supplier of LTO IR blobs, invoked only on an executable-cache miss
  */
-kernel get_ast_runtime_kernel(std::string const& cuda_source);
+kernel get_lto_linked_kernel(std::string const& name,
+                             std::string const& source_identity,
+                             std::function<std::vector<rtcx::blob>()> const& get_fragments);
 
 }  // namespace CUDF_EXPORT cudf

@@ -5,11 +5,15 @@
 
 #include <cudf/detail/row_ir/opcode.hpp>
 #include <cudf/errc.hpp>
+#include <cudf/utilities/bit.hpp>
 
 #include <cuda/std/optional>
 
+#include <jit/sync.cuh>
 #include <transform/jit/ast_runtime_descriptor.hpp>
 
+// Keep generated operations outside the reusable precompiled-header prefix.
+// https://docs.nvidia.com/cuda/archive/12.9.0/nvrtc/index.html#determining-the-header-stop-point
 #pragma nv_hdrstop
 
 namespace cudf::jit::ast_runtime {
@@ -19,9 +23,7 @@ __device__ auto load(input_descriptor const& column, cuda::std::int32_t row)
 {
   auto const index = column.offset + (column.scalar ? 0 : row);
   if constexpr (Nullable) {
-    if (column.null_mask != nullptr && !(column.null_mask[index / 32] & (1u << (index % 32)))) {
-      return cuda::std::optional<T>{};
-    }
+    if (!cudf::bit_value_or(column.null_mask, index, true)) { return cuda::std::optional<T>{}; }
     return cuda::std::optional<T>{static_cast<T const*>(column.data)[index]};
   } else {
     return static_cast<T const*>(column.data)[index];
@@ -43,11 +45,12 @@ __device__ void store(output_descriptor const& column,
                       cuda::std::uint32_t active_mask,
                       cuda::std::optional<T> value)
 {
-  static_cast<T*>(column.data)[row] = value.value_or(T{});
-  auto const validity               = __ballot_sync(active_mask, value.has_value());
-  if (column.null_mask != nullptr && (row % 32) == (__ffs(active_mask) - 1)) {
-    column.null_mask[row / 32] = validity;
+  // Null positions have no defined value, but maskless outputs still need initialized data.
+  if (value.has_value() || column.null_mask == nullptr) {
+    static_cast<T*>(column.data)[row] = value.value_or(T{});
   }
+  // All active lanes must participate, including lanes whose value store was skipped.
+  cudf::jit::warp_compact_validity(active_mask, column.null_mask, row, value.has_value());
 }
 
 #include <cudf/detail/operation_udf.cuh>

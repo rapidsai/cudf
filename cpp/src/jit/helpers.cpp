@@ -16,7 +16,6 @@
 #include <runtime/context.hpp>
 
 #include <algorithm>
-#include <array>
 #include <format>
 
 namespace cudf {
@@ -117,19 +116,6 @@ rtcx::blob get_udf_kernel_fragment(std::string const& source_file,
     {kernel_instance_source.c_str(), kernel_udf_source.c_str()};
 
   return get_kernel_fragment(source_file, source_file, include_names, include_headers, kernel_name);
-}
-
-rtcx::blob get_ast_udf_lto_fragment(std::string const& cuda_source)
-{
-  std::array<char const*, 1> const include_names{"cudf/detail/operation_udf.cuh"};
-  std::array<char const*, 1> const include_headers{cuda_source.c_str()};
-  std::array<char const*, 1> const name_expressions{"cudf_ast_runtime_entry"};
-  return get_kernel_fragment("cudf/cpp/src/transform/jit/ast_runtime_udf.cuh",
-                             "cudf/cpp/src/transform/jit/ast_runtime_udf.cuh",
-                             include_names,
-                             include_headers,
-                             "cudf_ast_runtime_entry",
-                             name_expressions);
 }
 
 }  // namespace jit
