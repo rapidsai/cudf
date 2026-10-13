@@ -26,6 +26,8 @@
 #include <cuda/std/type_traits>
 #include <math_constants.h>
 
+#include <concepts>
+
 namespace cudf {
 namespace io {
 
@@ -45,44 +47,38 @@ class union_member {
                        reference_type<U, byte_array_stats>,
                        reference_type<U, T>>>;
 
-  template <typename T, typename U>
+  template <std::unsigned_integral T, typename U>
   __device__ static type<T, U> get(U& val)
-    requires(std::is_integral_v<T> and std::is_unsigned_v<T>)
   {
     return val.u_val;
   }
 
-  template <typename T, typename U>
+  template <std::signed_integral T, typename U>
   __device__ static type<T, U> get(U& val)
-    requires(std::is_integral_v<T> and std::is_signed_v<T>)
   {
     return val.i_val;
   }
 
-  template <typename T, typename U>
+  template <std::same_as<__int128_t> T, typename U>
   __device__ static type<T, U> get(U& val)
-    requires(std::is_same_v<T, __int128_t>)
   {
     return val.d128_val;
   }
 
-  template <typename T, typename U>
+  template <std::floating_point T, typename U>
   __device__ static type<T, U> get(U& val)
-    requires(std::is_floating_point_v<T>)
   {
     return val.fp_val;
   }
 
-  template <typename T, typename U>
+  template <std::same_as<string_view> T, typename U>
   __device__ static type<T, U> get(U& val)
-    requires(std::is_same_v<T, string_view>)
   {
     return val.str_val;
   }
 
-  template <typename T, typename U>
+  template <std::same_as<statistics::byte_array_view> T, typename U>
   __device__ static type<T, U> get(U& val)
-    requires(std::is_same_v<T, statistics::byte_array_view>)
   {
     return val.byte_val;
   }
