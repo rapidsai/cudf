@@ -27,6 +27,7 @@
 #include <cuco/detail/open_addressing/kernels.cuh>
 #include <cuco/static_multiset_ref.cuh>
 #include <cuda/atomic>
+#include <cuda/buffer>
 #include <cuda/cmath>
 #include <cuda/functional>
 #include <cuda/iterator>
@@ -441,7 +442,8 @@ cudf::size_type mark_join::mark_probe_with_prefilter(storage_ref_type storage_re
 {
   CUDF_EXPECTS(_bloom_filter != nullptr, "Prefilter-enabled mark_join is missing bloom filter.");
 
-  auto filtered_right_rows = rmm::device_uvector<right_key_type>(num_right_rows, stream, mr);
+  auto filtered_right_rows =
+    cuda::device_buffer<right_key_type>(stream, mr, num_right_rows, cuda::no_init);
   cudf::detail::device_scalar<cudf::size_type> d_filtered_count(0, stream, mr);
 
   auto const filter_ref = _bloom_filter->ref();
@@ -483,16 +485,17 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_
 
   auto const temp_mr          = cudf::get_current_device_resource_ref();
   auto materialize_right_rows = [&](auto const& key_fn) {
-    rmm::device_uvector<right_key_type> right_rows(right.num_rows(), stream, temp_mr);
+    cuda::device_buffer<right_key_type> right_rows(
+      stream, temp_mr, right.num_rows(), cuda::no_init);
     cub::DeviceTransform::Transform(cuda::counting_iterator<size_type>{0},
-                                    right_rows.begin(),
+                                    right_rows.data(),
                                     right.num_rows(),
                                     cuda::proclaim_return_type<right_key_type>(key_fn),
                                     stream.get());
     return right_rows;
   };
 
-  rmm::device_uvector<right_key_type> right_rows(0, stream, temp_mr);
+  cuda::device_buffer<right_key_type> right_rows(stream, temp_mr, 0, cuda::no_init);
   if (is_primitive_row_op_compatible(_left)) {
     auto const d_right_hasher = primitive_row_hasher{nullate::DYNAMIC{true}, preprocessed_right};
     right_rows =
@@ -638,13 +641,13 @@ mark_join::mark_join(cudf::table_view const& left,
   auto do_bloom_filter_insert = [&](auto const& hashes) {
     if (_bloom_filter == nullptr) return;
     if (has_null_left_keys) {
-      _bloom_filter->add_if_async(hashes.begin(),
-                                  hashes.end(),
+      _bloom_filter->add_if_async(hashes.data(),
+                                  (hashes.data() + hashes.size()),
                                   cuda::counting_iterator{size_type{0}},
                                   row_is_valid{row_bitmask_ptr},
                                   stream.get());
     } else {
-      _bloom_filter->add_async(hashes.begin(), hashes.end(), stream.get());
+      _bloom_filter->add_async(hashes.data(), (hashes.data() + hashes.size()), stream.get());
     }
   };
 
@@ -676,10 +679,11 @@ mark_join::mark_join(cudf::table_view const& left,
 
   auto do_build_and_filter = [&](auto const& d_left_hasher, auto const& d_left_comparator) {
     if (_prefilter == cudf::join_prefilter::YES) {
-      rmm::device_uvector<hash_value_type> left_hashes(_left.num_rows(), stream, temp_mr);
+      cuda::device_buffer<hash_value_type> left_hashes(
+        stream, temp_mr, _left.num_rows(), cuda::no_init);
       cub::DeviceTransform::Transform(
         cuda::counting_iterator{size_type{0}},
-        left_hashes.begin(),
+        left_hashes.data(),
         _left.num_rows(),
         cuda::proclaim_return_type<hash_value_type>(masked_hash_value_fn{d_left_hasher}),
         stream.get());

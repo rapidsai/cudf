@@ -16,6 +16,7 @@
 
 #include <cub/device/device_for.cuh>
 #include <cub/device/device_transform.cuh>
+#include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <cuda/stream>
@@ -91,10 +92,10 @@ direct_inner_join(column_view const& left_keys,
   }
 
   // Build: scatter each right row index to the slot addressed by its key value
-  auto lookup =
-    rmm::device_uvector<size_type>(capacity, stream, cudf::get_current_device_resource_ref());
+  auto lookup = cuda::device_buffer<size_type>(
+    stream, cudf::get_current_device_resource_ref(), capacity, cuda::no_init);
   CUDF_CUDA_TRY(
-    cub::DeviceTransform::Fill(lookup.begin(), lookup.size(), JoinNoMatch, stream.get()));
+    cub::DeviceTransform::Fill(lookup.data(), lookup.size(), JoinNoMatch, stream.get()));
   CUDF_CUDA_TRY(
     cub::DeviceFor::Bulk(right_keys.size(),
                          scatter_right_index{lookup.data(), right_keys.begin<std::uint32_t>()},
