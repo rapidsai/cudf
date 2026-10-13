@@ -84,7 +84,11 @@ class PrefilterDecision:
 
 @dataclass(slots=True)
 class RuntimePrefilterStatistics:
-    """Runtime decision and observed effect for one optional prefilter."""
+    """
+    Runtime decision and observed effect for one optional prefilter.
+
+    Instances are mutated in-place by the actors performing the prefilter.
+    """
 
     placement: str
     decision: PrefilterDecision
@@ -205,7 +209,7 @@ async def count_rows_passthrough(
     context: Context,
     ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
-    statistics: RuntimePrefilterStatistics,
+    prefilter_statistics: RuntimePrefilterStatistics,
     row_count_key: Literal["input_rows", "output_rows"],
 ) -> None:
     """Forward a table-chunk channel while recording its row count."""
@@ -218,9 +222,9 @@ async def count_rows_passthrough(
             row_count += chunk.shape[0]
             await ch_out.send(context, Message(msg.sequence_number, chunk))
         if row_count_key == "input_rows":
-            statistics.input_rows = row_count
+            prefilter_statistics.input_rows = row_count
         else:
-            statistics.output_rows = row_count
+            prefilter_statistics.output_rows = row_count
         await ch_out.drain(context)
 
 
@@ -310,7 +314,7 @@ def add_bloom_prefilter(
     ch_target: Channel[TableChunk],
     ch_filtered: Channel[TableChunk],
     collective_id: int,
-    statistics: RuntimePrefilterStatistics | None,
+    prefilter_statistics: RuntimePrefilterStatistics | None,
 ) -> None:
     """Add the channels and actors for an approximate Bloom prefilter."""
     bloom = BloomFilter(
@@ -331,7 +335,7 @@ def add_bloom_prefilter(
     )
     ch_apply_input = ch_target
     ch_apply_output = ch_filtered
-    if statistics is not None:
+    if prefilter_statistics is not None:
         ch_counted_input: Channel[TableChunk] = context.create_channel()
         ch_raw_output: Channel[TableChunk] = context.create_channel()
         execution.add_channel(ch_counted_input)
@@ -341,7 +345,7 @@ def add_bloom_prefilter(
                 context,
                 ch_target,
                 ch_counted_input,
-                statistics,
+                prefilter_statistics,
                 "input_rows",
             )
         )
@@ -350,7 +354,7 @@ def add_bloom_prefilter(
                 context,
                 ch_raw_output,
                 ch_filtered,
-                statistics,
+                prefilter_statistics,
                 "output_rows",
             )
         )
