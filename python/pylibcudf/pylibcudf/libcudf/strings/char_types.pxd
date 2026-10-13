@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
-from libc.stdint cimport uint32_t
+from libc.stdint cimport uint8_t, uint32_t
 from libcpp.memory cimport unique_ptr
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
@@ -8,6 +8,12 @@ from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.scalar.scalar cimport string_scalar
 from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.memory_resource cimport device_async_resource_ref
+
+
+cdef extern from "cudf/strings/detail/char_tables.hpp" \
+        namespace "cudf::strings::detail" nogil:
+    cdef const uint8_t* get_character_flags_table() \
+        except +libcudf_exception_handler
 
 
 cdef extern from "cudf/strings/char_types/char_types.hpp" \
