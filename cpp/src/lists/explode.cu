@@ -6,6 +6,8 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/lists/explode.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table.hpp>
@@ -16,6 +18,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/buffer>
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/std/iterator>
@@ -55,8 +58,8 @@ std::unique_ptr<table> build_table(
 
   auto gathered_table =
     detail::gather(input_table.select(select_iter, select_iter + input_table.num_columns() - 1),
-                   gather_map.begin(),
-                   gather_map.end(),
+                   gather_map.data(),
+                   (gather_map.data() + gather_map.size()),
                    cudf::out_of_bounds_policy::DONT_CHECK,
                    stream,
                    mr);
@@ -107,7 +110,8 @@ std::unique_ptr<table> explode(table_view const& input_table,
 {
   lists_column_view explode_col{input_table.column(explode_column_idx)};
   auto sliced_child = explode_col.get_sliced_child(stream);
-  rmm::device_uvector<size_type> gather_map(sliced_child.size(), stream);
+  cuda::device_buffer<size_type> gather_map(
+    stream, cudf::get_current_device_resource_ref(), sliced_child.size(), cuda::no_init);
 
   // Sliced columns may require rebasing of the offsets.
   auto offsets = explode_col.offsets_begin();
@@ -126,7 +130,7 @@ std::unique_ptr<table> explode(table_view const& input_table,
                       offsets_minus_one + explode_col.size(),
                       counting_iter,
                       counting_iter + gather_map.size(),
-                      gather_map.begin());
+                      gather_map.data());
 
   return build_table(input_table,
                      explode_column_idx,
@@ -145,7 +149,8 @@ std::unique_ptr<table> explode_position(table_view const& input_table,
 {
   lists_column_view explode_col{input_table.column(explode_column_idx)};
   auto sliced_child = explode_col.get_sliced_child(stream);
-  rmm::device_uvector<size_type> gather_map(sliced_child.size(), stream);
+  cuda::device_buffer<size_type> gather_map(
+    stream, cudf::get_current_device_resource_ref(), sliced_child.size(), cuda::no_init);
 
   // Sliced columns may require rebasing of the offsets.
   auto offsets = explode_col.offsets_begin();
@@ -165,7 +170,7 @@ std::unique_ptr<table> explode_position(table_view const& input_table,
     rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     counting_iter,
     counting_iter + gather_map.size(),
-    gather_map.begin(),
+    gather_map.data(),
     cuda::proclaim_return_type<size_type>([position_array = pos.data(),
                                            offsets_minus_one,
                                            offsets,
@@ -200,7 +205,8 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
   auto offsets       = explode_col.offsets_begin();
 
   // number of nulls or empty lists found so far in the explode column
-  rmm::device_uvector<size_type> null_or_empty_offset(explode_col.size(), stream);
+  cuda::device_buffer<size_type> null_or_empty_offset(
+    stream, cudf::get_current_device_resource_ref(), explode_col.size(), cuda::no_init);
 
   auto null_or_empty = cuda::transform_iterator(
     cuda::counting_iterator<cudf::size_type>{0},
@@ -211,10 +217,17 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
   thrust::inclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          null_or_empty,
                          null_or_empty + explode_col.size(),
-                         null_or_empty_offset.begin());
+                         null_or_empty_offset.data());
 
-  auto null_or_empty_count =
-    null_or_empty_offset.size() > 0 ? null_or_empty_offset.back_element(stream) : 0;
+  size_type null_or_empty_count = 0;
+  if (!null_or_empty_offset.empty()) {
+    CUDF_CUDA_TRY(
+      cudf::detail::memcpy_async(&null_or_empty_count,
+                                 null_or_empty_offset.data() + null_or_empty_offset.size() - 1,
+                                 sizeof(size_type),
+                                 stream));
+    cudf::detail::sync_stream(stream);
+  }
   if (null_or_empty_count == 0) {
     // performance penalty to run the below loop if there are no nulls or empty lists.
     // run simple explode instead
@@ -224,8 +237,10 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
 
   auto gather_map_size = sliced_child.size() + null_or_empty_count;
 
-  rmm::device_uvector<size_type> gather_map(gather_map_size, stream);
-  rmm::device_uvector<size_type> explode_col_gather_map(gather_map_size, stream);
+  cuda::device_buffer<size_type> gather_map(
+    stream, cudf::get_current_device_resource_ref(), gather_map_size, cuda::no_init);
+  cuda::device_buffer<size_type> explode_col_gather_map(
+    stream, cudf::get_current_device_resource_ref(), gather_map_size, cuda::no_init);
   rmm::device_uvector<size_type> pos(include_position ? gather_map_size : 0, stream, mr);
 
   // offsets + 1 here to skip the 0th offset, which removes a - 1 operation later.
@@ -235,11 +250,11 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
     }));
 
   auto fill_gather_maps = [offsets_minus_one,
-                           gather_map_p             = gather_map.begin(),
-                           explode_col_gather_map_p = explode_col_gather_map.begin(),
+                           gather_map_p             = gather_map.data(),
+                           explode_col_gather_map_p = explode_col_gather_map.data(),
                            position_array           = pos.begin(),
                            sliced_child_size        = sliced_child.size(),
-                           null_or_empty_offset_p   = null_or_empty_offset.begin(),
+                           null_or_empty_offset_p   = null_or_empty_offset.data(),
                            include_position,
                            offsets,
                            null_or_empty,

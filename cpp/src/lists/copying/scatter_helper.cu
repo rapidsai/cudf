@@ -13,6 +13,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <cuda/buffer>
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/std/iterator>
@@ -223,7 +224,8 @@ struct list_child_constructor {
 
     if (num_child_rows == 0) { return make_empty_column(type_id::STRING); }
 
-    auto string_views = rmm::device_uvector<string_view>(num_child_rows, stream);
+    auto string_views = cuda::device_buffer<string_view>(
+      stream, cudf::get_current_device_resource_ref(), num_child_rows, cuda::no_init);
 
     auto const null_string_view = string_view{nullptr, 0};  // placeholder for factory function
 
@@ -231,7 +233,7 @@ struct list_child_constructor {
       rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
       cuda::counting_iterator<size_type>{0},
       cuda::counting_iterator{static_cast<size_type>(string_views.size())},
-      string_views.begin(),
+      string_views.data(),
       cuda::proclaim_return_type<string_view>([offset_begin  = list_offsets.begin<int32_t>(),
                                                offset_size   = list_offsets.size(),
                                                d_list_vector = list_vector.begin(),

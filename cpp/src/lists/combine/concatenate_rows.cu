@@ -19,6 +19,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/buffer>
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/stream>
@@ -131,8 +132,8 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
     // row is null if -all- input rows are null
     if (null_policy == concatenate_null_policy::IGNORE) {
       return cudf::detail::valid_if(
-        row_null_counts.begin(),
-        row_null_counts.begin() + input.num_rows(),
+        row_null_counts.data(),
+        row_null_counts.data() + input.num_rows(),
         [num_columns = input.num_columns()] __device__(size_type null_count) {
           return null_count != num_columns;
         },
@@ -142,8 +143,8 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
 
     // row is null if -any- input rows are null
     return cudf::detail::valid_if(
-      row_null_counts.begin(),
-      row_null_counts.begin() + input.num_rows(),
+      row_null_counts.data(),
+      row_null_counts.data() + input.num_rows(),
       [] __device__(size_type null_count) { return null_count == 0; },
       stream,
       mr);
@@ -152,10 +153,11 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
   return {std::move(offsets), std::move(null_mask), null_count};
 }
 
-rmm::device_uvector<size_type> generate_null_counts(table_device_view const& input,
+cuda::device_buffer<size_type> generate_null_counts(table_device_view const& input,
                                                     cuda::stream_ref stream)
 {
-  rmm::device_uvector<size_type> null_counts(input.num_rows(), stream);
+  cuda::device_buffer<size_type> null_counts(
+    stream, cudf::get_current_device_resource_ref(), input.num_rows(), cuda::no_init);
 
   auto keys =
     cuda::transform_iterator(cuda::counting_iterator<std::size_t>{0},
@@ -225,8 +227,10 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
 
   // if the output needs a null mask, generate a vector of null counts per row of input, where the
   // count is the number of columns that contain a null for a given row.
-  auto row_null_counts = build_null_mask ? generate_null_counts(*input_dv, stream)
-                                         : rmm::device_uvector<size_type>{0, stream};
+  auto row_null_counts = build_null_mask
+                           ? generate_null_counts(*input_dv, stream)
+                           : cuda::device_buffer<size_type>{
+                               stream, cudf::get_current_device_resource_ref(), 0, cuda::no_init};
 
   // if we have nulls, overlay an appropriate null mask onto the
   // concatenated column so that gather() sanitizes out the child data of rows that will ultimately
