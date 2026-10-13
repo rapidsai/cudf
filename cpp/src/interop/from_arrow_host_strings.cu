@@ -115,7 +115,7 @@ std::unique_ptr<column> from_arrow_stringview(
     rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     cuda::counting_iterator<cudf::size_type>{0},
     cuda::counting_iterator{static_cast<cudf::size_type>(input->length)},
-    d_indices.data(),
+    d_indices.begin(),
     [d_items = d_items.data(), d_ptrs, d_mask] __device__(auto idx) -> string_index_pair {
       if (d_mask && !bit_is_set(d_mask, idx)) { return string_index_pair{nullptr, 0}; }
       auto const& item = d_items[idx];
@@ -127,8 +127,7 @@ std::unique_ptr<column> from_arrow_stringview(
     });
 
   cudf::detail::sync_stream(stream);
-  return cudf::make_strings_column(
-    cudf::device_span<string_index_pair const>{d_indices.data(), d_indices.size()}, stream, mr);
+  return cudf::make_strings_column(d_indices, stream, mr);
 }
 
 }  // namespace
