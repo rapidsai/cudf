@@ -372,7 +372,9 @@ cudf::detail::hostdevice_vector<PageInfo> sort_pages(device_span<PageInfo const>
 
 namespace {
 
-// Construct metadata for a data page; dictionary slots remain zero-initialized.
+/**
+ * @brief Construct metadata for a data page; dictionary slots remain zero-initialized.
+ */
 page_index_info make_page_index_info(page_info const& source, Type physical_type, size_t start_row)
 {
   page_index_info page{};
