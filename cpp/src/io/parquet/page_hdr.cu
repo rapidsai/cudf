@@ -747,7 +747,13 @@ struct decode_from_page_data_fn {
   cudf::device_span<page_index_info const> page_indexes;
   kernel_error::pointer error_code;
 
-  __device__ void store_page(PageInfo page, size_type page_idx) const noexcept
+  /**
+   * @brief Apply page index metadata to PageInfo, and store descriptors in pages span
+   *
+   * @param[in,out] page Page info
+   * @param[in] page_idx Page index
+   */
+  __device__ void apply_page_index_and_store(PageInfo& page, size_type page_idx) const noexcept
   {
     if (!page_indexes.empty()) {
       auto const& index   = page_indexes[page_idx];
@@ -797,11 +803,12 @@ struct decode_from_page_data_fn {
 
     bs.page.chunk_idx      = chunk_idx;
     bs.page.src_col_schema = bs.ck.src_col_schema;
-    // Row positions and available value counts are applied from the index when storing the page.
+    // Fill row positions and available value counts from column and offset indexes when storing the
+    // page.
 
     // Return if empty page span (pruned page)
     if (page_span.empty()) {
-      store_page(bs.page, page_idx);
+      apply_page_index_and_store(bs.page, page_idx);
       return;
     }
 
@@ -847,7 +854,7 @@ struct decode_from_page_data_fn {
     bs.page.kernel_mask = kernel_mask_for_page(bs.page, bs.ck);
 
     // Copy over the page info from byte stream
-    store_page(bs.page, page_idx);
+    apply_page_index_and_store(bs.page, page_idx);
   }
 };
 
