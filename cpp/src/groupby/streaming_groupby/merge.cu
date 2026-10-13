@@ -62,8 +62,9 @@ struct merge_element_aggregator {
   }
 };
 
+template <typename Iterator>
 struct merge_single_pass_aggs_fn {
-  size_type const* target_indices;
+  Iterator target_indices;
   aggregation::Kind const* aggs;
   table_device_view source_values;
   mutable_table_device_view target_values;
