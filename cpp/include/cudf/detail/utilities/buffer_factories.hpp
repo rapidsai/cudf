@@ -88,8 +88,7 @@ cuda::device_buffer<std::remove_cv_t<T>> make_device_buffer_async(host_span<T> s
   using value_type = std::remove_cv_t<T>;
   cuda::device_buffer<value_type> ret(
     stream, mr.get_output_mr(), source_data.size(), cuda::no_init);
-  CUDF_CUDA_TRY(
-    cuda_memcpy_async<value_type>(ret, host_span<value_type const>{source_data}, stream));
+  cuda_memcpy_async<value_type>(ret, host_span<value_type const>{source_data}, stream);
   return ret;
 }
 
