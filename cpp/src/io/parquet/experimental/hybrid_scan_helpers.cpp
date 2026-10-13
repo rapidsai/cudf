@@ -607,7 +607,7 @@ aggregate_reader_metadata::dictionary_pages_byte_ranges(
   auto [ranges, source_map] = dictionary_pages_byte_ranges_impl(
     row_group_indices, output_dtypes, output_column_schemas, filter, false);
 
-  // Without unbounded ranges every extent is exact, so the byte ranges say everything
+  // Without unbounded ranges every extent is exact, so only the byte ranges are needed
   std::vector<byte_range_info> byte_ranges;
   byte_ranges.reserve(ranges.size());
   std::ranges::transform(
