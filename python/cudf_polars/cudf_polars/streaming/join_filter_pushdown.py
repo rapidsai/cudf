@@ -485,7 +485,11 @@ def _(node: Join, rec: GenericTransformer[IR, IR, _RewriteState]) -> IR:
     result = (
         node
         if decision.candidate is None
-        else apply_candidate(node, decision.candidate)
+        else apply_candidate(
+            node,
+            decision.candidate,
+            plan_metadata=rec.state["plan_metadata"],
+        )
     )
     if rec.state["plan_metadata"] is not None:
         rec.state["plan_metadata"].add_operator_detail(
@@ -498,7 +502,12 @@ def _(node: Join, rec: GenericTransformer[IR, IR, _RewriteState]) -> IR:
     return result
 
 
-def apply_candidate(ir: Join, candidate: Candidate) -> IR:
+def apply_candidate(
+    ir: Join,
+    candidate: Candidate,
+    *,
+    plan_metadata: PlanMetadata | None = None,
+) -> IR:
     """Apply a selected join-domain prefilter candidate to a join."""
     left, right = ir.children
     domain = _make_domain(candidate, ir)
@@ -512,13 +521,29 @@ def apply_candidate(ir: Join, candidate: Candidate) -> IR:
         placement="join_input" if not target.path else "pushed_down",
     )
     if candidate.target_side == "left":
-        left = replace_at_path(left, target.path, target_filter)
+        left = replace_at_path(
+            left,
+            target.path,
+            target_filter,
+            plan_metadata=plan_metadata,
+        )
     else:
-        right = replace_at_path(right, target.path, target_filter)
+        right = replace_at_path(
+            right,
+            target.path,
+            target_filter,
+            plan_metadata=plan_metadata,
+        )
     return ir.reconstruct((left, right))
 
 
-def replace_at_path(root: IR, path: Sequence[int], replacement: IR) -> IR:
+def replace_at_path(
+    root: IR,
+    path: Sequence[int],
+    replacement: IR,
+    *,
+    plan_metadata: PlanMetadata | None = None,
+) -> IR:
     """
     Replace a specific child in a DAG starting at root.
 
@@ -531,6 +556,9 @@ def replace_at_path(root: IR, path: Sequence[int], replacement: IR) -> IR:
         into.
     replacement
         Replacement node to return when the path becomes empty.
+    plan_metadata
+        Optional metadata whose operator details should be preserved on
+        reconstructed nodes.
 
     Returns
     -------
@@ -547,8 +575,17 @@ def replace_at_path(root: IR, path: Sequence[int], replacement: IR) -> IR:
         return replacement
     index, *path = path
     children = list(root.children)
-    children[index] = replace_at_path(children[index], path, replacement)
-    return root.reconstruct(children)
+    children[index] = replace_at_path(
+        children[index],
+        path,
+        replacement,
+        plan_metadata=plan_metadata,
+    )
+    result = root.reconstruct(children)
+    if plan_metadata is not None:
+        for detail in plan_metadata.operator_details(root):
+            plan_metadata.add_operator_detail(result, detail)
+    return result
 
 
 def _select_candidate(

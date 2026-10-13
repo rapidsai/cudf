@@ -605,11 +605,13 @@ def test_derived_selectivity_propagates_through_rewritten_children(
         .join(orders, left_on="c_custkey", right_on="o_custkey")
     )
     root = translate_query(query, engine)
+    plan_metadata = PlanMetadata()
 
     optimized = optimize_join_filter_pushdown(
         root,
         StatsCollector(),
         ConfigOptions.from_polars_engine(engine),
+        plan_metadata=plan_metadata,
     )
 
     hints = find_hints(optimized)
@@ -619,6 +621,7 @@ def test_derived_selectivity_propagates_through_rewritten_children(
         dataframe_scan(root, "o_orderkey"),
     }
     assert expected_targets <= {hint.children[0] for hint in hints}
+    assert all(plan_metadata.operator_details(join) for join in find_joins(optimized))
     assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
