@@ -3347,8 +3347,29 @@ class pack_plan::impl {
     auto const raw_block_bytes =
       std::min(max_raw_block_bytes, window_budget) / split_align * split_align;
 
-    auto const all_regions_are_direct = std::ranges::all_of(
-      layouts, [](auto const& layout) { return layout.direct_source != nullptr; });
+    auto const configured_codec = [&](std::size_t index) {
+      return configured_regions.empty() ? options.compression : configured_regions[index].codec;
+    };
+    std::vector<pack_compression> codecs(layouts.size());
+    std::ranges::transform(
+      std::views::iota(std::size_t{0}, layouts.size()), codecs.begin(), [&](auto index) {
+        auto const codec     = configured_codec(index);
+        auto const requested = codec == pack_compression::automatic
+                                 ? select_automatic_compression(layouts[index])
+                                 : codec;
+        CUDF_EXPECTS(is_concrete_codec(requested),
+                     "Unsupported pack compression codec",
+                     std::invalid_argument);
+        return requested;
+      });
+    // Codecs read their input with aligned loads, so a misaligned source must be staged.
+    auto const is_direct = [&](std::size_t index) {
+      auto const source = reinterpret_cast<std::uintptr_t>(layouts[index].direct_source);
+      return source != 0 && (codecs[index] == pack_compression::none ||
+                             source % block_alignment(codecs[index]) == 0);
+    };
+    auto const all_regions_are_direct =
+      std::ranges::all_of(std::views::iota(std::size_t{0}, layouts.size()), is_direct);
     // A packed input is already in payload layout, so regions are compressed from it in place.
     if (input.packed_source.empty() && !all_regions_are_direct) {
       staging_buffer = std::make_unique<rmm::device_buffer>(
@@ -3366,12 +3387,8 @@ class pack_plan::impl {
                    "Prepared compression regions do not cover a contiguous payload");
       uncompressed_end = layout.uncompressed_offset + layout.uncompressed_bytes;
 
-      auto const codec =
-        configured_regions.empty() ? options.compression : configured_regions[region_index].codec;
-      auto const automatic = codec == pack_compression::automatic;
-      auto const requested = automatic ? select_automatic_compression(layout) : codec;
-      CUDF_EXPECTS(
-        is_concrete_codec(requested), "Unsupported pack compression codec", std::invalid_argument);
+      auto const automatic = configured_codec(region_index) == pack_compression::automatic;
+      auto const requested = codecs[region_index];
 
       auto block_bytes = raw_block_bytes;
       auto cascaded    = type_id::UINT8;

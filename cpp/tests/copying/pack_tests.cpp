@@ -529,6 +529,29 @@ TEST_F(ExperimentalPackUnpackTest, CascadedUsesNativeTypedRegions)
   expect_materializes_to(input, packed.view());
 }
 
+TEST_F(ExperimentalPackUnpackTest, CompressMisalignedSlices)
+{
+  constexpr cudf::size_type rows = 64 * 1024;
+  auto const values =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 7; });
+  cudf::test::fixed_width_column_wrapper<int8_t> bytes(values, values + rows);
+  cudf::test::fixed_width_column_wrapper<int16_t> shorts(values, values + rows);
+  cudf::test::fixed_width_column_wrapper<int32_t> ints(values, values + rows);
+  auto const table = cudf::table_view{{bytes, shorts, ints}};
+  // Odd offsets leave the sliced data unaligned for every codec.
+  auto const input = cudf::slice(table, {3, rows - 1}).front();
+
+  for (auto const compression : {cx::pack_compression::automatic,
+                                 cx::pack_compression::cascaded,
+                                 cx::pack_compression::zstd,
+                                 cx::pack_compression::snappy}) {
+    if (!is_codec_enabled(compression)) { continue; }
+    SCOPED_TRACE(static_cast<int>(compression));
+    auto const plan = cx::prepare_pack(input, make_options(compression));
+    expect_materializes_to(input, pack_to_device(plan).view());
+  }
+}
+
 TEST_F(ExperimentalPackUnpackTest, AutomaticPerRegionCompression)
 {
   constexpr cudf::size_type rows = 32 * 1024;
