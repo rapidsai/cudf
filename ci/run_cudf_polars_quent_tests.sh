@@ -15,7 +15,19 @@ cargo fmt --all -- --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo check --locked
 cargo clean -p cudf-polars-quent
-python -m maturin build --locked
+python -m maturin build --release --locked
+
+shopt -s nullglob
+generated_wheels=(target/wheels/*.whl)
+shopt -u nullglob
+if ((${#generated_wheels[@]} != 1)); then
+  echo "Expected exactly one generated Quent wheel, found ${#generated_wheels[@]}" >&2
+  exit 1
+fi
+if [[ "$(basename "${generated_wheels[0]}")" != *-cp312-abi3-*.whl ]]; then
+  echo "Expected a cp312-abi3 wheel, found ${generated_wheels[0]}" >&2
+  exit 1
+fi
 
 shopt -s nullglob
 generated_stubs=(target/*/build/cudf-polars-quent-*/out/cudf_polars_quent.pyi)
