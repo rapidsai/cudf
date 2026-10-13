@@ -183,7 +183,23 @@ class IRExecutionContext:
         loop = asyncio.get_running_loop()
         ctx = contextvars.copy_context()
         func_call = functools.partial(ctx.run, func, *args, **kwargs)
-        return await loop.run_in_executor(self.py_executor, func_call)
+        future = loop.run_in_executor(self.py_executor, func_call)
+        try:
+            return await asyncio.shield(future)
+        except asyncio.CancelledError:
+            # Cancelling an asyncio future cannot stop running native work. Keep
+            # the caller's resource scopes alive until that work has finished.
+            while not future.done():
+                try:
+                    await asyncio.shield(future)
+                except asyncio.CancelledError:
+                    continue
+                except Exception:
+                    break
+            if not future.cancelled():
+                # Cancellation remains the caller's outcome even if cleanup fails.
+                future.exception()
+            raise
 
     @contextlib.contextmanager
     def stream_ordered_after(self, *dfs: DataFrame) -> Generator[Stream, None, None]:

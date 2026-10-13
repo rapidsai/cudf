@@ -42,6 +42,7 @@ from cudf_polars.dsl.traversal import CachingVisitor, reuse_if_unchanged, traver
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.streaming.base import PartitionInfo
 from cudf_polars.streaming.dispatch import lower_ir_node
+from cudf_polars.streaming.hint_sorted import HintSorted
 from cudf_polars.streaming.io import _clear_source_info_cache
 from cudf_polars.streaming.repartition import Repartition
 from cudf_polars.streaming.utils import (
@@ -305,7 +306,10 @@ def _(
     ir: MapFunction, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     if ir.name == "hint_sorted":
-        return _lower_ir_pwise(ir, rec, preserve_partitioning=True)
+        child, partition_info = rec(ir.children[0])
+        new_node = HintSorted(ir.schema, ir.options, child)
+        partition_info[new_node] = partition_info[child]
+        return new_node, partition_info
 
     # Allow pointwise operations
     if ir.name in ("rename", "explode"):
