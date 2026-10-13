@@ -393,7 +393,17 @@ public class HybridScanReader implements AutoCloseable {
     long[] lens = bufferLens(columnChunkData);
     long[] handles = materializeFilterColumns(cleaner.nativeHandle, rowGroupIndices,
         addrs, lens, usePageLevelPruning);
-    TableWithColumnNames tableWithColumnNames = toTableWithColumnNames(handles[1]);
+    TableWithColumnNames tableWithColumnNames;
+    try {
+      tableWithColumnNames = toTableWithColumnNames(handles[1]);
+    } catch (Throwable t) {
+      try {
+        ColumnVector.deleteCudfColumn(handles[0]);
+      } catch (Throwable s) {
+        t.addSuppressed(s);
+      }
+      throw t;
+    }
     try {
       return new FilterMaterializationResult(tableWithColumnNames,
           new ColumnVector(handles[0]));
