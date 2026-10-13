@@ -444,33 +444,37 @@ def _localize(
     return _apply_nonexistent(utc, is_nonexistent, non_existent, null_scalar, stream)
 
 
-_unit_to_nanoseconds_conversion = {
-    plc.TypeId.DURATION_NANOSECONDS: 1,
-    plc.TypeId.DURATION_MICROSECONDS: 1_000,
-    plc.TypeId.DURATION_MILLISECONDS: 1_000_000,
-    plc.TypeId.DURATION_SECONDS: 1_000_000_000,
-    plc.TypeId.DURATION_DAYS: 86_400_000_000_000,
-}
-
-_NANOSECONDS_PER_DAY = 86_400_000_000_000
-_MILLISECONDS_PER_DAY = 86_400_000
-# Nanoseconds in one tick of each timestamp type that can carry a polars Datetime.
-_TIMESTAMP_TICK_NANOSECONDS = {
-    plc.TypeId.TIMESTAMP_NANOSECONDS: 1,
-    plc.TypeId.TIMESTAMP_MICROSECONDS: 1_000,
-    plc.TypeId.TIMESTAMP_MILLISECONDS: 1_000_000,
-}
-_DURATION_STRING = re.compile(r"(?:\d+(?:ns|us|ms|mo|s|m|h|d|w|q|y))+")
-_DURATION_TOKEN = re.compile(r"(\d+)(ns|us|ms|mo|s|m|h|d|w|q|y)")
-_DURATION_TOKEN_MONTHS = {"mo": 1, "q": 3, "y": 12}
-_DURATION_TOKEN_NANOSECONDS = {
+# Nanoseconds in one of each fixed-length unit, keyed by its polars duration
+# string unit.
+_NANOSECONDS_PER_UNIT = {
     "ns": 1,
     "us": 1_000,
     "ms": 1_000_000,
     "s": 1_000_000_000,
     "m": 60_000_000_000,
     "h": 3_600_000_000_000,
+    "d": 86_400_000_000_000,
 }
+_NANOSECONDS_PER_DAY = _NANOSECONDS_PER_UNIT["d"]
+_MILLISECONDS_PER_DAY = _NANOSECONDS_PER_DAY // _NANOSECONDS_PER_UNIT["ms"]
+
+_unit_to_nanoseconds_conversion = {
+    plc.TypeId.DURATION_NANOSECONDS: _NANOSECONDS_PER_UNIT["ns"],
+    plc.TypeId.DURATION_MICROSECONDS: _NANOSECONDS_PER_UNIT["us"],
+    plc.TypeId.DURATION_MILLISECONDS: _NANOSECONDS_PER_UNIT["ms"],
+    plc.TypeId.DURATION_SECONDS: _NANOSECONDS_PER_UNIT["s"],
+    plc.TypeId.DURATION_DAYS: _NANOSECONDS_PER_UNIT["d"],
+}
+# Nanoseconds in one tick of each timestamp type that can carry a polars Datetime.
+_TIMESTAMP_TICK_NANOSECONDS = {
+    plc.TypeId.TIMESTAMP_NANOSECONDS: _NANOSECONDS_PER_UNIT["ns"],
+    plc.TypeId.TIMESTAMP_MICROSECONDS: _NANOSECONDS_PER_UNIT["us"],
+    plc.TypeId.TIMESTAMP_MILLISECONDS: _NANOSECONDS_PER_UNIT["ms"],
+}
+# polars only accepts ASCII digits in duration strings.
+_DURATION_STRING = re.compile(r"(?:[0-9]+(?:ns|us|ms|mo|s|m|h|d|w|q|y))+")
+_DURATION_TOKEN = re.compile(r"([0-9]+)(ns|us|ms|mo|s|m|h|d|w|q|y)")
+_DURATION_TOKEN_MONTHS = {"mo": 1, "q": 3, "y": 12}
 # Largest bucket, in ticks, for which ``pymod(t, every)`` cannot overflow INT64.
 _MAX_TRUNCATE_TICKS = 2**62
 # Largest bucket, in months, for which the calendar arithmetic in
@@ -479,15 +483,16 @@ _MAX_TRUNCATE_MONTHS = 2**40
 # The Gregorian calendar repeats every 400 years.
 _DAYS_PER_400_YEARS = 146_097
 _MONTHS_PER_400_YEARS = 4_800
-# Durations, in nanoseconds, that libcudf's floor_datetimes supports directly,
-# and whether libcudf counts them in 32 bits.
-_FLOOR_DATETIMES_FREQUENCIES = (
-    (_NANOSECONDS_PER_DAY, plc.datetime.RoundingFrequency.DAY, True),
-    (3_600_000_000_000, plc.datetime.RoundingFrequency.HOUR, True),
-    (60_000_000_000, plc.datetime.RoundingFrequency.MINUTE, True),
-    (1_000_000_000, plc.datetime.RoundingFrequency.SECOND, False),
-    (1_000_000, plc.datetime.RoundingFrequency.MILLISECOND, False),
-    (1_000, plc.datetime.RoundingFrequency.MICROSECOND, False),
+# Durations, in nanoseconds, that libcudf's floor/ceil/round_datetimes support
+# directly, and whether libcudf counts them in 32 bits.
+_ROUNDING_FREQUENCIES = (
+    (_NANOSECONDS_PER_UNIT["d"], plc.datetime.RoundingFrequency.DAY, True),
+    (_NANOSECONDS_PER_UNIT["h"], plc.datetime.RoundingFrequency.HOUR, True),
+    (_NANOSECONDS_PER_UNIT["m"], plc.datetime.RoundingFrequency.MINUTE, True),
+    (_NANOSECONDS_PER_UNIT["s"], plc.datetime.RoundingFrequency.SECOND, False),
+    (_NANOSECONDS_PER_UNIT["ms"], plc.datetime.RoundingFrequency.MILLISECOND, False),
+    (_NANOSECONDS_PER_UNIT["us"], plc.datetime.RoundingFrequency.MICROSECOND, False),
+    (_NANOSECONDS_PER_UNIT["ns"], plc.datetime.RoundingFrequency.NANOSECOND, False),
 )
 _INT64 = plc.DataType(plc.TypeId.INT64)
 _UINT64 = plc.DataType(plc.TypeId.UINT64)
@@ -548,8 +553,33 @@ def _parse_duration_string(every: str) -> tuple[int, int, int, int] | None:
         elif unit == "d":
             days += n
         else:
-            nanoseconds += n * _DURATION_TOKEN_NANOSECONDS[unit]
+            nanoseconds += n * _NANOSECONDS_PER_UNIT[unit]
     return months, weeks, days, nanoseconds
+
+
+def _round_frequency(every: str) -> plc.datetime.RoundingFrequency | None:
+    """
+    Return the libcudf frequency for ``dt.round(every)``, if it is supported.
+
+    Only durations of exactly one day, hour, minute, second, millisecond,
+    microsecond or nanosecond are supported; see
+    https://github.com/NVIDIA/cudf/issues/18654 for other durations.
+    """
+    parsed = _parse_duration_string(every)
+    if parsed is None:
+        return None
+    months, weeks, days, nanoseconds = parsed
+    if months > 0 or weeks > 0:
+        return None
+    every_ns = days * _NANOSECONDS_PER_DAY + nanoseconds
+    return next(
+        (
+            frequency
+            for frequency_ns, frequency, _ in _ROUNDING_FREQUENCIES
+            if frequency_ns == every_ns
+        ),
+        None,
+    )
 
 
 def _floor_datetimes_frequency(
@@ -561,7 +591,7 @@ def _floor_datetimes_frequency(
     libcudf counts days, hours and minutes in 32 bits, so those frequencies are
     only used if every value of the column fits; otherwise the counts overflow.
     """
-    for frequency_ns, frequency, count_is_int32 in _FLOOR_DATETIMES_FREQUENCIES:
+    for frequency_ns, frequency, count_is_int32 in _ROUNDING_FREQUENCIES:
         if every_ns == frequency_ns:
             if count_is_int32 and 2**63 // (frequency_ns // tick) >= 2**31:
                 return None
@@ -617,7 +647,13 @@ def _plan_truncate(dtype: DataType, every: str) -> _TruncatePlan:
     type_id = dtype.id()
     if type_id == plc.TypeId.TIMESTAMP_DAYS:
         return _plan_unit_truncate(
-            every, months, weeks, days, nanoseconds, 1_000_000, on_date=True
+            every,
+            months,
+            weeks,
+            days,
+            nanoseconds,
+            _NANOSECONDS_PER_UNIT["ms"],
+            on_date=True,
         )
     if type_id not in _TIMESTAMP_TICK_NANOSECONDS:
         raise NotImplementedError(  # pragma: no cover; polars raises first
@@ -974,25 +1010,15 @@ class TemporalFunction(Expr):
         Name.Microsecond: plc.datetime.DatetimeComponent.MICROSECOND,
         Name.Nanosecond: plc.datetime.DatetimeComponent.NANOSECOND,
     }
-    _ROUND_FREQ_MAP: ClassVar[dict[str, plc.datetime.RoundingFrequency]] = {
-        "d": plc.datetime.RoundingFrequency.DAY,
-        "h": plc.datetime.RoundingFrequency.HOUR,
-        "m": plc.datetime.RoundingFrequency.MINUTE,
-        "s": plc.datetime.RoundingFrequency.SECOND,
-        "ms": plc.datetime.RoundingFrequency.MILLISECOND,
-        "us": plc.datetime.RoundingFrequency.MICROSECOND,
-        "ns": plc.datetime.RoundingFrequency.NANOSECOND,
-    }
-
     # Number of nanoseconds represented by one unit of each ``total_*`` component.
     _TOTAL_COMPONENT_NANOSECONDS: ClassVar[dict[Name, int]] = {
-        Name.TotalDays: 86_400_000_000_000,
-        Name.TotalHours: 3_600_000_000_000,
-        Name.TotalMinutes: 60_000_000_000,
-        Name.TotalSeconds: 1_000_000_000,
-        Name.TotalMilliseconds: 1_000_000,
-        Name.TotalMicroseconds: 1_000,
-        Name.TotalNanoseconds: 1,
+        Name.TotalDays: _NANOSECONDS_PER_UNIT["d"],
+        Name.TotalHours: _NANOSECONDS_PER_UNIT["h"],
+        Name.TotalMinutes: _NANOSECONDS_PER_UNIT["m"],
+        Name.TotalSeconds: _NANOSECONDS_PER_UNIT["s"],
+        Name.TotalMilliseconds: _NANOSECONDS_PER_UNIT["ms"],
+        Name.TotalMicroseconds: _NANOSECONDS_PER_UNIT["us"],
+        Name.TotalNanoseconds: _NANOSECONDS_PER_UNIT["ns"],
     }
     # Divisor used to derive the century/millennium from the calendar year:
     # ``(year - 1) // divisor + 1`` (floor division, matching polars).
@@ -1104,12 +1130,10 @@ class TemporalFunction(Expr):
             every = every_expr.value
             if self.name is TemporalFunction.Name.Truncate:
                 self.options = _plan_truncate(self.children[0].dtype, every)
+            elif (frequency := _round_frequency(every)) is not None:
+                self.options = (frequency,)
             else:
-                match = re.fullmatch(r"(\d+)(ns|us|ms|s|m|h|d)", every)
-                if match is None or int(match.group(1)) != 1:
-                    # https://github.com/NVIDIA/cudf/issues/18654 to support non-1 buckets
-                    raise NotImplementedError(f"Unsupported bucket: {every!r}")
-                self.options = (self._ROUND_FREQ_MAP[match.group(2)],)
+                raise NotImplementedError(f"Unsupported bucket: {every!r}")
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME

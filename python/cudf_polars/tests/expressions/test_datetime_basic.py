@@ -541,7 +541,9 @@ def test_datetime_from_integer(engine: pl.GPUEngine, datetime_dtype, integer_dty
 )
 # ``every`` finer than a column's storage unit panics in CPU polars, so only
 # use frequencies that are coarser-or-equal to every tested resolution.
-@pytest.mark.parametrize("every", ["1ms", "1s", "1m", "1h", "1d"])
+@pytest.mark.parametrize(
+    "every", ["1ms", "1s", "1m", "1h", "1d", "1000ms", "60m", "24h"]
+)
 def test_datetime_round(engine: pl.GPUEngine, dtype, every):
     # Use an irregular step so no timestamp lands exactly on a half-way point:
     # libcudf rounds half-to-even while polars rounds half-away, so only the
@@ -561,7 +563,8 @@ def test_datetime_round(engine: pl.GPUEngine, dtype, every):
     assert_gpu_result_equal(q, engine=engine)
 
 
-@pytest.mark.parametrize("every", ["30m", "1mo"])
+# polars only accepts ASCII digits in durations (here Arabic-Indic and fullwidth).
+@pytest.mark.parametrize("every", ["30m", "1mo", "\u0661h", "\uff11m"])
 def test_datetime_round_unsupported(engine: pl.GPUEngine, every: str):
     ldf = pl.LazyFrame(
         {
@@ -675,6 +678,9 @@ def test_datetime_truncate(engine: pl.GPUEngine, dtype: pl.DataType, every: str)
         # polars truncates in local time for time zone aware datetimes.
         (pl.Datetime("us", time_zone="America/New_York"), "10m"),
         (pl.Datetime("us"), "1i"),
+        # polars only accepts ASCII digits (here Arabic-Indic and fullwidth).
+        (pl.Datetime("us"), "\u0661\u0660m"),
+        (pl.Datetime("us"), "\uff11m"),
         # polars raises for these.
         (pl.Datetime("us"), "-1h"),
         (pl.Datetime("us"), "1mo15d"),
