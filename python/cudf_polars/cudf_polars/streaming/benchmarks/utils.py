@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import importlib
+import importlib.util
 import json
 import os
 import pprint
@@ -820,6 +821,10 @@ def get_executor_options(
         run_config.streaming_options.to_executor_options()
     )
     if run_config.collect_traces:
+        if importlib.util.find_spec("cudf_polars_quent") is None:
+            raise RuntimeError(
+                "cudf_polars_quent is not installed. Please install it enable --collect-traces."
+            )
         executor_options["quent_context"] = cudf_polars.quent.QuentConfig(
             engine_id=run_config.run_id
         )
