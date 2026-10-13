@@ -9,10 +9,10 @@ cleanup() {
 }
 
 runtest() {
-    local lib=$1
-    local mode=$2
+    local mode=$1
+    shift
 
-    echo "Running tests for $lib in $mode mode"
+    echo "Running tests in $mode mode"
     local workers=${NUM_PROCESSES} args=()
     case $mode in
         cudf) args=("-p cudf.pandas") ;;
@@ -30,27 +30,31 @@ runtest() {
     --durations=50 --durations-min=1 \
     --numprocesses="${workers}" \
     --dist=worksteal \
-    "${TEST_DIR}"/test_"${lib}"*.py
+    "$@"
 }
 
 main() {
-    local lib=$1 environment=$2 repo_root
+    local environment=$1 repo_root lib
+    shift
     repo_root=$(git rev-parse --show-toplevel)
     TEST_DIR=${TEST_DIR:-${repo_root}/python/cudf/cudf_pandas_tests/third_party_integration_tests/tests}
     trap cleanup EXIT
 
-    # Activation stays in the test process, independent of background preparation.
     set +u
     source /opt/conda/etc/profile.d/conda.sh
     conda activate "$environment"
     set -u
 
-    NUM_PROCESSES=${NUM_PROCESSES:-0}
+    NUM_PROCESSES=${NUM_PROCESSES:-4}
     COMPARE_NUM_PROCESSES=${COMPARE_NUM_PROCESSES:-0}
-    if [[ $lib == tensorflow ]]; then
-        NUM_PROCESSES=1
-        COMPARE_NUM_PROCESSES=1
-    fi
+    local test_files=()
+    for lib in "$@"; do
+        test_files+=("${TEST_DIR}"/test_"${lib}"*.py)
+        if [[ $lib == tensorflow ]]; then
+            NUM_PROCESSES=1
+            COMPARE_NUM_PROCESSES=1
+        fi
+    done
     export TEST_DIR NUM_PROCESSES COMPARE_NUM_PROCESSES
     local status=0 workers mode
     for workers in "${NUM_PROCESSES}" "${COMPARE_NUM_PROCESSES:-${NUM_PROCESSES}}"; do
@@ -61,7 +65,7 @@ main() {
     done
 
     for mode in gold cudf compare; do
-        runtest "${lib}" "$mode" || status=1
+        runtest "$mode" "${test_files[@]}" || status=1
     done
 
     return "$status"

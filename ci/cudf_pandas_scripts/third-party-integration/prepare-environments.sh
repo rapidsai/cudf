@@ -4,30 +4,22 @@
 
 set -euo pipefail
 
-prepare_environment() {
-    local lib=$1 directory="${INTEGRATION_RUN_DIR}/$1"
-    local status=0 channels=()
-    mkdir -p "$directory"
+main() {
+    local dependencies_yaml=$1 environment=$2
+    shift 2
+    local lib channels=() file_keys=()
+    for lib in "$@"; do
+        file_keys+=(--file-key "test_${lib}")
+    done
     if [[ $RAPIDS_BUILD_TYPE == pull-request ]]; then
         channels=(--prepend-channel "$CPP_CHANNEL" --prepend-channel "$PYTHON_CHANNEL" --prepend-channel "$PYTHON_NOARCH_CHANNEL")
     fi
-    {
-        if rapids-dependency-file-generator \
-            --config "$INTEGRATION_DEPENDENCIES_YAML" --output conda --file-key "test_${lib}" \
-            --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
-            "${channels[@]}" | tee "${directory}/env.yaml" &&
-            rapids-mamba-retry env create --yes \
-                -f "${directory}/env.yaml" --prefix "${directory}/env"; then
-            status=0
-        else
-            status=$?
-        fi
-    } > "${directory}/prepare.log" 2>&1
-    # Atomic publication prevents consumers from reading an empty status file.
-    printf '%s\n' "$status" > "${directory}/status.tmp"
-    mv "${directory}/status.tmp" "${directory}/status"
+    rapids-dependency-file-generator \
+        --config "$dependencies_yaml" --output conda "${file_keys[@]}" \
+        --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
+        "${channels[@]}" | tee "${environment}.yaml"
+    rapids-mamba-retry env create --yes \
+        -f "${environment}.yaml" --prefix "$environment"
 }
 
-for library in "$@"; do
-    prepare_environment "$library"
-done
+main "$@"
