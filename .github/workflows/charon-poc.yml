@@ -7,6 +7,11 @@ on:
       - testing/charon-poc
       - testing/charon-poc-denied
   workflow_dispatch:
+    inputs:
+      read_services:
+        description: "Run staged service reads after the Charon grants and credentials are ready"
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -45,4 +50,56 @@ jobs:
               .addHeading('Charon identity preflight passed')
               .addRaw('Runner access and expected GitHub OIDC claims are confirmed. ')
               .addRaw('GitLab and Artifactory credential use has not been tested yet.')
+              .write();
+
+  tunnel-preflight:
+    needs: identity-preflight
+    runs-on: linux-amd64-cpu4
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout the proof-of-concept revision
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Verify the staging Charon tunnel
+        run: |
+          command -v tbot
+          tbot start -c .github/charon-tbot.yml &
+          timeout 45 bash -c 'until curl -sf http://127.0.0.1:8888/ready > /dev/null 2>&1; do sleep 1; done'
+
+  service-read:
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.read_services &&
+      (github.ref == 'refs/heads/testing/charon-poc' ||
+       github.ref == 'refs/heads/testing/charon-poc-denied')
+    runs-on: linux-amd64-cpu4
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout the proof-of-concept revision
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Start the staging Charon tunnel
+        run: |
+          command -v tbot
+          tbot start -c .github/charon-tbot.yml &
+          timeout 45 bash -c 'until curl -sf http://127.0.0.1:8888/ready > /dev/null 2>&1; do sleep 1; done'
+      - name: Test exact service reads or denied-branch requests
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
+            const runReads = require('./.github/scripts/charon-poc-read.cjs');
+            const token = await core.getIDToken('charon.nvidia.com');
+            const results = await runReads(token, {
+              expectDenied: context.ref === 'refs/heads/testing/charon-poc-denied',
+            });
+            for (const result of results) core.info(JSON.stringify(result));
+            await core.summary.addHeading('Charon service read results')
+              .addTable([['Service', 'Result'], ...results.map(r => [r.service, r.result])])
               .write();

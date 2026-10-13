@@ -1,0 +1,12 @@
+version: v2
+proxy_server: ext-nv-stg-apps.teleport.sh:443
+onboarding:
+  join_method: github
+  token: charon-gha-runners
+storage:
+  type: memory
+outputs: []
+services:
+  - type: application-tunnel
+    app_name: charon-v2
+    listen: tcp://127.0.0.1:8888
