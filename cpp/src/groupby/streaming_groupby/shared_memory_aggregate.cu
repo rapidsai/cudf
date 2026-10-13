@@ -3,12 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "groupby/hash/global_memory_aggregator.cuh"
-#include "groupby/hash/shared_memory_aggregator.cuh"
-#include "groupby/hash/shared_memory_dispatch.cuh"
-#include "groupby/hash/single_pass_functors.cuh"
 #include "shared_memory_aggregate.hpp"
+#include "shared_memory_aggregator.cuh"
 
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
@@ -24,8 +22,14 @@
 namespace cudf::groupby::detail::streaming {
 namespace {
 
-using hash::ALIGNMENT;
-using hash::dispatch_shared_memory_type_and_aggregation;
+/// Functor returning the size of a type
+struct size_of_fn {
+  template <typename T>
+  CUDF_HOST_DEVICE constexpr size_type operator()() const noexcept
+  {
+    return sizeof(T);
+  }
+};
 
 /// Thread block size of the shared memory aggregation kernel
 auto constexpr SHMEM_AGGS_BLOCK_SIZE = 256;
@@ -44,13 +48,14 @@ auto constexpr MIN_ACTIVE_BLOCKS_PER_SM = 2;
 
 std::size_t compute_shmem_size(table_view const& output_values, size_type num_groups)
 {
-  auto const mask_size    = util::round_up_safe(sizeof(bool) * num_groups, std::size_t{ALIGNMENT});
+  auto const mask_size =
+    util::round_up_safe(sizeof(bool) * num_groups, std::size_t{SHMEM_ALIGNMENT});
   auto const offsets_size = 2 * sizeof(size_type) * output_values.num_columns();
   std::size_t total       = offsets_size;
   for (auto const& col : output_values) {
-    auto const elem_size = static_cast<std::size_t>(
-      type_dispatcher<dispatch_storage_type>(col.type(), hash::size_of_functor{}));
-    total += util::round_up_safe(elem_size * num_groups, std::size_t{ALIGNMENT}) + mask_size;
+    auto const elem_size =
+      static_cast<std::size_t>(type_dispatcher<dispatch_storage_type>(col.type(), size_of_fn{}));
+    total += util::round_up_safe(elem_size * num_groups, std::size_t{SHMEM_ALIGNMENT}) + mask_size;
   }
   return total;
 }
@@ -70,7 +75,7 @@ CUDF_KERNEL void __launch_bounds__(SHMEM_AGGS_BLOCK_SIZE)
                               aggregation::Kind const* d_agg_kinds,
                               size_type agg_storage_size)
 {
-  extern __shared__ __align__(ALIGNMENT) cuda::std::byte shmem_agg_storage[];
+  extern __shared__ __align__(SHMEM_ALIGNMENT) cuda::std::byte shmem_agg_storage[];
 
   auto const num_cols = output_values.num_columns();
   auto* const shmem_agg_res_offsets =
@@ -79,14 +84,13 @@ CUDF_KERNEL void __launch_bounds__(SHMEM_AGGS_BLOCK_SIZE)
 
   if (threadIdx.x == 0) {
     auto const mask_size =
-      util::round_up_safe(static_cast<size_type>(sizeof(bool) * num_groups), ALIGNMENT);
+      util::round_up_safe(static_cast<size_type>(sizeof(bool) * num_groups), SHMEM_ALIGNMENT);
     size_type bytes_allocated = 0;
     for (size_type col_idx = 0; col_idx < num_cols; ++col_idx) {
-      auto const col_size =
-        util::round_up_safe(type_dispatcher<dispatch_storage_type>(
-                              output_values.column(col_idx).type(), hash::size_of_functor{}) *
-                              num_groups,
-                            ALIGNMENT);
+      auto const col_size = util::round_up_safe(
+        type_dispatcher<dispatch_storage_type>(output_values.column(col_idx).type(), size_of_fn{}) *
+          num_groups,
+        SHMEM_ALIGNMENT);
       shmem_agg_res_offsets[col_idx]  = bytes_allocated;
       shmem_agg_mask_offsets[col_idx] = bytes_allocated + col_size;
       bytes_allocated += col_size + mask_size;
@@ -99,12 +103,12 @@ CUDF_KERNEL void __launch_bounds__(SHMEM_AGGS_BLOCK_SIZE)
     auto* const target_mask =
       reinterpret_cast<bool*>(shmem_agg_storage + shmem_agg_mask_offsets[col_idx]);
     for (size_type idx = threadIdx.x; idx < num_groups; idx += blockDim.x) {
-      dispatch_shared_memory_type_and_aggregation(output_values.column(col_idx).type(),
-                                                  d_agg_kinds[col_idx],
-                                                  hash::initialize_shmem{},
-                                                  target,
-                                                  target_mask,
-                                                  idx);
+      dispatch_shmem_aggregation(input_values.column(col_idx).type(),
+                                 d_agg_kinds[col_idx],
+                                 initialize_shmem_fn{},
+                                 target,
+                                 target_mask,
+                                 idx);
     }
   }
   __syncthreads();
@@ -115,10 +119,10 @@ CUDF_KERNEL void __launch_bounds__(SHMEM_AGGS_BLOCK_SIZE)
     auto const target_idx = target_indices[source_idx];
     if (target_idx == cudf::detail::CUDF_SIZE_TYPE_SENTINEL) { continue; }
     for (size_type col_idx = 0; col_idx < num_cols; ++col_idx) {
-      dispatch_shared_memory_type_and_aggregation(
+      dispatch_shmem_aggregation(
         input_values.column(col_idx).type(),
         d_agg_kinds[col_idx],
-        hash::shmem_element_aggregator{},
+        shmem_element_aggregator{},
         shmem_agg_storage + shmem_agg_res_offsets[col_idx],
         reinterpret_cast<bool*>(shmem_agg_storage + shmem_agg_mask_offsets[col_idx]),
         target_idx,
@@ -130,13 +134,12 @@ CUDF_KERNEL void __launch_bounds__(SHMEM_AGGS_BLOCK_SIZE)
 
   for (size_type idx = threadIdx.x; idx < num_groups; idx += blockDim.x) {
     for (size_type col_idx = 0; col_idx < num_cols; ++col_idx) {
-      dispatch_shared_memory_type_and_aggregation(
+      dispatch_shmem_aggregation(
         input_values.column(col_idx).type(),
         d_agg_kinds[col_idx],
-        hash::gmem_element_aggregator{},
+        gmem_element_aggregator{},
         output_values.column(col_idx),
         idx,
-        input_values.column(col_idx),
         shmem_agg_storage + shmem_agg_res_offsets[col_idx],
         reinterpret_cast<bool*>(shmem_agg_storage + shmem_agg_mask_offsets[col_idx]),
         idx);
