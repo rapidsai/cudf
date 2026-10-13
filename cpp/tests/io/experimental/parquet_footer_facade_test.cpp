@@ -214,9 +214,9 @@ void read_written_footer(std::vector<char>& buffer,
   auto col1 = cudf::test::strings_column_wrapper{{"a", "bb", "ccc", "dddd", "eeeee"}};
   cudf::table_view const input({col0, col1});
 
-  auto opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, input).build();
-  if (not kv_metadata.empty()) { opts.set_key_value_metadata(std::move(kv_metadata)); }
+  auto builder = cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, input);
+  if (not kv_metadata.empty()) { builder.key_value_metadata(std::move(kv_metadata)); }
+  auto const opts = builder.build();
   cudf::io::write_parquet(opts);
 
   auto const src   = cudf::io::source_info{cudf::host_span<std::byte const>{
