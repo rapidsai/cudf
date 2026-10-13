@@ -2768,6 +2768,17 @@ void writer::impl::write(table_view const& input)
                               *_out_sink,
                               _stream);
 
+  if (_footer.headerLength != 0) {
+    // verify the user isn't passing mismatched tables
+    CUDF_EXPECTS(_footer.types.size() == 1 + orc_table.num_columns(),
+                 "Mismatch in table structure between multiple calls to write");
+    CUDF_EXPECTS(
+      std::all_of(orc_table.columns.cbegin(),
+                  orc_table.columns.cend(),
+                  [&](auto const& col) { return _footer.types[col.id()].kind == col.orc_kind(); }),
+      "Mismatch in column types between multiple calls to write");
+  }
+
   auto const first_write    = _state == writer_state::NO_DATA_WRITTEN;
   auto const rowgroup_blobs = std::move(intermediate_stats.rowgroup_blobs);
 
@@ -2937,15 +2948,6 @@ void writer::impl::add_table_to_footer_data(orc_table_view const& orc_table,
                        });
       }
     }
-  } else {
-    // verify the user isn't passing mismatched tables
-    CUDF_EXPECTS(_footer.types.size() == 1 + orc_table.num_columns(),
-                 "Mismatch in table structure between multiple calls to write");
-    CUDF_EXPECTS(
-      std::all_of(orc_table.columns.cbegin(),
-                  orc_table.columns.cend(),
-                  [&](auto const& col) { return _footer.types[col.id()].kind == col.orc_kind(); }),
-      "Mismatch in column types between multiple calls to write");
   }
   _footer.stripes.insert(_footer.stripes.end(),
                          std::make_move_iterator(stripes.begin()),

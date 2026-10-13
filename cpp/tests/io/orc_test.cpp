@@ -1190,6 +1190,12 @@ TEST_F(OrcChunkedWriterTest, MismatchedTypes)
   cudf::io::orc_chunked_writer writer(opts);
   writer.write(*table1);
   EXPECT_THROW(writer.write(*table2), cudf::logic_error);
+  writer.close();
+
+  // The mismatched write is rejected without affecting earlier writes
+  auto const result =
+    cudf::io::read_orc(cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *table1);
 }
 
 TEST_F(OrcChunkedWriterTest, ChunkedWritingAfterClosing)
@@ -1218,6 +1224,12 @@ TEST_F(OrcChunkedWriterTest, MismatchedStructure)
   cudf::io::orc_chunked_writer writer(opts);
   writer.write(*table1);
   EXPECT_THROW(writer.write(*table2), cudf::logic_error);
+  writer.close();
+
+  // The mismatched write is rejected without affecting earlier writes
+  auto const result =
+    cudf::io::read_orc(cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *table1);
 }
 
 TEST_F(OrcChunkedWriterTest, ReadStripes)
