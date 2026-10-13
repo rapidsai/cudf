@@ -18,12 +18,4 @@ jobs:
       date: '2026-10-13'
       sha: f5d3786c381c4801d17f0ea0a7ea995f0c4c0e23
       matrix_filter: map(select(.GPU == "rtxpro6000"))
-      script: |
-        control_dir=$(mktemp -d)
-        gh api 'repos/NVIDIA/cudf/contents/.ci-probes/main_callback_control.py?ref=2d841d677f90ca6fc32d08d6c06bfc3b3b4b2e0a' --jq .content | base64 --decode > "${control_dir}/main_callback_control.py"
-        gh api 'repos/NVIDIA/cudf/contents/python/cudf_polars/cudf_polars/callback.py?ref=bfac55d1aacf560770ca422d32fe6cb0f1cbeff0' --jq .content | base64 --decode > "${control_dir}/upstream_callback.py"
-        PYTHONPATH="${control_dir}" CUDF_POLARS_MAIN_CALLBACK_SOURCE="${control_dir}/upstream_callback.py" \
-          ci/test_cudf_polars_polars_tests.sh --engine spmd \
-          --inject-gpu-engine-blocksize small --run-slow \
-          --cudf-polars-shard-id 0 --cudf-polars-num-shards 2 \
-          -p main_callback_control
+      script: python -c exec(__import__('base64').b64decode('IiIiUnVuIG9uZSBDSSBzaGFyZCB3aXRoIGFuIHVwc3RyZWFtIGNhbGxiYWNrLCBleGNsdWRpbmcgYWRtaXNzaW9uIGV2aWRlbmNlLiIiIgoKaW1wb3J0IGJhc2U2NAppbXBvcnQgb3MKZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCmltcG9ydCBzdWJwcm9jZXNzCmltcG9ydCBzeXMKaW1wb3J0IHRlbXBmaWxlCgpzb3VyY2VzID0gewogICAgIm1haW5fY2FsbGJhY2tfY29udHJvbC5weSI6ICJyZXBvcy9OVklESUEvY3VkZi9jb250ZW50cy8uY2ktcHJvYmVzL21haW5fY2FsbGJhY2tfY29udHJvbC5weT9yZWY9MmQ4NDFkNjc3ZjkwY2E2ZmMzMmQwOGQ2YzA2YmZjM2IzYjRiMmUwYSIsCiAgICAidXBzdHJlYW1fY2FsbGJhY2sucHkiOiAicmVwb3MvTlZJRElBL2N1ZGYvY29udGVudHMvcHl0aG9uL2N1ZGZfcG9sYXJzL2N1ZGZfcG9sYXJzL2NhbGxiYWNrLnB5P3JlZj1iZmFjNTVkMWFhY2Y1NjA3NzBjYTQyMmQzMmZlNmNiMGYxY2JlZmYwIiwKfQp3aXRoIHRlbXBmaWxlLlRlbXBvcmFyeURpcmVjdG9yeShwcmVmaXg9InBvbGFycy1tYWluLWNhbGxiYWNrLWNvbnRyb2wtIikgYXMgZGlyZWN0b3J5OgogICAgZm9yIG5hbWUsIHNvdXJjZSBpbiBzb3VyY2VzLml0ZW1zKCk6CiAgICAgICAgZW5jb2RlZCA9IHN1YnByb2Nlc3MuY2hlY2tfb3V0cHV0KFsiZ2giLCAiYXBpIiwgc291cmNlLCAiLS1qcSIsICIuY29udGVudCJdKQogICAgICAgIFBhdGgoZGlyZWN0b3J5LCBuYW1lKS53cml0ZV9ieXRlcyhiYXNlNjQuYjY0ZGVjb2RlKGVuY29kZWQpKQogICAgZW52aXJvbm1lbnQgPSB7CiAgICAgICAgKipvcy5lbnZpcm9uLAogICAgICAgICJQWVRIT05QQVRIIjogZGlyZWN0b3J5LAogICAgICAgICJDVURGX1BPTEFSU19NQUlOX0NBTExCQUNLX1NPVVJDRSI6IHN0cihQYXRoKGRpcmVjdG9yeSwgInVwc3RyZWFtX2NhbGxiYWNrLnB5IikpLAogICAgfQogICAgcmVzdWx0ID0gc3VicHJvY2Vzcy5ydW4oCiAgICAgICAgWwogICAgICAgICAgICAiYmFzaCIsICJjaS90ZXN0X2N1ZGZfcG9sYXJzX3BvbGFyc190ZXN0cy5zaCIsICItLWVuZ2luZSIsICJzcG1kIiwKICAgICAgICAgICAgIi0taW5qZWN0LWdwdS1lbmdpbmUtYmxvY2tzaXplIiwgInNtYWxsIiwgIi0tcnVuLXNsb3ciLAogICAgICAgICAgICAiLS1jdWRmLXBvbGFycy1zaGFyZC1pZCIsICIwIiwgIi0tY3VkZi1wb2xhcnMtbnVtLXNoYXJkcyIsICIyIiwKICAgICAgICAgICAgIi1wIiwgIm1haW5fY2FsbGJhY2tfY29udHJvbCIsCiAgICAgICAgXSwKICAgICAgICBlbnY9ZW52aXJvbm1lbnQsCiAgICApCnN5cy5leGl0KHJlc3VsdC5yZXR1cm5jb2RlKQo='))
