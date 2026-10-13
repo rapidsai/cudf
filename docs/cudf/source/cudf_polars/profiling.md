@@ -153,7 +153,7 @@ from cudf_polars.quent import QuentConfig
 from cudf_polars.engine.spmd import SPMDEngine
 
 
-q = pl.read_parquet(...)  # build your polars query
+q = pl.scan_parquet(...)  # build your polars query
 
 quent_config = QuentConfig()
 with SPMDEngine(
