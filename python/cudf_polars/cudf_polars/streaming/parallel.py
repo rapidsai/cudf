@@ -19,6 +19,7 @@ import cudf_polars.streaming.filter_hint
 import cudf_polars.streaming.groupby
 import cudf_polars.streaming.io
 import cudf_polars.streaming.join
+import cudf_polars.streaming.rolling
 import cudf_polars.streaming.select
 import cudf_polars.streaming.shuffle
 import cudf_polars.streaming.sort  # noqa: F401
@@ -41,6 +42,7 @@ from cudf_polars.dsl.traversal import CachingVisitor, reuse_if_unchanged, traver
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.streaming.base import PartitionInfo
 from cudf_polars.streaming.dispatch import lower_ir_node
+from cudf_polars.streaming.hint_sorted import HintSorted
 from cudf_polars.streaming.io import _clear_source_info_cache
 from cudf_polars.streaming.repartition import Repartition
 from cudf_polars.streaming.utils import (
@@ -304,7 +306,10 @@ def _(
     ir: MapFunction, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     if ir.name == "hint_sorted":
-        return _lower_ir_pwise(ir, rec, preserve_partitioning=True)
+        child, partition_info = rec(ir.children[0])
+        new_node = HintSorted(ir.schema, ir.options, child)
+        partition_info[new_node] = partition_info[child]
+        return new_node, partition_info
 
     # Allow pointwise operations
     if ir.name in ("rename", "explode"):
@@ -346,7 +351,15 @@ def _lower_ir_pwise(
     return new_node, partition_info
 
 
-lower_ir_node.register(HConcat, _lower_ir_pwise)
+@lower_ir_node.register(HConcat)
+def _(
+    ir: HConcat, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    if ir.streaming_safe:
+        return _lower_ir_pwise(ir, rec)
+    return _lower_ir_fallback(
+        ir, rec, msg="HConcat is not supported for multiple partitions."
+    )
 
 
 @lower_ir_node.register(Filter)
