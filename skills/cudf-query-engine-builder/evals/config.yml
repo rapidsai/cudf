@@ -14,3 +14,5 @@ skill_workspace:
   mode: isolated
 grading:
   mode: default_plus_custom
+  custom_metrics:
+    - compiled_fixture_correctness
