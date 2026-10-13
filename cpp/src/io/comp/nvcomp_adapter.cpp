@@ -960,8 +960,6 @@ nvcompBatchedCascadedCompressOpts_t cascaded_compress_options(type_id value_type
 
 }  // namespace
 
-bool is_cascaded_enabled() { return nvcomp_integration::is_stable_enabled(); }
-
 size_t cascaded_compress_max_allowed_chunk_size()
 {
   return nvcompCascadedCompressionMaxAllowedChunkSize;

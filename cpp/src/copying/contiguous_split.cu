@@ -2516,24 +2516,6 @@ using io::detail::codec_status;
   }
 }
 
-[[nodiscard]] bool is_compression_enabled(pack_compression compression)
-{
-  if (compression == pack_compression::none) { return true; }
-  if (compression == pack_compression::cascaded) {
-    return io::detail::nvcomp::is_cascaded_enabled();
-  }
-  return io::detail::is_compression_supported(to_io_compression(compression));
-}
-
-[[nodiscard]] bool is_decompression_enabled(pack_compression compression)
-{
-  if (compression == pack_compression::none) { return true; }
-  if (compression == pack_compression::cascaded) {
-    return io::detail::nvcomp::is_cascaded_enabled();
-  }
-  return io::detail::is_decompression_supported(to_io_compression(compression));
-}
-
 // The integral type nvCOMP Cascaded interprets a buffer as.
 [[nodiscard]] type_id cascaded_type(type_id type, bool is_validity)
 {
@@ -3109,12 +3091,9 @@ std::unique_ptr<table> materialize_uncompressed(packed_data_view input,
 
 [[nodiscard]] pack_compression select_automatic_compression(compression_region_layout const& layout)
 {
-  if (layout.uncompressed_bytes < automatic_min_region_bytes ||
-      layout.kind == pack_region_kind::string_characters ||
-      !io::detail::nvcomp::is_cascaded_enabled()) {
-    return pack_compression::none;
-  }
-  return pack_compression::cascaded;
+  if (layout.uncompressed_bytes < automatic_min_region_bytes) { return pack_compression::none; }
+  return layout.kind == pack_region_kind::string_characters ? pack_compression::none
+                                                            : pack_compression::cascaded;
 }
 
 std::unique_ptr<detail::contiguous_split_state> make_split_state(cudf::table_view const& input,
@@ -3501,7 +3480,8 @@ class pack_plan::impl {
       auto block_bytes = raw_block_bytes;
       auto cascaded    = type_id::UINT8;
       if (requested != pack_compression::none) {
-        CUDF_EXPECTS(is_compression_enabled(requested),
+        CUDF_EXPECTS(requested == pack_compression::cascaded ||
+                       io::detail::is_compression_supported(to_io_compression(requested)),
                      "The selected compression codec is disabled");
         // Region sizes are multiples of split_align, so every block is a whole number of values.
         // Half the staging buffer leaves room for a block's worst-case compressed size.
@@ -3800,7 +3780,10 @@ std::unique_ptr<table> materialize_selection(packed_data_view input,
     uncompressed_end += entry.uncompressed_bytes;
     auto const compression = static_cast<pack_compression>(entry.compression);
     CUDF_EXPECTS(is_concrete_codec(compression), "Compressed region declares an unsupported codec");
-    CUDF_EXPECTS(is_decompression_enabled(compression), "The packed payload codec is disabled");
+    CUDF_EXPECTS(compression == pack_compression::none ||
+                   compression == pack_compression::cascaded ||
+                   io::detail::is_decompression_supported(to_io_compression(compression)),
+                 "The packed payload codec is disabled");
     CUDF_EXPECTS(
       entry.data_bytes <= entry.uncompressed_bytes &&
         (entry.data_bytes == 0 || entry.block_bytes > 0) &&
