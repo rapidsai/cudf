@@ -742,6 +742,14 @@ def default_target_partition_size(min_device_size: int | None) -> int:
     return min(max(int(min_device_size * 0.025), 1), _DEFAULT_TARGET_PARTITION_SIZE)
 
 
+def _sort_strategy_converter(value: str) -> Literal["in-memory", "external"]:
+    if value == "in-memory":
+        return "in-memory"
+    if value == "external":
+        return "external"
+    raise ValueError(f"sort_strategy must be 'in-memory' or 'external', got {value!r}")
+
+
 def default_broadcast_limit(min_device_size: int | None) -> int:
     """Return the default broadcast limit."""
     # TODO: Need empirical data to determine the optimal value.
@@ -1133,6 +1141,13 @@ class StreamingExecutor:
         Run ``sink_batches`` callbacks on each rank when ``maintain_order=False``.
         Enable only when all callbacks are safe to invoke concurrently across
         ranks. Disabled by default.
+    sort_strategy
+        How multi-partition Sort nodes execute: "in-memory" (default) buffers
+        the local input, range-shuffles it and sorts each received partition in
+        device memory; "external" streams the input into the disk-spilling
+        shuffler and sorts each partition with an external merge sort whose
+        runs live under rapidsmpf's ``disk_spill_dir`` (in host memory when no
+        spill directory is configured).
     dynamic_planning
         Options controlling dynamic shuffle planning. See
         :class:`~cudf_polars.utils.config.DynamicPlanningOptions` for more.
@@ -1302,6 +1317,13 @@ class StreamingExecutor:
             f"{_env_prefix}__PARALLEL_SINK_BATCHES", _bool_converter, default=False
         )
     )
+    sort_strategy: Literal["in-memory", "external"] = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__SORT_STRATEGY",
+            _sort_strategy_converter,
+            default="in-memory",
+        )
+    )
     dynamic_planning: DynamicPlanningOptions | None = dataclasses.field(
         default_factory=DynamicPlanningOptions
     )
@@ -1366,6 +1388,13 @@ class StreamingExecutor:
         if self.cluster is None:
             object.__setattr__(self, "cluster", Cluster.DEFAULT_SINGLETON)
         assert self.cluster is not None, "Expected cluster to be set."
+
+        if not isinstance(self.sort_strategy, str):
+            raise TypeError("sort_strategy must be a str")
+        if self.sort_strategy not in ("in-memory", "external"):
+            raise ValueError(
+                f"sort_strategy must be 'in-memory' or 'external', got {self.sort_strategy!r}"
+            )
 
         # frozen dataclass, so use object.__setattr__
         object.__setattr__(
