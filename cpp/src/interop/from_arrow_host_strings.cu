@@ -79,7 +79,8 @@ std::unique_ptr<column> from_arrow_stringview(
 
   // first copy stringview array to device
   auto items   = view.buffer_views[stringview_vector_idx].data.as_binary_view;
-  auto d_items = cuda::device_buffer<ArrowBinaryView>(stream, mr, input->length, cuda::no_init);
+  auto d_items = cuda::device_buffer<ArrowBinaryView>(
+    stream, cudf::get_current_device_resource_ref(), input->length, cuda::no_init);
   CUDF_CUDA_TRY(cudf::detail::memcpy_async(
     d_items.data(), items + input->offset, input->length * sizeof(ArrowBinaryView), stream));
 
@@ -108,7 +109,8 @@ std::unique_ptr<column> from_arrow_stringview(
   using string_index_pair = cudf::strings::detail::string_index_pair;
 
   // create indices to string fragments for the make_strings_column gather
-  auto d_indices = cuda::device_buffer<string_index_pair>(stream, mr, input->length, cuda::no_init);
+  auto d_indices = cuda::device_buffer<string_index_pair>(
+    stream, cudf::get_current_device_resource_ref(), input->length, cuda::no_init);
   thrust::transform(
     rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     cuda::counting_iterator<cudf::size_type>{0},

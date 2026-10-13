@@ -119,7 +119,8 @@ std::pair<std::unique_ptr<cuda::device_buffer<std::byte>>, size_type> get_mask_b
   auto const bit_index    = input->offset % bits_in_byte;
   auto const copy_size    = cudf::util::div_rounding_up_safe(num_rows + bit_index, bits_in_byte);
 
-  auto mask = cuda::device_buffer<bitmask_type>(stream, mr, padded_words, cuda::no_init);
+  auto mask = cuda::device_buffer<bitmask_type>(
+    stream, cudf::get_current_device_resource_ref(), padded_words, cuda::no_init);
   CUDF_CUDA_TRY(cudf::detail::memcpy_async(mask.data(), bitmap + offset_index, copy_size, stream));
 
   if (mask_words > 0 && bit_index > 0) {
@@ -201,12 +202,14 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<bool>(ArrowSch
   auto const bit_index    = input->offset % bits_in_byte;
   auto const copy_size    = cudf::util::div_rounding_up_safe(num_rows + bit_index, bits_in_byte);
 
-  auto data = cuda::device_buffer<bitmask_type>(stream, mr, data_words, cuda::no_init);
+  auto data = cuda::device_buffer<bitmask_type>(
+    stream, cudf::get_current_device_resource_ref(), data_words, cuda::no_init);
   CUDF_CUDA_TRY(
     cudf::detail::memcpy_async(data.data(), data_buffer + offset_index, copy_size, stream));
 
   if (data_words > 0 && bit_index > 0) {
-    auto dest_data = cuda::device_buffer<bitmask_type>(stream, mr, data_words, cuda::no_init);
+    auto dest_data = cuda::device_buffer<bitmask_type>(
+      stream, cudf::get_current_device_resource_ref(), data_words, cuda::no_init);
     cudf::detail::grid_1d config(data_words, 256);
     copy_shifted_bitmask<<<config.num_blocks, config.num_threads_per_block, 0, stream.get()>>>(
       dest_data.data(), data.data(), bit_index, bit_index + num_rows, data_words);
