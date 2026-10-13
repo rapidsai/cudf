@@ -90,11 +90,11 @@ constexpr inline bool has_common_type_v = detail::has_common_type_impl<Ts...>;
 
 /// Checks if a type is a timestamp type.
 template <typename T>
-using is_timestamp_t = cuda::std::bool_constant<concepts::timestamp<T>>;
+using is_timestamp_t = cuda::std::bool_constant<cudf::concepts::timestamp<T>>;
 
 /// Checks if a type is a duration type.
 template <typename T>
-using is_duration_t = cuda::std::bool_constant<concepts::duration<T>>;
+using is_duration_t = cuda::std::bool_constant<cudf::concepts::duration<T>>;
 
 /**
  * @brief Indicates whether objects of types `L` and `R` can be relationally
