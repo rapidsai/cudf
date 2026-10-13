@@ -95,7 +95,7 @@ direct_inner_join(column_view const& left_keys,
   auto lookup = cuda::device_buffer<size_type>(
     stream, cudf::get_current_device_resource_ref(), capacity, cuda::no_init);
   CUDF_CUDA_TRY(
-    cub::DeviceTransform::Fill(lookup.data(), lookup.size(), JoinNoMatch, stream.get()));
+    cub::DeviceTransform::Fill(lookup.begin(), lookup.size(), JoinNoMatch, stream.get()));
   CUDF_CUDA_TRY(
     cub::DeviceFor::Bulk(right_keys.size(),
                          scatter_right_index{lookup.data(), right_keys.begin<std::uint32_t>()},

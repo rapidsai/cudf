@@ -103,7 +103,7 @@ hash_join<Hasher>::partitioned_join_retrieve(join_kind join,
       auto offsets = cudf::detail::make_zeroed_device_buffer_async<cuda::std::int64_t>(
         static_cast<std::size_t>(partition_size) + 1, stream, temp_mr);
       auto const output_size = cudf::detail::sizes_to_offsets(
-        counts.data(), (counts.data() + counts.size()), offsets.data(), 0, stream, temp_mr);
+        counts.begin(), counts.end(), offsets.begin(), 0, stream, temp_mr);
       CUDF_EXPECTS(output_size >= 0, "Join output size overflowed", std::overflow_error);
       return std::pair(std::move(offsets), output_size);
     }();

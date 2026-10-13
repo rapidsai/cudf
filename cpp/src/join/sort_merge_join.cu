@@ -169,7 +169,7 @@ right_run_index build_right_run_index(SortedOrderIterator sorted_order,
   cuda::device_buffer<uint8_t> run_starts(stream, temp_mr, num_rows, cuda::no_init);
   CUDF_CUDA_TRY(cub::DeviceTransform::Transform(
     cuda::counting_iterator<size_type>{0},
-    run_starts.data(),
+    run_starts.begin(),
     num_rows,
     [sorted_order, less] __device__(size_type idx) -> uint8_t {
       return idx == 0 || less(sorted_order[idx - 1], sorted_order[idx]);
@@ -177,13 +177,13 @@ right_run_index build_right_run_index(SortedOrderIterator sorted_order,
     env));
 
   auto const input  = cuda::make_zip_iterator(sorted_order, cuda::counting_iterator<size_type>{0});
-  auto const output = cuda::make_zip_iterator(rows->data(), offsets->data());
+  auto const output = cuda::make_zip_iterator(rows->begin(), offsets->begin());
 
   CUDF_CUDA_TRY(
-    cub::DeviceSelect::Flagged(input, run_starts.data(), output, num_runs.data(), num_rows, env));
+    cub::DeviceSelect::Flagged(input, run_starts.begin(), output, num_runs.data(), num_rows, env));
 
   auto const host_num_runs = num_runs.value(stream);
-  CUDF_CUDA_TRY(cub::DeviceTransform::Fill(offsets->data() + host_num_runs, 1, num_rows, env));
+  CUDF_CUDA_TRY(cub::DeviceTransform::Fill(offsets->begin() + host_num_runs, 1, num_rows, env));
   return {std::move(rows), std::move(offsets), host_num_runs};
 }
 
@@ -452,7 +452,7 @@ merge<SmallerIterator>::inner(cuda::stream_ref stream, rmm::device_async_resourc
   auto last_element =
     cudf::detail::device_scalar<int64_t>(0, stream, cudf::get_current_device_resource_ref());
   auto output_itr = cudf::detail::make_sizes_to_offsets_iterator(
-    match_offsets.data(), (match_offsets.data() + match_offsets.size()), last_element.data());
+    match_offsets.begin(), match_offsets.end(), last_element.data());
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          match_counts->begin(),
                          match_counts->end(),
@@ -507,7 +507,7 @@ merge<SmallerIterator>::left(cuda::stream_ref stream, rmm::device_async_resource
       return cuda::std::max(match_counts[idx], size_type{1});
     });
   auto output_itr = cudf::detail::make_sizes_to_offsets_iterator(
-    match_offsets.data(), (match_offsets.data() + match_offsets.size()), total_matches.data());
+    match_offsets.begin(), match_offsets.end(), total_matches.data());
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          output_sizes,
                          output_sizes + match_counts->size(),
@@ -565,11 +565,10 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(cuda::stream_r
         cuda::std::reverse_iterator(lcv.offsets_end()),
         cuda::std::reverse_iterator(lcv.offsets_end()) + offsets.size(),
         cuda::std::reverse_iterator(cuda::counting_iterator{offsets.size()}),
-        cuda::std::reverse_iterator((offsets_subset.data() + offsets_subset.size())),
-        cuda::std::reverse_iterator((child_positions.data() + child_positions.size())));
-      auto subset_size = cuda::std::distance(
-        cuda::std::reverse_iterator((offsets_subset.data() + offsets_subset.size())),
-        cuda::std::get<0>(unique_end));
+        cuda::std::reverse_iterator(offsets_subset.end()),
+        cuda::std::reverse_iterator(child_positions.end()));
+      auto subset_size   = cuda::std::distance(cuda::std::reverse_iterator(offsets_subset.end()),
+                                             cuda::std::get<0>(unique_end));
       auto subset_offset = offsets.size() - subset_size;
 
       auto [reduced_validity_mask, num_nulls] =
@@ -732,7 +731,7 @@ cuda::device_buffer<size_type> sort_merge_join::preprocessed_table::map_table_to
     cuda::counting_iterator<size_type>{0},
     cuda::counting_iterator<size_type>{_table_view.num_rows()},
     cuda::counting_iterator<size_type>{0},
-    table_mapping.data(),
+    table_mapping.begin(),
     is_row_valid{reinterpret_cast<bitmask_type const*>(_validity_mask.value().data())},
     stream);
   return table_mapping;
@@ -879,7 +878,7 @@ sort_merge_join::left_join(table_view const& left,
       cudf::detail::copy_if_async(cuda::counting_iterator<size_type>{0},
                                   cuda::counting_iterator<size_type>{left.num_rows()},
                                   cuda::counting_iterator<size_type>{0},
-                                  null_left_indices.data(),
+                                  null_left_indices.dbeginata(),
                                   is_row_null{validity_mask},
                                   stream);
 
@@ -889,7 +888,7 @@ sort_merge_join::left_join(table_view const& left,
         cub::DeviceMerge::MergePairs(preprocessed_left_indices->begin(),
                                      preprocessed_right_indices->begin(),
                                      static_cast<int64_t>(preprocessed_left_indices->size()),
-                                     null_left_indices.data(),
+                                     null_left_indices.begin(),
                                      cuda::constant_iterator<size_type>{JoinNoMatch},
                                      static_cast<int64_t>(null_left_indices.size()),
                                      left_result_indices.begin(),
@@ -971,16 +970,16 @@ sort_merge_join::partitioned_inner_join(cudf::join_partition_context const& cont
   if (compare_nulls == null_equality::UNEQUAL && has_nested_nulls(preprocessed_left._table_view)) {
     auto left_mapping              = preprocessed_left.map_table_to_unprocessed(stream);
     null_processed_table_start_idx = cuda::std::distance(
-      left_mapping.data(),
+      left_mapping.begin(),
       thrust::lower_bound(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                          left_mapping.data(),
-                          (left_mapping.data() + left_mapping.size()),
+                          left_mapping.begin(),
+                          left_mapping.end(),
                           left_partition_start_idx));
     null_processed_table_end_idx = cuda::std::distance(
-      left_mapping.data(),
+      left_mapping.begin(),
       thrust::upper_bound(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                          left_mapping.data(),
-                          (left_mapping.data() + left_mapping.size()),
+                          left_mapping.begin(),
+                          left_mapping.end(),
                           left_partition_end_idx - 1));
   }
   auto null_processed_left_partition =

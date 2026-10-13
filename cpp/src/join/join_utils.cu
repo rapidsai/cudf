@@ -158,7 +158,7 @@ VectorPair finalize_full_join(VectorPair&& indices,
                        cuda::make_constant_iterator(size_type{1}) + match_total,
                        right_out->begin(),
                        right_out->begin(),
-                       computed_matches.data(),
+                       computed_matches.begin(),
                        valid_range<size_type>{0, right_table_num_rows});
   }
   auto const match_flags = right_matches ? right_matches->data() : computed_matches.data();

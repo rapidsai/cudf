@@ -345,8 +345,8 @@ class key_remap_table : public key_remap_table_interface {
     cuda::device_buffer<cudf::size_type> counts(
       stream, cudf::get_current_device_resource_ref(), right_num_rows, cuda::no_init);
     thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                 counts.data(),
-                 (counts.data() + counts.size()),
+                 counts.begin(),
+                 counts.end(),
                  0);
 
     cudf::detail::device_scalar<cudf::size_type> d_distinct_count{
@@ -364,8 +364,8 @@ class key_remap_table : public key_remap_table_interface {
 
     _max_duplicate_count =
       thrust::reduce(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                     counts.data(),
-                     (counts.data() + counts.size()),
+                     counts.begin(),
+                     counts.end(),
                      cudf::size_type{0},
                      cuda::maximum<cudf::size_type>{});
   }

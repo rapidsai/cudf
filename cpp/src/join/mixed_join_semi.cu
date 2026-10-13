@@ -203,7 +203,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   auto gather_map_end = cudf::detail::copy_if(
     cuda::counting_iterator<size_type>{0},
     cuda::counting_iterator<size_type>{left.num_rows()},
-    left_table_keep_mask.data(),
+    left_table_keep_mask.begin(),
     gather_map->begin(),
     [join_type] __device__(bool keep_row) -> bool {
       return keep_row == (join_type == join_kind::LEFT_SEMI_JOIN);

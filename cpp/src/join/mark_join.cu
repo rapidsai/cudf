@@ -488,7 +488,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_
     cuda::device_buffer<right_key_type> right_rows(
       stream, temp_mr, right.num_rows(), cuda::no_init);
     cub::DeviceTransform::Transform(cuda::counting_iterator<size_type>{0},
-                                    right_rows.data(),
+                                    right_rows.begin(),
                                     right.num_rows(),
                                     cuda::proclaim_return_type<right_key_type>(key_fn),
                                     stream.get());
@@ -641,13 +641,13 @@ mark_join::mark_join(cudf::table_view const& left,
   auto do_bloom_filter_insert = [&](auto const& hashes) {
     if (_bloom_filter == nullptr) return;
     if (has_null_left_keys) {
-      _bloom_filter->add_if_async(hashes.data(),
-                                  (hashes.data() + hashes.size()),
+      _bloom_filter->add_if_async(hashes.begin(),
+                                  hashes.end(),
                                   cuda::counting_iterator{size_type{0}},
                                   row_is_valid{row_bitmask_ptr},
                                   stream.get());
     } else {
-      _bloom_filter->add_async(hashes.data(), (hashes.data() + hashes.size()), stream.get());
+      _bloom_filter->add_async(hashes.begin(), hashes.end(), stream.get());
     }
   };
 
@@ -683,7 +683,7 @@ mark_join::mark_join(cudf::table_view const& left,
         stream, temp_mr, _left.num_rows(), cuda::no_init);
       cub::DeviceTransform::Transform(
         cuda::counting_iterator{size_type{0}},
-        left_hashes.data(),
+        left_hashes.begin(),
         _left.num_rows(),
         cuda::proclaim_return_type<hash_value_type>(masked_hash_value_fn{d_left_hasher}),
         stream.get());

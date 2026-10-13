@@ -234,7 +234,7 @@ distinct_hash_join::inner_join(cudf::table_view const& left,
 
   auto found_indices = cuda::device_buffer<size_type>(
     stream, cudf::get_current_device_resource_ref(), left_table_num_rows, cuda::no_init);
-  auto const found_begin = cuda::make_transform_output_iterator(found_indices.data(), output_fn{});
+  auto const found_begin = cuda::make_transform_output_iterator(found_indices.begin(), output_fn{});
 
   auto preprocessed_left = cudf::detail::row::equality::preprocessed_table::create(
     left, stream, cudf::get_current_device_resource_ref());
@@ -291,14 +291,14 @@ distinct_hash_join::inner_join(cudf::table_view const& left,
   auto const tuple_iter = cudf::detail::make_counting_transform_iterator(
     0,
     cuda::proclaim_return_type<cuda::std::tuple<size_type, size_type>>(
-      [found_iter = found_indices.data()] __device__(size_type idx) {
+      [found_iter = found_indices.begin()] __device__(size_type idx) {
         return cuda::std::tuple{*(found_iter + idx), idx};
       }));
   auto const output_begin = cuda::make_zip_iterator(right_indices->begin(), left_indices->begin());
   auto const output_end =
     cudf::detail::copy_if(tuple_iter,
                           tuple_iter + left_table_num_rows,
-                          found_indices.data(),
+                          found_indices.begin(),
                           output_begin,
                           cuda::proclaim_return_type<bool>(
                             [] __device__(size_type idx) { return idx != cudf::JoinNoMatch; }),
