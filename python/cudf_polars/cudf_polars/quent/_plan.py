@@ -9,7 +9,7 @@ import functools
 import json
 import os
 import uuid
-from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeAlias, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar
 
 from cudf_polars.dsl.expressions.base import Col, NamedExpr
 from cudf_polars.dsl.expressions.binaryop import BinOp
@@ -49,7 +49,7 @@ class DetailsEmitter(Protocol[DetailsT_contra]):
     def __call__(self, *, values: DetailsT_contra) -> None: ...
 
 
-OperatorDetails: TypeAlias = tuple[DetailsEmitter[DetailsT], DetailsT]
+type OperatorDetails[DetailsT] = tuple[DetailsEmitter[DetailsT], DetailsT]
 
 
 @functools.singledispatch
