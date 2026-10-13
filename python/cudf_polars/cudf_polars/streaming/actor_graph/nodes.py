@@ -596,7 +596,7 @@ def _(
                 tuple(channels[c].reserve_output_slot() for c in ir.children),
                 partitioning_callback=(
                     partial(build_hconcat_partitioning, ir)
-                    if isinstance(ir, HConcat)
+                    if isinstance(ir, HConcat) and ir.streaming_safe
                     else None
                 ),
             )
