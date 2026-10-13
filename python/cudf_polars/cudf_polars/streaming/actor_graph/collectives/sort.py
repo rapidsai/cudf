@@ -28,6 +28,8 @@ from cudf_polars.streaming.actor_graph.collectives.shuffle import ShuffleManager
 from cudf_polars.streaming.actor_graph.collectives.sort_utils import (
     build_order_scheme,
     compute_sort_boundaries,
+    find_sort_splits,
+    select_local_split_candidates,
     sort_by_column_names,
     sort_to_order_keys,
 )
@@ -58,11 +60,7 @@ from cudf_polars.streaming.actor_graph.utils import (
     send_metadata,
 )
 from cudf_polars.streaming.repartition import Repartition
-from cudf_polars.streaming.sort import (
-    _has_simple_zlice,
-    _select_local_split_candidates,
-    find_sort_splits,
-)
+from cudf_polars.streaming.sort import _has_simple_zlice
 from cudf_polars.utils.cuda_stream import get_joined_cuda_stream
 
 if TYPE_CHECKING:
@@ -215,7 +213,7 @@ async def _receive_and_buffer_chunks(
         )
         local_candidates_list.append(
             TableChunk.from_pylibcudf_table(
-                _select_local_split_candidates(
+                select_local_split_candidates(
                     df.select(by), by, num_partitions, seq_num
                 ).table,
                 df.stream,
