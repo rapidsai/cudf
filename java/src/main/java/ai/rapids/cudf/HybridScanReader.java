@@ -60,26 +60,51 @@ public class HybridScanReader implements AutoCloseable {
   }
 
   /**
+   * A materialized {@link Table} and the names of its columns, in the same order. The table is
+   * owned by this object; close via try-with-resources to release it.
+   */
+  public static final class TableWithColumnNames implements AutoCloseable {
+    private final Table table;
+    private final String[] columnNames;
+    private boolean closed = false;
+
+    TableWithColumnNames(Table table, String[] columnNames) {
+      this.table = table;
+      this.columnNames = columnNames;
+    }
+
+    /** @return the materialized table. */
+    public Table table() { return table; }
+
+    /** @return the names of the columns of {@link #table()}, in the same order. */
+    public String[] columnNames() { return columnNames; }
+
+    @Override
+    public synchronized void close() {
+      if (closed) return;
+      try { table.close(); } finally { closed = true; }
+    }
+  }
+
+  /**
    * The result of a combined row-mask-build + filter-column-materialization call.
    *
-   * <p>Both the filter {@link TableWithMeta} and the mutated row {@link ColumnVector} mask are
-   * owned by this object. Close via try-with-resources to release both.
+   * <p>Both the filter {@link TableWithColumnNames} and the mutated row {@link ColumnVector}
+   * mask are owned by this object. Close via try-with-resources to release both.
    */
   public static final class FilterMaterializationResult implements AutoCloseable {
-    private final TableWithMeta tableWithMeta;
+    private final TableWithColumnNames tableWithColumnNames;
     private final ColumnVector rowMask;
     private boolean closed = false;
 
-    FilterMaterializationResult(TableWithMeta tableWithMeta, ColumnVector rowMask) {
-      this.tableWithMeta = tableWithMeta;
+    FilterMaterializationResult(TableWithColumnNames tableWithColumnNames,
+                                ColumnVector rowMask) {
+      this.tableWithColumnNames = tableWithColumnNames;
       this.rowMask = rowMask;
     }
 
-    /**
-     * @return the materialized filter column table with its column names. Still owned by this
-     *         result; a table taken via {@link TableWithMeta#releaseTable()} is the caller's.
-     */
-    public TableWithMeta tableWithMeta() { return tableWithMeta; }
+    /** @return the materialized filter column table with its column names. */
+    public TableWithColumnNames tableWithColumnNames() { return tableWithColumnNames; }
 
     /** @return the (mutated) row mask after the filter expression was applied. */
     public ColumnVector rowMask() { return rowMask; }
@@ -87,7 +112,7 @@ public class HybridScanReader implements AutoCloseable {
     @Override
     public synchronized void close() {
       if (closed) return;
-      try { tableWithMeta.close(); } finally {
+      try { tableWithColumnNames.close(); } finally {
         try { rowMask.close(); } finally { closed = true; }
       }
     }
@@ -368,12 +393,13 @@ public class HybridScanReader implements AutoCloseable {
     long[] lens = bufferLens(columnChunkData);
     long[] handles = materializeFilterColumns(cleaner.nativeHandle, rowGroupIndices,
         addrs, lens, usePageLevelPruning);
-    TableWithMeta tableWithMeta = new TableWithMeta(handles[1]);
+    TableWithColumnNames tableWithColumnNames = toTableWithColumnNames(handles[1]);
     try {
-      return new FilterMaterializationResult(tableWithMeta, new ColumnVector(handles[0]));
+      return new FilterMaterializationResult(tableWithColumnNames,
+          new ColumnVector(handles[0]));
     } catch (Throwable t) {
       try {
-        tableWithMeta.close();
+        tableWithColumnNames.close();
       } catch (Throwable s) {
         t.addSuppressed(s);
       }
@@ -396,17 +422,25 @@ public class HybridScanReader implements AutoCloseable {
    *                             mask proves empty
    * @return the materialized payload column table with its column names; caller must close
    */
-  public TableWithMeta materializePayloadColumns(int[] rowGroupIndices,
-                                                 DeviceMemoryBuffer[] columnChunkData,
-                                                 ColumnVector rowMask,
-                                                 boolean usePageLevelPruning) {
+  public TableWithColumnNames materializePayloadColumns(int[] rowGroupIndices,
+                                                        DeviceMemoryBuffer[] columnChunkData,
+                                                        ColumnVector rowMask,
+                                                        boolean usePageLevelPruning) {
     assertNotClosed();
     requireNonNullRowGroups(rowGroupIndices);
     requireNonNullRowMask(rowMask);
     long[] addrs = bufferAddrs(columnChunkData);
     long[] lens = bufferLens(columnChunkData);
-    return new TableWithMeta(materializePayloadColumns(cleaner.nativeHandle, rowGroupIndices,
-        addrs, lens, rowMask.getNativeView(), usePageLevelPruning));
+    return toTableWithColumnNames(materializePayloadColumns(cleaner.nativeHandle,
+        rowGroupIndices, addrs, lens, rowMask.getNativeView(), usePageLevelPruning));
+  }
+
+  /** Takes ownership of a native {@code table_with_metadata} handle. */
+  private static TableWithColumnNames toTableWithColumnNames(long tableWithMetaHandle) {
+    try (TableWithMeta tableWithMeta = new TableWithMeta(tableWithMetaHandle)) {
+      String[] columnNames = tableWithMeta.getColumnNames();
+      return new TableWithColumnNames(tableWithMeta.releaseTable(), columnNames);
+    }
   }
 
   // ----------------------------------------------------------------------

@@ -164,9 +164,8 @@ public class HybridScanReaderTest extends CudfTestBase {
       DeviceMemoryBuffer[] filterCols = copyRangesToDevice(
           open.file, reader.filterColumnChunksByteRanges(survived));
       try (HybridScanReader.FilterMaterializationResult fr =
-               reader.materializeFilterColumns(survived, filterCols, true);
-           Table filterTable = fr.tableWithMeta().releaseTable()) {
-        assertEquals(5000L, filterTable.getRowCount(),
+               reader.materializeFilterColumns(survived, filterCols, true)) {
+        assertEquals(5000L, fr.tableWithColumnNames().table().getRowCount(),
             "Group 2 (zip_code 100,000–104,999) entirely satisfies zip_code > 99,999");
       } finally {
         closeAll(filterCols);
@@ -557,11 +556,10 @@ public class HybridScanReaderTest extends CudfTestBase {
           open.file, reader.filterColumnChunksByteRanges(survived));
       try (HybridScanReader.FilterMaterializationResult fr =
                reader.materializeFilterColumns(survived, filterCols, false)) {
-        assertArrayEquals(new String[]{"zip_code"}, fr.tableWithMeta().getColumnNames());
-        try (Table filterTable = fr.tableWithMeta().releaseTable()) {
-          assertEquals(1599L, filterTable.getRowCount());
-          assertEquals(1, filterTable.getNumberOfColumns(), "filter table contains only zip_code");
-        }
+        HybridScanReader.TableWithColumnNames filter = fr.tableWithColumnNames();
+        assertArrayEquals(new String[]{"zip_code"}, filter.columnNames());
+        assertEquals(1599L, filter.table().getRowCount());
+        assertEquals(1, filter.table().getNumberOfColumns(), "filter table contains only zip_code");
       } finally {
         closeAll(filterCols);
       }
@@ -589,12 +587,12 @@ public class HybridScanReaderTest extends CudfTestBase {
           open.file, reader.filterColumnChunksByteRanges(survived));
       try (HybridScanReader.FilterMaterializationResult fr =
                reader.materializeFilterColumns(survived, filterCols, false);
-           Table filterTable = fr.tableWithMeta().releaseTable();
            ColumnVector expectedZip = ColumnVector.fromInts(
                Arrays.stream(ids).map(i -> 10000 + i * 100).toArray());
            ColumnVector expectedUnits = ColumnVector.fromInts(
                IntStream.generate(() -> 2).limit(ids.length).toArray())) {
-        List<String> names = Arrays.asList(fr.tableWithMeta().getColumnNames());
+        Table filterTable = fr.tableWithColumnNames().table();
+        List<String> names = Arrays.asList(fr.tableWithColumnNames().columnNames());
         String[] sortedNames = names.toArray(new String[0]);
         Arrays.sort(sortedNames);
         assertArrayEquals(new String[]{"num_units", "zip_code"}, sortedNames,
@@ -632,18 +630,17 @@ public class HybridScanReaderTest extends CudfTestBase {
             open.file, reader.payloadColumnChunksByteRanges(survived));
         try (HybridScanReader.FilterMaterializationResult fr =
                  reader.materializeFilterColumns(survived, filterCols, false);
-             TableWithMeta payload = reader.materializePayloadColumns(survived, payloadCols,
-                 fr.rowMask(), false);
+             HybridScanReader.TableWithColumnNames payload =
+                 reader.materializePayloadColumns(survived, payloadCols, fr.rowMask(), false);
              ColumnVector expectedIds = ColumnVector.fromInts(
                  IntStream.rangeClosed(1401, 2999).toArray());
              ColumnVector expectedUnits = ColumnVector.fromInts(
                  IntStream.rangeClosed(1401, 2999).map(i -> 1 + (i % 3)).toArray())) {
-          assertArrayEquals(new String[]{"id", "num_units"}, payload.getColumnNames());
-          try (Table table = payload.releaseTable()) {
-            assertEquals(2, table.getNumberOfColumns(), "payload table contains id + num_units");
-            AssertUtils.assertColumnsAreEqual(expectedIds, table.getColumn(0), "id");
-            AssertUtils.assertColumnsAreEqual(expectedUnits, table.getColumn(1), "num_units");
-          }
+          assertArrayEquals(new String[]{"id", "num_units"}, payload.columnNames());
+          Table table = payload.table();
+          assertEquals(2, table.getNumberOfColumns(), "payload table contains id + num_units");
+          AssertUtils.assertColumnsAreEqual(expectedIds, table.getColumn(0), "id");
+          AssertUtils.assertColumnsAreEqual(expectedUnits, table.getColumn(1), "num_units");
         }
       } finally {
         closeAll(filterCols);
@@ -676,11 +673,11 @@ public class HybridScanReaderTest extends CudfTestBase {
             open.file, reader.payloadColumnChunksByteRanges(survived));
         try (HybridScanReader.FilterMaterializationResult fr =
                  reader.materializeFilterColumns(survived, filterCols, false);
-             TableWithMeta payloadWithMeta = reader.materializePayloadColumns(survived,
-                 payloadCols, fr.rowMask(), true);
-             Table payload = payloadWithMeta.releaseTable();
+             HybridScanReader.TableWithColumnNames payloadResult =
+                 reader.materializePayloadColumns(survived, payloadCols, fr.rowMask(), true);
              ColumnVector expectedIds = ColumnVector.fromInts(
                  IntStream.rangeClosed(100001, 119999).toArray())) {
+          Table payload = payloadResult.table();
           assertEquals(2, payload.getNumberOfColumns(), "payload table contains id + num_units");
           assertEquals(19999L, payload.getRowCount());
           AssertUtils.assertColumnsAreEqual(expectedIds, payload.getColumn(0), "id");
