@@ -15,7 +15,7 @@ AUDITWHEEL_EXCLUDES=(
   --exclude libcudf.so
   --exclude libcudf_streaming.so
   --exclude libkvikio.so
-  --exclude libnvcomp.so.5
+  --exclude libnvcomp.so.6
   --exclude librapids_logger.so
   --exclude librapidsmpf.so
   --exclude librmm.so
