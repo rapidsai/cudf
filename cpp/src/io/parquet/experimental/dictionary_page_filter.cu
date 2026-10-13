@@ -28,7 +28,6 @@
 #include <cuco/extent.cuh>
 #include <cuco/static_set.cuh>
 #include <cuda/iterator>
-#include <cuda/numeric>
 #include <cuda/stream>
 
 #include <optional>
@@ -160,12 +159,11 @@ struct query_equality_functor {
  * @param page_data_size Size of the page data
  * @return Boolean indicating if there is a data stream overrun
  */
-__device__ __forceinline__ bool is_stream_overrun(size_type offset,
+__device__ __forceinline__ bool is_stream_overrun(std::size_t offset,
                                                   std::size_t length,
                                                   size_type page_data_size)
 {
-  auto const end = cuda::add_overflow<size_type>(offset, length);
-  return end.overflow or end.value > page_data_size;
+  return offset + length > static_cast<std::size_t>(page_data_size);
 }
 
 /**
@@ -379,7 +377,9 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
   switch (physical_type) {
     case parquet::Type::INT96: {
       // Check if we have a stream overrun
-      if (is_stream_overrun(value_idx * INT96_SIZE, INT96_SIZE, page.uncompressed_page_size)) {
+      if (is_stream_overrun(static_cast<std::size_t>(value_idx) * INT96_SIZE,
+                            INT96_SIZE,
+                            page.uncompressed_page_size)) {
         set_error(error, decode_error::DATA_STREAM_OVERRUN);
         return {};
       }
@@ -399,7 +399,9 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
 
     case parquet::Type::FIXED_LEN_BYTE_ARRAY: {
       // Check if we have a stream overrun
-      if (is_stream_overrun(value_idx * flba_length, flba_length, page.uncompressed_page_size)) {
+      if (is_stream_overrun(static_cast<std::size_t>(value_idx) * flba_length,
+                            flba_length,
+                            page.uncompressed_page_size)) {
         set_error(error, decode_error::DATA_STREAM_OVERRUN);
         return {};
       }
@@ -426,8 +428,9 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
     }
     case parquet::Type::INT32: {
       // Check if we are overruning the data stream
-      if (is_stream_overrun(
-            value_idx * sizeof(int32_t), sizeof(int32_t), page.uncompressed_page_size)) {
+      if (is_stream_overrun(static_cast<std::size_t>(value_idx) * sizeof(int32_t),
+                            sizeof(int32_t),
+                            page.uncompressed_page_size)) {
         set_error(error, decode_error::DATA_STREAM_OVERRUN);
         return {};
       }
@@ -486,8 +489,9 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
     }
     case parquet::Type::INT64: {
       // Check if we are overruning the data stream
-      if (is_stream_overrun(
-            value_idx * sizeof(int64_t), sizeof(int64_t), page.uncompressed_page_size)) {
+      if (is_stream_overrun(static_cast<std::size_t>(value_idx) * sizeof(int64_t),
+                            sizeof(int64_t),
+                            page.uncompressed_page_size)) {
         set_error(error, decode_error::DATA_STREAM_OVERRUN);
         return {};
       }
@@ -512,7 +516,9 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
     case parquet::Type::FLOAT: [[fallthrough]];
     case parquet::Type::DOUBLE: {
       // Check if we are overruning the data stream
-      if (is_stream_overrun(value_idx * sizeof(T), sizeof(T), page.uncompressed_page_size)) {
+      if (is_stream_overrun(static_cast<std::size_t>(value_idx) * sizeof(T),
+                            sizeof(T),
+                            page.uncompressed_page_size)) {
         set_error(error, decode_error::DATA_STREAM_OVERRUN);
         return {};
       }
