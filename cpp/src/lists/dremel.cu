@@ -98,7 +98,7 @@ dremel_data get_encoding(column_view h_col,
                      empties_idx.begin(),
                      empties_idx_end,
                      lcv.offsets().begin<int32_t>(),
-                     empties.data());
+                     empties.begin());
 
     auto empties_size = empties_end - empties.begin();
     return std::make_tuple(std::move(empties), std::move(empties_idx), empties_size);
