@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-INTEGRATION_RUN_DIR=${INTEGRATION_RUN_DIR:-}
+INTEGRATION_RUN_DIR=''
 
 cleanup() {
     local status=$?
@@ -12,6 +12,24 @@ cleanup() {
         rm -rf -- "$INTEGRATION_RUN_DIR" || status=1
     fi
     return "$status"
+}
+
+prepare_environment() {
+    local dependencies_yaml=$1 environment=$2
+    shift 2
+    local lib channels=() file_keys=()
+    for lib in "$@"; do
+        file_keys+=(--file-key "test_${lib}")
+    done
+    if [[ $RAPIDS_BUILD_TYPE == pull-request ]]; then
+        channels=(--prepend-channel "$CPP_CHANNEL" --prepend-channel "$PYTHON_CHANNEL" --prepend-channel "$PYTHON_NOARCH_CHANNEL")
+    fi
+    rapids-dependency-file-generator \
+        --config "$dependencies_yaml" --output conda "${file_keys[@]}" \
+        --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
+        "${channels[@]}" | tee "${environment}.yaml" || return
+    rapids-mamba-retry env create --yes \
+        -f "${environment}.yaml" --prefix "$environment"
 }
 
 main() {
@@ -31,7 +49,6 @@ main() {
         CPP_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_cpp libcudf cudf --cuda "$RAPIDS_CUDA_VERSION")")
         PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_python cudf cudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
         PYTHON_NOARCH_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_python cudf cudf --pure --cuda "$RAPIDS_CUDA_VERSION" --arch any)")
-        export CPP_CHANNEL PYTHON_CHANNEL PYTHON_NOARCH_CHANNEL
     fi
     INTEGRATION_RUN_DIR=$(mktemp -d "${TMPDIR:-/tmp}/cudf-pandas-integration.XXXXXX")
     trap cleanup EXIT
@@ -51,7 +68,7 @@ main() {
         environment="${INTEGRATION_RUN_DIR}/group-${group_index}"
         group_index=$((group_index + 1))
         printf 'Prepare integration environment: %s\n' "$group"
-        if bash "${scripts_dir}/prepare-environments.sh" "$dependencies_yaml" "$environment" "${group_libraries[@]}"; then
+        if prepare_environment "$dependencies_yaml" "$environment" "${group_libraries[@]}"; then
             printf 'Integration tests: %s\n' "$group"
             if timeout 45m bash "${scripts_dir}/run-library-tests.sh" "$environment" "${group_libraries[@]}"; then
                 test_status=0

@@ -18,7 +18,7 @@ runtest() {
         cudf) args=("-p cudf.pandas") ;;
         compare)
             args=(--compare -p cudf.pandas)
-            workers=${COMPARE_NUM_PROCESSES:-${NUM_PROCESSES}}
+            workers=${COMPARE_NUM_PROCESSES}
             ;;
     esac
 
@@ -51,13 +51,12 @@ main() {
     for lib in "$@"; do
         test_files+=("${TEST_DIR}"/test_"${lib}"*.py)
         if [[ $lib == tensorflow ]]; then
-            NUM_PROCESSES=1
-            COMPARE_NUM_PROCESSES=1
+            NUM_PROCESSES=0
+            COMPARE_NUM_PROCESSES=0
         fi
     done
-    export TEST_DIR NUM_PROCESSES COMPARE_NUM_PROCESSES
     local status=0 workers mode
-    for workers in "${NUM_PROCESSES}" "${COMPARE_NUM_PROCESSES:-${NUM_PROCESSES}}"; do
+    for workers in "${NUM_PROCESSES}" "${COMPARE_NUM_PROCESSES}"; do
         if [[ ! $workers =~ ^(0|[1-9][0-9]*)$ ]]; then
             printf 'Worker counts must be nonnegative integers: %s\n' "$workers" >&2
             return 1
