@@ -13,6 +13,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/stream>
 
@@ -84,7 +85,8 @@ std::unique_ptr<column> group_nunique(column_view const& values,
 
   auto const d_values_view = column_device_view::create(values, stream, temp_mr);
 
-  auto d_result = rmm::device_uvector<size_type>(group_labels.size(), stream, temp_mr);
+  auto d_result =
+    cuda::device_buffer<size_type>(stream, temp_mr, group_labels.size(), cuda::no_init);
 
   auto const comparator_helper = [&](auto const d_equal) {
     auto fn = is_unique_iterator_fn{nullate::DYNAMIC{values.has_nulls()},
@@ -96,7 +98,7 @@ std::unique_ptr<column> group_nunique(column_view const& values,
     thrust::transform(rmm::exec_policy_nosync(stream, temp_mr),
                       cuda::counting_iterator<size_type>{0},
                       cuda::counting_iterator<size_type>{values.size()},
-                      d_result.begin(),
+                      d_result.data(),
                       fn);
   };
 
@@ -114,7 +116,7 @@ std::unique_ptr<column> group_nunique(column_view const& values,
   // it also helps that we are only calling it once for both conditions
   cudf::detail::reduce_by_key_async(group_labels.begin(),
                                     group_labels.end(),
-                                    d_result.begin(),
+                                    d_result.data(),
                                     cuda::make_discard_iterator(),
                                     result->mutable_view().begin<size_type>(),
                                     cuda::std::plus<size_type>(),

@@ -25,6 +25,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/std/functional>
 #include <cuda/stream>
@@ -146,7 +147,8 @@ struct group_scan_functor<K,
     if (values.is_empty()) { return cudf::make_empty_column(cudf::type_id::STRING); }
 
     // create an empty output vector we can fill with string_view instances
-    auto results_vector = rmm::device_uvector<string_view>(values.size(), stream);
+    auto results_vector = cuda::device_buffer<string_view>(
+      stream, cudf::get_current_device_resource_ref(), values.size(), cuda::no_init);
 
     auto values_view = column_device_view::create(values, stream);
 
@@ -165,9 +167,9 @@ struct group_scan_functor<K,
     if (values.has_nulls()) {
       auto input = make_null_replacement_iterator(
         *values_view, OpType::template identity<string_view>(), values.has_nulls());
-      do_scan(input, results_vector.begin(), OpType{});
+      do_scan(input, results_vector.data(), OpType{});
     } else {
-      do_scan(values_view->begin<string_view>(), results_vector.begin(), OpType{});
+      do_scan(values_view->begin<string_view>(), results_vector.data(), OpType{});
     }
 
     // turn the string_view vector into a strings column
@@ -191,7 +193,8 @@ struct group_scan_functor<K,
     if (values.is_empty()) { return cudf::empty_like(values); }
 
     // Create a gather map containing indices of the prefix min/max elements within each group.
-    auto gather_map = rmm::device_uvector<size_type>(values.size(), stream);
+    cuda::device_buffer<size_type> gather_map(
+      stream, cudf::get_current_device_resource_ref(), values.size(), cuda::no_init);
 
     auto const binop_generator =
       cudf::reduction::detail::arg_minmax_binop_generator::create<K>(values, stream);
@@ -200,7 +203,7 @@ struct group_scan_functor<K,
       group_labels.begin(),
       group_labels.end(),
       cuda::counting_iterator<size_type>{0},
-      gather_map.begin(),
+      gather_map.data(),
       cuda::std::equal_to{},
       binop_generator.binop());
 

@@ -9,11 +9,13 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/valid_if.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/std/cmath>
 #include <cuda/std/functional>
@@ -131,17 +133,18 @@ std::unique_ptr<column> compute_variance_std(TransformFunc&& transform_fn,
 
   // Since we may have new null rows depending on the group count, we need to generate a new null
   // mask from scratch.
-  rmm::device_uvector<bool> validity(size, stream);
+  cuda::device_buffer<bool> validity(
+    stream, cudf::get_current_device_resource_ref(), size, cuda::no_init);
 
   auto const out_it =
-    cuda::make_zip_iterator(output->mutable_view().begin<TargetType>(), validity.begin());
+    cuda::make_zip_iterator(output->mutable_view().begin<TargetType>(), validity.data());
   thrust::tabulate(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    out_it,
                    out_it + size,
                    transform_fn);
 
-  auto [null_mask, null_count] =
-    cudf::detail::valid_if(validity.begin(), validity.end(), cuda::std::identity{}, stream, mr);
+  auto [null_mask, null_count] = cudf::detail::valid_if(
+    validity.data(), (validity.data() + validity.size()), cuda::std::identity{}, stream, mr);
   if (null_count > 0) { output->set_null_mask(std::move(null_mask), null_count); }
 
   return output;
