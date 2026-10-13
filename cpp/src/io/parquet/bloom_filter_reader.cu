@@ -312,7 +312,7 @@ struct bloom_filter_caster {
  * @throws cudf::logic_error if the column and literal types mismatch
  *
  * @param op Comparison operator
- * @param col_idx Index of the column in the output table
+ * @param col_idx Output column index
  * @param literal Literal compared against the column
  * @param output_dtypes Output data types of columns
  * @param mismatched_timestamp_mask Boolean span indicating if an output column is a timestamp

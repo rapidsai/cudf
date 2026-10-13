@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias, assert_never
+from typing import TYPE_CHECKING, Any, Literal, assert_never
 
 from cudf_streaming import CardinalityEstimator
 from cudf_streaming.channel_metadata import (
@@ -163,10 +163,8 @@ class OrderedJoinStrategy:
     """Join-output ordering metadata."""
 
 
-JoinStrategy: TypeAlias = (
-    BroadcastJoinStrategy | ShuffleJoinStrategy | OrderedJoinStrategy
-)
-OrderedJoinDecision: TypeAlias = Literal[
+type JoinStrategy = BroadcastJoinStrategy | ShuffleJoinStrategy | OrderedJoinStrategy
+type OrderedJoinDecision = Literal[
     "ordered_aligned",
     "ordered_adjust_left",
     "ordered_adjust_right",
@@ -266,8 +264,9 @@ async def broadcast_join_actor(
         chs_out=(ch_out,),
         trace_ir=ir,
         ir_context=ir_context,
-    ) as tracer:
-        ir_context = replace(ir_context, tracer=tracer)
+    ) as actor_scope:
+        tracer = actor_scope.tracer
+        ir_context = actor_scope.require_ir_context()
         await broadcast_join(
             context,
             comm,
@@ -981,7 +980,8 @@ async def _shuffle_join(
         chs_aux=(ch_left_shuffle, ch_right_shuffle),
         trace_ir=ir,
         ir_context=ir_context,
-    ):
+    ) as actor_scope:
+        ir_context = actor_scope.require_ir_context()
         actor_tasks = [
             _global_shuffle(
                 context,
@@ -1142,7 +1142,8 @@ async def _ordered_join(
         chs_aux=(ch_left_adjusted, ch_right_adjusted),
         trace_ir=ir,
         ir_context=ir_context,
-    ):
+    ) as actor_scope:
+        ir_context = actor_scope.require_ir_context()
         await gather_in_task_group(
             _adjust_ordered_join_side(
                 context,
@@ -1900,8 +1901,9 @@ async def join_actor(
         chs_aux=ch_prefilter_domains,
         trace_ir=ir,
         ir_context=ir_context,
-    ) as tracer:
-        ir_context = replace(ir_context, tracer=tracer)
+    ) as actor_scope:
+        tracer = actor_scope.tracer
+        ir_context = actor_scope.require_ir_context()
         (
             left_metadata,
             right_metadata,
@@ -1964,7 +1966,8 @@ async def join_actor(
             chs_aux=(ch_left_replay, ch_right_replay, *prefilter_execution.channels),
             trace_ir=ir,
             ir_context=ir_context,
-        ):
+        ) as inner_actor_scope:
+            ir_context = inner_actor_scope.require_ir_context()
             actor_tasks = [
                 replay_buffered_channel(
                     context,
