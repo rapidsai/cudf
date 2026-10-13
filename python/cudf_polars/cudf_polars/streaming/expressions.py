@@ -148,6 +148,8 @@ def select(
     partition_info
         A mapping from unique nodes in the new graph to associated
         partitioning information.
+    hconcat_shape
+        How the decomposed expression lines up with sibling expressions.
     """
     named_exprs = [NamedExpr(next(names), expr) for expr in exprs]
     new_ir: IR = Select(
