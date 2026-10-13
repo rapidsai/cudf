@@ -148,8 +148,6 @@ def select(
     partition_info
         A mapping from unique nodes in the new graph to associated
         partitioning information.
-    hconcat_shape
-        How the decomposed expression lines up with sibling expressions.
     """
     named_exprs = [NamedExpr(next(names), expr) for expr in exprs]
     new_ir: IR = Select(
@@ -441,6 +439,8 @@ def _decompose_expr_node(
     partition_info
         A mapping from unique nodes in the new graph to associated
         partitioning information.
+    hconcat_shape
+        How the decomposed expression lines up with sibling expressions.
     """
     if isinstance(expr, Literal):
         # For Literal nodes, we don't actually want an
@@ -614,6 +614,8 @@ def decompose_expr_graph(
     partition_info
         A mapping from unique nodes in the new graph to associated
         partitioning information.
+    hconcat_shape
+        How the decomposed expression lines up with sibling expressions.
     """
     expr, input_ir, partition_info, hconcat_shape = mapper(named_expr.value)
     return (
