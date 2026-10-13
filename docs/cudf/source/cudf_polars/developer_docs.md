@@ -574,11 +574,13 @@ including execution during setup or teardown. Existing skips and failures
 retain their normal behavior.
 
 Nightlies run the full suite with telemetry for in-memory, default-blocksize
-SPMD, and small-blocksize SPMD. The audit job fails for newly observed GPU
-nodes missing from the lists, lost GPU execution, stale IDs, or incomplete
-evidence. Skips and unavailable optional modules are not removal evidence.
-The summary publishes an exact diff and candidate lists before the audit job
-enforces the result, so failed audits retain their diagnostics.
+SPMD, and small-blocksize SPMD. Only default-blocksize SPMD has a maintained
+run list, matching PR CI. The audit job fails for newly observed GPU nodes
+missing from that list, lost GPU execution, stale IDs, or incomplete evidence
+for default-blocksize SPMD. Other configurations remain diagnostic. Skips and
+unavailable optional modules are not removal evidence. The summary publishes
+an exact diff and candidate list before the audit job enforces the result, so
+failed audits retain their diagnostics.
 Each candidate entry records the source report path and SHA-256. CI reports
 also record their workflow run so a reviewed update can be traced to its
 telemetry artifact.

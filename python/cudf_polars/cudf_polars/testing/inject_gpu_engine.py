@@ -102,7 +102,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help=(
             "Blocksize mode for the 'spmd' engine. 'small' forces most tests "
             "onto the multi-partition path. PR CI uses 'default'; nightlies "
-            "audit both modes. Ignored for 'in-memory'."
+            "run both modes. Ignored for 'in-memory'."
         ),
     )
     group.addoption(

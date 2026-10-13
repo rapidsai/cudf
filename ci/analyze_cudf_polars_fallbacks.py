@@ -13,6 +13,9 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+PR_SELECTION_ENGINE = "spmd-default"
+PR_PRODUCER_PREFIX = "cudf-polars-polars-tests (spmd, default,"
+
 
 def configuration_key(run: dict[str, Any]) -> str | tuple[Any, ...]:
     """Keep GPU/driver/OS matrix variants distinct when combining shards."""
@@ -202,14 +205,26 @@ def audit_report(
     jobs: list[dict[str, Any]] | None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Generate reviewed-list candidates only from complete full-suite evidence."""
-    errors = [
-        f"Unreadable report: {run['run']}"
-        for run in report["unreadable_reports"]
+    # The other nightly configurations remain diagnostic; only the PR
+    # configuration has a maintained selection whose drift can be gated.
+    errors = (
+        [
+            f"Unreadable report: {run['run']}"
+            for run in report["unreadable_reports"]
+        ]
+        if jobs is None
+        else []
+    )
+    runs = [
+        run
+        for run in report["runs"]
+        if run.get("engine") == PR_SELECTION_ENGINE
     ]
-    runs = report["runs"]
+    selected_runs = {run["run"] for run in runs}
     by_run = defaultdict(list)
     for test in report["tests"]:
-        by_run[test["run"]].append(test)
+        if test.get("run") in selected_runs:
+            by_run[test["run"]].append(test)
     cohorts = defaultdict(list)
     for run in runs:
         tests = by_run[run["run"]]
@@ -300,13 +315,20 @@ def audit_report(
         version, configuration = key.split("|", 1)
         configurations[version].add(configuration)
     if not configurations or any(
-        observed != {"in-memory|default", "spmd|default", "spmd|small"}
-        for observed in configurations.values()
+        observed != {"spmd|default"} for observed in configurations.values()
     ):
         errors.append(
-            "Missing required in-memory/default-SPMD/small-SPMD discovery runs for a Polars version"
+            "Missing full default-SPMD discovery runs for a Polars version"
         )
     if jobs is not None:
+        if isinstance(jobs, list):
+            jobs = [
+                job
+                for job in jobs
+                if isinstance(job, dict)
+                and isinstance(job.get("name"), str)
+                and job["name"].startswith(PR_PRODUCER_PREFIX)
+            ]
         if not isinstance(jobs, list) or not all(
             isinstance(job, dict)
             and isinstance(job.get("name"), str)
@@ -428,8 +450,9 @@ def audit_report(
     for key in sorted(
         set(maintained.get("selections", {})) - set(generated["selections"])
     ):
-        # Older version selections remain available until explicitly retired.
-        generated["selections"][key] = maintained["selections"][key]
+        # Retain older Polars versions only for the configuration PR CI uses.
+        if key.endswith("|spmd|default"):
+            generated["selections"][key] = maintained["selections"][key]
     drift = any(
         row[field]
         for row in differences.values()
