@@ -569,7 +569,7 @@ TEST_F(RowOperatorTest, TestPrimitiveRowHasher64BitHash)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     results->view(), expected, cudf::test::debug_output_level::FIRST_ERROR, stream, mr);
 
-  // Preserve noncanonical BOOL8 bytes that a bool column wrapper would normalize.
+  // Construct noncanonical BOOL8 input to verify hashing normalizes it to the logical bool values.
   auto const bytes = cudf::test::fixed_width_column_wrapper<uint8_t>{{0, 1, 2, 255}, stream, mr};
   auto const raw_bools = cudf::column_view{
     cudf::data_type{cudf::type_id::BOOL8}, 4, cudf::column_view{bytes}.head(), nullptr, 0};
