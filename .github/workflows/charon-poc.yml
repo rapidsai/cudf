@@ -1,0 +1,48 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+name: Charon proof of concept
+on:
+  push:
+    branches:
+      - testing/charon-poc
+      - testing/charon-poc-denied
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  identity-preflight:
+    if: >-
+      github.ref == 'refs/heads/testing/charon-poc' ||
+      github.ref == 'refs/heads/testing/charon-poc-denied'
+    runs-on: linux-amd64-cpu4
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout the proof-of-concept revision
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Validate the GitHub identity contract for Charon
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
+            const validate = require('./.github/scripts/charon-poc-identity.cjs');
+            const token = await core.getIDToken('charon.nvidia.com');
+            const metadata = validate(token, {
+              repository: 'NVIDIA/cudf',
+              repositoryId: '90506918',
+              owner: 'NVIDIA',
+              ownerId: '1728152',
+              ref: context.ref,
+              sha: context.sha,
+              event: context.eventName,
+            });
+            core.info(JSON.stringify(metadata));
+            await core.summary
+              .addHeading('Charon identity preflight passed')
+              .addRaw('Runner access and expected GitHub OIDC claims are confirmed. ')
+              .addRaw('GitLab and Artifactory credential use has not been tested yet.')
+              .write();
