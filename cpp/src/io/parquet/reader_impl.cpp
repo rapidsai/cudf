@@ -207,18 +207,20 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
       return page.has_nz_map(nz_map_kind::DELTA_FLAT);
     });
 
-  // The producer gets its own stream and its own event rather than `fork_streams`' shared one, so
-  // that only the delta consumer waits on it and the other decoders overlap with it instead.
+  // The producer and the consumer that reads its output share a stream, so the other decoders
+  // overlap with them rather than queueing behind them.
   int const nkernels = std::bitset<32>(kernel_mask).count();
   auto streams       = cudf::detail::fork_streams(_stream, nkernels + (has_flat_nz_map ? 1 : 0));
-  std::optional<cuda::event> nz_map_done;
+  auto const nz_map_stream = streams.back();
 
   if (has_flat_nz_map) {
-    auto const nz_map_stream = streams.back();
-    auto const page_mask     = subpass_page_mask_span();
-    precompute_flat_nz_map(
-      subpass.pages, pass.chunks, page_mask, skip_rows, num_rows, level_type_size, nz_map_stream);
-    nz_map_done.emplace(nz_map_stream);
+    precompute_flat_nz_map(subpass.pages,
+                           pass.chunks,
+                           subpass_page_mask_span(),
+                           skip_rows,
+                           num_rows,
+                           level_type_size,
+                           nz_map_stream);
   }
 
   int s_idx = 0;
@@ -316,8 +318,6 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   // launch delta binary decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_BINARY) != 0) {
     auto const delta_stream = streams[s_idx++];
-    // The only kernel that reads the nz map.
-    if (has_flat_nz_map) { delta_stream.wait(*nz_map_done); }
     decode_delta_binary(subpass.pages,
                         pass.chunks,
                         num_rows,
@@ -326,7 +326,8 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
                         subpass_page_mask_span(),
                         has_flat_nz_map,
                         error_code.data(),
-                        delta_stream);
+                        delta_stream,
+                        nz_map_stream);
   }
 
   // launch byte stream split decoder

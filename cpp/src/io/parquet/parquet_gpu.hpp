@@ -1074,7 +1074,8 @@ void write_final_offsets(host_span<size_type const> offsets,
  * @param[in] page_mask Boolean vector indicating which pages need to be decoded
  * @param[in] has_flat_nz_map Whether any page of this subpass carries a flat nz map
  * @param[out] error_code Error code for kernel failures
- * @param[in] stream CUDA stream to use
+ * @param[in] stream CUDA stream for the level-decoding kernel
+ * @param[in] nz_map_stream Stream the producer ran on, which orders the consumer behind it
  */
 void decode_delta_binary(cudf::detail::hostdevice_span<PageInfo> pages,
                          cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
@@ -1084,7 +1085,8 @@ void decode_delta_binary(cudf::detail::hostdevice_span<PageInfo> pages,
                          cudf::device_span<bool const> page_mask,
                          bool has_flat_nz_map,
                          kernel_error::pointer error_code,
-                         cuda::stream_ref stream);
+                         cuda::stream_ref stream,
+                         cuda::stream_ref nz_map_stream);
 
 /**
  * @brief Launches kernel for reading the DELTA_BYTE_ARRAY column data stored in the pages

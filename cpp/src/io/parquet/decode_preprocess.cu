@@ -51,7 +51,7 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
                                 size_t min_row,
                                 size_t num_rows)
 {
-  static constexpr int num_warps = level_decode_block_size / cudf::detail::warp_size;
+  constexpr int num_warps = level_decode_block_size / cudf::detail::warp_size;
   __shared__ __align__(16) full_page_decode_state state_g;
   __shared__ int warp_valid_counts[num_warps];
   auto const block   = cg::this_thread_block();
@@ -665,6 +665,8 @@ void precompute_flat_nz_map(cudf::detail::hostdevice_span<PageInfo> pages,
 
   dim3 const grid(pages.size(), 1);
   dim3 const block(level_decode_block_size, 1);
+  static_assert(level_decode_block_size % cudf::detail::warp_size == 0,
+                "level_decode_block_size must be a multiple of the warp size");
   if (level_type_size == 1) {
     precompute_flat_nz_map_kernel<uint8_t>
       <<<grid, block, 0, stream.get()>>>(pages.device_ptr(), chunks, page_mask, min_row, num_rows);

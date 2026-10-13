@@ -9,7 +9,6 @@
 #include "page_string_utils.cuh"
 #include "parquet_gpu.hpp"
 
-#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 
 #include <rmm/exec_policy.hpp>
@@ -379,9 +378,7 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
   // Exit early if the page is pruned
   if (page_mask.size() > 0 and not page_mask[page_idx]) { return; }
   // A page carrying an nz map is decoded by `decode_delta_binary_kernel_with_nz_map` instead.
-  // Conditional on the same flag that launches that kernel, so the two routing decisions are one
-  // bit: were they derived separately, a disagreement would leave a page decoded by neither, with
-  // its rows already marked valid by the null mask fill.
+  // Gated on the same flag that launches that kernel, so the two routing decisions are one bit.
   if (has_flat_nz_map and pages[page_idx].has_nz_map(nz_map_kind::DELTA_FLAT)) { return; }
 
   [[maybe_unused]] null_count_back_copier _{s, static_cast<int>(block.thread_rank())};
@@ -567,7 +564,7 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_with_nz_map_block_size)
   int const nz_count_in    = pp->nz_map->nz_count;
 
   auto& ni = s->nesting.nesting_info[s->setup.col.max_nesting_depth - 1];
-  if (block.thread_rank() == 0) {
+  cg::invoke_one(block, [&] {
     // A sliced page keeps the valid values preceding `first_row` in its map, so the null count for
     // the rows this page contributes has to skip them. The map is ascending, so that prefix is the
     // distance to `first_row`'s lower bound. Only the first page of a read is sliced, so skip the
@@ -581,16 +578,16 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_with_nz_map_block_size)
         : static_cast<int>(s->setup.first_row);
     ni.null_count = process_nulls ? s->setup.num_rows - (nz_count_in - prefix_valid_count) : 0;
     s->progress.nz_count = nz_count_in;
-  }
+  });
   block.sync();
 
-  if (block.thread_rank() == 0) { db->init_binary_block(s->stream.data_start, s->stream.data_end); }
+  cg::invoke_one(block, [&] { db->init_binary_block(s->stream.data_start, s->stream.data_end); });
   block.sync();
   if (db->error) {
-    if (block.thread_rank() == 0) {
+    cg::invoke_one(block, [&] {
       set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
                 error_code);
-    }
+    });
     return;
   }
 
@@ -610,8 +607,8 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_with_nz_map_block_size)
   // the decoder's mutable scalars. `value_at()` touches `value[]` and `first_value`, and the
   // producer writes neither below that index.
   //
-  // `data_out` and the two scalars are hoisted because the store below writes through `data_out`,
-  // which the compiler cannot prove does not alias `ni`; left in place they reload once per value.
+  // Hoisted: the store below writes through `data_out`, which the compiler cannot prove does not
+  // alias `ni`, so in place these reload once per value.
   auto* const data_out = ni.data_out;
   auto const dtype_len = s->output_cvt.dtype_len;
   auto const first_row = s->setup.first_row;
@@ -652,11 +649,8 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_with_nz_map_block_size)
     // Stop once neither warp advances: a malformed page whose delta stream is shorter than its
     // definition levels imply never reaches `nz_count`.
     //
-    // Both halves of that test are needed. The producer finishes first on a well-formed page, and
-    // we need to wait for the writer to drain the trailing batch -- breaking on the producer alone
-    // would drop it from every page. Conversely, the writer has not run at all on the first
-    // iteration, so breaking on the writer alone would emit nothing for any page whose values fit
-    // in one batch.
+    // Both halves are needed: the producer finishes first and the writer still has a batch to
+    // drain, and on the first iteration the writer has not run at all.
     uint32_t const prev_produced = produced;
     produced                     = db->next_pass_start_idx();
     if (produced == prev_produced && s->progress.src_pos <= src_pos) { break; }
@@ -669,10 +663,11 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_with_nz_map_block_size)
   // Values still outstanding means the loop stopped above rather than finishing: the delta stream
   // held fewer values than the definition levels call for. Those rows are already marked valid, so
   // without an error the read would return whatever their output slots happened to contain.
-  if (block.thread_rank() == 0 and s->setup.error == 0 and
-      s->progress.src_pos < s->progress.nz_count) {
-    s->setup.error |= static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN);
-  }
+  cg::invoke_one(block, [&] {
+    if (s->setup.error == 0 and s->progress.src_pos < s->progress.nz_count) {
+      s->setup.error |= static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN);
+    }
+  });
 
   if (block.thread_rank() == 0 and s->setup.error != 0) { set_error(s->setup.error, error_code); }
 }
@@ -1142,19 +1137,22 @@ void decode_delta_binary(cudf::detail::hostdevice_span<PageInfo> pages,
                          cudf::device_span<bool const> page_mask,
                          bool has_flat_nz_map,
                          kernel_error::pointer error_code,
-                         cuda::stream_ref stream)
+                         cuda::stream_ref stream,
+                         cuda::stream_ref nz_map_stream)
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
 
   dim3 dim_block(decode_delta_binary_block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
   dim3 dim_block_nz_map(decode_delta_binary_with_nz_map_block_size, 1);
+  static_assert(decode_delta_binary_with_nz_map_block_size == 2 * cudf::detail::warp_size,
+                "The nz map consumer runs one producer warp and one writer warp");
 
-  // Both kernels route on the page's own nz map, so `has_flat_nz_map` only skips a launch that
-  // would find no work.
+  // On the producer's stream, so it is ordered behind the producer without an event. The
+  // level-decoding kernel below needs no such ordering: it reads only host-set fields.
   if (has_flat_nz_map) {
     // Not templated on `level_t`: this kernel never reads levels.
-    decode_delta_binary_kernel_with_nz_map<<<dim_grid, dim_block_nz_map, 0, stream.get()>>>(
+    decode_delta_binary_kernel_with_nz_map<<<dim_grid, dim_block_nz_map, 0, nz_map_stream.get()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
     CUDF_CUDA_TRY(cudaGetLastError());
   }

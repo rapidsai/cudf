@@ -203,7 +203,8 @@ TEST_F(ParquetReaderTest, NzMapMatchesLevelDecoder)
   {
     auto const read_chunked = [&] {
       auto reader = cudf::io::chunked_parquet_reader(
-        240'000,
+        1'024,
+        8'192,
         cudf::io::parquet_reader_options::builder(
           cudf::io::source_info{cudf::host_span<std::byte const>{
             reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
