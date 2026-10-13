@@ -18,6 +18,8 @@
 #include <cudf/io/detail/codec.hpp>
 #include <cudf/null_mask.hpp>
 
+#include <rmm/mr/statistics_resource_adaptor.hpp>
+
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -570,6 +572,25 @@ TEST_F(ExperimentalPackUnpackTest, CompressMisalignedSlices)
     auto const plan = cx::prepare_pack(input, make_options(compression));
     expect_materializes_to(input, pack_to_device(plan).view());
   }
+}
+
+TEST_F(ExperimentalPackUnpackTest, StageOnlyRegionsThatNeedIt)
+{
+  if (!is_codec_enabled(cx::pack_compression::cascaded)) { GTEST_SKIP() << "Cascaded is disabled"; }
+  constexpr cudf::size_type rows = 1024 * 1024;
+  auto const values = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  cudf::test::fixed_width_column_wrapper<int64_t> numbers(
+    values, values + rows, cudf::test::iterators::null_at(5));
+  // The sliced validity needs a bit shift, while the aligned data is compressed in place.
+  auto const input = cudf::slice(cudf::table_view{{numbers}}, {3, rows}).front();
+
+  rmm::mr::statistics_resource_adaptor output_mr(cudf::get_current_device_resource_ref());
+  auto const plan = cx::prepare_pack(input,
+                                     make_options(cx::pack_compression::cascaded),
+                                     cudf::get_default_stream(),
+                                     {output_mr, cudf::get_current_device_resource_ref()});
+  EXPECT_LT(output_mr.get_bytes_counter().value, rows * sizeof(int64_t) / 8);
+  expect_materializes_to(input, pack_to_device(plan).view());
 }
 
 TEST_F(ExperimentalPackUnpackTest, AutomaticPerRegionCompression)
