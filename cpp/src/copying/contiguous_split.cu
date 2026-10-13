@@ -3118,6 +3118,38 @@ struct segment_counts {
 };
 
 /**
+ * @brief Creates one copy batch per fused FOR tile.
+ *
+ * Unlike `compute_batches`, which uses 1MB batches, each batch here covers at most `tile_bytes`
+ * of one destination buffer, so that it becomes exactly one segment. Matches `count_segments`.
+ */
+std::unique_ptr<chunk_iteration_state> compute_tile_batches(int num_bufs,
+                                                            dst_buf_info* const d_dst_buf_info,
+                                                            std::size_t const* const h_buf_sizes,
+                                                            std::size_t num_partitions,
+                                                            std::size_t tile_bytes,
+                                                            cuda::stream_ref stream,
+                                                            rmm::device_async_resource_ref temp_mr)
+{
+  rmm::device_uvector<cuda::std::pair<std::size_t, std::size_t>> batches(num_bufs, stream, temp_mr);
+  thrust::transform(rmm::exec_policy_nosync(stream, temp_mr),
+                    d_dst_buf_info,
+                    d_dst_buf_info + num_bufs,
+                    batches.begin(),
+                    cuda::proclaim_return_type<cuda::std::pair<std::size_t, std::size_t>>(
+                      [tile_bytes] __device__(
+                        dst_buf_info const& buf) -> cuda::std::pair<std::size_t, std::size_t> {
+                        auto const bytes =
+                          buf.num_elements * static_cast<std::size_t>(buf.element_size);
+                        if (bytes == 0) { return {1, 0}; }
+                        return {util::div_rounding_up_unsafe(bytes, tile_bytes), tile_bytes};
+                      }));
+
+  return chunk_iteration_state::create(
+    batches, num_bufs, d_dst_buf_info, h_buf_sizes, num_partitions, 0, stream, temp_mr);
+}
+
+/**
  * @brief Counts the tile descriptors produced for every partition.
  */
 segment_counts count_segments(host_span<dst_buf_info const> destinations,
@@ -3347,14 +3379,13 @@ std::vector<fused_for_packed_columns> contiguous_split_fused_for(
   std::tie(num_src_bufs, num_bufs, partition_info) =
     compute_num_bufs_and_splits(input, splits, stream, temp_mr);
 
-  auto batches                             = compute_batches(static_cast<int>(num_bufs),
-                                                             partition_info->d_dst_buf_info.data(),
-                                                             partition_info->h_buf_sizes,
-                                                             num_partitions,
-                                                             0,
-                                                             options.tile_bytes,
-                                                             stream,
-                                                             temp_mr);
+  auto batches = fused_for::compute_tile_batches(static_cast<int>(num_bufs),
+                                                 partition_info->d_dst_buf_info.data(),
+                                                 partition_info->h_buf_sizes,
+                                                 num_partitions,
+                                                 options.tile_bytes,
+                                                 stream,
+                                                 temp_mr);
   auto const [starting_batch, num_batches] = batches->get_current_starting_index_and_buff_count();
   CUDF_EXPECTS(starting_batch == 0, "fused FOR packing must use one iteration");
 
