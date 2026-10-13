@@ -44,17 +44,15 @@ def _filter_row_groups_with_dictionary_pages(
     dictionary_ranges = reader.dictionary_pages_byte_ranges(
         all_row_groups, options
     )
-    # the caller is responsible for keeping the source bytes alive until
-    # synchronize_stream() below runs.
-    # See https://github.com/rapidsai/rmm/issues/2521
-    dict_page_bytes = [
-        parquet_bytes[r.offset : r.offset + r.size] for r in dictionary_ranges
-    ]
+    # Keep source bytes alive until synchronize_stream() runs
     dictionary_data = [
         plc.gpumemoryview(
-            rmm.DeviceBuffer.to_device(b, plc.utils._get_stream())
+            rmm.DeviceBuffer.to_device(
+                memoryview(parquet_bytes)[r.offset : r.offset + r.size],
+                plc.utils._get_stream(),
+            )
         )
-        for b in dict_page_bytes
+        for r in dictionary_ranges
     ]
     synchronize_stream()
     return reader.filter_row_groups_with_dictionary_pages(
