@@ -111,9 +111,9 @@ class memory_resources {
    *
    * @return Fully temporary resource reference
    */
-  [[nodiscard]] memory_resource as_temporary() const noexcept
+  [[nodiscard]] memory_resources as_temporary() const noexcept
   {
-    return memory_resource{_temporary_mr, _temporary_mr};
+    return memory_resources{_temporary_mr, _temporary_mr};
   }
 
  private:
