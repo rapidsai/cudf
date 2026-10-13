@@ -131,16 +131,13 @@ std::unique_ptr<column> group_merge_histogram(column_view const& values,
                  group_offsets.begin(),
                  group_offsets.end(),
                  lists_cv.offsets_begin(),
-                 new_offsets.data());
+                 new_offsets.begin());
 
   // Generate labels for the new lists.
   cuda::device_buffer<size_type> key_labels(
     stream, cudf::get_current_device_resource_ref(), histogram_cv.size(), cuda::no_init);
-  cudf::detail::label_segments(new_offsets.data(),
-                               (new_offsets.data() + new_offsets.size()),
-                               key_labels.data(),
-                               (key_labels.data() + key_labels.size()),
-                               stream);
+  cudf::detail::label_segments(
+    new_offsets.begin(), new_offsets.end(), key_labels.begin(), key_labels.end(), stream);
 
   auto const structs_cv   = structs_column_view{histogram_cv};
   auto const input_values = structs_cv.get_sliced_child(0, stream);

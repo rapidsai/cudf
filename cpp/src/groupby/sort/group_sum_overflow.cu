@@ -92,14 +92,11 @@ struct group_sum_overflow_fn {
         group_labels.end(),
         cudf::detail::make_validity_iterator(*dcol),
         cuda::make_discard_iterator(),
-        group_valid.data(),
+        group_valid.begin(),
         cuda::std::equal_to<size_type>{},
         cuda::std::logical_or<bool>{});
-      return cudf::detail::valid_if(group_valid.data(),
-                                    (group_valid.data() + group_valid.size()),
-                                    cuda::std::identity{},
-                                    stream,
-                                    mr);
+      return cudf::detail::valid_if(
+        group_valid.begin(), group_valid.end(), cuda::std::identity{}, stream, mr);
     }();
 
     std::vector<std::unique_ptr<column>> children;

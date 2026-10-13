@@ -64,7 +64,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
     rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     cuda::counting_iterator<size_type>{0},
     cuda::counting_iterator<size_type>{num_groups},
-    null_purged_sizes.data(),
+    null_purged_sizes.begin(),
     [d_offsets = offsets.template begin<int32_t>(), not_null_pred] __device__(auto i) {
       return thrust::count_if(thrust::seq,
                               cuda::counting_iterator<size_type>{d_offsets[i]},
@@ -73,7 +73,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
     });
 
   auto null_purged_offsets = std::get<0>(cudf::detail::make_offsets_child_column(
-    null_purged_sizes.data(), (null_purged_sizes.data() + null_purged_sizes.size()), stream, mr));
+    null_purged_sizes.cbegin(), null_purged_sizes.cend(), stream, mr));
 
   return std::pair(std::move(null_purged_values), std::move(null_purged_offsets));
 }

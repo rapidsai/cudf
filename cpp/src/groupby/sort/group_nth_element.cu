@@ -49,7 +49,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
   // TODO: replace with async version
   thrust::uninitialized_fill_n(
     rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-    nth_index.data(),
+    nth_index.begin(),
     num_groups,
     values.size());
 
@@ -62,7 +62,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
       group_sizes.end<size_type>(),
       group_offsets.begin(),
       group_sizes.begin<size_type>(),  // stencil
-      nth_index.data(),
+      nth_index.begin(),
       [n] __device__(auto group_size, auto group_offset) {
         return group_offset + ((n < 0) ? group_size + n : n);
       },
@@ -84,7 +84,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
       group_labels.begin(),
       group_labels.end(),
       bitmask_iterator,
-      intra_group_index.data());
+      intra_group_index.begin());
     // group_size to recalculate n if n<0
     cuda::device_buffer<size_type> group_count = [&] {
       if (n < 0) {
@@ -94,7 +94,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
                                           group_labels.end(),
                                           bitmask_iterator,
                                           cuda::make_discard_iterator(),
-                                          group_count.data(),
+                                          group_count.begin(),
                                           cuda::std::plus<size_type>(),
                                           stream);
         return group_count;
@@ -109,12 +109,12 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
                        cuda::counting_iterator<size_type>{values.size()},
                        group_labels.begin(),                   // map
                        cuda::counting_iterator<size_type>{0},  // stencil
-                       nth_index.data(),
+                       nth_index.begin(),
                        [n,
                         bitmask_iterator,
-                        group_size        = group_count.data(),
+                        group_size        = group_count.begin(),
                         group_labels      = group_labels.begin(),
-                        intra_group_index = intra_group_index.data()] __device__(auto i) -> bool {
+                        intra_group_index = intra_group_index.begin()] __device__(auto i) -> bool {
                          auto nth = ((n < 0) ? group_size[group_labels[i]] + n : n);
                          return (bitmask_iterator[i] && intra_group_index[i] == nth);
                        });

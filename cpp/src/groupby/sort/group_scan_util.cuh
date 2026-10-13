@@ -167,9 +167,9 @@ struct group_scan_functor<K,
     if (values.has_nulls()) {
       auto input = make_null_replacement_iterator(
         *values_view, OpType::template identity<string_view>(), values.has_nulls());
-      do_scan(input, results_vector.data(), OpType{});
+      do_scan(input, results_vector.begin(), OpType{});
     } else {
-      do_scan(values_view->begin<string_view>(), results_vector.data(), OpType{});
+      do_scan(values_view->begin<string_view>(), results_vector.begin(), OpType{});
     }
 
     // turn the string_view vector into a strings column
@@ -203,7 +203,7 @@ struct group_scan_functor<K,
       group_labels.begin(),
       group_labels.end(),
       cuda::counting_iterator<size_type>{0},
-      gather_map.data(),
+      gather_map.begin(),
       cuda::std::equal_to{},
       binop_generator.binop());
 

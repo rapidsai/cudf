@@ -73,11 +73,11 @@ struct bitwise_group_reduction_functor {
       cuda::device_buffer<bool> validity(
         stream, cudf::get_current_device_resource_ref(), num_groups, cuda::no_init);
       do_reduction(cudf::detail::make_validity_iterator(*d_values_ptr),
-                   validity.data(),
+                   validity.begin(),
                    cuda::std::logical_or{});
 
-      auto [null_mask, null_count] = cudf::detail::valid_if(
-        validity.data(), (validity.data() + validity.size()), cuda::std::identity{}, stream, mr);
+      auto [null_mask, null_count] =
+        cudf::detail::valid_if(validity.begin(), validity.end(), cuda::std::identity{}, stream, mr);
       if (null_count > 0) { result->set_null_mask(std::move(null_mask), null_count); }
     }
     return result;

@@ -51,9 +51,9 @@ size_type compute_group_offsets(table_view const& keys,
   auto const row_eq = permuted_row_equality_comparator(d_key_equal, sorted_order);
   auto const ufn    = cudf::detail::unique_copy_fn<decltype(itr), decltype(row_eq)>{
     itr, duplicate_keep_option::KEEP_FIRST, row_eq, size - 1};
-  thrust::transform(rmm::exec_policy_nosync(stream, temp_mr), itr, itr + size, result.data(), ufn);
+  thrust::transform(rmm::exec_policy_nosync(stream, temp_mr), itr, itr + size, result.begin(), ufn);
   auto const result_end = cudf::detail::copy_if(
-    itr, itr + size, result.data(), group_offsets.begin(), cuda::std::identity{}, stream);
+    itr, itr + size, result.begin(), group_offsets.begin(), cuda::std::identity{}, stream);
   return cuda::std::distance(group_offsets.begin(), result_end);
 }
 

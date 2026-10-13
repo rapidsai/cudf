@@ -259,7 +259,7 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(cuda::stream_ref stream,
   thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     group_offsets(stream).begin(),
                     group_offsets(stream).begin() + num_unique_keys,
-                    gather_map.data(),
+                    gather_map.begin(),
                     [idx_data] __device__(size_type i) -> size_type { return idx_data[i]; });
 
   return cudf::detail::gather(_keys,

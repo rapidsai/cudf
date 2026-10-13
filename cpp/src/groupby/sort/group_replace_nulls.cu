@@ -40,7 +40,7 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
   cuda::device_buffer<cudf::size_type> gather_map(
     stream, cudf::get_current_device_resource_ref(), size, cuda::no_init);
   auto gm_begin = cuda::make_zip_iterator(
-    cuda::std::make_tuple(gather_map.data(), cuda::make_discard_iterator()));
+    cuda::std::make_tuple(gather_map.begin(), cuda::make_discard_iterator()));
 
   auto func = cudf::detail::replace_policy_functor();
   cuda::std::equal_to<cudf::size_type> eq;

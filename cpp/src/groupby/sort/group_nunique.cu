@@ -98,7 +98,7 @@ std::unique_ptr<column> group_nunique(column_view const& values,
     thrust::transform(rmm::exec_policy_nosync(stream, temp_mr),
                       cuda::counting_iterator<size_type>{0},
                       cuda::counting_iterator<size_type>{values.size()},
-                      d_result.data(),
+                      d_result.begin(),
                       fn);
   };
 
@@ -116,7 +116,7 @@ std::unique_ptr<column> group_nunique(column_view const& values,
   // it also helps that we are only calling it once for both conditions
   cudf::detail::reduce_by_key_async(group_labels.begin(),
                                     group_labels.end(),
-                                    d_result.data(),
+                                    d_result.begin(),
                                     cuda::make_discard_iterator(),
                                     result->mutable_view().begin<size_type>(),
                                     cuda::std::plus<size_type>(),
