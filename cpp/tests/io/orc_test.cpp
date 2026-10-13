@@ -2790,10 +2790,27 @@ TEST_F(OrcChunkedWriterTest, OutOfMemoryRetry)
     writer.close();
   }
 
-  auto const result   = cudf::io::read_orc(cudf::io::orc_reader_options::builder(
-    cudf::io::source_info{cudf::host_span<char const>{out_buffer.data(), out_buffer.size()}}));
+  auto const source =
+    cudf::io::source_info{cudf::host_span<char const>{out_buffer.data(), out_buffer.size()}};
+  auto const result   = cudf::io::read_orc(cudf::io::orc_reader_options::builder(source));
   auto const expected = cudf::concatenate(std::vector<table_view>{input, input});
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), result.tbl->view());
+
+  // The failed write and close must not leave their chunk in the statistics
+  auto const stats = cudf::io::read_parsed_orc_statistics(source);
+  EXPECT_EQ(stats.stripes_stats.size(), 2ul);
+  ASSERT_EQ(stats.file_stats.size(), 3ul);
+  EXPECT_EQ(*stats.file_stats[0].number_of_values, 6ul);
+
+  auto const& int_stats =
+    std::get<cudf::io::integer_statistics>(stats.file_stats[1].type_specific_stats);
+  EXPECT_EQ(*int_stats.sum, 12);
+
+  auto const& str_stats =
+    std::get<cudf::io::string_statistics>(stats.file_stats[2].type_specific_stats);
+  EXPECT_EQ(*str_stats.minimum, "a");
+  EXPECT_EQ(*str_stats.maximum, "ccc");
+  EXPECT_EQ(*str_stats.sum, 12);
 }
 
 TEST_F(OrcChunkedWriterTest, NoDataInSinkWhenNoWrite)
