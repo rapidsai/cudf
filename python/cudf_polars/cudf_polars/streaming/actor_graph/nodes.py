@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from cudf_streaming.channel_metadata import (
     ChannelMetadata,
@@ -59,7 +59,7 @@ if TYPE_CHECKING:
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
     from cudf_polars.streaming.actor_graph.utils import PartitioningScheme
 
-    PartitioningResolver: TypeAlias = Callable[
+    type PartitioningResolver = Callable[
         [IR, Sequence[ChannelMetadata], Context],
         Partitioning | None,
     ]
@@ -199,7 +199,9 @@ async def default_node_single(
         chs_out=(ch_out,),
         trace_ir=ir,
         ir_context=ir_context,
-    ) as tracer:
+    ) as actor_scope:
+        tracer = actor_scope.tracer
+        ir_context = actor_scope.require_ir_context()
         # Recv metadata and prepare output metadata
         metadata_in = await recv_metadata(ch_in, context)
         partitioning = maybe_remap_partitioning(
@@ -212,10 +214,6 @@ async def default_node_single(
             partitioning=partitioning,
             duplicated=metadata_in.duplicated,
         )
-        import dataclasses
-
-        ir_context = dataclasses.replace(ir_context, tracer=tracer)
-
         # Process chunks (handle empty input for aggregation-like operations)
         await chunkwise_evaluate(
             context,
@@ -265,7 +263,9 @@ async def default_node_multi(
         chs_out=(ch_out,),
         trace_ir=ir,
         ir_context=ir_context,
-    ) as tracer:
+    ) as actor_scope:
+        tracer = actor_scope.tracer
+        ir_context = actor_scope.require_ir_context()
         # Merge and forward basic metadata.
         local_count = 1
         duplicated = True
@@ -735,7 +735,8 @@ async def empty_node(
         chs_out=(ch_out,),
         ir_context=ir_context,
         trace_ir=ir,
-    ) as tracer:
+    ) as actor_scope:
+        ir_context = actor_scope.require_ir_context()
         # Send metadata indicating a single empty chunk
         await send_metadata(
             ch_out,
@@ -751,7 +752,7 @@ async def empty_node(
         chunk = TableChunk.from_pylibcudf_table(
             df.table, df.stream, exclusive_view=True, br=context.br()
         )
-        await send_chunk(context, ch_out, chunk, 0, tracer=tracer)
+        await send_chunk(context, ch_out, chunk, 0, tracer=actor_scope.tracer)
 
         await ch_out.drain(context)
 

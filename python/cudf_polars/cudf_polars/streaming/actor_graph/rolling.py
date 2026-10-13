@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
 from cudf_streaming.channel_metadata import ChannelMetadata
@@ -85,9 +85,6 @@ class RangeBufferedChunk(BufferedChunk):
     """A buffered chunk with range-window overlap metadata."""
 
     overlap: RangeOverlap
-
-
-BufferedChunkT = TypeVar("BufferedChunkT", bound=BufferedChunk)
 
 
 @dataclass
@@ -213,7 +210,7 @@ class RollingManager:
         await ch_out.drain(self.context)
 
 
-class _RollingPolicy(Generic[BufferedChunkT]):
+class _RollingPolicy[BufferedChunkT: BufferedChunk]:
     """Base policy for evaluating ghost-expanded cursor chunks."""
 
     def observe(self, chunk: BufferedChunkT) -> None:
@@ -878,7 +875,7 @@ async def rolling_actor(
     """
     async with shutdown_on_error(
         context, chs_in=(ch_in,), chs_out=(ch_out,), trace_ir=ir, ir_context=ir_context
-    ) as tracer:
+    ) as actor_scope:
         metadata_in = await recv_metadata(ch_in, context)
         if comm.nranks != 1 and not metadata_in.duplicated:
             _fallback_inform(
@@ -890,7 +887,7 @@ async def rolling_actor(
                 local_count=1, partitioning=None, duplicated=True
             )
             await send_metadata(ch_out, context, metadata)
-            if tracer is not None:
+            if (tracer := actor_scope.tracer) is not None:
                 tracer.set_duplicated()
 
             stream = ir_context.get_cuda_stream()
@@ -933,7 +930,7 @@ async def rolling_actor(
                 duplicated=metadata_in.duplicated,
             ),
         )
-        if tracer is not None and metadata_in.duplicated:
+        if (tracer := actor_scope.tracer) is not None and metadata_in.duplicated:
             tracer.set_duplicated()
 
         with RollingManager(context, ir, ir_context, ch_in) as manager:
