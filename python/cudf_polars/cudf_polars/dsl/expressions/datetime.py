@@ -515,7 +515,12 @@ class _TruncateMethod(IntEnum):
 
 
 class _TruncatePlan(NamedTuple):
-    """Device computation for a ``dt.truncate``, produced by :func:`_plan_truncate`."""
+    """
+    Device computation for a ``dt.truncate``.
+
+    Create plans with :func:`_plan_truncate` and evaluate them with
+    :func:`_truncate`; the fields are an implementation detail.
+    """
 
     method: _TruncateMethod
     every: int
@@ -876,7 +881,23 @@ def _month_start_days(
 
 
 def _truncate(column: plc.Column, plan: _TruncatePlan, stream: Stream) -> plc.Column:
-    """Evaluate a ``dt.truncate`` planned by :func:`_plan_truncate`."""
+    """
+    Evaluate a ``dt.truncate`` planned by :func:`_plan_truncate`.
+
+    Parameters
+    ----------
+    column
+        Column to truncate, of the type the plan was made for.
+    plan
+        Plan from :func:`_plan_truncate`.
+    stream
+        CUDA stream used for device memory operations and kernel launches.
+
+    Returns
+    -------
+    The truncated column. If the plan leaves values unchanged, this is
+    ``column`` itself rather than a copy.
+    """
     method, every, day, on_date = plan
     if method is _TruncateMethod.IDENTITY:
         return column
