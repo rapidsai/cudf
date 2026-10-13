@@ -476,12 +476,30 @@ def main() -> None:
     parser.add_argument("--expected-jobs", type=Path)
     parser.add_argument("--generate-run-list", type=Path)
     args = parser.parse_args()
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    if args.audit_run_list or args.generate_run_list:
+        # A parsing failure must not leave a previous successful audit or
+        # removal proposal available to the publication step.
+        (args.output_dir / "gpu-run-list-candidate.json").unlink(
+            missing_ok=True
+        )
+        (args.output_dir / "run-list-drift.json").write_text(
+            json.dumps(
+                {
+                    "status": "incomplete",
+                    "errors": ["Audit did not finish"],
+                    "differences": {},
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n"
+        )
     report = (
         json.loads(args.diagnostics_file.read_text())
         if args.diagnostics_file
         else build_report(sorted(args.reports_dir.glob("*.json")))
     )
-    args.output_dir.mkdir(parents=True, exist_ok=True)
     (args.output_dir / "fallback-diagnostics.json").write_text(
         json.dumps(report, indent=2, sort_keys=True) + "\n"
     )
@@ -521,11 +539,6 @@ def main() -> None:
                 args.generate_run_list.write_text(
                     json.dumps(generated, indent=2, sort_keys=True) + "\n"
                 )
-        else:
-            # A failed refresh must not publish an earlier removal proposal.
-            (args.output_dir / "gpu-run-list-candidate.json").unlink(
-                missing_ok=True
-            )
         if args.summary_file:
             with args.summary_file.open("a") as summary:
                 summary.write(
