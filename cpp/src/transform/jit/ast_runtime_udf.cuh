@@ -57,7 +57,8 @@ __device__ void store(output_descriptor const& column,
 
 }  // namespace cudf::jit::ast_runtime
 
-// A named global expression keeps the device entry alive until the driver fragment is linked.
+// Registering a global entry makes retention of this otherwise device-only fragment explicit
+// across NVRTC versions before the driver is linked. This anchor is never launched.
 extern "C" __global__ void cudf_ast_runtime_entry()
 {
   auto const operation = &cudf::jit::ast_runtime::transform_row;
