@@ -42,13 +42,14 @@ from cudf_polars.streaming.actor_graph.collectives.sort import (
     _sort_to_order_keys,
 )
 from cudf_polars.streaming.actor_graph.core import evaluate_logical_plan
-from cudf_polars.streaming.actor_graph.nodes import resolve_hconcat_partitioning
 from cudf_polars.streaming.actor_graph.utils import (
     NormalizedPartitioning,
     _apply_ordering_metadata,
     _leading_order_keys,
     maybe_remap_partitioning,
 )
+from cudf_polars.streaming.base import StatsCollector
+from cudf_polars.streaming.parallel import lower_ir_graph
 from cudf_polars.utils.config import ConfigOptions
 from cudf_polars.utils.dtypes import make_empty_column
 from cudf_polars.utils.versions import POLARS_VERSION_LT_138
@@ -389,22 +390,6 @@ def _make_select_ir(engine: pl.GPUEngine, output_columns: tuple[str, ...]):
     return Select(out_schema, exprs, should_broadcast=False, df=child)
 
 
-def _make_hconcat_ir(engine: pl.GPUEngine):
-    left = Translator(
-        pl.LazyFrame({"a": [1], "b": [2]})._ldf.visit(), engine
-    ).translate_ir()
-    right = Translator(
-        pl.LazyFrame({"c": [3], "d": [4]})._ldf.visit(), engine
-    ).translate_ir()
-    return HConcat(
-        {**left.schema, **right.schema},
-        False,  # noqa: FBT003
-        True,  # noqa: FBT003
-        left,
-        right,
-    )
-
-
 def test_remap_partitioning_select_none_input(streaming_engine) -> None:
     assert (
         maybe_remap_partitioning(_make_select_ir(streaming_engine, ("a", "b")), None)
@@ -471,113 +456,48 @@ def test_remap_partitioning_hstack_appends_preserves_keys(streaming_engine) -> N
     assert result.local == "inherit"
 
 
-def test_hconcat_partitioning_preserves_later_child_ordering(spmd_engine) -> None:
-    hconcat = _make_hconcat_ir(pl.GPUEngine(executor="in-memory", raise_on_fail=True))
-    metadata = (
-        ChannelMetadata(local_count=1),
-        ChannelMetadata(
-            local_count=1,
-            partitioning=Partitioning(
-                inter_rank=_make_order_scheme(spmd_engine.context, key_indices=(0,)),
-                local="inherit",
-            ),
-        ),
-    )
-
-    result = resolve_hconcat_partitioning(hconcat, metadata, spmd_engine.context)
-
-    assert result is not None
-    assert isinstance(result.inter_rank, OrderScheme)
-    assert [
-        tuple(key.column_index for key in ordering.keys)
-        for ordering in result.inter_rank.orderings
-    ] == [(2,)]
-    assert result.inter_rank.orderings[0].locally_ordered is True
-    assert result.local == "inherit"
-
-
-def test_hconcat_partitioning_merges_child_orderings(spmd_engine) -> None:
-    hconcat = _make_hconcat_ir(pl.GPUEngine(executor="in-memory", raise_on_fail=True))
-    metadata = (
-        ChannelMetadata(
-            local_count=1,
-            partitioning=Partitioning(
-                inter_rank=_make_order_scheme(spmd_engine.context, key_indices=(0,)),
-                local="inherit",
-            ),
-        ),
-        ChannelMetadata(
-            local_count=1,
-            partitioning=Partitioning(
-                inter_rank=_make_order_scheme(spmd_engine.context, key_indices=(1,)),
-                local="inherit",
-            ),
-        ),
-    )
-
-    result = resolve_hconcat_partitioning(hconcat, metadata, spmd_engine.context)
-
-    assert result is not None
-    assert isinstance(result.inter_rank, OrderScheme)
-    assert [
-        tuple(key.column_index for key in ordering.keys)
-        for ordering in result.inter_rank.orderings
-    ] == [(0,), (3,)]
-    assert result.local == "inherit"
-
-
-def test_hconcat_partitioning_drops_conflicting_hash_schemes(
-    spmd_engine,
+def test_decomposed_select_preserves_row_ordering_metadata(
+    spmd_engine_factory,
 ) -> None:
-    hconcat = _make_hconcat_ir(pl.GPUEngine(executor="in-memory", raise_on_fail=True))
-    metadata = (
-        ChannelMetadata(
-            local_count=1,
-            partitioning=Partitioning(
-                inter_rank=HashScheme((0,), 8),
-                local="inherit",
-            ),
-        ),
-        ChannelMetadata(
-            local_count=1,
-            partitioning=Partitioning(
-                inter_rank=HashScheme((0,), 16),
-                local="inherit",
-            ),
-        ),
+    engine = spmd_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=2,
+            dynamic_planning=None,
+            fallback_mode="raise",
+            raise_on_fail=True,
+        )
     )
-
-    assert resolve_hconcat_partitioning(hconcat, metadata, spmd_engine.context) is None
-
-
-def test_hconcat_partitioning_ignores_duplicated_child(spmd_engine) -> None:
-    hconcat = _make_hconcat_ir(pl.GPUEngine(executor="in-memory", raise_on_fail=True))
-    metadata = (
-        ChannelMetadata(
-            local_count=1,
-            partitioning=Partitioning(
-                inter_rank=_make_order_scheme(spmd_engine.context, key_indices=(0,)),
-                local="inherit",
-            ),
-        ),
-        ChannelMetadata(
-            local_count=1,
-            partitioning=Partitioning(
-                inter_rank=_make_order_scheme(spmd_engine.context, key_indices=(0,)),
-                local="inherit",
-            ),
-            duplicated=True,
-        ),
+    q = (
+        pl.LazyFrame({"a": [3, 1, 2], "b": [6, 4, 5]})
+        .sort("a")
+        .select("a", (pl.col("b") - pl.col("b").mean()).alias("b_centered"))
     )
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    lowered = lower_ir_graph(
+        ir,
+        ConfigOptions.from_polars_engine(engine),
+        StatsCollector(),
+    ).lowered
+    hconcats = [node for node in traversal([lowered]) if isinstance(node, HConcat)]
+    assert hconcats
+    assert all(node.streaming_safe for node in hconcats)
 
-    result = resolve_hconcat_partitioning(hconcat, metadata, spmd_engine.context)
+    metadata_collector = evaluate_logical_plan(
+        ir, ConfigOptions.from_polars_engine(engine), collect_metadata=True
+    )[1]
 
-    assert result is not None
-    assert isinstance(result.inter_rank, OrderScheme)
+    assert metadata_collector is not None
+    assert len(metadata_collector) == 1
+    metadata = metadata_collector[0]
+    scheme = metadata.partitioning.inter_rank
+    assert isinstance(scheme, OrderScheme)
+
+    output_cols = list(ir.schema.keys())
     assert [
         tuple(key.column_index for key in ordering.keys)
-        for ordering in result.inter_rank.orderings
-    ] == [(0,)]
+        for ordering in scheme.orderings
+    ] == [(output_cols.index("a"),)]
+    assert all(ordering.locally_ordered for ordering in scheme.orderings)
 
 
 def test_remap_partitioning_select_drops_key(streaming_engine) -> None:

@@ -405,6 +405,25 @@ def test_over_select(engine, expr):
     assert_gpu_result_equal(df.select(expr), engine=engine, check_row_order=True)
 
 
+def test_over_select_static_planning_falls_back(spmd_engine_factory) -> None:
+    engine = spmd_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=2,
+            dynamic_planning=None,
+            fallback_mode="warn",
+        )
+    )
+    df = pl.LazyFrame({"g": [1, 1, 2, 2, 2, 1], "x": [1, 2, 3, 4, 5, 6]})
+    q = df.select(pl.col("x").sum().over("g"))
+
+    with warns_on_spmd(
+        engine,
+        UserWarning,
+        match="This selection is not supported for multiple partitions.",
+    ):
+        assert_gpu_result_equal(q, engine=engine, check_row_order=True)
+
+
 @pytest.mark.skipif(
     not POLARS_VERSION_LT_136 and POLARS_VERSION_LT_139,
     reason="Rolling window expressions are not accessible in polars 1.36-1.38",
