@@ -24,6 +24,7 @@ from cudf_polars.dsl.ir import (
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.dsl.utils.column_domain import ColumnRef
 from cudf_polars.engine.options import StreamingOptions
+from cudf_polars.quent._context import QuentConfig
 from cudf_polars.streaming.base import PartitionInfo, StatsCollector
 from cudf_polars.streaming.filter_hint import (
     JoinInputDomain,
@@ -80,10 +81,14 @@ def engine(spmd_engine_factory) -> SPMDEngine:
 
 
 def make_config(
-    *, dynamic_planning: bool = True, join_filter_pushdown: bool = True
+    *,
+    dynamic_planning: bool = True,
+    join_filter_pushdown: bool = True,
+    quent_context: QuentConfig | None = None,
 ) -> ConfigOptions:
     executor_options: dict[str, Any] = {
-        "join_filter_pushdown": {} if join_filter_pushdown else None
+        "join_filter_pushdown": {} if join_filter_pushdown else None,
+        "quent_context": quent_context,
     }
     if not dynamic_planning:
         executor_options["dynamic_planning"] = None
@@ -186,7 +191,7 @@ def test_filter_pushdown_is_independent_of_dynamic_planning(
     engine: SPMDEngine,
 ) -> None:
     root = translate_query(simple_query, engine)
-    config = make_config(dynamic_planning=False)
+    config = make_config(dynamic_planning=False, quent_context=QuentConfig())
     plan_metadata = PlanMetadata()
 
     optimized = optimize_join_filter_pushdown(
@@ -202,6 +207,7 @@ def test_filter_pushdown_is_independent_of_dynamic_planning(
     assert details.threshold == 0.5
     assert details.decision.reason == "applied"
     lowering = lower_ir_graph(root, config, StatsCollector())
+    assert lowering.plan_metadata is not None
     (details,) = lowering.plan_metadata.operator_details(lowering.optimized)
     assert isinstance(details, JoinFilterPushdownDecision)
     assert details.decision.reason == "applied"

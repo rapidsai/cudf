@@ -87,7 +87,7 @@ class LoweringInfo:
     partition_info: MutableMapping[
         IR, PartitionInfo
     ]  # Partition mapping for nodes in the lowered IR.
-    plan_metadata: PlanMetadata
+    plan_metadata: PlanMetadata | None
 
 
 def remove_cache_nodes(ir: IR) -> IR:
@@ -156,7 +156,10 @@ def _lower_ir_graph_impl(
         "rank": rank,
         "nranks": nranks,
     }
-    plan_metadata = PlanMetadata()
+    if config_options.executor.quent_context is not None:
+        plan_metadata = PlanMetadata()
+    else:
+        plan_metadata = None
     optimized = optimize_with_stats(
         ir,
         config_options,
