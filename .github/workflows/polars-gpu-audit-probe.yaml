@@ -1,0 +1,41 @@
+name: Polars GPU audit failure-path validation
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  publish-discovery-audit:
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: read
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    with:
+      build_type: pull-request
+      branch: pull-request/24568
+      date: '2026-10-13'
+      sha: f5d3786c381c4801d17f0ea0a7ea995f0c4c0e23
+      node_type: cpu8
+      container_image: rapidsai/citestwheel:26.12-latest
+      script: >-
+        env GITHUB_RUN_ID=38334458938 GITHUB_RUN_ATTEMPT=1
+        ci/run_cudf_polars_fallback_diagnostics.sh --publish-audit
+      file_to_upload: cudf-polars-fallback-diagnostics
+      artifact-name: cudf-polars-audit-validation-${{ github.run_attempt }}
+  require-current-selections:
+    needs: publish-discovery-audit
+    if: ${{ !cancelled() }}
+    permissions:
+      actions: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require current GPU test selections
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUDIT_ARTIFACT: cudf-polars-audit-validation-${{ github.run_attempt }}
+        run: |
+          gh run download "${GITHUB_RUN_ID}" --repo "${GITHUB_REPOSITORY}" \
+            --name "${AUDIT_ARTIFACT}" --dir audit
+          python -c 'import json; from pathlib import Path; audit = json.loads(Path("audit/run-list-drift.json").read_text()); print("GPU run-list audit:", audit["status"]); raise SystemExit(audit["status"] != "current")'
