@@ -259,6 +259,7 @@ def _serialize_expr(expr: Expr | NamedExpr) -> dict[str, Any]:
             }
         case BinOp():
             return {
+                "type": "BinOp",
                 "op": expr.op.name,
                 "left": _serialize_expr(expr.children[0]),
                 "right": _serialize_expr(expr.children[1]),
