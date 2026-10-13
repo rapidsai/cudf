@@ -130,7 +130,7 @@ generate_list_offsets_and_validities(column_view const& input,
                                            d_row_offsets,
                                            d_list_offsets,
                                            d_validities =
-                                             validities.data()] __device__(auto const idx) {
+                                             validities.begin()] __device__(auto const idx) {
       if (d_row_offsets[idx] == d_row_offsets[idx + 1]) {  // This is a null/empty row.
         d_validities[idx] = static_cast<int8_t>(lists_of_lists_dv.is_valid(idx));
         return size_type{0};
@@ -181,7 +181,7 @@ std::unique_ptr<column> gather_list_entries(column_view const& input,
     num_rows,
     [d_row_offsets,
      d_list_offsets,
-     d_indices = gather_map.data(),
+     d_indices = gather_map.begin(),
      d_out_list_offsets =
        output_list_offsets.template begin<int32_t>()] __device__(size_type const idx) {
       // The output row has been identified as a null/empty list during list size computation.
@@ -216,12 +216,8 @@ std::unique_ptr<column> concatenate_lists_nullifying_rows(column_view const& inp
 
   auto list_entries =
     gather_list_entries(input, offsets_view, num_rows, num_output_entries, stream, mr);
-  auto [null_mask, null_count] =
-    cudf::detail::valid_if(list_validities.data(),
-                           (list_validities.data() + list_validities.size()),
-                           cuda::std::identity{},
-                           stream,
-                           mr);
+  auto [null_mask, null_count] = cudf::detail::valid_if(
+    list_validities.begin(), list_validities.end(), cuda::std::identity{}, stream, mr);
 
   return make_lists_column(
     num_rows,

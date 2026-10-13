@@ -90,13 +90,13 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
   auto const labels_begin = rhs_labels->view().begin<size_type>();
   auto const end          = cudf::detail::reduce_by_key(labels_begin,  // keys
                                                labels_begin + rhs_labels->size(),
-                                               contained.begin(),       // values to reduce
-                                               list_indices.data(),     // out keys
-                                               overlap_results.data(),  // out values
+                                               contained.begin(),     // values to reduce
+                                               list_indices.begin(),  // out keys
+                                               overlap_results.begin(),  // out values
                                                cuda::std::logical_or{},  // reduction op for values
                                                stream);
 
-  auto const num_non_empty_segments = cuda::std::distance(overlap_results.data(), end.second);
+  auto const num_non_empty_segments = cuda::std::distance(overlap_results.begin(), end.second);
 
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
@@ -112,9 +112,9 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
     result_begin + num_rows,
     false);
   thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                  overlap_results.data(),
-                  overlap_results.data() + num_non_empty_segments,
-                  list_indices.data(),
+                  overlap_results.begin(),
+                  overlap_results.begin() + num_non_empty_segments,
+                  list_indices.begin(),
                   result_begin);
 
   // Reset null count, which was invalidated when calling to `mutable_view()`.

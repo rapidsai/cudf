@@ -65,7 +65,7 @@ generate_list_offsets_and_validities(table_view const& input,
     d_offsets,
     cuda::proclaim_return_type<size_type>([num_cols,
                                            table_dv     = *table_dv_ptr,
-                                           d_validities = validities.data(),
+                                           d_validities = validities.begin(),
                                            has_null_mask] __device__(size_type const idx) {
       auto const col_id     = idx % num_cols;
       auto const list_id    = idx / num_cols;
@@ -205,11 +205,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<std::is_same_v<T, cudf::
                        cuda::counting_iterator<size_type>{0},
                        num_output_lists,
                        comp_fn);
-    return cudf::make_strings_column(
-      cudf::device_span<cudf::strings::detail::string_index_pair const>{indices.data(),
-                                                                        indices.size()},
-      stream,
-      mr);
+    return cudf::make_strings_column(indices, stream, mr);
   }
 };
 
@@ -246,7 +242,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>(
       num_output_lists,
       [num_cols,
        table_dv     = *table_dv_ptr,
-       d_validities = validities.data(),
+       d_validities = validities.begin(),
        d_offsets    = output_list_offsets.template begin<int32_t>(),
        d_output     = output_dv_ptr->template begin<T>(),
        data_has_null_mask] __device__(size_type const idx) {
@@ -281,11 +277,8 @@ struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>(
       });
 
     if (data_has_null_mask) {
-      auto [null_mask, null_count] = cudf::detail::valid_if(validities.data(),
-                                                            (validities.data() + validities.size()),
-                                                            cuda::std::identity{},
-                                                            stream,
-                                                            mr);
+      auto [null_mask, null_count] = cudf::detail::valid_if(
+        validities.begin(), validities.end(), cuda::std::identity{}, stream, mr);
       if (null_count > 0) { output->set_null_mask(std::move(null_mask), null_count); }
     }
 

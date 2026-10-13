@@ -233,7 +233,7 @@ struct list_child_constructor {
       rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
       cuda::counting_iterator<size_type>{0},
       cuda::counting_iterator{static_cast<size_type>(string_views.size())},
-      string_views.data(),
+      string_views.begin(),
       cuda::proclaim_return_type<string_view>([offset_begin  = list_offsets.begin<int32_t>(),
                                                offset_size   = list_offsets.size(),
                                                d_list_vector = list_vector.begin(),

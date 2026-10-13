@@ -49,7 +49,7 @@ std::unique_ptr<column> reverse(lists_column_view const& input,
                      child.size(),
                      [list_offsets = out_offsets->view().begin<int32_t>(),
                       list_indices = labels->view().begin<size_type>(),
-                      gather_map   = gather_map.data()] __device__(auto const idx) {
+                      gather_map   = gather_map.begin()] __device__(auto const idx) {
                        auto const list_idx     = list_indices[idx];
                        auto const begin_offset = list_offsets[list_idx];
                        auto const end_offset   = list_offsets[list_idx + 1];

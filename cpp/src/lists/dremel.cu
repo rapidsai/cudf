@@ -90,17 +90,17 @@ dremel_data get_encoding(column_view h_col,
     auto empties_idx_end = cudf::detail::copy_if(
       cuda::counting_iterator<size_type>{start},
       cuda::counting_iterator<size_type>{end},
-      empties_idx.data(),
+      empties_idx.begin(),
       [d_off] __device__(auto i) -> bool { return d_off[i] == d_off[i + 1]; },
       stream);
     auto empties_end =
       thrust::gather(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                     empties_idx.data(),
+                     empties_idx.begin(),
                      empties_idx_end,
                      lcv.offsets().begin<int32_t>(),
                      empties.data());
 
-    auto empties_size = empties_end - empties.data();
+    auto empties_size = empties_end - empties.begin();
     return std::make_tuple(std::move(empties), std::move(empties_idx), empties_size);
   };
 
@@ -298,7 +298,7 @@ dremel_data get_encoding(column_view h_col,
     // Merge empty at deepest parent level with the rep, def level vals at leaf level
 
     auto input_parent_rep_it = cuda::make_constant_iterator(level);
-    auto input_parent_def_it = cuda::transform_iterator(empties_idx.data(),
+    auto input_parent_def_it = cuda::transform_iterator(empties_idx.begin(),
                                                         def_level_fn{d_nesting_levels + level,
                                                                      d_nullability.data(),
                                                                      start_at_sub_level[level],
@@ -327,8 +327,8 @@ dremel_data get_encoding(column_view h_col,
 
     auto ends =
       thrust::merge_by_key(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                           empties.data(),
-                           empties.data() + empties_size,
+                           empties.begin(),
+                           empties.begin() + empties_size,
                            cuda::counting_iterator{column_offsets[level + 1]},
                            cuda::counting_iterator{column_ends[level + 1]},
                            input_parent_zip_it,
@@ -350,7 +350,7 @@ dremel_data get_encoding(column_view h_col,
     thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                            scan_it,
                            scan_it + offset_size_at_level,
-                           scan_out.data());
+                           scan_out.begin());
 
     // Add scan output to existing offsets to get new offsets into merged rep level values
     new_offsets = rmm::device_uvector<size_type>(offset_size_at_level, stream);
@@ -395,10 +395,10 @@ dremel_data get_encoding(column_view h_col,
     std::swap(temp_def_vals, def_level);
 
     // Merge empty at parent level with the rep, def level vals at current level
-    auto transformed_empties = cuda::transform_iterator(empties.data(), offset_transformer);
+    auto transformed_empties = cuda::transform_iterator(empties.begin(), offset_transformer);
 
     auto input_parent_rep_it = cuda::make_constant_iterator(level);
-    auto input_parent_def_it = cuda::transform_iterator(empties_idx.data(),
+    auto input_parent_def_it = cuda::transform_iterator(empties_idx.begin(),
                                                         def_level_fn{d_nesting_levels + level,
                                                                      d_nullability.data(),
                                                                      start_at_sub_level[level],
@@ -441,7 +441,7 @@ dremel_data get_encoding(column_view h_col,
     thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                            scan_it,
                            scan_it + offset_size_at_level,
-                           scan_out.data());
+                           scan_out.begin());
 
     // Add scan output to existing offsets to get new offsets into merged rep level values
     rmm::device_uvector<size_type> temp_new_offsets(offset_size_at_level, stream);

@@ -132,8 +132,8 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
     // row is null if -all- input rows are null
     if (null_policy == concatenate_null_policy::IGNORE) {
       return cudf::detail::valid_if(
-        row_null_counts.data(),
-        row_null_counts.data() + input.num_rows(),
+        row_null_counts.begin(),
+        row_null_counts.begin() + input.num_rows(),
         [num_columns = input.num_columns()] __device__(size_type null_count) {
           return null_count != num_columns;
         },
@@ -143,8 +143,8 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
 
     // row is null if -any- input rows are null
     return cudf::detail::valid_if(
-      row_null_counts.data(),
-      row_null_counts.data() + input.num_rows(),
+      row_null_counts.begin(),
+      row_null_counts.begin() + input.num_rows(),
       [] __device__(size_type null_count) { return null_count == 0; },
       stream,
       mr);
