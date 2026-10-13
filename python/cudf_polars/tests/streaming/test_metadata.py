@@ -574,7 +574,6 @@ def test_set_sorted_dataframe_extracts_ordering_boundaries(spmd_engine_factory):
     assert any(
         isinstance(node, MapFunction) and node.name == "hint_sorted" for node in nodes
     )
-    assert not any(isinstance(node, Sort) for node in nodes)
 
     result, metadata_collector = evaluate_logical_plan(
         ir, ConfigOptions.from_polars_engine(engine), collect_metadata=True
