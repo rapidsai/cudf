@@ -11,7 +11,7 @@ import functools
 import importlib.util
 import os
 import time
-from typing import TYPE_CHECKING, Any, Concatenate, Literal, ParamSpec
+from typing import TYPE_CHECKING, Any, Concatenate, Literal
 
 import nvtx
 import pynvml
@@ -149,10 +149,7 @@ def make_snapshot(
     return d
 
 
-P = ParamSpec("P")
-
-
-def log_do_evaluate(
+def log_do_evaluate[**P](
     func: Callable[Concatenate[type[ir.IR], P], cudf_polars.containers.DataFrame],
 ) -> Callable[Concatenate[type[ir.IR], P], cudf_polars.containers.DataFrame]:
     """
