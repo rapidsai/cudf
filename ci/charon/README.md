@@ -43,9 +43,9 @@ Credential-use proof also needs operator evidence that Charon injected the
 configured nVault token (`decision_result=vended`) for the GitLab and
 Artifactory requests.
 
-GitHub normally requires a dispatchable workflow on the default branch.
-If this workflow remains branch-only, use the repository's reviewed default
-workflow dispatch mechanism or first land the workflow through human review.
+The initial branch push registered the workflow. Manual dispatch is available
+on `testing/charon-poc`; enable the `read_services` input only after the
+staging prerequisites above are met.
 
 Local service-client checks:
 `node --test .github/scripts/charon-poc-read.test.cjs`.

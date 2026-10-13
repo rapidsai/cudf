@@ -6,6 +6,10 @@ on:
     branches:
       - testing/charon-poc
       - testing/charon-poc-denied
+    paths:
+      - .github/workflows/charon-poc.yml
+      - .github/charon-tbot.yml
+      - .github/scripts/charon-poc-*.cjs
   workflow_dispatch:
     inputs:
       read_services:
