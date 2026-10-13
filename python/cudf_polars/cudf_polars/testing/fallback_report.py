@@ -40,11 +40,18 @@ class FallbackReport:
         self.path = path
         self.tests: dict[str, dict[str, Any]] = {}
         self.collection: dict[str, object] = {}
+        self.worker_failed = False
 
     @pytest.hookimpl(optionalhook=True)
     def pytest_testnodedown(self, node: Any, error: object) -> None:
         """Receive collection inventories from xdist workers."""
-        inventory = node.workeroutput.get("cudf_polars_collection", {})
+        workeroutput = getattr(node, "workeroutput", None)
+        # Crashed workers do not send workeroutput. Keep their original failure
+        # visible and prevent surviving workers from making the run look complete.
+        if error is not None or workeroutput is None:
+            self.worker_failed = True
+            return
+        inventory = workeroutput.get("cudf_polars_collection", {})
         if self.collection and inventory != self.collection:
             self.collection["consistent"] = False
         elif not self.collection:
@@ -92,6 +99,8 @@ class FallbackReport:
         """Write one diagnostic file after all worker reports have arrived."""
         config = session.config
         collection = self.collection or config.stash.get(COLLECTION, {})
+        if self.worker_failed:
+            collection = {**collection, "consistent": False}
         upstream_sha = subprocess.run(
             ["git", "rev-parse", "HEAD"],
             cwd=config.rootpath,
