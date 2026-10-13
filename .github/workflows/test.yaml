@@ -1,9 +1,9 @@
-name: Polars GPU audit failure-path validation
+name: Polars upstream-main callback crash control
 on:
   workflow_dispatch:
 permissions: {}
 jobs:
-  publish-discovery-audit:
+  cudf-polars-polars-tests-main-callback-control:
     permissions:
       actions: read
       contents: read
@@ -11,31 +11,19 @@ jobs:
       packages: read
       pull-requests: read
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
     with:
       build_type: pull-request
       branch: pull-request/24568
       date: '2026-10-13'
       sha: f5d3786c381c4801d17f0ea0a7ea995f0c4c0e23
-      node_type: cpu8
-      container_image: rapidsai/citestwheel:26.12-latest
-      script: >-
-        env GITHUB_RUN_ID=38334458938 GITHUB_RUN_ATTEMPT=1
-        ci/run_cudf_polars_fallback_diagnostics.sh --publish-audit
-      file_to_upload: cudf-polars-fallback-diagnostics
-      artifact-name: cudf-polars-audit-validation-${{ github.run_attempt }}
-  require-current-selections:
-    needs: publish-discovery-audit
-    if: ${{ !cancelled() }}
-    permissions:
-      actions: read
-    runs-on: ubuntu-latest
-    steps:
-      - name: Require current GPU test selections
-        env:
-          GH_TOKEN: ${{ github.token }}
-          AUDIT_ARTIFACT: cudf-polars-audit-validation-${{ github.run_attempt }}
-        run: |
-          gh run download "${GITHUB_RUN_ID}" --repo "${GITHUB_REPOSITORY}" \
-            --name "${AUDIT_ARTIFACT}" --dir audit
-          python -c 'import json; from pathlib import Path; audit = json.loads(Path("audit/run-list-drift.json").read_text()); print("GPU run-list audit:", audit["status"]); raise SystemExit(audit["status"] != "current")'
+      matrix_filter: map(select(.GPU == "rtxpro6000"))
+      script: |
+        control_dir=$(mktemp -d)
+        gh api 'repos/NVIDIA/cudf/contents/.ci-probes/main_callback_control.py?ref=2d841d677f90ca6fc32d08d6c06bfc3b3b4b2e0a' --jq .content | base64 --decode > "${control_dir}/main_callback_control.py"
+        gh api 'repos/NVIDIA/cudf/contents/python/cudf_polars/cudf_polars/callback.py?ref=bfac55d1aacf560770ca422d32fe6cb0f1cbeff0' --jq .content | base64 --decode > "${control_dir}/upstream_callback.py"
+        PYTHONPATH="${control_dir}" CUDF_POLARS_MAIN_CALLBACK_SOURCE="${control_dir}/upstream_callback.py" \
+          ci/test_cudf_polars_polars_tests.sh --engine spmd \
+          --inject-gpu-engine-blocksize small --run-slow \
+          --cudf-polars-shard-id 0 --cudf-polars-num-shards 2 \
+          -p main_callback_control
