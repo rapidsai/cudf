@@ -22,15 +22,17 @@ from cudf_polars.testing.engine_utils import (
     SMALL_TARGET_PARTITION_SIZE,
 )
 from cudf_polars.testing.fallback import (
-    Observation,
-    begin_observation,
-    bind_observation,
-    end_observation,
     fallback_used,
     gpu_attempted,
     gpu_executed,
 )
 from cudf_polars.testing.fallback_report import COLLECTION, FallbackReport
+from cudf_polars.testing.observation import (
+    Observation,
+    begin_observation,
+    bind_observation,
+    end_observation,
+)
 from cudf_polars.utils.config import StreamingFallbackMode
 
 if TYPE_CHECKING:

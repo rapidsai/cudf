@@ -30,11 +30,11 @@ from cudf_polars.dsl.ir import (
 from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.testing.fallback import (
-    bind_observation,
+    gpu_attempted,
+    gpu_executed,
     record_fallback,
-    record_gpu_attempt,
-    record_gpu_execution,
 )
+from cudf_polars.testing.observation import bind_observation, record_signal
 from cudf_polars.utils.config import (
     MemoryResourceConfig,
     _env_get_int,
@@ -309,7 +309,7 @@ def _callback(
         if config_options.executor.name == "in-memory":
             context = IRExecutionContext()
             df = ir.evaluate(cache={}, timer=timer, context=context).to_polars()
-            record_gpu_execution()
+            record_signal("gpu_executed", gpu_executed)
             if timer is None:
                 return df
             else:
@@ -326,7 +326,7 @@ def _callback(
                 raise NotImplementedError(msg)
 
             df = evaluate_streaming(ir, config_options)
-            record_gpu_execution()
+            record_signal("gpu_executed", gpu_executed)
             return df
         assert_never(config_options.executor)
 
@@ -361,7 +361,7 @@ def execute_with_cudf(
     The NodeTraverser is mutated if the libcudf executor can handle the plan.
     """
     # Translation can decline a plan before the execution callback is installed.
-    record_gpu_attempt()
+    record_signal("gpu_attempted", gpu_attempted)
     if duration_since_start is None:
         timer = None
     else:
