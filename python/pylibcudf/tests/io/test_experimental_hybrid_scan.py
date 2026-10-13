@@ -998,19 +998,20 @@ def test_hybrid_scan_filter_row_groups_with_dictionary_pages_negation(
 
     col1 = ColumnNameReference("col1")
     needle = Literal(plc.Scalar.from_arrow(pa.scalar("str_0")))
-    reader = simple_hybrid_scan_reader
-
-    def prune(filter_expression: Operation) -> list[int]:
-        return _filter_row_groups_with_dictionary_pages(
-            reader,
-            simple_parquet_options,
-            simple_parquet_bytes,
-            filter_expression,
-        )
-
     inner = Operation(negated, col1, needle)
-    assert prune(Operation(ASTOperator.NOT, inner)) == expected
-    assert prune(Operation(unnegated, col1, needle)) == expected
+    for filter_expression in (
+        Operation(ASTOperator.NOT, inner),
+        Operation(unnegated, col1, needle),
+    ):
+        assert (
+            _filter_row_groups_with_dictionary_pages(
+                simple_hybrid_scan_reader,
+                simple_parquet_options,
+                simple_parquet_bytes,
+                filter_expression,
+            )
+            == expected
+        )
 
 
 def test_hybrid_scan_dictionary_page_filter_long_strings() -> None:
