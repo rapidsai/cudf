@@ -28,6 +28,7 @@
 #include <cuco/extent.cuh>
 #include <cuco/static_set.cuh>
 #include <cuda/iterator>
+#include <cuda/numeric>
 #include <cuda/stream>
 
 #include <optional>
@@ -157,14 +158,14 @@ struct query_equality_functor {
  * @param offset Offset into the data stream
  * @param length Length of the data to read
  * @param page_data_size Size of the page data
-
  * @return Boolean indicating if there is a data stream overrun
  */
 __device__ __forceinline__ bool is_stream_overrun(size_type offset,
-                                                  size_type length,
+                                                  std::size_t length,
                                                   size_type page_data_size)
 {
-  return offset + length > page_data_size;
+  auto const end = cuda::add_overflow<size_type>(offset, length);
+  return end.overflow or end.value > page_data_size;
 }
 
 /**
@@ -382,16 +383,17 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
         set_error(error, decode_error::DATA_STREAM_OVERRUN);
         return {};
       }
-      // Check if the flba length is valid
-      if (flba_length != INT96_SIZE or not cuda::std::is_same_v<T, int64_t>) {
+      // INT96 values are decoded into 64-bit timestamps. INT96 has no type length in the schema, so
+      // `INT96_SIZE` is used to index the page data.
+      if constexpr (sizeof(T) == sizeof(int64_t) and
+                    (cudf::is_timestamp<T>() or cuda::std::is_same_v<T, int64_t>)) {
+        decode_int96timestamp(page_data + (value_idx * INT96_SIZE),
+                              chunk.ts_clock_rate,
+                              reinterpret_cast<int64_t*>(&decoded_value));
+      } else {
         set_error(error, decode_error::INVALID_DATA_TYPE);
         return {};
       }
-
-      // Decode the int96 value from the page data
-      decode_int96timestamp(page_data + (value_idx * flba_length),
-                            chunk.ts_clock_rate,
-                            reinterpret_cast<int64_t*>(&decoded_value));
       break;
     }
 
@@ -547,7 +549,7 @@ __device__ cudf::string_view decode_string_value(uint8_t const* page_data,
   }
 
   // Decode string length
-  auto const string_length = static_cast<int32_t>(*(page_data + buffer_offset));
+  auto const string_length = cudf::io::unaligned_load<uint32_t>(page_data + buffer_offset);
   buffer_offset += sizeof(int32_t);
 
   // Check if we have a stream overrun
@@ -562,7 +564,7 @@ __device__ cudf::string_view decode_string_value(uint8_t const* page_data,
                       static_cast<cudf::size_type>(string_length)};
 
   // Update the buffer offset
-  buffer_offset += string_length;
+  buffer_offset += static_cast<int32_t>(string_length);
 
   return decoded_value;
 }
@@ -1450,10 +1452,7 @@ aggregate_reader_metadata::apply_dictionary_filter(
   // Number of columns with dictionaries
   auto const num_dictionary_columns = static_cast<cudf::size_type>(dictionary_col_schemas.size());
   // Get parquet types for the predicate columns
-  auto const parquet_types = get_parquet_types(
-    cudf::host_span<std::vector<size_type> const>{input_row_group_indices.data(),
-                                                  input_row_group_indices.size()},
-    cudf::host_span<int const>{dictionary_col_schemas.data(), dictionary_col_schemas.size()});
+  auto const parquet_types = get_parquet_types(dictionary_col_schemas);
 
   // Convert dictionary membership for (in)equality predicate columns to a table
   // containing a column for each `col[i] == literal` or `col[i] != literal` predicate
@@ -1510,11 +1509,7 @@ aggregate_reader_metadata::apply_dictionary_filter(
   // Filter dictionary membership table with the DictionaryAST expression and collect
   // filtered row group indices
   return parquet::detail::collect_filtered_row_group_indices(
-    dictionary_membership_table,
-    dictionary_expr.value(),
-    cudf::host_span<std::vector<size_type> const>{input_row_group_indices.data(),
-                                                  input_row_group_indices.size()},
-    stream);
+    dictionary_membership_table, dictionary_expr.value(), input_row_group_indices, stream);
 }
 
 dictionary_literals_collector::dictionary_literals_collector(
