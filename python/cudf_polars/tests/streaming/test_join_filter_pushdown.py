@@ -206,6 +206,8 @@ def test_filter_pushdown_is_independent_of_dynamic_planning(
     assert isinstance(details, JoinFilterPushdownDecision)
     assert details.threshold == 0.5
     assert details.decision.reason == "applied"
+    plan_metadata.add_operator_detail(optimized, details)
+    assert plan_metadata.operator_details(optimized) == (details,)
     lowering = lower_ir_graph(root, config, StatsCollector())
     assert lowering.plan_metadata is not None
     (details,) = lowering.plan_metadata.operator_details(lowering.optimized)
@@ -627,7 +629,9 @@ def test_derived_selectivity_propagates_through_rewritten_children(
         dataframe_scan(root, "o_orderkey"),
     }
     assert expected_targets <= {hint.children[0] for hint in hints}
-    assert all(plan_metadata.operator_details(join) for join in find_joins(optimized))
+    assert all(
+        len(plan_metadata.operator_details(join)) == 1 for join in find_joins(optimized)
+    )
     assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 

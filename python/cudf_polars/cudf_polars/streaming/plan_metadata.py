@@ -27,8 +27,17 @@ class PlanMetadata:
     )
 
     def add_operator_detail(self, node: IR, detail: OperatorDetail) -> None:
-        """Associate one detail payload with an operator."""
-        self._operator_details[node].append(detail)
+        """Associate one single-shot detail payload with an operator."""
+        details = self._operator_details[node]
+        for existing in details:
+            if type(existing) is type(detail):
+                if existing != detail:
+                    raise ValueError(
+                        "Conflicting operator details for structurally equal nodes: "
+                        f"{existing!r} != {detail!r}"
+                    )
+                return
+        details.append(detail)
 
     def operator_details(self, node: IR) -> tuple[OperatorDetail, ...]:
         """Return detail payloads associated with an operator."""
