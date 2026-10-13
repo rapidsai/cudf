@@ -821,10 +821,6 @@ def get_executor_options(
         run_config.streaming_options.to_executor_options()
     )
     if run_config.collect_traces:
-        if importlib.util.find_spec("cudf_polars_quent") is None:
-            raise RuntimeError(
-                "cudf_polars_quent is not installed. Please install it enable --collect-traces."
-            )
         executor_options["quent_context"] = cudf_polars.quent.QuentConfig(
             engine_id=run_config.run_id
         )
@@ -2267,6 +2263,14 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
             f"--collect-traces is not supported with --frontend {run_config.frontend}; "
             "cudf-polars tracing only applies to GPU frontends "
             "(in-memory, dask, ray, spmd)."
+        )
+
+    elif (
+        run_config.collect_traces
+        and importlib.util.find_spec("cudf_polars_quent") is None
+    ):
+        raise RuntimeError(
+            "cudf_polars_quent is not installed. Please install it enable --collect-traces."
         )
 
     if run_config.validation_method is not None:
