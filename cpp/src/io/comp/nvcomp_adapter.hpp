@@ -145,6 +145,13 @@ void batched_compress(compression_type compression,
                       cudf::memory_resources mr);
 
 /**
+ * @brief Whether `LIBCUDF_NVCOMP_POLICY` allows nvCOMP Cascaded compression and decompression.
+ *
+ * @returns true if Cascaded is enabled
+ */
+[[nodiscard]] bool is_cascaded_enabled();
+
+/**
  * @brief Maximum size of uncompressed chunks that can be compressed with nvCOMP Cascaded.
  *
  * @returns maximum chunk size

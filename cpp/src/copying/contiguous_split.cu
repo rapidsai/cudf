@@ -2494,6 +2494,24 @@ using io::detail::codec_status;
   }
 }
 
+[[nodiscard]] bool is_compression_enabled(pack_compression compression)
+{
+  if (compression == pack_compression::none) { return true; }
+  if (compression == pack_compression::cascaded) {
+    return io::detail::nvcomp::is_cascaded_enabled();
+  }
+  return io::detail::is_compression_supported(to_io_compression(compression));
+}
+
+[[nodiscard]] bool is_decompression_enabled(pack_compression compression)
+{
+  if (compression == pack_compression::none) { return true; }
+  if (compression == pack_compression::cascaded) {
+    return io::detail::nvcomp::is_cascaded_enabled();
+  }
+  return io::detail::is_decompression_supported(to_io_compression(compression));
+}
+
 // The integral type nvCOMP Cascaded interprets a buffer as.
 [[nodiscard]] type_id cascaded_type(type_id type, bool is_validity)
 {
@@ -2851,6 +2869,61 @@ void collect_buffer_offsets(packed_metadata_view::column_view const& metadata,
   }
 }
 
+struct packed_buffer {
+  std::size_t offset;
+  pack_region_info info;
+  std::optional<std::size_t> data_bytes;  ///< Unpadded size, unknown for string characters
+};
+
+/// Lists the buffers of `column` in payload order, matching the regions planning discovers.
+void append_packed_buffers(packed_metadata_view::column_view const& column,
+                           std::vector<size_type>& path,
+                           pack_region_kind data_kind,
+                           std::vector<packed_buffer>& buffers)
+{
+  auto const add =
+    [&](int64_t offset, pack_region_kind kind, type_id type, std::optional<std::size_t> bytes) {
+      if (offset == -1) { return; }
+      buffers.emplace_back(offset, pack_region_info{0, path, kind, type, 0}, bytes);
+    };
+  auto const rows = static_cast<std::size_t>(column.num_rows());
+  auto const type = column.type();
+  add(column.null_mask_offset(),
+      pack_region_kind::validity,
+      type_id::INT32,
+      cudf::util::div_rounding_up_safe(rows, std::size_t{32}) * sizeof(bitmask_type));
+  if (type.id() == type_id::STRING) {
+    add(column.data_offset(), pack_region_kind::string_characters, type.id(), std::nullopt);
+  } else {
+    add(column.data_offset(),
+        data_kind,
+        type.id(),
+        is_fixed_width(type) ? std::optional{rows * size_of(type)} : std::nullopt);
+  }
+
+  auto const has_offsets_child = type.id() == type_id::STRING || type.id() == type_id::LIST;
+  for (size_type i = 0; i < column.num_children(); ++i) {
+    // Offsets belong to the column they describe.
+    if (has_offsets_child && i == 0) {
+      append_packed_buffers(column.child(i), path, pack_region_kind::offsets, buffers);
+      continue;
+    }
+    path.push_back(i);
+    append_packed_buffers(column.child(i), path, pack_region_kind::data, buffers);
+    path.pop_back();
+  }
+}
+
+std::vector<packed_buffer> list_packed_buffers(packed_metadata_view const& metadata)
+{
+  std::vector<packed_buffer> buffers;
+  for (size_type i = 0; i < metadata.num_columns(); ++i) {
+    std::vector<size_type> path{i};
+    append_packed_buffers(metadata.column(i), path, pack_region_kind::data, buffers);
+  }
+  return buffers;
+}
+
 /**
  * @brief Provides device pointers into a packed payload.
  *
@@ -3014,9 +3087,12 @@ std::unique_ptr<table> materialize_uncompressed(packed_data_view input,
 
 [[nodiscard]] pack_compression select_automatic_compression(compression_region_layout const& layout)
 {
-  if (layout.uncompressed_bytes < automatic_min_region_bytes) { return pack_compression::none; }
-  return layout.kind == pack_region_kind::string_characters ? pack_compression::none
-                                                            : pack_compression::cascaded;
+  if (layout.uncompressed_bytes < automatic_min_region_bytes ||
+      layout.kind == pack_region_kind::string_characters ||
+      !io::detail::nvcomp::is_cascaded_enabled()) {
+    return pack_compression::none;
+  }
+  return pack_compression::cascaded;
 }
 
 std::unique_ptr<detail::contiguous_split_state> make_split_state(cudf::table_view const& input,
@@ -3393,8 +3469,7 @@ class pack_plan::impl {
       auto block_bytes = raw_block_bytes;
       auto cascaded    = type_id::UINT8;
       if (requested != pack_compression::none) {
-        CUDF_EXPECTS(requested == pack_compression::cascaded ||
-                       io::detail::is_compression_supported(to_io_compression(requested)),
+        CUDF_EXPECTS(is_compression_enabled(requested),
                      "The selected compression codec is disabled");
         // Region sizes are multiples of split_align, so every block is a whole number of values.
         // Half the staging buffer leaves room for a block's worst-case compressed size.
@@ -3627,7 +3702,16 @@ table_view unpack_view(packed_data_view input)
         return access != 0;
       }(),
     "A zero-copy view requires a device-accessible payload");
-  return cudf::detail::unpack(input.metadata, input.payload.data());
+  auto const view = cudf::detail::unpack(input.metadata, input.payload.data());
+  // String characters are followed by their offsets, so known sizes bound every buffer.
+  CUDF_EXPECTS(std::ranges::all_of(list_packed_buffers(packed_metadata_view{input.metadata}),
+                                   [&](auto const& buffer) {
+                                     return buffer.offset <= input.payload.size() &&
+                                            buffer.data_bytes.value_or(0) <=
+                                              input.payload.size() - buffer.offset;
+                                   }),
+               "Packed column buffer lies outside the payload");
+  return view;
 }
 
 namespace {
@@ -3661,10 +3745,7 @@ std::unique_ptr<table> materialize_selection(packed_data_view input,
     uncompressed_end += entry.uncompressed_bytes;
     auto const compression = static_cast<pack_compression>(entry.compression);
     CUDF_EXPECTS(is_concrete_codec(compression), "Compressed region declares an unsupported codec");
-    CUDF_EXPECTS(compression == pack_compression::none ||
-                   compression == pack_compression::cascaded ||
-                   io::detail::is_decompression_supported(to_io_compression(compression)),
-                 "The packed payload codec is disabled");
+    CUDF_EXPECTS(is_decompression_enabled(compression), "The packed payload codec is disabled");
     CUDF_EXPECTS(
       entry.data_bytes <= entry.uncompressed_bytes &&
         (entry.data_bytes == 0 || entry.block_bytes > 0) &&
@@ -3830,55 +3911,6 @@ std::unique_ptr<table> materialize(packed_data_view input,
   return materialize_selection(input, column_indices, stream, mr);
 }
 
-namespace {
-
-struct packed_buffer {
-  std::size_t offset;
-  pack_region_info info;
-  std::optional<std::size_t> data_bytes;  ///< Unpadded size, unknown for string characters
-};
-
-/// Lists the buffers of `column` in payload order, matching the regions planning discovers.
-void append_packed_buffers(packed_metadata_view::column_view const& column,
-                           std::vector<size_type>& path,
-                           pack_region_kind data_kind,
-                           std::vector<packed_buffer>& buffers)
-{
-  auto const add =
-    [&](int64_t offset, pack_region_kind kind, type_id type, std::optional<std::size_t> bytes) {
-      if (offset == -1) { return; }
-      buffers.emplace_back(offset, pack_region_info{0, path, kind, type, 0}, bytes);
-    };
-  auto const rows = static_cast<std::size_t>(column.num_rows());
-  auto const type = column.type();
-  add(column.null_mask_offset(),
-      pack_region_kind::validity,
-      type_id::INT32,
-      cudf::util::div_rounding_up_safe(rows, std::size_t{32}) * sizeof(bitmask_type));
-  if (type.id() == type_id::STRING) {
-    add(column.data_offset(), pack_region_kind::string_characters, type.id(), std::nullopt);
-  } else {
-    add(column.data_offset(),
-        data_kind,
-        type.id(),
-        is_fixed_width(type) ? std::optional{rows * size_of(type)} : std::nullopt);
-  }
-
-  auto const has_offsets_child = type.id() == type_id::STRING || type.id() == type_id::LIST;
-  for (size_type i = 0; i < column.num_children(); ++i) {
-    // Offsets belong to the column they describe.
-    if (has_offsets_child && i == 0) {
-      append_packed_buffers(column.child(i), path, pack_region_kind::offsets, buffers);
-      continue;
-    }
-    path.push_back(i);
-    append_packed_buffers(column.child(i), path, pack_region_kind::data, buffers);
-    path.pop_back();
-  }
-}
-
-}  // namespace
-
 std::vector<pack_region_info> get_packed_region_info(std::span<uint8_t const> metadata)
 {
   CUDF_FUNC_RANGE();
@@ -3888,12 +3920,7 @@ std::vector<pack_region_info> get_packed_region_info(std::span<uint8_t const> me
   auto const legacy = parsed.has_value() ? parsed->legacy_metadata : metadata;
   if (legacy.empty()) { return {}; }
 
-  packed_metadata_view const view{legacy};
-  std::vector<packed_buffer> buffers;
-  for (size_type i = 0; i < view.num_columns(); ++i) {
-    std::vector<size_type> path{i};
-    append_packed_buffers(view.column(i), path, pack_region_kind::data, buffers);
-  }
+  auto buffers = list_packed_buffers(packed_metadata_view{legacy});
   // An empty buffer shares its offset with the buffer after it, and the stable sort keeps it first.
   std::ranges::stable_sort(buffers, {}, &packed_buffer::offset);
 

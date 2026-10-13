@@ -14,6 +14,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/config_utils.hpp>
 #include <cudf/io/detail/codec.hpp>
 #include <cudf/null_mask.hpp>
 
@@ -67,6 +68,9 @@ constexpr std::array all_codecs{cx::pack_compression::none,
 
 bool is_codec_enabled(cx::pack_compression compression)
 {
+  if (compression == cx::pack_compression::cascaded) {
+    return cudf::io::nvcomp_integration::is_stable_enabled();
+  }
   if (compression != cx::pack_compression::zstd && compression != cx::pack_compression::snappy) {
     return true;
   }
@@ -316,6 +320,20 @@ TEST_F(ExperimentalPackUnpackTest, UnpackViewPageablePayload)
   }
 }
 
+TEST_F(ExperimentalPackUnpackTest, UnpackViewTruncatedPayload)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> numbers({1, 2, 3, 4, 5});
+  cudf::test::strings_column_wrapper strings({"a", "truncated", "payload"});
+  for (auto const& input : {cudf::table_view{{numbers}}, cudf::table_view{{strings}}}) {
+    auto const packed =
+      pack_to_device(cx::prepare_pack(input, make_options(cx::pack_compression::none)));
+    auto view = packed.view();
+    CUDF_TEST_EXPECT_TABLES_EQUAL(input, cx::unpack_view(view));
+    view.payload = view.payload.first(view.payload.size() / 4);
+    EXPECT_THROW(cx::unpack_view(view), cudf::logic_error);
+  }
+}
+
 TEST_F(ExperimentalPackUnpackTest, MaterializeOversizedUncompressedPayload)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> numbers({1, 2, 3, 4, 5});
@@ -432,6 +450,7 @@ TEST_F(ExperimentalPackUnpackTest, CompressExistingPackedColumns)
 
 TEST_F(ExperimentalPackUnpackTest, CompressContiguousSplitPartitions)
 {
+  if (!is_codec_enabled(cx::pack_compression::cascaded)) { GTEST_SKIP() << "Cascaded is disabled"; }
   constexpr cudf::size_type num_rows = 64 * 1024;
   auto const values =
     cudf::detail::make_counting_transform_iterator(0, [](int64_t i) { return (i / 16) % 1000; });
@@ -499,6 +518,7 @@ TEST_F(ExperimentalPackUnpackTest, ExistingPackedColumnsRequireMatchingLayout)
 
 TEST_F(ExperimentalPackUnpackTest, CascadedUsesNativeTypedRegions)
 {
+  if (!is_codec_enabled(cx::pack_compression::cascaded)) { GTEST_SKIP() << "Cascaded is disabled"; }
   cudf::test::fixed_width_column_wrapper<int16_t> small({1, 1, 2, 3, 5},
                                                         {true, false, true, true, true});
   cudf::test::fixed_width_column_wrapper<int64_t> large({10, 20, 30, 40, 50});
@@ -554,6 +574,7 @@ TEST_F(ExperimentalPackUnpackTest, CompressMisalignedSlices)
 
 TEST_F(ExperimentalPackUnpackTest, AutomaticPerRegionCompression)
 {
+  if (!is_codec_enabled(cx::pack_compression::cascaded)) { GTEST_SKIP() << "Cascaded is disabled"; }
   constexpr cudf::size_type rows = 32 * 1024;
   std::vector<int32_t> values(rows, 7);
   std::vector<std::string> words(rows, "automatic-region-selection");
@@ -587,6 +608,7 @@ TEST_F(ExperimentalPackUnpackTest, AutomaticPerRegionCompression)
 
 TEST_F(ExperimentalPackUnpackTest, PerRegionCompression)
 {
+  if (!is_codec_enabled(cx::pack_compression::cascaded)) { GTEST_SKIP() << "Cascaded is disabled"; }
   if (!is_codec_enabled(cx::pack_compression::zstd) ||
       !is_codec_enabled(cx::pack_compression::snappy)) {
     GTEST_SKIP() << "Zstd or Snappy is disabled";
@@ -664,6 +686,7 @@ TEST_F(ExperimentalPackUnpackTest, RegionColumnPaths)
 
 TEST_F(ExperimentalPackUnpackTest, GetPackedRegionInfo)
 {
+  if (!is_codec_enabled(cx::pack_compression::cascaded)) { GTEST_SKIP() << "Cascaded is disabled"; }
   cudf::test::fixed_width_column_wrapper<int32_t> first({1, 2, 3, 4}, {true, false, true, true});
   cudf::test::strings_column_wrapper words({"a", "", "ccc", "dd"}, {true, false, true, true});
   cudf::test::structs_column_wrapper structs({first, words}, {true, true, false, true});
