@@ -144,10 +144,36 @@ The result is `(result_df, timings_df)`, see the Polars docs link above for the 
 ## Tracing
 
 The streaming runtime uses [Quent] to provide observability into how queries are executed.
+You can enable profiling by providing a `QuentConfig` when creating an engine:
 
-TODO: how to enable
-TODO: how to open
-TODO: data model / what is traced
+```python
+import polars as pl
+
+from cudf_polars.quent import QuentConfig
+from cudf_polars.engine.spmd import SPMDEngine
+
+
+q = pl.read_parquet(...)  # build your polars query
+
+quent_config = QuentConfig()
+with SPMDEngine(
+    executor_options={
+        "quent_context": quent_config
+    }
+) as engine:
+    result = q.collect(engine=engine)
+```
+
+The cudf-polars runtime will write telemetry data to `quent_config.output_root`
+(`.quent-events` in the current directory, by default). The telemetry can be inspected visually using the
+Quent UI, which can be started using `quent-open`:
+
+```bash
+$ quent-open .quent-events
+discovered 2 context(s) -> 1 viewer(s)
+building: cudf-polars-quent-analyzer (quent@ff07098d4907 analyzer@87ddd5c004a1) — 2 context(s)
+ready: cudf-polars-quent-analyzer (quent@ff07098d4907 analyzer@87ddd5c004a1) — 2 context(s)  http://127.0.0.1:36937/
+```
 
 [nsight]: https://developer.nvidia.com/nsight-systems
 [nvtx]: https://nvidia.github.io/NVTX/
