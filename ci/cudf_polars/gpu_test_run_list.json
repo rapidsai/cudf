@@ -63,7 +63,6 @@
         "tests/unit/datatypes/test_struct.py::test_struct_field_recognized_as_renaming_expr_16480",
         "tests/unit/datatypes/test_struct.py::test_struct_unnesting",
         "tests/unit/datatypes/test_temporal.py::test_datetime_cum_agg_schema",
-        "tests/unit/datatypes/test_temporal.py::test_tz_aware_truncate",
         "tests/unit/expr/test_exprs.py::test_exp_log1p[Float32-Float32]",
         "tests/unit/expr/test_exprs.py::test_exp_log1p[Float64-Float64]",
         "tests/unit/expr/test_exprs.py::test_exp_log1p[Int32-Float64]",
