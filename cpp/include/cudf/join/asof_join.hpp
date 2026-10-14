@@ -24,6 +24,7 @@
  */
 
 namespace CUDF_EXPORT cudf {
+namespace experimental {
 
 /**
  * @addtogroup column_join
@@ -136,9 +137,10 @@ class asof_join {
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
  private:
-  using impl_type = cudf::detail::asof_join;
+  using impl_type = cudf::experimental::detail::asof_join;
   std::unique_ptr<impl_type const> _impl;
 };
 
 /** @} */  // end of group
+}  // namespace experimental
 }  // namespace CUDF_EXPORT cudf

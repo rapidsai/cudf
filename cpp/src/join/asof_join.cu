@@ -37,7 +37,7 @@
 #include <string>
 #include <utility>
 
-namespace cudf {
+namespace cudf::experimental {
 namespace {
 
 bool is_supported_on_type(data_type type)
@@ -250,8 +250,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> asof_join::join(
       _right_lex_preprocessed, std::move(left_lex)};
     auto const right_group_rows = cuda::transform_iterator(
       _right_group_offsets.begin(),
-      cuda::proclaim_return_type<detail::row::lhs_index_type>(
-        [] __device__(size_type row) { return detail::row::lhs_index_type{row}; }));
+      cuda::proclaim_return_type<cudf::detail::row::lhs_index_type>(
+        [] __device__(size_type row) { return cudf::detail::row::lhs_index_type{row}; }));
     thrust::lower_bound(rmm::exec_policy_nosync(stream, temp_mr),
                         right_group_rows,
                         right_group_rows + _num_right_groups,
@@ -275,8 +275,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> asof_join::join(
       group_positions->begin(),
       [group_rows = _right_group_offsets.data(), num_groups = _num_right_groups, equal] __device__(
         size_type group, size_type left_row) {
-        return group < num_groups && equal(detail::row::lhs_index_type{group_rows[group]},
-                                           detail::row::rhs_index_type{left_row})
+        return group < num_groups && equal(cudf::detail::row::lhs_index_type{group_rows[group]},
+                                           cudf::detail::row::rhs_index_type{left_row})
                  ? group
                  : JoinNoMatch;
       });
@@ -322,4 +322,4 @@ std::unique_ptr<rmm::device_uvector<size_type>> asof_join::join(
   return _impl->join(left_by, left_on, strategy, allow_exact_matches, stream, mr);
 }
 
-}  // namespace cudf
+}  // namespace cudf::experimental

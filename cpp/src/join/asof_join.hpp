@@ -19,7 +19,7 @@
 
 #include <memory>
 
-namespace cudf::detail {
+namespace cudf::experimental::detail {
 
 /**
  * @brief Implementation of an as-of join with a reusable right side.
@@ -52,8 +52,8 @@ class asof_join {
   // Built once and reused by every probe. Lexicographic comparison locates a candidate group
   // with lower_bound; equality verifies an actual match, treating null grouping keys as unequal.
   // The two comparator APIs require separate preprocessing types.
-  std::shared_ptr<row::equality::preprocessed_table> _right_eq_preprocessed;
-  std::shared_ptr<row::lexicographic::preprocessed_table> _right_lex_preprocessed;
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> _right_eq_preprocessed;
+  std::shared_ptr<cudf::detail::row::lexicographic::preprocessed_table> _right_lex_preprocessed;
 };
 
-}  // namespace cudf::detail
+}  // namespace cudf::experimental::detail
