@@ -8,8 +8,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/device_uvector.hpp>
-
+#include <cuda/buffer>
 #include <cuda/stream>
 
 namespace cudf::groupby::detail::hash {
@@ -37,12 +36,14 @@ group_row_buffers stable_sort_group_rows(group_row_buffers input,
 struct grouped_keys {
   size_type num_groups;
   size_type num_grouped_rows;
-  rmm::device_uvector<size_type> key_rows;  ///< One representative input row per group; empty when
-                                            ///< the group-offset prefix already holds these rows
-  rmm::device_uvector<size_type> group_offsets;  ///< `num_groups + 1` offsets into `grouped_rows`
-  rmm::device_uvector<size_type> grouped_rows;   ///< Input rows reordered so groups are contiguous
-  rmm::device_uvector<size_type> group_labels;   ///< Group of each grouped row when the stable
-                                                 ///< build kept its sort keys, otherwise empty
+  /// First `num_groups` representative input rows; empty when the group-offset prefix holds them.
+  cuda::device_buffer<size_type> key_rows;
+  /// First `num_groups + 1` offsets delimit the groups in `grouped_rows`.
+  cuda::device_buffer<size_type> group_offsets;
+  /// First `num_grouped_rows` input rows, reordered so groups are contiguous.
+  cuda::device_buffer<size_type> grouped_rows;
+  /// First `num_grouped_rows` group IDs when the stable build kept its sort keys; otherwise empty.
+  cuda::device_buffer<size_type> group_labels;
 };
 
 /**

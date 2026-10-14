@@ -53,13 +53,15 @@ size_type compact_group_offsets(bool* flags,
 
 namespace {
 
-rmm::device_uvector<size_type> included_rows(table_view const& keys,
-                                             null_policy include_null_keys,
-                                             cuda::stream_ref stream,
-                                             cudf::memory_resources mr)
+std::pair<cuda::device_buffer<size_type>, size_type> included_rows(table_view const& keys,
+                                                                   null_policy include_null_keys,
+                                                                   cuda::stream_ref stream,
+                                                                   cudf::memory_resources mr)
 {
   auto const policy = rmm::exec_policy_nosync(stream, mr.get_temporary_mr());
-  auto rows         = rmm::device_uvector<size_type>(keys.num_rows(), stream, mr.get_output_mr());
+  auto rows =
+    cuda::device_buffer<size_type>(stream, mr.get_output_mr(), keys.num_rows(), cuda::no_init);
+  auto size = keys.num_rows();
   auto [row_bitmask_data, row_bitmask] =
     include_null_keys == null_policy::EXCLUDE
       ? compute_row_bitmask(
@@ -76,13 +78,13 @@ rmm::device_uvector<size_type> included_rows(table_view const& keys,
       cuda::counting_iterator<size_type>{keys.num_rows()},
       rows.begin(),
       [row_bitmask] __device__(size_type row) { return cudf::bit_is_set(row_bitmask, row); });
-    rows.resize(cuda::std::distance(rows.begin(), end), stream);
+    size = static_cast<size_type>(cuda::std::distance(rows.begin(), end));
   }
-  return rows;
+  return {std::move(rows), size};
 }
 
 void stabilize_rows(hash::grouped_keys& groups,
-                    rmm::device_uvector<size_type> const* cached_labels,
+                    cuda::device_buffer<size_type> const* cached_labels,
                     size_type num_rows,
                     bool keep_labels,
                     cuda::stream_ref stream,
@@ -96,10 +98,10 @@ void stabilize_rows(hash::grouped_keys& groups,
   auto const policy    = rmm::exec_policy_nosync(stream, temp_mr);
   auto const filtered  = size != num_rows;
   auto const labels_mr = keep_labels && cached_labels == nullptr ? mr.get_output_mr() : temp_mr;
-  auto input_labels    = rmm::device_uvector<size_type>(num_rows, stream, labels_mr);
-  auto ordered_labels  = rmm::device_uvector<size_type>(num_rows, stream, labels_mr);
-  auto ordered_rows =
-    rmm::device_uvector<size_type>(num_rows, stream, filtered ? temp_mr : mr.get_output_mr());
+  auto input_labels    = cuda::device_buffer<size_type>(stream, labels_mr, num_rows, cuda::no_init);
+  auto ordered_labels  = cuda::device_buffer<size_type>(stream, labels_mr, num_rows, cuda::no_init);
+  auto ordered_rows    = cuda::device_buffer<size_type>(
+    stream, filtered ? temp_mr : mr.get_output_mr(), num_rows, cuda::no_init);
   if (filtered) {
     auto const initialize_rows = cuda::tabulate_output_iterator{
       [labels = input_labels.data(), rows = ordered_rows.data(), num_groups] __device__(
@@ -123,11 +125,12 @@ void stabilize_rows(hash::grouped_keys& groups,
       write_label(grouped_rows[position], label);
     }};
   if (cached_labels) {
-    thrust::copy(policy, cached_labels->begin(), cached_labels->end(), label_output);
+    thrust::copy_n(policy, cached_labels->begin(), size, label_output);
   } else {
     // A CSR position's group ID is the number of segment ends at or before that position.
     // Compute it directly instead of materializing labels that only this ordering needs.
-    auto const& offsets = groups.group_offsets;
+    auto const offsets = device_span<size_type const>{groups.group_offsets.data(),
+                                                      static_cast<std::size_t>(num_groups) + 1};
     thrust::upper_bound(policy,
                         offsets.begin() + 1,
                         offsets.end(),
@@ -138,8 +141,9 @@ void stabilize_rows(hash::grouped_keys& groups,
 
   // The unfiltered CSR buffer is now free to serve as the alternate sorting buffer. With
   // exclusions, retain its exact-sized allocation for the sorted prefix instead.
-  auto alternate_rows = rmm::device_uvector<size_type>(filtered ? num_rows : 0, stream, temp_mr);
-  auto* alternate     = filtered ? alternate_rows.data() : groups.grouped_rows.data();
+  auto alternate_rows =
+    cuda::device_buffer<size_type>(stream, temp_mr, filtered ? num_rows : 0, cuda::no_init);
+  auto* alternate = filtered ? alternate_rows.data() : groups.grouped_rows.data();
   // Only excluded rows use the sentinel group ID, which sorts after every included group.
   auto const end_bit =
     cuda::std::bit_width(static_cast<uint32_t>(filtered ? num_groups : num_groups - 1));
@@ -158,8 +162,12 @@ void stabilize_rows(hash::grouped_keys& groups,
   if (keep_labels && cached_labels == nullptr) {
     groups.group_labels =
       sorted.labels == input_labels.data() ? std::move(input_labels) : std::move(ordered_labels);
-    groups.group_labels.resize(size, stream);
-    groups.group_labels.shrink_to_fit(stream);
+    if (groups.group_labels.size() != static_cast<std::size_t>(size)) {
+      groups.group_labels = cuda::device_buffer<size_type>{stream,
+                                                           mr.get_output_mr(),
+                                                           groups.group_labels.begin(),
+                                                           groups.group_labels.begin() + size};
+    }
   }
 }
 
@@ -188,7 +196,7 @@ void groupby_helper::build_groups(bool stable_rows,
 {
   if (_groups) {
     if (!need_grouped_rows ||
-        _groups->grouped_rows.size() == static_cast<std::size_t>(_groups->num_grouped_rows)) {
+        _groups->grouped_rows.size() >= static_cast<std::size_t>(_groups->num_grouped_rows)) {
       return;
     }
     // A previous counts-only aggregation needed no row permutation. Build it only when a later
@@ -212,19 +220,20 @@ void groupby_helper::build_groups(bool stable_rows,
 
   // Sorted keys already form contiguous groups. Null exclusion only needs stable compaction,
   // after which adjacent equality identifies boundaries without sorting or hashing.
-  auto rows = included_rows(
+  auto [rows, size] = included_rows(
     _keys, _include_null_keys, stream, cudf::memory_resources{_mr, mr.get_temporary_mr()});
-  auto const size = static_cast<size_type>(rows.size());
-  auto offsets    = rmm::device_uvector<size_type>(static_cast<std::size_t>(size) + 1, stream, _mr);
+  auto offsets =
+    cuda::device_buffer<size_type>(stream, _mr, static_cast<std::size_t>(size) + 1, cuda::no_init);
   auto const num_groups =
     size == 0 ? size_type{0}
     : cudf::detail::has_nested_columns(_keys)
       ? compute_nested_group_offsets(_keys, rows.data(), size, offsets, stream, mr)
       : compute_group_offsets<false>(_keys, rows.data(), size, offsets, stream, mr);
-  offsets.set_element_async(num_groups, size, stream);
-  offsets.resize(static_cast<std::size_t>(num_groups) + 1, stream);
+  thrust::fill_n(
+    rmm::exec_policy_nosync(stream, mr.get_temporary_mr()), offsets.data() + num_groups, 1, size);
   // Without filtered rows, each group offset already identifies its representative input row.
-  auto key_rows = rmm::device_uvector<size_type>(_is_presorted ? 0 : num_groups, stream, _mr);
+  auto key_rows =
+    cuda::device_buffer<size_type>(stream, _mr, _is_presorted ? 0 : num_groups, cuda::no_init);
   if (!_is_presorted) {
     thrust::gather(rmm::exec_policy_nosync(stream, mr.get_temporary_mr()),
                    offsets.begin(),
@@ -238,7 +247,7 @@ void groupby_helper::build_groups(bool stable_rows,
                        std::move(key_rows),
                        std::move(offsets),
                        std::move(rows),
-                       rmm::device_uvector<size_type>{0, stream, _mr}});
+                       cuda::device_buffer<size_type>{stream, _mr, 0, cuda::no_init}});
   _stable = true;
 }
 
@@ -254,8 +263,10 @@ void groupby_helper::make_stable(bool keep_labels,
   auto const num_groups = _groups->num_groups;
   if (num_groups == 1) {
     // A single group is the stable compaction of all included input rows.
-    _groups->grouped_rows = included_rows(
+    auto [rows, num_rows] = included_rows(
       _keys, _include_null_keys, stream, cudf::memory_resources{_mr, mr.get_temporary_mr()});
+    _groups->grouped_rows     = std::move(rows);
+    _groups->num_grouped_rows = num_rows;
   } else if (num_groups > 1 && num_groups < size) {
     stabilize_rows(*_groups,
                    _group_labels.get(),
@@ -278,14 +289,15 @@ column_view groupby_helper::grouped_order(bool keep_labels,
                                           cudf::memory_resources mr)
 {
   make_stable(keep_labels, stream, mr);
-  return column_view(device_span<size_type const>{_groups->grouped_rows});
+  return column_view(device_span<size_type const>{
+    _groups->grouped_rows.data(), static_cast<std::size_t>(_groups->num_grouped_rows)});
 }
 
 device_span<size_type const> groupby_helper::unordered_grouped_order(cuda::stream_ref stream,
                                                                      cudf::memory_resources mr)
 {
   build_groups(false, false, true, stream, mr);
-  return _groups->grouped_rows;
+  return {_groups->grouped_rows.data(), static_cast<std::size_t>(_groups->num_grouped_rows)};
 }
 
 hash::group_reduction_plan const& groupby_helper::reduction_groups(cuda::stream_ref stream,
@@ -293,36 +305,40 @@ hash::group_reduction_plan const& groupby_helper::reduction_groups(cuda::stream_
 {
   if (!_reduction_groups) {
     build_groups(false, false, true, stream, mr);
-    _reduction_groups = std::make_unique<hash::group_reduction_plan>(
-      hash::make_group_reduction_plan(_groups->grouped_rows,
-                                      _groups->group_offsets,
-                                      stream,
-                                      cudf::memory_resources{_mr, mr.get_temporary_mr()}));
+    _reduction_groups =
+      std::make_unique<hash::group_reduction_plan>(hash::make_group_reduction_plan(
+        {_groups->grouped_rows.data(), static_cast<std::size_t>(_groups->num_grouped_rows)},
+        {_groups->group_offsets.data(), static_cast<std::size_t>(_groups->num_groups) + 1},
+        stream,
+        cudf::memory_resources{_mr, mr.get_temporary_mr()}));
   }
   return *_reduction_groups;
 }
 
-rmm::device_uvector<size_type> const& groupby_helper::group_offsets(cuda::stream_ref stream,
-                                                                    cudf::memory_resources mr)
+device_span<size_type const> groupby_helper::group_offsets(cuda::stream_ref stream,
+                                                           cudf::memory_resources mr)
 {
   build_groups(false, false, false, stream, mr);
-  return _groups->group_offsets;
+  return {_groups->group_offsets.data(), static_cast<std::size_t>(_groups->num_groups) + 1};
 }
 
-rmm::device_uvector<size_type> const& groupby_helper::group_labels(cuda::stream_ref stream,
-                                                                   cudf::memory_resources mr)
+device_span<size_type const> groupby_helper::group_labels(cuda::stream_ref stream,
+                                                          cudf::memory_resources mr)
 {
   // Labels must use the final grouping order before any row consumer can observe them.
   build_groups(false, false, true, stream, mr);
-  if (_group_labels) { return *_group_labels; }
-  if (num_keys(stream, mr) != 0 && !_groups->group_labels.is_empty()) {
+  if (_group_labels) {
+    return {_group_labels->data(), static_cast<std::size_t>(_groups->num_grouped_rows)};
+  }
+  if (num_keys(stream, mr) != 0 && !_groups->group_labels.empty()) {
     // The stable build sorted the labels along with the rows.
     _group_labels =
-      std::make_unique<rmm::device_uvector<size_type>>(std::move(_groups->group_labels));
-    return *_group_labels;
+      std::make_unique<cuda::device_buffer<size_type>>(std::move(_groups->group_labels));
+    return {_group_labels->data(), static_cast<std::size_t>(_groups->num_grouped_rows)};
   }
-  auto labels = std::make_unique<rmm::device_uvector<size_type>>(num_keys(stream, mr), stream, _mr);
-  if (!labels->is_empty()) {
+  auto labels = std::make_unique<cuda::device_buffer<size_type>>(
+    stream, _mr, num_keys(stream, mr), cuda::no_init);
+  if (!labels->empty()) {
     auto const& offsets = group_offsets(stream, mr);
     cudf::detail::label_segments(offsets.begin(),
                                  offsets.end(),
@@ -332,16 +348,17 @@ rmm::device_uvector<size_type> const& groupby_helper::group_labels(cuda::stream_
                                  cudf::memory_resources{_mr, mr.get_temporary_mr()});
   }
   _group_labels = std::move(labels);
-  return *_group_labels;
+  return {_group_labels->data(), static_cast<std::size_t>(_groups->num_grouped_rows)};
 }
 
-rmm::device_uvector<size_type> const& groupby_helper::input_labels(cuda::stream_ref stream,
-                                                                   cudf::memory_resources mr)
+device_span<size_type const> groupby_helper::input_labels(cuda::stream_ref stream,
+                                                          cudf::memory_resources mr)
 {
   if (_input_labels) { return *_input_labels; }
   auto const policy  = rmm::exec_policy_nosync(stream, mr.get_temporary_mr());
   auto const& labels = group_labels(stream, mr);
-  auto input = std::make_unique<rmm::device_uvector<size_type>>(_keys.num_rows(), stream, _mr);
+  auto input =
+    std::make_unique<cuda::device_buffer<size_type>>(stream, _mr, _keys.num_rows(), cuda::no_init);
   // Excluded rows take the label past the last group so that they sort after every group.
   if (labels.size() != input->size()) {
     thrust::fill(policy, input->begin(), input->end(), num_groups(stream, mr));
@@ -393,12 +410,14 @@ std::unique_ptr<column> groupby_helper::unordered_grouped_values(column_view con
                                                                  cudf::memory_resources mr)
 {
   build_groups(false, false, true, stream, mr);
-  auto result = cudf::detail::gather(table_view{{values}},
-                                     _groups->grouped_rows,
-                                     out_of_bounds_policy::DONT_CHECK,
-                                     negative_index_policy::NOT_ALLOWED,
-                                     stream,
-                                     mr);
+  auto result = cudf::detail::gather(
+    table_view{{values}},
+    device_span<size_type const>{_groups->grouped_rows.data(),
+                                 static_cast<std::size_t>(_groups->num_grouped_rows)},
+    out_of_bounds_policy::DONT_CHECK,
+    negative_index_policy::NOT_ALLOWED,
+    stream,
+    mr);
   return std::move(result->release()[0]);
 }
 
@@ -424,10 +443,11 @@ std::unique_ptr<table> groupby_helper::distinct_keys(cuda::stream_ref stream,
   }
   auto const& groups = key_groups ? *key_groups : *_groups;
   auto const key_rows =
-    groups.key_rows.is_empty()
+    groups.key_rows.empty()
       ? device_span<size_type const>{groups.group_offsets.data(),
                                      static_cast<std::size_t>(groups.num_groups)}
-      : device_span<size_type const>{groups.key_rows};
+      : device_span<size_type const>{groups.key_rows.data(),
+                                     static_cast<std::size_t>(groups.num_groups)};
   return cudf::detail::gather(_keys,
                               key_rows,
                               out_of_bounds_policy::DONT_CHECK,

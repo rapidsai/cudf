@@ -12,8 +12,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/device_uvector.hpp>
-
+#include <cuda/buffer>
 #include <cuda/stream>
 
 #include <memory>
@@ -204,16 +203,15 @@ struct groupby_helper {
    *
    * Computes and stores the group offsets on first invocation and returns
    * the stored group offsets on subsequent calls.
-   * This returns a vector of size `num_groups + 1` such that the size of
+   * This returns a span of size `num_groups + 1` such that the size of
    * group `i` is `group_offsets[i+1] - group_offsets[i]`
    *
    * @param stream CUDA stream used for device operations
    * @param mr Memory resources whose temporary resource is used for operation scratch
-   * @return vector of offsets of the starting point of each group in the grouped
+   * @return span of offsets of the starting point of each group in the grouped
    * key table
    */
-  rmm::device_uvector<size_type> const& group_offsets(cuda::stream_ref stream,
-                                                      cudf::memory_resources mr);
+  device_span<size_type const> group_offsets(cuda::stream_ref stream, cudf::memory_resources mr);
 
   /**
    * @brief Get the group labels corresponding to the grouped order of `keys`.
@@ -228,10 +226,9 @@ struct groupby_helper {
    *
    * @param stream CUDA stream used for device operations
    * @param mr Memory resources whose temporary resource is used for operation scratch
-   * @return vector of group labels for each row in the grouped key column
+   * @return span of group labels for each row in the grouped key column
    */
-  rmm::device_uvector<size_type> const& group_labels(cuda::stream_ref stream,
-                                                     cudf::memory_resources mr);
+  device_span<size_type const> group_labels(cuda::stream_ref stream, cudf::memory_resources mr);
 
  private:
   /**
@@ -246,10 +243,9 @@ struct groupby_helper {
    *
    * @param stream CUDA stream used for device operations
    * @param mr Memory resources whose temporary resource is used for operation scratch
-   * @return vector of group labels in the order of the ungrouped key table
+   * @return span of group labels in the order of the ungrouped key table
    */
-  rmm::device_uvector<size_type> const& input_labels(cuda::stream_ref stream,
-                                                     cudf::memory_resources mr);
+  device_span<size_type const> input_labels(cuda::stream_ref stream, cudf::memory_resources mr);
 
   /// Materialize grouping metadata, optionally retaining rows and their input order.
   void build_groups(bool stable_rows,
@@ -262,12 +258,12 @@ struct groupby_helper {
   void make_stable(bool keep_labels, cuda::stream_ref stream, cudf::memory_resources mr);
 
   cuda::mr::any_resource<cuda::mr::device_accessible> _mr;  ///< Owns the cached-data resource
-  std::unique_ptr<rmm::device_uvector<size_type>>
+  std::unique_ptr<cuda::device_buffer<size_type>>
     _input_labels;   ///< Labels in input order; excluded rows get num_groups
   table_view _keys;  ///< Input grouping keys
   std::unique_ptr<hash::grouped_keys> _groups;                    ///< HashCSR grouping metadata
   std::unique_ptr<hash::group_reduction_plan> _reduction_groups;  ///< Cached reduction scheduling
-  std::unique_ptr<rmm::device_uvector<size_type>> _group_labels;  ///< Labels in grouped order
+  std::unique_ptr<cuda::device_buffer<size_type>> _group_labels;  ///< Labels in grouped order
   sorted _keys_pre_sorted;         ///< Whether key groups are already contiguous
   null_policy _include_null_keys;  ///< Whether to retain null key rows
   bool _is_presorted;              ///< Whether grouped values can use the input directly
