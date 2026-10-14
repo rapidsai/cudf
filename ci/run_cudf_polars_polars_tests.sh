@@ -7,6 +7,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
 TIMEOUT_TOOL_PATH="${SCRIPT_DIR}/timeout_with_stack.py"
+test_timeout=5400
+if [[ ${RAPIDS_BUILD_TYPE:-} == pull-request ]]; then
+    test_timeout=1800
+fi
 DESELECTED_TESTS_FILE="${SCRIPT_DIR}/cudf_polars/polars_test_deselections.txt"
 AARCH64_DESELECTED_TESTS_FILE="${SCRIPT_DIR}/cudf_polars/polars_test_deselections_aarch64.txt"
 INCOMPATIBLE_GLIBC_DESELECTED_TESTS_FILE="${SCRIPT_DIR}/cudf_polars/polars_test_deselections_incompatible_glibc.txt"
@@ -124,7 +128,7 @@ SQLALCHEMY_SQLITE_URI_WARNING="ignore:Query string argument(s) 'cache', 'mode' a
 if [[ "${ENGINE}" == "both" || "${ENGINE}" == "in-memory" ]]; then
     configure_fallback_report in-memory
     echo "Run polars tests with injected in-memory GPU engine"
-    python "${TIMEOUT_TOOL_PATH}" --enable-python 5400 \
+    python "${TIMEOUT_TOOL_PATH}" --enable-python "${test_timeout}" \
        python -m pytest \
            --import-mode=importlib \
            --cache-clear \
@@ -149,7 +153,7 @@ if [[ "${ENGINE}" == "both" || "${ENGINE}" == "spmd" ]]; then
     echo "Run polars tests with injected SPMD GPU engine, ${BLOCKSIZE} blocksize"
     CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE=805306368 \
     CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
-    python "${TIMEOUT_TOOL_PATH}" --enable-python 5400 \
+    python "${TIMEOUT_TOOL_PATH}" --enable-python "${test_timeout}" \
        python -m pytest \
            --import-mode=importlib \
            --cache-clear \
