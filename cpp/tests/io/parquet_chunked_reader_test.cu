@@ -1557,6 +1557,65 @@ TEST_F(ParquetChunkedReaderInputLimitTest, ListSpanningPagesAtPassEnd)
   }
 }
 
+TEST_F(ParquetChunkedReaderInputLimitTest, ListRowsOfVeryDifferentSizes)
+{
+  // A list column whose first rows are much larger than the others, without a page index, so that
+  // the estimated rows of their pages are far too high
+  auto constexpr num_rows   = 1'000;
+  auto constexpr num_large  = 10;
+  auto constexpr large_size = 1'000;
+
+  // List size of each row, shifted by one so that a scan turns them into offsets
+  std::vector<cudf::size_type> offsets(num_rows + 1, 1);
+  offsets.front() = 0;
+  std::fill(offsets.begin() + 1, offsets.begin() + 1 + num_large, large_size);
+  std::inclusive_scan(offsets.begin(), offsets.end(), offsets.begin());
+  // Few distinct values, so that the writer can use a dictionary
+  auto const values =
+    cudf::detail::make_counting_transform_iterator(0, [](int32_t i) { return i % 100; });
+  auto const list =
+    cudf::make_lists_column(num_rows,
+                            int32s_col(offsets.begin(), offsets.end()).release(),
+                            int32s_col(values, values + offsets.back()).release(),
+                            0,
+                            cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
+  auto const expected = cudf::table_view{{*list}};
+
+  for (auto const dict_policy :
+       {cudf::io::dictionary_policy::NEVER, cudf::io::dictionary_policy::ALWAYS}) {
+    // The input limit path is only taken for compressed data. Pages end between fragments, so one
+    // row per fragment gives every large row a page of its own.
+    auto const filepath = temp_env->get_temp_filepath("ListRowsOfVeryDifferentSizes.parquet");
+    cudf::io::write_parquet(
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+        .compression(cudf::io::compression_type::ZSTD)
+        .dictionary_policy(dict_policy)
+        .max_page_size_bytes(1024)
+        .max_page_fragment_size(1)
+        .build());
+    auto const source = cudf::io::datasource::create(filepath);
+    cudf::io::parquet::FileMetaData fmd;
+    read_footer(source, &fmd);
+    EXPECT_EQ(fmd.row_groups.front().columns.front().meta_data.dictionary_page_offset > 0,
+              dict_policy == cudf::io::dictionary_policy::ALWAYS);
+
+    // The whole file, and rows that the estimates put in the pages of the large rows
+    for (auto const& [skip_rows, num_rows_to_read] : {std::pair{0, num_rows}, std::pair{500, 10}}) {
+      SCOPED_TRACE("dictionary policy " + std::to_string(static_cast<int>(dict_policy)) +
+                   ", skip " + std::to_string(skip_rows));
+      auto const read_opts =
+        cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+          .skip_rows(skip_rows)
+          .num_rows(num_rows_to_read)
+          .build();
+      auto const [result, num_chunks] = chunked_read(read_opts, 0, 1);
+      CUDF_TEST_EXPECT_TABLES_EQUAL(
+        cudf::slice(expected, {skip_rows, skip_rows + num_rows_to_read})[0], result->view());
+      if (skip_rows == 0) { EXPECT_GT(num_chunks, 1); }
+    }
+  }
+}
+
 namespace {
 struct offset_gen {
   int const group_size;
