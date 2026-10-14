@@ -35,7 +35,7 @@ struct compute_single_pass_aggs_base_fn {
  * indices. In addition, all aggregations for all rows are computed concurrently without any order.
  */
 template <typename Iterator>
-struct compute_single_pass_aggs_dense_output_fn : compute_single_pass_aggs_base_fn<Iterator> {
+struct compute_single_pass_aggs_dense_output_fn : compute_single_pass_aggs_base_fn {
   Iterator target_indices;
 
   compute_single_pass_aggs_dense_output_fn(Iterator target_indices,
