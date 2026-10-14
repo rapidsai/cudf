@@ -263,8 +263,12 @@ def test_fixed_size_rolling_mean_after_drop_nulls(engine) -> None:
     not hasattr(plrs._expr_nodes, "RollingFunction"),
     reason="RollingFunction not available in this polars version",
 )
+@pytest.mark.parametrize(
+    "within_expression", [False, True], ids=["select", "expression"]
+)
 def test_fixed_size_rolling_mean_after_unaligned_siblings(
     spmd_engine_factory,
+    within_expression,
 ) -> None:
     engine = spmd_engine_factory(
         StreamingOptions(max_rows_per_partition=2, fallback_mode="warn")
@@ -275,10 +279,10 @@ def test_fixed_size_rolling_mean_after_unaligned_siblings(
             "y": [8.0, 16.0, None, 32.0],
         }
     )
-    q = df.select(
-        pl.col("x").drop_nulls().rolling_mean(window_size=2),
-        pl.col("y").drop_nulls().rolling_mean(window_size=2),
-    )
+    x = pl.col("x").drop_nulls().rolling_mean(window_size=2)
+    y = pl.col("y").drop_nulls().rolling_mean(window_size=2)
+    expressions = [x + y] if within_expression else [x, y]
+    q = df.select(expressions)
 
     with pytest.warns(
         UserWarning, match="HConcat is not supported for multiple partitions"

@@ -113,9 +113,8 @@ def _(node: GroupBy) -> Mapping[str, ColumnBinding]:
 
 @column_domain_bindings.register(Rolling)
 def _(node: Rolling) -> Mapping[str, ColumnBinding]:
-    if isinstance(node.index.value, expr.Col):
-        return {node.index.name: ColumnBinding(0, node.index.value.name)}
-    return {}
+    assert isinstance(node.index.value, expr.Col)
+    return {node.index.name: ColumnBinding(0, node.index.value.name)}
 
 
 @column_domain_bindings.register(Join)

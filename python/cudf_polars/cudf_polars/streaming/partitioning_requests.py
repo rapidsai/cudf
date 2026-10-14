@@ -33,7 +33,6 @@ from cudf_polars.dsl.ir import (
 from cudf_polars.dsl.traversal import post_traversal
 from cudf_polars.dsl.utils.column_domain import column_domain_bindings
 from cudf_polars.streaming.hint_sorted import HintSorted
-from cudf_polars.streaming.rolling import FixedSizeRolling
 from cudf_polars.utils.sorting import sort_order
 
 if TYPE_CHECKING:
@@ -141,7 +140,7 @@ def _propagated_child_requests(
         and len(node.children) == 1
         and isinstance(
             node,
-            (Projection, Select, Filter, Slice, GroupBy, Rolling, FixedSizeRolling),
+            (Projection, Select, Filter, Slice, GroupBy, Rolling),
         )
     ):
         remapping = {
