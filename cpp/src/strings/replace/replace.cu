@@ -33,8 +33,6 @@
 #include <cuda/std/iterator>
 #include <cuda/stream>
 #include <thrust/binary_search.h>
-#include <thrust/copy.h>
-#include <thrust/count.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/transform.h>
@@ -297,7 +295,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   auto const copy_itr    = cuda::counting_iterator<int64_t>{chars_offset};
   auto const copy_end    = cudf::detail::copy_if(
     copy_itr,
-    copy_itr + chars_bytes + chars_offset,
+    copy_itr + chars_bytes,
     targets_positions.begin(),
     [fn] __device__(int64_t idx) -> bool { return fn.is_target_within_row(idx); },
     stream);
