@@ -59,7 +59,7 @@ from cudf_polars.streaming.over import _decompose_grouped_window_node
 from cudf_polars.streaming.repartition import Repartition
 from cudf_polars.streaming.rolling import FixedSizeRolling
 from cudf_polars.streaming.shuffle import Shuffle
-from cudf_polars.streaming.utils import _dynamic_planning_on
+from cudf_polars.streaming.utils import _dynamic_planning_on, _fallback_inform
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping, Sequence
@@ -113,6 +113,26 @@ def hconcat_streaming_safe(shapes: Sequence[HConcatShape]) -> bool:
     return len(non_broadcast) <= 1 or all(
         shape == "row_aligned" for shape in non_broadcast
     )
+
+
+def align_hconcat_inputs(
+    inputs: Sequence[IR],
+    partition_info: MutableMapping[IR, PartitionInfo],
+    config_options: ConfigOptions,
+    *,
+    streaming_safe: bool,
+) -> list[IR]:
+    """Collapse unaligned HConcat inputs to single partitions."""
+    if streaming_safe:
+        return list(inputs)
+
+    if any(partition_info[ir].count > 1 for ir in inputs):
+        _fallback_inform(
+            "HConcat is not supported for multiple partitions.", config_options
+        )
+    result: list[IR] = [Repartition(ir.schema, ir) for ir in inputs]
+    partition_info.update((ir, PartitionInfo(count=1)) for ir in result)
+    return result
 
 
 def select(
@@ -530,7 +550,7 @@ def _decompose_expr_node(
             names=names,
         )
         (expr,) = columns
-        return expr, input_ir, partition_info, "row_aligned"
+        return expr, input_ir, partition_info, hconcat_shape
     elif isinstance(expr, UnaryFunction) and expr.name == "null_count":
         if partition_count == 1 and not dynamic_planning:
             return expr, input_ir, partition_info, "broadcast"
@@ -590,9 +610,15 @@ def _decompose(expr: Expr, rec: ExprDecomposer) -> DecomposedExpr:
     # Assume the partition count is the maximum input-IR partition count
     input_ir: IR
     assert len(input_irs) > 0  # Must have at least one input IR
-    partition_count = max(partition_info[ir].count for ir in input_irs)
     unique_input_irs = [k for k in dict.fromkeys(input_irs) if not isinstance(k, Empty)]
     if len(unique_input_irs) > 1:
+        streaming_safe = hconcat_streaming_safe(hconcat_shapes)
+        unique_input_irs = align_hconcat_inputs(
+            unique_input_irs,
+            partition_info,
+            rec.state["config_options"],
+            streaming_safe=streaming_safe,
+        )
         schema: Schema = {}
         for ir in unique_input_irs:
             schema.update(ir.schema)
@@ -600,10 +626,12 @@ def _decompose(expr: Expr, rec: ExprDecomposer) -> DecomposedExpr:
             schema,
             True,  # noqa: FBT003
             False,  # noqa: FBT003
-            hconcat_streaming_safe(hconcat_shapes),
+            streaming_safe,
             *unique_input_irs,
         )
-        partition_info[input_ir] = PartitionInfo(count=partition_count)
+        partition_info[input_ir] = PartitionInfo(
+            count=max(partition_info[ir].count for ir in unique_input_irs)
+        )
     elif len(unique_input_irs) == 1:
         input_ir = unique_input_irs[0]
     else:

@@ -18,6 +18,7 @@ from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.streaming.base import PartitionInfo
 from cudf_polars.streaming.dispatch import lower_ir_node
 from cudf_polars.streaming.expressions import (
+    align_hconcat_inputs,
     decompose_expr_graph,
     hconcat_streaming_safe,
     make_expr_decomposer,
@@ -174,26 +175,32 @@ def decompose_select(
     streaming_safe = hconcat_streaming_safe(hconcat_shapes)
 
     # Concatenate partial selections
-    new_ir: Select | HConcat
+    new_ir: IR
     selections, partition_info = _fuse_over_nodes(selections, partition_info)
     selections, partition_info = _fuse_simple_reductions(
         selections,
         partition_info,
         streaming_safe=streaming_safe,
     )
-    if len(selections) > 1:
+    aligned_selections = align_hconcat_inputs(
+        selections,
+        partition_info,
+        config_options,
+        streaming_safe=streaming_safe,
+    )
+    if len(aligned_selections) > 1:
         new_ir = HConcat(
             select_ir.schema,
             True,  # noqa: FBT003
             False,  # noqa: FBT003
             streaming_safe,
-            *selections,
+            *aligned_selections,
         )
         partition_info[new_ir] = PartitionInfo(
-            count=max(partition_info[c].count for c in selections)
+            count=max(partition_info[c].count for c in aligned_selections)
         )
     else:
-        new_ir = selections[0]
+        new_ir = aligned_selections[0]
 
     return new_ir, partition_info
 

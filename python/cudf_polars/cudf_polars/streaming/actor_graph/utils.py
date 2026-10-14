@@ -57,7 +57,6 @@ from cudf_polars.streaming.actor_graph.tracing import (
     record_channel_metrics,
     send_chunk,
 )
-from cudf_polars.streaming.rolling import FixedSizeRolling
 from cudf_polars.streaming.utils import _concat
 from cudf_polars.utils.dtypes import make_empty_column
 
@@ -787,7 +786,7 @@ def maybe_remap_partitioning(
             inter_rank=_remap_scheme_select(ir, partitioning.inter_rank, context),
             local=_remap_scheme_select(ir, partitioning.local, context),
         )
-    if isinstance(ir, (Rolling, FixedSizeRolling)):
+    if isinstance(ir, Rolling):
         return Partitioning(
             inter_rank=_remap_scheme_bindings(ir, partitioning.inter_rank),
             local=_remap_scheme_bindings(ir, partitioning.local),
