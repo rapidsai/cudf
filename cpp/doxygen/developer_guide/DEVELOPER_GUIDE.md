@@ -196,7 +196,7 @@ The following guidelines apply to organizing `#include` lines.
    groupings and sort the individual includes within a group lexicographically.
  * Separate groups by a blank line.
  * Order the groups from "nearest" to "farthest". In other words, local includes, then includes
-   from other RAPIDS libraries, then includes from related libraries, like `<thrust/...>`, then
+   from other NVIDIA CUDA-X libraries, then includes from related libraries, like `<thrust/...>`, then
    includes from dependencies installed with cuDF, and then standard headers (for example
    `<string>`, `<iostream>`).
  * We use clang-format for grouping and sorting headers automatically. See the
@@ -1721,7 +1721,7 @@ formats commonly used in data analytics, including CSV, Parquet, ORC, Avro, and 
 
 Here are some tools that can help with debugging libcudf (besides printf of course):
 1. `cuda-gdb`\
-   Follow the instructions in the [Contributor to cuDF guide](../../../CONTRIBUTING.md#debugging-cudf) to build
+   Follow the instructions in the [Contributor to cuDF guide](https://github.com/NVIDIA/cudf/blob/main/CONTRIBUTING.md#debugging-cudf) to build
    and run libcudf with debug symbols.
 2. `compute-sanitizer`\
    The [CUDA Compute Sanitizer](https://docs.nvidia.com/compute-sanitizer/ComputeSanitizer/index.html)

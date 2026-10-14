@@ -231,8 +231,8 @@ __device__ __forceinline__ void decode_int96timestamp(uint8_t const* int96_ptr,
   int64_t days  = cudf::io::unaligned_load<uint32_t>(int96_ptr + sizeof(int64_t));
 
   // Convert from Julian day at noon to UTC seconds
-  cudf::duration_D duration_days{
-    days - 2440588};  // TBD: Should be noon instead of midnight, but this matches pyarrow
+  // TBD: Should be noon instead of midnight, but this matches pyarrow
+  cudf::duration_D duration_days{days - cudf::io::parquet::detail::julian_day_unix_epoch};
 
   using cuda::std::chrono::duration_cast;
 
@@ -983,7 +983,7 @@ struct dictionary_caster {
                        cudf::data_type{cudf::type_id::BOOL8},
                        static_cast<cudf::size_type>(total_row_groups),
                        std::move(result_buffer),
-                       rmm::device_buffer{0, stream, mr},
+                       cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED, stream, mr),
                        0);
                    });
     return columns;
@@ -1315,6 +1315,25 @@ struct dictionary_caster {
   }
 };
 
+/**
+ * @brief Whether a dictionary page can be queried for a `col op literal` predicate
+ *
+ * @throws cudf::logic_error if the column and literal types mismatch
+ *
+ * @param op Comparison operator
+ * @param col_type Output type of the column
+ * @param literal Literal compared against the column
+ * @return Whether the dictionary page can be queried
+ */
+[[nodiscard]] bool is_dictionary_filterable(ast::ast_operator op,
+                                            cudf::data_type col_type,
+                                            ast::literal const& literal)
+{
+  // A dictionary page holds the values in a column chunk, so (in)equality can be evaluated exactly
+  if (op != ast::ast_operator::EQUAL and op != ast::ast_operator::NOT_EQUAL) { return false; }
+  return parquet::detail::is_membership_queryable(col_type, literal);
+}
+
 using parquet::detail::parquet_expression_simplifier;
 using parquet::detail::simplified_expression_opt;
 
@@ -1366,8 +1385,6 @@ class dictionary_expression_converter final : public parquet_expression_simplifi
   {
     using cudf::ast::ast_operator;
 
-    if (op != ast_operator::EQUAL and op != ast_operator::NOT_EQUAL) { return std::nullopt; }
-
     auto const col_idx             = col_ref.get_column_index();
     auto const& equality_literals  = _literals[col_idx];
     auto const& equality_operators = _operators[col_idx];
@@ -1375,8 +1392,9 @@ class dictionary_expression_converter final : public parquet_expression_simplifi
     auto const literal_iter        = std::ranges::find_if(literal_indices, [&](auto idx) {
       return equality_literals[idx] == &literal and equality_operators[idx] == op;
     });
-    CUDF_EXPECTS(literal_iter != literal_indices.end(),
-                 "Dictionary expression converter encountered an unexpected literal");
+
+    // Unsupported comparisons and those in discarded OR branches were not collected
+    if (literal_iter == literal_indices.end()) { return std::nullopt; }
 
     auto const col_literal_offset =
       _col_literals_offsets[col_idx] + static_cast<cudf::size_type>(*literal_iter);
@@ -1458,9 +1476,6 @@ aggregate_reader_metadata::apply_dictionary_filter(
       // Skip if no equality literals for this column
       if (literals[input_col_idx].empty()) { return; }
 
-      // Skip if non-comparable (compound) type except string
-      if (cudf::is_compound(dtype) and dtype.id() != cudf::type_id::STRING) { return; }
-
       // Create a dictionary membership caster struct for the current column
       dictionary_caster const dictionary_col{chunks,
                                              pages,
@@ -1504,59 +1519,20 @@ aggregate_reader_metadata::apply_dictionary_filter(
 
 dictionary_literals_collector::dictionary_literals_collector(
   ast::expression const& expr, std::span<cudf::data_type const> output_dtypes)
+  : equality_literals_collector{output_dtypes, {}}
 {
-  _output_dtypes =
-    cudf::host_span<cudf::data_type const>{output_dtypes.data(), output_dtypes.size()};
-  auto const num_input_columns = static_cast<cudf::size_type>(_output_dtypes.size());
-  _literals.resize(num_input_columns);
-  _operators.resize(num_input_columns);
-  expr.accept(*this);
+  collect(expr);
 }
 
-std::reference_wrapper<ast::expression const> dictionary_literals_collector::visit(
-  ast::operation const& expr)
+simplified_expression_opt dictionary_literals_collector::simplify_comparison(
+  ast::ast_operator op, ast::column_reference const& col_ref, ast::literal const& literal)
 {
-  using cudf::ast::ast_operator;
-  using parquet::detail::extract_binary_operands;
-  using parquet::detail::extract_unary_operand;
-  using parquet::detail::operand_kind;
+  auto const col_idx = col_ref.get_column_index();
 
-  auto const input_op       = expr.get_operator();
-  auto const operator_arity = cudf::ast::detail::ast_operator_arity(input_op);
+  // Do not collect literals that dictionary pages cannot be queried for
+  if (not is_dictionary_filterable(op, _output_dtypes[col_idx], literal)) { return std::nullopt; }
 
-  if (operator_arity == 1) {
-    auto const [kind, col_ref] = extract_unary_operand(expr);
-
-    if (kind == operand_kind::COLUMN_REF) {
-      col_ref->accept(*this);
-    } else {
-      std::ignore = visit_operands(expr.get_operands());
-    }
-    return expr;
-  }
-
-  // Binary operation
-  auto const [op, lhs_kind, rhs_kind, col_ref, literal] = extract_binary_operands(expr);
-
-  // Push expressions for `col op lit` or `lit op col` forms
-  if (lhs_kind == operand_kind::COLUMN_REF and rhs_kind == operand_kind::LITERAL) {
-    col_ref->accept(*this);
-    if (op == ast_operator::EQUAL or op == ast_operator::NOT_EQUAL) {
-      auto const col_idx = col_ref->get_column_index();
-      _literals[col_idx].emplace_back(const_cast<ast::literal*>(literal));
-      _operators[col_idx].emplace_back(op);
-    }
-  }  // For all other forms, visit operands to collect any nested literals
-  else {
-    std::ignore = visit_operands(expr.get_operands());
-  }
-  return expr;
-}
-
-std::pair<std::vector<std::vector<ast::literal*>>, std::vector<std::vector<ast::ast_operator>>>
-dictionary_literals_collector::get_literals_and_operators() &&
-{
-  return {std::move(_literals), std::move(_operators)};
+  return _tree.push(ast::operation{op, col_ref, literal});
 }
 
 }  // namespace cudf::io::parquet::experimental::detail

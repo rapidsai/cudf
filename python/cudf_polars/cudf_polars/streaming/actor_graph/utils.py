@@ -10,12 +10,11 @@ import itertools
 import math
 import operator
 import struct
-import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from functools import reduce
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import pylibcudf as plc
 import rmm.mr
@@ -37,23 +36,25 @@ from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.streaming.coll.allgather import AllGather
 from rapidsmpf.streaming.core.message import Message
 
-import cudf_polars.dsl.tracing
-import cudf_polars.quent._types
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Cast, Col, NamedExpr, TemporalFunction
 from cudf_polars.dsl.ir import (
     Filter,
     GroupBy,
+    HConcat,
     HStack,
     Join,
     Projection,
     Select,
 )
-from cudf_polars.dsl.tracing import Scope
 from cudf_polars.dsl.utils.column_domain import column_domain_bindings
-from cudf_polars.dsl.utils.naming import names_to_indices
+from cudf_polars.dsl.utils.naming import indices_to_names, names_to_indices
 from cudf_polars.streaming.actor_graph.collectives.allgather import AllGatherManager
-from cudf_polars.streaming.actor_graph.tracing import ActorTracer, send_chunk
+from cudf_polars.streaming.actor_graph.tracing import (
+    ActorTracer,
+    record_channel_metrics,
+    send_chunk,
+)
 from cudf_polars.streaming.utils import _concat
 from cudf_polars.utils.dtypes import make_empty_column
 
@@ -66,6 +67,8 @@ if TYPE_CHECKING:
         Iterator,
         Sequence,
     )
+
+    import cudf_polars_quent as _quent
 
     from cudf_streaming import CardinalityEstimator
     from rapidsmpf.communicator.communicator import Communicator
@@ -81,15 +84,15 @@ if TYPE_CHECKING:
     from cudf_polars.typing import Schema
 
 
-InterRankScheme: TypeAlias = HashScheme | OrderScheme | None
-PartitioningScheme: TypeAlias = InterRankScheme | Literal["inherit"]
-OrderingMetadata: TypeAlias = dict[int, OrderKey]
+type InterRankScheme = HashScheme | OrderScheme | None
+type PartitioningScheme = InterRankScheme | Literal["inherit"]
+type OrderingMetadata = dict[int, OrderKey]
 
 # Partitioning-level predicates:
 # - "flat": inter-rank scheme with local layout inherited from it.
 # - "inter_rank": inter-rank scheme only.
 # - "local": explicit local scheme only.
-PartitioningLevel: TypeAlias = Literal["flat", "inter_rank", "local"]
+type PartitioningLevel = Literal["flat", "inter_rank", "local"]
 
 # cuDF column/concatenate row limit (int32)
 CUDF_ROW_LIMIT = 2**31 - 1
@@ -271,127 +274,165 @@ async def shutdown_channels_on_error(
         raise
 
 
+@dataclass(frozen=True)
+class ActorScope:
+    """Metrics and explicit execution context for one Actor lifetime."""
+
+    tracer: ActorTracer | None
+    ir_context: IRExecutionContext | None
+
+    def require_ir_context(self) -> IRExecutionContext:
+        """Return the Actor-bound context required by evaluation code."""
+        assert self.ir_context is not None
+        return self.ir_context
+
+
 @asynccontextmanager
 async def shutdown_on_error(
     context: Context,
-    *channels: Channel[Any],
+    *,
+    chs_in: Sequence[Channel[Any]] = (),
+    chs_out: Sequence[Channel[Any]] = (),
+    chs_aux: Sequence[Channel[Any]] = (),
     trace_ir: IR,
     ir_context: IRExecutionContext | None = None,
-) -> AsyncIterator[ActorTracer | None]:
+) -> AsyncIterator[ActorScope]:
     """
-    Actor-level shutdown and tracing for rapidsmpf.
+    Actor-level shutdown and Quent telemetry for rapidsmpf.
 
-    This context manager handles actor channel cleanup on errors and emits
-    structlog tracing events.
+    This context manager handles actor channel cleanup on errors and records
+    the outermost Quent actor lifecycle when telemetry is configured.
 
     Parameters
     ----------
     context
         The rapidsmpf context.
-    channels
-        The channels to shutdown on error.
+    chs_in
+        Boundary input channels. Shut down on error, and used to record
+        ``input_bytes`` from ``Channel.metrics().recv_bytes``.
+    chs_out
+        Boundary output channels. Shut down on error, and used to record
+        ``output_bytes`` from ``Channel.metrics().send_bytes``.
+    chs_aux
+        Auxiliary channels. Shut down on error, but not included in
+        byte-volume tracing.
     trace_ir
-        Optional IR node to enable tracing for this streaming actor.
-        When provided and LOG_TRACES is enabled, an ActorTracer
-        is yielded for collecting stats, and a structlog event is
-        emitted on exit.
+        IR node represented by this streaming actor.
     ir_context
-        The IR execution context from cudf-polars. This is used to propagate
-        the query_id to the structlog logs emitted in this context.
+        The IR execution context from cudf-polars.
 
     Yields
     ------
-    ActorTracer | None
-        An actor tracer for collecting stats (if tracing enabled), else None.
+    ActorScope
+        Actor metrics and the Actor-bound IR execution context.
     """
-    # Create tracer only if LOG_TRACES is enabled and IR is provided
-    tracer: ActorTracer | None = None
-    contextvars: dict[str, Any] = {}
+    channels = (*chs_in, *chs_out, *chs_aux)
+    tracer = None if ir_context is None else ir_context.tracer
 
-    ir_id = trace_ir.get_stable_id()
-    ir_type = type(trace_ir).__name__
-    tracer = ActorTracer(ir_id, ir_type)
-    contextvars = {"actor_ir_id": ir_id, "actor_ir_type": ir_type}
+    # We might have nested calls to `shutdown_on_error` for a given actor.
+    # We always want to trace the outermost call, so record a little state here
+    # to know whether we're the outermost call and so created the quent actor.
+    created_quent_actor = False
+    unbound_quent_execution = (
+        None if ir_context is None else ir_context.unbound_quent_ir_execution_state
+    )
+    if (
+        ir_context is not None
+        and ir_context.actor_bound_quent_ir_execution_state is None
+        and unbound_quent_execution is not None
+    ):
+        import cudf_polars_quent as _quent
 
-    if ir_context is not None:
-        contextvars["cudf_polars_query_id"] = str(ir_context.query_id)
-        ir_context = replace(ir_context, tracer=tracer)
-
-    with cudf_polars.dsl.tracing.bound_contextvars(**contextvars):
-        start = time.monotonic_ns()
-        try:
-            yield tracer
-        except BaseException:
-            await shutdown_channels(context, *channels)
-            raise
-        finally:
-            stop = time.monotonic_ns()
-            record: dict[str, Any] = {
-                "scope": Scope.ACTOR.value,
-            }
-            if tracer is not None:
-                record.update(
-                    {
-                        "chunk_count": tracer.chunk_count,
-                        "duplicated": tracer.duplicated,
-                    }
-                )
-                if tracer.row_count is not None:
-                    record["row_count"] = tracer.row_count
-                if tracer.decision is not None:
-                    record["decision"] = tracer.decision
-                record.update(tracer.extra)
-            cudf_polars.dsl.tracing.log(
-                "Streaming Actor", start=start, stop=stop, **record
+        created_quent_actor = True
+        tracer = ActorTracer()
+        actor_id = _quent.now_v7()
+        quent_execution = unbound_quent_execution.bind_actor(actor_id)
+        ir_context = replace(
+            ir_context,
+            tracer=tracer,
+            actor_bound_quent_ir_execution_state=quent_execution,
+            unbound_quent_ir_execution_state=None,
+        )
+        runtime = quent_execution.query_worker_state.runtime
+        started = (
+            runtime.session.binding_context.actor_observer()
+            .handle(actor_id)
+            .started(
+                operator=quent_execution.operator_id,
+                worker=runtime.worker_resources.worker_id,
             )
+        )
+        runtime.session._actors[actor_id] = started.running()
 
-            if (
-                ir_context is not None
-                and (
-                    quent_ir_execution_context := ir_context.quent_ir_execution_context
+    actor_error: BaseException | None = None
+    try:
+        yield ActorScope(tracer=tracer, ir_context=ir_context)
+    except BaseException as caught:
+        actor_error = caught
+        await shutdown_channels(context, *channels)
+        raise
+    finally:
+        if (
+            created_quent_actor
+            and tracer is not None
+            and ir_context is not None
+            and (
+                quent_ir_execution_state := (
+                    ir_context.actor_bound_quent_ir_execution_state
                 )
-                is not None
-            ):
-                custom_attributes = []
-                if tracer is not None and tracer.chunk_count is not None:
-                    custom_attributes.append(
-                        cudf_polars.quent._types.StatisticsAttribute(
-                            key="chunk_count",
-                            value_type="U64",
-                            value=tracer.chunk_count,
-                        )
-                    )
-                if tracer is not None and tracer.duplicated is not None:
-                    custom_attributes.append(
-                        cudf_polars.quent._types.StatisticsAttribute(
-                            key="duplicated",
-                            value_type="U64",
-                            value=1 if tracer.duplicated else 0,
-                        )
-                    )
-                if tracer is not None and tracer.decision is not None:
-                    custom_attributes.append(
-                        cudf_polars.quent._types.StatisticsAttribute(
-                            key="decision",
-                            value_type="String",
-                            value=tracer.decision,
-                        )
-                    )
-                if tracer is None or tracer.row_count is None:
-                    # TODO: See if `output_rows` is nullable.
-                    output_rows = 0
-                else:
-                    output_rows = tracer.row_count
-                stats = quent_ir_execution_context.quent_operator.statistics(
-                    statistics=cudf_polars.quent._types.Statistics(
-                        output_rows=output_rows,
-                        input_bytes=tracer.input_bytes,
-                        output_bytes=tracer.output_bytes,
-                        custom_attributes=custom_attributes,
-                    )
+            )
+            is not None
+        ):
+            record_channel_metrics(tracer, chs_in=chs_in, chs_out=chs_out)
+            values: _quent.OperatorStatisticsDict = {
+                "output_rows": tracer.row_count,
+                "input_bytes": sum(tracer.input_bytes.values()),
+                "output_bytes": sum(tracer.output_bytes.values()),
+                "chunk_count": tracer.chunk_count,
+                "duplicated": tracer.duplicated,
+                "decision": tracer.decision,
+            }
+            prefilters: list[_quent.RuntimePrefilterStatisticsDict] = [
+                {
+                    "placement": value.placement,
+                    "method": value.decision.method,
+                    "reason": value.decision.reason,
+                    "target_side": value.target_side,
+                    "domain_side": value.domain_side,
+                    "domain": value.domain,
+                    "target_on": value.target_on,
+                    "domain_on": value.domain_on,
+                    "target_bytes": value.decision.target_bytes,
+                    "domain_rows": value.decision.domain_rows,
+                    "estimated_cardinality": value.decision.estimated_cardinality,
+                    "bloom_bytes": value.decision.bloom_bytes,
+                    "exact_bytes": value.decision.exact_bytes,
+                    "input_rows": value.input_rows,
+                    "output_rows": value.output_rows,
+                }
+                for value in tracer.prefilters
+            ]
+            runtime = quent_ir_execution_state.query_worker_state.runtime
+            operator = runtime.session.binding_context.operator_observer().handle(
+                quent_ir_execution_state.operator_id
+            )
+            for prefilter in prefilters:
+                operator.runtime_prefilter_statistics(
+                    actor=quent_ir_execution_state.actor_id,
+                    values=prefilter,
                 )
-
-                quent_ir_execution_context.logger.emit(stats)
+            if actor_error is None:
+                runtime.session._actors.pop(
+                    quent_ir_execution_state.actor_id
+                ).completed(
+                    values=values,
+                )
+            else:
+                runtime.session._actors.pop(quent_ir_execution_state.actor_id).failed(
+                    error=str(actor_error),
+                    values=values,
+                )
+            operator.statistics(values=values)
 
 
 def _update_ordering_indices(
@@ -628,19 +669,19 @@ def _remap_scheme_simple(
     ir: IR, scheme: PartitioningScheme, child: IR
 ) -> PartitioningScheme:
     if isinstance(scheme, HashScheme):
-        old_key_names = indices_to_names(scheme.column_indices, child.schema)
         try:
+            old_key_names = indices_to_names(scheme.column_indices, child.schema)
             new_indices = names_to_indices(old_key_names, ir.schema)
-        except (ValueError, IndexError):
+        except (ValueError, KeyError, IndexError):
             return None
         return HashScheme(new_indices, scheme.modulus)
     if isinstance(scheme, OrderScheme):
         new_orderings: list[Ordering] = []
         for ordering in scheme.orderings:
-            old_key_names = indices_to_names(ordering.column_indices, child.schema)
             try:
+                old_key_names = indices_to_names(ordering.column_indices, child.schema)
                 new_indices = names_to_indices(old_key_names, ir.schema)
-            except (ValueError, IndexError):
+            except (ValueError, KeyError, IndexError):
                 continue
             new_orderings.append(_update_ordering_indices(ordering, new_indices))
         if new_orderings:
@@ -711,7 +752,7 @@ def maybe_remap_partitioning(
             ),
             local=_remap_scheme_simple(ir, partitioning.local, ir.children[0]),
         )
-    if isinstance(ir, (Join, Projection, Filter)):
+    if isinstance(ir, (HConcat, Join, Projection, Filter)):
         child = child_ir if child_ir is not None else ir.children[0]
         return Partitioning(
             inter_rank=_remap_scheme_simple(ir, partitioning.inter_rank, child),
@@ -1097,18 +1138,24 @@ async def chunkwise_evaluate(
         received_any = True
         cd = msg.get_content_description()
         seq_num = msg.sequence_number
-        with cudf_polars.dsl.tracing.bound_contextvars(
-            content_sizes=cd.content_sizes,
-            spillable=cd.spillable,
-            sequence_number=msg.sequence_number,
-        ):
-            result = await evaluate_chunk(
-                context,
-                TableChunk.from_message(msg, br=context.br()),
-                ir,
-                ir_context=ir_context,
-                ordering_metadata=input_ordering_metadata,
+        chunk_ir_context = ir_context
+        if (quent_state := ir_context.actor_bound_quent_ir_execution_state) is not None:
+            chunk_ir_context = replace(
+                ir_context,
+                actor_bound_quent_ir_execution_state=replace(
+                    quent_state,
+                    sequence_number=seq_num,
+                    content_sizes=tuple(cd.content_sizes),
+                    spillable=cd.spillable,
+                ),
             )
+        result = await evaluate_chunk(
+            context,
+            TableChunk.from_message(msg, br=context.br()),
+            ir,
+            ir_context=chunk_ir_context,
+            ordering_metadata=input_ordering_metadata,
+        )
         del msg, cd
         await send_chunk(context, ch_out, result, seq_num, tracer=tracer)
 
@@ -1127,31 +1174,26 @@ async def chunkwise_evaluate(
     await ch_out.drain(context)
 
 
-def indices_to_names(indices: tuple[int, ...], schema: Schema) -> tuple[str, ...]:
-    """
-    Return column names for the given column indices in schema order.
+@dataclass(frozen=True)
+class TableSample:
+    """Exact local prefix buffered while sampling a table channel."""
 
-    Parameters
-    ----------
-    indices
-        The indices to get names for.
-    schema
-        The schema to get names from.
-
-    Returns
-    -------
-    The column names for each index in schema order.
-    """
-    keys = list(schema.keys())
-    return tuple(keys[i] for i in indices)
+    chunks: ChunkStore
+    """The sampled chunks/messages in replay order."""
+    size: int = 0
+    """Bytes in the buffered chunks."""
+    rows: int = 0
+    """Rows in the buffered chunks."""
+    is_complete: bool = False
+    """Whether the buffered prefix contains this rank's entire input."""
 
 
 @dataclass(frozen=True)
 class TableSizeStats:
-    """Sampled chunks and aggregate size/row stats for a table channel."""
+    """Local sample and complete-table size estimates for a table channel."""
 
-    chunks: ChunkStore
-    """The sampled chunks/messages in replay order."""
+    local_sample: TableSample
+    """The exact local buffered sample."""
     total_size: int = 0
     """The estimated table size in bytes for the represented scope."""
     total_rows: int = 0
@@ -1204,7 +1246,7 @@ async def aggregate_table_size_stats(
     totals_iter = iter(totals)
     return tuple(
         TableSizeStats(
-            chunks=sample.chunks,
+            local_sample=sample.local_sample,
             total_size=next(totals_iter),
             total_rows=next(totals_iter),
             total_chunks=next(totals_iter),
@@ -1334,7 +1376,12 @@ class ChunkSampler:
             total_size = sample_bytes
             total_rows = sample_rows
         return TableSizeStats(
-            chunks=chunks,
+            local_sample=TableSample(
+                chunks=chunks,
+                size=sample_bytes,
+                rows=sample_rows,
+                is_complete=is_complete,
+            ),
             total_size=total_size,
             total_rows=total_rows,
             total_chunks=(sample_count if is_complete else self.ch_in_chunk_count),
@@ -1439,7 +1486,12 @@ async def replay_buffered_channel(
         The IR node to trace. Passed through to shutdown_on_error.
     """
     try:
-        async with shutdown_on_error(context, ch_out, ch_in, trace_ir=trace_ir):
+        async with shutdown_on_error(
+            context,
+            chs_in=(ch_in,),
+            chs_out=(ch_out,),
+            trace_ir=trace_ir,
+        ):
             await send_metadata(ch_out, context, metadata)
             for msg in buffered_chunks:
                 await ch_out.send(context, msg)

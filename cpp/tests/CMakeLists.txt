@@ -199,6 +199,7 @@ ConfigureTest(
   hashing/md5_test.cpp
   hashing/murmurhash3_x86_32_test.cpp
   hashing/murmurhash3_x64_128_test.cpp
+  hashing/spark_murmurhash3_x86_32_test.cpp
   hashing/sha1_test.cpp
   hashing/sha224_test.cpp
   hashing/sha256_test.cpp
@@ -265,7 +266,10 @@ ConfigureTest(FIXED_POINT_TEST fixed_point/fixed_point_tests.cpp fixed_point/fix
 
 # ##################################################################################################
 # * unary tests -----------------------------------------------------------------------------------
-ConfigureTest(UNARY_TEST unary/math_ops_test.cpp unary/unary_ops_test.cpp unary/cast_tests.cpp)
+ConfigureTest(
+  UNARY_TEST unary/math_ops_test.cpp unary/unary_ops_test.cpp unary/cast_tests.cpp
+  unary/operator_parity_test.cpp
+)
 
 # ##################################################################################################
 # * round tests -----------------------------------------------------------------------------------
@@ -280,6 +284,7 @@ ConfigureTest(
   binaryop/binop-compiled-test.cpp
   binaryop/binop-compiled-fixed_point-test.cpp
   binaryop/binop-generic-ptx-test.cpp
+  binaryop/operator_parity_test.cpp
 )
 
 # ##################################################################################################
@@ -347,6 +352,7 @@ ConfigureTest(
   PERCENT 100
 )
 ConfigureTest(COMPACT_PROTOCOL_READER_TEST io/compact_protocol_reader_test.cpp)
+ConfigureTest(PARQUET_FOOTER_FACADE_TEST io/experimental/parquet_footer_facade_test.cpp)
 ConfigureTest(
   HYBRID_SCAN_TEST
   io/experimental/hybrid_scan_common.cpp
@@ -399,8 +405,14 @@ ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cpp)
 # ##################################################################################################
 # * sort tests ------------------------------------------------------------------------------------
 ConfigureTest(
-  SORT_TEST sort/rank_test.cpp sort/segmented_sort_tests.cpp sort/sort_nested_types_tests.cpp
-  sort/sort_test.cpp sort/stable_sort_tests.cpp sort/top_k_tests.cpp
+  SORT_TEST
+  sort/rank_test.cpp
+  sort/segmented_sort_tests.cpp
+  sort/sort_nested_types_tests.cpp
+  sort/sort_test.cpp
+  sort/stable_sort_tests.cpp
+  sort/string_sort_prefix_test.cpp
+  sort/top_k_tests.cpp
   GPUS 1
   PERCENT 70
 )

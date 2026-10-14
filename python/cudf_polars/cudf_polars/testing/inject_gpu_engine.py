@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import sqlite3
 from functools import partialmethod
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import packaging.version
@@ -19,10 +20,14 @@ from cudf_polars.testing.engine_utils import (
     SMALL_MAX_ROWS_PER_PARTITION,
     SMALL_TARGET_PARTITION_SIZE,
 )
+from cudf_polars.testing.fallback import fallback_used, gpu_attempted, gpu_executed
+from cudf_polars.testing.fallback_report import FallbackReport
 from cudf_polars.utils.config import StreamingFallbackMode
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Generator, Mapping
+
+    from pluggy import Result
 
 
 def nonnegative_int(value: str) -> int:
@@ -63,6 +68,11 @@ def pytest_addoption(parser: pytest.Parser) -> None:
             "Force raise_on_fail=True on the injected engine and suppress the "
             "plugin's xfail markers (tests will surface real failures)."
         ),
+    )
+    group.addoption(
+        "--inject-gpu-engine-report",
+        metavar="PATH",
+        help="Write per-test GPU execution and fallback diagnostics as JSON on the pytest controller.",
     )
     group.addoption(
         "--cudf-polars-shard-id",
@@ -135,6 +145,13 @@ def pytest_configure(config: pytest.Config) -> None:
         config.getoption("cudf_polars_shard_id"),
         config.getoption("cudf_polars_num_shards"),
     )
+    report_path = config.getoption("--inject-gpu-engine-report")
+    # Workers send TestReport objects to the controller; only the controller
+    # should aggregate them and write the shared output file.
+    if report_path and not hasattr(config, "workerinput"):
+        config.pluginmanager.register(
+            FallbackReport(Path(report_path).resolve()), "cudf-polars-fallback-report"
+        )
 
     if variant == "in-memory":
         engine = polars.GPUEngine(executor="in-memory", raise_on_fail=raise_on_fail)
@@ -166,6 +183,39 @@ def pytest_configure(config: pytest.Config) -> None:
         "filterwarnings",
         "ignore:.*Query execution with GPU not possible",
     )
+
+
+@pytest.hookimpl(hookwrapper=True, tryfirst=True)
+def pytest_runtest_protocol(
+    item: pytest.Item, nextitem: pytest.Item | None
+) -> Generator[None, None, None]:
+    """Give each injected-engine pytest item isolated execution signals."""
+    signals = (fallback_used, gpu_attempted, gpu_executed)
+    tokens = [signal.set(False) for signal in signals]
+    try:
+        yield
+    finally:
+        for signal, token in zip(signals, tokens, strict=True):
+            signal.reset(token)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(
+    item: pytest.Item, call: pytest.CallInfo[None]
+) -> Generator[None, Result[pytest.TestReport], None]:
+    """Attach per-test execution telemetry to each phase's report."""
+    outcome = yield
+    report = outcome.get_result()
+    if item.config.getoption("--inject-gpu-engine-report"):
+        # user_properties travel with TestReport across xdist's worker boundary.
+        report.user_properties.extend(
+            (name, str(signal.get()).lower())
+            for name, signal in (
+                ("cudf_polars_fallback", fallback_used),
+                ("cudf_polars_gpu_attempted", gpu_attempted),
+                ("cudf_polars_gpu_executed", gpu_executed),
+            )
+        )
 
 
 def _verify_collect_patch(engine: object) -> None:
@@ -216,9 +266,9 @@ def pytest_report_header(config: pytest.Config) -> str:
 
 EXPECTED_FAILURES: dict[str, str] = {
     "tests/unit/io/test_csv.py::test_read_csv_only_loads_selected_columns": "Memory usage won't be correct due to GPU",
-    "tests/unit/io/test_delta.py::test_scan_delta_version": "Need to expose hive partitioning",
-    "tests/unit/io/test_delta.py::test_scan_delta_relative": "Need to expose hive partitioning",
-    "tests/unit/io/test_delta.py::test_scan_delta_schema_evolution_nested_struct_field_19915": "Need to expose hive partitioning",
+    "tests/unit/io/test_delta.py::test_scan_delta_version": "Delta schema evolution not yet implemented in cudf-polars: the table's files have differing column counts",
+    "tests/unit/io/test_delta.py::test_scan_delta_relative": "Delta schema evolution not yet implemented in cudf-polars: the table's files have differing column counts",
+    "tests/unit/io/test_delta.py::test_scan_delta_schema_evolution_nested_struct_field_19915": "Delta schema evolution not yet implemented in cudf-polars: the table's files have differing column counts",
     "tests/unit/io/test_delta.py::test_scan_delta_nanosecond_timestamp": "polars generates the wrong schema: https://github.com/pola-rs/polars/issues/23949",
     "tests/unit/io/test_delta.py::test_scan_delta_nanosecond_timestamp_nested": "polars generates the wrong schema: https://github.com/pola-rs/polars/issues/23949",
     "tests/unit/io/test_iceberg.py::test_scan_iceberg_row_index_renamed": "Iceberg support not yet implemented in cudf-polars",
@@ -347,7 +397,6 @@ EXPECTED_FAILURES: dict[str, str] = {
     "tests/unit/io/test_scan.py::test_scan_sink_metrics_multiple_phases": "sink metrics are not reported by the GPU engine",
     "tests/unit/io/test_parquet.py::test_read_parquet_concatenated_gzip_members_28787": "Non-deterministic garbage in the last row; likely a libcudf GZIP multi-member decompression bug",
     "tests/unit/datatypes/test_struct.py::test_struct_equal_missing_null_25360": "struct equality with a null raises libcudf 'Index out of bounds' (get_element)",
-    "tests/unit/datatypes/test_temporal.py::test_tz_aware_truncate": "truncate/round operate on the UTC instant instead of the zone's local wall-clock time",
 }
 
 
@@ -502,6 +551,7 @@ STREAMING_ENGINE_TESTS_TO_SKIP_SMALL_BLOCKSIZE: Mapping[str, str] = {
     "tests/benchmark/test_join_where.py::test_non_strict_inequalities": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/benchmark/test_join_where.py::test_strict_inequalities": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_many_row_groups_12297": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/io/test_hive.py::test_hive_write_multiple_files": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/io/test_scan.py::test_scan[single-parquet-async]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/io/test_scan.py::test_scan[single-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/io/test_scan.py::test_scan_with_filter[glob-parquet-async]": "Too slow with --inject-gpu-engine-blocksize=small",
