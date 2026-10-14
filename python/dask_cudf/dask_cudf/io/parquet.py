@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ def _get_device_size():
         else:
             # This is a device index
             device = system.Device(index=int(index_or_uuid))
-        return device.memory.total
+        return device.memory_info.total
 
     except (ValueError, system.NotSupportedError):
         # Fall back to a conservative 8GiB default
