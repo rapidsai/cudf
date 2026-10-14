@@ -21,8 +21,10 @@ build_conda_package() (
     sccache --stop-server >/dev/null 2>&1 || true
   fi
   rapids-logger "Building ${package}"
+  # Downstream jobs exercise the installed packages; these recipes have no package tests.
   rapids-telemetry-record "build-${package}.log" \
     rattler-build build --recipe "conda/recipes/${package}" \
+      --package-format conda:9 --test skip \
       "${build_args[@]}" "${RATTLER_CHANNELS[@]}" 2>&1 | tee "${package}-build-output.log"
 
   if [[ "${package}" == "pylibcudf" || "${package}" == "cudf_streaming" ]]; then
