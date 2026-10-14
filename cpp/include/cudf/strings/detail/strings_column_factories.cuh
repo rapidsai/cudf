@@ -134,8 +134,9 @@ std::unique_ptr<column> make_offsets_child_column_async(IndexPairIterator begin,
  * @param input Per-column iterator to the first string row and number of rows
  * @param stream CUDA stream used for device memory operations
  * @param mr Device memory resource used to allocate the returned columns' device memory
- * @param input_consumed Called with a column index once its input is no longer read, so callers
- *        can release the input early and keep the peak memory usage low
+ * @param input_consumed Called with a column index once no work enqueued afterwards reads its
+ *        input, so callers can release the input early, stream-ordered on `stream`, and keep the
+ *        peak memory usage low
  * @return The strings columns, in the order of `input`
  */
 template <typename IndexPairIterator>

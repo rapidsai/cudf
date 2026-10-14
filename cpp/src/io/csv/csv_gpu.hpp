@@ -203,18 +203,20 @@ cudf::detail::host_vector<column_type_histogram> detect_column_types(
  * Quoted string fields are unescaped in place in `data` when doublequote is enabled, so the
  * staged string entries can reference the final string bytes directly.
  *
+ * @tparam OffsetT Offset type of the `string_offset_pair` entries staged for string columns
+ *
  * @param[in] options Options that control individual field data conversion
  * @param[in,out] data The row-column data
  * @param[in] column_flags Flags that control individual column parsing
  * @param[in] row_offsets List of row data start positions (offsets)
  * @param[in] dtypes List of dtype corresponding to each column
  * @param[out] columns Device memory output of column data; string columns receive
- *                     `compact_string_offset_pair` or `wide_string_offset_pair` arrays
+ *                     `string_offset_pair<OffsetT>` arrays
  * @param[out] valids Device memory output of column valids bitmap data
  * @param[out] valid_counts Device memory output of the number of valid fields in each column
- * @param[in] compact_strings Whether string columns use `compact_string_offset_pair` entries
  * @param[in] stream CUDA stream to use
  */
+template <typename OffsetT>
 void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<char> data,
                             device_span<column_parse::flags const> column_flags,
@@ -223,7 +225,6 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<void* const> columns,
                             device_span<cudf::bitmask_type* const> valids,
                             device_span<size_type> valid_counts,
-                            bool compact_strings,
                             cuda::stream_ref stream);
 
 }  // namespace gpu

@@ -305,7 +305,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
  * @param[in] row_offsets The start the CSV data of interest
  * @param[in] dtypes The data type of the column
  * @param[out] columns The output column data; `string_offset_pair<OffsetT>` arrays for string
- * columns
+ *                     columns
  * @param[out] valids The bitmaps indicating whether column fields are valid
  * @param[out] valid_counts The number of valid fields in each column
  */
@@ -863,6 +863,7 @@ cudf::detail::host_vector<column_type_histogram> detect_column_types(
   return cudf::detail::make_host_vector(d_stats, stream);
 }
 
+template <typename OffsetT>
 void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<char> data,
                             device_span<column_parse::flags const> column_flags,
@@ -871,7 +872,6 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<void* const> columns,
                             device_span<cudf::bitmask_type* const> valids,
                             device_span<size_type> valid_counts,
-                            bool compact_strings,
                             cuda::stream_ref stream)
 {
   // Calculate actual block count to use based on records count
@@ -879,17 +879,29 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
   auto const num_rows   = row_offsets.size() - 1;
   auto const grid_size  = cudf::util::div_rounding_up_safe<size_t>(num_rows, block_size);
 
-  auto const launch = [&](auto kernel) {
-    kernel<<<grid_size, block_size, 0, stream.get()>>>(
-      options, data, column_flags, row_offsets, dtypes, columns, valids, valid_counts);
-  };
-  if (compact_strings) {
-    launch(convert_csv_to_cudf<uint32_t>);
-  } else {
-    launch(convert_csv_to_cudf<uint64_t>);
-  }
+  convert_csv_to_cudf<OffsetT><<<grid_size, block_size, 0, stream.get()>>>(
+    options, data, column_flags, row_offsets, dtypes, columns, valids, valid_counts);
   CUDF_CUDA_TRY(cudaGetLastError());
 }
+
+template void decode_row_column_data<uint32_t>(cudf::io::parse_options_view const&,
+                                               device_span<char>,
+                                               device_span<column_parse::flags const>,
+                                               device_span<uint64_t const>,
+                                               device_span<cudf::data_type const>,
+                                               device_span<void* const>,
+                                               device_span<cudf::bitmask_type* const>,
+                                               device_span<size_type>,
+                                               cuda::stream_ref);
+template void decode_row_column_data<uint64_t>(cudf::io::parse_options_view const&,
+                                               device_span<char>,
+                                               device_span<column_parse::flags const>,
+                                               device_span<uint64_t const>,
+                                               device_span<cudf::data_type const>,
+                                               device_span<void* const>,
+                                               device_span<cudf::bitmask_type* const>,
+                                               device_span<size_type>,
+                                               cuda::stream_ref);
 
 uint32_t __host__ gather_row_offsets(parse_options_view const& options,
                                      uint64_t* row_ctx,

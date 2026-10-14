@@ -26,6 +26,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/error.hpp>
 #include <rmm/mr/callback_memory_resource.hpp>
@@ -39,6 +40,7 @@
 #include <fstream>
 #include <iterator>
 #include <limits>
+#include <new>
 #include <numeric>
 #include <sstream>
 #include <string>
@@ -1198,8 +1200,14 @@ TEST_P(CsvStringStagingTest, AllocationFailureAndRecovery)
     allocations = 0;
     injected    = false;
     fail_at     = point;
-    // CUB's env-based temp allocation reports allocator exceptions as cudaErrorMemoryAllocation
-    EXPECT_ANY_THROW(cudf::io::read_csv(options, stream, failing_mr));
+    try {
+      cudf::io::read_csv(options, stream, failing_mr);
+      ADD_FAILURE() << "expected the injected allocation failure to propagate";
+    } catch (std::bad_alloc const&) {
+    } catch (cudf::cuda_error const& e) {
+      // CUB's env-based temp allocation reports allocator exceptions as cudaErrorMemoryAllocation
+      EXPECT_EQ(e.error_code(), cudaErrorMemoryAllocation);
+    }
     EXPECT_TRUE(injected);
     stream.sync();
     EXPECT_EQ(live_bytes.load(), 0);

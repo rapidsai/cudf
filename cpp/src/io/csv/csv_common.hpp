@@ -9,6 +9,7 @@
 
 #include <cuda/std/limits>
 
+#include <concepts>
 #include <cstdint>
 
 namespace cudf {
@@ -17,6 +18,7 @@ namespace csv {
 // Offsets relative to the input replace pointers so inputs below the compact null sentinel can
 // stage 8-byte entries; larger inputs use the same layout with 64-bit offsets.
 template <typename OffsetT>
+  requires(std::same_as<OffsetT, uint32_t> || std::same_as<OffsetT, uint64_t>)
 struct string_offset_pair {
   using offset_type                        = OffsetT;
   static constexpr offset_type null_offset = cuda::std::numeric_limits<offset_type>::max();

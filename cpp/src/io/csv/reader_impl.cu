@@ -749,7 +749,7 @@ decode_result decode_data(parse_options const& parse_opts,
   auto d_valid_counts = cudf::detail::make_zeroed_device_uvector_async<size_type>(
     num_active_columns, stream, cudf::get_current_device_resource_ref());
 
-  cudf::io::csv::gpu::decode_row_column_data(
+  cudf::io::csv::gpu::decode_row_column_data<OffsetT>(
     parse_opts.view(),
     data,
     make_device_uvector_async(column_flags, stream, cudf::get_current_device_resource_ref()),
@@ -758,7 +758,6 @@ decode_result decode_data(parse_options const& parse_opts,
     make_device_uvector_async(h_data, stream, cudf::get_current_device_resource_ref()),
     make_device_uvector_async(h_valid, stream, cudf::get_current_device_resource_ref()),
     d_valid_counts,
-    std::is_same_v<OffsetT, uint32_t>,
     stream);
 
   auto const h_valid_counts = cudf::detail::make_host_vector(d_valid_counts, stream);
@@ -1028,28 +1027,23 @@ table_with_metadata read_csv(cudf::io::datasource* source,
 
     auto& out_buffers = decode_result.buffers;
 
-    std::vector<size_t> string_col_indices;
-    for (size_t i = 0; i < column_types.size(); ++i) {
-      if (column_types[i].id() == type_id::STRING) { string_col_indices.push_back(i); }
-    }
-
-    if (!string_col_indices.empty()) {
-      std::visit(
-        [&]<typename OffsetT>(decode_result::staging_vector<OffsetT>& staging) {
-          std::vector<rmm::device_uvector<string_offset_pair<OffsetT>>> string_staging;
-          string_staging.reserve(string_col_indices.size());
-          for (auto const col_idx : string_col_indices) {
-            string_staging.emplace_back(std::move(*staging[col_idx]));
-            staging[col_idx].reset();
-          }
-          auto string_columns =
-            materialize_string_columns<OffsetT>(data, string_staging, stream, mr);
-          for (size_t i = 0; i < string_col_indices.size(); ++i) {
-            out_columns[string_col_indices[i]] = std::move(string_columns[i]);
-          }
-        },
-        decode_result.staging);
-    }
+    std::visit(
+      [&]<typename OffsetT>(decode_result::staging_vector<OffsetT>& staging) {
+        std::vector<size_t> string_col_indices;
+        std::vector<rmm::device_uvector<string_offset_pair<OffsetT>>> string_staging;
+        for (size_t i = 0; i < staging.size(); ++i) {
+          if (!staging[i]) { continue; }
+          string_col_indices.push_back(i);
+          string_staging.emplace_back(std::move(*staging[i]));
+          staging[i].reset();
+        }
+        if (string_staging.empty()) { return; }
+        auto string_columns = materialize_string_columns<OffsetT>(data, string_staging, stream, mr);
+        for (size_t i = 0; i < string_col_indices.size(); ++i) {
+          out_columns[string_col_indices[i]] = std::move(string_columns[i]);
+        }
+      },
+      decode_result.staging);
 
     // Create output columns for the remaining non-string columns
     for (size_t i = 0; i < column_types.size(); ++i) {
