@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -523,30 +524,19 @@ class RangeOverlapPolicy(_RollingPolicy[RangeBufferedChunk]):
             stream = chunk.chunk.stream
             join_cuda_streams(downstreams=[stream], upstreams=[needle_stream])
             index_column = chunk.overlap.index_column
-            if index_column.type() != dtype:
+            needs_cast = index_column.type() != dtype
+            memory_scope = nullcontext()
+            if needs_cast:
                 reservation = await context.memory(MemoryType.DEVICE).reserve_or_wait(
                     chunk.num_rows * 8, net_memory_delta=0
                 )
-                with opaque_memory_usage(reservation):
+                memory_scope = opaque_memory_usage(reservation)
+            with memory_scope:
+                if needs_cast:
                     index_column = plc.unary.cast(index_column, dtype, stream=stream)
-                    # Since this returns a python integer, the work queued on
-                    # search stream is complete, so we don't need to join back
-                    # to the search and needle streams.
-                    insertion_value = (
-                        find(
-                            plc.Table([index_column]),
-                            plc.Table([needle]),
-                            [plc.types.Order.ASCENDING],
-                            [plc.types.NullOrder.AFTER],
-                            stream=stream,
-                            mr=context.br().device_mr,
-                        )
-                        .to_scalar(stream=stream)
-                        .to_py(stream=stream)
-                    )
-                    assert isinstance(insertion_value, int)
-                    insertion_point = insertion_value
-            else:
+                # Since this returns a python integer, the work queued on
+                # search stream is complete, so we don't need to join back
+                # to the search and needle streams.
                 insertion_value = (
                     find(
                         plc.Table([index_column]),
@@ -872,12 +862,11 @@ async def rolling_actor(
     config_options: ConfigOptions[StreamingExecutor],
 ) -> None:
     """
-    Single-rank streaming actor for rolling operations.
+    Streaming actor for rolling operations.
 
-    Chunks are received in order. The actor stages rank-local input, evaluates
-    each output chunk with enough ghost rows to satisfy the requested window, and
-    emits chunks in the same order. Multi-rank boundary exchange is deliberately
-    left for a later implementation.
+    Multi-rank input currently falls back to all-gather evaluation. The
+    rank-local path stages input chunks, evaluates each output chunk with enough
+    ghost rows to satisfy the requested window, and emits chunks in order.
     """
     async with shutdown_on_error(
         context, chs_in=(ch_in,), chs_out=(ch_out,), trace_ir=ir, ir_context=ir_context
