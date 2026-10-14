@@ -720,10 +720,11 @@ sort_merge_join::sort_merge_join(table_view const& right,
 rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_table_to_unprocessed(
   cuda::stream_ref stream) const
 {
+  // TODO: take mr as an input param
+  cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   CUDF_EXPECTS(_validity_mask.has_value() && _num_nulls.has_value(), "Mapping is not possible");
-  auto temp_mr                  = cudf::get_current_device_resource_ref();
   auto const table_mapping_size = _table_view.num_rows() - _num_nulls.value();
-  rmm::device_uvector<size_type> table_mapping(table_mapping_size, stream, temp_mr);
+  rmm::device_uvector<size_type> table_mapping(table_mapping_size, stream, mr.get_temporary_mr());
   cudf::detail::copy_if_async(
     cuda::counting_iterator<size_type>{0},
     cuda::counting_iterator<size_type>{_table_view.num_rows()},
@@ -731,7 +732,7 @@ rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_table_to
     table_mapping.begin(),
     is_row_valid{reinterpret_cast<bitmask_type const*>(_validity_mask.value().data())},
     stream,
-    cudf::memory_resources{temp_mr, temp_mr});
+    mr.as_temporary());
   return table_mapping;
 }
 
@@ -829,6 +830,8 @@ sort_merge_join::left_join(table_view const& left,
                            cuda::stream_ref stream,
                            rmm::device_async_resource_ref mr) const
 {
+  // TODO: take mr as a cudf::memory_resources
+  cudf::memory_resources mrs = mr;
   cudf::scoped_range range{"sort_merge_join::left_join"};
   // Sanity checks
   CUDF_EXPECTS(left.num_columns() != 0,
@@ -869,16 +872,15 @@ sort_merge_join::left_join(table_view const& left,
 
       auto const validity_mask =
         reinterpret_cast<bitmask_type const*>(preprocessed_left._validity_mask.value().data());
-      auto const temp_mr = cudf::get_current_device_resource_ref();
       rmm::device_uvector<size_type> null_left_indices{
-        static_cast<std::size_t>(num_filtered_nulls), stream, temp_mr};
+        static_cast<std::size_t>(num_filtered_nulls), stream, mrs.get_temporary_mr()};
       cudf::detail::copy_if_async(cuda::counting_iterator<size_type>{0},
                                   cuda::counting_iterator<size_type>{left.num_rows()},
                                   cuda::counting_iterator<size_type>{0},
                                   null_left_indices.begin(),
                                   is_row_null{validity_mask},
                                   stream,
-                                  cudf::memory_resources{temp_mr, temp_mr});
+                                  mrs.as_temporary());
 
       rmm::device_uvector<size_type> left_result_indices(total_output_size, stream, mr);
       rmm::device_uvector<size_type> right_result_indices(total_output_size, stream, mr);

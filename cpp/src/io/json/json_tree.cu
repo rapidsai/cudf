@@ -755,17 +755,18 @@ get_array_children_indices(TreeDepthT row_array_children_level,
                            device_span<NodeIndexT const> parent_node_ids,
                            cuda::stream_ref stream)
 {
+  // TODO: take mr as an input param
+  cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   // array children level: (level 2 for values, level 1 for values-JSONLines format)
   // copy nodes id of level 1's children (level 2)
   // exclusive scan by key (on key their parent_node_id, because we need indices in each row.
   // parent_node_id for each row will be same).
   // -> return their indices and their node id
-  auto const num_nodes = node_levels.size();
-  auto num_level2_nodes =
-    thrust::count(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                  node_levels.begin(),
-                  node_levels.end(),
-                  row_array_children_level);
+  auto const num_nodes  = node_levels.size();
+  auto num_level2_nodes = thrust::count(rmm::exec_policy_nosync(stream, mr.get_temporary_mr()),
+                                        node_levels.begin(),
+                                        node_levels.end(),
+                                        row_array_children_level);
   rmm::device_uvector<NodeIndexT> level2_nodes(num_level2_nodes, stream);
   rmm::device_uvector<NodeIndexT> level2_indices(num_level2_nodes, stream);
   cudf::detail::copy_if_async(
@@ -777,16 +778,14 @@ get_array_children_indices(TreeDepthT row_array_children_level,
       return level == row_array_children_level;
     },
     stream,
-    cudf::memory_resources{cudf::get_current_device_resource_ref(),
-                           cudf::get_current_device_resource_ref()});
+    mr.as_temporary());
   auto level2_parent_nodes =
     cuda::make_permutation_iterator(parent_node_ids.begin(), level2_nodes.cbegin());
-  thrust::exclusive_scan_by_key(
-    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-    level2_parent_nodes,
-    level2_parent_nodes + num_level2_nodes,
-    cuda::make_constant_iterator(NodeIndexT{1}),
-    level2_indices.begin());
+  thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(stream, mr.get_temporary_mr()),
+                                level2_parent_nodes,
+                                level2_parent_nodes + num_level2_nodes,
+                                cuda::make_constant_iterator(NodeIndexT{1}),
+                                level2_indices.begin());
   return std::make_pair(std::move(level2_nodes), std::move(level2_indices));
 }
 

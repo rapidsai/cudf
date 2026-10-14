@@ -25,6 +25,8 @@ template <join_kind Join>
 std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
                                          cuda::stream_ref stream) const
 {
+  // TODO: take mr as an input param
+  cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   static_assert(Join == join_kind::INNER_JOIN || Join == join_kind::LEFT_JOIN);
 
   CUDF_FUNC_RANGE();
@@ -39,13 +41,12 @@ std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
                "Left table has nulls while right table was not hashed with null check.",
                std::invalid_argument);
 
-  auto const preprocessed_left = cudf::detail::row::equality::preprocessed_table::create(
-    left, stream, cudf::get_current_device_resource_ref());
+  auto const preprocessed_left =
+    cudf::detail::row::equality::preprocessed_table::create(left, stream, mr.get_temporary_mr());
 
-  auto const temp_mr = cudf::get_current_device_resource_ref();
-  auto match_counts =
-    cudf::detail::make_zeroed_device_uvector_async<size_type>(left.num_rows(), stream, temp_mr);
-  auto const row_bitmask = cudf::detail::bitmask_and(left, stream, temp_mr).first;
+  auto match_counts = cudf::detail::make_zeroed_device_uvector_async<size_type>(
+    left.num_rows(), stream, mr.get_temporary_mr());
+  auto const row_bitmask = cudf::detail::bitmask_and(left, stream, mr.get_temporary_mr()).first;
   auto const valid_rows  = _nulls_equal == null_equality::UNEQUAL
                              ? reinterpret_cast<bitmask_type const*>(row_bitmask.data())
                              : nullptr;
@@ -70,7 +71,7 @@ std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
                                                 cuda::std::int64_t{0},
                                                 cuda::std::plus<>{},
                                                 stream,
-                                                cudf::memory_resources{temp_mr, temp_mr});
+                                                mr.as_temporary());
   CUDF_EXPECTS(output_size >= 0, "Join output size overflowed", std::overflow_error);
   return static_cast<std::size_t>(output_size);
 }
@@ -79,8 +80,11 @@ template <typename Hasher>
 template <join_kind Join>
 std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
                                          cuda::stream_ref stream,
-                                         [[maybe_unused]] rmm::device_async_resource_ref mr) const
+                                         rmm::device_async_resource_ref mr) const
 {
+  // TODO: make mr a cudf::memory_resources
+  cudf::memory_resources mrs = mr;
+  auto const temp_mr         = mrs.get_temporary_mr();
   static_assert(Join == join_kind::FULL_JOIN);
 
   CUDF_FUNC_RANGE();
@@ -90,9 +94,8 @@ std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
                "Left table has nulls while right table was not hashed with null check.",
                std::invalid_argument);
 
-  auto const preprocessed_left = cudf::detail::row::equality::preprocessed_table::create(
-    left, stream, cudf::get_current_device_resource_ref());
-  auto const temp_mr = cudf::get_current_device_resource_ref();
+  auto const preprocessed_left =
+    cudf::detail::row::equality::preprocessed_table::create(left, stream, temp_mr);
   auto match_counts =
     cudf::detail::make_zeroed_device_uvector_async<size_type>(left.num_rows(), stream, temp_mr);
   auto matched_groups = cudf::detail::make_zeroed_device_uvector_async<cuda::std::uint32_t>(
@@ -124,7 +127,7 @@ std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
                                                      cuda::std::int64_t{0},
                                                      cuda::std::plus<>{},
                                                      stream,
-                                                     cudf::memory_resources{temp_mr, temp_mr});
+                                                     mrs.as_temporary());
   auto const matched_right_rows = matched_build_rows.value(stream);
   CUDF_EXPECTS(left_output_size >= 0, "Join output size overflowed", std::overflow_error);
   auto const output_size = static_cast<cuda::std::uint64_t>(left_output_size) +

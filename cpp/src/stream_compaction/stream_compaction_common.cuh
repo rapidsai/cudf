@@ -78,7 +78,7 @@ OutputIterator unique_copy(InputIterator first,
     output,
     unique_copy_fn<InputIterator, BinaryPredicate>{first, keep, comp, last_index},
     stream,
-    mr);
+    mr.as_temporary());
 }
 }  // namespace detail
 }  // namespace cudf

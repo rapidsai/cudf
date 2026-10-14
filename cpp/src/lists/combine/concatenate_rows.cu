@@ -66,10 +66,11 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
                                          cuda::stream_ref stream,
                                          rmm::device_async_resource_ref mr)
 {
+  // TODO: make mr a cudf::memory_resources
+  cudf::memory_resources mrs = mr;
   // outgoing offsets.
   auto offsets = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, input.num_rows() + 1, mask_state::UNALLOCATED, stream, mr);
-  auto const temp_mr = cudf::get_current_device_resource_ref();
 
   auto keys =
     cuda::transform_iterator(cuda::counting_iterator<std::size_t>{0},
@@ -108,7 +109,7 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
                                     offsets->mutable_view().begin<int32_t>(),
                                     cuda::std::plus<size_type>(),
                                     stream,
-                                    cudf::memory_resources{temp_mr, temp_mr});
+                                    mrs.as_temporary());
 
   // convert to offsets
   auto total_size =
@@ -157,8 +158,9 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
 rmm::device_uvector<size_type> generate_null_counts(table_device_view const& input,
                                                     cuda::stream_ref stream)
 {
-  auto const temp_mr = cudf::get_current_device_resource_ref();
-  rmm::device_uvector<size_type> null_counts(input.num_rows(), stream, temp_mr);
+  // TODO: take mr as an input param
+  cudf::memory_resources mr = cudf::get_current_device_resource_ref();
+  rmm::device_uvector<size_type> null_counts(input.num_rows(), stream, mr.get_temporary_mr());
 
   auto keys =
     cuda::transform_iterator(cuda::counting_iterator<std::size_t>{0},
@@ -182,7 +184,7 @@ rmm::device_uvector<size_type> generate_null_counts(table_device_view const& inp
                                     null_counts.data(),
                                     cuda::std::plus<size_type>(),
                                     stream,
-                                    cudf::memory_resources{temp_mr, temp_mr});
+                                    mr.as_temporary());
 
   return null_counts;
 }

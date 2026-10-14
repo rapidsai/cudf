@@ -87,7 +87,9 @@ size_type count_child_nulls(column_view const& input,
                             std::unique_ptr<column> const& gather_map,
                             cuda::stream_ref stream)
 {
-  auto input_device_view = column_device_view::create(input, stream);
+  // TODO: take mr as an input param
+  cudf::memory_resources mr = cudf::get_current_device_resource_ref();
+  auto input_device_view    = column_device_view::create(input, stream);
 
   auto input_row_is_null = [d_input = *input_device_view] __device__(auto i) {
     return d_input.is_null_nocheck(i);
@@ -97,8 +99,7 @@ size_type count_child_nulls(column_view const& input,
                                 gather_map->view().end<size_type>(),
                                 input_row_is_null,
                                 stream,
-                                cudf::memory_resources{cudf::get_current_device_resource_ref(),
-                                                       cudf::get_current_device_resource_ref()});
+                                mr.as_temporary());
 }
 
 /**

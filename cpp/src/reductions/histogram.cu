@@ -117,7 +117,9 @@ compute_row_frequencies(table_view const& input,
                "Nested types are not yet supported in histogram aggregation.",
                std::invalid_argument);
 
-  auto const temp_mr = cudf::get_current_device_resource_ref();
+  // TODO: make mr a cudf::memory_resources
+  cudf::memory_resources mrs = mr;
+  auto const temp_mr         = mrs.get_temporary_mr();
   auto const preprocessed_input =
     cudf::detail::row::hash::preprocessed_table::create(input, stream, temp_mr);
   auto const has_nulls = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
@@ -193,12 +195,8 @@ compute_row_frequencies(table_view const& input,
 
   // Reduction results above are either group sizes of equal rows, or `0`.
   // The final output is non-zero group sizes only.
-  cudf::detail::copy_if_async(input_it,
-                              input_it + num_rows,
-                              output_it,
-                              is_not_zero{},
-                              stream,
-                              cudf::memory_resources{temp_mr, temp_mr});
+  cudf::detail::copy_if_async(
+    input_it, input_it + num_rows, output_it, is_not_zero{}, stream, mrs.as_temporary());
 
   return {std::move(distinct_indices), std::move(distinct_counts)};
 }

@@ -55,6 +55,9 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
                                      cuda::stream_ref stream,
                                      rmm::device_async_resource_ref mr)
 {
+  // TODO: make mr a cudf::memory_resources
+  cudf::memory_resources mrs = mr;
+  auto const temp_mr         = mrs.get_temporary_mr();
   check_compatibility(lhs, rhs);
 
   // Algorithm:
@@ -64,21 +67,18 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
   // - `reduce_by_key` with keys are rhs_labels and `logical_or` reduction on the existence results
   //   computed in the previous step.
 
-  auto const lhs_child = lhs.get_sliced_child(stream);
-  auto const rhs_child = rhs.get_sliced_child(stream);
-  auto const lhs_labels =
-    generate_labels(lhs, lhs_child.size(), stream, cudf::get_current_device_resource_ref());
-  auto const rhs_labels =
-    generate_labels(rhs, rhs_child.size(), stream, cudf::get_current_device_resource_ref());
-  auto const lhs_table = table_view{{lhs_labels->view(), lhs_child}};
-  auto const rhs_table = table_view{{rhs_labels->view(), rhs_child}};
+  auto const lhs_child  = lhs.get_sliced_child(stream);
+  auto const rhs_child  = rhs.get_sliced_child(stream);
+  auto const lhs_labels = generate_labels(lhs, lhs_child.size(), stream, temp_mr);
+  auto const rhs_labels = generate_labels(rhs, rhs_child.size(), stream, temp_mr);
+  auto const lhs_table  = table_view{{lhs_labels->view(), lhs_child}};
+  auto const rhs_table  = table_view{{rhs_labels->view(), rhs_child}};
 
   // Check existence for each row of the rhs_table in lhs_table.
-  auto const contained = cudf::detail::contains(
-    lhs_table, rhs_table, nulls_equal, nans_equal, stream, cudf::get_current_device_resource_ref());
+  auto const contained =
+    cudf::detail::contains(lhs_table, rhs_table, nulls_equal, nans_equal, stream, temp_mr);
 
   auto const num_rows = lhs.size();
-  auto const temp_mr  = cudf::get_current_device_resource_ref();
 
   // This stores the unique label values, used as scatter map.
   auto list_indices = rmm::device_uvector<size_type>(num_rows, stream, temp_mr);
@@ -94,7 +94,7 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
                                                overlap_results.begin(),  // out values
                                                cuda::std::logical_or{},  // reduction op for values
                                                stream,
-                                               cudf::memory_resources{temp_mr, temp_mr});
+                                               mrs.as_temporary());
 
   auto const num_non_empty_segments = cuda::std::distance(overlap_results.begin(), end.second);
 

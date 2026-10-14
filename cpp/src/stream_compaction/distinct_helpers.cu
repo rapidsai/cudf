@@ -39,7 +39,9 @@ size_type copy_reduction_results(size_type const* results,
                                  duplicate_keep_option keep,
                                  cuda::stream_ref stream)
 {
-  auto const output_end = [&] {
+  // TODO: take mr as an input param
+  cudf::memory_resources mr = cudf::get_current_device_resource_ref();
+  auto const output_end     = [&] {
     if (keep == duplicate_keep_option::KEEP_NONE) {
       // KEEP_NONE stores group sizes; retain only singleton groups.
       return cudf::detail::copy_if(
@@ -49,8 +51,7 @@ size_type copy_reduction_results(size_type const* results,
         cuda::proclaim_return_type<bool>(
           [results] __device__(auto const idx) { return results[idx] == size_type{1}; }),
         stream,
-        cudf::memory_resources{cudf::get_current_device_resource_ref(),
-                               cudf::get_current_device_resource_ref()});
+        mr.as_temporary());
     }
 
     // KEEP_FIRST and KEEP_LAST store desired row indices or the mode's initial marker.
@@ -61,8 +62,7 @@ size_type copy_reduction_results(size_type const* results,
       cuda::proclaim_return_type<bool>([init_value = reduction_init_value(keep)] __device__(
                                          auto const idx) { return idx != init_value; }),
       stream,
-      cudf::memory_resources{cudf::get_current_device_resource_ref(),
-                             cudf::get_current_device_resource_ref()});
+      mr.as_temporary());
   }();
 
   return cuda::std::distance(output, output_end);
