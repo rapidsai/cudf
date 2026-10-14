@@ -248,6 +248,17 @@ def test_fixed_size_rolling_mean(engine, center) -> None:
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.skipif(
+    not hasattr(plrs._expr_nodes, "RollingFunction"),
+    reason="RollingFunction not available in this polars version",
+)
+def test_fixed_size_rolling_mean_after_drop_nulls(engine) -> None:
+    df = pl.LazyFrame({"x": [None, 1.0, 2.0, None, 4.0, 8.0, 16.0]})
+    q = df.select(pl.col("x").drop_nulls().rolling_mean(window_size=2))
+
+    assert_gpu_result_equal(q, engine=engine)
+
+
 @pytest.mark.parametrize(
     "closed, period, offset",
     [

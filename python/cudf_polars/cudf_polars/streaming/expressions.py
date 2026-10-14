@@ -515,6 +515,14 @@ def _decompose_expr_node(
     elif isinstance(expr, FixedSizeRollingWindow):
         # TODO: Batch sibling fixed-size rolling expressions that share an
         # input IR so they can reuse one overlap pass.
+        if hconcat_shape != "row_aligned":
+            columns, input_ir, partition_info = select(
+                list(expr.children),
+                input_ir,
+                partition_info,
+                names=names,
+            )
+            expr = expr.reconstruct(columns)
         columns, input_ir, partition_info = fixed_size_rolling_select(
             [expr],
             input_ir,
