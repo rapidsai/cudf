@@ -9,8 +9,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
-#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/buffer>
@@ -30,14 +30,14 @@ size_type compact_group_offsets(bool* flags,
 size_type compute_nested_group_offsets(table_view const& keys,
                                        size_type const* sorted_order,
                                        size_type size,
-                                       rmm::device_uvector<size_type>& group_offsets,
+                                       device_span<size_type> group_offsets,
                                        cuda::stream_ref stream);
 
 template <bool HasNested>
 size_type compute_group_offsets(table_view const& keys,
                                 size_type const* sorted_order,
                                 size_type size,
-                                rmm::device_uvector<size_type>& group_offsets,
+                                device_span<size_type> group_offsets,
                                 cuda::stream_ref stream)
 {
   auto const temp_mr     = cudf::get_current_device_resource_ref();

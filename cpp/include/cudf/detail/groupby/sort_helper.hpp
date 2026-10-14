@@ -10,9 +10,9 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
-#include <rmm/device_uvector.hpp>
-
+#include <cuda/buffer>
 #include <cuda/stream>
 
 namespace cudf {
@@ -29,11 +29,7 @@ namespace groupby::detail::sort {
  *   value column
  */
 struct sort_groupby_helper {
-  using index_vector       = rmm::device_uvector<size_type>;
-  using bitmask_vector     = rmm::device_uvector<bitmask_type>;
-  using column_ptr         = std::unique_ptr<column>;
-  using index_vector_ptr   = std::unique_ptr<index_vector>;
-  using bitmask_vector_ptr = std::unique_ptr<bitmask_vector>;
+  using column_ptr = std::unique_ptr<column>;
 
   /**
    * @brief Construct a new helper object
@@ -149,13 +145,13 @@ struct sort_groupby_helper {
    *
    * Computes and stores the group offsets on first invocation and returns
    * the stored group offsets on subsequent calls.
-   * This returns a vector of size `num_groups() + 1` such that the size of
+   * This returns a span of size `num_groups() + 1` such that the size of
    * group `i` is `group_offsets[i+1] - group_offsets[i]`
    *
-   * @return vector of offsets of the starting point of each group in the sorted
+   * @return span of offsets of the starting point of each group in the sorted
    * key table
    */
-  index_vector const& group_offsets(cuda::stream_ref stream);
+  device_span<size_type const> group_offsets(cuda::stream_ref stream);
 
   /**
    * @brief Get the group labels corresponding to the sorted order of `keys`.
@@ -168,9 +164,9 @@ struct sort_groupby_helper {
    * Computes and stores labels on first invocation and returns stored labels on
    * subsequent calls.
    *
-   * @return vector of group labels for each row in the sorted key column
+   * @return span of group labels for each row in the sorted key column
    */
-  index_vector const& group_labels(cuda::stream_ref stream);
+  device_span<size_type const> group_labels(cuda::stream_ref stream);
 
  private:
   /**
@@ -208,10 +204,11 @@ struct sort_groupby_helper {
   column_ptr _keys_bitmask_column;   ///< Column representing rows with one or more nulls values
   table_view _keys;                  ///< Input keys to sort by
 
-  index_vector_ptr
+  std::unique_ptr<cuda::device_buffer<size_type>>
     _group_offsets;  ///< Indices into sorted _keys indicating starting index of each groups
-  index_vector_ptr _group_labels;  ///< Group labels for sorted _keys
+  std::unique_ptr<cuda::device_buffer<size_type>> _group_labels;  ///< Group labels for sorted _keys
 
+  size_type _num_groups{0};  ///< Logical number of groups in the cached offset buffer
   size_type _num_keys;      ///< Number of effective rows in _keys (adjusted for _include_null_keys)
   sorted _keys_pre_sorted;  ///< Whether _keys are pre-sorted
   null_policy _include_null_keys;  ///< Whether to use rows with nulls in _keys for grouping
