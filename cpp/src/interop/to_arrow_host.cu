@@ -497,9 +497,9 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
                         bound_itr + num_buffers,
                         buffer_indices.begin());
     thrust::gather(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                   d_offsets.begin(),
-                   d_offsets.end(),
                    buffer_indices.begin(),
+                   buffer_indices.end(),
+                   d_offsets.begin(),
                    buffer_offsets.begin());
     auto h_offsets = make_std_vector(buffer_offsets, stream);
 
