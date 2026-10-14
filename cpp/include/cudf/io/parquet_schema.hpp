@@ -239,7 +239,7 @@ struct IntType {
  * @brief Struct that describes the variant logical type annotation
  *
  * The optional `specification_version` field is kept so a round-tripped footer preserves the
- * variant's declared logical-type version; it must stay trivially copyable for device use.
+ * variant's declared logical-type version.
  */
 struct VariantType {
   /// Version of the Variant logical type specification
@@ -263,8 +263,7 @@ enum class EdgeInterpolationAlgorithm : int32_t {
 /**
  * @brief Struct that describes the geometry logical type annotation
  *
- * Only the presence of the thrift `crs` string is kept since `LogicalType` must stay trivially
- * copyable.
+ * Only the presence of the thrift `crs` string is kept, not its value.
  */
 struct GeometryType {
   bool has_crs{false};  ///< Whether the thrift `crs` string (field id 1) was present
@@ -273,8 +272,7 @@ struct GeometryType {
 /**
  * @brief Struct that describes the geography logical type annotation
  *
- * Only the presence of the thrift `crs` string is kept since `LogicalType` must stay trivially
- * copyable.
+ * Only the presence of the thrift `crs` string is kept, not its value.
  */
 struct GeographyType {
   bool has_crs{false};  ///< Whether the thrift `crs` string (field id 1) was present
@@ -320,12 +318,6 @@ struct LogicalType {
   cuda::std::optional<TimestampType> timestamp_type;
   /// Integer type
   cuda::std::optional<IntType> int_type;
-  /// Variant type (VARIANT only)
-  cuda::std::optional<VariantType> variant_type;
-  /// Geography type (GEOGRAPHY only)
-  cuda::std::optional<GeographyType> geography_type;
-  /// Geometry type (GEOMETRY only)
-  cuda::std::optional<GeometryType> geometry_type;
 
   /**
    * @brief Default constructor
@@ -461,6 +453,23 @@ struct LogicalType {
 };
 
 /**
+ * @brief Payloads of the `LogicalType` union fields that the decode kernels do not read
+ *
+ * `LogicalType` is copied into shared memory by the decode kernels, so it carries only the
+ * payloads they read; the rest live here, beside `SchemaElement::logical_type`. Only the member
+ * matching `LogicalType::type` is used, and a disengaged member writes an empty struct, which
+ * thrift allows.
+ */
+struct LogicalTypePayload {
+  /// Variant payload (thrift field 16)
+  cuda::std::optional<VariantType> variant_type;
+  /// Geometry payload (thrift field 17)
+  cuda::std::optional<GeometryType> geometry_type;
+  /// Geography payload (thrift field 18)
+  cuda::std::optional<GeographyType> geography_type;
+};
+
+/**
  * @brief Union to specify the order used for the min_value and max_value fields for a column.
  */
 struct ColumnOrder {
@@ -502,6 +511,8 @@ struct SchemaElement {
   std::optional<int32_t> field_id;
   /// 10: replaces converted type
   cuda::std::optional<LogicalType> logical_type;
+  /// Host-only payloads of `logical_type`; must travel with it whenever it is copied
+  LogicalTypePayload logical_type_payload;
 
   /// extra cudf specific fields
   bool output_as_byte_array = false;
