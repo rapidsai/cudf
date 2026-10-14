@@ -31,7 +31,6 @@ rmm::device_uvector<int64_t> find_string_delimiter_positions(strings_column_view
                                                              cudf::string_view delimiter,
                                                              cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr        = cudf::get_current_device_resource_ref();
   auto [first_offset, last_offset] = get_first_and_last_offset(input, stream);
   auto const chars_bytes           = last_offset - first_offset;
@@ -62,7 +61,6 @@ rmm::device_uvector<int64_t> find_string_delimiter_positions(strings_column_view
 rmm::device_uvector<int64_t> find_whitespace_delimiter_positions(strings_column_view const& input,
                                                                  cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr        = cudf::get_current_device_resource_ref();
   auto [first_offset, last_offset] = get_first_and_last_offset(input, stream);
   auto const chars_bytes           = last_offset - first_offset;

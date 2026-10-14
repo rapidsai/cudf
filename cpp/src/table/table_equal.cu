@@ -31,7 +31,6 @@ template <bool has_nested_columns>
                                 null_equality nulls_equal,
                                 cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   auto const comparator =
     detail::row::equality::two_table_comparator{left, right, stream, mr.get_temporary_mr()};

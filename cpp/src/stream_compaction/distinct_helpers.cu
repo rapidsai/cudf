@@ -39,7 +39,6 @@ size_type copy_reduction_results(size_type const* results,
                                  duplicate_keep_option keep,
                                  cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   auto const output_end     = [&] {
     if (keep == duplicate_keep_option::KEEP_NONE) {

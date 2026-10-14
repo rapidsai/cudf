@@ -1018,7 +1018,6 @@ void compute_page_string_sizes_pass2(cudf::detail::hostdevice_span<PageInfo> pag
                                      rmm::device_uvector<uint8_t>& temp_string_buf,
                                      cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   // check for needed temp space for DELTA_BYTE_ARRAY
   auto const need_sizes =

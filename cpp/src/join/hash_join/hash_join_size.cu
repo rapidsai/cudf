@@ -25,7 +25,6 @@ template <join_kind Join>
 std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
                                          cuda::stream_ref stream) const
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   static_assert(Join == join_kind::INNER_JOIN || Join == join_kind::LEFT_JOIN);
 

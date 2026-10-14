@@ -61,7 +61,6 @@ struct contains_scalar_dispatch {
     // Don't need to check for needle validity. If it is invalid, it should be handled by the caller
     // before dispatching to this function.
 
-    // TODO: take mr as an input param
     cudf::memory_resources mr = cudf::get_current_device_resource_ref();
     using DType               = device_storage_type_t<Element>;
     auto const d_haystack     = column_device_view::create(haystack, stream);
@@ -96,7 +95,6 @@ struct contains_scalar_dispatch {
     // In addition, haystack and needle structure compatibility will be checked later on by
     // constructor of the table comparator.
 
-    // TODO: take mr as an input param
     cudf::memory_resources mr = cudf::get_current_device_resource_ref();
     auto const temp_mr        = mr.get_temporary_mr();
     auto const haystack_tv    = table_view{{haystack}};

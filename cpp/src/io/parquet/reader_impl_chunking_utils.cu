@@ -255,7 +255,6 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
                         device_span<PageInfo const> pages,
                         cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   auto const temp_mr        = mr.get_temporary_mr();
   // sort by row count
@@ -363,7 +362,6 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   bool has_offset_index,
   cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr                  = cudf::get_current_device_resource_ref();
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
@@ -667,7 +665,6 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
                             std::optional<size_t> expected_row_count,
                             cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   CUDF_FUNC_RANGE();
 
@@ -727,7 +724,6 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
   device_span<PageInfo const> pages,
   cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   auto const temp_mr        = mr.get_temporary_mr();
   auto page_keys            = make_page_key_iterator(pages);

@@ -757,7 +757,6 @@ get_array_children_indices(TreeDepthT row_array_children_level,
                            device_span<NodeIndexT const> parent_node_ids,
                            cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   // array children level: (level 2 for values, level 1 for values-JSONLines format)
   // copy nodes id of level 1's children (level 2)

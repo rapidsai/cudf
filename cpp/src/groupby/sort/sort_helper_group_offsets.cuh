@@ -39,7 +39,6 @@ size_type compute_group_offsets(table_view const& keys,
                                 rmm::device_uvector<size_type>& group_offsets,
                                 cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   auto const comparator =
     cudf::detail::row::equality::self_comparator{keys, stream, mr.get_temporary_mr()};

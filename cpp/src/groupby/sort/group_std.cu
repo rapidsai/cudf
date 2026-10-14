@@ -66,7 +66,6 @@ void reduce_by_key_fn(column_device_view const& values,
                       ResultType* d_result,
                       cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   auto var_fn               = var_transform<ResultType, decltype(values_iter)>{
     values, values_iter, d_means, d_group_sizes, group_labels.data(), ddof};

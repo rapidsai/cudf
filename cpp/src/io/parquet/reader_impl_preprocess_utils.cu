@@ -302,7 +302,6 @@ std::string encoding_to_string(Encoding encoding)
 [[nodiscard]] std::string list_unsupported_encodings(device_span<PageInfo const> pages,
                                                      cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   auto const to_mask        = cuda::proclaim_return_type<uint32_t>([] __device__(auto const& page) {
     return is_supported_encoding(page.encoding) ? uint32_t{0} : encoding_to_mask(page.encoding);
@@ -454,7 +453,6 @@ void decode_page_headers_impl(pass_intermediate_data& pass,
                               std::span<cudf::device_span<uint8_t const> const> page_data,
                               cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   auto const temp_mr        = mr.get_temporary_mr();
   CUDF_FUNC_RANGE();

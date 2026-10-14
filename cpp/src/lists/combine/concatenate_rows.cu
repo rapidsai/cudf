@@ -156,7 +156,6 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
 rmm::device_uvector<size_type> generate_null_counts(table_device_view const& input,
                                                     cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   rmm::device_uvector<size_type> null_counts(input.num_rows(), stream, mr.get_temporary_mr());
 

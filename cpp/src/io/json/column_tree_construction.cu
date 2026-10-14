@@ -100,7 +100,6 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
   NodeIndexT row_array_parent_col_id,
   cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   auto const temp_mr        = mr.get_temporary_mr();
   CUDF_FUNC_RANGE();

@@ -1004,7 +1004,6 @@ void scatter_offsets(tree_meta_t const& tree,
                      hashmap_of_device_columns const& columns,
                      cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   auto const temp_mr        = mr.get_temporary_mr();
   auto const num_nodes      = col_ids.size();

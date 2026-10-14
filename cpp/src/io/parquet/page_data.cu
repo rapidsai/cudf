@@ -501,7 +501,6 @@ struct mask_tform {
 uint32_t get_aggregated_decode_kernel_mask(cudf::detail::hostdevice_span<PageInfo const> pages,
                                            cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   // determine which kernels to invoke
   return cudf::detail::transform_reduce(pages.device_begin(),

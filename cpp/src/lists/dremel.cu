@@ -70,7 +70,6 @@ dremel_data get_encoding(column_view h_col,
                          bool always_nullable,
                          cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   auto const temp_mr        = mr.get_temporary_mr();
   auto get_list_level       = [](column_view col) {

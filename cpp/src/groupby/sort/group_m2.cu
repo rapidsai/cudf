@@ -54,7 +54,6 @@ void compute_m2_fn(column_device_view const& values,
                    ResultType* d_result,
                    cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   auto m2_fn                = m2_transform<ResultType, decltype(values_iter)>{
     values, values_iter, d_means, group_labels.data()};

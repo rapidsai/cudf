@@ -510,7 +510,6 @@ rmm::device_uvector<cudf::size_type> compute_all_tokens(
   wordpiece_vocabulary::wordpiece_vocabulary_impl const& vocabulary,
   cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   auto const d_input_chars  = input.chars_begin(stream) + first_offset;
 

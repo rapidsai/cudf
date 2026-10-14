@@ -92,7 +92,6 @@ rmm::device_uvector<cudf::size_type> create_token_row_offsets(
   cudf::size_type tokens_counts,
   cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   index_changed_fn fn{cudf::detail::indexalator_factory::make_input_iterator(row_indices),
                       sorted_indices.data<cudf::size_type>()};

@@ -582,7 +582,6 @@ std::pair<std::vector<size_type>, size_type> compute_page_row_offsets(
 
 bool are_all_rows_retained(cudf::column_view const& row_mask, cuda::stream_ref stream)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   return cudf::detail::all_of(cuda::counting_iterator<cudf::size_type>{0},
                               cuda::counting_iterator{row_mask.size()},

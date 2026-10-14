@@ -78,7 +78,6 @@ void hybrid_scan_reader_impl::setup_next_pass(
   std::span<bool const> data_page_mask,
   std::optional<cudf::column_view> row_mask)
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   auto const num_passes     = _file_itm_data.num_passes();
   CUDF_EXPECTS(num_passes == 1,

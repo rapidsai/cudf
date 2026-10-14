@@ -720,7 +720,6 @@ sort_merge_join::sort_merge_join(table_view const& right,
 rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_table_to_unprocessed(
   cuda::stream_ref stream) const
 {
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   CUDF_EXPECTS(_validity_mask.has_value() && _num_nulls.has_value(), "Mapping is not possible");
   auto const table_mapping_size = _table_view.num_rows() - _num_nulls.value();

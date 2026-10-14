@@ -3477,7 +3477,6 @@ void EncodePages(device_span<EncPage> pages,
 {
   auto num_pages = pages.size();
 
-  // TODO: take mr as an input param
   cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   // determine which kernels to invoke
   auto kernel_mask = cudf::detail::transform_reduce(pages.begin(),
