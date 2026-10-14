@@ -324,7 +324,12 @@ jobs:
       pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_kafka || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_streaming || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cmake
+    if: >
+      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common ||
+      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf ||
+      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_kafka ||
+      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_streaming ||
+      fromJSON(needs.changed-files.outputs.changed_file_groups).test_cmake
     with:
       build_type: pull-request
       node_type: cpu16
@@ -404,10 +409,24 @@ jobs:
       build_type: pull-request
       script: >-
         env
-        RUN_LIBCUDF_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_common || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_libcudf }}
-        RUN_EXAMPLES_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_common || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_examples }}
-        RUN_LIBCUDF_KAFKA_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_kafka || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_common || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_kafka }}
-        RUN_LIBCUDF_STREAMING_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_streaming || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_common || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_streaming }}
+        RUN_LIBCUDF_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_common ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_libcudf }}
+        RUN_EXAMPLES_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_common ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_examples }}
+        RUN_LIBCUDF_KAFKA_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_kafka ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_common ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_kafka }}
+        RUN_LIBCUDF_STREAMING_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_streaming ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_common ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_streaming }}
         ci/test_cpp.sh
       cache-paths: .cache/libcudf
       cache-key-prefix: libcudf-rtcx-v2
@@ -530,8 +549,21 @@ jobs:
       build_type: pull-request
       script: >-
         env
-        RUN_PYLIBCUDF_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_builds || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_common || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_cudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_pylibcudf }}
-        RUN_CUDF_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_builds || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_common || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_cudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_cudf_tests }}
+        RUN_PYLIBCUDF_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_builds ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_common ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_cudf ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_pylibcudf }}
+        RUN_CUDF_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_builds ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_common ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_cudf ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_cudf_tests }}
         RUN_CUDF_BENCHMARK_TESTS=false
         ci/test_python_cudf.sh
       # https://github.com/NVIDIA/cudf/issues/23498
@@ -619,10 +651,35 @@ jobs:
       container-options: "--cap-add CAP_SYS_PTRACE --shm-size=8g --ulimit=nofile=1000000:1000000"
       script: >-
         env
-        RUN_DASK_CUDF_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_other || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_dask_cudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_builds || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_common }}
-        RUN_CUDF_KAFKA_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_kafka || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_other || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf_kafka || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_builds || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_common }}
-        RUN_CUSTREAMZ_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_other || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_custreamz || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_builds || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_common }}
-        RUN_CUDF_STREAMING_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_streaming || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_other || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf_streaming || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_builds || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_common || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf_streaming_runner }}
+        RUN_DASK_CUDF_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_other ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_dask_cudf ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_builds ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_common }}
+        RUN_CUDF_KAFKA_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_kafka ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_other ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf_kafka ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_builds ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_common }}
+        RUN_CUSTREAMZ_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_other ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_custreamz ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_builds ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_common }}
+        RUN_CUDF_STREAMING_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_streaming ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_other ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf_streaming ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_builds ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_common ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf_streaming_runner }}
         ci/test_python_other.sh
       # https://github.com/NVIDIA/cudf/issues/23498
       matrix_filter: map(select(.GPU != "gb300" and .GPU != "gh200"))
@@ -806,9 +863,24 @@ jobs:
       build_type: pull-request
       script: >-
         env
-        RUN_PYLIBCUDF_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheel_cudf }}
-        RUN_CUDF_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheel_cudf }}
-        RUN_CUDF_STREAMING_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_streaming || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf_streaming || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels || fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheel_cudf }}
+        RUN_PYLIBCUDF_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheel_cudf }}
+        RUN_CUDF_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheel_cudf }}
+        RUN_CUDF_STREAMING_TESTS=${{ fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_streaming ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf_streaming ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels ||
+        fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheel_cudf }}
         ci/test_wheel_cudf.sh
       # https://github.com/NVIDIA/cudf/issues/23498
       matrix_filter: map(select(.GPU != "gb300" and .GPU != "gh200"))
@@ -962,7 +1034,10 @@ jobs:
     with:
       # This selects the latest supported Python + CUDA minor versions for each ARCH/CUDA major version combo
       # Filter out GB300 due to https://github.com/NVIDIA/cudf/issues/23498
-      matrix_filter: group_by([(.ARCH), (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))])) | map(select(.GPU != "gb300" and .GPU != "gh200"))
+      matrix_filter: >-
+        group_by([(.ARCH), (.CUDA_VER|split(".")|map(tonumber)|.[0])]) |
+        map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))])) |
+        map(select(.GPU != "gb300" and .GPU != "gh200"))
       build_type: pull-request
       script: ci/cudf_pandas_scripts/run_tests.sh
   third-party-integration-tests-cudf-pandas:
@@ -1120,7 +1195,12 @@ jobs:
       packages: read
       pull-requests: read
     uses: ./.github/workflows/cudf-spark-jni.yaml
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_kafka || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_streaming || fromJSON(needs.changed-files.outputs.changed_file_groups).test_java
+    if: >
+      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common ||
+      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf ||
+      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_kafka ||
+      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_streaming ||
+      fromJSON(needs.changed-files.outputs.changed_file_groups).test_java
     with:
       cudf_commit: ${{ github.sha }}
   telemetry-summarize:
