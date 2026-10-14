@@ -28,6 +28,7 @@ from cudf_polars.streaming.actor_graph.collectives.shuffle import ShuffleManager
 from cudf_polars.streaming.actor_graph.core import evaluate_logical_plan
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.config import ConfigOptions
+from cudf_polars.utils.versions import POLARS_VERSION_LT_138
 
 
 @pytest.fixture(scope="module")
@@ -364,6 +365,9 @@ def test_groupby_sort_by_stable_ties_with_preshuffle_fallback(
         q.collect(engine=streaming_engine)
 
 
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_138, reason="set_sorted lowers to unsupported hint ir"
+)
 def test_groupby_first_non_null_sorted_keys(spmd_engine_factory):
     streaming_engine = spmd_engine_factory(
         StreamingOptions(
@@ -387,7 +391,9 @@ def test_groupby_first_non_null_sorted_keys(spmd_engine_factory):
             "a": pl.Series(values, dtype=pl.Int32),
         }
     ).set_sorted("idx")
-    q = df.group_by("idx", maintain_order=True).agg(pl.col("a").drop_nulls().first())
+    q = df.group_by("idx", maintain_order=True).agg(
+        pl.col("a").first(ignore_nulls=True)
+    )
 
     assert_gpu_result_equal(q, engine=streaming_engine)
 
