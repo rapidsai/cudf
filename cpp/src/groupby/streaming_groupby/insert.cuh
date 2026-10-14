@@ -13,9 +13,9 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/stream>
 #include <thrust/for_each.h>
@@ -46,8 +46,8 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
 
   // Slots are stored in target_indices until dense IDs have been assigned. Only
   // the representative row list needs separate batch-sized scratch.
-  rmm::device_uvector<size_type> target_indices(batch_size, stream, temp_mr);
-  rmm::device_uvector<size_type> batch_local_indices(batch_size, stream, temp_mr);
+  cuda::device_buffer<size_type> target_indices(stream, temp_mr, batch_size, cuda::no_init);
+  cuda::device_buffer<size_type> batch_local_indices(stream, temp_mr, batch_size, cuda::no_init);
 
   auto const new_distinct_keys =
     probe_and_insert_rows<has_nested>(preprocessed_batch,
@@ -58,7 +58,8 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
                                       batch_local_indices.data(),
                                       stream,
                                       cudf::memory_resources{temp_mr, temp_mr});
-  batch_local_indices.resize(new_distinct_keys, stream);
+  auto const new_key_indices = cudf::device_span<size_type const>{
+    batch_local_indices.data(), static_cast<std::size_t>(new_distinct_keys)};
 
   // Check capacity before publishing new dense IDs. Even without new keys, a larger
   // batch budget can require more partials for the existing groups.
@@ -74,7 +75,7 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
   if (new_distinct_keys > 0) {
     // Gather compacted distinct keys from the batch.
     auto compacted = cudf::detail::gather(batch_keys,
-                                          batch_local_indices,
+                                          new_key_indices,
                                           out_of_bounds_policy::DONT_CHECK,
                                           cudf::negative_index_policy::NOT_ALLOWED,
                                           stream,

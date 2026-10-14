@@ -99,7 +99,7 @@ void streaming_groupby::impl::do_merge(impl const& other, cuda::stream_ref strea
         rmm::exec_policy_nosync(stream, mr),
         cuda::counting_iterator<int64_t>(0),
         static_cast<int64_t>(other_distinct_keys) * source_partials_per_group * num_agg_cols,
-        merge_partial_aggs_fn{result.target_indices.begin(),
+        merge_partial_aggs_fn{result.target_indices.data(),
                               source_capacity,
                               other_distinct_keys,
                               source_partials_per_group,

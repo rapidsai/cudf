@@ -10,15 +10,13 @@
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/row_operator/hashing.cuh>
-#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/detail/utilities/buffer_factories.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
-
-#include <rmm/device_uvector.hpp>
 
 #include <cuda/buffer>
 #include <cuda/std/bit>
@@ -187,8 +185,7 @@ auto build_cross_comparators(
     cudf::nullate::DYNAMIC,
     cudf::detail::row::equality::nan_equal_physical_equality_comparator>;
 
-  auto const n       = static_cast<size_type>(preprocessed_batches.size());
-  auto const temp_mr = mr.get_temporary_mr();
+  auto const n = static_cast<size_type>(preprocessed_batches.size());
 
   std::vector<stored_batch_comparator<eq_t>> h_eqs;
   size_type dense_id_offset = 0;
@@ -201,7 +198,7 @@ auto build_cross_comparators(
     dense_id_offset += static_cast<table_device_view>(*preprocessed_batches[k]).num_rows();
   }
 
-  return cudf::detail::make_device_uvector(h_eqs, stream, temp_mr);
+  return cudf::detail::make_device_buffer(h_eqs, stream, mr.as_temporary());
 }
 
 /// The impl struct for streaming_groupby. Defined in impl.cu.
@@ -251,7 +248,7 @@ struct streaming_groupby::impl {
 
   /// Companion vector indexed by dense ID, sized to max_distinct_keys.
   /// Each entry identifies the compacted batch containing this dense ID.
-  std::unique_ptr<rmm::device_uvector<size_type>> _key_batch_ids;
+  std::unique_ptr<cuda::device_buffer<size_type>> _key_batch_ids;
 
   std::vector<size_type> _request_first_agg_offset;
   std::vector<aggregation::Kind> _agg_kinds;
@@ -271,7 +268,7 @@ struct streaming_groupby::impl {
   std::unique_ptr<mutable_table_device_view, std::function<void(mutable_table_device_view*)>>
     _d_agg_results;
   std::vector<size_type> _value_col_indices;
-  std::unique_ptr<rmm::device_uvector<aggregation::Kind>> _d_agg_kinds;
+  std::unique_ptr<cuda::device_buffer<aggregation::Kind>> _d_agg_kinds;
 
   std::unique_ptr<streaming_set_t> _key_set;
 
@@ -312,7 +309,7 @@ struct streaming_groupby::impl {
 
   struct batch_insert_result {
     // Slot bits until resolve_targets maps them to aggregate rows.
-    rmm::device_uvector<size_type> target_indices;
+    cuda::device_buffer<size_type> target_indices;
     size_type new_insertions;
     cuda::device_buffer<std::byte> bitmask_buffer;
   };

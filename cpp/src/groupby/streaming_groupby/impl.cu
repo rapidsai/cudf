@@ -19,6 +19,7 @@
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/buffer_factories.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
@@ -30,9 +31,9 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.cuh>
 
-#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/stream>
 #include <thrust/for_each.h>
@@ -224,8 +225,8 @@ void streaming_groupby::impl::initialize(table_view const& data, cuda::stream_re
   _agg_results   = make_aggregate_results(0, stream, cudf::memory_resources{mr, mr});
   _d_agg_results = mutable_table_device_view::create(_agg_results->mutable_view(), stream);
 
-  _d_agg_kinds = std::make_unique<rmm::device_uvector<aggregation::Kind>>(
-    cudf::detail::make_device_uvector_async(_agg_kinds, stream, mr));
+  _d_agg_kinds = std::make_unique<cuda::device_buffer<aggregation::Kind>>(
+    cudf::detail::make_device_buffer_async(_agg_kinds, stream, mr));
 
   // Map each column in `values_view` back to its index in `data`.
   _value_col_indices.reserve(values_view.num_columns());
@@ -262,7 +263,8 @@ void streaming_groupby::impl::initialize(table_view const& data, cuda::stream_re
   }
 
   // Companion vector: one compacted batch ID per dense group.
-  _key_batch_ids = std::make_unique<rmm::device_uvector<size_type>>(_max_distinct_keys, stream, mr);
+  _key_batch_ids =
+    std::make_unique<cuda::device_buffer<size_type>>(stream, mr, _max_distinct_keys, cuda::no_init);
 
   _initialized = true;
 }
@@ -418,7 +420,7 @@ std::unique_ptr<table> streaming_groupby::impl::gather_agg_results(cuda::stream_
   // finalize_and_release may destroy the object's kinds buffer on its original stream.
   // Own this kernel's kinds on the snapshot stream so its lifetime follows the queued read.
   // Finish the host copy as well: destructive finalization also retires the host vector.
-  auto const kinds = cudf::detail::make_device_uvector(_agg_kinds, stream, mr.get_temporary_mr());
+  auto const kinds = cudf::detail::make_device_buffer(_agg_kinds, stream, mr.as_temporary());
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream, mr.get_temporary_mr()),
     cuda::counting_iterator<int64_t>{0},
