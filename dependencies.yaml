@@ -1089,12 +1089,12 @@ dependencies:
           - nvtx>=0.2.1
           - packaging
           - rich
-          - cuda-core>=1.0.0
+          - cuda-core>=1.0.0,<2.0
   run_cudf_polars:
     common:
       - output_types: [conda, requirements, constraints, pyproject]
         packages:
-          - cuda-core>=1.0.0
+          - cuda-core>=1.0.0,<2.0
           - packaging
           - polars>=1.35,<1.45
           - typing_extensions>=4.0.0
@@ -1107,7 +1107,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, constraints, pyproject]
         packages:
-          - cuda-core>=1.0.0
+          - cuda-core>=1.0.0,<2.0
           - rapids-dask-dependency==26.12.*,>=0.0.0a0
   run_custreamz:
     common:
