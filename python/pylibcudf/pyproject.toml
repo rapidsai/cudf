@@ -98,7 +98,7 @@ select = [
 ]
 
 # PyPI hard limit is 1GiB, but try to keep this as small as possible
-max_allowed_size_compressed = '20M'
+max_allowed_size_compressed = '10M'
 
 [tool.pytest.ini_options]
 # --import-mode=importlib because two test_json.py exists and tests directory is not a structured module
