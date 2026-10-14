@@ -381,6 +381,7 @@ outputs:
         - cuda-profiler-api
         - cuda-sanitizer-api
       run:
+        - libkvikio =${{ minor_version }}
         - librmm =${{ minor_version }}
         - rapids-logger =0.3
         - libzlib ${{ zlib_version }}
