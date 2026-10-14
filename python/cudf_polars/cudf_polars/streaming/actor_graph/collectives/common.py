@@ -19,6 +19,7 @@ from cudf_polars.dsl.ir import (
 )
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.streaming.filter_hint import PushdownFilterHint
+from cudf_polars.streaming.hint_sorted import HintSorted
 from cudf_polars.streaming.io import StreamingScan, StreamingSink
 from cudf_polars.streaming.join import Join
 from cudf_polars.streaming.over import Over
@@ -101,6 +102,7 @@ class ReserveOpIDs:
             CallbackSink,
             Shuffle,
             Join,
+            HintSorted,
             Repartition,
             StreamingSink,
             StreamingScan,
@@ -112,6 +114,7 @@ class ReserveOpIDs:
                 CallbackSink,
                 Shuffle,
                 Join,
+                HintSorted,
                 Repartition,
                 StreamingSink,
                 StreamingScan,

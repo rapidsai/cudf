@@ -397,7 +397,6 @@ EXPECTED_FAILURES: dict[str, str] = {
     "tests/unit/io/test_scan.py::test_scan_sink_metrics_multiple_phases": "sink metrics are not reported by the GPU engine",
     "tests/unit/io/test_parquet.py::test_read_parquet_concatenated_gzip_members_28787": "Non-deterministic garbage in the last row; likely a libcudf GZIP multi-member decompression bug",
     "tests/unit/datatypes/test_struct.py::test_struct_equal_missing_null_25360": "struct equality with a null raises libcudf 'Index out of bounds' (get_element)",
-    "tests/unit/datatypes/test_temporal.py::test_tz_aware_truncate": "truncate/round operate on the UTC instant instead of the zone's local wall-clock time",
 }
 
 

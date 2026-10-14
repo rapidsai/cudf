@@ -23,7 +23,6 @@ import pylibcudf
 import rmm
 from rmm._cuda import gpu
 
-import cudf_polars.dsl.tracing
 from cudf_polars.dsl.ir import (
     IRExecutionContext,
 )
@@ -187,11 +186,6 @@ def set_memory_resource(
             ),
             memory_resource_config=memory_resource_config,
         )
-
-    if (
-        cudf_polars.dsl.tracing.LOG_TRACES
-    ):  # pragma: no cover; requires CUDF_POLARS_LOG_TRACES=1
-        mr = rmm.mr.StatisticsResourceAdaptor(mr)
 
     rmm.mr.set_current_device_resource(mr)
     try:

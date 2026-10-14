@@ -33,9 +33,6 @@ from typing import (
     TYPE_CHECKING,
     Any,
     ClassVar,
-    ParamSpec,
-    TypeAlias,
-    TypeVar,
     assert_never,
     overload,
 )
@@ -90,15 +87,15 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers.dataframe import NamedColumn
     from cudf_polars.dsl.utils.io import CachedParquetInfo
-    from cudf_polars.quent._context import QuentIRExecutionState
+    from cudf_polars.quent._context import (
+        ActorBoundQuentIRExecutionState,
+        UnboundQuentIRExecutionState,
+    )
     from cudf_polars.streaming.actor_graph.tracing import ActorTracer
     from cudf_polars.streaming.rank_aware_source import RankAwareSource
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
     from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
-
-    P = ParamSpec("P")
-    T = TypeVar("T")
 
 __all__ = [
     "IR",
@@ -147,8 +144,10 @@ class IRExecutionContext:
         A zero-argument callable that returns a CUDA stream.
     query_id
         Identifier for the query being executed.
-    quent_ir_execution_state
-        Optional Quent tracing context bound to a physical operator.
+    actor_bound_quent_ir_execution_state
+        Optional actor-bound Quent tracing context.
+    unbound_quent_ir_execution_state
+        Optional pre-actor Quent tracing context bound to a physical operator.
     tracer
         The actor tracer. Used to propagate statistics.
     """
@@ -156,10 +155,11 @@ class IRExecutionContext:
     py_executor: concurrent.futures.ThreadPoolExecutor | None = field(default=None)
     get_cuda_stream: Callable[[], Stream] = field(default=get_cuda_stream)
     query_id: uuid.UUID = field(default_factory=uuid.uuid4)
-    quent_ir_execution_state: QuentIRExecutionState | None = None
+    actor_bound_quent_ir_execution_state: ActorBoundQuentIRExecutionState | None = None
+    unbound_quent_ir_execution_state: UnboundQuentIRExecutionState | None = None
     tracer: ActorTracer | None = None
 
-    async def to_thread(
+    async def to_thread[**P, T](
         self, func: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs
     ) -> T:
         """
@@ -189,7 +189,23 @@ class IRExecutionContext:
         loop = asyncio.get_running_loop()
         ctx = contextvars.copy_context()
         func_call = functools.partial(ctx.run, func, *args, **kwargs)
-        return await loop.run_in_executor(self.py_executor, func_call)
+        future = loop.run_in_executor(self.py_executor, func_call)
+        try:
+            return await asyncio.shield(future)
+        except asyncio.CancelledError:
+            # Cancelling an asyncio future cannot stop running native work. Keep
+            # the caller's resource scopes alive until that work has finished.
+            while not future.done():
+                try:
+                    await asyncio.shield(future)
+                except asyncio.CancelledError:
+                    continue
+                except Exception:
+                    break
+            if not future.cancelled():
+                # Cancellation remains the caller's outcome even if cleanup fails.
+                future.exception()
+            raise
 
     @contextlib.contextmanager
     def stream_ordered_after(self, *dfs: DataFrame) -> Generator[Stream, None, None]:
@@ -2834,7 +2850,7 @@ def _strip_predicate_casts(node: expr.Expr) -> expr.Expr:
     return node.reconstruct([_strip_predicate_casts(child) for child in node.children])
 
 
-_ColumnKey: TypeAlias = tuple[plc_expr.TableReference, str]
+type _ColumnKey = tuple[plc_expr.TableReference, str]
 
 
 def _colref_comparisons(
@@ -4170,8 +4186,8 @@ class Union(IR):
 class HConcat(IR):
     """Concatenate dataframes horizontally."""
 
-    __slots__ = ("should_broadcast", "strict")
-    _non_child = ("schema", "should_broadcast", "strict")
+    __slots__ = ("should_broadcast", "streaming_safe", "strict")
+    _non_child = ("schema", "should_broadcast", "strict", "streaming_safe")
     _n_non_child_args = 3
 
     def __init__(
@@ -4179,11 +4195,13 @@ class HConcat(IR):
         schema: Schema,
         should_broadcast: bool,  # noqa: FBT001
         strict: bool,  # noqa: FBT001
+        streaming_safe: bool,  # noqa: FBT001
         *children: IR,
     ):
         self.schema = schema
         self.should_broadcast = should_broadcast
         self.strict = strict
+        self.streaming_safe = streaming_safe
         self._non_child_args = (schema, should_broadcast, strict)
         self.children = children
 
