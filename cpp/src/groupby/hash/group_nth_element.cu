@@ -17,6 +17,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/buffer>
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/stream>
@@ -43,7 +44,8 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
 
   if (num_groups == 0) { return empty_like(values); }
 
-  auto nth_index = rmm::device_uvector<size_type>(num_groups, stream);
+  auto nth_index = cuda::device_buffer<size_type>(
+    stream, cudf::get_current_device_resource_ref(), num_groups, cuda::no_init);
   // TODO: replace with async version
   thrust::uninitialized_fill_n(
     rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),

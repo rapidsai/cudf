@@ -14,6 +14,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/stream>
 #include <thrust/count.h>
@@ -57,7 +58,8 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
     cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED, stream, mr.get_output_mr()), 0);
 
   // Recalculate offsets after null entries are purged.
-  rmm::device_uvector<size_type> null_purged_sizes(num_groups, stream, mr.get_temporary_mr());
+  cuda::device_buffer<size_type> null_purged_sizes(
+    stream, mr.get_temporary_mr(), num_groups, cuda::no_init);
 
   thrust::transform(
     rmm::exec_policy_nosync(stream, mr.get_temporary_mr()),
