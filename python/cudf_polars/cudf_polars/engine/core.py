@@ -43,7 +43,6 @@ from cudf_polars.streaming.actor_graph.collectives import (
 )
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.core import generate_network
-from cudf_polars.streaming.actor_graph.tracing import log_query_plan
 from cudf_polars.streaming.actor_graph.utils import empty_table_chunk
 from cudf_polars.streaming.base import StatsCollector
 from cudf_polars.streaming.parallel import lower_ir_graph_with_node_map
@@ -72,18 +71,6 @@ if TYPE_CHECKING:
 
 
 T = TypeVar("T")
-
-
-def _run_cleanup_steps(message: str, *steps: Callable[[], object]) -> None:
-    """Run every cleanup step and group any failures."""
-    exceptions: list[Exception] = []
-    for step in steps:
-        try:
-            step()
-        except Exception as error:
-            exceptions.append(error)
-    if exceptions:
-        raise ExceptionGroup(message, exceptions)
 
 
 def reset_statistics_from_options(
@@ -976,18 +963,15 @@ def _evaluate_on_rank(
         logical_op_by_id = emit_plan(
             quent_query_worker_state.runtime.session,
             optimized,
-            config_options,
             query_id=quent_query_worker_state.query_id,
             plan_id=logical_plan_id,
             worker_id=quent_query_worker_state.runtime.worker_resources.worker_id,
             instance_name="logical",
             parent_plan_id=None,
             parent_operators_by_node_id=None,
+            plan_metadata=lowering.plan_metadata,
             emit=comm.rank == 0,
         )
-
-    if comm.rank == 0:
-        log_query_plan(ir, config_options)
 
     if config_options.executor.quent_context is not None:
         assert quent_query_worker_state is not None
@@ -995,7 +979,6 @@ def _evaluate_on_rank(
         physical_op_by_id = quent_query_worker_state.runtime.emit_physical_plan(
             quent_query_worker_state,
             ir,
-            config_options,
             plan_id=physical_plan_id,
             parent_plan_id=logical_plan_id,
             node_map=node_map,
