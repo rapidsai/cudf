@@ -92,8 +92,11 @@ template <typename I>
 CUDF_HOST_DEVICE constexpr I div_rounding_up_safe(I dividend, I divisor) noexcept
 {
   if constexpr (cuda::std::is_signed_v<I>) {
-    // Preserve the existing signed-input behavior outside cuda::ceil_div's domain.
-    if (dividend < 0 || divisor < 0) { return dividend / divisor + (dividend % divisor != 0); }
+    if (dividend < 0 || divisor < 0) {
+      // Truncation already rounds up when the signs differ.
+      auto const same_sign = (dividend < 0) == (divisor < 0);
+      return dividend / divisor + (same_sign && dividend % divisor != 0);
+    }
   }
   return cuda::ceil_div(dividend, divisor);
 }
