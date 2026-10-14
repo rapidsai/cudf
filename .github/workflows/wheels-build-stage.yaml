@@ -107,12 +107,7 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ github.workspace }}/.cache/cython
-          key: >-
-            cython-v1-${{ runner.os }}-${{ runner.arch }}-cuda${{ matrix.CUDA_VER }}-py${{ matrix.PY_VER }}-${{ hashFiles('dependencies.yaml',
-            'python/**/*.pyx',
-            'python/**/*.pxd',
-            'python/**/CMakeLists.txt',
-            'python/**/pyproject.toml') }}
+          key: cython-v1-${{ runner.os }}-${{ runner.arch }}-cuda${{ matrix.CUDA_VER }}-py${{ matrix.PY_VER }}-${{ hashFiles('dependencies.yaml', 'python/**/*.pyx', 'python/**/*.pxd', 'python/**/CMakeLists.txt', 'python/**/pyproject.toml') }}
           restore-keys: |
             cython-v1-${{ runner.os }}-${{ runner.arch }}-cuda${{ matrix.CUDA_VER }}-py${{ matrix.PY_VER }}-
       - name: Build staged wheels

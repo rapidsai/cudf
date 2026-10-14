@@ -100,8 +100,7 @@ jobs:
             const JOB_ID = job ? job.id : null;
 
             // Set default target URL if not defined
-            const targetUrl = CUSTOM_TARGET_URL ||
-              `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.WORKFLOW_RUN_ID}/attempts/${process.env.ATTEMPTS}#summary-${JOB_ID}`;
+            const targetUrl = CUSTOM_TARGET_URL || `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.WORKFLOW_RUN_ID}/attempts/${process.env.ATTEMPTS}#summary-${JOB_ID}`;
 
             console.log("job id: ", JOB_ID);
             console.log("state: ", CUSTOM_STATE);
