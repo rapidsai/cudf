@@ -244,7 +244,7 @@ ConfigureTest(
   reductions/tdigest_tests.cpp
   reductions/unique_count_tests.cpp
   GPUS 1
-  PERCENT 70
+  PERCENT 20
 )
 
 # ##################################################################################################
@@ -284,6 +284,7 @@ ConfigureTest(
   binaryop/binop-compiled-fixed_point-test.cpp
   binaryop/binop-generic-ptx-test.cpp
   binaryop/operator_parity_test.cpp
+  PERCENT 25
 )
 
 # ##################################################################################################
@@ -393,7 +394,7 @@ ConfigureTest(JSON_TREE_CSR_TEST io/json/json_tree_csr.cu)
 ConfigureTest(
   DATA_CHUNK_SOURCE_TEST io/text/data_chunk_source_test.cpp
   GPUS 1
-  PERCENT 100
+  PERCENT 5
 )
 target_link_libraries(DATA_CHUNK_SOURCE_TEST PRIVATE ZLIB::ZLIB)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
@@ -444,7 +445,7 @@ ConfigureTest(
   copying/utility_tests.cpp
   copying/reverse_tests.cpp
   GPUS 1
-  PERCENT 100
+  PERCENT 35
 )
 
 # ##################################################################################################
@@ -501,7 +502,7 @@ ConfigureTest(DEVICE_ATOMICS_TEST device_atomics/device_atomics_test.cu)
 ConfigureTest(
   TRANSPOSE_TEST transpose/transpose_test.cpp
   GPUS 1
-  PERCENT 70
+  PERCENT 20
 )
 
 # ##################################################################################################
@@ -554,7 +555,7 @@ ConfigureTest(
   rolling/range_window_type_test.cpp
   rolling/rolling_test.cpp
   GPUS 1
-  PERCENT 70
+  PERCENT 30
 )
 
 # ##################################################################################################
@@ -574,7 +575,7 @@ ConfigureTest(
 # * reshape test ----------------------------------------------------------------------------------
 ConfigureTest(
   RESHAPE_TEST reshape/byte_cast_tests.cpp reshape/interleave_columns_tests.cpp
-  reshape/table_to_array_tests.cpp reshape/tile_tests.cpp
+  reshape/table_to_array_tests.cpp reshape/tile_tests.cpp PERCENT 20
 )
 
 # ##################################################################################################
@@ -760,7 +761,7 @@ ConfigureTest(
   lists/stream_compaction/apply_mask_tests.cpp
   lists/stream_compaction/distinct_tests.cpp
   GPUS 1
-  PERCENT 70
+  PERCENT 30
 )
 
 # ##################################################################################################
