@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -64,6 +64,9 @@ storage_options : dict, optional, default None
     For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
+filesystem : fsspec.AbstractFileSystem, default None
+    Filesystem object to use when reading the data. This argument
+    should not be used at the same time as ``storage_options``.
 
 Returns
 -------
@@ -153,8 +156,8 @@ storage_options : dict, optional, default None
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
 filesystem : fsspec.AbstractFileSystem, default None
-    Filesystem object to use when reading the parquet data. This argument
-    should not be used at the same time as `storage_options`.
+    Filesystem object to use when reading the data. This argument
+    should not be used at the same time as ``storage_options``.
 filters : list of tuple, list of lists of tuples, default None
     If not None, specifies a filter predicate used to filter out row groups
     using statistics stored for each row group as Parquet metadata. Row groups
@@ -173,7 +176,13 @@ filters : list of tuple, list of lists of tuples, default None
 row_groups : int, or list, or a list of lists default None
     If not None, specifies, for each input file, which row groups to read.
     If reading multiple inputs, a list of lists should be passed, one list
-    for each input.
+    for each input. Rows are returned in input order, and in the given
+    row-group order within each input; row groups are not sorted or
+    deduplicated, so repeated indices are read multiple times.
+
+    .. note::
+       When ``filters`` are also provided, the given order and any repeated
+       indices may not be preserved.
 categorical_partitions : boolean, default True
     Whether directory-partitioned columns should be interpreted as categorical
     or raw dtypes.
@@ -222,8 +231,8 @@ Notes
 
 - Setting the cudf option `io.parquet.low_memory=True` will result in the chunked
   low memory parquet reader being used. This can make it easier to read large
-  parquet datasets on systems with limited GPU memory. See all `available options
-  <https://docs.rapids.ai/api/cudf/nightly/cudf/api_docs/options/#api-options>`_.
+  parquet datasets on systems with limited GPU memory. See all :ref:`available options
+  <api.options>`.
 
 Examples
 --------
@@ -256,7 +265,7 @@ path : str or list of str
     File path or Root Directory path. Will be used as Root Directory path
     while writing a partitioned dataset. Use list of str with partition_offsets
     to write parts of the dataframe to different files.
-compression : {{'snappy', 'ZSTD', 'LZ4', None}}, default 'snappy'
+compression : {{'snappy', 'ZSTD', 'LZ4', 'GZIP', None}}, default 'snappy'
     Name of the compression to use; case insensitive.
     Use ``None`` for no compression.
 index : bool, default None
@@ -315,6 +324,11 @@ storage_options : dict, optional, default None
     For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
+filesystem : fsspec.AbstractFileSystem, default None
+    Filesystem object to use when writing the data. This argument
+    should not be used at the same time as ``storage_options``.
+    With ``engine='pyarrow'``, a ``pyarrow.fs.FileSystem`` is also
+    accepted and the object is passed through to pyarrow.
 return_metadata : bool, default False
     Return parquet metadata for written data. Returned metadata will
     include the file path metadata (relative to `root_path`).
@@ -496,6 +510,9 @@ storage_options : dict, optional, default None
     For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
+filesystem : fsspec.AbstractFileSystem, default None
+    Filesystem object to use when reading the data. This argument
+    should not be used at the same time as ``storage_options``.
 bytes_per_thread : int, default None
     Determines the number of bytes to be allocated per thread to read the
     files in parallel. When there is a file of large size, we get slightly
@@ -564,6 +581,9 @@ storage_options : dict, optional, default None
     For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
+filesystem : fsspec.AbstractFileSystem, default None
+    Filesystem object to use when writing the data. This argument
+    should not be used at the same time as ``storage_options``.
 index : bool, default None
     If ``True``, include the dataframe's index(es) in the file output.
     If ``False``, they will not be written to the file.
@@ -572,6 +592,12 @@ index : bool, default None
     ``RangeIndex`` will be stored as a range in the metadata so it
     doesn't require much space and is faster. Other indexes will
     be included as columns in the file output.
+
+Notes
+-----
+Timestamps in the last 999 milliseconds before the UNIX epoch are not
+representable in ORC; they are read back one second later, as with the Apache
+ORC writer (ORC-763, ORC-771).
 
 See Also
 --------
@@ -718,8 +744,9 @@ chunksize : integer, default None
 compression : {'bz2', 'gzip', 'infer', 'snappy', 'zip', 'zstd'}, default 'infer'
     For on-the-fly decompression of on-disk data. If 'infer', then use
     bz2, gzip, snappy, zip, or zstd if path_or_buf is a string ending in
-    '.bz2', '.gz', '.sz', '.zip', or '.zstd', respectively. If using 'zip', the ZIP file must contain only one data
-    file to be read in. Set to None for no decompression.
+    '.bz2', '.gz', '.sz', '.zip', or '.zst'/'.zstd', respectively. If using
+    'zip', the ZIP file must contain only one data file to be read in. Set to
+    None for no decompression.
 byte_range : list or tuple, default None
 
     .. admonition:: GPU-accelerated
@@ -747,6 +774,9 @@ storage_options : dict, optional, default None
     For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
+filesystem : fsspec.AbstractFileSystem, default None
+    Filesystem object to use when reading the data. This argument
+    should not be used at the same time as ``storage_options``.
 mixed_types_as_string : bool, default False
 
     .. admonition:: GPU-accelerated feature
@@ -796,8 +826,8 @@ Notes
 
 - Setting the cudf option `io.json.low_memory=True` will result in the chunked
   low memory json reader being used. This can make it easier to read large
-  json datasets on systems with limited GPU memory. See all `available options
-  <https://docs.rapids.ai/api/cudf/nightly/cudf/api_docs/options/#api-options>`_.
+  json datasets on systems with limited GPU memory. See all :ref:`available options
+  <api.options>`.
 
 See Also
 --------
@@ -892,7 +922,9 @@ double_precision : int, default 10
     The number of decimal places to use when encoding
     floating point values.
 force_ascii : bool, default True
-    Force encoded string to be ASCII.
+    Force encoded string to be ASCII. If False, non-ASCII characters
+    are written as-is instead of being escaped to ``\\uXXXX`` sequences.
+    Supported with both the ``pandas`` and ``cudf`` engines.
 date_unit : string, default 'ms' (milliseconds)
     The time unit to encode to, governs timestamp and ISO8601
     precision.  One of 's', 'ms', 'us', 'ns' for second, millisecond,
@@ -913,6 +945,17 @@ index : bool, default True
     Whether to include the index values in the JSON string. Not
     including the index (``index=False``) is only supported when
     orient is 'split' or 'table'.
+storage_options : dict, optional, default None
+    Extra options that make sense for a particular storage connection,
+    e.g. host, port, username, password, etc. For HTTP(S) URLs the key-value
+    pairs are forwarded to ``urllib.request.Request`` as header options.
+    For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
+    pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
+    ``urllib`` for more details.
+filesystem : fsspec.AbstractFileSystem, default None
+    Filesystem object to use when writing the data. This argument
+    should not be used at the same time as ``storage_options``.
+    Only supported with ``engine='cudf'``.
 
 See Also
 --------
@@ -1175,12 +1218,12 @@ parse_dates : list of int or names, default None
     speed, explicitly specify `dtype='date'` for the desired columns.
 dayfirst : bool, default False
     DD/MM format dates, international and European format.
-compression : {{'infer', 'gzip', 'zip', None}}, default 'infer'
+compression : {{'infer', 'gzip', 'bz2', 'zip', 'zstd', None}}, default 'infer'
     For on-the-fly decompression of on-disk data. If 'infer', then detect
-    compression from the following extensions: '.gz','.zip' (otherwise no
-    decompression). If using 'zip', the ZIP file must contain only one
-    data file to be read in, otherwise the first non-zero-sized file will
-    be used. Set to None for no decompression.
+    compression from the following extensions: '.gz', '.bz2', '.zip', '.zst'
+    (otherwise no decompression). If using 'zip', the ZIP file must contain
+    only one data file to be read in, otherwise the first non-zero-sized file
+    will be used. Set to None for no decompression.
 thousands : char, default None
     Character used as a thousands delimiter.
 decimal : char, default '.'
@@ -1213,6 +1256,9 @@ storage_options : dict, optional, default None
     For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
+filesystem : fsspec.AbstractFileSystem, default None
+    Filesystem object to use when reading the data. This argument
+    should not be used at the same time as ``storage_options``.
 bytes_per_thread : int, default None
     Determines the number of bytes to be allocated per thread to read the
     files in parallel. When there is a file of large size, we get slightly
@@ -1296,9 +1342,13 @@ index : bool, default True
 encoding : str, default 'utf-8'
     A string representing the encoding to use in the output file
     Only 'utf-8' is currently supported
-compression : str, None
-    A string representing the compression scheme to use in the output file
-    Compression while writing csv is not supported currently
+compression : {{'zstd', None}}, default None
+    A string representing the compression scheme to use in the output file.
+    Not inferred from the file name; ``'infer'`` is not supported.
+quoting : int, optional
+    Control field quoting behavior per ``csv.QUOTE_*`` constants.
+    Use one of ``csv.QUOTE_MINIMAL`` (0) or ``csv.QUOTE_NONE`` (3).
+    Default is ``csv.QUOTE_MINIMAL``.
 lineterminator : str, optional
     The newline character or character sequence to use in the output file.
     Defaults to :data:`os.linesep`.
@@ -1311,6 +1361,9 @@ storage_options : dict, optional, default None
     For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
+filesystem : fsspec.AbstractFileSystem, default None
+    Filesystem object to use when writing the data. This argument
+    should not be used at the same time as ``storage_options``.
 
 Returns
 -------
@@ -1320,7 +1373,8 @@ None or str
 
 Notes
 -----
-- Follows the standard of Pandas csv.QUOTE_NONNUMERIC for all output.
+- Supports ``csv.QUOTE_MINIMAL`` and ``csv.QUOTE_NONE`` quoting styles,
+  consistent with pandas. Other quoting styles raise ``NotImplementedError``.
 - The default behaviour is to write all rows of the dataframe at once.
   This can lead to memory or overflow errors for large tables. If this
   happens, consider setting the ``chunksize`` argument to some
@@ -1418,6 +1472,9 @@ storage_options : dict, optional, default None
     For other URLs (e.g. starting with "s3://", and "gcs://") the key-value
     pairs are forwarded to ``fsspec.open``. Please see ``fsspec`` and
     ``urllib`` for more details.
+filesystem : fsspec.AbstractFileSystem, default None
+    Filesystem object to use when reading the data. This argument
+    should not be used at the same time as ``storage_options``.
 
 Returns
 -------
@@ -1663,6 +1720,26 @@ def _is_local_filesystem(fs):
     return isinstance(fs, LocalFileSystem)
 
 
+def _validate_filesystem(filesystem, storage_options=None):
+    """Validate a user-provided ``filesystem`` object.
+
+    ``filesystem`` must be an ``fsspec.AbstractFileSystem``, and cannot be
+    combined with a non-empty ``storage_options``.
+    """
+    import fsspec
+
+    if not isinstance(filesystem, fsspec.AbstractFileSystem):
+        raise ValueError(
+            f"Expected fsspec.AbstractFileSystem. Got {filesystem}"
+        )
+
+    if storage_options:
+        raise ValueError(
+            f"Cannot specify storage_options when an explicit "
+            f"filesystem object is specified. Got: {storage_options}"
+        )
+
+
 def _select_single_source(sources: list, caller: str):
     """Select the first element from a list of sources.
     Raise an error if sources contains multiple elements
@@ -1674,22 +1751,26 @@ def _select_single_source(sources: list, caller: str):
     return sources[0]
 
 
-def is_directory(path_or_data, storage_options=None):
+def is_directory(path_or_data, storage_options=None, filesystem=None):
     """Returns True if the provided filepath is a directory"""
     path_or_data = stringify_pathlike(path_or_data)
     if isinstance(path_or_data, str):
         import fsspec
 
         path_or_data = os.path.expanduser(path_or_data)
-        try:
-            fs = fsspec.core.get_fs_token_paths(
-                path_or_data, mode="rb", storage_options=storage_options
-            )[0]
-        except ValueError as e:
-            if str(e).startswith("Protocol not known"):
-                return False
-            else:
-                raise e
+        if filesystem is not None:
+            _validate_filesystem(filesystem, storage_options)
+            fs = filesystem
+        else:
+            try:
+                fs = fsspec.core.get_fs_token_paths(
+                    path_or_data, mode="rb", storage_options=storage_options
+                )[0]
+            except ValueError as e:
+                if str(e).startswith("Protocol not known"):
+                    return False
+                else:
+                    raise e
 
         return fs.isdir(path_or_data)
 
@@ -1738,16 +1819,7 @@ def _get_filesystem_and_paths(
                 else:
                     raise e
         else:
-            if not isinstance(filesystem, fsspec.AbstractFileSystem):
-                raise ValueError(
-                    f"Expected fsspec.AbstractFileSystem. Got {filesystem}"
-                )
-
-            if storage_options:
-                raise ValueError(
-                    f"Cannot specify storage_options when an explicit "
-                    f"filesystem object is specified. Got: {storage_options}"
-                )
+            _validate_filesystem(filesystem, storage_options)
 
             fs = filesystem
             return_paths = [
@@ -1793,6 +1865,7 @@ def get_reader_filepath_or_buffer(
     *,
     mode="rb",
     fs=None,
+    filesystem=None,
     iotypes=(BytesIO,),
     storage_options=None,
     bytes_per_thread=_BYTES_PER_THREAD_DEFAULT,
@@ -1801,6 +1874,10 @@ def get_reader_filepath_or_buffer(
     prefetch_options=None,
 ):
     """{docstring}"""
+
+    # Validate up front so file-like inputs are checked too, not just paths.
+    if filesystem is not None:
+        _validate_filesystem(filesystem, storage_options)
 
     # Convert path_or_data to a list of input data sources
     input_sources = [
@@ -1825,7 +1902,9 @@ def get_reader_filepath_or_buffer(
         paths = input_sources
         raw_text_input = False
         if fs is None:
-            fs, paths = _get_filesystem_and_paths(paths, storage_options)
+            fs, paths = _get_filesystem_and_paths(
+                paths, storage_options, filesystem=filesystem
+            )
 
         # Expand directories (if necessary)
         paths = _maybe_expand_directories(paths, expand_dir_pattern, fs)
@@ -1883,7 +1962,9 @@ def get_reader_filepath_or_buffer(
     return filepaths_or_buffers
 
 
-def get_writer_filepath_or_buffer(path_or_data, mode, storage_options=None):
+def get_writer_filepath_or_buffer(
+    path_or_data, mode, storage_options=None, filesystem=None
+):
     """
     Return either a filepath string to data,
     or a open file object to the output filesystem
@@ -1901,28 +1982,39 @@ def get_writer_filepath_or_buffer(path_or_data, mode, storage_options=None):
         header options. For other URLs (e.g. starting with "s3://", and
         "gcs://") the key-value pairs are forwarded to ``fsspec.open``.
         Please see ``fsspec`` and ``urllib`` for more details.
+    filesystem : fsspec.AbstractFileSystem, optional, default None
+        Filesystem object to write the data with. This argument should not
+        be used at the same time as ``storage_options``.
 
     Returns
     -------
     filepath_or_buffer : str,
         Filepath string or buffer of data
     """
+    if filesystem is not None:
+        _validate_filesystem(filesystem, storage_options)
+
     if storage_options is None:
         storage_options = {}
 
+    path_or_data = stringify_pathlike(path_or_data)
     if isinstance(path_or_data, str):
         import fsspec
 
         path_or_data = os.path.expanduser(path_or_data)
-        fs = fsspec.core.get_fs_token_paths(
-            path_or_data, mode=mode or "w", storage_options=storage_options
-        )[0]
+        if filesystem is None:
+            fs = fsspec.core.get_fs_token_paths(
+                path_or_data, mode=mode or "w", storage_options=storage_options
+            )[0]
+        else:
+            fs = filesystem
 
         if not _is_local_filesystem(fs):
-            filepath_or_buffer = fsspec.open(
-                path_or_data, mode=mode or "w", **(storage_options)
+            # Not `get_fs_token_paths`' paths: in write mode it expands
+            # them into numbered `.part` names. Strip the original instead.
+            return fsspec.core.OpenFile(
+                fs, fs._strip_protocol(path_or_data), mode=mode or "w"
             )
-            return filepath_or_buffer
 
     return path_or_data
 
@@ -2117,6 +2209,9 @@ def _ensure_filesystem(passed_filesystem, path, storage_options):
             path[0] if isinstance(path, list) else path,
             storage_options={} if storage_options is None else storage_options,
         )[0]
+    # No `storage_options` conflict check: internal callers (dask-cudf's
+    # `write_partition`) pass both. That check lives at the public boundary.
+    _validate_filesystem(passed_filesystem)
     return passed_filesystem
 
 

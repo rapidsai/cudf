@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,12 +16,12 @@
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
 #include <cuda/iterator>
+#include <cuda/stream>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -39,7 +39,7 @@ struct scalar_as_column_view {
   using return_type = typename std::pair<column_view, std::unique_ptr<column>>;
   template <typename T, CUDF_ENABLE_IF(is_fixed_width<T>())>
   return_type operator()(scalar const& s,
-                         rmm::cuda_stream_view stream,
+                         cuda::stream_ref stream,
                          rmm::device_async_resource_ref mr)
   {
     auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
@@ -53,14 +53,14 @@ struct scalar_as_column_view {
     // Null scalar needs a single-element null mask (kept alive by an auxiliary column) as its
     // validity (bool) cannot be reinterpreted as `bitmask_type` without reading out of bounds.
     auto null_mask = cudf::detail::create_null_mask(1, cudf::mask_state::ALL_NULL, stream, mr);
-    auto const* null_mask_ptr = static_cast<bitmask_type const*>(null_mask.data());
+    auto const* null_mask_ptr = reinterpret_cast<bitmask_type const*>(null_mask.data());
     auto aux_col              = std::make_unique<column>(
       data_type{type_id::INT8}, 0, rmm::device_buffer{}, std::move(null_mask), 1);
     auto col_v = column_view(s.type(), 1, h_scalar_type_view.data(), null_mask_ptr, 1);
     return std::pair{col_v, std::move(aux_col)};
   }
   template <typename T, CUDF_ENABLE_IF(!is_fixed_width<T>())>
-  return_type operator()(scalar const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
+  return_type operator()(scalar const&, cuda::stream_ref, rmm::device_async_resource_ref)
   {
     CUDF_FAIL("Unsupported type");
   }
@@ -68,7 +68,7 @@ struct scalar_as_column_view {
 // specialization for cudf::string_view
 template <>
 scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::string_view>(
-  scalar const& s, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+  scalar const& s, cuda::stream_ref stream, rmm::device_async_resource_ref mr)
 {
   using T                  = cudf::string_view;
   auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
@@ -89,7 +89,7 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::strin
   // Null scalar needs a single-element null mask and offsets (kepy alive by an auxiliary column) as
   // its validity (bool) cannot be reinterpreted as `bitmask_type` without reading out of bounds.
   auto null_mask = cudf::detail::create_null_mask(1, cudf::mask_state::ALL_NULL, stream, mr);
-  auto const* null_mask_ptr = static_cast<bitmask_type const*>(null_mask.data());
+  auto const* null_mask_ptr = reinterpret_cast<bitmask_type const*>(null_mask.data());
   auto col_v                = cudf::column_view(
     s.type(), 1, h_scalar_type_view.data(), null_mask_ptr, 1, 0, {offsets_column->view()});
   std::vector<std::unique_ptr<column>> children;
@@ -106,7 +106,7 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::strin
 // specializing for struct column
 template <>
 scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::struct_view>(
-  scalar const& s, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+  scalar const& s, cuda::stream_ref stream, rmm::device_async_resource_ref mr)
 {
   auto col = make_column_from_scalar(s, 1, stream, mr);
   return std::pair{col->view(), std::move(col)};
@@ -123,7 +123,7 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::struc
  */
 auto scalar_to_column_view(
   scalar const& scal,
-  rmm::cuda_stream_view stream,
+  cuda::stream_ref stream,
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
   return type_dispatcher(scal.type(), scalar_as_column_view{}, scal, stream, mr);
@@ -200,7 +200,7 @@ struct null_considering_binop {
   void populate_out_col(LhsViewT const& lhsv,
                         RhsViewT const& rhsv,
                         cudf::size_type col_size,
-                        rmm::cuda_stream_view stream,
+                        cuda::stream_ref stream,
                         CompareFunc cfunc,
                         OutT* out_col) const
   {
@@ -222,7 +222,7 @@ struct null_considering_binop {
                                      binary_operator op,
                                      data_type output_type,
                                      cudf::size_type col_size,
-                                     rmm::cuda_stream_view stream,
+                                     cuda::stream_ref stream,
                                      rmm::device_async_resource_ref mr) const
   {
     // Create device views for inputs
@@ -269,7 +269,7 @@ std::unique_ptr<column> string_null_min_max(scalar const& lhs,
                                             column_view const& rhs,
                                             binary_operator op,
                                             data_type output_type,
-                                            rmm::cuda_stream_view stream,
+                                            cuda::stream_ref stream,
                                             rmm::device_async_resource_ref mr)
 {
   // hard-coded to only work with cudf::string_view so we don't explode compile times
@@ -286,7 +286,7 @@ std::unique_ptr<column> string_null_min_max(column_view const& lhs,
                                             scalar const& rhs,
                                             binary_operator op,
                                             data_type output_type,
-                                            rmm::cuda_stream_view stream,
+                                            cuda::stream_ref stream,
                                             rmm::device_async_resource_ref mr)
 {
   // hard-coded to only work with cudf::string_view so we don't explode compile times
@@ -303,7 +303,7 @@ std::unique_ptr<column> string_null_min_max(column_view const& lhs,
                                             column_view const& rhs,
                                             binary_operator op,
                                             data_type output_type,
-                                            rmm::cuda_stream_view stream,
+                                            cuda::stream_ref stream,
                                             rmm::device_async_resource_ref mr)
 {
   // hard-coded to only work with cudf::string_view so we don't explode compile times
@@ -325,7 +325,7 @@ void operator_dispatcher(mutable_column_view& out,
                          bool is_lhs_scalar,
                          bool is_rhs_scalar,
                          binary_operator op,
-                         rmm::cuda_stream_view stream)
+                         cuda::stream_ref stream)
 {
   // clang-format off
 switch (op) {
@@ -377,7 +377,7 @@ void binary_operation(mutable_column_view& out,
                       column_view const& lhs,
                       column_view const& rhs,
                       binary_operator op,
-                      rmm::cuda_stream_view stream)
+                      cuda::stream_ref stream)
 {
   operator_dispatcher(out, lhs, rhs, false, false, op, stream);
 }
@@ -386,7 +386,7 @@ void binary_operation(mutable_column_view& out,
                       scalar const& lhs,
                       column_view const& rhs,
                       binary_operator op,
-                      rmm::cuda_stream_view stream)
+                      cuda::stream_ref stream)
 {
   auto [lhsv, aux] = scalar_to_column_view(lhs, stream);
   operator_dispatcher(out, lhsv, rhs, true, false, op, stream);
@@ -396,7 +396,7 @@ void binary_operation(mutable_column_view& out,
                       column_view const& lhs,
                       scalar const& rhs,
                       binary_operator op,
-                      rmm::cuda_stream_view stream)
+                      cuda::stream_ref stream)
 {
   auto [rhsv, aux] = scalar_to_column_view(rhs, stream);
   operator_dispatcher(out, lhs, rhsv, false, true, op, stream);
@@ -409,7 +409,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
                                     bool is_lhs_scalar,
                                     bool is_rhs_scalar,
                                     binary_operator op,
-                                    rmm::cuda_stream_view stream)
+                                    cuda::stream_ref stream)
 {
   CUDF_EXPECTS(lhs.type().id() == type_id::STRUCT && rhs.type().id() == type_id::STRUCT,
                "Both columns must be struct columns");

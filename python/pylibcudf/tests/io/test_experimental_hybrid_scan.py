@@ -1,11 +1,18 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import io
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
-from utils import synchronize_stream
+from utils import (
+    BLOOM_FILTER_OPTIONS,
+    assert_table_and_meta_eq,
+    extract_parquet_footer,
+    requires_pyarrow_bloom_filters,
+    synchronize_stream,
+    write_hybrid_scan_parquet_bytes,
+)
 
 import rmm
 from rmm.pylibrmm.stream import Stream
@@ -19,30 +26,31 @@ from pylibcudf.expressions import (
 )
 from pylibcudf.io.experimental import (
     HybridScanReader,
+    ReadColumnsMode,
     UseDataPageMask,
 )
 
 
 @pytest.fixture(scope="module")
-def num_rows():
+def num_rows() -> int:
     """Number of rows in the test table."""
     return 1000
 
 
 @pytest.fixture(scope="module")
-def row_group_size():
+def row_group_size() -> int:
     """Row group size for parquet files."""
     return 250
 
 
 @pytest.fixture(scope="module")
-def num_row_groups(num_rows, row_group_size):
+def num_row_groups(num_rows: int, row_group_size: int) -> int:
     """Number of row groups in the test parquet file."""
     return num_rows // row_group_size
 
 
 @pytest.fixture(scope="module")
-def simple_parquet_table(num_rows):
+def simple_parquet_table(num_rows: int) -> pa.Table:
     """Create a simple PyArrow table for testing."""
     data = {
         "col0": pa.array(list(range(num_rows)), type=pa.uint32()),
@@ -53,60 +61,44 @@ def simple_parquet_table(num_rows):
 
 
 @pytest.fixture(scope="module")
-def simple_parquet_bytes(simple_parquet_table, row_group_size):
+def simple_parquet_bytes(
+    simple_parquet_table: pa.Table, row_group_size: int
+) -> bytes:
     """Create parquet bytes from the simple table."""
-    buf = io.BytesIO()
-    pq.write_table(
-        simple_parquet_table,
-        buf,
-        row_group_size=row_group_size,
-        use_dictionary=True,
-        write_statistics=True,
-        write_page_index=True,
+    return write_hybrid_scan_parquet_bytes(
+        simple_parquet_table, row_group_size
     )
-    return buf.getvalue()
 
 
 @pytest.fixture
-def simple_parquet_options(simple_parquet_bytes):
-    """Create basic ParquetReaderOptions for the simple parquet file.
+def simple_parquet_options() -> plc.io.parquet.ParquetReaderOptions:
+    """Create basic ParquetReaderOptions for the hybrid scan reader.
 
     Note: This is function-scoped (not module-scoped) because tests may
     modify the options (e.g., by setting filters), so each test needs
     its own independent copy.
     """
-    source = plc.io.SourceInfo([io.BytesIO(simple_parquet_bytes)])
-    return plc.io.parquet.ParquetReaderOptions.builder(source).build()
+    # Hybrid scan reader options do not need a source
+    return plc.io.parquet.ParquetReaderOptions()
 
 
 @pytest.fixture
-def simple_hybrid_scan_reader(simple_parquet_bytes, simple_parquet_options):
+def simple_hybrid_scan_reader(
+    simple_parquet_bytes: bytes,
+    simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
+) -> HybridScanReader:
     """Create a HybridScanReader for the simple parquet file.
 
     Note: This is function-scoped (not module-scoped) because it depends on
     the function-scoped simple_parquet_options fixture.
     """
-    # Extract footer bytes from the parquet file
-    # According to Parquet file format specification:
-    # https://parquet.apache.org/docs/file-format/
-    PARQUET_FOOTER_SIZE_BYTES = 4  # Number of bytes encoding footer length
-    PARQUET_MAGIC_BYTES = 4  # Number of bytes for "PAR1" magic number
-    PARQUET_SUFFIX_BYTES = PARQUET_FOOTER_SIZE_BYTES + PARQUET_MAGIC_BYTES
-
-    simple_parquet_mv = memoryview(simple_parquet_bytes)
-
-    footer_size = int.from_bytes(
-        simple_parquet_mv[-PARQUET_SUFFIX_BYTES:-PARQUET_MAGIC_BYTES],
-        byteorder="little",
-    )
-    footer_start = len(simple_parquet_mv) - PARQUET_SUFFIX_BYTES - footer_size
-    footer_end = len(simple_parquet_mv) - PARQUET_SUFFIX_BYTES
-    footer_mv = simple_parquet_mv[footer_start:footer_end]
-
+    footer_mv = extract_parquet_footer(simple_parquet_bytes)
     return HybridScanReader(footer_mv, simple_parquet_options)
 
 
-def test_hybrid_scan_reader_basic(simple_hybrid_scan_reader, num_rows):
+def test_hybrid_scan_reader_basic(
+    simple_hybrid_scan_reader: HybridScanReader, num_rows: int
+) -> None:
     """Test basic HybridScanReader construction and metadata access."""
     metadata = simple_hybrid_scan_reader.parquet_metadata()
     assert metadata.version == 2
@@ -115,8 +107,9 @@ def test_hybrid_scan_reader_basic(simple_hybrid_scan_reader, num_rows):
 
 
 def test_hybrid_scan_reader_from_metadata(
-    simple_hybrid_scan_reader, simple_parquet_options
-):
+    simple_hybrid_scan_reader: HybridScanReader,
+    simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
+) -> None:
     """Test creating HybridScanReader from pre-populated metadata."""
     # Get metadata from the fixture reader
     metadata = simple_hybrid_scan_reader.parquet_metadata()
@@ -135,8 +128,10 @@ def test_hybrid_scan_reader_from_metadata(
 
 
 def test_hybrid_scan_all_row_groups(
-    simple_hybrid_scan_reader, simple_parquet_options, num_row_groups
-):
+    simple_hybrid_scan_reader: HybridScanReader,
+    simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
+    num_row_groups: int,
+) -> None:
     """Test getting all row groups."""
     row_groups = simple_hybrid_scan_reader.all_row_groups(
         simple_parquet_options
@@ -147,8 +142,11 @@ def test_hybrid_scan_all_row_groups(
 
 
 def test_hybrid_scan_total_rows_in_row_groups(
-    simple_hybrid_scan_reader, simple_parquet_options, num_rows, row_group_size
-):
+    simple_hybrid_scan_reader: HybridScanReader,
+    simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
+    num_rows: int,
+    row_group_size: int,
+) -> None:
     """Test getting total rows in specific row groups."""
     all_row_groups = simple_hybrid_scan_reader.all_row_groups(
         simple_parquet_options
@@ -167,12 +165,12 @@ def test_hybrid_scan_total_rows_in_row_groups(
 
 @pytest.mark.parametrize("stream", [None, Stream()])
 def test_hybrid_scan_filter_row_groups_with_stats(
-    simple_hybrid_scan_reader,
-    simple_parquet_options,
-    num_row_groups,
-    row_group_size,
-    stream,
-):
+    simple_hybrid_scan_reader: HybridScanReader,
+    simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
+    num_row_groups: int,
+    row_group_size: int,
+    stream: Stream | None,
+) -> None:
     """Test filtering row groups using statistics."""
     # Filter: col0 >= (num_row_groups // 2) * row_group_size
     # This should filter out the first half of row groups
@@ -200,11 +198,13 @@ def test_hybrid_scan_filter_row_groups_with_stats(
     assert filtered == expected_row_groups
 
 
-def test_hybrid_scan_secondary_filters_byte_ranges(
-    simple_hybrid_scan_reader, simple_parquet_options, num_rows
-):
+def test_hybrid_scan_bloom_filter_and_dictionary_page_byte_ranges(
+    simple_hybrid_scan_reader: HybridScanReader,
+    simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
+    num_rows: int,
+) -> None:
     """Test getting bloom filter and dictionary page byte ranges."""
-    # Need to set a filter for secondary filters to work
+    # Need to set a filter for either kind of byte range to be reported
     # Filter: col0 >= num_rows // 10
     filter_threshold = num_rows // 10
     filter_expression = Operation(
@@ -222,10 +222,11 @@ def test_hybrid_scan_secondary_filters_byte_ranges(
         simple_parquet_options
     )
 
-    bloom_ranges, dict_ranges = (
-        simple_hybrid_scan_reader.secondary_filters_byte_ranges(
-            all_row_groups, simple_parquet_options
-        )
+    bloom_ranges = simple_hybrid_scan_reader.bloom_filters_byte_ranges(
+        all_row_groups, simple_parquet_options
+    )
+    dict_ranges = simple_hybrid_scan_reader.dictionary_pages_byte_ranges(
+        all_row_groups, simple_parquet_options
     )
 
     # These should be lists of ByteRangeInfo
@@ -233,9 +234,51 @@ def test_hybrid_scan_secondary_filters_byte_ranges(
     assert isinstance(dict_ranges, list)
 
 
+@requires_pyarrow_bloom_filters
+def test_hybrid_scan_bloom_filter_byte_ranges_discarded_or(
+    simple_parquet_table: pa.Table,
+) -> None:
+    """Equalities in a discarded OR branch add no bloom filter byte ranges."""
+    buf = io.BytesIO()
+    bloom_options = dict.fromkeys(["col0", "col1"], BLOOM_FILTER_OPTIONS)
+    pq.write_table(
+        simple_parquet_table, buf, bloom_filter_options=bloom_options
+    )
+
+    def bloom_ranges(expression):
+        options = plc.io.parquet.ParquetReaderOptions()
+        options.set_filter(expression)
+        reader = HybridScanReader(
+            extract_parquet_footer(buf.getvalue()), options
+        )
+        row_groups = reader.all_row_groups(options)
+        ranges = reader.bloom_filters_byte_ranges(row_groups, options)
+        return [(r.offset, r.size) for r in ranges]
+
+    col0 = ColumnNameReference("col0")
+    five = Literal(plc.Scalar.from_arrow(pa.scalar(5, pa.uint32())))
+    survivor = Operation(
+        ASTOperator.EQUAL,
+        ColumnNameReference("col1"),
+        Literal(plc.Scalar.from_arrow(pa.scalar("str_7"))),
+    )
+    # Bloom filters cannot evaluate `<`, so the OR and `col0 == 5` are dropped
+    dropped = Operation(
+        ASTOperator.LOGICAL_OR,
+        Operation(ASTOperator.EQUAL, col0, five),
+        Operation(ASTOperator.LESS, col0, five),
+    )
+    filter_expression = Operation(ASTOperator.LOGICAL_AND, dropped, survivor)
+    assert bloom_ranges(survivor)
+    assert bloom_ranges(filter_expression) == bloom_ranges(survivor)
+
+
 def test_hybrid_scan_column_chunk_byte_ranges(
-    simple_hybrid_scan_reader, simple_parquet_options, num_rows, num_row_groups
-):
+    simple_hybrid_scan_reader: HybridScanReader,
+    simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
+    num_rows: int,
+    num_row_groups: int,
+) -> None:
     """Test getting filter and payload column chunk byte ranges."""
     # Set filter to make col0 the filter column
     # Filter: col0 >= num_rows // 10
@@ -281,13 +324,13 @@ def test_hybrid_scan_column_chunk_byte_ranges(
     "use_data_page_mask", [UseDataPageMask.NO, UseDataPageMask.YES]
 )
 def test_hybrid_scan_materialize_columns(
-    simple_parquet_bytes,
-    simple_hybrid_scan_reader,
-    simple_parquet_options,
-    num_rows,
-    stream,
-    use_data_page_mask,
-):
+    simple_parquet_bytes: bytes,
+    simple_hybrid_scan_reader: HybridScanReader,
+    simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
+    num_rows: int,
+    stream: Stream | None,
+    use_data_page_mask: UseDataPageMask,
+) -> None:
     """Test full workflow of materializing filter and payload columns."""
     # Create filter: col0 >= num_rows // 10 (filter out first 10%)
     filter_threshold = num_rows // 10
@@ -327,7 +370,7 @@ def test_hybrid_scan_materialize_columns(
     filter_data = [
         plc.gpumemoryview(
             rmm.DeviceBuffer.to_device(
-                simple_parquet_bytes[r.offset : r.offset + r.size],
+                memoryview(simple_parquet_bytes)[r.offset : r.offset + r.size],
                 plc.utils._get_stream(stream),
             )
         )
@@ -362,7 +405,7 @@ def test_hybrid_scan_materialize_columns(
     payload_data = [
         plc.gpumemoryview(
             rmm.DeviceBuffer.to_device(
-                simple_parquet_bytes[r.offset : r.offset + r.size],
+                memoryview(simple_parquet_bytes)[r.offset : r.offset + r.size],
                 plc.utils._get_stream(stream),
             )
         )
@@ -409,14 +452,89 @@ def test_hybrid_scan_materialize_columns(
     assert expected_arrow.equals(hybrid_arrow)
 
 
+def test_hybrid_scan_payload_page_mask_without_page_index(
+    simple_parquet_bytes: bytes,
+    simple_hybrid_scan_reader: HybridScanReader,
+    simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
+    simple_parquet_table: pa.Table,
+    num_rows: int,
+) -> None:
+    """Test payload page pruning without a page index set up on the reader."""
+    reader = simple_hybrid_scan_reader
+    row_groups = reader.all_row_groups(simple_parquet_options)
+
+    # Keep the first half of the rows so the trailing data pages get pruned.
+    num_selected = num_rows // 2
+    row_mask = plc.Column.from_arrow(
+        pa.array([i < num_selected for i in range(num_rows)], type=pa.bool_())
+    )
+
+    # Caller is responsible for keeping the source bytes alive until
+    # synchronize_stream() is called below.
+    # See https://github.com/rapidsai/rmm/issues/2521
+    payload_ranges = [
+        simple_parquet_bytes[r.offset : r.offset + r.size]
+        for r in reader.payload_column_chunks_byte_ranges(
+            row_groups, simple_parquet_options
+        )
+    ]
+    payload_data = [
+        plc.gpumemoryview(
+            rmm.DeviceBuffer.to_device(
+                src,
+                plc.utils._get_stream(),
+            )
+        )
+        for src in payload_ranges
+    ]
+    synchronize_stream()
+
+    # Chunks can disagree on field nullability, so compare row values only.
+    def to_rows(tbl: plc.Table) -> list:
+        return (
+            tbl.to_arrow()
+            .rename_columns(simple_parquet_table.column_names)
+            .to_pylist()
+        )
+
+    expected_rows = simple_parquet_table.slice(0, num_selected).to_pylist()
+
+    payload_result = reader.materialize_payload_columns(
+        row_groups,
+        payload_data,
+        row_mask,
+        UseDataPageMask.YES,
+        simple_parquet_options,
+    )
+    synchronize_stream()
+
+    assert to_rows(payload_result.tbl) == expected_rows
+
+    reader.setup_chunking_for_payload_columns(
+        256,
+        0,
+        row_groups,
+        row_mask,
+        UseDataPageMask.YES,
+        payload_data,
+        simple_parquet_options,
+    )
+    chunked_rows = []
+    while reader.has_next_table_chunk():
+        chunk = reader.materialize_payload_columns_chunk(row_mask)
+        chunked_rows.extend(to_rows(chunk.tbl))
+    synchronize_stream()
+    assert chunked_rows == expected_rows
+
+
 @pytest.mark.parametrize("stream", [None, Stream()])
 def test_hybrid_scan_single_step_materialize(
-    simple_parquet_bytes,
-    simple_hybrid_scan_reader,
-    simple_parquet_options,
-    num_rows,
-    stream,
-):
+    simple_parquet_bytes: bytes,
+    simple_hybrid_scan_reader: HybridScanReader,
+    simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
+    num_rows: int,
+    stream: Stream | None,
+) -> None:
     """Test full workflow of single step materialization."""
     # Create filter: col0 >= num_rows // 10 (filter out first 10%)
     filter_threshold = num_rows // 10
@@ -453,7 +571,7 @@ def test_hybrid_scan_single_step_materialize(
     all_columns_data = [
         plc.gpumemoryview(
             rmm.DeviceBuffer.to_device(
-                simple_parquet_bytes[r.offset : r.offset + r.size],
+                memoryview(simple_parquet_bytes)[r.offset : r.offset + r.size],
                 plc.utils._get_stream(stream),
             )
         )
@@ -494,11 +612,11 @@ def test_hybrid_scan_single_step_materialize(
 
 
 def test_hybrid_scan_has_next_table_chunk(
-    simple_parquet_bytes,
-    simple_hybrid_scan_reader,
-    simple_parquet_options,
-    num_rows,
-):
+    simple_parquet_bytes: bytes,
+    simple_hybrid_scan_reader: HybridScanReader,
+    simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
+    num_rows: int,
+) -> None:
     """Test has_next_table_chunk method - requires chunking to be set up first."""
     # Filter: col0 >= num_rows // 10
     filter_threshold = num_rows // 10
@@ -535,7 +653,7 @@ def test_hybrid_scan_has_next_table_chunk(
     filter_data = [
         plc.gpumemoryview(
             rmm.DeviceBuffer.to_device(
-                simple_parquet_bytes[r.offset : r.offset + r.size],
+                memoryview(simple_parquet_bytes)[r.offset : r.offset + r.size],
                 plc.utils._get_stream(),
             )
         )
@@ -562,12 +680,12 @@ def test_hybrid_scan_has_next_table_chunk(
 
 @pytest.mark.parametrize("stream", [None, Stream()])
 def test_hybrid_scan_chunked_reading(
-    simple_parquet_bytes,
-    simple_hybrid_scan_reader,
-    simple_parquet_options,
-    num_rows,
-    stream,
-):
+    simple_parquet_bytes: bytes,
+    simple_hybrid_scan_reader: HybridScanReader,
+    simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
+    num_rows: int,
+    stream: Stream | None,
+) -> None:
     """Test chunked reading with setup and chunk methods."""
     # Filter: col0 >= num_rows // 10
     filter_threshold = num_rows // 10
@@ -605,7 +723,7 @@ def test_hybrid_scan_chunked_reading(
     filter_data = [
         plc.gpumemoryview(
             rmm.DeviceBuffer.to_device(
-                simple_parquet_bytes[r.offset : r.offset + r.size],
+                memoryview(simple_parquet_bytes)[r.offset : r.offset + r.size],
                 plc.utils._get_stream(stream),
             )
         )
@@ -659,42 +777,238 @@ def test_hybrid_scan_construct_row_group_passes(
     # zero pass read limit => single pass with all row groups
     pass_read_limit = 0
     passes = simple_hybrid_scan_reader.construct_row_group_passes(
-        all_row_groups, pass_read_limit
+        ReadColumnsMode.ALL_COLUMNS,
+        all_row_groups,
+        pass_read_limit,
+        simple_parquet_options,
     )
     assert passes == [all_row_groups]
 
     # small pass read limit => each row group in its own pass
     pass_read_limit = 1
     passes = simple_hybrid_scan_reader.construct_row_group_passes(
-        all_row_groups, pass_read_limit
+        ReadColumnsMode.ALL_COLUMNS,
+        all_row_groups,
+        pass_read_limit,
+        simple_parquet_options,
     )
     assert passes == [[rg] for rg in all_row_groups]
 
     # Passes should flatten to all row groups
     pass_read_limit = 1024
     passes = simple_hybrid_scan_reader.construct_row_group_passes(
-        all_row_groups, pass_read_limit
+        ReadColumnsMode.ALL_COLUMNS,
+        all_row_groups,
+        pass_read_limit,
+        simple_parquet_options,
     )
     assert [rg for p in passes for rg in p] == all_row_groups
     assert all(passes)
 
     # Empty input row groups raise an error
-    with pytest.raises(RuntimeError):
+    with pytest.raises(
+        ValueError, match="Empty input row group indices encountered"
+    ):
         simple_hybrid_scan_reader.construct_row_group_passes(
-            [], pass_read_limit
+            ReadColumnsMode.ALL_COLUMNS,
+            [],
+            pass_read_limit,
+            simple_parquet_options,
         )
 
 
+def _col0_stats_negation_cases() -> list[
+    tuple[str, Operation, Operation, list[int]]
+]:
+    """Cases of (id, negated, equivalent unnegated, surviving row groups)."""
+
+    def _literal(value: int) -> Literal:
+        return Literal(
+            plc.Scalar.from_arrow(pa.scalar(value, type=pa.uint32()))
+        )
+
+    lt_250 = Operation(
+        ASTOperator.LESS, ColumnNameReference("col0"), _literal(250)
+    )
+    ge_250 = Operation(
+        ASTOperator.GREATER_EQUAL,
+        ColumnNameReference("col0"),
+        _literal(250),
+    )
+    lt_500 = Operation(
+        ASTOperator.LESS, ColumnNameReference("col0"), _literal(500)
+    )
+    ge_500 = Operation(
+        ASTOperator.GREATER_EQUAL,
+        ColumnNameReference("col0"),
+        _literal(500),
+    )
+    lt_750 = Operation(
+        ASTOperator.LESS, ColumnNameReference("col0"), _literal(750)
+    )
+    ge_750 = Operation(
+        ASTOperator.GREATER_EQUAL,
+        ColumnNameReference("col0"),
+        _literal(750),
+    )
+    eq_100 = Operation(
+        ASTOperator.EQUAL, ColumnNameReference("col0"), _literal(100)
+    )
+    ne_100 = Operation(
+        ASTOperator.NOT_EQUAL,
+        ColumnNameReference("col0"),
+        _literal(100),
+    )
+
+    return [
+        # Collapses to col0 < 250
+        (
+            "double_negation",
+            Operation(ASTOperator.NOT, Operation(ASTOperator.NOT, lt_250)),
+            lt_250,
+            [0],
+        ),
+        # Becomes col0 == 100
+        (
+            "not_equal_to_equal",
+            Operation(ASTOperator.NOT, ne_100),
+            eq_100,
+            [0],
+        ),
+        # Becomes col0 != 100, which stats cannot prune with
+        (
+            "equal_to_not_equal",
+            Operation(ASTOperator.NOT, eq_100),
+            ne_100,
+            [0, 1, 2, 3],
+        ),
+        # De Morgan over AND, giving col0 < 250 OR col0 >= 500
+        (
+            "de_morgan_and",
+            Operation(
+                ASTOperator.NOT,
+                Operation(ASTOperator.LOGICAL_AND, ge_250, lt_500),
+            ),
+            Operation(ASTOperator.LOGICAL_OR, lt_250, ge_500),
+            [0, 2, 3],
+        ),
+        # De Morgan over OR, giving col0 >= 250 AND col0 < 750
+        (
+            "de_morgan_or",
+            Operation(
+                ASTOperator.NOT,
+                Operation(ASTOperator.LOGICAL_OR, lt_250, ge_750),
+            ),
+            Operation(ASTOperator.LOGICAL_AND, ge_250, lt_750),
+            [1, 2],
+        ),
+    ]
+
+
+@pytest.mark.parametrize(
+    "negated,unnegated,expected",
+    [
+        pytest.param(negated, unnegated, expected, id=name)
+        for name, negated, unnegated, expected in _col0_stats_negation_cases()
+    ],
+)
+def test_hybrid_scan_filter_row_groups_with_stats_negation(
+    simple_hybrid_scan_reader: HybridScanReader,
+    simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
+    negated: Operation,
+    unnegated: Operation,
+    expected: list[int],
+) -> None:
+    """A negated filter must prune exactly like its unnegated equivalent."""
+
+    reader = simple_hybrid_scan_reader
+
+    def prune(filter_expression: Operation) -> list[int]:
+        reader.reset_column_selection()
+        simple_parquet_options.set_filter(filter_expression)
+        all_row_groups = reader.all_row_groups(simple_parquet_options)
+        return reader.filter_row_groups_with_stats(
+            all_row_groups, simple_parquet_options
+        )
+
+    assert prune(negated) == expected
+    assert prune(unnegated) == expected
+
+
+@pytest.mark.parametrize(
+    "negated,unnegated,expected",
+    [
+        # col1 holds 250 distinct strings per row group, so `col1 != v` never
+        # sees a dictionary made up only of `v` and cannot prune
+        pytest.param(
+            ASTOperator.EQUAL,
+            ASTOperator.NOT_EQUAL,
+            [0, 1, 2, 3],
+            id="equal_to_not_equal",
+        ),
+        # `col1 == "str_0"` keeps only the row group whose dictionary holds it
+        pytest.param(
+            ASTOperator.NOT_EQUAL,
+            ASTOperator.EQUAL,
+            [0],
+            id="not_equal_to_equal",
+        ),
+    ],
+)
+def test_hybrid_scan_filter_row_groups_with_dictionary_pages_negation(
+    simple_parquet_bytes: bytes,
+    simple_hybrid_scan_reader: HybridScanReader,
+    simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
+    negated: ASTOperator,
+    unnegated: ASTOperator,
+    expected: list[int],
+) -> None:
+    """`NOT(col == v)` must prune what `col != v` prunes, and converse."""
+
+    col1 = ColumnNameReference("col1")
+    needle = Literal(plc.Scalar.from_arrow(pa.scalar("str_0")))
+    reader = simple_hybrid_scan_reader
+
+    def prune(filter_expression: Operation) -> list[int]:
+        reader.reset_column_selection()
+        simple_parquet_options.set_filter(filter_expression)
+        all_row_groups = reader.all_row_groups(simple_parquet_options)
+        dictionary_ranges = reader.dictionary_pages_byte_ranges(
+            all_row_groups, simple_parquet_options
+        )
+        # the caller is responsible for keeping the source bytes alive until
+        # synchronize_stream() below runs.
+        # See https://github.com/rapidsai/rmm/issues/2521
+        dict_page_bytes = [
+            simple_parquet_bytes[r.offset : r.offset + r.size]
+            for r in dictionary_ranges
+        ]
+        dictionary_data = [
+            plc.gpumemoryview(
+                rmm.DeviceBuffer.to_device(b, plc.utils._get_stream())
+            )
+            for b in dict_page_bytes
+        ]
+        synchronize_stream()
+        return reader.filter_row_groups_with_dictionary_pages(
+            dictionary_data, all_row_groups, simple_parquet_options
+        )
+
+    inner = Operation(negated, col1, needle)
+    assert prune(Operation(ASTOperator.NOT, inner)) == expected
+    assert prune(Operation(unnegated, col1, needle)) == expected
+
+
 def test_hybrid_scan_metadata_with_page_index(
-    simple_parquet_bytes,
-    simple_hybrid_scan_reader,
-    simple_parquet_options,
-    num_rows,
-):
+    simple_parquet_bytes: bytes,
+    simple_hybrid_scan_reader: HybridScanReader,
+    simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
+    num_rows: int,
+) -> None:
     """Test that page index setup enables page-level filtering.
 
-    This test mirrors the C++ TestMetadata test. It verifies that:
-    1. Before setup_page_index(), methods requiring page index will fail
+    This test mirrors the C++ page-index filter tests. It verifies that:
+    1. Before setup_page_index(), filter column page pruning using page-statistics will fail
     2. After fetching page index bytes and calling setup_page_index(),
        the page index is available and page-level operations work correctly
     """
@@ -723,7 +1037,7 @@ def test_hybrid_scan_metadata_with_page_index(
     assert len(all_row_groups) > 0
 
     # Try to use build_row_mask_with_page_index_stats BEFORE setup_page_index
-    # This should raise an error because page index is not set up yet
+    # This should raise an error because column and offset indexes are not set up yet
     try:
         simple_hybrid_scan_reader.build_row_mask_with_page_index_stats(
             all_row_groups, simple_parquet_options
@@ -758,3 +1072,193 @@ def test_hybrid_scan_metadata_with_page_index(
     assert row_mask is not None
     assert row_mask.size() > 0
     assert row_mask.type().id() == plc.types.TypeId.BOOL8
+
+
+@pytest.mark.parametrize(
+    "write_statistics",
+    [True, False, ["col1"]],
+    ids=["column_and_offset_index", "offset_index_only", "mixed"],
+)
+def test_page_index_byte_range_optional_indexes(
+    simple_parquet_table: pa.Table,
+    row_group_size: int,
+    simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
+    write_statistics: bool | list[str],
+) -> None:
+    """Page index byte range must span exactly the indexes written between the
+    last column chunk and the footer, even when column indexes are missing.
+    """
+    data = memoryview(
+        write_hybrid_scan_parquet_bytes(
+            simple_parquet_table, row_group_size, write_statistics
+        )
+    )
+
+    # Page indexes are written right after the last column chunk and before the footer
+    pa_metadata = pq.read_metadata(io.BytesIO(data))
+    data_end = max(
+        (col.dictionary_page_offset or col.data_page_offset)
+        + col.total_compressed_size
+        for rg in range(pa_metadata.num_row_groups)
+        for col in map(
+            pa_metadata.row_group(rg).column, range(pa_metadata.num_columns)
+        )
+    )
+    footer = extract_parquet_footer(data)
+    footer_start = len(data) - 8 - len(footer)
+
+    reader = HybridScanReader(footer, simple_parquet_options)
+    page_index = reader.page_index_byte_range()
+    assert page_index.offset == data_end
+    assert page_index.offset + page_index.size == footer_start
+    reader.setup_page_index(
+        data[page_index.offset : page_index.offset + page_index.size]
+    )
+
+    # Keep the source alive for the main parquet reader
+    source = io.BytesIO(data)
+    options = plc.io.parquet.ParquetReaderOptions.builder(
+        plc.io.SourceInfo([source])
+    ).build()
+    assert_table_and_meta_eq(
+        simple_parquet_table, plc.io.parquet.read_parquet(options)
+    )
+
+
+@pytest.mark.parametrize("total_rows", [1_000, 20_000])
+def test_hybrid_scan_page_index_stats_misaligned_pages(
+    total_rows: int,
+    simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
+) -> None:
+    """Misaligned page stats prune without indexes for discarded columns."""
+    # Different value widths with a small page size give each column a different number
+    # of rows per page, so their page boundaries don't line up.
+    buf = io.BytesIO()
+    pq.write_table(
+        pa.table(
+            {
+                "a": [f"{i:07d}" for i in range(total_rows)],
+                "b": [f"{i:011d}" for i in range(total_rows)],
+                "unused": [f"{i:07d}" for i in range(total_rows)],
+            }
+        ),
+        buf,
+        use_dictionary=False,
+        write_batch_size=1,
+        data_page_size=256,
+        write_statistics=["a", "b"],
+        write_page_index=True,
+    )
+    data = memoryview(buf.getvalue())
+
+    # Filter: a >= lo AND b < hi
+    lo, hi = total_rows // 3, 2 * total_rows // 3
+    filter_expression = Operation(
+        ASTOperator.LOGICAL_AND,
+        Operation(
+            ASTOperator.GREATER_EQUAL,
+            ColumnNameReference("a"),
+            Literal(plc.Scalar.from_arrow(pa.scalar(f"{lo:07d}"))),
+        ),
+        Operation(
+            ASTOperator.LESS,
+            ColumnNameReference("b"),
+            Literal(plc.Scalar.from_arrow(pa.scalar(f"{hi:011d}"))),
+        ),
+    )
+    # This OR is true for every row because `unused` equals `a`, but the
+    # column-to-column comparison cannot use stats. Its discarded equality
+    # must not require a column index for `unused`.
+    filter_expression = Operation(
+        ASTOperator.LOGICAL_AND,
+        filter_expression,
+        Operation(
+            ASTOperator.LOGICAL_OR,
+            Operation(
+                ASTOperator.EQUAL,
+                ColumnNameReference("unused"),
+                Literal(plc.Scalar.from_arrow(pa.scalar("0000000"))),
+            ),
+            Operation(
+                ASTOperator.GREATER_EQUAL,
+                ColumnNameReference("unused"),
+                ColumnNameReference("a"),
+            ),
+        ),
+    )
+    simple_parquet_options.set_filter(filter_expression)
+
+    reader = HybridScanReader(
+        extract_parquet_footer(data), simple_parquet_options
+    )
+    page_index = reader.page_index_byte_range()
+    reader.setup_page_index(
+        data[page_index.offset : page_index.offset + page_index.size]
+    )
+    row_mask = reader.build_row_mask_with_page_index_stats(
+        reader.all_row_groups(simple_parquet_options), simple_parquet_options
+    ).to_arrow()
+
+    # Every matching row must be kept, and pages outside the range must be pruned.
+    assert all(row_mask[lo:hi].to_pylist())
+    assert not all(row_mask.to_pylist())
+
+
+@pytest.mark.parametrize(
+    "filter_expression, expected_keep",
+    [
+        pytest.param(
+            Operation(
+                ASTOperator.GREATER,
+                ColumnNameReference("a"),
+                Literal(plc.Scalar.from_arrow(pa.scalar(0, pa.int32()))),
+            ),
+            False,
+            id="greater",
+        ),
+        pytest.param(
+            Operation(
+                ASTOperator.NOT,
+                Operation(ASTOperator.IS_NULL, ColumnNameReference("a")),
+            ),
+            False,
+            id="not_is_null",
+        ),
+        pytest.param(
+            Operation(ASTOperator.IS_NULL, ColumnNameReference("a")),
+            True,
+            id="is_null",
+        ),
+    ],
+)
+def test_hybrid_scan_page_index_stats_all_null_page(
+    filter_expression: Operation,
+    expected_keep: bool,
+    simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
+) -> None:
+    """Row mask from page stats of a single, completely null page."""
+    # A completely null page has empty min and max values.
+    num_rows = 10
+    buf = io.BytesIO()
+    pq.write_table(
+        pa.table({"a": pa.array([None] * num_rows, pa.int32())}),
+        buf,
+        write_page_index=True,
+    )
+    data = memoryview(buf.getvalue())
+
+    simple_parquet_options.set_filter(filter_expression)
+
+    footer_size = int.from_bytes(data[-8:-4], byteorder="little")
+    reader = HybridScanReader(
+        data[-8 - footer_size : -8], simple_parquet_options
+    )
+    page_index = reader.page_index_byte_range()
+    reader.setup_page_index(
+        data[page_index.offset : page_index.offset + page_index.size]
+    )
+    row_mask = reader.build_row_mask_with_page_index_stats(
+        reader.all_row_groups(simple_parquet_options), simple_parquet_options
+    ).to_arrow()
+
+    assert row_mask.to_pylist() == [expected_keep] * num_rows

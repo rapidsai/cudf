@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Tests for Ray execution mode."""
 
@@ -186,14 +186,15 @@ def test_reset_collects_after_options_change(reset_engine: RayEngine) -> None:
 
 
 def test_reset_after_shutdown_raises(
-    ray_num_ranks: int,
     ray_init_options: dict[str, Any],
 ) -> None:
     """``shutdown`` is idempotent; ``_reset`` after shutdown raises every time."""
     engine = RayEngine(
         executor_options={"max_rows_per_partition": 10},
         engine_options={"allow_gpu_sharing": True},
-        num_ranks=ray_num_ranks,
+        # This test covers a closed engine's client-side state only; it does
+        # not exercise collective shutdown, so one actor is sufficient.
+        num_ranks=1,
         ray_init_options=ray_init_options,
     )
     engine.shutdown()
@@ -237,14 +238,14 @@ def test_reset_rejects_construction_time_engine_options(
 
 
 def test_shutdown_skips_when_ray_not_initialized(
-    ray_num_ranks: int,
     ray_init_options: dict[str, Any],
 ) -> None:
     """``shutdown`` short-circuits if ``ray.is_initialized()`` is ``False``."""
     engine = RayEngine(
         executor_options={"max_rows_per_partition": 10},
         engine_options={"allow_gpu_sharing": True},
-        num_ranks=ray_num_ranks,
+        # The no-auto-init guard is independent of rank count.
+        num_ranks=1,
         ray_init_options=ray_init_options,
     )
     try:
@@ -257,3 +258,39 @@ def test_shutdown_skips_when_ray_not_initialized(
         # actors are released so the next test's fixture isn't blocked.
         if engine._rank_actors is not None:
             engine.shutdown()
+
+
+def test_gathers_are_in_rank_order(ray_init_options: dict[str, Any]) -> None:
+    # Two ranks are sufficient to prove that the methods order by rank rather
+    # than actor-list position. The explicit reversal makes this deterministic,
+    # so additional engine constructions only repeat the same assertion.
+    engine = RayEngine(
+        executor_options={"max_rows_per_partition": 10},
+        engine_options={"allow_gpu_sharing": True},
+        num_ranks=2,
+        ray_init_options=ray_init_options,
+    )
+    try:
+        # Each actor's own view: (rank, info) in actor order.
+        actors = engine.rank_actors
+        reported = ray.get([actor.get_info.remote() for actor in actors])
+        assert sorted(rank for rank, _ in reported) == [0, 1]
+
+        # Actor positions that put the ranks in ascending order.
+        ascending = sorted(range(len(actors)), key=lambda i: reported[i][0])
+
+        # What the gathers must return: the infos in rank order.
+        expected = [reported[i][1].pid for i in ascending]
+
+        # Hold the actors in descending rank order, so position and rank are
+        # guaranteed to disagree. Without this, a position-ordered gather can
+        # agree with rank order by luck.
+        engine._rank_actors = [actors[i] for i in reversed(ascending)]
+
+        assert [info.pid for info in engine.gather_cluster_info()] == expected
+
+        # `_run` reaches the same actor for a given rank, so its pids line up
+        # with the cluster info once both are in rank order.
+        assert engine._run(os.getpid) == expected
+    finally:
+        engine.shutdown()

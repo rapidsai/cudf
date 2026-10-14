@@ -1,9 +1,10 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Parallel Select Logic."""
 
 from __future__ import annotations
 
+import dataclasses
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
@@ -18,6 +19,7 @@ from cudf_polars.streaming.base import PartitionInfo
 from cudf_polars.streaming.dispatch import lower_ir_node
 from cudf_polars.streaming.expressions import (
     decompose_expr_graph,
+    hconcat_streaming_safe,
     make_expr_decomposer,
 )
 from cudf_polars.streaming.io import StreamingScan
@@ -149,12 +151,16 @@ def decompose_select(
         config_options,
         name_generator,
     )
+    hconcat_shapes = []
     for ne in select_ir.exprs:
         # Decompose this partial expression
-        new_ne, partial_input_ir, _partition_info = decompose_expr_graph(
-            ne,
-            mapper=shared_mapper,
-        )
+        (
+            new_ne,
+            partial_input_ir,
+            _partition_info,
+            hconcat_shape,
+        ) = decompose_expr_graph(ne, mapper=shared_mapper)
+        hconcat_shapes.append(hconcat_shape)
         pi = _partition_info[partial_input_ir]
         partial_input_ir = Select(
             {ne.name: ne.value.dtype},
@@ -165,6 +171,7 @@ def decompose_select(
         _partition_info[partial_input_ir] = pi
         partition_info.update(_partition_info)
         selections.append(partial_input_ir)
+    streaming_safe = hconcat_streaming_safe(hconcat_shapes)
 
     # Concatenate partial selections
     new_ir: Select | HConcat
@@ -172,12 +179,14 @@ def decompose_select(
     selections, partition_info = _fuse_simple_reductions(
         selections,
         partition_info,
+        streaming_safe=streaming_safe,
     )
     if len(selections) > 1:
         new_ir = HConcat(
             select_ir.schema,
             True,  # noqa: FBT003
             False,  # noqa: FBT003
+            streaming_safe,
             *selections,
         )
         partition_info[new_ir] = PartitionInfo(
@@ -192,6 +201,8 @@ def decompose_select(
 def _fuse_simple_reductions(
     decomposed_select_irs: Sequence[Select],
     pi: MutableMapping[IR, PartitionInfo],
+    *,
+    streaming_safe: bool,
 ) -> tuple[list[Select], MutableMapping[IR, PartitionInfo]]:
     """
     Fuse simple reductions that are part of the same Select node.
@@ -202,6 +213,9 @@ def _fuse_simple_reductions(
         The decomposed Select nodes.
     pi
         Partition information.
+    streaming_safe
+        Whether the original decomposed selections may be concatenated
+        partition-wise.
 
     Returns
     -------
@@ -353,6 +367,7 @@ def _fuse_simple_reductions(
             hconcat_schema,
             True,  # noqa: FBT003
             False,  # noqa: FBT003
+            streaming_safe,
             *new_decomposed_select_irs,
         )
         count = max(pi[c].count for c in new_decomposed_select_irs)
@@ -404,7 +419,7 @@ def _(
         [e.value for e in ir.exprs]
     ):
         return _lower_ir_fallback(
-            ir.reconstruct([child]),
+            ir,
             rec,
             msg=(
                 "fill_null with strategy other than 'zero' or 'one' is not supported "
@@ -431,8 +446,20 @@ def _(
 
     if scan_child and scan_child.predicate is None and scan_child.typ == "parquet":
         # Special Case: Fast count.
+        # We can't use prefetched file metadata here, because we're in lowering,
+        # not execution, so we don't have an IRExecutionContext with the prefetched
+        # file metadata yet. Hybrid scan requires prefetched file metadata,
+        # so disable that as well.
         count = Scan._get_parquet_row_count_from_metadata(
-            scan_child.paths, scan_child.skip_rows, scan_child.n_rows
+            scan_child.paths,
+            scan_child.skip_rows,
+            scan_child.n_rows,
+            dataclasses.replace(
+                scan_child.parquet_options,
+                prefetch_file_metadata=False,
+                use_hybrid_scan=False,
+            ),
+            None,
         )
         dtype = ir.exprs[0].value.dtype
 

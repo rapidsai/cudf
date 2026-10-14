@@ -6,9 +6,9 @@ You will need:
    devcontainer](https://github.com/rapidsai/devcontainers/), add
    `"./features/src/rust": {"version": "latest", "profile": "default"},` to your
    preferred configuration. Or else, use
-   [rustup](https://www.rust-lang.org/tools/install)
+   [rustup](https://rust-lang.org/tools/install/)
 2. A [cudf development
-   environment](https://github.com/rapidsai/cudf/blob/main/CONTRIBUTING.md#setting-up-your-build-environment).
+   environment](https://github.com/NVIDIA/cudf/blob/main/CONTRIBUTING.md#setting-up-your-build-environment).
    The combined devcontainer works, or whatever your favourite approach is.
 
 :::{note}
@@ -410,6 +410,28 @@ engine = pl.GPUEngine(
 )
 ```
 
+Each scan node may run up to `max_concurrent_io_tasks` reads concurrently. By
+default, the streaming executor chooses this limit automatically based on the
+scan's paths. The limit applies independently to each scan node, each
+corresponding to a single `pl.scan_parquet` call in the query. Configure it
+explicitly through `executor_options` or
+`CUDF_POLARS__EXECUTOR__MAX_CONCURRENT_IO_TASKS`:
+
+```python
+engine = pl.GPUEngine(
+    executor="streaming",
+    executor_options={"max_concurrent_io_tasks": 4},
+)
+```
+
+Passing an integer uses the same limit for all scans. Pass a
+`{"local": ..., "remote": ...}` dict, or set the environment variable to a
+JSON value like `{"remote": 16}`, to tune local and remote scans separately.
+
+Before each read is submitted, it waits for a device-memory reservation.
+This makes aggregate read concurrency respond to memory pressure across all
+scan nodes on the rank.
+
 Internally, `collect_statistics` walks the IR graph, groups Parquet
 `Scan` nodes that share the same file paths (unioning projected columns
 for sampling), and builds one `DataSourceInfo` per path group. It then
@@ -551,15 +573,22 @@ def test_whatever():
 Where translation of a query should fail due to the feature being
 unsupported we should test this. To assert that _translation_ raises
 an exception (usually `NotImplementedError`), use the utility function
-`assert_ir_translation_raises`:
+`assert_ir_translation_raises` with the `in_memory_engine` fixture. This fixture
+provides an in-memory GPU engine configuration, not the Polars CPU engine.
+For unsupported features rejected by the shared translator, testing every
+execution engine repeats the same check and unnecessarily initializes streaming
+engines. Use the parametrized `engine` fixture for execution tests and for
+failure modes that depend on the engine configuration.
 
 ```python
 from cudf_polars.testing.asserts import assert_ir_translation_raises
 
 
-def test_whatever(engine):
+def test_whatever(in_memory_engine):
     unsupported_query = ...
-    assert_ir_translation_raises(unsupported_query, engine, NotImplementedError)
+    assert_ir_translation_raises(
+        unsupported_query, in_memory_engine, NotImplementedError
+    )
 ```
 
 This test will fail if translation does not raise.
@@ -625,55 +654,99 @@ another `nvtx` range (e.g. `Scan.do_evaluate`, `GroupBy.do_evaluate`, etc.).
 These provide a higher-level grouping over the lower-level libcudf calls (e.g.
 `read_chunk`, `aggregate`).
 
-Finally, if using [rapidsmpf](https://docs.rapids.ai/api/rapidsmpf/nightly/)
-for shuffling, the methods inserting and extracting partitions to shuffle are
-annotated with nvtx ranges.
-
 # Query Plans
 
 The module `cudf_polars.streaming.explain` contains functions for dumping
 the query for a given `LazyFrame`.
 
+## Quent
 
-## Structured Output
+cudf-polars uses [Quent] for instrumentation. The output can be opened
+with `quent-open` and might be helpful for users and developers of cudf-polars.
 
-`cudf_polars.streaming.explain.serialize_query` can be used to output
-the query plan in a structured format.
+### Enabling Quent Telemetry
 
-```python
->>> import dataclasses
->>> import polars as pl
->>> from cudf_polars.streaming.explain import serialize_query
->>> q = pl.LazyFrame({"a": ['a', 'b', 'a'], "b": [1, 2, 3]}).group_by("a").agg(pl.len())
->>> dataclasses.asdict(serialize_query(q, engine=pl.GPUEngine()))
-{'roots': ['526964741'],
- 'nodes': {'526964741': {'id': '526964741',
-   'children': ['1694929589'],
-   'schema': {'a': 'STRING', 'len': 'UINT32'},
-   'properties': {'columns': ['a', 'len']},
-   'type': 'Select'},
-  '1694929589': {'id': '1694929589',
-   'children': ['2632275007'],
-   'schema': {'a': 'STRING', '___0': 'UINT32'},
-   'properties': {'keys': ['a']},
-   'type': 'GroupBy'},
-  '2632275007': {'id': '2632275007',
-   'children': [],
-   'schema': {'a': 'STRING'},
-   'properties': {},
-   'type': 'DataFrameScan'}},
- 'partition_info': {'526964741': {'count': 1, 'partitioned_on': ()},
-  '1694929589': {'count': 1, 'partitioned_on': ()},
-  '2632275007': {'count': 1, 'partitioned_on': ()}}}
-```
+Set `CUDF_POLARS__EXECUTOR__QUENT_CONTEXT=1` to export plans, actor lifetimes,
+aggregate actor statistics, runtime decisions, and per-node `Evaluate`
+lifecycles. Asynchronous scan work uses the same lifecycle with task metadata,
+disk-to-device transfer usage, failures, and actual output bytes.
 
-The structured schema has three top-level fields:
+### Schema
 
-1. `roots`: the integer ID for the "root" (final) nodes in the query plan
-2. `partition_info`: partitioning information at each stage of the query
-3. `nodes`: A mapping from integer node id to node details. Each node ID
-   that appears in the output will be present in this mapping.
-   Inspect `children` to understand which nodes this node depends on.
+Quent uses a YAML file to define its event schema. Ours is at
+[model.yaml](../quent/model.yaml). See the [Quent Tutorial][qt] for background
+on these schemas. You can view it in the Quent [Schema Viewer][qsv].
 
-Note that all integers are stored as strings to make round-tripping
-to JSON easier.
+We define entities to represent the high-level execution model of cudf-polars.
+We won't repeat them all here, but this includes things like Plans (logical and
+physical) and [resources][qr] like Device Memory.
+
+Certain entities have special lifecycle rules, so they should be modeled as a
+[Quent FSM][fsm]. These include entities like a `Query`, `Engine`, and `Actor`.
+
+[qt]: https://rapidsai.github.io/quent/tutorial/
+[qsv]: https://rapidsai.github.io/quent/schema/
+[fsm]: https://rapidsai.github.io/quent/tutorial/instrumentation/modules/finite-state-machine/index.html
+[qr]: https://rapidsai.github.io/quent/tutorial/instrumentation/modules/resource/index.html
+
+### Implementation Notes
+
+The telemetry model is declared in [model.yaml](../quent/model.yaml). The
+`cudf-polars-quent-bridge` project uses maturin and Quent to
+
+- validate the schema
+- generate the Rust instrumentation library
+- generate python bindings to the Rust instrumentation library
+
+See [`cudf-polars-quent-bridge`](../quent/bridge/README.md) for details. These
+bindings are used in `cudf_polars` to build and emit Quent events matching the
+declared schema. cudf-polars starts a Quent Collector on the controller (rank 0
+for SPMD), distributes its address to every worker, and sends every process's
+events to it. The Collector writes all contexts under a common run directory,
+which our benchmark scripts package into a ZIP archive after the clients and
+Collector have closed.
+
+`QuentConfig.output_root`, which may also be configured with
+`CUDF_POLARS__EXECUTOR__QUENT_OUTPUT_ROOT`, is local to the process hosting the
+Collector. Workers do not need access to that path or to a shared filesystem.
+
+The `cudf-polars-quent-analyzer` project is a Rust library that's used
+by `quent-open` to visualize cudf-polars instrumentation in the Quent UI.
+
+Ranks need to coordinate on the creation of some entities. For example, each
+actor in a `RayEngine` needs to use the same `engine_id` so that plans can be
+associated with the engine correctly. `QuentConfig` carries the shared
+engine-level values and is provided through `StreamingExecutor.quent_context`;
+its `QuentQueryConfig` carries display metadata that may change per query.
+`QuentQueryWorkerState` binds a query ID to the worker runtime that owns the
+rank-local generated handles and resource UUIDs.
+
+### Concepts
+
+cudf-polars and Quent's Query Engine domain have somewhat overlapping names for
+somewhat overlapping concepts. The following table relates cudf-polars' names to
+Quent's names.
+
+#### Cluster Types
+
+| cudf-polars Type | Quent Type | Notes |
+| ---------------- | ---------- | ----- |
+| `StreamingEngine`  | `Engine`     | The Quent `Engine.implementation` field includes runtime information like the version of cudf-polars. |
+| `RankActor` / `_WorkerContext` | Worker | The logical rank / worker responsible for executing the given query plan. |
+
+#### Query Types
+
+| cudf-polars Type | Quent Type | Notes |
+| ---------------- | ---------- | ----- |
+| `LazyFrame.collect` / `sink` | `Query` | A single query, executed by an `Engine` |
+| - | `QueryGroup` | A group of queries; this is a purely logical grouping, optionally controlled by the user. `polars` / `cudf-polars` don't have any concept of a query group. |
+| `IR` | `Plan` | A plan, translated from a polars expression. Traversing the `.children` of a cudf-polars `IR` node will give you the full plan. |
+| `IR` | `Operator` | A node in the query plan. |
+| - | `Port` | The input or output of some Operator. In cudf-polars, intermediate results are typically passed between IR nodes / operators as a `pylibcudf.Table` |
+| - | `Edge` | A connection between two `Port`s. |
+| `IR.do_evaluate` | `Evaluate` | Synchronous host-side evaluation of an IR node. |
+| rapidsmpf streaming actor | `Actor` | Actor lifetime and aggregate chunk/byte statistics. |
+| worker I/O or rank link | `DataChannel` | A concrete resource used for data transfer. |
+
+
+[Quent]: https://github.com/rapidsai/quent

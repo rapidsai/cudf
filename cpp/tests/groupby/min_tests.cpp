@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -474,13 +474,8 @@ TEST_F(groupby_min_list_test, null_keys_and_values)
 
   // Null child element.
   {
-    auto const vals        = lists{lists{{0, null}, null_at(1)},
-                            lists{1, 2},
-                            lists{3, 4},
-                            lists{5, 6, 7},
-                            lists{0, 8},
-                            lists{9, 10}};
-    auto const expect_vals = lists{lists{{0, null}, null_at(1)}, {1, 2}, {3, 4}};
+    auto const vals = lists{{{0, null}, null_at(1)}, {1, 2}, {3, 4}, {5, 6, 7}, {0, 8}, {9, 10}};
+    auto const expect_vals = lists{{{0, null}, null_at(1)}, {1, 2}, {3, 4}};
     test_single_agg(keys,
                     vals,
                     expect_keys,
@@ -508,7 +503,7 @@ TYPED_TEST(groupby_min_floating_point_test, values_with_infinity)
   auto const expected_keys = int32s_col{1, 2};
   auto const expected_vals = floats_col{-inf, static_cast<T>(1)};
 
-  // Related issue: https://github.com/rapidsai/cudf/issues/11352
+  // Related issue: https://github.com/NVIDIA/cudf/issues/11352
   // The issue only occurs in sort-based aggregation.
   auto agg = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(

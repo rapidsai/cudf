@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,11 +9,12 @@
 
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/iterator>
+#include <cuda/stream>
 #include <thrust/copy.h>
+#include <thrust/for_each.h>
 
 namespace cudf::groupby {
 
@@ -27,7 +28,7 @@ size_type streaming_groupby::impl::probe_and_insert_subsequent(
   size_type* target_indices,
   size_type* slot_offsets,
   size_type* batch_local_indices,
-  rmm::cuda_stream_view stream)
+  cuda::stream_ref stream)
 {
   auto const temp_mr        = cudf::get_current_device_resource_ref();
   auto const batch_self_cmp = cudf::detail::row::equality::self_comparator{preprocessed_batch};
@@ -41,16 +42,20 @@ size_type streaming_groupby::impl::probe_and_insert_subsequent(
   auto const comparator =
     n_table_comparator{batch_self_eq, d_cross_eqs.data(), _key_loc->data(), _max_distinct_keys};
 
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, temp_mr),
+                     cuda::counting_iterator<size_type>(0),
+                     batch_size,
+                     insert_fn{set_ref_base.rebind_key_eq(comparator),
+                               batch_bitmask,
+                               _max_distinct_keys,
+                               base,
+                               target_indices,
+                               slot_offsets});
   auto const out_end = thrust::copy_if(rmm::exec_policy_nosync(stream, temp_mr),
                                        cuda::counting_iterator<size_type>(0),
                                        cuda::counting_iterator<size_type>(batch_size),
                                        batch_local_indices,
-                                       insert_and_check_fn{set_ref_base.rebind_key_eq(comparator),
-                                                           batch_bitmask,
-                                                           _max_distinct_keys,
-                                                           base,
-                                                           target_indices,
-                                                           slot_offsets});
+                                       is_new_key_fn{target_indices, _max_distinct_keys});
   return static_cast<size_type>(out_end - batch_local_indices);
 }
 

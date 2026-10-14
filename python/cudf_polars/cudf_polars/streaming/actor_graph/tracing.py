@@ -1,39 +1,47 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Tracing infrastructure for the RapidsMPF streaming runtime."""
 
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from cudf_polars.dsl.tracing import LOG_TRACES, Scope
-from cudf_polars.streaming.explain import SerializablePlan
+from rapidsmpf.memory.buffer import MemoryType
+from rapidsmpf.streaming.core.message import Message
 
 if TYPE_CHECKING:
-    import pylibcudf as plc
+    from collections.abc import Sequence
 
-    from cudf_polars.dsl.ir import IR
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_streaming.table_chunk import TableChunk
+    from rapidsmpf.streaming.core.channel import Channel
+    from rapidsmpf.streaming.core.context import Context
+
+    from cudf_polars.streaming.actor_graph.prefilter import RuntimePrefilterStatistics
 
 
+def _zero_bytes_by_tier() -> dict[MemoryType, int]:
+    return dict.fromkeys(MemoryType, 0)
+
+
+@dataclasses.dataclass(slots=True)
 class ActorTracer:
     """
     Tracer for a single streaming actor (IR node).
 
-    Collects execution statistics and emits structured log events.
+    Collects execution statistics for Quent actor telemetry.
 
     Attributes
     ----------
-    ir_id
-        Stable identifier for the IR node (for tracing/logging).
-    ir_type
-        Type name of the IR node (e.g., "Sort", "Join").
     row_count
         Total row count produced by this node during execution.
         None if row counting is not available for this node.
     chunk_count
         Total chunk count produced by this node during execution.
+    input_bytes
+        Bytes received on boundary input channels, stratified by memory tier.
+    output_bytes
+        Bytes sent on the boundary output channel, stratified by memory tier.
     decision
         The algorithm decision made at runtime for this node
         (e.g., "broadcast_left", "shuffle", "tree", etc.).
@@ -42,42 +50,34 @@ class ActorTracer:
         (e.g., after an allgather). Affects how rows are merged.
     """
 
-    __slots__ = (
-        "chunk_count",
-        "decision",
-        "duplicated",
-        "ir_id",
-        "ir_type",
-        "row_count",
+    row_count: int | None = None
+    chunk_count: int = 0
+    input_bytes: dict[MemoryType, int] = dataclasses.field(
+        default_factory=_zero_bytes_by_tier
+    )
+    output_bytes: dict[MemoryType, int] = dataclasses.field(
+        default_factory=_zero_bytes_by_tier
+    )
+    decision: str | None = None
+    duplicated: bool = False
+    prefilters: list[RuntimePrefilterStatistics] = dataclasses.field(
+        default_factory=list
     )
 
-    def __init__(self, ir_id: int | None = None, ir_type: str | None = None) -> None:
-        self.ir_id = ir_id
-        self.ir_type = ir_type
-        self.row_count: int | None = None
-        self.chunk_count: int = 0
-        self.decision: str | None = None
-        self.duplicated: bool = False
-
-    def add_chunk(self, *, table: plc.Table | None = None) -> None:
+    def add_chunk(self, *, chunk: TableChunk | None = None) -> None:
         """
         Record a chunk.
 
-        If table is provided, both row_count and chunk_count are updated.
-        If table is None, only chunk_count is incremented.
+        If chunk is provided, both row_count and chunk_count are updated.
+        Otherwise, only chunk_count is incremented.
 
         Parameters
         ----------
-        table
-            The table to record.
+        chunk
+            The table chunk to record.
         """
-        # TODO: replace this API with one that takes a TableChunk directly,
-        # using TableChunk.shape[0] for the row count, and consider providing a
-        # helper that logs and sends a chunk in one call so the
-        # ``tracer.add_chunk(...) + ch_out.send(...)`` pattern doesn't have to
-        # be duplicated across every actor.
-        if table is not None:  # pragma: no cover; Covered by rapidsmpf tests
-            self.row_count = (self.row_count or 0) + table.num_rows()
+        if chunk is not None:
+            self.row_count = (self.row_count or 0) + chunk.shape[0]
         self.chunk_count += 1
 
     def set_duplicated(self, *, duplicated: bool = True) -> None:
@@ -85,32 +85,56 @@ class ActorTracer:
         self.duplicated = duplicated
 
 
-def log_query_plan(ir: IR, config_options: ConfigOptions) -> None:
+def record_channel_metrics(
+    tracer: ActorTracer,
+    *,
+    chs_in: Sequence[Channel[Any]],
+    chs_out: Sequence[Channel[Any]],
+) -> None:
     """
-    Log the IR tree structure as a structlog event.
-
-    This should be called once on the client process after lowering,
-    before distributed execution begins. The structure can be used
-    by post-processing tools to reconstruct annotated plans.
+    Record boundary channel byte volumes on an actor tracer.
 
     Parameters
     ----------
-    ir
-        The root IR node of the lowered query plan.
-    config_options
-        The GPU engine configuration options.
-
-    Notes
-    -----
-    This function is a no-op if ``CUDF_POLARS_LOG_TRACES`` is not set.
+    tracer
+        The actor tracer to update.
+    chs_in
+        Input boundary channels. ``recv_bytes`` are summed per memory tier.
+    chs_out
+        Output boundary channels. ``send_bytes`` are summed per memory tier.
     """
-    if not LOG_TRACES:
-        return
+    for ch in chs_in:
+        for mem_type, nbytes in ch.metrics().recv_bytes.items():
+            tracer.input_bytes[mem_type] += nbytes
+    for ch in chs_out:
+        for mem_type, nbytes in ch.metrics().send_bytes.items():
+            tracer.output_bytes[mem_type] += nbytes
 
-    import structlog
 
-    dag = SerializablePlan.from_ir(ir, config_options=config_options)
-    raw = dataclasses.asdict(dag)
+async def send_chunk(
+    context: Context,
+    ch_out: Channel[TableChunk],
+    chunk: TableChunk,
+    sequence_number: int,
+    *,
+    tracer: ActorTracer | None,
+) -> None:
+    """
+    Trace and send a TableChunk.
 
-    log = structlog.get_logger()
-    log.info("Query Plan", scope=Scope.PLAN.value, plan=raw)
+    Parameters
+    ----------
+    context
+        The context of the streaming engine.
+    ch_out
+        The output channel to send the chunk to.
+    chunk
+        The chunk to send.
+    sequence_number
+        The sequence number of the chunk.
+    tracer
+        The tracer to use to trace the chunk.
+    """
+    if tracer is not None:
+        tracer.add_chunk(chunk=chunk)
+    await ch_out.send(context, Message(sequence_number, chunk))

@@ -1,11 +1,14 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
+#include <cudf/io/parquet_schema.hpp>
+
 #include <cstddef>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -14,8 +17,22 @@
 namespace cudf::io::parquet::detail {
 
 /**
- * @brief Returns a normalized (lowercased) column name or path when case-insensitive matching is
- * enabled
+ * @brief Gets the dot-separated path for a schema element.
+ *
+ * @param schema_tree The schema tree describing the file structure
+ * @param schema_idx Index of the schema element
+ * @return Dot-separated schema path from the root child to the schema element
+ */
+[[nodiscard]] std::string column_path_from_index(std::span<SchemaElement const> schema_tree,
+                                                 int schema_idx);
+
+/**
+ * @brief Returns a normalized (UTF8-aware lowercased) column name or path when case-insensitive
+ * matching is enabled
+ *
+ * @note Uses per-codepoint `std::ctype<wchar_t>::tolower` from `C.UTF-8` locale. Falls back to the
+ * classic locale if `C.UTF-8` is unavailable. Column paths that are not valid UTF-8 are returned
+ * unchanged.
  *
  * @param col_path The column name or path to normalize
  * @param case_sensitive_names Whether to normalize the column path case-insensitively
@@ -26,17 +43,17 @@ namespace cudf::io::parquet::detail {
                                                 bool case_sensitive_names);
 
 /**
- * @brief Compares two column paths with specified case sensitivity
+ * @brief Compares two column paths with specified case sensitivity (UTF8-aware)
  *
  * @param lhs The left-hand side column path
  * @param rhs The right-hand side column path
- * @param case_sensitive Whether to compare the column paths case-sensitively
+ * @param case_sensitive_names Whether to compare the column paths case-sensitively
  *
  * @return Boolean indicating if the column paths are equal
  */
 [[nodiscard]] bool are_column_paths_equal(std::string_view lhs,
                                           std::string_view rhs,
-                                          bool case_sensitive);
+                                          bool case_sensitive_names);
 
 /**
  * @brief Transparent hash for column paths that honors a case-sensitivity policy.

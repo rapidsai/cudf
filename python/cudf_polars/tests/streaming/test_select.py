@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -15,14 +15,18 @@ import pylibcudf as plc
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
-from cudf_polars.dsl.ir import HStack, Projection, Select
+from cudf_polars.dsl.ir import HConcat, HStack, Projection, Select
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.engine.options import StreamingOptions
+from cudf_polars.streaming.actor_graph.core import evaluate_logical_plan
+from cudf_polars.streaming.base import StatsCollector
+from cudf_polars.streaming.parallel import lower_ir_graph
 from cudf_polars.streaming.select import _inline_hstack_false, _sub_expr
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
 )
-from cudf_polars.testing.engine_utils import is_streaming_engine, warns_on_spmd
-from cudf_polars.utils.versions import POLARS_VERSION_LT_141
+from cudf_polars.testing.engine_utils import warns_on_spmd
+from cudf_polars.utils.config import ConfigOptions
 
 
 @pytest.fixture
@@ -95,6 +99,22 @@ def test_select_fill_null_with_strategy(df, streaming_engine_factory):
         assert_gpu_result_equal(q, engine=engine)
 
 
+def test_select_scan_fill_null_with_strategy_fallback(tmp_path, spmd_engine_factory):
+    engine = spmd_engine_factory(
+        StreamingOptions(target_partition_size=1, fallback_mode="warn"),
+    )
+    path = tmp_path / "data.parquet"
+    pl.DataFrame({"a": [None, 1, None, 3]}).write_parquet(path)
+    q = pl.scan_parquet(path).select(pl.col("a").fill_null(strategy="forward"))
+
+    with warns_on_spmd(
+        engine,
+        UserWarning,
+        match="fill_null with strategy other than 'zero' or 'one' is not supported for multiple partitions",
+    ):
+        assert_gpu_result_equal(q, engine=engine)
+
+
 @pytest.mark.parametrize(
     "aggs",
     [
@@ -119,20 +139,8 @@ def test_select_fill_null_with_strategy(df, streaming_engine_factory):
         (pl.col("a").min(), pl.col("b"), pl.col("c").max()),
     ],
 )
-def test_select_aggs(df, engine, aggs, request):
+def test_select_aggs(df, engine, aggs):
     # Test supported aggs (e.g. "min", "max", "mean", "n_unique")
-    if (
-        not POLARS_VERSION_LT_141
-        and is_streaming_engine(engine)
-        and len(aggs) == 1
-        and "len()" in str(aggs[0])
-    ):
-        request.applymarker(
-            pytest.mark.xfail(
-                reason="len() row count lost in zero-column streaming chunks "
-                "(https://github.com/rapidsai/cudf/issues/21428)"
-            )
-        )
     query = df.select(*aggs)
     assert_gpu_result_equal(query, engine=engine)
 
@@ -154,6 +162,55 @@ def test_select_drop_nulls_aggs(engine, aggs):
     assert_gpu_result_equal(query, engine=engine)
 
 
+def test_select_fused_reductions_keep_unaligned_hconcat_unsafe(
+    spmd_engine_factory,
+) -> None:
+    engine = spmd_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=2,
+            dynamic_planning=None,
+            fallback_mode="raise",
+            raise_on_fail=True,
+        )
+    )
+    df = pl.LazyFrame(
+        {
+            "a": [1, 2, 3, 1, 2, 3],
+            "b": [4, 5, 6, 4, 5, 6],
+            "c": [1, 2, 3, 4, 5, 6],
+        }
+    )
+    query = df.select(
+        pl.col("a").unique(),
+        pl.col("b").unique(),
+        pl.col("c").sum().alias("c_sum"),
+        pl.col("c").max().alias("c_max"),
+    )
+
+    ir = Translator(query._ldf.visit(), engine).translate_ir()
+    lowering = lower_ir_graph(
+        ir,
+        ConfigOptions.from_polars_engine(engine),
+        StatsCollector(),
+    )
+    hconcats = [
+        node for node in traversal([lowering.lowered]) if isinstance(node, HConcat)
+    ]
+
+    assert hconcats
+    assert not any(node.streaming_safe for node in hconcats)
+
+    metadata_collector = evaluate_logical_plan(
+        ir, ConfigOptions.from_polars_engine(engine), collect_metadata=True
+    )[1]
+    assert metadata_collector is not None
+    assert len(metadata_collector) == 1
+    partitioning = metadata_collector[0].partitioning
+    assert partitioning is None or (
+        partitioning.inter_rank is None and partitioning.local is None
+    )
+
+
 def test_select_with_cse_no_agg(df, engine):
     expr = pl.col("a") + pl.col("a")
     query = df.select(expr, (expr * 2).alias("b"), ((expr * 2) + 10).alias("c"))
@@ -168,7 +225,7 @@ def test_select_parquet_fast_count(tmp_path, df, engine):
 
 
 def test_select_literal(engine):
-    # See: https://github.com/rapidsai/cudf/issues/19147
+    # See: https://github.com/NVIDIA/cudf/issues/19147
     ldf = pl.LazyFrame({"a": list(range(10))})
     q = ldf.select(pl.lit(2).pow(pl.lit(-3, dtype=pl.Float32)))
     assert_gpu_result_equal(q, engine=engine)
@@ -193,13 +250,6 @@ def test_select_mean_with_decimals(engine):
     assert_gpu_result_equal(q, engine=engine)
 
 
-@pytest.mark.xfail(
-    condition=not POLARS_VERSION_LT_141,
-    reason=(
-        "len() row count lost in zero-column streaming chunks "
-        "(https://github.com/rapidsai/cudf/issues/21428)"
-    ),
-)
 def test_select_with_len(streaming_engine_factory):
     engine = streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=3, fallback_mode="warn"),

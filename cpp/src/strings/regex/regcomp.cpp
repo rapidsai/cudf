@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,9 +16,11 @@
 #include <clocale>
 #include <cwctype>
 #include <numeric>
+#include <ranges>
 #include <stack>
 #include <string>
 #include <tuple>
+#include <unordered_set>
 #include <vector>
 
 namespace cudf {
@@ -273,7 +275,8 @@ class regex_parser {
       ranges.push_back({'_', '_'});
     } else {
       ranges.back().last = 'A' - 1;
-      ranges.push_back({'Z' + 1, 'a' - 1});  // {'_'-1, '_' + 1}
+      ranges.push_back({'Z' + 1, '_' - 1});
+      ranges.push_back({'_' + 1, 'a' - 1});
       ranges.push_back({'z' + 1, MAX_REGEX_CHAR});
     }
   }
@@ -358,19 +361,22 @@ class regex_parser {
       if (!is_quoted && chr == '-' && !literals.empty()) {
         auto [q, n_chr] = next_char();
         if (n_chr == 0) { return 0; }  // malformed: '[x-'
-
-        if (!q && n_chr == ']') {  // handles: '[x-]'
+        if (!q && n_chr == ']') {      // handles: '[x-]'
           literals.push_back(chr);
-          literals.push_back(chr);  // add '-' as literal
+          literals.push_back(0);
           break;
         }
-        // normal case: '[a-z]'
-        // update end-range character
-        literals.back() = n_chr;
+        if (0 == literals.back()) {
+          literals.back() = n_chr;  // normal case: '[a-z]' update end-range character
+        } else {
+          literals.push_back(chr);  // adds '-'
+          literals.push_back(chr);
+          literals.push_back(n_chr);  // adds new character
+          literals.push_back(0);
+        }
       } else {
-        // add single literal
         literals.push_back(chr);
-        literals.push_back(chr);
+        literals.push_back(0);
       }
       std::tie(is_quoted, chr) = next_char();
     }
@@ -381,8 +387,9 @@ class regex_parser {
                    counter + (literals.size() / 2),
                    std::back_inserter(ranges),
                    [&literals, this](auto idx) {
-                     auto const lhs = literals[idx * 2];
-                     auto const rhs = literals[idx * 2 + 1];
+                     auto const lhs  = literals[idx * 2];
+                     auto const next = literals[idx * 2 + 1];
+                     auto const rhs  = next == 0 ? lhs : next;
                      CUDF_EXPECTS(lhs <= rhs,
                                   "invalid character range in class at " +
                                     std::to_string(std::distance(_pattern_begin, _expr_ptr)));
@@ -400,7 +407,7 @@ class regex_parser {
                      });
     }
     // sort the ranges to help with detecting overlapping entries
-    std::sort(ranges.begin(), ranges.end(), [](auto l, auto r) {
+    std::ranges::sort(ranges, [](auto l, auto r) {
       return l.first == r.first ? l.last < r.last : l.first < r.first;
     });
     // combine overlapping entries: [a-f][c-g] => [a-g]
@@ -414,9 +421,9 @@ class regex_parser {
       }
     }
     // remove any duplicates
-    auto const end = std::unique(
-      ranges.rbegin(), ranges.rend(), [](auto l, auto r) { return l.first == r.first; });
-    ranges.erase(ranges.begin(), ranges.begin() + std::distance(end, ranges.rend()));
+    auto const duplicates = std::ranges::unique(std::views::reverse(ranges),
+                                                [](auto l, auto r) { return l.first == r.first; });
+    ranges.erase(ranges.begin(), ranges.begin() + std::ranges::distance(duplicates));
 
     _cclass_id = _prog.add_class(reclass{builtins, std::move(ranges)});
     return type;
@@ -487,8 +494,8 @@ class regex_parser {
           } else {
             if (_id_cclass_s < 0) { _id_cclass_s = _prog.add_class(cclass_s); }
             _cclass_id = _id_cclass_s;
-            return NCCLASS;
           }
+          return NCCLASS;
         }
         case 'd': {
           if (is_ascii(_flags)) {
@@ -528,9 +535,8 @@ class regex_parser {
         }
         default: {
           // let valid escapable chars fall through as literal CHAR
-          if (chr &&
-              (std::find(escapable_chars.begin(), escapable_chars.end(), static_cast<char>(chr)) !=
-               escapable_chars.end())) {
+          if (chr && (std::ranges::find(escapable_chars, static_cast<char>(chr)) !=
+                      escapable_chars.end())) {
             break;
           }
           // anything else is a bad escape so throw an error
@@ -577,8 +583,7 @@ class regex_parser {
       }
     }
 
-    if (std::find(quantifiers.begin(), quantifiers.end(), static_cast<char>(chr)) ==
-        quantifiers.end()) {
+    if (std::ranges::find(quantifiers, static_cast<char>(chr)) == quantifiers.end()) {
       if (is_ignorecase(_flags)) {
         auto const swap_chr = swap_case(chr);
         _cclass_id =
@@ -609,7 +614,7 @@ class regex_parser {
       // look for matching LBRA
       auto nested_count = 1;
       auto lbra_itr =
-        std::find_if(_items.rbegin(), _items.rend(), [nested_count](auto const& item) mutable {
+        std::ranges::find_if(std::views::reverse(_items), [nested_count](auto const& item) mutable {
           auto const is_closing = (item.type == RBRA);
           auto const is_opening = (item.type == LBRA || item.type == LBRA_NC);
           nested_count += is_closing - is_opening;
@@ -626,9 +631,8 @@ class regex_parser {
       previous_type = (first_valid == lbra_itr) ? (--lbra_itr)->type : first_valid->type;
     }
 
-    if (std::find(valid_preceding_inst_types.begin(),
-                  valid_preceding_inst_types.end(),
-                  previous_type) == valid_preceding_inst_types.end()) {
+    if (std::ranges::find(valid_preceding_inst_types, previous_type) ==
+        valid_preceding_inst_types.end()) {
       CUDF_FAIL("invalid regex pattern: nothing to repeat at position " +
                 std::to_string(_expr_ptr - _pattern_begin - 1));
     }
@@ -991,8 +995,7 @@ class regex_compiler {
     if (token != RBRA) { push_operator(token, subid); }
 
     static std::vector<int> const tokens{STAR, STAR_LAZY, QUEST, QUEST_LAZY, PLUS, PLUS_LAZY, RBRA};
-    _last_was_and =
-      std::any_of(tokens.cbegin(), tokens.cend(), [token](auto t) { return t == token; });
+    _last_was_and = std::ranges::any_of(tokens, [token](auto t) { return t == token; });
   }
 
   void handle_operand(int token, int subid = 0, char32_t yy = 0, int class_id = 0)
@@ -1066,13 +1069,15 @@ reprog reprog::create_from(std::string_view pattern,
                            regex_flags const flags,
                            capture_groups const capture)
 {
-  reprog rtn;
+  reprog rtn(flags);
   auto pattern32 = string_to_char32_vector(pattern);
   regex_compiler const compiler(pattern32.data(), flags, capture, rtn);
-  // for debugging, it can be helpful to call rtn.print(flags) here to dump
+  // for debugging, it can be helpful to call rtn.print() here to dump
   // out the instructions that have been created from the given pattern
   return rtn;
 }
+
+reprog::reprog(regex_flags flags) : _flags{flags} {}
 
 void reprog::optimize() { collapse_nops(); }
 
@@ -1081,7 +1086,7 @@ void reprog::finalize() { build_start_ids(); }
 void reprog::collapse_nops()
 {
   // treat non-capturing LBRAs/RBRAs as NOP
-  std::transform(_insts.begin(), _insts.end(), _insts.begin(), [](auto inst) {
+  std::ranges::transform(_insts, _insts.begin(), [](auto inst) {
     if ((inst.type == LBRA || inst.type == RBRA) && (inst.u1.subid < 1)) { inst.type = NOP; }
     return inst;
   });
@@ -1095,7 +1100,7 @@ void reprog::collapse_nops()
   };
 
   // create new routes around NOP chains
-  std::transform(_insts.begin(), _insts.end(), _insts.begin(), [find_next_op](auto inst) {
+  std::ranges::transform(_insts, _insts.begin(), [find_next_op](auto inst) {
     if (inst.type != NOP) {
       inst.u2.next_id = find_next_op(inst.u2.next_id);
       if (inst.type == OR) { inst.u1.right_id = find_next_op(inst.u1.right_id); }
@@ -1115,11 +1120,11 @@ void reprog::collapse_nops()
     });
 
   // remove the NOP instructions
-  auto end = std::remove_if(_insts.begin(), _insts.end(), [](auto i) { return i.type == NOP; });
-  _insts.resize(std::distance(_insts.begin(), end));
+  auto const nops = std::ranges::remove_if(_insts, [](auto i) { return i.type == NOP; });
+  _insts.erase(nops.begin(), nops.end());
 
   // fix up the ids on the remaining instructions using the id_map
-  std::transform(_insts.begin(), _insts.end(), _insts.begin(), [id_map](auto inst) {
+  std::ranges::transform(_insts, _insts.begin(), [id_map](auto inst) {
     inst.u2.next_id = id_map[inst.u2.next_id];
     if (inst.type == OR) { inst.u1.right_id = id_map[inst.u1.right_id]; }
     return inst;
@@ -1155,7 +1160,7 @@ void reprog::build_start_ids()
  * @brief Check a specific instruction for errors.
  *
  * Currently this is checking for an infinite-loop condition as documented in this issue:
- * https://github.com/rapidsai/cudf/issues/10006
+ * https://github.com/NVIDIA/cudf/issues/10006
  *
  * Example instructions list created from pattern `(A?)+`
  * ```
@@ -1213,10 +1218,82 @@ void reprog::check_for_errors()
   }
 }
 
-#ifndef NDEBUG
-void reprog::print(regex_flags const flags)
+std::pair<literal_fast_path, std::string> reprog::check_for_literal_fast_path() const
 {
-  printf("Flags = 0x%08x\n", static_cast<uint32_t>(flags));
+  if (_flags != regex_flags::DEFAULT) { return {literal_fast_path::NONE, {}}; }
+  if (_startinst_ids.size() > 2) { return {literal_fast_path::NONE, {}}; }
+  auto const count = static_cast<size_type>(_insts.size());
+  if (count < 2) { return {literal_fast_path::NONE, {}}; }
+
+  auto inst = _insts[_startinst_id];
+
+  // Optional BOL at the start of the pattern
+  bool const has_bol = (inst.type == BOL);
+  if (has_bol) {
+    auto const id = inst.u2.next_id;
+    if (id < 0 || id >= count) { return {literal_fast_path::NONE, {}}; }
+    inst = _insts[id];
+  }
+
+  // Accumulate sequential CHAR bytes
+  std::string literal;
+  while (inst.type == CHAR && inst.u1.c != 0) {
+    std::array<char, 5> utf8                     = {};
+    utf8[from_char_utf8(inst.u1.c, utf8.data())] = 0;
+    literal += utf8.data();
+    auto const id = inst.u2.next_id;
+    if (id < 0 || id >= count) { return {literal_fast_path::NONE, {}}; }
+    inst = _insts[id];
+  }
+  if (literal.empty()) { return {literal_fast_path::NONE, {}}; }
+
+  // If we are at END then we are literal-only or starts-with.
+  if (inst.type == END) {
+    return {has_bol ? literal_fast_path::STARTS_WITH : literal_fast_path::LITERAL_ONLY,
+            std::move(literal)};
+  }
+  // Final check for ends-with: EOL followed by END
+  if (!has_bol && inst.type == EOL && inst.u1.c == 'Z') {
+    auto const id = inst.u2.next_id;
+    if (id >= 0 && id < count && _insts[id].type == END) {
+      return {literal_fast_path::ENDS_WITH, std::move(literal)};
+    }
+  }
+  return {literal_fast_path::NONE, {}};
+}
+
+match_flags reprog::compute_match_flags() const
+{
+  static std::unordered_set<int> const non_consuming_inst_types{
+    OR, BOL, EOL, BOW, NBOW, LBRA, RBRA};
+
+  auto check_paths = [this](auto&& self, int id, std::unordered_set<int>& visited) -> bool {
+    if (id < 0 || !std::get<1>(visited.insert(id))) { return false; }
+    auto const& inst = _insts[id];
+    if (inst.type == END) { return false; }
+    if (non_consuming_inst_types.find(inst.type) == non_consuming_inst_types.end()) { return true; }
+    if (inst.type == OR) {
+      return self(self, inst.u2.left_id, visited) && self(self, inst.u1.right_id, visited);
+    }
+    return self(self, inst.u2.next_id, visited);
+  };
+
+  bool found_non_consuming_path = false;
+  for (auto start : _startinst_ids) {
+    if (start == -1) break;
+    std::unordered_set<int> visited;
+    if (!check_paths(check_paths, start, visited)) {
+      found_non_consuming_path = true;
+      break;
+    }
+  }
+  return found_non_consuming_path ? match_flags::EMPTY_MATCH : match_flags::NONE;
+}
+
+#ifndef NDEBUG
+void reprog::print() const
+{
+  printf("Flags = 0x%08x\n", static_cast<uint32_t>(_flags));
   printf("Instructions:\n");
   for (std::size_t i = 0; i < _insts.size(); i++) {
     reinst const& inst = _insts[i];
@@ -1311,6 +1388,14 @@ void reprog::print(regex_flags const flags)
     printf("\n");
   }
   if (_num_capturing_groups) { printf("Number of capturing groups: %d\n", _num_capturing_groups); }
+
+  auto [fp, literal] = check_for_literal_fast_path();
+  switch (fp) {
+    case literal_fast_path::LITERAL_ONLY: printf("literal-only: %s\n", literal.c_str()); break;
+    case literal_fast_path::STARTS_WITH: printf("starts-with: %s\n", literal.c_str()); break;
+    case literal_fast_path::ENDS_WITH: printf("ends-with: %s\n", literal.c_str()); break;
+    default: break;
+  }
 }
 #endif
 

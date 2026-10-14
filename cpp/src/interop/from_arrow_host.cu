@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,6 +12,7 @@
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
@@ -26,9 +27,12 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_device.hpp>
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <cuda/buffer>
+#include <cuda/stream>
+#include <thrust/sequence.h>
 
 #include <nanoarrow/nanoarrow.h>
 #include <nanoarrow/nanoarrow.hpp>
@@ -90,14 +94,20 @@ CUDF_KERNEL void copy_shifted_bitmask(bitmask_type* __restrict__ destination,
 }
 
 // copies the bitmask to device and automatically applies the offset
-std::pair<std::unique_ptr<rmm::device_buffer>, size_type> get_mask_buffer(
-  ArrowArray const* input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+std::pair<std::unique_ptr<cuda::device_buffer<std::byte>>, size_type> get_mask_buffer(
+  ArrowArray const* input, cuda::stream_ref stream, rmm::device_async_resource_ref mr)
 {
-  if (input->length == 0) { return {std::make_unique<rmm::device_buffer>(0, stream, mr), 0}; }
+  if (input->length == 0) {
+    return {std::make_unique<cuda::device_buffer<std::byte>>(
+              cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED, stream, mr)),
+            0};
+  }
 
   auto bitmap = static_cast<uint8_t const*>(input->buffers[validity_buffer_idx]);
   if (bitmap == nullptr || input->null_count == 0) {
-    return {std::make_unique<rmm::device_buffer>(0, stream, mr), 0};
+    return {std::make_unique<cuda::device_buffer<std::byte>>(
+              cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED, stream, mr)),
+            0};
   }
 
   constexpr auto bits_in_byte = static_cast<int64_t>(size_in_bits<uint8_t>());
@@ -109,33 +119,37 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> get_mask_buffer(
   auto const bit_index    = input->offset % bits_in_byte;
   auto const copy_size    = cudf::util::div_rounding_up_safe(num_rows + bit_index, bits_in_byte);
 
-  auto mask = rmm::device_uvector<bitmask_type>(padded_words, stream, mr);
+  auto mask = cuda::device_buffer<bitmask_type>(
+    stream, cudf::get_current_device_resource_ref(), padded_words, cuda::no_init);
   CUDF_CUDA_TRY(cudf::detail::memcpy_async(mask.data(), bitmap + offset_index, copy_size, stream));
 
   if (mask_words > 0 && bit_index > 0) {
-    auto dest_mask = rmm::device_uvector<bitmask_type>(padded_words, stream, mr);
+    auto dest_mask = cuda::device_buffer<bitmask_type>(stream, mr, padded_words, cuda::no_init);
     cudf::detail::grid_1d config(mask_words, 256);
-    copy_shifted_bitmask<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
+    copy_shifted_bitmask<<<config.num_blocks, config.num_threads_per_block, 0, stream.get()>>>(
       dest_mask.data(), mask.data(), bit_index, bit_index + num_rows, mask_words);
-    CUDF_CHECK_CUDA(stream.value());
+    CUDF_CHECK_CUDA(stream.get());
     mask = std::move(dest_mask);
   }
 
   auto const null_count =
     mask_words > 0 ? cudf::detail::count_unset_bits(mask.data(), 0, num_rows, stream) : 0;
 
-  return {std::make_unique<rmm::device_buffer>(std::move(mask.release())), null_count};
+  auto const mask_bytes = reinterpret_cast<uint8_t const*>(mask.data());
+  return {std::make_unique<cuda::device_buffer<std::byte>>(cudf::detail::copy_bitmask(
+            reinterpret_cast<bitmask_type const*>(mask_bytes), 0, num_rows, stream, mr)),
+          null_count};
 }
 
 std::unique_ptr<column> get_column_copy(ArrowSchemaView const* schema,
                                         ArrowArray const* input,
                                         data_type type,
                                         bool skip_mask,
-                                        rmm::cuda_stream_view stream,
+                                        cuda::stream_ref stream,
                                         rmm::device_async_resource_ref mr);
 
 struct dispatch_copy_from_arrow_host {
-  rmm::cuda_stream_view stream;
+  cuda::stream_ref stream;
   rmm::device_async_resource_ref mr;
 
   template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>() && !is_fixed_point<T>())>
@@ -188,16 +202,18 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<bool>(ArrowSch
   auto const bit_index    = input->offset % bits_in_byte;
   auto const copy_size    = cudf::util::div_rounding_up_safe(num_rows + bit_index, bits_in_byte);
 
-  auto data = rmm::device_uvector<bitmask_type>(data_words, stream, mr);
+  auto data = cuda::device_buffer<bitmask_type>(
+    stream, cudf::get_current_device_resource_ref(), data_words, cuda::no_init);
   CUDF_CUDA_TRY(
     cudf::detail::memcpy_async(data.data(), data_buffer + offset_index, copy_size, stream));
 
   if (data_words > 0 && bit_index > 0) {
-    auto dest_data = rmm::device_uvector<bitmask_type>(data_words, stream, mr);
+    auto dest_data = cuda::device_buffer<bitmask_type>(
+      stream, cudf::get_current_device_resource_ref(), data_words, cuda::no_init);
     cudf::detail::grid_1d config(data_words, 256);
-    copy_shifted_bitmask<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
+    copy_shifted_bitmask<<<config.num_blocks, config.num_threads_per_block, 0, stream.get()>>>(
       dest_data.data(), data.data(), bit_index, bit_index + num_rows, data_words);
-    CUDF_CHECK_CUDA(stream.value());
+    CUDF_CHECK_CUDA(stream.get());
     data = std::move(dest_data);
   }
 
@@ -217,13 +233,15 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::string_v
 {
   CUDF_EXPECTS(
     input->length + 1 <= static_cast<std::int64_t>(std::numeric_limits<cudf::size_type>::max()),
-    "number of rows in Arrow column exceeds the column size limit",
+    "Number of rows exceeds cuDF's maximum supported row count (cudf::size_type).",
     std::overflow_error);
 
   if (input->length == 0) { return make_empty_column(type_id::STRING); }
-  auto [mask, null_count] = !skip_mask
-                              ? get_mask_buffer(input, stream, mr)
-                              : std::pair{std::make_unique<rmm::device_buffer>(0, stream, mr), 0};
+  auto [mask, null_count] =
+    !skip_mask ? get_mask_buffer(input, stream, mr)
+               : std::pair{std::make_unique<cuda::device_buffer<std::byte>>(
+                             cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED, stream, mr)),
+                           0};
   return string_column_from_arrow_host(schema, input, std::move(mask), null_count, stream, mr);
 }
 
@@ -278,36 +296,76 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::struct_v
 
   auto [out_mask, null_count] =
     !skip_mask ? get_mask_buffer(input, stream, mr)
-               : std::pair{std::make_unique<rmm::device_buffer>(0, stream, mr), 0};
+               : std::pair{std::make_unique<cuda::device_buffer<std::byte>>(
+                             cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED, stream, mr)),
+                           0};
 
   return make_structs_column(
     input->length, std::move(child_columns), null_count, std::move(*out_mask), stream, mr);
+}
+
+/**
+ * @brief Synthesize the offsets column and child bounds for a fixed-size-list array
+ *
+ * Mirrors the (offsets, child-offset, child-length) contract of `get_offsets_column`.
+ * Fixed-size-list arrays carry no offsets buffer, so `buffers[fixed_width_data_buffer_idx]`
+ * is never read here. The returned offsets are normalized to start at zero, matching
+ * `copy_offsets_column`; the absolute start of the child range is returned separately.
+ */
+std::tuple<std::unique_ptr<column>, int64_t, int64_t> get_fixed_size_list_offsets(
+  ArrowSchemaView const* schema,
+  ArrowArray const* input,
+  cuda::stream_ref stream,
+  rmm::device_async_resource_ref mr)
+{
+  auto const layout = get_fixed_size_list_layout(schema, input);
+  CUDF_EXPECTS(input->children[0]->length >= layout.child_end,
+               "fixed-size-list child is shorter than its parent layout requires",
+               std::invalid_argument);
+
+  return std::tuple{make_fixed_size_list_offsets(layout.num_rows + 1, layout.width, stream, mr),
+                    layout.child_offset,
+                    layout.child_length};
 }
 
 template <>
 std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::list_view>(
   ArrowSchemaView const* schema, ArrowArray const* input, data_type type, bool skip_mask)
 {
-  CUDF_EXPECTS(
-    input->length + 1 <= static_cast<std::int64_t>(std::numeric_limits<cudf::size_type>::max()),
-    "number of rows in Arrow column exceeds the column size limit",
-    std::overflow_error);
+  CUDF_EXPECTS(input->length >= 0, "Number of rows must be non-negative.", std::invalid_argument);
+  constexpr auto max_row_count = static_cast<int64_t>(std::numeric_limits<size_type>::max()) - 1;
+  CUDF_EXPECTS(input->length <= max_row_count,
+               "Number of rows exceeds cuDF's maximum supported row count (cudf::size_type).",
+               std::overflow_error);
 
-  auto [offsets_column, offset, length] = get_offsets_column(schema, input, stream, mr);
+  auto const fixed_size                 = is_fixed_size_list(schema);
+  auto [offsets_column, offset, length] = fixed_size
+                                            ? get_fixed_size_list_offsets(schema, input, stream, mr)
+                                            : get_offsets_column(schema, input, stream, mr);
 
   ArrowSchemaView view;
   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, schema->schema->children[0], nullptr));
   auto child_type = arrow_to_cudf_type(&view);
 
   ArrowArray child_array(*input->children[0]);
+  if (fixed_size) {
+    CUDF_EXPECTS(child_array.offset >= 0,
+                 "fixed-size-list child offset must be non-negative",
+                 std::invalid_argument);
+    CUDF_EXPECTS(offset <= std::numeric_limits<int64_t>::max() - child_array.offset,
+                 "fixed-size-list child offset overflows Arrow's int64 representation",
+                 std::overflow_error);
+  }
   child_array.offset += offset;
-  child_array.length = std::min(length, child_array.length);
+  child_array.length = fixed_size ? length : std::min(length, child_array.length);
 
   auto child_column = get_column_copy(&view, &child_array, child_type, skip_mask, stream, mr);
 
   auto [out_mask, null_count] =
     !skip_mask ? get_mask_buffer(input, stream, mr)
-               : std::pair{std::make_unique<rmm::device_buffer>(0, stream, mr), 0};
+               : std::pair{std::make_unique<cuda::device_buffer<std::byte>>(
+                             cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED, stream, mr)),
+                           0};
 
   return make_lists_column(static_cast<size_type>(input->length),
                            std::move(offsets_column),
@@ -336,22 +394,30 @@ std::unique_ptr<column> get_column_copy(ArrowSchemaView const* schema,
                                         ArrowArray const* input,
                                         data_type type,
                                         bool skip_mask,
-                                        rmm::cuda_stream_view stream,
+                                        cuda::stream_ref stream,
                                         rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(
     input->length <= static_cast<std::int64_t>(std::numeric_limits<cudf::size_type>::max()),
-    "number of rows in Arrow column exceeds the column size limit",
+    "Number of rows exceeds cuDF's maximum supported row count (cudf::size_type).",
     std::overflow_error);
 
-  return type.id() != type_id::EMPTY
-           ? std::move(type_dispatcher(
-               type, dispatch_copy_from_arrow_host{stream, mr}, schema, input, type, skip_mask))
-           : std::make_unique<column>(data_type(type_id::EMPTY),
-                                      input->length,
-                                      rmm::device_buffer{},
-                                      rmm::device_buffer{},
-                                      input->length);
+  if (type.id() == type_id::EMPTY) {
+    return std::make_unique<column>(data_type(type_id::EMPTY),
+                                    input->length,
+                                    rmm::device_buffer{},
+                                    cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED),
+                                    input->length);
+  }
+
+  auto result = type_dispatcher(
+    type, dispatch_copy_from_arrow_host{stream, mr}, schema, input, type, skip_mask);
+  if (!result->has_nulls() && !result->nullable() &&           // no nulls, not nullable
+      ((schema->schema->flags & ARROW_FLAG_NULLABLE) != 0)) {  // but arrow wants nullable
+    result->set_null_mask(
+      cudf::detail::create_null_mask(result->size(), cudf::mask_state::ALL_VALID, stream, mr), 0);
+  }
+  return result;
 }
 
 /**
@@ -361,7 +427,7 @@ template <typename OffsetType>
 std::tuple<std::unique_ptr<column>, int64_t, int64_t> copy_offsets_column(
   ArrowSchemaView const* schema,
   ArrowArray const* offsets,
-  rmm::cuda_stream_view stream,
+  cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
 {
   auto offsets_buffer =
@@ -386,14 +452,32 @@ std::tuple<std::unique_ptr<column>, int64_t, int64_t> copy_offsets_column(
 
 }  // namespace
 
+std::unique_ptr<column> make_fixed_size_list_offsets(size_type num_offsets,
+                                                     int32_t width,
+                                                     cuda::stream_ref stream,
+                                                     rmm::device_async_resource_ref mr)
+{
+  auto offsets = make_numeric_column(
+    data_type{type_id::INT32}, num_offsets, mask_state::UNALLOCATED, stream, mr);
+  auto d_offsets = offsets->mutable_view().begin<int32_t>();
+  thrust::sequence(
+    rmm::exec_policy_nosync(stream, mr), d_offsets, d_offsets + num_offsets, int32_t{0}, width);
+  return offsets;
+}
+
 /**
  * @brief Utility to copy the offsets from the given input (strings or list) to a
  * cudf column
+ *
+ * @note This requires `input` to carry an offsets buffer at
+ * `fixed_width_data_buffer_idx`, which it reads before inspecting `schema->type`.
+ * Fixed-size-list arrays have no offsets buffer (`n_buffers == 1`), so they must be
+ * routed to `get_fixed_size_list_offsets` instead.
  */
 std::tuple<std::unique_ptr<column>, int64_t, int64_t> get_offsets_column(
   ArrowSchemaView const* schema,
   ArrowArray const* input,
-  rmm::cuda_stream_view stream,
+  cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
 {
   void const* offsets_buffer     = input->buffers[fixed_width_data_buffer_idx];
@@ -437,12 +521,13 @@ std::tuple<std::unique_ptr<column>, int64_t, int64_t> get_offsets_column(
   offsets_array.offset                         = 0;  // already accounted for by the above transform
   auto result = dispatch_copy_from_arrow_host{stream, mr}.template operator()<int32_t>(
     schema, &offsets_array, data_type(type_id::INT32), true);
+  cudf::detail::sync_stream(stream);
   return std::tuple{std::move(result), offset, length};
 }
 
 std::unique_ptr<table> from_arrow_host(ArrowSchema const* schema,
                                        ArrowDeviceArray const* input,
-                                       rmm::cuda_stream_view stream,
+                                       cuda::stream_ref stream,
                                        rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(schema != nullptr && input != nullptr,
@@ -473,12 +558,21 @@ std::unique_ptr<table> from_arrow_host(ArrowSchema const* schema,
                    return get_column_copy(&view, child, type, false, stream, mr);
                  });
 
+  // A zero-column struct still has a length, preserve it as the table row count.
+  if (columns.empty()) {
+    CUDF_EXPECTS(
+      input->array.length <= static_cast<std::int64_t>(std::numeric_limits<cudf::size_type>::max()),
+      "Number of rows exceeds cuDF's maximum supported row count (cudf::size_type).",
+      std::overflow_error);
+    return std::make_unique<table>(std::move(columns), static_cast<size_type>(input->array.length));
+  }
+  cudf::detail::sync_stream(stream);
   return std::make_unique<table>(std::move(columns));
 }
 
 std::unique_ptr<column> from_arrow_host_column(ArrowSchema const* schema,
                                                ArrowDeviceArray const* input,
-                                               rmm::cuda_stream_view stream,
+                                               cuda::stream_ref stream,
                                                rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(schema != nullptr && input != nullptr,
@@ -491,15 +585,17 @@ std::unique_ptr<column> from_arrow_host_column(ArrowSchema const* schema,
   ArrowSchemaView view;
   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, schema, nullptr));
 
-  auto type = arrow_to_cudf_type(&view);
-  return get_column_copy(&view, &input->array, type, false, stream, mr);
+  auto type   = arrow_to_cudf_type(&view);
+  auto result = get_column_copy(&view, &input->array, type, false, stream, mr);
+  cudf::detail::sync_stream(stream);
+  return result;
 }
 
 std::unique_ptr<column> get_column_from_host_copy(ArrowSchemaView const* schema,
                                                   ArrowArray const* input,
                                                   data_type type,
                                                   bool skip_mask,
-                                                  rmm::cuda_stream_view stream,
+                                                  cuda::stream_ref stream,
                                                   rmm::device_async_resource_ref mr)
 {
   return get_column_copy(schema, input, type, skip_mask, stream, mr);
@@ -509,7 +605,7 @@ std::unique_ptr<column> get_column_from_host_copy(ArrowSchemaView const* schema,
 
 std::unique_ptr<table> from_arrow_host(ArrowSchema const* schema,
                                        ArrowDeviceArray const* input,
-                                       rmm::cuda_stream_view stream,
+                                       cuda::stream_ref stream,
                                        rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -519,7 +615,7 @@ std::unique_ptr<table> from_arrow_host(ArrowSchema const* schema,
 
 std::unique_ptr<column> from_arrow_host_column(ArrowSchema const* schema,
                                                ArrowDeviceArray const* input,
-                                               rmm::cuda_stream_view stream,
+                                               cuda::stream_ref stream,
                                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -529,7 +625,7 @@ std::unique_ptr<column> from_arrow_host_column(ArrowSchema const* schema,
 
 std::unique_ptr<table> from_arrow(ArrowSchema const* schema,
                                   ArrowArray const* input,
-                                  rmm::cuda_stream_view stream,
+                                  cuda::stream_ref stream,
                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -544,7 +640,7 @@ std::unique_ptr<table> from_arrow(ArrowSchema const* schema,
 
 std::unique_ptr<column> from_arrow_column(ArrowSchema const* schema,
                                           ArrowArray const* input,
-                                          rmm::cuda_stream_view stream,
+                                          cuda::stream_ref stream,
                                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();

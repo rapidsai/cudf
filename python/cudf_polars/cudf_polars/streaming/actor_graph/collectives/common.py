@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Common utilities for collective operations."""
 
@@ -10,9 +10,17 @@ from typing import TYPE_CHECKING, Literal
 
 from rapidsmpf.shuffler import Shuffler
 
-from cudf_polars.dsl.ir import Distinct, GroupBy, Sort
+from cudf_polars.dsl.ir import (
+    CallbackSink,
+    Distinct,
+    GroupBy,
+    Rolling,
+    Sort,
+)
 from cudf_polars.dsl.traversal import traversal
-from cudf_polars.streaming.io import StreamingSink
+from cudf_polars.streaming.filter_hint import PushdownFilterHint
+from cudf_polars.streaming.hint_sorted import HintSorted
+from cudf_polars.streaming.io import StreamingScan, StreamingSink
 from cudf_polars.streaming.join import Join
 from cudf_polars.streaming.over import Over
 from cudf_polars.streaming.repartition import Repartition
@@ -91,22 +99,31 @@ class ReserveOpIDs:
 
         # Find all collective IR nodes.
         collective_types: tuple[type, ...] = (
+            CallbackSink,
             Shuffle,
             Join,
+            HintSorted,
             Repartition,
             StreamingSink,
+            StreamingScan,
             Sort,
+            Rolling,
         )
         if self.dynamic_planning_enabled:
             collective_types = (
+                CallbackSink,
                 Shuffle,
                 Join,
+                HintSorted,
                 Repartition,
                 StreamingSink,
+                StreamingScan,
                 Sort,
+                Rolling,
                 GroupBy,
                 Distinct,
                 Over,
+                PushdownFilterHint,
             )
 
         self.collective_nodes: list[IR] = [
@@ -138,10 +155,8 @@ class ReserveOpIDs:
                         _get_new_collective_id_unsafe(),
                     ]
                 elif isinstance(node, Join) and self.dynamic_planning_enabled:
-                    # Join needs 4 IDs: size allgather, left shuffle/bcast,
-                    # right shuffle/bcast, bloom filter
+                    # Join needs 3 IDs: allgather, left shuffle, right shuffle.
                     self.collective_id_map[node] = [
-                        _get_new_collective_id_unsafe(),
                         _get_new_collective_id_unsafe(),
                         _get_new_collective_id_unsafe(),
                         _get_new_collective_id_unsafe(),

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from pylibcudf.libcudf.types cimport bitmask_type, data_type
@@ -11,10 +11,6 @@ from .gpumemoryview cimport gpumemoryview
 from .table cimport Table
 from .types cimport DataType
 
-
-cpdef tuple[gpumemoryview, int] nans_to_nulls(
-    Column input, object stream = *, DeviceMemoryResource mr = *
-)
 
 cpdef Column column_nans_to_nulls(
     Column input, object stream = *, DeviceMemoryResource mr = *
@@ -41,7 +37,7 @@ cpdef Column mask_to_bools(
 )
 
 cpdef Column transform(
-    list[Column] inputs,
+    inputs,
     str transform_udf,
     DataType output_type,
     bool is_ptx,

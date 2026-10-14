@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Shuffle Logic."""
 
@@ -51,11 +51,7 @@ class Shuffle(IR):
         self._non_child_args = (schema, keys)
         self.children = (df,)
 
-    # the type-ignore is for
-    # Argument 1 to "log_do_evaluate" has incompatible type "Callable[[type[Shuffle], <snip>]"
-    #    expected Callable[[type[IR], <snip>]
-    # But Shuffle is a subclass of IR, so this is fine.
-    @classmethod  # type: ignore[arg-type]
+    @classmethod
     @log_do_evaluate
     def do_evaluate(
         cls,

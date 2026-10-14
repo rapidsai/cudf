@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -123,6 +123,7 @@ def read_json(
     prune_columns: bool = False,
     on_bad_lines: Literal["error", "recover"] = "error",
     *args,
+    filesystem=None,
     **kwargs,
 ) -> DataFrame:
     """{docstring}"""
@@ -155,6 +156,7 @@ def read_json(
             path_or_buf,
             iotypes=(BytesIO, StringIO),
             storage_options=storage_options,
+            filesystem=filesystem,
             warn_meta=("json", "read_json"),
             expand_dir_pattern="*.json",
         )
@@ -244,6 +246,7 @@ def read_json(
             path_or_data=path_or_buf,
             iotypes=(BytesIO, StringIO),
             storage_options=storage_options,
+            filesystem=filesystem,
         )
         filepath_or_buffer = ioutils._select_single_source(
             filepath_or_buffer, "read_json (via pandas)"
@@ -329,6 +332,7 @@ def _plc_write_json(
     include_nulls: bool = True,
     lines: bool = False,
     rows_per_chunk: int = 1024 * 64,  # 64K rows
+    force_ascii: bool = True,
 ) -> None:
     with access_columns(*table._columns, mode="read", scope="internal"):
         try:
@@ -346,6 +350,7 @@ def _plc_write_json(
                 .include_nulls(include_nulls)
                 .lines(lines)
                 .compression(_to_plc_compression(compression))
+                .utf8_escaped(force_ascii)
                 .build()
             )
             if rows_per_chunk != np.iinfo(np.int32).max:
@@ -367,6 +372,7 @@ def to_json(
     orient=None,
     storage_options=None,
     *args,
+    filesystem=None,
     **kwargs,
 ):
     """{docstring}"""
@@ -389,6 +395,7 @@ def to_json(
                 path_or_data=path_or_buf,
                 mode="w",
                 storage_options=storage_options,
+                filesystem=filesystem,
             )
             return_as_string = False
 
@@ -403,7 +410,7 @@ def to_json(
                 _plc_write_json(
                     cudf_val,
                     colnames,
-                    path_or_buf,
+                    file_obj,
                     compression,
                     *args,
                     **kwargs,
@@ -417,6 +424,11 @@ def to_json(
             path_or_buf.seek(0)
             return path_or_buf.read()
     elif engine == "pandas":
+        if filesystem is not None:
+            raise NotImplementedError(
+                "filesystem is not supported with engine='pandas'. "
+                "Use storage_options instead, or engine='cudf'."
+            )
         warnings.warn("Using CPU via Pandas to write JSON dataset")
         if isinstance(cudf_val, DataFrame):
             pd_data = {

@@ -1,16 +1,17 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """RapidsMPF streaming engine running on a Ray cluster."""
 
 from __future__ import annotations
 
 import contextlib
-import dataclasses
 import os
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
 import ray
+import ray.exceptions
 import ucxx._lib.libucxx as ucx_api
 
 import polars as pl
@@ -20,37 +21,111 @@ from rapidsmpf import bootstrap
 from rapidsmpf.communicator.ucxx import barrier, get_root_ucxx_address, new_communicator
 from rapidsmpf.config import Options
 from rapidsmpf.progress_thread import ProgressThread
-from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
 
+import cudf_polars.quent
+import cudf_polars.quent._runtime
+from cudf_polars.engine import persisted_result, rank_local_store
 from cudf_polars.engine.core import (
     ClusterInfo,
     StreamingEngine,
     check_reserved_keys,
+    drop_if_replicated,
     evaluate_on_rank,
+    make_kvikio_monitor,
+    reset_kvikio_monitor,
+    reset_statistics_from_options,
     resolve_rapidsmpf_options,
+    take_io_summary,
 )
 from cudf_polars.engine.hardware_binding import (
     HardwareBindingPolicy,
     bind_to_gpu,
 )
-from cudf_polars.utils.config import MemoryResourceConfig, RayContext
+from cudf_polars.engine.persisted_result import (
+    PersistedBackend,
+    execute_persisted_query,
+)
+from cudf_polars.quent._runtime import (
+    QuentControllerRuntime,
+    QuentWorkerRuntime,
+)
+from cudf_polars.unstable import unstable
+from cudf_polars.utils.cleanup import run_cleanup_steps
+from cudf_polars.utils.config import (
+    MemoryResourceConfig,
+    RayContext,
+    configure_kvikio,
+    resolve_kvikio_executor_options,
+    resolve_quent_context,
+)
 
 if TYPE_CHECKING:
-    import uuid
     from collections.abc import Callable
 
+    import cudf_polars_quent as quent_bindings
+    import kvikio
+    from ray import ObjectRef
     from ray.actor import ActorHandle
 
-    from cudf_streaming.streaming.channel_metadata import ChannelMetadata
+    from cudf_streaming.channel_metadata import ChannelMetadata
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.core import T
     from cudf_polars.engine.options import StreamingOptions
+    from cudf_polars.engine.persisted_result import PersistedQueryResult
+    from cudf_polars.quent._context import QuentQueryWorkerState
     from cudf_polars.streaming.parallel import ConfigOptions
     from cudf_polars.utils.config import StreamingExecutor
+
+
+class RayPersistedBackend(PersistedBackend):
+    """Persisted-result backend for Ray."""
+
+    def __init__(self, uid: str, rank_actors: list[ActorHandle[RankActor]]) -> None:
+        self._uid = uid
+        self._rank_actors = rank_actors
+
+    def execute_persisted(
+        self,
+        ir: IR,
+        config_options: ConfigOptions[StreamingExecutor],
+        query_id: uuid.UUID,
+    ) -> list[int]:
+        """Run the query on every actor (see :class:`PersistedBackend`)."""
+        actor_config_options = config_options.drop_unserializable()
+        ir_ref = ray.put(ir)
+        try:
+            return ray.get(
+                [
+                    actor.execute_persisted.remote(
+                        self._uid, ir_ref, actor_config_options, query_id=query_id
+                    )
+                    for actor in self._rank_actors
+                ]
+            )
+        except Exception:
+            # An actor may have failed after others already stored their
+            # partition. Drop the query on every actor (idempotent) to avoid
+            # orphaning GPU partitions, then re-raise. drop_persisted suppresses
+            # its own failures, so no outer guard is needed here.
+            self.drop_persisted(query_id)
+            raise
+
+    def drop_persisted(self, query_id: uuid.UUID) -> None:
+        """Drop the query's partitions on every actor (see :class:`PersistedBackend`)."""
+        # Suppress failures so cleanup (GC finalizer / explicit release) never
+        # raises when the actors are already gone (engine shutdown or actor death).
+        with contextlib.suppress(Exception):
+            ray.get(
+                [
+                    actor.drop_persisted.remote(self._uid, query_id)
+                    for actor in self._rank_actors
+                ]
+            )
 
 
 def evaluate_pipeline_ray_mode(
@@ -97,37 +172,43 @@ def evaluate_pipeline_ray_mode(
     if config_options.executor.ray_context is None:
         raise RuntimeError("ray_context must be set when cluster='ray'")
     rank_actors = config_options.executor.ray_context.rank_actors
-
-    # Strip ray_context before pickling config_options for remote calls:
-    # actors don't need the full actor list, and sending actor handles to each
-    # actor is wasteful.
-    actor_config_options = dataclasses.replace(
-        config_options,
-        executor=dataclasses.replace(config_options.executor, ray_context=None),
-    )
+    actor_config_options = config_options.drop_unserializable()
+    quent_context = config_options.executor.quent_context
+    quent_runtime = config_options.executor.ray_context.quent_controller_runtime
+    if quent_context is not None:
+        assert quent_runtime is not None
+        query_scope: contextlib.AbstractContextManager = quent_runtime.query(
+            query_id, query_config=quent_context.query
+        )
+    else:
+        query_scope = contextlib.nullcontext()
 
     # Serialize the IR into the Ray object store so actors fetch by reference
     # instead of receiving N copies.
     ir_ref = ray.put(ir)
-    # ray.get() returns results in the same order as the input list of object refs,
-    # guaranteeing that result[i] corresponds to rank_actors[i] (rank order).
-    result = ray.get(
-        [
-            rank.evaluate_polars_ir.remote(
-                ir_ref,
-                actor_config_options,
-                collect_metadata=collect_metadata,
-                query_id=query_id,
-            )
-            for rank in rank_actors
-        ]
-    )
-    dfs: list[pl.DataFrame] = []
+    # `result` is in actor order, which is NOT rank order, so each actor
+    # reports its rank and the partitions are sorted before concatenation.
+    with query_scope:
+        result: list[tuple[int, pl.DataFrame, list[ChannelMetadata] | None]] = ray.get(
+            [
+                rank.evaluate_polars_ir.remote(
+                    ir_ref,
+                    actor_config_options,
+                    collect_metadata=collect_metadata,
+                    quent_context=config_options.executor.quent_context,
+                    query_id=query_id,
+                )
+                for rank in rank_actors
+            ]
+        )
+    ranked: list[tuple[int, pl.DataFrame]] = []
     metadata_collector: list[ChannelMetadata] = []
-    for df, md in result:
-        dfs.append(df)
+    for rank, df, md in result:
+        ranked.append((rank, df))
         if md is not None:
             metadata_collector.extend(md)
+    ranked.sort(key=lambda pair: pair[0])
+    dfs = [df for _, df in ranked]
 
     return pl.concat(dfs), metadata_collector or None
 
@@ -175,19 +256,44 @@ class RankActor:
         nranks: int,
         rapidsmpf_options_as_bytes: bytes,
         num_py_executors: int,
+        kvikio_nthreads: int | None,
+        kvikio_statistics: bool,
+        kvikio_remote_io_backend: kvikio.RemoteIOBackend,
+        kvikio_task_size: int,
+        kvikio_bounce_buffer_bytes: int,
+        kvikio_reactor_count: int,
+        kvikio_reactor_dispatch: kvikio.RemoteReactorDispatch,
+        kvikio_request_ceiling: int,
         hardware_binding: HardwareBindingPolicy,
         memory_resource_config: MemoryResourceConfig | None,
+        worker_id: uuid.UUID,
+        engine_id: uuid.UUID,
+        quent_enabled: bool,
     ) -> None:
         bind_to_gpu(hardware_binding)
+        configure_kvikio(
+            kvikio_nthreads,
+            remote_io_backend=kvikio_remote_io_backend,
+            task_size=kvikio_task_size,
+            bounce_buffer_bytes=kvikio_bounce_buffer_bytes,
+            reactor_count=kvikio_reactor_count,
+            reactor_dispatch=kvikio_reactor_dispatch,
+            request_ceiling=kvikio_request_ceiling,
+        )
         memory_resource_config = (
             memory_resource_config or MemoryResourceConfig.default()
         )
-        base_mr = memory_resource_config.create_memory_resource()
-        self._mr = RmmResourceAdaptor(base_mr)
+        self._base_mr: rmm.mr.DeviceMemoryResource | None = (
+            memory_resource_config.create_memory_resource()
+        )
+        self._mr: RmmResourceAdaptor | None = (
+            None  # set after `Context` is built (below).
+        )
         self._rapidsmpf_options: Options = Options.deserialize(
             rapidsmpf_options_as_bytes
         )
         self._rapidsmpf_statistics = Statistics.from_options(self._rapidsmpf_options)
+        self._kvikio_monitor = make_kvikio_monitor(enabled=kvikio_statistics)
         self._nranks: int = nranks
         self._py_executor = ThreadPoolExecutor(
             max_workers=num_py_executors,
@@ -195,6 +301,10 @@ class RankActor:
         )
         self._comm: Communicator | None = None
         self._ctx: Context | None = None
+        self._quent_enabled = quent_enabled
+        self._quent_worker_runtime: QuentWorkerRuntime | None = None
+        self._quent_engine_id = engine_id
+        self._worker_id = worker_id
 
     def setup_root(self) -> bytes:
         """
@@ -213,11 +323,16 @@ class RankActor:
             ucx_worker=None,
             root_ucxx_address=None,
             options=self._rapidsmpf_options,
-            progress_thread=ProgressThread(),
+            progress_thread=ProgressThread(self._rapidsmpf_statistics),
         )
         return get_root_ucxx_address(self._comm)
 
-    def setup_worker(self, root_ucxx_address_as_bytes: bytes) -> None:
+    def setup_worker(
+        self,
+        root_ucxx_address_as_bytes: bytes,
+        collector_address: str | None,
+        quent_context: cudf_polars.quent.QuentConfig | None,
+    ) -> None:
         """
         Complete communicator bootstrap and create the streaming context.
 
@@ -230,6 +345,10 @@ class RankActor:
         ----------
         root_ucxx_address_as_bytes
             Serialized UCXX root address returned by :meth:`setup_root`.
+        collector_address
+            Address of the Quent collector, or ``None`` when tracing is disabled.
+        quent_context
+            Serializable Quent configuration, or ``None`` when tracing is disabled.
         """
         if self._comm is None:
             root_ucxx_address = ucx_api.UCXAddress.create_from_buffer(
@@ -240,20 +359,56 @@ class RankActor:
                 ucx_worker=None,
                 root_ucxx_address=root_ucxx_address,
                 options=self._rapidsmpf_options,
-                progress_thread=ProgressThread(),
+                progress_thread=ProgressThread(self._rapidsmpf_statistics),
             )
         barrier(self._comm)
+        assert self._base_mr is not None
         self._ctx = Context.from_options(
             self._comm.logger,
-            self._mr,
+            self._base_mr,
             self._rapidsmpf_options,
             self._rapidsmpf_statistics,
         )
-        # Set the current RMM device resource so all temporary allocations
-        # in libcudf also use the same memory resource.
-        rmm.mr.set_current_device_resource(self._ctx.br().device_mr)
+        # Replace the plain base MR with the Context's internal tracking
+        # adaptor so subsequent uses of `self._mr` (including the next
+        # `Context.from_options` call in `reset`) share the same tracking
+        # adaptor; also install it as the current RMM device resource so
+        # libcudf temporary allocations use the same memory resource.
+        self._mr = self._ctx.br().device_mr_adaptor()
+        rmm.mr.set_current_device_resource(self._mr)
+        if collector_address is not None:
+            assert self._comm is not None
+            if not self._quent_enabled:
+                return
+            assert quent_context is not None
+            self._quent_worker_runtime = QuentWorkerRuntime.create(
+                quent_context,
+                collector_address,
+                worker_id=self._worker_id,
+                rank=self._comm.rank,
+                nranks=self._nranks,
+                instance_name=f"RankActor-{self._worker_id.hex[:8]}",
+            )
 
-    def reset(self, *, rapidsmpf_options_as_bytes: bytes) -> None:
+    def close_quent(self) -> None:
+        """Close this rank's collector client after its Worker exit."""
+        if self._quent_worker_runtime is None:
+            return
+        self._quent_worker_runtime.close()
+
+    def reset(
+        self,
+        *,
+        rapidsmpf_options_as_bytes: bytes,
+        kvikio_nthreads: int | None,
+        kvikio_statistics: bool,
+        kvikio_remote_io_backend: kvikio.RemoteIOBackend,
+        kvikio_task_size: int,
+        kvikio_bounce_buffer_bytes: int,
+        kvikio_reactor_count: int,
+        kvikio_reactor_dispatch: kvikio.RemoteReactorDispatch,
+        kvikio_request_ceiling: int,
+    ) -> None:
         """
         Rebuild the streaming Context with new options.
 
@@ -264,23 +419,63 @@ class RankActor:
         ----------
         rapidsmpf_options_as_bytes
             Serialized :class:`Options` to install.
+        kvikio_nthreads
+            Number of kvikio threads to configure on this worker process.
+            ``None`` defers to kvikio's own built-in default.
+        kvikio_statistics
+            Whether to collect KvikIO I/O statistics on this rank.
+        kvikio_remote_io_backend
+            The kvikio remote I/O backend to configure on this worker process.
+        kvikio_task_size
+            Size, in bytes, of the kvikio task size to configure on this worker process.
+        kvikio_bounce_buffer_bytes
+            Size, in bytes, of the kvikio bounce buffer to configure on this worker process.
+        kvikio_reactor_count
+            Number of ``MULTI_POLL`` reactor threads to configure on this worker process.
+        kvikio_reactor_dispatch
+            ``MULTI_POLL`` reactor dispatch policy to configure on this worker process.
+        kvikio_request_ceiling
+            ``MULTI_POLL`` concurrent-request ceiling to configure on this worker process.
         """
         if self._ctx is None:
             raise RuntimeError("reset() requires setup_worker() to have run")
+        configure_kvikio(
+            kvikio_nthreads,
+            remote_io_backend=kvikio_remote_io_backend,
+            task_size=kvikio_task_size,
+            bounce_buffer_bytes=kvikio_bounce_buffer_bytes,
+            reactor_count=kvikio_reactor_count,
+            reactor_dispatch=kvikio_reactor_dispatch,
+            request_ceiling=kvikio_request_ceiling,
+        )
         assert self._comm is not None
         # Collective: all ranks idle before any rank tears down its Context.
         if self._comm.nranks > 1:
             barrier(self._comm)
+        # Drop persisted partitions before tearing down the Context.
+        rank_local_store.close_all()
         self._ctx.shutdown()
         self._ctx = None
         self._rapidsmpf_options = Options.deserialize(rapidsmpf_options_as_bytes)
-        self._rapidsmpf_statistics = Statistics.from_options(self._rapidsmpf_options)
+        self._rapidsmpf_statistics = reset_statistics_from_options(
+            self._rapidsmpf_statistics, self._rapidsmpf_options
+        )
+        self._rapidsmpf_statistics.clear()
+        self._kvikio_monitor = reset_kvikio_monitor(
+            self._kvikio_monitor, enabled=kvikio_statistics
+        )
+        assert self._base_mr is not None
         self._ctx = Context.from_options(
             self._comm.logger,
-            self._mr,
+            self._base_mr,
             self._rapidsmpf_options,
             self._rapidsmpf_statistics,
         )
+        # Refresh `self._mr` and the current RMM device resource to point at
+        # the new Context's tracking adaptor; the previous adaptor was tied
+        # to the now-shutdown Context.
+        self._mr = self._ctx.br().device_mr_adaptor()
+        rmm.mr.set_current_device_resource(self._mr)
 
     def shutdown(self) -> None:
         """
@@ -288,32 +483,41 @@ class RankActor:
 
         Raises `ray.exceptions.RayActorError`.
         """
+        # First, so that a failure below cannot leave it counting.
+        if self._kvikio_monitor is not None:
+            self._kvikio_monitor.stop()
+            self._kvikio_monitor = None
         self._py_executor.shutdown(wait=True, cancel_futures=True)
         # Release resources in dependency order before exit_actor() terminates
         # the process. Shut down the Context explicitly on the same thread
         # that constructed it.
         try:
+            # Drop persisted partitions before tearing down the Context.
+            rank_local_store.close_all()
             if self._ctx is not None:
                 self._ctx.shutdown()
         finally:
             self._ctx = None
             self._comm = None
             self._mr = None
+            self._base_mr = None
             ray.actor.exit_actor()
 
-    def get_info(self) -> ClusterInfo:
+    def get_info(self) -> tuple[int, ClusterInfo]:
         """
-        Return diagnostic information about actor placement.
+        Return this actor's rank and diagnostic information about its placement.
 
         Returns
         -------
-        Diagnostic information about this actor's placement and state.
+        The communicator rank and diagnostic information about this actor's
+        placement and state.
         """
-        return ClusterInfo.local()
+        assert self._comm is not None
+        return self._comm.rank, ClusterInfo.local()
 
-    def get_statistics(self, *, clear: bool = False) -> Statistics:
+    def get_statistics(self, *, clear: bool = False) -> tuple[int, Statistics]:
         """
-        Return this rank's :class:`~rapidsmpf.statistics.Statistics` object.
+        Return this rank's index and :class:`~rapidsmpf.statistics.Statistics`.
 
         The returned object is pickled by Ray when sent to the client, so the
         caller receives a detached copy.
@@ -325,16 +529,36 @@ class RankActor:
 
         Returns
         -------
-        The rank's Statistics object (a detached copy if ``clear`` is True).
+        The communicator rank and its Statistics object (a detached copy if
+        ``clear`` is True).
         """
         assert self._ctx is not None
+        assert self._comm is not None
         stats = self._ctx.statistics()
         if clear:
             # Return a deep copy so it survives the in-place clear of `stats`.
             detached = stats.copy()
             stats.clear()
-            return detached
-        return stats
+            return self._comm.rank, detached
+        return self._comm.rank, stats
+
+    def get_io_summary(
+        self, *, clear: bool = False
+    ) -> tuple[int, kvikio.Summary | None]:
+        """
+        Return this rank's index and its kvikio I/O totals.
+
+        Parameters
+        ----------
+        clear
+            If ``True``, restart this rank's measured span after reading.
+
+        Returns
+        -------
+        This rank's index, and its totals or ``None`` if it is not counting.
+        """
+        assert self._comm is not None
+        return self._comm.rank, take_io_summary(self._kvikio_monitor, clear=clear)
 
     def evaluate_polars_ir(
         self,
@@ -342,8 +566,9 @@ class RankActor:
         config_options: ConfigOptions[StreamingExecutor],
         *,
         collect_metadata: bool,
+        quent_context: cudf_polars.quent.QuentConfig | None,
         query_id: uuid.UUID,
-    ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
+    ) -> tuple[int, pl.DataFrame, list[ChannelMetadata] | None]:
         """
         Lower and execute a Polars IR query on this actor's GPU.
 
@@ -360,13 +585,18 @@ class RankActor:
             Executor configuration forwarded from the client.
         collect_metadata
             If ``True``, collect channel metadata during execution.
+        quent_context
+            The client's current quent context.
         query_id
             Unique identifier for the query, propagated into actor traces.
 
         Returns
         -------
+        rank
+            This actor's communicator rank, which the client sorts by so that
+            the concatenated result does not depend on actor order.
         result
-            This rank's output fragment as a Polars DataFrame.
+            This rank's output partition as a Polars DataFrame.
         metadata
             Collected channel metadata if ``collect_metadata`` is ``True``,
             otherwise ``None``.
@@ -382,7 +612,12 @@ class RankActor:
         # object store (pickle / Arrow IPC). The DataFrame is already on CPU at
         # this point (to_polars() copies the result off-GPU), so no GPU memory
         # crosses process boundaries.
-        #
+        quent_query_worker_state: QuentQueryWorkerState | None = None
+        if quent_context is not None:
+            assert self._quent_worker_runtime is not None
+            quent_query_worker_state = self._quent_worker_runtime.query_worker_state(
+                query_id
+            )
         # evaluate_on_rank always collects metadata internally so we can read
         # metadata[-1].duplicated to decide whether to suppress this rank's
         # output. The client concatenates each rank's result, so without this
@@ -391,20 +626,87 @@ class RankActor:
         # collected list is returned to the client (see the return statement),
         # which is the cost we care about saving when the caller doesn't need
         # the metadata.
-        df, metadata = evaluate_on_rank(
+        gpu_df, metadata = evaluate_on_rank(
             self._ctx,
             self._comm,
             self._py_executor,
             ir,
             config_options,
+            quent_query_worker_state=quent_query_worker_state,
             query_id=query_id,
         )
-        if self._comm.rank != 0 and metadata and metadata[-1].duplicated:
-            df = df.clear()
-        return df, metadata if collect_metadata else None
+        gpu_df = drop_if_replicated(gpu_df, self._comm.rank, metadata)
+        return (
+            self._comm.rank,
+            gpu_df.to_polars(),
+            metadata if collect_metadata else None,
+        )
+
+    def execute_persisted(
+        self,
+        uid: str,
+        ir: IR,
+        config_options: ConfigOptions[StreamingExecutor],
+        *,
+        query_id: uuid.UUID,
+    ) -> int:
+        """
+        Execute a query, keeping this rank's partition GPU-resident on this actor.
+
+        Parameters
+        ----------
+        uid
+            The producing engine's store uid on this actor.
+        ir
+            The pre-lowered IR tree.
+        config_options
+            Executor configuration forwarded from the client.
+        query_id
+            Unique identifier for the query.
+
+        Returns
+        -------
+        This actor's communicator rank.
+
+        Raises
+        ------
+        RuntimeError
+            If :meth:`setup_worker` has not been called first.
+        """
+        if self._ctx is None or self._comm is None:
+            raise RuntimeError("setup_worker must be called before execute_persisted")
+        quent_query_worker_state = None
+        if config_options.executor.quent_context is not None:
+            assert self._quent_worker_runtime is not None
+            quent_query_worker_state = self._quent_worker_runtime.query_worker_state(
+                query_id
+            )
+        return persisted_result.evaluate_and_persist(
+            uid,
+            self._ctx,
+            self._comm,
+            self._py_executor,
+            ir,
+            config_options,
+            query_id,
+            # Partitions are gathered to the client and concatenated, so a
+            # duplicated output is deduplicated to a single copy.
+            deduplicate_replicated=True,
+            quent_query_worker_state=quent_query_worker_state,
+        )
+
+    def drop_persisted(self, uid: str, query_id: uuid.UUID) -> None:
+        """Drop this query's partitions from this engine's store (idempotent)."""
+        rank_local_store.drop_query(uid, query_id)
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
         return func(*args, **kwargs)
+
+    def _run_with_rank(
+        self, func: Callable[..., T], *args: Any, **kwargs: Any
+    ) -> tuple[int, T]:
+        assert self._comm is not None
+        return self._comm.rank, func(*args, **kwargs)
 
 
 def get_num_gpus_in_ray_cluster() -> int:
@@ -431,6 +733,46 @@ def get_num_gpus_in_ray_cluster() -> int:
     if free_gpus == 0:
         raise RuntimeError("No available GPUs in the Ray cluster at startup")
     return free_gpus
+
+
+def _wait_for_actor_shutdown(ref: ObjectRef[Any]) -> None:
+    """Wait for actor exit, ignoring Ray's expected termination error."""
+    with contextlib.suppress(ray.exceptions.RayActorError):
+        ray.get(ref)
+
+
+def _shutdown_ray(
+    rank_actors: list[ActorHandle[RankActor]],
+    quent_runtime: QuentControllerRuntime | None,
+    quent_collector: quent_bindings.Collector | None,
+    *,
+    shutdown_ray: bool,
+) -> None:
+    """Release Ray resources in dependency order."""
+    ray_running = ray.is_initialized()
+    steps: list[Callable[[], object]] = []
+    if ray_running and quent_collector is not None:
+        steps.append(
+            lambda: ray.get([actor.close_quent.remote() for actor in rank_actors])
+        )
+    if quent_runtime is not None:
+        steps.append(quent_runtime.close)
+    elif quent_collector is not None:
+        steps.append(quent_collector.close)
+
+    if ray_running:
+
+        def shutdown_actors() -> None:
+            refs = [actor.shutdown.remote() for actor in rank_actors]
+            run_cleanup_steps(
+                "Ray actor shutdown failed",
+                *(lambda ref=ref: _wait_for_actor_shutdown(ref) for ref in refs),
+            )
+
+        steps.append(shutdown_actors)
+    if shutdown_ray:
+        steps.append(ray.shutdown)
+    run_cleanup_steps("Ray engine shutdown failed", *steps)
 
 
 class RayEngine(StreamingEngine):
@@ -529,7 +871,7 @@ class RayEngine(StreamingEngine):
         ray_init_options: dict[str, Any] | None = None,
         num_ranks: int | None = None,
     ) -> None:
-        executor_options = executor_options or {}
+        executor_options = resolve_kvikio_executor_options(executor_options or {})
         engine_options = engine_options or {}
         ray_init_options = ray_init_options or {}
 
@@ -541,6 +883,17 @@ class RayEngine(StreamingEngine):
             )
 
         check_reserved_keys(executor_options, engine_options)
+
+        quent_context = resolve_quent_context(executor_options)
+        executor_options["quent_context"] = quent_context
+        if quent_context is not None:
+            engine_id = quent_context.engine_id
+        else:
+            engine_id = uuid.uuid4()
+        self._quent_runtime = None
+
+        # This engine's store uid, used to key its partitions in each actor's process rank-local store.
+        self._store_uid = uuid.uuid4().hex
 
         if num_ranks is not None:
             if num_ranks < 1:
@@ -561,16 +914,26 @@ class RayEngine(StreamingEngine):
         rapidsmpf_options_as_bytes = self.rapidsmpf_options.serialize()
 
         exit_stack = contextlib.ExitStack()
-        if not ray.is_initialized():
-            # Prevent Ray from overriding CUDA_VISIBLE_DEVICES to "" when a worker
-            # process starts with zero visible GPUs (e.g., the driver process itself).
-            # In the future, this behavior will become the default in Ray.
-            os.environ.setdefault("RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO", "0")
-            ray.init(**ray_init_options)
-            # Ensure Ray is shut down when RayEngine shuts down.
-            exit_stack.callback(ray.shutdown)
-
+        owns_ray = not ray.is_initialized()
+        rank_actors: list[ActorHandle[RankActor]] = []
+        quent_collector: quent_bindings.Collector | None = None
+        quent_runtime: QuentControllerRuntime | None = None
+        exit_stack.callback(
+            lambda: _shutdown_ray(
+                rank_actors,
+                quent_runtime,
+                quent_collector,
+                shutdown_ray=owns_ray,
+            )
+        )
         try:
+            if owns_ray:
+                # Prevent Ray from overriding CUDA_VISIBLE_DEVICES to "" when a worker
+                # process starts with zero visible GPUs (e.g., the driver process itself).
+                # In the future, this behavior will become the default in Ray.
+                os.environ.setdefault("RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO", "0")
+                ray.init(**ray_init_options)
+
             # Override num_gpus=0 when num_ranks is set so Ray doesn't gate
             # actor scheduling on GPU resources; .options() with no overrides
             # is a no-op for the default path.
@@ -580,31 +943,76 @@ class RayEngine(StreamingEngine):
             nranks = (
                 num_ranks if num_ranks is not None else get_num_gpus_in_ray_cluster()
             )
+            worker_ids = [uuid.uuid4() for _ in range(nranks)]
 
-            rank_actors: list[ActorHandle[RankActor]] = [
-                RankActor.options(**actor_options).remote(  # type: ignore[attr-defined]
-                    nranks=nranks,
-                    rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
-                    num_py_executors=cast(
-                        int,
-                        executor_options.get("num_py_executors", 8),
-                    ),
-                    hardware_binding=hw_binding,
-                    memory_resource_config=mr_config,
+            # Append incrementally so cleanup owns every actor even if a later
+            # actor construction fails.
+            for worker_id in worker_ids:
+                rank_actors.append(  # noqa: PERF401
+                    RankActor.options(**actor_options).remote(  # type: ignore[attr-defined]
+                        nranks=nranks,
+                        rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
+                        num_py_executors=cast(
+                            "int",
+                            executor_options.get("num_py_executors", 8),
+                        ),
+                        kvikio_nthreads=executor_options["kvikio_nthreads"],
+                        kvikio_statistics=executor_options["kvikio_statistics"],
+                        kvikio_remote_io_backend=executor_options[
+                            "kvikio_remote_io_backend"
+                        ],
+                        kvikio_task_size=executor_options["kvikio_task_size"],
+                        kvikio_bounce_buffer_bytes=executor_options[
+                            "kvikio_bounce_buffer_bytes"
+                        ],
+                        kvikio_reactor_count=executor_options["kvikio_reactor_count"],
+                        kvikio_reactor_dispatch=executor_options[
+                            "kvikio_reactor_dispatch"
+                        ],
+                        kvikio_request_ceiling=executor_options[
+                            "kvikio_request_ceiling"
+                        ],
+                        hardware_binding=hw_binding,
+                        memory_resource_config=mr_config,
+                        worker_id=worker_id,
+                        engine_id=engine_id,
+                        quent_enabled=quent_context is not None,
+                    )
                 )
-                for _ in range(nranks)
-            ]
 
-            root_ucxx_address_as_bytes = ray.get(rank_actors[0].setup_root.remote())
+            root_ucxx_address_as_bytes = cast(
+                "bytes", ray.get(rank_actors[0].setup_root.remote())
+            )
+            if quent_context is not None:
+                quent_collector = cudf_polars.quent._runtime.start_collector(
+                    quent_context.run_root
+                )
+                collector_address = quent_collector.address
+            else:
+                quent_collector = None
+                collector_address = None
             # Call setup_worker on all actors concurrently, including the root.
             # The root skips communicator creation and proceeds directly to the barrier.
             # Non-root actors create their communicators and then join the barrier.
             ray.get(
                 [
-                    rank.setup_worker.remote(root_ucxx_address_as_bytes)
+                    rank.setup_worker.remote(
+                        root_ucxx_address_as_bytes,
+                        collector_address,
+                        quent_context,
+                    )
                     for rank in rank_actors
                 ]
             )
+            if quent_context is not None:
+                assert collector_address is not None
+                quent_runtime = QuentControllerRuntime.create(
+                    quent_context,
+                    collector_address,
+                    backend="ray",
+                    collector=quent_collector,
+                )
+                self._quent_runtime = quent_runtime
 
             self._rank_actors: list[ActorHandle[RankActor]] | None = rank_actors
             super().__init__(
@@ -612,7 +1020,7 @@ class RayEngine(StreamingEngine):
                 executor_options={
                     **executor_options,
                     "cluster": "ray",
-                    "ray_context": RayContext(rank_actors),
+                    "ray_context": RayContext(rank_actors, quent_runtime),
                 },
                 engine_options=engine_options,
                 exit_stack=exit_stack,
@@ -631,16 +1039,26 @@ class RayEngine(StreamingEngine):
         """Reset the engine; see :meth:`StreamingEngine._reset` for the contract."""
         if self._rank_actors is None:
             raise RuntimeError("Cannot reset a shut-down engine")
+        existing_executor_options = self.config.get("executor_options", {})
+        if not isinstance(existing_executor_options, dict):
+            existing_executor_options = {}
+        existing_quent_context = existing_executor_options.get("quent_context")
         super()._reset(
             rapidsmpf_options=rapidsmpf_options,
             executor_options=executor_options,
             engine_options=engine_options,
         )
         executor_options = executor_options or {}
+        if "quent_context" in existing_executor_options:
+            executor_options.setdefault("quent_context", existing_quent_context)
+        if "kvikio_nthreads" in existing_executor_options:
+            executor_options.setdefault(
+                "kvikio_nthreads", existing_executor_options["kvikio_nthreads"]
+            )
+        executor_options = resolve_kvikio_executor_options(executor_options)
         engine_options = engine_options or {}
-        rapidsmpf_options_as_bytes = resolve_rapidsmpf_options(
-            rapidsmpf_options
-        ).serialize()
+        self.rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
+        rapidsmpf_options_as_bytes = self.rapidsmpf_options.serialize()
 
         # Reset all actor Contexts collectively. ``ray.get`` blocks until
         # every actor's reset returns; the per-actor barrier inside
@@ -649,6 +1067,18 @@ class RayEngine(StreamingEngine):
             [
                 rank.reset.remote(
                     rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
+                    kvikio_nthreads=executor_options["kvikio_nthreads"],
+                    kvikio_statistics=executor_options["kvikio_statistics"],
+                    kvikio_remote_io_backend=executor_options[
+                        "kvikio_remote_io_backend"
+                    ],
+                    kvikio_task_size=executor_options["kvikio_task_size"],
+                    kvikio_bounce_buffer_bytes=executor_options[
+                        "kvikio_bounce_buffer_bytes"
+                    ],
+                    kvikio_reactor_count=executor_options["kvikio_reactor_count"],
+                    kvikio_reactor_dispatch=executor_options["kvikio_reactor_dispatch"],
+                    kvikio_request_ceiling=executor_options["kvikio_request_ceiling"],
                 )
                 for rank in self._rank_actors
             ]
@@ -666,7 +1096,7 @@ class RayEngine(StreamingEngine):
             executor_options={
                 **executor_options,
                 "cluster": "ray",
-                "ray_context": RayContext(self._rank_actors),
+                "ray_context": RayContext(self._rank_actors, self._quent_runtime),
             },
             engine_options=engine_options,
             exit_stack=self._exit_stack,
@@ -728,15 +1158,35 @@ class RayEngine(StreamingEngine):
             raise RuntimeError("rank_actors is not available after shutdown")
         return self._rank_actors
 
+    def _gather_by_rank(self, refs: list[ObjectRef]) -> dict[int, Any]:
+        """
+        Resolve ``(rank, result)`` object refs into results keyed by rank.
+
+        Parameters
+        ----------
+        refs
+            One object ref per actor, each resolving to ``(rank, result)``.
+
+        Returns
+        -------
+        One result per rank, keyed by rank and in rank order.
+        """
+        return dict(sorted(ray.get(refs), key=lambda pair: pair[0]))
+
     def gather_cluster_info(self) -> list[ClusterInfo]:
         """
         Collect diagnostic information from every rank.
 
         Returns
         -------
-        List of :class:`~cudf_polars.engine.core.ClusterInfo`, one per rank.
+        List of :class:`~cudf_polars.engine.core.ClusterInfo`, one per rank,
+        ordered by rank index.
         """
-        return ray.get([rank.get_info.remote() for rank in self.rank_actors])
+        return list(
+            self._gather_by_rank(
+                [rank.get_info.remote() for rank in self.rank_actors]
+            ).values()
+        )
 
     def gather_statistics(self, *, clear: bool = False) -> list[Statistics]:
         """
@@ -752,9 +1202,32 @@ class RayEngine(StreamingEngine):
         List of :class:`~rapidsmpf.statistics.Statistics`, one per rank,
         ordered by rank index.
         """
-        return ray.get(
-            [rank.get_statistics.remote(clear=clear) for rank in self.rank_actors]
+        return list(
+            self._gather_by_rank(
+                [rank.get_statistics.remote(clear=clear) for rank in self.rank_actors]
+            ).values()
         )
+
+    def gather_io_summary(self, *, clear: bool = False) -> dict[int, kvikio.Summary]:
+        """
+        Collect kvikio I/O statistics from every rank via Ray.
+
+        Parameters
+        ----------
+        clear
+            If ``True``, restart each rank's measured span after reading.
+
+        Returns
+        -------
+        A :class:`kvikio.Summary` per rank, keyed by rank index, omitting
+        ranks that are not counting.
+        """
+        summaries = self._gather_by_rank(
+            [rank.get_io_summary.remote(clear=clear) for rank in self.rank_actors]
+        )
+        return {
+            rank: summary for rank, summary in summaries.items() if summary is not None
+        }
 
     def shutdown(self) -> None:
         """
@@ -770,29 +1243,47 @@ class RayEngine(StreamingEngine):
         """
         if self._rank_actors is None:
             return  # already shut down; idempotent
-        exceptions: list[Exception] = []
-        try:
-            # If Ray is no longer initialized (for example, if ``ray.shutdown()`` was
-            # called before ``RayEngine.shutdown()``), the actors are gone as well.
-            # Calling ``.remote()`` in this state would trigger Ray's ``auto_init_hook``
-            # and start a new cluster.
-            if not ray.is_initialized():
-                return
-            refs = [a.shutdown.remote() for a in self._rank_actors]
-            for ref in refs:
-                try:
-                    ray.get(ref)
-                except ray.exceptions.RayActorError:
-                    pass  # expected: exit_actor() terminates the process immediately
-                except Exception as e:
-                    exceptions.append(e)
-            if exceptions:
-                raise ExceptionGroup("Actor shutdown failed", exceptions)
-        finally:
-            self._rank_actors = None
-            super().shutdown()
+        self._rank_actors = None
+        self._quent_runtime = None
+        super().shutdown()
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
-        return ray.get(
-            [rank._run.remote(func, *args, **kwargs) for rank in self.rank_actors]
+        return list(
+            self._gather_by_rank(
+                [
+                    rank._run_with_rank.remote(func, *args, **kwargs)
+                    for rank in self.rank_actors
+                ]
+            ).values()
         )
+
+    # TODO: adopt polars' Engine.execute(lf, *, optimizations) contract
+    # (added in polars>=1.43) so we can return our own result type from
+    # LazyFrame.execute(engine=...) too (See https://github.com/NVIDIA/cudf/issues/22917).
+    @unstable()
+    def execute(self, lf: pl.LazyFrame) -> PersistedQueryResult:  # type: ignore[override]
+        """
+        Execute a :class:`~polars.LazyFrame` and return a distributed result.
+
+        Unlike :meth:`~polars.LazyFrame.collect`, worker outputs remain as separate
+        partitions rather than being concatenated into a single dataframe. Call
+        ``.lazy()`` on the returned result to build further queries.
+
+        Parameters
+        ----------
+        lf
+            The lazy query to execute.
+
+        Returns
+        -------
+        Distributed query result backed by per-rank GPU-persisted partitions
+        kept in the producing actors.
+
+        Examples
+        --------
+        >>> with RayEngine() as engine:  # doctest: +SKIP
+        ...     result = engine.execute(pl.scan_parquet("data/*.parquet"))
+        ...     df = result.lazy().filter(pl.col("x") > 0).collect(engine=engine)
+        """
+        backend = RayPersistedBackend(self._store_uid, self.rank_actors)
+        return execute_persisted_query(self, lf, backend, self._store_uid)

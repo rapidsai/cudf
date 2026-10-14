@@ -1,11 +1,12 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition evaluation."""
 
 from __future__ import annotations
 
+import dataclasses
 import operator
-from functools import partial, reduce
+from functools import reduce
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -14,9 +15,11 @@ import polars as pl
 # handlers at import time so the dispatch table is populated before any query
 # is lowered.
 import cudf_polars.streaming.distinct
+import cudf_polars.streaming.filter_hint
 import cudf_polars.streaming.groupby
 import cudf_polars.streaming.io
 import cudf_polars.streaming.join
+import cudf_polars.streaming.rolling
 import cudf_polars.streaming.select
 import cudf_polars.streaming.shuffle
 import cudf_polars.streaming.sort  # noqa: F401
@@ -25,6 +28,7 @@ from cudf_polars.dsl.expr import Col, Literal, NamedExpr
 from cudf_polars.dsl.ir import (
     IR,
     Cache,
+    ErrorNode,
     Filter,
     HConcat,
     HStack,
@@ -34,11 +38,13 @@ from cudf_polars.dsl.ir import (
     Slice,
     Union,
 )
-from cudf_polars.dsl.traversal import CachingVisitor, traversal
+from cudf_polars.dsl.traversal import CachingVisitor, reuse_if_unchanged, traversal
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.streaming.base import PartitionInfo
 from cudf_polars.streaming.dispatch import lower_ir_node
+from cudf_polars.streaming.hint_sorted import HintSorted
 from cudf_polars.streaming.io import _clear_source_info_cache
+from cudf_polars.streaming.plan_metadata import PlanMetadata
 from cudf_polars.streaming.repartition import Repartition
 from cudf_polars.streaming.utils import (
     _contains_over,
@@ -51,6 +57,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.streaming.base import StatsCollector
     from cudf_polars.streaming.dispatch import LowerIRTransformer, State
+    from cudf_polars.typing import GenericTransformer
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
@@ -64,6 +71,111 @@ def _(
     )
 
 
+@lower_ir_node.register(Cache)
+def _(
+    ir: Cache, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:  # pragma: no cover
+    raise AssertionError("Cache nodes should have been removed before lowering")
+
+
+@dataclasses.dataclass
+class LoweringInfo:
+    """Information produced by optimizing and lowering an IR graph."""
+
+    optimized: IR  # IR after optimization
+    lowered: IR  # optimized IR after lowering
+    partition_info: MutableMapping[
+        IR, PartitionInfo
+    ]  # Partition mapping for nodes in the lowered IR.
+    plan_metadata: PlanMetadata | None
+
+
+def remove_cache_nodes(ir: IR) -> IR:
+    """Remove logical cache nodes while preserving shared DAG structure."""
+
+    def rewrite(node: IR, rec: GenericTransformer[IR, IR, None]) -> IR:
+        if isinstance(node, Cache):
+            return rec(node.children[0])
+        return reuse_if_unchanged(node, rec)
+
+    mapper: GenericTransformer[IR, IR, None] = CachingVisitor(rewrite, state=None)
+    return mapper(ir)
+
+
+def optimize_with_stats(
+    ir: IR,
+    config_options: ConfigOptions[StreamingExecutor],
+    stats: StatsCollector,
+    *,
+    plan_metadata: PlanMetadata | None = None,
+) -> IR:
+    """
+    Optimize an IR graph given some statistics.
+
+    Parameters
+    ----------
+    ir
+        Root of the graph to optimize.
+    config_options
+        GPUEngine configuration options.
+    stats
+        Pre-computed statistics.
+    plan_metadata
+        Optional place to record details about lowering / optimization
+        decisions.
+
+    Returns
+    -------
+    IR
+        The optimized IR graph.
+    """
+    from cudf_polars.streaming.join_filter_pushdown import (
+        optimize_join_filter_pushdown,
+    )
+
+    ir = remove_cache_nodes(ir)
+    return optimize_join_filter_pushdown(
+        ir,
+        stats,
+        config_options,
+        plan_metadata=plan_metadata,
+    )
+
+
+def _lower_ir_graph_impl(
+    ir: IR,
+    config_options: ConfigOptions[StreamingExecutor],
+    stats: StatsCollector,
+    *,
+    rank: int = 0,
+    nranks: int = 1,
+) -> tuple[LoweringInfo, LowerIRTransformer]:
+    state: State = {
+        "config_options": config_options,
+        "stats": stats,
+        "rank": rank,
+        "nranks": nranks,
+    }
+    if config_options.executor.quent_context is not None:
+        plan_metadata = PlanMetadata()
+    else:
+        plan_metadata = None
+    optimized = optimize_with_stats(
+        ir,
+        config_options,
+        stats,
+        plan_metadata=plan_metadata,
+    )
+    mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
+    lowered, partition_info = mapper(optimized)
+    return LoweringInfo(
+        optimized=optimized,
+        lowered=lowered,
+        partition_info=partition_info,
+        plan_metadata=plan_metadata,
+    ), mapper
+
+
 def lower_ir_graph(
     ir: IR,
     config_options: ConfigOptions[StreamingExecutor],
@@ -71,7 +183,7 @@ def lower_ir_graph(
     *,
     rank: int = 0,
     nranks: int = 1,
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> LoweringInfo:
     """
     Rewrite an IR graph and extract partitioning information.
 
@@ -90,9 +202,7 @@ def lower_ir_graph(
 
     Returns
     -------
-    new_ir, partition_info
-        The rewritten graph and a mapping from unique nodes
-        in the new graph to associated partitioning information.
+    LoweringInfo
 
     Notes
     -----
@@ -103,14 +213,56 @@ def lower_ir_graph(
     --------
     lower_ir_node
     """
-    state: State = {
-        "config_options": config_options,
-        "stats": stats,
-        "rank": rank,
-        "nranks": nranks,
-    }
-    mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
-    return mapper(ir)
+    return _lower_ir_graph_impl(ir, config_options, stats, rank=rank, nranks=nranks)[0]
+
+
+def lower_ir_graph_with_node_map(
+    ir: IR,
+    config_options: ConfigOptions[StreamingExecutor],
+    stats: StatsCollector,
+    *,
+    rank: int = 0,
+    nranks: int = 1,
+) -> tuple[LoweringInfo, dict[str, list[str]]]:
+    """
+    Lower an IR graph and return a mapping from physical to logical stable IDs.
+
+    Behaves like :func:`lower_ir_graph`, but additionally returns a
+    mapping from each physical (post-lowering) node's stable ID to the
+    logical (pre-lowering) node(s) it was derived from.
+
+    Parameters
+    ----------
+    ir
+        Root of the graph to rewrite.
+    config_options
+        GPUEngine configuration options.
+    stats
+        Pre-computed statistics collector.
+    rank
+        Rank of the current worker.
+    nranks
+        Number of workers in the current cluster.
+
+    Returns
+    -------
+    LoweringInfo
+        Information about the lowered IR graph.
+    node_map
+        Mapping ``{physical_stable_id: [logical_stable_id, ...]}`` built
+        from the internal :class:`CachingVisitor` cache. Nodes inserted
+        by lowering (e.g. ``Repartition``) will not appear as keys.
+    """
+    result, mapper = _lower_ir_graph_impl(
+        ir, config_options, stats, rank=rank, nranks=nranks
+    )
+    node_map: dict[str, list[str]] = {}
+    for old_node, (new_node, _) in mapper.cache.items():  # type: ignore[attr-defined]
+        new_key = str(new_node.get_stable_id())
+        old_key = str(old_node.get_stable_id())
+        node_map.setdefault(new_key, []).append(old_key)
+
+    return result, node_map
 
 
 def evaluate_streaming(
@@ -167,10 +319,24 @@ def _(
     return new_node, partition_info
 
 
+@lower_ir_node.register(ErrorNode)
+def _(
+    ir: ErrorNode, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # nothing to lower or repartition.
+    return ir, {ir: PartitionInfo(count=1)}
+
+
 @lower_ir_node.register(MapFunction)
 def _(
     ir: MapFunction, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    if ir.name == "hint_sorted":
+        child, partition_info = rec(ir.children[0])
+        new_node = HintSorted(ir.schema, ir.options, child)
+        partition_info[new_node] = partition_info[child]
+        return new_node, partition_info
+
     # Allow pointwise operations
     if ir.name in ("rename", "explode"):
         return _lower_ir_pwise(ir, rec)
@@ -211,9 +377,15 @@ def _lower_ir_pwise(
     return new_node, partition_info
 
 
-_lower_ir_pwise_preserve = partial(_lower_ir_pwise, preserve_partitioning=True)
-lower_ir_node.register(Cache, _lower_ir_pwise_preserve)
-lower_ir_node.register(HConcat, _lower_ir_pwise)
+@lower_ir_node.register(HConcat)
+def _(
+    ir: HConcat, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    if ir.streaming_safe:
+        return _lower_ir_pwise(ir, rec)
+    return _lower_ir_fallback(
+        ir, rec, msg="HConcat is not supported for multiple partitions."
+    )
 
 
 @lower_ir_node.register(Filter)
@@ -225,7 +397,7 @@ def _(
     if partition_info[child].count > 1 and _contains_over([ir.mask.value]):
         # mask contains .over(...), collapse to single partition
         return _lower_ir_fallback(
-            ir.reconstruct([child]),
+            ir,
             rec,
             msg=(
                 "over(...) inside filter is not supported for multiple partitions; "
@@ -237,7 +409,7 @@ def _(
         expr.is_pointwise for expr in traversal([ir.mask.value])
     ):
         # TODO: Use expression decomposition to lower Filter
-        # See: https://github.com/rapidsai/cudf/issues/20076
+        # See: https://github.com/NVIDIA/cudf/issues/20076
         return _lower_ir_fallback(
             ir, rec, msg="This filter is not supported for multiple partitions."
         )

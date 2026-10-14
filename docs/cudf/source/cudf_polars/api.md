@@ -9,15 +9,15 @@ multi-GPU engines.
 
 ```{eval-rst}
 .. autoclass:: cudf_polars.engine.ray.RayEngine
-   :members: from_options, gather_cluster_info, gather_statistics, global_statistics, shutdown, nranks
+   :members: from_options, gather_cluster_info, gather_statistics, global_statistics, gather_io_summary, shutdown, nranks
    :show-inheritance:
 
 .. autoclass:: cudf_polars.engine.dask.DaskEngine
-   :members: from_options, gather_cluster_info, gather_statistics, global_statistics, shutdown, nranks
+   :members: from_options, gather_cluster_info, gather_statistics, global_statistics, gather_io_summary, shutdown, nranks
    :show-inheritance:
 
 .. autoclass:: cudf_polars.engine.spmd.SPMDEngine
-   :members: from_options, gather_cluster_info, gather_statistics, global_statistics, shutdown, nranks, rank, comm, context
+   :members: from_options, from_torch_distributed, execute, gather_cluster_info, gather_statistics, global_statistics, gather_io_summary, shutdown, nranks, rank, comm, context
    :show-inheritance:
 
 .. autoclass:: cudf_polars.engine.default_singleton_engine.DefaultSingletonEngine
@@ -29,11 +29,20 @@ The engine classes share a common base class:
 
 ```{eval-rst}
 .. autoclass:: cudf_polars.engine.core.StreamingEngine
-   :members: gather_cluster_info, gather_statistics, global_statistics, shutdown, nranks
+   :members: gather_cluster_info, gather_statistics, global_statistics, gather_io_summary, shutdown, nranks
    :show-inheritance:
 
 .. autoclass:: cudf_polars.engine.core.ClusterInfo
    :members:
+```
+
+## Persisted results
+
+Returned by `engine.execute()` to keep query results GPU-resident (see {doc}`execute`).
+
+```{eval-rst}
+.. autoclass:: cudf_polars.engine.persisted_result.PersistedQueryResult
+   :members: lazy, release, take_local, local_is_duplicated
 ```
 
 ## Configuration
@@ -55,7 +64,17 @@ The engine classes share a common base class:
 ```{eval-rst}
 .. autofunction:: cudf_polars.engine.spmd.allgather_polars_dataframe
 
+.. autofunction:: cudf_polars.engine.spmd.use_gpu
+
 .. autofunction:: cudf_polars.streaming.actor_graph.collectives.common.reserve_op_id
+```
+
+## PyTorch interoperability
+
+```{eval-rst}
+.. autofunction:: cudf_polars.engine.torch_interop.persisted_to_torch
+
+.. autofunction:: cudf_polars.engine.torch_interop.polars_to_tensor
 ```
 
 ## Internal configuration objects
@@ -67,8 +86,21 @@ Most users interact with them through `StreamingOptions` fields rather than dire
 .. automodule:: cudf_polars.utils.config
    :members:
       DynamicPlanningOptions,
+      JoinFilterPushdownOptions,
       MemoryResourceConfig,
       ParquetOptions,
       StreamingExecutor,
       StreamingFallbackMode,
+```
+
+## Quent Integration
+
+cudf-polars can emit [Quent events](https://github.com/rapidsai/quent), which can be
+used to profile your queries.
+
+```{eval-rst}
+.. automodule:: cudf_polars.quent
+   :members:
+      QuentConfig,
+      QuentQueryConfig,
 ```

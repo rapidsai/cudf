@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Core RapidsMPF streaming-engine API."""
 
@@ -11,9 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.streaming.core.leaf_actor import pull_from_channel
 
-import cudf_polars.dsl.tracing
 from cudf_polars.dsl.ir import (
-    DataFrameScan,
     Join,
     Union,
 )
@@ -23,8 +21,10 @@ from cudf_polars.streaming.actor_graph.nodes import (
     generate_ir_sub_network_wrapper,
     metadata_drain_node,
 )
-from cudf_polars.streaming.io import StreamingScan
+from cudf_polars.streaming.filter_hint import PushdownFilterHint
+from cudf_polars.streaming.hint_sorted import HintSorted
 from cudf_polars.streaming.over import Over
+from cudf_polars.streaming.partitioning_requests import collect_partitioning_requests
 from cudf_polars.utils.config import SPMDContext
 
 if TYPE_CHECKING:
@@ -32,13 +32,14 @@ if TYPE_CHECKING:
 
     import polars as pl
 
-    from cudf_streaming.streaming.channel_metadata import ChannelMetadata
-    from cudf_streaming.streaming.table_chunk import TableChunk
+    from cudf_streaming.channel_metadata import ChannelMetadata
+    from cudf_streaming.table_chunk import TableChunk
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.core.leaf_actor import DeferredMessages
 
+    import cudf_polars.quent._context
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.streaming.actor_graph.dispatch import (
         GenState,
@@ -79,6 +80,10 @@ def evaluate_logical_plan(
         )
 
         engine = DefaultSingletonEngine.get_or_create()
+        if config_options.executor.quent_context is not None:
+            engine_id = config_options.executor.quent_context.engine_id
+        else:
+            engine_id = uuid.uuid4()
         config_options = dataclasses.replace(
             config_options,
             executor=dataclasses.replace(
@@ -87,50 +92,52 @@ def evaluate_logical_plan(
                     comm=engine.comm,
                     context=engine.context,
                     py_executor=engine.py_executor,
+                    engine_id=engine_id,
+                    worker_id=engine._quent_worker_id,
+                    quent_controller_runtime=engine._quent_runtime,
+                    quent_worker_runtime=engine._quent_worker_runtime,
                 ),
             ),
         )
 
     query_id = uuid.uuid4()
-    with cudf_polars.dsl.tracing.bound_contextvars(
-        cudf_polars_query_id=str(query_id),
-    ):
-        match config_options.executor.cluster:
-            case "spmd" | "default_singleton":
-                from cudf_polars.engine.spmd import (
-                    evaluate_pipeline_spmd_mode,
-                )
+    match config_options.executor.cluster:
+        case "spmd" | "default_singleton":
+            from cudf_polars.engine.spmd import (
+                evaluate_pipeline_spmd_mode,
+            )
 
-                result, metadata_collector = evaluate_pipeline_spmd_mode(
-                    ir,
-                    config_options,
-                    collect_metadata=collect_metadata,
-                    query_id=query_id,
-                )
-            case "ray":
-                from cudf_polars.engine.ray import (
-                    evaluate_pipeline_ray_mode,
-                )
+            _gpu_result, metadata_collector = evaluate_pipeline_spmd_mode(
+                ir,
+                config_options,
+                collect_metadata=collect_metadata,
+                query_id=query_id,
+            )
+            result = _gpu_result.to_polars()
+        case "ray":
+            from cudf_polars.engine.ray import (
+                evaluate_pipeline_ray_mode,
+            )
 
-                result, metadata_collector = evaluate_pipeline_ray_mode(
-                    ir,
-                    config_options,
-                    collect_metadata=collect_metadata,
-                    query_id=query_id,
-                )
-            case "dask":
-                from cudf_polars.engine.dask import (
-                    evaluate_pipeline_dask_mode,
-                )
+            result, metadata_collector = evaluate_pipeline_ray_mode(
+                ir,
+                config_options,
+                collect_metadata=collect_metadata,
+                query_id=query_id,
+            )
+        case "dask":
+            from cudf_polars.engine.dask import (
+                evaluate_pipeline_dask_mode,
+            )
 
-                result, metadata_collector = evaluate_pipeline_dask_mode(
-                    ir,
-                    config_options,
-                    collect_metadata=collect_metadata,
-                    query_id=query_id,
-                )
-            case other:
-                raise ValueError(f"Unknown cluster mode: {other}")
+            result, metadata_collector = evaluate_pipeline_dask_mode(
+                ir,
+                config_options,
+                collect_metadata=collect_metadata,
+                query_id=query_id,
+            )
+        case other:
+            raise ValueError(f"Unknown cluster mode: {other}")
 
     return result, metadata_collector
 
@@ -170,11 +177,12 @@ def determine_fanout_nodes(
     for node in traversal([ir]):
         if node in unbounded:
             _mark_children_unbounded(node)
-        elif isinstance(node, (Union, Join, Over)):
+        elif isinstance(node, (Union, Join, Over, HintSorted, PushdownFilterHint)):
             # Union processes children sequentially; Join may broadcast one
             # side; Over buffers (or samples-then-replays) its input before
-            # producing output. In every case the input source needs
-            # unbounded fanout so other consumers don't block it.
+            # producing output; hints may buffer then replay. In every case
+            # the input source needs unbounded fanout so other consumers don't
+            # block it.
             _mark_children_unbounded(node)
         elif len(node.children) > 1:
             # Check if this node is doing any broadcasting.
@@ -211,6 +219,9 @@ def generate_network(
     ir_context: IRExecutionContext,
     collective_id_map: dict[IR, list[int]],
     metadata_collector: list[ChannelMetadata] | None,
+    quent_operator_map: dict[IR, uuid.UUID] | None = None,
+    quent_query_worker_state: cudf_polars.quent._context.QuentQueryWorkerState
+    | None = None,
 ) -> tuple[list[Any], DeferredMessages]:
     """
     Translate the IR graph to a RapidsMPF streaming network.
@@ -237,26 +248,30 @@ def generate_network(
         The list to collect the final metadata.
         This list will be mutated when the network is executed.
         If None, metadata will not be collected.
+    quent_operator_map
+        Mapping from IR nodes to their Quent operators, or ``None`` when tracing
+        is disabled.
+    quent_query_worker_state
+        The Quent query-worker state for this rank, or ``None`` when tracing is
+        disabled.
 
     Returns
     -------
     The network nodes and output hook.
     """
-    # Count the number of IO nodes and the number of IR dependencies
-    num_io_nodes: int = 0
+    # Count the number of IR dependencies
     ir_dep_count: defaultdict[IR, int] = defaultdict(int)
     for node in traversal([ir]):
-        if isinstance(node, (DataFrameScan, StreamingScan)):
-            num_io_nodes += 1
         for child in node.children:
             ir_dep_count[child] += 1
 
     # Determine which nodes need fanout
     fanout_nodes = determine_fanout_nodes(ir, partition_info, ir_dep_count)
 
-    # Get max_io_threads from config (default: 2)
-    max_io_threads_global = config_options.executor.max_io_threads
-    max_io_threads_local = max(1, max_io_threads_global // max(1, num_io_nodes))
+    # Collect partitioning requests any optimizations might consume them
+    dynamic_planning = config_options.executor.dynamic_planning
+    infer_ordering = dynamic_planning and dynamic_planning.infer_ordering
+    partitioning_requests = collect_partitioning_requests(ir) if infer_ordering else {}
 
     # Generate the network
     state: GenState = {
@@ -266,9 +281,12 @@ def generate_network(
         "partition_info": partition_info,
         "fanout_nodes": fanout_nodes,
         "ir_context": ir_context,
-        "max_io_threads": max_io_threads_local,
+        "max_concurrent_io_tasks": config_options.executor.max_concurrent_io_tasks,
         "stats": stats,
         "collective_id_map": collective_id_map,
+        "partitioning_requests": partitioning_requests,
+        "quent_operator_map": quent_operator_map,
+        "quent_query_worker_state": quent_query_worker_state,
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -50,7 +50,6 @@ def partition_by(request):
         pl.col("b").min(),
         pl.col("b").sum(),
         pl.col("b").count(),
-        pl.col("b").sum(),
         pl.col("b").mean(),
         pl.col("b").var(),
     ],
@@ -95,17 +94,14 @@ def test_over(engine: pl.GPUEngine, df: pl.LazyFrame, partition_by, agg_expr):
     ) if "var" in str(agg_expr) else assert_gpu_result_equal(q, engine=engine)
 
 
-def test_over_with_sort(engine: pl.GPUEngine, df: pl.LazyFrame):
+def test_over_with_sort(in_memory_engine, df: pl.LazyFrame):
     """Test window functions with sorting."""
     query = df.with_columns([pl.col("c").rank().sort().over(pl.col("a"))])
-    assert_ir_translation_raises(query, engine, NotImplementedError)
+    assert_ir_translation_raises(query, in_memory_engine, NotImplementedError)
 
 
-@pytest.mark.parametrize("mapping_strategy", ["group_to_rows", "explode", "join"])
-def test_over_mapping_strategy(
-    engine: pl.GPUEngine, df: pl.LazyFrame, mapping_strategy: str
-):
-    """Test window functions with different mapping strategies."""
+def test_over_mapping_strategy(engine: pl.GPUEngine, df: pl.LazyFrame):
+    """Test the supported window mapping strategy."""
     # ignore is for polars' WindowMappingStrategy, which isn't publicly exported.
     # https://github.com/pola-rs/polars/issues/17420
     q = df.with_columns(
@@ -115,15 +111,32 @@ def test_over_mapping_strategy(
             .over(
                 pl.col("a"),
                 mapping_strategy=cast(
-                    Literal["group_to_rows", "join", "explode"], mapping_strategy
+                    "Literal['group_to_rows', 'join', 'explode']", "group_to_rows"
                 ),
             )
         ]
     )
-    if mapping_strategy == "group_to_rows":
-        assert_gpu_result_equal(q, engine=engine)
-    else:
-        assert_ir_translation_raises(q, engine, NotImplementedError)
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize("mapping_strategy", ["explode", "join"])
+def test_over_unsupported_mapping_strategy(
+    in_memory_engine, df: pl.LazyFrame, mapping_strategy: str
+):
+    """Unsupported strategies fail while translating the window expression."""
+    q = df.with_columns(
+        [
+            pl.col("b")
+            .rank()
+            .over(
+                pl.col("a"),
+                mapping_strategy=cast(
+                    "Literal['group_to_rows', 'join', 'explode']", mapping_strategy
+                ),
+            )
+        ]
+    )
+    assert_ir_translation_raises(q, in_memory_engine, NotImplementedError)
 
 
 @pytest.mark.skipif(
@@ -144,9 +157,7 @@ def test_rolling(
     assert_gpu_result_equal(query, engine=engine)
 
 
-def test_rolling_unsupported(
-    engine: pl.GPUEngine, df: pl.LazyFrame, unsupported_agg_expr
-):
+def test_rolling_unsupported(in_memory_engine, df: pl.LazyFrame, unsupported_agg_expr):
     """Test rolling window functions over time series."""
     window_expr = unsupported_agg_expr.rolling(period="2d", index_column="date")
     result_name = f"{unsupported_agg_expr!s}_rolling"
@@ -154,7 +165,7 @@ def test_rolling_unsupported(
 
     query = df.with_columns(window_expr)
 
-    assert_ir_translation_raises(query, engine, NotImplementedError)
+    assert_ir_translation_raises(query, in_memory_engine, NotImplementedError)
 
 
 @pytest.mark.skipif(
@@ -173,7 +184,7 @@ def test_rolling_closed(engine: pl.GPUEngine, request, df: pl.LazyFrame, closed:
             .rolling(
                 period="2d",
                 index_column="date",
-                closed=cast(Literal["left", "right", "both", "none"], closed),
+                closed=cast("Literal['left', 'right', 'both', 'none']", closed),
             )
         ]
     )

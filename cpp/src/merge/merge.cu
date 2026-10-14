@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -28,16 +28,15 @@
 #include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <cuda/std/utility>
+#include <cuda/stream>
 #include <thrust/binary_search.h>
 #include <thrust/merge.h>
-#include <thrust/sequence.h>
 #include <thrust/transform.h>
 
 #include <limits>
@@ -117,7 +116,7 @@ CUDF_KERNEL void materialize_merged_bitmask_kernel(
   column_device_view right_dcol,
   bitmask_type* out_validity,
   size_type const num_destination_rows,
-  index_type const* const __restrict__ merged_indices)
+  index_type const* __restrict__ const merged_indices)
 {
   auto const stride = detail::grid_1d::grid_stride();
 
@@ -153,7 +152,7 @@ void materialize_bitmask(column_view const& left_col,
                          bitmask_type* out_validity,
                          size_type num_elements,
                          index_type const* merged_indices,
-                         rmm::cuda_stream_view stream)
+                         cuda::stream_ref stream)
 {
   constexpr size_type BLOCK_SIZE{256};
   detail::grid_1d grid_config{num_elements, BLOCK_SIZE};
@@ -167,24 +166,27 @@ void materialize_bitmask(column_view const& left_col,
   if (left_col.has_nulls()) {
     if (right_col.has_nulls()) {
       materialize_merged_bitmask_kernel<true, true>
-        <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream.value()>>>(
+        <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream.get()>>>(
           left_valid, right_valid, out_validity, num_elements, merged_indices);
+      CUDF_CUDA_TRY(cudaGetLastError());
     } else {
       materialize_merged_bitmask_kernel<true, false>
-        <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream.value()>>>(
+        <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream.get()>>>(
           left_valid, right_valid, out_validity, num_elements, merged_indices);
+      CUDF_CUDA_TRY(cudaGetLastError());
     }
   } else {
     if (right_col.has_nulls()) {
       materialize_merged_bitmask_kernel<false, true>
-        <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream.value()>>>(
+        <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream.get()>>>(
           left_valid, right_valid, out_validity, num_elements, merged_indices);
+      CUDF_CUDA_TRY(cudaGetLastError());
     } else {
       CUDF_FAIL("materialize_merged_bitmask_kernel<false, false>() should never be called.");
     }
   }
 
-  CUDF_CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.get());
 }
 
 struct side_index_generator {
@@ -215,7 +217,7 @@ index_vector generate_merged_indices(table_view const& left_table,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,
                                      bool nullable,
-                                     rmm::cuda_stream_view stream)
+                                     cuda::stream_ref stream)
 {
   size_type const left_size  = left_table.num_rows();
   size_type const right_size = right_table.num_rows();
@@ -272,8 +274,7 @@ index_vector generate_merged_indices(table_view const& left_table,
                   ineq_op);
   }
 
-  CUDF_CHECK_CUDA(stream.value());
-
+  CUDF_CHECK_CUDA(stream.get());
   return merged_indices;
 }
 
@@ -282,7 +283,7 @@ index_vector generate_merged_indices_nested(table_view const& left_table,
                                             std::vector<order> const& column_order,
                                             std::vector<null_order> const& null_precedence,
                                             bool nullable,
-                                            rmm::cuda_stream_view stream)
+                                            cuda::stream_ref stream)
 {
   size_type const left_size  = left_table.num_rows();
   size_type const right_size = right_table.num_rows();
@@ -337,7 +338,7 @@ struct column_merger {
   template <typename Element, CUDF_ENABLE_IF(not is_rep_layout_compatible<Element>())>
   std::unique_ptr<column> operator()(column_view const&,
                                      column_view const&,
-                                     rmm::cuda_stream_view,
+                                     cuda::stream_ref,
                                      rmm::device_async_resource_ref) const
   {
     CUDF_FAIL("Unsupported type for merge.");
@@ -348,7 +349,7 @@ struct column_merger {
   template <typename Element>
   std::unique_ptr<column> operator()(column_view const& lcol,
                                      column_view const& rcol,
-                                     rmm::cuda_stream_view stream,
+                                     cuda::stream_ref stream,
                                      rmm::device_async_resource_ref mr) const
     requires(is_rep_layout_compatible<Element>())
   {
@@ -421,7 +422,7 @@ template <>
 std::unique_ptr<column> column_merger::operator()<cudf::string_view>(
   column_view const& lcol,
   column_view const& rcol,
-  rmm::cuda_stream_view stream,
+  cuda::stream_ref stream,
   rmm::device_async_resource_ref mr) const
 {
   return strings::detail::merge(
@@ -433,7 +434,7 @@ template <>
 std::unique_ptr<column> column_merger::operator()<cudf::dictionary32>(
   column_view const& lcol,
   column_view const& rcol,
-  rmm::cuda_stream_view stream,
+  cuda::stream_ref stream,
   rmm::device_async_resource_ref mr) const
 {
   auto result = cudf::dictionary::detail::merge(
@@ -453,7 +454,7 @@ template <>
 std::unique_ptr<column> column_merger::operator()<cudf::list_view>(
   column_view const& lcol,
   column_view const& rcol,
-  rmm::cuda_stream_view stream,
+  cuda::stream_ref stream,
   rmm::device_async_resource_ref mr) const
 {
   std::vector<column_view> columns{lcol, rcol};
@@ -481,7 +482,7 @@ template <>
 std::unique_ptr<column> column_merger::operator()<cudf::struct_view>(
   column_view const& lcol,
   column_view const& rcol,
-  rmm::cuda_stream_view stream,
+  cuda::stream_ref stream,
   rmm::device_async_resource_ref mr) const
 {
   // merge each child.
@@ -502,14 +503,14 @@ std::unique_ptr<column> column_merger::operator()<cudf::struct_view>(
   auto const merged_size = lcol.size() + rcol.size();
 
   // materialize the output buffer
-  rmm::device_buffer validity =
+  cuda::device_buffer<std::byte> validity =
     lcol.has_nulls() || rcol.has_nulls()
       ? detail::create_null_mask(merged_size, mask_state::UNINITIALIZED, stream, mr)
-      : rmm::device_buffer{};
+      : cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED);
   if (lcol.has_nulls() || rcol.has_nulls()) {
     materialize_bitmask(lcol,
                         rcol,
-                        static_cast<bitmask_type*>(validity.data()),
+                        reinterpret_cast<bitmask_type*>(validity.data()),
                         merged_size,
                         row_order_.data(),
                         stream);
@@ -530,7 +531,7 @@ table_ptr_type merge(cudf::table_view const& left_table,
                      std::vector<cudf::size_type> const& key_cols,
                      std::vector<cudf::order> const& column_order,
                      std::vector<cudf::null_order> const& null_precedence,
-                     rmm::cuda_stream_view stream,
+                     cuda::stream_ref stream,
                      rmm::device_async_resource_ref mr)
 {
   // collect index columns for lhs, rhs, resp.
@@ -600,7 +601,7 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
                      std::vector<cudf::size_type> const& key_cols,
                      std::vector<cudf::order> const& column_order,
                      std::vector<cudf::null_order> const& null_precedence,
-                     rmm::cuda_stream_view stream,
+                     cuda::stream_ref stream,
                      rmm::device_async_resource_ref mr)
 {
   if (tables_to_merge.empty()) { return std::make_unique<cudf::table>(); }
@@ -683,7 +684,7 @@ std::unique_ptr<cudf::table> merge(std::vector<table_view> const& tables_to_merg
                                    std::vector<cudf::size_type> const& key_cols,
                                    std::vector<cudf::order> const& column_order,
                                    std::vector<cudf::null_order> const& null_precedence,
-                                   rmm::cuda_stream_view stream,
+                                   cuda::stream_ref stream,
                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();

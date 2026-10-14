@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,7 +12,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
+#include <cuda/stream>
 
 #include <algorithm>
 
@@ -105,7 +105,7 @@ struct scalar_empty_like_functor {
 std::unique_ptr<column> allocate_like(column_view const& input,
                                       size_type size,
                                       mask_allocation_policy mask_alloc,
-                                      rmm::cuda_stream_view stream,
+                                      cuda::stream_ref stream,
                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -141,8 +141,12 @@ std::unique_ptr<column> empty_like(column_view const& input)
                  std::back_inserter(children),
                  [](column_view const& col) { return empty_like(col); });
 
-  return std::make_unique<cudf::column>(
-    input.type(), 0, rmm::device_buffer{}, rmm::device_buffer{}, 0, std::move(children));
+  return std::make_unique<cudf::column>(input.type(),
+                                        0,
+                                        rmm::device_buffer{},
+                                        cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED),
+                                        0,
+                                        std::move(children));
 }
 
 /*
@@ -161,15 +165,14 @@ std::unique_ptr<table> empty_like(table_view const& input_table)
 {
   CUDF_FUNC_RANGE();
   std::vector<std::unique_ptr<column>> columns(input_table.num_columns());
-  std::transform(input_table.begin(), input_table.end(), columns.begin(), [&](column_view in_col) {
-    return empty_like(in_col);
-  });
+  std::ranges::transform(
+    input_table, columns.begin(), [&](column_view in_col) { return empty_like(in_col); });
   return std::make_unique<table>(std::move(columns));
 }
 
 std::unique_ptr<column> allocate_like(column_view const& input,
                                       mask_allocation_policy mask_alloc,
-                                      rmm::cuda_stream_view stream,
+                                      cuda::stream_ref stream,
                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -179,7 +182,7 @@ std::unique_ptr<column> allocate_like(column_view const& input,
 std::unique_ptr<column> allocate_like(column_view const& input,
                                       size_type size,
                                       mask_allocation_policy mask_alloc,
-                                      rmm::cuda_stream_view stream,
+                                      cuda::stream_ref stream,
                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();

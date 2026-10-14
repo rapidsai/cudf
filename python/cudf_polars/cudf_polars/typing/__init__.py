@@ -1,11 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Typing utilities for cudf_polars."""
 
 from __future__ import annotations
 
-from collections.abc import Hashable, MutableMapping
+from collections.abc import Hashable, Iterator, MutableMapping, Sized
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -23,7 +23,6 @@ from polars import polars as plrs  # type: ignore[attr-defined]
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from typing import TypeAlias
 
     import pylibcudf as plc
 
@@ -44,10 +43,11 @@ __all__: list[str] = [
     "PolarsIR",
     "RankMethod",
     "Schema",
+    "SizedIterator",
     "Slice",
 ]
 
-PolarsIR: TypeAlias = Union[
+type PolarsIR = Union[
     plrs._ir_nodes.PythonScan,
     plrs._ir_nodes.Scan,
     plrs._ir_nodes.Cache,
@@ -67,7 +67,7 @@ PolarsIR: TypeAlias = Union[
     plrs._ir_nodes.ExtContext,
 ]
 
-PolarsExpr: TypeAlias = Union[
+type PolarsExpr = Union[
     plrs._expr_nodes.Function,
     plrs._expr_nodes.Window,
     plrs._expr_nodes.Literal,
@@ -83,16 +83,16 @@ PolarsExpr: TypeAlias = Union[
     plrs._expr_nodes.PyExprIR,
 ]
 
-PolarsSchema: TypeAlias = dict[str, pl.DataType]
-Schema: TypeAlias = dict[str, "DataType"]
+type PolarsSchema = dict[str, pl.DataType]
+type Schema = dict[str, "DataType"]
 
-PolarsDataType: TypeAlias = polars.datatypes.DataTypeClass | polars.datatypes.DataType
+type PolarsDataType = polars.datatypes.DataTypeClass | polars.datatypes.DataType
 
-Slice: TypeAlias = tuple[int, int | None]
+type Slice = tuple[int, int | None]
 
-CSECache: TypeAlias = MutableMapping[int, tuple["DataFrame", int]]
+type CSECache = MutableMapping[int, tuple["DataFrame", int]]
 
-ClosedInterval: TypeAlias = Literal["left", "right", "both", "none"]
+type ClosedInterval = Literal["left", "right", "both", "none"]
 
 Duration = NewType("Duration", tuple[int, int, int, int, bool, bool])
 
@@ -136,7 +136,7 @@ class NodeTraverser(Protocol):
         ...
 
 
-OptimizationArgs: TypeAlias = Literal[
+type OptimizationArgs = Literal[
     "type_coercion",
     "predicate_pushdown",
     "projection_pushdown",
@@ -149,13 +149,18 @@ OptimizationArgs: TypeAlias = Literal[
     "optimizations",
 ]
 
-CollectKwargs: TypeAlias = dict[OptimizationArgs, bool | pl.QueryOptFlags]
+type CollectKwargs = dict[OptimizationArgs, bool | pl.QueryOptFlags]
 
 
 U_contra = TypeVar("U_contra", bound=Hashable, contravariant=True)
 V_co = TypeVar("V_co", covariant=True)
 StateT_co = TypeVar("StateT_co", covariant=True)
 NodeT = TypeVar("NodeT", bound="nodebase.Node[Any]")
+ItemT_co = TypeVar("ItemT_co", covariant=True)
+
+
+class SizedIterator(Iterator[ItemT_co], Sized, Protocol[ItemT_co]):
+    """An iterator that also reports how many items it will yield."""
 
 
 class GenericTransformer(Protocol[U_contra, V_co, StateT_co]):
@@ -198,6 +203,12 @@ class _ListDataTypeHeader(TypedDict):
     inner: DataTypeHeader
 
 
+class _ArrayDataTypeHeader(TypedDict):
+    kind: Literal["array"]
+    inner: DataTypeHeader
+    width: int
+
+
 class _StructFieldHeader(TypedDict):
     name: str
     dtype: DataTypeHeader
@@ -208,13 +219,28 @@ class _StructDataTypeHeader(TypedDict):
     fields: list[_StructFieldHeader]
 
 
+class _CategoricalDataTypeHeader(TypedDict):
+    kind: Literal["categorical"]
+    name: str
+    namespace: str
+    physical: str
+
+
+class _EnumDataTypeHeader(TypedDict):
+    kind: Literal["enum"]
+    categories: list[str]
+
+
 DataTypeHeader = (
     _ScalarDataTypeHeader
     | _DecimalDataTypeHeader
     | _DatetimeDataTypeHeader
     | _DurationDataTypeHeader
     | _ListDataTypeHeader
+    | _ArrayDataTypeHeader
     | _StructDataTypeHeader
+    | _CategoricalDataTypeHeader
+    | _EnumDataTypeHeader
 )
 
 

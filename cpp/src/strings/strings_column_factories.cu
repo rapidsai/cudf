@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,13 +14,13 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/utility>
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/stream>
 #include <thrust/scan.h>
 #include <thrust/uninitialized_fill.h>
 
@@ -35,7 +35,7 @@ using column_string_pairs = cudf::device_span<string_index_pair const>;
 template <typename OutputType>
 std::pair<std::vector<std::unique_ptr<column>>, rmm::device_uvector<int64_t>>
 make_offsets_child_column_batch_async(std::vector<column_string_pairs> const& input,
-                                      rmm::cuda_stream_view stream,
+                                      cuda::stream_ref stream,
                                       rmm::device_async_resource_ref mr)
 {
   auto const num_columns = input.size();
@@ -68,9 +68,15 @@ make_offsets_child_column_batch_async(std::vector<column_string_pairs> const& in
 
 }  // namespace
 
+CUDF_EXPORT std::pair<std::unique_ptr<column>, int64_t> make_offsets_child_column(
+  device_span<size_type const> sizes, cuda::stream_ref stream, rmm::device_async_resource_ref mr)
+{
+  return make_offsets_child_column(sizes.begin(), sizes.end(), stream, mr);
+}
+
 std::vector<std::unique_ptr<column>> make_strings_column_batch(
   std::vector<column_string_pairs> const& input,
-  rmm::cuda_stream_view stream,
+  cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
 {
   auto const num_columns = input.size();
@@ -78,7 +84,7 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
   auto [offsets_cols, d_chars_sizes] =
     make_offsets_child_column_batch_async<size_type>(input, stream, mr);
 
-  std::vector<rmm::device_buffer> null_masks;
+  std::vector<cuda::device_buffer<std::byte>> null_masks;
   null_masks.reserve(num_columns);
 
   rmm::device_uvector<size_type> d_valid_counts(num_columns, stream, mr);
@@ -100,12 +106,13 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
     auto const grid =
       cudf::detail::grid_1d{static_cast<thread_index_type>(string_count), block_size};
     cudf::detail::valid_if_kernel<block_size>
-      <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+      <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.get()>>>(
         reinterpret_cast<bitmask_type*>(null_masks.back().data()),
         string_pairs.data(),
         string_count,
         [] __device__(string_index_pair const pair) -> bool { return pair.first != nullptr; },
         d_valid_counts.data() + idx);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   auto const chars_sizes  = cudf::detail::make_std_vector_async(d_chars_sizes, stream);
@@ -113,7 +120,7 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
 
   // Except for other stream syncs in `CUB` that we cannot control,
   // this should be the only stream sync we need in the entire API.
-  stream.synchronize();
+  stream.sync();
 
   auto const threshold = cudf::strings::get_offset64_threshold();
   auto const overflow_count =
@@ -166,7 +173,8 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
       std::move(offsets_cols[idx]),
       chars_data.release(),
       null_count,
-      null_count ? std::move(null_masks[idx]) : rmm::device_buffer{0, stream, mr});
+      null_count ? std::move(null_masks[idx])
+                           : cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED, stream, mr));
   }
 
   return output;
@@ -177,7 +185,7 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
 // Create a strings-type column from vector of pointer/size pairs
 std::unique_ptr<column> make_strings_column(
   device_span<cuda::std::pair<char const*, size_type> const> strings,
-  rmm::cuda_stream_view stream,
+  cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -186,7 +194,7 @@ std::unique_ptr<column> make_strings_column(
 
 std::vector<std::unique_ptr<column>> make_strings_column_batch(
   std::vector<cudf::device_span<cuda::std::pair<char const*, size_type> const>> const& input,
-  rmm::cuda_stream_view stream,
+  cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -209,13 +217,13 @@ struct string_view_to_pair {
 
 std::unique_ptr<column> make_strings_column(device_span<string_view const> string_views,
                                             string_view null_placeholder,
-                                            rmm::cuda_stream_view stream,
+                                            cuda::stream_ref stream,
                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
   auto it_pair =
-    thrust::make_transform_iterator(string_views.begin(), string_view_to_pair{null_placeholder});
+    cuda::transform_iterator(string_views.begin(), string_view_to_pair{null_placeholder});
   return cudf::strings::detail::make_strings_column(
     it_pair, it_pair + string_views.size(), stream, mr);
 }
@@ -224,7 +232,7 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
                                             std::unique_ptr<column> offsets_column,
                                             rmm::device_buffer&& chars_buffer,
                                             size_type null_count,
-                                            rmm::device_buffer&& null_mask)
+                                            cuda::device_buffer<std::byte>&& null_mask)
 {
   CUDF_FUNC_RANGE();
 
@@ -247,7 +255,7 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
 std::unique_ptr<column> make_strings_column(size_type num_strings,
                                             rmm::device_uvector<size_type>&& offsets,
                                             rmm::device_uvector<char>&& chars,
-                                            rmm::device_buffer&& null_mask,
+                                            cuda::device_buffer<std::byte>&& null_mask,
                                             size_type null_count)
 {
   CUDF_FUNC_RANGE();
@@ -264,7 +272,7 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
     data_type{type_id::INT32},
     offsets_size,
     offsets.release(),
-    rmm::device_buffer(),
+    cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED),
     0);
 
   auto children = std::vector<std::unique_ptr<column>>();

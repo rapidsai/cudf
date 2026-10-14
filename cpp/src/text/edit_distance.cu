@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -20,17 +20,13 @@
 
 #include <nvtext/edit_distance.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cooperative_groups.h>
 #include <cuda/iterator>
 #include <cuda/std/functional>
-#include <thrust/execution_policy.h>
-#include <thrust/fill.h>
-#include <thrust/for_each.h>
-#include <thrust/sequence.h>
+#include <cuda/stream>
 #include <thrust/transform.h>
 
 namespace nvtext {
@@ -233,7 +229,7 @@ CUDF_KERNEL void levenshtein_kernel(cudf::column_device_view d_strings,
 
 std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& input,
                                             cudf::strings_column_view const& targets,
-                                            rmm::cuda_stream_view stream,
+                                            cuda::stream_ref stream,
                                             rmm::device_async_resource_ref mr)
 {
   auto const output_type = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
@@ -261,19 +257,25 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& inp
   // get the total size of the temporary compute buffer
   // and convert sizes to offsets in-place
   auto const compute_size =
-    cudf::detail::sizes_to_offsets(offsets.begin(), offsets.end(), offsets.begin(), 0, stream);
+    cudf::detail::sizes_to_offsets(offsets.begin(), offsets.end(), offsets.begin(), 0, stream, mr);
   rmm::device_uvector<cudf::size_type> compute_buffer(compute_size, stream);
   auto d_buffer = compute_buffer.data();
 
   auto results = cudf::make_fixed_width_column(
-    output_type, input.size(), rmm::device_buffer{0, stream, mr}, 0, stream, mr);
+    output_type,
+    input.size(),
+    cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED, stream, mr),
+    0,
+    stream,
+    mr);
   auto d_results = results->mutable_view().data<cudf::size_type>();
 
   constexpr auto block_size = 256L;
   constexpr auto tile_size  = static_cast<cudf::thread_index_type>(cudf::detail::warp_size);
   cudf::detail::grid_1d grid{input.size() * tile_size, block_size};
-  levenshtein_kernel<tile_size><<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+  levenshtein_kernel<tile_size><<<grid.num_blocks, grid.num_threads_per_block, 0, stream.get()>>>(
     *d_strings, *d_targets, d_buffer, offsets.data(), d_results);
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   return results;
 }
@@ -287,7 +289,7 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& inp
  */
 std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& input,
                                             cudf::strings_column_view const& targets,
-                                            rmm::cuda_stream_view stream,
+                                            cuda::stream_ref stream,
                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();

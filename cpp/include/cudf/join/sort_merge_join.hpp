@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,17 +11,22 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/stream>
+
 #include <memory>
+
+/**
+ * @file
+ * @brief Class implementing the sort-merge algorithm for table joins
+ */
 
 namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup column_join
  * @{
- * @file
  */
 
 // Forward declaration
@@ -61,8 +66,8 @@ class sort_merge_join {
    */
   sort_merge_join(table_view const& right,
                   sorted is_right_sorted,
-                  null_equality compare_nulls  = null_equality::EQUAL,
-                  rmm::cuda_stream_view stream = cudf::get_default_stream());
+                  null_equality compare_nulls = null_equality::EQUAL,
+                  cuda::stream_ref stream     = cudf::get_default_stream());
 
   /**
    * @brief Returns the row indices that can be used to construct the result of performing
@@ -73,7 +78,6 @@ class sort_merge_join {
    * This method is thread-safe and can be called concurrently from multiple threads.
    *
    * @param left The left table
-   * @param is_left_sorted Enum to indicate if left table is pre-sorted
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the join indices' device
    * memory.
@@ -84,8 +88,7 @@ class sort_merge_join {
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(table_view const& left,
-             sorted is_left_sorted,
-             rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+             cuda::stream_ref stream           = cudf::get_default_stream(),
              rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
@@ -97,7 +100,6 @@ class sort_merge_join {
    * This method is thread-safe and can be called concurrently from multiple threads.
    *
    * @param left The left table
-   * @param is_left_sorted Enum to indicate if left table is pre-sorted
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the join indices' device memory
    *
@@ -107,8 +109,7 @@ class sort_merge_join {
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   left_join(table_view const& left,
-            sorted is_left_sorted,
-            rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+            cuda::stream_ref stream           = cudf::get_default_stream(),
             rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
@@ -128,7 +129,6 @@ class sort_merge_join {
    * to process large joins in manageable chunks.
    *
    * @param left The left table to join with the pre-processed right table
-   * @param is_left_sorted Enum to indicate if left table is pre-sorted
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the result device memory
    *
@@ -138,8 +138,7 @@ class sort_merge_join {
    */
   std::unique_ptr<join_match_context> inner_join_match_context(
     table_view const& left,
-    sorted is_left_sorted,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    cuda::stream_ref stream           = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
@@ -174,7 +173,7 @@ class sort_merge_join {
    * sort_merge_join join_obj(right_table, sorted::NO);
    *
    * // Get match context for the entire left table
-   * auto match_ctx = join_obj.inner_join_match_context(left_table, sorted::NO);
+   * auto match_ctx = join_obj.inner_join_match_context(left_table);
    *
    * // Create partition context
    * cudf::join_partition_context part_ctx{std::move(match_ctx), 0, 0};
@@ -198,7 +197,7 @@ class sort_merge_join {
             std::unique_ptr<rmm::device_uvector<size_type>>>
   partitioned_inner_join(
     cudf::join_partition_context const& context,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    cuda::stream_ref stream           = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
  private:

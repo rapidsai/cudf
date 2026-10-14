@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,7 +24,6 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
@@ -32,9 +31,8 @@
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/std/iterator>
+#include <cuda/stream>
 #include <thrust/binary_search.h>
-#include <thrust/copy.h>
-#include <thrust/count.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/transform.h>
@@ -262,7 +260,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
                                                    string_view const& d_target,
                                                    string_view const& d_replacement,
                                                    cudf::size_type maxrepl,
-                                                   rmm::cuda_stream_view stream,
+                                                   cuda::stream_ref stream,
                                                    rmm::device_async_resource_ref mr)
 {
   auto d_strings = column_device_view::create(input.parent(), stream);
@@ -287,7 +285,8 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   auto const num_blocks                = util::div_rounding_up_safe(
     util::div_rounding_up_safe(chars_bytes, static_cast<int64_t>(bytes_per_thread)), block_size);
   count_targets_kernel<block_size, bytes_per_thread>
-    <<<num_blocks, block_size, 0, stream.value()>>>(fn, chars_bytes, d_target_count.data());
+    <<<num_blocks, block_size, 0, stream.get()>>>(fn, chars_bytes, d_target_count.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
   auto target_count = d_target_count.value(stream);
 
   // Create a vector of every target position in the chars column.
@@ -298,7 +297,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
     copy_itr,
     copy_itr + chars_bytes + chars_offset,
     targets_positions.begin(),
-    [fn] __device__(int64_t idx) { return fn.is_target_within_row(idx); },
+    [fn] __device__(int64_t idx) -> bool { return fn.is_target_within_row(idx); },
     stream);
 
   // adjust target count since the copy-if may have eliminated some invalid targets
@@ -344,12 +343,11 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
     });
 
   // use this utility to gather the string parts into a contiguous chars column
-  auto chars      = make_strings_column(indices.begin(), indices.end(), stream, mr);
+  auto chars      = cudf::make_strings_column(indices, stream, mr);
   auto chars_data = chars->release().data;
 
   // create offsets from the sizes
-  offsets = std::get<0>(
-    cudf::strings::detail::make_offsets_child_column(counts.begin(), counts.end(), stream, mr));
+  offsets = std::get<0>(cudf::strings::detail::make_offsets_child_column(counts, stream, mr));
 
   // build the strings columns from the chars and offsets
   return make_strings_column(strings_count,
@@ -452,7 +450,7 @@ std::unique_ptr<column> replace_string_parallel(strings_column_view const& input
                                                 ReplIter repl_iter,
                                                 cudf::size_type maxrepl,
                                                 bitmask_type const* d_valid_mask,
-                                                rmm::cuda_stream_view stream,
+                                                cuda::stream_ref stream,
                                                 rmm::device_async_resource_ref mr)
 {
   auto d_strings = column_device_view::create(input.parent(), stream);
@@ -463,7 +461,11 @@ std::unique_ptr<column> replace_string_parallel(strings_column_view const& input
     stream,
     mr);
 
-  return make_strings_column(input.size(), std::move(offsets_column), chars.release(), 0, {});
+  return make_strings_column(input.size(),
+                             std::move(offsets_column),
+                             chars.release(),
+                             0,
+                             cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
 }
 
 }  // namespace
@@ -472,7 +474,7 @@ std::unique_ptr<column> replace(strings_column_view const& input,
                                 string_scalar const& target,
                                 string_scalar const& repl,
                                 cudf::size_type maxrepl,
-                                rmm::cuda_stream_view stream,
+                                cuda::stream_ref stream,
                                 rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
@@ -506,7 +508,7 @@ std::unique_ptr<column> replace(strings_column_view const& input,
 std::unique_ptr<column> replace(strings_column_view const& input,
                                 strings_column_view const& targets,
                                 strings_column_view const& repls,
-                                rmm::cuda_stream_view stream,
+                                cuda::stream_ref stream,
                                 rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(targets.size() == input.size(),
@@ -526,11 +528,11 @@ std::unique_ptr<column> replace(strings_column_view const& input,
       auto const views = std::vector<column_view>{input.parent(), targets.parent(), repls.parent()};
       return cudf::detail::bitmask_and(table_view{views}, stream, mr);
     } else {
-      return std::pair{rmm::device_buffer{}, 0};
+      return std::pair{cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED), 0};
     }
   }();
   auto const d_valid_mask =
-    has_any_nulls ? static_cast<bitmask_type const*>(null_mask.data()) : nullptr;
+    has_any_nulls ? reinterpret_cast<bitmask_type const*>(null_mask.data()) : nullptr;
 
   auto d_targets = column_device_view::create(targets.parent(), stream);
   auto d_repls   = column_device_view::create(repls.parent(), stream);
@@ -555,7 +557,7 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
                                 string_scalar const& target,
                                 string_scalar const& repl,
                                 cudf::size_type maxrepl,
-                                rmm::cuda_stream_view stream,
+                                cuda::stream_ref stream,
                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -565,7 +567,7 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
 std::unique_ptr<column> replace(strings_column_view const& strings,
                                 strings_column_view const& targets,
                                 strings_column_view const& repls,
-                                rmm::cuda_stream_view stream,
+                                cuda::stream_ref stream,
                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();

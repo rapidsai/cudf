@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,6 +19,7 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/strings/case.hpp>
+#include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.cuh>
@@ -29,14 +30,15 @@
 
 #include <nvtext/normalize.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-
-#include <cub/cub.cuh>
+#include <cub/block/block_store.cuh>
+#include <cub/device/device_segmented_reduce.cuh>
+#include <cuda/buffer>
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/iterator>
+#include <cuda/stream>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
-#include <thrust/for_each.h>
 #include <thrust/remove.h>
 #include <thrust/transform_reduce.h>
 
@@ -106,7 +108,7 @@ __device__ int8_t cp_to_utf8(uint32_t codepoint, char* out)
 
 // detail API
 std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& strings,
-                                               rmm::cuda_stream_view stream,
+                                               cuda::stream_ref stream,
                                                rmm::device_async_resource_ref mr)
 {
   if (strings.is_empty()) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
@@ -131,7 +133,7 @@ std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& 
  * Build the code point metadata table in device memory
  * using the vector pieces from codepoint_metadata.ah
  */
-rmm::device_uvector<codepoint_metadata_type> get_codepoint_metadata(rmm::cuda_stream_view stream)
+rmm::device_uvector<codepoint_metadata_type> get_codepoint_metadata(cuda::stream_ref stream)
 {
   auto table_vector = rmm::device_uvector<codepoint_metadata_type>(codepoint_metadata_size, stream);
   auto table        = table_vector.data();
@@ -155,7 +157,7 @@ rmm::device_uvector<codepoint_metadata_type> get_codepoint_metadata(rmm::cuda_st
  * Build the aux code point data table in device memory
  * using the vector pieces from codepoint_metadata.ah
  */
-rmm::device_uvector<aux_codepoint_data_type> get_aux_codepoint_data(rmm::cuda_stream_view stream)
+rmm::device_uvector<aux_codepoint_data_type> get_aux_codepoint_data(cuda::stream_ref stream)
 {
   auto table_vector = rmm::device_uvector<aux_codepoint_data_type>(aux_codepoint_data_size, stream);
   auto table        = table_vector.data();
@@ -184,7 +186,7 @@ rmm::device_uvector<aux_codepoint_data_type> get_aux_codepoint_data(rmm::cuda_st
 // external APIs
 
 std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& input,
-                                               rmm::cuda_stream_view stream,
+                                               cuda::stream_ref stream,
                                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -219,7 +221,7 @@ struct character_normalizer::character_normalizer_impl {
 
 character_normalizer::character_normalizer(bool do_lower_case,
                                            cudf::strings_column_view const& special_tokens,
-                                           rmm::cuda_stream_view stream,
+                                           cuda::stream_ref stream,
                                            rmm::device_async_resource_ref)
 {
   auto cp_metadata = nvtext::detail::get_codepoint_metadata(stream);
@@ -249,7 +251,7 @@ character_normalizer::~character_normalizer() {}
 std::unique_ptr<character_normalizer> create_character_normalizer(
   bool do_lower_case,
   cudf::strings_column_view const& special_tokens,
-  rmm::cuda_stream_view stream,
+  cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -286,7 +288,7 @@ CUDF_KERNEL void special_tokens_kernel(uint32_t* d_normalized,
   if (match == end) { return; }
   char candidate[8];
   auto const ch_begin =
-    thrust::transform_iterator(begin, [](auto v) { return static_cast<char>(v); });
+    cuda::transform_iterator(begin, [](auto v) { return static_cast<char>(v); });
   auto const ch_end = ch_begin + cuda::std::distance(begin, match + 1);
   auto last         = thrust::copy_if(
     thrust::seq, ch_begin, ch_end, candidate, [](auto c) { return c != 0 && c != ' '; });
@@ -312,6 +314,11 @@ CUDF_KERNEL void special_tokens_kernel(uint32_t* d_normalized,
   }
 }
 
+// Highest codepoint that maps to a plain ASCII result via get_first_cp
+constexpr uint32_t ASCII_MAX_CODEPOINT = 0x7Fu;
+// The char_flags table covers exactly the Basic Multilingual Plane
+constexpr uint32_t BMP_CODEPOINT_LIMIT = 0x10000u;
+
 /**
  * @brief The normalizer kernel
  *
@@ -328,12 +335,16 @@ CUDF_KERNEL void special_tokens_kernel(uint32_t* d_normalized,
  * @param do_lower_case True if the normalization includes lower-casing characters
  * @param d_output The output of the normalization (UTF-8 encoded)
  */
-CUDF_KERNEL void data_normalizer_kernel(char const* d_chars,
-                                        int64_t total_bytes,
-                                        codepoint_metadata_type const* cp_metadata,
-                                        aux_codepoint_data_type const* aux_table,
-                                        bool do_lower_case,
-                                        uint32_t* d_output)
+CUDF_KERNEL void data_normalizer_kernel(
+  char const* d_chars,
+  int64_t total_bytes,
+  codepoint_metadata_type const* cp_metadata,
+  aux_codepoint_data_type const* aux_table,
+  bool do_lower_case,
+  bool strip_accents,
+  bool pad_punctuation,
+  cudf::strings::detail::character_flags_table_type const* char_flags,
+  uint32_t* d_output)
 {
   uint32_t replacement[MAX_NEW_CHARS] = {0};
 
@@ -347,11 +358,19 @@ CUDF_KERNEL void data_normalizer_kernel(char const* d_chars,
     }();
     auto const metadata = cp_metadata[cp];
 
-    if (!should_remove_cp(metadata, do_lower_case)) {
+    if (!should_remove_cp(metadata, do_lower_case, strip_accents)) {
       int8_t num_new_chars = 1;
       // retrieve the normalized value for cp
-      auto const new_cp = do_lower_case || always_replace(metadata) ? get_first_cp(metadata) : cp;
-      replacement[0]    = new_cp == 0 ? cp : new_cp;
+      uint32_t new_cp = [char_flags, do_lower_case, strip_accents, metadata, cp] {
+        if (do_lower_case || always_replace(metadata)) { return get_first_cp(metadata); }
+        if (!strip_accents) { return 0u; }
+        // Use the de-accented ASCII result when available; re-uppercase if needed
+        auto const mapped = get_first_cp(metadata);
+        if (mapped == 0 || mapped > ASCII_MAX_CODEPOINT) { return 0u; }
+        auto const flag = cp < BMP_CODEPOINT_LIMIT ? char_flags[cp] : uint8_t{0};
+        return cudf::strings::detail::IS_UPPER(flag) ? (mapped - 'a' + 'A') : mapped;
+      }();
+      replacement[0] = new_cp == 0 ? cp : new_cp;
 
       if (do_lower_case && is_multi_char_transform(metadata)) {
         auto const next_cps = aux_table[cp];
@@ -360,7 +379,7 @@ CUDF_KERNEL void data_normalizer_kernel(char const* d_chars,
         num_new_chars       = 2 + (replacement[2] != 0);
       }
 
-      if (should_add_spaces(metadata, do_lower_case) && (num_new_chars == 1)) {
+      if (should_add_spaces(metadata, do_lower_case, pad_punctuation) && (num_new_chars == 1)) {
         replacement[1] = replacement[0];
         replacement[0] = SPACE_CODE_POINT;  // add spaces around the new codepoint
         replacement[2] = SPACE_CODE_POINT;
@@ -401,7 +420,7 @@ rmm::device_uvector<cudf::size_type> compute_sizes(cudf::device_span<uint32_t co
                                                    OffsetType offsets,
                                                    int64_t offset,
                                                    cudf::size_type size,
-                                                   rmm::cuda_stream_view stream)
+                                                   cuda::stream_ref stream)
 {
   auto output_sizes = rmm::device_uvector<cudf::size_type>(size, stream);
 
@@ -410,13 +429,12 @@ rmm::device_uvector<cudf::size_type> compute_sizes(cudf::device_span<uint32_t co
   // counts the non-zero bytes in the d_data array
   auto d_in = cudf::detail::make_counting_transform_iterator(
     0, cuda::proclaim_return_type<cudf::size_type>([d_data] __device__(auto idx) {
-      idx = idx * MAX_NEW_CHARS;
       // transform function counts number of non-zero bytes in uint32_t value
       auto tfn = [](uint32_t v) -> cudf::size_type {
         return ((v & 0xFF) > 0) + ((v & 0xFF00) > 0) + ((v & 0xFF0000) > 0) +
                ((v & 0xFF000000) > 0);
       };
-      auto const begin = d_data + idx;
+      auto const begin = d_data + (static_cast<int64_t>(idx) * MAX_NEW_CHARS);
       auto const end   = begin + MAX_NEW_CHARS;
       return thrust::transform_reduce(thrust::seq, begin, end, tfn, 0, cuda::std::plus{});
     }));
@@ -426,20 +444,22 @@ rmm::device_uvector<cudf::size_type> compute_sizes(cudf::device_span<uint32_t co
   auto temp  = std::size_t{0};
   if (offset == 0) {
     cub::DeviceSegmentedReduce::Sum(
-      nullptr, temp, d_in, d_out, size, offsets, offsets + 1, stream.value());
-    auto d_temp = rmm::device_buffer{temp, stream};
+      nullptr, temp, d_in, d_out, size, offsets, offsets + 1, stream.get());
+    auto d_temp = cuda::device_buffer<std::byte>{
+      stream, cudf::get_current_device_resource_ref(), temp, cuda::no_init};
     cub::DeviceSegmentedReduce::Sum(
-      d_temp.data(), temp, d_in, d_out, size, offsets, offsets + 1, stream.value());
+      d_temp.data(), temp, d_in, d_out, size, offsets, offsets + 1, stream.get());
   } else {
     // offsets need to be normalized for segmented-reduce to work efficiently
-    auto offsets_itr = thrust::transform_iterator(
+    auto offsets_itr = cuda::transform_iterator(
       offsets,
       cuda::proclaim_return_type<int64_t>([offset] __device__(auto o) { return o - offset; }));
     cub::DeviceSegmentedReduce::Sum(
-      nullptr, temp, d_in, d_out, size, offsets_itr, offsets_itr + 1, stream.value());
-    auto d_temp = rmm::device_buffer{temp, stream};
+      nullptr, temp, d_in, d_out, size, offsets_itr, offsets_itr + 1, stream.get());
+    auto d_temp = cuda::device_buffer<std::byte>{
+      stream, cudf::get_current_device_resource_ref(), temp, cuda::no_init};
     cub::DeviceSegmentedReduce::Sum(
-      d_temp.data(), temp, d_in, d_out, size, offsets_itr, offsets_itr + 1, stream.value());
+      d_temp.data(), temp, d_in, d_out, size, offsets_itr, offsets_itr + 1, stream.get());
   }
 
   return output_sizes;
@@ -451,7 +471,7 @@ OutputIterator remove_copy_safe(InputIterator first,
                                 InputIterator last,
                                 OutputIterator result,
                                 T const& value,
-                                rmm::cuda_stream_view stream)
+                                cuda::stream_ref stream)
 {
   auto const copy_size = std::min(static_cast<std::size_t>(std::distance(first, last)),
                                   static_cast<std::size_t>(std::numeric_limits<int>::max()));
@@ -473,7 +493,7 @@ OutputIterator remove_copy_safe(InputIterator first,
 
 // handles ranges above int32 max
 template <typename Iterator, typename T>
-Iterator remove_safe(Iterator first, Iterator last, T const& value, rmm::cuda_stream_view stream)
+Iterator remove_safe(Iterator first, Iterator last, T const& value, cuda::stream_ref stream)
 {
   auto const size = std::min(static_cast<std::size_t>(std::distance(first, last)),
                              static_cast<std::size_t>(std::numeric_limits<int>::max()));
@@ -492,7 +512,9 @@ Iterator remove_safe(Iterator first, Iterator last, T const& value, rmm::cuda_st
 
 std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view const& input,
                                                    character_normalizer const& normalizer,
-                                                   rmm::cuda_stream_view stream,
+                                                   bool strip_accents,
+                                                   bool pad_punctuation,
+                                                   cuda::stream_ref stream,
                                                    rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) { return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING}); }
@@ -510,22 +532,32 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
 
   auto const& parameters = normalizer._impl;
 
+  // char_flags only needed when stripping accents without lowercasing (re-uppercase logic)
+  auto const char_flags = (strip_accents && !parameters->do_lower_case)
+                            ? cudf::strings::detail::get_character_flags_table(stream)
+                            : nullptr;
+
   auto d_normalized = rmm::device_uvector<uint32_t>(max_new_char_total, stream);
-  data_normalizer_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+  data_normalizer_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.get()>>>(
     d_input_chars,
     chars_size,
     parameters->cp_metadata.data(),
     parameters->aux_table.data(),
     parameters->do_lower_case,
+    strip_accents,
+    pad_punctuation,
+    char_flags,
     d_normalized.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   // This removes space added around any special tokens in the form of [ttt].
-  // An alternate approach is to do a multi-replace of '[ ttt ]' with '[ttt]' right
-  // before returning the output strings column.
+  // The kernel relies on the space-padded layout produced when pad_punctuation=true;
+  // when pad_punctuation=false no spaces were inserted, so there is nothing to undo.
   auto const special_tokens = parameters->get_special_tokens();
-  if (!special_tokens.empty()) {
-    special_tokens_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+  if (!special_tokens.empty() && pad_punctuation) {
+    special_tokens_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.get()>>>(
       d_normalized.data(), chars_size, special_tokens, parameters->do_lower_case);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   // Use segmented-reduce over the non-zero codepoints to get the size of the output rows
@@ -541,9 +573,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   // create output chars by calling remove_copy(0) on the bytes in d_normalized
   auto chars       = rmm::device_uvector<char>(total_size, stream, mr);
   auto const begin = reinterpret_cast<char const*>(d_normalized.begin());
-  // the remove() above speeds up the remove_copy() by roughly 10%
-  auto const end =
-    reinterpret_cast<char const*>(remove_safe(d_normalized.begin(), d_normalized.end(), 0, stream));
+  auto const end   = reinterpret_cast<char const*>(d_normalized.end());
   remove_copy_safe(begin, end, chars.data(), 0, stream);
 
   return cudf::make_strings_column(input.size(),
@@ -557,11 +587,23 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
 
 std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view const& input,
                                                    character_normalizer const& normalizer,
-                                                   rmm::cuda_stream_view stream,
+                                                   cuda::stream_ref stream,
                                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::normalize_characters(input, normalizer, stream, mr);
+  return detail::normalize_characters(input, normalizer, false, true, stream, mr);
+}
+
+std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view const& input,
+                                                   character_normalizer const& normalizer,
+                                                   normalize_flags flags,
+                                                   cuda::stream_ref stream,
+                                                   rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  auto const strip    = static_cast<bool>(flags & normalize_flags::STRIP_ACCENTS);
+  auto const tokenize = static_cast<bool>(flags & normalize_flags::PAD_PUNCTUATION);
+  return detail::normalize_characters(input, normalizer, strip, tokenize, stream, mr);
 }
 
 }  // namespace nvtext

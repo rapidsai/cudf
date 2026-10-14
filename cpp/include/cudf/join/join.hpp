@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,19 +12,27 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/std/limits>
+#include <cuda/stream>
 
+#include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <optional>
+#include <utility>
+
+/**
+ * @file
+ * @brief Common types and utilities shared by cuDF's join APIs.
+ */
 
 namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup column_join
  * @{
- * @file
  */
 
 /**
@@ -50,6 +58,14 @@ enum class join_kind : int32_t {
  * prefiltering, such as bloom-filter-based candidate reduction before probing a hash table.
  */
 enum class join_prefilter : bool { NO = false, YES = true };
+
+/**
+ * @brief Specifies whether join-key columns may contain nulls.
+ *
+ * Join implementations use this to select row operators that either check or omit null handling.
+ * If nullability is unknown, use `YES`.
+ */
+enum class nullable_join : bool { YES = true, NO = false };
 
 /**
  * @brief Sentinel value used to indicate an unmatched row index in join operations.
@@ -154,7 +170,7 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 inner_join(cudf::table_view const& left_keys,
            cudf::table_view const& right_keys,
            null_equality compare_nulls       = null_equality::EQUAL,
-           rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+           cuda::stream_ref stream           = cudf::get_default_stream(),
            rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
@@ -195,7 +211,7 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 left_join(cudf::table_view const& left_keys,
           cudf::table_view const& right_keys,
           null_equality compare_nulls       = null_equality::EQUAL,
-          rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+          cuda::stream_ref stream           = cudf::get_default_stream(),
           rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
@@ -236,13 +252,17 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 full_join(cudf::table_view const& left_keys,
           cudf::table_view const& right_keys,
           null_equality compare_nulls       = null_equality::EQUAL,
-          rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+          cuda::stream_ref stream           = cudf::get_default_stream(),
           rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Performs a cross join on two tables (`left`, `right`)
  *
  * The cross join returns the cartesian product of rows from each table.
+ *
+ * The result has `left.num_rows() * right.num_rows()` rows and
+ * `left.num_columns() + right.num_columns()` columns. Either operand may have
+ * zero columns and still contribute its row count.
  *
  * @note Warning: This function can easily cause out-of-memory errors. The size of the output is
  * equal to `left.num_rows() * right.num_rows()`. Use with caution.
@@ -252,8 +272,9 @@ full_join(cudf::table_view const& left_keys,
  * Right b: {3, 4, 5}
  * Result: { a: {0, 0, 0, 1, 1, 1, 2, 2, 2}, b: {3, 4, 5, 3, 4, 5, 3, 4, 5} }
  * @endcode
-
- * @throw cudf::logic_error if the number of columns in either `left` or `right` table is 0
+ *
+ * @throw std::overflow_error if `left.num_rows() * right.num_rows()` exceeds the maximum
+ * number of rows a column can hold.
  *
  * @param left  The left table
  * @param right The right table
@@ -265,7 +286,7 @@ full_join(cudf::table_view const& left_keys,
 std::unique_ptr<cudf::table> cross_join(
   cudf::table_view const& left,
   cudf::table_view const& right,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  cuda::stream_ref stream           = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
@@ -277,14 +298,16 @@ std::unique_ptr<cudf::table> cross_join(
  *
  * The behavior depends on the join type:
  * - INNER_JOIN: Only pairs that satisfy the predicate and have valid indices are kept.
- * - LEFT_JOIN: All left rows are preserved. Failed predicates nullify right indices.
- * - FULL_JOIN: All rows from both sides are preserved. Failed predicates create separate pairs.
+ * - LEFT_JOIN: Keeps passing pairs and adds exactly one unmatched pair for each left row
+ *   with no passing match.
+ * - FULL_JOIN: Keeps passing pairs and adds exactly one unmatched pair for each row on either
+ *   side with no passing match.
  *
- * Note on JoinNoMatch pairs: If an input pair already contains `JoinNoMatch` in either
- * position, the predicate cannot be evaluated and the pair passes through unchanged. The
- * "separate pairs" splitting only occurs when both indices are valid but the predicate fails.
- * For example, a FULL_JOIN pair `(5, 10)` that fails the predicate becomes two pairs:
- * `(5, JoinNoMatch)` and `(JoinNoMatch, 10)`, ensuring both rows appear in the output.
+ * The input maps must come from an equality join of the requested kind, with row indices
+ * corresponding to the supplied conditional tables. Null predicate results are nonmatches.
+ * Unmatched rows in valid outer-join maps are preserved without evaluating the predicate.
+ * A failed candidate does not create an unmatched row if another candidate for that row passes.
+ * Empty input maps produce empty output maps, without completing an outer join.
  *
  * ## Usage Pattern
  *
@@ -331,6 +354,9 @@ std::unique_ptr<cudf::table> cross_join(
  * @param right_indices Device span of row indices in the right table from hash join.
  * @param predicate An AST expression that returns a boolean for each pair of rows.
  * @param join_kind The type of join operation. Must be INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
+ * @param output_size Optional precomputed number of output rows. When provided, skips the internal
+ *        size-counting pass. Behavior is undefined if it differs from the size the function would
+ *        otherwise produce for the same inputs.
  * @param stream CUDA stream used for kernel launches and memory operations.
  * @param mr Device memory resource used to allocate output indices.
  *
@@ -345,7 +371,8 @@ filter_join_indices(cudf::table_view const& left,
                     cudf::device_span<size_type const> right_indices,
                     cudf::ast::expression const& predicate,
                     cudf::join_kind join_kind,
-                    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                    std::optional<std::size_t> output_size = std::nullopt,
+                    cuda::stream_ref stream                = cudf::get_default_stream(),
                     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
@@ -353,15 +380,21 @@ filter_join_indices(cudf::table_view const& left,
  *        the filtered index vectors.
  *
  * Runs the same predicate evaluation as `filter_join_indices` but skips the index
- * materialization step, returning only the total number of pairs that would be
- * emitted. The semantics per `join_kind` match `filter_join_indices`:
- * - INNER_JOIN: number of pairs where the predicate evaluates to true.
- * - LEFT_JOIN: predicate-passing pairs plus one entry per left row with no passing match.
- * - FULL_JOIN: input pairs plus one extra entry per pair whose predicate failed
- *   (because failed matches split into `(left, JoinNoMatch)` and `(JoinNoMatch, right)`).
+ * materialization step, returning the total number of pairs that would be emitted along with the
+ * per-output contribution counts whose sum is that total. The counts are laid out per `join_kind`
+ * so that each entry records how many output rows the corresponding input contributes:
+ * - INNER_JOIN: indexed per input pair; entry `i` is `1` if the predicate passes and `0` otherwise.
+ * - FULL_JOIN: one entry per left row followed by one per right row. Left entries count passing
+ *   valid pairs, floored to `1`; right entries are `1` for rows with no passing match and `0`
+ *   otherwise. Empty input maps return empty counts.
+ * - LEFT_JOIN: indexed per left row; each entry holds the number of passing pairs for that left
+ *   row, floored to `1` to account for the synthetic `(left, JoinNoMatch)` entry.
  *
- * The returned size may be passed as a precomputed hint to APIs that compose
- * `filter_join_indices` (for example, the mixed join APIs).
+ * The returned size and contribution counts may be passed as a precomputed hint to APIs that
+ * compose `filter_join_indices` (for example, the mixed join APIs). The layout above is an
+ * implementation detail that callers should treat as opaque rather than rely upon.
+ * The input-map contract is the same as `filter_join_indices`. Empty maps return zero size and
+ * empty counts.
  *
  * @throw std::invalid_argument if `join_kind` is not INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
  * @throw std::invalid_argument if `left_indices` and `right_indices` have different sizes.
@@ -374,28 +407,35 @@ filter_join_indices(cudf::table_view const& left,
  * @param predicate An AST expression that returns a boolean for each pair of rows.
  * @param join_kind The type of join operation. Must be INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
  * @param stream CUDA stream used for kernel launches and memory operations.
+ * @param mr Device memory resource used to allocate the returned contribution counts.
  *
- * @return The exact number of pairs that `filter_join_indices` would produce.
+ * @return A pair containing the exact number of pairs that `filter_join_indices` would produce
+ *         and the per-output contribution counts that sum to that number.
  */
-[[nodiscard]] std::size_t filter_join_indices_output_size(
+[[nodiscard]] std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>>
+filter_join_indices_output_size(
   cudf::table_view const& left,
   cudf::table_view const& right,
   cudf::device_span<size_type const> left_indices,
   cudf::device_span<size_type const> right_indices,
   cudf::ast::expression const& predicate,
   cudf::join_kind join_kind,
-  rmm::cuda_stream_view stream = cudf::get_default_stream());
+  cuda::stream_ref stream           = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief JIT-based filtering of join result indices using string predicate.
  *
  * This function provides a JIT-compiled alternative to filter_join_indices(),
  * taking a string-based predicate that gets compiled to optimized GPU code.
+ * The input-map contract is the same as `filter_join_indices`.
  *
  * The behavior depends on the join type (same as filter_join_indices):
  * - INNER_JOIN: Only pairs that satisfy the predicate and have valid indices are kept.
- * - LEFT_JOIN: All left rows are preserved. Failed predicates nullify right indices.
- * - FULL_JOIN: All rows from both sides are preserved. Failed predicates create separate pairs.
+ * - LEFT_JOIN: Keeps passing pairs and adds exactly one unmatched pair for each left row
+ *   with no passing match.
+ * - FULL_JOIN: Keeps passing pairs and adds exactly one unmatched pair for each row on either
+ *   side with no passing match.
  *
  * ## Usage Pattern
  *
@@ -458,7 +498,7 @@ filter_join_indices_jit(
   std::string const& predicate_code,
   cudf::join_kind join_kind,
   bool is_ptx                       = false,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  cuda::stream_ref stream           = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
@@ -466,6 +506,9 @@ filter_join_indices_jit(
  *
  * This overload converts an AST expression referencing columns from both left and right
  * tables into JIT-compiled CUDA code and uses it to filter the join index pairs.
+ * The input-map contract and join semantics are the same as `filter_join_indices`.
+ *
+ * @throw std::invalid_argument if join_kind is not INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
  *
  * @param left The left table for predicate evaluation
  * @param right The right table for predicate evaluation
@@ -486,7 +529,7 @@ filter_join_indices_jit(
   cudf::device_span<size_type const> right_indices,
   cudf::ast::expression const& predicate,
   cudf::join_kind join_kind,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  cuda::stream_ref stream           = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group

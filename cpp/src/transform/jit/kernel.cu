@@ -1,25 +1,23 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <cudf/ast/detail/operator_functor.cuh>
 #include <cudf/column/column_device_view_base.cuh>
-#include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/row_ir/opcode.hpp>
+#include <cudf/errc.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
-#include <cudf/utilities/bit.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <cuda/std/cstddef>
 #include <cuda/std/tuple>
+#include <cuda/std/type_traits>
 #include <cuda/std/utility>
 
-#include <jit/column_accessor.cuh>
 #include <jit/column_device_view_wrappers.cuh>
-#include <jit/sync.cuh>
-#include <jit/type_list.cuh>
+#include <jit/transform_kernel.cuh>
 
 #pragma nv_hdrstop  // The above headers are used by the kernel below and need to be included before
                     // it. Each UDF will have a different operation_udf.cuh generated for it, so we
@@ -32,18 +30,46 @@
 #include <cudf/detail/operation_udf.cuh>
 // clang-format on
 
+#ifndef CUDF_LTO_MODE
+#define CUDF_UDF_TYPE int()
+#endif
+
+// Use LTO-dispatch for transform operators if we're in LTO mode. This allows the operator to be
+// defined in a separate translation unit and compiled with LTO, which can result in better
+// performance due to more optimization opportunities
+#ifdef CUDF_LTO_MODE
+#define GENERIC_TRANSFORM_OP(...) ::cudf::jit::lto::transform(__VA_ARGS__)
+#endif
+
 namespace cudf {
 namespace jit {
+namespace lto {
 
-template <bool has_user_data, typename Args>
-__device__ void execute_transform_op(void* user_data, size_type element_idx, Args args)
+using transform_type = CUDF_UDF_TYPE;
+
+extern "C" __device__ transform_type transform;
+
+}  // namespace lto
+
+template <typename... Args>
+  requires requires(Args... args) { GENERIC_TRANSFORM_OP(args...); }
+__device__ errc invoke_transform(Args... args)
 {
-  // TODO: static assert invocable
-  if constexpr (has_user_data) {
-    cuda::std::apply([&](auto... a) { GENERIC_TRANSFORM_OP(a...); },
-                     cuda::std::tuple_cat(cuda::std::tuple{user_data, element_idx}, args));
+  if constexpr (!cuda::std::is_void_v<decltype(GENERIC_TRANSFORM_OP(args...))>) {
+    return static_cast<errc>(GENERIC_TRANSFORM_OP(args...));
   } else {
-    cuda::std::apply([&](auto... a) { GENERIC_TRANSFORM_OP(a...); }, args);
+    (void)GENERIC_TRANSFORM_OP(args...);
+    return errc::SUCCESS;
+  }
+}
+
+template <bool has_user_data, typename... Args>
+__device__ errc invoke_transform_op(void* user_data, size_type row, Args... args)
+{
+  if constexpr (has_user_data) {
+    return invoke_transform(user_data, row, args...);
+  } else {
+    return invoke_transform(args...);
   }
 }
 
@@ -53,57 +79,15 @@ __device__ void transform_kernel(size_type row_size,
                                  bitmask_type const* __restrict__ stencil,
                                  void* __restrict__ user_data,
                                  column_device_view_core const* __restrict__ input_cols,
-                                 mutable_column_device_view_core const* __restrict__ output_cols)
+                                 mutable_column_device_view_core const* __restrict__ output_cols,
+                                 int32_t* __restrict__ max_error)
 {
-  auto start  = detail::grid_1d::global_thread_id();
-  auto stride = detail::grid_1d::grid_stride();
+  auto operation = [&](size_type row, auto... args) {
+    return invoke_transform_op<has_user_data>(user_data, row, args...);
+  };
 
-  for (auto element_idx = start; element_idx < row_size; element_idx += stride) {
-    if constexpr (!is_null_aware) {
-      if (stencil != nullptr && !bit_is_set(stencil, element_idx)) { continue; }
-
-      auto ins = InputAccessors::map(
-        [&]<typename... A>() { return cuda::std::tuple{A::element(input_cols, element_idx)...}; });
-
-      auto outs = OutputAccessors::map([&]<typename... A>() {
-        return cuda::std::tuple{A::output_arg(output_cols, element_idx)...};
-      });
-
-      auto out_ptrs =
-        cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs);
-
-      execute_transform_op<has_user_data>(
-        user_data, element_idx, cuda::std::tuple_cat(out_ptrs, ins));
-
-      OutputAccessors::map([&]<typename... A>() {
-        (A::assign(output_cols, element_idx, cuda::std::get<A::index>(outs)), ...);
-      });
-
-    } else {
-      auto active_mask = __ballot_sync(0xFFFF'FFFFU, element_idx < row_size);
-
-      auto ins = InputAccessors::map([&]<typename... A>() {
-        return cuda::std::tuple{A::nullable_element(input_cols, element_idx)...};
-      });
-
-      auto outs = OutputAccessors::map([&]<typename... A>() {
-        return cuda::std::tuple{A::null_output_arg(output_cols, element_idx)...};
-      });
-
-      auto out_ptrs =
-        cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs);
-
-      execute_transform_op<has_user_data>(
-        user_data, element_idx, cuda::std::tuple_cat(out_ptrs, ins));
-
-      OutputAccessors::map([&]<typename... A>() {
-        (A::assign(output_cols, element_idx, *cuda::std::get<A::index>(outs)), ...);
-        (warp_compact_validity<A>(
-           active_mask, output_cols, element_idx, cuda::std::get<A::index>(outs).has_value()),
-         ...);
-      });
-    }
-  }
+  detail::transform_kernel<is_null_aware, InputAccessors, OutputAccessors>(
+    row_size, stencil, input_cols, output_cols, max_error, operation);
 }
 
 }  // namespace jit
@@ -123,7 +107,8 @@ extern "C" __global__ void cudf_kernel_entry(
   cudf::bitmask_type const* __restrict__ stencil,
   void* __restrict__ user_data,
   cudf::column_device_view_core const* __restrict__ input_cols,
-  cudf::mutable_column_device_view_core const* __restrict__ output_cols)
+  cudf::mutable_column_device_view_core const* __restrict__ output_cols,
+  int32_t* __restrict__ max_error)
 {
-  CUDF_KERNEL_INSTANCE(row_size, stencil, user_data, input_cols, output_cols);
+  CUDF_KERNEL_INSTANCE(row_size, stencil, user_data, input_cols, output_cols, max_error);
 }

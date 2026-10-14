@@ -1,6 +1,6 @@
 /**
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "random_data.hpp"
@@ -12,7 +12,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/random.h>
+#include <cuda/iterator>
+#include <cuda/std/random>
 #include <thrust/transform.h>
 
 #include <rapidsmpf/memory/cuda_memcpy_async.hpp>
@@ -25,44 +26,45 @@
 rmm::device_uvector<std::int32_t> random_device_vector(std::size_t nelem,
                                                        std::int32_t min_val,
                                                        std::int32_t max_val,
-                                                       rmm::cuda_stream_view stream,
+                                                       cuda::stream_ref stream,
                                                        rmm::device_async_resource_ref mr)
 {
   // Fill vector with random data.
   using index_t        = std::int64_t;
   auto const end_index = rapidsmpf::safe_cast<index_t>(nelem);
   rmm::device_uvector<std::int32_t> vec(nelem, stream, mr);
-  thrust::counting_iterator<index_t> const begin(0);
-  thrust::counting_iterator<index_t> const end(end_index);
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    begin,
-                    end,
-                    vec.begin(),
-                    [min_val, max_val] __device__(index_t index) {
-                      thrust::default_random_engine engine(
-                        static_cast<thrust::default_random_engine::result_type>(index));
-                      thrust::uniform_int_distribution<std::int32_t> dist(min_val, max_val);
-                      return dist(engine);
-                    });
+  cuda::counting_iterator<index_t> const begin(0);
+  cuda::counting_iterator<index_t> const end(end_index);
+  thrust::transform(
+    rmm::exec_policy_nosync(stream),
+    begin,
+    end,
+    vec.begin(),
+    [min_val, max_val] __device__(index_t index) {
+      cuda::std::philox4x32 engine(static_cast<cuda::std::philox4x32::result_type>(index));
+      cuda::std::uniform_int_distribution<std::int32_t> dist(min_val, max_val);
+      return dist(engine);
+    });
   return vec;
 }
 
 std::unique_ptr<cudf::column> random_column(cudf::size_type nrows,
                                             std::int32_t min_val,
                                             std::int32_t max_val,
-                                            rmm::cuda_stream_view stream,
+                                            cuda::stream_ref stream,
                                             rmm::device_async_resource_ref mr)
 {
   auto vec =
     random_device_vector(rapidsmpf::safe_cast<std::size_t>(nrows), min_val, max_val, stream, mr);
-  return std::make_unique<cudf::column>(std::move(vec), rmm::device_buffer{0, stream, mr}, 0);
+  return std::make_unique<cudf::column>(
+    std::move(vec), cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED, stream, mr), 0);
 }
 
 cudf::table random_table(cudf::size_type ncolumns,
                          cudf::size_type nrows,
                          std::int32_t min_val,
                          std::int32_t max_val,
-                         rmm::cuda_stream_view stream,
+                         cuda::stream_ref stream,
                          rmm::device_async_resource_ref mr)
 {
   std::vector<std::unique_ptr<cudf::column>> cols;
@@ -84,7 +86,7 @@ void random_fill(rapidsmpf::Buffer& buffer, rmm::device_async_resource_ref mr)
                                       std::numeric_limits<std::int32_t>::max(),
                                       buffer.stream(),
                                       mr);
-      buffer.write_access([&](std::byte* buffer_data, rmm::cuda_stream_view stream) {
+      buffer.write_access([&](std::byte* buffer_data, cuda::stream_ref stream) {
         RAPIDSMPF_CUDA_TRY(
           rapidsmpf::cuda_memcpy_async(buffer_data, vec.data(), buffer.size, stream));
       });

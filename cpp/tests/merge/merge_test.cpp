@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,6 +14,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/merge.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -259,7 +260,7 @@ TYPED_TEST(MergeTest_, MergeWithEmptyColumn)
 
   cudf::column_view const& a_left_tbl_cview{static_cast<cudf::column_view const&>(leftColWrap1)};
   cudf::column_view const& a_right_tbl_cview{static_cast<cudf::column_view const&>(rightColWrap1)};
-  const cudf::size_type outputRows = a_left_tbl_cview.size() + a_right_tbl_cview.size();
+  cudf::size_type const outputRows = a_left_tbl_cview.size() + a_right_tbl_cview.size();
 
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence)::value_type>
     expectedDataWrap1(
@@ -324,7 +325,7 @@ TYPED_TEST(MergeTest_, Merge1KeyColumns)
 
   cudf::column_view const& a_left_tbl_cview{static_cast<cudf::column_view const&>(leftColWrap1)};
   cudf::column_view const& a_right_tbl_cview{static_cast<cudf::column_view const&>(rightColWrap1)};
-  const cudf::size_type outputRows = a_left_tbl_cview.size() + a_right_tbl_cview.size();
+  cudf::size_type const outputRows = a_left_tbl_cview.size() + a_right_tbl_cview.size();
 
   auto seq_out1 = cudf::detail::make_counting_transform_iterator(0, [outputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
@@ -402,7 +403,7 @@ TYPED_TEST(MergeTest_, Merge2KeyColumns)
 
   cudf::column_view const& a_left_tbl_cview{static_cast<cudf::column_view const&>(leftColWrap1)};
   cudf::column_view const& a_right_tbl_cview{static_cast<cudf::column_view const&>(rightColWrap1)};
-  const cudf::size_type outputRows = a_left_tbl_cview.size() + a_right_tbl_cview.size();
+  cudf::size_type const outputRows = a_left_tbl_cview.size() + a_right_tbl_cview.size();
 
   auto seq_out1 = cudf::detail::make_counting_transform_iterator(0, [outputRows](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
@@ -489,8 +490,8 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns)
 
   cudf::column_view const& a_left_tbl_cview{static_cast<cudf::column_view const&>(leftColWrap1)};
   cudf::column_view const& a_right_tbl_cview{static_cast<cudf::column_view const&>(rightColWrap1)};
-  const cudf::size_type outputRows = a_left_tbl_cview.size() + a_right_tbl_cview.size();
-  const cudf::size_type column1TotalNulls =
+  cudf::size_type const outputRows = a_left_tbl_cview.size() + a_right_tbl_cview.size();
+  cudf::size_type const column1TotalNulls =
     a_left_tbl_cview.null_count() + a_right_tbl_cview.null_count();
 
   // data: 0 1 2 3 4 5 6 7 | valid: 1 1 1 1 1 1 0 0
@@ -573,7 +574,7 @@ TYPED_TEST(MergeTest_, Merge2KeyNullColumns)
 
   cudf::column_view const& a_left_tbl_cview{static_cast<cudf::column_view const&>(leftColWrap1)};
   cudf::column_view const& a_right_tbl_cview{static_cast<cudf::column_view const&>(rightColWrap1)};
-  const cudf::size_type outputRows = a_left_tbl_cview.size() + a_right_tbl_cview.size();
+  cudf::size_type const outputRows = a_left_tbl_cview.size() + a_right_tbl_cview.size();
 
   // data: 0 0 1 1 2 2 3 3 | valid: 1 1 1 1 1 1 1 1
   auto seq_out1 = cudf::detail::make_counting_transform_iterator(0, [outputRows](auto row) {
@@ -651,7 +652,7 @@ TYPED_TEST(MergeTest_, NMerge1KeyColumns)
   std::unique_ptr<cudf::table> p_outputTable;
   EXPECT_NO_THROW(p_outputTable = cudf::merge(tables, key_cols, column_order, null_precedence));
 
-  const cudf::size_type outputRows = inputRows * num_tables;
+  cudf::size_type const outputRows = inputRows * num_tables;
 
   auto seq_out1 = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
@@ -859,15 +860,15 @@ using cudf::test::iterators::nulls_at;
 
 TEST_F(MergeTest, Lists)
 {
-  auto col1 = lcw{lcw{1}, lcw{3}, lcw{5}, lcw{7}};
-  auto col2 = lcw{lcw{2}, lcw{4}, lcw{6}, lcw{8}};
+  auto col1 = lcw({{1}, {3}, {5}, {7}});
+  auto col2 = lcw({{2}, {4}, {6}, {8}});
 
   auto tbl1 = cudf::table_view{{col1}};
   auto tbl2 = cudf::table_view{{col2}};
 
   auto result = cudf::merge({tbl1, tbl2}, {0}, {cudf::order::ASCENDING});
 
-  auto expected_col = lcw{lcw{1}, lcw{2}, lcw{3}, lcw{4}, lcw{5}, lcw{6}, lcw{7}, lcw{8}};
+  auto expected_col = lcw({{1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}});
   auto expected_tbl = cudf::table_view{{expected_col}};
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl, *result);
@@ -875,23 +876,16 @@ TEST_F(MergeTest, Lists)
 
 TEST_F(MergeTest, NestedListsWithNulls)
 {
-  auto col1 = lcw{{lcw{lcw{1}}, lcw{lcw{3}}, lcw{lcw{5}}, lcw{lcw{7}}}, null_at(3)};
-  auto col2 = lcw{{lcw{lcw{2}}, lcw{lcw{4}}, lcw{lcw{6}}, lcw{lcw{8}}}, null_at(3)};
+  auto col1 = lcw{{{{1}}, {{3}}, {{5}}, {{7}}}, null_at(3)};
+  auto col2 = lcw{{{{2}}, {{4}}, {{6}}, {{8}}}, null_at(3)};
 
   auto tbl1 = cudf::table_view{{col1}};
   auto tbl2 = cudf::table_view{{col2}};
 
   auto result = cudf::merge({tbl1, tbl2}, {0}, {cudf::order::ASCENDING}, {cudf::null_order::AFTER});
 
-  auto expected_col = lcw{{lcw{lcw{1}},
-                           lcw{lcw{2}},
-                           lcw{lcw{3}},
-                           lcw{lcw{4}},
-                           lcw{lcw{5}},
-                           lcw{lcw{6}},
-                           lcw{lcw{7}},
-                           lcw{lcw{8}}},
-                          nulls_at({6, 7})};
+  auto expected_col =
+    lcw{{{{1}}, {{2}}, {{3}}, {{4}}, {{5}}, {{6}}, {{7}}, {{8}}}, nulls_at({6, 7})};
   auto expected_tbl = cudf::table_view{{expected_col}};
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl, *result);
@@ -913,7 +907,7 @@ TEST_F(MergeTest, NestedListsofStructs)
       cudf::test::fixed_width_column_wrapper<int32_t>{0, 3, 4, 6, 7}.release(),
       get_structs().release(),
       0,
-      {});
+      cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
   }();
 
   // [ {4}                ]
@@ -930,7 +924,7 @@ TEST_F(MergeTest, NestedListsofStructs)
       cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 2, 3, 4}.release(),
       get_structs().release(),
       0,
-      {});
+      cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
   }();
 
   auto tbl1 = cudf::table_view{{*col1}};
@@ -957,7 +951,7 @@ TEST_F(MergeTest, NestedListsofStructs)
       cudf::test::fixed_width_column_wrapper<int32_t>{0, 3, 4, 5, 6, 8, 9, 10, 11}.release(),
       get_structs().release(),
       0,
-      {});
+      cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
   }();
   auto expected_tbl = cudf::table_view{{*expected_col}};
 

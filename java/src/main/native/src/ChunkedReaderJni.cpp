@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -71,7 +71,7 @@ Java_ai_rapids_cudf_ParquetChunkedReader_create(JNIEnv* env,
       multi_buffer_source.reset(new cudf::jni::multi_host_buffer_source(n_addrs_sizes));
       source = cudf::io::source_info(multi_buffer_source.get());
     } else {
-      source = cudf::io::source_info(filename.get());
+      source = cudf::io::source_info(filename);
     }
 
     auto opts_builder = cudf::io::parquet_reader_options::builder(source);
@@ -180,7 +180,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_ParquetChunkedReader_close(JNIEnv* en
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    delete reinterpret_cast<cudf::io::chunked_parquet_reader*>(handle);
+    cudf::jni::safe_delete<cudf::io::chunked_parquet_reader>(handle);
   }
   JNI_CATCH(env, );
 }
@@ -190,7 +190,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_ParquetChunkedReader_destroyMultiHost
 {
   JNI_NULL_CHECK(env, handle, "handle is null", );
 
-  JNI_TRY { delete reinterpret_cast<cudf::jni::multi_host_buffer_source*>(handle); }
+  JNI_TRY { cudf::jni::safe_delete<cudf::jni::multi_host_buffer_source>(handle); }
   JNI_CATCH(env, );
 }
 
@@ -346,7 +346,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_ORCChunkedReader_close(JNIEnv* env, j
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    delete reinterpret_cast<cudf::io::chunked_orc_reader*>(handle);
+    cudf::jni::safe_delete<cudf::io::chunked_orc_reader>(handle);
   }
   JNI_CATCH(env, );
 }

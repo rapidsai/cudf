@@ -1,11 +1,13 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/types.hpp>
+
+#include <cuda/cmath>
 
 namespace cudf {
 namespace strings {
@@ -25,8 +27,7 @@ struct alignas(8) relist {
    */
   CUDF_HOST_DEVICE constexpr inline static std::size_t data_size_for(int32_t insts)
   {
-    return ((sizeof(ranges[0]) + sizeof(inst_ids[0])) * insts) +
-           cudf::util::div_rounding_up_unsafe(insts, 8);
+    return ((sizeof(ranges[0]) + sizeof(inst_ids[0])) * insts) + cuda::ceil_div(insts, 8);
   }
 
   /**
@@ -46,7 +47,7 @@ struct alignas(8) relist {
 
   __device__ __forceinline__
   relist(int16_t insts, int32_t num_threads, u_char* gp_ptr, int32_t index)
-    : masksize(cudf::util::div_rounding_up_unsafe(insts, 8)), stride(num_threads)
+    : masksize(cuda::ceil_div(insts, 8)), stride(num_threads)
   {
     auto const rdata_size = sizeof(ranges[0]);
     auto const idata_size = sizeof(inst_ids[0]);
@@ -127,51 +128,6 @@ struct reljunk {
     list2    = tmp;
   }
 };
-
-/**
- * @brief Check for supported new-line characters
- *
- * '\n, \r, \u0085, \u2028, or \u2029'
- */
-CUDF_HOST_DEVICE constexpr bool is_newline(char32_t const ch)
-{
-  return (ch == '\n' || ch == '\r' || ch == 0x00c285 || ch == 0x00e280a8 || ch == 0x00e280a9);
-}
-
-/**
- * @brief Utility to check a specific character against this class instance.
- *
- * @param ch A 4-byte UTF-8 character.
- * @param codepoint_flags Used for mapping a character to type for builtin classes.
- * @return true if the character matches
- */
-__device__ __forceinline__ bool reclass_device::is_match(char32_t const ch,
-                                                         uint8_t const* codepoint_flags) const
-{
-  for (int i = 0; i < count; ++i) {
-    auto const literal = literals[i];
-    if ((ch >= literal.first) && (ch <= literal.last)) { return true; }
-  }
-
-  if (!builtins) return false;
-  uint32_t codept = utf8_to_codepoint(ch);
-  if (codept > 0x00'FFFF) return false;
-  int8_t fl = codepoint_flags[codept];
-  if ((builtins & CCLASS_W) && ((ch == '_') || IS_ALPHANUM(fl)))  // \w
-    return true;
-  if ((builtins & CCLASS_S) && IS_SPACE(fl))  // \s
-    return true;
-  if ((builtins & CCLASS_D) && IS_DIGIT(fl))  // \d
-    return true;
-  if ((builtins & NCCLASS_W) && ((ch != '\n') && (ch != '_') && !IS_ALPHANUM(fl)))  // \W
-    return true;
-  if ((builtins & NCCLASS_S) && !IS_SPACE(fl))  // \S
-    return true;
-  if ((builtins & NCCLASS_D) && ((ch != '\n') && !IS_DIGIT(fl)))  // \D
-    return true;
-  //
-  return false;
-}
 
 __device__ __forceinline__ reinst reprog_device::get_inst(int32_t id) const { return _insts[id]; }
 
@@ -468,8 +424,11 @@ __device__ __forceinline__ match_result reprog_device::extract(int32_t const thr
                                                                cudf::size_type end,
                                                                cudf::size_type const group_id) const
 {
-  end = begin.position() + 1;
-  return call_regexec(thread_idx, dstr, begin, end, group_id + 1);
+  end               = begin.position() + 1;
+  auto const result = call_regexec(thread_idx, dstr, begin, end, group_id + 1);
+  // a capture group that did not participate in the overall match
+  // (e.g. an unmatched optional group) has an invalid range
+  return (result && (result->first >= 0)) ? result : cuda::std::nullopt;
 }
 
 template <positional P>
