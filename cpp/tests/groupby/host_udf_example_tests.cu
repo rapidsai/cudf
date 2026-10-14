@@ -12,11 +12,12 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/tuple>
@@ -46,7 +47,8 @@ struct host_udf_groupby_example : cudf::groupby_host_udf {
     cuda::stream_ref stream, rmm::device_async_resource_ref mr) const override
   {
     auto const values = get_grouped_values();
-    return cudf::type_dispatcher(values.type(), groupby_fn{*this}, stream, mr);
+    return cudf::type_dispatcher(
+      values.type(), groupby_fn{*this}, stream, cudf::memory_resources{mr});
   }
 
   [[nodiscard]] bool is_equal(host_udf_base const& other) const override
@@ -76,10 +78,10 @@ struct host_udf_groupby_example : cudf::groupby_host_udf {
 
     template <typename T, CUDF_ENABLE_IF(std::is_same_v<InputType, T>)>
     std::unique_ptr<cudf::column> operator()(cuda::stream_ref stream,
-                                             rmm::device_async_resource_ref mr) const
+                                             cudf::memory_resources mr) const
     {
       auto const values = parent.get_grouped_values();
-      if (values.size() == 0) { return parent.get_empty_output(stream, mr); }
+      if (values.size() == 0) { return parent.get_empty_output(stream, mr.get_output_mr()); }
 
       auto const offsets = parent.get_group_offsets();
       CUDF_EXPECTS(offsets.size() > 0, "Invalid offsets.");
@@ -90,18 +92,20 @@ struct host_udf_groupby_example : cudf::groupby_host_udf {
       auto const group_sum =
         parent.compute_aggregation(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
 
-      auto const values_dv_ptr = cudf::column_device_view::create(values, stream);
+      auto const values_dv_ptr =
+        cudf::column_device_view::create(values, stream, mr.get_temporary_mr());
       auto const output = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<OutputType>()},
                                                     num_groups,
                                                     cudf::mask_state::UNALLOCATED,
                                                     stream,
-                                                    mr);
+                                                    mr.get_output_mr());
 
       // Store row index if it is valid, otherwise store a negative value denoting a null row.
-      rmm::device_uvector<cudf::size_type> valid_idx(num_groups, stream);
+      cuda::device_buffer<cudf::size_type> valid_idx(
+        stream, mr.get_temporary_mr(), num_groups, cuda::no_init);
 
       thrust::transform(
-        rmm::exec_policy_nosync(stream),
+        rmm::exec_policy_nosync(stream, mr.get_temporary_mr()),
         cuda::counting_iterator<cudf::size_type>{0},
         cuda::counting_iterator{num_groups},
         cuda::make_zip_iterator(output->mutable_view().begin<OutputType>(), valid_idx.begin()),
@@ -112,7 +116,7 @@ struct host_udf_groupby_example : cudf::groupby_host_udf {
                      group_sum.begin<InputType>()});
 
       auto const valid_idx_cv = cudf::column_view{
-        cudf::data_type{cudf::type_id::INT32}, num_groups, valid_idx.begin(), nullptr, 0};
+        cudf::data_type{cudf::type_id::INT32}, num_groups, valid_idx.data(), nullptr, 0};
       return std::move(cudf::gather(cudf::table_view{{output->view()}},
                                     valid_idx_cv,
                                     cudf::out_of_bounds_policy::NULLIFY,
