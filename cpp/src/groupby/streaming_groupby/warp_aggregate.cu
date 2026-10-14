@@ -7,8 +7,8 @@
 #include "warp_aggregate.hpp"
 
 #include <cudf/detail/cuco_helpers.hpp>
-#include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/device_atomics.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.cuh>
 
@@ -18,7 +18,6 @@
 #include <cuda/std/cmath>
 #include <cuda/std/type_traits>
 
-#include <algorithm>
 #include <cstdint>
 
 namespace cudf::groupby {
@@ -135,28 +134,17 @@ __device__ void aggregate_row(Column const& column, size_type row, size_type tar
   }
 }
 
-// All lanes in a logical warp process the same row tile. Equal targets can be
-// noncontiguous within that tile; labeled_partition groups lanes with the same target.
+// Equal targets can be noncontiguous within a warp; labeled_partition groups lanes with the same
+// target.
 template <typename Column, typename Op>
 CUDF_KERNEL void __launch_bounds__(block_size)
   aggregate_warp_kernel(size_type num_rows, size_type const* targets, Column column, Op operation)
 {
-  constexpr auto warp_size = cudf::detail::warp_size;
-  auto const num_tiles     = (static_cast<int64_t>(num_rows) + warp_size - 1) / warp_size;
-  auto const global_thread = static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
-  auto const lane          = threadIdx.x % warp_size;
-  auto const tile_stride   = static_cast<int64_t>(gridDim.x) * (blockDim.x / warp_size);
-  for (auto tile = global_thread / warp_size; tile < num_tiles; tile += tile_stride) {
-    auto const row_wide = tile * warp_size + lane;
-    if (row_wide < num_rows) {
-      auto const row    = static_cast<size_type>(row_wide);
-      auto const target = targets[row];
-      if (target != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
-        aggregate_row(column, row, target, operation);
-      }
-    }
-    // Excluded, null and tail lanes also wait before advancing to another tile.
-    __syncwarp();
+  auto const row = cudf::detail::grid_1d::global_thread_id();
+  if (row >= num_rows) { return; }
+  auto const target = targets[row];
+  if (target != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
+    aggregate_row(column, static_cast<size_type>(row), target, operation);
   }
 }
 
@@ -166,17 +154,10 @@ void launch_warp_kernel(device_span<size_type const> targets,
                         Op operation,
                         cuda::stream_ref stream)
 {
-  if (targets.empty()) { return; }
-  auto const needed_blocks = (static_cast<int64_t>(targets.size()) + block_size - 1) / block_size;
-  int active_blocks{};
-  CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-    &active_blocks, aggregate_warp_kernel<Column, Op>, block_size, 0));
-  auto const resident_blocks =
-    static_cast<int64_t>(active_blocks) * cudf::detail::num_multiprocessors();
-  auto const blocks = static_cast<int>(std::min(needed_blocks, resident_blocks));
-  CUDF_EXPECTS(blocks > 0, "Warp aggregation kernel has no resident blocks.");
-  aggregate_warp_kernel<<<blocks, block_size, 0, stream.get()>>>(
-    static_cast<size_type>(targets.size()), targets.data(), column, operation);
+  auto const num_rows = static_cast<size_type>(targets.size());
+  cudf::detail::grid_1d const grid{num_rows, block_size};
+  aggregate_warp_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.get()>>>(
+    num_rows, targets.data(), column, operation);
   CUDF_CUDA_TRY(cudaGetLastError());
 }
 
@@ -254,9 +235,6 @@ void compute_warp_aggregates(table_view const& values,
                              cuda::stream_ref stream,
                              cudf::memory_resources mr)
 {
-  CUDF_EXPECTS(values.num_columns() == static_cast<size_type>(kinds.size()) &&
-                 output.num_columns() == values.num_columns(),
-               "Invalid warp aggregation metadata");
   for (size_type i = 0; i < values.num_columns(); ++i) {
     cudf::detail::aggregation_dispatcher(kinds[i],
                                          aggregation_kind_dispatch{},
