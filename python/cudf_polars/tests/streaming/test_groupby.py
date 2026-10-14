@@ -364,6 +364,36 @@ def test_groupby_sort_by_stable_ties_with_preshuffle_fallback(
         q.collect(engine=streaming_engine)
 
 
+def test_groupby_first_non_null_sorted_keys(spmd_engine_factory):
+    streaming_engine = spmd_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=4,
+            target_partition_size=10,
+            fallback_mode="raise",
+        ),
+    )
+    n = 10
+    values = []
+    for group in range(1, 6):
+        values.extend([None] * (group - 1))
+        values.extend(range(group, n - group + 2))
+        values.extend([None] * (group - 1))
+    df = pl.LazyFrame(
+        {
+            "idx": pl.Series(
+                [1] * n + [2] * n + [3] * n + [4] * n + [5] * n,
+                dtype=pl.Int32,
+            ),
+            "a": pl.Series(values, dtype=pl.Int32),
+        }
+    ).set_sorted("idx")
+    q = df.group_by("idx", maintain_order=True).agg(
+        pl.col("a").first(ignore_nulls=True)
+    )
+
+    assert_gpu_result_equal(q, engine=streaming_engine)
+
+
 def test_groupby_sort_by_preserves_sorted_key_order(streaming_engine_factory):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=2, fallback_mode="raise"),
