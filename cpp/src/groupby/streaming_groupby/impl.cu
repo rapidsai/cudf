@@ -261,8 +261,8 @@ void streaming_groupby::impl::initialize(table_view const& data, cuda::stream_re
     CUDF_EXPECTS(found, "Internal error: request's first simple agg not found.");
   }
 
-  // Companion vector: indexed by dense ID, one {batch_id, row} entry per distinct key.
-  _key_loc = std::make_unique<rmm::device_uvector<key_location_t>>(_max_distinct_keys, stream, mr);
+  // Companion vector: one compacted batch ID per dense group.
+  _key_batch_ids = std::make_unique<rmm::device_uvector<size_type>>(_max_distinct_keys, stream, mr);
 
   _initialized = true;
 }
@@ -617,7 +617,7 @@ streaming_groupby::do_finalize_and_release(cuda::stream_ref stream, cudf::memory
   stream.sync();
   auto state = std::move(_impl);
   state->_key_set.reset();
-  state->_key_loc.reset();
+  state->_key_batch_ids.reset();
   state->_preprocessed_batches.clear();
   // Finalization reads these columns asynchronously. Rebind before enqueueing any
   // copies so destruction is stream-ordered even if finalization throws.

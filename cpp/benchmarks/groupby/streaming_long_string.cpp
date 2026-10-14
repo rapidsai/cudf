@@ -8,9 +8,11 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/padding.hpp>
@@ -43,6 +45,9 @@ void bench_streaming_long_string(nvbench::state& state)
   auto const batch_size = positive_size_axis(state, "batch_size");
   auto const key_bytes  = positive_size_axis(state, "key_bytes");
   auto const mode       = state.get_string("key_mode");
+  auto const key_format = state.get_string("key_format");
+  CUDF_EXPECTS(key_format == "string" || key_format == "struct",
+               "key_format must be string or struct");
   CUDF_EXPECTS(mode == "all_unique" || mode == "repeated_batch",
                "key_mode must be all_unique or repeated_batch");
   auto const groups = mode == "all_unique" ? num_rows : std::min(batch_size, num_rows);
@@ -71,6 +76,13 @@ void bench_streaming_long_string(nvbench::state& state)
                                        key_bytes,
                                        cudf::strings::side_type::RIGHT,
                                        "#"));
+  if (key_format == "struct") {
+    columns.push_back(std::move(integer_keys));
+    auto keys = cudf::make_structs_column(
+      num_rows, std::move(columns), 0, cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
+    columns.clear();
+    columns.push_back(std::move(keys));
+  }
   columns.push_back(
     cudf::sequence(num_rows, cudf::numeric_scalar<int32_t>{1}, cudf::numeric_scalar<int32_t>{0}));
   auto const input = std::make_unique<cudf::table>(std::move(columns));
@@ -110,4 +122,5 @@ NVBENCH_BENCH(bench_streaming_long_string)
   .add_int64_axis("num_rows", {4'000'000})
   .add_int64_axis("batch_size", {1'000'000})
   .add_int64_axis("key_bytes", {64, 256})
-  .add_string_axis("key_mode", {"all_unique", "repeated_batch"});
+  .add_string_axis("key_mode", {"all_unique", "repeated_batch"})
+  .add_string_axis("key_format", {"string", "struct"});

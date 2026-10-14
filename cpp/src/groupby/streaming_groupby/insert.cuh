@@ -49,28 +49,15 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
   rmm::device_uvector<size_type> target_indices(batch_size, stream, temp_mr);
   rmm::device_uvector<size_type> batch_local_indices(batch_size, stream, temp_mr);
 
-  // First batch has no compacted batches yet, so all slot values are transient (>=
-  // _max_distinct_keys) and only the batch-self equality branch of n_table_comparator
-  // can fire.  Dispatch to a dedicated helper that uses first_batch_comparator to skip
-  // the cross-table dispatch, the cross-comparator build, and the dense-ID branches.
-  // The two helpers live in separate TUs to parallelize the heavy row-comparator/thrust template
-  // instantiations.
-  size_type const new_distinct_keys =
-    _compacted_batches.empty()
-      ? probe_and_insert_first_batch<has_nested>(preprocessed_batch,
-                                                 has_null,
-                                                 batch_bitmask,
-                                                 batch_size,
-                                                 target_indices.data(),
-                                                 batch_local_indices.data(),
-                                                 stream)
-      : probe_and_insert_subsequent<has_nested>(preprocessed_batch,
-                                                has_null,
-                                                batch_bitmask,
-                                                batch_size,
-                                                target_indices.data(),
-                                                batch_local_indices.data(),
-                                                stream);
+  auto const new_distinct_keys =
+    probe_and_insert_rows<has_nested>(preprocessed_batch,
+                                      has_null,
+                                      batch_bitmask,
+                                      batch_size,
+                                      target_indices.data(),
+                                      batch_local_indices.data(),
+                                      stream,
+                                      cudf::memory_resources{temp_mr, temp_mr});
   batch_local_indices.resize(new_distinct_keys, stream);
 
   // Check capacity before publishing new dense IDs. Even without new keys, a larger
@@ -102,7 +89,7 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
     auto const new_batch_id    = static_cast<size_type>(_compacted_batches.size());
     auto const dense_id_offset = distinct_so_far;
     // Pass 2 — fused: rewrites slots from transient encoding to dense IDs and
-    // writes the {batch_id, row} companion entry.
+    // writes the compacted batch ID companion entry.
     auto* const base = _key_set->data();
     thrust::for_each_n(rmm::exec_policy_nosync(stream, temp_mr),
                        cuda::counting_iterator<size_type>(0),
@@ -110,7 +97,7 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
                        finalize_new_key_fn{batch_local_indices.data(),
                                            base,
                                            target_indices.data(),
-                                           _key_loc->data(),
+                                           _key_batch_ids->data(),
                                            new_batch_id,
                                            dense_id_offset});
 
