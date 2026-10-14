@@ -18,6 +18,7 @@
 #include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/stream>
+#include <thrust/copy.h>
 #include <thrust/for_each.h>
 
 #include <string>
@@ -25,8 +26,8 @@
 namespace cudf::groupby {
 
 template <bool has_nested>
-streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_insert_impl(
-  table_view const& batch_keys, cuda::stream_ref stream)
+cuda::device_buffer<size_type> streaming_groupby::impl::probe_and_insert_impl(
+  table_view const& batch_keys, bool use_partials, cuda::stream_ref stream)
 {
   auto const batch_size = batch_keys.num_rows();
   auto const temp_mr    = cudf::get_current_device_resource_ref();
@@ -49,17 +50,35 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
   cuda::device_buffer<size_type> target_indices(stream, temp_mr, batch_size, cuda::no_init);
   cuda::device_buffer<size_type> batch_local_indices(stream, temp_mr, batch_size, cuda::no_init);
 
-  auto const new_distinct_keys =
-    probe_and_insert_rows<has_nested>(preprocessed_batch,
-                                      has_null,
-                                      batch_bitmask,
-                                      batch_size,
-                                      target_indices.data(),
-                                      batch_local_indices.data(),
-                                      stream,
-                                      cudf::memory_resources{temp_mr, temp_mr});
-  auto const new_key_indices = cudf::device_span<size_type const>{
-    batch_local_indices.data(), static_cast<std::size_t>(new_distinct_keys)};
+  auto* const base = _key_set->data();
+  size_type new_distinct_keys{};
+  {  // Release the cross comparators before aggregate state can grow.
+    auto const capacity       = static_cast<cuda::std::uint32_t>(_key_set->size());
+    auto const batch_self_cmp = cudf::detail::row::equality::self_comparator{preprocessed_batch};
+    auto const batch_self_eq  = batch_self_cmp.equal_to<has_nested>(has_null, null_equality::EQUAL);
+    auto const hasher =
+      cudf::detail::row::hash::row_hasher{preprocessed_batch}.device_hasher(has_null);
+    auto const d_cross_eqs = build_cross_comparators<has_nested>(
+      preprocessed_batch, _preprocessed_batches, has_null, stream, cudf::memory_resources{temp_mr});
+    auto const comparator = n_table_comparator{
+      batch_self_eq, d_cross_eqs.data(), _key_batch_ids->data(), _max_distinct_keys};
+    thrust::for_each_n(rmm::exec_policy_nosync(stream, temp_mr),
+                       cuda::counting_iterator<size_type>(0),
+                       batch_size,
+                       insert_fn{detail::hash::hash_set_ref{base, capacity, capacity},
+                                 comparator,
+                                 hasher,
+                                 batch_bitmask,
+                                 _max_distinct_keys,
+                                 target_indices.data()});
+    new_distinct_keys = static_cast<size_type>(
+      thrust::copy_if(rmm::exec_policy_nosync(stream, temp_mr),
+                      cuda::counting_iterator<size_type>(0),
+                      cuda::counting_iterator<size_type>(batch_size),
+                      batch_local_indices.begin(),
+                      is_new_key_fn{target_indices.data(), base, _max_distinct_keys}) -
+      batch_local_indices.begin());
+  }
 
   // Check capacity before publishing new dense IDs. Even without new keys, a larger
   // batch budget can require more partials for the existing groups.
@@ -74,12 +93,14 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
 
   if (new_distinct_keys > 0) {
     // Gather compacted distinct keys from the batch.
-    auto compacted = cudf::detail::gather(batch_keys,
-                                          new_key_indices,
-                                          out_of_bounds_policy::DONT_CHECK,
-                                          cudf::negative_index_policy::NOT_ALLOWED,
-                                          stream,
-                                          temp_mr);
+    auto compacted = cudf::detail::gather(
+      batch_keys,
+      cudf::device_span<size_type const>{batch_local_indices.data(),
+                                         static_cast<std::size_t>(new_distinct_keys)},
+      out_of_bounds_policy::DONT_CHECK,
+      cudf::negative_index_policy::NOT_ALLOWED,
+      stream,
+      temp_mr);
 
     auto preprocessed_compacted =
       cudf::detail::row::hash::preprocessed_table::create(compacted->view(), stream, temp_mr);
@@ -89,9 +110,6 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
     _preprocessed_batches.reserve(_preprocessed_batches.size() + 1);
     auto const new_batch_id    = static_cast<size_type>(_compacted_batches.size());
     auto const dense_id_offset = distinct_so_far;
-    // Pass 2 — fused: rewrites slots from transient encoding to dense IDs and
-    // writes the compacted batch ID companion entry.
-    auto* const base = _key_set->data();
     thrust::for_each_n(rmm::exec_policy_nosync(stream, temp_mr),
                        cuda::counting_iterator<size_type>(0),
                        new_distinct_keys,
@@ -107,9 +125,15 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
     _distinct_keys.fetch_add(new_distinct_keys, std::memory_order_relaxed);
   }
 
-  // The caller resolves slots directly to its final aggregate rows in one pass.
-  return batch_insert_result{
-    std::move(target_indices), new_distinct_keys, std::move(bitmask_buffer)};
+  if (!_agg_kinds.empty()) {
+    thrust::for_each_n(
+      rmm::exec_policy_nosync(stream, temp_mr),
+      cuda::counting_iterator<size_type>(0),
+      batch_size,
+      resolve_aggregate_targets{
+        base, target_indices.data(), _aggregate_capacity, use_partials ? _partials_per_group : 1});
+  }
+  return target_indices;
 }
 
 }  // namespace cudf::groupby

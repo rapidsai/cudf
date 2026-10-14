@@ -6,8 +6,6 @@
 #include "common.cuh"
 #include "warp_aggregate.hpp"
 
-#include <cudf/detail/utilities/cuda.hpp>
-#include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -54,25 +52,17 @@ void streaming_groupby::impl::do_aggregate(table_view const& data, cuda::stream_
     update_nullable_state(batch_keys);
     if (!_key_set) { create_key_set(stream); }
     _insert_done.wait(stream);
-    insertion_started   = true;
-    auto result         = probe_and_insert(batch_keys, stream);
-    auto const resource = cudf::get_current_device_resource_ref();
-    auto const mr       = cudf::memory_resources{resource, resource};
-    resolve_targets(result, _partials_per_group, stream, mr);
+    insertion_started  = true;
+    auto const targets = probe_and_insert(batch_keys, true, stream);
     _insert_done.record(stream);
-    auto const num_groups = _distinct_keys.load(std::memory_order_relaxed);
     _results_read_done.wait(stream);
 
-    auto const num_items =
-      static_cast<int64_t>(batch_size) * static_cast<int64_t>(_agg_kinds.size());
-    if (num_items > 0 && num_groups > 0) {
-      compute_warp_aggregates(data.select(_value_col_indices),
-                              _agg_kinds,
-                              {result.target_indices.data(), result.target_indices.size()},
-                              _agg_results->mutable_view(),
-                              stream,
-                              mr);
-    }
+    compute_warp_aggregates(data.select(_value_col_indices),
+                            _agg_kinds,
+                            {targets.data(), targets.size()},
+                            _agg_results->mutable_view(),
+                            stream,
+                            cudf::get_current_device_resource_ref());
     record_aggregate_completion(stream);
   } catch (...) {
     if (insertion_started) { _invalidated = true; }

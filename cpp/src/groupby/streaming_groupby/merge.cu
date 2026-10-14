@@ -70,43 +70,38 @@ void streaming_groupby::impl::do_merge(impl const& other, cuda::stream_ref strea
     update_nullable_state(other_key_view);
     if (!_key_set) { create_key_set(stream); }
     _insert_done.wait(stream);
-    insertion_started = true;
-    auto result       = probe_and_insert(other_key_view, stream);
-    resolve_targets(result, 1, stream, cudf::memory_resources{mr, mr});
+    insertion_started  = true;
+    auto const targets = probe_and_insert(other_key_view, false, stream);
     _insert_done.record(stream);
     _results_read_done.wait(stream);
 
-    auto const num_agg_cols = static_cast<int64_t>(_agg_kinds.size());
-    if (num_agg_cols > 0) {
-      CUDF_EXPECTS(other_distinct_keys <= other._aggregate_capacity,
-                   "Merge source exceeds allocated aggregate capacity.");
-      std::unique_ptr<table> source_snapshot;
-      auto source_partials_per_group = other._partials_per_group;
-      auto source_capacity           = other._aggregate_capacity;
-      auto const other_aggs_view     = [&] {
-        if (this == &other) {
-          // Partials collapse into the first partial. A self-merge must snapshot first so its first
-          // partial cannot observe contributions concurrently arriving from other partials.
-          source_snapshot = other.gather_agg_results(stream, cudf::memory_resources{mr, mr});
-          source_partials_per_group = 1;
-          source_capacity           = other_distinct_keys;
-          return source_snapshot->view();
-        }
-        return other._agg_results->view();
-      }();
-      auto const d_source = table_device_view::create(other_aggs_view, stream);
-      thrust::for_each_n(
-        rmm::exec_policy_nosync(stream, mr),
-        cuda::counting_iterator<int64_t>(0),
-        static_cast<int64_t>(other_distinct_keys) * source_partials_per_group * num_agg_cols,
-        merge_partial_aggs_fn{result.target_indices.data(),
-                              source_capacity,
-                              other_distinct_keys,
-                              source_partials_per_group,
-                              _d_agg_kinds->data(),
-                              *d_source,
-                              *_d_agg_results});
-    }
+    std::unique_ptr<table> source_snapshot;
+    auto source_partials_per_group = other._partials_per_group;
+    auto source_capacity           = other._aggregate_capacity;
+    auto const other_aggs_view     = [&] {
+      if (this == &other) {
+        // Partials collapse into the first partial. A self-merge must snapshot first so its first
+        // partial cannot observe contributions concurrently arriving from other partials.
+        source_snapshot           = other.gather_agg_results(stream, mr);
+        source_partials_per_group = 1;
+        source_capacity           = other_distinct_keys;
+        return source_snapshot->view();
+      }
+      return other._agg_results->view();
+    }();
+    auto const d_source = table_device_view::create(other_aggs_view, stream);
+    auto const d_target = mutable_table_device_view::create(_agg_results->mutable_view(), stream);
+    thrust::for_each_n(
+      rmm::exec_policy_nosync(stream, mr),
+      cuda::counting_iterator<int64_t>(0),
+      static_cast<int64_t>(other_distinct_keys) * source_partials_per_group * _agg_kinds.size(),
+      merge_partial_aggs_fn{targets.data(),
+                            source_capacity,
+                            other_distinct_keys,
+                            source_partials_per_group,
+                            _d_agg_kinds->data(),
+                            *d_source,
+                            *d_target});
     record_aggregate_completion(stream);
     other.record_result_read(stream);
   } catch (...) {

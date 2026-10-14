@@ -24,7 +24,6 @@
 #include <cuda/stream>
 
 #include <atomic>
-#include <functional>
 #include <memory>
 #include <mutex>
 #include <vector>
@@ -58,7 +57,6 @@ class insert_order_event {
   cudaEvent_t _event{};
 };
 
-using streaming_set_t                               = cuda::device_buffer<size_type>;
 inline constexpr int partial_aggregation_block_size = 256;
 
 // Dense IDs within a compacted batch are contiguous and follow its gathered row order.
@@ -104,11 +102,8 @@ struct n_table_comparator {
 };
 
 /*
- * Insert rows into the same scalar, exact-equality slot table used by HashCSR. During
- * insertion target_indices holds the slot bits, not a dense ID. This reuses the output
- * array as slot scratch, and computes each row hash once without a separate cache.
- * Unsigned slot bits use the full capacity range; UINT32_MAX is the excluded-row
- * sentinel, so large tables cannot alias valid slots with excluded rows.
+ * Inserts rows into the HashCSR slot table. Until dense IDs are assigned, target_indices holds
+ * each row's slot bits; excluded rows hold the UINT32_MAX (no slot) sentinel.
  */
 template <typename Equal, typename Hasher>
 struct insert_fn {
@@ -145,11 +140,9 @@ struct is_new_key_fn {
 };
 
 /*
- * For each newly discovered key (dense rank `r` within this batch):
- *   1. Rewrite its slot from transient encoding to its dense ID.  Pass 2 runs
- *      after Pass 1's kernel completes and each slot has a single writer, so a
- *      plain store is sufficient.
- *   2. Write the compacted batch ID to the companion vector at the dense ID.
+ * For each newly discovered key (dense rank `r` within this batch), rewrites its slot from the
+ * transient encoding to its dense ID and records its compacted batch ID. Each slot has a single
+ * writer, so plain stores suffice.
  */
 struct finalize_new_key_fn {
   size_type const*
@@ -200,6 +193,25 @@ auto build_cross_comparators(
 
   return cudf::detail::make_device_buffer(h_eqs, stream, mr.as_temporary());
 }
+
+/*
+ * Maps slot bits to aggregate rows. With several partials, rows of the same thread block share
+ * one partial so concurrent blocks spread their atomics over different copies of each group.
+ */
+struct resolve_aggregate_targets {
+  size_type const* slots;
+  size_type* targets;
+  size_type capacity;
+  size_type partials_per_group;
+
+  __device__ void operator()(size_type row) const
+  {
+    auto const slot = cuda::std::bit_cast<cuda::std::uint32_t>(targets[row]);
+    if (slot == detail::hash::hash_csr_no_slot) { return; }
+    auto const partial = (row / partial_aggregation_block_size) % partials_per_group;
+    targets[row]       = partial * capacity + slots[slot];
+  }
+};
 
 /// The impl struct for streaming_groupby. Defined in impl.cu.
 struct streaming_groupby::impl {
@@ -264,13 +276,10 @@ struct streaming_groupby::impl {
   size_type _partials_per_group{1};
   std::vector<data_type> _aggregate_input_types;
   std::unique_ptr<table> _agg_results;
-  // Preserve the factory deleter, which owns the device column-descriptor buffer.
-  std::unique_ptr<mutable_table_device_view, std::function<void(mutable_table_device_view*)>>
-    _d_agg_results;
   std::vector<size_type> _value_col_indices;
   std::unique_ptr<cuda::device_buffer<aggregation::Kind>> _d_agg_kinds;
 
-  std::unique_ptr<streaming_set_t> _key_set;
+  std::unique_ptr<cuda::device_buffer<size_type>> _key_set;
 
   [[nodiscard]] size_type num_keys() const { return static_cast<size_type>(_key_indices.size()); }
   void ensure_not_invalidated() const
@@ -307,37 +316,23 @@ struct streaming_groupby::impl {
   }
   void update_nullable_state(table_view const& batch_keys);
 
-  struct batch_insert_result {
-    // Slot bits until resolve_targets maps them to aggregate rows.
-    cuda::device_buffer<size_type> target_indices;
-    size_type new_insertions;
-    cuda::device_buffer<std::byte> bitmask_buffer;
-  };
-
-  batch_insert_result probe_and_insert(table_view const& batch_keys, cuda::stream_ref stream);
-  void resolve_targets(batch_insert_result& result,
-                       size_type partials_per_group,
-                       cuda::stream_ref stream,
-                       cudf::memory_resources mr) const;
+  /*
+   * Inserts the batch keys and returns each row's aggregate row, or the no-slot sentinel for
+   * excluded rows. `use_partials` spreads rows over the per-group partials (aggregate);
+   * otherwise every row targets the group's first partial (merge).
+   */
+  cuda::device_buffer<size_type> probe_and_insert(table_view const& batch_keys,
+                                                  bool use_partials,
+                                                  cuda::stream_ref stream);
 
   /*
    * Template implementation of probe_and_insert, split by has_nested.
    * Defined in insert.cuh, instantiated in insert.cu and insert_nested.cu.
    */
   template <bool has_nested>
-  batch_insert_result probe_and_insert_impl(table_view const& batch_keys, cuda::stream_ref stream);
-
-  // Flat and nested row-comparator instantiations live in separate translation units.
-  template <bool has_nested>
-  size_type probe_and_insert_rows(
-    std::shared_ptr<cudf::detail::row::hash::preprocessed_table> const& preprocessed_batch,
-    cudf::nullate::DYNAMIC has_null,
-    bitmask_type const* batch_bitmask,
-    size_type batch_size,
-    size_type* target_indices,
-    size_type* batch_local_indices,
-    cuda::stream_ref stream,
-    cudf::memory_resources mr);
+  cuda::device_buffer<size_type> probe_and_insert_impl(table_view const& batch_keys,
+                                                       bool use_partials,
+                                                       cuda::stream_ref stream);
 
   void do_aggregate(table_view const& data, cuda::stream_ref stream);
 

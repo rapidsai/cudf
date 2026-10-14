@@ -65,7 +65,6 @@ struct merge_partial_aggs_fn {
 
   __device__ void operator()(int64_t idx) const
   {
-    if (source_groups == 0) { return; }
     auto const num_rows = static_cast<int64_t>(source_groups) * source_partials_per_group;
     auto const position = idx % num_rows;
     auto const group    = static_cast<size_type>(position % source_groups);

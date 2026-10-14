@@ -785,13 +785,11 @@ add_library(
   src/groupby/sort/sort_helper_nested.cu
   src/groupby/streaming_groupby.cpp
   src/groupby/streaming_groupby/aggregate.cu
-  src/groupby/streaming_groupby/warp_aggregate.cu
   src/groupby/streaming_groupby/impl.cu
   src/groupby/streaming_groupby/insert.cu
   src/groupby/streaming_groupby/insert_nested.cu
-  src/groupby/streaming_groupby/insert_rows.cu
-  src/groupby/streaming_groupby/insert_rows_nested.cu
   src/groupby/streaming_groupby/merge.cu
+  src/groupby/streaming_groupby/warp_aggregate.cu
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu
   src/hash/murmurhash3_x64_128.cu

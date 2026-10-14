@@ -20,7 +20,6 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/buffer_factories.hpp>
-#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/null_mask.hpp>
@@ -41,7 +40,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
-#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -53,22 +51,6 @@
 namespace cudf::groupby {
 
 namespace {
-
-struct resolve_aggregate_targets {
-  size_type const* slots;
-  size_type* targets;
-  size_type capacity;
-  size_type partials_per_group;
-
-  __device__ void operator()(size_type row) const
-  {
-    auto const slot = cuda::std::bit_cast<cuda::std::uint32_t>(targets[row]);
-    if (slot == detail::hash::hash_csr_no_slot) { return; }
-    auto const partial =
-      partials_per_group > 1 ? (row / partial_aggregation_block_size) % partials_per_group : 0;
-    targets[row] = partial * capacity + slots[slot];
-  }
-};
 
 // Streaming still uses element_aggregator, whose atomic requirements are independent of the
 // reductions used by ordinary hash groupby.
@@ -215,15 +197,13 @@ void streaming_groupby::impl::initialize(table_view const& data, cuda::stream_re
     std::invalid_argument);
 
   // Keep only type metadata, never a view or owner of the caller's value buffers.
-  _aggregate_input_types.clear();
   _aggregate_input_types.reserve(values_view.num_columns());
   for (auto const& values : values_view) {
     _aggregate_input_types.push_back(cudf::is_dictionary(values.type())
                                        ? cudf::dictionary_column_view(values).keys().type()
                                        : values.type());
   }
-  _agg_results   = make_aggregate_results(0, stream, cudf::memory_resources{mr, mr});
-  _d_agg_results = mutable_table_device_view::create(_agg_results->mutable_view(), stream);
+  _agg_results = make_aggregate_results(0, stream, cudf::memory_resources{mr, mr});
 
   _d_agg_kinds = std::make_unique<cuda::device_buffer<aggregation::Kind>>(
     cudf::detail::make_device_buffer_async(_agg_kinds, stream, mr));
@@ -297,77 +277,43 @@ void streaming_groupby::impl::ensure_aggregate_capacity(size_type required,
                                                         cuda::stream_ref stream,
                                                         cudf::memory_resources mr)
 {
-  CUDF_EXPECTS(required <= _max_distinct_keys, "Aggregate capacity exceeds distinct-key bound.");
-  if (required == 0) { return; }
+  // Without aggregations there is no aggregate state to size.
+  if (required == 0 || _agg_kinds.empty()) { return; }
   auto const next_capacity =
     required <= _aggregate_capacity
       ? _aggregate_capacity
       : static_cast<size_type>(std::min<int64_t>(
-          _max_distinct_keys,
-          std::max<int64_t>(required, std::max<int64_t>(1, 2LL * _aggregate_capacity))));
-  auto const next_partials_per_group =
-    _agg_kinds.empty() ? size_type{1} : std::max<size_type>(1, _partial_budget / next_capacity);
+          _max_distinct_keys, std::max<int64_t>(required, 2LL * _aggregate_capacity)));
+  // Multiple partials stay within the budget; a single partial uses capacity rows.
+  auto const next_partials_per_group = std::max<size_type>(1, _partial_budget / next_capacity);
   if (next_capacity == _aggregate_capacity && next_partials_per_group == _partials_per_group) {
     return;
   }
-  // Multiple partials stay within the budget; a single partial uses capacity rows.
-  auto const next_rows_wide = static_cast<int64_t>(next_capacity) * next_partials_per_group;
-  CUDF_EXPECTS(next_rows_wide <= std::numeric_limits<size_type>::max(),
-               "Persistent partial state exceeds column size limit.");
-  auto const next_rows = static_cast<size_type>(next_rows_wide);
 
   _aggregate_done.wait(stream);
-  auto next = make_aggregate_results(next_rows, stream, mr);
-  auto next_view =
-    mutable_table_device_view::create(next->mutable_view(), stream, mr.get_output_mr());
+  auto next = make_aggregate_results(next_capacity * next_partials_per_group, stream, mr);
+  // A new capacity changes the partial-state pitch. Collapse live groups into the first new
+  // partial; every other partial and padding row retains its identity.
   auto const old_groups = _distinct_keys.load(std::memory_order_relaxed);
-  CUDF_EXPECTS(old_groups <= _aggregate_capacity, "Aggregate state exceeds allocated capacity.");
-  auto const old_rows =
-    static_cast<size_type>(static_cast<int64_t>(old_groups) * _partials_per_group);
-  if (old_rows > 0 && next->num_columns() > 0) {
-    if (next_partials_per_group == 1 && _partials_per_group == 1) {
-      for (size_type i = 0; i < next->num_columns(); ++i) {
-        auto const source = _agg_results->get_column(i).view();
-        auto target       = next->get_column(i).mutable_view();
-        // Null payloads contain live identities, so copy values and validity independently.
-        CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-          target.head(),
-          source.head(),
-          static_cast<std::size_t>(old_rows) * cudf::size_of(source.type()),
-          stream));
-        if (source.nullable()) {
-          CUDF_EXPECTS(target.nullable(), "Aggregate validity schema changed during growth.");
-          CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-            target.null_mask(),
-            source.null_mask(),
-            static_cast<std::size_t>(cudf::num_bitmask_words(old_rows)) * sizeof(bitmask_type),
-            stream));
-          cudf::set_null_mask(target.null_mask(), old_rows, next_rows, false, stream);
-        } else if (target.nullable()) {
-          cudf::set_null_mask(target.null_mask(), 0, old_rows, true, stream);
-        }
-      }
-    } else {
-      // A new capacity changes the partial-state pitch. Collapse live groups into the
-      // first new partial; every other partial and padding row retains its identity.
-      auto const source =
-        table_device_view::create(_agg_results->view(), stream, mr.get_temporary_mr());
-      thrust::for_each_n(rmm::exec_policy_nosync(stream, mr.get_temporary_mr()),
-                         cuda::counting_iterator<int64_t>{0},
-                         static_cast<int64_t>(old_rows) * static_cast<int64_t>(_agg_kinds.size()),
-                         merge_partial_aggs_fn{nullptr,
-                                               _aggregate_capacity,
-                                               old_groups,
-                                               _partials_per_group,
-                                               _d_agg_kinds->data(),
-                                               *source,
-                                               *next_view});
-    }
+  if (old_groups > 0) {
+    auto const source =
+      table_device_view::create(_agg_results->view(), stream, mr.get_temporary_mr());
+    auto const target =
+      mutable_table_device_view::create(next->mutable_view(), stream, mr.get_temporary_mr());
+    thrust::for_each_n(rmm::exec_policy_nosync(stream, mr.get_temporary_mr()),
+                       cuda::counting_iterator<int64_t>{0},
+                       static_cast<int64_t>(old_groups) * _partials_per_group * _agg_kinds.size(),
+                       merge_partial_aggs_fn{nullptr,
+                                             _aggregate_capacity,
+                                             old_groups,
+                                             _partials_per_group,
+                                             _d_agg_kinds->data(),
+                                             *source,
+                                             *target});
   }
   // Old owners can free on their original streams. Finish every old use and transfer before
   // retiring them.
   stream.sync();
-  _d_agg_results      = std::move(next_view);
   _agg_results        = std::move(next);
   _aggregate_capacity = next_capacity;
   _partials_per_group = next_partials_per_group;
@@ -377,14 +323,9 @@ void streaming_groupby::impl::create_key_set(cuda::stream_ref stream)
 {
   // Space for up to twice the bound also lets an over-capacity batch finish
   // insertion before the existing distinct-key check invalidates the object.
-  auto const capacity =
-    std::max(static_cast<std::size_t>(_max_distinct_keys) + 1,
-             static_cast<std::size_t>(std::ceil(static_cast<double>(_max_distinct_keys) /
-                                                cudf::detail::CUCO_DESIRED_LOAD_FACTOR)));
-  CUDF_EXPECTS(capacity < std::numeric_limits<cuda::std::uint32_t>::max(),
-               "Streaming HashCSR table capacity is not representable.",
-               std::overflow_error);
-  _key_set = std::make_unique<streaming_set_t>(stream, _mr, capacity, cuda::no_init);
+  auto const capacity = static_cast<std::size_t>(
+    std::ceil(_max_distinct_keys / cudf::detail::CUCO_DESIRED_LOAD_FACTOR));
+  _key_set = std::make_unique<cuda::device_buffer<size_type>>(stream, _mr, capacity, cuda::no_init);
   CUDF_CUDA_TRY(
     cudaMemsetAsync(_key_set->data(), 0xff, capacity * sizeof(size_type), stream.get()));
 }
@@ -404,15 +345,13 @@ std::unique_ptr<table> streaming_groupby::impl::gather_agg_results(cuda::stream_
                                                                    cudf::memory_resources mr) const
 {
   auto const size = _distinct_keys.load(std::memory_order_relaxed);
-  CUDF_EXPECTS(size <= _aggregate_capacity, "Aggregate state exceeds allocated capacity.");
   if (_agg_results->num_columns() == 0) { return std::make_unique<table>(); }
   if (_partials_per_group == 1 || size == 0) {
     auto const sliced = cudf::detail::slice(_agg_results->view(), {0, size}, stream).front();
     return std::make_unique<table>(sliced, stream, mr.get_output_mr());
   }
 
-  auto result     = make_aggregate_results(size, stream, mr);
-  auto const rows = static_cast<size_type>(static_cast<int64_t>(size) * _partials_per_group);
+  auto result = make_aggregate_results(size, stream, mr);
   auto const source =
     table_device_view::create(_agg_results->view(), stream, mr.get_temporary_mr());
   auto const target =
@@ -424,7 +363,7 @@ std::unique_ptr<table> streaming_groupby::impl::gather_agg_results(cuda::stream_
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream, mr.get_temporary_mr()),
     cuda::counting_iterator<int64_t>{0},
-    static_cast<int64_t>(rows) * static_cast<int64_t>(_agg_kinds.size()),
+    static_cast<int64_t>(size) * _partials_per_group * _agg_kinds.size(),
     merge_partial_aggs_fn{
       nullptr, _aggregate_capacity, size, _partials_per_group, kinds.data(), *source, *target});
   return result;
@@ -545,28 +484,11 @@ streaming_groupby::impl::do_finalize_and_release(cuda::stream_ref stream, cudf::
   return finalize_gathered(std::move(keys), std::move(agg_gathered), stream, mr);
 }
 
-streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_insert(
-  table_view const& batch_keys, cuda::stream_ref stream)
+cuda::device_buffer<size_type> streaming_groupby::impl::probe_and_insert(
+  table_view const& batch_keys, bool use_partials, cuda::stream_ref stream)
 {
-  if (_has_nested_keys) {
-    return probe_and_insert_impl<true>(batch_keys, stream);
-  } else {
-    return probe_and_insert_impl<false>(batch_keys, stream);
-  }
-}
-
-void streaming_groupby::impl::resolve_targets(batch_insert_result& result,
-                                              size_type partials_per_group,
-                                              cuda::stream_ref stream,
-                                              cudf::memory_resources mr) const
-{
-  if (_agg_kinds.empty()) { return; }
-  thrust::for_each_n(
-    rmm::exec_policy_nosync(stream, mr.get_temporary_mr()),
-    cuda::counting_iterator<size_type>{0},
-    result.target_indices.size(),
-    resolve_aggregate_targets{
-      _key_set->data(), result.target_indices.data(), _aggregate_capacity, partials_per_group});
+  if (_has_nested_keys) { return probe_and_insert_impl<true>(batch_keys, use_partials, stream); }
+  return probe_and_insert_impl<false>(batch_keys, use_partials, stream);
 }
 
 // Constructor, destructor, and move ops require full impl definition.
