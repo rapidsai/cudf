@@ -24,7 +24,7 @@ std::unique_ptr<column> sorted_order_impl(table_view const& input,
                                           std::vector<null_order> const& null_precedence,
                                           sort_method method,
                                           cuda::stream_ref stream,
-                                          rmm::device_async_resource_ref mr)
+                                          cudf::memory_resources mr)
 {
   if (method == sort_method::STABLE) {
     return sorted_order<sort_method::STABLE>(input, column_order, null_precedence, stream, mr);

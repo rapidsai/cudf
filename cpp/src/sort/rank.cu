@@ -290,9 +290,9 @@ std::unique_ptr<column> rank(column_view const& input,
   std::unique_ptr<column> sorted_order =
     (method == rank_method::FIRST)
       ? detail::stable_sorted_order(
-          table_view{{input}}, {column_order}, {null_precedence}, stream, {temp_mr, temp_mr})
+          table_view{{input}}, {column_order}, {null_precedence}, stream, mr.as_temporary())
       : detail::sorted_order(
-          table_view{{input}}, {column_order}, {null_precedence}, stream, {temp_mr, temp_mr});
+          table_view{{input}}, {column_order}, {null_precedence}, stream, mr.as_temporary());
   column_view sorted_order_view = sorted_order->view();
 
   // dense: All equal values have same rank and rank always increases by 1 between groups
