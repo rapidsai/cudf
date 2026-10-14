@@ -14,14 +14,17 @@ from polars.testing import assert_frame_equal
 from cudf_streaming.channel_metadata import OrderScheme
 
 from cudf_polars import Translator
+from cudf_polars.engine.core import all_gather_host_data
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.engine.spmd import SPMDEngine
+from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.core import evaluate_logical_plan
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
 from cudf_polars.testing.engine_utils import warns_on_spmd
+from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions
 from cudf_polars.utils.versions import POLARS_VERSION_LT_136, POLARS_VERSION_LT_139
 
@@ -246,6 +249,55 @@ def test_fixed_size_rolling_mean(engine, center) -> None:
     q = df.select(pl.col("x").rolling_mean(window_size=3, center=center))
 
     assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "kind,offset",
+    [("range", "-4i"), ("range", "0i"), ("count", None)],
+    ids=["range-trailing", "range-leading", "count"],
+)
+def test_rolling_multirank(engine, tmp_path, kind, offset) -> None:
+    source = tmp_path / "rolling.parquet"
+    _write_rolling_source(source)
+    _assert_rolling_result(engine, source, kind, offset)
+
+
+def _write_rolling_source(source) -> None:
+    make_partitioned_source(
+        pl.DataFrame(
+            {
+                "orderby": [0, 1, 2, 3, 3, 4, 5, 6],
+                "values": [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0],
+            }
+        ),
+        source,
+        "parquet",
+        row_group_size=2,
+    )
+
+
+def _assert_rolling_result(engine, source, kind, offset) -> None:
+    q = pl.scan_parquet(source).set_sorted("orderby")
+    if kind == "range":
+        q = q.rolling("orderby", period="4i", offset=offset).agg(pl.col("values").sum())
+    else:
+        q = q.select(pl.col("values").rolling_mean(window_size=3, center=True))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.spmd
+@pytest.mark.parametrize("kind", ["range", "count"])
+def test_rolling_multirank_spmd(spmd_engine, tmp_path, kind) -> None:
+    source = tmp_path / "rolling.parquet"
+    path = b""
+    if spmd_engine.rank == 0:
+        _write_rolling_source(source)
+        path = str(source).encode()
+    with reserve_op_id() as op_id:
+        source = all_gather_host_data(
+            spmd_engine.comm, spmd_engine.context.br(), op_id, path
+        )[0].decode()
+    _assert_rolling_result(spmd_engine, source, kind, "-2i")
 
 
 @pytest.mark.skipif(
