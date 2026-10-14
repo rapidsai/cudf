@@ -18,6 +18,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <cub/device/device_segmented_reduce.cuh>
@@ -34,13 +36,12 @@
 namespace CUDF_EXPORT cudf {
 namespace detail {
 
-cuda::device_buffer<cudf::size_type> nulls_per_group(column_view const& orderby,
+rmm::device_uvector<cudf::size_type> nulls_per_group(column_view const& orderby,
                                                      device_span<size_type const> offsets,
-                                                     cuda::stream_ref stream,
-                                                     cudf::memory_resources mr)
+                                                     cuda::stream_ref stream)
 {
   CUDF_FUNC_RANGE();
-  auto d_orderby        = column_device_view::create(orderby, stream, mr.get_temporary_mr());
+  auto d_orderby        = column_device_view::create(orderby, stream);
   auto const num_groups = offsets.size() - 1;
   std::size_t bytes{0};
   auto is_null_it = cudf::detail::make_counting_transform_iterator(
@@ -49,8 +50,7 @@ cuda::device_buffer<cudf::size_type> nulls_per_group(column_view const& orderby,
       [orderby = *d_orderby] __device__(size_type i) -> size_type {
         return static_cast<size_type>(orderby.is_null_nocheck(i));
       }));
-  cuda::device_buffer<cudf::size_type> null_counts{
-    stream, mr.get_output_mr(), num_groups, cuda::no_init};
+  rmm::device_uvector<cudf::size_type> null_counts{num_groups, stream};
   cub::DeviceSegmentedReduce::Sum(nullptr,
                                   bytes,
                                   is_null_it,
@@ -59,7 +59,8 @@ cuda::device_buffer<cudf::size_type> nulls_per_group(column_view const& orderby,
                                   offsets.begin(),
                                   offsets.begin() + 1,
                                   stream.get());
-  auto tmp = cuda::device_buffer<std::byte>(stream, mr.get_temporary_mr(), bytes, cuda::no_init);
+  auto tmp = cuda::device_buffer<std::byte>(
+    stream, cudf::get_current_device_resource_ref(), bytes, cuda::no_init);
   cub::DeviceSegmentedReduce::Sum(tmp.data(),
                                   bytes,
                                   is_null_it,
@@ -115,12 +116,10 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   if (group_keys.num_columns() > 0) {
     using grouping_helper = cudf::groupby::detail::groupby_helper;
     grouping_helper helper{group_keys, null_policy::INCLUDE, sorted::YES, mr};
-    auto const& labels  = helper.group_labels(stream, mr);
-    auto const& offsets = helper.group_offsets(stream, mr);
-    auto per_group_nulls =
-      orderby.has_nulls()
-        ? nulls_per_group(orderby, offsets, stream, cudf::memory_resources{mr}.as_temporary())
-        : cuda::device_buffer<size_type>{stream, cudf::memory_resources{mr}.get_temporary_mr()};
+    auto const& labels   = helper.group_labels(stream, mr);
+    auto const& offsets  = helper.group_offsets(stream, mr);
+    auto per_group_nulls = orderby.has_nulls() ? nulls_per_group(orderby, offsets, stream)
+                                               : rmm::device_uvector<size_type>{0, stream};
     auto grouping = detail::rolling::preprocessed_group_info{labels, offsets, per_group_nulls};
     return {
       make_range_window(

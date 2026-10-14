@@ -12,7 +12,6 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <cuda/buffer>
 #include <cuda/stream>
 
 #include <memory>
@@ -34,7 +33,7 @@ enum class direction : bool {
 struct preprocessed_group_info {
   device_span<size_type const> labels;   ///< Mapping from row index to group label
   device_span<size_type const> offsets;  ///< Mapping from group label to row offsets
-  device_span<size_type const>
+  rmm::device_uvector<size_type> const&
     nulls_per_group;  ///< Mapping from group label to null count in the group
 };
 
@@ -46,14 +45,10 @@ struct preprocessed_group_info {
  * @param orderby Column with null mask.
  * @param offsets Offset array defining the (sorted) groups.
  * @param stream CUDA stream used for kernel launches
- * @param mr Memory resources used for the returned counts and temporary allocations
- * @return device_buffer containing the null count per group.
+ * @return device_uvector containing the null count per group.
  */
-[[nodiscard]] cuda::device_buffer<cudf::size_type> nulls_per_group(
-  column_view const& orderby,
-  device_span<size_type const> offsets,
-  cuda::stream_ref stream,
-  cudf::memory_resources mr);
+[[nodiscard]] rmm::device_uvector<cudf::size_type> nulls_per_group(
+  column_view const& orderby, device_span<size_type const> offsets, cuda::stream_ref stream);
 
 /**
  * @copydoc std::unique_ptr<column> rolling_window(
