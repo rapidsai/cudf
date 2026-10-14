@@ -1351,12 +1351,59 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
     auto filter_expression = cudf::ast::operation(
       cudf::ast::ast_operator::LOGICAL_OR, uint_filter_expression, uint_filter_expression2);
 
+    auto options = cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
+    reader->reset_column_selection();
+    EXPECT_TRUE(
+      reader->dictionary_pages_byte_ranges(reader->all_row_groups(options), options).empty());
+
     constexpr size_t expected_row_groups = 4;
-    auto const options =
-      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     EXPECT_EQ(
       filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr).size(),
       expected_row_groups);
+
+    // AND'ing a `table[2] == "9999"` to the filter must only fetch col2's dictionaries.
+    auto str_value   = cudf::string_scalar("9999", true, stream);
+    auto str_literal = cudf::ast::literal(str_value);
+    auto str_filter  = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col2_ref, str_literal);
+
+    options.set_filter(str_filter);
+    reader->reset_column_selection();
+    auto const expected_ranges =
+      reader->dictionary_pages_byte_ranges(reader->all_row_groups(options), options);
+    ASSERT_FALSE(expected_ranges.empty());
+
+    auto conjunction =
+      cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, filter_expression, str_filter);
+    options.set_filter(conjunction);
+
+    reader->reset_column_selection();
+    auto const dict_ranges =
+      reader->dictionary_pages_byte_ranges(reader->all_row_groups(options), options);
+
+    ASSERT_EQ(dict_ranges.size(), expected_ranges.size());
+    EXPECT_TRUE(std::equal(dict_ranges.begin(),
+                           dict_ranges.end(),
+                           expected_ranges.begin(),
+                           expected_ranges.end(),
+                           [](auto const& lhs, auto const& rhs) {
+                             return lhs.offset() == rhs.offset() and lhs.size() == rhs.size();
+                           }));
+    EXPECT_TRUE(
+      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr).empty());
+  }
+
+  {
+    // Filtering - table[0] == 1000. The collector must report byte ranges to be fetched
+    auto uint_literal_value = cudf::numeric_scalar<T>(1000, true, stream);
+    auto uint_literal       = cudf::ast::literal(uint_literal_value);
+    auto filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col0_ref, uint_literal);
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
+
+    reader->reset_column_selection();
+    EXPECT_FALSE(
+      reader->dictionary_pages_byte_ranges(reader->all_row_groups(options), options).empty());
   }
 
   {
@@ -1379,6 +1426,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
     EXPECT_EQ(
       filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr).size(),
       expected_row_groups);
+
+    reader->reset_column_selection();
+    EXPECT_FALSE(
+      reader->dictionary_pages_byte_ranges(reader->all_row_groups(options), options).empty());
   }
 
   {
@@ -1934,14 +1985,16 @@ TEST_F(HybridScanFiltersTest, RowGroupPasses)
 
   // No pass read limit. All row groups in a single pass
   {
-    auto passes = reader->construct_row_group_passes(all_row_groups, 0);
+    auto passes = reader->construct_row_group_passes(
+      cudf::io::parquet::experimental::read_columns_mode::ALL_COLUMNS, all_row_groups, 0, options);
     EXPECT_EQ(passes.size(), 1);
     EXPECT_EQ(passes.front(), all_row_groups);
   }
 
   // Small pass limit would result in each row group in its own pass
   {
-    auto passes = reader->construct_row_group_passes(all_row_groups, 1);
+    auto passes = reader->construct_row_group_passes(
+      cudf::io::parquet::experimental::read_columns_mode::ALL_COLUMNS, all_row_groups, 1, options);
     EXPECT_EQ(passes.size(), all_row_groups.size());
     auto zipped = cuda::make_zip_iterator(passes.begin(), all_row_groups.begin());
     std::for_each(zipped, zipped + passes.size(), [&](auto const& iter) {
@@ -1954,7 +2007,11 @@ TEST_F(HybridScanFiltersTest, RowGroupPasses)
 
   // All passes should cover all row groups and be consecutive
   {
-    auto passes = reader->construct_row_group_passes(all_row_groups, 1'024);
+    auto passes = reader->construct_row_group_passes(
+      cudf::io::parquet::experimental::read_columns_mode::ALL_COLUMNS,
+      all_row_groups,
+      1'024,
+      options);
     std::vector<cudf::size_type> flattened;
     for (auto const& pass : passes) {
       EXPECT_GT(pass.size(), 0);

@@ -113,6 +113,18 @@ template <operator_transform mode>
 [[nodiscard]] bool is_boolean_valued(ast::expression const& expr);
 
 /**
+ * @brief Whether a bloom filter or a dictionary page can be queried for a `col == lit` predicate
+ *
+ * @throws cudf::logic_error if the column and literal types mismatch
+ *
+ * @param column_type Output type of the column
+ * @param literal Literal compared against the column
+ * @return Whether the predicate can be queried
+ */
+[[nodiscard]] bool is_membership_queryable(cudf::data_type column_type,
+                                           ast::literal const& literal);
+
+/**
  * @brief Collects column names from the expression ignoring the `skip_names`
  */
 class names_from_expression : public ast::detail::expression_transformer {
@@ -234,56 +246,6 @@ class parquet_filter_normalizer : public ast::detail::expression_transformer {
   // Using std::list or std::deque to avoid reference invalidation
   std::list<ast::column_reference> _col_ref;
   std::list<ast::operation> _operators;
-};
-
-/**
- * @brief Collects lists of equality predicate literals in the AST expression, one list per input
- * table column. This is used in row group filtering based on bloom filters.
- */
-class equality_literals_collector : public ast::detail::expression_transformer {
- public:
-  equality_literals_collector() = default;
-
-  equality_literals_collector(ast::expression const& expr,
-                              cudf::host_span<cudf::data_type const> output_dtypes,
-                              cudf::host_span<cudf::size_type const> output_column_schemas = {},
-                              cudf::host_span<SchemaElement const> schema_tree             = {});
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override;
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(
-    ast::column_name_reference const& expr) override;
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
-
-  /**
-   * @brief Vectors of equality literals in the AST expression, one per input table column
-   *
-   * @return Vectors of equality literals, one per input table column
-   */
-  [[nodiscard]] std::vector<std::vector<ast::literal*>> get_literals() &&;
-
- protected:
-  cudf::host_span<cudf::data_type const> _output_dtypes;
-  std::vector<std::vector<ast::literal*>> _literals;
-
- private:
-  cudf::host_span<cudf::size_type const> _output_column_schemas;
-  cudf::host_span<SchemaElement const> _schema_tree;
 };
 
 /**
@@ -442,6 +404,81 @@ class parquet_expression_simplifier {
    * @brief Validates operands in `expr`
    */
   void validate_operands(ast::expression const& expr) const;
+};
+
+/**
+ * @brief Collects lists of equality predicate literals in the AST expression, one list per input
+ * table column. This is used in row group filtering based on bloom filters.
+ */
+class equality_literals_collector : public parquet_expression_simplifier {
+ public:
+  /**
+   * @brief Collects the equality literals in `expr` that bloom filters can be queried for
+   *
+   * @param expr Filter expression to collect from
+   * @param output_dtypes Output data types of the table columns
+   * @param mismatched_timestamp_mask Boolean span indicating if output columns are timestamps
+   * with mismatched precision in any source, or empty to skip the check
+   */
+  equality_literals_collector(ast::expression const& expr,
+                              std::span<cudf::data_type const> output_dtypes,
+                              std::span<bool const> mismatched_timestamp_mask = {});
+
+  /**
+   * @brief Returns vectors of collected literals and their comparison operators in the AST
+   * expression, one per input table column
+   *
+   * @return A pair of vectors of collected literals and their comparison operators, one per input
+   * table column
+   */
+  [[nodiscard]] std::pair<std::vector<std::vector<ast::literal*>>,
+                          std::vector<std::vector<ast::ast_operator>>>
+  get_literals_and_operators() &&;
+
+  /**
+   * @brief Whether the membership filter built from the collected literals can prune anything
+   *
+   * @return Whether any row groups can be pruned by the filter
+   */
+  [[nodiscard]] bool can_filter() const;
+
+ protected:
+  /**
+   * @brief Constructs a collector without walking for derived classes
+   */
+  equality_literals_collector(std::span<cudf::data_type const> output_dtypes,
+                              std::span<bool const> mismatched_timestamp_mask);
+
+  /**
+   * @brief Simplifies `expr` and collects literals and operators from it
+   *
+   * @param expr Filter expression to simplify and collect from
+   */
+  void collect(ast::expression const& expr);
+
+  /**
+   * @copydoc parquet_expression_simplifier::simplify_comparison
+   *
+   * A bloom filter only evaluates if a row group may be present, so we can only evaluate equality
+   * comparisons against literals.
+   */
+  [[nodiscard]] simplified_expression_opt simplify_comparison(ast::ast_operator op,
+                                                              ast::column_reference const& col_ref,
+                                                              ast::literal const& literal) override;
+
+  std::vector<std::vector<ast::literal*>> _literals;
+  std::vector<std::vector<ast::ast_operator>> _operators;
+
+ private:
+  /**
+   * @brief Collects literals and operators from the simplified expression
+   *
+   * @param simplified_expr Simplified expression whose leaves are `col op lit` comparisons
+   */
+  void collect_surviving_predicates(ast::expression const& simplified_expr);
+
+  std::span<bool const> _mismatched_timestamp_mask;
+  bool _can_filter{false};
 };
 
 /**
