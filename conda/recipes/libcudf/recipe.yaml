@@ -148,6 +148,7 @@ outputs:
         - zlib ${{ zlib_version }}
         - cuda-cudart-dev
       run:
+        - libzlib ${{ zlib_version }}
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - cuda-nvrtc
         - cuda-sanitizer-api
@@ -378,6 +379,7 @@ outputs:
         - cuda-profiler-api
         - cuda-sanitizer-api
       run:
+        - libzlib ${{ zlib_version }}
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - ${{ pin_subpackage("libcudf_kafka", exact=True) }}
