@@ -82,7 +82,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
                                        cudf::memory_resources mr)
 {
   auto const temp_mr             = mr.get_temporary_mr();
-  auto const temporary_resources = cudf::memory_resources{temp_mr, temp_mr};
+  auto const temporary_resources = mr.as_temporary();
 
   // Determine which grouping outputs the requested aggregations need.
   auto const [values, agg_kinds, aggs, is_agg_intermediate, has_compound_aggs] =

@@ -831,8 +831,6 @@ class JoinFilterPushdownOptions:
         Maximum Bloom-filter size in bytes. If the estimated Bloom filter exceeds
         this size, an exact semi-join is preferred when its projected keys fit the
         broadcast limit. Set to 0 to disable Bloom filters. Default is 32 MiB.
-    trace
-        Whether to emit plan-time trace decisions for filter decisions. Default is False.
     """
 
     _env_prefix = "CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN"
@@ -847,11 +845,6 @@ class JoinFilterPushdownOptions:
             f"{_env_prefix}__BLOOM_FILTER_MAX_SIZE",
             int,
             default=32 * 1024 * 1024,
-        )
-    )
-    trace: bool = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__TRACE", _bool_converter, default=False
         )
     )
 
@@ -869,8 +862,6 @@ class JoinFilterPushdownOptions:
             raise TypeError("bloom_filter_max_size must be an int")
         if self.bloom_filter_max_size < 0:
             raise ValueError("bloom_filter_max_size must be non-negative")
-        if not isinstance(self.trace, bool):
-            raise TypeError("trace must be a bool")
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
