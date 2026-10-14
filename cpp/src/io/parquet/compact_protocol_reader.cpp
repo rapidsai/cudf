@@ -821,18 +821,15 @@ void CompactProtocolReader::read(GeometryType* g)
 
 void CompactProtocolReader::read(VariantType* v)
 {
-  using optional_version =
-    parquet_field_optional<int8_t, parquet_field_int8, cuda::std::optional<int8_t>>;
-  auto op = std::make_tuple(optional_version(1, v->specification_version));
+  using optional_version = parquet_field_optional<int8_t, parquet_field_int8>;
+  auto op                = std::make_tuple(optional_version(1, v->specification_version));
   function_builder(this, op);
 }
 
 void CompactProtocolReader::read(GeographyType* g)
 {
-  using optional_algorithm =
-    parquet_field_optional<EdgeInterpolationAlgorithm,
-                           parquet_field_enum<EdgeInterpolationAlgorithm>,
-                           cuda::std::optional<EdgeInterpolationAlgorithm>>;
+  using optional_algorithm = parquet_field_optional<EdgeInterpolationAlgorithm,
+                                                    parquet_field_enum<EdgeInterpolationAlgorithm>>;
   // Thrift field 1 is the `crs` string; only its PRESENCE is recorded while `algorithm` (id 2)
   // round-trips.
   std::optional<std::string> crs;

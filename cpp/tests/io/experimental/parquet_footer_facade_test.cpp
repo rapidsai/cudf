@@ -1097,6 +1097,45 @@ TEST_F(ParquetFooterFacadeTest, InvalidLogicalTypeFails)
   }
 }
 
+// A payload member engaged for a union field other than its own would be dropped silently, so the
+// writer refuses it; each of the three guards is reached by a distinct mismatch, and a disengaged
+// payload stays legal.
+TEST_F(ParquetFooterFacadeTest, MismatchedLogicalTypePayloadIsRefused)
+{
+  LogicalTypePayload variant_payload{.variant_type = VariantType{}};
+  LogicalTypePayload geometry_payload{.geometry_type = GeometryType{}};
+  LogicalTypePayload geography_payload{.geography_type = GeographyType{}};
+
+  // VARIANT carrying a Geography payload.
+  auto const variant_with_geography =
+    make_logical_type_footer({{LogicalType{LogicalType::VARIANT}, geography_payload}});
+  EXPECT_THROW((void)experimental::write_parquet_footer_bytes(variant_with_geography),
+               cudf::logic_error);
+
+  // GEOGRAPHY carrying a Variant payload.
+  auto const geography_with_variant =
+    make_logical_type_footer({{LogicalType{LogicalType::GEOGRAPHY}, variant_payload}});
+  EXPECT_THROW((void)experimental::write_parquet_footer_bytes(geography_with_variant),
+               cudf::logic_error);
+
+  // GEOMETRY carrying a Variant payload.
+  auto const geometry_with_variant =
+    make_logical_type_footer({{LogicalType{LogicalType::GEOMETRY}, variant_payload}});
+  EXPECT_THROW((void)experimental::write_parquet_footer_bytes(geometry_with_variant),
+               cudf::logic_error);
+
+  // VARIANT carrying a Geometry payload.
+  auto const variant_with_geometry =
+    make_logical_type_footer({{LogicalType{LogicalType::VARIANT}, geometry_payload}});
+  EXPECT_THROW((void)experimental::write_parquet_footer_bytes(variant_with_geometry),
+               cudf::logic_error);
+
+  // A disengaged payload is a legal thrift value: the VARIANT arm writes an empty struct.
+  auto const variant_without_payload =
+    make_logical_type_footer({{LogicalType{LogicalType::VARIANT}, LogicalTypePayload{}}});
+  EXPECT_NO_THROW((void)experimental::write_parquet_footer_bytes(variant_without_payload));
+}
+
 // A malformed known LogicalType field (GEOMETRY, id 17, expected STRUCT) encoded as i32 keeps the
 // mismatch policy: COMPAT skips the field (the inner type stays UNDEFINED and the writer rejects
 // it), strict mode throws on parse. Malformed input must not be silently reinterpreted.

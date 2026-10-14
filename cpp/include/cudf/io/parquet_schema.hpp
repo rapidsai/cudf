@@ -243,7 +243,7 @@ struct IntType {
  */
 struct VariantType {
   /// Version of the Variant logical type specification
-  cuda::std::optional<int8_t> specification_version;
+  std::optional<int8_t> specification_version;
 };
 
 /**
@@ -277,7 +277,7 @@ struct GeometryType {
 struct GeographyType {
   bool has_crs{false};  ///< Whether the thrift `crs` string (field id 1) was present
   /// Edge interpolation algorithm (thrift id 2); SPHERICAL if unset
-  cuda::std::optional<EdgeInterpolationAlgorithm> algorithm;
+  std::optional<EdgeInterpolationAlgorithm> algorithm;
 };
 
 /**
