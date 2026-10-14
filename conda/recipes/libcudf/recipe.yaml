@@ -329,6 +329,8 @@ outputs:
         - cuda-nvrtc-dev
         - libnvjitlink-dev
       run:
+        - librmm =${{ minor_version }}
+        - rapids-logger =0.3
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - cuda-nvtx
@@ -379,6 +381,8 @@ outputs:
         - cuda-profiler-api
         - cuda-sanitizer-api
       run:
+        - librmm =${{ minor_version }}
+        - rapids-logger =0.3
         - libzlib ${{ zlib_version }}
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - ${{ pin_subpackage("libcudf", exact=True) }}
@@ -429,6 +433,7 @@ outputs:
         - cuda-version =${{ cuda_version }}
         - cuda-cudart-dev
       run:
+        - rapids-logger =0.3
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - ${{ pin_subpackage("libcudf-streaming", exact=True) }}
         - librmm =${{ minor_version }}
