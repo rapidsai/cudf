@@ -106,14 +106,14 @@ struct sorted_order_radix_fn {
   {
     auto pair_in = cuda::device_buffer<float_pair<T>>(
       stream, cudf::get_current_device_resource_ref(), input.size(), cuda::no_init);
-    auto d_in = pair_in.begin();
+    auto d_in = pair_in.data();
     // pair_out/d_out is not returned to the caller but used as an intermediate
     auto pair_out = cuda::device_buffer<float_pair<T>>(
       stream, cudf::get_current_device_resource_ref(), input.size(), cuda::no_init);
-    auto d_out = pair_out.begin();
+    auto d_out = pair_out.data();
     auto vals  = cuda::device_buffer<size_type>(
       stream, cudf::get_current_device_resource_ref(), indices.size(), cuda::no_init);
-    auto dv_in  = vals.begin();
+    auto dv_in  = vals.data();
     auto dv_out = indices.begin<cudf::size_type>();
 
     auto zip_out = cuda::make_zip_iterator(d_in, dv_in);
