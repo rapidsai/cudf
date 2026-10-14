@@ -2510,15 +2510,28 @@ class streaming_hash_join_impl {
       auto row_indices = std::make_unique<rmm::device_uvector<size_type>>(
         result_size, stream, resources.get_output_mr());
       if (result_size > 0) {
-        launch_segmented_dynamic_csr_retrieve_kernel(static_cast<size_type>(result_size),
-                                                     left.num_rows(),
-                                                     probe_slots.data(),
-                                                     offsets.data(),
-                                                     dynamic_csr->ref(),
-                                                     left_indices->data(),
-                                                     batch_indices->data(),
-                                                     row_indices->data(),
-                                                     stream);
+        auto row_refs = rmm::device_uvector<cuda::std::uint64_t>{
+          result_size, stream, resources.get_temporary_mr()};
+        auto const config = grid_1d{static_cast<size_type>(result_size), 256};
+        segmented_dynamic_csr_retrieve_kernel<<<config.num_blocks,
+                                                config.num_threads_per_block,
+                                                0,
+                                                stream.get()>>>(static_cast<size_type>(result_size),
+                                                                left.num_rows(),
+                                                                probe_slots.data(),
+                                                                offsets.data(),
+                                                                dynamic_csr->ref(),
+                                                                row_refs.data(),
+                                                                left_indices->data());
+        CUDF_CUDA_TRY(cudaGetLastError());
+        unpack_segmented_dynamic_refs_kernel<<<config.num_blocks,
+                                               config.num_threads_per_block,
+                                               0,
+                                               stream.get()>>>(static_cast<size_type>(result_size),
+                                                               row_refs.data(),
+                                                               batch_indices->data(),
+                                                               row_indices->data());
+        CUDF_CUDA_TRY(cudaGetLastError());
       }
       return std::pair{std::move(left_indices),
                        std::pair{std::move(batch_indices), std::move(row_indices)}};
