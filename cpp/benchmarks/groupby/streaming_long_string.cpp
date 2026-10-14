@@ -48,9 +48,9 @@ void bench_streaming_long_string(nvbench::state& state)
   auto const key_format = state.get_string("key_format");
   CUDF_EXPECTS(key_format == "string" || key_format == "struct",
                "key_format must be string or struct");
-  CUDF_EXPECTS(mode == "all_unique" || mode == "repeated_batch",
-               "key_mode must be all_unique or repeated_batch");
-  auto const groups = mode == "all_unique" ? num_rows : std::min(batch_size, num_rows);
+  CUDF_EXPECTS(mode == "all_distinct" || mode == "repeated_batch",
+               "key_mode must be all_distinct or repeated_batch");
+  auto const groups = mode == "all_distinct" ? num_rows : std::min(batch_size, num_rows);
   CUDF_EXPECTS(key_bytes >= static_cast<cudf::size_type>(std::to_string(groups - 1).size()),
                "key_bytes must accommodate the longest decimal key");
   CUDF_EXPECTS(
@@ -62,7 +62,7 @@ void bench_streaming_long_string(nvbench::state& state)
                "Streaming capacity plus batch size must fit cudf::size_type");
 
   // Decimal digits never contain '#', so right padding preserves distinct keys exactly.
-  // Repeated mode reuses precisely the first batch's set; unique mode introduces only new keys.
+  // Repeated mode reuses the first batch's keys; all_distinct uses different keys in every row.
   auto integer_keys = cudf::sequence(num_rows, cudf::numeric_scalar<int32_t>{0});
   if (mode == "repeated_batch") {
     integer_keys = cudf::binary_operation(integer_keys->view(),
@@ -122,5 +122,5 @@ NVBENCH_BENCH(bench_streaming_long_string)
   .add_int64_axis("num_rows", {4'000'000})
   .add_int64_axis("batch_size", {1'000'000})
   .add_int64_axis("key_bytes", {64, 256})
-  .add_string_axis("key_mode", {"all_unique", "repeated_batch"})
+  .add_string_axis("key_mode", {"all_distinct", "repeated_batch"})
   .add_string_axis("key_format", {"string", "struct"});

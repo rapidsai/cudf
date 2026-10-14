@@ -14,7 +14,7 @@
 
 namespace cudf::groupby {
 
-/// Combines validated streaming aggregation columns by warp peers.
+/// Combines row values with equal targets within each warp.
 void compute_warp_aggregates(table_view const& values,
                              host_span<aggregation::Kind const> kinds,
                              device_span<size_type const> targets,

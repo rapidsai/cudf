@@ -251,7 +251,7 @@ ConfigureNVBench(
   groupby/group_sum.cpp
   groupby/streaming_groupby.cpp
   groupby/streaming_groupby_cardinality.cpp
-  groupby/streaming_groupby_unique_keys.cpp
+  groupby/streaming_groupby_distinct_keys.cpp
   groupby/streaming_long_string.cpp
 )
 

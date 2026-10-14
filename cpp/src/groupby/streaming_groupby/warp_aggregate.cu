@@ -24,12 +24,12 @@
 namespace cudf::groupby {
 namespace {
 
-namespace hash                = detail::hash;
-namespace cg                  = cooperative_groups;
-constexpr int peer_block_size = 256;
+namespace hash           = detail::hash;
+namespace cg             = cooperative_groups;
+constexpr int block_size = 256;
 
 template <typename T, aggregation::Kind K>
-constexpr bool peer_type_supported()
+constexpr bool is_warp_aggregation_supported()
 {
   if constexpr (cuda::std::is_same_v<T, numeric::decimal128> && K == aggregation::SUM) {
     return true;  // This kind has a dedicated existing 128-bit atomic addition.
@@ -45,14 +45,14 @@ constexpr bool peer_type_supported()
 }
 
 template <typename ValueFn>
-struct peer_values {
+struct aggregation_values {
   ValueFn values;
   __device__ bool valid(size_type row) const { return !values.col_is_null(row); }
   __device__ auto value(size_type row) const { return values.compute(row); }
 };
 
 template <bool ValidOnly>
-struct peer_count_values {
+struct count_values {
   column_device_view values;
   bool has_nulls;
   __device__ bool valid(size_type row) const
@@ -63,7 +63,7 @@ struct peer_count_values {
 };
 
 template <typename Values, typename Result>
-struct peer_column {
+struct aggregation_column {
   Values values;
   Result* output;
   bitmask_type* validity;
@@ -71,15 +71,15 @@ struct peer_column {
 
 // Public CG collectives shuffle this trivially-copyable representation without narrowing it.
 // Unsigned word arithmetic keeps every carry and avoids signed overflow in the local reduction.
-struct peer_sum128_value {
+struct int128_words {
   uint64_t low;
   uint64_t high;
 };
-static_assert(sizeof(peer_sum128_value) == sizeof(__int128_t));
-static_assert(cuda::std::is_trivially_copyable_v<peer_sum128_value>);
+static_assert(sizeof(int128_words) == sizeof(__int128_t));
+static_assert(cuda::std::is_trivially_copyable_v<int128_words>);
 
-struct peer_sum128_op {
-  __device__ peer_sum128_value operator()(peer_sum128_value lhs, peer_sum128_value rhs) const
+struct int128_sum {
+  __device__ int128_words operator()(int128_words lhs, int128_words rhs) const
   {
     auto const low = lhs.low + rhs.low;
     return {low, lhs.high + rhs.high + static_cast<uint64_t>(low < lhs.low)};
@@ -87,44 +87,41 @@ struct peer_sum128_op {
 };
 
 template <typename T, typename Op>
-__device__ T reduce_peer_value(cg::coalesced_group const& peers, T value, Op operation)
+__device__ T reduce_group_value(cg::coalesced_group const& thread_group, T value, Op operation)
 {
   if constexpr (cuda::std::is_same_v<T, __int128_t>) {
     static_assert(cuda::std::is_same_v<Op, cudf::DeviceSum>);
     auto const bits = static_cast<__uint128_t>(value);
     auto const packed =
-      peer_sum128_value{static_cast<uint64_t>(bits), static_cast<uint64_t>(bits >> 64)};
-    auto const result = cg::reduce(peers, packed, peer_sum128_op{});
+      int128_words{static_cast<uint64_t>(bits), static_cast<uint64_t>(bits >> 64)};
+    auto const result = cg::reduce(thread_group, packed, int128_sum{});
     auto const output = (static_cast<__uint128_t>(result.high) << 64) | result.low;
     return cuda::std::bit_cast<__int128_t>(output);
   } else {
-    return cg::reduce(peers, value, operation);
+    return cg::reduce(thread_group, value, operation);
   }
 }
 
 template <typename Column, typename Op>
-__device__ void aggregate_peer_row(Column const& column,
-                                   size_type row,
-                                   size_type target,
-                                   Op operation)
+__device__ void aggregate_row(Column const& column, size_type row, size_type target, Op operation)
 {
   if (column.values.valid(row)) {
-    auto const active = cg::coalesced_threads();
-    auto const peers  = cg::labeled_partition(active, target);
-    auto const value  = column.values.value(row);
-    auto combine      = peers.size() > 1;
+    auto const active       = cg::coalesced_threads();
+    auto const thread_group = cg::labeled_partition(active, target);
+    auto const value        = column.values.value(row);
+    auto combine            = thread_group.size() > 1;
     if constexpr (cuda::std::is_floating_point_v<decltype(value)> &&
                   (cuda::std::is_same_v<Op, cudf::DeviceMin> ||
                    cuda::std::is_same_v<Op, cudf::DeviceMax>)) {
       if (combine) {
         // Existing MIN/MAX are order-sensitive for NaNs and signed-zero ties. Keep
-        // every original atomic in those peer groups, without inventing a new policy.
+        // every original atomic in those thread groups.
         auto const exceptional = cuda::std::isnan(value) || value == 0;
-        combine = cg::reduce(peers, static_cast<int>(exceptional), cg::plus<int>{}) == 0;
+        combine = cg::reduce(thread_group, static_cast<int>(exceptional), cg::plus<int>{}) == 0;
       }
     }
-    auto const combined = combine ? reduce_peer_value(peers, value, operation) : value;
-    if (!combine || peers.thread_rank() == 0) {
+    auto const combined = combine ? reduce_group_value(thread_group, value, operation) : value;
+    if (!combine || thread_group.thread_rank() == 0) {
       if (column.validity != nullptr && !cudf::bit_is_set(column.validity, target)) {
         cudf::set_bit(column.validity, target);
       }
@@ -139,10 +136,10 @@ __device__ void aggregate_peer_row(Column const& column,
 }
 
 // All lanes in a logical warp process the same row tile. Equal targets can be
-// noncontiguous within that tile; labeled_partition combines all of their peers.
+// noncontiguous within that tile; labeled_partition groups lanes with the same target.
 template <typename Column, typename Op>
-CUDF_KERNEL void __launch_bounds__(peer_block_size)
-  aggregate_peers_kernel(size_type num_rows, size_type const* targets, Column column, Op operation)
+CUDF_KERNEL void __launch_bounds__(block_size)
+  aggregate_warp_kernel(size_type num_rows, size_type const* targets, Column column, Op operation)
 {
   constexpr auto warp_size = cudf::detail::warp_size;
   auto const num_tiles     = (static_cast<int64_t>(num_rows) + warp_size - 1) / warp_size;
@@ -155,7 +152,7 @@ CUDF_KERNEL void __launch_bounds__(peer_block_size)
       auto const row    = static_cast<size_type>(row_wide);
       auto const target = targets[row];
       if (target != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
-        aggregate_peer_row(column, row, target, operation);
+        aggregate_row(column, row, target, operation);
       }
     }
     // Excluded, null and tail lanes also wait before advancing to another tile.
@@ -164,30 +161,29 @@ CUDF_KERNEL void __launch_bounds__(peer_block_size)
 }
 
 template <typename Column, typename Op>
-void launch_peer_kernel(device_span<size_type const> targets,
+void launch_warp_kernel(device_span<size_type const> targets,
                         Column column,
                         Op operation,
                         cuda::stream_ref stream)
 {
   if (targets.empty()) { return; }
-  auto const needed_blocks =
-    (static_cast<int64_t>(targets.size()) + peer_block_size - 1) / peer_block_size;
+  auto const needed_blocks = (static_cast<int64_t>(targets.size()) + block_size - 1) / block_size;
   int active_blocks{};
   CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-    &active_blocks, aggregate_peers_kernel<Column, Op>, peer_block_size, 0));
+    &active_blocks, aggregate_warp_kernel<Column, Op>, block_size, 0));
   auto const resident_blocks =
     static_cast<int64_t>(active_blocks) * cudf::detail::num_multiprocessors();
   auto const blocks = static_cast<int>(std::min(needed_blocks, resident_blocks));
-  CUDF_EXPECTS(blocks > 0, "Peer aggregation kernel has no resident blocks.");
-  aggregate_peers_kernel<<<blocks, peer_block_size, 0, stream.get()>>>(
+  CUDF_EXPECTS(blocks > 0, "Warp aggregation kernel has no resident blocks.");
+  aggregate_warp_kernel<<<blocks, block_size, 0, stream.get()>>>(
     static_cast<size_type>(targets.size()), targets.data(), column, operation);
   CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 template <aggregation::Kind K>
-struct peer_dispatch {
+struct aggregation_dispatch {
   template <typename T>
-    requires(peer_type_supported<T, K>())
+    requires(is_warp_aggregation_supported<T, K>())
   void operator()(column_view const& input,
                   mutable_column_view const& output,
                   device_span<size_type const> targets,
@@ -204,24 +200,24 @@ struct peer_dispatch {
                              detail::value_accessor<Source>{*values},
                              Op::template identity<Result>(),
                              input.has_nulls()};
-    peer_column<peer_values<ValueFn>, Result> const column{
+    aggregation_column<aggregation_values<ValueFn>, Result> const column{
       {row_values}, output.template begin<Result>(), output.null_mask()};
-    launch_peer_kernel(targets, column, Op{}, stream);
+    launch_warp_kernel(targets, column, Op{}, stream);
   }
 
   template <typename T>
-    requires(!peer_type_supported<T, K>())
+    requires(!is_warp_aggregation_supported<T, K>())
   void operator()(column_view const&,
                   mutable_column_view const&,
                   device_span<size_type const>,
                   cuda::stream_ref,
                   cudf::memory_resources) const
   {
-    CUDF_FAIL("Unsupported type for peer aggregation");
+    CUDF_FAIL("Unsupported type for warp aggregation");
   }
 };
 
-struct peer_kind_dispatch {
+struct aggregation_kind_dispatch {
   template <aggregation::Kind K>
   void operator()(column_view const& input,
                   mutable_column_view const& output,
@@ -230,21 +226,21 @@ struct peer_kind_dispatch {
                   cudf::memory_resources mr) const
   {
     if constexpr (K == aggregation::COUNT_ALL || K == aggregation::COUNT_VALID) {
-      using Column      = peer_column<peer_count_values<K == aggregation::COUNT_VALID>, size_type>;
+      using Column = aggregation_column<count_values<K == aggregation::COUNT_VALID>, size_type>;
       auto const values = column_device_view::create(input, stream, mr.get_temporary_mr());
       Column const column{
         {*values, input.has_nulls()}, output.template begin<size_type>(), nullptr};
       // Counts combine row contributions with addition, including COUNT_ALL on null rows.
-      launch_peer_kernel(targets, column, cudf::DeviceSum{}, stream);
+      launch_warp_kernel(targets, column, cudf::DeviceSum{}, stream);
     } else if constexpr (K == aggregation::SUM || K == aggregation::SUM_OF_SQUARES ||
                          K == aggregation::PRODUCT || K == aggregation::MIN ||
                          K == aggregation::MAX) {
       auto const type = cudf::is_dictionary(input.type())
                           ? dictionary_column_view(input).keys().type()
                           : input.type();
-      type_dispatcher(type, peer_dispatch<K>{}, input, output, targets, stream, mr);
+      type_dispatcher(type, aggregation_dispatch<K>{}, input, output, targets, stream, mr);
     } else {
-      CUDF_FAIL("Unsupported kind for peer aggregation");
+      CUDF_FAIL("Unsupported kind for warp aggregation");
     }
   }
 };
@@ -260,10 +256,15 @@ void compute_warp_aggregates(table_view const& values,
 {
   CUDF_EXPECTS(values.num_columns() == static_cast<size_type>(kinds.size()) &&
                  output.num_columns() == values.num_columns(),
-               "Invalid peer aggregation metadata");
+               "Invalid warp aggregation metadata");
   for (size_type i = 0; i < values.num_columns(); ++i) {
-    cudf::detail::aggregation_dispatcher(
-      kinds[i], peer_kind_dispatch{}, values.column(i), output.column(i), targets, stream, mr);
+    cudf::detail::aggregation_dispatcher(kinds[i],
+                                         aggregation_kind_dispatch{},
+                                         values.column(i),
+                                         output.column(i),
+                                         targets,
+                                         stream,
+                                         mr);
   }
 }
 

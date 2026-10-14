@@ -73,7 +73,7 @@ void verify_result(cudf::table_view keys,
   }
 }
 
-void bench_streaming_groupby_unique_keys(nvbench::state& state)
+void bench_streaming_groupby_distinct_keys(nvbench::state& state)
 {
   auto const group_axis = state.get_int64("max_distinct_keys");
   auto const batch_axis = state.get_int64("batch_size");
@@ -89,7 +89,7 @@ void bench_streaming_groupby_unique_keys(nvbench::state& state)
   auto const with_min   = schema == "int8_min";
   auto const stream     = cudf::get_default_stream();
 
-  // Unique keys arrive in small batches, so the number of groups grows throughout the operation.
+  // Keys are distinct across batches, so the number of groups grows throughout the operation.
   std::vector<std::unique_ptr<cudf::column>> columns;
   columns.push_back(cudf::sequence(groups, cudf::numeric_scalar<int32_t>{0}));
   if (with_min) {
@@ -141,8 +141,8 @@ void bench_streaming_groupby_unique_keys(nvbench::state& state)
 
 }  // namespace
 
-NVBENCH_BENCH(bench_streaming_groupby_unique_keys)
-  .set_name("streaming_groupby_unique_keys")
+NVBENCH_BENCH(bench_streaming_groupby_distinct_keys)
+  .set_name("streaming_groupby_distinct_keys")
   .add_int64_axis("max_distinct_keys", {65'537, 1'048'577})
   .add_int64_axis("batch_size", {4096})
   .add_string_axis("schema", {"keys_only", "int8_min"});
