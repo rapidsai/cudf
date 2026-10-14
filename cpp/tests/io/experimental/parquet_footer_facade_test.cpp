@@ -912,7 +912,7 @@ TEST_F(ParquetFooterFacadeTest, PayloadLogicalTypeFieldsRoundTrip)
   EXPECT_EQ(experimental::write_parquet_footer_bytes(reparsed), bytes);
 
   // A conforming external writer emits `crs` (thrift id 1) before `algorithm` (id 2); cudf
-  // skips the unbound string field on read (documented lossy) and preserves the field + algorithm.
+  // records only the presence of `crs` on read, preserves `algorithm`, and rejects the rewrite.
   // Hand-built leaf carrying GeographyType field 1 (BINARY "EPSG:4326") then field 2
   // (i32 algorithm 0), as a conforming external writer emits them. Field 18 needs the long-form
   // id encoding (delta 0 + zigzag varint 36) inside LogicalType.
