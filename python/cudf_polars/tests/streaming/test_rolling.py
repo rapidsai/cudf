@@ -28,7 +28,7 @@ from cudf_polars.utils.versions import POLARS_VERSION_LT_136, POLARS_VERSION_LT_
 POLARS_LT_136_EMPTY_SUM_XFAIL = pytest.mark.xfail(
     POLARS_VERSION_LT_136,
     reason=(
-        "Polars 1.35 returns null for sum over these empty rolling windows. "
+        "Polars 1.35 returns null for sum over these empty rolling windows; "
         "newer Polars returns 0."
     ),
 )
@@ -60,8 +60,7 @@ def test_rolling_datetime(engine):
         .lazy()
     )
     q = df.with_columns(pl.sum("a").rolling(index_column="dt", period="2d"))
-    # HStack may redirect to Select before fallback. The message differs by
-    # Polars IR and version.
+    # HStack may redirect to Select before fallback; message differs by Polars IR / version.
     with warns_on_spmd(
         engine,
         UserWarning,
@@ -766,7 +765,7 @@ def test_over_in_filter_unsupported(request, streaming_engine_factory) -> None:
     ).filter(pl.len().over("k") == 2)
     if not isinstance(engine, SPMDEngine):
         # On Dask/Ray the fallback warning fires on worker processes and is
-        # invisible to ``pytest.warns``. The multi-rank fallback also
+        # invisible to ``pytest.warns``; the multi-rank fallback also
         # doesn't preserve row order.
         request.applymarker(
             pytest.mark.xfail(

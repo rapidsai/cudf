@@ -56,8 +56,6 @@ class FixedSizeRolling(IR):
         self.preceding_overlap = preceding_overlap
         self.following_overlap = following_overlap
         self.children = (df,)
-        # Fixed-size rolling is only special for streaming chunk overlap.
-        # Once evaluated against one table, this is just a normal Select.
         self._non_child_args = (self.exprs, should_broadcast)
 
     @classmethod

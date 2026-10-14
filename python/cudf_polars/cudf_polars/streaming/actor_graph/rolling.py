@@ -52,6 +52,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
+    from cudf_polars.streaming.actor_graph.tracing import ActorTracer
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
@@ -163,7 +164,9 @@ class RollingManager:
             future.append(chunk)
         return False
 
-    async def execute(self, ch_out: Channel[TableChunk], tracer: Any) -> None:
+    async def execute(
+        self, ch_out: Channel[TableChunk], tracer: ActorTracer | None
+    ) -> None:
         """Evaluate this rolling node over its prepared input stream."""
         history: list[Any] = []
         future: list[Any] = []
@@ -879,6 +882,8 @@ async def rolling_actor(
     async with shutdown_on_error(
         context, chs_in=(ch_in,), chs_out=(ch_out,), trace_ir=ir, ir_context=ir_context
     ) as actor_scope:
+        tracer = actor_scope.tracer
+        ir_context = actor_scope.require_ir_context()
         metadata_in = await recv_metadata(ch_in, context)
         if comm.nranks != 1 and not metadata_in.duplicated:
             _fallback_inform(
@@ -890,7 +895,7 @@ async def rolling_actor(
                 local_count=1, partitioning=None, duplicated=True
             )
             await send_metadata(ch_out, context, metadata)
-            if (tracer := actor_scope.tracer) is not None:
+            if tracer is not None:
                 tracer.set_duplicated()
 
             stream = ir_context.get_cuda_stream()
@@ -933,7 +938,7 @@ async def rolling_actor(
                 duplicated=metadata_in.duplicated,
             ),
         )
-        if (tracer := actor_scope.tracer) is not None and metadata_in.duplicated:
+        if tracer is not None and metadata_in.duplicated:
             tracer.set_duplicated()
 
         with RollingManager(context, ir, ir_context, ch_in) as manager:

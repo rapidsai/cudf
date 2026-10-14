@@ -153,7 +153,7 @@ def _matching_order_scheme(
         )
     ]
     if matches:
-        # Prefer the most specific matching ordering. Equal-length ties
+        # Prefer the most specific matching ordering; equal-length ties
         # keep the original metadata order.
         i, ordering = max(matches, key=lambda match: len(match[1].keys))
         return OrderScheme(
