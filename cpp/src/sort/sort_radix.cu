@@ -86,10 +86,10 @@ struct sort_radix_fn {
   {
     auto pair_in = cuda::device_buffer<float_pair<T>>(
       stream, cudf::get_current_device_resource_ref(), input.size(), cuda::no_init);
-    auto d_in     = pair_in.begin();
+    auto d_in     = pair_in.data();
     auto pair_out = cuda::device_buffer<float_pair<T>>(
       stream, cudf::get_current_device_resource_ref(), input.size(), cuda::no_init);
-    auto d_out = pair_out.begin();
+    auto d_out = pair_out.data();
 
     thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       cuda::counting_iterator<size_type>{0},
