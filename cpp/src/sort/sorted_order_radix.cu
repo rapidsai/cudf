@@ -67,14 +67,14 @@ struct sorted_order_radix_fn {
     auto d_in   = input.begin<T>();
     auto output = cuda::device_buffer<T>(
       stream, cudf::get_current_device_resource_ref(), input.size(), cuda::no_init);
-    auto d_out = output.begin();  // not returned
+    auto d_out = output.data();  // not returned
     auto seqs  = cuda::device_buffer<cudf::size_type>(
       stream, cudf::get_current_device_resource_ref(), input.size(), cuda::no_init);
     thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      seqs.begin(),
                      seqs.end(),
                      0);
-    auto dv_in  = seqs.begin();
+    auto dv_in  = seqs.data();
     auto dv_out = indices.begin<cudf::size_type>();
 
     auto const n       = input.size();
