@@ -30,9 +30,9 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/std/functional>
 #include <cuda/stream>
@@ -161,7 +161,7 @@ struct group_scan_functor<K,
 
     // create an empty output vector we can fill with string_view instances
     auto results_vector =
-      rmm::device_uvector<string_view>(values.size(), stream, mr.get_temporary_mr());
+      cuda::device_buffer<string_view>(stream, mr.get_temporary_mr(), values.size(), cuda::no_init);
 
     auto values_view = column_device_view::create(values, stream, mr.get_temporary_mr());
 
@@ -206,7 +206,8 @@ struct group_scan_functor<K,
     if (values.is_empty()) { return cudf::empty_like(values); }
 
     // Create a gather map containing indices of the prefix min/max elements within each group.
-    auto gather_map = rmm::device_uvector<size_type>(values.size(), stream, mr.get_temporary_mr());
+    cuda::device_buffer<size_type> gather_map(
+      stream, mr.get_temporary_mr(), values.size(), cuda::no_init);
 
     scan_struct_argminmax(
       values, group_labels, gather_map.data(), K == aggregation::MIN, stream, mr);
