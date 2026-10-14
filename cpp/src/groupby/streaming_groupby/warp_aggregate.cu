@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "groupby/hash/single_pass_functors.cuh"
 #include "groupby/hash/single_pass_reductions.cuh"
-#include "peer_aggregate.hpp"
+#include "warp_aggregate.hpp"
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/traits.cuh>
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
@@ -463,6 +463,7 @@ CUDF_KERNEL void __launch_bounds__(peer_block_size)
 
 struct source_fusion_dispatch {
   template <typename T>
+    requires(!cudf::is_nested<T>() && !cudf::is_dictionary<T>())
   void operator()(table_view const& values,
                   mutable_table_view const& output,
                   host_span<aggregation::Kind const> kinds,
@@ -513,75 +514,49 @@ struct source_fusion_dispatch {
                                                      blocks_per_column);
     CUDF_CUDA_TRY(cudaGetLastError());
   }
-};
 
-CUDF_KERNEL void __launch_bounds__(peer_block_size)
-  aggregate_scalar_run_kernel(int64_t num_items,
-                              int64_t index_offset,
-                              hash::compute_single_pass_aggs_dense_output_fn aggregate)
-{
-  auto const first  = static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
-  auto const stride = static_cast<int64_t>(gridDim.x) * blockDim.x;
-  for (auto item = first; item < num_items; item += stride) {
-    aggregate(index_offset + item);
+  template <typename T>
+    requires(cudf::is_nested<T>() || cudf::is_dictionary<T>())
+  void operator()(table_view const&,
+                  mutable_table_view const&,
+                  host_span<aggregation::Kind const>,
+                  host_span<size_type const>,
+                  device_span<size_type const>,
+                  cuda::stream_ref,
+                  cudf::memory_resources) const
+  {
+    // Initialization rejects nested values; dictionary dispatch uses the decoded key type.
+    CUDF_FAIL("Unsupported decoded type for peer aggregation");
   }
-}
-
-void compute_scalar_run(size_type begin,
-                        size_type end,
-                        device_span<size_type const> targets,
-                        aggregation::Kind const* device_kinds,
-                        table_device_view device_values,
-                        mutable_table_device_view device_output,
-                        cuda::stream_ref stream)
-{
-  auto const num_items = static_cast<int64_t>(end - begin) * static_cast<int64_t>(targets.size());
-  if (num_items == 0) { return; }
-  int active_blocks{};
-  CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-    &active_blocks, aggregate_scalar_run_kernel, peer_block_size, 0));
-  auto const resident_blocks =
-    static_cast<int64_t>(active_blocks) * cudf::detail::num_multiprocessors();
-  auto const needed_blocks = (num_items + peer_block_size - 1) / peer_block_size;
-  auto const blocks        = static_cast<int>(std::min(needed_blocks, resident_blocks));
-  CUDF_EXPECTS(blocks > 0, "Scalar aggregation kernel has no resident blocks.");
-  aggregate_scalar_run_kernel<<<blocks, peer_block_size, 0, stream.get()>>>(
-    num_items,
-    static_cast<int64_t>(begin) * static_cast<int64_t>(targets.size()),
-    hash::compute_single_pass_aggs_dense_output_fn{
-      targets.data(), device_kinds, device_values, device_output});
-  CUDF_CUDA_TRY(cudaGetLastError());
-}
+};
 
 }  // namespace
 
-void compute_peer_aggs(table_view const& values,
-                       host_span<aggregation::Kind const> kinds,
-                       aggregation::Kind const* device_kinds,
-                       device_span<size_type const> targets,
-                       mutable_table_view const& output,
-                       mutable_table_device_view device_output,
-                       cuda::stream_ref stream,
-                       cudf::memory_resources mr)
+void compute_warp_aggregates(table_view const& values,
+                             host_span<aggregation::Kind const> kinds,
+                             device_span<size_type const> targets,
+                             mutable_table_view const& output,
+                             cuda::stream_ref stream,
+                             cudf::memory_resources mr)
 {
   CUDF_EXPECTS(values.num_columns() == static_cast<size_type>(kinds.size()) &&
                  output.num_columns() == values.num_columns(),
                "Invalid peer aggregation metadata");
-  std::vector<bool> supported(values.num_columns());
   for (size_type i = 0; i < values.num_columns(); ++i) {
-    supported[i] = kinds[i] == aggregation::COUNT_ALL || kinds[i] == aggregation::COUNT_VALID ||
+    CUDF_EXPECTS(kinds[i] == aggregation::COUNT_ALL || kinds[i] == aggregation::COUNT_VALID ||
                    cudf::detail::dispatch_type_and_aggregation(
-                     decoded_type(values.column(i)), kinds[i], peer_supported_dispatch{});
+                     decoded_type(values.column(i)), kinds[i], peer_supported_dispatch{}),
+                 "Unsupported type and kind for peer aggregation");
   }
   std::vector<bool> fused(values.num_columns(), false);
   std::vector<bool> visited(values.num_columns(), false);
   for (size_type first = 0; first < values.num_columns(); ++first) {
-    if (!supported[first] || visited[first]) { continue; }
+    if (visited[first]) { continue; }
     auto const type = decoded_type(values.column(first));
     std::vector<size_type> indices;
     bool mixed_kinds = false;
     for (size_type i = first; i < values.num_columns(); ++i) {
-      if (supported[i] && decoded_type(values.column(i)) == type) {
+      if (decoded_type(values.column(i)) == type) {
         indices.push_back(i);
         visited[i]  = true;
         mixed_kinds = mixed_kinds || kinds[i] != kinds[first];
@@ -601,8 +576,6 @@ void compute_peer_aggs(table_view const& values,
       fused[index] = true;
     }
   }
-  using DeviceValues = decltype(table_device_view::create(values, stream, mr.get_temporary_mr()));
-  DeviceValues fallback_values;
   for (size_type begin = 0; begin < values.num_columns();) {
     if (fused[begin]) {
       ++begin;
@@ -612,28 +585,17 @@ void compute_peer_aggs(table_view const& values,
     auto const type  = decoded_type(values.column(begin));
     auto const count = kind == aggregation::COUNT_ALL || kind == aggregation::COUNT_VALID;
     auto end         = begin + 1;
-    if (!supported[begin]) {
-      while (end < values.num_columns() && !supported[end]) {
-        ++end;
-      }
-      if (!fallback_values) {
-        fallback_values = table_device_view::create(values, stream, mr.get_temporary_mr());
-      }
-      compute_scalar_run(
-        begin, end, targets, device_kinds, *fallback_values, device_output, stream);
+    while (end < values.num_columns() && !fused[end] && kinds[end] == kind &&
+           (count || decoded_type(values.column(end)) == type)) {
+      ++end;
+    }
+    if (kind == aggregation::COUNT_ALL) {
+      compute_peer_counts<false>(values, output, begin, end, targets, stream, mr);
+    } else if (kind == aggregation::COUNT_VALID) {
+      compute_peer_counts<true>(values, output, begin, end, targets, stream, mr);
     } else {
-      while (end < values.num_columns() && !fused[end] && supported[end] && kinds[end] == kind &&
-             (count || decoded_type(values.column(end)) == type)) {
-        ++end;
-      }
-      if (kind == aggregation::COUNT_ALL) {
-        compute_peer_counts<false>(values, output, begin, end, targets, stream, mr);
-      } else if (kind == aggregation::COUNT_VALID) {
-        compute_peer_counts<true>(values, output, begin, end, targets, stream, mr);
-      } else {
-        cudf::detail::aggregation_dispatcher(
-          kind, peer_kind_dispatch{}, type, values, output, begin, end, targets, stream, mr);
-      }
+      cudf::detail::aggregation_dispatcher(
+        kind, peer_kind_dispatch{}, type, values, output, begin, end, targets, stream, mr);
     }
     begin = end;
   }

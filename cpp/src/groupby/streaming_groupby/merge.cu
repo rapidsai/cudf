@@ -72,6 +72,7 @@ void streaming_groupby::impl::do_merge(impl const& other, cuda::stream_ref strea
     _insert_done.wait(stream);
     insertion_started = true;
     auto result       = probe_and_insert(other_key_view, stream);
+    resolve_targets(result, 1, stream, cudf::memory_resources{mr, mr});
     _insert_done.record(stream);
     _results_read_done.wait(stream);
 
@@ -80,30 +81,31 @@ void streaming_groupby::impl::do_merge(impl const& other, cuda::stream_ref strea
       CUDF_EXPECTS(other_distinct_keys <= other._aggregate_capacity,
                    "Merge source exceeds allocated aggregate capacity.");
       std::unique_ptr<table> source_snapshot;
-      auto source_replicas       = other._aggregate_replicas;
-      auto source_capacity       = other._aggregate_capacity;
-      auto const other_aggs_view = [&] {
+      auto source_partials_per_group = other._partials_per_group;
+      auto source_capacity           = other._aggregate_capacity;
+      auto const other_aggs_view     = [&] {
         if (this == &other) {
-          // Shards collapse into shard0. A self-merge must snapshot first so its source
-          // shard0 cannot observe contributions concurrently arriving from other shards.
+          // Partials collapse into the first partial. A self-merge must snapshot first so its first
+          // partial cannot observe contributions concurrently arriving from other partials.
           source_snapshot = other.gather_agg_results(stream, cudf::memory_resources{mr, mr});
-          source_replicas = 1;
-          source_capacity = other_distinct_keys;
+          source_partials_per_group = 1;
+          source_capacity           = other_distinct_keys;
           return source_snapshot->view();
         }
         return other._agg_results->view();
       }();
       auto const d_source = table_device_view::create(other_aggs_view, stream);
-      thrust::for_each_n(rmm::exec_policy_nosync(stream, mr),
-                         cuda::counting_iterator<int64_t>(0),
-                         static_cast<int64_t>(other_distinct_keys) * source_replicas * num_agg_cols,
-                         merge_partial_aggs_fn{result.target_indices.begin(),
-                                               source_capacity,
-                                               other_distinct_keys,
-                                               source_replicas,
-                                               _d_agg_kinds->data(),
-                                               *d_source,
-                                               *_d_agg_results});
+      thrust::for_each_n(
+        rmm::exec_policy_nosync(stream, mr),
+        cuda::counting_iterator<int64_t>(0),
+        static_cast<int64_t>(other_distinct_keys) * source_partials_per_group * num_agg_cols,
+        merge_partial_aggs_fn{result.target_indices.begin(),
+                              source_capacity,
+                              other_distinct_keys,
+                              source_partials_per_group,
+                              _d_agg_kinds->data(),
+                              *d_source,
+                              *_d_agg_results});
     }
     record_aggregate_completion(stream);
     other.record_result_read(stream);

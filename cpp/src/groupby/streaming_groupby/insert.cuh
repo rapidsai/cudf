@@ -73,22 +73,18 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
                                                 stream);
   batch_local_indices.resize(new_distinct_keys, stream);
 
+  // Check capacity before publishing new dense IDs. Even without new keys, a larger
+  // batch budget can require more partials for the existing groups.
+  auto const distinct_so_far = _distinct_keys.load(std::memory_order_relaxed);
+  if (distinct_so_far + new_distinct_keys > _max_distinct_keys) {
+    _invalidated = true;
+    CUDF_FAIL("Distinct key count (" + std::to_string(distinct_so_far + new_distinct_keys) +
+              ") would exceed max_distinct_keys (" + std::to_string(_max_distinct_keys) + ").");
+  }
+  ensure_aggregate_capacity(
+    distinct_so_far + new_distinct_keys, stream, cudf::memory_resources{temp_mr, temp_mr});
+
   if (new_distinct_keys > 0) {
-    // Bound check: the hash set has already been written above (transient slot values),
-    // so on failure the object is left invalidated; further aggregate()/merge() calls
-    // will throw immediately while finalize() can still recover partial results.
-    auto const distinct_so_far = _distinct_keys.load(std::memory_order_relaxed);
-    if (distinct_so_far + new_distinct_keys > _max_distinct_keys) {
-      _invalidated = true;
-      CUDF_FAIL("Distinct key count (" + std::to_string(distinct_so_far + new_distinct_keys) +
-                ") would exceed max_distinct_keys (" + std::to_string(_max_distinct_keys) + ").");
-    }
-
-    // Allocate before publishing new dense IDs so a failed growth leaves the old result
-    // prefix and distinct count valid for recovery through finalize().
-    ensure_aggregate_capacity(
-      distinct_so_far + new_distinct_keys, stream, cudf::memory_resources{temp_mr, temp_mr});
-
     // Gather compacted distinct keys from the batch.
     auto compacted = cudf::detail::gather(batch_keys,
                                           batch_local_indices,
@@ -123,12 +119,7 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
     _distinct_keys.fetch_add(new_distinct_keys, std::memory_order_relaxed);
   }
 
-  // Every valid target currently identifies a slot; resident values are now dense IDs.
-  thrust::for_each_n(rmm::exec_policy_nosync(stream, temp_mr),
-                     cuda::counting_iterator<size_type>(0),
-                     batch_size,
-                     update_transient_target_indices_fn{_key_set->data(), target_indices.data()});
-
+  // The caller resolves slots directly to its final aggregate rows in one pass.
   return batch_insert_result{
     std::move(target_indices), new_distinct_keys, std::move(bitmask_buffer)};
 }

@@ -68,7 +68,8 @@ class insert_order_event {
  */
 using key_location_t = cuda::std::pair<size_type, size_type>;
 
-using streaming_set_t = cuda::device_buffer<size_type>;
+using streaming_set_t                               = cuda::device_buffer<size_type>;
+inline constexpr int partial_aggregation_block_size = 256;
 
 /*
  * Comparator for the first batch only.  All slot values are transient (encoded as
@@ -196,17 +197,6 @@ struct finalize_new_key_fn {
   }
 };
 
-struct update_transient_target_indices_fn {
-  size_type const* base;
-  size_type* target_indices;
-
-  __device__ void operator()(size_type i) const
-  {
-    auto const slot = cuda::std::bit_cast<cuda::std::uint32_t>(target_indices[i]);
-    if (slot != detail::hash::hash_csr_no_slot) { target_indices[i] = base[slot]; }
-  }
-};
-
 template <bool has_nested_columns>
 auto build_cross_comparators(
   std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_batch,
@@ -292,10 +282,10 @@ struct streaming_groupby::impl {
 
   // Result columns grow geometrically with observed groups; lookup capacity stays fixed.
   size_type _aggregate_capacity{0};
-  // Physical partial row = shard * _aggregate_capacity + group. Budget counts partial rows,
+  // Physical partial row = partial * _aggregate_capacity + group. Budget counts partial rows,
   // growing only when an observed batch budget at least doubles the previous one.
   size_type _partial_budget{0};
-  size_type _aggregate_replicas{1};
+  size_type _partials_per_group{1};
   std::vector<data_type> _aggregate_input_types;
   std::unique_ptr<table> _agg_results;
   // Preserve the factory deleter, which owns the device column-descriptor buffer.
@@ -342,12 +332,17 @@ struct streaming_groupby::impl {
   void update_nullable_state(table_view const& batch_keys);
 
   struct batch_insert_result {
+    // Slot bits until resolve_targets maps them to aggregate rows.
     rmm::device_uvector<size_type> target_indices;
     size_type new_insertions;
     cuda::device_buffer<std::byte> bitmask_buffer;
   };
 
   batch_insert_result probe_and_insert(table_view const& batch_keys, cuda::stream_ref stream);
+  void resolve_targets(batch_insert_result& result,
+                       size_type partials_per_group,
+                       cuda::stream_ref stream,
+                       cudf::memory_resources mr) const;
 
   /*
    * Template implementation of probe_and_insert, split by has_nested.
