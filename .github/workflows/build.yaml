@@ -74,7 +74,7 @@ jobs:
       packages: read
       pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@6064465d699d78291ab61f4c4cb593b0b74dee01
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@47f1182f3d74e30c32a59817747f4c84f31f0acc
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       build-datetime: ${{ needs.build-details.outputs.build-datetime }}
@@ -92,7 +92,7 @@ jobs:
       packages: read
       pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@6064465d699d78291ab61f4c4cb593b0b74dee01
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@47f1182f3d74e30c32a59817747f4c84f31f0acc
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       build-datetime: ${{ needs.build-details.outputs.build-datetime }}
@@ -111,7 +111,7 @@ jobs:
       packages: read
       pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@6064465d699d78291ab61f4c4cb593b0b74dee01
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@47f1182f3d74e30c32a59817747f4c84f31f0acc
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       build-datetime: ${{ needs.build-details.outputs.build-datetime }}
