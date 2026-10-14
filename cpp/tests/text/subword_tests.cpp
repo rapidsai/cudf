@@ -184,11 +184,11 @@ TEST(TextSubwordTest, WordPieceMaxWordsSmall)
 
   using LCW     = cudf::test::lists_column_wrapper<cudf::size_type>;
   auto results  = nvtext::wordpiece_tokenize(sv, *vocab, 1);
-  auto expected = LCW({LCW{1}, LCW{2}, LCW{4}, LCW{}, LCW{}, LCW{4, 5}, LCW{3}});
+  auto expected = LCW({{1}, {2}, {4}, {}, {}, {4, 5}, {3}});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   results  = nvtext::wordpiece_tokenize(sv, *vocab, 2);
-  expected = LCW({LCW{1}, LCW{2, 3}, LCW{4}, LCW{}, LCW{}, LCW{4, 5, 1}, LCW{3}});
+  expected = LCW({{1}, {2, 3}, {4}, {}, {}, {4, 5, 1}, {3}});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
