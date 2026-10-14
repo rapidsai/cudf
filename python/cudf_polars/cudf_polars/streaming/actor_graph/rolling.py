@@ -21,7 +21,10 @@ from rapidsmpf.streaming.core.message import Message
 from cudf_polars.dsl.ir import IR, Rolling
 from cudf_polars.dsl.utils.windows import duration_to_scalar
 from cudf_polars.streaming.actor_graph.collectives.allgather import AllGatherManager
-from cudf_polars.streaming.actor_graph.dispatch import generate_ir_sub_network
+from cudf_polars.streaming.actor_graph.dispatch import (
+    generate_ir_sub_network,
+    ir_context_for_node,
+)
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
     _evaluate_chunk_sync,
@@ -649,7 +652,7 @@ async def rolling_actor(
                     )
                     history.append(cursor)
                 if (tracer := actor_scope.tracer) is not None:
-                    actor_scope.tracer.add_chunk(chunk=result)
+                    tracer.add_chunk(chunk=result)
                 await ch_out.send(context, Message(cursor.sequence_number, result))
 
                 if future:
@@ -687,7 +690,7 @@ def _(
             rec.state["context"],
             rec.state["comm"],
             ir,
-            rec.state["ir_context"],
+            ir_context_for_node(rec, ir),
             channels[ir].reserve_input_slot(),
             channels[ir.children[0]].reserve_output_slot(),
             collective_id=collective_id,

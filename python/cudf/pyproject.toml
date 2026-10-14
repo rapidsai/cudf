@@ -98,7 +98,7 @@ select = [
 ]
 
 # PyPI hard limit is 1GiB, but try to keep this as small as possible
-max_allowed_size_compressed = '15M'
+max_allowed_size_compressed = '5M'
 
 [tool.pytest.ini_options]
 addopts = "--tb=native --strict-config --strict-markers"
