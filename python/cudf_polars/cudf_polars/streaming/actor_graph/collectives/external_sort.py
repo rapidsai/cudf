@@ -8,8 +8,9 @@ live in the shuffler (spillable by rapidsmpf, to disk when a spill directory
 is configured). Instead of unpacking a whole partition into device memory and
 sorting it in place, this module:
 
-* **Phase A** unpacks the pieces in batches bounded by a device budget, sorts
-  each batch, and copies it out of device memory as a *run* of pages; and
+* **Phase A** unpacks the pieces in batches bounded by a device budget, merges
+  each batch (every piece is already sorted), and copies it out of device
+  memory as a *run* of pages; and
 * **Phase B** streams a k-way merge of the runs (``plc.merge.merge`` on the
   current page of each run), emitting only rows that no unread page can
   precede, and refilling the run(s) that bound the emission. Runs beyond the
@@ -31,6 +32,7 @@ This mirrors spark-rapids' ``GpuSortExec`` and the standalone
 
 from __future__ import annotations
 
+import enum
 import math
 from collections import deque
 from dataclasses import dataclass, field
@@ -41,7 +43,6 @@ import polars as pl
 import pylibcudf as plc
 from cudf_streaming.channel_metadata import ChannelMetadata, Partitioning
 from cudf_streaming.partition_utils import (
-    unpack_and_concat as py_unpack_and_concat,
     unpack_and_concat_cost as py_unpack_and_concat_cost,
 )
 from cudf_streaming.table_chunk import (
@@ -116,6 +117,15 @@ _MIN_PAGE_ROWS = 1024
 # writes one file per emitted chunk, which produced ~48k ~8 MB files for a
 # 3TB sort. Coalesce pages to at least this many bytes (or batch/4) first.
 _MIN_COALESCE_BYTES = 256 << 20
+
+
+class _PartitionSort(enum.Enum):
+    """How :func:`sort_partition` sorted a partition."""
+
+    IN_MEMORY = enum.auto()
+    """The partition fit the batch budget and was sorted in device memory."""
+    EXTERNAL = enum.auto()
+    """Sorted runs were written out of device memory and merged."""
 
 
 def _device_total_bytes() -> int | None:
@@ -268,15 +278,9 @@ class RunCursor:
         table = chunk.table_view()
         nrows = table.num_rows()
         keys = plc.Table([table.columns()[i] for i in key_indices])
-        last = plc.Column.from_scalar(
-            plc.Scalar.from_py(
-                nrows - 1, plc.DataType(plc.TypeId.INT32), stream=stream
-            ),
-            1,
-            stream=stream,
-        )
-        self.tail = plc.copying.gather(
-            keys, last, plc.copying.OutOfBoundsPolicy.DONT_CHECK, stream=stream
+        # Owning copy: a slice view would keep the whole page alive.
+        self.tail = _owning_copy(
+            plc.copying.slice(keys, [nrows - 1, nrows], stream=stream)[0], stream
         )
         return table
 
@@ -397,63 +401,67 @@ async def merge_runs(
         ]
 
 
-async def _unpack_and_sort(
+async def _unpack_and_merge(
     context: Context,
-    ir_context: IRExecutionContext,
     pieces: Sequence[PackedData],
-    nbytes: int,
-    post_sort_ir: Sort,
+    order_keys: Sequence[OrderKey],
     stream: Stream,
 ) -> plc.Table:
-    """Unpack packed pieces into one table and sort it (with the stable key)."""
-    reservation = await reserve_memory(
+    """
+    Unpack packed pieces and merge them into one sorted table.
+
+    Every piece is a contiguous slice of a locally sorted input chunk (see
+    :class:`_ChunkPreparer`), so a k-way merge suffices; no re-sort is needed.
+    """
+    br = context.br()
+    # Device-resident pieces unpack as zero-copy views; spilled pieces are
+    # copied back to device first.
+    chunks, _ = await make_table_chunks_available_or_wait(
         context,
-        py_unpack_and_concat_cost(pieces),
-        # Representation change: packed input consumed as the table is produced.
+        [TableChunk.from_packed_data(piece, br) for piece in pieces],
+        reserve_extra=0,
+        # Representation change: packed input consumed as the views are produced.
         net_memory_delta=0,
     )
-    table = py_unpack_and_concat(
-        partitions=list(pieces),
-        stream=stream,
-        br=context.br(),
-        reservation=reservation,
+    join_cuda_streams(downstreams=[stream], upstreams=[c.stream for c in chunks])
+    # Keep one chunk, even if empty, to carry the schema.
+    chunks = [c for c in chunks if c.table_view().num_rows() > 0] or chunks[:1]
+    if len(chunks) == 1:
+        # The view keeps the chunk alive.
+        return chunks[0].table_view()
+    # The merged output replaces its inputs.
+    merge_reservation = await reserve_memory(
+        context,
+        sum(c.data_alloc_size(MemoryType.DEVICE) for c in chunks),
+        net_memory_delta=0,
     )
-    if table.num_rows() == 0:
-        return table
-    # Sorting needs the output plus temporaries of about the input size.
-    sort_reservation = await reserve_memory(context, 2 * nbytes, net_memory_delta=0)
-    with opaque_memory_usage(sort_reservation):
-        return post_sort_ir.do_evaluate(
-            *post_sort_ir._non_child_args,
-            DataFrame.from_table(
-                table,
-                list(post_sort_ir.schema.keys()),
-                list(post_sort_ir.schema.values()),
-                stream,
-            ),
-            context=ir_context,
-        ).table
+    with opaque_memory_usage(merge_reservation):
+        merged = plc.merge.merge(
+            [c.table_view() for c in chunks],
+            [key.column_index for key in order_keys],
+            [key.order for key in order_keys],
+            [key.null_order for key in order_keys],
+            stream=stream,
+            mr=br.device_mr,
+        )
+    # The inputs are freed on their own streams once dropped.
+    join_cuda_streams(downstreams=[c.stream for c in chunks], upstreams=[stream])
+    return merged
 
 
 async def sort_partition(
     context: Context,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
-    shuffle: ShuffleManager,
-    post_sort_ir: Sort,
+    pieces: list[PackedData],
     order_keys: Sequence[OrderKey],
     output_schema: Schema,
     partition_id: int,
     *,
     batch_bytes: int,
     tracer: ActorTracer | None,
-) -> str:
-    """
-    Sort one owned partition and send it on ``ch_out``.
-
-    Returns ``"in_memory"`` when the partition fit the batch budget and was
-    sorted like before, or ``"external"`` when runs were written and merged.
-    """
+) -> _PartitionSort:
+    """Sort one owned partition, given its packed ``pieces``, and send it on ``ch_out``."""
     ncols_out = len(output_schema)
 
     async def emit(table: plc.Table, stream: Stream) -> None:
@@ -466,17 +474,14 @@ async def sort_partition(
         )
         await send_chunk(context, ch_out, chunk, partition_id, tracer=tracer)
 
-    pieces = shuffle.extract_pieces(partition_id)
     sizes = [py_unpack_and_concat_cost([piece]) for piece in pieces]
     total = sum(sizes)
     stream = ir_context.get_cuda_stream()
 
     if total <= batch_bytes:
-        table = await _unpack_and_sort(
-            context, ir_context, pieces, total, post_sort_ir, stream
-        )
+        table = await _unpack_and_merge(context, pieces, order_keys, stream)
         await emit(table, stream)
-        return "in_memory"
+        return _PartitionSort.IN_MEMORY
 
     # Run pages live outside device memory (on disk with a spill directory)
     # and are released with the runs, also when an exception unwinds.
@@ -491,9 +496,7 @@ async def sort_partition(
         nonlocal batch, batch_nbytes, page_rows
         if not batch:
             return
-        table = await _unpack_and_sort(
-            context, ir_context, batch, batch_nbytes, post_sort_ir, stream
-        )
+        table = await _unpack_and_merge(context, batch, order_keys, stream)
         if page_rows is None:
             # A page is 1/(2*fanin) of the budget so that `fanin` pages
             # plus the merge output fit within one batch budget.
@@ -568,7 +571,7 @@ async def sort_partition(
 
     await merge_runs(context, ir_context, runs, order_keys, emit_coalesced, stream)
     await flush_coalesced(stream)
-    return "external"
+    return _PartitionSort.EXTERNAL
 
 
 # Number of leading chunks sampled per rank to derive range-partition boundaries
@@ -735,17 +738,16 @@ async def _stream_chunks_into_shuffle(
     comm: Communicator,
     ir: Sort,
     ir_context: IRExecutionContext,
+    shuffle: ShuffleManager,
     prepared_sample: ChunkStore,
     preparer: _ChunkPreparer,
     ch_in: Channel[TableChunk],
-    num_partitions: int,
-    collective_ids: list[int],
     metadata_in: ChannelMetadata,
     sort_boundaries_df: DataFrame,
     by: list[str],
-) -> ShuffleManager:
+) -> None:
     """
-    Range-split and insert the sample, then every remaining chunk.
+    Range-split and insert the sample, then every remaining chunk, into ``shuffle``.
 
     Chunks after the sample are prepared and inserted one at a time as they
     arrive.
@@ -758,14 +760,6 @@ async def _stream_chunks_into_shuffle(
     by_indices = names_to_indices(tuple(by), ir.schema)
 
     skip_insert = metadata_in.duplicated and comm.rank != 0
-
-    shuffle = ShuffleManager(
-        context,
-        comm,
-        num_partitions,
-        collective_ids.pop(),
-        partition_assignment=PartitionAssignment.CONTIGUOUS,
-    )
 
     async def insert_prepared(seq_num: int, chunk: TableChunk) -> None:
         # The chunk's data moves into shuffler-owned packed buffers,
@@ -808,8 +802,6 @@ async def _stream_chunks_into_shuffle(
             )
             del df
             await insert_prepared(seq_num, chunk)
-
-    return shuffle
 
 
 async def global_sort_external(
@@ -879,41 +871,45 @@ async def global_sort_external(
         ),
     )
 
-    shuffle = await _stream_chunks_into_shuffle(
+    shuffle = ShuffleManager(
+        context,
+        comm,
+        num_partitions,
+        collective_ids.pop(),
+        partition_assignment=PartitionAssignment.CONTIGUOUS,
+    )
+
+    await _stream_chunks_into_shuffle(
         context,
         comm,
         ir,
         ir_context,
+        shuffle,
         prepared_sample,
         preparer,
         ch_in,
-        num_partitions,
-        collective_ids,
         metadata_in,
         sort_boundaries_df,
         by,
     )
 
-    post_sort_ir = _post_sort_ir(ir)
-    order_keys = sort_to_order_keys(post_sort_ir)
+    order_keys = sort_to_order_keys(_post_sort_ir(ir))
     batch_bytes = batch_bytes_for(executor)
-    decisions: set[str] = set()
+    any_external = False
     for partition_id in shuffle.local_partitions():
-        decisions.add(
-            await sort_partition(
-                context,
-                ir_context,
-                ch_out,
-                shuffle,
-                post_sort_ir,
-                order_keys,
-                ir.schema,
-                partition_id,
-                batch_bytes=batch_bytes,
-                tracer=tracer,
-            )
+        method = await sort_partition(
+            context,
+            ir_context,
+            ch_out,
+            shuffle.extract_pieces(partition_id),
+            order_keys,
+            ir.schema,
+            partition_id,
+            batch_bytes=batch_bytes,
+            tracer=tracer,
         )
-    if tracer is not None and "external" in decisions:
+        any_external |= method is _PartitionSort.EXTERNAL
+    if tracer is not None and any_external:
         tracer.decision = "external_sort"
 
     await ch_out.drain(context)
