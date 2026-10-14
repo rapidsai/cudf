@@ -180,15 +180,16 @@ def decompose_select(
     selections, partition_info = _fuse_simple_reductions(
         selections,
         partition_info,
-        streaming_safe=streaming_safe,
-    )
-    aligned_selections = align_hconcat_inputs(
-        selections,
-        partition_info,
         config_options,
         streaming_safe=streaming_safe,
     )
-    if len(aligned_selections) > 1:
+    if len(selections) > 1:
+        aligned_selections = align_hconcat_inputs(
+            selections,
+            partition_info,
+            config_options,
+            streaming_safe=streaming_safe,
+        )
         new_ir = HConcat(
             select_ir.schema,
             True,  # noqa: FBT003
@@ -200,7 +201,7 @@ def decompose_select(
             count=max(partition_info[c].count for c in aligned_selections)
         )
     else:
-        new_ir = aligned_selections[0]
+        new_ir = selections[0]
 
     return new_ir, partition_info
 
@@ -208,6 +209,7 @@ def decompose_select(
 def _fuse_simple_reductions(
     decomposed_select_irs: Sequence[Select],
     pi: MutableMapping[IR, PartitionInfo],
+    config_options: ConfigOptions,
     *,
     streaming_safe: bool,
 ) -> tuple[list[Select], MutableMapping[IR, PartitionInfo]]:
@@ -220,6 +222,8 @@ def _fuse_simple_reductions(
         The decomposed Select nodes.
     pi
         Partition information.
+    config_options
+        GPUEngine configuration options.
     streaming_safe
         Whether the original decomposed selections may be concatenated
         partition-wise.
@@ -366,18 +370,24 @@ def _fuse_simple_reductions(
     # the results and apply the final (fused) "c" selection,
     # otherwise we may mess up the ordering of the columns.
     if len(new_decomposed_select_irs) < len(decomposed_select_irs):
+        aligned_irs = align_hconcat_inputs(
+            new_decomposed_select_irs,
+            pi,
+            config_options,
+            streaming_safe=streaming_safe,
+        )
         # Compute schema from actual children (intermediate columns)
         hconcat_schema: Schema = {}
-        for ir in new_decomposed_select_irs:
+        for ir in aligned_irs:
             hconcat_schema |= ir.schema
         new_hconcat = HConcat(
             hconcat_schema,
             True,  # noqa: FBT003
             False,  # noqa: FBT003
             streaming_safe,
-            *new_decomposed_select_irs,
+            *aligned_irs,
         )
-        count = max(pi[c].count for c in new_decomposed_select_irs)
+        count = max(pi[c].count for c in aligned_irs)
         pi[new_hconcat] = PartitionInfo(count=count)
 
         final_exprs = [
