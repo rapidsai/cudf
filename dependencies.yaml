@@ -501,6 +501,7 @@ files:
       - numpy_run
       - run_common
       - run_dask_cudf
+      - depends_on_cuda_bindings
       - depends_on_cudf
       - depends_on_cupy
   py_test_dask_cudf:
@@ -1088,13 +1089,11 @@ dependencies:
           - nvtx>=0.2.1
           - packaging
           - rich
-          - cuda-bindings>=12.9.6,!=13.0.*,!=13.1.*,!=13.2.*,<14
           - cuda-core>=1.0.0
   run_cudf_polars:
     common:
       - output_types: [conda, requirements, constraints, pyproject]
         packages:
-          - cuda-bindings>=12.9.6,!=13.0.*,!=13.1.*,!=13.2.*,<14
           - cuda-core>=1.0.0
           - packaging
           - polars>=1.35,<1.45
@@ -1108,7 +1107,6 @@ dependencies:
     common:
       - output_types: [conda, requirements, constraints, pyproject]
         packages:
-          - cuda-bindings>=12.9.6,!=13.0.*,!=13.1.*,!=13.2.*,<14
           - cuda-core>=1.0.0
           - rapids-dask-dependency==26.12.*,>=0.0.0a0
   run_custreamz:
