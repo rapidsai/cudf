@@ -163,7 +163,7 @@ __device__ __forceinline__ bool is_stream_overrun(std::size_t offset,
                                                   std::size_t length,
                                                   size_type page_data_size)
 {
-  return offset + length > static_cast<std::size_t>(page_data_size);
+  return page_data_size < 0 or offset + length > static_cast<std::size_t>(page_data_size);
 }
 
 /**
