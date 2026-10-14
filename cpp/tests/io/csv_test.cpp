@@ -1125,7 +1125,7 @@ TEST_F(CsvReaderTest, StringStagingUsesTemporaryResource)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result.tbl->view().column(0));
 }
 
-TEST_P(CsvStringStagingTest, WorkerAllocationFailureAndRecovery)
+TEST_P(CsvStringStagingTest, AllocationFailureAndRecovery)
 {
   auto const [doublequote, prune] = GetParam();
   std::string const buffer =
@@ -1150,14 +1150,16 @@ TEST_P(CsvStringStagingTest, WorkerAllocationFailureAndRecovery)
   auto const expected =
     prune ? table_view{{plain, quoted, mixed}} : table_view{{ignored, plain, quoted, mixed, tail}};
 
-  // Zero disables injection; otherwise the n-th allocation made by a worker thread fails.
+  // Zero disables injection; otherwise the n-th allocation fails.
   std::atomic<int> fail_at{0};
+  std::atomic<int> allocations{0};
   std::atomic<int> worker_allocations{0};
   std::atomic<std::size_t> live_bytes{0};
   std::atomic<bool> injected{false};
   rmm::mr::callback_memory_resource failing_mr{
     [&](std::size_t bytes, auto allocation_stream, void*) -> void* {
-      if (std::this_thread::get_id() != caller && ++worker_allocations == fail_at) {
+      if (std::this_thread::get_id() != caller) { ++worker_allocations; }
+      if (++allocations == fail_at) {
         injected = true;
         throw rmm::out_of_memory{"Injected CSV materialization allocation failure"};
       }
@@ -1171,25 +1173,31 @@ TEST_P(CsvStringStagingTest, WorkerAllocationFailureAndRecovery)
       live_bytes -= bytes;
     }};
   cudf::test::scoped_current_device_resource current_mr{failing_mr};
+  // Verification also allocates from the current resource, so count only the read itself.
+  int read_allocations       = 0;
   auto const read_and_verify = [&] {
     {
+      allocations       = 0;
       auto const result = cudf::io::read_csv(options, stream, failing_mr);
+      read_allocations  = allocations.load();
       CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, result.tbl->view());
     }
     stream.sync();
     EXPECT_EQ(live_bytes.load(), 0);
   };
 
-  // Derive injection points from the observed count so they stay reachable as internals change.
+  // Allocations off the calling thread escape callers that track memory per thread, like Spark.
   read_and_verify();
-  auto const total_worker_allocations = worker_allocations.load();
-  ASSERT_GT(total_worker_allocations, 0);
+  EXPECT_EQ(worker_allocations.load(), 0);
+  // Derive injection points from the observed count so they stay reachable as internals change.
+  auto const total_allocations = read_allocations;
+  ASSERT_GT(total_allocations, 0);
 
-  for (int point : {1, (total_worker_allocations + 1) / 2, total_worker_allocations}) {
+  for (int point : {1, (total_allocations + 1) / 2, total_allocations}) {
     SCOPED_TRACE(point);
-    worker_allocations = 0;
-    injected           = false;
-    fail_at            = point;
+    allocations = 0;
+    injected    = false;
+    fail_at     = point;
     // CUB's env-based temp allocation reports allocator exceptions as cudaErrorMemoryAllocation
     EXPECT_ANY_THROW(cudf::io::read_csv(options, stream, failing_mr));
     EXPECT_TRUE(injected);
