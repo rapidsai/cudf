@@ -21,7 +21,10 @@ from rapidsmpf.streaming.core.message import Message
 from cudf_polars.dsl.ir import IR, Rolling
 from cudf_polars.dsl.utils.windows import duration_to_scalar
 from cudf_polars.streaming.actor_graph.collectives.allgather import AllGatherManager
-from cudf_polars.streaming.actor_graph.dispatch import generate_ir_sub_network
+from cudf_polars.streaming.actor_graph.dispatch import (
+    generate_ir_sub_network,
+    ir_context_for_node,
+)
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
     _evaluate_chunk_sync,
@@ -541,7 +544,7 @@ async def rolling_actor(
     """
     async with shutdown_on_error(
         context, chs_in=(ch_in,), chs_out=(ch_out,), trace_ir=ir, ir_context=ir_context
-    ) as tracer:
+    ) as actor_scope:
         metadata_in = await recv_metadata(ch_in, context)
         if comm.nranks != 1 and not metadata_in.duplicated:
             _fallback_inform(
@@ -553,7 +556,7 @@ async def rolling_actor(
                 local_count=1, partitioning=None, duplicated=True
             )
             await send_metadata(ch_out, context, metadata)
-            if tracer is not None:
+            if (tracer := actor_scope.tracer) is not None:
                 tracer.set_duplicated()
 
             stream = ir_context.get_cuda_stream()
@@ -577,7 +580,7 @@ async def rolling_actor(
                 ir,
                 ir_context=ir_context,
             )
-            if tracer is not None:
+            if (tracer := actor_scope.tracer) is not None:
                 tracer.add_chunk(chunk=result)
             await ch_out.send(context, Message(0, result))
             await ch_out.drain(context)
@@ -592,7 +595,7 @@ async def rolling_actor(
                 duplicated=metadata_in.duplicated,
             ),
         )
-        if tracer is not None and metadata_in.duplicated:
+        if (tracer := actor_scope.tracer) is not None and metadata_in.duplicated:
             tracer.set_duplicated()
 
         window = make_window(ir, ir_context.get_cuda_stream())
@@ -648,7 +651,7 @@ async def rolling_actor(
                         window=window,
                     )
                     history.append(cursor)
-                if tracer is not None:
+                if (tracer := actor_scope.tracer) is not None:
                     tracer.add_chunk(chunk=result)
                 await ch_out.send(context, Message(cursor.sequence_number, result))
 
@@ -687,7 +690,7 @@ def _(
             rec.state["context"],
             rec.state["comm"],
             ir,
-            rec.state["ir_context"],
+            ir_context_for_node(rec, ir),
             channels[ir].reserve_input_slot(),
             channels[ir.children[0]].reserve_output_slot(),
             collective_id=collective_id,

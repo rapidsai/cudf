@@ -46,6 +46,9 @@ void sort_and_compare(std::unique_ptr<cudf::table>& lhs_keys,
   auto const rhs_order = cudf::sorted_order(rhs_keys->view(), {}, null_prec);
 
   EXPECT_EQ(lhs_keys->num_rows(), rhs_keys->num_rows());
+  auto const lhs_sorted_keys = cudf::gather(lhs_keys->view(), *lhs_order);
+  auto const rhs_sorted_keys = cudf::gather(rhs_keys->view(), *rhs_order);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(lhs_sorted_keys->view(), rhs_sorted_keys->view());
 
   ASSERT_EQ(lhs_results.size(), rhs_results.size());
   for (size_t r = 0; r < lhs_results.size(); ++r) {
@@ -1131,6 +1134,86 @@ TEST_F(StreamingGroupbyTest, SlicedInputColumns)
   auto [keys, results] = streaming_agg.finalize();
 
   verify_against_groupby(keys, results, {sliced[0]}, KEY_COL, reqs);
+}
+
+TEST_F(StreamingGroupbyTest, FinalizeAndRelease)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> keys{1, 1, 2, 2};
+  cudf::test::fixed_width_column_wrapper<int32_t> values{{2, 4, 0, 0}, {true, true, false, false}};
+  cudf::table_view const batch{{keys, values}};
+  std::vector<cudf::groupby::streaming_aggregation_request> requests;
+  requests.push_back(make_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>()));
+  requests.push_back(make_req(1, cudf::make_mean_aggregation<cudf::groupby_aggregation>()));
+  cudf::groupby::streaming_groupby agg{KEY_COL, requests, DEFAULT_MAX_DISTINCT_KEYS};
+  agg.aggregate(batch);
+  std::ignore = agg.finalize();
+  // Non-destructive finalization must still allow subsequent updates.
+  agg.aggregate(batch);
+  auto [expected_keys, expected_results] = agg.finalize();
+  auto [out_keys, out_results]           = std::move(agg).finalize_and_release();
+  sort_and_compare(out_keys, out_results, expected_keys, expected_results);
+  EXPECT_EQ(agg.distinct_keys(), 0);
+  EXPECT_THROW(agg.aggregate(batch), cudf::logic_error);
+  EXPECT_THROW(static_cast<void>(agg.finalize()), cudf::logic_error);
+  EXPECT_THROW(static_cast<void>(std::move(agg).finalize_and_release()), cudf::logic_error);
+  cudf::groupby::streaming_groupby other{KEY_COL, requests, DEFAULT_MAX_DISTINCT_KEYS};
+  other.aggregate(batch);
+  EXPECT_THROW(other.merge(agg), cudf::logic_error);
+  EXPECT_THROW(agg.merge(other), cudf::logic_error);
+}
+
+TEST_F(StreamingGroupbyTest, FinalizeAndReleaseDifferentStream)
+{
+  cudf::test::strings_column_wrapper keys1{{"a", "b", "c"}, {true, false, true}};
+  cudf::test::strings_column_wrapper keys2{"a", "d"};
+  cudf::test::fixed_width_column_wrapper<int32_t> values1{{2, 4, 0}, {true, true, false}};
+  cudf::test::fixed_width_column_wrapper<int32_t> values2{3, 5};
+  cudf::table_view const batch1{{keys1, values1}};
+  cudf::table_view const batch2{{keys2, values2}};
+  auto requests = single_agg_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+
+  int device{};
+  CUDF_CUDA_TRY(cudaGetDevice(&device));
+  cuda::stream aggregate_stream{cuda::device_ref{device}};
+  cuda::stream finalize_stream{cuda::device_ref{device}};
+  cudf::get_default_stream().sync();
+  cudf::groupby::streaming_groupby agg{
+    KEY_COL, requests, DEFAULT_MAX_DISTINCT_KEYS, cudf::null_policy::INCLUDE};
+  agg.aggregate(batch1, aggregate_stream);
+  agg.aggregate(batch2, aggregate_stream);
+  aggregate_stream.sync();
+
+  auto [out_keys, out_results] = std::move(agg).finalize_and_release(finalize_stream);
+  finalize_stream.sync();
+  verify_against_groupby(
+    out_keys, out_results, {batch1, batch2}, KEY_COL, requests, cudf::null_policy::INCLUDE);
+  EXPECT_EQ(agg.distinct_keys(), 0);
+}
+
+TEST_F(StreamingGroupbyTest, FinalizeAndReleaseEmpty)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> keys{};
+  cudf::test::fixed_width_column_wrapper<int32_t> values{};
+  std::vector<cudf::groupby::streaming_aggregation_request> requests;
+  requests.push_back(make_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>()));
+  cudf::groupby::streaming_groupby agg{KEY_COL, requests, DEFAULT_MAX_DISTINCT_KEYS};
+  agg.aggregate(cudf::table_view{{keys, values}});
+  EXPECT_THROW(static_cast<void>(std::move(agg).finalize_and_release()), cudf::logic_error);
+
+  cudf::test::fixed_width_column_wrapper<int32_t> nonempty_keys{1};
+  cudf::test::fixed_width_column_wrapper<int32_t> nonempty_values{2};
+  agg.aggregate(cudf::table_view{{nonempty_keys, nonempty_values}});
+  EXPECT_EQ(agg.distinct_keys(), 1);
+}
+
+TEST_F(StreamingGroupbyTest, FinalizeAndReleaseBeforeAggregateThrows)
+{
+  std::vector<cudf::groupby::streaming_aggregation_request> requests;
+  requests.push_back(make_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>()));
+  cudf::groupby::streaming_groupby agg{KEY_COL, requests, DEFAULT_MAX_DISTINCT_KEYS};
+  EXPECT_THROW(static_cast<void>(std::move(agg).finalize_and_release()), cudf::logic_error);
+  EXPECT_EQ(agg.distinct_keys(), 0);
+  EXPECT_THROW(static_cast<void>(agg.finalize()), cudf::logic_error);
 }
 
 // Test that finalize() before any aggregate() throws.
