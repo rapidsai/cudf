@@ -38,6 +38,7 @@
 #include <cuda/stream>
 #include <thrust/binary_search.h>
 #include <thrust/for_each.h>
+#include <thrust/gather.h>
 
 #include <nanoarrow/nanoarrow.h>
 #include <nanoarrow/nanoarrow.hpp>
