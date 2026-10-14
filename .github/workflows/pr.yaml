@@ -302,7 +302,7 @@ jobs:
       build_type: pull-request
       build-datetime: ${{ needs.build-details.outputs.build-datetime }}
       node_type: cpu16
-      script: ${{ (fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_common || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_libcudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_examples || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_kafka || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_streaming) && 'ci/build_cpp.sh' || 'ci/build_cpp_runtime.sh' }}
+      script: ${{ (fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_kafka || fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_streaming || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_common || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_libcudf || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_examples || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_kafka || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp_streaming) && 'ci/build_cpp.sh' || 'ci/build_cpp_runtime.sh' }}
   cmake-tests:
     needs: [checks, changed-files]
     permissions:
@@ -468,7 +468,10 @@ jobs:
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     if: >
-      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs ||
+      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common ||
+      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf ||
+      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_kafka ||
+      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_streaming ||
       fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all ||
       fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf ||
       fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf_polars ||
@@ -560,7 +563,10 @@ jobs:
     secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@main
     if: >
-      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs ||
+      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common ||
+      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf ||
+      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_kafka ||
+      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_streaming ||
       fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all ||
       fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf_polars ||
       fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_conda_builds ||
