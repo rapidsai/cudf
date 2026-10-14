@@ -55,9 +55,7 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
                                      cuda::stream_ref stream,
                                      rmm::device_async_resource_ref mr)
 {
-  // TODO: make mr a cudf::memory_resources
-  cudf::memory_resources mrs = mr;
-  auto const temp_mr         = mrs.get_temporary_mr();
+  auto const temp_mr = cudf::get_current_device_resource_ref();
   check_compatibility(lhs, rhs);
 
   // Algorithm:
@@ -94,7 +92,7 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
                                                overlap_results.begin(),  // out values
                                                cuda::std::logical_or{},  // reduction op for values
                                                stream,
-                                               mrs.as_temporary());
+                                               cudf::memory_resources{temp_mr, temp_mr});
 
   auto const num_non_empty_segments = cuda::std::distance(overlap_results.begin(), end.second);
 

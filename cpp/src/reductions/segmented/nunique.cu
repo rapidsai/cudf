@@ -51,18 +51,20 @@ std::unique_ptr<cudf::column> segmented_nunique(column_view const& col,
 
   // compute the unique identifiers within each segment
   auto const identifiers = [&] {
-    // TODO: make mr a cudf::memory_resources
-    cudf::memory_resources mrs = mr;
-    auto const temp_mr         = mrs.get_temporary_mr();
-    auto const d_col           = column_device_view::create(col, stream, temp_mr);
+    auto const temp_mr = cudf::get_current_device_resource_ref();
+    auto const d_col   = column_device_view::create(col, stream, temp_mr);
     auto const comparator =
       cudf::detail::row::equality::self_comparator{table_view({col}), stream, temp_mr};
     auto const row_equal =
       comparator.equal_to<false>(cudf::nullate::DYNAMIC{col.has_nulls()}, null_equality::EQUAL);
 
     auto labels = rmm::device_uvector<size_type>(col.size(), stream, temp_mr);
-    cudf::detail::label_segments(
-      offsets.begin(), offsets.end(), labels.begin(), labels.end(), stream, mrs.as_temporary());
+    cudf::detail::label_segments(offsets.begin(),
+                                 offsets.end(),
+                                 labels.begin(),
+                                 labels.end(),
+                                 stream,
+                                 cudf::memory_resources{temp_mr, temp_mr});
     auto fn = is_unique_fn<decltype(row_equal)>{
       *d_col, row_equal, null_handling, offsets.data(), labels.data()};
 

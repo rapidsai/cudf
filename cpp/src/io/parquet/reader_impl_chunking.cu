@@ -83,8 +83,7 @@ void reader_impl::handle_chunking(read_mode mode)
 
 void reader_impl::setup_next_pass(read_mode mode)
 {
-  cudf::memory_resources mr = _mr;
-  auto const num_passes     = _file_itm_data.num_passes();
+  auto const num_passes = _file_itm_data.num_passes();
 
   // always create the pass struct, even if we end up with no work.
   // this will also cause the previous pass information to be deleted
@@ -169,6 +168,7 @@ void reader_impl::setup_next_pass(read_mode mode)
     // store off how much memory we've used so far. This includes the compressed page data and the
     // decompressed dictionary data. we will subtract this from the available total memory for the
     // subpasses
+    auto temp_mr    = cudf::get_current_device_resource_ref();
     auto chunk_iter = cuda::transform_iterator(pass.chunks.d_begin(), get_chunk_compressed_size{});
     pass.base_mem_size =
       decomp_dict_data_size + cudf::detail::reduce(chunk_iter,
@@ -176,7 +176,7 @@ void reader_impl::setup_next_pass(read_mode mode)
                                                    size_t{0},
                                                    cuda::std::plus<size_t>{},
                                                    _stream,
-                                                   mr.as_temporary());
+                                                   cudf::memory_resources{temp_mr, temp_mr});
 
     // if we are doing subpass reading, generate more accurate num_row estimates for list columns.
     // this helps us to generate more accurate subpass splits.

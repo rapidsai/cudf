@@ -666,9 +666,7 @@ std::unique_ptr<column> compute_row_mask_from_page_stats(
   CUDF_EXPECTS(
     total_rows > 0, "Parquet row groups must contain at least one row", cudf::logic_error);
 
-  // TODO: take temporary mr as an input param
-  cudf::memory_resources mrs = mr;
-  auto const temp_mr         = mrs.get_temporary_mr();
+  auto const temp_mr = cudf::get_current_device_resource_ref();
 
   // Return an all true row mask if no compacted page statistics are provided
   if (inputs.empty()) {
@@ -791,7 +789,7 @@ std::unique_ptr<column> compute_row_mask_from_page_stats(
                                row_segment_indices.begin(),
                                row_segment_indices.end(),
                                stream,
-                               mrs.as_temporary());
+                               cudf::memory_resources{temp_mr, temp_mr});
 
   // Gather segment-level mask to row-level mask
   auto row_mask = cudf::detail::gather(cudf::table_view{{segment_mask->view()}},

@@ -24,6 +24,6 @@ namespace cudf::detail {
 VectorPair full_to_left_join_indices(device_span<size_type const> left_indices,
                                      device_span<size_type const> right_indices,
                                      cuda::stream_ref stream,
-                                     cudf::memory_resources mr);
+                                     rmm::device_async_resource_ref mr);
 
 }  // namespace cudf::detail

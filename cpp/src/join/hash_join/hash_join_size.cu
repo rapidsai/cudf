@@ -80,11 +80,8 @@ template <typename Hasher>
 template <join_kind Join>
 std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
                                          cuda::stream_ref stream,
-                                         rmm::device_async_resource_ref mr) const
+                                         rmm::device_async_resource_ref temp_mr) const
 {
-  // TODO: make mr a cudf::memory_resources
-  cudf::memory_resources mrs = mr;
-  auto const temp_mr         = mrs.get_temporary_mr();
   static_assert(Join == join_kind::FULL_JOIN);
 
   CUDF_FUNC_RANGE();
@@ -127,7 +124,7 @@ std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
                                                      cuda::std::int64_t{0},
                                                      cuda::std::plus<>{},
                                                      stream,
-                                                     mrs.as_temporary());
+                                                     cudf::memory_resources{temp_mr, temp_mr});
   auto const matched_right_rows = matched_build_rows.value(stream);
   CUDF_EXPECTS(left_output_size >= 0, "Join output size overflowed", std::overflow_error);
   auto const output_size = static_cast<cuda::std::uint64_t>(left_output_size) +
