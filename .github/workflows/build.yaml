@@ -24,9 +24,14 @@ on:
         required: true
         type: string
       build_type:
-        description: "build_type: one of [branch, nightly, pull-request]"
+        description: "build_type: one of [branch, nightly, pull-request, release-candidate]"
         type: string
         default: nightly
+      candidate-train-sha256:
+        description: "SHA-256 of the reviewed release candidate train."
+        required: false
+        type: string
+        default: ""
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ inputs.build_type || 'branch' }}
@@ -36,7 +41,7 @@ permissions: {}
 
 jobs:
   build-details:
-    uses: rapidsai/shared-workflows/.github/workflows/compute-build-details.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/compute-build-details.yaml@f127659d02df896f7ded35eafa08530c362bc694
   telemetry-setup:
     permissions:
       id-token: write
@@ -73,11 +78,11 @@ jobs:
       id-token: write
       packages: read
       pull-requests: read
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@f127659d02df896f7ded35eafa08530c362bc694
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       build-datetime: ${{ needs.build-details.outputs.build-datetime }}
+      candidate-train-sha256: ${{ inputs.candidate-train-sha256 }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       node_type: cpu16
@@ -91,11 +96,11 @@ jobs:
       id-token: write
       packages: read
       pull-requests: read
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@f127659d02df896f7ded35eafa08530c362bc694
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       build-datetime: ${{ needs.build-details.outputs.build-datetime }}
+      candidate-train-sha256: ${{ inputs.candidate-train-sha256 }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       script: ci/build_python.sh
@@ -110,17 +115,18 @@ jobs:
       id-token: write
       packages: read
       pull-requests: read
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@f127659d02df896f7ded35eafa08530c362bc694
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       build-datetime: ${{ needs.build-details.outputs.build-datetime }}
+      candidate-train-sha256: ${{ inputs.candidate-train-sha256 }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       script: ci/build_python_noarch.sh
       sha: ${{ inputs.sha }}
       pure-conda: cuda_major
   upload-conda:
+    if: ${{ inputs.build_type != 'release-candidate' }}
     needs: [cpp-build, python-build, python-build-noarch]
     permissions:
       actions: read
@@ -138,6 +144,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
   docs-build-matrix:
+    if: ${{ inputs.build_type != 'release-candidate' }}
     permissions:
       contents: read
     uses: rapidsai/shared-workflows/.github/workflows/compute-matrix.yaml@main
@@ -145,7 +152,7 @@ jobs:
       build_type: ${{ inputs.build_type || 'branch' }}
       matrix_name: docs-build
   docs-build:
-    if: github.ref_type == 'branch'
+    if: ${{ inputs.build_type != 'release-candidate' && github.ref_type == 'branch' }}
     needs: [docs-build-matrix, python-build, python-build-noarch]
     permissions:
       actions: read
@@ -168,7 +175,7 @@ jobs:
       script: "ci/build_docs.sh"
       sha: ${{ inputs.sha }}
   publish-api-docs:
-    if: github.ref_type == 'branch'
+    if: ${{ inputs.build_type != 'release-candidate' && github.ref_type == 'branch' }}
     needs: [docs-build]
     permissions:
       contents: read
@@ -196,18 +203,20 @@ jobs:
       id-token: write
       packages: read
       pull-requests: read
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: ./.github/workflows/wheels-build-stage.yaml
     with:
       # Build a wheel for each CUDA x ARCH x minimum supported Python version.
-      matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
+      matrix_filter: >-
+        ${{ inputs.build_type == 'release-candidate' && 'map(. + {CUDA_MAJOR: (.CUDA_VER | split(".") | .[0]), PYTHON_NO_DOT: (.PY_VER | split(".") | join(""))})' || 'group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))' }}
       build_type: ${{ inputs.build_type || 'branch' }}
       build-datetime: ${{ needs.build-details.outputs.build-datetime }}
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
+      candidate-train-sha256: ${{ inputs.candidate-train-sha256 }}
       node_type: cpu16
   wheel-publish-libcudf:
+    if: ${{ inputs.build_type != 'release-candidate' }}
     needs: wheel-build
     permissions:
       actions: read
@@ -229,6 +238,7 @@ jobs:
       # trailing underscore to avoid collision with `libcudf-streaming`
       publish-wheel-search-key: cudf_wheel_cpp_libcudf_
   wheel-publish-libcudf-streaming:
+    if: ${{ inputs.build_type != 'release-candidate' }}
     needs: wheel-build
     permissions:
       actions: read
@@ -249,6 +259,7 @@ jobs:
       package-type: cpp
       publish-wheel-search-key: cudf_wheel_cpp_libcudf-streaming
   wheel-publish-cudf-streaming:
+    if: ${{ inputs.build_type != 'release-candidate' }}
     needs: wheel-build
     permissions:
       actions: read
@@ -269,6 +280,7 @@ jobs:
       package-type: python
       publish-wheel-search-key: cudf_wheel_python_cudf-streaming
   wheel-publish-pylibcudf:
+    if: ${{ inputs.build_type != 'release-candidate' }}
     needs: wheel-build
     permissions:
       actions: read
@@ -287,6 +299,7 @@ jobs:
       package-type: python
       publish-wheel-search-key: cudf_wheel_python_pylibcudf
   wheel-publish-cudf:
+    if: ${{ inputs.build_type != 'release-candidate' }}
     needs: wheel-build
     permissions:
       actions: read
@@ -313,19 +326,21 @@ jobs:
       id-token: write
       packages: read
       pull-requests: read
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     uses: ./.github/workflows/wheels-build-stage.yaml
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
-      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      matrix_filter: >-
+        ${{ inputs.build_type == 'release-candidate' && 'map(. + {CUDA_MAJOR: (.CUDA_VER | split(".") | .[0]), PYTHON_NO_DOT: (.PY_VER | split(".") | join(""))})' || 'map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))' }}
       build_type: ${{ inputs.build_type || 'branch' }}
       build-datetime: ${{ needs.build-details.outputs.build-datetime }}
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
+      candidate-train-sha256: ${{ inputs.candidate-train-sha256 }}
       node_type: cpu8
       pure-wheel: true
   wheel-publish-dask-cudf:
+    if: ${{ inputs.build_type != 'release-candidate' }}
     needs: wheel-python-build-noarch
     permissions:
       actions: read
@@ -344,6 +359,7 @@ jobs:
       package-type: python
       publish-wheel-search-key: cudf_wheel_python_dask-cudf
   wheel-publish-cudf-polars:
+    if: ${{ inputs.build_type != 'release-candidate' }}
     needs: wheel-python-build-noarch
     permissions:
       actions: read
@@ -399,12 +415,13 @@ jobs:
       - wheel-publish-dask-cudf
       - wheel-publish-libcudf
       - wheel-publish-pylibcudf
-    if: ${{ vars.TELEMETRY_ENABLED == 'true' && !cancelled() }}
+    if: ${{ inputs.build_type != 'release-candidate' && vars.TELEMETRY_ENABLED == 'true' && !cancelled() }}
     continue-on-error: true
     steps:
       - name: Telemetry summarize
         uses: rapidsai/shared-actions/telemetry-dispatch-summarize@main
   devcontainers:
+    if: ${{ inputs.build_type != 'release-candidate' }}
     name: Build devcontainers
     secrets: inherit  # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/build-devcontainers.yaml@main
@@ -418,11 +435,12 @@ jobs:
     needs: [telemetry-setup]
     permissions:
       contents: read
-    uses: rapidsai/shared-workflows/.github/workflows/compute-matrix.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/compute-matrix.yaml@f127659d02df896f7ded35eafa08530c362bc694
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       matrix_name: conda-cpp-build
-      matrix_filter: 'map(. + {CUDA_MAJOR: (.CUDA_VER | split(".") | .[0])})'
+      matrix_filter: >-
+        ${{ inputs.build_type == 'release-candidate' && 'map(. + {CUDA_MAJOR: (.CUDA_VER | split(".") | .[0])}) | group_by({CUDA_MAJOR, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))' || 'map(. + {CUDA_MAJOR: (.CUDA_VER | split(".") | .[0])})' }}
   java-build:
     needs: [build-details, telemetry-setup, java-build-matrix]
     permissions:
@@ -431,8 +449,7 @@ jobs:
       id-token: write
       packages: read
       pull-requests: read
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@f127659d02df896f7ded35eafa08530c362bc694
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.java-build-matrix.outputs.matrix) }}
@@ -448,8 +465,26 @@ jobs:
       script: "ci/build_java.sh"
       file_to_upload: output_jars
       artifact-name: cudf_java_${{ matrix.ARCH }}_cu${{ matrix.CUDA_MAJOR }}
+      candidate-train-sha256: ${{ inputs.candidate-train-sha256 }}
+      candidate-dependency-family: maven
+      candidate-unit-id: maven:cudf-java
+      candidate-cuda-version: ${{ matrix.CUDA_VER }}
+      candidate-artifact-name: cudf-java-${{ matrix.ARCH }}-cuda${{ matrix.CUDA_MAJOR }}
+      candidate-skip-github-artifact-upload: true
+      release-catalog-config: >-
+        {
+          "release_catalog_key": "maven:cudf-java",
+          "artifact_directory": ".release-candidate-artifacts/maven",
+          "artifacts": [
+            {
+              "path": "cudf-java.tar.gz",
+              "package_identity_file": "cudf-java.identity.json"
+            }
+          ]
+        }
   # Assemble the per-classifier JARs into one Maven-repository layout.
   java-gather:
+    if: ${{ inputs.build_type != 'release-candidate' }}
     needs: [java-build]
     runs-on: linux-amd64-cpu4
     permissions:
@@ -483,6 +518,7 @@ jobs:
   # Publisher Portal). Other runs -> Sonatype snapshots (immediate, overwrites
   # -SNAPSHOT).
   java-publish:
+    if: ${{ inputs.build_type != 'release-candidate' }}
     needs: [java-gather]
     permissions:
       actions: read

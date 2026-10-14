@@ -101,7 +101,20 @@ CUDF_VERSION="$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout 
 # Release tag builds strip -SNAPSHOT and rewrite the POM so packaged artifacts
 # carry the release version. Non-release builds keep -SNAPSHOT. The EXIT trap
 # restores java/pom.xml after packaging (the rewritten POM is copied to OUTPUT_DIR).
-if rapids-is-release-build; then
+if [[ ${RAPIDS_RELEASE_CANDIDATE:-false} == "true" ]]; then
+  CANDIDATE_VERSION="$(jq -er '.unit_package_versions["maven:cudf-java"] // .package_versions.maven' \
+    <<<"${RAPIDS_RELEASE_CANDIDATE_UNIT_VERSIONS:-}")"
+  if [[ ${CUDF_VERSION} != "${CANDIDATE_VERSION}" ]]; then
+    if [[ ${CUDF_VERSION} != "${CANDIDATE_VERSION}-SNAPSHOT" ]]; then
+      echo "Error: Maven project version '${CUDF_VERSION}' does not match frozen candidate version '${CANDIDATE_VERSION}'" >&2
+      exit 1
+    fi
+    cp -p "${REPO_ROOT}/java/pom.xml" "${REPO_ROOT}/java/pom.xml.backup"
+    POM_WAS_REWRITTEN=1
+    mvn versions:set -DnewVersion="${CANDIDATE_VERSION}" -DgenerateBackupPoms=false "${BUILD_ARG[@]}"
+    CUDF_VERSION=${CANDIDATE_VERSION}
+  fi
+elif rapids-is-release-build; then
   CUDF_VERSION="${CUDF_VERSION%-SNAPSHOT}"
   cp -p "${REPO_ROOT}/java/pom.xml" "${REPO_ROOT}/java/pom.xml.backup"
   POM_WAS_REWRITTEN=1
