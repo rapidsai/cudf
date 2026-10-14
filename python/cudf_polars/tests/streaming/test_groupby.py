@@ -387,9 +387,7 @@ def test_groupby_first_non_null_sorted_keys(spmd_engine_factory):
             "a": pl.Series(values, dtype=pl.Int32),
         }
     ).set_sorted("idx")
-    q = df.group_by("idx", maintain_order=True).agg(
-        pl.col("a").first(ignore_nulls=True)
-    )
+    q = df.group_by("idx", maintain_order=True).agg(pl.col("a").drop_nulls().first())
 
     assert_gpu_result_equal(q, engine=streaming_engine)
 
