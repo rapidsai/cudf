@@ -578,14 +578,13 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(cuda::stream_r
                                               stream,
                                               temp_mr);
 
-      thrust::for_each(
-        rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-        cuda::counting_iterator<cudf::size_type>{0},
-        cuda::counting_iterator<cudf::size_type>{0} + subset_size,
-        list_nonnull_filter{reinterpret_cast<bitmask_type*>(validity_mask.data()),
-                            reinterpret_cast<bitmask_type const*>(reduced_validity_mask.data()),
-                            child_positions,
-                            static_cast<size_type>(subset_offset)});
+      thrust::for_each(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                       cuda::counting_iterator<cudf::size_type>{0},
+                       cuda::counting_iterator<cudf::size_type>{0} + subset_size,
+                       list_nonnull_filter{validity_mask.data(),
+                                           reduced_validity_mask.data(),
+                                           child_positions,
+                                           static_cast<size_type>(subset_offset)});
     } else if (col.type().id() == type_id::STRUCT) {
       // Recursive lambda to traverse struct hierarchy and accumulate null information.
       // This lambda ANDs the column's null mask with the accumulated mask in-place and recursively
@@ -626,12 +625,11 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(cuda::stream_r
       // Process all children of the struct column
       for (auto it = col.child_begin(); it != col.child_end(); it++) {
         auto& child = *it;
-        and_bitmasks(and_bitmasks, reinterpret_cast<bitmask_type*>(validity_mask.data()), child);
+        and_bitmasks(and_bitmasks, validity_mask.data(), child);
       }
     }
   }
-  this->_num_nulls =
-    null_count(reinterpret_cast<bitmask_type*>(validity_mask.data()), 0, table.num_rows(), stream);
+  this->_num_nulls     = null_count(validity_mask.data(), 0, table.num_rows(), stream);
   this->_validity_mask = std::move(validity_mask);
 }
 
@@ -724,13 +722,12 @@ rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_table_to
   auto temp_mr                  = cudf::get_current_device_resource_ref();
   auto const table_mapping_size = _table_view.num_rows() - _num_nulls.value();
   rmm::device_uvector<size_type> table_mapping(table_mapping_size, stream, temp_mr);
-  cudf::detail::copy_if_async(
-    cuda::counting_iterator<size_type>{0},
-    cuda::counting_iterator<size_type>{_table_view.num_rows()},
-    cuda::counting_iterator<size_type>{0},
-    table_mapping.begin(),
-    is_row_valid{reinterpret_cast<bitmask_type const*>(_validity_mask.value().data())},
-    stream);
+  cudf::detail::copy_if_async(cuda::counting_iterator<size_type>{0},
+                              cuda::counting_iterator<size_type>{_table_view.num_rows()},
+                              cuda::counting_iterator<size_type>{0},
+                              table_mapping.begin(),
+                              is_row_valid{_validity_mask.value().data()},
+                              stream);
   return table_mapping;
 }
 
@@ -866,8 +863,7 @@ sort_merge_join::left_join(table_view const& left,
       auto const total_output_size =
         preprocessed_left_indices->size() + static_cast<int64_t>(num_filtered_nulls);
 
-      auto const validity_mask =
-        reinterpret_cast<bitmask_type const*>(preprocessed_left._validity_mask.value().data());
+      auto const validity_mask = preprocessed_left._validity_mask.value().data();
       rmm::device_uvector<size_type> null_left_indices{static_cast<std::size_t>(num_filtered_nulls),
                                                        stream,
                                                        cudf::get_current_device_resource_ref()};

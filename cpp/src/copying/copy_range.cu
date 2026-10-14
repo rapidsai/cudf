@@ -152,12 +152,11 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
   auto const source_indices = source_view.get_indices_annotated();
   auto target_contents      = target_matched->release();
   auto target_indices(std::move(target_contents.children.front()));
-  cudf::mutable_column_view new_indices(
-    target_indices->type(),
-    dict_target.size(),
-    target_indices->mutable_view().head(),
-    reinterpret_cast<cudf::bitmask_type*>(target_contents.null_mask->data()),
-    dict_target.null_count());
+  cudf::mutable_column_view new_indices(target_indices->type(),
+                                        dict_target.size(),
+                                        target_indices->mutable_view().head(),
+                                        target_contents.null_mask->data(),
+                                        dict_target.null_count());
   cudf::type_dispatcher(new_indices.type(),
                         in_place_copy_range_dispatch{source_indices, new_indices},
                         source_begin,

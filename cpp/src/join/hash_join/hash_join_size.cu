@@ -46,9 +46,7 @@ std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
   auto match_counts =
     cudf::detail::make_zeroed_device_uvector_async<size_type>(left.num_rows(), stream, temp_mr);
   auto const row_bitmask = cudf::detail::bitmask_and(left, stream, temp_mr).first;
-  auto const valid_rows  = _nulls_equal == null_equality::UNEQUAL
-                             ? reinterpret_cast<bitmask_type const*>(row_bitmask.data())
-                             : nullptr;
+  auto const valid_rows  = _nulls_equal == null_equality::UNEQUAL ? row_bitmask.data() : nullptr;
 
   auto count_matches = [&](auto equality, auto hasher) {
     launch_hash_csr_probe_count_kernel<Join == join_kind::LEFT_JOIN>(left.num_rows(),
@@ -95,9 +93,7 @@ std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
     _right.num_rows(), stream, temp_mr);
   auto matched_build_rows = cudf::detail::device_scalar<cuda::std::uint64_t>(0, stream, temp_mr);
   auto const row_bitmask  = cudf::detail::bitmask_and(left, stream, temp_mr).first;
-  auto const valid_rows   = _nulls_equal == null_equality::UNEQUAL
-                              ? reinterpret_cast<bitmask_type const*>(row_bitmask.data())
-                              : nullptr;
+  auto const valid_rows   = _nulls_equal == null_equality::UNEQUAL ? row_bitmask.data() : nullptr;
 
   auto count_matches = [&](auto equality, auto hasher) {
     launch_hash_csr_probe_count_kernel<true>(left.num_rows(),
