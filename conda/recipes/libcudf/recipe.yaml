@@ -24,13 +24,15 @@ outputs:
       script:
         content: |
 
-          # Remove `-fdebug-prefix-map` line from CFLAGS and CXXFLAGS so the
-          # incrementing version number in the compile line doesn't break the
-          # cache
-          set -x
-          export CFLAGS=$(echo $CFLAGS | sed -E 's@\-fdebug\-prefix\-map[^ ]*@@g')
-          export CXXFLAGS=$(echo $CXXFLAGS | sed -E 's@\-fdebug\-prefix\-map[^ ]*@@g')
-          set +x
+          # Versioned debug-prefix maps invalidate otherwise identical cached native objects.
+          for flags_name in CFLAGS CXXFLAGS; do
+              [[ -v "${flags_name}" ]] || continue
+              flags_value="${!flags_name}"
+              while [[ "${flags_value}" =~ -fdebug-prefix-map[^[:space:]]* ]]; do
+                  flags_value="${flags_value/"${BASH_REMATCH[0]}"/}"
+              done
+              export "${flags_name}=${flags_value}"
+          done
 
           cudf_ROOT="$(realpath ./cpp/build)"
           export cudf_ROOT
