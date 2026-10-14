@@ -36,12 +36,12 @@ void verify_result(cudf::table_view keys,
                    cuda::stream_ref stream)
 {
   CUDF_EXPECTS(keys.num_columns() == 1 && keys.num_rows() == groups,
-               "Boundary benchmark returned an incorrect key shape");
+               "Streaming benchmark returned an incorrect key shape");
   auto const key_column = keys.column(0);
   CUDF_EXPECTS(key_column.type().id() == cudf::type_id::INT32 && !key_column.has_nulls(),
-               "Boundary benchmark returned an incorrect key type or validity");
+               "Streaming benchmark returned an incorrect key type or validity");
   CUDF_EXPECTS(results.size() == (with_min ? 1 : 0),
-               "Boundary benchmark returned an incorrect request count");
+               "Streaming benchmark returned an incorrect request count");
   std::vector<int32_t> host_keys(groups);
   cudf::detail::cuda_memcpy(
     cudf::host_span<int32_t>{host_keys},
@@ -50,11 +50,11 @@ void verify_result(cudf::table_view keys,
   std::vector<int8_t> host_values;
   if (with_min) {
     CUDF_EXPECTS(results.front().results.size() == 1,
-                 "Boundary benchmark returned an incorrect aggregation count");
+                 "Streaming benchmark returned an incorrect aggregation count");
     auto const values = results.front().results.front()->view();
     CUDF_EXPECTS(
       values.type().id() == cudf::type_id::INT8 && values.size() == groups && !values.has_nulls(),
-      "Boundary benchmark returned an incorrect MIN shape, type or validity");
+      "Streaming benchmark returned an incorrect MIN shape, type or validity");
     host_values.resize(groups);
     cudf::detail::cuda_memcpy(
       cudf::host_span<int8_t>{host_values},
@@ -64,16 +64,16 @@ void verify_result(cudf::table_view keys,
   std::vector<uint8_t> seen(groups, 0);
   for (cudf::size_type row = 0; row < groups; ++row) {
     auto const key = host_keys[row];
-    CUDF_EXPECTS(key >= 0 && key < groups, "Boundary benchmark returned an out-of-range key");
-    CUDF_EXPECTS(seen[key]++ == 0, "Boundary benchmark returned a duplicate key");
+    CUDF_EXPECTS(key >= 0 && key < groups, "Streaming benchmark returned an out-of-range key");
+    CUDF_EXPECTS(seen[key]++ == 0, "Streaming benchmark returned a duplicate key");
     if (with_min) {
       CUDF_EXPECTS(host_values[row] == static_cast<int8_t>(key % 127 - 63),
-                   "Boundary benchmark returned an incorrect MIN value");
+                   "Streaming benchmark returned an incorrect MIN value");
     }
   }
 }
 
-void bench_streaming_key_location_boundary(nvbench::state& state)
+void bench_streaming_groupby_unique_keys(nvbench::state& state)
 {
   auto const group_axis = state.get_int64("max_distinct_keys");
   auto const batch_axis = state.get_int64("batch_size");
@@ -83,14 +83,13 @@ void bench_streaming_key_location_boundary(nvbench::state& state)
                  batch_axis <= group_axis &&
                  group_axis + batch_axis <= std::numeric_limits<cudf::size_type>::max(),
                "Capacity and batch size must fit the streaming row-index bound");
-  CUDF_EXPECTS(schema == "keys_only" || schema == "int8_min", "Unsupported boundary schema");
+  CUDF_EXPECTS(schema == "keys_only" || schema == "int8_min", "Unsupported schema");
   auto const groups     = static_cast<cudf::size_type>(group_axis);
   auto const batch_size = static_cast<cudf::size_type>(batch_axis);
   auto const with_min   = schema == "int8_min";
   auto const stream     = cudf::get_default_stream();
 
-  // All keys are unique, arriving in many small batches. The final key crosses
-  // a power-of-two location capacity with little per-batch scratch in flight.
+  // Unique keys arrive in small batches, so the number of groups grows throughout the operation.
   std::vector<std::unique_ptr<cudf::column>> columns;
   columns.push_back(cudf::sequence(groups, cudf::numeric_scalar<int32_t>{0}));
   if (with_min) {
@@ -142,8 +141,8 @@ void bench_streaming_key_location_boundary(nvbench::state& state)
 
 }  // namespace
 
-NVBENCH_BENCH(bench_streaming_key_location_boundary)
-  .set_name("streaming_key_location_boundary")
+NVBENCH_BENCH(bench_streaming_groupby_unique_keys)
+  .set_name("streaming_groupby_unique_keys")
   .add_int64_axis("max_distinct_keys", {65'537, 1'048'577})
   .add_int64_axis("batch_size", {4096})
   .add_string_axis("schema", {"keys_only", "int8_min"});
