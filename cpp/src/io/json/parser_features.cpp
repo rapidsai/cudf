@@ -15,7 +15,6 @@
 #include <cudf/utilities/concepts.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <concepts>
 #include <optional>
 #include <string>
 #include <vector>
@@ -69,7 +68,7 @@ struct empty_column_functor {
     return make_empty_column(schema.type);
   }
 
-  template <std::same_as<cudf::list_view> T>
+  template <cudf::concepts::list_view T>
   std::unique_ptr<column> operator()(schema_element const& schema) const
   {
     CUDF_EXPECTS(schema.child_types.size() == 1, "List column should have only one child");
@@ -90,7 +89,7 @@ struct empty_column_functor {
                                     std::move(child_columns));
   }
 
-  template <std::same_as<cudf::struct_view> T>
+  template <cudf::concepts::struct_view T>
   std::unique_ptr<column> operator()(schema_element const& schema) const
   {
     std::vector<std::unique_ptr<column>> child_columns;
@@ -154,7 +153,7 @@ struct allnull_column_functor {
     return make_dictionary_column(std::move(child), std::move(indices), std::move(null_mask), size);
   }
 
-  template <std::same_as<cudf::string_view> T>
+  template <cudf::concepts::string_view T>
   std::unique_ptr<column> operator()(schema_element const& schema, size_type size) const
   {
     auto offsets   = make_zeroed_offsets(size);
@@ -162,7 +161,7 @@ struct allnull_column_functor {
     return make_strings_column(
       size, std::move(offsets), rmm::device_buffer{}, size, std::move(null_mask));
   }
-  template <std::same_as<cudf::list_view> T>
+  template <cudf::concepts::list_view T>
   std::unique_ptr<column> operator()(schema_element const& schema, size_type size) const
   {
     CUDF_EXPECTS(schema.child_types.size() == 1, "List column should have only one child");
@@ -184,7 +183,7 @@ struct allnull_column_functor {
                                     std::move(child_columns));
   }
 
-  template <std::same_as<cudf::struct_view> T>
+  template <cudf::concepts::struct_view T>
   std::unique_ptr<column> operator()(schema_element const& schema, size_type size) const
   {
     std::vector<std::unique_ptr<column>> child_columns;

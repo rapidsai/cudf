@@ -25,6 +25,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/concepts.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
@@ -35,7 +36,6 @@
 #include <thrust/tabulate.h>
 
 #include <algorithm>
-#include <concepts>
 #include <numeric>
 #include <string>
 #include <utility>
@@ -216,7 +216,7 @@ struct column_to_strings_fn {
     CUDF_FAIL("Only nested columns should use this overload.");
   }
 
-  template <std::same_as<cudf::list_view> column_type>
+  template <cudf::concepts::list_view column_type>
   std::unique_ptr<column> operator()(column_view const& column,
                                      host_span<column_name_info const> children_names) const
   {
@@ -252,7 +252,7 @@ struct column_to_strings_fn {
                                 mr_);
   }
 
-  template <std::same_as<cudf::struct_view> column_type>
+  template <cudf::concepts::struct_view column_type>
   std::unique_ptr<column> operator()(column_view const& column,
                                      host_span<column_name_info const> children_names) const
   {

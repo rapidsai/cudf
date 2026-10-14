@@ -17,6 +17,7 @@
 #include "temp_storage_wrapper.cuh"
 
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/utilities/concepts.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <cuda/functional>
@@ -71,7 +72,7 @@ class union_member {
     return val.fp_val;
   }
 
-  template <std::same_as<string_view> T, typename U>
+  template <cudf::concepts::string_view T, typename U>
   __device__ static type<T, U> get(U& val)
   {
     return val.str_val;

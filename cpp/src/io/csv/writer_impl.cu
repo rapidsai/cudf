@@ -279,7 +279,7 @@ struct column_to_strings_fn {
 
   // strings:
   //
-  template <cuda::std::same_as<cudf::string_view> column_type>
+  template <cudf::concepts::string_view column_type>
   std::unique_ptr<column> operator()(column_view const& column_v) const
   {
     if (options_.get_quoting() == cudf::io::quote_style::NONE) {
