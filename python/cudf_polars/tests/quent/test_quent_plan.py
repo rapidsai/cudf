@@ -123,7 +123,7 @@ from cudf_polars.streaming.shuffle import Shuffle
                 "expression": (
                     '{"left": {"name": "a", "type": "Col"}, "op": "GREATER", '
                     '"right": {"type": "Literal", "value": {"type": "int", '
-                    '"value": 1}}}'
+                    '"value": 1}}, "type": "BinOp"}'
                 ),
             },
         ),
