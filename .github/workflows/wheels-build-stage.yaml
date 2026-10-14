@@ -45,7 +45,7 @@ permissions:
 
 jobs:
   compute-matrix:
-    uses: rapidsai/shared-workflows/.github/workflows/compute-matrix.yaml@f127659d02df896f7ded35eafa08530c362bc694
+    uses: rapidsai/shared-workflows/.github/workflows/compute-matrix.yaml@45cb998acd60279c1af3d9ebe1ed98ab96369c04
     with:
       build_type: ${{ inputs.build_type }}
       matrix_name: wheels-build
