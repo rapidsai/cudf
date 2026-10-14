@@ -3166,7 +3166,7 @@ std::unique_ptr<chunk_iteration_state> compute_tile_batches(int num_bufs,
                         auto const bytes =
                           buf.num_elements * static_cast<std::size_t>(buf.element_size);
                         if (bytes == 0) { return {1, 0}; }
-                        return {util::div_rounding_up_unsafe(bytes, tile_bytes), tile_bytes};
+                        return {util::div_rounding_up_safe(bytes, tile_bytes), tile_bytes};
                       }));
 
   return chunk_iteration_state::create(
