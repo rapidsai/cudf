@@ -52,8 +52,8 @@ size_type state_null_count(mask_state state, size_type size);
  * of this value
  * @return The necessary number of bytes
  */
-[[deprecated("Use `bitmask_allocation_size_words` instead.")]] std::size_t
-bitmask_allocation_size_bytes(size_type number_of_bits, std::size_t padding_boundary = 64);
+std::size_t bitmask_allocation_size_bytes(size_type number_of_bits,
+                                          std::size_t padding_boundary = 64);
 
 /**
  * @brief Computes the required words necessary to represent the specified
