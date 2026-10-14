@@ -417,14 +417,22 @@ public class HybridScanReader implements AutoCloseable {
       }
       throw t;
     }
+    ColumnVector rowMask = null;
     try {
-      return new FilterMaterializationResult(tableWithColumnNames,
-          new ColumnVector(handles[0]));
+      rowMask = new ColumnVector(handles[0]);
+      return new FilterMaterializationResult(tableWithColumnNames, rowMask);
     } catch (Throwable t) {
       try {
         tableWithColumnNames.close();
       } catch (Throwable s) {
         t.addSuppressed(s);
+      }
+      if (rowMask != null) {
+        try {
+          rowMask.close();
+        } catch (Throwable s) {
+          t.addSuppressed(s);
+        }
       }
       throw t;
     }
@@ -460,9 +468,20 @@ public class HybridScanReader implements AutoCloseable {
 
   /** Takes ownership of a native {@code table_with_metadata} handle. */
   private static TableWithColumnNames toTableWithColumnNames(long tableWithMetaHandle) {
+    Table table = null;
     try (TableWithMeta tableWithMeta = new TableWithMeta(tableWithMetaHandle)) {
       String[] columnNames = tableWithMeta.getColumnNames();
-      return new TableWithColumnNames(tableWithMeta.releaseTable(), columnNames);
+      table = tableWithMeta.releaseTable();
+      return new TableWithColumnNames(table, columnNames);
+    } catch (Throwable t) {
+      if (table != null) {
+        try {
+          table.close();
+        } catch (Throwable s) {
+          t.addSuppressed(s);
+        }
+      }
+      throw t;
     }
   }
 
