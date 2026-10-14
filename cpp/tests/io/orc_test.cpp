@@ -1769,6 +1769,23 @@ TEST_F(OrcStatisticsTest, DecimalSum)
   }
 }
 
+TEST_F(OrcStatisticsTest, Decimal128Sum)
+{
+  // Valid sum that exceeds max() / non_nulls; must still be written
+  std::vector<__int128_t> const vals{__int128_t{1} << 126, 1};
+  dec128_col col{vals.begin(), vals.end(), numeric::scale_type{0}};
+  table_view tbl({col});
+
+  auto const filepath = temp_env->get_temp_filepath("OrcStatsDecimal128Sum.orc");
+  cudf::io::write_orc(
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, tbl).build());
+
+  auto const stats = cudf::io::read_parsed_orc_statistics(cudf::io::source_info{filepath});
+  auto const& ts = std::get<cudf::io::decimal_statistics>(stats.file_stats[1].type_specific_stats);
+  ASSERT_TRUE(ts.sum.has_value());
+  EXPECT_EQ(*ts.sum, "85070591730234615865843651857942052865");
+}
+
 TEST_F(OrcStatisticsTest, HasNull)
 {
   // This test can now be implemented with libcudf; keeping the pandas version to keep the test
