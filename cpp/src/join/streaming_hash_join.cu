@@ -16,9 +16,9 @@
 #include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/row_operator/primitive_equality.cuh>
 #include <cudf/detail/row_operator/primitive_hashing.cuh>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
-#include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/join/streaming_hash_join.hpp>
@@ -763,7 +763,7 @@ struct streaming_delta {
   size_type candidate_begin;
   size_type candidate_end;
   size_type generation;
-  std::unique_ptr<rmm::device_buffer> valid_rows;
+  std::unique_ptr<cuda::device_buffer<std::byte>> valid_rows;
   std::unique_ptr<rmm::device_uvector<int>> overlaps_prior;
   std::unique_ptr<rmm::device_uvector<cuda::std::uint32_t>> slots;
   std::unique_ptr<rmm::device_uvector<streaming_sparse_node>> nodes;
@@ -1636,7 +1636,8 @@ class streaming_hash_join_impl {
             cudaMemsetAsync(delta->overlaps_prior->data(), 0, sizeof(int), stream.get()));
         }
         if (defer_preseal_build && row_bitmask) {
-          delta->valid_rows = std::make_unique<rmm::device_buffer>(std::move(*row_bitmask));
+          delta->valid_rows =
+            std::make_unique<cuda::device_buffer<std::byte>>(std::move(*row_bitmask));
         }
         delta->slots = std::make_unique<rmm::device_uvector<cuda::std::uint32_t>>(
           batch_rows, stream, mr.get_output_mr());
@@ -1657,7 +1658,7 @@ class streaming_hash_join_impl {
                                          0,
                                          stream.get()>>>(
             batch_rows,
-            row_bitmask ? static_cast<bitmask_type const*>(row_bitmask->data()) : nullptr,
+            row_bitmask ? reinterpret_cast<bitmask_type const*>(row_bitmask->data()) : nullptr,
             batch_id,
             old_inserted_rows,
             delta->slots->data(),
@@ -1985,7 +1986,8 @@ class streaming_hash_join_impl {
       auto const& delta = base_delta_batches[batch];
       if (!delta || delta->slots->size() == 0) { continue; }
       base_delta_build_descriptors_host.push_back(
-        {delta->valid_rows ? static_cast<bitmask_type const*>(delta->valid_rows->data()) : nullptr,
+        {delta->valid_rows ? reinterpret_cast<bitmask_type const*>(delta->valid_rows->data())
+                           : nullptr,
          delta->slots->data(),
          static_cast<size_type>(delta->slots->size()),
          input_begin,
@@ -2348,13 +2350,14 @@ class streaming_hash_join_impl {
       row::equality::preprocessed_table::create(left, stream, resources.get_temporary_mr());
     auto const rights = std::span{preprocessed_right}.first(
       static_cast<std::size_t>(inserted_batches.load(std::memory_order_relaxed)));
-    auto const valid_rows = [&]() -> std::optional<rmm::device_buffer> {
+    auto const valid_rows = [&]() -> std::optional<cuda::device_buffer<std::byte>> {
       if (compare_nulls == null_equality::UNEQUAL && nullable(left)) {
         return cudf::detail::bitmask_and(left, stream, resources.get_temporary_mr()).first;
       }
       return std::nullopt;
     }();
-    auto const mask = valid_rows ? static_cast<bitmask_type const*>(valid_rows->data()) : nullptr;
+    auto const mask =
+      valid_rows ? reinterpret_cast<bitmask_type const*>(valid_rows->data()) : nullptr;
     if (cudf::detail::is_primitive_row_op_compatible(left)) {
       auto const comparators = make_device_primitive_row_comparators(preprocessed_left,
                                                                      rights,
