@@ -126,7 +126,21 @@ jobs:
       sha: ${{ inputs.sha }}
       pure-conda: cuda_major
   upload-conda:
-    if: ${{ inputs.build_type != 'release-candidate' }}
+    if: >-
+      ${{ inputs.build_type != 'release-candidate'
+      && github.event.inputs.build_type != 'release-candidate'
+      && !startsWith(github.ref, 'refs/heads/release-test-')
+      && !startsWith(github.ref_name, 'release-test-')
+      && !startsWith(github.head_ref, 'release-test-')
+      && !startsWith(github.head_ref, 'refs/heads/release-test-')
+      && !startsWith(inputs.branch, 'release-test-')
+      && !startsWith(inputs.branch, 'refs/heads/release-test-')
+      && github.ref != 'agent/release-catalog-canary'
+      && github.ref != 'refs/heads/agent/release-catalog-canary'
+      && github.head_ref != 'agent/release-catalog-canary'
+      && github.head_ref != 'refs/heads/agent/release-catalog-canary'
+      && inputs.branch != 'agent/release-catalog-canary'
+      && inputs.branch != 'refs/heads/agent/release-catalog-canary' }}
     needs: [cpp-build, python-build, python-build-noarch]
     permissions:
       actions: read
@@ -175,7 +189,22 @@ jobs:
       script: "ci/build_docs.sh"
       sha: ${{ inputs.sha }}
   publish-api-docs:
-    if: ${{ inputs.build_type != 'release-candidate' && github.ref_type == 'branch' }}
+    if: >-
+      ${{ inputs.build_type != 'release-candidate'
+      && github.event.inputs.build_type != 'release-candidate'
+      && github.ref_type == 'branch'
+      && !startsWith(github.ref, 'refs/heads/release-test-')
+      && !startsWith(github.ref_name, 'release-test-')
+      && !startsWith(github.head_ref, 'release-test-')
+      && !startsWith(github.head_ref, 'refs/heads/release-test-')
+      && !startsWith(inputs.branch, 'release-test-')
+      && !startsWith(inputs.branch, 'refs/heads/release-test-')
+      && github.ref != 'agent/release-catalog-canary'
+      && github.ref != 'refs/heads/agent/release-catalog-canary'
+      && github.head_ref != 'agent/release-catalog-canary'
+      && github.head_ref != 'refs/heads/agent/release-catalog-canary'
+      && inputs.branch != 'agent/release-catalog-canary'
+      && inputs.branch != 'refs/heads/agent/release-catalog-canary' }}
     needs: [docs-build]
     permissions:
       contents: read
@@ -216,7 +245,21 @@ jobs:
       candidate-train-sha256: ${{ inputs.candidate-train-sha256 }}
       node_type: cpu16
   wheel-publish-libcudf:
-    if: ${{ inputs.build_type != 'release-candidate' }}
+    if: >-
+      ${{ inputs.build_type != 'release-candidate'
+      && github.event.inputs.build_type != 'release-candidate'
+      && !startsWith(github.ref, 'refs/heads/release-test-')
+      && !startsWith(github.ref_name, 'release-test-')
+      && !startsWith(github.head_ref, 'release-test-')
+      && !startsWith(github.head_ref, 'refs/heads/release-test-')
+      && !startsWith(inputs.branch, 'release-test-')
+      && !startsWith(inputs.branch, 'refs/heads/release-test-')
+      && github.ref != 'agent/release-catalog-canary'
+      && github.ref != 'refs/heads/agent/release-catalog-canary'
+      && github.head_ref != 'agent/release-catalog-canary'
+      && github.head_ref != 'refs/heads/agent/release-catalog-canary'
+      && inputs.branch != 'agent/release-catalog-canary'
+      && inputs.branch != 'refs/heads/agent/release-catalog-canary' }}
     needs: wheel-build
     permissions:
       actions: read
@@ -238,7 +281,21 @@ jobs:
       # trailing underscore to avoid collision with `libcudf-streaming`
       publish-wheel-search-key: cudf_wheel_cpp_libcudf_
   wheel-publish-libcudf-streaming:
-    if: ${{ inputs.build_type != 'release-candidate' }}
+    if: >-
+      ${{ inputs.build_type != 'release-candidate'
+      && github.event.inputs.build_type != 'release-candidate'
+      && !startsWith(github.ref, 'refs/heads/release-test-')
+      && !startsWith(github.ref_name, 'release-test-')
+      && !startsWith(github.head_ref, 'release-test-')
+      && !startsWith(github.head_ref, 'refs/heads/release-test-')
+      && !startsWith(inputs.branch, 'release-test-')
+      && !startsWith(inputs.branch, 'refs/heads/release-test-')
+      && github.ref != 'agent/release-catalog-canary'
+      && github.ref != 'refs/heads/agent/release-catalog-canary'
+      && github.head_ref != 'agent/release-catalog-canary'
+      && github.head_ref != 'refs/heads/agent/release-catalog-canary'
+      && inputs.branch != 'agent/release-catalog-canary'
+      && inputs.branch != 'refs/heads/agent/release-catalog-canary' }}
     needs: wheel-build
     permissions:
       actions: read
@@ -259,7 +316,21 @@ jobs:
       package-type: cpp
       publish-wheel-search-key: cudf_wheel_cpp_libcudf-streaming
   wheel-publish-cudf-streaming:
-    if: ${{ inputs.build_type != 'release-candidate' }}
+    if: >-
+      ${{ inputs.build_type != 'release-candidate'
+      && github.event.inputs.build_type != 'release-candidate'
+      && !startsWith(github.ref, 'refs/heads/release-test-')
+      && !startsWith(github.ref_name, 'release-test-')
+      && !startsWith(github.head_ref, 'release-test-')
+      && !startsWith(github.head_ref, 'refs/heads/release-test-')
+      && !startsWith(inputs.branch, 'release-test-')
+      && !startsWith(inputs.branch, 'refs/heads/release-test-')
+      && github.ref != 'agent/release-catalog-canary'
+      && github.ref != 'refs/heads/agent/release-catalog-canary'
+      && github.head_ref != 'agent/release-catalog-canary'
+      && github.head_ref != 'refs/heads/agent/release-catalog-canary'
+      && inputs.branch != 'agent/release-catalog-canary'
+      && inputs.branch != 'refs/heads/agent/release-catalog-canary' }}
     needs: wheel-build
     permissions:
       actions: read
@@ -280,7 +351,21 @@ jobs:
       package-type: python
       publish-wheel-search-key: cudf_wheel_python_cudf-streaming
   wheel-publish-pylibcudf:
-    if: ${{ inputs.build_type != 'release-candidate' }}
+    if: >-
+      ${{ inputs.build_type != 'release-candidate'
+      && github.event.inputs.build_type != 'release-candidate'
+      && !startsWith(github.ref, 'refs/heads/release-test-')
+      && !startsWith(github.ref_name, 'release-test-')
+      && !startsWith(github.head_ref, 'release-test-')
+      && !startsWith(github.head_ref, 'refs/heads/release-test-')
+      && !startsWith(inputs.branch, 'release-test-')
+      && !startsWith(inputs.branch, 'refs/heads/release-test-')
+      && github.ref != 'agent/release-catalog-canary'
+      && github.ref != 'refs/heads/agent/release-catalog-canary'
+      && github.head_ref != 'agent/release-catalog-canary'
+      && github.head_ref != 'refs/heads/agent/release-catalog-canary'
+      && inputs.branch != 'agent/release-catalog-canary'
+      && inputs.branch != 'refs/heads/agent/release-catalog-canary' }}
     needs: wheel-build
     permissions:
       actions: read
@@ -299,7 +384,21 @@ jobs:
       package-type: python
       publish-wheel-search-key: cudf_wheel_python_pylibcudf
   wheel-publish-cudf:
-    if: ${{ inputs.build_type != 'release-candidate' }}
+    if: >-
+      ${{ inputs.build_type != 'release-candidate'
+      && github.event.inputs.build_type != 'release-candidate'
+      && !startsWith(github.ref, 'refs/heads/release-test-')
+      && !startsWith(github.ref_name, 'release-test-')
+      && !startsWith(github.head_ref, 'release-test-')
+      && !startsWith(github.head_ref, 'refs/heads/release-test-')
+      && !startsWith(inputs.branch, 'release-test-')
+      && !startsWith(inputs.branch, 'refs/heads/release-test-')
+      && github.ref != 'agent/release-catalog-canary'
+      && github.ref != 'refs/heads/agent/release-catalog-canary'
+      && github.head_ref != 'agent/release-catalog-canary'
+      && github.head_ref != 'refs/heads/agent/release-catalog-canary'
+      && inputs.branch != 'agent/release-catalog-canary'
+      && inputs.branch != 'refs/heads/agent/release-catalog-canary' }}
     needs: wheel-build
     permissions:
       actions: read
@@ -340,7 +439,21 @@ jobs:
       node_type: cpu8
       pure-wheel: true
   wheel-publish-dask-cudf:
-    if: ${{ inputs.build_type != 'release-candidate' }}
+    if: >-
+      ${{ inputs.build_type != 'release-candidate'
+      && github.event.inputs.build_type != 'release-candidate'
+      && !startsWith(github.ref, 'refs/heads/release-test-')
+      && !startsWith(github.ref_name, 'release-test-')
+      && !startsWith(github.head_ref, 'release-test-')
+      && !startsWith(github.head_ref, 'refs/heads/release-test-')
+      && !startsWith(inputs.branch, 'release-test-')
+      && !startsWith(inputs.branch, 'refs/heads/release-test-')
+      && github.ref != 'agent/release-catalog-canary'
+      && github.ref != 'refs/heads/agent/release-catalog-canary'
+      && github.head_ref != 'agent/release-catalog-canary'
+      && github.head_ref != 'refs/heads/agent/release-catalog-canary'
+      && inputs.branch != 'agent/release-catalog-canary'
+      && inputs.branch != 'refs/heads/agent/release-catalog-canary' }}
     needs: wheel-python-build-noarch
     permissions:
       actions: read
@@ -359,7 +472,21 @@ jobs:
       package-type: python
       publish-wheel-search-key: cudf_wheel_python_dask-cudf
   wheel-publish-cudf-polars:
-    if: ${{ inputs.build_type != 'release-candidate' }}
+    if: >-
+      ${{ inputs.build_type != 'release-candidate'
+      && github.event.inputs.build_type != 'release-candidate'
+      && !startsWith(github.ref, 'refs/heads/release-test-')
+      && !startsWith(github.ref_name, 'release-test-')
+      && !startsWith(github.head_ref, 'release-test-')
+      && !startsWith(github.head_ref, 'refs/heads/release-test-')
+      && !startsWith(inputs.branch, 'release-test-')
+      && !startsWith(inputs.branch, 'refs/heads/release-test-')
+      && github.ref != 'agent/release-catalog-canary'
+      && github.ref != 'refs/heads/agent/release-catalog-canary'
+      && github.head_ref != 'agent/release-catalog-canary'
+      && github.head_ref != 'refs/heads/agent/release-catalog-canary'
+      && inputs.branch != 'agent/release-catalog-canary'
+      && inputs.branch != 'refs/heads/agent/release-catalog-canary' }}
     needs: wheel-python-build-noarch
     permissions:
       actions: read
@@ -421,7 +548,21 @@ jobs:
       - name: Telemetry summarize
         uses: rapidsai/shared-actions/telemetry-dispatch-summarize@main
   devcontainers:
-    if: ${{ inputs.build_type != 'release-candidate' }}
+    if: >-
+      ${{ inputs.build_type != 'release-candidate'
+      && github.event.inputs.build_type != 'release-candidate'
+      && !startsWith(github.ref, 'refs/heads/release-test-')
+      && !startsWith(github.ref_name, 'release-test-')
+      && !startsWith(github.head_ref, 'release-test-')
+      && !startsWith(github.head_ref, 'refs/heads/release-test-')
+      && !startsWith(inputs.branch, 'release-test-')
+      && !startsWith(inputs.branch, 'refs/heads/release-test-')
+      && github.ref != 'agent/release-catalog-canary'
+      && github.ref != 'refs/heads/agent/release-catalog-canary'
+      && github.head_ref != 'agent/release-catalog-canary'
+      && github.head_ref != 'refs/heads/agent/release-catalog-canary'
+      && inputs.branch != 'agent/release-catalog-canary'
+      && inputs.branch != 'refs/heads/agent/release-catalog-canary' }}
     name: Build devcontainers
     secrets: inherit  # zizmor: ignore[secrets-inherit]
     uses: rapidsai/shared-workflows/.github/workflows/build-devcontainers.yaml@main
@@ -518,7 +659,21 @@ jobs:
   # Publisher Portal). Other runs -> Sonatype snapshots (immediate, overwrites
   # -SNAPSHOT).
   java-publish:
-    if: ${{ inputs.build_type != 'release-candidate' }}
+    if: >-
+      ${{ inputs.build_type != 'release-candidate'
+      && github.event.inputs.build_type != 'release-candidate'
+      && !startsWith(github.ref, 'refs/heads/release-test-')
+      && !startsWith(github.ref_name, 'release-test-')
+      && !startsWith(github.head_ref, 'release-test-')
+      && !startsWith(github.head_ref, 'refs/heads/release-test-')
+      && !startsWith(inputs.branch, 'release-test-')
+      && !startsWith(inputs.branch, 'refs/heads/release-test-')
+      && github.ref != 'agent/release-catalog-canary'
+      && github.ref != 'refs/heads/agent/release-catalog-canary'
+      && github.head_ref != 'agent/release-catalog-canary'
+      && github.head_ref != 'refs/heads/agent/release-catalog-canary'
+      && inputs.branch != 'agent/release-catalog-canary'
+      && inputs.branch != 'refs/heads/agent/release-catalog-canary' }}
     needs: [java-gather]
     permissions:
       actions: read
