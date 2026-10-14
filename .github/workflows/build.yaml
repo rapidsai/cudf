@@ -41,7 +41,7 @@ permissions: {}
 
 jobs:
   build-details:
-    uses: rapidsai/shared-workflows/.github/workflows/compute-build-details.yaml@db1cddb6cdf80d1836de64085bb653bea4571867
+    uses: rapidsai/shared-workflows/.github/workflows/compute-build-details.yaml@cbf3d64a73fd7b44ee70cebdb50c175b495f6b29
   telemetry-setup:
     permissions:
       id-token: write
@@ -78,7 +78,7 @@ jobs:
       id-token: write
       packages: read
       pull-requests: read
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@db1cddb6cdf80d1836de64085bb653bea4571867
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@cbf3d64a73fd7b44ee70cebdb50c175b495f6b29
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       build-datetime: ${{ needs.build-details.outputs.build-datetime }}
@@ -96,7 +96,7 @@ jobs:
       id-token: write
       packages: read
       pull-requests: read
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@db1cddb6cdf80d1836de64085bb653bea4571867
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@cbf3d64a73fd7b44ee70cebdb50c175b495f6b29
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       build-datetime: ${{ needs.build-details.outputs.build-datetime }}
@@ -115,7 +115,7 @@ jobs:
       id-token: write
       packages: read
       pull-requests: read
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@db1cddb6cdf80d1836de64085bb653bea4571867
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@cbf3d64a73fd7b44ee70cebdb50c175b495f6b29
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       build-datetime: ${{ needs.build-details.outputs.build-datetime }}
@@ -576,7 +576,7 @@ jobs:
     needs: [telemetry-setup]
     permissions:
       contents: read
-    uses: rapidsai/shared-workflows/.github/workflows/compute-matrix.yaml@db1cddb6cdf80d1836de64085bb653bea4571867
+    uses: rapidsai/shared-workflows/.github/workflows/compute-matrix.yaml@cbf3d64a73fd7b44ee70cebdb50c175b495f6b29
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       matrix_name: conda-cpp-build
@@ -590,7 +590,7 @@ jobs:
       id-token: write
       packages: read
       pull-requests: read
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@db1cddb6cdf80d1836de64085bb653bea4571867
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@cbf3d64a73fd7b44ee70cebdb50c175b495f6b29
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.java-build-matrix.outputs.matrix) }}
