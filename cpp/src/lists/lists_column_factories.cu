@@ -36,8 +36,7 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
   }
   // The 1-row column is the result when `size == 1`; otherwise it is an intermediate input to
   // the gather below.
-  auto const temp_mr = mr.get_temporary_mr();
-  auto const row_mr  = size == 1 ? mr : cudf::memory_resources{temp_mr, temp_mr};
+  auto const row_mr = size == 1 ? mr : mr.as_temporary();
 
   // Handcraft a 1-row column
   auto sizes_itr = cuda::constant_iterator<size_type>(value.view().size());
