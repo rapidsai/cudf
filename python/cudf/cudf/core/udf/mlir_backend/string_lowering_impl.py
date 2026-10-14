@@ -15,6 +15,8 @@ from numba_cuda_mlir._mlir.dialects import arith, llvm, scf
 from numba_cuda_mlir._mlir.extras import types as T
 from numba_cuda_mlir.lowering_utilities import GEP_DYNAMIC_INDEX
 
+from pylibcudf.strings.char_types import StringCharacterTypes
+
 
 def _byte_at(data: ir.Value, idx: ir.Value) -> ir.Value:
     """Load ``data[idx]`` as ``i8`` via a dynamic GEP on the ``i8*`` buffer."""
@@ -376,17 +378,18 @@ def _lower_contains(container: ir.Value, target: ir.Value) -> ir.Value:
 
 
 # --- character-class predicates (libcudf flags table) ----------------------
-# Flag bits from cudf::strings::string_character_types.
-_CT_DECIMAL = 1 << 0
-_CT_NUMERIC = 1 << 1
-_CT_DIGIT = 1 << 2
-_CT_ALPHA = 1 << 3
-_CT_SPACE = 1 << 4
-_CT_UPPER = 1 << 5
-_CT_LOWER = 1 << 6
-_CT_ALPHANUM = _CT_DECIMAL | _CT_NUMERIC | _CT_DIGIT | _CT_ALPHA
-_CT_CASE_TYPES = _CT_UPPER | _CT_LOWER
-_CT_ALL_TYPES = _CT_ALPHANUM | _CT_CASE_TYPES | _CT_SPACE
+# Flag bits sourced directly from the public ``cudf::strings`` enum so the
+# values stay in sync with libcudf rather than being duplicated here.
+_CT_DECIMAL = int(StringCharacterTypes.DECIMAL)
+_CT_NUMERIC = int(StringCharacterTypes.NUMERIC)
+_CT_DIGIT = int(StringCharacterTypes.DIGIT)
+_CT_ALPHA = int(StringCharacterTypes.ALPHA)
+_CT_SPACE = int(StringCharacterTypes.SPACE)
+_CT_UPPER = int(StringCharacterTypes.UPPER)
+_CT_LOWER = int(StringCharacterTypes.LOWER)
+_CT_ALPHANUM = int(StringCharacterTypes.ALPHANUM)
+_CT_CASE_TYPES = int(StringCharacterTypes.CASE_TYPES)
+_CT_ALL_TYPES = int(StringCharacterTypes.ALL_TYPES)
 
 
 def _utf8_byte_width(first_byte: ir.Value) -> ir.Value:

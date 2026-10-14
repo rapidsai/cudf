@@ -10,14 +10,11 @@ from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
-cdef extern from "cudf/strings/detail/char_tables.hpp" \
-        namespace "cudf::strings::detail" nogil:
-    cdef const uint8_t* get_character_flags_table() \
-        except +libcudf_exception_handler
-
-
 cdef extern from "cudf/strings/char_types/char_types.hpp" \
         namespace "cudf::strings" nogil:
+
+    cdef const uint8_t* get_character_flags_table() \
+        except +libcudf_exception_handler
 
     cpdef enum class string_character_types(uint32_t):
         DECIMAL
