@@ -249,6 +249,13 @@ ConfigureNVBench(
   groupby/group_struct_keys.cpp
   groupby/group_struct_values.cpp
   groupby/group_sum.cpp
+  groupby/streaming_groupby.cpp
+)
+
+ConfigureNVBench(STREAMING_STRESS_NVBENCH groupby/streaming_stress.cpp)
+ConfigureNVBench(STREAMING_LONG_STRING_NVBENCH groupby/streaming_long_string.cpp)
+ConfigureNVBench(
+  STREAMING_KEY_LOCATION_BOUNDARY_NVBENCH groupby/streaming_key_location_boundary.cpp
 )
 
 # ##################################################################################################

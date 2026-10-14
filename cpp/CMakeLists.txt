@@ -785,6 +785,7 @@ add_library(
   src/groupby/sort/sort_helper_nested.cu
   src/groupby/streaming_groupby.cpp
   src/groupby/streaming_groupby/aggregate.cu
+  src/groupby/streaming_groupby/peer_aggregate.cu
   src/groupby/streaming_groupby/impl.cu
   src/groupby/streaming_groupby/insert.cu
   src/groupby/streaming_groupby/insert_first.cu
