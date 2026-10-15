@@ -495,5 +495,4 @@ jobs:
     with:
       artifact-name: cudf_java_maven_repo
       source-git-sha: ${{ inputs.sha || github.sha }}
-      publish-to-maven-central: true
       docs-project: cudf-java
