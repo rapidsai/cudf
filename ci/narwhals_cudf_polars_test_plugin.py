@@ -17,6 +17,12 @@ TESTS_TO_SKIP: Mapping[str, str] = {}
 
 
 EXPECTED_FAILURES: Mapping[str, str] = {
+    "tests/frame/interchange_native_namespace_test.py::test_interchange": "Polars 2.0 removed the dataframe interchange protocol (`__dataframe__`).",
+    "tests/frame/interchange_schema_test.py::test_interchange_schema": "Polars 2.0 removed the dataframe interchange protocol (`__dataframe__`).",
+    "tests/frame/interchange_schema_test.py::test_interchange_schema_float16": "Polars 2.0 removed the dataframe interchange protocol (`__dataframe__`).",
+    "tests/frame/interchange_schema_test.py::test_invalid": "Polars 2.0 removed the dataframe interchange protocol (`__dataframe__`).",
+    "tests/frame/interchange_to_arrow_test.py::test_interchange_to_arrow": "Polars 2.0 removed the dataframe interchange protocol (`__dataframe__`).",
+    "tests/v1_test.py::test_get_level": "Polars 2.0 removed the dataframe interchange protocol (`__dataframe__`).",
     "tests/expr_and_series/str/zfill_test.py::test_str_zfill[polars[lazy]-non_ascii]": "cudf-polars zfill only supports ascii strings.",
     "tests/expr_and_series/str/zfill_test.py::test_str_zfill[polars[lazy]-non_ascii_plus_w3]": "cudf-polars zfill only supports ascii strings.",
     "tests/expr_and_series/str/zfill_test.py::test_str_zfill[polars[lazy]-non_ascii_plus_w4]": "cudf-polars zfill only supports ascii strings.",

@@ -351,6 +351,7 @@ EXPECTED_FAILURES: dict[str, str] = {
 
 
 TESTS_TO_SKIP: dict[str, str] = {
+    "tests/unit/io/test_delta.py::test_scan_delta_loads_aws_profile_endpoint_url": "Does not use the GPU engine; fails whenever AWS_DEFAULT_REGION is set, as in CI",
     # CI has shown two different failure modes across runs (a PanicException on
     # an invalid datetime, and garbage/uninitialized-looking datetime values),
     # suggesting a real non-deterministic bug in CSV datetime fallback parsing
@@ -545,9 +546,6 @@ STREAMING_ENGINE_TESTS_TO_SKIP_SMALL_BLOCKSIZE: Mapping[str, str] = {
 }
 
 STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
-    "tests/unit/io/test_parquet.py::test_resolve_metadata_cache_distinguishes_source_sets": "Fanout copy of a row-count-only table chunk fails with 'packed data cannot be empty'",
-    "tests/unit/sql/test_joins.py::test_cross_join_unnest_from_cte": "Fanout copy of a row-count-only table chunk fails with 'packed data cannot be empty'",
-    "tests/unit/sql/test_set_ops.py::test_union_with_join_state_isolation": "Fanout copy of a row-count-only table chunk fails with 'packed data cannot be empty'",
     "tests/unit/sql/test_subqueries.py::test_scalar_subquery_multi_row_errors": "Correct polars.exceptions.ComputeError raised but it's in an ExceptionGroup",
     "tests/unit/functions/test_union.py::test_union_lazyframe_horizontal": "Correct polars.exceptions.ShapeError raised but it's in an ExceptionGroup",
     "tests/unit/functions/test_concat.py::test_concat_lazyframe_horizontal": "Correct polars.exceptions.ShapeError raised but it's in an ExceptionGroup",
