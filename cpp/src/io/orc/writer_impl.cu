@@ -1361,9 +1361,12 @@ wall_clock_columns make_wall_clock_columns(orc_table_view const& orc_table,
     }
   }
 
-  return {std::move(data),
-          cudf::detail::make_device_buffer_async(views, stream, mr),
-          cudf::detail::make_device_buffer_async(host_indices, stream, mr)};
+  auto columns = cudf::detail::make_device_buffer_async(views, stream, mr);
+  auto indices = cudf::detail::make_device_buffer_async(host_indices, stream, mr);
+  // The copies read their host sources in stream order, so finish them before those go out of scope
+  cudf::detail::sync_stream(stream);
+
+  return {std::move(data), std::move(columns), std::move(indices)};
 }
 
 void set_stat_desc_leaf_cols(device_span<orc_column_device_view const> columns,
