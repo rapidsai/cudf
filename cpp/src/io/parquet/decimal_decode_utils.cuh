@@ -13,6 +13,7 @@
 #include <cuda/std/cstdint>
 #include <cuda/std/cstring>
 #include <cuda/std/optional>
+#include <cuda/std/utility>
 
 namespace cudf::io::parquet::detail {
 
@@ -74,7 +75,7 @@ template <typename T>
   }
   cuda::std::memcpy(&length, data + offset, sizeof(length));
   offset += sizeof(length);
-  if (length > static_cast<uint32_t>(size - offset)) { return cuda::std::nullopt; }
+  if (cuda::std::cmp_greater(length, size - offset)) { return cuda::std::nullopt; }
 
   auto const value = decode_big_endian_decimal<T>(data + offset, static_cast<int32_t>(length));
   offset += static_cast<int32_t>(length);

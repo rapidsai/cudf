@@ -2406,14 +2406,17 @@ TYPED_TEST(ByteArrayDecimalDictTest, FilterRowGroups)
   auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
     metadata, cudf::io::parquet_reader_options::builder().build());
 
-  auto const col_ref = cudf::ast::column_name_reference("dec");
+  auto const col_ref            = cudf::ast::column_name_reference("dec");
+  auto const make_literal_value = [&](int64_t value) {
+    return cudf::fixed_point_scalar<T>(
+      static_cast<typename T::rep>(value), numeric::scale_type{-scale}, true, stream);
+  };
 
   for (auto const& [value, expected_row_groups] :
        {std::pair{-3 * step, std::vector<cudf::size_type>{0}},
         std::pair{-3 * step + 1, std::vector<cudf::size_type>{1}},
         std::pair{-3 * step + 2, std::vector<cudf::size_type>{}}}) {
-    auto literal_value = cudf::fixed_point_scalar<T>(
-      static_cast<typename T::rep>(value), numeric::scale_type{-scale}, true, stream);
+    auto literal_value = make_literal_value(value);
     auto const literal = cudf::ast::literal(literal_value);
     auto const filter_expression =
       cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref, literal);
@@ -2422,5 +2425,25 @@ TYPED_TEST(ByteArrayDecimalDictTest, FilterRowGroups)
     EXPECT_EQ(
       filter_row_groups_with_dictionaries(*datasources.front(), *reader, options, stream, mr),
       expected_row_groups);
+  }
+
+  // Many literals path - only row group 1 should survive
+  {
+    auto literal_value0 = make_literal_value(-3 * step + 1);
+    auto literal_value1 = make_literal_value(-3 * step + 2);
+    auto literal_value2 = make_literal_value(-3 * step + 3);
+    auto const literal0 = cudf::ast::literal(literal_value0);
+    auto const literal1 = cudf::ast::literal(literal_value1);
+    auto const literal2 = cudf::ast::literal(literal_value2);
+    auto const equal0   = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref, literal0);
+    auto const equal1   = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref, literal1);
+    auto const equal2   = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref, literal2);
+    auto const equal01  = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, equal0, equal1);
+    auto const equal012 =
+      cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, equal01, equal2);
+    auto const options = cudf::io::parquet_reader_options::builder().filter(equal012).build();
+    EXPECT_EQ(
+      filter_row_groups_with_dictionaries(*datasources.front(), *reader, options, stream, mr),
+      std::vector<cudf::size_type>{1});
   }
 }
