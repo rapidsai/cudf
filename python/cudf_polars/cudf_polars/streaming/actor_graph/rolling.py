@@ -7,6 +7,7 @@ from __future__ import annotations
 import struct
 from contextlib import nullcontext
 from dataclasses import dataclass, field
+from enum import IntEnum
 from typing import TYPE_CHECKING, Any, cast
 
 import pylibcudf as plc
@@ -66,11 +67,19 @@ RowRange = tuple[int, int]
 RangeValues = tuple[Any, Any, Any, Any]
 
 
+class RangeValidation(IntEnum):
+    """Validation status for one rank's range index."""
+
+    VALID = 0
+    NULL = 1
+    UNSORTED = 2
+    OUT_OF_BOUNDS = 3
+
+
 @dataclass
 class BufferedChunk:
     """An input chunk with its global row span."""
 
-    sequence_number: int
     chunk: TableChunk
     row_start: int
     num_rows: int
@@ -103,10 +112,10 @@ class RangeBufferedChunk(BufferedChunk):
 
 @dataclass
 class StagedChunk[BufferedChunkT: BufferedChunk]:
-    """A prepared chunk and its output sequence number when locally owned."""
+    """A prepared chunk marked as locally owned or ghost data."""
 
     chunk: BufferedChunkT
-    output_sequence_number: int | None = None
+    owned: bool
 
 
 @dataclass(frozen=True)
@@ -129,11 +138,12 @@ class RangeInputSummary:
     first_value: int | None
     last_value: int | None
     chunk_bounds: tuple[RangeChunkBounds, ...]
+    validation: RangeValidation
 
     @property
     def has_rows(self) -> bool:
         """Return whether this rank has any rows."""
-        return bool(self.chunk_bounds)
+        return self.local_rows != 0
 
 
 @dataclass(frozen=True)
@@ -145,6 +155,7 @@ class RangeRequests:
     upper_values: tuple[Any | None, ...]
     first_values: tuple[Any | None, ...]
     last_values: tuple[Any | None, ...]
+    validations: tuple[RangeValidation, ...]
 
 
 class RollingInput[BufferedChunkT: BufferedChunk]:
@@ -169,8 +180,8 @@ class RollingInput[BufferedChunkT: BufferedChunk]:
         self._buffer: BufferedInput | None = None
         self._exchange: RowExchange | None = None
         self._replay_channel = context.create_channel() if self.multirank else None
-        self._staged: dict[int, int | None] = {}
-        self._range_values: dict[int, RangeValues] = {}
+        self._owned: tuple[int, int] | None = None
+        self._buffered_range_values: list[RangeValues | None] = []
 
     async def __aenter__(self) -> RollingInput[BufferedChunkT]:
         """Prepare ghost exchange when input spans multiple ranks."""
@@ -202,27 +213,30 @@ class RollingInput[BufferedChunkT: BufferedChunk]:
         channel = self._replay_channel if self.multirank else self.ch_in
         assert channel is not None
         row_offset = 0
+        replay_position = 0
         while (msg := await channel.recv(self.context)) is not None:
-            output_sequence_number = (
-                self._staged.pop(msg.sequence_number)
-                if self.multirank
-                else msg.sequence_number
-            )
+            owned = not self.multirank
+            host_values = None
+            if self.multirank and self._owned is not None:
+                owned_start, owned_count = self._owned
+                owned = owned_start <= replay_position < owned_start + owned_count
+                if owned and isinstance(self.policy, RangeOverlapPolicy):
+                    host_values = self._buffered_range_values[
+                        replay_position - owned_start
+                    ]
             if (
                 self.multirank
                 and isinstance(self.policy, RangeOverlapPolicy)
-                and output_sequence_number in self._range_values
+                and host_values is not None
             ):
-                sequence_number = msg.sequence_number
                 table_chunk = TableChunk.from_message(msg, br=self.context.br())
                 chunk = cast(
                     "BufferedChunkT",
                     await self.policy.prepare_table_chunk(
                         self.context,
-                        sequence_number,
                         table_chunk,
                         row_offset=row_offset,
-                        host_values=self._range_values[output_sequence_number],
+                        host_values=host_values,
                     ),
                 )
             else:
@@ -231,7 +245,8 @@ class RollingInput[BufferedChunkT: BufferedChunk]:
                 )
             self.policy.observe(chunk)
             row_offset = chunk.row_stop
-            yield StagedChunk(chunk, output_sequence_number)
+            replay_position += 1
+            yield StagedChunk(chunk, owned)
 
     async def _prepare_multirank(self) -> None:
         self._buffer = BufferedInput(self.context)
@@ -292,11 +307,10 @@ class RollingInput[BufferedChunkT: BufferedChunk]:
         assert self._buffer is not None
         row_offset = 0
         while (msg := await self.ch_in.recv(self.context)) is not None:
-            sequence_number = msg.sequence_number
             chunk = TableChunk.from_message(msg, br=self.context.br())
             nrows, _ = chunk.shape
             self._buffer.insert(
-                Message(sequence_number, chunk),
+                Message(0, chunk),
                 row_start=row_offset,
                 num_rows=nrows,
             )
@@ -309,41 +323,69 @@ class RollingInput[BufferedChunkT: BufferedChunk]:
         row_offset = 0
         bounds: list[RangeChunkBounds] = []
         lower = upper = first = last = None
+        validation = RangeValidation.VALID
+        previous_last = None
         while (msg := await self.ch_in.recv(self.context)) is not None:
-            sequence_number = msg.sequence_number
-            chunk = await self.policy.prepare_chunk(
-                self.context, msg, row_offset=row_offset
+            table_chunk = TableChunk.from_message(msg, br=self.context.br())
+            chunk = await self.policy.prepare_table_chunk(
+                self.context,
+                table_chunk,
+                row_offset=row_offset,
+                validate_index=False,
             )
             self.policy.observe(chunk)
             row_offset = chunk.row_stop
             if chunk.num_rows != 0:
                 overlap = chunk.overlap
-                assert overlap.first is not None
-                assert overlap.last is not None
-                bounds.append(
-                    RangeChunkBounds(
-                        chunk.row_start, chunk.row_stop, overlap.first, overlap.last
-                    )
+                chunk_validation = self.policy.index_validation(
+                    overlap.index_column, chunk.chunk.stream
                 )
-                if lower is None:
-                    lower = overlap.lower_bound
-                    first = overlap.first
-                upper = overlap.upper_bound
-                last = overlap.last
-                assert overlap.lower_bound is not None
-                assert overlap.upper_bound is not None
-                self._range_values[sequence_number] = (
+                if (
+                    chunk_validation is RangeValidation.VALID
+                    and previous_last is not None
+                    and overlap.first < previous_last
+                ):
+                    chunk_validation = RangeValidation.UNSORTED
+                if validation is RangeValidation.VALID:
+                    validation = chunk_validation
+                if chunk_validation is RangeValidation.VALID:
+                    bounds.append(
+                        RangeChunkBounds(
+                            chunk.row_start,
+                            chunk.row_stop,
+                            overlap.first,
+                            overlap.last,
+                        )
+                    )
+                    if lower is None:
+                        lower = overlap.lower_bound
+                        first = overlap.first
+                    upper = overlap.upper_bound
+                    last = overlap.last
+                    previous_last = overlap.last
+                host_values: RangeValues | None = (
                     overlap.first,
                     overlap.last,
                     overlap.lower_bound,
                     overlap.upper_bound,
                 )
+            else:
+                host_values = None
+            self._buffered_range_values.append(host_values)
             self._buffer.insert(
-                Message(sequence_number, chunk.chunk),
+                Message(0, chunk.chunk),
                 row_start=chunk.row_start,
                 num_rows=chunk.num_rows,
             )
-        return RangeInputSummary(row_offset, lower, upper, first, last, tuple(bounds))
+        return RangeInputSummary(
+            row_offset,
+            lower,
+            upper,
+            first,
+            last,
+            tuple(bounds),
+            validation,
+        )
 
     async def _replay(self) -> None:
         assert self._buffer is not None
@@ -352,26 +394,25 @@ class RollingInput[BufferedChunkT: BufferedChunk]:
         replay_channel = self._replay_channel
         sequence_number = 0
 
-        async def send(chunk: TableChunk, output: int | None = None) -> None:
-            nonlocal sequence_number
-            self._staged[sequence_number] = output
-            await replay_channel.send(self.context, Message(sequence_number, chunk))
-            sequence_number += 1
-
         for source in self._exchange.sources:
             if source < self.comm.rank:
                 for chunk in self._exchange.receive(source):
-                    await send(chunk)
+                    await replay_channel.send(
+                        self.context, Message(sequence_number, chunk)
+                    )
+                    sequence_number += 1
+        self._owned = (sequence_number, len(self._buffer.chunks))
         for msg in self._buffer.replay():
-            output_sequence_number = msg.sequence_number
-            await send(
-                TableChunk.from_message(msg, br=self.context.br()),
-                output_sequence_number,
-            )
+            chunk = TableChunk.from_message(msg, br=self.context.br())
+            await replay_channel.send(self.context, Message(sequence_number, chunk))
+            sequence_number += 1
         for source in self._exchange.sources:
             if source > self.comm.rank:
                 for chunk in self._exchange.receive(source):
-                    await send(chunk)
+                    await replay_channel.send(
+                        self.context, Message(sequence_number, chunk)
+                    )
+                    sequence_number += 1
         await replay_channel.drain(self.context)
 
 
@@ -438,12 +479,13 @@ class RollingManager:
         history: list[Any] = []
         future: list[StagedChunk[Any]] = []
         input_exhausted = False
+        output_sequence_number = 0
         chunks = aiter(rolling_input)
         staged = await anext(chunks, None)
         while staged is not None:
             cursor = staged.chunk
             self.policy.validate_cursor(self.context, cursor)
-            if staged.output_sequence_number is None:
+            if not staged.owned:
                 history.append(cursor)
             elif cursor.num_rows == 0:
                 result = await evaluate_chunk(
@@ -457,9 +499,10 @@ class RollingManager:
                     self.context,
                     ch_out,
                     result,
-                    staged.output_sequence_number,
+                    output_sequence_number,
                     tracer=tracer,
                 )
+                output_sequence_number += 1
             else:
                 history = self.policy.evict_history(history, cursor, self.context)
                 if not input_exhausted:
@@ -487,9 +530,10 @@ class RollingManager:
                     self.context,
                     ch_out,
                     result,
-                    staged.output_sequence_number,
+                    output_sequence_number,
                     tracer=tracer,
                 )
+                output_sequence_number += 1
             if future:
                 staged = future.pop(0)
             else:
@@ -851,18 +895,28 @@ class RangeOverlapPolicy(_RollingPolicy[RangeBufferedChunk]):
         # Needle is later than all the chunks we know about.
         return chunks[-1].row_stop
 
-    def validate_index_column(self, index_column: plc.Column, stream: Stream) -> None:
-        """Validate chunk-local ordering before using search primitives."""
+    @staticmethod
+    def index_validation(index_column: plc.Column, stream: Stream) -> RangeValidation:
+        """Return the validation status for one index column."""
         if index_column.null_count() != 0:
-            raise RuntimeError(
-                f"Index column '{self.index_name}' in rolling may not contain nulls"
-            )
+            return RangeValidation.NULL
         if index_column.size() > 1 and not plc.sorting.is_sorted(
             plc.Table([index_column]),
             [plc.types.Order.ASCENDING],
             [plc.types.NullOrder.BEFORE],
             stream=stream,
         ):
+            return RangeValidation.UNSORTED
+        return RangeValidation.VALID
+
+    def validate_index_column(self, index_column: plc.Column, stream: Stream) -> None:
+        """Validate chunk-local ordering before using search primitives."""
+        validation = self.index_validation(index_column, stream)
+        if validation is RangeValidation.NULL:
+            raise RuntimeError(
+                f"Index column '{self.index_name}' in rolling may not contain nulls"
+            )
+        if validation is RangeValidation.UNSORTED:
             raise RuntimeError(
                 f"Index column '{self.index_name}' in rolling is not sorted, "
                 "please sort first"
@@ -893,11 +947,9 @@ class RangeOverlapPolicy(_RollingPolicy[RangeBufferedChunk]):
         row_offset: int,
     ) -> RangeBufferedChunk:
         """Convert a message to a staged chunk and extract range metadata."""
-        sequence_number = msg.sequence_number
         chunk = TableChunk.from_message(msg, br=context.br())
         return await self.prepare_table_chunk(
             context,
-            sequence_number,
             chunk,
             row_offset=row_offset,
         )
@@ -905,12 +957,12 @@ class RangeOverlapPolicy(_RollingPolicy[RangeBufferedChunk]):
     async def prepare_table_chunk(
         self,
         context: Context,
-        sequence_number: int,
         chunk: TableChunk,
         *,
         row_offset: int,
         already_available: bool = False,
         host_values: RangeValues | None = None,
+        validate_index: bool = True,
     ) -> RangeBufferedChunk:
         """Extract range metadata from a table chunk."""
         nrows, _ = chunk.shape
@@ -926,7 +978,7 @@ class RangeOverlapPolicy(_RollingPolicy[RangeBufferedChunk]):
         memory_scope = nullcontext() if extra is None else opaque_memory_usage(extra)
         with memory_scope:
             index_column = chunk.table_view().columns()[self.index]
-            if host_values is None:
+            if host_values is None and validate_index:
                 self.validate_index_column(index_column, chunk.stream)
             if nrows == 0:
                 overlap = RangeOverlap(
@@ -974,7 +1026,7 @@ class RangeOverlapPolicy(_RollingPolicy[RangeBufferedChunk]):
                     upper_bound,
                     *host_values,
                 )
-        return RangeBufferedChunk(sequence_number, chunk, row_offset, nrows, overlap)
+        return RangeBufferedChunk(chunk, row_offset, nrows, overlap)
 
     def evict_history(
         self,
@@ -1084,7 +1136,7 @@ class RowCountOverlapPolicy(_RollingPolicy[BufferedChunk]):
         chunk, _ = await make_table_chunks_available_or_wait(
             context, chunk, reserve_extra=0, net_memory_delta=0
         )
-        return BufferedChunk(msg.sequence_number, chunk, row_offset, nrows)
+        return BufferedChunk(chunk, row_offset, nrows)
 
     def evict_history(
         self,
@@ -1134,7 +1186,6 @@ class RowCountOverlapPolicy(_RollingPolicy[BufferedChunk]):
         with opaque_memory_usage(reservation):
             table = table.copy(stream=stream, mr=context.br().device_mr)
         return BufferedChunk(
-            cursor.sequence_number,
             TableChunk.from_pylibcudf_table(
                 table,
                 stream,
@@ -1267,34 +1318,64 @@ async def _gather_range_requests(
     *,
     collective_id: int,
 ) -> RangeRequests:
+    range_values = (
+        summary.lower_value,
+        summary.upper_value,
+        summary.first_value,
+        summary.last_value,
+    )
+    validation = summary.validation
+    if any(
+        value is not None and not -(2**63) <= value < 2**63 for value in range_values
+    ):
+        validation = RangeValidation.OUT_OF_BOUNDS
     values = await _allgather_int64s(
         context,
         comm,
         summary.local_rows,
         int(summary.has_rows),
-        int(summary.lower_value or 0),
-        int(summary.upper_value or 0),
-        int(summary.first_value or 0),
-        int(summary.last_value or 0),
+        int(validation),
+        *(
+            value
+            if value is not None and validation is not RangeValidation.OUT_OF_BOUNDS
+            else 0
+            for value in range_values
+        ),
         collective_id=collective_id,
     )
     row_counts = tuple(item[0] for item in values)
-    raw_lower = tuple(item[2] if item[1] else None for item in values)
-    raw_upper = tuple(item[3] if item[1] else None for item in values)
-    first_values = tuple(item[4] if item[1] else None for item in values)
-    last_values = tuple(item[5] if item[1] else None for item in values)
+    validations = tuple(RangeValidation(item[2]) for item in values)
+    raw_lower = tuple(item[3] if item[1] else None for item in values)
+    raw_upper = tuple(item[4] if item[1] else None for item in values)
+    first_values = tuple(item[5] if item[1] else None for item in values)
+    last_values = tuple(item[6] if item[1] else None for item in values)
     return RangeRequests(
         row_counts,
         raw_lower,
         raw_upper,
         first_values,
         last_values,
+        validations,
     )
 
 
 def _validate_global_range_order(
     requests: RangeRequests, policy: RangeOverlapPolicy
 ) -> None:
+    if RangeValidation.OUT_OF_BOUNDS in requests.validations:
+        raise NotImplementedError(
+            "Multi-rank rolling does not support index values outside the signed "
+            "64-bit range"
+        )
+    if RangeValidation.NULL in requests.validations:
+        raise RuntimeError(
+            f"Index column '{policy.index_name}' in rolling may not contain nulls"
+        )
+    if RangeValidation.UNSORTED in requests.validations:
+        raise RuntimeError(
+            f"Index column '{policy.index_name}' in rolling is not sorted, "
+            "please sort first"
+        )
     previous_last = None
     for rank, row_count in enumerate(requests.row_counts):
         if not row_count:
@@ -1472,6 +1553,20 @@ async def rolling_actor(
         ir_context = actor_scope.require_ir_context()
         metadata_in = await recv_metadata(ch_in, context)
         with RollingManager(context, ir, ir_context) as manager:
+            await send_metadata(
+                ch_out,
+                context,
+                ChannelMetadata(
+                    local_count=metadata_in.local_count,
+                    partitioning=maybe_remap_partitioning(
+                        ir,
+                        metadata_in.partitioning,
+                        child_ir=ir.children[0],
+                        context=context,
+                    ),
+                    duplicated=metadata_in.duplicated,
+                ),
+            )
             async with RollingInput(
                 context,
                 comm,
@@ -1480,20 +1575,6 @@ async def rolling_actor(
                 metadata_in,
                 collective_id=collective_id,
             ) as rolling_input:
-                await send_metadata(
-                    ch_out,
-                    context,
-                    ChannelMetadata(
-                        local_count=metadata_in.local_count,
-                        partitioning=maybe_remap_partitioning(
-                            ir,
-                            metadata_in.partitioning,
-                            child_ir=ir.children[0],
-                            context=context,
-                        ),
-                        duplicated=metadata_in.duplicated,
-                    ),
-                )
                 if tracer is not None and metadata_in.duplicated:
                     tracer.set_duplicated()
                 execute = manager.execute(ch_out, tracer, rolling_input)

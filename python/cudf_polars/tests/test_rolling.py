@@ -189,6 +189,25 @@ def test_orderby_nulls_raises_computeerror(engine: pl.GPUEngine):
             q.collect(engine=engine)
 
 
+@pytest.mark.engine_params(["ray"])
+def test_rolling_uint64_out_of_bounds(engine: pl.GPUEngine):
+    df = pl.LazyFrame(
+        {
+            "orderby": pl.Series([2**63, 2**63 + 1], dtype=pl.UInt64),
+            "values": [1, 2],
+        }
+    )
+    q = df.rolling("orderby", period="2i").agg(sum=pl.sum("values"))
+
+    with pytest.RaisesGroup(
+        pytest.RaisesExc(
+            NotImplementedError,
+            match="outside the signed 64-bit range",
+        )
+    ):
+        q.collect(engine=engine)
+
+
 @pytest.mark.xfail(
     condition=not POLARS_VERSION_LT_136,
     reason="polars raises now",

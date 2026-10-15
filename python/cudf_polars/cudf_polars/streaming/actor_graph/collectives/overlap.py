@@ -30,7 +30,6 @@ class StoredChunk:
     """Storage ID and row span for one buffered chunk."""
 
     mid: int
-    sequence_number: int
     row_start: int
     num_rows: int
 
@@ -56,9 +55,8 @@ class BufferedInput:
 
     def insert(self, msg: Message, *, row_start: int, num_rows: int) -> None:
         """Store one input message and its rank-local row span."""
-        sequence_number = msg.sequence_number
         mid = self._store.insert(msg)
-        self._chunks.append(StoredChunk(mid, sequence_number, row_start, num_rows))
+        self._chunks.append(StoredChunk(mid, row_start, num_rows))
 
     def set_row_offset(self, row_offset: int) -> None:
         """Set the global row offset for this rank's input."""
