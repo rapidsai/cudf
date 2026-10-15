@@ -6,19 +6,16 @@
 
 #include <cudf/utilities/concepts.hpp>
 #include <cudf/utilities/export.hpp>
-#include <cudf/utilities/traits.hpp>
 
 #include <cuda/std/concepts>
 #include <cuda/std/optional>
-#include <cuda/std/type_traits>
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
 namespace ops {
 
 template <typename T>
-concept unsigned_integer =
-  cudf::concepts::integral_not_bool<T> && cuda::std::is_unsigned_v<cuda::std::remove_cv_t<T>>;
+concept unsigned_integer = concepts::integral_not_bool<T> && cuda::std::unsigned_integral<T>;
 
 template <typename T>
 constexpr bool is_nullable = false;

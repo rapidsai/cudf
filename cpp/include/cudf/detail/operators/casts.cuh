@@ -140,7 +140,7 @@ __device__ uint64_t cast_to_uint64(T a)
  */
 template <typename T>
 __device__ float cast_to_float32(T a)
-  requires(cuda::std::is_integral_v<T> || cuda::std::is_floating_point_v<T>)
+  requires(cuda::std::integral<T> || cuda::std::floating_point<T>)
 {
   return static_cast<float>(a);
 }
@@ -159,7 +159,7 @@ __device__ float cast_to_float32(numeric::decimal<R> a)
  */
 template <typename T>
 __device__ double cast_to_float64(T a)
-  requires(cuda::std::is_integral_v<T> || cuda::std::floating_point<T> || concepts::fixed_point<T>)
+  requires(cuda::std::integral<T> || cuda::std::floating_point<T>)
 {
   return static_cast<double>(a);
 }
