@@ -24,21 +24,21 @@ namespace cudf::experimental::detail {
 /**
  * @brief Implementation of an as-of join with a reusable right side.
  */
-class asof_join {
+class asof_join_impl {
  public:
-  asof_join()                            = delete;
-  ~asof_join()                           = default;
-  asof_join(asof_join const&)            = delete;
-  asof_join(asof_join&&)                 = delete;
-  asof_join& operator=(asof_join const&) = delete;
-  asof_join& operator=(asof_join&&)      = delete;
+  asof_join_impl()                                 = delete;
+  ~asof_join_impl()                                = default;
+  asof_join_impl(asof_join_impl const&)            = delete;
+  asof_join_impl(asof_join_impl&&)                 = delete;
+  asof_join_impl& operator=(asof_join_impl const&) = delete;
+  asof_join_impl& operator=(asof_join_impl&&)      = delete;
 
-  asof_join(table_view const& right_by, column_view const& right_on, cuda::stream_ref stream);
+  asof_join_impl(table_view const& right_by, column_view const& right_on, cuda::stream_ref stream);
 
   std::unique_ptr<rmm::device_uvector<size_type>> join(table_view const& left_by,
                                                        column_view const& left_on,
                                                        asof_join_strategy strategy,
-                                                       bool allow_exact_matches,
+                                                       asof_join_exact_matches exact_matches,
                                                        cuda::stream_ref stream,
                                                        rmm::device_async_resource_ref mr) const;
 

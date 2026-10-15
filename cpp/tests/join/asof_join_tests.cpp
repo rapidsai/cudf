@@ -22,6 +22,7 @@
 namespace {
 
 using cudf::experimental::asof_join;
+using cudf::experimental::asof_join_exact_matches;
 using cudf::experimental::asof_join_strategy;
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
@@ -45,7 +46,8 @@ TEST_F(AsofJoinTest, Ungrouped)
   fixed_width_column_wrapper<int32_t> left_on{0, 1, 2, 3, 8};
 
   asof_join join(cudf::table_view{}, right_on);
-  auto result = join.join(cudf::table_view{}, left_on, asof_join_strategy::BACKWARD, true);
+  auto result = join.join(
+    cudf::table_view{}, left_on, asof_join_strategy::BACKWARD, asof_join_exact_matches::YES);
 
   expect_gather_map(*result, {cudf::JoinNoMatch, 0, 0, 2, 3});
 }
@@ -58,7 +60,10 @@ TEST_F(AsofJoinTest, SingleStringGroupingKey)
   fixed_width_column_wrapper<int32_t> left_on{3, 0, 5, 3, 5};
 
   asof_join join(cudf::table_view{{right_by}}, right_on);
-  auto result = join.join(cudf::table_view{{left_by}}, left_on, asof_join_strategy::BACKWARD, true);
+  auto result = join.join(cudf::table_view{{left_by}},
+                          left_on,
+                          asof_join_strategy::BACKWARD,
+                          asof_join_exact_matches::YES);
 
   expect_gather_map(*result, {2, cudf::JoinNoMatch, cudf::JoinNoMatch, 1, 3});
 }
@@ -73,8 +78,10 @@ TEST_F(AsofJoinTest, MultipleGroupingKeys)
   fixed_width_column_wrapper<int32_t> left_on{4, 1, 4};
 
   asof_join join(cudf::table_view{{right_by_1, right_by_2}}, right_on);
-  auto result = join.join(
-    cudf::table_view{{left_by_1, left_by_2}}, left_on, asof_join_strategy::BACKWARD, true);
+  auto result = join.join(cudf::table_view{{left_by_1, left_by_2}},
+                          left_on,
+                          asof_join_strategy::BACKWARD,
+                          asof_join_exact_matches::YES);
 
   expect_gather_map(*result, {3, cudf::JoinNoMatch, 1});
 }
@@ -85,7 +92,8 @@ TEST_F(AsofJoinTest, NullOrderedKeys)
   fixed_width_column_wrapper<int32_t> left_on({0, 1, 2, 3}, cudf::test::iterators::nulls_at({3}));
 
   asof_join join(cudf::table_view{}, right_on);
-  auto result = join.join(cudf::table_view{}, left_on, asof_join_strategy::BACKWARD, true);
+  auto result = join.join(
+    cudf::table_view{}, left_on, asof_join_strategy::BACKWARD, asof_join_exact_matches::YES);
 
   expect_gather_map(*result, {cudf::JoinNoMatch, 1, 1, cudf::JoinNoMatch});
 }
@@ -98,7 +106,10 @@ TEST_F(AsofJoinTest, NullGroupingKeysDoNotMatch)
   fixed_width_column_wrapper<int32_t> left_on{2, 1};
 
   asof_join join(cudf::table_view{{right_by}}, right_on);
-  auto result = join.join(cudf::table_view{{left_by}}, left_on, asof_join_strategy::BACKWARD, true);
+  auto result = join.join(cudf::table_view{{left_by}},
+                          left_on,
+                          asof_join_strategy::BACKWARD,
+                          asof_join_exact_matches::YES);
 
   expect_gather_map(*result, {cudf::JoinNoMatch, 2});
 }
@@ -109,12 +120,13 @@ TEST_F(AsofJoinTest, EmptyInputs)
   fixed_width_column_wrapper<int32_t> left_on{1, 2};
 
   asof_join empty_right_join(cudf::table_view{}, empty);
-  auto no_matches =
-    empty_right_join.join(cudf::table_view{}, left_on, asof_join_strategy::BACKWARD, true);
+  auto no_matches = empty_right_join.join(
+    cudf::table_view{}, left_on, asof_join_strategy::BACKWARD, asof_join_exact_matches::YES);
   expect_gather_map(*no_matches, {cudf::JoinNoMatch, cudf::JoinNoMatch});
 
   asof_join join(cudf::table_view{}, left_on);
-  auto empty_result = join.join(cudf::table_view{}, empty, asof_join_strategy::BACKWARD, true);
+  auto empty_result = join.join(
+    cudf::table_view{}, empty, asof_join_strategy::BACKWARD, asof_join_exact_matches::YES);
   expect_gather_map(*empty_result, {});
 }
 
@@ -124,7 +136,8 @@ TEST_F(AsofJoinTest, TimestampOrderedKey)
   fixed_width_column_wrapper<cudf::timestamp_ms, int64_t> left_on{2, 5};
 
   asof_join join(cudf::table_view{}, right_on);
-  auto result = join.join(cudf::table_view{}, left_on, asof_join_strategy::BACKWARD, true);
+  auto result = join.join(
+    cudf::table_view{}, left_on, asof_join_strategy::BACKWARD, asof_join_exact_matches::YES);
 
   expect_gather_map(*result, {0, 2});
 }
@@ -135,10 +148,10 @@ TEST_F(AsofJoinTest, UnsupportedOptions)
   fixed_width_column_wrapper<int32_t> left_on{1};
   asof_join join(cudf::table_view{}, right_on);
 
-  EXPECT_THROW((void)join.join(cudf::table_view{}, left_on, asof_join_strategy::FORWARD, true),
-               cudf::logic_error);
-  EXPECT_THROW((void)join.join(cudf::table_view{}, left_on, asof_join_strategy::BACKWARD, false),
-               cudf::logic_error);
+  EXPECT_THROW(
+    (void)join.join(
+      cudf::table_view{}, left_on, asof_join_strategy::BACKWARD, asof_join_exact_matches::NO),
+    cudf::logic_error);
 }
 
 TEST_F(AsofJoinTest, MismatchedOrderedKeyTypes)
@@ -147,8 +160,10 @@ TEST_F(AsofJoinTest, MismatchedOrderedKeyTypes)
   fixed_width_column_wrapper<int64_t> left_on{1};
   asof_join join(cudf::table_view{}, right_on);
 
-  EXPECT_THROW((void)join.join(cudf::table_view{}, left_on, asof_join_strategy::BACKWARD, true),
-               cudf::logic_error);
+  EXPECT_THROW(
+    (void)join.join(
+      cudf::table_view{}, left_on, asof_join_strategy::BACKWARD, asof_join_exact_matches::YES),
+    cudf::logic_error);
 }
 
 TEST_F(AsofJoinTest, NullGroupBeforeNonNullGroup)
@@ -159,7 +174,10 @@ TEST_F(AsofJoinTest, NullGroupBeforeNonNullGroup)
   fixed_width_column_wrapper<int32_t> left_on{5, 1};
 
   asof_join join(cudf::table_view{{right_by}}, right_on);
-  auto result = join.join(cudf::table_view{{left_by}}, left_on, asof_join_strategy::BACKWARD, true);
+  auto result = join.join(cudf::table_view{{left_by}},
+                          left_on,
+                          asof_join_strategy::BACKWARD,
+                          asof_join_exact_matches::YES);
 
   expect_gather_map(*result, {cudf::JoinNoMatch, 1});
 }
@@ -172,7 +190,10 @@ TEST_F(AsofJoinTest, LeftKeyBetweenGroups)
   fixed_width_column_wrapper<int32_t> left_on{1, 1, 1};
 
   asof_join join(cudf::table_view{{right_by}}, right_on);
-  auto result = join.join(cudf::table_view{{left_by}}, left_on, asof_join_strategy::BACKWARD, true);
+  auto result = join.join(cudf::table_view{{left_by}},
+                          left_on,
+                          asof_join_strategy::BACKWARD,
+                          asof_join_exact_matches::YES);
 
   expect_gather_map(*result, {cudf::JoinNoMatch, cudf::JoinNoMatch, cudf::JoinNoMatch});
 }
@@ -185,7 +206,10 @@ TEST_F(AsofJoinTest, NullOrderedKeyAtGroupFront)
   fixed_width_column_wrapper<int32_t> left_on{4, 5};
 
   asof_join join(cudf::table_view{{right_by}}, right_on);
-  auto result = join.join(cudf::table_view{{left_by}}, left_on, asof_join_strategy::BACKWARD, true);
+  auto result = join.join(cudf::table_view{{left_by}},
+                          left_on,
+                          asof_join_strategy::BACKWARD,
+                          asof_join_exact_matches::YES);
 
   expect_gather_map(*result, {cudf::JoinNoMatch, 1});
 }
@@ -198,7 +222,8 @@ TEST_F(AsofJoinTest, SlicedColumns)
   auto const left_on  = cudf::slice(left_on_base, {1, 5})[0];
 
   asof_join join(cudf::table_view{}, right_on);
-  auto result = join.join(cudf::table_view{}, left_on, asof_join_strategy::BACKWARD, true);
+  auto result = join.join(
+    cudf::table_view{}, left_on, asof_join_strategy::BACKWARD, asof_join_exact_matches::YES);
 
   expect_gather_map(*result, {cudf::JoinNoMatch, 0, 0, 2});
 }
@@ -215,7 +240,10 @@ TEST_F(AsofJoinTest, SlicedGroupedColumns)
   auto const left_on = cudf::slice(left_on_base, {1, 3})[0];
 
   asof_join join(cudf::table_view{{right_by}}, right_on);
-  auto result = join.join(cudf::table_view{{left_by}}, left_on, asof_join_strategy::BACKWARD, true);
+  auto result = join.join(cudf::table_view{{left_by}},
+                          left_on,
+                          asof_join_strategy::BACKWARD,
+                          asof_join_exact_matches::YES);
 
   expect_gather_map(*result, {2, 1});
 }
@@ -228,17 +256,21 @@ TEST_F(AsofJoinTest, ValidationErrors)
 
   // Left/right number of grouping keys must match
   fixed_width_column_wrapper<int32_t> left_on{1};
-  EXPECT_THROW((void)join.join(cudf::table_view{}, left_on, asof_join_strategy::BACKWARD, true),
-               cudf::logic_error);
+  EXPECT_THROW(
+    (void)join.join(
+      cudf::table_view{}, left_on, asof_join_strategy::BACKWARD, asof_join_exact_matches::YES),
+    cudf::logic_error);
 
   // Grouping and ordered keys must have the same number of rows
   strings_column_wrapper short_by{"a"};
   EXPECT_THROW((void)asof_join(cudf::table_view{{short_by}}, right_on), cudf::logic_error);
   strings_column_wrapper left_by{"a", "b"};
   fixed_width_column_wrapper<int32_t> long_left_on{1, 2, 3};
-  EXPECT_THROW(
-    (void)join.join(cudf::table_view{{left_by}}, long_left_on, asof_join_strategy::BACKWARD, true),
-    cudf::logic_error);
+  EXPECT_THROW((void)join.join(cudf::table_view{{left_by}},
+                               long_left_on,
+                               asof_join_strategy::BACKWARD,
+                               asof_join_exact_matches::YES),
+               cudf::logic_error);
 
   // Unsupported ordered-key type
   strings_column_wrapper strings_on{"a", "b"};
@@ -274,7 +306,10 @@ TEST_F(AsofJoinTest, LargeMultiBlock)
   fixed_width_column_wrapper<int32_t> left_on(left_on_host.begin(), left_on_host.end());
 
   asof_join join(cudf::table_view{{right_by}}, right_on);
-  auto result = join.join(cudf::table_view{{left_by}}, left_on, asof_join_strategy::BACKWARD, true);
+  auto result = join.join(cudf::table_view{{left_by}},
+                          left_on,
+                          asof_join_strategy::BACKWARD,
+                          asof_join_exact_matches::YES);
 
   std::vector<cudf::size_type> expected(num_groups);
   for (int32_t g = 0; g < num_groups; ++g) {

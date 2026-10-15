@@ -35,14 +35,19 @@ namespace experimental {
  * @brief Selects how an as-of join searches for a matching right row.
  */
 enum class asof_join_strategy {
-  BACKWARD,  ///< Select the last right row whose ordered key is less than or equal to the left key.
-  FORWARD,   ///< Select the first right row whose ordered key is greater than or equal to the left
-             ///< key.
-  NEAREST    ///< Select the right row whose ordered key is nearest to the left key.
+  BACKWARD  ///< Select the last right row whose ordered key is less than or equal to the left key.
+};
+
+/**
+ * @brief Whether equal ordered keys may match in an as-of join.
+ */
+enum class asof_join_exact_matches {
+  NO,  ///< Do not allow equal ordered keys to match.
+  YES  ///< Allow equal ordered keys to match.
 };
 
 namespace detail {
-class asof_join;
+class asof_join_impl;
 }  // namespace detail
 
 /**
@@ -118,12 +123,12 @@ class asof_join {
    * @throws cudf::logic_error if corresponding left and right key types do not match
    * @throws cudf::logic_error if the left-side keys do not satisfy the supported type contract
    * @throws cudf::logic_error if `strategy` is not `asof_join_strategy::BACKWARD`
-   * @throws cudf::logic_error if `allow_exact_matches` is `false`
+   * @throws cudf::logic_error if `exact_matches` is `asof_join_exact_matches::NO`
    *
    * @param left_by Left-side equality grouping keys
    * @param left_on Left-side ordered key
    * @param strategy Direction in which to search for a right-side match
-   * @param allow_exact_matches Whether equal ordered keys may match
+   * @param exact_matches Whether equal ordered keys may match
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned indices
    * @return Right-side gather map containing a row index or `cudf::JoinNoMatch` per left row
@@ -132,12 +137,12 @@ class asof_join {
     table_view const& left_by,
     column_view const& left_on,
     asof_join_strategy strategy,
-    bool allow_exact_matches,
+    asof_join_exact_matches exact_matches,
     cuda::stream_ref stream           = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
  private:
-  using impl_type = cudf::experimental::detail::asof_join;
+  using impl_type = cudf::experimental::detail::asof_join_impl;
   std::unique_ptr<impl_type const> _impl;
 };
 

@@ -37,7 +37,7 @@
 #include <string>
 #include <utility>
 
-namespace cudf::experimental {
+namespace cudf::experimental::detail {
 namespace {
 
 bool is_supported_on_type(data_type type)
@@ -112,26 +112,28 @@ struct probe_dispatch {
   cuda::stream_ref stream;
 
   template <typename T>
+    requires(cudf::is_integral_not_bool<T>() || cudf::is_chrono<T>())
   void operator()() const
   {
-    if constexpr (cudf::is_integral_not_bool<T>() || cudf::is_chrono<T>()) {
-      thrust::transform(
-        rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-        cuda::counting_iterator<size_type>{0},
-        cuda::counting_iterator<size_type>{left_on.size()},
-        output,
-        backward_probe<T>{left_on, right_on, group_offsets, group_positions, num_groups});
-    } else {
-      CUDF_FAIL("Unsupported as-of join ordered-key type");
-    }
+    thrust::transform(
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      cuda::counting_iterator<size_type>{0},
+      cuda::counting_iterator<size_type>{left_on.size()},
+      output,
+      backward_probe<T>{left_on, right_on, group_offsets, group_positions, num_groups});
+  }
+
+  template <typename T>
+    requires(not cudf::is_integral_not_bool<T>() && not cudf::is_chrono<T>())
+  void operator()() const
+  {
+    CUDF_FAIL("Unsupported as-of join ordered-key type");
   }
 };
 
 }  // namespace
 
-namespace detail {
-
-void asof_join::build_right_group_index(cuda::stream_ref stream)
+void asof_join_impl::build_right_group_index(cuda::stream_ref stream)
 {
   // Ungrouped joins may have an empty _right_by with zero rows, so use _right_on's size.
   auto const num_rows = _right_on.size();
@@ -181,9 +183,9 @@ void asof_join::build_right_group_index(cuda::stream_ref stream)
   _right_group_offsets.resize(static_cast<std::size_t>(_num_right_groups) + 1, stream);
 }
 
-asof_join::asof_join(table_view const& right_by,
-                     column_view const& right_on,
-                     cuda::stream_ref stream)
+asof_join_impl::asof_join_impl(table_view const& right_by,
+                               column_view const& right_on,
+                               cuda::stream_ref stream)
   : _right_by{right_by}, _right_on{right_on}, _right_group_offsets{0, stream}
 {
   cudf::scoped_range range{"asof_join::asof_join"};
@@ -203,18 +205,19 @@ asof_join::asof_join(table_view const& right_by,
   build_right_group_index(stream);
 }
 
-std::unique_ptr<rmm::device_uvector<size_type>> asof_join::join(
+std::unique_ptr<rmm::device_uvector<size_type>> asof_join_impl::join(
   table_view const& left_by,
   column_view const& left_on,
   asof_join_strategy strategy,
-  bool allow_exact_matches,
+  asof_join_exact_matches exact_matches,
   cuda::stream_ref stream,
   rmm::device_async_resource_ref mr) const
 {
   cudf::scoped_range range{"asof_join::join"};
   CUDF_EXPECTS(strategy == asof_join_strategy::BACKWARD,
                "Only backward as-of joins are currently supported");
-  CUDF_EXPECTS(allow_exact_matches, "As-of joins without exact matches are currently unsupported");
+  CUDF_EXPECTS(exact_matches == asof_join_exact_matches::YES,
+               "As-of joins without exact matches are currently unsupported");
   validate_key_sizes(left_by, left_on, "left");
   CUDF_EXPECTS(left_by.num_columns() == _right_by.num_columns(),
                "As-of join inputs must have the same number of grouping keys");
@@ -298,7 +301,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> asof_join::join(
   return result;
 }
 
-}  // namespace detail
+}  // namespace cudf::experimental::detail
+
+namespace cudf::experimental {
 
 asof_join::~asof_join() = default;
 
@@ -314,12 +319,12 @@ std::unique_ptr<rmm::device_uvector<size_type>> asof_join::join(
   table_view const& left_by,
   column_view const& left_on,
   asof_join_strategy strategy,
-  bool allow_exact_matches,
+  asof_join_exact_matches exact_matches,
   cuda::stream_ref stream,
   rmm::device_async_resource_ref mr) const
 {
   CUDF_FUNC_RANGE();
-  return _impl->join(left_by, left_on, strategy, allow_exact_matches, stream, mr);
+  return _impl->join(left_by, left_on, strategy, exact_matches, stream, mr);
 }
 
 }  // namespace cudf::experimental
