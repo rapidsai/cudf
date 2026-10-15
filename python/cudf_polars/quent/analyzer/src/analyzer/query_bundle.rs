@@ -18,7 +18,10 @@ use quent_ui::{
 use uuid::Uuid;
 
 use super::CudfPolarsUiAnalyzer;
-use crate::resource::{DATA_CHANNEL_RESOURCE_TYPE, EVALUATE_ENTITY_TYPE, PROCESSOR_RESOURCE_TYPE};
+use crate::resource::{
+    DATA_CHANNEL_RESOURCE_TYPE, DEVICE_MEMORY_RESOURCE_TYPE, EVALUATE_ENTITY_TYPE,
+    PROCESSOR_RESOURCE_TYPE,
+};
 
 impl CudfPolarsUiAnalyzer {
     pub(super) fn build_query_bundle(&self, query_id: Uuid) -> AnalyzerResult<QueryBundle> {
@@ -71,6 +74,18 @@ impl CudfPolarsUiAnalyzer {
                 },
             ),
             (
+                DEVICE_MEMORY_RESOURCE_TYPE.to_owned(),
+                UiResourceTypeDecl {
+                    name: DEVICE_MEMORY_RESOURCE_TYPE.to_owned(),
+                    capacities: vec![UiCapacityDecl {
+                        name: "bytes".to_owned(),
+                        kind: CapacityKind::Occupancy,
+                        quantity: "bytes".to_owned(),
+                    }],
+                    used_by: vec![],
+                },
+            ),
+            (
                 DATA_CHANNEL_RESOURCE_TYPE.to_owned(),
                 UiResourceTypeDecl {
                     name: DATA_CHANNEL_RESOURCE_TYPE.to_owned(),
@@ -97,6 +112,7 @@ impl CudfPolarsUiAnalyzer {
                     "engine",
                     vec![
                         PROCESSOR_RESOURCE_TYPE.to_owned(),
+                        DEVICE_MEMORY_RESOURCE_TYPE.to_owned(),
                         DATA_CHANNEL_RESOURCE_TYPE.to_owned(),
                     ],
                 ),
@@ -107,6 +123,7 @@ impl CudfPolarsUiAnalyzer {
                     "worker",
                     vec![
                         PROCESSOR_RESOURCE_TYPE.to_owned(),
+                        DEVICE_MEMORY_RESOURCE_TYPE.to_owned(),
                         DATA_CHANNEL_RESOURCE_TYPE.to_owned(),
                     ],
                 ),

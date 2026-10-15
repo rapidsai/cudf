@@ -3,6 +3,7 @@
 import datetime
 import decimal
 import io
+import json
 import os
 import struct
 
@@ -12,9 +13,11 @@ import pyarrow.parquet as pq
 import pytest
 from pyarrow.parquet import read_table, write_table
 from utils import (
+    BLOOM_FILTER_OPTIONS,
     assert_table_and_meta_eq,
     get_bytes_from_source,
     make_source,
+    requires_pyarrow_bloom_filters,
     synchronize_stream,
 )
 
@@ -189,6 +192,42 @@ def test_read_parquet_filters_metadata(tmp_path, if_prune_rowgroup, result):
     assert plc_table_w_meta.num_row_groups_after_stats_filter == result
 
 
+@pytest.mark.parametrize("chunked", [True, False])
+@pytest.mark.parametrize("use_builder", [True, False])
+def test_read_parquet_filter_outlives_expression_reference(
+    tmp_path, use_builder, chunked
+):
+    tbl = pa.Table.from_pydict({"a": list(range(10))})
+    path = tmp_path / "tbl.parquet"
+    write_table(tbl, path)
+
+    def make_filter():
+        return Operation(
+            ASTOperator.GREATER_EQUAL,
+            ColumnNameReference("a"),
+            Literal(plc.Scalar.from_arrow(pa.scalar(5))),
+        )
+
+    builder = plc.io.parquet.ParquetReaderOptions.builder(
+        plc.io.SourceInfo([path])
+    )
+    # The filter is a temporary, so only pylibcudf objects can keep it alive
+    if use_builder:
+        options = builder.filter(make_filter()).build()
+    else:
+        options = builder.build()
+        options.set_filter(make_filter())
+    del builder
+
+    if chunked:
+        reader = plc.io.parquet.ChunkedParquetReader(options)
+        del options
+        result = reader.read_chunk()
+    else:
+        result = plc.io.parquet.read_parquet(options)
+    assert_table_and_meta_eq(tbl.filter(pc.field("a") >= 5), result)
+
+
 @pytest.mark.parametrize(
     "pa_filters,plc_filters",
     [
@@ -260,15 +299,6 @@ def _read_parquet_equal_to(path, column, value, and_expr=None):
         expr = Operation(ASTOperator.LOGICAL_AND, expr, and_expr)
     options.set_filter(expr)
     return plc.io.parquet.read_parquet(options)
-
-
-requires_pyarrow_bloom_filters = pytest.mark.skipif(
-    int(pa.__version__.split(".", 1)[0]) < 24,
-    reason="pyarrow writes Parquet bloom filters from 24.0",
-)
-
-# Sized so that absent values are practically never false positives
-_BLOOM_FILTER = {"ndv": 1000, "fpp": 0.0001}
 
 
 # The default 28-digit context would round 38-digit decimals
@@ -367,7 +397,7 @@ def test_read_parquet_bloom_filter_physical_types(
         ),
         path,
         row_group_size=len(evens),
-        bloom_filter_options={"c": _BLOOM_FILTER},
+        bloom_filter_options={"c": BLOOM_FILTER_OPTIONS},
         **write_kwargs,
     )
 
@@ -400,7 +430,7 @@ def test_read_parquet_bloom_filter_decimal_scale_mismatch(tmp_path):
         pa.table({"c": pa.array(with_five + evens, pa.decimal128(5, 2))}),
         path,
         row_group_size=len(evens),
-        bloom_filter_options={"c": _BLOOM_FILTER},
+        bloom_filter_options={"c": BLOOM_FILTER_OPTIONS},
     )
 
     for value, num_rows in [(5, 20), (7, 0)]:
@@ -425,7 +455,7 @@ def test_read_parquet_bloom_filter_signed_zero(
         pa.table({"c": pa.array(with_zero + odds, arrow_type)}),
         path,
         row_group_size=len(odds),
-        bloom_filter_options={"c": _BLOOM_FILTER},
+        bloom_filter_options={"c": BLOOM_FILTER_OPTIONS},
     )
 
     result = _read_parquet_equal_to(path, "c", pa.scalar(literal, arrow_type))
@@ -907,6 +937,26 @@ def test_file_metadata_wrappers_not_directly_constructible() -> None:
         ValueError, match="SchemaElement cannot be constructed directly"
     ):
         plc.io.parquet_metadata.SchemaElement()
+    with pytest.raises(
+        ValueError, match="LogicalType cannot be constructed directly"
+    ):
+        plc.io.parquet_metadata.LogicalType()
+    with pytest.raises(
+        ValueError, match="DecimalType cannot be constructed directly"
+    ):
+        plc.io.parquet_metadata.DecimalType()
+    with pytest.raises(
+        ValueError, match="TimeType cannot be constructed directly"
+    ):
+        plc.io.parquet_metadata.TimeType()
+    with pytest.raises(
+        ValueError, match="TimestampType cannot be constructed directly"
+    ):
+        plc.io.parquet_metadata.TimestampType()
+    with pytest.raises(
+        ValueError, match="IntType cannot be constructed directly"
+    ):
+        plc.io.parquet_metadata.IntType()
 
 
 def test_file_metadata_schema_elements() -> None:
@@ -941,6 +991,26 @@ def test_file_metadata_schema_elements() -> None:
                 pa.binary(4),
                 metadata={b"PARQUET:field_id": b"40"},
             ),
+            pa.field("i8", pa.int8(), metadata={b"PARQUET:field_id": b"50"}),
+            pa.field(
+                "u16", pa.uint16(), metadata={b"PARQUET:field_id": b"51"}
+            ),
+            pa.field(
+                "date", pa.date32(), metadata={b"PARQUET:field_id": b"52"}
+            ),
+            pa.field(
+                "time", pa.time32("ms"), metadata={b"PARQUET:field_id": b"53"}
+            ),
+            pa.field(
+                "ts_utc",
+                pa.timestamp("ms", tz="UTC"),
+                metadata={b"PARQUET:field_id": b"54"},
+            ),
+            pa.field(
+                "ts_naive",
+                pa.timestamp("ns"),
+                metadata={b"PARQUET:field_id": b"55"},
+            ),
         ]
     )
     table = pa.table(
@@ -954,11 +1024,29 @@ def test_file_metadata_schema_elements() -> None:
                 [decimal.Decimal("1.25")] * 3, type=schema.field("dec").type
             ),
             pa.array([b"abcd"] * 3, type=schema.field("fixed").type),
+            pa.array([1, 2, 3], type=pa.int8()),
+            pa.array([1, 2, 3], type=pa.uint16()),
+            pa.array([datetime.date(2020, 1, 1)] * 3, type=pa.date32()),
+            pa.array([datetime.time(1)] * 3, type=pa.time32("ms")),
+            pa.array(
+                [datetime.datetime(2020, 1, 1)] * 3,
+                type=pa.timestamp("ms", tz="UTC"),
+            ),
+            pa.array(
+                [datetime.datetime(2020, 1, 1)] * 3, type=pa.timestamp("ns")
+            ),
         ],
         schema=schema,
     )
     sink = io.BytesIO()
     write_table(table, sink)
+    sink.seek(0)
+    parquet_schema = pq.ParquetFile(sink).metadata.schema
+    time_is_adjusted_to_utc = json.loads(
+        parquet_schema.column(
+            parquet_schema.names.index("time")
+        ).logical_type.to_json()
+    )["isAdjustedToUTC"]
     sink.seek(0)
 
     file_metadata = plc.io.parquet_metadata.read_parquet_footers(
@@ -966,6 +1054,32 @@ def test_file_metadata_schema_elements() -> None:
     )[0]
 
     PhysicalType = plc.io.parquet_metadata.PhysicalType
+    LogicalTypeId = plc.io.parquet_metadata.LogicalTypeId
+    TimeUnit = plc.io.parquet_metadata.TimeUnit
+
+    def logical_type_values(logical_type):
+        if logical_type is None:
+            return None
+        decimal_type = logical_type.decimal_type
+        time_type = logical_type.time_type
+        timestamp_type = logical_type.timestamp_type
+        int_type = logical_type.int_type
+        return (
+            logical_type.type,
+            None
+            if decimal_type is None
+            else (decimal_type.scale, decimal_type.precision),
+            None
+            if time_type is None
+            else (time_type.unit, time_type.is_adjusted_to_utc),
+            None
+            if timestamp_type is None
+            else (timestamp_type.unit, timestamp_type.is_adjusted_to_utc),
+            None
+            if int_type is None
+            else (int_type.bit_width, int_type.is_signed),
+        )
+
     result = [
         (
             element.name,
@@ -973,18 +1087,290 @@ def test_file_metadata_schema_elements() -> None:
             element.num_children,
             element.type,
             element.type_length,
+            logical_type_values(element.logical_type),
         )
         for element in file_metadata.schema
     ]
     # Depth-first, root first.
     assert result == [
-        ("schema", None, 4, PhysicalType.UNDEFINED, 0),
-        ("a", 10, 0, PhysicalType.INT64, 0),
-        ("s", 20, 2, PhysicalType.UNDEFINED, 0),
-        ("x", 21, 0, PhysicalType.INT32, 0),
-        ("y", 22, 0, PhysicalType.BYTE_ARRAY, 0),
-        ("dec", 30, 0, PhysicalType.FIXED_LEN_BYTE_ARRAY, 6),
-        ("fixed", 40, 0, PhysicalType.FIXED_LEN_BYTE_ARRAY, 4),
+        ("schema", None, 10, PhysicalType.UNDEFINED, 0, None),
+        ("a", 10, 0, PhysicalType.INT64, 0, None),
+        ("s", 20, 2, PhysicalType.UNDEFINED, 0, None),
+        ("x", 21, 0, PhysicalType.INT32, 0, None),
+        (
+            "y",
+            22,
+            0,
+            PhysicalType.BYTE_ARRAY,
+            0,
+            (LogicalTypeId.STRING, None, None, None, None),
+        ),
+        (
+            "dec",
+            30,
+            0,
+            PhysicalType.FIXED_LEN_BYTE_ARRAY,
+            6,
+            (LogicalTypeId.DECIMAL, (2, 12), None, None, None),
+        ),
+        ("fixed", 40, 0, PhysicalType.FIXED_LEN_BYTE_ARRAY, 4, None),
+        (
+            "i8",
+            50,
+            0,
+            PhysicalType.INT32,
+            0,
+            (LogicalTypeId.INTEGER, None, None, None, (8, True)),
+        ),
+        (
+            "u16",
+            51,
+            0,
+            PhysicalType.INT32,
+            0,
+            (LogicalTypeId.INTEGER, None, None, None, (16, False)),
+        ),
+        (
+            "date",
+            52,
+            0,
+            PhysicalType.INT32,
+            0,
+            (LogicalTypeId.DATE, None, None, None, None),
+        ),
+        (
+            "time",
+            53,
+            0,
+            PhysicalType.INT32,
+            0,
+            (
+                LogicalTypeId.TIME,
+                None,
+                (TimeUnit.MILLIS, time_is_adjusted_to_utc),
+                None,
+                None,
+            ),
+        ),
+        (
+            "ts_utc",
+            54,
+            0,
+            PhysicalType.INT64,
+            0,
+            (
+                LogicalTypeId.TIMESTAMP,
+                None,
+                None,
+                (TimeUnit.MILLIS, True),
+                None,
+            ),
+        ),
+        (
+            "ts_naive",
+            55,
+            0,
+            PhysicalType.INT64,
+            0,
+            (
+                LogicalTypeId.TIMESTAMP,
+                None,
+                None,
+                (TimeUnit.NANOS, False),
+                None,
+            ),
+        ),
+    ]
+
+
+def test_schema_element_is_one_level_list_rejects_none() -> None:
+    sink = io.BytesIO()
+    write_table(pa.table({"a": [1]}), sink)
+    sink.seek(0)
+    element = plc.io.parquet_metadata.read_parquet_footers(
+        plc.io.SourceInfo([sink])
+    )[0].schema[1]
+    with pytest.raises(TypeError, match="parent"):
+        element.is_one_level_list(None)
+
+
+def test_file_metadata_schema_element_nesting() -> None:
+    schema = pa.schema(
+        [
+            pa.field("a", pa.int64()),
+            pa.field("s", pa.struct([pa.field("x", pa.int64())])),
+            pa.field("l", pa.list_(pa.int32())),
+            pa.field("r", pa.int32(), nullable=False),
+        ]
+    )
+    table = pa.table(
+        [
+            pa.array([1, None, 3], type=pa.int64()),
+            pa.array([{"x": 1}, {"x": 2}, None], type=schema.field("s").type),
+            pa.array([[1], [], None], type=schema.field("l").type),
+            pa.array([1, 2, 3], type=pa.int32()),
+        ],
+        schema=schema,
+    )
+    sink = io.BytesIO()
+    write_table(table, sink)
+    sink.seek(0)
+
+    elements = plc.io.parquet_metadata.read_parquet_footers(
+        plc.io.SourceInfo([sink])
+    )[0].schema
+
+    FieldRepetitionType = plc.io.parquet_metadata.FieldRepetitionType
+    result = [
+        (
+            element.name,
+            element.repetition_type,
+            element.max_definition_level,
+            element.max_repetition_level,
+            element.parent_idx,
+            element.children_idx,
+            element.is_stub(),
+            element.is_struct(),
+            element.is_one_level_list(elements[element.parent_idx]),
+            element.output_as_byte_array,
+            element.arrow_type,
+        )
+        for element in elements
+    ]
+    assert result == [
+        (
+            "schema",
+            FieldRepetitionType.REQUIRED,
+            0,
+            0,
+            0,
+            [1, 2, 4, 7],
+            False,
+            True,
+            False,
+            False,
+            None,
+        ),
+        (
+            "a",
+            FieldRepetitionType.OPTIONAL,
+            1,
+            0,
+            0,
+            [],
+            False,
+            False,
+            False,
+            False,
+            None,
+        ),
+        (
+            "s",
+            FieldRepetitionType.OPTIONAL,
+            1,
+            0,
+            0,
+            [3],
+            False,
+            True,
+            False,
+            False,
+            None,
+        ),
+        (
+            "x",
+            FieldRepetitionType.OPTIONAL,
+            2,
+            0,
+            2,
+            [],
+            False,
+            False,
+            False,
+            False,
+            None,
+        ),
+        (
+            "l",
+            FieldRepetitionType.OPTIONAL,
+            1,
+            0,
+            0,
+            [5],
+            False,
+            True,
+            False,
+            False,
+            None,
+        ),
+        (
+            "list",
+            FieldRepetitionType.REPEATED,
+            2,
+            1,
+            4,
+            [6],
+            True,
+            False,
+            False,
+            False,
+            None,
+        ),
+        (
+            "element",
+            FieldRepetitionType.OPTIONAL,
+            3,
+            1,
+            5,
+            [],
+            False,
+            False,
+            False,
+            False,
+            None,
+        ),
+        (
+            "r",
+            FieldRepetitionType.REQUIRED,
+            0,
+            0,
+            0,
+            [],
+            False,
+            False,
+            False,
+            False,
+            None,
+        ),
+    ]
+
+
+def test_file_metadata_schema_element_arrow_type() -> None:
+    table = pa.table(
+        {
+            "d": pa.array([1, 2, 3], type=pa.duration("ms")),
+            "i": pa.array([1, 2, 3], type=pa.int32()),
+        }
+    )
+    sink = io.BytesIO()
+    write_table(table, sink, store_schema=True)
+    sink.seek(0)
+    footer, _ = _extract_footer_bytes_with_suffix(sink.getvalue())
+
+    from_footers = plc.io.parquet_metadata.read_parquet_footers(
+        plc.io.SourceInfo([sink])
+    )[0]
+    from_bytes = plc.io.parquet_metadata.FileMetaData.from_bytes(footer)
+
+    assert [element.arrow_type for element in from_footers.schema] == [
+        None,
+        None,
+        None,
+    ]
+    assert [element.arrow_type for element in from_bytes.schema] == [
+        None,
+        plc.TypeId.DURATION_MILLISECONDS,
+        None,
     ]
 
 
