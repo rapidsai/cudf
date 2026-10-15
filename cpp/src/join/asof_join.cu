@@ -133,29 +133,47 @@ struct probe_dispatch {
 
 }  // namespace
 
-void asof_join_impl::build_right_group_index(cuda::stream_ref stream)
+asof_join_impl::asof_join_impl(table_view const& right_by,
+                               column_view const& right_on,
+                               cuda::stream_ref stream)
+  : _right_by{right_by}, _right_on{right_on}, _right_group_offsets{0, stream}
 {
+  cudf::scoped_range range{"asof_join::asof_join"};
+  validate_key_sizes(right_by, right_on, "right");
+  CUDF_EXPECTS(is_supported_on_type(right_on.type()),
+               "As-of join ordered keys must be integer, timestamp, or duration columns");
+  validate_by_types(right_by);
+
+  if (right_by.num_columns() > 0) {
+    auto const mr = cudf::get_current_device_resource_ref();
+    _right_eq_preprocessed =
+      cudf::detail::row::equality::preprocessed_table::create(right_by, stream, mr);
+    _right_lex_preprocessed =
+      cudf::detail::row::lexicographic::preprocessed_table::create(right_by, {}, {}, stream);
+  }
+
   // Ungrouped joins may have an empty _right_by with zero rows, so use _right_on's size.
   auto const num_rows = _right_on.size();
   auto const mr       = cudf::get_current_device_resource_ref();
   auto mr_property    = cuda::std::execution::prop{cuda::mr::get_memory_resource, mr};
   auto env            = cuda::std::execution::env{cuda::stream_ref{stream.get()}, mr_property};
-  _right_group_offsets.resize(static_cast<std::size_t>(num_rows) + 1, stream);
 
   if (num_rows == 0) {
+    _right_group_offsets.resize(1, stream);
     CUDF_CUDA_TRY(cub::DeviceTransform::Fill(_right_group_offsets.begin(), 1, size_type{0}, env));
     _num_right_groups = 0;
     return;
   }
 
   if (_right_by.num_columns() == 0) {
+    _right_group_offsets.resize(2, stream);
     CUDF_CUDA_TRY(cub::DeviceTransform::Fill(_right_group_offsets.begin(), 1, size_type{0}, env));
     CUDF_CUDA_TRY(cub::DeviceTransform::Fill(_right_group_offsets.begin() + 1, 1, num_rows, env));
-    _right_group_offsets.resize(2, stream);
     _num_right_groups = 1;
     return;
   }
 
+  _right_group_offsets.resize(static_cast<std::size_t>(num_rows) + 1, stream);
   // Mark the first row and each change in adjacent by keys, then compact their indices into
   // offsets. Append num_rows so group g occupies [offsets[g], offsets[g + 1]).
   auto const has_nulls  = cudf::has_nested_nulls(_right_by);
@@ -181,28 +199,6 @@ void asof_join_impl::build_right_group_index(cuda::stream_ref stream)
   CUDF_CUDA_TRY(
     cub::DeviceTransform::Fill(_right_group_offsets.begin() + _num_right_groups, 1, num_rows, env));
   _right_group_offsets.resize(static_cast<std::size_t>(_num_right_groups) + 1, stream);
-}
-
-asof_join_impl::asof_join_impl(table_view const& right_by,
-                               column_view const& right_on,
-                               cuda::stream_ref stream)
-  : _right_by{right_by}, _right_on{right_on}, _right_group_offsets{0, stream}
-{
-  cudf::scoped_range range{"asof_join::asof_join"};
-  validate_key_sizes(right_by, right_on, "right");
-  CUDF_EXPECTS(is_supported_on_type(right_on.type()),
-               "As-of join ordered keys must be integer, timestamp, or duration columns");
-  validate_by_types(right_by);
-
-  if (right_by.num_columns() > 0) {
-    auto const mr = cudf::get_current_device_resource_ref();
-    _right_eq_preprocessed =
-      cudf::detail::row::equality::preprocessed_table::create(right_by, stream, mr);
-    _right_lex_preprocessed =
-      cudf::detail::row::lexicographic::preprocessed_table::create(right_by, {}, {}, stream);
-  }
-
-  build_right_group_index(stream);
 }
 
 std::unique_ptr<rmm::device_uvector<size_type>> asof_join_impl::join(
@@ -310,9 +306,8 @@ asof_join::~asof_join() = default;
 asof_join::asof_join(table_view const& right_by,
                      column_view const& right_on,
                      cuda::stream_ref stream)
+  : _impl{std::make_unique<impl_type>(right_by, right_on, stream)}
 {
-  CUDF_FUNC_RANGE();
-  _impl = std::make_unique<impl_type>(right_by, right_on, stream);
 }
 
 std::unique_ptr<rmm::device_uvector<size_type>> asof_join::join(

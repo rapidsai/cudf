@@ -43,8 +43,6 @@ class asof_join_impl {
                                                        rmm::device_async_resource_ref mr) const;
 
  private:
-  void build_right_group_index(cuda::stream_ref stream);
-
   table_view _right_by;
   column_view _right_on;
   rmm::device_uvector<size_type> _right_group_offsets;
