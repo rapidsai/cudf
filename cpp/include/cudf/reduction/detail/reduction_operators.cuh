@@ -11,12 +11,24 @@
 #include <cudf/detail/utilities/transform_unary_functions.cuh>
 #include <cudf/types.hpp>  //for CUDF_HOST_DEVICE
 
+#include <cuda/std/array>
 #include <cuda/std/cmath>
 #include <cuda/std/limits>
 
 namespace cudf {
 namespace reduction {
 namespace detail {
+#if defined(__CUDACC__)
+// Small intermediate states can replace division with a precomputed reciprocal.
+static __constant__ cuda::std::array<double, 1025> const variance_inverse_counts = [] {
+  cuda::std::array<double, 1025> reciprocals{};
+  for (size_type i = 1; i <= 1024; ++i) {
+    reciprocals[i] = 1.0 / i;
+  }
+  return reciprocals;
+}();
+#endif
+
 // intermediate data structure to compute `var`, `std`
 template <typename ResultType>
 struct var_std {
@@ -48,8 +60,14 @@ struct var_std {
       auto constexpr nan = cuda::std::numeric_limits<ResultType>::quiet_NaN();
       return {nan, nan, m + n};
     }
-    auto const delta   = rhs.running_mean - running_mean;
+    auto const delta = rhs.running_mean - running_mean;
+#if defined(__CUDA_ARCH__)
+    auto const delta_n = (m + n <= 1024)
+                           ? delta * static_cast<ResultType>(variance_inverse_counts[m + n])
+                           : delta / (m + n);
+#else
     auto const delta_n = delta / (m + n);
+#endif
     return {running_mean + delta_n * n,
             running_square_deviations + rhs.running_square_deviations + delta * delta_n * m * n,
             m + n};
