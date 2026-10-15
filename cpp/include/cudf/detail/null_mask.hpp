@@ -51,7 +51,7 @@ void set_null_mask(bitmask_type* bitmask,
  * @param start Index of the first bit to count (inclusive).
  * @param stop Index of the last bit to count (exclusive).
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Memory resources used for temporary allocations
+ * @param mr Memory resources used for allocations
  * @return The number of non-zero bits in the specified range.
  */
 cudf::size_type count_set_bits(bitmask_type const* bitmask,
@@ -72,7 +72,7 @@ cudf::size_type count_set_bits(bitmask_type const* bitmask,
  * @param start Index of the first bit to count (inclusive).
  * @param stop Index of the last bit to count (exclusive).
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Memory resources used for temporary allocations
+ * @param mr Memory resources used for allocations
  * @return The number of zero bits in the specified range.
  */
 cudf::size_type count_unset_bits(
@@ -93,7 +93,7 @@ cudf::size_type count_unset_bits(
  * @param[in] bitmask Bitmask residing in device memory whose bits will be counted.
  * @param[in] indices A host_span of indices specifying ranges to count the number of set bits.
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- * @param[in] mr Memory resources used for temporary allocations
+ * @param[in] mr Memory resources used for allocations
  * @return A vector storing the number of non-zero bits in the specified ranges.
  */
 std::vector<size_type> segmented_count_set_bits(
@@ -113,7 +113,7 @@ std::vector<size_type> segmented_count_set_bits(
  * @param[in] bitmask Bitmask residing in device memory whose bits will be counted.
  * @param[in] indices A host_span of indices specifying ranges to count the number of unset bits.
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- * @param[in] mr Memory resources used for temporary allocations
+ * @param[in] mr Memory resources used for allocations
  * @return A vector storing the number of zero bits in the specified ranges.
  */
 std::vector<size_type> segmented_count_unset_bits(
@@ -136,7 +136,7 @@ std::vector<size_type> segmented_count_unset_bits(
  * @param[in] start Index of the first bit to count (inclusive).
  * @param[in] stop Index of the last bit to count (exclusive).
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- * @param[in] mr Memory resources used for temporary allocations
+ * @param[in] mr Memory resources used for allocations
  * @return The number of valid elements in the specified range.
  */
 cudf::size_type valid_count(bitmask_type const* bitmask,
@@ -149,7 +149,7 @@ cudf::size_type valid_count(bitmask_type const* bitmask,
  * @copydoc null_count(bitmask_type const* bitmask, size_type start, size_type stop)
  *
  * @param stream Stream view on which to allocate resources and queue execution.
- * @param mr Memory resources used for temporary allocations
+ * @param mr Memory resources used for allocations
  */
 cudf::size_type null_count(bitmask_type const* bitmask,
                            size_type start,
@@ -254,7 +254,7 @@ std::pair<cuda::device_buffer<std::byte>, size_type> bitmask_or(table_view const
  * @param masks_begin_bits The bit offsets from which each mask is to be ANDed
  * @param mask_size_bits The number of bits to be ANDed in each mask
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Memory resources used for temporary allocations
+ * @param mr Memory resources used for allocations
  * @return Count of set bits
  */
 cudf::size_type inplace_bitmask_and(

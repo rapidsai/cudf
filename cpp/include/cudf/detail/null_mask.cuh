@@ -254,7 +254,7 @@ rmm::device_uvector<size_type> inplace_segmented_bitmask_binop(
  * const, size_type, cudf::memory_resources)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Memory resources used for temporary allocations
+ * @param mr Memory resources used for allocations
  */
 template <typename Binop>
 std::pair<cuda::device_buffer<std::byte>, size_type> bitmask_binop(
@@ -682,7 +682,7 @@ struct index_alternator {
  * count the number of set/unset bits within.
  * @param count_bits If SET_BITS, count set (1) bits. If UNSET_BITS, count unset (0) bits.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Memory resources used for temporary allocations
+ * @param mr Memory resources used for allocations
  *
  * @return A vector storing the number of non-zero bits in the specified ranges
  */
