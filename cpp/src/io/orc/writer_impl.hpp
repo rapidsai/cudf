@@ -211,7 +211,8 @@ struct writer_timezone {
   // `name`. Equal to `orc_utc_epoch` when writing UTC.
   duration_s const base_epoch;
   // Offsets from UT over time, used to put timestamps on `name`'s wall clock for the statistics.
-  // Empty when writing UTC, where the wall clock and the input instants coincide.
+  // Empty when no statistics are gathered, and when writing UTC, where the wall clock and the
+  // input instants coincide.
   std::unique_ptr<cudf::table> const transitions;
 
   /**
@@ -220,15 +221,17 @@ struct writer_timezone {
    * Uses `base_epoch_in_timezone`, so the writer and the reader resolve the epoch the same way.
    *
    * @param timezone Timezone name
+   * @param stats_freq Frequency of statistics to be included in the output file
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @throw cudf::logic_error if `timezone` is empty or does not resolve to a TZif file
    */
-  explicit writer_timezone(std::string timezone, cuda::stream_ref stream);
+  writer_timezone(std::string timezone, statistics_freq stats_freq, cuda::stream_ref stream);
 
  private:
   [[nodiscard]] static duration_s compute_base_epoch(std::string_view timezone);
   [[nodiscard]] static std::unique_ptr<cudf::table> make_transitions(std::string_view timezone,
+                                                                     statistics_freq stats_freq,
                                                                      cuda::stream_ref stream);
 };
 

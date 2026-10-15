@@ -2762,18 +2762,23 @@ duration_s writer_timezone::compute_base_epoch(std::string_view timezone)
 }
 
 std::unique_ptr<cudf::table> writer_timezone::make_transitions(std::string_view timezone,
+                                                               statistics_freq stats_freq,
                                                                cuda::stream_ref stream)
 {
-  if (timezone == "UTC") { return std::make_unique<cudf::table>(); }
+  if (timezone == "UTC" or stats_freq == statistics_freq::STATISTICS_NONE) {
+    return std::make_unique<cudf::table>();
+  }
 
   return cudf::detail::make_timezone_transition_table(
     {}, timezone, stream, cudf::get_current_device_resource_ref());
 }
 
-writer_timezone::writer_timezone(std::string timezone, cuda::stream_ref stream)
+writer_timezone::writer_timezone(std::string timezone,
+                                 statistics_freq stats_freq,
+                                 cuda::stream_ref stream)
   : name{std::move(timezone)},
     base_epoch{compute_base_epoch(name)},
-    transitions{make_transitions(name, stream)}
+    transitions{make_transitions(name, stats_freq, stream)}
 {
 }
 
@@ -2791,7 +2796,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     _sort_dictionaries{options.get_enable_dictionary_sort()},
     _single_write_mode(mode),
     _kv_meta(options.get_key_value_metadata()),
-    _timezone(options.get_writer_timezone(), stream),
+    _timezone(options.get_writer_timezone(), _stats_freq, stream),
     _out_sink(std::move(sink))
 {
   if (options.get_metadata()) {
@@ -2815,7 +2820,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     _sort_dictionaries{options.get_enable_dictionary_sort()},
     _single_write_mode(mode),
     _kv_meta(options.get_key_value_metadata()),
-    _timezone(options.get_writer_timezone(), stream),
+    _timezone(options.get_writer_timezone(), _stats_freq, stream),
     _out_sink(std::move(sink))
 {
   if (options.get_metadata()) {
