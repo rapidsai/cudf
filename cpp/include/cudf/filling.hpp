@@ -48,7 +48,7 @@ namespace CUDF_EXPORT cudf {
  * @param end The index of the last element in the fill range (exclusive)
  * @param value The scalar value to fill
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Memory resources used for temporary allocations
+ * @param mr Memory resources used for allocations
  */
 void fill_in_place(mutable_column_view& destination,
                    size_type begin,

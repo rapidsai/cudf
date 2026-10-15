@@ -367,7 +367,7 @@ std::unique_ptr<table> empty_like(table_view const& input_table);
  * (exclusive)
  * @param target_begin The starting index of the target range (inclusive)
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Memory resources used for temporary allocations
+ * @param mr Memory resources used for allocations
  */
 void copy_range_in_place(column_view const& source,
                          mutable_column_view& target,
