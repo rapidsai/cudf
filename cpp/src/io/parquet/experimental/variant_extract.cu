@@ -523,42 +523,56 @@ __device__ bool is_variant_null(device_span<uint8_t const> enc)
 template <typename T>
 concept variant_int = cuda::std::signed_integral<T> && !cuda::std::same_as<T, __int128_t>;
 
-// The fixed-width primitive types (signed integers and floats) a VARIANT value can be decoded into.
+// The microsecond/nanosecond timestamps a VARIANT value can be decoded into.
 template <typename T>
-concept variant_numerical = variant_int<T> || cuda::std::floating_point<T>;
+concept variant_timestamp =
+  cuda::std::same_as<T, cudf::timestamp_us> || cuda::std::same_as<T, cudf::timestamp_ns>;
+
+// The fixed-width primitive types (signed integers, floats, timestamps) a VARIANT value can be
+// decoded into.
+template <typename T>
+concept variant_fixed_width =
+  variant_int<T> || cuda::std::floating_point<T> || variant_timestamp<T>;
 
 // The output types a VARIANT value can be cast to: the fixed-width signed integers, floats,
-// decimals, bool, and strings.
+// timestamps, decimals, bool, and strings.
 template <typename T>
-concept variant_castable = variant_numerical<T> || cudf::concepts::fixed_point<T> ||
+concept variant_castable = variant_fixed_width<T> || cudf::concepts::fixed_point<T> ||
                            cudf::concepts::boolean<T> || cudf::concepts::string_view<T>;
 
-// Maps a fixed-width output type to the VARIANT primitive type header id that encodes it.
-template <variant_numerical T>
-__device__ constexpr primitive_type primitive_type_for()
+// Whether a VARIANT primitive type header encodes `T`.
+template <variant_fixed_width T>
+__device__ constexpr bool matches_primitive_type(primitive_type ptype)
 {
   if constexpr (cuda::std::is_same_v<T, int8_t>) {
-    return primitive_type::INT8;
+    return ptype == primitive_type::INT8;
   } else if constexpr (cuda::std::is_same_v<T, int16_t>) {
-    return primitive_type::INT16;
+    return ptype == primitive_type::INT16;
   } else if constexpr (cuda::std::is_same_v<T, int32_t>) {
-    return primitive_type::INT32;
+    return ptype == primitive_type::INT32;
   } else if constexpr (cuda::std::is_same_v<T, int64_t>) {
-    return primitive_type::INT64;
+    return ptype == primitive_type::INT64;
   } else if constexpr (cuda::std::is_same_v<T, float>) {
-    return primitive_type::FLOAT32;
+    return ptype == primitive_type::FLOAT32;
   } else if constexpr (cuda::std::is_same_v<T, double>) {
-    return primitive_type::FLOAT64;
+    return ptype == primitive_type::FLOAT64;
+  }
+  // cuDF timestamps carry no timezone, so a timestamp target also accepts the matching NTZ
+  // encoding; Spark's TIMESTAMP and TIMESTAMP_NTZ both map to TIMESTAMP_MICROSECONDS.
+  else if constexpr (cuda::std::is_same_v<T, cudf::timestamp_us>) {
+    return ptype == primitive_type::TIMESTAMP_MICROS ||
+           ptype == primitive_type::TIMESTAMP_NTZ_MICROS;
   } else {
-    CUDF_UNREACHABLE("primitive_type_for: T is not a supported variant primitive type");
-    return primitive_type::NULLVAL;
+    static_assert(cuda::std::is_same_v<T, cudf::timestamp_ns>,
+                  "T is not a supported variant primitive type");
+    return ptype == primitive_type::TIMESTAMP_NANOS || ptype == primitive_type::TIMESTAMP_NTZ_NANOS;
   }
 }
 
 /**
  * @brief Decode a single VARIANT value blob into a fixed-width primitive of type `T`.
  *
- * Requires `basic_type == primitive` and a value header whose physical type id matches `T` exactly.
+ * Requires `basic_type == primitive` and a value header accepted by `matches_primitive_type<T>`.
  */
 template <typename T>
 __device__ inline cuda::std::optional<T> decode_primitive(device_span<uint8_t const> enc)
@@ -567,7 +581,8 @@ __device__ inline cuda::std::optional<T> decode_primitive(device_span<uint8_t co
 
   uint8_t const value_metadata = enc[0];
   if (decode_basic_type(value_metadata) != basic_type::PRIMITIVE ||
-      variant_value_header(value_metadata) != static_cast<uint8_t>(primitive_type_for<T>())) {
+      !matches_primitive_type<T>(
+        static_cast<primitive_type>(variant_value_header(value_metadata)))) {
     return cuda::std::nullopt;
   }
   return cudf::io::unaligned_load<T>(enc.data() + 1);
@@ -785,7 +800,7 @@ __device__ bool is_recognized_primitive_type(primitive_type ptype)
  * @brief Status helper for fixed-width primitive targets: classifies why `decode_primitive<T>`
  * failed to decode `val`, per `variant_operation_status` semantics.
  */
-template <variant_numerical T>
+template <variant_fixed_width T>
 __device__ op_status cast_status_for_primitive(device_span<uint8_t const> val)
 {
   if (val.empty()) { return op_status::MALFORMED_VARIANT; }
@@ -793,7 +808,7 @@ __device__ op_status cast_status_for_primitive(device_span<uint8_t const> val)
   if (decode_primitive<T>(val).has_value()) { return op_status::SUCCESS; }
   if (decode_basic_type(val[0]) != basic_type::PRIMITIVE) { return op_status::TYPE_MISMATCH; }
   auto const ptype = static_cast<primitive_type>(variant_value_header(val[0]));
-  if (ptype == primitive_type_for<T>()) { return op_status::MALFORMED_VARIANT; }
+  if (matches_primitive_type<T>(ptype)) { return op_status::MALFORMED_VARIANT; }
   return is_recognized_primitive_type(ptype) ? op_status::TYPE_MISMATCH
                                              : op_status::MALFORMED_VARIANT;
 }
@@ -1137,7 +1152,7 @@ struct cast_variant_fn {
   // In-out status tracking; null when no status was requested.
   op_status* d_status{nullptr};
 
-  template <variant_numerical T>
+  template <variant_fixed_width T>
   std::unique_ptr<column> operator()()
   {
     rmm::device_buffer data{num_rows * sizeof(T), stream, mr};
@@ -1459,6 +1474,8 @@ std::unique_ptr<column> cast_variant(column_view const& values,
     case type_id::INT64:
     case type_id::FLOAT32:
     case type_id::FLOAT64:
+    case type_id::TIMESTAMP_MICROSECONDS:
+    case type_id::TIMESTAMP_NANOSECONDS:
     case type_id::BOOL8:
     case type_id::STRING:
     case type_id::DECIMAL32:

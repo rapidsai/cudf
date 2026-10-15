@@ -18,16 +18,16 @@
 
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/utilities/concepts.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <cuda/functional>
 #include <cuda/std/cmath>
+#include <cuda/std/concepts>
 #include <cuda/std/functional>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 #include <math_constants.h>
-
-#include <concepts>
 
 namespace cudf {
 namespace io {
@@ -48,25 +48,26 @@ class union_member {
                        reference_type<U, byte_array_stats>,
                        reference_type<U, T>>>;
 
-  template <std::unsigned_integral T, typename U>
+  template <cuda::std::unsigned_integral T, typename U>
   __device__ static type<T, U> get(U& val)
   {
     return val.u_val;
   }
 
-  template <std::signed_integral T, typename U>
+  template <cuda::std::signed_integral T, typename U>
   __device__ static type<T, U> get(U& val)
+    requires(not cuda::std::same_as<T, __int128_t>)
   {
     return val.i_val;
   }
 
-  template <std::same_as<__int128_t> T, typename U>
+  template <cuda::std::same_as<__int128_t> T, typename U>
   __device__ static type<T, U> get(U& val)
   {
     return val.d128_val;
   }
 
-  template <std::floating_point T, typename U>
+  template <cuda::std::floating_point T, typename U>
   __device__ static type<T, U> get(U& val)
   {
     return val.fp_val;
@@ -78,7 +79,7 @@ class union_member {
     return val.str_val;
   }
 
-  template <std::same_as<statistics::byte_array_view> T, typename U>
+  template <cuda::std::same_as<statistics::byte_array_view> T, typename U>
   __device__ static type<T, U> get(U& val)
   {
     return val.byte_val;
@@ -246,7 +247,9 @@ get_untyped_chunk(typed_statistics_chunk<T, include_aggregate> const& chunk)
   stat.has_nan    = chunk.has_nan;
   stat.has_sum    = [&]() {
     // invalidate the sum if overflow or underflow is possible
-    if constexpr (std::is_floating_point_v<E> or std::is_integral_v<E>) {
+    // decimals (E == __int128_t) skip this check so decimal128 sum overflow is not detected
+    if constexpr (cuda::std::is_floating_point_v<E> or
+                  (cudf::is_integral<E>() and not cuda::std::is_same_v<E, __int128_t>)) {
       if (!chunk.has_minmax) { return true; }
       return cuda::std::numeric_limits<E>::max() / chunk.non_nulls >=
                static_cast<E>(chunk.maximum_value) and

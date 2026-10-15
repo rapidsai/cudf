@@ -831,44 +831,13 @@ async def _assemble_partition(
     schema_ir: IR,
     ir_context: IRExecutionContext,
     chunks: list[TableChunk],
-    ordering: Ordering,
 ) -> TableChunk:
     """Assemble pieces for one output partition."""
     if not chunks:
         return empty_table_chunk(schema_ir, context, ir_context.get_cuda_stream())
-    if not ordering.locally_ordered:
-        return await concat_batch(chunks, context, schema_ir.schema, ir_context)
-
-    reserve_extra = (
-        0 if len(chunks) == 1 else sum(chunk.data_alloc_size() for chunk in chunks)
-    )
-    chunks, extra = await make_table_chunks_available_or_wait(
-        context,
-        chunks,
-        reserve_extra=reserve_extra,
-        net_memory_delta=0,
-    )
-    with opaque_memory_usage(extra):
-        if len(chunks) == 1:
-            return chunks[0]
-        with stream_ordered_after(
-            ir_context.get_cuda_stream,
-            upstreams=tuple(chunk.stream for chunk in chunks),
-        ) as stream:
-            table = plc.merge.merge(
-                [chunk.table_view() for chunk in chunks],
-                [key.column_index for key in ordering.keys],
-                [key.order for key in ordering.keys],
-                [key.null_order for key in ordering.keys],
-                stream=stream,
-                mr=context.br().device_mr,
-            )
-            return TableChunk.from_pylibcudf_table(
-                table,
-                stream,
-                exclusive_view=True,
-                br=context.br(),
-            )
+    if len(chunks) == 1:
+        return chunks[0]
+    return await concat_batch(chunks, context, schema_ir.schema, ir_context)
 
 
 async def _send_remote_partition(
@@ -880,7 +849,6 @@ async def _send_remote_partition(
     npartitions: int,
     pid: int,
     store: ChunkStore | None,
-    output_ordering: Ordering,
 ) -> None:
     """Send one packed payload for one remote-owned output partition."""
     chunks = (
@@ -893,7 +861,6 @@ async def _send_remote_partition(
         schema_ir,
         ir_context,
         chunks,
-        output_ordering,
     )
     stream = chunk.stream
     exchange.insert(
@@ -917,7 +884,6 @@ async def _emit_partition(
     ch_out: Channel[TableChunk],
     pid: int,
     store: ChunkStore | None,
-    output_ordering: Ordering,
 ) -> None:
     """Emit one output partition, using an empty chunk when no data is present."""
     chunks = (
@@ -930,7 +896,6 @@ async def _emit_partition(
         schema_ir,
         ir_context,
         chunks,
-        output_ordering,
     )
     await ch_out.send(context, Message(pid, chunk))
 
@@ -954,7 +919,6 @@ async def _adjust_ordering_impl(
     buffer = _OutputPartitionBuffer(
         context, ch_in, output_boundaries, input_ordering, output_ordering
     )
-
     exchange = None
     if plan.remote_sources or plan.remote_destinations:
         exchange = SparseAlltoall(
@@ -1000,7 +964,6 @@ async def _adjust_ordering_impl(
                 plan.npartitions,
                 pid,
                 piece,
-                output_ordering,
             )
         elif owner == comm.rank and piece is not None:
             local_pieces[pid] = piece
@@ -1012,7 +975,6 @@ async def _adjust_ordering_impl(
                 ch_out,
                 pid,
                 local_pieces.pop(pid, None),
-                output_ordering,
             )
 
     if exchange is not None:
@@ -1057,7 +1019,6 @@ async def _adjust_ordering_impl(
             schema_ir,
             ir_context,
             chunks,
-            output_ordering,
         )
         await ch_out.send(context, Message(pid, chunk))
     await buffer.assert_input_drained()
@@ -1105,9 +1066,9 @@ async def adjust_ordering(
     This utility is intentionally narrow and only adjusts data messages. The
     caller is responsible for receiving input metadata and sending output
     metadata. Input rows are assumed to be order-partitioned by
-    ``input_ordering``. Locally unordered chunks are sorted before splitting.
-    When ``output_ordering.locally_ordered`` is true, sorted pieces are merged
-    before emission so complete output partitions are locally ordered.
+    ``input_ordering``. Input chunks arrive in key-range order. Locally
+    unordered chunks are sorted before splitting, and output pieces are
+    concatenated in source order.
 
     The current implementation requires contiguous partition ownership, strict
     output boundaries, and output keys that are a prefix of the input keys.
