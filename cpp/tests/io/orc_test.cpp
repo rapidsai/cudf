@@ -834,10 +834,6 @@ TEST_F(OrcWriterTest, WriterTimezoneNegativeTimestampsNano)
 
 TEST_F(OrcWriterTest, WriterTimezoneStatistics)
 {
-  // Statistics are on the writer's wall clock, so the bounds hold the values a reader decodes, the
-  // ones `WriterTimezoneUsesFixedEpochOffsetAcrossDst` reads back. The bounds take different
-  // offsets where one of them falls in daylight saving time, which is what shifting the reduced
-  // bounds by a single offset would get wrong.
   auto const timestamps =
     column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{during_est, during_edt};
   // A timestamp column nested in a list has a row count of its own, unrelated to the table's
@@ -850,8 +846,7 @@ TEST_F(OrcWriterTest, WriterTimezoneStatistics)
       SCOPED_TRACE(timezone.value_or("default"));
       auto const buffer = write_orc_with_timezone(input, timezone);
 
-      // Schema entries one and two are the table's columns, three is the timestamp child of the
-      // list
+      // Entries one and two are the table's columns, three is the list's timestamp child
       for (auto const column : {1, 3}) {
         auto const stats = timestamp_stats(buffer, column);
         EXPECT_EQ(stats.minimum, (during_est + min_offset) * 1000);
