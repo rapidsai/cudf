@@ -1547,6 +1547,14 @@ TEST_F(HybridScanTest, RowGroupPassesUseSelectedColumns)
     all_row_groups,
     pass_read_limit,
     options);
+  auto const sparse_payload_passes = reader->construct_row_group_passes(
+    cudf::io::parquet::experimental::read_columns_mode::SPARSE_PAYLOAD_COLUMNS,
+    all_row_groups,
+    pass_read_limit,
+    options);
+
+  // Sparse payload passes are estimated the same as payload passes
+  EXPECT_EQ(sparse_payload_passes, payload_passes);
 
   auto const expect_all_row_groups = [&](auto const& passes) {
     auto flattened = std::vector<cudf::size_type>{};
