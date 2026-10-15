@@ -23,11 +23,10 @@
 
 #include <cub/block/block_reduce.cuh>
 #include <cub/block/block_scan.cuh>
+#include <cuda/cmath>
 #include <cuda/functional>
 #include <cuda/std/limits>
 #include <cuda/stream>
-#include <thrust/for_each.h>
-#include <thrust/transform.h>
 
 namespace cudf::io::orc::detail {
 
@@ -1164,8 +1163,8 @@ CUDF_KERNEL void __launch_bounds__(256)
   __shared__ __align__(16) stripe_stream ss;
   __shared__ uint8_t* uncomp_base_g;
 
-  auto const padded_block_header_size = util::round_up_unsafe(block_header_size, comp_block_align);
-  auto const padded_comp_block_size   = util::round_up_unsafe(max_comp_blk_size, comp_block_align);
+  auto const padded_block_header_size = cuda::round_up(block_header_size, comp_block_align);
+  auto const padded_comp_block_size   = cuda::round_up(max_comp_blk_size, comp_block_align);
 
   auto const stripe_id = blockIdx.x / strm_desc.size().second;
   auto const stream_id = blockIdx.x % strm_desc.size().second;
@@ -1355,8 +1354,7 @@ void compact_orc_data_streams(device_2dspan<stripe_stream> strm_desc,
     num_chunks, stream, cudf::get_current_device_resource_ref());
 
   auto const num_blocks =
-    cudf::util::div_rounding_up_unsafe(num_stripes, compact_streams_block_size) *
-    strm_desc.size().second;
+    cuda::ceil_div(num_stripes, compact_streams_block_size) * strm_desc.size().second;
   init_batched_memcpy_kernel<<<num_blocks, compact_streams_block_size, 0, stream.get()>>>(
     strm_desc, enc_streams, srcs, dsts, lengths);
   CUDF_CUDA_TRY(cudaGetLastError());

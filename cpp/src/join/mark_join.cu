@@ -27,6 +27,7 @@
 #include <cuco/detail/open_addressing/kernels.cuh>
 #include <cuco/static_multiset_ref.cuh>
 #include <cuda/atomic>
+#include <cuda/cmath>
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <thrust/copy.h>
@@ -131,8 +132,7 @@ CUDF_KERNEL __launch_bounds__(block_size) void compact_if_kernel(OutputType* out
   auto const warp              = cg::tiled_partition<warp_size>(block);
   auto const tid               = cudf::detail::grid_1d::global_thread_id<block_size>();
   auto const stride            = cudf::detail::grid_1d::grid_stride<block_size>();
-  auto const loop_bound =
-    cudf::util::round_up_unsafe(static_cast<thread_index_type>(op.num_buckets()), stride);
+  auto const loop_bound = cuda::round_up(static_cast<thread_index_type>(op.num_buckets()), stride);
 
   constexpr int buffer_capacity_factor = 4;
   constexpr int buffer_capacity        = block_size * buffer_capacity_factor;
@@ -282,10 +282,9 @@ CUDF_KERNEL __launch_bounds__(block_size) void mark_retrieve_kernel(
   __shared__ cudf::size_type left_buffer[buffer_capacity];
   cuda::atomic_ref<cudf::size_type, cuda::thread_scope_device> global_off{*global_offset};
 
-  auto const tid    = cudf::detail::grid_1d::global_thread_id<block_size>();
-  auto const stride = cudf::detail::grid_1d::grid_stride<block_size>();
-  auto const loop_bound =
-    cudf::util::round_up_unsafe(static_cast<thread_index_type>(num_buckets), stride);
+  auto const tid        = cudf::detail::grid_1d::global_thread_id<block_size>();
+  auto const stride     = cudf::detail::grid_1d::grid_stride<block_size>();
+  auto const loop_bound = cuda::round_up(static_cast<thread_index_type>(num_buckets), stride);
 
   for (thread_index_type i = tid; i < loop_bound; i += stride) {
     bool has_match = false;
@@ -389,7 +388,7 @@ void mark_join::clear_marks(cuda::stream_ref stream)
   auto const num_buckets = static_cast<cudf::thread_index_type>(storage_ref.num_buckets());
   if (num_buckets == 0) return;
 
-  auto const grid_size = cudf::util::div_rounding_up_unsafe(num_buckets, mark_block_size);
+  auto const grid_size = cuda::ceil_div(num_buckets, mark_block_size);
   clear_marks_kernel<mark_block_size><<<grid_size, mark_block_size, 0, stream.get()>>>(
     storage_ref, static_cast<slot_type>(masked_empty_sentinel), num_buckets);
   CUDF_CUDA_TRY(cudaGetLastError());
