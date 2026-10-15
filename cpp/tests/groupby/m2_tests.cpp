@@ -377,6 +377,49 @@ TEST_F(GroupbyStableM2Test, NonFiniteAndExtremeConstants)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, sorted->view().column(1));
 }
 
+TEST_F(GroupbyStableM2Test, NonFinitePositionDoesNotChangeResult)
+{
+  auto const inf = std::numeric_limits<double>::infinity();
+  for (int n : {1, 33, 1025, 10000}) {
+    for (int pos : {0, n / 2, n - 1}) {
+      for (double non_finite : {NaN, inf, -inf}) {
+        for (bool nullable : {false, true}) {
+          SCOPED_TRACE(::testing::Message() << "n=" << n << " pos=" << pos
+                                            << " value=" << non_finite << " nullable=" << nullable);
+          std::vector<int32_t> keys(n, 0);
+          std::vector<double> values(n);
+          std::vector<bool> valid(n, true);
+          for (int i = 0; i < n; ++i) {
+            values[i] = i;
+            if (nullable && i != pos && i % 7 == 0) { valid[i] = false; }
+          }
+          values[pos] = non_finite;
+          keys_col<int32_t> input_keys(keys.begin(), keys.end());
+          vals_col<double> input_values =
+            nullable ? vals_col<double>(values.begin(), values.end(), valid.begin())
+                     : vals_col<double>(values.begin(), values.end());
+          std::vector<cudf::groupby::aggregation_request> requests(1);
+          requests[0].values = input_values;
+          requests[0].aggregations.push_back(
+            cudf::make_m2_aggregation<cudf::groupby_aggregation>());
+          requests[0].aggregations.push_back(
+            cudf::make_variance_aggregation<cudf::groupby_aggregation>(0));
+          requests[0].aggregations.push_back(
+            cudf::make_std_aggregation<cudf::groupby_aggregation>(0));
+          cudf::groupby::groupby gb(cudf::table_view{{input_keys}});
+          auto result = gb.aggregate(requests);
+          for (auto const& column : result.second[0].results) {
+            EXPECT_EQ(column->null_count(), 0);
+            auto const actual = cudf::test::to_host<double>(*column).first;
+            ASSERT_EQ(actual.size(), 1);
+            EXPECT_TRUE(std::isnan(actual.front()));
+          }
+        }
+      }
+    }
+  }
+}
+
 TEST_F(GroupbyStableM2Test, IndependentSumsAndRequestOrder)
 {
   keys_col<int32_t> keys{0, 0, 0, 1, 1};

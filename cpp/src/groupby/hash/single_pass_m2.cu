@@ -69,6 +69,11 @@ struct merge_m2 {
     // Avoid inf * 0 for empty partials and retain non-finite singleton M2.
     if (a.count == 0) { return b; }
     if (b.count == 0) { return a; }
+    // Make non-finite results independent of the order in which states are merged.
+    if (!cuda::std::isfinite(a.mean) || !cuda::std::isfinite(b.mean)) {
+      auto constexpr nan = cuda::std::numeric_limits<double>::quiet_NaN();
+      return {a.count + b.count, nan, nan};
+    }
     auto const count   = a.count + b.count;
     auto const delta   = b.mean - a.mean;
     auto const delta_n = count <= T{rows_per_chunk} ? delta * inverse_counts[count]
