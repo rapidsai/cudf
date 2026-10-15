@@ -37,7 +37,10 @@ from cudf_polars.dsl.utils.io import (
     prefetch_parquet_file_metadata_for_ir,
 )
 from cudf_polars.quent._plan import build_quent_operator_map, emit_plan
-from cudf_polars.streaming.actor_graph.collectives import ReserveOpIDs
+from cudf_polars.streaming.actor_graph.collectives import (
+    ReserveOpIDs,
+    collective_id_scope,
+)
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.core import generate_network
 from cudf_polars.streaming.actor_graph.utils import empty_table_chunk
@@ -908,6 +911,31 @@ def evaluate_on_rank(
     metadata
         Collected channel metadata.
     """
+    # Each query reserves its collective IDs from its own pool, so that the
+    # IDs agree across ranks even if this process concurrently takes part in
+    # other queries (possibly on other communicators).
+    with collective_id_scope():
+        return _evaluate_on_rank(
+            ctx,
+            comm,
+            py_executor,
+            ir,
+            config_options,
+            quent_query_worker_state=quent_query_worker_state,
+            query_id=query_id,
+        )
+
+
+def _evaluate_on_rank(
+    ctx: Context,
+    comm: Communicator,
+    py_executor: ThreadPoolExecutor,
+    ir: IR,
+    config_options: ConfigOptions[StreamingExecutor],
+    *,
+    quent_query_worker_state: QuentQueryWorkerState | None,
+    query_id: uuid.UUID,
+) -> tuple[DataFrame, list[ChannelMetadata]]:
     stats = allgather_stats(comm, ctx.br(), ir, config_options, py_executor)
     # ``get_stable_plan_id`` is a deterministic function of the IR
     # structure, so every rank derives the same logical plan ID for a
