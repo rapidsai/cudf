@@ -210,10 +210,19 @@ struct writer_timezone {
   // Instant that encoded timestamps are stored relative to: the ORC epoch as wall-clock time in
   // `name`. Equal to `orc_utc_epoch` when writing UTC.
   duration_s const base_epoch;
-  // Offsets from UT over time, used to put timestamps on `name`'s wall clock for the statistics.
-  // Empty when no statistics are gathered, and when writing UTC, where the wall clock and the
-  // input instants coincide.
-  std::unique_ptr<cudf::table> const transitions;
+
+  // Writing UTC leaves the input instants on the wall clock, so nothing needs shifting
+  [[nodiscard]] bool is_utc() const noexcept { return name == "UTC"; }
+
+  /**
+   * @brief Returns this timezone's offsets from UT over time, reading them on the first call.
+   *
+   * Only the statistics need them, so a writer that gathers none never reads the TZif file.
+   *
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return Transition table, as returned by `make_timezone_transition_table`
+   */
+  [[nodiscard]] table_view ut_offsets(cuda::stream_ref stream) const;
 
   /**
    * @brief Resolves a timezone name into the epoch that timestamps are encoded relative to.
@@ -221,18 +230,15 @@ struct writer_timezone {
    * Uses `base_epoch_in_timezone`, so the writer and the reader resolve the epoch the same way.
    *
    * @param timezone Timezone name
-   * @param stats_freq Frequency of statistics to be included in the output file
-   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @throw cudf::logic_error if `timezone` is empty or does not resolve to a TZif file
    */
-  writer_timezone(std::string timezone, statistics_freq stats_freq, cuda::stream_ref stream);
+  explicit writer_timezone(std::string timezone);
 
  private:
   [[nodiscard]] static duration_s compute_base_epoch(std::string_view timezone);
-  [[nodiscard]] static std::unique_ptr<cudf::table> make_transitions(std::string_view timezone,
-                                                                     statistics_freq stats_freq,
-                                                                     cuda::stream_ref stream);
+
+  mutable std::unique_ptr<cudf::table> transitions;
 };
 
 enum class writer_state {

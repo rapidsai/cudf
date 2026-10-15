@@ -1317,9 +1317,8 @@ wall_clock_columns make_wall_clock_columns(orc_table_view const& orc_table,
   auto views =
     cudf::detail::make_empty_host_vector<column_device_view>(orc_table.num_columns(), stream);
 
-  // Writing UTC leaves the input instants on the wall clock already
-  if (timezone.transitions->num_rows() != 0) {
-    auto const d_transitions = table_device_view::create(timezone.transitions->view(), stream);
+  if (not timezone.is_utc()) {
+    auto const d_transitions = table_device_view::create(timezone.ut_offsets(stream), stream);
 
     for (auto const& column : orc_table.columns) {
       if (column.orc_kind() != TypeKind::TIMESTAMP) { continue; }
@@ -2761,24 +2760,18 @@ duration_s writer_timezone::compute_base_epoch(std::string_view timezone)
   return base_epoch_in_timezone(timezone);
 }
 
-std::unique_ptr<cudf::table> writer_timezone::make_transitions(std::string_view timezone,
-                                                               statistics_freq stats_freq,
-                                                               cuda::stream_ref stream)
+table_view writer_timezone::ut_offsets(cuda::stream_ref stream) const
 {
-  if (timezone == "UTC" or stats_freq == statistics_freq::STATISTICS_NONE) {
-    return std::make_unique<cudf::table>();
+  if (transitions == nullptr) {
+    transitions = cudf::detail::make_timezone_transition_table(
+      {}, name, stream, cudf::get_current_device_resource_ref());
   }
 
-  return cudf::detail::make_timezone_transition_table(
-    {}, timezone, stream, cudf::get_current_device_resource_ref());
+  return transitions->view();
 }
 
-writer_timezone::writer_timezone(std::string timezone,
-                                 statistics_freq stats_freq,
-                                 cuda::stream_ref stream)
-  : name{std::move(timezone)},
-    base_epoch{compute_base_epoch(name)},
-    transitions{make_transitions(name, stats_freq, stream)}
+writer_timezone::writer_timezone(std::string timezone)
+  : name{std::move(timezone)}, base_epoch{compute_base_epoch(name)}
 {
 }
 
@@ -2796,7 +2789,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     _sort_dictionaries{options.get_enable_dictionary_sort()},
     _single_write_mode(mode),
     _kv_meta(options.get_key_value_metadata()),
-    _timezone(options.get_writer_timezone(), _stats_freq, stream),
+    _timezone(options.get_writer_timezone()),
     _out_sink(std::move(sink))
 {
   if (options.get_metadata()) {
@@ -2820,7 +2813,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     _sort_dictionaries{options.get_enable_dictionary_sort()},
     _single_write_mode(mode),
     _kv_meta(options.get_key_value_metadata()),
-    _timezone(options.get_writer_timezone(), _stats_freq, stream),
+    _timezone(options.get_writer_timezone()),
     _out_sink(std::move(sink))
 {
   if (options.get_metadata()) {
