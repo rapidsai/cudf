@@ -37,9 +37,9 @@ from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.actor_graph.collectives.ordering import (
     _metadata_has_ordering,
 )
-from cudf_polars.streaming.actor_graph.collectives.sort import (
-    _can_sort_chunkwise,
-    _sort_to_order_keys,
+from cudf_polars.streaming.actor_graph.collectives.sort import _can_sort_chunkwise
+from cudf_polars.streaming.actor_graph.collectives.sort_utils import (
+    sort_to_order_keys,
 )
 from cudf_polars.streaming.actor_graph.core import evaluate_logical_plan
 from cudf_polars.streaming.actor_graph.utils import (
@@ -1185,7 +1185,7 @@ def test_get_ordering(
         3, partitioning=Partitioning(inter_rank=scheme, local="inherit")
     )
 
-    order_keys = _sort_to_order_keys(sort_xy)
+    order_keys = sort_to_order_keys(sort_xy)
     partitioning = NormalizedPartitioning.from_keys(
         meta.partitioning, nranks=1, keys=order_keys
     )
