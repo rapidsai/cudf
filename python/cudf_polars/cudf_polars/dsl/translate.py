@@ -43,8 +43,6 @@ if TYPE_CHECKING:
 
     from cudf_polars.typing import NodeTraverser, Slice as Zlice
 
-_HAS_ROLLING_FUNCTION = hasattr(plrs._expr_nodes, "RollingFunction")
-
 _ARRAY_PASSTHROUGH_ERROR = "Only pass-through of Array columns is supported"
 
 __all__ = ["Translator", "translate_named_expr"]
@@ -1279,7 +1277,7 @@ def _translate_function(
             options,
             *(translator.translate_expr(n=n, schema=schema) for n in node.input),
         )
-    elif _HAS_ROLLING_FUNCTION and isinstance(name, plrs._expr_nodes.RollingFunction):
+    elif isinstance(name, plrs._expr_nodes.RollingFunction):
         window_size, min_periods, weights, center, fn_params = options
         if weights is not None:
             raise NotImplementedError("Weighted rolling windows")
@@ -1383,7 +1381,7 @@ def _(
     dtype: DataType,
     schema: Schema,
 ) -> expr.Expr:
-    if hasattr(plrs._expr_nodes, "RollingGroupOptions") and isinstance(
+    if isinstance(
         node.options, plrs._expr_nodes.RollingGroupOptions
     ):  # pragma: no cover; polars uses AExpr::Rolling now
         with set_expr_context(translator, ExecutionContext.ROLLING):

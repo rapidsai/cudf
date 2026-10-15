@@ -908,10 +908,10 @@ class UnaryFunction(Expr):
                 ),
                 stream=df.stream,
             )
-            if rounded.type() != self.dtype.plc_type:
-                rounded = plc.unary.cast(rounded, self.dtype.plc_type, stream=df.stream)
-            return Column(rounded, dtype=self.dtype).sorted_like(
-                values
+            return (
+                Column(rounded, dtype=self.dtype)
+                .astype(self.dtype, stream=df.stream)
+                .sorted_like(values)
             )  # pragma: no cover
         elif self.name == "round_sig_figs":
             column = self.children[0].evaluate(df, context=context)
