@@ -13,17 +13,6 @@ conda config --set channel_priority strict
 
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_cpp libcudf cudf --cuda "$RAPIDS_CUDA_VERSION")")
-
-# Unpatched MPF fails on empty buffers with new RMM; remove after independent fixes ship.
-MPF_PR=1261
-MPF_COMMIT=f06149945f934b7be925f2ad2db100767eaec25f
-if [[ "${RAPIDS_DEPENDENCIES}" == "oldest" ]]; then
-  # Oldest numba needs a fixed MPF build that retains the older UCXX/cuda-core minimum.
-  MPF_PR=1258
-  MPF_COMMIT=5ce52df90de32c03c449a51619b20d72fe7f3474
-fi
-MPF_CPP_CHANNEL=$(rapids-get-pr-artifact rapidsmpf "${MPF_PR}" cpp conda "${MPF_COMMIT}")
-MPF_PYTHON_CHANNEL=$(rapids-get-pr-artifact rapidsmpf "${MPF_PR}" python conda "${MPF_COMMIT}")
 PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_python cudf cudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
 PYTHON_NOARCH_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_python cudf cudf --pure --arch any --cuda "$RAPIDS_CUDA_VERSION")")
 
@@ -44,8 +33,6 @@ if [[ -n "${CUDF_EXTRA_DEPENDENCY_MATRIX:-}" ]]; then
 fi
 
 CMD="${CMD} \
-  --prepend-channel \"${MPF_CPP_CHANNEL}\" \
-  --prepend-channel \"${MPF_PYTHON_CHANNEL}\" \
   --prepend-channel \"${CPP_CHANNEL}\" \
   --prepend-channel \"${PYTHON_CHANNEL}\" \
   --prepend-channel \"${PYTHON_NOARCH_CHANNEL}\" \
