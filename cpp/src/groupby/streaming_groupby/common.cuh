@@ -102,8 +102,8 @@ struct n_table_comparator {
 };
 
 /*
- * Inserts rows into the HashCSR slot table. Until dense IDs are assigned, target_indices holds
- * each row's slot bits; excluded rows hold the UINT32_MAX (no slot) sentinel.
+ * Inserts rows into the open-addressing slot table. Until dense IDs are assigned, target_indices
+ * holds each row's slot bits; excluded rows hold the UINT32_MAX (no slot) sentinel.
  */
 template <typename Equal, typename Hasher>
 struct insert_fn {
