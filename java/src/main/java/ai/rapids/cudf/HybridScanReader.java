@@ -312,21 +312,16 @@ public class HybridScanReader implements AutoCloseable {
     if (packed == null || packed.length == 0) {
       return new DictionaryByteRange[0];
     }
-    // Layout: [off0, size0, extent0, off1, size1, extent1, ...]
+    // Layout: [off0, size0, isExact0, off1, size1, isExact1, ...]
     if (packed.length % 3 != 0) {
       throw new IllegalStateException(
           "Expected dictionary page ranges packed in threes, got " + packed.length + " longs");
     }
     int n = packed.length / 3;
-    DictionaryByteRange.Extent[] extents = DictionaryByteRange.Extent.values();
     DictionaryByteRange[] out = new DictionaryByteRange[n];
     for (int i = 0; i < n; i++) {
-      long extent = packed[3 * i + 2];
-      if (extent < 0 || extent >= extents.length) {
-        throw new IllegalStateException("Unknown dictionary page extent " + extent);
-      }
       out[i] = new DictionaryByteRange(new ByteRange(packed[3 * i], packed[3 * i + 1]),
-          extents[(int) extent]);
+          packed[3 * i + 2] != 0);
     }
     return out;
   }

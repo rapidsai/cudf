@@ -1314,7 +1314,7 @@ public class HybridScanReaderTest extends CudfTestBase {
   private static final long MAX_DICT_PAGE_READ = 1L << 20;
 
   /**
-   * A writer that sets dictionary_page_offset (every cudf-written file) yields only EXACT ranges,
+   * A writer that sets dictionary_page_offset (every cudf-written file) yields only exact ranges,
    * so the included-unbounded result matches dictionaryPagesByteRanges() one-for-one.
    */
   @Test
@@ -1328,7 +1328,7 @@ public class HybridScanReaderTest extends CudfTestBase {
       assertEquals(exact.length, unbounded.length, "one range per dict column chunk either way");
       assertTrue(exact.length > 0, "low-cardinality num_units has dictionary pages");
       for (int i = 0; i < exact.length; i++) {
-        assertEquals(DictionaryByteRange.Extent.EXACT, unbounded[i].extent(),
+        assertTrue(unbounded[i].isExact(),
             "cudf sets dictionary_page_offset, so the range is the page itself");
         assertEquals(exact[i], unbounded[i].byteRange(), "same range as the exact API");
       }
@@ -1336,8 +1336,8 @@ public class HybridScanReaderTest extends CudfTestBase {
   }
 
   /**
-   * dictionaryPageLengths() measures the page in each EXACT range buffer as the whole buffer, since
-   * an EXACT range is already exactly one dictionary page.
+   * dictionaryPageLengths() measures the page in each exact range buffer as the whole buffer, since
+   * an exact range is already exactly one dictionary page.
    */
   @Test
   void testDictionaryPageLengthsMeasuresExactPage(@TempDir Path tmp) throws IOException {
@@ -1356,7 +1356,7 @@ public class HybridScanReaderTest extends CudfTestBase {
         long[] lengths = HybridScanReader.dictionaryPageLengths(host);
         for (int i = 0; i < ranges.length; i++) {
           assertEquals(ranges[i].byteRange().size(), lengths[i],
-              "an EXACT range is exactly one dictionary page");
+              "an exact range is exactly one dictionary page");
         }
       } finally {
         for (HostMemoryBuffer b : host) {
@@ -1382,7 +1382,7 @@ public class HybridScanReaderTest extends CudfTestBase {
   /**
    * End-to-end included-unbounded pruning: cap each range, cut it down to its page with
    * dictionaryPageLengths(), stage the page on the device, and prune. Matches the exact-path result
-   * for this cudf-written fixture (all EXACT ranges).
+   * for this cudf-written fixture (all exact ranges).
    */
   @Test
   void testIncludeUnboundedPrunesSubsetOfGroups(@TempDir Path tmp) throws IOException {

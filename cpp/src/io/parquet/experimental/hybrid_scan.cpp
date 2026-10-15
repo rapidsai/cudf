@@ -174,7 +174,13 @@ std::vector<text::byte_range_info> hybrid_scan_reader::dictionary_pages_byte_ran
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
 
-  return _impl->dictionary_pages_byte_ranges(input_row_group_indices, options).first;
+  auto const ranges = _impl->dictionary_pages_byte_ranges(input_row_group_indices, options);
+  std::vector<text::byte_range_info> byte_ranges;
+  byte_ranges.reserve(ranges.first.size());
+  for (auto const& range : ranges.first) {
+    byte_ranges.push_back(range.byte_range);
+  }
+  return byte_ranges;
 }
 
 std::vector<dictionary_byte_range>
@@ -187,8 +193,7 @@ hybrid_scan_reader::dictionary_pages_byte_ranges_include_unbounded(
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
 
-  return _impl->dictionary_pages_byte_ranges_include_unbounded(input_row_group_indices, options)
-    .first;
+  return _impl->dictionary_pages_byte_ranges(input_row_group_indices, options, true).first;
 }
 
 std::vector<cudf::size_type> hybrid_scan_reader::filter_row_groups_with_dictionary_pages(

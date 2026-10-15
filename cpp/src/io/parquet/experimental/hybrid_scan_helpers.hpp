@@ -79,19 +79,6 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
     std::reference_wrapper<ast::expression const> filter,
     cuda::stream_ref stream) const;
 
-  /**
-   * @brief Implements `dictionary_pages_byte_ranges` and
-   *        `dictionary_pages_byte_ranges_include_unbounded`
-   *
-   * @param include_unbounded Whether to also return `upper_bound_if_present` ranges
-   */
-  [[nodiscard]] std::pair<std::vector<dictionary_byte_range>, std::vector<cudf::size_type>>
-  dictionary_pages_byte_ranges_impl(std::span<std::vector<size_type> const> row_group_indices,
-                                    std::span<data_type const> output_dtypes,
-                                    std::span<cudf::size_type const> output_column_schemas,
-                                    std::reference_wrapper<ast::expression const> filter,
-                                    bool include_unbounded);
-
  public:
   /**
    * @brief Constructor for aggregate_reader_metadata
@@ -271,38 +258,17 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param output_dtypes Datatypes of output columns
    * @param output_column_schemas schema indices of output columns
    * @param filter AST expression to filter row groups based on dictionary pages
-   *
-   * @return A pair of vectors containing dictionary page byte ranges and corresponding source
-   *         indices
-   */
-  [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
-                          std::vector<cudf::size_type>>
-  dictionary_pages_byte_ranges(std::span<std::vector<size_type> const> row_group_indices,
-                               std::span<data_type const> output_dtypes,
-                               std::span<cudf::size_type const> output_column_schemas,
-                               std::reference_wrapper<ast::expression const> filter);
-
-  /**
-   * @brief Get dictionary page ranges, including ranges that only bound a possibly absent page
-   *
-   * Like `dictionary_pages_byte_ranges` but also returns an `upper_bound_if_present` range for a
-   * column chunk whose footer neither gives a `dictionary_page_offset` nor an offset index to bound
-   * the page with, which some writers omit even with a dictionary page present. The range then
-   * covers the whole chunk and its dictionary page may turn out not to be there at all.
-   *
-   * @param row_group_indices Input row groups indices
-   * @param output_dtypes Datatypes of output columns
-   * @param output_column_schemas schema indices of output columns
-   * @param filter AST expression to filter row groups based on dictionary pages
+   * @param include_unbounded Whether to also return an upper-bound range for a column chunk whose
+   *        footer has neither a `dictionary_page_offset` nor an offset index
    *
    * @return A pair of vectors containing dictionary page ranges and corresponding source indices
    */
   [[nodiscard]] std::pair<std::vector<dictionary_byte_range>, std::vector<cudf::size_type>>
-  dictionary_pages_byte_ranges_include_unbounded(
-    std::span<std::vector<size_type> const> row_group_indices,
-    std::span<data_type const> output_dtypes,
-    std::span<cudf::size_type const> output_column_schemas,
-    std::reference_wrapper<ast::expression const> filter);
+  dictionary_pages_byte_ranges(std::span<std::vector<size_type> const> row_group_indices,
+                               std::span<data_type const> output_dtypes,
+                               std::span<cudf::size_type const> output_column_schemas,
+                               std::reference_wrapper<ast::expression const> filter,
+                               bool include_unbounded = false);
 
   /**
    * @brief Filter the row groups using dictionaries based on predicate filter

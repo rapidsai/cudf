@@ -2213,60 +2213,10 @@ INSTANTIATE_TEST_SUITE_P(Compression,
                          ::testing::Values(cudf::io::compression_type::NONE,
                                            cudf::io::compression_type::ZSTD));
 
-namespace {
-
-// Footer metadata that a reader built from an edited copy of it can still resolve columns with. A
-// raw thrift parse leaves the derived schema fields unset, so go through a reader built from the
-// footer bytes instead.
-cudf::io::parquet::FileMetaData initialized_footer_metadata(cudf::io::datasource& datasource)
-{
-  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(datasource);
-  auto const reader        = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
-    *footer_buffer, cudf::io::parquet_reader_options::builder().build());
-  return reader->parquet_metadata();
-}
-
-void drop_encoding_stats(cudf::io::parquet::FileMetaData& metadata)
-{
-  for (auto& row_group : metadata.row_groups) {
-    for (auto& column : row_group.columns) {
-      column.meta_data.encoding_stats.reset();
-    }
-  }
-}
-
-// Leave dictionary_page_offset unset with data_page_offset pointing at the dictionary page, as some
-// writers do. cudf's writer always sets it, so this is the only way to get such a footer.
-void hide_dictionary_page_offsets(cudf::io::parquet::FileMetaData& metadata)
-{
-  for (auto& row_group : metadata.row_groups) {
-    for (auto& column : row_group.columns) {
-      auto& col_meta = column.meta_data;
-      if (col_meta.dictionary_page_offset <= 0) { continue; }
-      col_meta.data_page_offset       = col_meta.dictionary_page_offset;
-      col_meta.dictionary_page_offset = 0;
-    }
-  }
-}
-
-std::vector<std::pair<int64_t, int64_t>> to_offsets_and_sizes(
-  std::vector<cudf::io::text::byte_range_info> const& ranges)
-{
-  auto result = std::vector<std::pair<int64_t, int64_t>>{};
-  std::ranges::transform(ranges, std::back_inserter(result), [](auto const& r) {
-    return std::pair{r.offset(), r.size()};
-  });
-  return result;
-}
-
-}  // namespace
-
 // Dropping the upper-bound ranges from dictionary_pages_byte_ranges_include_unbounded() must give
 // back exactly what dictionary_pages_byte_ranges() returns, whatever the footer leaves out.
 TEST_F(HybridScanFiltersTest, DictionaryPagesByteRangesIncludeUnboundedMatchesExact)
 {
-  using cudf::io::parquet::experimental::dictionary_page_extent;
-
   auto constexpr num_rows_per_row_group = 20'000;
   // RG 0 holds a single distinct value so it is dict encoded
   // RG 1 holds all distinct values so it falls back
@@ -2279,13 +2229,9 @@ TEST_F(HybridScanFiltersTest, DictionaryPagesByteRangesIncludeUnboundedMatchesEx
     cudf::test::strings_column_wrapper(strings, strings + 2 * num_rows_per_row_group);
   auto const table = cudf::table_view{{column}};
 
-  auto table_metadata = cudf::io::table_input_metadata{table};
-  table_metadata.column_metadata[0].set_name("col0");
-
   auto const filepath = temp_env->get_temp_filepath("DictionaryIncludeUnbounded.parquet");
   auto const write_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table)
-      .metadata(std::move(table_metadata))
       .row_group_size_rows(num_rows_per_row_group)
       .dictionary_policy(cudf::io::dictionary_policy::ADAPTIVE)
       .max_dictionary_size(1024)
@@ -2297,7 +2243,7 @@ TEST_F(HybridScanFiltersTest, DictionaryPagesByteRangesIncludeUnboundedMatchesEx
   auto stream = cudf::get_default_stream();
 
   auto const datasource = cudf::io::datasource::create(filepath);
-  auto const col0_ref   = cudf::ast::column_name_reference("col0");
+  auto const col0_ref   = cudf::ast::column_name_reference("_col0");
 
   auto literal_value = cudf::string_scalar("dict_value", true, stream);
   auto literal       = cudf::ast::literal(literal_value);
@@ -2306,20 +2252,54 @@ TEST_F(HybridScanFiltersTest, DictionaryPagesByteRangesIncludeUnboundedMatchesEx
   auto const options =
     cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
 
+  // Footer metadata that a reader built from an edited copy of it can still resolve columns with,
+  // and without the page index. A raw thrift parse leaves the derived schema fields unset, and
+  // `read_parquet_footers` also loads the offset index, so go through a reader built from the
+  // footer bytes instead.
+  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
+  auto const footer_reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
+    *footer_buffer, cudf::io::parquet_reader_options::builder().build());
+  auto const footer_metadata = footer_reader->parquet_metadata();
+
+  auto const to_offsets_and_sizes = [](std::vector<cudf::io::text::byte_range_info> const& ranges) {
+    auto result = std::vector<std::pair<int64_t, int64_t>>{};
+    std::ranges::transform(ranges, std::back_inserter(result), [](auto const& r) {
+      return std::pair{r.offset(), r.size()};
+    });
+    return result;
+  };
+
   for (auto const drop_stats : {false, true}) {
     for (auto const hide_offsets : {false, true}) {
       SCOPED_TRACE("drop_stats=" + std::to_string(drop_stats) +
                    " hide_offsets=" + std::to_string(hide_offsets));
 
-      auto metadata = initialized_footer_metadata(*datasource);
-      if (drop_stats) { drop_encoding_stats(metadata); }
-      if (hide_offsets) { hide_dictionary_page_offsets(metadata); }
+      auto metadata = footer_metadata;
+      if (drop_stats) {
+        for (auto& row_group : metadata.row_groups) {
+          for (auto& column : row_group.columns) {
+            column.meta_data.encoding_stats.reset();
+          }
+        }
+      }
+      // Leave dictionary_page_offset unset with data_page_offset pointing at the dictionary page,
+      // as some writers do. cudf's writer always sets it, so this is the only way to get such a
+      // footer.
+      if (hide_offsets) {
+        for (auto& row_group : metadata.row_groups) {
+          for (auto& column : row_group.columns) {
+            auto& col_meta = column.meta_data;
+            if (col_meta.dictionary_page_offset <= 0) { continue; }
+            col_meta.data_page_offset       = col_meta.dictionary_page_offset;
+            col_meta.dictionary_page_offset = 0;
+          }
+        }
+      }
 
       // Never call setup_page_index(), so there is no offset index to bound a page with either
       auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
         metadata, cudf::io::parquet_reader_options::builder().build());
 
-      reader->reset_column_selection();
       auto const row_group_indices = reader->all_row_groups(options);
       ASSERT_EQ(row_group_indices.size(), 2);
 
@@ -2330,9 +2310,7 @@ TEST_F(HybridScanFiltersTest, DictionaryPagesByteRangesIncludeUnboundedMatchesEx
       // RG 0's range is only a bound once its dictionary_page_offset is hidden. RG 1 fell back, so
       // it has nothing to prune with either way.
       ASSERT_EQ(unbounded.size(), 2);
-      EXPECT_EQ(unbounded[0].extent,
-                hide_offsets ? dictionary_page_extent::upper_bound_if_present
-                             : dictionary_page_extent::exact);
+      EXPECT_EQ(unbounded[0].is_exact, not hide_offsets);
       EXPECT_GT(unbounded[0].byte_range.size(), 0);
       EXPECT_EQ(unbounded[1].byte_range.size(), 0);
 
@@ -2340,8 +2318,7 @@ TEST_F(HybridScanFiltersTest, DictionaryPagesByteRangesIncludeUnboundedMatchesEx
       // no ranges at all when nothing is left
       auto bounded = std::vector<cudf::io::text::byte_range_info>{};
       std::ranges::transform(unbounded, std::back_inserter(bounded), [](auto const& r) {
-        return r.extent == dictionary_page_extent::exact ? r.byte_range
-                                                         : cudf::io::text::byte_range_info{};
+        return r.is_exact ? r.byte_range : cudf::io::text::byte_range_info{};
       });
       if (std::ranges::all_of(bounded, [](auto const& r) { return r.size() == 0; })) {
         bounded.clear();

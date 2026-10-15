@@ -91,10 +91,8 @@ void decode_dictionary_page_headers(
       if (page.flags & parquet::detail::PAGEINFO_FLAGS_DICTIONARY) {
         chunk.dict_page = &page;
       } else if (chunk.compressed_size > 0) {
-        // The span holds exactly one page, but not a dictionary page: e.g. the footer's
-        // `dictionary_page_offset` points at a data page. The prune kernels would decode it as a
-        // dictionary, reading past the end of compressed data or pruning with data values, so reset
-        // the chunk to the state an empty span leaves it in.
+        // Not a dictionary page (e.g. a bad `dictionary_page_offset`): reset the chunk as if its
+        // span were empty, so the prune kernels don't decode a data page as a dictionary.
         auto const src_col_schema = page.src_col_schema;
         parquet::detail::reset_page_info(page);
         page.chunk_idx        = static_cast<int32_t>(chunk_idx);
