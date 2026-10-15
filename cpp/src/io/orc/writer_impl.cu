@@ -1284,12 +1284,8 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
 /**
  * @brief Timestamp columns put on the writer's wall clock, for the statistics to be gathered from.
  *
- * The wall clock is the frame readers compare the bounds in, while the data stream stays relative
- * to the epoch; Apache shifts each value the same way before updating its statistics
- * (`TimestampTreeWriter`, through `SerializationUtils.convertToUtc`). Shifting the reduced bounds
- * instead would not do: daylight saving makes the offset vary between the values of one column,
- * and wall-clock order differs from instant order across a fold. Columns of other types are
- * absent, and the statistics read them from the table itself.
+ * Shifted per value, like Apache's `TimestampTreeWriter` does, because daylight saving makes the
+ * offset vary within a column. Non-timestamp columns are absent; their statistics read the table.
  */
 struct wall_clock_columns {
   std::vector<cuda::device_buffer<int64_t>> data;  // shifted values, one per timestamp column
