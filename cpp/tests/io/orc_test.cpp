@@ -834,12 +834,11 @@ TEST_F(OrcWriterTest, WriterTimezoneNegativeTimestampsNano)
 
 TEST_F(OrcWriterTest, WriterTimezoneStatistics)
 {
-  auto const timestamps =
+  auto const top_level =
     column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{during_est, during_edt};
-  // A timestamp column nested in a list has a row count of its own, unrelated to the table's
   cudf::test::lists_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> const nested{
     {during_est}, {during_edt, during_est}};
-  table_view input({timestamps, nested});
+  table_view input({top_level, nested});
 
   auto const bounds_shift_with_the_values =
     [&](std::optional<std::string> const& timezone, int64_t min_offset, int64_t max_offset) {
