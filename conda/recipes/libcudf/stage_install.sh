@@ -8,10 +8,14 @@ export LC_ALL=C
 manifests="${SRC_DIR}/staged-manifests"
 staged="${SRC_DIR}/staged-files"
 
+# Compare sorted inventories so dependency files stay out of package manifests.
+# NUL delimiters keep whitespace in installed filenames from changing ownership.
 prefix_files() {
   find "$PREFIX" \( -type f -o -type l \) -printf '%P\0' | sort -z
 }
 
+# Merge payloads into existing dependency directories without recopying file contents.
+# Batch files by parent directory to limit subprocess overhead and argument size.
 move_files() {
   local source=$1 destination=$2 file directory previous=
   local -a batch=()
@@ -39,6 +43,9 @@ case "$1" in
     package=$2
     shift 2
     mkdir -p "$manifests"
+    # Outputs must introduce distinct paths so dependency files and earlier
+    # outputs stay out of this manifest. Keep earlier installs available for
+    # dependent installs and for compiling the examples.
     prefix_files > "${manifests}/before"
     "$@"
     prefix_files > "${manifests}/after"
