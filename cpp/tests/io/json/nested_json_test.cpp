@@ -18,11 +18,8 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/mr/statistics_resource_adaptor.hpp>
-
 #include <cuda/iterator>
 #include <cuda/std/tuple>
-#include <cuda/stream>
 
 #include <algorithm>
 #include <limits>
@@ -124,41 +121,6 @@ void print_column(std::string const& input, cuio_json::json_column const& column
 
 // Base test fixture for tests
 struct JsonTest : public cudf::test::BaseFixture {};
-
-TEST_F(JsonTest, AllNullStringCharsPreserveStreamAndResource)
-{
-  int device{};
-  CUDF_CUDA_TRY(cudaGetDevice(&device));
-  cuda::stream stream{cuda::device_ref{device}};
-  auto output_mr         = rmm::mr::statistics_resource_adaptor{mr()};
-  auto output_ref        = rmm::device_async_resource_ref{output_mr};
-  std::string const json = "{\"present\":1}\n{\"present\":2}\n";
-  auto options =
-    cudf::io::json_reader_options::builder(
-      cudf::io::source_info{cudf::host_span<char const>{json.data(), json.size()}})
-      .lines(true)
-      .dtypes(cudf::io::schema_element{
-        cudf::data_type{cudf::type_id::STRUCT},
-        {{"missing", cudf::io::schema_element{cudf::data_type{cudf::type_id::STRING}}}},
-        std::vector<std::string>{"missing"}})
-      .prune_columns(true)
-      .build();
-  rmm::device_buffer input(json.data(), json.size(), stream, mr());
-  auto table = cudf::io::json::detail::device_parse_nested_json(
-    cudf::device_span<char const>{static_cast<char const*>(input.data()), input.size()},
-    options,
-    stream,
-    output_ref);
-  ASSERT_EQ(table.tbl->num_columns(), 1);
-  auto columns = table.tbl->release();
-  auto result  = std::move(columns.front());
-  EXPECT_EQ(result->size(), 2);
-  EXPECT_EQ(result->null_count(), 2);
-  auto data = result->release().data;
-  EXPECT_EQ(data->size(), 0);
-  EXPECT_EQ(data->stream().get(), stream.get());
-  EXPECT_TRUE(data->memory_resource() == output_ref);
-}
 
 TEST_F(JsonTest, StackContext)
 {

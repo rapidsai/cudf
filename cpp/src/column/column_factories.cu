@@ -58,7 +58,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
         size + 1,
         stream,
         mr),
-      rmm::device_buffer{0, stream, mr},
+      rmm::device_buffer{},
       size,
       cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr));
   }

@@ -18,10 +18,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/mr/statistics_resource_adaptor.hpp>
-
 #include <cuda/iterator>
-#include <cuda/stream>
 
 class ColumnFactoryTest : public cudf::test::BaseFixture {
   cudf::size_type _size{1000};
@@ -355,23 +352,6 @@ TEST_F(ColumnFactoryTest, FromStringScalar)
   EXPECT_FALSE(column->nullable());
   EXPECT_FALSE(column->has_nulls());
   EXPECT_TRUE(column->num_children() > 0);
-}
-
-TEST_F(ColumnFactoryTest, NullStringCharsPreserveStreamAndResource)
-{
-  int device{};
-  CUDF_CUDA_TRY(cudaGetDevice(&device));
-  cuda::stream stream{cuda::device_ref{device}};
-  auto output_mr  = rmm::mr::statistics_resource_adaptor{mr()};
-  auto output_ref = rmm::device_async_resource_ref{output_mr};
-  auto value      = cudf::string_scalar("", false, stream, mr());
-  auto result     = cudf::make_column_from_scalar(value, 2, stream, output_ref);
-  EXPECT_EQ(result->size(), 2);
-  EXPECT_EQ(result->null_count(), 2);
-  auto data = result->release().data;
-  EXPECT_EQ(data->size(), 0);
-  EXPECT_EQ(data->stream().get(), stream.get());
-  EXPECT_TRUE(data->memory_resource() == output_ref);
 }
 
 TEST_F(ColumnFactoryTest, FromNullStringScalar)

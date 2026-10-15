@@ -77,7 +77,7 @@ auto generate_empty_output(strings_column_view const& input,
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
-                             rmm::device_buffer{0, stream, mr},
+                             rmm::device_buffer{},
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }

@@ -159,7 +159,7 @@ struct allnull_column_functor {
     auto offsets   = make_zeroed_offsets(size);
     auto null_mask = cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
     return make_strings_column(
-      size, std::move(offsets), rmm::device_buffer{0, stream, mr}, size, std::move(null_mask));
+      size, std::move(offsets), rmm::device_buffer{}, size, std::move(null_mask));
   }
   template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, cudf::list_view>)>
   std::unique_ptr<column> operator()(schema_element const& schema, size_type size) const
