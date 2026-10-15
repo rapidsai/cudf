@@ -332,13 +332,8 @@ void streaming_groupby::impl::create_key_set(cuda::stream_ref stream)
 
 void streaming_groupby::impl::update_nullable_state(table_view const& batch_keys)
 {
-  if (_has_nullable_keys) return;
-  for (size_type c = 0; c < num_keys(); ++c) {
-    if (batch_keys.column(c).nullable()) {
-      _has_nullable_keys = true;
-      return;
-    }
-  }
+  // Nested members can be null even when the top-level key columns are not.
+  _has_nullable_keys = _has_nullable_keys || cudf::has_nested_nullable_columns(batch_keys);
 }
 
 std::unique_ptr<table> streaming_groupby::impl::gather_agg_results(cuda::stream_ref stream,
