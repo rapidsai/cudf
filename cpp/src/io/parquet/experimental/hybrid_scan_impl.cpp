@@ -608,7 +608,7 @@ void hybrid_scan_reader_impl::check_offset_indexes_present(
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
-hybrid_scan_reader_impl::columns_byte_ranges(
+hybrid_scan_reader_impl::column_chunks_byte_ranges(
   read_columns_mode columns_mode,
   std::span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options)
@@ -826,59 +826,18 @@ table_with_metadata hybrid_scan_reader_impl::read_columns(read_mode mode, RowMas
   return read_chunk_internal(mode, _read_columns_mode, row_mask);
 }
 
-template <typename RowMaskView>
-table_with_metadata hybrid_scan_reader_impl::read_columns_chunk(RowMaskView row_mask)
-{
-  CUDF_EXPECTS(_file_preprocessed, "Chunking for columns not yet setup");
-  check_row_mask_view<RowMaskView>(_read_columns_mode);
-
-  // Reset the output buffers to their original states (right after reader construction).
-  // Don't need to do it if we read the file all at once.
-  if (_file_itm_data._current_input_pass < _file_itm_data.num_passes() and
-      not is_first_output_chunk()) {
-    _output_buffers = make_empty_like_column_buffers(_output_buffers_template);
-  }
-
-  prepare_data(read_mode::CHUNKED_READ, {}, {}, {});
-  return read_columns(read_mode::CHUNKED_READ, row_mask);
-}
-
+template <row_mask_view_type RowMaskView>
 table_with_metadata hybrid_scan_reader_impl::materialize_columns(
   read_columns_mode columns_mode,
   std::span<std::vector<size_type> const> row_group_indices,
   std::span<cudf::device_span<uint8_t const> const> column_data,
-  cudf::mutable_column_view& row_mask,
+  RowMaskView row_mask,
   use_data_page_mask mask_data_pages,
   parquet_reader_options const& options,
   cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
 {
-  check_row_mask_view<cudf::mutable_column_view>(columns_mode);
-  setup_columns_read(read_mode::READ_ALL,
-                     columns_mode,
-                     0,
-                     0,
-                     row_group_indices,
-                     column_data,
-                     row_mask,
-                     mask_data_pages,
-                     options,
-                     stream,
-                     mr);
-  return read_columns(read_mode::READ_ALL, row_mask);
-}
-
-table_with_metadata hybrid_scan_reader_impl::materialize_columns(
-  read_columns_mode columns_mode,
-  std::span<std::vector<size_type> const> row_group_indices,
-  std::span<cudf::device_span<uint8_t const> const> column_data,
-  cudf::column_view const& row_mask,
-  use_data_page_mask mask_data_pages,
-  parquet_reader_options const& options,
-  cuda::stream_ref stream,
-  rmm::device_async_resource_ref mr)
-{
-  check_row_mask_view<cudf::column_view>(columns_mode);
+  check_row_mask_view<RowMaskView>(columns_mode);
   setup_columns_read(read_mode::READ_ALL,
                      columns_mode,
                      0,
@@ -950,16 +909,21 @@ void hybrid_scan_reader_impl::setup_chunking_for_sparse_payload_columns(
   prepare_data(read_mode::CHUNKED_READ, row_group_indices, page_data, {});
 }
 
-table_with_metadata hybrid_scan_reader_impl::materialize_columns_chunk(
-  cudf::mutable_column_view& row_mask)
+template <row_mask_view_type RowMaskView>
+table_with_metadata hybrid_scan_reader_impl::materialize_columns_chunk(RowMaskView row_mask)
 {
-  return read_columns_chunk(row_mask);
-}
+  CUDF_EXPECTS(_file_preprocessed, "Chunking for columns not yet setup");
+  check_row_mask_view<RowMaskView>(_read_columns_mode);
 
-table_with_metadata hybrid_scan_reader_impl::materialize_columns_chunk(
-  cudf::column_view const& row_mask)
-{
-  return read_columns_chunk(row_mask);
+  // Reset the output buffers to their original states (right after reader construction).
+  // Don't need to do it if we read the file all at once.
+  if (_file_itm_data._current_input_pass < _file_itm_data.num_passes() and
+      not is_first_output_chunk()) {
+    _output_buffers = make_empty_like_column_buffers(_output_buffers_template);
+  }
+
+  prepare_data(read_mode::CHUNKED_READ, {}, {}, {});
+  return read_columns(read_mode::CHUNKED_READ, row_mask);
 }
 
 std::pair<std::vector<std::vector<cudf::size_type>>, std::vector<cudf::size_type>>
@@ -1550,5 +1514,28 @@ void hybrid_scan_reader_impl::set_sparse_pass_page_mask(
   // Mark output buffers nullable when page pruning produces nulls
   mark_buffers_nullable_for_pruned_pages();
 }
+
+// Explicit instantiations for the row mask view types
+template table_with_metadata hybrid_scan_reader_impl::materialize_columns(
+  read_columns_mode,
+  std::span<std::vector<size_type> const>,
+  std::span<cudf::device_span<uint8_t const> const>,
+  cudf::column_view,
+  use_data_page_mask,
+  parquet_reader_options const&,
+  cuda::stream_ref,
+  rmm::device_async_resource_ref);
+template table_with_metadata hybrid_scan_reader_impl::materialize_columns(
+  read_columns_mode,
+  std::span<std::vector<size_type> const>,
+  std::span<cudf::device_span<uint8_t const> const>,
+  cudf::mutable_column_view,
+  use_data_page_mask,
+  parquet_reader_options const&,
+  cuda::stream_ref,
+  rmm::device_async_resource_ref);
+template table_with_metadata hybrid_scan_reader_impl::materialize_columns_chunk(cudf::column_view);
+template table_with_metadata hybrid_scan_reader_impl::materialize_columns_chunk(
+  cudf::mutable_column_view);
 
 }  // namespace cudf::io::parquet::experimental::detail

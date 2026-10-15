@@ -22,6 +22,7 @@
 #include <cuda/stream>
 #include <thrust/host_vector.h>
 
+#include <concepts>
 #include <memory>
 #include <optional>
 #include <span>
@@ -33,6 +34,13 @@ namespace cudf::io::parquet::experimental::detail {
 using cudf::io::parquet::detail::ColumnChunkDesc;
 using cudf::io::parquet::detail::PageInfo;
 using text::byte_range_info;
+
+/**
+ * @brief Row mask view types: mutable for filter columns (updated in place), immutable otherwise
+ */
+template <typename T>
+concept row_mask_view_type =
+  std::same_as<T, cudf::column_view> or std::same_as<T, cudf::mutable_column_view>;
 
 /**
  * @brief Implementation of the experimental Parquet reader optimized for Hybrid Scan operation
@@ -183,9 +191,9 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    *         input source file indices
    */
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
-  columns_byte_ranges(read_columns_mode columns_mode,
-                      std::span<std::vector<size_type> const> row_group_indices,
-                      parquet_reader_options const& options);
+  column_chunks_byte_ranges(read_columns_mode columns_mode,
+                            std::span<std::vector<size_type> const> row_group_indices,
+                            parquet_reader_options const& options);
 
   /**
    * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::payload_pages_byte_ranges
@@ -197,35 +205,14 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
                                    cuda::stream_ref stream);
 
   /**
-   * @brief Materializes filter columns and updates the input row mask in place
+   * @brief Materializes the columns for the specified read columns mode
    *
-   * @param columns_mode Columns to materialize. Must be `FILTER_COLUMNS`
+   * @tparam RowMaskView `mutable_column_view` for `FILTER_COLUMNS`, `column_view` otherwise
+   * @param columns_mode Columns to materialize
    * @param row_group_indices Input row groups indices
    * @param column_data Device spans of column chunk data
-   * @param row_mask Mutable boolean column indicating surviving rows
-   * @param mask_data_pages Whether to build and use a data page mask using the row mask
-   * @param options Parquet reader options
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource used to allocate the device memory of the returned table
-   * @return Table of materialized columns and metadata
-   */
-  [[nodiscard]] table_with_metadata materialize_columns(
-    read_columns_mode columns_mode,
-    std::span<std::vector<size_type> const> row_group_indices,
-    std::span<cudf::device_span<uint8_t const> const> column_data,
-    cudf::mutable_column_view& row_mask,
-    use_data_page_mask mask_data_pages,
-    parquet_reader_options const& options,
-    cuda::stream_ref stream,
-    rmm::device_async_resource_ref mr);
-
-  /**
-   * @brief Materializes payload or all columns
-   *
-   * @param columns_mode Columns to materialize. Must not be `FILTER_COLUMNS`
-   * @param row_group_indices Input row groups indices
-   * @param column_data Device spans of column chunk data
-   * @param row_mask Boolean column indicating surviving rows. Ignored for `ALL_COLUMNS`
+   * @param row_mask Boolean column indicating surviving rows. Updated in place for
+   *        `FILTER_COLUMNS` and ignored for `ALL_COLUMNS`
    * @param mask_data_pages Whether to build and use a data page mask using the row mask. Ignored
    *        for `ALL_COLUMNS`
    * @param options Parquet reader options
@@ -233,11 +220,12 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @param mr Device memory resource used to allocate the device memory of the returned table
    * @return Table of materialized columns and metadata
    */
+  template <row_mask_view_type RowMaskView>
   [[nodiscard]] table_with_metadata materialize_columns(
     read_columns_mode columns_mode,
     std::span<std::vector<size_type> const> row_group_indices,
     std::span<cudf::device_span<uint8_t const> const> column_data,
-    cudf::column_view const& row_mask,
+    RowMaskView row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
     cuda::stream_ref stream,
@@ -294,20 +282,15 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @brief Materializes the next chunk of filter columns and updates the input row mask in place
+   * @brief Materializes the next chunk of the columns selected at chunking setup
    *
-   * @param row_mask Mutable boolean column indicating surviving rows
-   * @return Table chunk of materialized filter columns and metadata
-   */
-  [[nodiscard]] table_with_metadata materialize_columns_chunk(cudf::mutable_column_view& row_mask);
-
-  /**
-   * @brief Materializes the next chunk of payload (incl. sparse payload) or all columns
-   *
-   * @param row_mask Boolean column indicating surviving rows. Ignored for `ALL_COLUMNS`
+   * @tparam RowMaskView `mutable_column_view` for `FILTER_COLUMNS`, `column_view` otherwise
+   * @param row_mask Boolean column indicating surviving rows. Updated in place for
+   *        `FILTER_COLUMNS` and ignored for `ALL_COLUMNS`
    * @return Table chunk of materialized columns and metadata
    */
-  [[nodiscard]] table_with_metadata materialize_columns_chunk(cudf::column_view const& row_mask);
+  template <row_mask_view_type RowMaskView>
+  [[nodiscard]] table_with_metadata materialize_columns_chunk(RowMaskView row_mask);
 
   /**
    * @brief Partition per-source row groups into read passes for the specified column selection
@@ -510,16 +493,6 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    */
   template <typename RowMaskView>
   table_with_metadata read_columns(read_mode mode, RowMaskView row_mask);
-
-  /**
-   * @brief Read the next chunk of columns selected at chunking setup
-   *
-   * @tparam RowMaskView View type of the row mask column
-   * @param[in,out] row_mask Boolean column indicating surviving rows
-   * @return The output table chunk along with columns' metadata
-   */
-  template <typename RowMaskView>
-  table_with_metadata read_columns_chunk(RowMaskView row_mask);
 
   /**
    * @brief Perform the necessary data preprocessing for parsing file later on

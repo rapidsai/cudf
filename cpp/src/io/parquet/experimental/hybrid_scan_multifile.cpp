@@ -127,7 +127,8 @@ hybrid_scan_multifile::filter_column_chunks_byte_ranges(
   parquet_reader_options const& options)
 {
   CUDF_FUNC_RANGE();
-  return _impl->columns_byte_ranges(read_columns_mode::FILTER_COLUMNS, row_group_indices, options);
+  return _impl->column_chunks_byte_ranges(
+    read_columns_mode::FILTER_COLUMNS, row_group_indices, options);
 }
 
 table_with_metadata hybrid_scan_multifile::materialize_filter_columns(
@@ -156,7 +157,8 @@ hybrid_scan_multifile::payload_column_chunks_byte_ranges(
   parquet_reader_options const& options)
 {
   CUDF_FUNC_RANGE();
-  return _impl->columns_byte_ranges(read_columns_mode::PAYLOAD_COLUMNS, row_group_indices, options);
+  return _impl->column_chunks_byte_ranges(
+    read_columns_mode::PAYLOAD_COLUMNS, row_group_indices, options);
 }
 
 std::pair<std::vector<text::byte_range_info>, std::vector<size_type>>
@@ -196,7 +198,8 @@ hybrid_scan_multifile::all_column_chunks_byte_ranges(
   parquet_reader_options const& options)
 {
   CUDF_FUNC_RANGE();
-  return _impl->columns_byte_ranges(read_columns_mode::ALL_COLUMNS, row_group_indices, options);
+  return _impl->column_chunks_byte_ranges(
+    read_columns_mode::ALL_COLUMNS, row_group_indices, options);
 }
 
 table_with_metadata hybrid_scan_multifile::materialize_all_columns(
