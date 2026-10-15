@@ -111,15 +111,18 @@ void generate_depth_remappings(
       int schema_idx = mapped_src_col_schema;
       while (schema_idx > 0) {
         auto& cur_schema = md.get_schema(schema_idx, src_file_idx);
+        auto const one_level_list =
+          cur_schema.is_one_level_list(md.get_schema(cur_schema.parent_idx, src_file_idx));
         if (cur_schema.max_repetition_level == r) {
           // if this is a repeated field, map it one level deeper
           shallowest = cur_schema.is_stub() ? cur_depth + 1 : cur_depth;
         }
         // if it's one-level encoding list
-        else if (cur_schema.is_one_level_list(md.get_schema(cur_schema.parent_idx, src_file_idx))) {
+        else if (one_level_list) {
           shallowest = cur_depth - 1;
         }
-        if (!cur_schema.is_stub()) { cur_depth--; }
+        // a one-level list also accounts for its implicit list level
+        if (!cur_schema.is_stub()) { cur_depth -= one_level_list ? 2 : 1; }
         schema_idx = cur_schema.parent_idx;
       }
       return shallowest;
