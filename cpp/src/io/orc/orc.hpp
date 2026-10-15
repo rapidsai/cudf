@@ -12,6 +12,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/wrappers/durations.hpp>
 
+#include <cuda/std/concepts>
 #include <cuda/std/optional>
 
 #include <algorithm>
@@ -277,7 +278,7 @@ class protobuf_reader {
 
   uint32_t read_field_size(uint8_t const* end);
 
-  template <std::integral T>
+  template <cuda::std::integral T>
   void read_field(T& value, uint8_t const* end)
   {
     value = get<T>();
