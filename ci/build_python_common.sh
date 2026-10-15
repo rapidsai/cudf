@@ -21,6 +21,8 @@ build_conda_package() (
     sccache --stop-server >/dev/null 2>&1 || true
   fi
   rapids-logger "Building ${package}"
+  # Specifying conda:9 lowers Zstandard from its default level 15 to reduce
+  # packaging time with a small package-size increase.
   # Downstream jobs exercise the installed packages; these recipes have no package tests.
   rapids-telemetry-record "build-${package}.log" \
     rattler-build build --recipe "conda/recipes/${package}" \

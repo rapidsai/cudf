@@ -28,6 +28,8 @@ source rapids-rattler-channel-string
 # --no-build-id allows for caching with `sccache`
 # more info is available at
 # https://rattler-build.prefix.dev/latest/tips_and_tricks/
+# Specifying conda:9 lowers Zstandard from its default level 15 to reduce
+# packaging time with a small package-size increase.
 # Downstream jobs exercise the installed packages; this recipe has no package tests.
 rapids-telemetry-record build-libcudf.log \
     rattler-build build --recipe conda/recipes/libcudf \
