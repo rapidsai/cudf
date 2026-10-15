@@ -678,14 +678,14 @@ std::vector<char> write_orc_with_timezone(cudf::table_view const& table,
   return buffer;
 }
 
-// File-level timestamp statistics of the table's first column. Entry zero of the schema is the
-// root struct that wraps the table, so that column is entry one.
-cudf::io::timestamp_statistics timestamp_stats(std::vector<char> const& buffer)
+// File-level timestamp statistics of one column, by its index in the file's schema. Entry zero is
+// the root struct that wraps the table, so the table's first column is entry one.
+cudf::io::timestamp_statistics timestamp_stats(std::vector<char> const& buffer, size_t column = 1)
 {
   auto const stats =
     cudf::io::read_parsed_orc_statistics(cudf::io::source_info{cudf::host_span<std::byte const>{
       reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}});
-  return std::get<cudf::io::timestamp_statistics>(stats.file_stats[1].type_specific_stats);
+  return std::get<cudf::io::timestamp_statistics>(stats.file_stats[column].type_specific_stats);
 }
 
 cudf::io::table_with_metadata read_orc_buffer(std::vector<char> const& buffer,
@@ -833,77 +833,40 @@ TEST_F(OrcWriterTest, WriterTimezoneNegativeTimestampsNano)
 
 TEST_F(OrcWriterTest, WriterTimezoneStatistics)
 {
-  // Statistics are on the writer's wall clock, the frame the values are read back in, so the
-  // bounds match what a reader decodes. Apache stores them the same way.
-  auto const bounds_shift_with_the_values = [](std::optional<std::string> const& timezone,
-                                               int64_t offset_s) {
-    SCOPED_TRACE(timezone.value_or("default"));
-
-    auto const timestamps =
-      column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{0, 1421323200};
-    auto const stats = timestamp_stats(write_orc_with_timezone(table_view({timestamps}), timezone));
-    ASSERT_TRUE(stats.minimum.has_value());
-    ASSERT_TRUE(stats.maximum.has_value());
-    ASSERT_TRUE(stats.minimum_utc.has_value());
-    ASSERT_TRUE(stats.maximum_utc.has_value());
-    EXPECT_EQ(*stats.minimum, offset_s * 1000);
-    EXPECT_EQ(*stats.maximum, (1421323200L + offset_s) * 1000);
-    // Unlike Apache, which omits the legacy pair, both are written in the same frame
-    EXPECT_EQ(*stats.minimum_utc, *stats.minimum);
-    EXPECT_EQ(*stats.maximum_utc, *stats.maximum);
-  };
-
-  bounds_shift_with_the_values(std::nullopt, 0);
-  bounds_shift_with_the_values("UTC", 0);
-  bounds_shift_with_the_values("Asia/Shanghai", shanghai_offset);
-  bounds_shift_with_the_values("America/New_York", new_york_offset);
-}
-
-TEST_F(OrcWriterTest, WriterTimezoneStatisticsAcrossDst)
-{
-  // One value on each side of a daylight saving transition, so the two bounds shift by different
-  // amounts. This is what a single offset applied to the reduced bounds would get wrong.
-  auto constexpr standard_time = 1421323200L;  // 2015-01-15T12:00:00Z
-  auto constexpr summer_time   = 1435752000L;  // 2015-07-01T12:00:00Z
+  // Statistics are on the writer's wall clock, so the bounds hold the values a reader decodes, the
+  // ones `WriterTimezoneUsesFixedEpochOffsetAcrossDst` reads back. Apache records them the same
+  // way. The bounds take different offsets where one of them falls in daylight saving time, which
+  // is what shifting the reduced bounds by a single offset would get wrong.
+  auto const during_est = cudf::timestamp_s::rep{1421323200};  // 2015-01-15T12:00:00Z
+  auto const during_edt = cudf::timestamp_s::rep{1435752000};  // 2015-07-01T12:00:00Z
   auto const timestamps =
-    column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{standard_time, summer_time};
+    column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{during_est, during_edt};
+  // A timestamp column nested in a list has a row count of its own, unrelated to the table's
+  cudf::test::lists_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> const nested{
+    {during_est}, {during_edt, during_est}};
+  table_view input({timestamps, nested});
 
-  auto const stats =
-    timestamp_stats(write_orc_with_timezone(table_view({timestamps}), "America/New_York"));
-  EXPECT_EQ(*stats.minimum_utc, (standard_time + new_york_offset) * 1000);
-  EXPECT_EQ(*stats.maximum_utc, (summer_time + new_york_dst_offset) * 1000);
+  auto const bounds_shift_with_the_values =
+    [&](std::optional<std::string> const& timezone, int64_t min_offset, int64_t max_offset) {
+      SCOPED_TRACE(timezone.value_or("default"));
+      auto const buffer = write_orc_with_timezone(input, timezone);
 
-  // The bounds hold the values that come back out of the file
-  auto const read_back =
-    read_orc_buffer(write_orc_with_timezone(table_view({timestamps}), "America/New_York"));
-  auto const expected = column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
-    standard_time + new_york_offset, summer_time + new_york_dst_offset};
-  CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expected}), read_back.tbl->view());
-}
+      // Schema entries one and two are the table's columns, three is the timestamp child of the
+      // list
+      for (auto const column : {1, 3}) {
+        auto const stats = timestamp_stats(buffer, column);
+        EXPECT_EQ(stats.minimum, (during_est + min_offset) * 1000);
+        EXPECT_EQ(stats.maximum, (during_edt + max_offset) * 1000);
+        // Unlike Apache, which omits the legacy pair, both are written in the same frame
+        EXPECT_EQ(stats.minimum_utc, stats.minimum);
+        EXPECT_EQ(stats.maximum_utc, stats.maximum);
+      }
+    };
 
-TEST_F(OrcWriterTest, WriterTimezoneStatisticsNestedTimestamps)
-{
-  // A timestamp column nested in a list holds as many rows as the lists have elements, which is
-  // unrelated to the row count of the table and of the other columns
-  auto constexpr standard_time = 1421323200L;  // 2015-01-15T12:00:00Z
-  auto constexpr summer_time   = 1435752000L;  // 2015-07-01T12:00:00Z
-  auto const timestamps =
-    column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{standard_time, summer_time};
-  cudf::test::lists_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> const
-    nested_timestamps{{standard_time}, {summer_time, standard_time}};
-  table_view input({timestamps, nested_timestamps});
-
-  auto const buffer = write_orc_with_timezone(input, "America/New_York");
-
-  // Entry zero of the schema is the root struct that wraps the table, one and two are its columns,
-  // and three is the timestamp child of the list
-  auto const stats =
-    cudf::io::read_parsed_orc_statistics(cudf::io::source_info{cudf::host_span<std::byte const>{
-      reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}});
-  auto const nested_stats =
-    std::get<cudf::io::timestamp_statistics>(stats.file_stats[3].type_specific_stats);
-  EXPECT_EQ(*nested_stats.minimum_utc, (standard_time + new_york_offset) * 1000);
-  EXPECT_EQ(*nested_stats.maximum_utc, (summer_time + new_york_dst_offset) * 1000);
+  bounds_shift_with_the_values(std::nullopt, 0, 0);
+  bounds_shift_with_the_values("UTC", 0, 0);
+  bounds_shift_with_the_values("Asia/Shanghai", shanghai_offset, shanghai_offset);
+  bounds_shift_with_the_values("America/New_York", new_york_offset, new_york_dst_offset);
 }
 
 TEST_F(OrcWriterTest, WriterTimezoneInvalid)

@@ -1284,14 +1284,16 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
 /**
  * @brief Timestamp columns put on the writer's wall clock, for the statistics to be gathered from.
  *
- * Apache shifts each timestamp into the writer's timezone before updating the statistics, while
- * the data stream stays relative to the epoch; see `gather_statistic_blobs`. Columns of other
- * types are absent, and the statistics read them from the table itself.
+ * The wall clock is the frame readers compare the bounds in, while the data stream stays relative
+ * to the epoch; Apache shifts each value the same way before updating its statistics
+ * (`TimestampTreeWriter`, through `SerializationUtils.convertToUtc`). Shifting the reduced bounds
+ * instead would not do: daylight saving makes the offset vary between the values of one column,
+ * and wall-clock order differs from instant order across a fold. Columns of other types are
+ * absent, and the statistics read them from the table itself.
  */
 struct wall_clock_columns {
   std::vector<cuda::device_buffer<int64_t>> data;  // shifted values, one per timestamp column
-  // Views of `data`, in the same order. Not a table, because a timestamp column nested in a list
-  // has as many rows as the list has elements, which differs from the table's row count.
+  // Views of `data`. Not a table, because a timestamp column nested in a list has its own row count
   cuda::device_buffer<column_device_view> columns;
   cuda::device_buffer<size_type> indices;  // index into `columns` per ORC column, or `absent`
 
@@ -1344,8 +1346,7 @@ wall_clock_columns make_wall_clock_columns(orc_table_view const& orc_table,
                           if (not input.is_valid(idx)) { return 0; }
 
                           auto const value = input.element<int64_t>(idx);
-                          // Floor, so that the offset is the one in effect in the second the value
-                          // falls in
+                          // Floor, to take the offset in effect in the second the value falls in
                           auto const seconds =
                             value / ticks_per_s - ((value % ticks_per_s < 0) ? 1 : 0);
                           auto const offset = cudf::detail::get_ut_offset(
@@ -1353,16 +1354,15 @@ wall_clock_columns make_wall_clock_columns(orc_table_view const& orc_table,
                           return value + offset.count() * ticks_per_s;
                         });
 
-      auto const shifted_view = column_view{input.type(),
-                                            input.size(),
-                                            shifted.data(),
-                                            input.null_mask(),
-                                            input.null_count(),
-                                            input.offset()};
-      // Timestamps have no children, so the view owns no device memory of its own and can be
-      // copied into an array of its own
+      // A timestamp column has no children, so its device view owns no memory and can be copied
       host_indices[column.index()] = views.size();
-      views.push_back(*column_device_view::create(shifted_view, stream));
+      views.push_back(*column_device_view::create(column_view{input.type(),
+                                                              input.size(),
+                                                              shifted.data(),
+                                                              input.null_mask(),
+                                                              input.null_count(),
+                                                              input.offset()},
+                                                  stream));
       data.emplace_back(std::move(shifted));
     }
   }
@@ -1443,12 +1443,7 @@ cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
 /**
  * @brief Returns column statistics in an intermediate format.
  *
- * Timestamp statistics are gathered from the values put on the writer's wall clock, which is the
- * frame readers compare the bounds in; the data stream itself is stored relative to the epoch.
- * Apache shifts each value the same way before updating its statistics (`TimestampTreeWriter`,
- * through `SerializationUtils.convertToUtc`). Shifting the reduced bounds instead would not do:
- * daylight saving makes the offset vary between the values of one column, and wall-clock order
- * differs from instant order across a fold.
+ * Timestamp statistics come from `make_wall_clock_columns` rather than from the table.
  *
  * @param stats_freq Frequency of statistics to be included in the output file
  * @param orc_table Table information to be written
