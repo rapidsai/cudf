@@ -217,12 +217,10 @@ struct writer_timezone {
   /**
    * @brief Returns this timezone's offsets from UT over time, reading them on the first call.
    *
-   * Only the statistics need them, so a writer that gathers none never reads the TZif file.
-   *
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Transition table, as returned by `make_timezone_transition_table`
    */
-  [[nodiscard]] table_view ut_offsets(cuda::stream_ref stream) const;
+  table_view ut_offsets(cuda::stream_ref stream) const;
 
   /**
    * @brief Resolves a timezone name into the epoch that timestamps are encoded relative to.
