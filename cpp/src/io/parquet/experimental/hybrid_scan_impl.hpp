@@ -421,59 +421,37 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
                                rmm::device_async_resource_ref mr);
 
   /**
-   * @brief Helper to validate inputs and prepare the reader to (chunked) read the columns
+   * @brief Helper to validate inputs and set up column chunk read
    *
-   * Sets up an empty read if all rows are pruned. Otherwise, the caller must call `prepare_data`
-   * with the column data to read.
-   *
-   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
-   * @param columns_mode Columns to materialize
-   * @param chunk_read_limit Limit on total number of bytes to be returned per read
-   * @param pass_read_limit Limit on memory usage for decompressing and decoding data
-   * @param row_group_indices Input row groups indices
-   * @param row_mask Boolean column indicating surviving rows. Ignored for `ALL_COLUMNS`
-   * @param options Parquet reader options
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource used to allocate the device memory for the output columns
-   * @return True if all rows are pruned and the (empty) read is already set up
-   */
-  [[nodiscard]] bool prepare_columns_read(read_mode mode,
-                                          read_columns_mode columns_mode,
-                                          std::size_t chunk_read_limit,
-                                          std::size_t pass_read_limit,
-                                          std::span<std::vector<size_type> const> row_group_indices,
-                                          cudf::column_view const& row_mask,
-                                          parquet_reader_options const& options,
-                                          cuda::stream_ref stream,
-                                          rmm::device_async_resource_ref mr);
-
-  /**
-   * @brief Helper to set up the (chunked) read of the columns from column chunk data
+   * Sets up an empty read if all rows are pruned
    *
    * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param columns_mode Columns to materialize
    * @param chunk_read_limit Limit on total number of bytes to be returned per read
    * @param pass_read_limit Limit on memory usage for decompressing and decoding data
    * @param row_group_indices Input row groups indices
-   * @param column_data Device spans of column chunk data
+   * @param column_data Device spans of column chunk data, or of page data if `sparse_page_io`
    * @param row_mask Boolean column indicating surviving rows. Ignored for `ALL_COLUMNS`
    * @param mask_data_pages Whether to build and use a data page mask using the row mask. Ignored
-   *        for `ALL_COLUMNS`
+   *        for `ALL_COLUMNS` and with `sparse_page_io`
+   * @param sparse_page_io Boolean indicating whether `column_data` holds page data for page-level
+   * (sparse) I/O
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the device memory for the output columns
    */
-  void setup_columns_read(read_mode mode,
-                          read_columns_mode columns_mode,
-                          std::size_t chunk_read_limit,
-                          std::size_t pass_read_limit,
-                          std::span<std::vector<size_type> const> row_group_indices,
-                          std::span<cudf::device_span<uint8_t const> const> column_data,
-                          cudf::column_view const& row_mask,
-                          use_data_page_mask mask_data_pages,
-                          parquet_reader_options const& options,
-                          cuda::stream_ref stream,
-                          rmm::device_async_resource_ref mr);
+  void prepare_column_chunks_read(read_mode mode,
+                                  read_columns_mode columns_mode,
+                                  std::size_t chunk_read_limit,
+                                  std::size_t pass_read_limit,
+                                  std::span<std::vector<size_type> const> row_group_indices,
+                                  std::span<cudf::device_span<uint8_t const> const> column_data,
+                                  cudf::column_view const& row_mask,
+                                  use_data_page_mask mask_data_pages,
+                                  bool sparse_page_io,
+                                  parquet_reader_options const& options,
+                                  cuda::stream_ref stream,
+                                  rmm::device_async_resource_ref mr);
 
   /**
    * @brief Read the (next chunk of) columns selected at materialization setup

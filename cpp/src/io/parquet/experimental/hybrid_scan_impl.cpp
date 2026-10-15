@@ -723,35 +723,37 @@ hybrid_scan_reader_impl::sparse_payload_pages_byte_ranges(
   return {std::move(page_ranges), std::move(source_map)};
 }
 
-bool hybrid_scan_reader_impl::prepare_columns_read(
+void hybrid_scan_reader_impl::prepare_column_chunks_read(
   read_mode mode,
   read_columns_mode columns_mode,
   std::size_t chunk_read_limit,
   std::size_t pass_read_limit,
   std::span<std::vector<size_type> const> row_group_indices,
+  std::span<cudf::device_span<uint8_t const> const> column_data,
   cudf::column_view const& row_mask,
+  use_data_page_mask mask_data_pages,
+  bool sparse_page_io,
   parquet_reader_options const& options,
   cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
 {
   auto const is_all_columns = columns_mode == read_columns_mode::ALL_COLUMNS;
 
-  if (is_all_columns) {
-    CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
-  } else {
-    CUDF_EXPECTS(std::cmp_equal(row_mask.size(), total_rows_in_row_groups(row_group_indices)),
-                 "Row mask must span across all input row groups");
-  }
-  if (columns_mode == read_columns_mode::FILTER_COLUMNS) {
-    CUDF_EXPECTS(options.get_filter().has_value(), "Empty input filter expression encountered");
-  } else if (not is_all_columns) {
-    CUDF_EXPECTS(row_mask.null_count() == 0,
-                 "Row mask must not have any nulls when materializing payload column");
-  }
+  CUDF_EXPECTS(not is_all_columns or not row_group_indices.empty(),
+               "Empty input row group indices encountered");
+  CUDF_EXPECTS(
+    is_all_columns or std::cmp_equal(row_mask.size(), total_rows_in_row_groups(row_group_indices)),
+    "Row mask must span across all input row groups");
+  CUDF_EXPECTS(
+    columns_mode != read_columns_mode::FILTER_COLUMNS or options.get_filter().has_value(),
+    "Empty input filter expression encountered");
+  CUDF_EXPECTS(columns_mode != read_columns_mode::PAYLOAD_COLUMNS or row_mask.null_count() == 0,
+               "Row mask must not have any nulls when materializing payload column");
 
   prepare_materialization(columns_mode, row_group_indices.size(), options, stream, mr);
 
   _read_columns_mode       = columns_mode;
+  _sparse_page_io          = sparse_page_io;
   _input_pass_read_limit   = pass_read_limit;
   _output_chunk_read_limit = chunk_read_limit;
 
@@ -768,38 +770,19 @@ bool hybrid_scan_reader_impl::prepare_columns_read(
     prepare_data(mode, empty_row_groups, {}, {});
     // Set correct number of input row groups to the output metadata
     _file_itm_data.num_input_row_groups = count_row_groups(row_group_indices);
-    return true;
-  }
-  return false;
-}
-
-void hybrid_scan_reader_impl::setup_columns_read(
-  read_mode mode,
-  read_columns_mode columns_mode,
-  std::size_t chunk_read_limit,
-  std::size_t pass_read_limit,
-  std::span<std::vector<size_type> const> row_group_indices,
-  std::span<cudf::device_span<uint8_t const> const> column_data,
-  cudf::column_view const& row_mask,
-  use_data_page_mask mask_data_pages,
-  parquet_reader_options const& options,
-  cuda::stream_ref stream,
-  rmm::device_async_resource_ref mr)
-{
-  if (prepare_columns_read(mode,
-                           columns_mode,
-                           chunk_read_limit,
-                           pass_read_limit,
-                           row_group_indices,
-                           row_mask,
-                           options,
-                           stream,
-                           mr)) {
     return;
   }
 
+  if (_sparse_page_io) {
+    auto const column_schemas = get_column_schemas(_input_columns);
+    CUDF_EXPECTS(_extended_metadata->page_index_presence(row_group_indices, column_schemas).second,
+                 "Page-level I/O for payload columns requires offset indexes to be present");
+  }
+
+  // In sparse page I/O, the data page mask is computed directly from the page data spans inside
+  // `prepare_data() -> setup_sparse_compressed_data()`
   auto const retention_mask =
-    (mask_data_pages == use_data_page_mask::YES and columns_mode != read_columns_mode::ALL_COLUMNS)
+    (mask_data_pages == use_data_page_mask::YES and not is_all_columns and not _sparse_page_io)
       ? std::optional{row_mask}
       : std::nullopt;
   prepare_data(mode, row_group_indices, column_data, retention_mask);
@@ -832,17 +815,21 @@ table_with_metadata hybrid_scan_reader_impl::materialize_columns(
   CUDF_EXPECTS(is_valid_row_mask_view<RowMaskView>(columns_mode),
                "Invalid row mask view type for the current columns selection mode",
                std::invalid_argument);
-  setup_columns_read(read_mode::READ_ALL,
-                     columns_mode,
-                     0,
-                     0,
-                     row_group_indices,
-                     column_data,
-                     row_mask,
-                     mask_data_pages,
-                     options,
-                     stream,
-                     mr);
+
+  auto constexpr sparse_page_io = false;
+  prepare_column_chunks_read(read_mode::READ_ALL,
+                             columns_mode,
+                             0,
+                             0,
+                             row_group_indices,
+                             column_data,
+                             row_mask,
+                             mask_data_pages,
+                             sparse_page_io,
+                             options,
+                             stream,
+                             mr);
+
   return read_columns(read_mode::READ_ALL, row_mask);
 }
 
@@ -858,17 +845,19 @@ void hybrid_scan_reader_impl::setup_chunking_for_columns(
   cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
 {
-  setup_columns_read(read_mode::CHUNKED_READ,
-                     columns_mode,
-                     chunk_read_limit,
-                     pass_read_limit,
-                     row_group_indices,
-                     column_data,
-                     row_mask,
-                     mask_data_pages,
-                     options,
-                     stream,
-                     mr);
+  auto constexpr sparse_page_io = false;
+  prepare_column_chunks_read(read_mode::CHUNKED_READ,
+                             columns_mode,
+                             chunk_read_limit,
+                             pass_read_limit,
+                             row_group_indices,
+                             column_data,
+                             row_mask,
+                             mask_data_pages,
+                             sparse_page_io,
+                             options,
+                             stream,
+                             mr);
 }
 
 void hybrid_scan_reader_impl::setup_chunking_for_sparse_payload_columns(
@@ -881,28 +870,19 @@ void hybrid_scan_reader_impl::setup_chunking_for_sparse_payload_columns(
   cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
 {
-  if (prepare_columns_read(read_mode::CHUNKED_READ,
-                           read_columns_mode::PAYLOAD_COLUMNS,
-                           chunk_read_limit,
-                           pass_read_limit,
-                           row_group_indices,
-                           row_mask,
-                           options,
-                           stream,
-                           mr)) {
-    return;
-  }
-
-  auto const column_schemas = get_column_schemas(_input_columns);
-  CUDF_EXPECTS(_extended_metadata->page_index_presence(row_group_indices, column_schemas).second,
-               "Page-level I/O for payload columns requires offset indexes to be present");
-
-  // Mark that we are using page-level I/O for payload columns
-  _sparse_page_io = true;
-
-  // Data page mask in sparse mode will be computed directly from the page data spans inside
-  // `prepare_data() -> setup_sparse_compressed_data()`
-  prepare_data(read_mode::CHUNKED_READ, row_group_indices, page_data, {});
+  auto constexpr sparse_page_io = true;
+  prepare_column_chunks_read(read_mode::CHUNKED_READ,
+                             read_columns_mode::PAYLOAD_COLUMNS,
+                             chunk_read_limit,
+                             pass_read_limit,
+                             row_group_indices,
+                             page_data,
+                             row_mask,
+                             use_data_page_mask::NO,
+                             sparse_page_io,
+                             options,
+                             stream,
+                             mr);
 }
 
 template <row_mask_view_type RowMaskView>
