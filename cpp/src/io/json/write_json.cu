@@ -191,6 +191,7 @@ std::unique_ptr<column> make_escaped_json_strings(column_device_view const& d_co
 namespace {
 
 // Struct - scatter string_views of each element in a struct column
+template <typename Iterator>
 struct struct_scatter_strings_fn {
   table_device_view const tbl;
   column_device_view const col_names;
@@ -201,7 +202,7 @@ struct struct_scatter_strings_fn {
   string_view const value_separator;  // ","
   string_view const narep;            // null entry replacement
   bool const include_nulls;
-  string_view* d_strviews;
+  Iterator d_strviews;
 
   /**
    * @brief Scatters string_views for each element in a struct column

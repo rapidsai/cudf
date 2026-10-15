@@ -112,7 +112,7 @@ std::vector<std::string> copy_strings_to_host_sync(
   cudf::io::parse_options_view options_view{};
   options_view.quotechar  = '\0';  // no quotes
   options_view.keepquotes = true;
-  auto d_offset_length_it = cuda::make_zip_iterator(string_offsets.begin(), string_lengths.begin());
+  auto d_offset_length_it = cuda::make_zip_iterator(string_offsets.data(), string_lengths.data());
   auto d_column_names     = parse_data(input.data(),
                                    d_offset_length_it,
                                    num_strings,
