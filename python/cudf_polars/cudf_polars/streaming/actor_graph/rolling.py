@@ -287,6 +287,8 @@ async def rolling_actor(
                     duplicated=metadata_in.duplicated,
                 ),
             )
+            if tracer is not None and metadata_in.duplicated:
+                tracer.set_duplicated()
             async with OverlapInput(
                 context,
                 comm,
@@ -295,8 +297,6 @@ async def rolling_actor(
                 duplicated=metadata_in.duplicated,
                 collective_id=collective_id,
             ) as rolling_input:
-                if tracer is not None and metadata_in.duplicated:
-                    tracer.set_duplicated()
                 await manager.execute(ch_out, tracer, rolling_input)
 
 

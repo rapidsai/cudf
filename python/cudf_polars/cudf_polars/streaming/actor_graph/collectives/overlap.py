@@ -4,11 +4,12 @@
 
 from __future__ import annotations
 
+import operator
 import struct
 from contextlib import nullcontext
 from dataclasses import dataclass, field
 from enum import IntEnum
-from itertools import pairwise
+from itertools import accumulate, pairwise
 from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
@@ -28,7 +29,7 @@ from cudf_polars.streaming.actor_graph.utils import ChunkStore, names_to_indices
 from cudf_polars.utils.cuda_stream import join_cuda_streams
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Sequence
+    from collections.abc import AsyncIterator, Callable, Iterable, Sequence
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
@@ -141,9 +142,10 @@ class _OverlapPolicy[BufferedChunkT: BufferedChunk]:
     async def prepare_chunk(
         self,
         context: Context,
-        msg: Message,
+        chunk: TableChunk,
         *,
         row_offset: int,
+        host_values: RangeValues | None = None,
     ) -> BufferedChunkT:
         raise NotImplementedError
 
@@ -387,7 +389,10 @@ class RangeOverlapPolicy(_OverlapPolicy[RangeBufferedChunk]):
 
     def validate_index_column(self, index_column: plc.Column, stream: Stream) -> None:
         """Validate chunk-local ordering before using search primitives."""
-        validation = self.index_validation(index_column, stream)
+        self.raise_validation(self.index_validation(index_column, stream))
+
+    def raise_validation(self, validation: RangeValidation) -> None:
+        """Raise the corresponding range-index validation error."""
         if validation is RangeValidation.NULL:
             raise RuntimeError(
                 f"Index column '{self.index_name}' in rolling may not contain nulls"
@@ -408,50 +413,27 @@ class RangeOverlapPolicy(_OverlapPolicy[RangeBufferedChunk]):
             self.previous_index_value is not None
             and cursor.overlap.first < self.previous_index_value
         ):
-            raise RuntimeError(
-                f"Index column '{self.index_name}' in rolling is not sorted, "
-                "please sort first"
-            )
+            self.raise_validation(RangeValidation.UNSORTED)
         self.previous_index_value = cursor.overlap.last
 
     async def prepare_chunk(
         self,
         context: Context,
-        msg: Message,
-        *,
-        row_offset: int,
-    ) -> RangeBufferedChunk:
-        """Convert a message to a staged chunk and extract range metadata."""
-        chunk = TableChunk.from_message(msg, br=context.br())
-        return await self.prepare_table_chunk(
-            context,
-            chunk,
-            row_offset=row_offset,
-        )
-
-    async def prepare_table_chunk(
-        self,
-        context: Context,
         chunk: TableChunk,
         *,
         row_offset: int,
-        already_available: bool = False,
         host_values: RangeValues | None = None,
         validate_index: bool = True,
     ) -> RangeBufferedChunk:
         """Extract range metadata from a table chunk."""
         nrows, _ = chunk.shape
-        if already_available:
-            extra = None
-        else:
-            chunk, extra = await make_table_chunks_available_or_wait(
-                context,
-                chunk,
-                reserve_extra=32,
-                net_memory_delta=0,
-            )
-        memory_scope = nullcontext() if extra is None else opaque_memory_usage(extra)
-        with memory_scope:
+        chunk, extra = await make_table_chunks_available_or_wait(
+            context,
+            chunk,
+            reserve_extra=32,
+            net_memory_delta=0,
+        )
+        with opaque_memory_usage(extra):
             index_column = chunk.table_view().columns()[self.index]
             if host_values is None and validate_index:
                 self.validate_index_column(index_column, chunk.stream)
@@ -509,21 +491,13 @@ class RangeOverlapPolicy(_OverlapPolicy[RangeBufferedChunk]):
         cursor: RangeBufferedChunk,
     ) -> list[RangeBufferedChunk]:
         """Drop history chunks that cannot contribute to the cursor chunk."""
-        if not history:
-            return []
         assert cursor.overlap.lower_bound is not None
-        if self.start_closed:
-            return [
-                chunk
-                for chunk in history
-                if chunk.overlap.last is not None
-                and chunk.overlap.last >= cursor.overlap.lower_bound
-            ]
+        keep = operator.ge if self.start_closed else operator.gt
         return [
             chunk
             for chunk in history
             if chunk.overlap.last is not None
-            and chunk.overlap.last > cursor.overlap.lower_bound
+            and keep(chunk.overlap.last, cursor.overlap.lower_bound)
         ]
 
     def has_complete_future(
@@ -535,9 +509,8 @@ class RangeOverlapPolicy(_OverlapPolicy[RangeBufferedChunk]):
         if latest.overlap.last is None:
             return False
         assert current.overlap.upper_bound is not None
-        if self.end_closed:
-            return latest.overlap.last > current.overlap.upper_bound
-        return latest.overlap.last >= current.overlap.upper_bound
+        complete = operator.gt if self.end_closed else operator.ge
+        return complete(latest.overlap.last, current.overlap.upper_bound)
 
     async def overlap_bounds(
         self,
@@ -584,12 +557,13 @@ class RowCountOverlapPolicy(_OverlapPolicy[BufferedChunk]):
     async def prepare_chunk(
         self,
         context: Context,
-        msg: Message,
+        chunk: TableChunk,
         *,
         row_offset: int,
+        host_values: RangeValues | None = None,
     ) -> BufferedChunk:
-        """Convert a message to an available chunk with row-span metadata."""
-        chunk = TableChunk.from_message(msg, br=context.br())
+        """Attach row-span metadata to an available chunk."""
+        del host_values
         nrows, _ = chunk.shape
         chunk, _ = await make_table_chunks_available_or_wait(
             context, chunk, reserve_extra=0, net_memory_delta=0
@@ -666,7 +640,7 @@ type OverlapPolicy = _OverlapPolicy[Any]
 @dataclass(frozen=True)
 class _RangeSummary:
     rows: int
-    validation: RangeValidation
+    validation: RangeValidation = RangeValidation.VALID
     lower: Any | None = None
     upper: Any | None = None
     first: Any | None = None
@@ -690,12 +664,13 @@ class OverlapInput:
         self.comm = comm
         self.ch_in = ch_in
         self.policy = policy
-        self.range_based = isinstance(policy, RangeOverlapPolicy)
+        self.range_policy = policy if isinstance(policy, RangeOverlapPolicy) else None
         self.multirank = comm.nranks != 1 and not duplicated
         self.collective_id = collective_id
         self.buffer: ChunkStore | None = None
         self.exchange: SparseAlltoall | None = None
-        self.sources: tuple[int, ...] = ()
+        self.left_sources: tuple[int, ...] = ()
+        self.right_sources: tuple[int, ...] = ()
         self.host_values: list[RangeValues | None] = []
 
     async def __aenter__(self) -> OverlapInput:
@@ -713,107 +688,87 @@ class OverlapInput:
         """Release messages still owned by this input."""
         if self.buffer is not None:
             self.buffer.clear()
+        self.exchange = None
 
     def __aiter__(self) -> AsyncIterator[StagedChunk]:
         """Yield prepared chunks in rolling evaluation order."""
         return self._chunks()
 
-    async def _prepare_chunk(
+    async def _raw_owned_chunks(
         self,
-        value: Message | TableChunk,
-        row_offset: int,
-        host_values: RangeValues | None = None,
-    ) -> BufferedChunk:
-        if isinstance(value, Message):
-            return await self.policy.prepare_chunk(
-                self.context, value, row_offset=row_offset
-            )
-        if self.range_based and host_values is not None:
-            assert isinstance(self.policy, RangeOverlapPolicy)
-            return await self.policy.prepare_table_chunk(
-                self.context,
-                value,
-                row_offset=row_offset,
-                host_values=host_values,
-            )
-        return await self.policy.prepare_chunk(
-            self.context, Message(0, value), row_offset=row_offset
-        )
-
-    async def _chunks(self) -> AsyncIterator[StagedChunk]:
-        row_offset = 0
+    ) -> AsyncIterator[tuple[TableChunk, RangeValues | None]]:
+        """Yield locally owned input chunks."""
         if not self.multirank:
             while (msg := await self.ch_in.recv(self.context)) is not None:
-                chunk = await self._prepare_chunk(msg, row_offset)
+                yield TableChunk.from_message(msg, br=self.context.br()), None
+        else:
+            assert self.buffer is not None
+            for position, msg in enumerate(self.buffer):
+                yield (
+                    TableChunk.from_message(msg, br=self.context.br()),
+                    self.host_values[position]
+                    if self.range_policy is not None
+                    else None,
+                )
+
+    async def _raw_ghost_chunks(
+        self, sources: Iterable[int]
+    ) -> AsyncIterator[tuple[TableChunk, None]]:
+        """Yield exchanged chunks from each source in rank order."""
+        for source in sources:
+            assert self.exchange is not None
+            for packed in self.exchange.extract(source):
+                yield TableChunk.from_packed_data(packed, self.context.br()), None
+
+    async def _chunks(self) -> AsyncIterator[StagedChunk]:
+        """Prepare owned and ghost chunks in logical row order."""
+        row_offset = 0
+        inputs = (
+            (False, self._raw_ghost_chunks(self.left_sources)),
+            (True, self._raw_owned_chunks()),
+            (False, self._raw_ghost_chunks(self.right_sources)),
+        )
+        for owned, values in inputs:
+            async for raw_chunk, host_values in values:
+                chunk = await self.policy.prepare_chunk(
+                    self.context,
+                    raw_chunk,
+                    row_offset=row_offset,
+                    host_values=host_values,
+                )
                 self.policy.observe(chunk)
                 row_offset = chunk.row_stop
-                yield StagedChunk(chunk, owned=True)
-            return
-
-        assert self.buffer is not None
-        for source in self.sources:
-            if source < self.comm.rank:
-                assert self.exchange is not None
-                for packed in self.exchange.extract(source):
-                    value = TableChunk.from_packed_data(packed, self.context.br())
-                    chunk = await self._prepare_chunk(value, row_offset)
-                    self.policy.observe(chunk)
-                    row_offset = chunk.row_stop
-                    yield StagedChunk(chunk, owned=False)
-        for position, msg in enumerate(self.buffer):
-            value = TableChunk.from_message(msg, br=self.context.br())
-            host_values = self.host_values[position] if self.range_based else None
-            chunk = await self._prepare_chunk(value, row_offset, host_values)
-            self.policy.observe(chunk)
-            row_offset = chunk.row_stop
-            yield StagedChunk(chunk, owned=True)
-        for source in self.sources:
-            if source > self.comm.rank:
-                assert self.exchange is not None
-                for packed in self.exchange.extract(source):
-                    value = TableChunk.from_packed_data(packed, self.context.br())
-                    chunk = await self._prepare_chunk(value, row_offset)
-                    self.policy.observe(chunk)
-                    row_offset = chunk.row_stop
-                    yield StagedChunk(chunk, owned=False)
+                yield StagedChunk(chunk, owned=owned)
 
     async def _prepare(self) -> None:
         self.buffer = ChunkStore(self.context)
         summary = await self._buffer_input()
         gathered = await self._allgather(summary)
-        starts = [0]
-        for item in gathered:
-            starts.append(starts[-1] + item.rows)
-        owned = (starts[self.comm.rank], starts[self.comm.rank + 1])
-        spans = tuple(pairwise(starts))
-        if self.range_based:
+        starts = tuple(accumulate((item.rows for item in gathered), initial=0))
+        if self.range_policy is not None:
             self._validate_ranges(gathered)
             sends, sources, destinations = self._range_plan(summary, gathered)
         else:
-            sends, sources, destinations = self._count_plan(spans)
+            sends, sources, destinations = self._count_plan(tuple(pairwise(starts)))
         await self._exchange(
             sends,
             sources,
             destinations,
             gathered,
-            owned[0],
+            starts[self.comm.rank],
         )
 
     async def _buffer_input(self) -> _RangeSummary:
         assert self.buffer is not None
-        range_policy = (
-            self.policy if isinstance(self.policy, RangeOverlapPolicy) else None
-        )
-        assert not self.range_based or range_policy is not None
+        range_policy = self.range_policy
         row_offset = 0
         validation = RangeValidation.VALID
         lower = upper = first = last = previous = None
         while (msg := await self.ch_in.recv(self.context)) is not None:
             table_chunk = TableChunk.from_message(msg, br=self.context.br())
             nrows, _ = table_chunk.shape
-            if self.range_based:
-                assert range_policy is not None
-                chunk = await range_policy.prepare_table_chunk(
+            if range_policy is not None:
+                chunk = await range_policy.prepare_chunk(
                     self.context,
                     table_chunk,
                     row_offset=row_offset,
@@ -870,7 +825,7 @@ class OverlapInput:
                     for value in values
                 ),
             )
-            if self.range_based
+            if self.range_policy is not None
             else (summary.rows,)
         )
         fmt = f"<{len(payload)}q"
@@ -888,10 +843,8 @@ class OverlapInput:
             struct.unpack(fmt, item.to_host_bytes())
             for item in await gather.extract_all(self.context, ordered=True)
         )
-        if not self.range_based:
-            return tuple(
-                _RangeSummary(item[0], RangeValidation.VALID) for item in unpacked
-            )
+        if self.range_policy is None:
+            return tuple(_RangeSummary(item[0]) for item in unpacked)
         return tuple(
             _RangeSummary(
                 item[0],
@@ -902,7 +855,7 @@ class OverlapInput:
         )
 
     def _validate_ranges(self, summaries: Sequence[_RangeSummary]) -> None:
-        assert isinstance(self.policy, RangeOverlapPolicy)
+        assert self.range_policy is not None
         validations = {item.validation for item in summaries}
         if RangeValidation.OUT_OF_BOUNDS in validations:
             raise NotImplementedError(
@@ -910,9 +863,7 @@ class OverlapInput:
                 "signed 64-bit range"
             )
         if RangeValidation.NULL in validations:
-            raise RuntimeError(
-                f"Index column '{self.policy.index_name}' in rolling may not contain nulls"
-            )
+            self.range_policy.raise_validation(RangeValidation.NULL)
         previous = None
         for item in summaries:
             if item.validation is RangeValidation.UNSORTED:
@@ -929,10 +880,7 @@ class OverlapInput:
             previous = item.last
         else:
             return
-        raise RuntimeError(
-            f"Index column '{self.policy.index_name}' in rolling is not sorted, "
-            "please sort first"
-        )
+        self.range_policy.raise_validation(RangeValidation.UNSORTED)
 
     @staticmethod
     def _intersection(left: RowRange, right: RowRange) -> RowRange | None:
@@ -975,7 +923,6 @@ class OverlapInput:
         local: _RangeSummary,
         summaries: Sequence[_RangeSummary],
     ) -> tuple[list[GhostSend], tuple[int, ...], tuple[int, ...]]:
-        assert isinstance(self.policy, RangeOverlapPolicy)
         rank = self.comm.rank
         sources = tuple(
             source
@@ -1010,15 +957,20 @@ class OverlapInput:
         row_offset: int,
     ) -> None:
         assert self.buffer is not None
-        self.sources = tuple(sorted(set(sources)))
+        self.left_sources = tuple(
+            source for source in sources if source < self.comm.rank
+        )
+        self.right_sources = tuple(
+            source for source in sources if source > self.comm.rank
+        )
         destinations = tuple(sorted(set(destinations)))
-        if not self.sources and not destinations:
+        if not (self.left_sources or self.right_sources or destinations):
             return
         self.exchange = SparseAlltoall(
             self.context,
             self.comm,
             self.collective_id,
-            srcs=self.sources,
+            srcs=self.left_sources + self.right_sources,
             dsts=destinations,
         )
         source, self.buffer = self.buffer, ChunkStore(self.context)
@@ -1028,7 +980,7 @@ class OverlapInput:
                 chunk = TableChunk.from_message(msg, br=self.context.br())
                 size = chunk.shape[0]
                 pieces: list[tuple[int, int, int]] = []
-                if self.range_based and size:
+                if self.range_policy is not None and size:
                     values = self.host_values[position]
                     assert values is not None
                     first, last = values[:2]
@@ -1090,35 +1042,34 @@ class OverlapInput:
         destinations: Sequence[int],
         summaries: Sequence[_RangeSummary],
     ) -> list[tuple[int, int, int]]:
-        assert isinstance(self.policy, RangeOverlapPolicy)
+        policy = self.range_policy
+        assert policy is not None
         pieces = []
-        index = chunk.table_view().columns()[self.policy.index]
+        index = chunk.table_view().columns()[policy.index]
         for destination in destinations:
             lower = summaries[destination].lower
             upper = summaries[destination].upper
             assert lower is not None
             assert upper is not None
-            if last < lower or first > upper:
-                continue
             begin = (
                 0
-                if lower < first or (self.policy.start_closed and lower == first)
-                else await self.policy.insertion_point(
+                if lower < first or (policy.start_closed and lower == first)
+                else await policy.insertion_point(
                     self.context,
                     index,
                     lower,
-                    self.policy.find_start,
+                    policy.find_start,
                     chunk.stream,
                 )
             )
             end = (
                 size
-                if upper > last or (self.policy.end_closed and upper == last)
-                else await self.policy.insertion_point(
+                if upper > last or (policy.end_closed and upper == last)
+                else await policy.insertion_point(
                     self.context,
                     index,
                     upper,
-                    self.policy.find_end,
+                    policy.find_end,
                     chunk.stream,
                 )
             )
