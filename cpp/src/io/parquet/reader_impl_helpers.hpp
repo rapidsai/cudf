@@ -394,14 +394,11 @@ class aggregate_reader_metadata {
   /**
    * @brief Collects Parquet types for the columns with the specified schema indices
    *
-   * @param row_group_indices Lists of row groups, once per source
    * @param column_schemas Schema indices of columns whose types will be collected
    *
    * @return A list of parquet types for the columns matching the provided schema indices
    */
-  [[nodiscard]] std::vector<Type> get_parquet_types(
-    host_span<std::vector<size_type> const> row_group_indices,
-    host_span<int const> column_schemas) const;
+  [[nodiscard]] std::vector<Type> get_parquet_types(std::span<int const> column_schemas) const;
 
   /**
    * @brief Filters the row groups using row bounds (`skip_rows` and `num_rows`)
@@ -514,13 +511,13 @@ class aggregate_reader_metadata {
    * @return Surviving row group indices if any of them are filtered.
    */
   [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> apply_bloom_filters(
-    cudf::host_span<cudf::device_span<cuda::std::byte const> const> bloom_filter_data,
-    host_span<std::vector<size_type> const> input_row_group_indices,
-    host_span<std::vector<ast::literal*> const> literals,
-    host_span<std::vector<ast::ast_operator> const> operators,
+    std::span<cudf::device_span<cuda::std::byte const> const> bloom_filter_data,
+    std::span<std::vector<size_type> const> input_row_group_indices,
+    std::span<std::vector<ast::literal*> const> literals,
+    std::span<std::vector<ast::ast_operator> const> operators,
     size_type total_row_groups,
-    host_span<data_type const> output_dtypes,
-    host_span<int const> bloom_filter_col_schemas,
+    std::span<data_type const> output_dtypes,
+    std::span<int const> bloom_filter_col_schemas,
     std::reference_wrapper<ast::expression const> filter,
     cuda::stream_ref stream) const;
 
