@@ -11,7 +11,8 @@
 #include <cudf/detail/utilities/transform_unary_functions.cuh>
 #include <cudf/types.hpp>  //for CUDF_HOST_DEVICE
 
-#include <cmath>
+#include <cuda/std/cmath>
+#include <cuda/std/limits>
 
 namespace cudf {
 namespace reduction {
@@ -43,12 +44,15 @@ struct var_std {
     // Empty states are identities, including when the other state is non-finite.
     if (m == 0) { return rhs; }
     if (n == 0) { return *this; }
-    auto const total   = m + n;
+    if (!cuda::std::isfinite(running_mean) || !cuda::std::isfinite(rhs.running_mean)) {
+      auto constexpr nan = cuda::std::numeric_limits<ResultType>::quiet_nan();
+      return {nan, nan, m + n};
+    }
     auto const delta   = rhs.running_mean - running_mean;
-    auto const delta_n = delta / static_cast<ResultType>(total);
+    auto const delta_n = delta / (m + n);
     return {running_mean + delta_n * n,
             running_square_deviations + rhs.running_square_deviations + delta * delta_n * m * n,
-            total};
+            m + n};
   };
 };
 

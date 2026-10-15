@@ -951,6 +951,26 @@ TEST_F(StableVarianceReductionTest, ConstantValuesWhoseSumOverflows)
   EXPECT_EQ(var, 0.0);
 }
 
+TEST_F(StableVarianceReductionTest, InfinityPositionDoesNotChangeResult)
+{
+  constexpr cudf::size_type size = 10'000;
+  auto const var_at              = [&](cudf::size_type inf_pos) {
+    std::vector<double> values(size);
+    std::iota(values.begin(), values.end(), 0.0);
+    values[inf_pos] = std::numeric_limits<double>::infinity();
+    cudf::test::fixed_width_column_wrapper<double> col(values.begin(), values.end());
+    return reduction_test<double>(col, *cudf::make_variance_aggregation<reduce_aggregation>())
+      .first;
+  };
+  auto const first  = var_at(0);
+  auto const middle = var_at(size / 2);
+  auto const last   = var_at(size - 1);
+  EXPECT_EQ(std::isnan(first), std::isnan(last));
+  EXPECT_EQ(std::isnan(first), std::isnan(middle));
+  EXPECT_EQ(std::isinf(first), std::isinf(last));
+  EXPECT_EQ(std::isinf(first), std::isinf(middle));
+}
+
 // ----------------------------------------------------------------------------
 
 template <typename T>
