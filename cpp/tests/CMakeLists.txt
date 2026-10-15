@@ -453,6 +453,7 @@ ConfigureTest(
   UTILITIES_TEST
   utilities_tests/batched_memcpy_tests.cu
   utilities_tests/batched_memset_tests.cu
+  utilities_tests/buffer_factories_tests.cpp
   utilities_tests/column_debug_tests.cpp
   utilities_tests/column_utilities_tests.cpp
   utilities_tests/column_wrapper_tests.cpp
