@@ -157,7 +157,17 @@ class DataFrame:
         ]
         table_columns = list(self.table.columns())
         for i, c in enumerate(self.columns):
-            if c.dtype.is_categorical and c.null_count > 0:
+            if isinstance(c.dtype.polars_type, pl.Time):
+                table_columns[i] = plc.Column(
+                    plc.DataType(plc.TypeId.INT64),
+                    c.obj.size(),
+                    c.obj.data(),
+                    c.obj.null_mask(),
+                    c.obj.null_count(),
+                    c.obj.offset(),
+                    c.obj.children(),
+                )
+            elif c.dtype.is_categorical and c.null_count > 0:
                 # Polars requires non-null codes.
                 filled = plc.replace.replace_nulls(
                     c.obj,
@@ -171,14 +181,16 @@ class DataFrame:
         table = plc.Table(table_columns)
         table_with_metadata = _ObjectWithArrowMetadata(table, metadata, self.stream)
         df = pl.DataFrame(table_with_metadata).rename(name_map)
-        array_dtypes: dict[str, PolarsDataType] = {
+        cast_dtypes: dict[str, PolarsDataType] = {
             column.name: column.dtype.polars_type
             for column in self.columns
-            if isinstance(column.dtype.polars_type, pl.Array)
+            if isinstance(column.dtype.polars_type, (pl.Array, pl.Time))
         }
-        if array_dtypes:
-            # TODO: Remove this cast when libcudf can export Arrow fixed-size lists.
-            df = df.cast(pl.Schema(array_dtypes), strict=True)
+        if cast_dtypes:
+            # TODO: Remove this cast when:
+            # 1. libcudf can export Arrow fixed-size lists.
+            # 2. libcudf natively supports TIME64 type
+            df = df.cast(pl.Schema(cast_dtypes), strict=True)
         categorical_columns = [c for c in self.columns if c.dtype.is_categorical]
         if categorical_columns:
             df = df.with_columns(
