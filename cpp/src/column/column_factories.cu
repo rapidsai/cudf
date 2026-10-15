@@ -81,7 +81,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::list
   scalar const& value, size_type size, cuda::stream_ref stream, cudf::memory_resources mr) const
 {
   auto lv = static_cast<list_scalar const*>(&value);
-  return lists::detail::make_lists_column_from_scalar(*lv, size, stream, mr.get_output_mr());
+  return lists::detail::make_lists_column_from_scalar(*lv, size, stream, mr);
 }
 
 template <>
