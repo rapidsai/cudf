@@ -11,6 +11,7 @@
 #include "io/comp/compression.hpp"
 #include "io/orc/orc_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
+#include "utilities/time_utils.cuh"
 #include "writer_impl.hpp"
 
 #include <cudf/detail/iterator.cuh>
@@ -1294,10 +1295,6 @@ struct wall_clock_columns {
   cuda::device_buffer<cuda::std::optional<size_type>> indices;
 };
 
-// `scale()` counts the decimal digits between the column's resolution and nanoseconds
-constexpr std::array<int64_t, 10> ticks_per_second{
-  1'000'000'000, 100'000'000, 10'000'000, 1'000'000, 100'000, 10'000, 1'000, 100, 10, 1};
-
 /**
  * @brief Shifts the timestamp columns of a table onto the writer's wall clock.
  *
@@ -1328,18 +1325,20 @@ wall_clock_columns make_wall_clock_columns(orc_table_view const& orc_table,
       // The null mask is shared with the input, so the shifted values keep its row offset
       auto shifted = cuda::device_buffer<int64_t>(
         stream, mr.get_output_mr(), input.offset() + input.size(), cuda::no_init);
-      auto const d_input     = column_device_view::create(input, stream);
-      auto const ticks_per_s = ticks_per_second[column.scale()];
+      auto const d_input = column_device_view::create(input, stream);
+      // `scale()` counts the decimal digits between the column's resolution and nanoseconds
+      auto const scale = column.scale();
 
       thrust::transform(rmm::exec_policy_nosync(stream, mr.get_temporary_mr()),
                         cuda::counting_iterator<size_type>{0},
                         cuda::counting_iterator{input.size()},
                         shifted.data() + input.offset(),
-                        [input = *d_input, transitions = *d_transitions, ticks_per_s] __device__(
+                        [input = *d_input, transitions = *d_transitions, scale] __device__(
                           size_type idx) -> int64_t {
                           if (not input.is_valid(idx)) { return 0; }
 
-                          auto const value = input.element<int64_t>(idx);
+                          auto const ticks_per_s = cudf::detail::powers_of_ten[9 - scale];
+                          auto const value       = input.element<int64_t>(idx);
                           // Floor, to take the offset in effect in the second the value falls in
                           auto const seconds =
                             value / ticks_per_s - ((value % ticks_per_s < 0) ? 1 : 0);
