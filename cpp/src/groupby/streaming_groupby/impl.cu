@@ -18,6 +18,7 @@
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/buffer_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/null_mask.hpp>
@@ -29,9 +30,8 @@
 #include <cudf/utilities/traits.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-
+#include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/stream>
 #include <thrust/tabulate.h>
@@ -298,8 +298,8 @@ void streaming_groupby::impl::initialize(table_view const& data, cuda::stream_re
       decltype(_d_agg_results){raii.release(), +[](mutable_table_device_view* t) { t->destroy(); }};
   }
 
-  _d_agg_kinds = std::make_unique<rmm::device_uvector<aggregation::Kind>>(
-    cudf::detail::make_device_uvector_async(_agg_kinds, stream, mr));
+  _d_agg_kinds = std::make_unique<cuda::device_buffer<aggregation::Kind>>(
+    cudf::detail::make_device_buffer_async(_agg_kinds, stream, mr));
 
   // Map each column in `values_view` back to its index in `data`.
   _value_col_indices.reserve(values_view.num_columns());
@@ -338,7 +338,8 @@ void streaming_groupby::impl::initialize(table_view const& data, cuda::stream_re
   }
 
   // Companion vector: indexed by dense ID, one {batch_id, row} entry per distinct key.
-  _key_loc = std::make_unique<rmm::device_uvector<key_location_t>>(_max_distinct_keys, stream, mr);
+  _key_loc = std::make_unique<cuda::device_buffer<key_location_t>>(
+    stream, mr, _max_distinct_keys, cuda::no_init);
 
   _initialized = true;
 }
