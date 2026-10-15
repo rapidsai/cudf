@@ -10,12 +10,13 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/preprocessed_table.cuh>
-#include <cudf/detail/row_operator/primitive_row_operators.cuh>
+#include <cudf/detail/row_operator/primitive_common.cuh>
 #include <cudf/join/filtered_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/device_uvector.hpp>
@@ -24,6 +25,7 @@
 #include <rmm/resource_ref.hpp>
 
 #include <cuco/extent.cuh>
+#include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/stream>
 #include <thrust/copy.h>
@@ -137,7 +139,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> filtered_join::semi_anti_j
     return cudf::detail::row::equality::preprocessed_table::create(left, stream, temp_mr);
   }();
 
-  auto contains_map            = rmm::device_uvector<bool>(left.num_rows(), stream, temp_mr);
+  auto contains_map = cuda::device_buffer<bool>(stream, temp_mr, left.num_rows(), cuda::no_init);
   auto const contains_map_span = cudf::device_span<bool>{contains_map.data(), contains_map.size()};
   if (_right_mode == row_operator_mode::PRIMITIVE) {
     query_right_table_primitive(left, preprocessed_left, contains_map_span, stream);

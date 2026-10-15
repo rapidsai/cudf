@@ -10,7 +10,8 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/row_operator/hashing.cuh>
-#include <cudf/detail/row_operator/primitive_row_operators.cuh>
+#include <cudf/detail/row_operator/primitive_equality.cuh>
+#include <cudf/detail/row_operator/primitive_hashing.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/join/distinct_hash_join.hpp>
 #include <cudf/join/join.hpp>
@@ -23,14 +24,13 @@
 #include <rmm/resource_ref.hpp>
 
 #include <cooperative_groups.h>
-#include <cub/block/block_scan.cuh>
 #include <cuco/static_set.cuh>
+#include <cuda/buffer>
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/std/tuple>
 #include <cuda/stream>
 #include <thrust/fill.h>
-#include <thrust/sequence.h>
 
 #include <limits>
 #include <memory>
@@ -232,7 +232,8 @@ distinct_hash_join::inner_join(cudf::table_view const& left,
   auto left_indices =
     std::make_unique<rmm::device_uvector<size_type>>(left_table_num_rows, stream, mr);
 
-  auto found_indices     = rmm::device_uvector<size_type>(left_table_num_rows, stream);
+  auto found_indices = cuda::device_buffer<size_type>(
+    stream, cudf::get_current_device_resource_ref(), left_table_num_rows, cuda::no_init);
   auto const found_begin = cuda::make_transform_output_iterator(found_indices.begin(), output_fn{});
 
   auto preprocessed_left = cudf::detail::row::equality::preprocessed_table::create(
