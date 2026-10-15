@@ -669,11 +669,8 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
 
   if (batch_offsets.size() <= 2) {
     // single batch
-    auto has_inserted = insert_partial_tables(read_batch(sources,
-                                                         batched_reader_opts,
-                                                         stream,
-                                                         cudf::get_current_device_resource_ref(),
-                                                         diagnostics_out));
+    auto has_inserted =
+      insert_partial_tables(read_batch(sources, batched_reader_opts, stream, mr, diagnostics_out));
     if (!has_inserted) {
       return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{}),
                                  {std::vector<column_name_info>{}}};
@@ -719,8 +716,8 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
     }
   }
 
-  // If there is a single partial table, then there is no need to concatenate
-  if (partial_tables.size() == 1) return std::move(partial_tables[0]);
+  // Multi-batch results must be copied onto the output resource even if only one batch is nonempty.
+  if (batch_offsets.size() <= 2 && partial_tables.size() == 1) return std::move(partial_tables[0]);
   auto expects_schema_equality =
     std::all_of(partial_tables.begin() + 1,
                 partial_tables.end(),

@@ -27,7 +27,10 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
 
+#include <rmm/mr/statistics_resource_adaptor.hpp>
+
 #include <cuda/iterator>
+#include <cuda/stream>
 
 #include <fstream>
 #include <limits>
@@ -3624,6 +3627,33 @@ struct JsonBatchedReaderTest : public cudf::test::BaseFixture {
 
   ~JsonBatchedReaderTest() { unsetenv("LIBCUDF_JSON_BATCH_SIZE"); }
 };
+
+TEST_F(JsonBatchedReaderTest, OutputMemoryResource)
+{
+  std::string const data = "{\"a\":1}\n{\"a\":2}\n{\"a\":3}\n{\"a\":4}\n\n";
+  auto options           = cudf::io::json_reader_options::builder(
+                   cudf::io::source_info{cudf::host_span<char const>{data.data(), data.size()}})
+                   .lines(true)
+                   .build();
+  int device{};
+  CUDF_CUDA_TRY(cudaGetDevice(&device));
+  auto stream     = cuda::stream{cuda::device_ref{device}};
+  auto output_mr  = rmm::mr::statistics_resource_adaptor{mr()};
+  auto output_ref = rmm::device_async_resource_ref{output_mr};
+
+  // The last batch can contribute no rows when the preceding batch finishes its last record.
+  for (auto batch_size : {data.size(), data.size() - 1, data.size() / 2}) {
+    SCOPED_TRACE(batch_size);
+    this->set_batch_size(batch_size);
+    auto result = cudf::io::read_json(options, stream, output_ref);
+    ASSERT_EQ(result.tbl->num_columns(), 1);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper({1, 2, 3, 4}));
+    auto columns = result.tbl->release();
+    auto buffer  = columns.front()->release().data;
+    EXPECT_EQ(buffer->stream(), cuda::stream_ref{stream});
+    EXPECT_EQ(buffer->memory_resource(), output_ref);
+  }
+}
 
 TEST_F(JsonBatchedReaderTest, EmptyLastBatch)
 {
