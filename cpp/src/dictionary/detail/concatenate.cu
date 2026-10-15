@@ -218,9 +218,11 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   auto d_all_keys = column_device_view::create(all_keys->view(), stream, temp_mr);
   thrust::transform(
     policy, iota, iota + all_keys->size(), d_indices.begin(), insert_keys_fn{set_ref, *d_all_keys});
-  auto keys_indices =
+  auto keys_indices_storage =
     cuda::device_buffer<size_type>(stream, temp_mr, all_keys->size(), cuda::no_init);
-  auto keys_end = set.retrieve_all(keys_indices.begin(), stream);
+  auto keys_end     = set.retrieve_all(keys_indices_storage.begin(), stream);
+  auto keys_indices = cudf::device_span<size_type>(
+    keys_indices_storage.data(), cuda::std::distance(keys_indices_storage.begin(), keys_end));
 
   // use keys_indices to retrieve the keys (gather)
   auto const oob_policy   = cudf::out_of_bounds_policy::DONT_CHECK;

@@ -109,8 +109,11 @@ std::unique_ptr<column> encode(column_view const& input,
                     d_indices.begin(),
                     encode_fn{set_ref, *d_input});
 
-  auto keys_indices = cuda::device_buffer<size_type>(stream, temp_mr, input.size(), cuda::no_init);
-  auto keys_end     = set.retrieve_all(keys_indices.begin(), stream.get());
+  auto keys_indices_storage =
+    cuda::device_buffer<size_type>(stream, temp_mr, input.size(), cuda::no_init);
+  auto keys_end     = set.retrieve_all(keys_indices_storage.begin(), stream);
+  auto keys_indices = cudf::device_span<size_type>(
+    keys_indices_storage.data(), cuda::std::distance(keys_indices_storage.begin(), keys_end));
 
   // sort the keys_indices so we can use lower-bound on them
   thrust::sort(rmm::exec_policy_nosync(stream, temp_mr), keys_indices.begin(), keys_indices.end());
