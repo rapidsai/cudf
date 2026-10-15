@@ -31,6 +31,7 @@ struct grouped_keys {
  * @param need_grouped_rows Whether to return grouped input row indices; requires group offsets
  * @param stream CUDA stream used for device operations
  * @param mr Memory resources for grouping outputs and temporary allocations
+ * @throws std::invalid_argument If grouped rows are requested without group offsets
  * @return Representative rows, group offsets, and grouped row indices as requested
  */
 grouped_keys group_keys(table_view const& keys,

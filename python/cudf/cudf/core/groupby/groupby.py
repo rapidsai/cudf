@@ -999,24 +999,16 @@ class GroupBy(Serializable, Reducible, Scannable):
             else []
         )
         positions = value_columns.pop() if need_positions else None
-        if not order_groups or len(offsets) <= 2:
+        # get_groups already returns groups in sorted key order.
+        if not order_groups or self._sort or len(offsets) <= 2:
             return offsets, key_columns, value_columns
 
         # Cache the requested group order, preserving row order within each group.
         if self._group_ordering is None:
             group_starts = as_column(offsets[:-1])
-            if self._sort:
-                group_names = _index_from_data(
-                    {
-                        i: col.take(group_starts)
-                        for i, col in enumerate(key_columns)
-                    }
-                )
-                group_order = cp.asnumpy(group_names.argsort())
-            else:
-                assert positions is not None
-                first_positions = positions.take(group_starts)
-                group_order = first_positions.argsort().to_numpy()
+            assert positions is not None
+            first_positions = positions.take(group_starts)
+            group_order = first_positions.argsort().to_numpy()
 
             if np.array_equal(group_order, np.arange(len(offsets) - 1)):
                 self._group_ordering = (offsets, None)

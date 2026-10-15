@@ -372,6 +372,9 @@ grouped_keys group_keys(table_view const& keys,
                         cuda::stream_ref stream,
                         cudf::memory_resources mr)
 {
+  CUDF_EXPECTS(need_group_offsets || !need_grouped_rows,
+               "Grouped rows require group offsets",
+               std::invalid_argument);
   auto const num_rows = keys.num_rows();
   auto const skip_rows_with_nulls =
     cudf::has_nulls(keys) && include_null_keys == null_policy::EXCLUDE;
