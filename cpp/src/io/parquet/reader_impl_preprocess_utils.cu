@@ -154,12 +154,19 @@ void generate_depth_remappings(
       int depth  = max_depth - 1;
       while (schema_idx > 0) {
         SchemaElement cur_schema = md.get_schema(schema_idx, src_file_idx);
+        auto const one_level_list =
+          cur_schema.is_one_level_list(md.get_schema(cur_schema.parent_idx, src_file_idx));
         if (cur_schema.max_repetition_level == r1) {
           // if this is a repeated field, map it one level deeper
           depth = cur_schema.is_stub() ? depth + 1 : depth;
           break;
         }
-        if (!cur_schema.is_stub()) { depth--; }
+        // the implicit list of a one-level list has one less repetition level than its leaf
+        if (one_level_list and cur_schema.max_repetition_level - 1 == r1) {
+          depth--;
+          break;
+        }
+        if (!cur_schema.is_stub()) { depth -= one_level_list ? 2 : 1; }
         prev_schema = cur_schema;
         schema_idx  = cur_schema.parent_idx;
       }
