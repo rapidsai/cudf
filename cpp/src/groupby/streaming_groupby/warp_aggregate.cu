@@ -6,6 +6,7 @@
 #include "groupby/hash/single_pass_reductions.cuh"
 #include "warp_aggregate.hpp"
 
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
@@ -28,8 +29,7 @@ namespace cg             = cooperative_groups;
 constexpr int block_size = 256;
 
 template <typename T, aggregation::Kind K>
-constexpr bool is_warp_aggregation_supported()
-{
+constexpr bool is_warp_aggregation_supported = [] {
   if constexpr (cuda::std::is_same_v<T, numeric::decimal128> && K == aggregation::SUM) {
     return true;  // This kind has a dedicated existing 128-bit atomic addition.
   }
@@ -41,31 +41,29 @@ constexpr bool is_warp_aggregation_supported()
            cudf::has_atomic_support<Result>();
   }
   return false;
-}
+}();
 
-template <typename ValueFn>
-struct aggregation_values {
-  ValueFn values;
-  __device__ bool valid(size_type row) const { return !values.col_is_null(row); }
-  __device__ auto value(size_type row) const { return values.compute(row); }
-};
-
-template <bool ValidOnly>
-struct count_values {
-  column_device_view values;
-  bool has_nulls;
-  __device__ bool valid(size_type row) const
-  {
-    return !ValidOnly || !has_nulls || values.is_valid_nocheck(row);
-  }
-  __device__ size_type value(size_type) const { return 1; }
-};
-
-template <typename Values, typename Result>
 struct aggregation_column {
-  Values values;
-  Result* output;
-  bitmask_type* validity;
+  void* output{};
+  bitmask_type* validity{};
+};
+
+struct aggregation_columns {
+  aggregation_column sum, min, max, product, sum_of_squares, count_valid, count_all;
+
+  aggregation_column& operator[](aggregation::Kind kind)
+  {
+    switch (kind) {
+      case aggregation::SUM: return sum;
+      case aggregation::MIN: return min;
+      case aggregation::MAX: return max;
+      case aggregation::PRODUCT: return product;
+      case aggregation::SUM_OF_SQUARES: return sum_of_squares;
+      case aggregation::COUNT_VALID: return count_valid;
+      case aggregation::COUNT_ALL: return count_all;
+      default: CUDF_FAIL("Unsupported kind for warp aggregation");
+    }
+  }
 };
 
 // Public CG collectives shuffle this trivially-copyable representation without narrowing it.
@@ -101,15 +99,20 @@ __device__ T reduce_group_value(cg::coalesced_group const& thread_group, T value
   }
 }
 
-template <typename Column, typename Op>
-__device__ void aggregate_row(Column const& column, size_type row, size_type target, Op operation)
+template <typename T, aggregation::Kind K>
+__device__ void aggregate_value(hash::rep_type_t<T> input,
+                                cg::coalesced_group const& thread_group,
+                                size_type target,
+                                aggregation_column column)
 {
-  if (column.values.valid(row)) {
-    auto const active       = cg::coalesced_threads();
-    auto const thread_group = cg::labeled_partition(active, target);
-    auto const value        = column.values.value(row);
-    auto combine            = thread_group.size() > 1;
-    if constexpr (cuda::std::is_floating_point_v<decltype(value)> &&
+  if constexpr (is_warp_aggregation_supported<T, K>) {
+    if (column.output == nullptr) { return; }
+    using Result = hash::rep_type_t<cudf::detail::target_type_t<T, K>>;
+    using Op     = cudf::detail::corresponding_operator_t<K>;
+    auto value   = static_cast<Result>(input);
+    if constexpr (K == aggregation::SUM_OF_SQUARES) { value *= value; }
+    auto combine = thread_group.size() > 1;
+    if constexpr (cuda::std::is_floating_point_v<Result> &&
                   (cuda::std::is_same_v<Op, cudf::DeviceMin> ||
                    cuda::std::is_same_v<Op, cudf::DeviceMax>)) {
       if (combine) {
@@ -119,110 +122,105 @@ __device__ void aggregate_row(Column const& column, size_type row, size_type tar
         combine = cg::reduce(thread_group, static_cast<int>(exceptional), cg::plus<int>{}) == 0;
       }
     }
-    auto const combined = combine ? reduce_group_value(thread_group, value, operation) : value;
+    auto const combined = combine ? reduce_group_value(thread_group, value, Op{}) : value;
     if (!combine || thread_group.thread_rank() == 0) {
       if (column.validity != nullptr && !cudf::bit_is_set(column.validity, target)) {
         cudf::set_bit(column.validity, target);
       }
-      if constexpr (cuda::std::is_same_v<cuda::std::remove_cv_t<decltype(combined)>, __int128_t>) {
+      auto* const output = static_cast<Result*>(column.output);
+      if constexpr (cuda::std::is_same_v<Result, __int128_t>) {
         static_assert(cuda::std::is_same_v<Op, cudf::DeviceSum>);
-        cudf::detail::atomic_add(column.output + target, combined);
+        cudf::detail::atomic_add(output + target, combined);
       } else {
-        cudf::detail::genericAtomicOperation(column.output + target, combined, operation);
+        cudf::detail::genericAtomicOperation(output + target, combined, Op{});
       }
     }
   }
 }
 
+__device__ void aggregate_count(cg::coalesced_group const& thread_group,
+                                size_type target,
+                                aggregation_column column)
+{
+  if (column.output != nullptr && thread_group.thread_rank() == 0) {
+    cudf::detail::atomic_add(static_cast<size_type*>(column.output) + target,
+                             static_cast<size_type>(thread_group.size()));
+  }
+}
+
 // Equal targets can be noncontiguous within a warp; labeled_partition groups lanes with the same
-// target.
-template <typename Column, typename Op>
+// target. All requested aggregations share the input load and valid-row partition.
+template <typename T>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  aggregate_warp_kernel(size_type num_rows, size_type const* targets, Column column, Op operation)
+  aggregate_warp_kernel(size_type num_rows,
+                        size_type const* targets,
+                        detail::value_accessor<hash::rep_type_t<T>> values,
+                        bool has_nulls,
+                        aggregation_columns outputs)
 {
   auto const row = cudf::detail::grid_1d::global_thread_id();
   if (row >= num_rows) { return; }
   auto const target = targets[row];
-  if (target != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
-    aggregate_row(column, static_cast<size_type>(row), target, operation);
+  if (target == cudf::detail::CUDF_SIZE_TYPE_SENTINEL) { return; }
+
+  // COUNT_ALL also includes rows with null values.
+  if (outputs.count_all.output != nullptr) {
+    auto const all_rows = cg::labeled_partition(cg::coalesced_threads(), target);
+    aggregate_count(all_rows, target, outputs.count_all);
+  }
+  if (has_nulls && values.col.is_null_nocheck(row)) { return; }
+
+  auto const thread_group = cg::labeled_partition(cg::coalesced_threads(), target);
+  aggregate_count(thread_group, target, outputs.count_valid);
+  if constexpr (is_warp_aggregation_supported<T, aggregation::SUM> ||
+                is_warp_aggregation_supported<T, aggregation::MIN> ||
+                is_warp_aggregation_supported<T, aggregation::MAX> ||
+                is_warp_aggregation_supported<T, aggregation::PRODUCT> ||
+                is_warp_aggregation_supported<T, aggregation::SUM_OF_SQUARES>) {
+    // Count-only requests do not need to read or decode the input value.
+    if (outputs.sum.output || outputs.min.output || outputs.max.output || outputs.product.output ||
+        outputs.sum_of_squares.output) {
+      auto const value = values(row);
+      aggregate_value<T, aggregation::SUM>(value, thread_group, target, outputs.sum);
+      aggregate_value<T, aggregation::MIN>(value, thread_group, target, outputs.min);
+      aggregate_value<T, aggregation::MAX>(value, thread_group, target, outputs.max);
+      aggregate_value<T, aggregation::PRODUCT>(value, thread_group, target, outputs.product);
+      aggregate_value<T, aggregation::SUM_OF_SQUARES>(
+        value, thread_group, target, outputs.sum_of_squares);
+    }
   }
 }
 
-template <typename Column, typename Op>
-void launch_warp_kernel(device_span<size_type const> targets,
-                        Column column,
-                        Op operation,
-                        cuda::stream_ref stream)
-{
-  auto const num_rows = static_cast<size_type>(targets.size());
-  cudf::detail::grid_1d const grid{num_rows, block_size};
-  aggregate_warp_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.get()>>>(
-    num_rows, targets.data(), column, operation);
-  CUDF_CUDA_TRY(cudaGetLastError());
-}
-
-template <aggregation::Kind K>
 struct aggregation_dispatch {
   template <typename T>
-    requires(is_warp_aggregation_supported<T, K>())
+    requires(!cudf::is_nested<T>() && !cuda::std::is_same_v<T, dictionary32>)
   void operator()(column_view const& input,
-                  mutable_column_view const& output,
+                  aggregation_columns outputs,
                   device_span<size_type const> targets,
                   cuda::stream_ref stream,
                   cudf::memory_resources mr) const
   {
-    using Source      = hash::rep_type_t<T>;
-    using Result      = hash::rep_type_t<cudf::detail::target_type_t<T, K>>;
-    using Op          = cudf::detail::corresponding_operator_t<K>;
-    using ValueFn     = hash::grouped_value_fn<Source, Result, K == aggregation::SUM_OF_SQUARES>;
-    auto const values = column_device_view::create(input, stream, mr.get_temporary_mr());
-    // These row-based helpers never dereference the grouped-row map.
-    ValueFn const row_values{nullptr,
-                             detail::value_accessor<Source>{*values},
-                             Op::template identity<Result>(),
-                             input.has_nulls()};
-    aggregation_column<aggregation_values<ValueFn>, Result> const column{
-      {row_values}, output.template begin<Result>(), output.null_mask()};
-    launch_warp_kernel(targets, column, Op{}, stream);
+    auto const values   = column_device_view::create(input, stream, mr.get_temporary_mr());
+    auto const num_rows = static_cast<size_type>(targets.size());
+    cudf::detail::grid_1d const grid{num_rows, block_size};
+    aggregate_warp_kernel<T><<<grid.num_blocks, grid.num_threads_per_block, 0, stream.get()>>>(
+      num_rows,
+      targets.data(),
+      detail::value_accessor<hash::rep_type_t<T>>{*values},
+      input.has_nulls(),
+      outputs);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   template <typename T>
-    requires(!is_warp_aggregation_supported<T, K>())
+    requires(cudf::is_nested<T>() || cuda::std::is_same_v<T, dictionary32>)
   void operator()(column_view const&,
-                  mutable_column_view const&,
+                  aggregation_columns,
                   device_span<size_type const>,
                   cuda::stream_ref,
                   cudf::memory_resources) const
   {
     CUDF_FAIL("Unsupported type for warp aggregation");
-  }
-};
-
-struct aggregation_kind_dispatch {
-  template <aggregation::Kind K>
-  void operator()(column_view const& input,
-                  mutable_column_view const& output,
-                  device_span<size_type const> targets,
-                  cuda::stream_ref stream,
-                  cudf::memory_resources mr) const
-  {
-    if constexpr (K == aggregation::COUNT_ALL || K == aggregation::COUNT_VALID) {
-      using Column = aggregation_column<count_values<K == aggregation::COUNT_VALID>, size_type>;
-      auto const values = column_device_view::create(input, stream, mr.get_temporary_mr());
-      Column const column{
-        {*values, input.has_nulls()}, output.template begin<size_type>(), nullptr};
-      // Counts combine row contributions with addition, including COUNT_ALL on null rows.
-      launch_warp_kernel(targets, column, cudf::DeviceSum{}, stream);
-    } else if constexpr (K == aggregation::SUM || K == aggregation::SUM_OF_SQUARES ||
-                         K == aggregation::PRODUCT || K == aggregation::MIN ||
-                         K == aggregation::MAX) {
-      auto const type = cudf::is_dictionary(input.type())
-                          ? dictionary_column_view(input).keys().type()
-                          : input.type();
-      type_dispatcher(type, aggregation_dispatch<K>{}, input, output, targets, stream, mr);
-    } else {
-      CUDF_FAIL("Unsupported kind for warp aggregation");
-    }
   }
 };
 
@@ -235,14 +233,23 @@ void compute_warp_aggregates(table_view const& values,
                              cuda::stream_ref stream,
                              cudf::memory_resources mr)
 {
-  for (size_type i = 0; i < values.num_columns(); ++i) {
-    cudf::detail::aggregation_dispatcher(kinds[i],
-                                         aggregation_kind_dispatch{},
-                                         values.column(i),
-                                         output.column(i),
-                                         targets,
-                                         stream,
-                                         mr);
+  for (size_type begin = 0; begin < values.num_columns();) {
+    auto const& input = values.column(begin);
+    aggregation_columns columns{};
+    auto end = begin;
+    while (end < values.num_columns() &&
+           cudf::detail::is_shallow_equivalent(input, values.column(end))) {
+      auto& column = columns[kinds[end]];
+      // Separate requests can alias the same input. Keep both outputs for repeated kinds.
+      if (column.output != nullptr) { break; }
+      column = {output.column(end).head(), output.column(end).null_mask()};
+      ++end;
+    }
+    auto const type = cudf::is_dictionary(input.type())
+                        ? dictionary_column_view(input).keys().type()
+                        : input.type();
+    type_dispatcher(type, aggregation_dispatch{}, input, columns, targets, stream, mr);
+    begin = end;
   }
 }
 
