@@ -867,6 +867,23 @@ TEST_F(OrcWriterTest, WriterTimezoneStatistics)
   bounds_shift_with_the_values("America/New_York", new_york_offset, new_york_dst_offset);
 }
 
+TEST_F(OrcWriterTest, WriterTimezoneStatisticsSlicedSubsecond)
+{
+  // Sub-second resolution, a null, and a value before the epoch, whose fractional part makes the
+  // second it falls in one lower. Sliced, so the values the statistics read start past row zero.
+  auto constexpr negative_ms = cudf::timestamp_ms::rep{-1'500};  // 1969-12-31T23:59:58.500Z
+  auto const timestamps      = column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>{
+    {during_est * 1000, 0L, negative_ms, during_edt * 1000}, {true, false, true, true}};
+  auto const sliced = cudf::slice(static_cast<cudf::column_view>(timestamps), {1, 4}).front();
+
+  auto const stats =
+    timestamp_stats(write_orc_with_timezone(table_view({sliced}), "America/New_York"));
+  EXPECT_EQ(stats.minimum, negative_ms + new_york_offset * 1000);
+  EXPECT_EQ(stats.maximum, (during_edt + new_york_dst_offset) * 1000);
+  EXPECT_EQ(stats.minimum_utc, stats.minimum);
+  EXPECT_EQ(stats.maximum_utc, stats.maximum);
+}
+
 TEST_F(OrcWriterTest, WriterTimezoneInvalid)
 {
   auto const timestamps = column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{0, 1};
