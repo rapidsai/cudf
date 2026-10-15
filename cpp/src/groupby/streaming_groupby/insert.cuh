@@ -13,17 +13,26 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/stream>
 #include <thrust/for_each.h>
-#include <thrust/transform.h>
 
 #include <string>
 
 namespace cudf::groupby {
+
+// A shared owner prevents flat and nested insertion from emitting the same hash-cache kernel.
+void compute_batch_hashes(
+  std::shared_ptr<cudf::detail::row::hash::preprocessed_table> const& preprocessed_batch,
+  cudf::nullate::DYNAMIC has_null,
+  bitmask_type const* batch_bitmask,
+  hash_value_type* batch_hash_cache,
+  size_type batch_size,
+  cuda::stream_ref stream,
+  rmm::device_async_resource_ref mr);
 
 template <bool has_nested>
 streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_insert_impl(
@@ -36,8 +45,6 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
   // Preprocess batch for row operators.
   auto preprocessed_batch =
     cudf::detail::row::hash::preprocessed_table::create(batch_keys, stream, temp_mr);
-  auto const batch_hasher_obj = cudf::detail::row::hash::row_hasher{preprocessed_batch};
-  auto const d_batch_hash     = batch_hasher_obj.device_hasher(has_null);
 
   // Compute the null-exclusion bitmask first so the hash cache pass can skip
   // hashing rows that will be excluded
@@ -49,21 +56,23 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
           cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED, stream), nullptr};
 
   // Precompute batch hash values.  Caching is faster than inlining the row hasher
-  rmm::device_uvector<hash_value_type> batch_hash_cache(batch_size, stream, temp_mr);
-  thrust::transform(rmm::exec_policy_nosync(stream, temp_mr),
-                    cuda::counting_iterator<size_type>(0),
-                    cuda::counting_iterator<size_type>(batch_size),
-                    batch_hash_cache.begin(),
-                    conditional_hash_fn<decltype(d_batch_hash)>{d_batch_hash, batch_bitmask});
+  cuda::device_buffer<hash_value_type> batch_hash_cache(stream, temp_mr, batch_size, cuda::no_init);
+  compute_batch_hashes(preprocessed_batch,
+                       has_null,
+                       batch_bitmask,
+                       batch_hash_cache.data(),
+                       batch_size,
+                       stream,
+                       temp_mr);
 
   // Pass 1 — fused insert_and_find + compact via `thrust::copy_if`.
   // Per-row work in the predicate: writes target_indices and slot_offsets.
   // Output: batch row indices of newly inserted keys, compacted into batch_local_indices.
   // Count: iterator distance returned by copy_if inside the helper.
   // slot_offsets stores 4-byte slot offsets (vs. 8-byte raw pointers) to halve temp memory.
-  rmm::device_uvector<size_type> target_indices(batch_size, stream, temp_mr);
-  rmm::device_uvector<size_type> slot_offsets(batch_size, stream, temp_mr);
-  rmm::device_uvector<size_type> batch_local_indices(batch_size, stream, temp_mr);
+  cuda::device_buffer<size_type> target_indices(stream, temp_mr, batch_size, cuda::no_init);
+  cuda::device_buffer<size_type> slot_offsets(stream, temp_mr, batch_size, cuda::no_init);
+  cuda::device_buffer<size_type> batch_local_indices(stream, temp_mr, batch_size, cuda::no_init);
 
   // First batch has no compacted batches yet, so all slot values are transient (>=
   // _max_distinct_keys) and only the batch-self equality branch of n_table_comparator
@@ -91,7 +100,8 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
                                                 slot_offsets.data(),
                                                 batch_local_indices.data(),
                                                 stream);
-  batch_local_indices.resize(new_distinct_keys, stream);
+  auto const new_key_indices = cudf::device_span<size_type const>{
+    batch_local_indices.data(), static_cast<std::size_t>(new_distinct_keys)};
 
   if (new_distinct_keys > 0) {
     // Bound check: the hash set has already been written above (transient slot values),
@@ -106,7 +116,7 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
 
     // Gather compacted distinct keys from the batch.
     auto compacted = cudf::detail::gather(batch_keys,
-                                          batch_local_indices,
+                                          new_key_indices,
                                           out_of_bounds_policy::DONT_CHECK,
                                           cudf::negative_index_policy::NOT_ALLOWED,
                                           stream,

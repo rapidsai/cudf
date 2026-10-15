@@ -22,6 +22,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/atomic>
+#include <cuda/cmath>
 #include <cuda/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/optional>
@@ -647,8 +648,7 @@ CUDF_HOST_DEVICE constexpr inline size_t max_RLE_page_size(uint8_t value_bit_wid
   // bitwidths it's hard to get the pathological 8:2 split.
   // If the encoder starts printing the data corruption warning, then this will need to be
   // revisited.
-  return 4 + 5 + cudf::util::div_rounding_up_unsafe<size_t>(num_values * value_bit_width, 8) +
-         (num_values / 8);
+  return 4 + 5 + cuda::ceil_div<size_t, size_t>(num_values * value_bit_width, 8) + (num_values / 8);
 }
 
 // Bytes needed for the RLE length field
@@ -658,7 +658,7 @@ constexpr uint32_t RLE_LENGTH_FIELD_LEN = sizeof(uint32_t);
 // seven payload bits. Equal to 1 (field header byte) + ceil(value_bits / 7).
 CUDF_HOST_DEVICE constexpr size_t max_thrift_field_size(size_t value_bits)
 {
-  return 1 + cudf::util::div_rounding_up_unsafe<size_t>(value_bits, 7);
+  return 1 + cuda::ceil_div<size_t, size_t>(value_bits, 7);
 }
 
 // Max V2 page header size excluding statistics. Equal to size of 9 `i32` fields + 2 bool fields
@@ -877,6 +877,18 @@ void decode_page_headers(cudf::device_span<ColumnChunkDesc const> chunks,
                          cuda::stream_ref stream);
 
 /**
+ * @brief Page metadata from the page index to be applied to pages during header parsing.
+ */
+struct page_index_info {
+  int32_t num_rows;
+  int32_t chunk_row;
+  int32_t num_nulls;
+  int32_t num_valids;
+  int32_t str_bytes;
+  bool has_value_info;
+};
+
+/**
  * @brief Decode page headers from corresponding specified page data spans.
  *
  * Empty spans initialize the corresponding logical page descriptor but are not decoded.
@@ -885,6 +897,7 @@ void decode_page_headers(cudf::device_span<ColumnChunkDesc const> chunks,
  * @param[out] pages Device span of pages
  * @param[in] page_data Device span of page data
  * @param[in] chunk_page_offsets List of running count of page locations per column chunk
+ * @param[in] page_indexes Device span of metadata from page index for each logical page.
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
@@ -893,6 +906,7 @@ void decode_page_headers_from_page_data(
   cudf::device_span<PageInfo> pages,
   cudf::device_span<cudf::device_span<uint8_t const> const> page_data,
   cudf::device_span<size_type const> chunk_page_offsets,
+  cudf::device_span<page_index_info const> page_indexes,
   kernel_error::pointer error_code,
   cuda::stream_ref stream);
 
