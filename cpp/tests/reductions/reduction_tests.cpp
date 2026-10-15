@@ -906,6 +906,7 @@ TEST_F(StableVarianceReductionTest, LargeOffsetAcrossTiles)
 {
   // Exercise multiple CUB tiles with a small variance relative to the mean.
   for (bool nullable : {false, true}) {
+    SCOPED_TRACE(nullable ? "nullable" : "non-nullable");
     std::vector<double> values(100003);
     std::vector<bool> valid(values.size(), true);
     long double sum = 0;
@@ -928,6 +929,7 @@ TEST_F(StableVarianceReductionTest, LargeOffsetAcrossTiles)
     }
     cudf::test::fixed_width_column_wrapper<double> col(values.begin(), values.end(), valid.begin());
     for (int ddof : {0, 1}) {
+      SCOPED_TRACE(ddof == 0 ? "ddof=0" : "ddof=1");
       auto const expected = static_cast<double>(m2 / (count - ddof));
       auto const [var, var_valid] =
         reduction_test<double>(col, *cudf::make_variance_aggregation<reduce_aggregation>(ddof));

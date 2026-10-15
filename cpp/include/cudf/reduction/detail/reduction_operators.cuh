@@ -27,7 +27,7 @@ struct var_std {
   // Also http://www.cs.yale.edu/publications/techreports/tr222.pdf
   // This is a modification of Youngs and Cramer's online approach.
   // We track the running mean, rather than the running sum so that columns whose sum
-  // overflows but whose mean does not produce finite variance.
+  // overflows, but whose mean does not, produce finite variance.
   ResultType running_mean;
   ResultType running_square_deviations;
   size_type count;
@@ -45,7 +45,7 @@ struct var_std {
     if (m == 0) { return rhs; }
     if (n == 0) { return *this; }
     if (!cuda::std::isfinite(running_mean) || !cuda::std::isfinite(rhs.running_mean)) {
-      auto constexpr nan = cuda::std::numeric_limits<ResultType>::quiet_nan();
+      auto constexpr nan = cuda::std::numeric_limits<ResultType>::quiet_NaN();
       return {nan, nan, m + n};
     }
     auto const delta   = rhs.running_mean - running_mean;
