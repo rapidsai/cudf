@@ -752,13 +752,13 @@ void hybrid_scan_reader_impl::prepare_column_chunks_read(
 
   prepare_materialization(columns_mode, row_group_indices.size(), options, stream, mr);
 
-  _read_columns_mode       = columns_mode;
-  _sparse_page_io          = sparse_page_io;
   _input_pass_read_limit   = pass_read_limit;
   _output_chunk_read_limit = chunk_read_limit;
 
-  // Normalize the input expression for filter and all columns (must be done after
-  // prepare_materialization)
+  // Mark that we are using page-level I/O for payload columns
+  _sparse_page_io = sparse_page_io;
+
+  // Normalize the input expression (must be done after prepare_materialization)
   if (columns_mode != read_columns_mode::PAYLOAD_COLUMNS) {
     _expr_conv = build_normalized_expression(options);
   }
@@ -773,32 +773,19 @@ void hybrid_scan_reader_impl::prepare_column_chunks_read(
     return;
   }
 
+  // Check offset indexes are present for sparse payload page I/O mode
   if (_sparse_page_io) {
     auto const column_schemas = get_column_schemas(_input_columns);
     CUDF_EXPECTS(_extended_metadata->page_index_presence(row_group_indices, column_schemas).second,
                  "Page-level I/O for payload columns requires offset indexes to be present");
   }
 
-  // In sparse page I/O, the data page mask is computed directly from the page data spans inside
-  // `prepare_data() -> setup_sparse_compressed_data()`
+  // Sparse page I/O infers the data page mask from the page data
   auto const retention_mask =
     (mask_data_pages == use_data_page_mask::YES and not is_all_columns and not _sparse_page_io)
       ? std::optional{row_mask}
       : std::nullopt;
   prepare_data(mode, row_group_indices, column_data, retention_mask);
-}
-
-template <typename RowMaskView>
-table_with_metadata hybrid_scan_reader_impl::read_columns(read_mode mode, RowMaskView row_mask)
-{
-  if (_read_columns_mode == read_columns_mode::ALL_COLUMNS) {
-    // Use the main reader's function for reading all columns
-    auto result = reader_impl::read_chunk_internal(mode);
-    // base read_chunk_internal() does not update the output chunk produced flag
-    _output_chunk_produced = true;
-    return result;
-  }
-  return read_chunk_internal(mode, _read_columns_mode, row_mask);
 }
 
 template <row_mask_view_type RowMaskView>
@@ -830,7 +817,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_columns(
                              stream,
                              mr);
 
-  return read_columns(read_mode::READ_ALL, row_mask);
+  return read_chunk_internal(read_mode::READ_ALL, columns_mode, row_mask);
 }
 
 void hybrid_scan_reader_impl::setup_chunking_for_columns(
@@ -888,8 +875,9 @@ void hybrid_scan_reader_impl::setup_chunking_for_sparse_payload_columns(
 template <row_mask_view_type RowMaskView>
 table_with_metadata hybrid_scan_reader_impl::materialize_columns_chunk(RowMaskView row_mask)
 {
-  CUDF_EXPECTS(_file_preprocessed, "Chunking for columns not yet setup");
-  CUDF_EXPECTS(is_valid_row_mask_view<RowMaskView>(_read_columns_mode),
+  CUDF_EXPECTS(_file_preprocessed and _selected_columns_mode.has_value(),
+               "Chunking for columns not yet setup");
+  CUDF_EXPECTS(is_valid_row_mask_view<RowMaskView>(*_selected_columns_mode),
                "Invalid row mask view type for the current columns selection mode",
                std::invalid_argument);
 
@@ -901,7 +889,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_columns_chunk(RowMaskVi
   }
 
   prepare_data(read_mode::CHUNKED_READ, {}, {}, {});
-  return read_columns(read_mode::CHUNKED_READ, row_mask);
+  return read_chunk_internal(read_mode::CHUNKED_READ, *_selected_columns_mode, row_mask);
 }
 
 std::pair<std::vector<std::vector<cudf::size_type>>, std::vector<cudf::size_type>>
@@ -1104,6 +1092,14 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(read_mode mode,
                                                                  read_columns_mode columns_mode,
                                                                  RowMaskView row_mask)
 {
+  // Use the main reader's function for reading all columns
+  if (columns_mode == read_columns_mode::ALL_COLUMNS) {
+    auto result = reader_impl::read_chunk_internal(mode);
+    // Main reader does not update the output chunk produced flag so do it here
+    _output_chunk_produced = true;
+    return result;
+  }
+
   // If `_output_metadata` has been constructed, just copy it over.
   auto out_metadata = _output_metadata ? table_metadata{*_output_metadata} : table_metadata{};
   out_metadata.schema_info.resize(_output_buffers.size());
