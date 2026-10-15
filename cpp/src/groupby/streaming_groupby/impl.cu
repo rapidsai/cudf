@@ -426,8 +426,10 @@ streaming_groupby::impl::finalize_gathered(std::unique_ptr<table> keys,
     // Compute compound aggs (MEAN/STD/VARIANCE/M2/...) into the cache.  The cache itself
     // dedupes: skip if (column, kind) is already there from a prior agg in the group.
     for (auto const& req : column_grouped) {
+      // `req.values` holds gathered intermediates, which never carry the input's nulls, so
+      // results such as MEAN must derive nulls from the counts.
       auto const finalizer =
-        detail::hash::hash_compound_agg_finalizer(req.values, &cache, stream, mr);
+        detail::hash::hash_compound_agg_finalizer(req.values, &cache, stream, mr, true);
       for (auto const& agg : req.aggregations) {
         if (cache.has_result(req.values, *agg)) continue;
         cudf::detail::aggregation_dispatcher(agg->kind, finalizer, *agg);
