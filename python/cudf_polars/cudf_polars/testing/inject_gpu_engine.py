@@ -383,6 +383,7 @@ TESTS_TO_SKIP: dict[str, str] = {
     # flaky XPASS/FAIL.
     "tests/unit/operations/test_statistics.py::test_skew_streaming_matches_in_memory[False]": "Compares the CPU streaming engine against the injected engine on random inputs",
     "tests/unit/operations/test_statistics.py::test_skew_streaming_matches_in_memory[True]": "Compares the CPU streaming engine against the injected engine on random inputs",
+    "tests/unit/streaming/test_streaming_sort.py::test_sort_sets_sorted_flag[partitioned]": "Flaky in Polars itself; uses the CPU streaming engine and fails intermittently without the GPU engine",
     # Tests performance difference of CPU engine
     "tests/unit/operations/test_join.py::test_join_where_eager_perf_21145": "Tests performance bug in CPU engine",
     "tests/unit/operations/namespaces/list/test_list.py::test_list_struct_field_perf": "Tests CPU Engine perf",
