@@ -154,21 +154,20 @@ namespace {
 }
 
 /**
- * @brief Check that the row mask view type matches the read columns mode
+ * @brief Returns whether the row mask view type is valid for the specified read columns mode
  *
  * Filter columns update the row mask in place so require a mutable view whereas all other
  * columns require an immutable view.
  *
- * @tparam RowMaskView View type of the row mask column
+ * @tparam RowMaskView Row mask column view type
  * @param columns_mode Columns to materialize
+ * @return Whether the row mask view type is valid for the columns mode
  */
 template <typename RowMaskView>
-void check_row_mask_view(read_columns_mode columns_mode)
+[[nodiscard]] bool is_valid_row_mask_view(read_columns_mode columns_mode)
 {
-  constexpr auto is_mutable = std::is_same_v<RowMaskView, cudf::mutable_column_view>;
-  CUDF_EXPECTS(is_mutable == (columns_mode == read_columns_mode::FILTER_COLUMNS),
-               "Filter columns require a mutable row mask and all other columns an immutable one",
-               std::invalid_argument);
+  return std::same_as<RowMaskView, cudf::mutable_column_view> ==
+         (columns_mode == read_columns_mode::FILTER_COLUMNS);
 }
 
 }  // namespace
@@ -598,15 +597,6 @@ hybrid_scan_reader_impl::get_input_column_chunk_byte_ranges(
   return {std::move(column_chunk_byte_ranges), std::move(chunk_source_map)};
 }
 
-void hybrid_scan_reader_impl::check_offset_indexes_present(
-  std::span<std::vector<size_type> const> row_group_indices) const
-{
-  CUDF_EXPECTS(
-    _extended_metadata->page_index_presence(row_group_indices, get_column_schemas(_input_columns))
-      .second,
-    "Page-level I/O for payload columns requires offset indexes to be present");
-}
-
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
 hybrid_scan_reader_impl::column_chunks_byte_ranges(
   read_columns_mode columns_mode,
@@ -634,10 +624,12 @@ hybrid_scan_reader_impl::sparse_payload_pages_byte_ranges(
                "Row mask must not have any nulls when planning payload pages");
 
   select_columns(read_columns_mode::PAYLOAD_COLUMNS, options);
-  check_offset_indexes_present(row_group_indices);
 
   auto const column_schemas = get_column_schemas(_input_columns);
-  auto const num_columns    = _input_columns.size();
+  CUDF_EXPECTS(_extended_metadata->page_index_presence(row_group_indices, column_schemas).second,
+               "Page-level I/O for payload columns requires offset indexes to be present");
+
+  auto const num_columns = _input_columns.size();
   auto const num_chunks =
     static_cast<std::size_t>(count_row_groups(row_group_indices)) * num_columns;
 
@@ -837,7 +829,9 @@ table_with_metadata hybrid_scan_reader_impl::materialize_columns(
   cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
 {
-  check_row_mask_view<RowMaskView>(columns_mode);
+  CUDF_EXPECTS(is_valid_row_mask_view<RowMaskView>(columns_mode),
+               "Invalid row mask view type for the current columns selection mode",
+               std::invalid_argument);
   setup_columns_read(read_mode::READ_ALL,
                      columns_mode,
                      0,
@@ -899,7 +893,9 @@ void hybrid_scan_reader_impl::setup_chunking_for_sparse_payload_columns(
     return;
   }
 
-  check_offset_indexes_present(row_group_indices);
+  auto const column_schemas = get_column_schemas(_input_columns);
+  CUDF_EXPECTS(_extended_metadata->page_index_presence(row_group_indices, column_schemas).second,
+               "Page-level I/O for payload columns requires offset indexes to be present");
 
   // Mark that we are using page-level I/O for payload columns
   _sparse_page_io = true;
@@ -913,7 +909,9 @@ template <row_mask_view_type RowMaskView>
 table_with_metadata hybrid_scan_reader_impl::materialize_columns_chunk(RowMaskView row_mask)
 {
   CUDF_EXPECTS(_file_preprocessed, "Chunking for columns not yet setup");
-  check_row_mask_view<RowMaskView>(_read_columns_mode);
+  CUDF_EXPECTS(is_valid_row_mask_view<RowMaskView>(_read_columns_mode),
+               "Invalid row mask view type for the current columns selection mode",
+               std::invalid_argument);
 
   // Reset the output buffers to their original states (right after reader construction).
   // Don't need to do it if we read the file all at once.
@@ -1515,7 +1513,7 @@ void hybrid_scan_reader_impl::set_sparse_pass_page_mask(
   mark_buffers_nullable_for_pruned_pages();
 }
 
-// Explicit instantiations for the row mask view types
+// Explicit template instantiations for the row mask view types
 template table_with_metadata hybrid_scan_reader_impl::materialize_columns(
   read_columns_mode,
   std::span<std::vector<size_type> const>,
@@ -1525,6 +1523,7 @@ template table_with_metadata hybrid_scan_reader_impl::materialize_columns(
   parquet_reader_options const&,
   cuda::stream_ref,
   rmm::device_async_resource_ref);
+
 template table_with_metadata hybrid_scan_reader_impl::materialize_columns(
   read_columns_mode,
   std::span<std::vector<size_type> const>,
@@ -1534,7 +1533,9 @@ template table_with_metadata hybrid_scan_reader_impl::materialize_columns(
   parquet_reader_options const&,
   cuda::stream_ref,
   rmm::device_async_resource_ref);
+
 template table_with_metadata hybrid_scan_reader_impl::materialize_columns_chunk(cudf::column_view);
+
 template table_with_metadata hybrid_scan_reader_impl::materialize_columns_chunk(
   cudf::mutable_column_view);
 

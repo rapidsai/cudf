@@ -397,14 +397,6 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     std::span<std::vector<size_type> const> row_group_indices) const;
 
   /**
-   * @brief Check that offset indexes are present for all input column chunks
-   *
-   * @param row_group_indices The row groups indices to read
-   */
-  void check_offset_indexes_present(
-    std::span<std::vector<size_type> const> row_group_indices) const;
-
-  /**
    * @brief Helper to prepare a normalized filter expression and output column data types
    *
    * @param options Parquet reader options
