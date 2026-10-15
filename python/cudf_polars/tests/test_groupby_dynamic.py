@@ -527,6 +527,26 @@ def test_int32_window_overflow(
     assert_gpu_result_equal(q, engine=engine)
 
 
+def test_int64_shift_overflow(engine: pl.GPUEngine) -> None:
+    # An offset or closed="right" shifts the index before truncating; for a
+    # row within that shift of Int64's range, the shift itself overflows.
+    # Null that row's window instead of silently wrapping it into an
+    # unrelated, distant one.
+    i64_min = -(2**63)
+    t = [i64_min, i64_min + 1, i64_min + 5]
+    q = (
+        pl.LazyFrame({"t": pl.Series(t, dtype=pl.Int64), "v": [1, 2, 3]})
+        .group_by_dynamic("t", every="2i", closed="right")
+        .agg(pl.col("v").sum())
+    )
+    result = q.collect(engine=engine)
+    assert result.sort("t", nulls_last=False).rows() == [
+        (None, 1),
+        (i64_min, 2),
+        (i64_min + 4, 3),
+    ]
+
+
 @pytest.mark.parametrize(
     "keys",
     [

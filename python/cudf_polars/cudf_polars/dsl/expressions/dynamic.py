@@ -26,6 +26,8 @@ __all__ = ["DynamicWindowEnd", "DynamicWindowStart"]
 
 _INT32 = plc.DataType(plc.TypeId.INT32)
 _INT64 = plc.DataType(plc.TypeId.INT64)
+_BOOL8 = plc.DataType(plc.TypeId.BOOL8)
+_I64_MIN, _I64_MAX = -(2**63), 2**63 - 1
 
 
 def _is_sorted(
@@ -99,15 +101,36 @@ def _from_ticks(ticks: plc.Column, dtype: plc.DataType, stream: Stream) -> plc.C
 
 
 def _add_ticks(ticks: plc.Column, value: int, stream: Stream) -> plc.Column:
-    """Add a host integer to an INT64 column."""
+    """
+    Add a host integer to an INT64 column, with an overflowing result as null.
+
+    ``value`` is static (from the window's offset or length, never the data),
+    so whether ``ticks + value`` overflows INT64 depends only on ``ticks``,
+    checked here without relying on the wrapped sum itself.
+    """
     if value == 0:
         return ticks
-    return plc.binaryop.binary_operation(
+    result = plc.binaryop.binary_operation(
         ticks,
         plc.Scalar.from_py(value, _INT64, stream=stream),
         plc.binaryop.BinaryOperator.ADD,
         _INT64,
         stream=stream,
+    )
+    bound, op = (
+        (_I64_MAX - value, plc.binaryop.BinaryOperator.LESS_EQUAL)
+        if value > 0
+        else (_I64_MIN - value, plc.binaryop.BinaryOperator.GREATER_EQUAL)
+    )
+    safe = plc.binaryop.binary_operation(
+        ticks,
+        plc.Scalar.from_py(bound, _INT64, stream=stream),
+        op,
+        _BOOL8,
+        stream=stream,
+    )
+    return plc.copying.copy_if_else(
+        result, plc.Scalar.from_py(None, _INT64, stream=stream), safe, stream=stream
     )
 
 
@@ -125,24 +148,23 @@ def _checked_narrow(
     narrowed = _from_ticks(ticks, dtype, stream)
     if dtype.id() not in (plc.TypeId.INT32, plc.TypeId.TIMESTAMP_DAYS):
         return narrowed
-    bool8 = plc.DataType(plc.TypeId.BOOL8)
     in_range = plc.binaryop.binary_operation(
         plc.binaryop.binary_operation(
             ticks,
             plc.Scalar.from_py(-(2**31), _INT64, stream=stream),
             plc.binaryop.BinaryOperator.GREATER_EQUAL,
-            bool8,
+            _BOOL8,
             stream=stream,
         ),
         plc.binaryop.binary_operation(
             ticks,
             plc.Scalar.from_py(2**31 - 1, _INT64, stream=stream),
             plc.binaryop.BinaryOperator.LESS_EQUAL,
-            bool8,
+            _BOOL8,
             stream=stream,
         ),
         plc.binaryop.BinaryOperator.LOGICAL_AND,
-        bool8,
+        _BOOL8,
         stream=stream,
     )
     return plc.copying.copy_if_else(
