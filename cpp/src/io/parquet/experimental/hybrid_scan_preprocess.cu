@@ -70,6 +70,7 @@ void decode_dictionary_page_headers(
     cudf::device_span<PageInfo>{pages.device_ptr(), pages.size()},
     page_data,
     chunk_page_offsets,
+    {},  // Dictionary-only parsing has no page-index metadata.
     error_code.data(),
     stream);
 
@@ -269,7 +270,7 @@ hybrid_scan_reader_impl::prepare_dictionaries(
                                           {},
                                           {},
                                           {},
-                                          _stream));
+                                          stream));
 
   CUDF_EXPECTS(
     row_groups_info.size() * dictionary_col_schemas.size() == dictionary_page_data.size(),
