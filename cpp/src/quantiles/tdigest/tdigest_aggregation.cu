@@ -792,9 +792,9 @@ cluster_info generate_group_cluster_info(int delta,
                             nearest_weight,
                             group_info,
                             cumulative_weight,
-                            cinfo.cluster_wl.begin(),
+                            decltype(cinfo.cluster_wl.begin()){},
                             cinfo.num_clusters.begin(),
-                            cinfo.cluster_start.begin(),
+                            decltype(cinfo.cluster_start.begin()){},
                             has_nulls,
                             stream);
   }
