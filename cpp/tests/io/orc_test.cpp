@@ -834,9 +834,9 @@ TEST_F(OrcWriterTest, WriterTimezoneNegativeTimestampsNano)
 TEST_F(OrcWriterTest, WriterTimezoneStatistics)
 {
   // Statistics are on the writer's wall clock, so the bounds hold the values a reader decodes, the
-  // ones `WriterTimezoneUsesFixedEpochOffsetAcrossDst` reads back. Apache records them the same
-  // way. The bounds take different offsets where one of them falls in daylight saving time, which
-  // is what shifting the reduced bounds by a single offset would get wrong.
+  // ones `WriterTimezoneUsesFixedEpochOffsetAcrossDst` reads back. The bounds take different
+  // offsets where one of them falls in daylight saving time, which is what shifting the reduced 
+  // bounds by a single offset would get wrong.
   auto const during_est = cudf::timestamp_s::rep{1421323200};  // 2015-01-15T12:00:00Z
   auto const during_edt = cudf::timestamp_s::rep{1435752000};  // 2015-07-01T12:00:00Z
   auto const timestamps =
