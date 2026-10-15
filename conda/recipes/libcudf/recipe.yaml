@@ -47,6 +47,10 @@ cache:
             libcudf libcudf_kafka libcudf_streaming "${test_targets[@]}" \
             --build_metrics --incl_cache_stats --allgpuarch \
             --cmake-args="\"-DCUDF_ENABLE_ARROW_S3=ON\" $cmake_args"
+
+        # Outputs install the linked artifacts, so intermediate objects only add
+        # to the cache copied for each package. Time pruning to measure its cost.
+        time find . -type f -name '*.o' -delete
       secrets:
         - AWS_ACCESS_KEY_ID
         - AWS_SECRET_ACCESS_KEY
