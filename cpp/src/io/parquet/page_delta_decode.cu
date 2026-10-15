@@ -1136,6 +1136,7 @@ void decode_delta_binary(cudf::detail::hostdevice_span<PageInfo> pages,
                          int level_type_size,
                          cudf::device_span<bool const> page_mask,
                          bool has_flat_nz_map,
+                         bool needs_level_decoder,
                          kernel_error::pointer error_code,
                          cuda::stream_ref stream,
                          cuda::stream_ref nz_map_stream)
@@ -1156,6 +1157,10 @@ void decode_delta_binary(cudf::detail::hostdevice_span<PageInfo> pages,
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
     CUDF_CUDA_TRY(cudaGetLastError());
   }
+
+  // When every DELTA_BINARY page of this subpass carries a map, each block of this grid would do
+  // nothing but read the two fields it takes to decide to return.
+  if (not needs_level_decoder) { return; }
 
   if (level_type_size == 1) {
     decode_delta_binary_kernel<uint8_t><<<dim_grid, dim_block, 0, stream.get()>>>(

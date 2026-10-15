@@ -428,7 +428,14 @@ void reader_impl::allocate_level_decode_space()
       auto const& chunk = pass.chunks[page.chunk_idx];
       state->nz_count   = page_nz_map::not_yet_produced;
       if (chunk.max_level[level_type::DEFINITION] != 0) {
-        flat_map_sizes[idx] = static_cast<size_t>(page.num_input_values) * sizeof(uint32_t);
+        // The producer never indexes past `min(num_input_values, num_decoded_level_values)`, which
+        // is set above and is the smaller of the two for a sliced read. A page whose levels are
+        // entirely outside the row range decodes none, so it gets no slice at all; the producer
+        // takes that page's `def == nullptr` path and reports a zero count, and the consumer never
+        // reaches the map.
+        flat_map_sizes[idx] =
+          static_cast<size_t>(std::min(page.num_input_values, page.num_decoded_level_values)) *
+          sizeof(uint32_t);
         flat_nz_map_size += flat_map_sizes[idx];
       }
     }

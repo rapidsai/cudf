@@ -1073,6 +1073,7 @@ void write_final_offsets(host_span<size_type const> offsets,
  * @param[in] level_type_size Size in bytes of the type for level decoding
  * @param[in] page_mask Boolean vector indicating which pages need to be decoded
  * @param[in] has_flat_nz_map Whether any page of this subpass carries a flat nz map
+ * @param[in] needs_level_decoder Whether any DELTA_BINARY page of this subpass lacks a flat nz map
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream for the level-decoding kernel
  * @param[in] nz_map_stream Stream the producer ran on, which orders the consumer behind it
@@ -1084,6 +1085,7 @@ void decode_delta_binary(cudf::detail::hostdevice_span<PageInfo> pages,
                          int level_type_size,
                          cudf::device_span<bool const> page_mask,
                          bool has_flat_nz_map,
+                         bool needs_level_decoder,
                          kernel_error::pointer error_code,
                          cuda::stream_ref stream,
                          cuda::stream_ref nz_map_stream);
@@ -1190,10 +1192,12 @@ void preprocess_levels(cudf::detail::hostdevice_span<PageInfo> pages,
 /**
  * @brief Launches the kernel that computes the flat nz map
  *
- * Runs once per subpass, before the decode kernels, over the pages `classify_nz_map_kind`
- * selected a consumer for. Writes
- * `page_nz_map::nz_idx` / `nz_count` and the leaf column's null mask, so that the matching
- * decode kernel can place values without walking definition levels itself.
+ * Runs once per output chunk, before the decode kernels, over the pages `classify_nz_map_kind`
+ * selected a consumer for. Writes `page_nz_map::nz_idx` / `nz_count` and the leaf column's null
+ * mask, so that the matching decode kernel can place values without walking definition levels
+ * itself. A subpass may yield several output chunks, each with its own `min_row` / `num_rows`, and
+ * the map covers one chunk's range at a time — unlike the allocation, which is sized once per
+ * subpass over the pass's row range.
  *
  * @param[in,out] pages All pages to be processed
  * @param[in] chunks All chunks to be processed
