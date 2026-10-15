@@ -2173,17 +2173,18 @@ class DictionaryFilterGapTest : public HybridScanFiltersTest,
 
 TEST_P(DictionaryFilterGapTest, FilterRowGroupsWithMissingDictPages)
 {
-  auto const compression            = GetParam();
-  auto constexpr rows_per_row_group = 20'000;
+  auto const compression                = GetParam();
+  auto constexpr num_rows_per_row_group = 20'000;
   // RG 0 holds a single distinct value so it is dict encoded
   // RG 1 holds all distinct values so it falls back
   auto const strings = cudf::detail::make_counting_transform_iterator(0, [](auto const i) {
-    return i < rows_per_row_group ? std::string{"dict_value"}
-                                  : "plain_value_" + std::to_string(i - rows_per_row_group);
+    return i < num_rows_per_row_group ? std::string{"dict_value"}
+                                      : "plain_value_" + std::to_string(i - num_rows_per_row_group);
   });
 
-  auto const column = cudf::test::strings_column_wrapper(strings, strings + 2 * rows_per_row_group);
-  auto const table  = cudf::table_view{{column}};
+  auto const column =
+    cudf::test::strings_column_wrapper(strings, strings + 2 * num_rows_per_row_group);
+  auto const table = cudf::table_view{{column}};
 
   auto table_metadata = cudf::io::table_input_metadata{table};
   table_metadata.column_metadata[0].set_name("col0");
@@ -2192,7 +2193,7 @@ TEST_P(DictionaryFilterGapTest, FilterRowGroupsWithMissingDictPages)
   auto const write_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table)
       .metadata(std::move(table_metadata))
-      .row_group_size_rows(rows_per_row_group)
+      .row_group_size_rows(num_rows_per_row_group)
       .dictionary_policy(cudf::io::dictionary_policy::ADAPTIVE)
       .max_dictionary_size(1024)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)

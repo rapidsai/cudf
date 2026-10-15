@@ -1031,6 +1031,7 @@ def _(node: plrs._ir_nodes.HConcat, translator: Translator, schema: Schema) -> i
         schema,
         False,  # noqa: FBT003
         strict,
+        False,  # noqa: FBT003
         *(translator.translate_ir(n=n) for n in node.inputs),
     )
 

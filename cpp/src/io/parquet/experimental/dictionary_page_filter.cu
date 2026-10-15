@@ -30,7 +30,6 @@
 #include <cuco/extent.cuh>
 #include <cuco/static_set.cuh>
 #include <cuda/iterator>
-#include <cuda/numeric>
 #include <cuda/stream>
 
 #include <optional>
@@ -164,12 +163,11 @@ struct query_equality_functor {
  * @param page_data_size Size of the page data
  * @return Boolean indicating if there is a data stream overrun
  */
-__device__ __forceinline__ bool is_stream_overrun(size_type offset,
+__device__ __forceinline__ bool is_stream_overrun(std::size_t offset,
                                                   std::size_t length,
                                                   size_type page_data_size)
 {
-  auto const end = cuda::add_overflow<size_type>(offset, length);
-  return end.overflow or end.value > page_data_size;
+  return page_data_size < 0 or offset + length > static_cast<std::size_t>(page_data_size);
 }
 
 /**
@@ -355,7 +353,7 @@ CUDF_KERNEL void query_dictionaries(cudf::device_span<T> decoded_data,
 template <SupportedFixedWidthType T>
 __device__ T decode_fixed_width_value(PageInfo const& page,
                                       ColumnChunkDesc const& chunk,
-                                      int32_t value_idx,
+                                      std::size_t value_idx,
                                       parquet::Type physical_type,
                                       int32_t& byte_array_offset,
                                       kernel_error::pointer error)

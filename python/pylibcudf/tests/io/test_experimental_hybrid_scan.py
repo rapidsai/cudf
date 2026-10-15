@@ -45,17 +45,15 @@ def _filter_row_groups_with_dictionary_pages(
     dictionary_ranges = reader.dictionary_pages_byte_ranges(
         all_row_groups, options
     )
-    # the caller is responsible for keeping the source bytes alive until
-    # synchronize_stream() below runs.
-    # See https://github.com/rapidsai/rmm/issues/2521
-    dict_page_bytes = [
-        parquet_bytes[r.offset : r.offset + r.size] for r in dictionary_ranges
-    ]
+    # Keep source bytes alive until synchronize_stream() runs
     dictionary_data = [
         plc.gpumemoryview(
-            rmm.DeviceBuffer.to_device(b, plc.utils._get_stream())
+            rmm.DeviceBuffer.to_device(
+                memoryview(parquet_bytes)[r.offset : r.offset + r.size],
+                plc.utils._get_stream(),
+            )
         )
-        for b in dict_page_bytes
+        for r in dictionary_ranges
     ]
     synchronize_stream()
     return reader.filter_row_groups_with_dictionary_pages(
@@ -999,19 +997,51 @@ def test_hybrid_scan_filter_row_groups_with_dictionary_pages_negation(
 
     col1 = ColumnNameReference("col1")
     needle = Literal(plc.Scalar.from_arrow(pa.scalar("str_0")))
-    reader = simple_hybrid_scan_reader
-
-    def prune(filter_expression: Operation) -> list[int]:
-        return _filter_row_groups_with_dictionary_pages(
-            reader,
-            simple_parquet_options,
-            simple_parquet_bytes,
-            filter_expression,
+    inner = Operation(negated, col1, needle)
+    for filter_expression in (
+        Operation(ASTOperator.NOT, inner),
+        Operation(unnegated, col1, needle),
+    ):
+        assert (
+            _filter_row_groups_with_dictionary_pages(
+                simple_hybrid_scan_reader,
+                simple_parquet_options,
+                simple_parquet_bytes,
+                filter_expression,
+            )
+            == expected
         )
 
-    inner = Operation(negated, col1, needle)
-    assert prune(Operation(ASTOperator.NOT, inner)) == expected
-    assert prune(Operation(unnegated, col1, needle)) == expected
+
+def test_hybrid_scan_dictionary_page_filter_long_strings() -> None:
+    """Dictionary values are prefixed with their 4 byte length, which can exceed 255."""
+    # Row group 0 holds "x...x5" and row group 1 holds "x...x6"
+    prefix = "x" * 300
+    buf = io.BytesIO()
+    pq.write_table(
+        pa.table({"s": [f"{prefix}5"] * 10 + [f"{prefix}6"] * 10}),
+        buf,
+        row_group_size=10,
+        use_dictionary=True,
+    )
+    parquet_bytes = buf.getvalue()
+    options = plc.io.parquet.ParquetReaderOptions.builder(
+        plc.io.SourceInfo([io.BytesIO(parquet_bytes)])
+    ).build()
+    reader = HybridScanReader(extract_parquet_footer(parquet_bytes), options)
+
+    for value, expected in [(5, [0]), (6, [1]), (7, [])]:
+        filter_expression = Operation(
+            ASTOperator.EQUAL,
+            ColumnNameReference("s"),
+            Literal(plc.Scalar.from_arrow(pa.scalar(f"{prefix}{value}"))),
+        )
+        assert (
+            _filter_row_groups_with_dictionary_pages(
+                reader, options, parquet_bytes, filter_expression
+            )
+            == expected
+        )
 
 
 @pytest.mark.parametrize(
@@ -1056,37 +1086,6 @@ def test_hybrid_scan_filter_row_groups_with_dictionary_pages_short_flba_decimals
             ASTOperator.EQUAL,
             ColumnNameReference("c"),
             Literal(plc.Scalar.from_arrow(literal)),
-        )
-        assert (
-            _filter_row_groups_with_dictionary_pages(
-                reader, options, parquet_bytes, filter_expression
-            )
-            == expected
-        )
-
-
-def test_hybrid_scan_dictionary_page_filter_long_strings() -> None:
-    """Dictionary values are prefixed with their 4 byte length, which can exceed 255."""
-    # Row group 0 holds "x...x5" and row group 1 holds "x...x6"
-    prefix = "x" * 300
-    buf = io.BytesIO()
-    pq.write_table(
-        pa.table({"s": [f"{prefix}5"] * 10 + [f"{prefix}6"] * 10}),
-        buf,
-        row_group_size=10,
-        use_dictionary=True,
-    )
-    parquet_bytes = buf.getvalue()
-    options = plc.io.parquet.ParquetReaderOptions.builder(
-        plc.io.SourceInfo([io.BytesIO(parquet_bytes)])
-    ).build()
-    reader = HybridScanReader(extract_parquet_footer(parquet_bytes), options)
-
-    for value, expected in [(5, [0]), (6, [1]), (7, [])]:
-        filter_expression = Operation(
-            ASTOperator.EQUAL,
-            ColumnNameReference("s"),
-            Literal(plc.Scalar.from_arrow(pa.scalar(f"{prefix}{value}"))),
         )
         assert (
             _filter_row_groups_with_dictionary_pages(
@@ -1346,8 +1345,9 @@ def test_hybrid_scan_page_index_stats_all_null_page(
 
     simple_parquet_options.set_filter(filter_expression)
 
+    footer_size = int.from_bytes(data[-8:-4], byteorder="little")
     reader = HybridScanReader(
-        extract_parquet_footer(data), simple_parquet_options
+        data[-8 - footer_size : -8], simple_parquet_options
     )
     page_index = reader.page_index_byte_range()
     reader.setup_page_index(
