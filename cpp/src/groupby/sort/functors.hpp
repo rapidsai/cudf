@@ -51,10 +51,11 @@ struct store_result_functor {
   [[nodiscard]] bool is_presorted() const { return keys_are_sorted == sorted::YES; }
 
   /**
-   * @brief Get the grouped values
+   * @brief Borrow a view of the grouped values without transferring ownership.
    *
    * Computes the grouped values from @p values on first invocation and returns
-   * the stored result on subsequent invocation
+   * the stored result on subsequent invocations, including after ownership has
+   * been transferred to a cached result by take_grouped_values().
    */
   column_view get_grouped_values()
   {
@@ -70,6 +71,11 @@ struct store_result_functor {
 
   /**
    * @brief Transfer grouped values to a result, retaining a view for later aggregations.
+   *
+   * Moves the owned column to the caller and retains a non-owning view for
+   * get_grouped_values(). The caller must keep the unmodified column alive in
+   * the result cache while later aggregations use that view. For presorted keys,
+   * copies the borrowed input values instead.
    */
   std::unique_ptr<column> take_grouped_values()
   {

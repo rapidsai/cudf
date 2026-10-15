@@ -476,7 +476,8 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_LIST>(aggregation
     dynamic_cast<cudf::detail::collect_list_aggregation const&>(agg)._null_handling;
   auto const grouped = get_grouped_values();
   auto result        = [&] {
-    // Filtering produces a different child: keep the original values for later requests.
+    // Null filtering creates a new list child. Borrow the grouped values so the unfiltered
+    // column stays alive for later aggregations.
     if (null_handling == null_policy::EXCLUDE && grouped.has_nulls()) {
       return detail::group_collect(grouped,
                                    helper.group_offsets(stream),
@@ -485,6 +486,7 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_LIST>(aggregation
                                    stream,
                                    mr);
     }
+    // Transfer ownership to the list child, retaining a view for later aggregations.
     return detail::group_collect(take_grouped_values(),
                                  helper.group_offsets(stream),
                                  helper.num_groups(stream),
@@ -502,7 +504,7 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation 
 
   auto const null_handling =
     dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg)._null_handling;
-  auto const collect_result =
+  auto const collect_list_result =
     detail::group_collect(get_unordered_grouped_values(),
                           helper.group_offsets(stream),
                           helper.num_groups(stream),
@@ -515,7 +517,7 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation 
     dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg)._nans_equal;
   cache.add_result(values,
                    agg,
-                   lists::detail::distinct(lists_column_view{collect_result->view()},
+                   lists::detail::distinct(lists_column_view{collect_list_result->view()},
                                            nulls_equal,
                                            nans_equal,
                                            duplicate_keep_option::KEEP_ANY,
