@@ -1304,14 +1304,14 @@ constexpr std::array<int64_t, 10> ticks_per_second{
  * @param orc_table Table being written
  * @param timezone Timezone the file is written in
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resources used to allocate the returned and intermediate buffers
  * @return The shifted columns; holds no column when writing UTC, or without timestamps
  */
 wall_clock_columns make_wall_clock_columns(orc_table_view const& orc_table,
                                            writer_timezone const& timezone,
-                                           cuda::stream_ref stream)
+                                           cuda::stream_ref stream,
+                                           cudf::memory_resources mr)
 {
-  auto const mr = cudf::get_current_device_resource_ref();
-
   auto host_indices = std::vector<cuda::std::optional<size_type>>(orc_table.num_columns());
   auto data         = std::vector<cuda::device_buffer<int64_t>>{};
   auto views =
@@ -1326,12 +1326,12 @@ wall_clock_columns make_wall_clock_columns(orc_table_view const& orc_table,
 
       auto const& input = column.cudf_view();
       // The null mask is shared with the input, so the shifted values keep its row offset
-      auto shifted =
-        cuda::device_buffer<int64_t>(stream, mr, input.offset() + input.size(), cuda::no_init);
+      auto shifted = cuda::device_buffer<int64_t>(
+        stream, mr.get_output_mr(), input.offset() + input.size(), cuda::no_init);
       auto const d_input     = column_device_view::create(input, stream);
       auto const ticks_per_s = ticks_per_second[column.scale()];
 
-      thrust::transform(rmm::exec_policy_nosync(stream, mr),
+      thrust::transform(rmm::exec_policy_nosync(stream, mr.get_temporary_mr()),
                         cuda::counting_iterator<size_type>{0},
                         cuda::counting_iterator{input.size()},
                         shifted.data() + input.offset(),
@@ -1507,7 +1507,8 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
   stat_desc.host_to_device_async(stream);
   rowgroup_merge.host_to_device_async(stream);
   stripe_merge.host_to_device_async(stream);
-  auto const wall_clock = make_wall_clock_columns(orc_table, timezone, stream);
+  auto const wall_clock =
+    make_wall_clock_columns(orc_table, timezone, stream, cudf::get_current_device_resource_ref());
   set_stat_desc_leaf_cols(orc_table.d_columns, stat_desc, wall_clock, stream);
 
   // The rowgroup stat chunks are written out in each stripe. The stripe and file-level chunks are
