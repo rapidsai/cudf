@@ -359,7 +359,7 @@ table_with_metadata hybrid_scan_reader::materialize_filter_columns_chunk(
 {
   CUDF_FUNC_RANGE();
 
-  return _impl->materialize_columns_chunk(row_mask);
+  return _impl->materialize_next_table_chunk(row_mask);
 }
 
 void hybrid_scan_reader::setup_chunking_for_payload_columns(
@@ -396,7 +396,7 @@ table_with_metadata hybrid_scan_reader::materialize_payload_columns_chunk(
 {
   CUDF_FUNC_RANGE();
 
-  return _impl->materialize_columns_chunk(row_mask);
+  return _impl->materialize_next_table_chunk(row_mask);
 }
 
 void hybrid_scan_reader::setup_chunking_for_all_columns(
@@ -430,7 +430,7 @@ table_with_metadata hybrid_scan_reader::materialize_all_columns_chunk()
 {
   CUDF_FUNC_RANGE();
 
-  return _impl->materialize_columns_chunk(cudf::column_view{});
+  return _impl->materialize_next_table_chunk(cudf::column_view{});
 }
 
 std::vector<std::vector<cudf::size_type>> hybrid_scan_reader::construct_row_group_passes(

@@ -248,7 +248,7 @@ table_with_metadata hybrid_scan_multifile::materialize_filter_columns_chunk(
   cudf::mutable_column_view& row_mask)
 {
   CUDF_FUNC_RANGE();
-  return _impl->materialize_columns_chunk(row_mask);
+  return _impl->materialize_next_table_chunk(row_mask);
 }
 
 void hybrid_scan_multifile::setup_chunking_for_payload_columns(
@@ -294,7 +294,7 @@ table_with_metadata hybrid_scan_multifile::materialize_payload_columns_chunk(
   cudf::column_view const& row_mask)
 {
   CUDF_FUNC_RANGE();
-  return _impl->materialize_columns_chunk(row_mask);
+  return _impl->materialize_next_table_chunk(row_mask);
 }
 
 void hybrid_scan_multifile::setup_chunking_for_all_columns(
@@ -322,7 +322,7 @@ void hybrid_scan_multifile::setup_chunking_for_all_columns(
 table_with_metadata hybrid_scan_multifile::materialize_all_columns_chunk()
 {
   CUDF_FUNC_RANGE();
-  return _impl->materialize_columns_chunk(cudf::column_view{});
+  return _impl->materialize_next_table_chunk(cudf::column_view{});
 }
 
 bool hybrid_scan_multifile::has_next_table_chunk() { return _impl->has_next_table_chunk(); }

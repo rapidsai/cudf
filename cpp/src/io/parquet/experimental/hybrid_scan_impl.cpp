@@ -723,7 +723,7 @@ hybrid_scan_reader_impl::sparse_payload_pages_byte_ranges(
   return {std::move(page_ranges), std::move(source_map)};
 }
 
-void hybrid_scan_reader_impl::prepare_column_chunks_read(
+void hybrid_scan_reader_impl::setup_table_materialization(
   read_mode mode,
   read_columns_mode columns_mode,
   std::size_t chunk_read_limit,
@@ -804,18 +804,18 @@ table_with_metadata hybrid_scan_reader_impl::materialize_columns(
                std::invalid_argument);
 
   auto constexpr sparse_page_io = false;
-  prepare_column_chunks_read(read_mode::READ_ALL,
-                             columns_mode,
-                             0,
-                             0,
-                             row_group_indices,
-                             column_data,
-                             row_mask,
-                             mask_data_pages,
-                             sparse_page_io,
-                             options,
-                             stream,
-                             mr);
+  setup_table_materialization(read_mode::READ_ALL,
+                              columns_mode,
+                              0,
+                              0,
+                              row_group_indices,
+                              column_data,
+                              row_mask,
+                              mask_data_pages,
+                              sparse_page_io,
+                              options,
+                              stream,
+                              mr);
 
   return read_chunk_internal(read_mode::READ_ALL, columns_mode, row_mask);
 }
@@ -833,18 +833,18 @@ void hybrid_scan_reader_impl::setup_chunking_for_columns(
   rmm::device_async_resource_ref mr)
 {
   auto constexpr sparse_page_io = false;
-  prepare_column_chunks_read(read_mode::CHUNKED_READ,
-                             columns_mode,
-                             chunk_read_limit,
-                             pass_read_limit,
-                             row_group_indices,
-                             column_data,
-                             row_mask,
-                             mask_data_pages,
-                             sparse_page_io,
-                             options,
-                             stream,
-                             mr);
+  setup_table_materialization(read_mode::CHUNKED_READ,
+                              columns_mode,
+                              chunk_read_limit,
+                              pass_read_limit,
+                              row_group_indices,
+                              column_data,
+                              row_mask,
+                              mask_data_pages,
+                              sparse_page_io,
+                              options,
+                              stream,
+                              mr);
 }
 
 void hybrid_scan_reader_impl::setup_chunking_for_sparse_payload_columns(
@@ -858,22 +858,22 @@ void hybrid_scan_reader_impl::setup_chunking_for_sparse_payload_columns(
   rmm::device_async_resource_ref mr)
 {
   auto constexpr sparse_page_io = true;
-  prepare_column_chunks_read(read_mode::CHUNKED_READ,
-                             read_columns_mode::PAYLOAD_COLUMNS,
-                             chunk_read_limit,
-                             pass_read_limit,
-                             row_group_indices,
-                             page_data,
-                             row_mask,
-                             use_data_page_mask::NO,
-                             sparse_page_io,
-                             options,
-                             stream,
-                             mr);
+  setup_table_materialization(read_mode::CHUNKED_READ,
+                              read_columns_mode::PAYLOAD_COLUMNS,
+                              chunk_read_limit,
+                              pass_read_limit,
+                              row_group_indices,
+                              page_data,
+                              row_mask,
+                              use_data_page_mask::NO,
+                              sparse_page_io,
+                              options,
+                              stream,
+                              mr);
 }
 
 template <row_mask_view_type RowMaskView>
-table_with_metadata hybrid_scan_reader_impl::materialize_columns_chunk(RowMaskView row_mask)
+table_with_metadata hybrid_scan_reader_impl::materialize_next_table_chunk(RowMaskView row_mask)
 {
   CUDF_EXPECTS(_file_preprocessed and _selected_columns_mode.has_value(),
                "Chunking for columns not yet setup");
@@ -1510,9 +1510,10 @@ template table_with_metadata hybrid_scan_reader_impl::materialize_columns(
   cuda::stream_ref,
   rmm::device_async_resource_ref);
 
-template table_with_metadata hybrid_scan_reader_impl::materialize_columns_chunk(cudf::column_view);
+template table_with_metadata hybrid_scan_reader_impl::materialize_next_table_chunk(
+  cudf::column_view);
 
-template table_with_metadata hybrid_scan_reader_impl::materialize_columns_chunk(
+template table_with_metadata hybrid_scan_reader_impl::materialize_next_table_chunk(
   cudf::mutable_column_view);
 
 }  // namespace cudf::io::parquet::experimental::detail
