@@ -247,7 +247,7 @@ void bench_streaming_groupby_distinct_keys(nvbench::state& state)
   run_streaming_groupby(state, make_batches(input.view(), batch_size), {0}, requests, groups);
 }
 
-void bench_streaming_long_string(nvbench::state& state)
+void bench_streaming_groupby_long_string(nvbench::state& state)
 {
   auto const num_rows   = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const batch_size = static_cast<cudf::size_type>(state.get_int64("batch_size"));
@@ -315,8 +315,8 @@ NVBENCH_BENCH(bench_streaming_groupby_distinct_keys)
   .add_int64_axis("batch_size", {4096})
   .add_string_axis("schema", {"keys_only", "int8_min"});
 
-NVBENCH_BENCH(bench_streaming_long_string)
-  .set_name("streaming_long_string")
+NVBENCH_BENCH(bench_streaming_groupby_long_string)
+  .set_name("streaming_groupby_long_string")
   .add_int64_axis("num_rows", {4'000'000})
   .add_int64_axis("batch_size", {1'000'000})
   .add_int64_axis("key_bytes", {64, 256})
