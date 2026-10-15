@@ -923,7 +923,9 @@ class orc_writer_options {
    * the libcudf reader, which has no session timezone and returns the writer's wall clock.
    *
    * Timestamp statistics hold the wall-clock values that a reader materializes from the data
-   * stream, so that the bounds and the data agree. Apache's writer records them the same way.
+   * stream, so that the bounds and the data agree. Apache's writer records them the same way. In a
+   * non-UTC file, the pre-ORC-135 `minimum` and `maximum` fields are omitted, as Apache omits them,
+   * leaving only `minimumUtc` and `maximumUtc`.
    *
    * An empty name, or one that does not resolve to a timezone file, is rejected by the writer,
    * not by this setter.

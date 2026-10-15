@@ -858,11 +858,16 @@ TEST_F(OrcWriterTest, WriterTimezoneStatistics)
       // Entries one and two are the table's columns, three is the list's timestamp child
       for (auto const column : {1, 3}) {
         auto const stats = timestamp_stats(buffer, column);
-        EXPECT_EQ(stats.minimum, (during_est + min_offset) * 1000);
-        EXPECT_EQ(stats.maximum, (during_edt + max_offset) * 1000);
-        // Unlike Apache, which omits the legacy pair, both are written in the same frame
-        EXPECT_EQ(stats.minimum_utc, stats.minimum);
-        EXPECT_EQ(stats.maximum_utc, stats.maximum);
+        EXPECT_EQ(stats.minimum_utc, (during_est + min_offset) * 1000);
+        EXPECT_EQ(stats.maximum_utc, (during_edt + max_offset) * 1000);
+        // The legacy pair holds instants, which only match the wall clock when writing UTC
+        if (min_offset == 0 and max_offset == 0) {
+          EXPECT_EQ(stats.minimum, stats.minimum_utc);
+          EXPECT_EQ(stats.maximum, stats.maximum_utc);
+        } else {
+          EXPECT_FALSE(stats.minimum.has_value());
+          EXPECT_FALSE(stats.maximum.has_value());
+        }
       }
     };
 
@@ -888,10 +893,10 @@ TEST_F(OrcWriterTest, WriterTimezoneStatisticsSlicedSubsecond)
   EXPECT_EQ(stats.has_null, true);
 
   auto const ts_stats = std::get<cudf::io::timestamp_statistics>(stats.type_specific_stats);
-  EXPECT_EQ(ts_stats.minimum, negative_ms + new_york_offset * 1000);
-  EXPECT_EQ(ts_stats.maximum, (during_edt + new_york_dst_offset) * 1000);
-  EXPECT_EQ(ts_stats.minimum_utc, ts_stats.minimum);
-  EXPECT_EQ(ts_stats.maximum_utc, ts_stats.maximum);
+  EXPECT_EQ(ts_stats.minimum_utc, negative_ms + new_york_offset * 1000);
+  EXPECT_EQ(ts_stats.maximum_utc, (during_edt + new_york_dst_offset) * 1000);
+  EXPECT_FALSE(ts_stats.minimum.has_value());
+  EXPECT_FALSE(ts_stats.maximum.has_value());
 }
 
 TEST_F(OrcWriterTest, WriterTimezoneInvalid)

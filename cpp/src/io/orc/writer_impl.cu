@@ -1417,6 +1417,7 @@ cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
   cudf::detail::hostdevice_vector<statistics_merge_group>& stats_merge_groups,
   device_span<statistics_chunk const> stat_chunks,
   int num_stat_blobs,
+  bool write_legacy_timestamp_bounds,
   cuda::stream_ref stream)
 {
   // figure out the buffer size needed for protobuf format
@@ -1438,6 +1439,7 @@ cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
                         stats_merge_groups.device_ptr(),
                         stat_chunks.data(),
                         num_stat_blobs,
+                        write_legacy_timestamp_bounds,
                         stream);
   stats_merge_groups.device_to_host_async(stream);
   blobs.device_to_host(stream);
@@ -1574,7 +1576,11 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
     if (not is_granularity_rowgroup) { return {}; }
 
     cudf::detail::hostdevice_vector<uint8_t> blobs =
-      allocate_and_encode_blobs(rowgroup_merge, rowgroup_chunks, num_rowgroup_blobs, stream);
+      allocate_and_encode_blobs(rowgroup_merge,
+                                rowgroup_chunks,
+                                num_rowgroup_blobs,
+                                timezone.ut_offsets(stream).num_rows() == 0,
+                                stream);
 
     std::vector<col_stats_blob> rowgroup_blobs(num_rowgroup_blobs);
     for (size_t i = 0; i < num_rowgroup_blobs; i++) {
@@ -1597,13 +1603,17 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
  *
  * @param footer ORC footer containing stripe and type information
  * @param per_chunk_stats Persisted per-chunk statistics from `gather_statistic_blobs`
+ * @param timezone Timezone the file is written in
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return The encoded statistic blobs
  */
 encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
                                                  persisted_statistics& per_chunk_stats,
+                                                 writer_timezone const& timezone,
                                                  cuda::stream_ref stream)
 {
+  auto const write_legacy_timestamp_bounds = timezone.ut_offsets(stream).num_rows() == 0;
+
   auto stripe_size_iter = cuda::transform_iterator(per_chunk_stats.stripe_stat_merge.begin(),
                                                    [](auto const& s) { return s.size(); });
 
@@ -1634,8 +1644,8 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
     stats_merge.host_to_device_async(stream);
 
     // Encode and return
-    cudf::detail::hostdevice_vector<uint8_t> hd_file_blobs =
-      allocate_and_encode_blobs(stats_merge, d_stat_chunks, num_file_blobs, stream);
+    cudf::detail::hostdevice_vector<uint8_t> hd_file_blobs = allocate_and_encode_blobs(
+      stats_merge, d_stat_chunks, num_file_blobs, write_legacy_timestamp_bounds, stream);
 
     // Copy blobs to host (actual size)
     std::vector<col_stats_blob> file_blobs(num_file_blobs);
@@ -1708,8 +1718,8 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
   detail::merge_group_statistics<detail::io_file_format::ORC>(
     file_stat_chunks, stat_chunks.data(), d_file_stats_merge, num_file_blobs, stream);
 
-  cudf::detail::hostdevice_vector<uint8_t> blobs =
-    allocate_and_encode_blobs(stats_merge, stat_chunks, num_blobs, stream);
+  cudf::detail::hostdevice_vector<uint8_t> blobs = allocate_and_encode_blobs(
+    stats_merge, stat_chunks, num_blobs, write_legacy_timestamp_bounds, stream);
 
   auto stripe_stat_merge = stats_merge.host_ptr();
 
@@ -3100,7 +3110,7 @@ void writer::impl::close()
 
   std::optional<encoded_footer_statistics> statistics;
   if (_stats_freq != statistics_freq::STATISTICS_NONE) {
-    statistics = finish_statistic_blobs(_footer, _persisted_stripe_statistics, _stream);
+    statistics = finish_statistic_blobs(_footer, _persisted_stripe_statistics, _timezone, _stream);
   }
 
   // Output may be partially written from here on.
