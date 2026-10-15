@@ -7,7 +7,6 @@
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/experimental/hybrid_scan.hpp>
-#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <thrust/host_vector.h>
@@ -221,11 +220,7 @@ hybrid_scan_reader::filter_column_chunks_byte_ranges(std::span<size_type const> 
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
 
   return _impl
-    ->columns_byte_ranges(read_columns_mode::FILTER_COLUMNS,
-                          input_row_group_indices,
-                          cudf::column_view{},
-                          options,
-                          cudf::get_default_stream())
+    ->columns_byte_ranges(read_columns_mode::FILTER_COLUMNS, input_row_group_indices, options)
     .first;
 }
 
@@ -264,11 +259,7 @@ hybrid_scan_reader::payload_column_chunks_byte_ranges(std::span<size_type const>
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
 
   return _impl
-    ->columns_byte_ranges(read_columns_mode::PAYLOAD_COLUMNS,
-                          input_row_group_indices,
-                          cudf::column_view{},
-                          options,
-                          cudf::get_default_stream())
+    ->columns_byte_ranges(read_columns_mode::PAYLOAD_COLUMNS, input_row_group_indices, options)
     .first;
 }
 
@@ -306,11 +297,7 @@ std::vector<byte_range_info> hybrid_scan_reader::all_column_chunks_byte_ranges(
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
 
   return _impl
-    ->columns_byte_ranges(read_columns_mode::ALL_COLUMNS,
-                          input_row_group_indices,
-                          cudf::column_view{},
-                          options,
-                          cudf::get_default_stream())
+    ->columns_byte_ranges(read_columns_mode::ALL_COLUMNS, input_row_group_indices, options)
     .first;
 }
 

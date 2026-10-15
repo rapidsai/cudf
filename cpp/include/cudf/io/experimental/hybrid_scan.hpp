@@ -60,16 +60,12 @@ enum class use_data_page_mask : bool {
 };
 
 /**
- * @brief Columns selection to read
- *
- * Used to select the columns for row group pass memory estimation.
+ * @brief Columns selection
  */
 enum class read_columns_mode : int8_t {
-  FILTER_COLUMNS         = 0,  ///< Filter columns
-  PAYLOAD_COLUMNS        = 1,  ///< Payload columns
-  SPARSE_PAYLOAD_COLUMNS = 2,  ///< Payload columns read with page-level (sparse) I/O. Requires
-                               ///< offset indexes. Estimates passes the same as `PAYLOAD_COLUMNS`
-  ALL_COLUMNS = 3              ///< All selected columns
+  FILTER_COLUMNS  = 0,  ///< Filter columns
+  PAYLOAD_COLUMNS = 1,  ///< Payload columns
+  ALL_COLUMNS     = 2   ///< All selected columns
 };
 
 /**

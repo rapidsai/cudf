@@ -26,8 +26,7 @@ class UseDataPageMask(IntEnum):
 class ReadColumnsMode(IntEnum):
     FILTER_COLUMNS = 0
     PAYLOAD_COLUMNS = 1
-    SPARSE_PAYLOAD_COLUMNS = 2
-    ALL_COLUMNS = 3
+    ALL_COLUMNS = 2
 
 class HybridScanMetadata:
     @staticmethod

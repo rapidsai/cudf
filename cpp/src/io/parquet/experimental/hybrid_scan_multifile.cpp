@@ -7,7 +7,6 @@
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/experimental/hybrid_scan_multifile.hpp>
-#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <numeric>
@@ -128,11 +127,7 @@ hybrid_scan_multifile::filter_column_chunks_byte_ranges(
   parquet_reader_options const& options)
 {
   CUDF_FUNC_RANGE();
-  return _impl->columns_byte_ranges(read_columns_mode::FILTER_COLUMNS,
-                                    row_group_indices,
-                                    cudf::column_view{},
-                                    options,
-                                    cudf::get_default_stream());
+  return _impl->columns_byte_ranges(read_columns_mode::FILTER_COLUMNS, row_group_indices, options);
 }
 
 table_with_metadata hybrid_scan_multifile::materialize_filter_columns(
@@ -161,11 +156,7 @@ hybrid_scan_multifile::payload_column_chunks_byte_ranges(
   parquet_reader_options const& options)
 {
   CUDF_FUNC_RANGE();
-  return _impl->columns_byte_ranges(read_columns_mode::PAYLOAD_COLUMNS,
-                                    row_group_indices,
-                                    cudf::column_view{},
-                                    options,
-                                    cudf::get_default_stream());
+  return _impl->columns_byte_ranges(read_columns_mode::PAYLOAD_COLUMNS, row_group_indices, options);
 }
 
 std::pair<std::vector<text::byte_range_info>, std::vector<size_type>>
@@ -176,8 +167,7 @@ hybrid_scan_multifile::payload_pages_byte_ranges(
   cuda::stream_ref stream)
 {
   CUDF_FUNC_RANGE();
-  return _impl->columns_byte_ranges(
-    read_columns_mode::SPARSE_PAYLOAD_COLUMNS, row_group_indices, row_mask, options, stream);
+  return _impl->sparse_payload_pages_byte_ranges(row_group_indices, row_mask, options, stream);
 }
 
 table_with_metadata hybrid_scan_multifile::materialize_payload_columns(
@@ -206,11 +196,7 @@ hybrid_scan_multifile::all_column_chunks_byte_ranges(
   parquet_reader_options const& options)
 {
   CUDF_FUNC_RANGE();
-  return _impl->columns_byte_ranges(read_columns_mode::ALL_COLUMNS,
-                                    row_group_indices,
-                                    cudf::column_view{},
-                                    options,
-                                    cudf::get_default_stream());
+  return _impl->columns_byte_ranges(read_columns_mode::ALL_COLUMNS, row_group_indices, options);
 }
 
 table_with_metadata hybrid_scan_multifile::materialize_all_columns(
@@ -297,16 +283,8 @@ void hybrid_scan_multifile::setup_chunking_for_payload_columns(
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  _impl->setup_chunking_for_columns(read_columns_mode::SPARSE_PAYLOAD_COLUMNS,
-                                    chunk_read_limit,
-                                    pass_read_limit,
-                                    row_group_indices,
-                                    page_data,
-                                    row_mask,
-                                    use_data_page_mask::NO,
-                                    options,
-                                    stream,
-                                    mr);
+  _impl->setup_chunking_for_sparse_payload_columns(
+    chunk_read_limit, pass_read_limit, row_group_indices, page_data, row_mask, options, stream, mr);
 }
 
 table_with_metadata hybrid_scan_multifile::materialize_payload_columns_chunk(

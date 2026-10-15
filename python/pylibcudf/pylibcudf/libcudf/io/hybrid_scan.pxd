@@ -32,7 +32,6 @@ cdef extern from "cudf/io/experimental/hybrid_scan.hpp" \
     cpdef enum class read_columns_mode:
         FILTER_COLUMNS
         PAYLOAD_COLUMNS
-        SPARSE_PAYLOAD_COLUMNS
         ALL_COLUMNS
 
     cdef cppclass hybrid_scan_metadata:
