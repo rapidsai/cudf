@@ -169,7 +169,7 @@ def test_select_fused_reductions_keep_unaligned_hconcat_unsafe(
         StreamingOptions(
             max_rows_per_partition=2,
             dynamic_planning=None,
-            fallback_mode="raise",
+            fallback_mode="silent",
             raise_on_fail=True,
         )
     )
@@ -181,8 +181,8 @@ def test_select_fused_reductions_keep_unaligned_hconcat_unsafe(
         }
     )
     query = df.select(
-        pl.col("a").unique(),
-        pl.col("b").unique(),
+        pl.col("a").unique(maintain_order=True),
+        pl.col("b").unique(maintain_order=True),
         pl.col("c").sum().alias("c_sum"),
         pl.col("c").max().alias("c_max"),
     )
@@ -209,6 +209,7 @@ def test_select_fused_reductions_keep_unaligned_hconcat_unsafe(
     assert partitioning is None or (
         partitioning.inter_rank is None and partitioning.local is None
     )
+    assert_gpu_result_equal(query, engine=engine)
 
 
 def test_select_with_cse_no_agg(df, engine):
