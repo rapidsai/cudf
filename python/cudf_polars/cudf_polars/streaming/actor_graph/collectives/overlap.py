@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+from contextlib import aclosing, asynccontextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -18,7 +18,7 @@ from rapidsmpf.streaming.coll.sparse_alltoall import SparseAlltoall
 from cudf_polars.streaming.actor_graph.utils import RandomAccessChunkStore
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Iterator, Sequence
+    from collections.abc import AsyncGenerator, AsyncIterator, Iterator, Sequence
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.context import Context
@@ -81,7 +81,7 @@ class BufferedInput:
         async with self._store.borrow(chunk.mid) as table_chunk:
             yield table_chunk
 
-    async def slices(self, start: int, stop: int) -> AsyncIterator[TableChunk]:
+    async def slices(self, start: int, stop: int) -> AsyncGenerator[TableChunk]:
         """Yield views covering a global half-open row range."""
         expected = start
         for chunk in self._chunks:
@@ -166,16 +166,19 @@ class RowExchange:
             for send in sorted(
                 self._sends, key=lambda item: (item.destination, item.start)
             ):
-                async for chunk in self._source.slices(send.start, send.stop):
-                    available, extra = await make_table_chunks_available_or_wait(
-                        self._context,
-                        chunk,
-                        reserve_extra=chunk.into_packed_data_cost(),
-                        net_memory_delta=0,
-                    )
-                    self._exchange.insert(
-                        send.destination, available.into_packed_data(extra)
-                    )
+                async with aclosing(
+                    self._source.slices(send.start, send.stop)
+                ) as slices:
+                    async for chunk in slices:
+                        available, extra = await make_table_chunks_available_or_wait(
+                            self._context,
+                            chunk,
+                            reserve_extra=chunk.into_packed_data_cost(),
+                            net_memory_delta=0,
+                        )
+                        self._exchange.insert(
+                            send.destination, available.into_packed_data(extra)
+                        )
         finally:
             await self._exchange.insert_finished(self._context)
 

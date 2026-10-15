@@ -253,9 +253,21 @@ def test_fixed_size_rolling_mean(engine, center) -> None:
 
 @pytest.mark.parametrize(
     "kind,offset",
-    [("range", "-4i"), ("range", "0i"), ("count", None)],
+    [
+        ("range", "-4i"),
+        pytest.param("range", "0i", marks=POLARS_LT_136_EMPTY_SUM_XFAIL),
+        pytest.param(
+            "count",
+            None,
+            marks=pytest.mark.skipif(
+                not hasattr(plrs._expr_nodes, "RollingFunction"),
+                reason="RollingFunction not available in this polars version",
+            ),
+        ),
+    ],
     ids=["range-trailing", "range-leading", "count"],
 )
+@pytest.mark.engine_params(["dask", "ray"])
 def test_rolling_multirank(engine, tmp_path, kind, offset) -> None:
     source = tmp_path / "rolling.parquet"
     _write_rolling_source(source)
@@ -277,16 +289,32 @@ def _write_rolling_source(source) -> None:
 
 
 def _assert_rolling_result(engine, source, kind, offset) -> None:
-    q = pl.scan_parquet(source).set_sorted("orderby")
+    q = pl.scan_parquet(source)
     if kind == "range":
-        q = q.rolling("orderby", period="4i", offset=offset).agg(pl.col("values").sum())
+        q = (
+            q.sort("orderby")
+            .rolling("orderby", period="4i", offset=offset)
+            .agg(pl.col("values").sum())
+        )
     else:
         q = q.select(pl.col("values").rolling_mean(window_size=3, center=True))
     assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.spmd
-@pytest.mark.parametrize("kind", ["range", "count"])
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "range",
+        pytest.param(
+            "count",
+            marks=pytest.mark.skipif(
+                not hasattr(plrs._expr_nodes, "RollingFunction"),
+                reason="RollingFunction not available in this polars version",
+            ),
+        ),
+    ],
+)
 def test_rolling_multirank_spmd(spmd_engine, tmp_path, kind) -> None:
     source = tmp_path / "rolling.parquet"
     path = b""
