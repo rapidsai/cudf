@@ -600,6 +600,7 @@ _names_to_skip_in_cpp = {
     "type_to_scalar_type_impl",
     "type_to_scalar_type_impl",
     "detail",
+    "concepts",
     # Test-only helper types are intentionally not published as API pages.
     "classcudf_1_1test_1_1",
     # kafka objects
@@ -957,6 +958,10 @@ def linkcode_resolve(domain, info) -> str | None:
 suppress_warnings = ["myst.domains"]
 
 
+# pylibcudf enums whose names do not match their nested C++ enum.
+_enums_without_cpp_see_also = {"Kind", "LogicalTypeId", "TimeUnit"}
+
+
 class PLCIntEnumDocumenter(ClassDocumenter):
     objtype = "enum"
     directivetype = "attribute"
@@ -987,7 +992,7 @@ class PLCIntEnumDocumenter(ClassDocumenter):
         source_name = self.get_sourcename()
         enum_object: IntEnum = self.object
 
-        if self.object.__name__ != "Kind":
+        if self.object.__name__ not in _enums_without_cpp_see_also:
             self.add_line(
                 f"See also :cpp:enum:`{self.object.__name__}`.",
                 source_name,
