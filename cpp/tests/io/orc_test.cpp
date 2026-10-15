@@ -687,14 +687,19 @@ std::vector<char> write_orc_with_timezone(cudf::table_view const& table,
   return buffer;
 }
 
-// File-level timestamp statistics of one column, by its index in the file's schema. Entry zero is
-// the root struct that wraps the table, so the table's first column is entry one.
-cudf::io::timestamp_statistics timestamp_stats(std::vector<char> const& buffer, size_t column = 1)
+// File-level statistics of one column, by its index in the file's schema. Entry zero is the root
+// struct that wraps the table, so the table's first column is entry one.
+cudf::io::column_statistics column_stats(std::vector<char> const& buffer, size_t column = 1)
 {
   auto const stats =
     cudf::io::read_parsed_orc_statistics(cudf::io::source_info{cudf::host_span<std::byte const>{
       reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}});
-  return std::get<cudf::io::timestamp_statistics>(stats.file_stats[column].type_specific_stats);
+  return stats.file_stats[column];
+}
+
+cudf::io::timestamp_statistics timestamp_stats(std::vector<char> const& buffer, size_t column = 1)
+{
+  return std::get<cudf::io::timestamp_statistics>(column_stats(buffer, column).type_specific_stats);
 }
 
 cudf::io::table_with_metadata read_orc_buffer(std::vector<char> const& buffer,
@@ -869,19 +874,24 @@ TEST_F(OrcWriterTest, WriterTimezoneStatistics)
 
 TEST_F(OrcWriterTest, WriterTimezoneStatisticsSlicedSubsecond)
 {
-  // Sub-second resolution, a null, and a value before the epoch, whose fractional part makes the
-  // second it falls in one lower. Sliced, so the values the statistics read start past row zero.
+  // Sub-second resolution and a value before the epoch, whose fractional part makes the second it
+  // falls in one lower. Sliced, so the rows the statistics read start past row zero, and the null
+  // is the last row, which falls outside the slice if the null mask is read at the wrong offset.
   auto constexpr negative_ms = cudf::timestamp_ms::rep{-1'500};  // 1969-12-31T23:59:58.500Z
   auto const timestamps      = column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>{
-    {during_est * 1000, 0L, negative_ms, during_edt * 1000}, {true, false, true, true}};
-  auto const sliced = cudf::slice(static_cast<cudf::column_view>(timestamps), {1, 4}).front();
+    {0L, negative_ms, during_est * 1000, during_edt * 1000, 0L}, {true, true, true, true, false}};
+  auto const sliced = cudf::slice(static_cast<cudf::column_view>(timestamps), {1, 5}).front();
 
   auto const stats =
-    timestamp_stats(write_orc_with_timezone(table_view({sliced}), "America/New_York"));
-  EXPECT_EQ(stats.minimum, negative_ms + new_york_offset * 1000);
-  EXPECT_EQ(stats.maximum, (during_edt + new_york_dst_offset) * 1000);
-  EXPECT_EQ(stats.minimum_utc, stats.minimum);
-  EXPECT_EQ(stats.maximum_utc, stats.maximum);
+    column_stats(write_orc_with_timezone(table_view({sliced}), "America/New_York"));
+  EXPECT_EQ(stats.number_of_values, 3);
+  EXPECT_EQ(stats.has_null, true);
+
+  auto const ts_stats = std::get<cudf::io::timestamp_statistics>(stats.type_specific_stats);
+  EXPECT_EQ(ts_stats.minimum, negative_ms + new_york_offset * 1000);
+  EXPECT_EQ(ts_stats.maximum, (during_edt + new_york_dst_offset) * 1000);
+  EXPECT_EQ(ts_stats.minimum_utc, ts_stats.minimum);
+  EXPECT_EQ(ts_stats.maximum_utc, ts_stats.maximum);
 }
 
 TEST_F(OrcWriterTest, WriterTimezoneInvalid)
