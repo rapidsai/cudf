@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,11 +22,11 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/iterator>
 #include <cuda/std/limits>
+#include <cuda/stream>
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
 #include <thrust/reduce.h>
@@ -504,8 +504,11 @@ struct agg_specific_empty_output {
     }
 
     if constexpr (op == aggregation::COLLECT_LIST) {
-      return cudf::make_lists_column(
-        0, make_empty_column(type_to_id<size_type>()), empty_like(input), 0, {});
+      return cudf::make_lists_column(0,
+                                     make_empty_column(type_id::INT32),
+                                     empty_like(input),
+                                     0,
+                                     cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
     }
 
     return empty_like(input);

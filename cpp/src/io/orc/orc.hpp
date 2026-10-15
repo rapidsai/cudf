@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,6 +10,7 @@
 #include <cudf/io/orc_metadata.hpp>
 #include <cudf/io/orc_types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/wrappers/durations.hpp>
 
 #include <cuda/std/optional>
 
@@ -19,6 +20,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -55,6 +57,20 @@ static constexpr uint32_t cudf_writer_version = 7;
 // the maximum nanosecond remainder is 999,999 (nanoseconds in a millisecond - 1).
 static constexpr int32_t DEFAULT_MIN_NANOS = 0;
 static constexpr int32_t DEFAULT_MAX_NANOS = 999'999;
+
+/**
+ * @brief Returns the ORC epoch as it occurs in a timezone.
+ *
+ * The offset is looked up at the ORC epoch as a UTC instant; the Apache writer resolves it as a
+ * local time, which differs only for a timezone with a transition inside that offset-wide window.
+ *
+ * @param timezone Timezone name
+ *
+ * @throw cudf::logic_error if `timezone` does not resolve to a valid TZif file
+ *
+ * @return Instant that encoded timestamps are stored relative to
+ */
+[[nodiscard]] duration_s base_epoch_in_timezone(std::string_view timezone);
 
 struct PostScript {
   uint64_t footerLength       = 0;        // the length of the footer section in bytes
@@ -599,7 +615,7 @@ class metadata {
   std::vector<orc_stripe_info> stripe_info;
 
  public:
-  explicit metadata(datasource* const src, rmm::cuda_stream_view stream);
+  explicit metadata(datasource* const src, cuda::stream_ref stream);
 
   metadata(metadata const&)            = delete;
   metadata& operator=(metadata const&) = delete;

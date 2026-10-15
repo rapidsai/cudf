@@ -17,13 +17,13 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/std/functional>
 #include <cuda/std/tuple>
+#include <cuda/stream>
 #include <thrust/reduce.h>
 
 #include <memory>
@@ -49,7 +49,7 @@ struct group_sum_overflow_fn {
   std::unique_ptr<column> operator()(column_view const& values,
                                      size_type num_groups,
                                      cudf::device_span<size_type const> group_labels,
-                                     rmm::cuda_stream_view stream,
+                                     cuda::stream_ref stream,
                                      rmm::device_async_resource_ref mr) const
   {
     using DeviceType = cudf::device_storage_type_t<Source>;
@@ -80,10 +80,12 @@ struct group_sum_overflow_fn {
 
     // A group's struct entry is null only when every row in the group is null (mirrors group_sum):
     // reduce per-row validity with logical-or, then build the mask from the per-group result.
-    auto [null_mask, null_count] = [&]() -> std::pair<rmm::device_buffer, size_type> {
-      if (!values.has_nulls()) { return {rmm::device_buffer{}, size_type{0}}; }
-      rmm::device_uvector<bool> group_valid(
-        num_groups, stream, cudf::get_current_device_resource_ref());
+    auto [null_mask, null_count] = [&]() -> std::pair<cuda::device_buffer<std::byte>, size_type> {
+      if (!values.has_nulls()) {
+        return {cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED), size_type{0}};
+      }
+      cuda::device_buffer<bool> group_valid(
+        stream, cudf::get_current_device_resource_ref(), num_groups, cuda::no_init);
       thrust::reduce_by_key(
         rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
         group_labels.begin(),
@@ -117,7 +119,7 @@ struct group_sum_overflow_fn {
 std::unique_ptr<column> group_sum_overflow(column_view const& values,
                                            size_type num_groups,
                                            cudf::device_span<size_type const> group_labels,
-                                           rmm::cuda_stream_view stream,
+                                           cuda::stream_ref stream,
                                            rmm::device_async_resource_ref mr)
 {
   return cudf::type_dispatcher(

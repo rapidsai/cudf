@@ -19,9 +19,8 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-
 #include <cuda/std/iterator>
+#include <cuda/stream>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/remove.h>
@@ -75,7 +74,7 @@ std::unique_ptr<column> segmented_top_k_order(column_view const& col,
                                               column_view const& segment_offsets,
                                               size_type k,
                                               order topk_order,
-                                              rmm::cuda_stream_view stream,
+                                              cuda::stream_ref stream,
                                               rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(k >= 0, "k must be greater than or equal to 0", std::invalid_argument);
@@ -106,7 +105,7 @@ std::unique_ptr<column> segmented_top_k_order(column_view const& col,
     segment_offsets.size() - 1, stream, temp_mr);
   auto span_indices = device_span<size_type>{d_indices, static_cast<std::size_t>(indices->size())};
   auto const grid   = cudf::detail::grid_1d(indices->size(), 256);
-  resolve_segment_indices<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
+  resolve_segment_indices<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.get()>>>(
     segment_offsets, k, span_indices, segment_sizes.data());
   CUDF_CUDA_TRY(cudaGetLastError());
   auto [offsets, total_elements] =
@@ -123,15 +122,18 @@ std::unique_ptr<column> segmented_top_k_order(column_view const& col,
                       -1);
 
   auto const num_rows = static_cast<size_type>(offsets->size() - 1);
-  return make_lists_column(
-    num_rows, std::move(offsets), std::move(result), 0, rmm::device_buffer{});
+  return make_lists_column(num_rows,
+                           std::move(offsets),
+                           std::move(result),
+                           0,
+                           cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
 }
 
 std::unique_ptr<column> segmented_top_k(column_view const& col,
                                         column_view const& segment_offsets,
                                         size_type k,
                                         order topk_order,
-                                        rmm::cuda_stream_view stream,
+                                        cuda::stream_ref stream,
                                         rmm::device_async_resource_ref mr)
 {
   if (col.is_empty()) { return cudf::make_empty_column(col.type()); }
@@ -149,8 +151,11 @@ std::unique_ptr<column> segmented_top_k(column_view const& col,
                                      mr);
   auto offsets        = std::move(ordered->release().children.front());
   auto const num_rows = static_cast<size_type>(offsets->size() - 1);
-  return make_lists_column(
-    num_rows, std::move(offsets), std::move(result->release().front()), 0, rmm::device_buffer{});
+  return make_lists_column(num_rows,
+                           std::move(offsets),
+                           std::move(result->release().front()),
+                           0,
+                           cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
 }
 
 }  // namespace detail
@@ -159,7 +164,7 @@ std::unique_ptr<column> segmented_top_k(column_view const& col,
                                         column_view const& segment_offsets,
                                         size_type k,
                                         order topk_order,
-                                        rmm::cuda_stream_view stream,
+                                        cuda::stream_ref stream,
                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -170,7 +175,7 @@ std::unique_ptr<column> segmented_top_k_order(column_view const& col,
                                               column_view const& segment_offsets,
                                               size_type k,
                                               order topk_order,
-                                              rmm::cuda_stream_view stream,
+                                              cuda::stream_ref stream,
                                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();

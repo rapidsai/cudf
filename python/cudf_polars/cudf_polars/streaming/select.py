@@ -18,14 +18,15 @@ from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.streaming.base import PartitionInfo
 from cudf_polars.streaming.dispatch import lower_ir_node
 from cudf_polars.streaming.expressions import (
+    align_hconcat_inputs,
     decompose_expr_graph,
+    hconcat_streaming_safe,
     make_expr_decomposer,
 )
 from cudf_polars.streaming.io import StreamingScan
 from cudf_polars.streaming.over import _fuse_over_nodes
 from cudf_polars.streaming.repartition import Repartition
 from cudf_polars.streaming.utils import (
-    _contains_cum_sum_without_order_by,
     _contains_unsupported_fill_strategy,
     _dynamic_planning_on,
     _lower_ir_fallback,
@@ -151,12 +152,16 @@ def decompose_select(
         config_options,
         name_generator,
     )
+    hconcat_shapes = []
     for ne in select_ir.exprs:
         # Decompose this partial expression
-        new_ne, partial_input_ir, _partition_info = decompose_expr_graph(
-            ne,
-            mapper=shared_mapper,
-        )
+        (
+            new_ne,
+            partial_input_ir,
+            _partition_info,
+            hconcat_shape,
+        ) = decompose_expr_graph(ne, mapper=shared_mapper)
+        hconcat_shapes.append(hconcat_shape)
         pi = _partition_info[partial_input_ir]
         partial_input_ir = Select(
             {ne.name: ne.value.dtype},
@@ -167,23 +172,33 @@ def decompose_select(
         _partition_info[partial_input_ir] = pi
         partition_info.update(_partition_info)
         selections.append(partial_input_ir)
+    streaming_safe = hconcat_streaming_safe(hconcat_shapes)
 
     # Concatenate partial selections
-    new_ir: Select | HConcat
+    new_ir: IR
     selections, partition_info = _fuse_over_nodes(selections, partition_info)
     selections, partition_info = _fuse_simple_reductions(
         selections,
         partition_info,
+        config_options,
+        streaming_safe=streaming_safe,
     )
     if len(selections) > 1:
+        aligned_selections = align_hconcat_inputs(
+            selections,
+            partition_info,
+            config_options,
+            streaming_safe=streaming_safe,
+        )
         new_ir = HConcat(
             select_ir.schema,
             True,  # noqa: FBT003
             False,  # noqa: FBT003
-            *selections,
+            streaming_safe,
+            *aligned_selections,
         )
         partition_info[new_ir] = PartitionInfo(
-            count=max(partition_info[c].count for c in selections)
+            count=max(partition_info[c].count for c in aligned_selections)
         )
     else:
         new_ir = selections[0]
@@ -194,6 +209,9 @@ def decompose_select(
 def _fuse_simple_reductions(
     decomposed_select_irs: Sequence[Select],
     pi: MutableMapping[IR, PartitionInfo],
+    config_options: ConfigOptions,
+    *,
+    streaming_safe: bool,
 ) -> tuple[list[Select], MutableMapping[IR, PartitionInfo]]:
     """
     Fuse simple reductions that are part of the same Select node.
@@ -204,6 +222,11 @@ def _fuse_simple_reductions(
         The decomposed Select nodes.
     pi
         Partition information.
+    config_options
+        GPUEngine configuration options.
+    streaming_safe
+        Whether the original decomposed selections may be concatenated
+        partition-wise.
 
     Returns
     -------
@@ -347,17 +370,24 @@ def _fuse_simple_reductions(
     # the results and apply the final (fused) "c" selection,
     # otherwise we may mess up the ordering of the columns.
     if len(new_decomposed_select_irs) < len(decomposed_select_irs):
+        aligned_irs = align_hconcat_inputs(
+            new_decomposed_select_irs,
+            pi,
+            config_options,
+            streaming_safe=streaming_safe,
+        )
         # Compute schema from actual children (intermediate columns)
         hconcat_schema: Schema = {}
-        for ir in new_decomposed_select_irs:
+        for ir in aligned_irs:
             hconcat_schema |= ir.schema
         new_hconcat = HConcat(
             hconcat_schema,
             True,  # noqa: FBT003
             False,  # noqa: FBT003
-            *new_decomposed_select_irs,
+            streaming_safe,
+            *aligned_irs,
         )
-        count = max(pi[c].count for c in new_decomposed_select_irs)
+        count = max(pi[c].count for c in aligned_irs)
         pi[new_hconcat] = PartitionInfo(count=count)
 
         final_exprs = [
@@ -406,23 +436,11 @@ def _(
         [e.value for e in ir.exprs]
     ):
         return _lower_ir_fallback(
-            ir.reconstruct([child]),
+            ir,
             rec,
             msg=(
                 "fill_null with strategy other than 'zero' or 'one' is not supported "
                 "for multiple partitions; falling back to in-memory evaluation."
-            ),
-        )
-
-    if rec.state["nranks"] > 1 and _contains_cum_sum_without_order_by(
-        [e.value for e in ir.exprs]
-    ):
-        return _lower_ir_fallback(
-            ir.reconstruct([child]),
-            rec,
-            msg=(
-                "cum_sum() over a window without order_by is not supported across "
-                "multiple ranks; falling back to a single partition."
             ),
         )
 
@@ -447,13 +465,16 @@ def _(
         # Special Case: Fast count.
         # We can't use prefetched file metadata here, because we're in lowering,
         # not execution, so we don't have an IRExecutionContext with the prefetched
-        # file metadata yet.
+        # file metadata yet. Hybrid scan requires prefetched file metadata,
+        # so disable that as well.
         count = Scan._get_parquet_row_count_from_metadata(
             scan_child.paths,
             scan_child.skip_rows,
             scan_child.n_rows,
             dataclasses.replace(
-                scan_child.parquet_options, prefetch_file_metadata=False
+                scan_child.parquet_options,
+                prefetch_file_metadata=False,
+                use_hybrid_scan=False,
             ),
             None,
         )

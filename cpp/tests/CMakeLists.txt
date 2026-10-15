@@ -88,8 +88,6 @@ endfunction()
 set(CUDF_INSTALL_LIBRARY_DEPS OFF)
 set(CUDF_EXCLUDE_DEPS_FROM_ALL ON)
 set(CUDF_EXCLUDE_DEPS_FROM_ALL_FLAG EXCLUDE_FROM_ALL)
-set(CUDF_ENABLE_ARROW_COMPUTE ON)
-include(../cmake/thirdparty/get_arrow.cmake)
 
 # ##################################################################################################
 # test sources ##################################################################################
@@ -179,6 +177,7 @@ ConfigureTest(
   join/direct_join_tests.cpp
   join/distinct_join_tests.cpp
   join/key_remapping_tests.cpp
+  join/streaming_hash_join_tests.cpp
   GPUS 1
   PERCENT 100
 )
@@ -199,6 +198,7 @@ ConfigureTest(
   hashing/md5_test.cpp
   hashing/murmurhash3_x86_32_test.cpp
   hashing/murmurhash3_x64_128_test.cpp
+  hashing/spark_murmurhash3_x86_32_test.cpp
   hashing/sha1_test.cpp
   hashing/sha224_test.cpp
   hashing/sha256_test.cpp
@@ -223,7 +223,7 @@ ConfigureTest(
   QUANTILES_TEST quantiles/percentile_approx_test.cpp quantiles/quantile_test.cpp
   quantiles/quantiles_test.cpp
   GPUS 1
-  PERCENT 70 EXTRA_LIBS ${ARROW_LIBRARIES}
+  PERCENT 70
 )
 
 # ##################################################################################################
@@ -265,7 +265,10 @@ ConfigureTest(FIXED_POINT_TEST fixed_point/fixed_point_tests.cpp fixed_point/fix
 
 # ##################################################################################################
 # * unary tests -----------------------------------------------------------------------------------
-ConfigureTest(UNARY_TEST unary/math_ops_test.cpp unary/unary_ops_test.cpp unary/cast_tests.cpp)
+ConfigureTest(
+  UNARY_TEST unary/math_ops_test.cpp unary/unary_ops_test.cpp unary/cast_tests.cpp
+  unary/operator_parity_test.cpp
+)
 
 # ##################################################################################################
 # * round tests -----------------------------------------------------------------------------------
@@ -280,6 +283,7 @@ ConfigureTest(
   binaryop/binop-compiled-test.cpp
   binaryop/binop-compiled-fixed_point-test.cpp
   binaryop/binop-generic-ptx-test.cpp
+  binaryop/operator_parity_test.cpp
 )
 
 # ##################################################################################################
@@ -304,17 +308,15 @@ ConfigureTest(FILTER_TEST filter/filter_test.cpp)
 ConfigureTest(
   INTEROP_TEST
   interop/arrow_data_structures_test.cpp
+  interop/nanoarrow_utils.cpp
   interop/to_arrow_device_test.cpp
-  interop/to_arrow_test.cpp
   interop/to_arrow_host_test.cpp
-  interop/from_arrow_test.cpp
   interop/from_arrow_device_test.cpp
   interop/from_arrow_host_test.cpp
   interop/from_arrow_stream_test.cpp
   interop/dlpack_test.cpp
   EXTRA_LIBS
   nanoarrow::nanoarrow
-  ${ARROW_LIBRARIES}
 )
 
 # ##################################################################################################
@@ -340,6 +342,7 @@ ConfigureTest(
   io/parquet_chunked_writer_test.cpp
   io/parquet_common.cpp
   io/parquet_misc_test.cpp
+  io/parquet_reader_dict_test.cpp
   io/parquet_reader_test.cpp
   io/parquet_test.cpp
   io/parquet_v2_test.cpp
@@ -347,6 +350,8 @@ ConfigureTest(
   GPUS 1
   PERCENT 100
 )
+ConfigureTest(COMPACT_PROTOCOL_READER_TEST io/compact_protocol_reader_test.cpp)
+ConfigureTest(PARQUET_FOOTER_FACADE_TEST io/experimental/parquet_footer_facade_test.cpp)
 ConfigureTest(
   HYBRID_SCAN_TEST
   io/experimental/hybrid_scan_common.cpp
@@ -399,8 +404,14 @@ ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cpp)
 # ##################################################################################################
 # * sort tests ------------------------------------------------------------------------------------
 ConfigureTest(
-  SORT_TEST sort/rank_test.cpp sort/segmented_sort_tests.cpp sort/sort_nested_types_tests.cpp
-  sort/sort_test.cpp sort/stable_sort_tests.cpp sort/top_k_tests.cpp
+  SORT_TEST
+  sort/rank_test.cpp
+  sort/segmented_sort_tests.cpp
+  sort/sort_nested_types_tests.cpp
+  sort/sort_test.cpp
+  sort/stable_sort_tests.cpp
+  sort/string_sort_prefix_test.cpp
+  sort/top_k_tests.cpp
   GPUS 1
   PERCENT 70
 )
@@ -447,10 +458,12 @@ ConfigureTest(
   utilities_tests/column_wrapper_tests.cpp
   utilities_tests/context_tests.cpp
   utilities_tests/default_stream_tests.cpp
+  utilities_tests/integer_utils_tests.cpp
   utilities_tests/io_utilities_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
   utilities_tests/memory_resource_tests.cpp
   utilities_tests/pinned_memory_tests.cpp
+  utilities_tests/stream_pool_tests.cpp
   utilities_tests/type_check_tests.cpp
   utilities_tests/type_list_tests.cpp
 )
@@ -516,7 +529,7 @@ ConfigureTest(
 # * stream compaction tests -----------------------------------------------------------------------
 ConfigureTest(
   STREAM_COMPACTION_TEST
-  stream_compaction/apply_boolean_mask_tests.cpp
+  stream_compaction/apply_mask_tests.cpp
   stream_compaction/distinct_tests.cpp
   stream_compaction/drop_nans_tests.cpp
   stream_compaction/drop_nulls_tests.cpp
@@ -657,6 +670,7 @@ ConfigureTest(
   text/stemmer_tests.cpp
   text/subword_tests.cpp
   text/tokenize_tests.cpp
+  text/unicode_normalize_tests.cpp
 )
 
 # ##################################################################################################
@@ -714,7 +728,7 @@ add_fragment(
 add_fragment(cudf_test_fragments FRAGMENT to_upper SOURCE transform/fragments/to_upper.cu)
 
 rtcx_embed(
-  cudf_test_fragments COMPRESSION none OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
+  cudf_test_fragments COMPRESSION none OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rtcx_embed"
 )
 
 ConfigureTest(
@@ -741,7 +755,7 @@ ConfigureTest(
   lists/set_operations/intersect_distinct_tests.cpp
   lists/set_operations/union_distinct_tests.cpp
   lists/sort_lists_tests.cpp
-  lists/stream_compaction/apply_boolean_mask_tests.cpp
+  lists/stream_compaction/apply_mask_tests.cpp
   lists/stream_compaction/distinct_tests.cpp
   GPUS 1
   PERCENT 70
@@ -842,6 +856,7 @@ ConfigureTest(
   streams/text/replace_test.cpp
   streams/text/stemmer_test.cpp
   streams/text/tokenize_test.cpp
+  streams/text/unicode_normalize_test.cpp
   STREAM_MODE
   testing
 )

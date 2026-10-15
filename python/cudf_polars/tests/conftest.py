@@ -317,21 +317,14 @@ def engine(
 
 
 @pytest.fixture
-def engine_raise_on_fail() -> pl.GPUEngine:
+def in_memory_engine() -> pl.GPUEngine:
     """
-    Return a default :class:`polars.GPUEngine` with ``raise_on_fail=True``.
+    Return an in-memory :class:`polars.GPUEngine` with ``raise_on_fail=True``.
 
-    Returns
-    -------
-    In-memory engine configured to raise exceptions on failure.
-
-    Notes
-    -----
-    Intended for error-path tests that assert specific exceptions propagate
-    from ``.collect()``. Uses the in-memory executor so errors are not wrapped
-    by a streaming task group.
+    Use this for tests that intentionally exercise in-memory-only behavior
+    instead of the parametrized engine matrix, but generally prefer the ``engine``
+    fixture instead.
     """
-    # TODO: We should be testing with all supported engine variants
     return pl.GPUEngine(executor="in-memory", raise_on_fail=True)
 
 
@@ -349,6 +342,11 @@ def pytest_configure(config: pytest.Config):
         "skip_on_streaming_engine(reason, *, engine=None): skip the test for "
         'streaming ``engine`` variants (e.g. ``"spmd"``, ``"spmd-small"``, '
         '``"dask"``, ``"ray"``) while still allowing the in-memory variant to run.',
+    )
+    config.addinivalue_line(
+        "markers",
+        "engine_params(params): run an engine-fixture test only for the "
+        "listed engine parameter ids.",
     )
 
     # Ray's internal subprocess management leaks `/dev/null` file handles, and
@@ -382,6 +380,22 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
         engines = ALL_ENGINE_FIXTURE_PARAMS
     else:
         raise AssertionError("Unknown engine fixture")
+
+    marker = metafunc.definition.get_closest_marker("engine_params")
+    if marker is not None:
+        # Selectors must not opt unavailable backends back into the fixture.
+        engines = [engine for engine in engines if engine in marker.args[0]]
+
+    if not engines:
+        # Empty parameter sets are collection errors in this suite.
+        metafunc.parametrize(
+            "_engine_param",
+            [pytest.param(None, marks=pytest.mark.skip(reason="No available engines"))],
+            indirect=True,
+            ids=["unavailable"],
+            scope="session",
+        )
+        return
 
     metafunc.parametrize(
         "_engine_param",

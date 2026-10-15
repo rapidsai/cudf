@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,8 +9,11 @@
 #include "io/utilities/hostdevice_vector.hpp"
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
-#include <cub/cub.cuh>
+#include <cub/util_arch.cuh>
+#include <cub/util_type.cuh>
+#include <cuda/buffer>
 #include <cuda/std/iterator>
 
 #include <algorithm>
@@ -844,7 +847,7 @@ class Dfa {
   Dfa(SymbolGroupIdInitT const& sgid_lut_init,
       TransitionTableInitT const& transition_table_init,
       TranslationTableInitT const& translation_table_init,
-      rmm::cuda_stream_view stream)
+      cuda::stream_ref stream)
     : init_data{single_item, stream}
   {
     *init_data.host_ptr() = {sgid_lut_init, transition_table_init, translation_table_init};
@@ -886,10 +889,10 @@ class Dfa {
                  TransducedIndexOutItT d_out_idx_it,
                  TransducedCountOutItT d_num_transduced_out_it,
                  uint32_t const seed_state,
-                 rmm::cuda_stream_view stream)
+                 cuda::stream_ref stream)
   {
     std::size_t temp_storage_bytes = 0;
-    rmm::device_buffer temp_storage{};
+    cuda::device_buffer<std::byte> temp_storage{stream, cudf::get_current_device_resource_ref()};
     DeviceTransduce(nullptr,
                     temp_storage_bytes,
                     this->get_device_view(),
@@ -899,10 +902,11 @@ class Dfa {
                     d_out_idx_it,
                     d_num_transduced_out_it,
                     seed_state,
-                    stream);
+                    stream.get());
 
     if (temp_storage.size() < temp_storage_bytes) {
-      temp_storage.resize(temp_storage_bytes, stream);
+      temp_storage = cuda::device_buffer<std::byte>{
+        stream, cudf::get_current_device_resource_ref(), temp_storage_bytes, cuda::no_init};
     }
 
     DeviceTransduce(temp_storage.data(),
@@ -914,7 +918,7 @@ class Dfa {
                     d_out_idx_it,
                     d_num_transduced_out_it,
                     seed_state,
-                    stream);
+                    stream.get());
   }
 
  private:
@@ -944,7 +948,7 @@ template <typename SymbolGroupIdInitT,
 auto make_fst(SymbolGroupIdInitT const& sgid_lut_init,
               TransitionTableInitT const& transition_table_init,
               TranslationTableInitT const& translation_table_init,
-              rmm::cuda_stream_view stream)
+              cuda::stream_ref stream)
 {
   return Dfa<SymbolGroupIdInitT, TransitionTableInitT, TranslationTableInitT>(
     sgid_lut_init, transition_table_init, translation_table_init, stream);

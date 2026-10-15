@@ -24,13 +24,13 @@
 
 #include <nvtext/generate_ngrams.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
 #include <cuda/functional>
 #include <cuda/std/iterator>
+#include <cuda/stream>
 #include <thrust/copy.h>
 
 #include <stdexcept>
@@ -86,7 +86,7 @@ struct ngram_generator_fn {
 std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& strings,
                                               cudf::size_type ngrams,
                                               cudf::string_scalar const& separator,
-                                              rmm::cuda_stream_view stream,
+                                              cuda::stream_ref stream,
                                               rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(
@@ -141,8 +141,11 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
     ngram_generator_fn{d_strings, ngrams, d_separator}, ngrams_count, stream, mr);
 
   // make the output strings column from the offsets and chars column
-  return cudf::make_strings_column(
-    ngrams_count, std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
+  return cudf::make_strings_column(ngrams_count,
+                                   std::move(offsets_column),
+                                   chars.release(),
+                                   0,
+                                   cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
 }
 
 }  // namespace detail
@@ -150,7 +153,7 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
 std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& strings,
                                               cudf::size_type ngrams,
                                               cudf::string_scalar const& separator,
-                                              rmm::cuda_stream_view stream,
+                                              cuda::stream_ref stream,
                                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -248,7 +251,7 @@ struct character_ngram_generator_fn {
 
 std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_view const& input,
                                                         cudf::size_type ngrams,
-                                                        rmm::cuda_stream_view stream,
+                                                        cuda::stream_ref stream,
                                                         rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(ngrams >= 2,
@@ -273,7 +276,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
                                   : cudf::detail::warp_size;  // warp per row
     auto const grid           = cudf::detail::grid_1d(
       static_cast<cudf::thread_index_type>(input.size()) * tile_size, block_size);
-    count_char_ngrams_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+    count_char_ngrams_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.get()>>>(
       *d_strings, ngrams, tile_size, counts.data());
     CUDF_CUDA_TRY(cudaGetLastError());
     return cudf::detail::make_offsets_child_column(counts.begin(), counts.end(), stream, mr);
@@ -287,11 +290,17 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
   auto [offsets_column, chars] =
     cudf::strings::detail::make_strings_children(generator, input.size(), total_ngrams, stream, mr);
 
-  auto output = cudf::make_strings_column(
-    total_ngrams, std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
+  auto output = cudf::make_strings_column(total_ngrams,
+                                          std::move(offsets_column),
+                                          chars.release(),
+                                          0,
+                                          cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
 
-  return make_lists_column(
-    input.size(), std::move(offsets), std::move(output), 0, rmm::device_buffer{});
+  return make_lists_column(input.size(),
+                           std::move(offsets),
+                           std::move(output),
+                           0,
+                           cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
 }
 
 namespace {
@@ -357,7 +366,7 @@ CUDF_KERNEL void character_ngram_hash_kernel(cudf::column_device_view const d_st
 std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view const& input,
                                                     cudf::size_type ngrams,
                                                     uint32_t seed,
-                                                    rmm::cuda_stream_view stream,
+                                                    cuda::stream_ref stream,
                                                     rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(ngrams >= 2,
@@ -374,7 +383,7 @@ std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view co
   // build offsets column by computing the number of ngrams per string
   auto [offsets, total_ngrams] = [&] {
     auto counts = rmm::device_uvector<cudf::size_type>(input.size(), stream);
-    count_char_ngrams_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+    count_char_ngrams_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.get()>>>(
       *d_strings, ngrams, cudf::detail::warp_size, counts.data());
     CUDF_CUDA_TRY(cudaGetLastError());
     return cudf::detail::make_offsets_child_column(counts.begin(), counts.end(), stream, mr);
@@ -389,19 +398,22 @@ std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view co
     cudf::make_numeric_column(output_type, total_ngrams, cudf::mask_state::UNALLOCATED, stream, mr);
   auto d_hashes = hashes->mutable_view().data<cudf::hash_value_type>();
 
-  character_ngram_hash_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+  character_ngram_hash_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.get()>>>(
     *d_strings, ngrams, seed, d_offsets, d_hashes);
   CUDF_CUDA_TRY(cudaGetLastError());
 
-  return make_lists_column(
-    input.size(), std::move(offsets), std::move(hashes), 0, rmm::device_buffer{});
+  return make_lists_column(input.size(),
+                           std::move(offsets),
+                           std::move(hashes),
+                           0,
+                           cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
 }
 
 }  // namespace detail
 
 std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_view const& strings,
                                                         cudf::size_type ngrams,
-                                                        rmm::cuda_stream_view stream,
+                                                        cuda::stream_ref stream,
                                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -411,7 +423,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
 std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view const& strings,
                                                     cudf::size_type ngrams,
                                                     uint32_t seed,
-                                                    rmm::cuda_stream_view stream,
+                                                    cuda::stream_ref stream,
                                                     rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();

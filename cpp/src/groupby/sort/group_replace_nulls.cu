@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
@@ -12,6 +12,7 @@
 
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/std/functional>
 #include <cuda/std/tuple>
@@ -26,7 +27,7 @@ namespace detail {
 std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_value,
                                             device_span<size_type const> group_labels,
                                             cudf::replace_policy replace_policy,
-                                            rmm::cuda_stream_view stream,
+                                            cuda::stream_ref stream,
                                             rmm::device_async_resource_ref mr)
 {
   cudf::size_type size = grouped_value.size();
@@ -36,7 +37,8 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
   auto valid_it  = cudf::detail::make_validity_iterator(*device_in);
   auto in_begin  = cuda::make_zip_iterator(cuda::std::make_tuple(index, valid_it));
 
-  rmm::device_uvector<cudf::size_type> gather_map(size, stream);
+  cuda::device_buffer<cudf::size_type> gather_map(
+    stream, cudf::get_current_device_resource_ref(), size, cuda::no_init);
   auto gm_begin = cuda::make_zip_iterator(
     cuda::std::make_tuple(gather_map.begin(), cuda::make_discard_iterator()));
 

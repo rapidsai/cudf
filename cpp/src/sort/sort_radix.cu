@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,12 +7,13 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_radix_sort.cuh>
+#include <cuda/buffer>
 #include <cuda/iterator>
+#include <cuda/stream>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -50,10 +51,10 @@ struct float_to_pair_fn {
  * Should not be used if `input.has_nulls()==true`
  */
 struct sort_radix_fn {
-  column_view const input;       // input column to sort
-  mutable_column_view output;    // output sorted
-  bool ascending;                // true if ascending sort
-  rmm::cuda_stream_view stream;  // stream for allocations and kernel launches
+  column_view const input;     // input column to sort
+  mutable_column_view output;  // output sorted
+  bool ascending;              // true if ascending sort
+  cuda::stream_ref stream;     // stream for allocations and kernel launches
 
   template <typename T>
   void sort_radix()
@@ -61,17 +62,19 @@ struct sort_radix_fn {
     auto d_in          = input.data<T>();
     auto d_out         = output.data<T>();
     auto const end_bit = sizeof(T) * 8;
-    auto const sv      = stream.value();
+    auto const sv      = stream.get();
     auto const n       = input.size();
     // cub radix sort implementation is always stable
     std::size_t tmp_bytes = 0;
     if (ascending) {
       cub::DeviceRadixSort::SortKeys(nullptr, tmp_bytes, d_in, d_out, n, 0, end_bit, sv);
-      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+      auto tmp_stg = cuda::device_buffer<std::byte>(
+        stream, cudf::get_current_device_resource_ref(), tmp_bytes, cuda::no_init);
       cub::DeviceRadixSort::SortKeys(tmp_stg.data(), tmp_bytes, d_in, d_out, n, 0, end_bit, sv);
     } else {
       cub::DeviceRadixSort::SortKeysDescending(nullptr, tmp_bytes, d_in, d_out, n, 0, end_bit, sv);
-      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+      auto tmp_stg = cuda::device_buffer<std::byte>(
+        stream, cudf::get_current_device_resource_ref(), tmp_bytes, cuda::no_init);
       cub::DeviceRadixSort::SortKeysDescending(
         tmp_stg.data(), tmp_bytes, d_in, d_out, n, 0, end_bit, sv);
     }
@@ -94,20 +97,22 @@ struct sort_radix_fn {
 
     auto const decomposer = float_decomposer<T>{};
     auto const end_bit    = sizeof(float_pair<T>) * 8;
-    auto const sv         = stream.value();
+    auto const sv         = stream.get();
     auto const n          = input.size();
     // cub radix sort implementation is always stable
     std::size_t tmp_bytes = 0;
     if (ascending) {
       cub::DeviceRadixSort::SortKeys(
         nullptr, tmp_bytes, d_in, d_out, n, decomposer, 0, end_bit, sv);
-      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+      auto tmp_stg = cuda::device_buffer<std::byte>(
+        stream, cudf::get_current_device_resource_ref(), tmp_bytes, cuda::no_init);
       cub::DeviceRadixSort::SortKeys(
         tmp_stg.data(), tmp_bytes, d_in, d_out, n, decomposer, 0, end_bit, sv);
     } else {
       cub::DeviceRadixSort::SortKeysDescending(
         nullptr, tmp_bytes, d_in, d_out, n, decomposer, 0, end_bit, sv);
-      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
+      auto tmp_stg = cuda::device_buffer<std::byte>(
+        stream, cudf::get_current_device_resource_ref(), tmp_bytes, cuda::no_init);
       cub::DeviceRadixSort::SortKeysDescending(
         tmp_stg.data(), tmp_bytes, d_in, d_out, n, decomposer, 0, end_bit, sv);
     }
@@ -150,7 +155,7 @@ bool is_radix_sortable(column_view const& column)
 
 std::unique_ptr<column> sort_radix(column_view const& input,
                                    bool ascending,
-                                   rmm::cuda_stream_view stream,
+                                   cuda::stream_ref stream,
                                    rmm::device_async_resource_ref mr)
 {
   auto result   = std::make_unique<column>(input, stream, mr);

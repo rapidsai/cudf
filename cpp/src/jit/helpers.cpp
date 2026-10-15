@@ -9,10 +9,13 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/iterator>
+
 #include <jit/cache.hpp>
-#include <rtcx.hpp>
+#include <rtcx/rtcx.hpp>
 #include <runtime/context.hpp>
 
+#include <algorithm>
 #include <format>
 
 namespace cudf {
@@ -28,8 +31,8 @@ typename std::vector<column_view>::const_iterator get_transform_base_column(
 {
   if (inputs.empty()) { return inputs.end(); }
 
-  auto [smallest, largest] = std::minmax_element(
-    inputs.begin(), inputs.end(), [](auto const& a, auto const& b) { return a.size() < b.size(); });
+  auto [smallest, largest] = std::ranges::minmax_element(
+    inputs, [](auto const& a, auto const& b) { return a.size() < b.size(); });
 
   /// when the largest size is 1, the size-1 column could be a scalar or an actual column, it would
   /// be a scalar if it has columns that are zero-sized
@@ -54,8 +57,8 @@ size_type get_projection_size(std::span<std::variant<column_view, scalar_column_
     return std::visit([](auto& a) { return get_projection_size(a); }, var);
   };
 
-  return *std::max_element(thrust::make_transform_iterator(inputs.begin(), get_size),
-                           thrust::make_transform_iterator(inputs.end(), get_size));
+  return *std::max_element(cuda::transform_iterator(inputs.begin(), get_size),
+                           cuda::transform_iterator(inputs.end(), get_size));
 }
 
 std::map<uint32_t, std::string> build_ptx_params(std::span<std::string const> output_typenames,

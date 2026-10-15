@@ -112,9 +112,11 @@ _DECIMAL_AGGS = {
     "COLLECT",
     "COUNT",
     "MAX",
+    "MEAN",
     "MIN",
     "NTH",
     "NUNIQUE",
+    "SIZE",
     "SUM",
 }
 
@@ -518,7 +520,7 @@ def _collect_series_key_column_names(obj, by) -> dict[int, Hashable]:
 
 
 class GroupByNthSelector:
-    """Mirror of :class:`pandas.core.groupby.indexing.GroupByNthSelector`.
+    """Mirror of ``pandas.core.groupby.indexing.GroupByNthSelector``.
 
     ``GroupBy.nth`` supports both the call form ``gb.nth(n, dropna=...)``
     and the index form ``gb.nth[n]``.
@@ -628,7 +630,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         self._sort = sort
         self._dropna = dropna
         self._group_keys = group_keys
-        self._selection: tuple[Any, ...] | None = None
+        self._selection = None
 
         if isinstance(self._by, _Grouping):
             self._by._obj = self.obj
@@ -651,7 +653,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         if isinstance(group_names, Index):
             group_names = group_names.to_pandas()
         if self._sort or len(offsets) <= 2:
-            order: Iterable[int] = range(len(offsets) - 1)
+            order = range(len(offsets) - 1)
         else:
             # libcudf returns groups sorted by key, but with ``sort=False``
             # pandas iterates groups in order of first appearance. Reorder by
@@ -1274,6 +1276,17 @@ class GroupBy(Serializable, Reducible, Scannable):
                 elif agg_kind == "NUNIQUE":
                     cast_dtype = np.dtype(np.int64)
                 elif (
+                    agg_name in {"cumsum", "cumprod"}
+                    and is_pandas_nullable_extension_dtype(orig_dtype)
+                    and orig_dtype.kind in {"i", "u"}
+                ):
+                    # libcudf's SUM/PRODUCT scans promote narrow integers
+                    # to 64-bit. pandas does the same for numpy dtypes
+                    # (int8 -> int64, GH#37493) but preserves masked
+                    # extension dtypes (Int16 stays Int16, GH#58811),
+                    # wrapping on overflow.
+                    cast_dtype = orig_dtype
+                elif (
                     (
                         isinstance(agg_name, str)
                         and agg_name in Reducible._SUPPORTED_REDUCTIONS
@@ -1318,7 +1331,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 result_col = ColumnBase.create(plc_result, create_dtype)
                 if agg == "cumcount":
                     # pandas 0-indexes cumulative count, see
-                    # https://github.com/rapidsai/cudf/issues/10237
+                    # https://github.com/NVIDIA/cudf/issues/10237
                     result_col = result_col - 1
                 if cast_dtype is not None:
                     result_col = result_col.astype(cast_dtype)
@@ -1335,7 +1348,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # RangeIndex) columns.
             data = ColumnAccessor(
                 data,
-                multiindex=False,
+                multiindex=self.obj._data.multiindex,
                 level_names=self.obj._data.level_names,
                 rangeindex=self.obj._data.rangeindex,
                 label_dtype=self.obj._data.label_dtype,
@@ -1346,11 +1359,26 @@ class GroupBy(Serializable, Reducible, Scannable):
             and self.obj.ndim == 2
             and self.obj._data.level_names != (None,)
         ):
+            mi_kwargs: dict[str, Any] = {}
+            if self.obj._data.multiindex and all(
+                isinstance(label, tuple)
+                and len(label) == self.obj._data.nlevels
+                for label in data
+            ):
+                # the aggregation kept the source's tuple labels: preserve
+                # the MultiIndex columns and their per-level metadata.
+                # Relabeling aggregations (``agg(new=(col, func))``) emit
+                # new flat labels the source's multi-level metadata does
+                # not describe, so they keep the flat default.
+                mi_kwargs = {
+                    "multiindex": True,
+                    "level_dtypes": self.obj._data.level_dtypes,
+                }
             data = ColumnAccessor(
                 data,
-                multiindex=False,
                 level_names=self.obj._data.level_names,
                 label_dtype=self.obj._data.label_dtype,
+                **mi_kwargs,
             )
         else:
             data = ColumnAccessor(data, multiindex=multilevel)
@@ -1478,8 +1506,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             Computed {op} of values within each group.
 
         .. pandas-compat::
-            :meth:`pandas.core.groupby.DataFrameGroupBy.{op}`,
-             :meth:`pandas.core.groupby.SeriesGroupBy.{op}`
+            :meth:`pandas.api.typing.DataFrameGroupBy.{op}`,
+             :meth:`pandas.api.typing.SeriesGroupBy.{op}`
 
             The numeric_only, min_count
         """
@@ -2277,7 +2305,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         aggs_per_column: Iterable[AggType | Iterable[AggType]]
         # TODO: Remove isinstance condition when the legacy dask_cudf API is removed.
-        # See https://github.com/rapidsai/cudf/pull/16528#discussion_r1715482302 for information.
+        # See https://github.com/NVIDIA/cudf/pull/16528#discussion_r1715482302 for information.
         if aggs or isinstance(aggs, dict):
             if isinstance(aggs, dict):
                 if any(
@@ -2567,8 +2595,8 @@ class GroupBy(Serializable, Reducible, Scannable):
           std, idxmax, and idxmin and any arithmetic formula involving them are
           allowed. Binary operations are not yet supported, so syntax like
           `df['x'] * 2` is not yet allowed.
-          For more information, see the `cuDF guide to user defined functions
-          <https://docs.rapids.ai/api/cudf/stable/cudf/guide-to-udfs/>`__.
+          For more information, see the :doc:`cuDF guide to user defined functions
+          </cudf/guide-to-udfs>`.
           Use `cudf` to select the iterative groupby apply algorithm which aims
           to provide maximum flexibility at the expense of performance.
           The default value `auto` will attempt to use the numba JIT pipeline
@@ -2613,8 +2641,8 @@ class GroupBy(Serializable, Reducible, Scannable):
           6    2    6   12
 
         .. pandas-compat::
-            :meth:`pandas.core.groupby.DataFrameGroupBy.apply`,
-             :meth:`pandas.core.groupby.SeriesGroupBy.apply`
+            :meth:`pandas.api.typing.DataFrameGroupBy.apply`,
+             :meth:`pandas.api.typing.SeriesGroupBy.apply`
 
             cuDF's ``groupby.apply`` is limited compared to pandas.
             In some situations, Pandas returns the grouped keys as part of
@@ -3566,8 +3594,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             Object shifted within each group.
 
         .. pandas-compat::
-            :meth:`pandas.core.groupby.DataFrameGroupBy.shift`,
-             :meth:`pandas.core.groupby.SeriesGroupBy.shift`
+            :meth:`pandas.api.typing.DataFrameGroupBy.shift`,
+             :meth:`pandas.api.typing.SeriesGroupBy.shift`
 
             Parameter ``freq`` is unsupported.
         """

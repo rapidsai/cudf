@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,10 +15,10 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/iterator>
+#include <cuda/stream>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -27,7 +27,7 @@ namespace detail {
 // Convert strings column to boolean column
 std::unique_ptr<column> to_booleans(strings_column_view const& input,
                                     string_scalar const& true_string,
-                                    rmm::cuda_stream_view stream,
+                                    cuda::stream_ref stream,
                                     rmm::device_async_resource_ref mr)
 {
   size_type strings_count = input.size();
@@ -70,7 +70,7 @@ std::unique_ptr<column> to_booleans(strings_column_view const& input,
 // external API
 std::unique_ptr<column> to_booleans(strings_column_view const& input,
                                     string_scalar const& true_string,
-                                    rmm::cuda_stream_view stream,
+                                    cuda::stream_ref stream,
                                     rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -109,7 +109,7 @@ struct from_booleans_fn {
 std::unique_ptr<column> from_booleans(column_view const& booleans,
                                       string_scalar const& true_string,
                                       string_scalar const& false_string,
-                                      rmm::cuda_stream_view stream,
+                                      cuda::stream_ref stream,
                                       rmm::device_async_resource_ref mr)
 {
   size_type strings_count = booleans.size();
@@ -127,7 +127,7 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
   auto d_column = *column;
 
   // copy null mask
-  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(booleans, stream, mr);
+  cuda::device_buffer<std::byte> null_mask = cudf::detail::copy_bitmask(booleans, stream, mr);
 
   auto [offsets, chars] =
     make_strings_children(from_booleans_fn{d_column, d_true, d_false}, strings_count, stream, mr);
@@ -146,7 +146,7 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
 std::unique_ptr<column> from_booleans(column_view const& booleans,
                                       string_scalar const& true_string,
                                       string_scalar const& false_string,
-                                      rmm::cuda_stream_view stream,
+                                      cuda::stream_ref stream,
                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();

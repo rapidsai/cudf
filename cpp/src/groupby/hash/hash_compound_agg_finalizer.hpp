@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -8,6 +8,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 namespace cudf::groupby::detail::hash {
 
@@ -18,15 +19,13 @@ struct hash_compound_agg_finalizer {
   column_view const col;
   data_type const input_type;
   cudf::detail::result_cache* const cache;
-  bitmask_type const* const d_row_bitmask;
-  rmm::cuda_stream_view const stream;
-  rmm::device_async_resource_ref const mr;
+  cuda::stream_ref const stream;
+  cudf::memory_resources const mr;
 
   hash_compound_agg_finalizer(column_view const& col,
                               cudf::detail::result_cache* cache,
-                              bitmask_type const* d_row_bitmask,
-                              rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr);
+                              cuda::stream_ref stream,
+                              cudf::memory_resources mr);
 
   // Default case: no-op
   template <aggregation::Kind k>

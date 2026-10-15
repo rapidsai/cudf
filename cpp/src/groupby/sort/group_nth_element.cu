@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,12 +15,12 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/buffer>
 #include <cuda/functional>
 #include <cuda/iterator>
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/stream>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
 #include <thrust/transform.h>
@@ -36,7 +36,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
                                           size_type num_groups,
                                           size_type n,
                                           null_policy null_handling,
-                                          rmm::cuda_stream_view stream,
+                                          cuda::stream_ref stream,
                                           rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
@@ -44,7 +44,8 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
 
   if (num_groups == 0) { return empty_like(values); }
 
-  auto nth_index = rmm::device_uvector<size_type>(num_groups, stream);
+  auto nth_index = cuda::device_buffer<size_type>(
+    stream, cudf::get_current_device_resource_ref(), num_groups, cuda::no_init);
   // TODO: replace with async version
   thrust::uninitialized_fill_n(
     rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
@@ -72,11 +73,11 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
     // Returns index of nth value.
     auto values_view = column_device_view::create(values, stream);
     auto bitmask_iterator =
-      thrust::make_transform_iterator(cudf::detail::make_validity_iterator(*values_view),
-                                      cuda::proclaim_return_type<size_type>([] __device__(auto b) {
-                                        return static_cast<size_type>(b);
-                                      }));
-    rmm::device_uvector<size_type> intra_group_index(values.size(), stream);
+      cuda::transform_iterator(cudf::detail::make_validity_iterator(*values_view),
+                               cuda::proclaim_return_type<size_type>(
+                                 [] __device__(auto b) { return static_cast<size_type>(b); }));
+    cuda::device_buffer<size_type> intra_group_index(
+      stream, cudf::get_current_device_resource_ref(), values.size(), cuda::no_init);
     // intra group index for valids only.
     thrust::exclusive_scan_by_key(
       rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
@@ -85,9 +86,10 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
       bitmask_iterator,
       intra_group_index.begin());
     // group_size to recalculate n if n<0
-    rmm::device_uvector<size_type> group_count = [&] {
+    cuda::device_buffer<size_type> group_count = [&] {
       if (n < 0) {
-        rmm::device_uvector<size_type> group_count(num_groups, stream);
+        cuda::device_buffer<size_type> group_count(
+          stream, cudf::get_current_device_resource_ref(), num_groups, cuda::no_init);
         cudf::detail::reduce_by_key_async(group_labels.begin(),
                                           group_labels.end(),
                                           bitmask_iterator,
@@ -97,7 +99,8 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
                                           stream);
         return group_count;
       } else {
-        return rmm::device_uvector<size_type>(0, stream);
+        return cuda::device_buffer<size_type>(
+          stream, cudf::get_current_device_resource_ref(), 0, cuda::no_init);
       }
     }();
     // gather the valid index == n
@@ -123,7 +126,9 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
                                            cudf::negative_index_policy::NOT_ALLOWED,
                                            stream,
                                            mr);
-  if (!output_table->get_column(0).has_nulls()) output_table->get_column(0).set_null_mask({}, 0);
+  if (!output_table->get_column(0).has_nulls())
+    output_table->get_column(0).set_null_mask(
+      cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED), 0);
   return std::make_unique<column>(std::move(output_table->get_column(0)));
 }
 }  // namespace detail

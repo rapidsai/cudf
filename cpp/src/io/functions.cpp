@@ -6,7 +6,6 @@
 #include "io/orc/orc.hpp"
 #include "io/parquet/reader_impl_helpers.hpp"
 
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/getenv_or.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
@@ -33,6 +32,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <ranges>
 #include <utility>
 
 namespace cudf::io {
@@ -67,7 +67,7 @@ compression_type infer_compression_type(compression_type compression, source_inf
   if (ext == "gz") { return compression_type::GZIP; }
   if (ext == "zip") { return compression_type::ZIP; }
   if (ext == "bz2") { return compression_type::BZIP2; }
-  if (ext == "zstd") { return compression_type::ZSTD; }
+  if (ext == "zst" or ext == "zstd") { return compression_type::ZSTD; }
   if (ext == "sz") { return compression_type::SNAPPY; }
   if (ext == "xz") { return compression_type::XZ; }
 
@@ -175,10 +175,8 @@ std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info 
             return cudf::io::datasource::create(fs.path, offset, max_size_estimate, fs.size);
           }));
         }
-        std::transform(
-          source_tasks.begin(), source_tasks.end(), std::back_inserter(sources), [](auto& task) {
-            return task.get();
-          });
+        std::ranges::transform(
+          source_tasks, std::back_inserter(sources), [](auto& task) { return task.get(); });
       } else {
         for (auto const& fs : info.filepath_sources()) {
           sources.emplace_back(
@@ -216,7 +214,7 @@ std::vector<std::unique_ptr<data_sink>> make_datasinks(sink_info const& info)
 }  // namespace
 
 table_with_metadata read_avro(avro_reader_options const& options,
-                              rmm::cuda_stream_view stream,
+                              cuda::stream_ref stream,
                               rmm::device_async_resource_ref mr)
 {
   namespace avro = cudf::io::detail::avro;
@@ -231,7 +229,7 @@ table_with_metadata read_avro(avro_reader_options const& options,
 }
 
 table_with_metadata read_json(json_reader_options options,
-                              rmm::cuda_stream_view stream,
+                              cuda::stream_ref stream,
                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -246,7 +244,7 @@ table_with_metadata read_json(json_reader_options options,
 }
 
 json_reader_result read_json_with_diagnostics(json_reader_options options,
-                                              rmm::cuda_stream_view stream,
+                                              cuda::stream_ref stream,
                                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -261,7 +259,7 @@ json_reader_result read_json_with_diagnostics(json_reader_options options,
 }
 
 json_reader_result_with_row_diagnostics read_json_with_row_diagnostics(
-  json_reader_options options, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+  json_reader_options options, cuda::stream_ref stream, rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -274,7 +272,7 @@ json_reader_result_with_row_diagnostics read_json_with_row_diagnostics(
   return json::detail::read_json_with_row_diagnostics(datasources, options, stream, mr);
 }
 
-void write_json(json_writer_options const& options, rmm::cuda_stream_view stream)
+void write_json(json_writer_options const& options, cuda::stream_ref stream)
 {
   auto sinks = make_datasinks(options.get_sink());
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for JSON writing");
@@ -287,7 +285,7 @@ void write_json(json_writer_options const& options, rmm::cuda_stream_view stream
 }
 
 table_with_metadata read_csv(csv_reader_options options,
-                             rmm::cuda_stream_view stream,
+                             cuda::stream_ref stream,
                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -308,7 +306,7 @@ table_with_metadata read_csv(csv_reader_options options,
 }
 
 // Freeform API wraps the detail writer class API
-void write_csv(csv_writer_options const& options, rmm::cuda_stream_view stream)
+void write_csv(csv_writer_options const& options, cuda::stream_ref stream)
 {
   using namespace cudf::io::detail;
 
@@ -345,8 +343,7 @@ bool is_supported_write_orc(compression_type compression)
           detail::is_compression_supported(compression));
 }
 
-raw_orc_statistics read_raw_orc_statistics(source_info const& src_info,
-                                           rmm::cuda_stream_view stream)
+raw_orc_statistics read_raw_orc_statistics(source_info const& src_info, cuda::stream_ref stream)
 {
   // Get source to read statistics from
   std::unique_ptr<datasource> source;
@@ -419,7 +416,7 @@ column_statistics::column_statistics(orc::detail::column_statistics&& cs)
 }
 
 parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info,
-                                                 rmm::cuda_stream_view stream)
+                                                 cuda::stream_ref stream)
 {
   auto const raw_stats = read_raw_orc_statistics(src_info, stream);
 
@@ -434,17 +431,13 @@ parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info,
     return column_statistics(std::move(stats_internal));
   };
 
-  std::transform(raw_stats.file_stats.cbegin(),
-                 raw_stats.file_stats.cend(),
-                 std::back_inserter(result.file_stats),
-                 parse_column_statistics);
+  std::ranges::transform(
+    raw_stats.file_stats, std::back_inserter(result.file_stats), parse_column_statistics);
 
   for (auto const& raw_stripe_stats : raw_stats.stripes_stats) {
     result.stripes_stats.emplace_back();
-    std::transform(raw_stripe_stats.cbegin(),
-                   raw_stripe_stats.cend(),
-                   std::back_inserter(result.stripes_stats.back()),
-                   parse_column_statistics);
+    std::ranges::transform(
+      raw_stripe_stats, std::back_inserter(result.stripes_stats.back()), parse_column_statistics);
   }
 
   return result;
@@ -457,22 +450,22 @@ orc_column_schema make_orc_column_schema(host_span<orc::detail::SchemaType const
   auto const& orc_col_schema = orc_schema[column_id];
   std::vector<orc_column_schema> children;
   children.reserve(orc_col_schema.subtypes.size());
-  std::transform(
-    orc_col_schema.subtypes.cbegin(),
-    orc_col_schema.subtypes.cend(),
-    cudf::detail::make_counting_transform_iterator(0,
-                                                   [&names = orc_col_schema.fieldNames](size_t i) {
-                                                     return i < names.size() ? names[i]
-                                                                             : std::string{};
-                                                   }),
-    std::back_inserter(children),
-    [&](auto& type, auto name) { return make_orc_column_schema(orc_schema, type, name); });
+  // A subtype without a matching entry in `fieldNames` is unnamed
+  auto const field_names =
+    std::views::iota(std::size_t{0}, orc_col_schema.subtypes.size()) |
+    std::views::transform([&names = orc_col_schema.fieldNames](std::size_t i) {
+      return i < names.size() ? names[i] : std::string{};
+    });
+  std::ranges::transform(
+    orc_col_schema.subtypes, field_names, std::back_inserter(children), [&](auto& type, auto name) {
+      return make_orc_column_schema(orc_schema, type, name);
+    });
 
   return {std::move(column_name), orc_schema[column_id].kind, std::move(children)};
 }
 };  // namespace
 
-orc_metadata read_orc_metadata(source_info const& src_info, rmm::cuda_stream_view stream)
+orc_metadata read_orc_metadata(source_info const& src_info, cuda::stream_ref stream)
 {
   auto sources = make_datasources(src_info);
 
@@ -488,7 +481,7 @@ orc_metadata read_orc_metadata(source_info const& src_info, rmm::cuda_stream_vie
  * @copydoc cudf::io::read_orc
  */
 table_with_metadata read_orc(orc_reader_options const& options,
-                             rmm::cuda_stream_view stream,
+                             cuda::stream_ref stream,
                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -501,7 +494,7 @@ table_with_metadata read_orc(orc_reader_options const& options,
 /**
  * @copydoc cudf::io::write_orc
  */
-void write_orc(orc_writer_options const& options, rmm::cuda_stream_view stream)
+void write_orc(orc_writer_options const& options, cuda::stream_ref stream)
 {
   namespace io_detail = cudf::io::detail;
 
@@ -519,7 +512,7 @@ chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
                                        std::size_t pass_read_limit,
                                        size_type output_row_granularity,
                                        orc_reader_options const& options,
-                                       rmm::cuda_stream_view stream,
+                                       cuda::stream_ref stream,
                                        rmm::device_async_resource_ref mr)
   : reader{std::make_unique<orc::detail::chunked_reader>(chunk_read_limit,
                                                          pass_read_limit,
@@ -534,7 +527,7 @@ chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
 chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
                                        std::size_t pass_read_limit,
                                        orc_reader_options const& options,
-                                       rmm::cuda_stream_view stream,
+                                       cuda::stream_ref stream,
                                        rmm::device_async_resource_ref mr)
   : reader{std::make_unique<orc::detail::chunked_reader>(chunk_read_limit,
                                                          pass_read_limit,
@@ -547,7 +540,7 @@ chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
 
 chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
                                        orc_reader_options const& options,
-                                       rmm::cuda_stream_view stream,
+                                       cuda::stream_ref stream,
                                        rmm::device_async_resource_ref mr)
   : chunked_orc_reader(chunk_read_limit, 0UL, options, stream, mr)
 {
@@ -583,7 +576,7 @@ orc_chunked_writer::~orc_chunked_writer() = default;
  * @copydoc cudf::io::orc_chunked_writer::orc_chunked_writer
  */
 orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& options,
-                                       rmm::cuda_stream_view stream)
+                                       cuda::stream_ref stream)
 {
   namespace io_detail = cudf::io::detail;
 
@@ -637,13 +630,13 @@ bool is_supported_write_parquet(compression_type compression)
     return true;
   }
 
-  return ((compression == compression_type::LZ4 or compression == compression_type::SNAPPY or
-           compression == compression_type::ZSTD) and
+  return ((compression == compression_type::GZIP or compression == compression_type::LZ4 or
+           compression == compression_type::SNAPPY or compression == compression_type::ZSTD) and
           detail::is_compression_supported(compression));
 }
 
 table_with_metadata read_parquet(parquet_reader_options const& options,
-                                 rmm::cuda_stream_view stream,
+                                 cuda::stream_ref stream,
                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -658,7 +651,7 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
 table_with_metadata read_parquet(std::vector<std::unique_ptr<cudf::io::datasource>>&& datasources,
                                  std::vector<parquet::FileMetaData>&& parquet_metadatas,
                                  parquet_reader_options const& options,
-                                 rmm::cuda_stream_view stream,
+                                 cuda::stream_ref stream,
                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -684,6 +677,23 @@ std::vector<parquet::FileMetaData> read_parquet_footers(
   return detail_parquet::read_parquet_footers(sources);
 }
 
+std::unique_ptr<table> read_parquet_column_chunk_bounds(
+  std::span<parquet::FileMetaData const> parquet_metadatas,
+  std::span<std::string const> column_names,
+  cuda::stream_ref stream,
+  cudf::memory_resources mr)
+{
+  CUDF_FUNC_RANGE();
+
+  auto metadata = detail_parquet::aggregate_reader_metadata{
+    std::vector<parquet::FileMetaData>{parquet_metadatas.begin(), parquet_metadatas.end()},
+    false,  // use_arrow_schema
+    false   // has_cols_from_mismatched_srcs
+  };
+
+  return metadata.read_column_chunk_bounds(column_names, stream, mr.get_output_mr());
+}
+
 /**
  * @copydoc cudf::io::merge_row_group_metadata
  */
@@ -704,8 +714,7 @@ table_input_metadata::table_input_metadata(table_view const& table)
     return col_meta;
   };
 
-  std::transform(
-    table.begin(), table.end(), std::back_inserter(this->column_metadata), get_children);
+  std::ranges::transform(table, std::back_inserter(this->column_metadata), get_children);
 }
 
 table_input_metadata::table_input_metadata(table_metadata const& metadata)
@@ -719,22 +728,18 @@ table_input_metadata::table_input_metadata(table_metadata const& metadata)
       if (name.is_nullable.has_value()) { col_meta.set_nullability(name.is_nullable.value()); }
       if (name.is_binary.value_or(false)) { col_meta.set_output_as_binary(true); }
       if (name.type_length.has_value()) { col_meta.set_type_length(name.type_length.value()); }
-      std::transform(name.children.begin(),
-                     name.children.end(),
-                     std::back_inserter(col_meta.children),
-                     process_node);
+      std::ranges::transform(name.children, std::back_inserter(col_meta.children), process_node);
       return col_meta;
     };
 
-  std::transform(
-    names.begin(), names.end(), std::back_inserter(this->column_metadata), process_node);
+  std::ranges::transform(names, std::back_inserter(this->column_metadata), process_node);
 }
 
 /**
  * @copydoc cudf::io::write_parquet
  */
 std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const& options,
-                                                    rmm::cuda_stream_view stream)
+                                                    cuda::stream_ref stream)
 {
   namespace io_detail = cudf::io::detail;
 
@@ -756,7 +761,7 @@ chunked_parquet_reader::chunked_parquet_reader() = default;
  */
 chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
                                                parquet_reader_options const& options,
-                                               rmm::cuda_stream_view stream,
+                                               cuda::stream_ref stream,
                                                rmm::device_async_resource_ref mr)
   : reader{std::make_unique<detail_parquet::chunked_reader>(
       chunk_read_limit,
@@ -777,7 +782,7 @@ chunked_parquet_reader::chunked_parquet_reader(
   std::vector<std::unique_ptr<cudf::io::datasource>>&& datasources,
   std::vector<parquet::FileMetaData>&& parquet_metadatas,
   parquet_reader_options const& options,
-  rmm::cuda_stream_view stream,
+  cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
   : reader{std::make_unique<detail_parquet::chunked_reader>(
       chunk_read_limit,
@@ -796,7 +801,7 @@ chunked_parquet_reader::chunked_parquet_reader(
 chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
                                                std::size_t pass_read_limit,
                                                parquet_reader_options const& options,
-                                               rmm::cuda_stream_view stream,
+                                               cuda::stream_ref stream,
                                                rmm::device_async_resource_ref mr)
   : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
                                                             pass_read_limit,
@@ -817,7 +822,7 @@ chunked_parquet_reader::chunked_parquet_reader(
   std::vector<std::unique_ptr<cudf::io::datasource>>&& datasources,
   std::vector<parquet::FileMetaData>&& parquet_metadatas,
   parquet_reader_options const& options,
-  rmm::cuda_stream_view stream,
+  cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
   : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
                                                             pass_read_limit,
@@ -860,7 +865,7 @@ chunked_parquet_writer::chunked_parquet_writer() = default;
  * @copydoc cudf::io::chunked_parquet_writer::chunked_parquet_writer
  */
 chunked_parquet_writer::chunked_parquet_writer(chunked_parquet_writer_options const& options,
-                                               rmm::cuda_stream_view stream)
+                                               cuda::stream_ref stream)
 {
   namespace io_detail = cudf::io::detail;
 
@@ -1285,16 +1290,16 @@ namespace experimental {
 
 // Forward declarations for detail functions
 namespace detail {
-void write_cudftable(data_sink* sink, table_view const& input, rmm::cuda_stream_view stream);
+void write_cudftable(data_sink* sink, table_view const& input, cuda::stream_ref stream);
 packed_table read_cudftable(datasource* source,
-                            rmm::cuda_stream_view stream,
+                            cuda::stream_ref stream,
                             rmm::device_async_resource_ref mr);
 }  // namespace detail
 
 /**
  * @copydoc cudf::io::experimental::write_cudftable
  */
-void write_cudftable(cudftable_writer_options const& options, rmm::cuda_stream_view stream)
+void write_cudftable(cudftable_writer_options const& options, cuda::stream_ref stream)
 {
   CUDF_FUNC_RANGE();
 
@@ -1308,7 +1313,7 @@ void write_cudftable(cudftable_writer_options const& options, rmm::cuda_stream_v
  * @copydoc cudf::io::experimental::read_cudftable
  */
 packed_table read_cudftable(cudftable_reader_options const& options,
-                            rmm::cuda_stream_view stream,
+                            cuda::stream_ref stream,
                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();

@@ -18,15 +18,21 @@ LIBCUDF_STREAMING_WHEELHOUSE=$(rapids-download-from-github "$(rapids-artifact-na
 CUDF_STREAMING_WHEELHOUSE=$(rapids-download-from-github "$(rapids-artifact-name wheel_python cudf-streaming cudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
 
 # generate constraints (possibly pinning to oldest support versions of dependencies)
-rapids-generate-pip-constraints py_test_cudf_polars "${PIP_CONSTRAINT}"
+rapids-generate-pip-constraints py_test_cudf_polars "${PIP_CONSTRAINT}" constraints
 
 read -r -a VERSIONS <<< "$(python ci/utils/get_matrix_values.py dependencies.yaml test_cudf_polars_compat polars_compat_version)"
-
-if [[ "${POLARS_VERSIONS:-all}" == "endpoints" ]] && [[ ${#VERSIONS[@]} -ge 2 ]]; then
-    VERSIONS=("${VERSIONS[0]}" "${VERSIONS[-1]}")
-fi
-
 LATEST_VERSION="${VERSIONS[-1]}"
+
+case "${POLARS_VERSIONS:-all}" in
+    all) ;;
+    earliest) VERSIONS=("${VERSIONS[0]}") ;;
+    latest) VERSIONS=("${VERSIONS[-1]}") ;;
+    endpoints) VERSIONS=("${VERSIONS[0]}" "${VERSIONS[-1]}") ;;
+    *)
+        echo "Unsupported POLARS_VERSIONS=${POLARS_VERSIONS}" >&2
+        exit 1
+        ;;
+esac
 
 # shellcheck disable=SC2317
 function set_exitcode()
@@ -91,13 +97,11 @@ for version in "${VERSIONS[@]}"; do
 
     # Fail fast (-x) rather than trying to continue because failed tests pollute the state
     ./ci/run_cudf_polars_pytests.sh \
-        -vv \
         "${COVERAGE_ARGS[@]}" \
         --numprocesses=4 \
         --dist=worksteal \
-        --durations 10 --durations-min 10 \
+        --durations=50 --durations-min=1 \
         -x \
-        -ra \
         --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-${version}.xml"
 
     test_exitcode=$?

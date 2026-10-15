@@ -8,10 +8,10 @@
 #include <cudf/groupby.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
+#include <cuda/stream>
 
 #include <memory>
 
@@ -37,7 +37,8 @@ namespace cudf::groupby::detail::hash {
  * @param d_row_hash Device row hasher
  * @param cache Dense aggregation results
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned table
+ * @param mr Device memory resources used for the returned keys, aggregation results, and temporary
+ * storage
  * @return Table of unique keys
  */
 template <typename Equal, typename Hash>
@@ -47,6 +48,6 @@ std::unique_ptr<cudf::table> compute_groupby(table_view const& keys,
                                              Equal const& d_row_equal,
                                              Hash const& d_row_hash,
                                              cudf::detail::result_cache* cache,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr);
+                                             cuda::stream_ref stream,
+                                             cudf::memory_resources mr);
 }  // namespace cudf::groupby::detail::hash
