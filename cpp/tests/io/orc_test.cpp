@@ -668,6 +668,10 @@ constexpr int64_t phoenix_offset      = cudf::duration_s{cudf::duration_h{-7}}.c
 constexpr int64_t kolkata_offset      = cudf::duration_s{cudf::duration_m{5 * 60 + 30}}.count();
 constexpr int64_t kathmandu_offset    = cudf::duration_s{cudf::duration_m{5 * 60 + 45}}.count();
 
+// UTC instants falling in New York's standard and daylight saving periods, respectively
+constexpr cudf::timestamp_s::rep during_est = 1421323200;  // 2015-01-15T12:00:00Z
+constexpr cudf::timestamp_s::rep during_edt = 1435752000;  // 2015-07-01T12:00:00Z
+
 std::vector<char> write_orc_with_timezone(cudf::table_view const& table,
                                           std::optional<std::string> const& timezone)
 {
@@ -793,9 +797,6 @@ TEST_F(OrcWriterTest, WriterTimezoneFractionalOffset)
 
 TEST_F(OrcWriterTest, WriterTimezoneUsesFixedEpochOffsetAcrossDst)
 {
-  // UTC instants falling in New York's standard and daylight saving periods, respectively
-  auto const during_est = cudf::timestamp_s::rep{1421323200};  // 2015-01-15T12:00:00Z
-  auto const during_edt = cudf::timestamp_s::rep{1435752000};  // 2015-07-01T12:00:00Z
   auto const timestamps =
     column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{during_est, during_edt};
 
@@ -837,8 +838,6 @@ TEST_F(OrcWriterTest, WriterTimezoneStatistics)
   // ones `WriterTimezoneUsesFixedEpochOffsetAcrossDst` reads back. The bounds take different
   // offsets where one of them falls in daylight saving time, which is what shifting the reduced
   // bounds by a single offset would get wrong.
-  auto const during_est = cudf::timestamp_s::rep{1421323200};  // 2015-01-15T12:00:00Z
-  auto const during_edt = cudf::timestamp_s::rep{1435752000};  // 2015-07-01T12:00:00Z
   auto const timestamps =
     column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{during_est, during_edt};
   // A timestamp column nested in a list has a row count of its own, unrelated to the table's
