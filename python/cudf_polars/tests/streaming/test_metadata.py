@@ -25,6 +25,7 @@ from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import (
     GroupBy,
+    HConcat,
     HStack,
     MapFunction,
     Projection,
@@ -47,6 +48,8 @@ from cudf_polars.streaming.actor_graph.utils import (
     _leading_order_keys,
     maybe_remap_partitioning,
 )
+from cudf_polars.streaming.base import StatsCollector
+from cudf_polars.streaming.parallel import lower_ir_graph
 from cudf_polars.utils.config import ConfigOptions
 from cudf_polars.utils.dtypes import make_empty_column
 from cudf_polars.utils.versions import POLARS_VERSION_LT_138
@@ -451,6 +454,50 @@ def test_remap_partitioning_hstack_appends_preserves_keys(streaming_engine) -> N
     assert result.inter_rank.column_indices == (0, 1)
     assert result.inter_rank.modulus == 8
     assert result.local == "inherit"
+
+
+def test_decomposed_select_preserves_row_ordering_metadata(
+    spmd_engine_factory,
+) -> None:
+    engine = spmd_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=2,
+            dynamic_planning=None,
+            fallback_mode="raise",
+            raise_on_fail=True,
+        )
+    )
+    q = (
+        pl.LazyFrame({"a": [3, 1, 2], "b": [6, 4, 5]})
+        .sort("a")
+        .select("a", (pl.col("b") - pl.col("b").mean()).alias("b_centered"))
+    )
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    lowered = lower_ir_graph(
+        ir,
+        ConfigOptions.from_polars_engine(engine),
+        StatsCollector(),
+    ).lowered
+    hconcats = [node for node in traversal([lowered]) if isinstance(node, HConcat)]
+    assert hconcats
+    assert all(node.streaming_safe for node in hconcats)
+
+    metadata_collector = evaluate_logical_plan(
+        ir, ConfigOptions.from_polars_engine(engine), collect_metadata=True
+    )[1]
+
+    assert metadata_collector is not None
+    assert len(metadata_collector) == 1
+    metadata = metadata_collector[0]
+    scheme = metadata.partitioning.inter_rank
+    assert isinstance(scheme, OrderScheme)
+
+    output_cols = list(ir.schema.keys())
+    assert [
+        tuple(key.column_index for key in ordering.keys)
+        for ordering in scheme.orderings
+    ] == [(output_cols.index("a"),)]
+    assert all(ordering.locally_ordered for ordering in scheme.orderings)
 
 
 def test_remap_partitioning_select_drops_key(streaming_engine) -> None:
