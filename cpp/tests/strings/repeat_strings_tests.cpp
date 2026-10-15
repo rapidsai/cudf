@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,6 +13,10 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/utilities.hpp>
 
+#include <rmm/mr/statistics_resource_adaptor.hpp>
+
+#include <cuda/stream>
+
 using namespace cudf::test::iterators;
 
 namespace {
@@ -24,6 +28,26 @@ constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_leve
 }  // namespace
 
 struct RepeatStringsTest : public cudf::test::BaseFixture {};
+
+TEST_F(RepeatStringsTest, EmptyCharsPreserveStreamAndResource)
+{
+  int device{};
+  CUDF_CUDA_TRY(cudaGetDevice(&device));
+  cuda::stream stream{cuda::device_ref{device}};
+  auto output_mr  = rmm::mr::statistics_resource_adaptor{mr()};
+  auto output_ref = rmm::device_async_resource_ref{output_mr};
+  cudf::test::strings_column_wrapper input({"abc", ""}, {true, false}, stream);
+  for (auto const times : {0, -1}) {
+    auto result =
+      cudf::strings::repeat_strings(cudf::strings_column_view(input), times, stream, output_ref);
+    EXPECT_EQ(result->size(), 2);
+    EXPECT_EQ(result->null_count(), 1);
+    auto data = result->release().data;
+    EXPECT_EQ(data->size(), 0);
+    EXPECT_EQ(data->stream().get(), stream.get());
+    EXPECT_TRUE(data->memory_resource() == output_ref);
+  }
+}
 
 template <typename T>
 struct RepeatStringsTypedTest : public cudf::test::BaseFixture {};

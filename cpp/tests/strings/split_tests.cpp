@@ -18,11 +18,41 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 
+#include <rmm/mr/statistics_resource_adaptor.hpp>
+
 #include <cuda/iterator>
+#include <cuda/stream>
 
 #include <vector>
 
 struct StringsSplitTest : public cudf::test::BaseFixture {};
+
+TEST_F(StringsSplitTest, AllNullCharsPreserveStreamAndResource)
+{
+  int device{};
+  CUDF_CUDA_TRY(cudaGetDevice(&device));
+  cuda::stream stream{cuda::device_ref{device}};
+  auto output_mr  = rmm::mr::statistics_resource_adaptor{mr()};
+  auto output_ref = rmm::device_async_resource_ref{output_mr};
+  cudf::test::strings_column_wrapper input({"", ""}, {false, false}, stream);
+  for (bool const reverse : {false, true}) {
+    for (auto const delimiter : {"", "-"}) {
+      auto separator = cudf::string_scalar(delimiter, true, stream, mr());
+      auto result    = reverse
+                         ? cudf::strings::rsplit(
+                          cudf::strings_column_view(input), separator, -1, stream, output_ref)
+                         : cudf::strings::split(
+                          cudf::strings_column_view(input), separator, -1, stream, output_ref);
+      ASSERT_EQ(result->num_columns(), 1);
+      EXPECT_EQ(result->num_rows(), 2);
+      EXPECT_EQ(result->get_column(0).null_count(), 2);
+      auto data = result->get_column(0).release().data;
+      EXPECT_EQ(data->size(), 0);
+      EXPECT_EQ(data->stream().get(), stream.get());
+      EXPECT_TRUE(data->memory_resource() == output_ref);
+    }
+  }
+}
 
 TEST_F(StringsSplitTest, WideExplicitDelimiter)
 {
