@@ -1317,8 +1317,9 @@ wall_clock_columns make_wall_clock_columns(orc_table_view const& orc_table,
   auto views =
     cudf::detail::make_empty_host_vector<column_device_view>(orc_table.num_columns(), stream);
 
-  if (not timezone.is_utc()) {
-    auto const d_transitions = table_device_view::create(timezone.ut_offsets(stream), stream);
+  // Empty when writing UTC, which leaves the input instants on the wall clock already
+  if (auto const transitions = timezone.ut_offsets(stream); transitions.num_rows() != 0) {
+    auto const d_transitions = table_device_view::create(transitions, stream);
 
     for (auto const& column : orc_table.columns) {
       if (column.orc_kind() != TypeKind::TIMESTAMP) { continue; }

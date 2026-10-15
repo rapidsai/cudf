@@ -211,14 +211,12 @@ struct writer_timezone {
   // `name`. Equal to `orc_utc_epoch` when writing UTC.
   duration_s const base_epoch;
 
-  // Writing UTC leaves the input instants on the wall clock, so nothing needs shifting
-  [[nodiscard]] bool is_utc() const noexcept { return name == "UTC"; }
-
   /**
    * @brief Returns this timezone's offsets from UT over time, reading them on the first call.
    *
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return Transition table, as returned by `make_timezone_transition_table`
+   * @return Transition table, as returned by `make_timezone_transition_table`; empty when writing
+   * UTC, where the wall clock and the input instants coincide
    */
   table_view ut_offsets(cuda::stream_ref stream) const;
 
