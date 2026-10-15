@@ -13,6 +13,10 @@ conda config --set channel_priority strict
 
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_cpp libcudf cudf --cuda "$RAPIDS_CUDA_VERSION")")
+
+# Unpatched MPF nightlies fail on empty buffers with new RMM; remove after rapidsai/rapidsmpf#1261 ships.
+MPF_CPP_CHANNEL=$(rapids-get-pr-artifact rapidsmpf 1261 cpp conda f06149945f934b7be925f2ad2db100767eaec25f)
+MPF_PYTHON_CHANNEL=$(rapids-get-pr-artifact rapidsmpf 1261 python conda f06149945f934b7be925f2ad2db100767eaec25f)
 PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_python cudf cudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
 PYTHON_NOARCH_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_python cudf cudf --pure --arch any --cuda "$RAPIDS_CUDA_VERSION")")
 
@@ -33,6 +37,8 @@ if [[ -n "${CUDF_EXTRA_DEPENDENCY_MATRIX:-}" ]]; then
 fi
 
 CMD="${CMD} \
+  --prepend-channel \"${MPF_CPP_CHANNEL}\" \
+  --prepend-channel \"${MPF_PYTHON_CHANNEL}\" \
   --prepend-channel \"${CPP_CHANNEL}\" \
   --prepend-channel \"${PYTHON_CHANNEL}\" \
   --prepend-channel \"${PYTHON_NOARCH_CHANNEL}\" \

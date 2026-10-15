@@ -12,6 +12,9 @@ conda config --set channel_priority strict
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_cpp libcudf cudf --cuda "$RAPIDS_CUDA_VERSION")")
 
+# Unpatched MPF nightlies fail on empty buffers with new RMM; remove after rapidsai/rapidsmpf#1261 ships.
+MPF_CPP_CHANNEL=$(rapids-get-pr-artifact rapidsmpf 1261 cpp conda f06149945f934b7be925f2ad2db100767eaec25f)
+
 rapids-logger "Generate C++ testing dependencies"
 
 ENV_YAML_DIR="$(mktemp -d)"
@@ -19,6 +22,7 @@ ENV_YAML_DIR="$(mktemp -d)"
 rapids-dependency-file-generator \
   --output conda \
   --file-key test_cpp \
+  --prepend-channel "${MPF_CPP_CHANNEL}" \
   --prepend-channel "${CPP_CHANNEL}" \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee "${ENV_YAML_DIR}/env.yaml"
 
