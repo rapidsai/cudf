@@ -205,78 +205,14 @@ class ChunkStore:
             self._store.extract(mid=mid)
         self._mids.clear()
 
-    def insert(self, msg: Message) -> int:
-        """Insert a message and return its storage ID."""
-        mid = self._store.insert(msg)
-        self._mids.append(mid)
-        return mid
+    def insert(self, msg: Message) -> None:
+        """Insert a message into the store."""
+        self._mids.append(self._store.insert(msg))
 
     def __iter__(self) -> Generator[Message, None, None]:
         """Yield messages in insertion order, draining the store."""
         while self._mids:
             yield self._store.extract(mid=self._mids.popleft())
-
-
-class RandomAccessChunkStore(ChunkStore):
-    """Spillable message store supporting access and extraction by ID."""
-
-    def __init__(self, ctx: Context) -> None:
-        super().__init__(ctx)
-        self._ctx = ctx
-        self._physical_mids: dict[int, int] = {}
-        self._next_mid = 0
-
-    def insert(self, msg: Message) -> int:
-        """Insert a message and return its stable storage ID."""
-        mid = self._next_mid
-        self._next_mid += 1
-        self._mids.append(mid)
-        self._physical_mids[mid] = self._store.insert(msg)
-        return mid
-
-    def clear(self) -> None:
-        """Discard all stored messages."""
-        for mid in self._mids:
-            self._store.extract(mid=self._physical_mids[mid])
-        self._mids.clear()
-        self._physical_mids.clear()
-
-    def extract(self, mid: int) -> Message:
-        """Return and remove one stored message."""
-        if self._mids[0] == mid:
-            self._mids.popleft()
-        else:
-            self._mids.remove(mid)
-        return self._store.extract(mid=self._physical_mids.pop(mid))
-
-    def __iter__(self) -> Generator[Message, None, None]:
-        """Yield messages in insertion order, draining the store."""
-        while self._mids:
-            yield self.extract(self._mids[0])
-
-    @contextlib.asynccontextmanager
-    async def borrow(self, mid: int) -> AsyncIterator[TableChunk]:
-        """Make a stored table available temporarily without consuming it."""
-        msg = self._store.extract(mid=self._physical_mids[mid])
-        sequence_number = msg.sequence_number
-        try:
-            chunk = TableChunk.from_message(msg, br=self._ctx.br())
-        except BaseException:
-            self._physical_mids[mid] = self._store.insert(msg)
-            raise
-        try:
-            chunk, extra = await make_table_chunks_available_or_wait(
-                self._ctx,
-                chunk,
-                reserve_extra=0,
-                net_memory_delta=0,
-            )
-            with opaque_memory_usage(extra):
-                yield chunk
-        finally:
-            self._physical_mids[mid] = self._store.insert(
-                Message(sequence_number, chunk)
-            )
 
 
 @contextlib.contextmanager

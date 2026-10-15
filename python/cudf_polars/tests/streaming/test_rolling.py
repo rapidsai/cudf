@@ -252,12 +252,13 @@ def test_fixed_size_rolling_mean(engine, center) -> None:
 
 
 @pytest.mark.parametrize(
-    "kind,offset",
+    "kind,offset,closed",
     [
-        ("range", "-4i"),
-        pytest.param("range", "0i", marks=POLARS_LT_136_EMPTY_SUM_XFAIL),
+        *(("range", "-4i", closed) for closed in ("left", "right", "both", "none")),
+        pytest.param("range", "0i", "right", marks=POLARS_LT_136_EMPTY_SUM_XFAIL),
         pytest.param(
             "count",
+            None,
             None,
             marks=pytest.mark.skipif(
                 not hasattr(plrs._expr_nodes, "RollingFunction"),
@@ -265,13 +266,20 @@ def test_fixed_size_rolling_mean(engine, center) -> None:
             ),
         ),
     ],
-    ids=["range-trailing", "range-leading", "count"],
+    ids=[
+        "range-left",
+        "range-right",
+        "range-both",
+        "range-none",
+        "range-leading",
+        "count",
+    ],
 )
 @pytest.mark.engine_params(["dask", "ray"])
-def test_rolling_multirank(engine, tmp_path, kind, offset) -> None:
+def test_rolling_multirank(engine, tmp_path, kind, offset, closed) -> None:
     source = tmp_path / "rolling.parquet"
     _write_rolling_source(source)
-    _assert_rolling_result(engine, source, kind, offset)
+    _assert_rolling_result(engine, source, kind, offset, closed)
 
 
 def _write_rolling_source(source) -> None:
@@ -288,12 +296,12 @@ def _write_rolling_source(source) -> None:
     )
 
 
-def _assert_rolling_result(engine, source, kind, offset) -> None:
+def _assert_rolling_result(engine, source, kind, offset, closed="right") -> None:
     q = pl.scan_parquet(source)
     if kind == "range":
         q = (
             q.sort("orderby")
-            .rolling("orderby", period="4i", offset=offset)
+            .rolling("orderby", period="4i", offset=offset, closed=closed)
             .agg(pl.col("values").sum())
         )
     else:
