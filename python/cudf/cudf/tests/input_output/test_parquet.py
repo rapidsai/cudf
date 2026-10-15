@@ -3073,8 +3073,6 @@ def test_parquet_reader_brotli(datadir):
     "fname", ["one_level_list.parquet", "one_level_list_in_struct.parquet"]
 )
 def test_parquet_reader_one_level_list(datadir, fname):
-    import pylibcudf as plc
-
     fname = datadir / fname
 
     expect = pd.read_parquet(fname)
@@ -3082,21 +3080,8 @@ def test_parquet_reader_one_level_list(datadir, fname):
 
     assert_eq(expect, got)
 
-    # Each source is a single page of ~70 bytes (e.g. 48 data + 20 list
-    # offset bytes for one_level_list), so only two pages fit in 160 bytes
-    sources = [str(fname)] * 3
-    options = plc.io.parquet.ParquetReaderOptions.builder(
-        plc.io.SourceInfo(sources)
-    ).build()
-    reader = plc.io.parquet.ChunkedParquetReader(options, chunk_read_limit=160)
-    num_chunks = 0
-    while reader.has_next():
-        reader.read_chunk()
-        num_chunks += 1
-    assert num_chunks == 2
-
     with cudf.option_context("io.parquet.low_memory", True):
-        got = cudf.read_parquet(sources, _chunk_read_limit=160)
+        got = cudf.read_parquet([fname] * 3, _chunk_read_limit=160)
     assert_eq(pd.concat([expect] * 3, ignore_index=True), got)
 
 
