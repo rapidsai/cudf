@@ -287,8 +287,10 @@ class stats_caster_base {
         auto [d_chars, d_offsets, _] = make_strings_children(val, chars, stream, mr);
         auto null_mask_buffer =
           cudf::create_null_mask(val.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
-        CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-          null_mask_buffer.data(), null_mask.data(), null_mask_buffer.size(), stream));
+        CUDF_CUDA_TRY(cudf::detail::memcpy_async(null_mask_buffer.data(),
+                                                 null_mask.data(),
+                                                 null_mask_buffer.size() * sizeof(bitmask_type),
+                                                 stream));
         stream.sync();
         return cudf::make_strings_column(
           val.size(),
@@ -303,8 +305,10 @@ class stats_caster_base {
       auto data = cudf::detail::make_device_uvector_async(val, stream, mr);
       auto null_mask_buffer =
         cudf::create_null_mask(val.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
-      CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-        null_mask_buffer.data(), null_mask.data(), null_mask_buffer.size(), stream));
+      CUDF_CUDA_TRY(cudf::detail::memcpy_async(null_mask_buffer.data(),
+                                               null_mask.data(),
+                                               null_mask_buffer.size() * sizeof(bitmask_type),
+                                               stream));
       stream.sync();
       return std::make_unique<column>(
         dtype, val.size(), data.release(), std::move(null_mask_buffer), null_count);
@@ -358,6 +362,13 @@ class stats_columns_collector final : public parquet_expression_simplifier {
     ast::literal const& literal) override;
 
  private:
+  /**
+   * @brief Collects the columns referenced by the simplified expression
+   *
+   * @param simplified_expr Simplified expression whose leaves are column references
+   */
+  void collect_surviving_predicates(ast::expression const& simplified_expr);
+
   thrust::host_vector<bool> _columns_mask;
 };
 

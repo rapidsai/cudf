@@ -21,10 +21,12 @@ build:
   script:
     content: |
       ./build.sh custreamz
+    env:
+      RAPIDS_CUDA_VERSION: ${{ env.get("RAPIDS_CUDA_VERSION") }}
 
 requirements:
   host:
-    - python >=3.11
+    - python >=3.12
     - pip
     - rapids-build-backend >=0.4.0,<0.5.0
     - setuptools>=77.0.0

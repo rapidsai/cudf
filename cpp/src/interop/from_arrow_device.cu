@@ -14,6 +14,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/unary.hpp>
+#include <cudf/detail/utilities/buffer_factories.hpp>
 #include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
@@ -27,6 +28,7 @@
 #include <rmm/cuda_device.hpp>
 #include <rmm/device_buffer.hpp>
 
+#include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/stream>
 
@@ -183,13 +185,13 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::string_view>(
     for (auto i = 0L; i < view.n_variadic_buffers; ++i) {
       variadic_ptrs.push_back(reinterpret_cast<char const*>(view.variadic_buffers[i]));
     }
-    auto d_variadic_ptrs = cudf::detail::make_device_uvector_async(
+    auto d_variadic_ptrs = cudf::detail::make_device_buffer_async(
       variadic_ptrs, stream, cudf::get_current_device_resource_ref());
     auto d_ptrs       = d_variadic_ptrs.data();
     auto const d_mask = reinterpret_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]);
     // build strings into gather input form
-    auto d_indices =
-      rmm::device_uvector<cudf::strings::detail::string_index_pair>(size, stream, mr);
+    auto d_indices = cuda::device_buffer<cudf::strings::detail::string_index_pair>(
+      stream, cudf::get_current_device_resource_ref(), size, cuda::no_init);
     thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       cuda::counting_iterator<cudf::size_type>{offset},
                       cuda::counting_iterator<cudf::size_type>{offset + size},
