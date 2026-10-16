@@ -206,12 +206,15 @@ def test_explicit_memory_resource():
     upstream = rmm.mr.CudaMemoryResource()
     n_allocations = 0
 
-    def allocate(bytes, stream):
+    def allocate(stream, bytes, alignment):
         nonlocal n_allocations
         n_allocations += 1
         return upstream.allocate(bytes, stream)
 
-    mr = rmm.mr.CallbackMemoryResource(allocate, upstream.deallocate)
+    def deallocate(stream, ptr, bytes, alignment):
+        return upstream.deallocate(ptr, bytes, stream)
+
+    mr = rmm.mr.CallbackMemoryResource(allocate, deallocate)
 
     q = pl.LazyFrame({"a": [1, 2, 3]})
     result = q.collect(engine=pl.GPUEngine(executor="in-memory", memory_resource=mr))
