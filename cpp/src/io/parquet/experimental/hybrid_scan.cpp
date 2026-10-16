@@ -239,7 +239,7 @@ table_with_metadata hybrid_scan_reader::materialize_filter_columns(
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
 
-  return _impl->materialize_columns<read_columns_mode::FILTER_COLUMNS>(
+  return _impl->materialize_table<read_columns_mode::FILTER_COLUMNS>(
     input_row_group_indices, column_chunk_data, row_mask, mask_data_pages, options, stream, mr);
 }
 
@@ -273,7 +273,7 @@ table_with_metadata hybrid_scan_reader::materialize_payload_columns(
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
 
-  return _impl->materialize_columns<read_columns_mode::PAYLOAD_COLUMNS>(
+  return _impl->materialize_table<read_columns_mode::PAYLOAD_COLUMNS>(
     input_row_group_indices, column_chunk_data, row_mask, mask_data_pages, options, stream, mr);
 }
 
@@ -303,13 +303,13 @@ table_with_metadata hybrid_scan_reader::materialize_all_columns(
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
 
-  return _impl->materialize_columns<read_columns_mode::ALL_COLUMNS>(input_row_group_indices,
-                                                                    column_chunk_data,
-                                                                    cudf::column_view{},
-                                                                    use_data_page_mask::NO,
-                                                                    options,
-                                                                    stream,
-                                                                    mr);
+  return _impl->materialize_table<read_columns_mode::ALL_COLUMNS>(input_row_group_indices,
+                                                                  column_chunk_data,
+                                                                  cudf::column_view{},
+                                                                  use_data_page_mask::NO,
+                                                                  options,
+                                                                  stream,
+                                                                  mr);
 }
 
 void hybrid_scan_reader::setup_chunking_for_filter_columns(

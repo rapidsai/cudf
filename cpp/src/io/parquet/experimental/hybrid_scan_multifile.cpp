@@ -141,7 +141,7 @@ table_with_metadata hybrid_scan_multifile::materialize_filter_columns(
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return _impl->materialize_columns<read_columns_mode::FILTER_COLUMNS>(
+  return _impl->materialize_table<read_columns_mode::FILTER_COLUMNS>(
     row_group_indices, column_chunk_data, row_mask, mask_data_pages, options, stream, mr);
 }
 
@@ -176,7 +176,7 @@ table_with_metadata hybrid_scan_multifile::materialize_payload_columns(
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return _impl->materialize_columns<read_columns_mode::PAYLOAD_COLUMNS>(
+  return _impl->materialize_table<read_columns_mode::PAYLOAD_COLUMNS>(
     row_group_indices, column_chunk_data, row_mask, mask_data_pages, options, stream, mr);
 }
 
@@ -198,13 +198,13 @@ table_with_metadata hybrid_scan_multifile::materialize_all_columns(
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return _impl->materialize_columns<read_columns_mode::ALL_COLUMNS>(row_group_indices,
-                                                                    column_chunk_data,
-                                                                    cudf::column_view{},
-                                                                    use_data_page_mask::NO,
-                                                                    options,
-                                                                    stream,
-                                                                    mr);
+  return _impl->materialize_table<read_columns_mode::ALL_COLUMNS>(row_group_indices,
+                                                                  column_chunk_data,
+                                                                  cudf::column_view{},
+                                                                  use_data_page_mask::NO,
+                                                                  options,
+                                                                  stream,
+                                                                  mr);
 }
 
 void hybrid_scan_multifile::setup_chunking_for_filter_columns(

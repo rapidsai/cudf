@@ -699,7 +699,7 @@ void hybrid_scan_reader_impl::prepare_materialization(
   std::size_t chunk_read_limit,
   std::size_t pass_read_limit,
   std::span<std::vector<size_type> const> row_group_indices,
-  std::span<cudf::device_span<uint8_t const> const> column_data,
+  std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
   cudf::column_view const& row_mask,
   use_data_page_mask mask_data_pages,
   bool sparse_page_io,
@@ -758,14 +758,14 @@ void hybrid_scan_reader_impl::prepare_materialization(
     (mask_data_pages == use_data_page_mask::YES and not is_all_columns and not _sparse_page_io)
       ? std::optional{row_mask}
       : std::nullopt;
-  prepare_data(mode, row_group_indices, column_data, retention_mask);
+  prepare_data(mode, row_group_indices, column_chunk_data, retention_mask);
 }
 
 template <read_columns_mode mode>
-table_with_metadata hybrid_scan_reader_impl::materialize_columns(
+table_with_metadata hybrid_scan_reader_impl::materialize_table(
   std::span<std::vector<size_type> const> row_group_indices,
   std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
-  row_mask_view_t<mode> row_mask,
+  row_mask_view_t<mode> const& row_mask,
   use_data_page_mask mask_data_pages,
   parquet_reader_options const& options,
   cuda::stream_ref stream,
@@ -842,7 +842,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_sparse_payload_columns(
 
 template <read_columns_mode mode>
 table_with_metadata hybrid_scan_reader_impl::materialize_next_table_chunk(
-  row_mask_view_t<mode> row_mask)
+  row_mask_view_t<mode> const& row_mask)
 {
   CUDF_EXPECTS(_file_preprocessed and _selected_columns_mode.has_value(),
                "Chunking for columns not yet setup");
@@ -1463,10 +1463,10 @@ void hybrid_scan_reader_impl::set_sparse_pass_page_mask(
   template std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>            \
   hybrid_scan_reader_impl::column_chunks_byte_ranges<mode>(                                 \
     std::span<std::vector<size_type> const>, parquet_reader_options const&);                \
-  template table_with_metadata hybrid_scan_reader_impl::materialize_columns<mode>(          \
+  template table_with_metadata hybrid_scan_reader_impl::materialize_table<mode>(            \
     std::span<std::vector<size_type> const>,                                                \
     std::span<cudf::device_span<uint8_t const> const>,                                      \
-    row_mask_view_t<mode>,                                                                  \
+    row_mask_view_t<mode> const&,                                                           \
     use_data_page_mask,                                                                     \
     parquet_reader_options const&,                                                          \
     cuda::stream_ref,                                                                       \
@@ -1482,7 +1482,7 @@ void hybrid_scan_reader_impl::set_sparse_pass_page_mask(
     cuda::stream_ref,                                                                       \
     rmm::device_async_resource_ref);                                                        \
   template table_with_metadata hybrid_scan_reader_impl::materialize_next_table_chunk<mode>( \
-    row_mask_view_t<mode>);
+    row_mask_view_t<mode> const&);
 
 INSTANTIATE_HYBRID_SCAN_COLUMNS_APIS(read_columns_mode::FILTER_COLUMNS)
 INSTANTIATE_HYBRID_SCAN_COLUMNS_APIS(read_columns_mode::PAYLOAD_COLUMNS)

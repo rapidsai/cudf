@@ -210,10 +210,10 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @return Table of materialized columns and metadata
    */
   template <read_columns_mode mode>
-  [[nodiscard]] table_with_metadata materialize_columns(
+  [[nodiscard]] table_with_metadata materialize_table(
     std::span<std::vector<size_type> const> row_group_indices,
     std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
-    row_mask_view_t<mode> row_mask,
+    row_mask_view_t<mode> const& row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
     cuda::stream_ref stream,
@@ -290,7 +290,8 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @return Table chunk of materialized columns and metadata
    */
   template <read_columns_mode mode>
-  [[nodiscard]] table_with_metadata materialize_next_table_chunk(row_mask_view_t<mode> row_mask);
+  [[nodiscard]] table_with_metadata materialize_next_table_chunk(
+    row_mask_view_t<mode> const& row_mask);
 
  private:
   /**
@@ -392,7 +393,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @param chunk_read_limit Limit on total number of bytes to be returned per read
    * @param pass_read_limit Limit on memory usage for decompressing and decoding data
    * @param row_group_indices Input row groups indices
-   * @param column_data Device spans of column chunk or page data
+   * @param column_chunk_data Device spans of column chunk or page data
    * @param row_mask Boolean column indicating surviving rows
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
    * @param sparse_page_io Boolean indicating if page-level (sparse) I/O is enabled
@@ -405,7 +406,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
                                std::size_t chunk_read_limit,
                                std::size_t pass_read_limit,
                                std::span<std::vector<size_type> const> row_group_indices,
-                               std::span<cudf::device_span<uint8_t const> const> column_data,
+                               std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
                                cudf::column_view const& row_mask,
                                use_data_page_mask mask_data_pages,
                                bool sparse_page_io,
