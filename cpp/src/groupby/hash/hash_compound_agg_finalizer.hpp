@@ -10,8 +10,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <optional>
-
 namespace cudf::groupby::detail::hash {
 
 /**
@@ -25,15 +23,20 @@ struct hash_compound_agg_finalizer {
   cuda::stream_ref const stream;
   cudf::memory_resources const mr;
 
-  /**
-   * @param input_has_nulls Whether the aggregated input had nulls; defaults to
-   * `col.has_nulls()`. Callers that pass intermediate results as `col` must set it.
-   */
   hash_compound_agg_finalizer(column_view const& col,
                               cudf::detail::result_cache* cache,
                               cuda::stream_ref stream,
-                              cudf::memory_resources mr,
-                              std::optional<bool> input_has_nulls = std::nullopt);
+                              cudf::memory_resources mr);
+
+  /**
+   * @param input_has_nulls Whether the aggregated input had nulls. Callers that pass
+   * intermediate results as `col` must provide it because those results carry no input nulls.
+   */
+  hash_compound_agg_finalizer(column_view const& col,
+                              cudf::detail::result_cache* cache,
+                              bool input_has_nulls,
+                              cuda::stream_ref stream,
+                              cudf::memory_resources mr);
 
   // Default case: no-op
   template <aggregation::Kind k>

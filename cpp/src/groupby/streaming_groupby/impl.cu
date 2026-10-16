@@ -424,7 +424,7 @@ streaming_groupby::impl::finalize_gathered(std::unique_ptr<table> keys,
       // `req.values` holds gathered intermediates, which never carry the input's nulls, so
       // results such as MEAN must derive nulls from the counts.
       auto const finalizer =
-        detail::hash::hash_compound_agg_finalizer(req.values, &cache, stream, mr, true);
+        detail::hash::hash_compound_agg_finalizer(req.values, &cache, true, stream, mr);
       for (auto const& agg : req.aggregations) {
         if (cache.has_result(req.values, *agg)) continue;
         cudf::detail::aggregation_dispatcher(agg->kind, finalizer, *agg);

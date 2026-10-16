@@ -26,11 +26,19 @@ namespace cudf::groupby::detail::hash {
 hash_compound_agg_finalizer::hash_compound_agg_finalizer(column_view const& col,
                                                          cudf::detail::result_cache* cache,
                                                          cuda::stream_ref stream,
-                                                         cudf::memory_resources mr,
-                                                         std::optional<bool> input_has_nulls)
+                                                         cudf::memory_resources mr)
+  : hash_compound_agg_finalizer(col, cache, col.has_nulls(), stream, mr)
+{
+}
+
+hash_compound_agg_finalizer::hash_compound_agg_finalizer(column_view const& col,
+                                                         cudf::detail::result_cache* cache,
+                                                         bool input_has_nulls,
+                                                         cuda::stream_ref stream,
+                                                         cudf::memory_resources mr)
   : col{col},
     input_type{is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type()},
-    input_has_nulls{input_has_nulls.value_or(col.has_nulls())},
+    input_has_nulls{input_has_nulls},
     cache{cache},
     stream{stream},
     mr{mr}
