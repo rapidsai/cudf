@@ -961,12 +961,16 @@ TEST_F(StableVarianceReductionTest, InfinityPositionDoesNotChangeResult)
     std::iota(values.begin(), values.end(), 0.0);
     values[inf_pos] = std::numeric_limits<double>::infinity();
     cudf::test::fixed_width_column_wrapper<double> col(values.begin(), values.end());
-    return reduction_test<double>(col, *cudf::make_variance_aggregation<reduce_aggregation>())
-      .first;
+    auto const [var, valid] =
+      reduction_test<double>(col, *cudf::make_variance_aggregation<reduce_aggregation>());
+    SCOPED_TRACE("inf_pos=" + std::to_string(inf_pos));
+    EXPECT_TRUE(valid);
+    return var;
   };
   auto const first  = var_at(0);
   auto const middle = var_at(size / 2);
   auto const last   = var_at(size - 1);
+  EXPECT_TRUE(std::isnan(first));
   EXPECT_EQ(std::isnan(first), std::isnan(last));
   EXPECT_EQ(std::isnan(first), std::isnan(middle));
   EXPECT_EQ(std::isinf(first), std::isinf(last));
