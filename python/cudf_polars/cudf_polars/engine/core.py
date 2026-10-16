@@ -539,12 +539,6 @@ class StreamingEngine(pl.GPUEngine):
         existing_executor_options = self.config.get("executor_options", {})
         if not isinstance(existing_executor_options, dict):
             existing_executor_options = {}
-        existing_quent_context = existing_executor_options.get("quent_context")
-        if (
-            "quent_context" in executor_options
-            and executor_options["quent_context"] != existing_quent_context
-        ):
-            raise ValueError("quent_context cannot be changed during reset")
 
         _disallowed_exec = {"num_py_executors"} & executor_options.keys()
         if _disallowed_exec:

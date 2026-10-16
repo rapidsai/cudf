@@ -990,8 +990,6 @@ class SPMDEngine(StreamingEngine):
             engine_options=engine_options,
         )
         executor_options = executor_options or {}
-        if "quent_context" in existing_executor_options:
-            executor_options.setdefault("quent_context", existing_quent_context)
         if "kvikio_nthreads" in existing_executor_options:
             executor_options.setdefault(
                 "kvikio_nthreads", existing_executor_options["kvikio_nthreads"]
@@ -1007,11 +1005,24 @@ class SPMDEngine(StreamingEngine):
             request_ceiling=executor_options["kvikio_request_ceiling"],
         )
         engine_options = engine_options or {}
-        quent_context: cudf_polars.quent.QuentConfig | None = executor_options.get(
-            "quent_context"
+        new_quent_context: cudf_polars.quent.QuentConfig | None = executor_options.get(
+            "quent_context", existing_quent_context
         )
+        quent_changing = new_quent_context != existing_quent_context
         rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
         self.rapidsmpf_options = rapidsmpf_options
+
+        # Tear down Quent runtimes before the Context rebuild if they're changing.
+        if quent_changing:
+            if self._comm.nranks > 1:
+                barrier(self._comm)
+            self._close_quent_worker()
+            if self._comm.nranks > 1:
+                barrier(self._comm)
+            if self._comm.rank == 0:
+                self._close_quent_controller()
+            if self._comm.nranks > 1:
+                barrier(self._comm)
 
         # Collective: synchronize all ranks before tearing down the Context.
         if self._comm.nranks > 1:
@@ -1041,8 +1052,46 @@ class SPMDEngine(StreamingEngine):
         self._mr = self._ctx.br().device_mr_adaptor()
         rmm.mr.set_current_device_resource(self._mr)
 
+        # Start new Quent runtimes after the Context is rebuilt.
+        if quent_changing and new_quent_context is not None:
+            collector_address: str = ""
+            if self._comm.rank == 0:
+                quent_collector = cudf_polars.quent._runtime.start_collector(
+                    new_quent_context.run_root
+                )
+                _collector_cleanup = contextlib.ExitStack()
+                _collector_cleanup.callback(quent_collector.close)
+                collector_address = quent_collector.address
+            new_quent_context, collector_address = synchronize_quent_configuration(
+                comm=self._comm,
+                context=self._ctx,
+                quent_config=new_quent_context,
+                collector_address=collector_address,
+            )
+            if self._comm.rank == 0:
+                self._quent_runtime = QuentControllerRuntime.create(
+                    new_quent_context,
+                    collector_address,
+                    backend="spmd",
+                    collector=quent_collector,
+                )
+                _collector_cleanup.pop_all()
+            self._quent_worker_runtime = QuentWorkerRuntime.create(
+                new_quent_context,
+                collector_address,
+                worker_id=self._quent_worker_id,
+                rank=self._comm.rank,
+                nranks=self._comm.nranks,
+                instance_name=f"rank-{self._comm.rank}",
+            )
+        executor_options["quent_context"] = new_quent_context
+        self._quent_output_root = (
+            new_quent_context.run_root if new_quent_context is not None else None
+        )
         engine_id = (
-            quent_context.engine_id if quent_context is not None else uuid.uuid4()
+            new_quent_context.engine_id
+            if new_quent_context is not None
+            else uuid.uuid4()
         )
 
         # Re-run ``StreamingEngine.__init__`` on the existing instance to
