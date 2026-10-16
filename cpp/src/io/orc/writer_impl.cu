@@ -1375,7 +1375,7 @@ wall_clock_columns make_wall_clock_columns(orc_table_view const& orc_table,
     }
   }
 
-  // Nothing was shifted, so skip the copies and the synchronization they need
+  // Nothing was shifted, so skip the host-to-device copies below, each of which blocks the stream
   if (views.empty()) {
     return {{},
             {},
