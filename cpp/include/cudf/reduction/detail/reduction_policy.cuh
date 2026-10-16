@@ -9,6 +9,7 @@
 
 #include <cub/block/block_reduce.cuh>
 #include <cub/device/dispatch/tuning/tuning_reduce.cuh>
+#include <cub/device/dispatch/tuning/tuning_segmented_reduce.cuh>
 #include <cuda/devices>
 
 #include <type_traits>
@@ -35,6 +36,28 @@ struct variance_reduce_policy {
     // we use significantly less collective FP64 arithmetic than CUB's default policy.
     policy.multi_tile.reduce_algorithm  = cub::BLOCK_REDUCE_RAKING;
     policy.single_tile.reduce_algorithm = cub::BLOCK_REDUCE_RAKING;
+    return policy;
+  }
+};
+
+/**
+ * @brief A custom tuning policy for segmented one-pass variance computation.
+ * @tparam State Type of the state being reduced over.
+ * @tparam Offset Type of the segment offsets.
+ * @tparam BinaryOp Type of the binary operator used in the reduction.
+ *
+ * @note Preserves CUB's architecture-specific tuning, changing only the block
+ * collective used to combine expensive intermediate states for variance.
+ */
+template <typename State, typename Offset, typename BinaryOp>
+struct variance_segmented_reduce_policy {
+  CUDF_HOST_DEVICE constexpr cub::SegmentedReducePolicy operator()(
+    cuda::compute_capability cc) const
+  {
+    // TODO: Update to public CUB facilities using policy transformers once that exists.
+    auto policy =
+      cub::detail::segmented_reduce::policy_selector_from_types<State, Offset, BinaryOp>{}(cc);
+    policy.large_reduce.reduce_algorithm = cub::BLOCK_REDUCE_RAKING;
     return policy;
   }
 };

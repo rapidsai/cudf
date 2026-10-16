@@ -16,10 +16,13 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_segmented_reduce.cuh>
+#include <cuda/execution>
 #include <cuda/iterator>
 #include <cuda/std/execution>
 #include <cuda/stream>
 #include <thrust/transform.h>
+
+#include <type_traits>
 
 namespace cudf {
 namespace reduction {
@@ -130,15 +133,27 @@ void segmented_reduce(InputIterator d_in,
   rmm::device_uvector<IntermediateType> intermediate_result{static_cast<std::size_t>(num_segments),
                                                             stream};
 
-  CUDF_CUDA_TRY(cub::DeviceSegmentedReduce::Reduce(
-    d_in,
-    intermediate_result.data(),
-    num_segments,
-    d_offset_begin,
-    d_offset_begin + 1,
-    binary_op,
-    initial_value,
-    cudf::detail::make_env(stream, cudf::get_current_device_resource_ref())));
+  auto const env = [&] {
+    if constexpr (std::is_same_v<Op, op::variance> || std::is_same_v<Op, op::standard_deviation>) {
+      return cudf::detail::make_env(
+        stream,
+        cudf::get_current_device_resource_ref(),
+        cuda::execution::tune(
+          variance_segmented_reduce_policy<IntermediateType,
+                                           cuda::std::iter_value_t<OffsetIterator>,
+                                           std::remove_cv_t<decltype(binary_op)>>{}));
+    } else {
+      return cudf::detail::make_env(stream, cudf::get_current_device_resource_ref());
+    }
+  }();
+  CUDF_CUDA_TRY(cub::DeviceSegmentedReduce::Reduce(d_in,
+                                                   intermediate_result.data(),
+                                                   num_segments,
+                                                   d_offset_begin,
+                                                   d_offset_begin + 1,
+                                                   binary_op,
+                                                   initial_value,
+                                                   env));
 
   // compute the result value from intermediate value in device
   thrust::transform(
