@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import random
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -19,6 +20,9 @@ from cudf_polars.testing.engine_utils import (
     warns_on_spmd,
 )
 from cudf_polars.utils.versions import POLARS_VERSION_LT_142
+
+if TYPE_CHECKING:
+    from polars._typing import ClosedInterval, Label, TimeUnit
 
 
 def _timestamps(n: int, *, seed: int, span: dt.timedelta) -> list[dt.datetime]:
@@ -100,7 +104,7 @@ def test_fixed_every(
     frame: pl.LazyFrame,
     every: str,
     offset: str,
-    closed: str,
+    closed: ClosedInterval,
 ) -> None:
     q = frame.group_by_dynamic("t", every=every, offset=offset, closed=closed).agg(
         *_aggs()
@@ -111,7 +115,10 @@ def test_fixed_every(
 @pytest.mark.parametrize("every", ["1mo", "3mo", "1q", "1y"])
 @pytest.mark.parametrize("closed", ["left", "right"])
 def test_calendar_every(
-    in_memory_engine: pl.GPUEngine, frame: pl.LazyFrame, every: str, closed: str
+    in_memory_engine: pl.GPUEngine,
+    frame: pl.LazyFrame,
+    every: str,
+    closed: ClosedInterval,
 ) -> None:
     q = frame.group_by_dynamic(
         "t", every=every, closed=closed, include_boundaries=True
@@ -125,7 +132,7 @@ def test_calendar_every(
 def test_datetime_dtypes(
     in_memory_engine: pl.GPUEngine,
     frame: pl.LazyFrame,
-    time_unit: str,
+    time_unit: TimeUnit,
     time_zone: str | None,
     every: str,
 ) -> None:
@@ -158,7 +165,7 @@ def test_date_index(
     frame: pl.LazyFrame,
     every: str,
     offset: str,
-    closed: str,
+    closed: ClosedInterval,
 ) -> None:
     q = (
         frame.with_columns(pl.col("t").dt.date())
@@ -177,7 +184,7 @@ def test_integer_index(
     dtype: pl.DataType,
     every: str,
     offset: str,
-    closed: str,
+    closed: ClosedInterval,
 ) -> None:
     rng = random.Random(7)
     q = (
@@ -205,7 +212,7 @@ def test_grouped(
     engine: pl.GPUEngine,
     short_frame: pl.LazyFrame,
     group_by: str | list[str],
-    label: str,
+    label: Label,
     include_boundaries: bool,  # noqa: FBT001
 ) -> None:
     # Polars requires the index to be sorted within each group.
@@ -497,7 +504,7 @@ def test_unsupported_raises(
 @pytest.mark.parametrize("closed", ["left", "right"])
 @pytest.mark.parametrize("group_by", [None, "g"])
 def test_int32_window_overflow(
-    engine: pl.GPUEngine, group_by: str | None, closed: str, label: str
+    engine: pl.GPUEngine, group_by: str | None, closed: ClosedInterval, label: Label
 ) -> None:
     # A window may start or end outside Int32's range; polars nulls that
     # label/boundary, keeping distinct windows distinct, instead of wrapping
