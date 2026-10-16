@@ -88,8 +88,7 @@ struct dispatch_to_arrow_host {
     enable_hugepage(&bitmap->buffer);
     CUDF_CUDA_TRY(cudf::detail::memcpy_async(
       bitmap->buffer.data,
-      (column.offset() > 0) ? reinterpret_cast<cudf::bitmask_type const*>(
-                                cudf::detail::copy_bitmask(column, stream, mr).data())
+      (column.offset() > 0) ? cudf::detail::copy_bitmask(column, stream, mr).data()
                             : column.null_mask(),
       bitmap->buffer.size_bytes,
       stream));
@@ -149,7 +148,7 @@ int dispatch_to_arrow_host::operator()<bool>(ArrowArray* out) const
   auto bitmask = detail::bools_to_mask(column, stream, mr);
   NANOARROW_RETURN_NOT_OK(populate_data_buffer(
     device_span<uint8_t const>(reinterpret_cast<uint8_t const*>(bitmask.first->data()),
-                               bitmask.first->size()),
+                               bitmask.first->size() * sizeof(bitmask_type)),
     ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx)));
 
   ArrowArrayMove(tmp.get(), out);
