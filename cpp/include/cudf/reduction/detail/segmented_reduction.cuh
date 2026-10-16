@@ -60,15 +60,15 @@ void segmented_reduce(InputIterator d_in,
 {
   auto const num_segments = static_cast<size_type>(std::distance(d_offset_begin, d_offset_end)) - 1;
   auto const binary_op    = cudf::detail::cast_functor<OutputType>(op);
-  CUDF_CUDA_TRY(
-    cub::DeviceSegmentedReduce::Reduce(d_in,
-                                       d_out,
-                                       num_segments,
-                                       d_offset_begin,
-                                       d_offset_begin + 1,
-                                       binary_op,
-                                       initial_value,
-                                       make_env(stream, cudf::get_current_device_resource_ref())));
+  CUDF_CUDA_TRY(cub::DeviceSegmentedReduce::Reduce(
+    d_in,
+    d_out,
+    num_segments,
+    d_offset_begin,
+    d_offset_begin + 1,
+    binary_op,
+    initial_value,
+    cudf::detail::make_env(stream, cudf::get_current_device_resource_ref())));
 }
 
 template <typename InputIterator,
@@ -130,15 +130,15 @@ void segmented_reduce(InputIterator d_in,
   rmm::device_uvector<IntermediateType> intermediate_result{static_cast<std::size_t>(num_segments),
                                                             stream};
 
-  CUDF_CUDA_TRY(
-    cub::DeviceSegmentedReduce::Reduce(d_in,
-                                       intermediate_result.data(),
-                                       num_segments,
-                                       d_offset_begin,
-                                       d_offset_begin + 1,
-                                       binary_op,
-                                       initial_value,
-                                       make_env(stream, cudf::get_current_device_resource_ref())));
+  CUDF_CUDA_TRY(cub::DeviceSegmentedReduce::Reduce(
+    d_in,
+    intermediate_result.data(),
+    num_segments,
+    d_offset_begin,
+    d_offset_begin + 1,
+    binary_op,
+    initial_value,
+    cudf::detail::make_env(stream, cudf::get_current_device_resource_ref())));
 
   // compute the result value from intermediate value in device
   thrust::transform(
