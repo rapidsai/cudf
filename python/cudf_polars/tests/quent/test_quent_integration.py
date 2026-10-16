@@ -37,7 +37,7 @@ def engine_with_quent_context(
     _unconfigured_engine: tuple[StreamingEngine, StreamingOptions],
     quent_context: QuentConfig,
     streaming_engine_factory: Callable[[StreamingOptions], StreamingEngine],
-) -> Iterator[StreamingEngine]:
+) -> Iterator[tuple[StreamingEngine, StreamingOptions]]:
     """
     Yield a streaming engine configured with Quent tracing.
     """
@@ -55,7 +55,7 @@ def engine_with_quent_context(
         engine_options=base_options.to_engine_options(),
     )
     try:
-        yield engine
+        yield engine, base_options
     finally:
         engine._reset(
             rapidsmpf_options=base_options.to_rapidsmpf_options(),
@@ -165,12 +165,12 @@ def test_quent_controller_cleanup_continues_after_handle_failure() -> None:
 
 
 def test_quent_lifecycle(
-    engine_with_quent_context: StreamingEngine,
+    engine_with_quent_context: tuple[StreamingEngine, StreamingOptions],
     quent_context: QuentConfig,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     query = pl.LazyFrame({"x": [1, 2, 3]}).filter(pl.col("x") > 1)
-    engine = engine_with_quent_context
+    engine, base_options = engine_with_quent_context
     assert engine.config["executor_options"]["quent_context"] == quent_context
     current_context = dataclasses.replace(
         quent_context,
@@ -220,7 +220,15 @@ def test_quent_lifecycle(
     # The fixture teardown calls _reset(..., quent_context=None) again, which is a no-op.
     quent_output_root = engine._quent_output_root
     assert quent_output_root is not None
-    engine._reset(executor_options={"quent_context": None, "fallback_mode": "silent"})
+    engine._reset(
+        rapidsmpf_options=base_options.to_rapidsmpf_options(),
+        executor_options={
+            **base_options.to_executor_options(),
+            "quent_context": None,
+            "fallback_mode": "silent",
+        },
+        engine_options=base_options.to_engine_options(),
+    )
 
     events = _stored_events(quent_output_root)
     engine_events = _of_type(events, "Engine")
