@@ -26,6 +26,9 @@ namespace detail {
  *
  * Bit `i` in the output mask will be set if `p(*(begin+i)) == true`.
  *
+ * `cudf::strings::detail::strings_validity_and_size_kernel` is a copy of this kernel with a size
+ * sum fused in; fixes here likely apply there too.
+ *
  * @tparam block_size The number of threads in the block
  * @param[out] output The output bitmask
  * @param[in] begin The beginning of the sequence of elements

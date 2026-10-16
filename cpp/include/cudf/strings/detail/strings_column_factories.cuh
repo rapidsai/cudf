@@ -129,6 +129,9 @@ std::unique_ptr<column> make_offsets_child_column_async(IndexPairIterator begin,
 /**
  * @brief Builds the null mask, valid count and chars size of a strings column in one pass
  *
+ * This is `cudf::detail::valid_if_kernel` with the size sum fused in, so it reads the input once;
+ * fixes to either kernel likely apply to the other.
+ *
  * @tparam block_size The number of threads in the block
  * @tparam IndexPairIterator iterator over type `pair<char const*,size_type>` values
  *
