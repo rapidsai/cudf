@@ -44,9 +44,7 @@
 #include <cuda/stream>
 #include <thrust/for_each.h>
 #include <thrust/gather.h>
-#include <thrust/host_vector.h>
 #include <thrust/scan.h>
-#include <thrust/tabulate.h>
 
 #include <algorithm>
 #include <memory>
@@ -158,7 +156,7 @@ struct escape_strings_fn {
 
   std::unique_ptr<column> make_strings_column(size_type size,
                                               size_type null_count,
-                                              cuda::device_buffer<std::byte> null_mask,
+                                              cuda::device_buffer<cudf::bitmask_type> null_mask,
                                               cuda::stream_ref stream,
                                               rmm::device_async_resource_ref mr)
   {
@@ -178,7 +176,7 @@ struct escape_strings_fn {
 std::unique_ptr<column> make_escaped_json_strings(column_device_view const& d_column,
                                                   size_type size,
                                                   size_type null_count,
-                                                  cuda::device_buffer<std::byte> null_mask,
+                                                  cuda::device_buffer<cudf::bitmask_type> null_mask,
                                                   bool append_colon,
                                                   bool escaped_utf8,
                                                   cuda::stream_ref stream,

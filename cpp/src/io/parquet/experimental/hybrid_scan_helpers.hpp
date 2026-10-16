@@ -88,7 +88,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param use_arrow_schema Whether to use Arrow schema
    * @param has_cols_from_mismatched_srcs Whether to have columns from mismatched sources
    */
-  aggregate_reader_metadata(cudf::host_span<cudf::host_span<uint8_t const> const> footer_bytes,
+  aggregate_reader_metadata(std::span<cudf::host_span<uint8_t const> const> footer_bytes,
                             bool use_arrow_schema,
                             bool has_cols_from_mismatched_srcs);
 
@@ -101,7 +101,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param use_arrow_schema Whether to use Arrow schema
    * @param has_cols_from_mismatched_srcs Whether to have columns from mismatched sources
    */
-  aggregate_reader_metadata(cudf::host_span<FileMetaData const> parquet_metadatas,
+  aggregate_reader_metadata(std::span<FileMetaData const> parquet_metadatas,
                             bool use_arrow_schema,
                             bool has_cols_from_mismatched_srcs);
 
@@ -152,6 +152,8 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
 
   /**
    * @brief Setup and populate the page index structs in every source's `FileMetaData`
+   *
+   * @throws std::invalid_argument if any page index buffer or byte range in the metadata is invalid
    *
    * @param page_index_bytes Host span of Parquet page index buffer bytes, one per source
    */
@@ -381,17 +383,6 @@ class dictionary_literals_collector final : public equality_literals_collector {
   dictionary_literals_collector(ast::expression const& expr,
                                 std::span<cudf::data_type const> output_dtypes);
 
-  /**
-   * @brief Returns vectors of collected literals and (in)equality operators in the AST expression,
-   * one per input table column
-   *
-   * @return A pair of vectors of collected literals and (in)equality operators, one per input table
-   * column
-   */
-  [[nodiscard]] std::pair<std::vector<std::vector<ast::literal*>>,
-                          std::vector<std::vector<ast::ast_operator>>>
-  get_literals_and_operators() &&;
-
  protected:
   /**
    * @copydoc parquet_expression_simplifier::simplify_comparison
@@ -403,9 +394,6 @@ class dictionary_literals_collector final : public equality_literals_collector {
   [[nodiscard]] simplified_expression_opt simplify_comparison(ast::ast_operator op,
                                                               ast::column_reference const& col_ref,
                                                               ast::literal const& literal) override;
-
- private:
-  std::vector<std::vector<ast::ast_operator>> _operators;
 };
 
 /**

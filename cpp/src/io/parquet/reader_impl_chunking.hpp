@@ -84,6 +84,8 @@ struct subpass_intermediate_data {
   subpass_intermediate_data(cuda::stream_ref stream)
     : decomp_page_data(stream, cudf::get_current_device_resource_ref()),
       level_decode_data(stream, cudf::get_current_device_resource_ref()),
+      flat_nz_map_data(stream, cudf::get_current_device_resource_ref()),
+      nz_map_buf(0, stream),
       page_buf(0, stream),
       page_src_index{0, stream},
       page_string_offset_indices(0, stream),
@@ -97,6 +99,13 @@ struct subpass_intermediate_data {
   cuda::device_buffer<std::uint8_t> decomp_page_data;
 
   cuda::device_buffer<std::byte> level_decode_data;
+  // Backing store for the flat nz maps. `allocate_level_decode_space`
+  // sub-allocates one slice of this per mapped page that has definition levels. Empty unless some
+  // page has an nz map.
+  cuda::device_buffer<std::byte> flat_nz_map_data;
+  // Out-of-line nz map scratch, one entry per page. Empty unless some page of this subpass has
+  // an nz map. See page_nz_map.
+  cudf::detail::hostdevice_vector<page_nz_map> nz_map_buf;
   cudf::detail::hostdevice_span<PageInfo> pages{};
 
   cudf::detail::hostdevice_vector<PageInfo> page_buf;
