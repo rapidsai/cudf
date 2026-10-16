@@ -40,6 +40,7 @@
 #include <cuco/static_map.cuh>
 #include <cuda/atomic>
 #include <cuda/buffer>
+#include <cuda/cmath>
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/memory_resource>
@@ -516,8 +517,7 @@ struct all_words_fn {
     auto const start = d_starts[idx];
     auto last        = cuda::std::min(chars_size, start + max_word_size);
     // the word cannot extend past the start of the next row
-    for (auto pos = start + 1; pos < last;
-         pos      = cudf::util::round_up_unsafe(pos + 1, row_starts_word_bits)) {
+    for (auto pos = start + 1; pos < last; pos = cuda::round_up(pos + 1, row_starts_word_bits)) {
       auto const bits = d_row_starts[pos / row_starts_word_bits] >> (pos % row_starts_word_bits);
       if (bits != 0) {
         last = cuda::std::min(last, pos + __ffs(bits) - 1);
