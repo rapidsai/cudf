@@ -397,7 +397,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
 
   // the delta_temp_buf in the subpass struct can be freed now
   subpass.delta_temp_buf = cuda::device_buffer<uint8_t>(
-    _stream, cudf::get_current_device_resource_ref(), 0, cuda::no_init);
+    _stream, subpass.delta_temp_buf.memory_resource(), 0, cuda::no_init);
 
   subpass.pages.device_to_host_async(_stream);
   page_nesting.device_to_host_async(_stream);

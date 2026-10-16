@@ -1053,7 +1053,7 @@ void compute_page_string_sizes_pass2(cudf::detail::hostdevice_span<PageInfo> pag
 
     // allocate the temp space
     temp_string_buf = cuda::device_buffer<uint8_t>(
-      stream, cudf::get_current_device_resource_ref(), total_size, cuda::no_init);
+      stream, temp_string_buf.memory_resource(), total_size, cuda::no_init);
 
     // now use the offsets array to set each page's temp_string_buf pointers
     thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
