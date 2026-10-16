@@ -302,6 +302,24 @@ def test_groupby_agg(df, streaming_engine, op, keys):
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
+def test_groupby_order_sensitive_aggs(streaming_engine_factory):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=2, fallback_mode="raise"),
+    )
+    df = pl.LazyFrame(
+        {
+            "key": ["a", "b", "a", "b", "a", "b"],
+            "value": [None, 10, 20, None, 30, 40],
+        }
+    )
+    q = df.group_by("key").agg(
+        pl.col("value").first(),
+        pl.col("value").last().alias("last"),
+        pl.col("value").first(ignore_nulls=True).alias("first_non_null"),
+    )
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
+
+
 def test_groupby_sort_by_first_last(streaming_engine_factory):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=2, fallback_mode="raise"),

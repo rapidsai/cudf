@@ -59,6 +59,8 @@ _GB_AGG_SUPPORTED = (
     "std",
     "var",
     "item",
+    "first",
+    "last",
     "first_non_null",
 )
 
@@ -69,6 +71,8 @@ _GB_AGG_REDUCTIONS = {
     "max": "max",
     "n_unique": "sum",
     "item": "item",
+    "first": "first",
+    "last": "last",
     "first_non_null": "first_non_null",
 }
 
@@ -133,6 +137,15 @@ def _has_stable_sorted_agg(exprs: Iterable[NamedExpr]) -> bool:
     """Return True if any expression requires stable sorted aggregation."""
     return any(
         isinstance(expr, SortedAgg) and expr.options[0]
+        for ne in exprs
+        for expr in traversal([ne.value])
+    )
+
+
+def _has_order_sensitive_agg(exprs: Iterable[NamedExpr]) -> bool:
+    """Return True if reducing an aggregation must preserve input order."""
+    return any(
+        isinstance(expr, Agg) and expr.name in {"first", "last", "first_non_null"}
         for ne in exprs
         for expr in traversal([ne.value])
     )
