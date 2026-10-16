@@ -91,6 +91,20 @@ def _skip_unless_spmd(request: pytest.FixtureRequest) -> None:
         pytest.skip("skip: SPMD nranks > 1 (mark with pytest.mark.spmd to run)")
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _configure_dask() -> Generator[None, None, None]:
+    """Apply test-suite-wide Dask configuration."""
+    # workaround https://github.com/dask/distributed/issues/9374
+    try:
+        import dask
+    except ImportError:
+        yield
+        return
+
+    with dask.config.set({"distributed.client.scheduler-info-interval": "60s"}):
+        yield
+
+
 @pytest.fixture(scope="session")
 def _engine_param(request: pytest.FixtureRequest) -> EngineFixtureParam:
     """Decoded engine variant selected by pytest parametrization.
@@ -343,6 +357,11 @@ def pytest_configure(config: pytest.Config):
         'streaming ``engine`` variants (e.g. ``"spmd"``, ``"spmd-small"``, '
         '``"dask"``, ``"ray"``) while still allowing the in-memory variant to run.',
     )
+    config.addinivalue_line(
+        "markers",
+        "engine_params(params): run an engine-fixture test only for the "
+        "listed engine parameter ids.",
+    )
 
     # Ray's internal subprocess management leaks `/dev/null` file handles, and
     # distributed's shutdown leaves unclosed sockets. Under Python 3.14 +
@@ -375,6 +394,22 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
         engines = ALL_ENGINE_FIXTURE_PARAMS
     else:
         raise AssertionError("Unknown engine fixture")
+
+    marker = metafunc.definition.get_closest_marker("engine_params")
+    if marker is not None:
+        # Selectors must not opt unavailable backends back into the fixture.
+        engines = [engine for engine in engines if engine in marker.args[0]]
+
+    if not engines:
+        # Empty parameter sets are collection errors in this suite.
+        metafunc.parametrize(
+            "_engine_param",
+            [pytest.param(None, marks=pytest.mark.skip(reason="No available engines"))],
+            indirect=True,
+            ids=["unavailable"],
+            scope="session",
+        )
+        return
 
     metafunc.parametrize(
         "_engine_param",

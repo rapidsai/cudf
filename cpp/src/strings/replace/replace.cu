@@ -33,8 +33,6 @@
 #include <cuda/std/iterator>
 #include <cuda/stream>
 #include <thrust/binary_search.h>
-#include <thrust/copy.h>
-#include <thrust/count.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/transform.h>
@@ -297,7 +295,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   auto const copy_itr    = cuda::counting_iterator<int64_t>{chars_offset};
   auto const copy_end    = cudf::detail::copy_if(
     copy_itr,
-    copy_itr + chars_bytes + chars_offset,
+    copy_itr + chars_bytes,
     targets_positions.begin(),
     [fn] __device__(int64_t idx) -> bool { return fn.is_target_within_row(idx); },
     stream);
@@ -463,7 +461,11 @@ std::unique_ptr<column> replace_string_parallel(strings_column_view const& input
     stream,
     mr);
 
-  return make_strings_column(input.size(), std::move(offsets_column), chars.release(), 0, {});
+  return make_strings_column(input.size(),
+                             std::move(offsets_column),
+                             chars.release(),
+                             0,
+                             cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
 }
 
 }  // namespace
@@ -526,11 +528,11 @@ std::unique_ptr<column> replace(strings_column_view const& input,
       auto const views = std::vector<column_view>{input.parent(), targets.parent(), repls.parent()};
       return cudf::detail::bitmask_and(table_view{views}, stream, mr);
     } else {
-      return std::pair{rmm::device_buffer{}, 0};
+      return std::pair{cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED), 0};
     }
   }();
   auto const d_valid_mask =
-    has_any_nulls ? static_cast<bitmask_type const*>(null_mask.data()) : nullptr;
+    has_any_nulls ? reinterpret_cast<bitmask_type const*>(null_mask.data()) : nullptr;
 
   auto d_targets = column_device_view::create(targets.parent(), stream);
   auto d_repls   = column_device_view::create(repls.parent(), stream);

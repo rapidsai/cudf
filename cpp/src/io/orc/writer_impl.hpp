@@ -17,6 +17,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
+#include <cudf/wrappers/durations.hpp>
 
 #include <rmm/device_uvector.hpp>
 
@@ -200,11 +201,37 @@ struct encoded_footer_statistics {
   std::vector<col_stats_blob> file_level;
 };
 
+/**
+ * @brief Timezone that the written timestamps are relative to.
+ */
+struct writer_timezone {
+  // Recorded in the stripe footers as `writerTimezone`
+  std::string const name;
+  // Instant that encoded timestamps are stored relative to: the ORC epoch as wall-clock time in
+  // `name`. Equal to `orc_utc_epoch` when writing UTC.
+  duration_s const base_epoch;
+
+  /**
+   * @brief Resolves a timezone name into the epoch that timestamps are encoded relative to.
+   *
+   * Uses `base_epoch_in_timezone`, so the writer and the reader resolve the epoch the same way.
+   *
+   * @param timezone Timezone name
+   *
+   * @throw cudf::logic_error if `timezone` is empty or does not resolve to a TZif file
+   */
+  explicit writer_timezone(std::string timezone);
+
+ private:
+  [[nodiscard]] static duration_s compute_base_epoch(std::string_view timezone);
+};
+
 enum class writer_state {
   NO_DATA_WRITTEN,  // No table data has been written to the sink; if the writer is closed or
                     // destroyed in this state, it should not write the footer.
   DATA_WRITTEN,     // At least one table has been written to the sink; when the writer is closed,
                     // it should write the footer.
+  FAILED,           // A write or close failed after output started; no further writes are allowed.
   CLOSED            // Writer has been closed; no further writes are allowed.
 };
 
@@ -302,17 +329,6 @@ class writer::impl {
   void add_table_to_footer_data(orc_table_view const& orc_table,
                                 std::vector<StripeInformation>& stripes);
 
-  /**
-   * @brief Update writer-level statistics with data from the current table.
-   *
-   * @param num_rows Number of rows in the current table
-   * @param single_table_stats Statistics data from the current table
-   * @param compression_stats Compression statistics from the current table
-   */
-  void update_statistics(size_type num_rows,
-                         intermediate_statistics&& single_table_stats,
-                         std::optional<writer_compression_statistics> const& compression_stats);
-
  private:
   // CUDA stream.
   cuda::stream_ref const _stream;
@@ -329,6 +345,7 @@ class writer::impl {
                                                // indicate that we are guaranteeing a single table
                                                // write. This enables some internal optimizations.
   std::map<std::string, std::string> const _kv_meta;  // Optional user metadata.
+  writer_timezone const _timezone;
   std::unique_ptr<data_sink> const _out_sink;
 
   // Debug parameter---currently not yet supported to be user-specified.

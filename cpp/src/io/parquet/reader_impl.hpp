@@ -15,6 +15,7 @@
 #include "reader_impl_chunking.hpp"
 #include "reader_impl_helpers.hpp"
 
+#include <cudf/detail/utilities/getenv_or.hpp>
 #include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/parquet.hpp>
@@ -179,7 +180,7 @@ class reader_impl {
   /**
    * @brief Preprocess string length and bounds information for the subpass.
    *
-   * At the end of this process, the `str_bytes` field of the the PageInfo struct
+   * At the end of this process, the `str_bytes` field of the PageInfo struct
    * will be populated, and if applicable, the delta_temp_buf in the subpass struct will
    * be allocated and the pages in the subpass will point into it properly.
    *
@@ -489,7 +490,7 @@ class reader_impl {
    * @brief Calculate the number of rows read from each source in the output chunk
    *
    * @param chunk_start_row The offset of the first row in the output chunk
-   * @param chunk_num_rows The number of rows in the the output chunk
+   * @param chunk_num_rows The number of rows in the output chunk
    * @return Vector of number of rows from each respective data source in the output chunk
    */
   [[nodiscard]] std::vector<size_t> calculate_output_num_rows_per_source(size_t chunk_start_row,
@@ -603,6 +604,12 @@ class reader_impl {
   // Per-input-column flag indicating whether that column was selected for direct
   // Parquet-dict → DICTIONARY32 transcode.
   std::vector<bool> _dict_transcode_eligible;
+
+  // LIBCUDF_PARQUET_NZ_MAP selector is fixed for the reader lifetime so
+  // every pass and output chunk agrees on which nz map consumer kinds may
+  // be selected. Read here rather than in a constructor body because
+  // `hybrid_scan_reader_impl` reaches this class through the default constructor.
+  bool _nz_map_enabled{cudf::detail::get_bool_env_or("LIBCUDF_PARQUET_NZ_MAP", false)};
 };
 
 }  // namespace cudf::io::parquet::detail

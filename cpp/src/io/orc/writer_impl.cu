@@ -16,12 +16,14 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/timezone.hpp>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -35,6 +37,7 @@
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/memcpy_async.h>
+#include <cuda/cmath>
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/std/climits>
@@ -45,7 +48,6 @@
 #include <thrust/execution_policy.h>
 #include <thrust/extrema.h>
 #include <thrust/for_each.h>
-#include <thrust/host_vector.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/sequence.h>
@@ -55,8 +57,11 @@
 
 #include <algorithm>
 #include <cstring>
+#include <exception>
 #include <functional>
 #include <numeric>
+#include <optional>
+#include <string>
 #include <tuple>
 #include <utility>
 
@@ -396,12 +401,9 @@ void persisted_statistics::persist(uint64_t num_table_rows,
                                    intermediate_statistics&& intermediate_stats,
                                    cuda::stream_ref stream)
 {
-  col_types = std::move(intermediate_stats.col_types);
-  num_rows += num_table_rows;
-  if (num_table_rows == 0) { return; }
-  stats_dtypes = std::move(intermediate_stats.stats_dtypes);
-
-  if (write_mode == single_write_mode::NO) {
+  // Allocate before modifying any state
+  std::optional<rmm::device_uvector<char>> string_pool;
+  if (num_table_rows > 0 and write_mode == single_write_mode::NO) {
     // persist the strings in the chunks into a string pool and update pointers
     auto const num_chunks = static_cast<int>(intermediate_stats.stripe_stat_chunks.size());
     // min offset and max offset + 1 for total size
@@ -420,22 +422,33 @@ void persisted_statistics::persist(uint64_t num_table_rows,
     // pull size back to host
     auto const total_string_pool_size = offsets.element(num_chunks * 2, stream);
     if (total_string_pool_size > 0) {
-      rmm::device_uvector<char> string_pool(total_string_pool_size, stream);
+      string_pool.emplace(total_string_pool_size, stream);
 
       // offsets describes where in the string pool each string goes. Going with the simple
       // approach for now, but it is possible something fancier with breaking up each thread into
       // copying x bytes instead of a single string is the better method since we are dealing in
       // min/max strings they almost certainly will not be uniform length.
       copy_string_data<<<num_chunks * 2, 256, 0, stream.get()>>>(
-        string_pool.data(),
+        string_pool->data(),
         offsets.data(),
         intermediate_stats.stripe_stat_chunks.data(),
         intermediate_stats.stripe_stat_merge.device_ptr());
       CUDF_CUDA_TRY(cudaGetLastError());
-      string_pools.emplace_back(std::move(string_pool));
     }
   }
 
+  if (num_table_rows > 0) {
+    if (string_pool.has_value()) { string_pools.reserve(string_pools.size() + 1); }
+    stripe_stat_chunks.reserve(stripe_stat_chunks.size() + 1);
+    stripe_stat_merge.reserve(stripe_stat_merge.size() + 1);
+  }
+
+  col_types = std::move(intermediate_stats.col_types);
+  num_rows += num_table_rows;
+  if (num_table_rows == 0) { return; }
+  stats_dtypes = std::move(intermediate_stats.stats_dtypes);
+
+  if (string_pool.has_value()) { string_pools.emplace_back(std::move(*string_pool)); }
   stripe_stat_chunks.emplace_back(std::move(intermediate_stats.stripe_stat_chunks));
   stripe_stat_merge.emplace_back(std::move(intermediate_stats.stripe_stat_merge));
 }
@@ -508,29 +521,27 @@ template <typename T>
 size_t max_varint_size()
 {
   // varint encodes 7 bits in each byte
-  return cudf::util::div_rounding_up_unsafe(sizeof(T) * 8, 7);
+  return cuda::ceil_div(sizeof(T) * 8, 7);
 }
 
 size_t rle_stream_size(TypeKind kind, size_t count)
 {
-  using cudf::util::div_rounding_up_unsafe;
+  using cuda::ceil_div;
   constexpr auto byte_rle_max_len = 128;
   switch (kind) {
-    case TypeKind::BOOLEAN:
-      return div_rounding_up_unsafe(count, byte_rle_max_len * 8) * (byte_rle_max_len + 1);
-    case TypeKind::BYTE:
-      return div_rounding_up_unsafe(count, byte_rle_max_len) * (byte_rle_max_len + 1);
+    case TypeKind::BOOLEAN: return ceil_div(count, byte_rle_max_len * 8) * (byte_rle_max_len + 1);
+    case TypeKind::BYTE: return ceil_div(count, byte_rle_max_len) * (byte_rle_max_len + 1);
     case TypeKind::SHORT:
-      return div_rounding_up_unsafe(count, encode_block_size) *
+      return ceil_div(count, encode_block_size) *
              (encode_block_size * max_varint_size<int16_t>() + 2);
     case TypeKind::FLOAT:
     case TypeKind::INT:
     case TypeKind::DATE:
-      return div_rounding_up_unsafe(count, encode_block_size) *
+      return ceil_div(count, encode_block_size) *
              (encode_block_size * max_varint_size<int32_t>() + 2);
     case TypeKind::LONG:
     case TypeKind::DOUBLE:
-      return div_rounding_up_unsafe(count, encode_block_size) *
+      return ceil_div(count, encode_block_size) *
              (encode_block_size * max_varint_size<int64_t>() + 2);
     default: CUDF_FAIL("Unsupported ORC type for RLE stream size: " + std::to_string(kind));
   }
@@ -868,6 +879,7 @@ struct extent_info {
  * @param[in] segmentation stripe and rowgroup ranges
  * @param[in] streams List of stream descriptors
  * @param[in] uncomp_block_align Required alignment of the codec's chunks
+ * @param[in] base_epoch Instant that encoded timestamps are stored relative to
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @return The encoded data, along with a [stripe][strm_id] description of every extent, flattened
  * with `streams.size()` elements per row
@@ -878,6 +890,7 @@ std::pair<encoded_data, std::vector<extent_info>> encode_columns(
   file_segmentation const& segmentation,
   orc_streams const& streams,
   uint32_t uncomp_block_align,
+  duration_s base_epoch,
   cuda::stream_ref stream)
 {
   CUDF_EXPECTS(uncomp_block_align > 0 and extent_alignment % uncomp_block_align == 0,
@@ -1051,7 +1064,7 @@ std::pair<encoded_data, std::vector<extent_info>> encode_columns(
       if (extent.size == 0) { continue; }
       extent.is_transient = segmentation.stripes[s].size > 1 and extent.has_slack;
       auto& arena_size    = extent.is_transient ? transient_arena_size : persistent_arena_size;
-      arena_size          = util::round_up_unsafe<size_t>(arena_size, extent_alignment);
+      arena_size          = cuda::round_up<size_t>(arena_size, extent_alignment);
       extent.offset       = arena_size;
       arena_size += extent.size;
     }
@@ -1129,7 +1142,7 @@ std::pair<encoded_data, std::vector<extent_info>> encode_columns(
                                  stream);
     }
 
-    encode_orc_column_data(chunks, chunk_streams, stream);
+    encode_orc_column_data(chunks, chunk_streams, base_epoch, stream);
   }
   chunk_streams.device_to_host(stream);
 
@@ -1213,7 +1226,7 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
     for (size_t strm_id = 0; strm_id < num_streams_in_data; ++strm_id) {
       auto& extent = gather_extents[s][strm_id];
       if (!extent.gathered) { continue; }
-      gather_total  = util::round_up_unsafe<size_t>(gather_total, extent_alignment);
+      gather_total  = cuda::round_up<size_t>(gather_total, extent_alignment);
       extent.offset = gather_total;
       gather_total += extent.size;
     }
@@ -2054,8 +2067,7 @@ hostdevice_2dvector<rowgroup_rows> calculate_rowgroup_bounds(orc_table_view cons
                                                              size_type rowgroup_size,
                                                              cuda::stream_ref stream)
 {
-  auto const num_rowgroups =
-    cudf::util::div_rounding_up_unsafe<size_t, size_t>(orc_table.num_rows(), rowgroup_size);
+  auto const num_rowgroups = cuda::ceil_div<size_t, size_t>(orc_table.num_rows(), rowgroup_size);
 
   hostdevice_2dvector<rowgroup_rows> rowgroup_bounds(
     num_rowgroups, orc_table.num_columns(), stream);
@@ -2294,6 +2306,8 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
   auto map_storage = std::make_unique<storage_type>(
     total_map_storage_size, rmm::mr::polymorphic_allocator<char>{}, stream.get());
 
+  // Largest stripe row count, used to size the grids of the dictionary kernels
+  size_type max_dict_rows = 0;
   // Initialize stripe dictionaries
   for (auto col_idx : orc_table.string_column_indices) {
     auto& str_column       = orc_table.column(col_idx);
@@ -2315,12 +2329,14 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
 
       sd.entry_count = 0;
       sd.char_count  = 0;
+
+      max_dict_rows = std::max(max_dict_rows, sd.num_rows);
     }
   }
   stripe_dicts.host_to_device_async(stream);
 
   map_storage->initialize_async({KEY_SENTINEL, VALUE_SENTINEL}, {stream.get()});
-  populate_dictionary_hash_maps(stripe_dicts, orc_table.d_columns, stream);
+  populate_dictionary_hash_maps(stripe_dicts, orc_table.d_columns, max_dict_rows, stream);
   // Copy the entry counts and char counts from the device to the host
   stripe_dicts.device_to_host(stream);
 
@@ -2367,7 +2383,7 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
   stripe_dicts.host_to_device_async(stream);
 
   collect_map_entries(stripe_dicts, stream);
-  get_dictionary_indices(stripe_dicts, orc_table.d_columns, stream);
+  get_dictionary_indices(stripe_dicts, orc_table.d_columns, max_dict_rows, stream);
 
   // synchronize to ensure the copy is complete before we clear `map_slots`
   stream.sync();
@@ -2462,6 +2478,7 @@ struct stripe_stream_size_less {
  * @param table_meta The table metadata
  * @param max_stripe_size Maximum size of stripes in the output file
  * @param row_index_stride The row index stride
+ * @param timezone Timezone that the written timestamps are relative to
  * @param enable_dictionary Whether dictionary is enabled
  * @param sort_dictionaries Whether to sort the dictionaries
  * @param compression The compression format
@@ -2477,6 +2494,7 @@ auto convert_table_to_orc_data(table_view const& input,
                                table_input_metadata const& table_meta,
                                stripe_size_limits max_stripe_size,
                                size_type row_index_stride,
+                               writer_timezone const& timezone,
                                bool enable_dictionary,
                                bool sort_dictionaries,
                                compression_type compression,
@@ -2515,8 +2533,13 @@ auto convert_table_to_orc_data(table_view const& input,
                                 compression,
                                 write_mode);
 
-  auto [enc_data, extents] = encode_columns(
-    orc_table, std::move(dec_chunk_sizes), segmentation, streams, block_align, stream);
+  auto [enc_data, extents] = encode_columns(orc_table,
+                                            std::move(dec_chunk_sizes),
+                                            segmentation,
+                                            streams,
+                                            block_align,
+                                            timezone.base_epoch,
+                                            stream);
 
   stripe_dicts.on_encode_complete(stream);
 
@@ -2557,9 +2580,8 @@ auto convert_table_to_orc_data(table_view const& input,
   auto const max_compressed_block_size =
     max_compressed_size(compression, std::min<size_t>(largest_stream_size, compression_blocksize));
   auto const padded_max_compressed_block_size =
-    util::round_up_unsafe<size_t>(max_compressed_block_size, block_align);
-  auto const padded_block_header_size =
-    util::round_up_unsafe<size_t>(block_header_size, block_align);
+    cuda::round_up<size_t>(max_compressed_block_size, block_align);
+  auto const padded_block_header_size = cuda::round_up<size_t>(block_header_size, block_align);
 
   for (auto& ss : strm_descs.host_view().flat_view()) {
     size_t stream_size = ss.stream_size;
@@ -2638,6 +2660,20 @@ auto convert_table_to_orc_data(table_view const& input,
 
 }  // namespace
 
+duration_s writer_timezone::compute_base_epoch(std::string_view timezone)
+{
+  // An empty name would omit `writerTimezone` from the stripe footers, which Apache readers
+  // resolve as their own local timezone rather than UTC
+  CUDF_EXPECTS(not timezone.empty(), "Writer timezone cannot be empty");
+
+  return base_epoch_in_timezone(timezone);
+}
+
+writer_timezone::writer_timezone(std::string timezone)
+  : name{std::move(timezone)}, base_epoch{compute_base_epoch(name)}
+{
+}
+
 writer::impl::impl(std::unique_ptr<data_sink> sink,
                    orc_writer_options const& options,
                    single_write_mode mode,
@@ -2652,6 +2688,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     _sort_dictionaries{options.get_enable_dictionary_sort()},
     _single_write_mode(mode),
     _kv_meta(options.get_key_value_metadata()),
+    _timezone(options.get_writer_timezone()),
     _out_sink(std::move(sink))
 {
   if (options.get_metadata()) {
@@ -2675,6 +2712,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     _sort_dictionaries{options.get_enable_dictionary_sort()},
     _single_write_mode(mode),
     _kv_meta(options.get_key_value_metadata()),
+    _timezone(options.get_writer_timezone()),
     _out_sink(std::move(sink))
 {
   if (options.get_metadata()) {
@@ -2684,11 +2722,22 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
                "Compression type not supported for ORC writer");
 }
 
-writer::impl::~impl() { close(); }
+writer::impl::~impl()
+{
+  // Must not throw
+  try {
+    close();
+  } catch (std::exception const& e) {
+    CUDF_LOG_WARN(std::string{"ORC writer failed to close during destruction: "} + e.what());
+  }
+}
 
 void writer::impl::write(table_view const& input)
 {
   CUDF_EXPECTS(_state != writer_state::CLOSED, "Data has already been flushed to out and closed");
+  CUDF_EXPECTS(
+    _state != writer_state::FAILED,
+    "Writer failed after output started; the output is incomplete and must be discarded");
 
   if (not _table_meta) { _table_meta = make_table_meta(input); }
 
@@ -2713,6 +2762,7 @@ void writer::impl::write(table_view const& input)
                               *_table_meta,
                               _max_stripe_size,
                               _row_index_stride,
+                              _timezone,
                               _enable_dictionary,
                               _sort_dictionaries,
                               _compression,
@@ -2723,7 +2773,29 @@ void writer::impl::write(table_view const& input)
                               *_out_sink,
                               _stream);
 
-  if (_state == writer_state::NO_DATA_WRITTEN) {
+  if (_footer.headerLength != 0) {
+    // verify the user isn't passing mismatched tables
+    CUDF_EXPECTS(_footer.types.size() == 1 + orc_table.num_columns(),
+                 "Mismatch in table structure between multiple calls to write");
+    CUDF_EXPECTS(
+      std::all_of(orc_table.columns.cbegin(),
+                  orc_table.columns.cend(),
+                  [&](auto const& col) { return _footer.types[col.id()].kind == col.orc_kind(); }),
+      "Mismatch in column types between multiple calls to write");
+  }
+
+  auto const first_write    = _state == writer_state::NO_DATA_WRITTEN;
+  auto const rowgroup_blobs = std::move(intermediate_stats.rowgroup_blobs);
+
+  // Everything that may run out of memory happens before output starts, so failures up to here
+  // are retryable.
+  _persisted_stripe_statistics.persist(
+    orc_table.num_rows(), _single_write_mode, std::move(intermediate_stats), _stream);
+
+  // Output may be partially written from here on.
+  _state = writer_state::FAILED;
+
+  if (first_write) {
     // Write the ORC file header if this is the first write
     _out_sink->host_write(MAGIC, std::strlen(MAGIC));
   }
@@ -2735,7 +2807,7 @@ void writer::impl::write(table_view const& input)
                          compressed_data,
                          comp_results,
                          strm_descs,
-                         intermediate_stats.rowgroup_blobs,
+                         rowgroup_blobs,
                          streams,
                          stripes,
                          bounce_buffer);
@@ -2743,23 +2815,11 @@ void writer::impl::write(table_view const& input)
   // Update data into the footer. This needs to be called even when num_rows==0.
   add_table_to_footer_data(orc_table, stripes);
 
-  // Update file-level and compression statistics
-  update_statistics(orc_table.num_rows(), std::move(intermediate_stats), compression_stats);
-
-  _state = writer_state::DATA_WRITTEN;
-}
-
-void writer::impl::update_statistics(
-  size_type num_rows,
-  intermediate_statistics&& intermediate_stats,
-  std::optional<writer_compression_statistics> const& compression_stats)
-{
-  _persisted_stripe_statistics.persist(
-    num_rows, _single_write_mode, std::move(intermediate_stats), _stream);
-
   if (compression_stats.has_value() and _compression_statistics != nullptr) {
     *_compression_statistics += compression_stats.value();
   }
+
+  _state = writer_state::DATA_WRITTEN;
 }
 
 void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,
@@ -2825,7 +2885,7 @@ void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,
         (sf.columns[i].kind == DICTIONARY_V2)
           ? orc_table.column(i - 1).host_stripe_dict(stripe_id).entry_count
           : 0;
-      if (orc_table.column(i - 1).orc_kind() == TIMESTAMP) { sf.writerTimezone = "UTC"; }
+      if (orc_table.column(i - 1).orc_kind() == TIMESTAMP) { sf.writerTimezone = _timezone.name; }
     }
 
     protobuf_writer pbw;
@@ -2893,15 +2953,6 @@ void writer::impl::add_table_to_footer_data(orc_table_view const& orc_table,
                        });
       }
     }
-  } else {
-    // verify the user isn't passing mismatched tables
-    CUDF_EXPECTS(_footer.types.size() == 1 + orc_table.num_columns(),
-                 "Mismatch in table structure between multiple calls to write");
-    CUDF_EXPECTS(
-      std::all_of(orc_table.columns.cbegin(),
-                  orc_table.columns.cend(),
-                  [&](auto const& col) { return _footer.types[col.id()].kind == col.orc_kind(); }),
-      "Mismatch in column types between multiple calls to write");
   }
   _footer.stripes.insert(_footer.stripes.end(),
                          std::make_move_iterator(stripes.begin()),
@@ -2912,16 +2963,21 @@ void writer::impl::add_table_to_footer_data(orc_table_view const& orc_table,
 void writer::impl::close()
 {
   if (_state != writer_state::DATA_WRITTEN) {
-    // writer is either closed or no data has been written
+    // The writer is closed, empty, or failed. Failed output must not be finalized.
     _state = writer_state::CLOSED;
     return;
   }
+
+  std::optional<encoded_footer_statistics> statistics;
+  if (_stats_freq != statistics_freq::STATISTICS_NONE) {
+    statistics = finish_statistic_blobs(_footer, _persisted_stripe_statistics, _stream);
+  }
+
+  // Output may be partially written from here on.
+  _state = writer_state::FAILED;
   PostScript ps;
 
-  if (_stats_freq != statistics_freq::STATISTICS_NONE) {
-    // Write column statistics
-    auto statistics = finish_statistic_blobs(_footer, _persisted_stripe_statistics, _stream);
-
+  if (statistics.has_value()) {
     // File-level statistics
     {
       _footer.statistics.reserve(_footer.types.size());
@@ -2937,8 +2993,8 @@ void writer::impl::close()
 
       // Add file stats, stored after stripe stats in `column_stats`
       _footer.statistics.insert(_footer.statistics.end(),
-                                std::make_move_iterator(statistics.file_level.begin()),
-                                std::make_move_iterator(statistics.file_level.end()));
+                                std::make_move_iterator(statistics->file_level.begin()),
+                                std::make_move_iterator(statistics->file_level.end()));
     }
 
     // Stripe-level statistics
@@ -2960,7 +3016,7 @@ void writer::impl::close()
         for (size_t col_idx = 0; col_idx < _footer.types.size() - 1; col_idx++) {
           size_t idx = _footer.stripes.size() * col_idx + stripe_id;
           _orc_meta.stripeStats[stripe_id].colStats[1 + col_idx] =
-            std::move(statistics.stripe_level[idx]);
+            std::move(statistics->stripe_level[idx]);
         }
       }
     }

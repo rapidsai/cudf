@@ -23,12 +23,12 @@ import pylibcudf
 import rmm
 from rmm._cuda import gpu
 
-import cudf_polars.dsl.tracing
 from cudf_polars.dsl.ir import (
     IRExecutionContext,
 )
 from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
 from cudf_polars.dsl.translate import Translator
+from cudf_polars.testing.fallback import gpu_attempted, gpu_executed, record_fallback
 from cudf_polars.utils.config import (
     MemoryResourceConfig,
     _env_get_int,
@@ -187,11 +187,6 @@ def set_memory_resource(
             memory_resource_config=memory_resource_config,
         )
 
-    if (
-        cudf_polars.dsl.tracing.LOG_TRACES
-    ):  # pragma: no cover; requires CUDF_POLARS_LOG_TRACES=1
-        mr = rmm.mr.StatisticsResourceAdaptor(mr)
-
     rmm.mr.set_current_device_resource(mr)
     try:
         yield mr
@@ -303,6 +298,7 @@ def _callback(
         if config_options.executor.name == "in-memory":
             context = IRExecutionContext()
             df = ir.evaluate(cache={}, timer=timer, context=context).to_polars()
+            gpu_executed.set(True)
             if timer is None:
                 return df
             else:
@@ -318,7 +314,9 @@ def _callback(
                     """)
                 raise NotImplementedError(msg)
 
-            return evaluate_streaming(ir, config_options)
+            df = evaluate_streaming(ir, config_options)
+            gpu_executed.set(True)
+            return df
         assert_never(config_options.executor)
 
 
@@ -351,6 +349,8 @@ def execute_with_cudf(
     -----
     The NodeTraverser is mutated if the libcudf executor can handle the plan.
     """
+    # Translation can decline a plan before the execution callback is installed.
+    gpu_attempted.set(True)
     if duration_since_start is None:
         timer = None
     else:
@@ -372,6 +372,7 @@ def execute_with_cudf(
                 warnings.warn(error_message, PerformanceWarning, stacklevel=2)
             if translator.config_options.raise_on_fail:
                 raise exception
+            record_fallback()
         else:
             nt.set_udf(
                 partial(
