@@ -890,8 +890,11 @@ jobs:
       fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheel_cudf
     with:
       build_type: pull-request
+      # TEMPORARY(cupy-nightly): validate nightly cupy in PR CI. Revert before merge.
+      continue-on-error: true
       script: >-
         env
+        CUPY_NIGHTLY=true
         RUN_PYLIBCUDF_TESTS=${{
         fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common ||
         fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf ||
@@ -918,7 +921,10 @@ jobs:
         }}
         ci/test_wheel_cudf.sh
       # https://github.com/NVIDIA/cudf/issues/23498
-      matrix_filter: map(select(.GPU != "gb300" and .GPU != "gh200"))
+      # TEMPORARY(cupy-nightly): added `.DEPENDENCIES == "latest"` filter so the
+      # `oldest` matrix entries (which pin cupy==14.0.1) don't conflict with the
+      # nightly cupy wheel. Revert this line to the GPU-only filter before merge.
+      matrix_filter: map(select(.GPU != "gb300" and .GPU != "gh200" and .DEPENDENCIES == "latest"))
   wheel-tests-cudf-polars:
     needs: [wheel-build, wheel-python-build-noarch, changed-files]
     permissions:
