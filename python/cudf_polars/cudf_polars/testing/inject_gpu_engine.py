@@ -317,19 +317,16 @@ def pytest_collection_modifyitems(
         full_suite = any(
             Path(arg.split("::", 1)[0]).name == "tests" for arg in config.args
         )
+        requested = [
+            arg[arg.index("tests/") :] for arg in config.args if "tests/" in arg
+        ]
+        explicit_node = any("::" in arg for arg in config.args)
         stale = sorted(
             node
             for node in selection - inventory
             if (full_suite or node.split("::", 1)[0] in collected_files)
             and not any(node.startswith(module) for module in collection_skips)
-            and not (
-                any("::" in arg for arg in config.args)
-                and not any(
-                    node.startswith(arg[arg.index("tests/") :])
-                    for arg in config.args
-                    if "tests/" in arg
-                )
-            )
+            and (not explicit_node or any(node.startswith(arg) for arg in requested))
         )
         if stale:
             raise pytest.UsageError("Stale GPU run-list nodes:\n" + "\n".join(stale))

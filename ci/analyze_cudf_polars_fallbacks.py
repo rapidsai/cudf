@@ -25,24 +25,19 @@ def configuration_key(run: dict[str, Any]) -> str | tuple[Any, ...]:
 
 
 def validate_report(run: dict[str, Any], tests: list[dict[str, Any]]) -> None:
-    """Reject corrupt fields before calculating summaries or audit candidates."""
-    if not isinstance(run["engine"], str) or run["engine"] not in {
-        "in-memory",
-        "spmd",
-    }:
-        raise ValueError("Invalid injected engine")
-    if any(
-        run.get(name) is not None and not isinstance(run[name], str)
-        for name in (
-            "python",
-            "arch",
-            "cuda",
-            "dependencies",
-            "configuration",
-            "polars_version",
-        )
+    """Reject malformed reports before calculating summaries or candidates."""
+    if run["engine"] not in ("in-memory", "spmd"):
+        raise ValueError(f"Invalid injected engine: {run['engine']!r}")
+    for name in (
+        "python",
+        "arch",
+        "cuda",
+        "dependencies",
+        "configuration",
+        "polars_version",
     ):
-        raise ValueError("Invalid matrix configuration metadata")
+        if (value := run.get(name)) is not None and not isinstance(value, str):
+            raise ValueError(f"Invalid {name}: {value!r}")
     if any(
         name in run
         and (
@@ -56,27 +51,26 @@ def validate_report(run: dict[str, Any], tests: list[dict[str, Any]]) -> None:
         )
     ):
         raise ValueError("Invalid collection inventory")
-    if any(
-        test[name] not in {"true", "false", "unknown"}
-        for test in tests
-        for name in ("fallback", "gpu_attempted", "gpu_executed")
-    ):
-        raise ValueError("Invalid GPU observation values")
-    if any(
-        not isinstance(test["nodeid"], str)
-        or test["outcome"]
-        not in {
-            "incomplete",
-            "passed",
-            "xpassed",
-            "xfailed",
-            "skipped",
-            "failed",
-            "error",
-        }
-        for test in tests
-    ):
-        raise ValueError("Invalid pytest item data")
+    outcomes = {
+        "incomplete",
+        "passed",
+        "xpassed",
+        "xfailed",
+        "skipped",
+        "failed",
+        "error",
+    }
+    for test in tests:
+        if (
+            not isinstance(test["nodeid"], str)
+            or test["outcome"] not in outcomes
+        ):
+            raise ValueError(f"Invalid pytest item: {test!r}")
+        for name in ("fallback", "gpu_attempted", "gpu_executed"):
+            if test[name] not in ("true", "false", "unknown"):
+                raise ValueError(
+                    f"Invalid {name} for {test['nodeid']}: {test[name]!r}"
+                )
 
 
 def build_report(paths: list[Path]) -> dict[str, Any]:
@@ -99,9 +93,6 @@ def build_report(paths: list[Path]) -> dict[str, Any]:
             run_tests = [
                 {
                     **test,
-                    "nodeid": test["nodeid"],
-                    "outcome": test["outcome"],
-                    "fallback": test["fallback"],
                     "gpu_attempted": test.get("gpu_attempted", "unknown"),
                     "gpu_executed": test.get("gpu_executed", "unknown"),
                     "engine": engine,
@@ -231,39 +222,20 @@ def audit_report(
         try:
             key = selection_key(run)
             if (
-                not isinstance(run["collected_nodeids"], list)
-                or not isinstance(run["collection_nodeids"], list)
-                or not isinstance(run.get("collection_skips"), list)
-                or not isinstance(run["polars_version"], str)
-                or not run["polars_version"]
-                or any(
-                    not isinstance(run.get(name), str)
-                    or len(run[name]) != 40
-                    or any(
-                        char not in "0123456789abcdef" for char in run[name]
-                    )
-                    for name in ("cudf_sha", "upstream_sha")
+                any(
+                    not isinstance(run[name], str) or not run[name]
+                    for name in ("polars_version", "cudf_sha", "upstream_sha")
                 )
+                or run["shard_id"] not in range(run["num_shards"])
                 or any(
-                    isinstance(run[name], bool)
-                    or not isinstance(run[name], int)
+                    not isinstance(run[name], list)
+                    or not all(isinstance(node, str) for node in run[name])
                     for name in (
-                        "num_shards",
-                        "shard_id",
-                        "collected",
-                        "exitstatus",
+                        "collected_nodeids",
+                        "collection_nodeids",
+                        "collection_skips",
                     )
                 )
-                or not all(
-                    isinstance(node, str) for node in run["collection_nodeids"]
-                )
-                or not all(
-                    isinstance(node, str) for node in run["collection_skips"]
-                )
-                or not isinstance(run["num_shards"], int)
-                or run["num_shards"] < 1
-                or not isinstance(run["shard_id"], int)
-                or not 0 <= run["shard_id"] < run["num_shards"]
             ):
                 errors.append(f"Invalid collection metadata: {run['run']}")
                 continue

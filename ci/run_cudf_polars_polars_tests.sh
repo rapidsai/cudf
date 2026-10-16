@@ -13,6 +13,8 @@ if [[ -n "${CUDF_POLARS_GPU_RUN_LIST:-}" ]]; then
     RUN_LIST_ARGS=(--inject-gpu-engine-run-list="$(realpath "${SCRIPT_DIR}/../${CUDF_POLARS_GPU_RUN_LIST}")")
 fi
 if [[ "${CI:-false}" == "true" ]]; then
+    # GitHub exposes the job name but not its numeric ID to steps; the audit
+    # matches each report to that ID to detect missing matrix jobs and shards.
     producer_json=$(gh api --paginate \
         "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest&per_page=100" \
         | jq -c --arg runner "${RUNNER_NAME}" \

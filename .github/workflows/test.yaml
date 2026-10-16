@@ -404,7 +404,7 @@ jobs:
         run: |
           gh run download "${GITHUB_RUN_ID}" --repo "${GITHUB_REPOSITORY}" \
             --name "${AUDIT_ARTIFACT}" --dir audit
-          python -c 'import json; from pathlib import Path; audit = json.loads(Path("audit/run-list-drift.json").read_text()); print("GPU run-list audit:", audit["status"]); raise SystemExit(audit["status"] != "current")'
+          jq -e '.status == "current"' audit/run-list-drift.json
   narwhals-tests:
     permissions:
       actions: read
