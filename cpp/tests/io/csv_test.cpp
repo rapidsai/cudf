@@ -1159,19 +1159,18 @@ TEST_P(CsvStringStagingTest, AllocationFailureAndRecovery)
   std::atomic<std::size_t> live_bytes{0};
   std::atomic<bool> injected{false};
   rmm::mr::callback_memory_resource failing_mr{
-    [&](std::size_t bytes, auto allocation_stream, void*) -> void* {
+    [&](auto allocation_stream, std::size_t bytes, std::size_t alignment, void*) -> void* {
       if (std::this_thread::get_id() != caller) { ++worker_allocations; }
       if (++allocations == fail_at) {
         injected = true;
         throw rmm::out_of_memory{"Injected CSV materialization allocation failure"};
       }
-      auto* ptr =
-        upstream.allocate(allocation_stream, bytes, cuda::mr::default_cuda_malloc_alignment);
+      auto* ptr = upstream.allocate(allocation_stream, bytes, alignment);
       live_bytes += bytes;
       return ptr;
     },
-    [&](void* ptr, std::size_t bytes, auto allocation_stream, void*) {
-      upstream.deallocate(allocation_stream, ptr, bytes, cuda::mr::default_cuda_malloc_alignment);
+    [&](auto allocation_stream, void* ptr, std::size_t bytes, std::size_t alignment, void*) {
+      upstream.deallocate(allocation_stream, ptr, bytes, alignment);
       live_bytes -= bytes;
     }};
   cudf::test::scoped_current_device_resource current_mr{failing_mr};
