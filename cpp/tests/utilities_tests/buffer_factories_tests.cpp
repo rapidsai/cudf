@@ -132,8 +132,7 @@ TYPED_TEST(BufferFactoriesTest, StdVectorDeepCopy)
       },
       expected);
     SCOPED_TRACE(::testing::Message() << "size=" << size << ", async");
-    auto input          = this->make_input(size);
-    auto const expected = input;
+    input = this->make_input(size);
     this->check_buffer(
       [&](cudf::memory_resources mr) {
         auto result = cudf::detail::make_device_buffer_async(input, this->stream, mr);
