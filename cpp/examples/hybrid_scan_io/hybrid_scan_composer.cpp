@@ -249,16 +249,15 @@ std::unique_ptr<cudf::table> single_step_materialize(
   all_column_chunk_read_tasks.get();
   nvtxRangePop();
 
-  auto read_table =
-    reader
-      .materialize_columns<read_columns_mode::ALL_COLUMNS>(current_row_group_indices,
-                                                           all_column_chunk_data,
-                                                           {},
-                                                           use_data_page_mask::NO,
-                                                           options,
-                                                           stream,
-                                                           mr)
-      .tbl;
+  auto read_table = reader
+                      .materialize_table<read_columns_mode::ALL_COLUMNS>(current_row_group_indices,
+                                                                         all_column_chunk_data,
+                                                                         {},
+                                                                         use_data_page_mask::NO,
+                                                                         options,
+                                                                         stream,
+                                                                         mr)
+                      .tbl;
 
   if (verbose) { timer.print_elapsed_millis(); }
 
@@ -333,7 +332,7 @@ std::unique_ptr<cudf::table> two_step_materialize(
   auto row_mask_mutable_view = row_mask->mutable_view();
   auto filter_table =
     reader
-      .materialize_columns<read_columns_mode::FILTER_COLUMNS>(
+      .materialize_table<read_columns_mode::FILTER_COLUMNS>(
         current_row_group_indices,
         filter_column_chunk_data,
         row_mask_mutable_view,
@@ -371,7 +370,7 @@ std::unique_ptr<cudf::table> two_step_materialize(
 
   auto payload_table =
     reader
-      .materialize_columns<read_columns_mode::PAYLOAD_COLUMNS>(
+      .materialize_table<read_columns_mode::PAYLOAD_COLUMNS>(
         current_row_group_indices,
         payload_column_chunk_data,
         row_mask->view(),

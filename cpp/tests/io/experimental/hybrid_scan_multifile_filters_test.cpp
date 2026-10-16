@@ -262,7 +262,7 @@ TEST_F(HybridScanMultifileFiltersTest, MismatchedNullabilityDoesNotLeakIntoMetad
     reader.column_chunks_byte_ranges<read_columns_mode::ALL_COLUMNS>(row_groups, options),
     stream,
     mr);
-  auto const result = reader.materialize_columns<read_columns_mode::ALL_COLUMNS>(
+  auto const result = reader.materialize_table<read_columns_mode::ALL_COLUMNS>(
     row_groups, column_data.flat_spans, {}, use_data_page_mask::NO, options, stream, mr);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected.tbl->view(), result.tbl->view());
@@ -283,7 +283,7 @@ TEST_F(HybridScanMultifileFiltersTest, MismatchedNullabilityDoesNotLeakIntoMetad
     stream,
     mr);
   auto const downstream_result =
-    reader_from_metadata.materialize_columns<read_columns_mode::ALL_COLUMNS>(
+    reader_from_metadata.materialize_table<read_columns_mode::ALL_COLUMNS>(
       row_groups,
       downstream_column_data.flat_spans,
       {},

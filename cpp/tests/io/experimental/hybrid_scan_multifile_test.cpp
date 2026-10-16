@@ -254,13 +254,13 @@ TEST_F(HybridScanMultifileTest, PrependIndexColumns)
     mr);
   auto row_mask_view = row_mask->mutable_view();
   auto filter_result =
-    reader.materialize_columns<read_columns_mode::FILTER_COLUMNS>(row_group_indices,
-                                                                  filter_column_chunks.flat_spans,
-                                                                  row_mask_view,
-                                                                  use_data_page_mask::NO,
-                                                                  options,
-                                                                  stream,
-                                                                  mr);
+    reader.materialize_table<read_columns_mode::FILTER_COLUMNS>(row_group_indices,
+                                                                filter_column_chunks.flat_spans,
+                                                                row_mask_view,
+                                                                use_data_page_mask::NO,
+                                                                options,
+                                                                stream,
+                                                                mr);
 
   ASSERT_EQ(filter_result.tbl->num_columns(), 3);
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_table, filter_result.tbl->view());
@@ -273,13 +273,13 @@ TEST_F(HybridScanMultifileTest, PrependIndexColumns)
     stream,
     mr);
   auto payload_result =
-    reader.materialize_columns<read_columns_mode::PAYLOAD_COLUMNS>(row_group_indices,
-                                                                   payload_column_chunks.flat_spans,
-                                                                   row_mask->view(),
-                                                                   use_data_page_mask::NO,
-                                                                   options,
-                                                                   stream,
-                                                                   mr);
+    reader.materialize_table<read_columns_mode::PAYLOAD_COLUMNS>(row_group_indices,
+                                                                 payload_column_chunks.flat_spans,
+                                                                 row_mask->view(),
+                                                                 use_data_page_mask::NO,
+                                                                 options,
+                                                                 stream,
+                                                                 mr);
   ASSERT_EQ(payload_result.tbl->num_columns(), 1);
   // col1 (payload) must be identical to col0 (filter) with the same row_mask
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_table.select({2}), payload_result.tbl->view());
@@ -394,12 +394,11 @@ TEST_F(HybridScanMultifileTest, SparseDictionaryEncodedPages)
   EXPECT_EQ(expected_ranges, actual_ranges);
 
   auto page_data = fetch_multisource_device_data(inputs, page_ranges, stream, mr);
-  reader.setup_chunking_for_sparse_payload_columns(
+  reader.setup_chunked_sparse_payload_materialization(
     0, 0, row_groups, page_data.flat_spans, row_mask, reader_options, stream, mr);
 
   ASSERT_TRUE(reader.has_next_table_chunk());
-  auto const result =
-    reader.materialize_next_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask);
+  auto const result = reader.materialize_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask);
   EXPECT_FALSE(reader.has_next_table_chunk());
 
   auto const input =
@@ -469,11 +468,11 @@ TEST_F(HybridScanMultifileTest, SparsePayloadEmptyAndAllPrunedPageData)
     auto false_scalar          = cudf::numeric_scalar<bool>{false};
     auto row_mask              = cudf::make_column_from_scalar(false_scalar, 0);
 
-    EXPECT_NO_THROW(reader->setup_chunking_for_sparse_payload_columns(
+    EXPECT_NO_THROW(reader->setup_chunked_sparse_payload_materialization(
       0, 0, row_groups, empty_page_data, row_mask->view(), options, stream, mr));
     ASSERT_TRUE(reader->has_next_table_chunk());
     auto const result =
-      reader->materialize_next_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask->view());
+      reader->materialize_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask->view());
     EXPECT_EQ(result.tbl->num_rows(), 0);
     EXPECT_EQ(result.metadata.num_input_row_groups, 0);
     EXPECT_FALSE(reader->has_next_table_chunk());
@@ -489,7 +488,7 @@ TEST_F(HybridScanMultifileTest, SparsePayloadEmptyAndAllPrunedPageData)
     auto const row_mask        = reader->build_all_true_row_mask(row_groups, stream, mr);
     auto const empty_page_data = std::vector<cudf::device_span<uint8_t const>>{};
 
-    EXPECT_THROW(reader->setup_chunking_for_sparse_payload_columns(
+    EXPECT_THROW(reader->setup_chunked_sparse_payload_materialization(
                    0, 0, row_groups, empty_page_data, row_mask->view(), options, stream, mr),
                  cudf::logic_error);
   }
@@ -513,11 +512,11 @@ TEST_F(HybridScanMultifileTest, SparsePayloadEmptyAndAllPrunedPageData)
                             [](auto const& range) { return range.is_empty(); }));
     auto const all_pruned_page_data =
       std::vector<cudf::device_span<uint8_t const>>(page_ranges.first.size());
-    reader->setup_chunking_for_sparse_payload_columns(
+    reader->setup_chunked_sparse_payload_materialization(
       0, 0, row_groups, all_pruned_page_data, row_mask->view(), options, stream, mr);
     ASSERT_TRUE(reader->has_next_table_chunk());
     auto const result =
-      reader->materialize_next_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask->view());
+      reader->materialize_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask->view());
     EXPECT_EQ(result.tbl->num_rows(), 0);
     EXPECT_EQ(result.tbl->num_columns(), 1);
     // Two sources with four row groups each
@@ -549,7 +548,7 @@ TEST_F(HybridScanMultifileTest, AllColumnsPreservesRequiredNullability)
     reader.column_chunks_byte_ranges<read_columns_mode::ALL_COLUMNS>(row_groups, options),
     stream,
     mr);
-  auto const result = reader.materialize_columns<read_columns_mode::ALL_COLUMNS>(
+  auto const result = reader.materialize_table<read_columns_mode::ALL_COLUMNS>(
     row_groups, column_data.flat_spans, {}, use_data_page_mask::NO, options, stream, mr);
 
   // Check results
@@ -601,7 +600,7 @@ TEST_F(HybridScanMultifileTest, MismatchedSchemaNullabilityDoesNotLeakIntoMetada
     reader.column_chunks_byte_ranges<read_columns_mode::ALL_COLUMNS>(row_groups, options),
     stream,
     mr);
-  auto const result = reader.materialize_columns<read_columns_mode::ALL_COLUMNS>(
+  auto const result = reader.materialize_table<read_columns_mode::ALL_COLUMNS>(
     row_groups, column_data.flat_spans, {}, use_data_page_mask::NO, options, stream, mr);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected.tbl->view(), result.tbl->view());
@@ -623,7 +622,7 @@ TEST_F(HybridScanMultifileTest, MismatchedSchemaNullabilityDoesNotLeakIntoMetada
     stream,
     mr);
   auto const downstream_result =
-    reader_from_metadata.materialize_columns<read_columns_mode::ALL_COLUMNS>(
+    reader_from_metadata.materialize_table<read_columns_mode::ALL_COLUMNS>(
       row_groups,
       downstream_column_data.flat_spans,
       {},
@@ -685,7 +684,7 @@ TEST_F(HybridScanMultifileTest, ReadColumnsFromMismatchedSchemas)
       reader.column_chunks_byte_ranges<read_columns_mode::ALL_COLUMNS>(row_groups, options),
       stream,
       mr);
-    auto const result = reader.materialize_columns<read_columns_mode::ALL_COLUMNS>(
+    auto const result = reader.materialize_table<read_columns_mode::ALL_COLUMNS>(
       row_groups, column_data.flat_spans, {}, use_data_page_mask::NO, options, stream, mr);
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected.tbl->view(), result.tbl->view());
   }
@@ -726,27 +725,27 @@ TEST_F(HybridScanMultifileTest, ReadColumnsFromMismatchedSchemas)
       stream,
       mr);
     auto const filter_result =
-      reader.materialize_columns<read_columns_mode::FILTER_COLUMNS>(row_groups,
-                                                                    filter_column_chunks.flat_spans,
-                                                                    row_mask_view,
-                                                                    use_data_page_mask::YES,
-                                                                    options,
-                                                                    stream,
-                                                                    mr);
+      reader.materialize_table<read_columns_mode::FILTER_COLUMNS>(row_groups,
+                                                                  filter_column_chunks.flat_spans,
+                                                                  row_mask_view,
+                                                                  use_data_page_mask::YES,
+                                                                  options,
+                                                                  stream,
+                                                                  mr);
 
     auto payload_column_chunks = fetch_multisource_device_data(
       inputs,
       reader.column_chunks_byte_ranges<read_columns_mode::PAYLOAD_COLUMNS>(row_groups, options),
       stream,
       mr);
-    auto const payload_result = reader.materialize_columns<read_columns_mode::PAYLOAD_COLUMNS>(
-      row_groups,
-      payload_column_chunks.flat_spans,
-      row_mask_view,
-      use_data_page_mask::YES,
-      options,
-      stream,
-      mr);
+    auto const payload_result =
+      reader.materialize_table<read_columns_mode::PAYLOAD_COLUMNS>(row_groups,
+                                                                   payload_column_chunks.flat_spans,
+                                                                   row_mask_view,
+                                                                   use_data_page_mask::YES,
+                                                                   options,
+                                                                   stream,
+                                                                   mr);
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_filtered.tbl->select({0}),
                                        filter_result.tbl->view());

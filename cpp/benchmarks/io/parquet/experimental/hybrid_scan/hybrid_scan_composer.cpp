@@ -147,13 +147,13 @@ std::unique_ptr<cudf::table> single_step_materialize(
   all_column_chunk_read_tasks.get();
 
   return reader
-    .materialize_columns<read_columns_mode::ALL_COLUMNS>(current_row_group_indices,
-                                                         all_column_chunk_data,
-                                                         {},
-                                                         use_data_page_mask::NO,
-                                                         options,
-                                                         stream,
-                                                         mr)
+    .materialize_table<read_columns_mode::ALL_COLUMNS>(current_row_group_indices,
+                                                       all_column_chunk_data,
+                                                       {},
+                                                       use_data_page_mask::NO,
+                                                       options,
+                                                       stream,
+                                                       mr)
     .tbl;
 }
 

@@ -71,12 +71,9 @@ enum class read_columns_mode : int8_t {
 };
 
 /**
- * @brief Row mask column view type for the columns selection `mode`
+ * @brief Row mask view type for the column selection `mode`. Mutable for filter columns
  *
- * Materializing filter columns updates the row mask in place so it requires a mutable view. Other
- * columns selections only read the row mask so they take an immutable view.
- *
- * @tparam mode Columns selection
+ * @tparam mode Column selection
  */
 template <read_columns_mode mode>
 using row_mask_view_t = std::conditional_t<mode == read_columns_mode::FILTER_COLUMNS,
@@ -324,15 +321,15 @@ class hybrid_scan_metadata {
  *
  * Materialize filter columns: Once we are done with pruning row groups and constructing the row
  * mask, the next step is to materialize filter columns into a table (first reader pass). This is
- * done using the `materialize_columns<read_columns_mode::FILTER_COLUMNS>()` function. This function
- * requires a span of device spans of column chunk data for the current list of row groups, and a
- * mutable view of the current row mask. The function optionally builds a mask for the current data
- * pages using the input row mask to skip decompression and decoding of the pruned pages based on
- * the `mask_data_pages` argument. The filter columns are then read into a table and filtered based
- * on the filter expression and the row mask is updated to only indicate the rows that survive in
- * the read table. The final table is returned. The byte ranges for the required column chunk data
- * may be obtained using the `column_chunks_byte_ranges<read_columns_mode::FILTER_COLUMNS>()`
- * function and read into device buffers with corresponding device spans.
+ * done using the `materialize_table<FILTER_COLUMNS>()` function. This function requires a span of
+ * device spans of column chunk data for the current list of row groups, and a mutable view
+ * of the current row mask. The function optionally builds a mask for the current data pages using
+ * the input row mask to skip decompression and decoding of the pruned pages based on the
+ * `mask_data_pages` argument. The filter columns are then read into a table and filtered based on
+ * the filter expression and the row mask is updated to only indicate the rows that survive in the
+ * read table. The final table is returned. The byte ranges for the required column chunk data may
+ * be obtained using the `column_chunks_byte_ranges<FILTER_COLUMNS>()` function and read into device
+ * buffers with corresponding device spans.
  * @code{.cpp}
  * // Get byte ranges of column chunk byte ranges from the reader
  * auto const filter_col_byte_ranges =
@@ -350,7 +347,7 @@ class hybrid_scan_metadata {
  *
  * // Materialize the table with only the filter columns
  * auto [filter_table, filter_metadata] =
- *   reader->materialize_columns<read_columns_mode::FILTER_COLUMNS>(
+ *   reader->materialize_table<read_columns_mode::FILTER_COLUMNS>(
  *     current_row_group_indices,
  *     filter_col_data,
  *     row_mask->mutable_view(),
@@ -362,12 +359,11 @@ class hybrid_scan_metadata {
  *
  * Materialize payload columns: Once the filter columns are materialized, the final step is to
  * materialize the payload columns into another table (second reader pass). This is done using the
- * `materialize_columns<read_columns_mode::PAYLOAD_COLUMNS>()` function which is identical to the
- * first reader pass in terms of functionality except that it accepts an immutable view of the row
- * mask and uses it to filter the read output table before returning it. The byte ranges for the
- * required column chunk data may be obtained using the
- * `column_chunks_byte_ranges<read_columns_mode::PAYLOAD_COLUMNS>()` function and read into device
- * buffers with corresponding device spans.
+ * `materialize_table<PAYLOAD_COLUMNS>()` function which is identical to the first reader pass in
+ * terms of functionality except that it accepts an immutable view of the row mask and uses it to
+ * filter the read output table before returning it. The byte ranges for the required column chunk
+ * data may be obtained using the `column_chunks_byte_ranges<PAYLOAD_COLUMNS>()` function and read
+ * into device buffers with corresponding device spans.
  * @code{.cpp}
  * // Get column chunk byte ranges from the reader
  * auto const payload_col_byte_ranges =
@@ -385,7 +381,7 @@ class hybrid_scan_metadata {
  *
  * // Materialize the table with only the payload columns
  * auto [payload_table, payload_metadata] =
- *   reader->materialize_columns<read_columns_mode::PAYLOAD_COLUMNS>(
+ *   reader->materialize_table<read_columns_mode::PAYLOAD_COLUMNS>(
  *     current_row_group_indices,
  *     payload_col_data,
  *     row_mask->view(),
@@ -397,28 +393,6 @@ class hybrid_scan_metadata {
  *
  * Once both reader passes are complete, the filter and payload column tables may be trivially
  * combined by releasing the columns from both tables and moving them into a new cudf table.
- *
- * Chunked materialization (OPTIONAL): Either reader pass may instead be materialized in table
- * chunks of bounded size by setting up chunking once with `setup_chunking_for_columns<mode>()` and
- * then calling `materialize_next_table_chunk<mode>()` with the same `mode` while
- * `has_next_table_chunk()` returns true. All selected columns may also be read in a single pass
- * without a row mask using `read_columns_mode::ALL_COLUMNS`.
- * @code{.cpp}
- * reader->setup_chunking_for_columns<read_columns_mode::PAYLOAD_COLUMNS>(
- *   chunk_read_limit,
- *   pass_read_limit,
- *   current_row_group_indices,
- *   payload_col_data,
- *   row_mask->view(),
- *   use_data_page_mask::YES,
- *   options,
- *   stream,
- *   mr);
- * while (reader->has_next_table_chunk()) {
- *   auto [payload_chunk, payload_chunk_metadata] =
- *     reader->materialize_next_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask->view());
- * }
- * @endcode
  *
  * @note The performance advantage of this reader is most prominent when the filter expression
  * is highly selective, i.e. when the data in filter columns are at least partially ordered and the
@@ -638,12 +612,11 @@ class hybrid_scan_reader {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @brief Get byte ranges of column chunks of the columns selected by `mode`
+   * @brief Get byte ranges of column chunks of the selected columns
    *
-   * @tparam mode Columns selection: filter columns (columns appearing in the filter expression),
-   *         payload columns (selected columns not appearing in the filter expression), or all
-   *         selected columns
+   * Byte ranges are flattened in row group and column chunk order.
    *
+   * @tparam mode Column selection (filter, payload or all)
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
    * @return Vector of byte ranges to column chunks of the selected columns
@@ -666,35 +639,25 @@ class hybrid_scan_reader {
     std::span<size_type const> row_group_indices, parquet_reader_options const& options);
 
   /**
-   * @brief Materializes the columns selected by `mode`
+   * @brief Materializes the selected columns. Filter columns also update the input row mask to
+   * only the rows that exist in the output table
    *
-   * Filter columns are filtered using the filter expression and the input row mask is updated in
-   * place to only the rows that exist in the output table. Payload columns are filtered by applying
-   * the input row mask to the output table. All selected columns are read without a row mask.
-   *
-   * @throws cudf::logic_error if `mode` is `FILTER_COLUMNS` and there is no filter expression
-   * @throws cudf::logic_error if `mode` is `PAYLOAD_COLUMNS` and the row mask has nulls
-   *
-   * @tparam mode Columns selection. `FILTER_COLUMNS` requires a mutable row mask view (see
-   *         `row_mask_view_t`)
-   *
+   * @tparam mode Column selection
    * @param row_group_indices Input row groups indices
-   * @param column_chunk_data Device spans of column chunk data of the selected columns, in the
-   *        same order as the byte ranges returned by `column_chunks_byte_ranges<mode>()`
-   * @param[in,out] row_mask Boolean column indicating surviving rows. Updated in place for
-   *        `FILTER_COLUMNS` and ignored for `ALL_COLUMNS`
-   * @param mask_data_pages Whether to build and use a data page mask using the row mask. Ignored
-   *        for `ALL_COLUMNS`
+   * @param column_chunk_data Device spans of column chunk data in the same order as byte ranges
+   *        from `column_chunks_byte_ranges`
+   * @param[in,out] row_mask Boolean column indicating surviving rows
+   * @param mask_data_pages Whether to build and use a data page mask using the row mask
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the device memory for the output table
    * @return Table of materialized columns and metadata
    */
   template <read_columns_mode mode>
-  [[nodiscard]] table_with_metadata materialize_columns(
+  [[nodiscard]] table_with_metadata materialize_table(
     std::span<size_type const> row_group_indices,
     std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
-    row_mask_view_t<mode> row_mask,
+    row_mask_view_t<mode> const& row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
     cuda::stream_ref stream,
@@ -714,7 +677,7 @@ class hybrid_scan_reader {
    * @return Table of materialized filter columns and metadata
    *
    * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
-   * `materialize_columns<read_columns_mode::FILTER_COLUMNS>()` instead.
+   * `materialize_table<read_columns_mode::FILTER_COLUMNS>()` instead.
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns(
     std::span<size_type const> row_group_indices,
@@ -751,7 +714,7 @@ class hybrid_scan_reader {
    * @return Table of materialized payload columns and metadata
    *
    * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
-   * `materialize_columns<read_columns_mode::PAYLOAD_COLUMNS>()` instead.
+   * `materialize_table<read_columns_mode::PAYLOAD_COLUMNS>()` instead.
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns(
     std::span<size_type const> row_group_indices,
@@ -786,7 +749,7 @@ class hybrid_scan_reader {
    * @return Table of all materialized columns and metadata
    *
    * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
-   * `materialize_columns<read_columns_mode::ALL_COLUMNS>()` instead.
+   * `materialize_table<read_columns_mode::ALL_COLUMNS>()` instead.
    */
   [[nodiscard]] table_with_metadata materialize_all_columns(
     std::span<size_type const> row_group_indices,
@@ -796,38 +759,29 @@ class hybrid_scan_reader {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @brief Setup chunking information for the columns selected by `mode` and preprocess the input
-   * data pages
+   * @brief Setup chunking information for the selected columns and preprocess the input data pages
    *
-   * Table chunks are then materialized using `materialize_next_table_chunk<mode>()` while
-   * `has_next_table_chunk()` returns true.
-   *
-   * @throws cudf::logic_error if `mode` is `FILTER_COLUMNS` and there is no filter expression
-   * @throws cudf::logic_error if `mode` is `PAYLOAD_COLUMNS` and the row mask has nulls
-   *
-   * @tparam mode Columns selection
-   *
+   * @tparam mode Column selection
    * @param chunk_read_limit Limit on total number of bytes to be returned per table chunk. `0` if
    * there is no limit
    * @param pass_read_limit Limit on the memory used for reading and decompressing data. `0` if
    * there is no limit
    * @param row_group_indices Input row groups indices
-   * @param column_chunk_data Device spans of column chunk data of the selected columns, in the
-   *        same order as the byte ranges returned by `column_chunks_byte_ranges<mode>()`
-   * @param row_mask Boolean column indicating surviving rows. Ignored for `ALL_COLUMNS`
-   * @param mask_data_pages Whether to build and use a data page mask using the row mask. Ignored
-   *        for `ALL_COLUMNS`
+   * @param column_chunk_data Device spans of column chunk data in the same order as byte ranges
+   *        from `column_chunks_byte_ranges`
+   * @param row_mask Boolean column indicating surviving rows
+   * @param mask_data_pages Whether to build and use a data page mask using the row mask
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the device memory for the output table chunks
    */
   template <read_columns_mode mode>
-  void setup_chunking_for_columns(
+  void setup_chunked_table_materialization(
     std::size_t chunk_read_limit,
     std::size_t pass_read_limit,
     std::span<size_type const> row_group_indices,
     std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
-    cudf::column_view row_mask,
+    cudf::column_view const& row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
     cuda::stream_ref stream,
@@ -849,7 +803,7 @@ class hybrid_scan_reader {
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
-   * `setup_chunking_for_columns<read_columns_mode::FILTER_COLUMNS>()` instead.
+   * `setup_chunked_table_materialization<read_columns_mode::FILTER_COLUMNS>()` instead.
    */
   void setup_chunking_for_filter_columns(
     std::size_t chunk_read_limit,
@@ -863,22 +817,15 @@ class hybrid_scan_reader {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @brief Materializes the next table chunk of the columns selected by `mode`
+   * @brief Materializes the next table chunk of the selected columns. Filter columns also update
+   * the corresponding range of the input row mask
    *
-   * For filter columns, the corresponding range of the input row mask is updated in place to only
-   * the rows that exist in the output table chunk. For payload columns, the corresponding range of
-   * the input row mask is applied to the output table chunk.
-   *
-   * @throws std::invalid_argument if `mode` does not match the one used to setup chunking
-   *
-   * @tparam mode Columns selection. Must match the one used in `setup_chunking_for_columns<mode>()`
-   *
-   * @param[in,out] row_mask Boolean column indicating surviving rows. Updated in place for
-   *        `FILTER_COLUMNS` and ignored for `ALL_COLUMNS`
+   * @tparam mode Column selection. Must match the one used to setup chunking
+   * @param[in,out] row_mask Boolean column indicating surviving rows
    * @return Table chunk of materialized columns and metadata
    */
   template <read_columns_mode mode>
-  [[nodiscard]] table_with_metadata materialize_next_table_chunk(row_mask_view_t<mode> row_mask);
+  [[nodiscard]] table_with_metadata materialize_table_chunk(row_mask_view_t<mode> const& row_mask);
 
   /**
    * @brief Materializes a chunk of filter columns and updates the corresponding range of input row
@@ -889,7 +836,7 @@ class hybrid_scan_reader {
    * @return Table chunk of materialized filter columns and metadata
    *
    * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
-   * `materialize_next_table_chunk<read_columns_mode::FILTER_COLUMNS>()` instead.
+   * `materialize_table_chunk<read_columns_mode::FILTER_COLUMNS>()` instead.
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns_chunk(
     cudf::mutable_column_view& row_mask);
@@ -910,7 +857,7 @@ class hybrid_scan_reader {
    * @param mr Device memory resource used to allocate the device memory for the output table chunks
    *
    * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
-   * `setup_chunking_for_columns<read_columns_mode::PAYLOAD_COLUMNS>()` instead.
+   * `setup_chunked_table_materialization<read_columns_mode::PAYLOAD_COLUMNS>()` instead.
    */
   void setup_chunking_for_payload_columns(
     std::size_t chunk_read_limit,
@@ -932,7 +879,7 @@ class hybrid_scan_reader {
    * @return Table chunk of materialized filter columns and metadata
    *
    * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
-   * `materialize_next_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>()` instead.
+   * `materialize_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>()` instead.
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns_chunk(
     cudf::column_view const& row_mask);
@@ -952,7 +899,7 @@ class hybrid_scan_reader {
    * @param mr Device memory resource used to allocate the device memory for the output table chunks
    *
    * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
-   * `setup_chunking_for_columns<read_columns_mode::ALL_COLUMNS>()` instead.
+   * `setup_chunked_table_materialization<read_columns_mode::ALL_COLUMNS>()` instead.
    */
   void setup_chunking_for_all_columns(
     std::size_t chunk_read_limit,
@@ -969,7 +916,7 @@ class hybrid_scan_reader {
    * @return Table of materialized all (or selected) columns and metadata
    *
    * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
-   * `materialize_next_table_chunk<read_columns_mode::ALL_COLUMNS>()` instead.
+   * `materialize_table_chunk<read_columns_mode::ALL_COLUMNS>()` instead.
    */
   [[nodiscard]] table_with_metadata materialize_all_columns_chunk();
 

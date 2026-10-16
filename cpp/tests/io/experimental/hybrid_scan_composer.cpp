@@ -192,13 +192,13 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> hybrid_sc
   // Materialize the table with only the filter columns
   auto row_mask_view = row_mask->mutable_view();
   auto [filter_table, filter_metadata] =
-    reader->materialize_columns<read_columns_mode::FILTER_COLUMNS>(current_row_group_indices,
-                                                                   filter_col_data,
-                                                                   row_mask_view,
-                                                                   use_data_page_mask::YES,
-                                                                   options,
-                                                                   stream,
-                                                                   mr);
+    reader->materialize_table<read_columns_mode::FILTER_COLUMNS>(current_row_group_indices,
+                                                                 filter_col_data,
+                                                                 row_mask_view,
+                                                                 use_data_page_mask::YES,
+                                                                 options,
+                                                                 stream,
+                                                                 mr);
 
   // Get column chunk byte ranges from the reader
   auto const payload_column_chunk_byte_ranges =
@@ -217,13 +217,13 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> hybrid_sc
 
   // Materialize the table with only the payload columns
   auto [payload_table, payload_metadata] =
-    reader->materialize_columns<read_columns_mode::PAYLOAD_COLUMNS>(current_row_group_indices,
-                                                                    payload_col_data,
-                                                                    row_mask_view,
-                                                                    use_data_page_mask::YES,
-                                                                    options,
-                                                                    stream,
-                                                                    mr);
+    reader->materialize_table<read_columns_mode::PAYLOAD_COLUMNS>(current_row_group_indices,
+                                                                  payload_col_data,
+                                                                  row_mask_view,
+                                                                  use_data_page_mask::YES,
+                                                                  options,
+                                                                  stream,
+                                                                  mr);
 
   return std::tuple{std::move(filter_table), std::move(payload_table)};
 }
@@ -291,19 +291,20 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> chunked_h
         mr);
     filter_tasks.get();
 
-    reader->setup_chunking_for_columns<read_columns_mode::FILTER_COLUMNS>(1024,
-                                                                          10240,
-                                                                          row_group_indices,
-                                                                          filter_data,
-                                                                          row_mask_view,
-                                                                          use_data_page_mask::YES,
-                                                                          options,
-                                                                          stream,
-                                                                          mr);
+    reader->setup_chunked_table_materialization<read_columns_mode::FILTER_COLUMNS>(
+      1024,
+      10240,
+      row_group_indices,
+      filter_data,
+      row_mask_view,
+      use_data_page_mask::YES,
+      options,
+      stream,
+      mr);
 
     while (reader->has_next_table_chunk()) {
       filter_tables.push_back(
-        reader->materialize_next_table_chunk<read_columns_mode::FILTER_COLUMNS>(row_mask_view).tbl);
+        reader->materialize_table_chunk<read_columns_mode::FILTER_COLUMNS>(row_mask_view).tbl);
     }
 
     // Materialize payload columns
@@ -319,20 +320,20 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> chunked_h
         mr);
     payload_tasks.get();
 
-    reader->setup_chunking_for_columns<read_columns_mode::PAYLOAD_COLUMNS>(1024,
-                                                                           10240,
-                                                                           row_group_indices,
-                                                                           payload_data,
-                                                                           row_mask_view,
-                                                                           use_data_page_mask::YES,
-                                                                           options,
-                                                                           stream,
-                                                                           mr);
+    reader->setup_chunked_table_materialization<read_columns_mode::PAYLOAD_COLUMNS>(
+      1024,
+      10240,
+      row_group_indices,
+      payload_data,
+      row_mask_view,
+      use_data_page_mask::YES,
+      options,
+      stream,
+      mr);
 
     while (reader->has_next_table_chunk()) {
       payload_tables.push_back(
-        reader->materialize_next_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask_view)
-          .tbl);
+        reader->materialize_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask_view).tbl);
     }
 
     // Update the number of rows materialized
@@ -396,7 +397,7 @@ std::unique_ptr<cudf::table> hybrid_scan_single_step(
 
   // Materialize the table with all columns
   return reader
-    ->materialize_columns<read_columns_mode::ALL_COLUMNS>(
+    ->materialize_table<read_columns_mode::ALL_COLUMNS>(
       current_row_group_indices, all_col_data, {}, use_data_page_mask::NO, options, stream, mr)
     .tbl;
 }
@@ -442,18 +443,19 @@ std::unique_ptr<cudf::table> chunked_hybrid_scan_single_step(
     all_column_chunk_tasks.get();
 
     // Setup chunking for all columns and materialize the columns
-    reader->setup_chunking_for_columns<read_columns_mode::ALL_COLUMNS>(1024,
-                                                                       10240,
-                                                                       row_group_indices,
-                                                                       all_column_chunk_data,
-                                                                       {},
-                                                                       use_data_page_mask::NO,
-                                                                       options,
-                                                                       stream,
-                                                                       mr);
+    reader->setup_chunked_table_materialization<read_columns_mode::ALL_COLUMNS>(
+      1024,
+      10240,
+      row_group_indices,
+      all_column_chunk_data,
+      {},
+      use_data_page_mask::NO,
+      options,
+      stream,
+      mr);
 
     while (reader->has_next_table_chunk()) {
-      auto chunk = reader->materialize_next_table_chunk<read_columns_mode::ALL_COLUMNS>({});
+      auto chunk = reader->materialize_table_chunk<read_columns_mode::ALL_COLUMNS>({});
       tables.push_back(std::move(chunk.tbl));
       metadata = std::move(chunk.metadata);
     }

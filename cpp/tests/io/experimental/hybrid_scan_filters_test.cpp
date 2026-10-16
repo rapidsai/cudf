@@ -924,7 +924,7 @@ TEST_F(HybridScanFiltersTest, RowMaskNullsAreRetained)
   read_tasks.get();
 
   auto row_mask_view = row_mask->mutable_view();
-  auto result        = reader.materialize_columns<read_columns_mode::FILTER_COLUMNS>(
+  auto result        = reader.materialize_table<read_columns_mode::FILTER_COLUMNS>(
     row_groups,
     column_data,
     row_mask_view,
@@ -980,7 +980,7 @@ TEST_F(HybridScanFiltersTest, OffsetIndexOnlyDataPageMask)
   read_tasks.get();
 
   // Materialization maps the row mask to pages using only offset index, then applies the row mask.
-  auto const result = offset_only_reader.materialize_columns<read_columns_mode::PAYLOAD_COLUMNS>(
+  auto const result = offset_only_reader.materialize_table<read_columns_mode::PAYLOAD_COLUMNS>(
     selected_row_groups,
     column_data,
     row_mask_view,
@@ -1009,7 +1009,7 @@ TEST_F(HybridScanFiltersTest, OffsetIndexOnlyDataPageMask)
       *datasource, no_index_ranges, cudf::io::parquet::io_submission_policy::SERIALIZE, stream, mr);
   no_index_tasks.get();
   auto const no_index_result =
-    no_index_reader.materialize_columns<read_columns_mode::PAYLOAD_COLUMNS>(
+    no_index_reader.materialize_table<read_columns_mode::PAYLOAD_COLUMNS>(
       no_index_row_groups,
       no_index_data,
       row_mask_view,
@@ -1062,7 +1062,7 @@ TEST_F(HybridScanFiltersTest, NoOffsetIndexListColumns)
     mr);
   list_tasks.get();
 
-  auto const list_result = list_reader.materialize_columns<read_columns_mode::PAYLOAD_COLUMNS>(
+  auto const list_result = list_reader.materialize_table<read_columns_mode::PAYLOAD_COLUMNS>(
     list_row_groups,
     list_data,
     list_row_mask_view,

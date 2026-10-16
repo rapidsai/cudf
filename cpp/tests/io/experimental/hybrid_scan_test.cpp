@@ -970,7 +970,7 @@ TEST_F(HybridScanTest, DecimalTypeOption)
       *datasource, chunk_ranges, cudf::io::parquet::io_submission_policy::SERIALIZE, stream, mr);
     tasks.get();
 
-    return reader->materialize_columns<read_columns_mode::ALL_COLUMNS>(
+    return reader->materialize_table<read_columns_mode::ALL_COLUMNS>(
       row_groups, col_data, {}, use_data_page_mask::NO, options, stream, mr);
   };
 
@@ -1042,7 +1042,7 @@ TEST_F(HybridScanTest, StructChildFilterColumn)
   using cudf::io::parquet::experimental::use_data_page_mask;
   auto row_mask_mutable = row_mask->mutable_view();
   EXPECT_THROW(
-    std::ignore = reader->materialize_columns<read_columns_mode::FILTER_COLUMNS>(
+    std::ignore = reader->materialize_table<read_columns_mode::FILTER_COLUMNS>(
       row_groups, filter_data, row_mask_mutable, use_data_page_mask::NO, options, stream, mr),
     std::invalid_argument);
 }
@@ -1076,7 +1076,7 @@ TEST_F(HybridScanTest, SharedMetadataReaderMatchesReadParquet)
       *datasource, chunk_ranges, cudf::io::parquet::io_submission_policy::SERIALIZE, stream, mr);
     tasks.get();
     return reader
-      ->materialize_columns<read_columns_mode::ALL_COLUMNS>(
+      ->materialize_table<read_columns_mode::ALL_COLUMNS>(
         row_groups, data, {}, use_data_page_mask::NO, options, stream, mr)
       .tbl;
   };
@@ -1130,7 +1130,7 @@ TEST_F(HybridScanTest, SharedMetadataFromFileMetaDataMatchesReadParquet)
       *datasource, chunk_ranges, cudf::io::parquet::io_submission_policy::SERIALIZE, stream, mr);
     tasks.get();
     return reader
-      ->materialize_columns<read_columns_mode::ALL_COLUMNS>(
+      ->materialize_table<read_columns_mode::ALL_COLUMNS>(
         row_groups, data, {}, use_data_page_mask::NO, options, stream, mr)
       .tbl;
   };
@@ -1208,7 +1208,7 @@ TEST_F(HybridScanTest, SharedMetadataConcurrentReadersMatchReadParquet)
       *datasource, chunk_ranges, cudf::io::parquet::io_submission_policy::SERIALIZE, stream, mr);
     tasks.get();
     return reader
-      ->template materialize_columns<read_columns_mode::ALL_COLUMNS>(
+      ->template materialize_table<read_columns_mode::ALL_COLUMNS>(
         row_group_indices, data, {}, use_data_page_mask::NO, options, stream, mr)
       .tbl;
   };
@@ -1284,7 +1284,7 @@ TEST_F(HybridScanTest, AllRowsPrunedReportsInputRowGroups)
       mr);
   filter_tasks.get();
 
-  auto const filter_result = reader->materialize_columns<read_columns_mode::FILTER_COLUMNS>(
+  auto const filter_result = reader->materialize_table<read_columns_mode::FILTER_COLUMNS>(
     row_groups, filter_data, row_mask_view, use_data_page_mask::YES, options, stream, mr);
   EXPECT_EQ(filter_result.tbl->num_rows(), 0);
   EXPECT_EQ(filter_result.metadata.num_input_row_groups,
@@ -1302,7 +1302,7 @@ TEST_F(HybridScanTest, AllRowsPrunedReportsInputRowGroups)
       mr);
   payload_tasks.get();
 
-  auto const payload_result = reader->materialize_columns<read_columns_mode::PAYLOAD_COLUMNS>(
+  auto const payload_result = reader->materialize_table<read_columns_mode::PAYLOAD_COLUMNS>(
     row_groups, payload_data, row_mask_view, use_data_page_mask::YES, options, stream, mr);
   EXPECT_EQ(payload_result.tbl->num_rows(), 0);
   EXPECT_EQ(payload_result.metadata.num_input_row_groups,
@@ -1368,7 +1368,7 @@ TEST_F(HybridScanTest, ChunkedReadRowMaskPerPass)
     filter_tasks.get();
 
     filter_tables.push_back(reader
-                              ->materialize_columns<read_columns_mode::FILTER_COLUMNS>(
+                              ->materialize_table<read_columns_mode::FILTER_COLUMNS>(
                                 row_group_indices,
                                 filter_data,
                                 row_mask_view,
@@ -1392,7 +1392,7 @@ TEST_F(HybridScanTest, ChunkedReadRowMaskPerPass)
     payload_tasks.get();
 
     payload_tables.push_back(reader
-                               ->materialize_columns<read_columns_mode::PAYLOAD_COLUMNS>(
+                               ->materialize_table<read_columns_mode::PAYLOAD_COLUMNS>(
                                  row_group_indices,
                                  payload_data,
                                  row_mask_view,
@@ -1487,18 +1487,19 @@ TEST_F(HybridScanTest, RowGroupPassesMatchesChunkedReader)
         mr);
       tasks.get();
 
-      reader->setup_chunking_for_columns<read_columns_mode::ALL_COLUMNS>(0,
-                                                                         pass_read_limit,
-                                                                         pass_row_groups,
-                                                                         col_data,
-                                                                         {},
-                                                                         use_data_page_mask::NO,
-                                                                         options,
-                                                                         stream,
-                                                                         mr);
+      reader->setup_chunked_table_materialization<read_columns_mode::ALL_COLUMNS>(
+        0,
+        pass_read_limit,
+        pass_row_groups,
+        col_data,
+        {},
+        use_data_page_mask::NO,
+        options,
+        stream,
+        mr);
 
       while (reader->has_next_table_chunk()) {
-        auto chunk = reader->materialize_next_table_chunk<read_columns_mode::ALL_COLUMNS>({});
+        auto chunk = reader->materialize_table_chunk<read_columns_mode::ALL_COLUMNS>({});
         hybrid_scan_tables.push_back(std::move(chunk.tbl));
       }
     }
@@ -1648,12 +1649,12 @@ TEST_F(HybridScanTest, MisusePassesThrows)
     *datasource, chunk_ranges, cudf::io::parquet::io_submission_policy::SERIALIZE, stream, mr);
   tasks.get();
 
-  reader->setup_chunking_for_columns<read_columns_mode::ALL_COLUMNS>(
+  reader->setup_chunked_table_materialization<read_columns_mode::ALL_COLUMNS>(
     0, 0, all_row_groups, col_data, {}, use_data_page_mask::NO, options, stream, mr);
 
   // Chunks must be materialized with the same columns selection as the chunking setup
   EXPECT_THROW(
-    std::ignore = reader->materialize_next_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>({}),
+    std::ignore = reader->materialize_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>({}),
     std::invalid_argument);
 
   // Construct passes for filter columns after chunking is set up.
@@ -1661,7 +1662,6 @@ TEST_F(HybridScanTest, MisusePassesThrows)
     cudf::io::parquet::experimental::read_columns_mode::FILTER_COLUMNS, all_row_groups, 1, options);
 
   // All column materialization now throws as the column selection is now stale
-  EXPECT_THROW(
-    std::ignore = reader->materialize_next_table_chunk<read_columns_mode::ALL_COLUMNS>({}),
-    cudf::logic_error);
+  EXPECT_THROW(std::ignore = reader->materialize_table_chunk<read_columns_mode::ALL_COLUMNS>({}),
+               cudf::logic_error);
 }

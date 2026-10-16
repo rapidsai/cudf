@@ -127,13 +127,13 @@ struct hybrid_scan_fn {
     all_col_read_tasks.get();
     table.get() =
       std::move(reader
-                  ->materialize_columns<read_columns_mode::ALL_COLUMNS>(row_groups_indices,
-                                                                        all_column_chunk_data,
-                                                                        {},
-                                                                        use_data_page_mask::NO,
-                                                                        options,
-                                                                        stream,
-                                                                        mr)
+                  ->materialize_table<read_columns_mode::ALL_COLUMNS>(row_groups_indices,
+                                                                      all_column_chunk_data,
+                                                                      {},
+                                                                      use_data_page_mask::NO,
+                                                                      options,
+                                                                      stream,
+                                                                      mr)
                   .tbl);
     stream.sync();
   }
