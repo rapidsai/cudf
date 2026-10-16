@@ -3742,7 +3742,7 @@ TEST_F(ParquetReaderTest, RepeatedNoAnnotations)
   auto num_list_rows = list_offsets_column->size() - 1;
 
   auto mask = cudf::create_null_mask(6, cudf::mask_state::ALL_VALID);
-  cudf::set_null_mask(reinterpret_cast<cudf::bitmask_type*>(mask.data()), 0, 2, false);
+  cudf::set_null_mask(mask.data(), 0, 2, false);
 
   auto list_col = cudf::make_lists_column(
     num_list_rows, std::move(list_offsets_column), struct_col.release(), 2, std::move(mask));

@@ -1145,7 +1145,7 @@ struct cast_variant_fn {
   size_type num_rows;
   data_type desired_type;
   bitmask_type* d_null_mask;
-  cuda::device_buffer<std::byte> null_mask{
+  cuda::device_buffer<cudf::bitmask_type> null_mask{
     cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED)};
   cuda::stream_ref stream;
   rmm::device_async_resource_ref mr;
@@ -1402,7 +1402,7 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
     variant_column.nullable()
       ? cudf::detail::copy_bitmask(variant_column, stream, mr)
       : cudf::create_null_mask(variant_column.size(), mask_state::ALL_VALID, stream, mr);
-  auto* d_null_mask = reinterpret_cast<bitmask_type*>(null_mask.data());
+  auto* d_null_mask = null_mask.data();
 
   auto grid = cudf::detail::grid_1d{num_rows, block_size};
 
@@ -1507,7 +1507,7 @@ std::unique_ptr<column> cast_variant(column_view const& values,
   auto null_mask    = values.nullable()
                         ? cudf::detail::copy_bitmask(values, stream, mr)
                         : cudf::create_null_mask(num_rows, mask_state::ALL_VALID, stream, mr);
-  auto* d_null_mask = reinterpret_cast<bitmask_type*>(null_mask.data());
+  auto* d_null_mask = null_mask.data();
 
   return cudf::type_dispatcher(
     desired_type,
@@ -1536,7 +1536,7 @@ std::unique_ptr<column> get_variant_type_id(column_view const& values,
   auto null_mask    = values.nullable()
                         ? cudf::detail::copy_bitmask(values, stream, mr)
                         : cudf::create_null_mask(num_rows, mask_state::ALL_VALID, stream, mr);
-  auto* d_null_mask = reinterpret_cast<bitmask_type*>(null_mask.data());
+  auto* d_null_mask = null_mask.data();
 
   rmm::device_buffer data{static_cast<std::size_t>(num_rows) * sizeof(uint8_t), stream, mr};
 
