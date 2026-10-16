@@ -357,18 +357,6 @@ hybrid_scan_reader_impl::prepare_filter_and_output_types(parquet_reader_options 
   return {std::move(expr_conv), std::move(output_dtypes)};
 }
 
-void hybrid_scan_reader_impl::prepare_materialization(read_columns_mode columns_mode,
-                                                      std::size_t num_sources,
-                                                      parquet_reader_options const& options,
-                                                      cuda::stream_ref stream,
-                                                      rmm::device_async_resource_ref mr)
-{
-  reset_internal_state();
-  initialize_options(options, num_sources, stream, mr);
-  select_columns(columns_mode, options);
-  reset_output_buffers();
-}
-
 std::vector<std::vector<cudf::size_type>>
 hybrid_scan_reader_impl::filter_row_groups_with_byte_range(
   std::span<std::vector<size_type> const> row_group_indices,
@@ -705,7 +693,7 @@ hybrid_scan_reader_impl::sparse_payload_pages_byte_ranges(
   return {std::move(page_ranges), std::move(source_map)};
 }
 
-void hybrid_scan_reader_impl::setup_table_materialization(
+void hybrid_scan_reader_impl::prepare_materialization(
   read_mode mode,
   read_columns_mode columns_mode,
   std::size_t chunk_read_limit,
@@ -732,7 +720,10 @@ void hybrid_scan_reader_impl::setup_table_materialization(
   CUDF_EXPECTS(columns_mode != read_columns_mode::PAYLOAD_COLUMNS or row_mask.null_count() == 0,
                "Row mask must not have any nulls when materializing payload column");
 
-  prepare_materialization(columns_mode, row_group_indices.size(), options, stream, mr);
+  reset_internal_state();
+  initialize_options(options, row_group_indices.size(), stream, mr);
+  select_columns(columns_mode, options);
+  reset_output_buffers();
 
   _input_pass_read_limit   = pass_read_limit;
   _output_chunk_read_limit = chunk_read_limit;
@@ -740,7 +731,7 @@ void hybrid_scan_reader_impl::setup_table_materialization(
   // Mark that we are using page-level I/O for payload columns
   _sparse_page_io = sparse_page_io;
 
-  // Normalize the input expression (must be done after prepare_materialization)
+  // Normalize the input expression (must be done after column selection)
   if (columns_mode != read_columns_mode::PAYLOAD_COLUMNS) {
     _expr_conv = build_normalized_expression(options);
   }
@@ -781,18 +772,18 @@ table_with_metadata hybrid_scan_reader_impl::materialize_columns(
   rmm::device_async_resource_ref mr)
 {
   auto constexpr sparse_page_io = false;
-  setup_table_materialization(read_mode::READ_ALL,
-                              mode,
-                              0,
-                              0,
-                              row_group_indices,
-                              column_chunk_data,
-                              row_mask,
-                              mask_data_pages,
-                              sparse_page_io,
-                              options,
-                              stream,
-                              mr);
+  prepare_materialization(read_mode::READ_ALL,
+                          mode,
+                          0,
+                          0,
+                          row_group_indices,
+                          column_chunk_data,
+                          row_mask,
+                          mask_data_pages,
+                          sparse_page_io,
+                          options,
+                          stream,
+                          mr);
 
   return read_chunk_internal(read_mode::READ_ALL, mode, row_mask);
 }
@@ -810,18 +801,18 @@ void hybrid_scan_reader_impl::setup_chunking_for_columns(
   rmm::device_async_resource_ref mr)
 {
   auto constexpr sparse_page_io = false;
-  setup_table_materialization(read_mode::CHUNKED_READ,
-                              mode,
-                              chunk_read_limit,
-                              pass_read_limit,
-                              row_group_indices,
-                              column_chunk_data,
-                              row_mask,
-                              mask_data_pages,
-                              sparse_page_io,
-                              options,
-                              stream,
-                              mr);
+  prepare_materialization(read_mode::CHUNKED_READ,
+                          mode,
+                          chunk_read_limit,
+                          pass_read_limit,
+                          row_group_indices,
+                          column_chunk_data,
+                          row_mask,
+                          mask_data_pages,
+                          sparse_page_io,
+                          options,
+                          stream,
+                          mr);
 }
 
 void hybrid_scan_reader_impl::setup_chunking_for_sparse_payload_columns(
@@ -835,18 +826,18 @@ void hybrid_scan_reader_impl::setup_chunking_for_sparse_payload_columns(
   rmm::device_async_resource_ref mr)
 {
   auto constexpr sparse_page_io = true;
-  setup_table_materialization(read_mode::CHUNKED_READ,
-                              read_columns_mode::PAYLOAD_COLUMNS,
-                              chunk_read_limit,
-                              pass_read_limit,
-                              row_group_indices,
-                              page_data,
-                              row_mask,
-                              use_data_page_mask::NO,
-                              sparse_page_io,
-                              options,
-                              stream,
-                              mr);
+  prepare_materialization(read_mode::CHUNKED_READ,
+                          read_columns_mode::PAYLOAD_COLUMNS,
+                          chunk_read_limit,
+                          pass_read_limit,
+                          row_group_indices,
+                          page_data,
+                          row_mask,
+                          use_data_page_mask::NO,
+                          sparse_page_io,
+                          options,
+                          stream,
+                          mr);
 }
 
 template <read_columns_mode mode>

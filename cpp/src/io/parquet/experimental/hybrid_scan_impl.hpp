@@ -383,21 +383,6 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   prepare_filter_and_output_types(parquet_reader_options const& options);
 
   /**
-   * @brief Helper to prepare column materialization
-   *
-   * @param columns_mode Columns to materialize
-   * @param num_sources Number of input sources
-   * @param options Parquet reader options
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource used to allocate the device memory for the output columns
-   */
-  void prepare_materialization(read_columns_mode columns_mode,
-                               std::size_t num_sources,
-                               parquet_reader_options const& options,
-                               cuda::stream_ref stream,
-                               rmm::device_async_resource_ref mr);
-
-  /**
    * @brief Validates inputs and sets up the reader to materialize columns
    *
    * Sets up an empty read if all rows are pruned
@@ -415,18 +400,18 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the device memory for the output columns
    */
-  void setup_table_materialization(read_mode mode,
-                                   read_columns_mode columns_mode,
-                                   std::size_t chunk_read_limit,
-                                   std::size_t pass_read_limit,
-                                   std::span<std::vector<size_type> const> row_group_indices,
-                                   std::span<cudf::device_span<uint8_t const> const> column_data,
-                                   cudf::column_view const& row_mask,
-                                   use_data_page_mask mask_data_pages,
-                                   bool sparse_page_io,
-                                   parquet_reader_options const& options,
-                                   cuda::stream_ref stream,
-                                   rmm::device_async_resource_ref mr);
+  void prepare_materialization(read_mode mode,
+                               read_columns_mode columns_mode,
+                               std::size_t chunk_read_limit,
+                               std::size_t pass_read_limit,
+                               std::span<std::vector<size_type> const> row_group_indices,
+                               std::span<cudf::device_span<uint8_t const> const> column_data,
+                               cudf::column_view const& row_mask,
+                               use_data_page_mask mask_data_pages,
+                               bool sparse_page_io,
+                               parquet_reader_options const& options,
+                               cuda::stream_ref stream,
+                               rmm::device_async_resource_ref mr);
 
   /**
    * @brief Perform the necessary data preprocessing for parsing file later on
