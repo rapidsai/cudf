@@ -181,6 +181,8 @@ asof_join_impl::asof_join_impl(table_view const& right_by,
   auto const row_equal =
     comparator.equal_to<false>(nullate::DYNAMIC{has_nulls}, null_equality::EQUAL);
   rmm::device_uvector<uint8_t> group_starts(num_rows, stream, mr);
+  // We benchmarked this two-step approach against DeviceSelect::If and found that
+  // combining the predicate with selection was slower, especially for string keys.
   CUDF_CUDA_TRY(cub::DeviceTransform::Transform(cuda::counting_iterator<size_type>{0},
                                                 group_starts.begin(),
                                                 num_rows,
