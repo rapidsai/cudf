@@ -25,7 +25,6 @@
 #include <memory>
 #include <optional>
 #include <span>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -34,14 +33,6 @@ namespace cudf::io::parquet::experimental::detail {
 using cudf::io::parquet::detail::ColumnChunkDesc;
 using cudf::io::parquet::detail::PageInfo;
 using text::byte_range_info;
-
-/**
- * @brief Row mask column view type for the specified columns
- */
-template <read_columns_mode mode>
-using row_mask_view_t = std::conditional_t<mode == read_columns_mode::FILTER_COLUMNS,
-                                           cudf::mutable_column_view,
-                                           cudf::column_view>;
 
 /**
  * @brief Implementation of the experimental Parquet reader optimized for Hybrid Scan operation
