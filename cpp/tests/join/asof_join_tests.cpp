@@ -6,6 +6,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -19,10 +20,10 @@
 #include <cuda/stream>
 #include <cuda_runtime_api.h>
 
-#include <algorithm>
 #include <array>
 #include <atomic>
 #include <exception>
+#include <limits>
 #include <memory>
 #include <thread>
 #include <vector>
@@ -40,12 +41,65 @@ class AsofJoinTest : public cudf::test::BaseFixture {};
 void expect_gather_map(rmm::device_uvector<cudf::size_type> const& actual,
                        std::vector<cudf::size_type> const& expected)
 {
-  auto const stream      = cudf::get_default_stream();
-  auto const host_actual = cudf::detail::make_host_vector_async(actual, stream);
-  stream.sync();
+  auto const host_actual = cudf::detail::make_std_vector(actual, cudf::get_default_stream());
+  EXPECT_EQ(host_actual, expected);
+}
 
-  ASSERT_EQ(host_actual.size(), expected.size());
-  EXPECT_TRUE(std::equal(host_actual.begin(), host_actual.end(), expected.begin()));
+template <typename T>
+class AsofJoinOrderedKeyTest : public cudf::test::BaseFixture {};
+
+using OrderedKeyTypes =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::ChronoTypes>;
+TYPED_TEST_SUITE(AsofJoinOrderedKeyTest, OrderedKeyTypes);
+
+TYPED_TEST(AsofJoinOrderedKeyTest, Backward)
+{
+  fixed_width_column_wrapper<TypeParam, int32_t> right_on{1, 3, 3, 7};
+  fixed_width_column_wrapper<TypeParam, int32_t> left_on{0, 1, 2, 3, 8};
+
+  asof_join join(cudf::table_view{}, right_on);
+  auto result = join.join(
+    cudf::table_view{}, left_on, asof_join_strategy::BACKWARD, asof_join_exact_matches::YES);
+
+  expect_gather_map(*result, {cudf::JoinNoMatch, 0, 0, 2, 3});
+}
+
+TEST_F(AsofJoinTest, FloatingPointGroupingKeys)
+{
+  auto const nan = std::numeric_limits<float>::quiet_NaN();
+  auto const inf = std::numeric_limits<float>::infinity();
+  fixed_width_column_wrapper<float> right_by({0.0f, 1.0f, 1.0f, inf, nan, nan},
+                                             cudf::test::iterators::nulls_at({0}));
+  fixed_width_column_wrapper<int32_t> right_on{1, 1, 4, 2, 1, 5};
+  fixed_width_column_wrapper<float> left_by({nan, 1.0f, nan, 0.0f, 2.0f, inf},
+                                            cudf::test::iterators::nulls_at({3}));
+  fixed_width_column_wrapper<int32_t> left_on{5, 3, 0, 9, 9, 2};
+
+  asof_join join(cudf::table_view{{right_by}}, right_on);
+  auto result = join.join(cudf::table_view{{left_by}},
+                          left_on,
+                          asof_join_strategy::BACKWARD,
+                          asof_join_exact_matches::YES);
+
+  expect_gather_map(*result, {5, 1, cudf::JoinNoMatch, cudf::JoinNoMatch, cudf::JoinNoMatch, 3});
+}
+
+TEST_F(AsofJoinTest, DecimalGroupingKeys)
+{
+  cudf::test::fixed_point_column_wrapper<int32_t> right_by{{120, 120, 250},
+                                                           numeric::scale_type{-2}};
+  fixed_width_column_wrapper<int32_t> right_on{1, 4, 2};
+  cudf::test::fixed_point_column_wrapper<int32_t> left_by{{250, 120, 175, 120},
+                                                          numeric::scale_type{-2}};
+  fixed_width_column_wrapper<int32_t> left_on{3, 4, 9, 0};
+
+  asof_join join(cudf::table_view{{right_by}}, right_on);
+  auto result = join.join(cudf::table_view{{left_by}},
+                          left_on,
+                          asof_join_strategy::BACKWARD,
+                          asof_join_exact_matches::YES);
+
+  expect_gather_map(*result, {2, 1, cudf::JoinNoMatch, cudf::JoinNoMatch});
 }
 
 TEST_F(AsofJoinTest, Ungrouped)

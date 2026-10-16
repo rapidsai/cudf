@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -58,13 +59,15 @@ class asof_join_impl;
  * repeatedly with different left inputs.
  *
  * The right input must be sorted in ascending lexicographic order by `(right_by..., right_on)`,
- * with nulls ordered before non-nulls. Consequently, rows with equal `right_by` keys must be
+ * with nulls ordered before non-nulls. Within each floating-point grouping column, NaNs must be
+ * ordered after all other non-null values. Consequently, rows with equal `right_by` keys must be
  * physically contiguous; interleaved right-side groups are not supported. The left input may be in
  * any order, and the result preserves its row order. These ordering preconditions are not
  * validated.
  *
- * Grouping-key nulls compare unequal. A null left ordered key never matches, and a null right
- * ordered key is never a valid match candidate.
+ * Grouping-key nulls compare unequal, while floating-point NaN grouping keys compare equal to
+ * each other. A null left ordered key never matches, and a null right ordered key is never a
+ * valid match candidate.
  *
  * Currently, only `asof_join_strategy::BACKWARD` with exact matches enabled is supported. It
  * selects the last right row in the same group whose ordered key is less than or equal to the left
