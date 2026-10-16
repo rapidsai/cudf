@@ -8,20 +8,22 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
 
-#include <cub/device/device_reduce.cuh>
+#include <cub/block/block_reduce.cuh>
+#include <cuda/atomic>
 #include <cuda/functional>
 #include <cuda/iterator>
-#include <cuda/std/execution>
 #include <cuda/std/iterator>
 #include <cuda/std/utility>
 #include <cuda/stream>
@@ -125,6 +127,57 @@ std::unique_ptr<column> make_offsets_child_column_async(IndexPairIterator begin,
 }
 
 /**
+ * @brief Builds the null mask, valid count and chars size of a strings column in one pass
+ *
+ * @tparam block_size The number of threads in the block
+ * @tparam IndexPairIterator iterator over type `pair<char const*,size_type>` values
+ *
+ * @param[out] null_mask The output bitmask
+ * @param[in] begin Iterator to the first string row
+ * @param[in] strings_count Number of rows
+ * @param[out] valid_count The count of set bits in the output bitmask
+ * @param[out] chars_size The total size of the strings in bytes
+ */
+template <size_type block_size, typename IndexPairIterator>
+CUDF_KERNEL void strings_validity_and_size_kernel(bitmask_type* null_mask,
+                                                  IndexPairIterator begin,
+                                                  size_type strings_count,
+                                                  size_type* valid_count,
+                                                  int64_t* chars_size)
+{
+  constexpr size_type leader_lane{0};
+  auto const lane_id{threadIdx.x % cudf::detail::warp_size};
+  auto i            = cudf::detail::grid_1d::global_thread_id<block_size>();
+  auto const stride = cudf::detail::grid_1d::grid_stride<block_size>();
+  size_type warp_valid_count{0};
+  int64_t thread_chars_size{0};
+
+  auto active_mask = __ballot_sync(0xFFFF'FFFFu, i < strings_count);
+  while (i < strings_count) {
+    auto const pair           = string_index_pair{begin[i]};
+    bitmask_type const ballot = __ballot_sync(active_mask, pair.first != nullptr);
+    if (lane_id == leader_lane) {
+      null_mask[cudf::word_index(i)] = ballot;
+      warp_valid_count += __popc(ballot);
+    }
+    thread_chars_size += pair.second;
+    i += stride;
+    active_mask = __ballot_sync(active_mask, i < strings_count);
+  }
+
+  auto const block_valid_count =
+    cudf::detail::single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_count);
+  using block_reduce = cub::BlockReduce<int64_t, block_size>;
+  __shared__ typename block_reduce::TempStorage temp_storage;
+  auto const block_chars_size = block_reduce(temp_storage).Sum(thread_chars_size);
+  if (threadIdx.x == 0) {
+    atomicAdd(valid_count, block_valid_count);
+    cuda::atomic_ref<int64_t, cuda::thread_scope_device> ref{*chars_size};
+    ref.fetch_add(block_chars_size, cuda::std::memory_order_relaxed);
+  }
+}
+
+/**
  * @brief Creates a batch of strings columns from iterators of pointer/size pairs
  *
  * The output sizes of all columns are synchronized once instead of once per column.
@@ -156,11 +209,6 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
   auto d_valid_counts = cudf::detail::make_zeroed_device_uvector_async<size_type>(
     num_columns, stream, cudf::get_current_device_resource_ref());
 
-  auto const env =
-    cuda::std::execution::env{cuda::std::execution::prop{cuda::get_stream_t{}, stream},
-                              cuda::std::execution::prop{cuda::mr::get_memory_resource_t{},
-                                                         cudf::get_current_device_resource_ref()}};
-
   // Only the sizes are needed before the sync. Offsets are built per column afterwards, so they
   // never coexist with the inputs of all columns.
   for (std::size_t idx = 0; idx < num_columns; ++idx) {
@@ -171,23 +219,16 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
 
     if (string_count == 0) { continue; }
 
-    auto const string_sizes = cuda::transform_iterator(
-      string_pairs, cuda::proclaim_return_type<int64_t>([] __device__(auto const& pair) {
-        return static_cast<int64_t>(string_index_pair{pair}.second);
-      }));
-    CUDF_CUDA_TRY(
-      cub::DeviceReduce::Sum(string_sizes, d_chars_sizes.data() + idx, string_count, env));
-
     constexpr size_type block_size{256};
     auto const grid =
       cudf::detail::grid_1d{static_cast<thread_index_type>(string_count), block_size};
-    cudf::detail::valid_if_kernel<block_size>
+    strings_validity_and_size_kernel<block_size>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.get()>>>(
         reinterpret_cast<bitmask_type*>(null_masks.back().data()),
         string_pairs,
         string_count,
-        [] __device__(string_index_pair const pair) -> bool { return pair.first != nullptr; },
-        d_valid_counts.data() + idx);
+        d_valid_counts.data() + idx,
+        d_chars_sizes.data() + idx);
     CUDF_CUDA_TRY(cudaGetLastError());
   }
 
