@@ -107,7 +107,7 @@ TYPED_TEST(BufferFactoriesTest, ConstHostSpan)
 TYPED_TEST(BufferFactoriesTest, MutableHostSpanAsync)
 {
   for (auto size : {0U, 1U, 257U, 65537U}) {
-    SCOPED_TRACE(size);
+    SCOPED_TRACE(::testing::Message() << "size=" << size);
     auto input = this->make_input(size);
     this->check_buffer(
       [&](cudf::memory_resources mr) {
@@ -132,7 +132,7 @@ TYPED_TEST(BufferFactoriesTest, StdVectorDeepCopy)
       },
       expected);
     SCOPED_TRACE(::testing::Message() << "size=" << size << ", async");
-    input = this->make_input(size);
+    input = expected;
     this->check_buffer(
       [&](cudf::memory_resources mr) {
         auto result = cudf::detail::make_device_buffer_async(input, this->stream, mr);
