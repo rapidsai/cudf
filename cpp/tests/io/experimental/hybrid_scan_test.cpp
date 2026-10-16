@@ -44,15 +44,15 @@ using cudf::io::parquet::experimental::read_columns_mode;
 using cudf::io::parquet::experimental::use_data_page_mask;
 
 /**
- * @brief Whether `hybrid_scan_reader::materialize_columns<Mode>` accepts a `RowMaskView` row mask
+ * @brief Whether `hybrid_scan_reader::materialize_columns<mode>` accepts a `RowMaskView` row mask
  */
-template <read_columns_mode Mode, typename RowMaskView>
+template <read_columns_mode mode, typename RowMaskView>
 concept accepts_row_mask = requires(cudf::io::parquet::experimental::hybrid_scan_reader& reader,
                                     RowMaskView row_mask,
                                     cudf::io::parquet_reader_options const& options,
                                     cuda::stream_ref stream,
                                     rmm::device_async_resource_ref mr) {
-  reader.materialize_columns<Mode>(
+  reader.materialize_columns<mode>(
     {}, {}, row_mask, cudf::io::parquet::experimental::use_data_page_mask::NO, options, stream, mr);
 };
 
@@ -1679,6 +1679,7 @@ TEST_F(HybridScanTest, MisusePassesThrows)
     cudf::io::parquet::experimental::read_columns_mode::FILTER_COLUMNS, all_row_groups, 1, options);
 
   // All column materialization now throws as the column selection is now stale
-  EXPECT_THROW(std::ignore = reader->materialize_next_table_chunk<read_columns_mode::ALL_COLUMNS>({}),
-               cudf::logic_error);
+  EXPECT_THROW(
+    std::ignore = reader->materialize_next_table_chunk<read_columns_mode::ALL_COLUMNS>({}),
+    cudf::logic_error);
 }

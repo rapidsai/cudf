@@ -269,14 +269,14 @@ class hybrid_scan_multifile {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @brief Get byte ranges of column chunks of the columns selected by `Mode`
+   * @brief Get byte ranges of column chunks of the columns selected by `mode`
    *
    * Byte ranges are flattened in source order. Within each source, byte ranges follow the selected
    * row group and column chunk order used by `row_group_indices` and `options`. The returned source
    * map has one source index per byte range and can be used to regroup byte ranges by datasource
    * before fetching.
    *
-   * @tparam Mode Columns selection: filter columns (columns appearing in the filter expression),
+   * @tparam mode Columns selection: filter columns (columns appearing in the filter expression),
    *         payload columns (selected columns not appearing in the filter expression), or all
    *         selected columns
    *
@@ -285,7 +285,7 @@ class hybrid_scan_multifile {
    * @return Pair of flattened byte ranges to column chunks of the selected columns and their
    *         corresponding source indices
    */
-  template <read_columns_mode Mode>
+  template <read_columns_mode mode>
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<size_type>>
   column_chunks_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
                             parquet_reader_options const& options);
@@ -303,7 +303,7 @@ class hybrid_scan_multifile {
    * @return Pair of flattened byte ranges to column chunks of filter columns and their
    *         corresponding source indices
    *
-   * @deprecated Deprecated in 26.12 and will be removed in 27.02. Use
+   * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
    * `column_chunks_byte_ranges<read_columns_mode::FILTER_COLUMNS>()` instead.
    */
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<size_type>>
@@ -311,21 +311,21 @@ class hybrid_scan_multifile {
                                    parquet_reader_options const& options);
 
   /**
-   * @brief Materializes the columns selected by `Mode`
+   * @brief Materializes the columns selected by `mode`
    *
    * Filter columns are filtered using the filter expression and the input row mask is updated in
    * place to only the rows that exist in the output table. Payload columns are filtered by applying
    * the input row mask to the output table. All selected columns are read without a row mask.
    *
-   * @throws cudf::logic_error if `Mode` is `FILTER_COLUMNS` and there is no filter expression
-   * @throws cudf::logic_error if `Mode` is `PAYLOAD_COLUMNS` and the row mask has nulls
+   * @throws cudf::logic_error if `mode` is `FILTER_COLUMNS` and there is no filter expression
+   * @throws cudf::logic_error if `mode` is `PAYLOAD_COLUMNS` and the row mask has nulls
    *
-   * @tparam Mode Columns selection. `FILTER_COLUMNS` requires a mutable row mask view (see
+   * @tparam mode Columns selection. `FILTER_COLUMNS` requires a mutable row mask view (see
    *         `row_mask_view_t`)
    *
    * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param column_chunk_data Flattened device spans of column chunk data of the selected columns,
-   *        in the same order as the byte ranges returned by `column_chunks_byte_ranges<Mode>()`
+   *        in the same order as the byte ranges returned by `column_chunks_byte_ranges<mode>()`
    * @param[in,out] row_mask Boolean column spanning all selected rows across all sources and
    *        indicating surviving rows. Updated in place for `FILTER_COLUMNS` and ignored for
    *        `ALL_COLUMNS`
@@ -336,11 +336,11 @@ class hybrid_scan_multifile {
    * @param mr Device memory resource used to allocate the device memory for the output table
    * @return Table of materialized columns and metadata
    */
-  template <read_columns_mode Mode>
+  template <read_columns_mode mode>
   [[nodiscard]] table_with_metadata materialize_columns(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
-    row_mask_view_t<Mode> row_mask,
+    row_mask_view_t<mode> row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
     cuda::stream_ref stream,
@@ -361,7 +361,7 @@ class hybrid_scan_multifile {
    * @param mr Device memory resource used to allocate the device memory for the output table
    * @return Table of materialized filter columns and metadata
    *
-   * @deprecated Deprecated in 26.12 and will be removed in 27.02. Use
+   * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
    * `materialize_columns<read_columns_mode::FILTER_COLUMNS>()` instead.
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns(
@@ -386,7 +386,7 @@ class hybrid_scan_multifile {
    * @return Pair of flattened byte ranges to column chunks of payload columns and their
    *         corresponding source indices
    *
-   * @deprecated Deprecated in 26.12 and will be removed in 27.02. Use
+   * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
    * `column_chunks_byte_ranges<read_columns_mode::PAYLOAD_COLUMNS>()` instead.
    */
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<size_type>>
@@ -429,7 +429,7 @@ class hybrid_scan_multifile {
    * @param stream CUDA stream used to compute the page mask
    * @return Pair of flattened payload page byte ranges and their corresponding source indices
    *
-   * @deprecated Deprecated in 26.12 and will be removed in 27.02. Use
+   * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
    * `sparse_payload_pages_byte_ranges()` instead.
    */
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<size_type>>
@@ -452,7 +452,7 @@ class hybrid_scan_multifile {
    * @param mr Device memory resource used to allocate the device memory for the output table
    * @return Table of materialized payload columns and metadata
    *
-   * @deprecated Deprecated in 26.12 and will be removed in 27.02. Use
+   * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
    * `materialize_columns<read_columns_mode::PAYLOAD_COLUMNS>()` instead.
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns(
@@ -472,7 +472,7 @@ class hybrid_scan_multifile {
    * @return Pair of flattened byte ranges to column chunks of all (or selected) columns and their
    *         corresponding source indices
    *
-   * @deprecated Deprecated in 26.12 and will be removed in 27.02. Use
+   * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
    * `column_chunks_byte_ranges<read_columns_mode::ALL_COLUMNS>()` instead.
    */
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<size_type>>
@@ -490,7 +490,7 @@ class hybrid_scan_multifile {
    * @param mr Device memory resource used to allocate the device memory for the output table
    * @return Table of all materialized columns and metadata
    *
-   * @deprecated Deprecated in 26.12 and will be removed in 27.02. Use
+   * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
    * `materialize_columns<read_columns_mode::ALL_COLUMNS>()` instead.
    */
   [[nodiscard]] table_with_metadata materialize_all_columns(
@@ -501,16 +501,16 @@ class hybrid_scan_multifile {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @brief Setup chunking information for the columns selected by `Mode` and preprocess the input
+   * @brief Setup chunking information for the columns selected by `mode` and preprocess the input
    * data pages
    *
-   * Table chunks are then materialized using `materialize_next_table_chunk<Mode>()` while
+   * Table chunks are then materialized using `materialize_next_table_chunk<mode>()` while
    * `has_next_table_chunk()` returns true.
    *
-   * @throws cudf::logic_error if `Mode` is `FILTER_COLUMNS` and there is no filter expression
-   * @throws cudf::logic_error if `Mode` is `PAYLOAD_COLUMNS` and the row mask has nulls
+   * @throws cudf::logic_error if `mode` is `FILTER_COLUMNS` and there is no filter expression
+   * @throws cudf::logic_error if `mode` is `PAYLOAD_COLUMNS` and the row mask has nulls
    *
-   * @tparam Mode Columns selection
+   * @tparam mode Columns selection
    *
    * @param chunk_read_limit Limit on total number of bytes to be returned per table chunk. `0` if
    * there is no limit
@@ -518,7 +518,7 @@ class hybrid_scan_multifile {
    * there is no limit
    * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param column_chunk_data Flattened device spans of column chunk data of the selected columns,
-   *        in the same order as the byte ranges returned by `column_chunks_byte_ranges<Mode>()`
+   *        in the same order as the byte ranges returned by `column_chunks_byte_ranges<mode>()`
    * @param row_mask Boolean column spanning all selected rows across all sources and indicating
    *        surviving rows. Ignored for `ALL_COLUMNS`
    * @param mask_data_pages Whether to build and use a data page mask using the row mask. Ignored
@@ -527,7 +527,7 @@ class hybrid_scan_multifile {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the device memory for the output table chunks
    */
-  template <read_columns_mode Mode>
+  template <read_columns_mode mode>
   void setup_chunking_for_columns(
     std::size_t chunk_read_limit,
     std::size_t pass_read_limit,
@@ -556,7 +556,7 @@ class hybrid_scan_multifile {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the device memory for the output table chunks
    *
-   * @deprecated Deprecated in 26.12 and will be removed in 27.02. Use
+   * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
    * `setup_chunking_for_columns<read_columns_mode::FILTER_COLUMNS>()` instead.
    */
   void setup_chunking_for_filter_columns(
@@ -571,15 +571,15 @@ class hybrid_scan_multifile {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @brief Materializes the next table chunk of the columns selected by `Mode`
+   * @brief Materializes the next table chunk of the columns selected by `mode`
    *
    * For filter columns, the corresponding range of the input row mask is updated in place to only
    * the rows that exist in the output table chunk. For payload columns, the corresponding range of
    * the input row mask is applied to the output table chunk.
    *
-   * @throws std::invalid_argument if `Mode` does not match the one used to setup chunking
+   * @throws std::invalid_argument if `mode` does not match the one used to setup chunking
    *
-   * @tparam Mode Columns selection. Must match the one used in `setup_chunking_for_columns<Mode>()`
+   * @tparam mode Columns selection. Must match the one used in `setup_chunking_for_columns<mode>()`
    * or `PAYLOAD_COLUMNS` after `setup_chunking_for_sparse_payload_columns()`
    *
    * @param[in,out] row_mask Boolean column spanning all selected rows across all sources and
@@ -588,8 +588,8 @@ class hybrid_scan_multifile {
    * only when there are no such rows (yielding an empty output table)
    * @return Table chunk of materialized columns and metadata
    */
-  template <read_columns_mode Mode>
-  [[nodiscard]] table_with_metadata materialize_next_table_chunk(row_mask_view_t<Mode> row_mask);
+  template <read_columns_mode mode>
+  [[nodiscard]] table_with_metadata materialize_next_table_chunk(row_mask_view_t<mode> row_mask);
 
   /**
    * @brief Materializes a chunk of filter columns and updates the corresponding range of input row
@@ -602,7 +602,7 @@ class hybrid_scan_multifile {
    *
    * @return Table chunk of materialized filter columns and metadata
    *
-   * @deprecated Deprecated in 26.12 and will be removed in 27.02. Use
+   * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
    * `materialize_next_table_chunk<read_columns_mode::FILTER_COLUMNS>()` instead.
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns_chunk(
@@ -625,7 +625,7 @@ class hybrid_scan_multifile {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the device memory for the output table chunks
    *
-   * @deprecated Deprecated in 26.12 and will be removed in 27.02. Use
+   * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
    * `setup_chunking_for_columns<read_columns_mode::PAYLOAD_COLUMNS>()` instead.
    */
   void setup_chunking_for_payload_columns(
@@ -687,7 +687,7 @@ class hybrid_scan_multifile {
    * @param stream CUDA stream used for preprocessing
    * @param mr Device memory resource used for output table chunks
    *
-   * @deprecated Deprecated in 26.12 and will be removed in 27.02. Use
+   * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
    * `setup_chunking_for_sparse_payload_columns()` instead.
    */
   void setup_chunking_for_payload_columns(
@@ -709,7 +709,7 @@ class hybrid_scan_multifile {
    *
    * @return Table chunk of materialized payload columns and metadata
    *
-   * @deprecated Deprecated in 26.12 and will be removed in 27.02. Use
+   * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
    * `materialize_next_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>()` instead.
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns_chunk(
@@ -730,7 +730,7 @@ class hybrid_scan_multifile {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the device memory for the output table chunks
    *
-   * @deprecated Deprecated in 26.12 and will be removed in 27.02. Use
+   * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
    * `setup_chunking_for_columns<read_columns_mode::ALL_COLUMNS>()` instead.
    */
   void setup_chunking_for_all_columns(
@@ -747,7 +747,7 @@ class hybrid_scan_multifile {
    *
    * @return Table chunk of materialized all (or selected) columns and metadata
    *
-   * @deprecated Deprecated in 26.12 and will be removed in 27.02. Use
+   * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
    * `materialize_next_table_chunk<read_columns_mode::ALL_COLUMNS>()` instead.
    */
   [[nodiscard]] table_with_metadata materialize_all_columns_chunk();

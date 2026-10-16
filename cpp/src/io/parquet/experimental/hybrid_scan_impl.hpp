@@ -22,7 +22,6 @@
 #include <cuda/stream>
 #include <thrust/host_vector.h>
 
-#include <concepts>
 #include <memory>
 #include <optional>
 #include <span>
@@ -34,13 +33,6 @@ namespace cudf::io::parquet::experimental::detail {
 using cudf::io::parquet::detail::ColumnChunkDesc;
 using cudf::io::parquet::detail::PageInfo;
 using text::byte_range_info;
-
-/**
- * @brief Row mask column view types
- */
-template <typename T>
-concept row_mask_view_type =
-  std::same_as<T, cudf::column_view> or std::same_as<T, cudf::mutable_column_view>;
 
 /**
  * @brief Implementation of the experimental Parquet reader optimized for Hybrid Scan operation
@@ -183,12 +175,10 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
 
   /**
    * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::column_chunks_byte_ranges
-   *
-   * @param columns_mode Columns to read
    */
+  template <read_columns_mode mode>
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
-  column_chunks_byte_ranges(read_columns_mode columns_mode,
-                            std::span<std::vector<size_type> const> row_group_indices,
+  column_chunks_byte_ranges(std::span<std::vector<size_type> const> row_group_indices,
                             parquet_reader_options const& options);
 
   /**
@@ -203,16 +193,12 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
 
   /**
    * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::materialize_columns
-   *
-   * @tparam RowMaskView Row mask column view type
-   * @param columns_mode Columns to materialize
    */
-  template <row_mask_view_type RowMaskView>
+  template <read_columns_mode mode>
   [[nodiscard]] table_with_metadata materialize_columns(
-    read_columns_mode columns_mode,
     std::span<std::vector<size_type> const> row_group_indices,
-    std::span<cudf::device_span<uint8_t const> const> column_data,
-    RowMaskView row_mask,
+    std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    row_mask_view_t<mode> row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
     cuda::stream_ref stream,
@@ -220,19 +206,18 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
 
   /**
    * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::setup_chunking_for_columns
-   *
-   * @param columns_mode Columns to materialize
    */
-  void setup_chunking_for_columns(read_columns_mode columns_mode,
-                                  std::size_t chunk_read_limit,
-                                  std::size_t pass_read_limit,
-                                  std::span<std::vector<size_type> const> row_group_indices,
-                                  std::span<cudf::device_span<uint8_t const> const> column_data,
-                                  cudf::column_view const& row_mask,
-                                  use_data_page_mask mask_data_pages,
-                                  parquet_reader_options const& options,
-                                  cuda::stream_ref stream,
-                                  rmm::device_async_resource_ref mr);
+  template <read_columns_mode mode>
+  void setup_chunking_for_columns(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    std::span<std::vector<size_type> const> row_group_indices,
+    std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    cudf::column_view const& row_mask,
+    use_data_page_mask mask_data_pages,
+    parquet_reader_options const& options,
+    cuda::stream_ref stream,
+    rmm::device_async_resource_ref mr);
 
   /**
    * @copydoc
@@ -273,13 +258,9 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
 
   /**
    * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::materialize_next_table_chunk
-   *
-   * @tparam RowMaskView Row mask column view type
-   * @param columns_mode Columns to materialize. Must match the one used to setup chunking
    */
-  template <row_mask_view_type RowMaskView>
-  [[nodiscard]] table_with_metadata materialize_next_table_chunk(read_columns_mode columns_mode,
-                                                                 RowMaskView row_mask);
+  template <read_columns_mode mode>
+  [[nodiscard]] table_with_metadata materialize_next_table_chunk(row_mask_view_t<mode> row_mask);
 
  private:
   /**

@@ -209,7 +209,7 @@ std::unique_ptr<cudf::column> hybrid_scan_reader::build_row_mask_with_page_index
   return _impl->build_row_mask_with_page_index_stats(input_row_group_indices, options, stream, mr);
 }
 
-template <read_columns_mode Mode>
+template <read_columns_mode mode>
 std::vector<byte_range_info> hybrid_scan_reader::column_chunks_byte_ranges(
   std::span<size_type const> row_group_indices, parquet_reader_options const& options)
 {
@@ -219,7 +219,7 @@ std::vector<byte_range_info> hybrid_scan_reader::column_chunks_byte_ranges(
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
 
-  return _impl->column_chunks_byte_ranges(Mode, input_row_group_indices, options).first;
+  return _impl->column_chunks_byte_ranges<mode>(input_row_group_indices, options).first;
 }
 
 std::vector<byte_range_info> hybrid_scan_reader::filter_column_chunks_byte_ranges(
@@ -228,11 +228,11 @@ std::vector<byte_range_info> hybrid_scan_reader::filter_column_chunks_byte_range
   return column_chunks_byte_ranges<read_columns_mode::FILTER_COLUMNS>(row_group_indices, options);
 }
 
-template <read_columns_mode Mode>
+template <read_columns_mode mode>
 table_with_metadata hybrid_scan_reader::materialize_columns(
   std::span<size_type const> row_group_indices,
   std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
-  row_mask_view_t<Mode> row_mask,
+  row_mask_view_t<mode> row_mask,
   use_data_page_mask mask_data_pages,
   parquet_reader_options const& options,
   cuda::stream_ref stream,
@@ -244,14 +244,8 @@ table_with_metadata hybrid_scan_reader::materialize_columns(
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
 
-  return _impl->materialize_columns(Mode,
-                                    input_row_group_indices,
-                                    column_chunk_data,
-                                    row_mask,
-                                    mask_data_pages,
-                                    options,
-                                    stream,
-                                    mr);
+  return _impl->materialize_columns<mode>(
+    input_row_group_indices, column_chunk_data, row_mask, mask_data_pages, options, stream, mr);
 }
 
 table_with_metadata hybrid_scan_reader::materialize_filter_columns(
@@ -303,7 +297,7 @@ table_with_metadata hybrid_scan_reader::materialize_all_columns(
     row_group_indices, column_chunk_data, {}, use_data_page_mask::NO, options, stream, mr);
 }
 
-template <read_columns_mode Mode>
+template <read_columns_mode mode>
 void hybrid_scan_reader::setup_chunking_for_columns(
   std::size_t chunk_read_limit,
   std::size_t pass_read_limit,
@@ -321,16 +315,15 @@ void hybrid_scan_reader::setup_chunking_for_columns(
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
 
-  _impl->setup_chunking_for_columns(Mode,
-                                    chunk_read_limit,
-                                    pass_read_limit,
-                                    input_row_group_indices,
-                                    column_chunk_data,
-                                    row_mask,
-                                    mask_data_pages,
-                                    options,
-                                    stream,
-                                    mr);
+  _impl->setup_chunking_for_columns<mode>(chunk_read_limit,
+                                          pass_read_limit,
+                                          input_row_group_indices,
+                                          column_chunk_data,
+                                          row_mask,
+                                          mask_data_pages,
+                                          options,
+                                          stream,
+                                          mr);
 }
 
 void hybrid_scan_reader::setup_chunking_for_filter_columns(
@@ -355,12 +348,12 @@ void hybrid_scan_reader::setup_chunking_for_filter_columns(
                                                                 mr);
 }
 
-template <read_columns_mode Mode>
-table_with_metadata hybrid_scan_reader::materialize_next_table_chunk(row_mask_view_t<Mode> row_mask)
+template <read_columns_mode mode>
+table_with_metadata hybrid_scan_reader::materialize_next_table_chunk(row_mask_view_t<mode> row_mask)
 {
   CUDF_FUNC_RANGE();
 
-  return _impl->materialize_next_table_chunk(Mode, row_mask);
+  return _impl->materialize_next_table_chunk<mode>(row_mask);
 }
 
 table_with_metadata hybrid_scan_reader::materialize_filter_columns_chunk(
@@ -443,18 +436,18 @@ std::vector<std::vector<cudf::size_type>> hybrid_scan_reader::construct_row_grou
 bool hybrid_scan_reader::has_next_table_chunk() { return _impl->has_next_table_chunk(); }
 
 // Explicit instantiations of the generic columns APIs for each columns selection mode
-#define INSTANTIATE_COLUMNS_APIS(Mode)                                                       \
-  template std::vector<byte_range_info> hybrid_scan_reader::column_chunks_byte_ranges<Mode>( \
+#define INSTANTIATE_COLUMNS_APIS(mode)                                                       \
+  template std::vector<byte_range_info> hybrid_scan_reader::column_chunks_byte_ranges<mode>( \
     std::span<size_type const>, parquet_reader_options const&);                              \
-  template table_with_metadata hybrid_scan_reader::materialize_columns<Mode>(                \
+  template table_with_metadata hybrid_scan_reader::materialize_columns<mode>(                \
     std::span<size_type const>,                                                              \
     std::span<cudf::device_span<uint8_t const> const>,                                       \
-    row_mask_view_t<Mode>,                                                                   \
+    row_mask_view_t<mode>,                                                                   \
     use_data_page_mask,                                                                      \
     parquet_reader_options const&,                                                           \
     cuda::stream_ref,                                                                        \
     rmm::device_async_resource_ref);                                                         \
-  template void hybrid_scan_reader::setup_chunking_for_columns<Mode>(                        \
+  template void hybrid_scan_reader::setup_chunking_for_columns<mode>(                        \
     std::size_t,                                                                             \
     std::size_t,                                                                             \
     std::span<size_type const>,                                                              \
@@ -464,8 +457,8 @@ bool hybrid_scan_reader::has_next_table_chunk() { return _impl->has_next_table_c
     parquet_reader_options const&,                                                           \
     cuda::stream_ref,                                                                        \
     rmm::device_async_resource_ref);                                                         \
-  template table_with_metadata hybrid_scan_reader::materialize_next_table_chunk<Mode>(          \
-    row_mask_view_t<Mode>);
+  template table_with_metadata hybrid_scan_reader::materialize_next_table_chunk<mode>(       \
+    row_mask_view_t<mode>);
 
 INSTANTIATE_COLUMNS_APIS(read_columns_mode::FILTER_COLUMNS)
 INSTANTIATE_COLUMNS_APIS(read_columns_mode::PAYLOAD_COLUMNS)

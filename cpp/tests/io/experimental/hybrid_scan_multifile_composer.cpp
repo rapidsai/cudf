@@ -246,7 +246,8 @@ chunked_sparse_hybrid_scan_multifile(
                                                    mr);
   while (reader.has_next_table_chunk()) {
     payload_tables.push_back(
-      reader.materialize_next_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask->view()).tbl);
+      reader.materialize_next_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask->view())
+        .tbl);
   }
 
   return std::tuple{concatenate_tables(std::move(filter_tables), stream, mr),

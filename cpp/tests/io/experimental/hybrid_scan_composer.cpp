@@ -331,7 +331,8 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> chunked_h
 
     while (reader->has_next_table_chunk()) {
       payload_tables.push_back(
-        reader->materialize_next_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask_view).tbl);
+        reader->materialize_next_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask_view)
+          .tbl);
     }
 
     // Update the number of rows materialized
