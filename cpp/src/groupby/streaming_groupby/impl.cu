@@ -203,7 +203,8 @@ void streaming_groupby::impl::initialize(table_view const& data, cuda::stream_re
                                        ? cudf::dictionary_column_view(values).keys().type()
                                        : values.type());
   }
-  _agg_results = make_aggregate_results(0, stream, cudf::memory_resources{mr, mr});
+  _agg_results = make_aggregate_results(
+    0, stream, cudf::memory_resources{mr, cudf::get_current_device_resource_ref()});
 
   _d_agg_kinds = std::make_unique<cuda::device_buffer<aggregation::Kind>>(
     cudf::detail::make_device_buffer_async(_agg_kinds, stream, mr));

@@ -178,12 +178,12 @@ auto build_cross_comparators(
     cudf::nullate::DYNAMIC,
     cudf::detail::row::equality::nan_equal_physical_equality_comparator>;
 
-  auto const n = static_cast<size_type>(preprocessed_batches.size());
+  auto const num_batches = static_cast<size_type>(preprocessed_batches.size());
 
   std::vector<stored_batch_comparator<eq_t>> h_eqs;
   size_type dense_id_offset = 0;
-  h_eqs.reserve(n);
-  for (size_type k = 0; k < n; ++k) {
+  h_eqs.reserve(num_batches);
+  for (size_type k = 0; k < num_batches; ++k) {
     auto const cross_cmp = cudf::detail::row::equality::two_table_comparator{
       preprocessed_batch, preprocessed_batches[k]};
     auto const adapter = cross_cmp.equal_to<has_nested_columns>(has_null, null_equality::EQUAL);
@@ -191,7 +191,7 @@ auto build_cross_comparators(
     dense_id_offset += static_cast<table_device_view>(*preprocessed_batches[k]).num_rows();
   }
 
-  return cudf::detail::make_device_buffer(h_eqs, stream, mr.as_temporary());
+  return cudf::detail::make_device_buffer(h_eqs, stream, mr.get_output_mr());
 }
 
 /*
@@ -300,9 +300,9 @@ struct streaming_groupby::impl {
   void ensure_aggregate_capacity(size_type required,
                                  cuda::stream_ref stream,
                                  cudf::memory_resources mr);
-  std::unique_ptr<table> make_aggregate_results(size_type capacity,
-                                                cuda::stream_ref stream,
-                                                cudf::memory_resources mr) const;
+  [[nodiscard]] std::unique_ptr<table> make_aggregate_results(size_type capacity,
+                                                              cuda::stream_ref stream,
+                                                              cudf::memory_resources mr) const;
   // Call after enqueueing this operation, while holding _insert_mutex.
   void record_aggregate_completion(cuda::stream_ref stream) const
   {
