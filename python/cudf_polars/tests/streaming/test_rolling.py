@@ -261,7 +261,7 @@ def test_fixed_size_rolling_mean(engine, center) -> None:
             None,
             None,
             marks=pytest.mark.skipif(
-                not hasattr(plrs._expr_nodes, "RollingFunction"),
+                POLARS_VERSION_LT_136,
                 reason="RollingFunction not available in this polars version",
             ),
         ),
@@ -309,6 +309,14 @@ def _assert_rolling_result(engine, source, kind, offset, closed="right") -> None
     assert_gpu_result_equal(q, engine=engine)
 
 
+def _share_source_path(spmd_engine, source) -> str:
+    path = str(source).encode() if spmd_engine.rank == 0 else b""
+    with reserve_op_id() as op_id:
+        return all_gather_host_data(
+            spmd_engine.comm, spmd_engine.context.br(), op_id, path
+        )[0].decode()
+
+
 @pytest.mark.spmd
 @pytest.mark.parametrize(
     "kind",
@@ -317,7 +325,7 @@ def _assert_rolling_result(engine, source, kind, offset, closed="right") -> None
         pytest.param(
             "count",
             marks=pytest.mark.skipif(
-                not hasattr(plrs._expr_nodes, "RollingFunction"),
+                POLARS_VERSION_LT_136,
                 reason="RollingFunction not available in this polars version",
             ),
         ),
@@ -325,15 +333,45 @@ def _assert_rolling_result(engine, source, kind, offset, closed="right") -> None
 )
 def test_rolling_multirank_spmd(spmd_engine, tmp_path, kind) -> None:
     source = tmp_path / "rolling.parquet"
-    path = b""
     if spmd_engine.rank == 0:
         _write_rolling_source(source)
-        path = str(source).encode()
-    with reserve_op_id() as op_id:
-        source = all_gather_host_data(
-            spmd_engine.comm, spmd_engine.context.br(), op_id, path
-        )[0].decode()
+    source = _share_source_path(spmd_engine, source)
     _assert_rolling_result(spmd_engine, source, kind, "-2i")
+
+
+@pytest.mark.spmd
+def test_rolling_uint64_out_of_bounds(spmd_engine, tmp_path) -> None:
+    if spmd_engine.comm.nranks != 2:
+        pytest.skip("This test expects exactly two ranks.")
+
+    source = tmp_path / "rolling-uint64.parquet"
+    if spmd_engine.rank == 0:
+        make_partitioned_source(
+            pl.DataFrame(
+                {
+                    "orderby": pl.Series([2**63, 2**63 + 1], dtype=pl.UInt64),
+                    "values": [1, 2],
+                }
+            ),
+            source,
+            "parquet",
+            row_group_size=1,
+        )
+    source = _share_source_path(spmd_engine, source)
+    q = (
+        pl.scan_parquet(source)
+        .sort("orderby")
+        .rolling("orderby", period="2i")
+        .agg(sum=pl.sum("values"))
+    )
+
+    with pytest.RaisesGroup(
+        pytest.RaisesExc(
+            NotImplementedError,
+            match="outside the signed 64-bit range",
+        )
+    ):
+        q.collect(engine=spmd_engine)
 
 
 @pytest.mark.skipif(
