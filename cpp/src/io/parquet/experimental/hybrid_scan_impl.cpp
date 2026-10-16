@@ -153,23 +153,6 @@ namespace {
   return column_schemas;
 }
 
-/**
- * @brief Returns whether the row mask view type is valid for the specified read columns mode
- *
- * Filter columns update the row mask in place so require a mutable view whereas all other
- * columns require an immutable view.
- *
- * @tparam RowMaskView Row mask column view type
- * @param columns_mode Columns to materialize
- * @return Whether the row mask view type is valid for the columns mode
- */
-template <typename RowMaskView>
-[[nodiscard]] bool is_valid_row_mask_view(read_columns_mode columns_mode)
-{
-  return std::same_as<RowMaskView, cudf::mutable_column_view> ==
-         (columns_mode == read_columns_mode::FILTER_COLUMNS);
-}
-
 }  // namespace
 
 void hybrid_scan_reader_impl::mark_buffers_nullable_for_pruned_pages()
@@ -799,10 +782,6 @@ table_with_metadata hybrid_scan_reader_impl::materialize_columns(
   cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(is_valid_row_mask_view<RowMaskView>(columns_mode),
-               "Invalid row mask view type for the current columns selection mode",
-               std::invalid_argument);
-
   auto constexpr sparse_page_io = false;
   setup_table_materialization(read_mode::READ_ALL,
                               columns_mode,
@@ -880,9 +859,6 @@ table_with_metadata hybrid_scan_reader_impl::materialize_next_table_chunk(
                "Chunking for columns not yet setup");
   CUDF_EXPECTS(columns_mode == *_selected_columns_mode,
                "Columns selection mode must match the one used to setup chunking",
-               std::invalid_argument);
-  CUDF_EXPECTS(is_valid_row_mask_view<RowMaskView>(columns_mode),
-               "Invalid row mask view type for the current columns selection mode",
                std::invalid_argument);
 
   // Reset the output buffers to their original states (right after reader construction).

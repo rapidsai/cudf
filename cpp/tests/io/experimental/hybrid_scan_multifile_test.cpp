@@ -399,7 +399,7 @@ TEST_F(HybridScanMultifileTest, SparseDictionaryEncodedPages)
 
   ASSERT_TRUE(reader.has_next_table_chunk());
   auto const result =
-    reader.materialize_columns_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask);
+    reader.materialize_next_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask);
   EXPECT_FALSE(reader.has_next_table_chunk());
 
   auto const input =
@@ -473,7 +473,7 @@ TEST_F(HybridScanMultifileTest, SparsePayloadEmptyAndAllPrunedPageData)
       0, 0, row_groups, empty_page_data, row_mask->view(), options, stream, mr));
     ASSERT_TRUE(reader->has_next_table_chunk());
     auto const result =
-      reader->materialize_columns_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask->view());
+      reader->materialize_next_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask->view());
     EXPECT_EQ(result.tbl->num_rows(), 0);
     EXPECT_EQ(result.metadata.num_input_row_groups, 0);
     EXPECT_FALSE(reader->has_next_table_chunk());
@@ -517,7 +517,7 @@ TEST_F(HybridScanMultifileTest, SparsePayloadEmptyAndAllPrunedPageData)
       0, 0, row_groups, all_pruned_page_data, row_mask->view(), options, stream, mr);
     ASSERT_TRUE(reader->has_next_table_chunk());
     auto const result =
-      reader->materialize_columns_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask->view());
+      reader->materialize_next_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask->view());
     EXPECT_EQ(result.tbl->num_rows(), 0);
     EXPECT_EQ(result.tbl->num_columns(), 1);
     // Two sources with four row groups each

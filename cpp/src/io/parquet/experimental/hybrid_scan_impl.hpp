@@ -272,7 +272,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   [[nodiscard]] bool has_next_table_chunk();
 
   /**
-   * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::materialize_columns_chunk
+   * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::materialize_next_table_chunk
    *
    * @tparam RowMaskView Row mask column view type
    * @param columns_mode Columns to materialize. Must match the one used to setup chunking

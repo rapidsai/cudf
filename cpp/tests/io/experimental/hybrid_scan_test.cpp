@@ -1516,7 +1516,7 @@ TEST_F(HybridScanTest, RowGroupPassesMatchesChunkedReader)
                                                                          mr);
 
       while (reader->has_next_table_chunk()) {
-        auto chunk = reader->materialize_columns_chunk<read_columns_mode::ALL_COLUMNS>({});
+        auto chunk = reader->materialize_next_table_chunk<read_columns_mode::ALL_COLUMNS>({});
         hybrid_scan_tables.push_back(std::move(chunk.tbl));
       }
     }
@@ -1671,7 +1671,7 @@ TEST_F(HybridScanTest, MisusePassesThrows)
 
   // Chunks must be materialized with the same columns selection as the chunking setup
   EXPECT_THROW(
-    std::ignore = reader->materialize_columns_chunk<read_columns_mode::PAYLOAD_COLUMNS>({}),
+    std::ignore = reader->materialize_next_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>({}),
     std::invalid_argument);
 
   // Construct passes for filter columns after chunking is set up.
@@ -1679,6 +1679,6 @@ TEST_F(HybridScanTest, MisusePassesThrows)
     cudf::io::parquet::experimental::read_columns_mode::FILTER_COLUMNS, all_row_groups, 1, options);
 
   // All column materialization now throws as the column selection is now stale
-  EXPECT_THROW(std::ignore = reader->materialize_columns_chunk<read_columns_mode::ALL_COLUMNS>({}),
+  EXPECT_THROW(std::ignore = reader->materialize_next_table_chunk<read_columns_mode::ALL_COLUMNS>({}),
                cudf::logic_error);
 }

@@ -44,7 +44,7 @@ struct hybrid_scan_reader_wrapper {
   std::unique_ptr<exp_pq::hybrid_scan_reader> reader;
   // Owns the row mask for the duration of a chunked filter-column pipeline.
   // Set by setup_chunking_for_columns<FILTER_COLUMNS>, mutated in place by each
-  // materialize_columns_chunk<FILTER_COLUMNS> call, and transferred to Java by
+  // materialize_next_table_chunk<FILTER_COLUMNS> call, and transferred to Java by
   // take_filter_row_mask. nullptr outside of an active chunked-filter session.
   std::unique_ptr<cudf::column> chunked_filter_row_mask;
 

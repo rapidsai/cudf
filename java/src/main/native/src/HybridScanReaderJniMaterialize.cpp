@@ -212,7 +212,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_HybridScanReader_materializeFil
     }
     auto mut_view = wrapper->chunked_filter_row_mask->mutable_view();
     auto result =
-      wrapper->reader->materialize_columns_chunk<exp_pq::read_columns_mode::FILTER_COLUMNS>(
+      wrapper->reader->materialize_next_table_chunk<exp_pq::read_columns_mode::FILTER_COLUMNS>(
         mut_view);
     return cudf::jni::convert_table_for_return(env, result.tbl);
   }
@@ -293,7 +293,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_HybridScanReader_materializePay
     auto* wrapper  = reinterpret_cast<hybrid_scan_reader_wrapper*>(handle);
     auto* row_mask = reinterpret_cast<cudf::column_view const*>(row_mask_view_handle);
     auto result =
-      wrapper->reader->materialize_columns_chunk<exp_pq::read_columns_mode::PAYLOAD_COLUMNS>(
+      wrapper->reader->materialize_next_table_chunk<exp_pq::read_columns_mode::PAYLOAD_COLUMNS>(
         *row_mask);
     return cudf::jni::convert_table_for_return(env, result.tbl);
   }
@@ -343,7 +343,7 @@ Java_ai_rapids_cudf_HybridScanReader_materializeAllColumnsChunk(JNIEnv* env, jcl
     cudf::jni::auto_set_device(env);
     auto* wrapper = reinterpret_cast<hybrid_scan_reader_wrapper*>(handle);
     auto result =
-      wrapper->reader->materialize_columns_chunk<exp_pq::read_columns_mode::ALL_COLUMNS>({});
+      wrapper->reader->materialize_next_table_chunk<exp_pq::read_columns_mode::ALL_COLUMNS>({});
     return cudf::jni::convert_table_for_return(env, result.tbl);
   }
   JNI_CATCH(env, nullptr);

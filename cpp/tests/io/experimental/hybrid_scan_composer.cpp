@@ -303,7 +303,7 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> chunked_h
 
     while (reader->has_next_table_chunk()) {
       filter_tables.push_back(
-        reader->materialize_columns_chunk<read_columns_mode::FILTER_COLUMNS>(row_mask_view).tbl);
+        reader->materialize_next_table_chunk<read_columns_mode::FILTER_COLUMNS>(row_mask_view).tbl);
     }
 
     // Materialize payload columns
@@ -331,7 +331,7 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> chunked_h
 
     while (reader->has_next_table_chunk()) {
       payload_tables.push_back(
-        reader->materialize_columns_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask_view).tbl);
+        reader->materialize_next_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask_view).tbl);
     }
 
     // Update the number of rows materialized
@@ -452,7 +452,7 @@ std::unique_ptr<cudf::table> chunked_hybrid_scan_single_step(
                                                                        mr);
 
     while (reader->has_next_table_chunk()) {
-      auto chunk = reader->materialize_columns_chunk<read_columns_mode::ALL_COLUMNS>({});
+      auto chunk = reader->materialize_next_table_chunk<read_columns_mode::ALL_COLUMNS>({});
       tables.push_back(std::move(chunk.tbl));
       metadata = std::move(chunk.metadata);
     }

@@ -154,7 +154,7 @@ chunked_hybrid_scan_multifile(cudf::io::source_info const& source_info,
     mr);
   while (reader.has_next_table_chunk()) {
     filter_tables.push_back(
-      reader.materialize_columns_chunk<read_columns_mode::FILTER_COLUMNS>(row_mask_view).tbl);
+      reader.materialize_next_table_chunk<read_columns_mode::FILTER_COLUMNS>(row_mask_view).tbl);
   }
 
   auto payload_column_chunks = fetch_multisource_device_data(
@@ -174,7 +174,7 @@ chunked_hybrid_scan_multifile(cudf::io::source_info const& source_info,
     mr);
   while (reader.has_next_table_chunk()) {
     payload_tables.push_back(
-      reader.materialize_columns_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask_view).tbl);
+      reader.materialize_next_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask_view).tbl);
   }
 
   return std::tuple{concatenate_tables(std::move(filter_tables), stream, mr),
@@ -229,7 +229,7 @@ chunked_sparse_hybrid_scan_multifile(
     mr);
   while (reader.has_next_table_chunk()) {
     filter_tables.push_back(
-      reader.materialize_columns_chunk<read_columns_mode::FILTER_COLUMNS>(row_mask_view).tbl);
+      reader.materialize_next_table_chunk<read_columns_mode::FILTER_COLUMNS>(row_mask_view).tbl);
   }
 
   auto const payload_page_ranges =
@@ -246,7 +246,7 @@ chunked_sparse_hybrid_scan_multifile(
                                                    mr);
   while (reader.has_next_table_chunk()) {
     payload_tables.push_back(
-      reader.materialize_columns_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask->view()).tbl);
+      reader.materialize_next_table_chunk<read_columns_mode::PAYLOAD_COLUMNS>(row_mask->view()).tbl);
   }
 
   return std::tuple{concatenate_tables(std::move(filter_tables), stream, mr),
@@ -295,7 +295,7 @@ std::unique_ptr<cudf::table> chunked_hybrid_scan_multifile_single_step(
 
   auto tables = std::vector<std::unique_ptr<cudf::table>>{};
   while (reader.has_next_table_chunk()) {
-    tables.push_back(reader.materialize_columns_chunk<read_columns_mode::ALL_COLUMNS>({}).tbl);
+    tables.push_back(reader.materialize_next_table_chunk<read_columns_mode::ALL_COLUMNS>({}).tbl);
   }
 
   return concatenate_tables(std::move(tables), stream, mr);
