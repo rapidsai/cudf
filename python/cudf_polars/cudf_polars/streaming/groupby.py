@@ -519,14 +519,15 @@ def _(
 
     # Preshuffle ir.child if needed
     if need_preshuffle:
-        if _has_stable_sorted_agg(ir.agg_requests):
+        if _has_stable_sorted_agg(ir.agg_requests) or _has_order_sensitive_agg(
+            ir.agg_requests
+        ):
             return _lower_ir_fallback(
                 ir,
                 rec,
                 msg=(
-                    "Streaming group_by does not yet preserve input-order ties "
-                    "for sort_by(..., maintain_order=True) when another "
-                    "aggregation requires repartitioning."
+                    "Streaming group_by does not preserve input order when an "
+                    "order-sensitive aggregation requires repartitioning."
                 ),
             )
         child = Shuffle(

@@ -320,6 +320,27 @@ def test_groupby_order_sensitive_aggs(streaming_engine_factory):
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
+def test_groupby_order_sensitive_agg_with_preshuffle_fallback(
+    streaming_engine_factory,
+):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=2, fallback_mode="raise"),
+    )
+    df = pl.LazyFrame(
+        {
+            "key": ["a", "b", "a", "b"],
+            "value": [1, 2, 3, 4],
+        }
+    )
+    q = df.group_by("key").agg(
+        pl.col("value").n_unique(),
+        pl.col("value").first().alias("first"),
+        pl.col("value").last().alias("last"),
+    )
+    with pytest.raises(NotImplementedError, match="preserve input order"):
+        q.collect(engine=streaming_engine)
+
+
 def test_groupby_sort_by_first_last(streaming_engine_factory):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=2, fallback_mode="raise"),
@@ -379,7 +400,7 @@ def test_groupby_sort_by_stable_ties_with_preshuffle_fallback(
         pl.col("val").sort_by("idx", maintain_order=True).first().alias("first_tie"),
         pl.col("val").sort_by("idx", maintain_order=True).last().alias("last_tie"),
     )
-    with pytest.raises(NotImplementedError, match="input-order ties"):
+    with pytest.raises(NotImplementedError, match="preserve input order"):
         q.collect(engine=streaming_engine)
 
 
