@@ -181,6 +181,7 @@ struct dremel_data {
  * @param output_as_byte_array if `true`, then any nested list level that has a child of type
  * `uint8_t` will be considered as the last level
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @throws std::overflow_error if the number of level values exceeds the column size limit
  * @return A struct containing dremel data
  */
 dremel_data get_dremel_data(column_view input,
@@ -199,6 +200,7 @@ dremel_data get_dremel_data(column_view input,
  * @param output_as_byte_array if `true`, then any nested list level that has a child of type
  * `uint8_t` will be considered as the last level
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @throws std::overflow_error if the number of level values exceeds the column size limit
  * @return A struct containing dremel data
  */
 dremel_data get_comparator_data(column_view input,
