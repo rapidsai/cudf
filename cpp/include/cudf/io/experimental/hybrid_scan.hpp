@@ -628,6 +628,8 @@ class hybrid_scan_reader {
   /**
    * @brief Get byte ranges of column chunks of filter columns
    *
+   * Byte ranges are flattened in row group and column chunk order.
+   *
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
    * @return Vector of byte ranges to column chunks of filter columns
@@ -639,7 +641,7 @@ class hybrid_scan_reader {
     std::span<size_type const> row_group_indices, parquet_reader_options const& options);
 
   /**
-   * @brief Materializes the selected columns. Filter columns also update the input row mask to
+   * @brief Materializes the selected columns. Filter columns also update the input @p row_mask to
    * only the rows that exist in the output table
    *
    * @tparam mode Column selection
@@ -691,6 +693,8 @@ class hybrid_scan_reader {
   /**
    * @brief Get byte ranges of column chunks of payload columns
    *
+   * Byte ranges are flattened in row group and column chunk order.
+   *
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
    * @return Vector of byte ranges to column chunks of payload columns
@@ -727,6 +731,8 @@ class hybrid_scan_reader {
 
   /**
    * @brief Get byte ranges of column chunks of all (or selected) columns
+   *
+   * Byte ranges are flattened in row group and column chunk order.
    *
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options

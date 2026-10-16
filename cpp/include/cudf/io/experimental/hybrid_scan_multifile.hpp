@@ -271,12 +271,13 @@ class hybrid_scan_multifile {
   /**
    * @brief Get byte ranges of column chunks of the selected columns
    *
-   * Byte ranges are flattened in source, row group, and column chunk order.
+   * Byte ranges are flattened in source, row group, and column chunk order. The source map
+   * indicates the source index for each byte range.
    *
    * @tparam mode Column selection
    * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param options Parquet reader options
-   * @return Pair of flattened byte ranges to column chunks of the selected columns and their
+   * @return Pair of flattened column chunk byte ranges and their
    *         corresponding source indices
    */
   template <read_columns_mode mode>
@@ -287,14 +288,12 @@ class hybrid_scan_multifile {
   /**
    * @brief Get byte ranges of column chunks of filter columns
    *
-   * Byte ranges are flattened in source order. Within each source, byte ranges follow the selected
-   * row group and column chunk order used by `row_group_indices` and `options`. The returned source
-   * map has one source index per byte range and can be used to regroup byte ranges by datasource
-   * before fetching.
+   * Byte ranges are flattened in source, row group, and column chunk order. The source map
+   * indicates the source index for each byte range.
    *
    * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param options Parquet reader options
-   * @return Pair of flattened byte ranges to column chunks of filter columns and their
+   * @return Pair of flattened column chunk byte ranges and their
    *         corresponding source indices
    *
    * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
@@ -305,8 +304,10 @@ class hybrid_scan_multifile {
                                    parquet_reader_options const& options);
 
   /**
-   * @brief Materializes the selected columns. Filter columns also update the input row mask to
-   * only the rows that exist in the output table
+   * @brief Materializes a table containing the selected columns
+   *
+   * Filter columns also update the input @p row_mask to reflect the surviving rows
+   * in the materialized table.
    *
    * @tparam mode Column selection
    * @param row_group_indices Span of vectors of input row group indices, one per source
@@ -360,14 +361,12 @@ class hybrid_scan_multifile {
   /**
    * @brief Get byte ranges of column chunks of payload columns
    *
-   * Byte ranges are flattened in source order. Within each source, byte ranges follow the selected
-   * row group and column chunk order used by `row_group_indices` and `options`. The returned source
-   * map has one source index per byte range and can be used to regroup byte ranges by datasource
-   * before fetching.
+   * Byte ranges are flattened in source, row group, and column chunk order. The source map
+   * indicates the source index for each byte range.
    *
    * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param options Parquet reader options
-   * @return Pair of flattened byte ranges to column chunks of payload columns and their
+   * @return Pair of flattened column chunk byte ranges and their
    *         corresponding source indices
    *
    * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
@@ -380,16 +379,14 @@ class hybrid_scan_multifile {
   /**
    * @brief Get byte ranges of pages of payload columns for sparse (page-level) I/O
    *
-   * Byte ranges are flattened in source, row group, column chunk, and page order. The returned
-   * source map has one source index per byte range. Dictionary pages precede data pages within each
-   * column chunk. Pruned pages are represented by empty byte ranges.
+   * Byte ranges are flattened in source, row group, column chunk, and page order. The source map
+   * indicates the source index for each byte range.
    *
-   * @throws cudf::logic_error if any selected column chunk does not have a valid offset index
-   *
-   * @param row_group_indices Input row group indices, one vector per source
-   * @param row_mask Boolean mask spanning the selected row groups
+   * @param row_group_indices Span of vectors of input row group indices, one per source
+   * @param row_mask Boolean column spanning all selected rows across all sources and indicating
+   *        surviving rows
    * @param options Parquet reader options
-   * @param stream CUDA stream used to compute the page mask
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Pair of flattened payload page byte ranges and their corresponding source indices
    */
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<size_type>>
@@ -401,16 +398,15 @@ class hybrid_scan_multifile {
   /**
    * @brief Get byte ranges of pages of payload columns
    *
-   * Byte ranges are flattened in source, row group, column chunk, and page order. The returned
-   * source map has one source index per byte range. Dictionary pages precede data pages within each
-   * column chunk. Pruned pages are represented by empty byte ranges.
+   * Byte ranges are flattened in source, row group, column chunk, and page order. The source map
+   * indicates the source index for each byte range.
    *
    * @throws cudf::logic_error if any selected column chunk does not have a valid offset index
    *
    * @param row_group_indices Input row group indices, one vector per source
    * @param row_mask Boolean mask spanning the selected row groups
    * @param options Parquet reader options
-   * @param stream CUDA stream used to compute the page mask
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Pair of flattened payload page byte ranges and their corresponding source indices
    *
    * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
@@ -450,6 +446,9 @@ class hybrid_scan_multifile {
 
   /**
    * @brief Get byte ranges of column chunks of all (or selected) columns
+   *
+   * Byte ranges are flattened in source, row group, and column chunk order. The source map
+   * indicates the source index for each byte range.
    *
    * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param options Parquet reader options
@@ -546,8 +545,10 @@ class hybrid_scan_multifile {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @brief Materializes the next table chunk of the selected columns. Filter columns also update
-   * the corresponding row ranges of the input @p row_mask
+   * @brief Materializes a table chunk containing the selected columns
+   *
+   * Filter columns also update the corresponding portion of the input @p row_mask
+   * to reflect the surviving rows in the output table chunk.
    *
    * @tparam mode Column selection (same as the one used to setup chunking)
    * @param[in,out] row_mask Boolean column spanning all selected rows across all sources and
@@ -608,8 +609,9 @@ class hybrid_scan_multifile {
   /**
    * @brief Setup chunking information for payload columns from sparse (page-level) data
    *
-   * @param chunk_read_limit Memory limit for output table chunk byte size, or zero if no limit
-   * @param pass_read_limit Memory limit for reading and decompressing data, or zero if
+   * @param chunk_read_limit Limit on total number of bytes to be returned per table chunk, or `0`
+   * if there is no limit
+   * @param pass_read_limit Limit on the memory used for reading and decompressing data, or `0` if
    * there is no limit
    * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param page_data Flattened device spans of page data in the same order as byte ranges from
@@ -644,7 +646,7 @@ class hybrid_scan_multifile {
    * @param page_data Flattened device spans of payload page data in the same order as the byte
    * ranges from `payload_pages_byte_ranges`
    * @param options Parquet reader options
-   * @param stream CUDA stream used for preprocessing
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used for output table chunks
    *
    * @deprecated Deprecated in 26.12 and will be removed in a future commit. Use
