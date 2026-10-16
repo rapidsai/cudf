@@ -34,7 +34,6 @@
 #include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cooperative_groups.h>
-#include <cub/block/block_reduce.cuh>
 #include <cub/block/block_scan.cuh>
 #include <cub/device/device_segmented_reduce.cuh>
 #include <cuco/static_map.cuh>
@@ -683,31 +682,9 @@ CUDF_KERNEL void tokenize_deferred_kernel(WordsFn words,
 }
 
 /**
- * @brief Computes the number of tokens for each block of words
- *
- * Launched as a thread per word using the same blocks as write_tokens_kernel.
- *
- * @param num_words Number of words
- * @param d_counts Number of tokens for each word
- * @param d_block_counts Number of tokens for each block of words
- */
-CUDF_KERNEL void block_counts_kernel(cudf::size_type num_words,
-                                     uint8_t const* d_counts,
-                                     int64_t* d_block_counts)
-{
-  auto const idx   = cudf::detail::grid_1d::global_thread_id();
-  auto const count = idx < num_words ? static_cast<int64_t>(d_counts[idx]) : int64_t{0};
-
-  using block_reduce = cub::BlockReduce<int64_t, words_block_size>;
-  __shared__ typename block_reduce::TempStorage reduce_storage;
-  auto const block_count = block_reduce(reduce_storage).Sum(count);
-  if (threadIdx.x == 0) { d_block_counts[blockIdx.x] = block_count; }
-}
-
-/**
  * @brief Writes the tokens for each word to the output
  *
- * Launched as a thread per word using the same blocks as block_counts_kernel.
+ * Launched as a thread per word in blocks of `words_block_size`.
  *
  * @param num_words Number of words
  * @param d_counts Number of tokens for each word
@@ -935,9 +912,20 @@ std::unique_ptr<cudf::column> make_tokens_column(tokenized_words&& tokens,
                                                         cudf::get_current_device_resource_ref(),
                                                         static_cast<std::size_t>(grid.num_blocks),
                                                         cuda::no_init};
-    block_counts_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.get()>>>(
-      num_words, tokens.counts.data(), d_block_offsets.data());
-    CUDF_CUDA_TRY(cudaGetLastError());
+    {
+      // sum the token counts for each block of words; the last block may be partial
+      auto const d_counts   = tokens.counts.data();
+      auto const counts_itr = cuda::transform_iterator(
+        cuda::counting_iterator<int64_t>{0},
+        cuda::proclaim_return_type<uint8_t>([d_counts, num_words] __device__(int64_t idx) {
+          return idx < num_words ? d_counts[idx] : uint8_t{0};
+        }));
+      auto const mr_prop = cuda::std::execution::prop{cuda::mr::get_memory_resource,
+                                                      cudf::get_current_device_resource_ref()};
+      auto const env     = cuda::std::execution::env{stream, mr_prop};
+      CUDF_CUDA_TRY(cub::DeviceSegmentedReduce::Sum(
+        counts_itr, d_block_offsets.begin(), grid.num_blocks, words_block_size, env));
+    }
     thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                            d_block_offsets.begin(),
                            d_block_offsets.end(),
