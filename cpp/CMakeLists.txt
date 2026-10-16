@@ -924,6 +924,7 @@ add_library(
   src/jit/parser.cpp
   src/jit/row_ir.cpp
   src/jit/util.cpp
+  src/join/asof_join.cu
   src/join/conditional_join.cu
   src/join/cross_join.cu
   src/join/direct_join.cu
@@ -962,7 +963,6 @@ add_library(
   src/join/hash_join/partitioned_inner_join.cu
   src/join/hash_join/partitioned_join_retrieve.cu
   src/join/hash_join/partitioned_left_join.cu
-  src/join/asof_join.cu
   src/join/join.cu
   src/join/join_utils.cu
   src/join/key_remapping.cu
