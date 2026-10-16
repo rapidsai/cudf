@@ -119,6 +119,11 @@ class asof_join {
    * an equivalent CUDA event dependency so that preprocessing completes before the probe executes.
    * Probes on the constructor stream are already ordered and require no additional synchronization.
    *
+   * Before destroying this object, the caller must synchronize outstanding probes on other streams
+   * or establish equivalent CUDA event dependencies back to the constructor stream, so that probes
+   * finish before shared state is deallocated. Input columns must remain alive and unmodified until
+   * all operations using them have completed.
+   *
    * @throws cudf::logic_error if the left and right inputs have different numbers of grouping keys
    * @throws cudf::logic_error if `left_by` has columns and
    *         `left_by.num_rows() != left_on.size()`

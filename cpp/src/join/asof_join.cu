@@ -87,7 +87,8 @@ struct backward_probe {
   {
     if (left_on.is_null(left_row)) { return JoinNoMatch; }
 
-    auto const group = group_positions[left_row];
+    // A null group_positions pointer means an ungrouped join: every row uses group zero.
+    auto const group = group_positions ? group_positions[left_row] : size_type{0};
     if (group < 0 || group >= num_groups) { return JoinNoMatch; }
 
     auto const first = cuda::counting_iterator<size_type>{group_offsets[group]};
@@ -144,14 +145,6 @@ asof_join_impl::asof_join_impl(table_view const& right_by,
                "As-of join ordered keys must be integer, timestamp, or duration columns");
   validate_by_types(right_by);
 
-  if (right_by.num_columns() > 0) {
-    auto const mr = cudf::get_current_device_resource_ref();
-    _right_eq_preprocessed =
-      cudf::detail::row::equality::preprocessed_table::create(right_by, stream, mr);
-    _right_lex_preprocessed =
-      cudf::detail::row::lexicographic::preprocessed_table::create(right_by, {}, {}, stream);
-  }
-
   // Ungrouped joins may have an empty _right_by with zero rows, so use _right_on's size.
   auto const num_rows = _right_on.size();
   auto const mr       = cudf::get_current_device_resource_ref();
@@ -173,11 +166,16 @@ asof_join_impl::asof_join_impl(table_view const& right_by,
     return;
   }
 
+  _right_eq_preprocessed =
+    cudf::detail::row::equality::preprocessed_table::create(right_by, stream, mr);
+  _right_lex_preprocessed =
+    cudf::detail::row::lexicographic::preprocessed_table::create(right_by, {}, {}, stream);
+
   _right_group_offsets.resize(static_cast<std::size_t>(num_rows) + 1, stream);
   // Mark the first row and each change in adjacent by keys, then compact their indices into
   // offsets. Append num_rows so group g occupies [offsets[g], offsets[g + 1]).
   auto const has_nulls  = cudf::has_nested_nulls(_right_by);
-  auto const comparator = cudf::detail::row::equality::self_comparator{_right_by, stream, mr};
+  auto const comparator = cudf::detail::row::equality::self_comparator{_right_eq_preprocessed};
   auto const row_equal =
     comparator.equal_to<false>(nullate::DYNAMIC{has_nulls}, null_equality::EQUAL);
   rmm::device_uvector<uint8_t> group_starts(num_rows, stream, mr);
@@ -228,22 +226,21 @@ std::unique_ptr<rmm::device_uvector<size_type>> asof_join_impl::join(
                "As-of join ordered keys must be integer, timestamp, or duration columns");
   validate_by_types(left_by);
 
-  auto const temp_mr = cudf::get_current_device_resource_ref();
-  // Map each left row to a right group, or JoinNoMatch; ungrouped inputs use group zero.
-  auto group_positions =
-    std::make_unique<rmm::device_uvector<size_type>>(left_on.size(), stream, temp_mr);
+  auto result = std::make_unique<rmm::device_uvector<size_type>>(left_on.size(), stream, mr);
+  if (left_on.is_empty()) { return result; }
 
+  auto const temp_mr = cudf::get_current_device_resource_ref();
   if (_num_right_groups == 0) {
-    thrust::fill(rmm::exec_policy_nosync(stream, temp_mr),
-                 group_positions->begin(),
-                 group_positions->end(),
-                 JoinNoMatch);
-  } else if (left_by.num_columns() == 0) {
-    thrust::fill(rmm::exec_policy_nosync(stream, temp_mr),
-                 group_positions->begin(),
-                 group_positions->end(),
-                 size_type{0});
-  } else {
+    thrust::fill(
+      rmm::exec_policy_nosync(stream, temp_mr), result->begin(), result->end(), JoinNoMatch);
+    return result;
+  }
+
+  // Grouped probes map each left row to a right group, or JoinNoMatch.
+  std::unique_ptr<rmm::device_uvector<size_type>> group_positions;
+  if (left_by.num_columns() > 0) {
+    group_positions =
+      std::make_unique<rmm::device_uvector<size_type>>(left_on.size(), stream, temp_mr);
     auto const has_nulls = cudf::has_nested_nulls(_right_by) || cudf::has_nested_nulls(left_by);
     // Binary-search group representatives for the first by key not less than the left key.
     auto left_lex =
@@ -286,14 +283,13 @@ std::unique_ptr<rmm::device_uvector<size_type>> asof_join_impl::join(
 
   // Within each matched group, find the last row with right_on <= left_on.
   // Return one right-row index (or JoinNoMatch) per left row, preserving left input order.
-  auto result = std::make_unique<rmm::device_uvector<size_type>>(left_on.size(), stream, mr);
   auto const left_on_device  = column_device_view::create(left_on, stream, temp_mr);
   auto const right_on_device = column_device_view::create(_right_on, stream, temp_mr);
   cudf::type_dispatcher(left_on.type(),
                         probe_dispatch{*left_on_device,
                                        *right_on_device,
                                        _right_group_offsets.data(),
-                                       group_positions->data(),
+                                       group_positions ? group_positions->data() : nullptr,
                                        _num_right_groups,
                                        result->data(),
                                        stream});

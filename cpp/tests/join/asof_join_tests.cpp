@@ -8,6 +8,7 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/join/asof_join.hpp>
@@ -312,6 +313,27 @@ TEST_F(AsofJoinTest, EmptyInputs)
   asof_join join(cudf::table_view{}, left_on);
   auto empty_result = join.join(
     cudf::table_view{}, empty, asof_join_strategy::BACKWARD, asof_join_exact_matches::YES);
+  expect_gather_map(*empty_result, {});
+}
+
+TEST_F(AsofJoinTest, EmptyGroupedInputs)
+{
+  fixed_width_column_wrapper<int32_t> empty{};
+  auto empty_strings  = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
+  auto const empty_by = cudf::table_view{{empty, empty_strings->view()}};
+  fixed_width_column_wrapper<int32_t> by{0, 1};
+  strings_column_wrapper strings_by{"a", "b"};
+  auto const nonempty_by = cudf::table_view{{by, strings_by}};
+  fixed_width_column_wrapper<int32_t> on{1, 2};
+
+  asof_join empty_right_join(empty_by, empty);
+  auto no_matches = empty_right_join.join(
+    nonempty_by, on, asof_join_strategy::BACKWARD, asof_join_exact_matches::YES);
+  expect_gather_map(*no_matches, {cudf::JoinNoMatch, cudf::JoinNoMatch});
+
+  asof_join join(nonempty_by, on);
+  auto empty_result =
+    join.join(empty_by, empty, asof_join_strategy::BACKWARD, asof_join_exact_matches::YES);
   expect_gather_map(*empty_result, {});
 }
 
