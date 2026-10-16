@@ -40,12 +40,10 @@ def engine_with_quent_context(
 ) -> Iterator[StreamingEngine]:
     """
     Yield a streaming engine configured with Quent tracing.
-
-    Reuses the session-scoped engine from conftest (UCX / rapidsmpf / Ray
-    bootstrap paid once per session).  ``streaming_engine_factory`` is
-    included to tell ``pytest_generate_tests`` to parametrise over all
-    streaming backends; it is not called directly here.
     """
+    # Uses ``_unconfigured_engine`` directly (rather than a public engine
+    # fixture) so that quent setup and teardown can be expressed as a single
+    # ``_reset`` call each way.
     engine, base_options = _unconfigured_engine
     engine._reset(
         rapidsmpf_options=base_options.to_rapidsmpf_options(),
