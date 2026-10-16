@@ -1322,7 +1322,7 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
  */
 struct wall_clock_columns {
   std::vector<cuda::device_buffer<int64_t>> data;                // shifted values
-  std::vector<cuda::device_buffer<std::byte>> null_masks;        // one per sliced nullable column
+  std::vector<cuda::device_buffer<bitmask_type>> null_masks;     // one per sliced nullable column
   std::unique_ptr<cuda::device_buffer<std::byte>> view_storage;  // backs `columns`
   column_device_view const* columns{nullptr};
   // Index into `columns` per ORC column; null for the columns whose statistics read the table.
@@ -1346,7 +1346,7 @@ wall_clock_columns make_wall_clock_columns(orc_table_view const& orc_table,
 {
   auto host_indices = std::vector<cuda::std::optional<size_type>>(orc_table.num_columns());
   auto data         = std::vector<cuda::device_buffer<int64_t>>{};
-  auto null_masks   = std::vector<cuda::device_buffer<std::byte>>{};
+  auto null_masks   = std::vector<cuda::device_buffer<bitmask_type>>{};
   auto views        = std::vector<column_view>{};
 
   // Empty when writing UTC, which leaves the input instants on the wall clock already
@@ -1385,7 +1385,7 @@ wall_clock_columns make_wall_clock_columns(orc_table_view const& orc_table,
       auto const* null_mask = (input.null_count() == 0) ? nullptr : input.null_mask();
       if (null_mask != nullptr and input.offset() != 0) {
         null_masks.push_back(cudf::detail::copy_bitmask(input, stream, mr.get_output_mr()));
-        null_mask = reinterpret_cast<bitmask_type const*>(null_masks.back().data());
+        null_mask = null_masks.back().data();
       }
 
       host_indices[column.index()] = views.size();
