@@ -44,12 +44,13 @@ namespace {
 
 constexpr int chars_buffer_idx = 2;
 
-std::unique_ptr<column> from_arrow_string(ArrowSchemaView const* schema,
-                                          ArrowArray const* input,
-                                          std::unique_ptr<cuda::device_buffer<std::byte>>&& mask,
-                                          size_type null_count,
-                                          cuda::stream_ref stream,
-                                          rmm::device_async_resource_ref mr)
+std::unique_ptr<column> from_arrow_string(
+  ArrowSchemaView const* schema,
+  ArrowArray const* input,
+  std::unique_ptr<cuda::device_buffer<cudf::bitmask_type>>&& mask,
+  size_type null_count,
+  cuda::stream_ref stream,
+  rmm::device_async_resource_ref mr)
 {
   auto [offsets_column, offset, char_data_length] = get_offsets_column(schema, input, stream, mr);
 
@@ -69,7 +70,7 @@ constexpr int stringview_vector_idx = 1;
 std::unique_ptr<column> from_arrow_stringview(
   ArrowSchemaView const* schema,
   ArrowArray const* input,
-  std::unique_ptr<cuda::device_buffer<std::byte>>&& mask,
+  std::unique_ptr<cuda::device_buffer<cudf::bitmask_type>>&& mask,
   cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
 {
@@ -101,7 +102,7 @@ std::unique_ptr<column> from_arrow_stringview(
   auto d_variadic_ptrs = cudf::detail::make_device_buffer_async(
     variadic_ptrs, stream, cudf::get_current_device_resource_ref());
   auto d_ptrs = d_variadic_ptrs.data();
-  auto d_mask = reinterpret_cast<cudf::bitmask_type*>(mask->data());
+  auto d_mask = mask->data();
 
   using string_index_pair = cudf::strings::detail::string_index_pair;
 
@@ -132,7 +133,7 @@ std::unique_ptr<column> from_arrow_stringview(
 std::unique_ptr<column> string_column_from_arrow_host(
   ArrowSchemaView const* schema,
   ArrowArray const* input,
-  std::unique_ptr<cuda::device_buffer<std::byte>>&& mask,
+  std::unique_ptr<cuda::device_buffer<cudf::bitmask_type>>&& mask,
   size_type null_count,
   cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)

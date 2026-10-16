@@ -522,7 +522,7 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
   auto [result_bitmask, null_count] =
     profile.get_null_probability().has_value()
       ? cudf::bools_to_mask(cudf::device_span<bool const>(null_mask), stream)
-      : std::pair{std::make_unique<cuda::device_buffer<std::byte>>(
+      : std::pair{std::make_unique<cuda::device_buffer<cudf::bitmask_type>>(
                     cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED)),
                   0};
 
@@ -632,7 +632,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
   auto [result_bitmask, null_count] =
     profile.get_null_probability().has_value()
       ? cudf::bools_to_mask(cudf::device_span<bool const>(null_mask))
-      : std::pair{std::make_unique<cuda::device_buffer<std::byte>>(
+      : std::pair{std::make_unique<cuda::device_buffer<cudf::bitmask_type>>(
                     cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED)),
                   0};
 
@@ -712,7 +712,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profi
           return cudf::bools_to_mask(cudf::device_span<bool const>(valids),
                                      cudf::get_default_stream());
         }
-        return std::pair{std::make_unique<cuda::device_buffer<std::byte>>(
+        return std::pair{std::make_unique<cuda::device_buffer<cudf::bitmask_type>>(
                            cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED)),
                          0};
       }();
@@ -809,7 +809,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     auto [null_mask, null_count] =
       profile.get_null_probability().has_value()
         ? cudf::bools_to_mask(cudf::device_span<bool const>(valids))
-        : std::pair{std::make_unique<cuda::device_buffer<std::byte>>(
+        : std::pair{std::make_unique<cuda::device_buffer<cudf::bitmask_type>>(
                       cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED)),
                     0};
 
@@ -1091,7 +1091,7 @@ std::unique_ptr<cudf::column> create_string_column(cudf::size_type num_rows,
   return std::move(table->release().front());
 }
 
-std::pair<cuda::device_buffer<std::byte>, cudf::size_type> create_random_null_mask(
+std::pair<cuda::device_buffer<cudf::bitmask_type>, cudf::size_type> create_random_null_mask(
   cudf::size_type size, std::optional<double> null_probability, unsigned seed)
 {
   if (not null_probability.has_value()) {
