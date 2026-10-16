@@ -16,7 +16,15 @@
 
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/stream>
+#include <cuda_runtime_api.h>
+
 #include <algorithm>
+#include <array>
+#include <atomic>
+#include <exception>
+#include <memory>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -84,6 +92,114 @@ TEST_F(AsofJoinTest, MultipleGroupingKeys)
                           asof_join_exact_matches::YES);
 
   expect_gather_map(*result, {3, cudf::JoinNoMatch, 1});
+}
+
+TEST_F(AsofJoinTest, SequentialProbes)
+{
+  strings_column_wrapper right_by{"a", "a", "b", "b"};
+  fixed_width_column_wrapper<int32_t> right_on{1, 4, 2, 6};
+  strings_column_wrapper left_by_1{"a", "b", "c"};
+  fixed_width_column_wrapper<int32_t> left_on_1{4, 5, 7};
+  strings_column_wrapper left_by_2{"b", "a", "a"};
+  fixed_width_column_wrapper<int32_t> left_on_2{6, 0, 3};
+
+  asof_join join(cudf::table_view{{right_by}}, right_on);
+  auto result_1 = join.join(cudf::table_view{{left_by_1}},
+                            left_on_1,
+                            asof_join_strategy::BACKWARD,
+                            asof_join_exact_matches::YES);
+  auto result_2 = join.join(cudf::table_view{{left_by_2}},
+                            left_on_2,
+                            asof_join_strategy::BACKWARD,
+                            asof_join_exact_matches::YES);
+
+  expect_gather_map(*result_1, {1, 2, cudf::JoinNoMatch});
+  expect_gather_map(*result_2, {3, cudf::JoinNoMatch, 0});
+}
+
+TEST_F(AsofJoinTest, ConcurrentMultiStreamProbes)
+{
+  constexpr std::size_t num_probes = 4;
+  fixed_width_column_wrapper<int32_t> right_by{0, 0, 1, 1, 2, 2};
+  fixed_width_column_wrapper<int32_t> right_on{1, 4, 2, 6, 3, 8};
+
+  fixed_width_column_wrapper<int32_t> left_by_0{0, 1, 2};
+  fixed_width_column_wrapper<int32_t> left_on_0{4, 5, 9};
+  fixed_width_column_wrapper<int32_t> left_by_1{2, 0, 3};
+  fixed_width_column_wrapper<int32_t> left_on_1{2, 2, 7};
+  fixed_width_column_wrapper<int32_t> left_by_2{1, 2, 0};
+  fixed_width_column_wrapper<int32_t> left_on_2{6, 8, 0};
+  fixed_width_column_wrapper<int32_t> left_by_3{0, 2, 1};
+  fixed_width_column_wrapper<int32_t> left_on_3{3, 4, 1};
+
+  auto const left_by =
+    std::array<cudf::column_view, num_probes>{left_by_0, left_by_1, left_by_2, left_by_3};
+  auto const left_on =
+    std::array<cudf::column_view, num_probes>{left_on_0, left_on_1, left_on_2, left_on_3};
+  auto const expected = std::array<std::vector<cudf::size_type>, num_probes>{
+    std::vector<cudf::size_type>{1, 2, 5},
+    std::vector<cudf::size_type>{cudf::JoinNoMatch, 0, cudf::JoinNoMatch},
+    std::vector<cudf::size_type>{3, 5, cudf::JoinNoMatch},
+    std::vector<cudf::size_type>{0, 4, cudf::JoinNoMatch}};
+
+  int device{};
+  CUDF_CUDA_TRY(cudaGetDevice(&device));
+  auto const stream_device = cuda::device_ref{device};
+  std::vector<std::unique_ptr<cuda::stream>> streams;
+  streams.reserve(num_probes);
+  for (std::size_t i = 0; i < num_probes; ++i) {
+    streams.push_back(std::make_unique<cuda::stream>(stream_device));
+  }
+
+  // Construct on a stream of its own so the probes below run on different streams than the
+  // group index was built on, then synchronize it as the `join()` docs require.
+  cuda::stream const build_stream{stream_device};
+  asof_join join(cudf::table_view{{right_by}}, right_on, build_stream);
+  build_stream.sync();
+
+  std::vector<std::unique_ptr<rmm::device_uvector<cudf::size_type>>> results(num_probes);
+  std::vector<std::thread> threads;
+  std::vector<std::exception_ptr> errors(num_probes);
+  // `ready` lets the main thread wait until every worker is spawned and spinning, and `start`
+  // then releases them together, so the probes actually overlap instead of trickling in as
+  // each thread is created.
+  std::atomic<std::size_t> ready{0};
+  std::atomic<bool> start{false};
+  threads.reserve(num_probes);
+  for (std::size_t i = 0; i < num_probes; ++i) {
+    threads.emplace_back([&, i] {
+      CUDF_CUDA_TRY(cudaSetDevice(device));
+      ready.fetch_add(1, std::memory_order_relaxed);
+      while (!start.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+      }
+      try {
+        results[i] = join.join(cudf::table_view{{left_by[i]}},
+                               left_on[i],
+                               asof_join_strategy::BACKWARD,
+                               asof_join_exact_matches::YES,
+                               *streams[i]);
+      } catch (...) {
+        errors[i] = std::current_exception();
+      }
+    });
+  }
+  while (ready.load(std::memory_order_relaxed) != num_probes) {
+    std::this_thread::yield();
+  }
+  start.store(true, std::memory_order_release);
+  for (auto& thread : threads) {
+    thread.join();
+  }
+  for (auto const& probe_stream : streams) {
+    probe_stream->sync();
+  }
+  for (auto const& error : errors) {
+    ASSERT_FALSE(error);
+  }
+  for (std::size_t i = 0; i < num_probes; ++i) {
+    expect_gather_map(*results[i], expected[i]);
+  }
 }
 
 TEST_F(AsofJoinTest, NullOrderedKeys)
