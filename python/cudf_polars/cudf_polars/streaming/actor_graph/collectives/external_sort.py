@@ -55,7 +55,7 @@ from rapidsmpf.shuffler import PartitionAssignment
 from rapidsmpf.streaming.core.memory_reserve_or_wait import reserve_memory
 from rapidsmpf.streaming.core.message import Message
 
-from cudf_polars.containers import DataFrame, DataType
+from cudf_polars.containers import DataType
 from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import Sort
 from cudf_polars.dsl.utils.naming import names_to_indices, unique_names
@@ -76,6 +76,7 @@ from cudf_polars.streaming.actor_graph.utils import (
     evaluate_chunk,
     send_metadata,
 )
+from cudf_polars.utils.config import get_total_device_memory
 from cudf_polars.utils.cuda_stream import get_joined_cuda_stream, join_cuda_streams
 
 if TYPE_CHECKING:
@@ -89,6 +90,7 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
     from rmm.pylibrmm.stream import Stream
 
+    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.streaming.actor_graph.tracing import ActorTracer
     from cudf_polars.typing import Schema
@@ -128,28 +130,13 @@ class _PartitionSort(enum.Enum):
     """Sorted runs were written out of device memory and merged."""
 
 
-def _device_total_bytes() -> int | None:
-    try:
-        import rmm.mr
-
-        _, total = rmm.mr.available_device_memory()
-    except Exception:  # pragma: no cover - depends on the RMM build
-        return None
-    return int(total)
-
-
-def batch_bytes_for(executor: StreamingExecutor) -> int:
+def batch_bytes_for(target_partition_size: int) -> int:
     """Device budget (bytes) for one sorted run of the external merge sort."""
-    budget = _BATCH_BYTES_TARGET_MULTIPLE * executor.target_partition_size
-    total = _device_total_bytes()
+    budget = _BATCH_BYTES_TARGET_MULTIPLE * target_partition_size
+    total = get_total_device_memory()
     if total is not None:
         budget = min(budget, int(total * _BATCH_BYTES_DEVICE_FRACTION))
     return max(1, budget)
-
-
-def merge_fanin() -> int:
-    """Runs merged per pass (indirection so tests can shrink it)."""
-    return DEFAULT_MERGE_FANIN
 
 
 def run_memory_type(br: BufferResource) -> MemoryType:
@@ -166,22 +153,6 @@ def run_memory_type(br: BufferResource) -> MemoryType:
 def table_nbytes(table: plc.Table) -> int:
     """Device bytes held by ``table``."""
     return sum(column.device_buffer_size() for column in table.columns())
-
-
-def _to_host_ints(column: plc.Column, stream: Stream) -> list[int]:
-    """Stream-aware device->host copy of a small INT32 column."""
-    return (
-        DataFrame.from_table(
-            plc.Table([column]), ["v"], [DataType(pl.Int32())], stream=stream
-        )
-        .to_polars()["v"]
-        .to_list()
-    )
-
-
-def _owning_copy(table: plc.Table, stream: Stream) -> plc.Table:
-    """Deep-copy a (possibly view) table so it owns its buffers."""
-    return plc.Table([column.copy(stream=stream) for column in table.columns()])
 
 
 @dataclass
@@ -279,8 +250,8 @@ class RunCursor:
         nrows = table.num_rows()
         keys = plc.Table([table.columns()[i] for i in key_indices])
         # Owning copy: a slice view would keep the whole page alive.
-        self.tail = _owning_copy(
-            plc.copying.slice(keys, [nrows - 1, nrows], stream=stream)[0], stream
+        self.tail = plc.copying.slice(keys, [nrows - 1, nrows], stream=stream)[0].copy(
+            stream=stream
         )
         return table
 
@@ -305,31 +276,32 @@ def _emit_bound(
         [tail for tail in pending_tails if tail is not None], stream=stream
     )
     order = plc.sorting.sorted_order(tails, orders, null_orders, stream=stream)
-    ranked = _to_host_ints(order, stream)
     min_tail = plc.copying.gather(
         tails,
         plc.copying.slice(order, [0, 1], stream=stream)[0],
         plc.copying.OutOfBoundsPolicy.DONT_CHECK,
         stream=stream,
     )
-    (cut,) = _to_host_ints(
-        plc.search.upper_bound(
-            merged_keys, min_tail, orders, null_orders, stream=stream
-        ),
-        stream,
+    cut_col = plc.search.upper_bound(
+        merged_keys, min_tail, orders, null_orders, stream=stream
     )
-    (n_equal,) = _to_host_ints(
-        plc.search.upper_bound(
-            plc.copying.gather(
-                tails, order, plc.copying.OutOfBoundsPolicy.DONT_CHECK, stream=stream
-            ),
-            min_tail,
-            orders,
-            null_orders,
-            stream=stream,
+    n_equal_col = plc.search.upper_bound(
+        plc.copying.gather(
+            tails, order, plc.copying.OutOfBoundsPolicy.DONT_CHECK, stream=stream
         ),
-        stream,
+        min_tail,
+        orders,
+        null_orders,
+        stream=stream,
     )
+    # Everything above stays on the device, so a single sync covers all three
+    # host copies. ``to_pylist`` copies on the default stream, hence the sync.
+    # The columns have one INT32 (``size_type``) entry per pending run (at most
+    # the merge fan-in), never one per row, so the copies are cheap.
+    stream.synchronize()
+    ranked = order.to_pylist()
+    (cut,) = cut_col.to_pylist()
+    (n_equal,) = n_equal_col.to_pylist()
     refill = [pending[i] for i in ranked[: max(1, n_equal)]]
     return cut, refill
 
@@ -391,8 +363,8 @@ async def merge_runs(
         else:
             head, rest = plc.copying.split(merged, [cut], stream=stream)
             if cut > 0:
-                await emit(_owning_copy(head, stream), stream)
-            carry = _owning_copy(rest, stream)
+                await emit(head.copy(stream=stream), stream)
+            carry = rest.copy(stream=stream)
         del merged
 
         tables = [
@@ -485,7 +457,7 @@ async def sort_partition(
 
     # Run pages live outside device memory (on disk with a spill directory)
     # and are released with the runs, also when an exception unwinds.
-    fanin = merge_fanin()
+    fanin = DEFAULT_MERGE_FANIN
     # Phase A: sorted runs.
     runs: list[Run] = []
     page_rows: int | None = None
@@ -894,7 +866,7 @@ async def global_sort_external(
     )
 
     order_keys = sort_to_order_keys(_post_sort_ir(ir))
-    batch_bytes = batch_bytes_for(executor)
+    batch_bytes = batch_bytes_for(executor.target_partition_size)
     any_external = False
     for partition_id in shuffle.local_partitions():
         method = await sort_partition(

@@ -743,6 +743,8 @@ def default_target_partition_size(min_device_size: int | None) -> int:
 
 
 def _sort_strategy_converter(value: str) -> Literal["in-memory", "external"]:
+    if not isinstance(value, str):
+        raise TypeError("sort_strategy must be a str")
     if value == "in-memory":
         return "in-memory"
     if value == "external":
@@ -1389,14 +1391,10 @@ class StreamingExecutor:
             object.__setattr__(self, "cluster", Cluster.DEFAULT_SINGLETON)
         assert self.cluster is not None, "Expected cluster to be set."
 
-        if not isinstance(self.sort_strategy, str):
-            raise TypeError("sort_strategy must be a str")
-        if self.sort_strategy not in ("in-memory", "external"):
-            raise ValueError(
-                f"sort_strategy must be 'in-memory' or 'external', got {self.sort_strategy!r}"
-            )
-
         # frozen dataclass, so use object.__setattr__
+        object.__setattr__(
+            self, "sort_strategy", _sort_strategy_converter(self.sort_strategy)
+        )
         object.__setattr__(
             self, "fallback_mode", StreamingFallbackMode(self.fallback_mode)
         )

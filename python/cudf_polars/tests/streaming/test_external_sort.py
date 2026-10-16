@@ -51,8 +51,8 @@ def force_disk(monkeypatch):
     ``dask``/``ray`` the workers are separate processes, so those variants
     exercise the streaming insertion and the in-memory fast path instead.
     """
-    monkeypatch.setattr(es, "batch_bytes_for", lambda executor: 1)
-    monkeypatch.setattr(es, "merge_fanin", lambda: 2)
+    monkeypatch.setattr(es, "batch_bytes_for", lambda target_partition_size: 1)
+    monkeypatch.setattr(es, "DEFAULT_MERGE_FANIN", 2)
 
 
 @pytest.fixture

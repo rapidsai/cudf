@@ -511,8 +511,10 @@ def force_external_sort(monkeypatch):
     """Make every partition exceed the run budget and every merge exceed the fan-in."""
     from cudf_polars.streaming.actor_graph.collectives import external_sort
 
-    monkeypatch.setattr(external_sort, "batch_bytes_for", lambda executor: 1)
-    monkeypatch.setattr(external_sort, "merge_fanin", lambda: 2)
+    monkeypatch.setattr(
+        external_sort, "batch_bytes_for", lambda target_partition_size: 1
+    )
+    monkeypatch.setattr(external_sort, "DEFAULT_MERGE_FANIN", 2)
 
 
 @pytest.fixture

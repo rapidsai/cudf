@@ -210,8 +210,8 @@ class StreamingOptions:
         Directory for disk-backed buffers. When set, the RapidsMPF buffer
         resource gets a disk memory tier whose files live in a subdirectory it
         owns under this path.
-        The external sort (``sort_strategy="external"``) keeps its run pages
-        there.
+        The external sort (``sort_strategy="external"``) also uses this directory
+        to write intermediate files.
         Env: ``RAPIDSMPF_DISK_SPILL_DIR``.
         Default: disabled.
         Category: rapidsmpf.
@@ -324,8 +324,8 @@ class StreamingOptions:
         device memory. ``"external"`` streams the input into the (disk-spilling)
         shuffler as it arrives and sorts each partition with an external merge
         sort (sorted runs on disk under ``disk_spill_dir``, or in host memory
-        without one), so neither the shard nor a partition is ever resident
-        whole.
+        without one), so neither the full shard nor a full partition is ever
+        resident in device memory.
         Env: ``CUDF_POLARS__EXECUTOR__SORT_STRATEGY``.
         Default: ``"in-memory"``.
         Category: executor.
