@@ -1297,7 +1297,11 @@ class DaskEngine(StreamingEngine):
                 "cluster": "dask",
                 "dask_context": new_ctx,
             },
-            engine_options={**engine_options, "memory_resource": None},
+            engine_options={
+                "allow_gpu_sharing": self._allow_gpu_sharing,
+                **engine_options,
+                "memory_resource": None,
+            },
             exit_stack=self._exit_stack,
         )
 

@@ -381,6 +381,7 @@ class StreamingEngine(pl.GPUEngine):
         # accept it.
         engine_options = dict(engine_options)
         allow_gpu_sharing = engine_options.pop("allow_gpu_sharing", False)
+        self._allow_gpu_sharing = allow_gpu_sharing
         super().__init__(
             executor="streaming",
             executor_options=executor_options,

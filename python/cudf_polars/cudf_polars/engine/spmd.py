@@ -1116,6 +1116,7 @@ class SPMDEngine(StreamingEngine):
                 ),
             },
             engine_options={
+                "allow_gpu_sharing": self._allow_gpu_sharing,
                 **engine_options,
                 "memory_resource": self._ctx.br().device_mr,
             },

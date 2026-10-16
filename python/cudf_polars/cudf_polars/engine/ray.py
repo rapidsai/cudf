@@ -1127,7 +1127,10 @@ class RayEngine(StreamingEngine):
                 "cluster": "ray",
                 "ray_context": RayContext(self._rank_actors, self._quent_runtime),
             },
-            engine_options=engine_options,
+            engine_options={
+                "allow_gpu_sharing": self._allow_gpu_sharing,
+                **engine_options,
+            },
             exit_stack=self._exit_stack,
         )
 
