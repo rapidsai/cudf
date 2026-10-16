@@ -157,7 +157,13 @@ jobs:
           - 'ci/test_cmake.sh'
         devcontainer_build_inputs:
           - '.devcontainer/**'
-          - 'build.sh'
+          - '.github/workflows/pr.yaml'
+          - 'RAPIDS_BRANCH'
+          - 'cmake/**'
+          - 'cpp/**'
+          - 'dependencies.yaml'
+          - 'python/**'
+          - '!**/*.md'
         cpp_linters:
           - 'cpp/.clang-tidy'
           - 'cpp/scripts/parse_iwyu_output.py'
@@ -1035,20 +1041,7 @@ jobs:
       pull-requests: read
     secrets: inherit # zizmor: ignore[secrets-inherit]
     needs: [telemetry-setup, changed-files]
-    if: |
-      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_common ||
-      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_libcudf ||
-      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_kafka ||
-      fromJSON(needs.changed-files.outputs.changed_file_groups).cpp_build_inputs_streaming ||
-      fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_all ||
-      fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf ||
-      fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf_polars ||
-      fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_polars_quent ||
-      fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_dask_cudf ||
-      fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf_kafka ||
-      fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_custreamz ||
-      fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_cudf_streaming ||
-      fromJSON(needs.changed-files.outputs.changed_file_groups).devcontainer_build_inputs
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).devcontainer_build_inputs
     uses: rapidsai/shared-workflows/.github/workflows/build-in-devcontainer.yaml@main
     with:
       arch: '["amd64", "arm64"]'
