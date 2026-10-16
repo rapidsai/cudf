@@ -388,13 +388,8 @@ unicode_normalizer::unicode_normalizer(cudf::table_view const& unicode_data,
   // In-place exclusive scan of decomp_offsets: each codepoint's slot becomes
   // its start offset in the flat decomp_table.  The extra sentinel slot at
   // MAX_CODEPOINT+1 accumulates the total via the scan.
-  auto const total_decomp_size =
-    cudf::detail::sizes_to_offsets(decomp_offsets.data(),
-                                   decomp_offsets.data() + decomp_offsets.size(),
-                                   decomp_offsets.data(),
-                                   0,
-                                   stream,
-                                   temp_mr);
+  auto const total_decomp_size = cudf::detail::sizes_to_offsets(
+    decomp_offsets.begin(), decomp_offsets.end(), decomp_offsets.begin(), 0, stream, temp_mr);
 
   // Fill decomp_table
   auto decomp_table = cuda::device_buffer<uint32_t>{
@@ -426,7 +421,7 @@ unicode_normalizer::unicode_normalizer(cudf::table_view const& unicode_data,
 
   // Compact keys and values together in one pass: remove any (key, value) pair
   // where the key is 0 (rows that build_comp_table_fn left empty).
-  auto kv_begin        = cuda::make_zip_iterator(d_comp_keys.data(), d_comp_values.data());
+  auto kv_begin        = cuda::make_zip_iterator(d_comp_keys.begin(), d_comp_values.begin());
   auto kv_end          = kv_begin + num_rows;
   auto const end_itr   = thrust::remove_if(policy, kv_begin, kv_end, detail::is_zero_comp_key_fn{});
   auto const comp_size = cuda::std::distance(kv_begin, end_itr);
@@ -434,12 +429,11 @@ unicode_normalizer::unicode_normalizer(cudf::table_view const& unicode_data,
   // Copy only the compacted prefix into exact-size allocations; the tail past
   // comp_size holds unspecified leftovers from remove_if.
   auto comp_keys =
-    cuda::device_buffer<uint64_t>{stream, mr, d_comp_keys.data(), d_comp_keys.data() + comp_size};
+    cuda::device_buffer<uint64_t>{stream, mr, d_comp_keys.begin(), d_comp_keys.begin() + comp_size};
   auto comp_values = cuda::device_buffer<uint32_t>{
-    stream, mr, d_comp_values.data(), d_comp_values.data() + comp_size};
+    stream, mr, d_comp_values.begin(), d_comp_values.begin() + comp_size};
 
-  thrust::sort_by_key(
-    policy, comp_keys.data(), comp_keys.data() + comp_keys.size(), comp_values.data());
+  thrust::sort_by_key(policy, comp_keys.begin(), comp_keys.end(), comp_values.begin());
 
   _impl = std::make_unique<unicode_normalizer_impl>(
     unicode_normalizer_impl{std::move(decomp_offsets),
@@ -549,14 +543,21 @@ __device__ int32_t decompose_cp(int64_t idx,
         } else {
           auto copy_size =
             cuda::std::min(end - start, static_cast<uint32_t>(MAX_DECOMP_EXPAND - count_b));
-          cuda::std::memcpy(
-            buf_b + count_b, decomp_table.data() + start, copy_size * sizeof(uint32_t));
+          // Plain loops copy whole uint32_t elements here and below.
+          // cuda::std::memcpy with a runtime size compiles to a byte-wise copy, and
+          // cuda::std::copy/copy_n on pointers dispatch to cuda::std::memmove (also
+          // byte-wise), which measured slower than these element copies.
+          for (uint32_t j = 0; j < copy_size; ++j) {
+            buf_b[count_b + j] = decomp_table[start + j];
+          }
           count_b += copy_size;
           expanded = true;
         }
       }
     }
-    cuda::std::memcpy(buf_a, buf_b, count_b * sizeof(uint32_t));
+    for (int32_t i = 0; i < count_b; ++i) {
+      buf_a[i] = buf_b[i];
+    }
     count_a = count_b;
     if (!expanded) { break; }
   }
@@ -595,11 +596,8 @@ struct decompose_fn {
   /// Writes the packed slots for the input byte at @p idx to @p d_out
   __device__ void fill(int64_t idx, uint32_t* d_out) const
   {
-    decompose_cp(idx,
-                 d_input_chars,
-                 decomp_offsets,
-                 decomp_table,
-                 cuda::transform_output_iterator{d_out, pack_slot_fn{ccc_table}});
+    auto const out_itr = cuda::transform_output_iterator{d_out, pack_slot_fn{ccc_table}};
+    decompose_cp(idx, d_input_chars, decomp_offsets, decomp_table, out_itr);
   }
 };
 
@@ -879,7 +877,7 @@ struct mark_row_starts_fn {
   int64_t const* d_str_cp_offsets;
   cudf::bitmask_type* d_segment_starts;
 
-  __device__ void operator()(cudf::size_type row) const
+  __device__ void operator()(int64_t row) const
   {
     auto const pos = d_str_cp_offsets[row];
     if (pos == d_str_cp_offsets[row + 1]) { return; }
@@ -1080,9 +1078,9 @@ std::unique_ptr<cudf::column> normalize_unicode(cudf::strings_column_view const&
       d_counts.data(), str_cp_offsets.data(), num_rows, d_row_offsets, d_row_offsets + 1, stream);
     CUDF_CUDA_TRY(
       cudaMemsetAsync(str_cp_offsets.data() + num_rows, 0, sizeof(int64_t), stream.get()));
-    auto const total_cps = cudf::detail::sizes_to_offsets(str_cp_offsets.data(),
-                                                          str_cp_offsets.data() + num_rows + 1,
-                                                          str_cp_offsets.data(),
+    auto const total_cps = cudf::detail::sizes_to_offsets(str_cp_offsets.begin(),
+                                                          str_cp_offsets.end(),
+                                                          str_cp_offsets.begin(),
                                                           int64_t{0},
                                                           stream,
                                                           temp_mr);
@@ -1118,20 +1116,15 @@ std::unique_ptr<cudf::column> normalize_unicode(cudf::strings_column_view const&
       reorder, composer, run_starts.data(), is_composing ? segment_starts.data() : nullptr);
     CUDF_CUDA_TRY(cudaGetLastError());
 
-    thrust::for_each_n(policy,
-                       cuda::make_counting_iterator(int64_t{0}),
-                       num_words,
-                       detail::sort_marked_runs_fn{reorder, run_starts.data()});
+    auto const itr     = cuda::make_counting_iterator(int64_t{0});
+    auto const sort_fn = detail::sort_marked_runs_fn{reorder, run_starts.data()};
+    thrust::for_each_n(policy, itr, num_words, sort_fn);
 
     if (is_composing) {
-      thrust::for_each_n(policy,
-                         cuda::make_counting_iterator(cudf::size_type{0}),
-                         num_rows,
-                         detail::mark_row_starts_fn{str_cp_offsets.data(), segment_starts.data()});
-      thrust::for_each_n(policy,
-                         cuda::make_counting_iterator(int64_t{0}),
-                         num_slots,
-                         detail::compose_segments_fn{composer, segment_starts.data()});
+      auto const rows_fn = detail::mark_row_starts_fn{str_cp_offsets.data(), segment_starts.data()};
+      auto const compose_fn = detail::compose_segments_fn{composer, segment_starts.data()};
+      thrust::for_each_n(policy, itr, num_rows, rows_fn);
+      thrust::for_each_n(policy, itr, num_slots, compose_fn);
     }
   }
 
@@ -1143,8 +1136,7 @@ std::unique_ptr<cudf::column> normalize_unicode(cudf::strings_column_view const&
       stream, temp_mr, static_cast<std::size_t>(num_rows), cuda::no_init};
     detail::segmented_sum(
       d_widths, sizes.data(), num_rows, str_cp_offsets.data(), str_cp_offsets.data() + 1, stream);
-    return cudf::strings::detail::make_offsets_child_column(
-      sizes.data(), sizes.data() + sizes.size(), stream, mr);
+    return cudf::strings::detail::make_offsets_child_column(sizes.begin(), sizes.end(), stream, mr);
   }();
   auto chars = rmm::device_uvector<char>(total_bytes, stream, mr);
   detail::scan_with(d_widths,
