@@ -312,18 +312,6 @@ TEST_F(AsofJoinTest, TimestampOrderedKey)
   expect_gather_map(*result, {0, 2});
 }
 
-TEST_F(AsofJoinTest, UnsupportedOptions)
-{
-  fixed_width_column_wrapper<int32_t> right_on{1};
-  fixed_width_column_wrapper<int32_t> left_on{1};
-  asof_join join(cudf::table_view{}, right_on);
-
-  EXPECT_THROW(
-    (void)join.join(
-      cudf::table_view{}, left_on, asof_join_strategy::BACKWARD, asof_join_exact_matches::NO),
-    cudf::logic_error);
-}
-
 TEST_F(AsofJoinTest, MismatchedOrderedKeyTypes)
 {
   fixed_width_column_wrapper<int32_t> right_on{1};

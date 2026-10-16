@@ -43,7 +43,6 @@ enum class asof_join_strategy {
  * @brief Whether equal ordered keys may match in an as-of join.
  */
 enum class asof_join_exact_matches {
-  NO,  ///< Do not allow equal ordered keys to match.
   YES  ///< Allow equal ordered keys to match.
 };
 
@@ -125,8 +124,6 @@ class asof_join {
    *         `left_by.num_rows() != left_on.size()`
    * @throws cudf::logic_error if corresponding left and right key types do not match
    * @throws cudf::logic_error if the left-side keys do not satisfy the supported type contract
-   * @throws cudf::logic_error if `strategy` is not `asof_join_strategy::BACKWARD`
-   * @throws cudf::logic_error if `exact_matches` is `asof_join_exact_matches::NO`
    *
    * @param left_by Left-side equality grouping keys
    * @param left_on Left-side ordered key
@@ -136,7 +133,7 @@ class asof_join {
    * @param mr Device memory resource used to allocate the returned indices
    * @return Right-side gather map containing a row index or `cudf::JoinNoMatch` per left row
    */
-  std::unique_ptr<rmm::device_uvector<size_type>> join(
+  [[nodiscard]] std::unique_ptr<rmm::device_uvector<size_type>> join(
     table_view const& left_by,
     column_view const& left_on,
     asof_join_strategy strategy,

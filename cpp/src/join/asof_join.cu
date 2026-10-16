@@ -199,6 +199,7 @@ asof_join_impl::asof_join_impl(table_view const& right_by,
   CUDF_CUDA_TRY(
     cub::DeviceTransform::Fill(_right_group_offsets.begin() + _num_right_groups, 1, num_rows, env));
   _right_group_offsets.resize(static_cast<std::size_t>(_num_right_groups) + 1, stream);
+  _right_group_offsets.shrink_to_fit(stream);
 }
 
 std::unique_ptr<rmm::device_uvector<size_type>> asof_join_impl::join(
