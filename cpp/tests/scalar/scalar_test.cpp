@@ -31,10 +31,12 @@ namespace {
 // Value construction must be intentional, especially when selecting a stream and resource.
 template <typename Scalar, typename Value>
 constexpr bool has_explicit_value_constructor =
+  std::is_convertible_v<Scalar const&, Scalar> && std::is_convertible_v<Scalar&&, Scalar> &&
   !std::is_convertible_v<Value, Scalar> && std::is_constructible_v<Scalar, Value> &&
   std::is_constructible_v<Scalar, Value, bool, cuda::stream_ref, rmm::device_async_resource_ref> &&
+  std::is_constructible_v<Scalar, Value> && std::is_constructible_v<Scalar, Value, bool> &&
   !std::is_constructible_v<Scalar, Value, cuda::stream_ref, rmm::device_async_resource_ref> &&
-  std::is_convertible_v<Scalar const&, Scalar> && std::is_convertible_v<Scalar&&, Scalar>;
+  !std::is_constructible_v<Scalar, Value, cuda::stream_ref>;
 
 static_assert(has_explicit_value_constructor<cudf::string_scalar, std::string_view>);
 static_assert(has_explicit_value_constructor<cudf::string_scalar, cudf::string_view>);
