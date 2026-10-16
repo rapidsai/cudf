@@ -389,7 +389,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
               *out = *in;
               if (*in == quotes && in + 1 < end && *(in + 1) == quotes) { ++in; }
             }
-            end = raw_csv + (out - data.data());
+            end = out;
           }
           auto str_list    = static_cast<string_offset_pair<OffsetT>*>(columns[actual_col]);
           str_list[rec_id] = {static_cast<OffsetT>(field_start - raw_csv),
