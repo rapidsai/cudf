@@ -69,7 +69,7 @@ def short_frame(frame: pl.LazyFrame) -> pl.LazyFrame:
     A prefix of ``frame`` for tests that run on every engine.
 
     Streaming sorts of many tiny partitions are slow, so these tests keep the
-    number of windows small; the option matrices use ``frame`` in memory.
+    number of windows small. The option matrices use ``frame`` in memory.
     """
     return frame.head(80)
 
@@ -266,8 +266,8 @@ def test_slice(
     group_by: str | None,
     zlice: tuple[int, int],
 ) -> None:
-    # Polars pushes the slice into the dynamic group-by; it applies to the
-    # ordered result.
+    # Polars pushes the slice into the dynamic group-by, where it applies to
+    # the ordered result.
     q = (
         short_frame.group_by_dynamic("t", every="1w", group_by=group_by)
         .agg(*_aggs())
@@ -310,11 +310,11 @@ def test_empty(
 def test_streaming(
     engine: pl.GPUEngine, short_frame: pl.LazyFrame, kwargs: dict, index: str
 ) -> None:
-    """Representative windows on every engine; the full matrix is in-memory."""
+    """Representative windows on every engine, with the full matrix in memory."""
     lf = short_frame
     if index == "date":
         lf = lf.with_columns(pl.col("t").dt.date())
-        # Date indexes take whole-day offsets; boundaries are a fallback.
+        # Date indexes take whole-day offsets, and boundaries fall back.
         kwargs = {k: v for k, v in kwargs.items() if k != "include_boundaries"}
         kwargs |= {"offset": "-1d"} if "offset" in kwargs else {}
     elif index == "int":
@@ -359,7 +359,7 @@ def test_taq_mean(
 ) -> None:
     """Window means of the KX NYSE TAQ benchmark (q22-33)."""
     # TAQ applies drop_nans() before mean(), which GroupBy does not support
-    # inside aggregations yet; the window computation is the same.
+    # inside aggregations yet. The window computation is the same.
     liquidity = (pl.col("bsize") * pl.col("bid") + pl.col("asize") * pl.col("ask")) / (
         pl.col("asize") + pl.col("bsize")
     )
@@ -506,7 +506,7 @@ def test_unsupported_raises(
 def test_int32_window_overflow(
     engine: pl.GPUEngine, group_by: str | None, closed: ClosedInterval, label: Label
 ) -> None:
-    # A window may start or end outside Int32's range; polars nulls that
+    # A window may start or end outside Int32's range. Polars nulls that
     # label/boundary, keeping distinct windows distinct, instead of wrapping
     # (which corrupts the sort order) or nulling the grouping key (which
     # collides distinct out-of-range windows into one group).
@@ -535,8 +535,8 @@ def test_int32_window_overflow(
 
 
 def test_int64_shift_overflow(engine: pl.GPUEngine) -> None:
-    # An offset or closed="right" shifts the index before truncating; for a
-    # row within that shift of Int64's range, the shift itself overflows.
+    # An offset or closed="right" shifts the index before truncating, and for
+    # a row within that shift of Int64's range, the shift itself overflows.
     # Null that row's window instead of silently wrapping it into an
     # unrelated, distant one.
     i64_min = -(2**63)
@@ -567,7 +567,7 @@ def test_int64_shift_overflow(engine: pl.GPUEngine) -> None:
     ids=["str", "int", "float", "bool", "str-int", "int-str"],
 )
 def test_key_order(engine: pl.GPUEngine, keys: dict[str, pl.Series]) -> None:
-    # Polars sorts groups by key; null keys come last for strings and first
+    # Polars sorts groups by key, with null keys last for strings and first
     # for other types.
     q = (
         pl.LazyFrame({"t": [0, 1, 2, 3], **keys, "v": [1, 2, 3, 4]})

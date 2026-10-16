@@ -244,7 +244,8 @@ def rewrite_groupby_dynamic(
     elif dynamic.label == "right":
         label = end
     else:
-        # The first index value in each window; the index is sorted within it.
+        # The first index value in each window, which is its minimum because
+        # the index is sorted within the window.
         datapoint_name = next(names)
         group_aggs.append(
             expr.NamedExpr(

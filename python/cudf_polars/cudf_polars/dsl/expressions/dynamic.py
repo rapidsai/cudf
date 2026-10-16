@@ -141,8 +141,8 @@ def _checked_narrow(
     Narrow ``ticks`` to ``dtype``, with out-of-range ``INT32``/Date values as null.
 
     This matches polars' checked conversion when materializing a window's
-    label or boundary; libcudf's native narrowing cast wraps instead. Safe
-    only where the result is not reused as a grouping or sort key, since
+    label or boundary, where libcudf's native narrowing cast would wrap. It is
+    only safe where the result is not reused as a grouping or sort key, since
     overflowing but distinct windows would collide into a single null group.
     """
     narrowed = _from_ticks(ticks, dtype, stream)
