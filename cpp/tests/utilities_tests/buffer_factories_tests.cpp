@@ -69,16 +69,18 @@ TYPED_TEST_SUITE(BufferFactoriesTest, BufferTypes);
 TYPED_TEST(BufferFactoriesTest, Zeroed)
 {
   for (auto size : {0U, 1U, 257U, 65537U}) {
-    for (bool async : {false, true}) {
-      SCOPED_TRACE(::testing::Message() << "size=" << size << ", async=" << async);
-      this->check_buffer(
-        [&](cudf::memory_resources mr) {
-          return async ? cudf::detail::make_zeroed_device_buffer_async<TypeParam>(
-                           size, this->stream, mr)
-                       : cudf::detail::make_zeroed_device_buffer<TypeParam>(size, this->stream, mr);
-        },
-        std::vector<TypeParam>(size, TypeParam{0}));
-    }
+    SCOPED_TRACE(::testing::Message() << "size=" << size);
+    this->check_buffer(
+      [&](cudf::memory_resources mr) {
+        return cudf::detail::make_zeroed_device_buffer<TypeParam>(size, this->stream, mr);
+      },
+      std::vector<TypeParam>(size, TypeParam{0}));
+    SCOPED_TRACE(::testing::Message() << "size=" << size << ", async");
+    this->check_buffer(
+      [&](cudf::memory_resources mr) {
+        return cudf::detail::make_zeroed_device_buffer_async<TypeParam>(size, this->stream, mr);
+      },
+      std::vector<TypeParam>(size, TypeParam{0}));
   }
 }
 
@@ -87,15 +89,18 @@ TYPED_TEST(BufferFactoriesTest, ConstHostSpan)
   for (auto size : {0U, 1U, 257U, 65537U}) {
     auto const input = this->make_input(size);
     auto const span  = cudf::host_span<TypeParam const>{input};
-    for (bool async : {false, true}) {
-      SCOPED_TRACE(::testing::Message() << "size=" << size << ", async=" << async);
-      this->check_buffer(
-        [&](cudf::memory_resources mr) {
-          return async ? cudf::detail::make_device_buffer_async(span, this->stream, mr)
-                       : cudf::detail::make_device_buffer(span, this->stream, mr);
-        },
-        input);
-    }
+    SCOPED_TRACE(::testing::Message() << "size=" << size);
+    this->check_buffer(
+      [&](cudf::memory_resources mr) {
+        return cudf::detail::make_device_buffer(span, this->stream, mr);
+      },
+      input);
+    SCOPED_TRACE(::testing::Message() << "size=" << size << ", async");
+    this->check_buffer(
+      [&](cudf::memory_resources mr) {
+        return cudf::detail::make_device_buffer_async(span, this->stream, mr);
+      },
+      input);
   }
 }
 
@@ -116,21 +121,28 @@ TYPED_TEST(BufferFactoriesTest, MutableHostSpanAsync)
 TYPED_TEST(BufferFactoriesTest, StdVectorDeepCopy)
 {
   for (auto size : {0U, 1U, 257U, 65537U}) {
-    for (bool async : {false, true}) {
-      SCOPED_TRACE(::testing::Message() << "size=" << size << ", async=" << async);
-      auto input          = this->make_input(size);
-      auto const expected = input;
-      this->check_buffer(
-        [&](cudf::memory_resources mr) {
-          auto result = async ? cudf::detail::make_device_buffer_async(input, this->stream, mr)
-                              : cudf::detail::make_device_buffer(input, this->stream, mr);
-          // The asynchronous copy must finish before its host source is modified.
-          if (async) { this->stream.sync(); }
-          std::fill(input.begin(), input.end(), TypeParam{99});
-          return result;
-        },
-        expected);
-    }
+    SCOPED_TRACE(::testing::Message() << "size=" << size);
+    auto input          = this->make_input(size);
+    auto const expected = input;
+    this->check_buffer(
+      [&](cudf::memory_resources mr) {
+        auto result = cudf::detail::make_device_buffer(input, this->stream, mr);
+        std::fill(input.begin(), input.end(), TypeParam{99});
+        return result;
+      },
+      expected);
+    SCOPED_TRACE(::testing::Message() << "size=" << size << ", async");
+    auto input          = this->make_input(size);
+    auto const expected = input;
+    this->check_buffer(
+      [&](cudf::memory_resources mr) {
+        auto result = cudf::detail::make_device_buffer_async(input, this->stream, mr);
+        // The asynchronous copy must finish before its host source is modified.
+        this->stream.sync();
+        std::fill(input.begin(), input.end(), TypeParam{99});
+        return result;
+      },
+      expected);
   }
 }
 
@@ -141,15 +153,18 @@ TYPED_TEST(BufferFactoriesTest, PinnedHostContainer)
     auto input          = cudf::detail::make_pinned_vector_async<TypeParam>(size, this->stream);
     std::copy(expected.begin(), expected.end(), input.begin());
     ASSERT_TRUE(cudf::host_span<TypeParam const>{input}.is_device_accessible());
-    for (bool async : {false, true}) {
-      SCOPED_TRACE(::testing::Message() << "size=" << size << ", async=" << async);
-      this->check_buffer(
-        [&](cudf::memory_resources mr) {
-          return async ? cudf::detail::make_device_buffer_async(input, this->stream, mr)
-                       : cudf::detail::make_device_buffer(input, this->stream, mr);
-        },
-        expected);
-    }
+    SCOPED_TRACE(::testing::Message() << "size=" << size);
+    this->check_buffer(
+      [&](cudf::memory_resources mr) {
+        return cudf::detail::make_device_buffer(input, this->stream, mr);
+      },
+      expected);
+    SCOPED_TRACE(::testing::Message() << "size=" << size << ", async");
+    this->check_buffer(
+      [&](cudf::memory_resources mr) {
+        return cudf::detail::make_device_buffer_async(input, this->stream, mr);
+      },
+      expected);
   }
 }
 
