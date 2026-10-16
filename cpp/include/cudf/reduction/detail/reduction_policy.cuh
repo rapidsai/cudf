@@ -7,34 +7,15 @@
 
 #include <cudf/types.hpp>
 
-#include <rmm/resource_ref.hpp>
-
 #include <cub/block/block_reduce.cuh>
 #include <cub/device/dispatch/tuning/tuning_reduce.cuh>
 #include <cuda/devices>
-#include <cuda/memory_resource>
-#include <cuda/std/execution>
-#include <cuda/stream>
 
 #include <type_traits>
 
 namespace cudf {
 namespace reduction {
 namespace detail {
-/**
- * @brief Make an execution environment to pass to CUB reductions.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used for internal allocations in the reduction.
- *
- * @returns A new execution environment.
- */
-inline auto make_env(cuda::stream_ref stream, rmm::device_async_resource_ref mr)
-{
-  auto stream_property   = cuda::std::execution::prop{cuda::get_stream_t{}, stream};
-  auto resource_property = cuda::std::execution::prop{cuda::mr::get_memory_resource_t{}, mr};
-  return cuda::std::execution::env{stream_property, resource_property};
-}
-
 /**
  * @brief A custom tuning policy for the block reductions for one-pass variance computation.
  * @tparam State type of the state being reduced over.
@@ -45,7 +26,7 @@ inline auto make_env(cuda::stream_ref stream, rmm::device_async_resource_ref mr)
  */
 template <typename State, typename BinaryOp>
 struct variance_reduce_policy {
-  __host__ __device__ constexpr cub::ReducePolicy operator()(cuda::compute_capability cc) const
+  CUDF_HOST_DEVICE constexpr cub::ReducePolicy operator()(cuda::compute_capability cc) const
   {
     // TODO: Update to public CUB facilities using policy transformers once that exists.
     auto policy = cub::detail::reduce::

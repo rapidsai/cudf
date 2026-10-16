@@ -10,8 +10,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/utilities/cast_functor.cuh>
-#include <cudf/reduction/detail/reduction_env.cuh>
+#include <cudf/reduction/detail/reduction_policy.cuh>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/execution_env.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -157,10 +158,11 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 
   auto const env = [&] {
     if constexpr (std::is_same_v<Op, op::variance> || std::is_same_v<Op, op::standard_deviation>) {
-      return cuda::std::execution::env{
-        make_env(stream, cudf::get_current_device_resource_ref()),
+      return make_env(
+        stream,
+        cudf::get_current_device_resource_ref(),
         cuda::execution::tune(
-          variance_reduce_policy<IntermediateType, std::remove_cv_t<decltype(binary_op)>>{})};
+          variance_reduce_policy<IntermediateType, std::remove_cv_t<decltype(binary_op)>>{}));
     } else {
       return make_env(stream, cudf::get_current_device_resource_ref());
     }

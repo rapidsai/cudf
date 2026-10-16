@@ -28,7 +28,6 @@ struct var_std {
   // recommendations_ (1983)
   // https://doi.org/10.1080/00031305.1983.10483115
   // Also http://www.cs.yale.edu/publications/techreports/tr222.pdf
-  // This is a modification of Youngs and Cramer's online approach.
   // We track the running mean, rather than the running sum so that columns whose sum
   // overflows, but whose mean does not, produce finite variance. This is algebraically
   // equivalent to the CGL algorithm in exact arithmetic, and has similar small-step
