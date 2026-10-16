@@ -182,13 +182,9 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @brief Fetches byte ranges of column chunks of the columns to read
+   * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::column_chunks_byte_ranges
    *
    * @param columns_mode Columns to read
-   * @param row_group_indices Input row groups indices
-   * @param options Parquet reader options
-   * @return Pair of a vector of byte ranges to column chunks and a vector of their corresponding
-   *         input source file indices
    */
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
   column_chunks_byte_ranges(read_columns_mode columns_mode,
@@ -196,7 +192,8 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
                             parquet_reader_options const& options);
 
   /**
-   * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::payload_pages_byte_ranges
+   * @copydoc
+   * cudf::io::parquet::experimental::hybrid_scan_multifile::sparse_payload_pages_byte_ranges
    */
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
   sparse_payload_pages_byte_ranges(std::span<std::vector<size_type> const> row_group_indices,
@@ -205,18 +202,10 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
                                    cuda::stream_ref stream);
 
   /**
-   * @brief Materializes the specified columns
+   * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::materialize_columns
    *
    * @tparam RowMaskView Row mask column view type
    * @param columns_mode Columns to materialize
-   * @param row_group_indices Input row groups indices
-   * @param column_data Device spans of column chunk data
-   * @param row_mask Boolean column indicating surviving rows
-   * @param mask_data_pages Whether to build and use a data page mask using the row mask
-   * @param options Parquet reader options
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource used to allocate the device memory of the returned table
-   * @return Table of materialized columns and metadata
    */
   template <row_mask_view_type RowMaskView>
   [[nodiscard]] table_with_metadata materialize_columns(
@@ -230,18 +219,9 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @brief Sets up chunked reading of the specified columns
+   * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::setup_chunking_for_columns
    *
    * @param columns_mode Columns to materialize
-   * @param chunk_read_limit Limit on total number of bytes to be returned per read
-   * @param pass_read_limit Limit on memory usage for decompressing and decoding data
-   * @param row_group_indices Input row groups indices
-   * @param column_data Device spans of column chunk data
-   * @param row_mask Boolean column indicating surviving rows
-   * @param mask_data_pages Whether to build and use a data page mask using the row mask
-   * @param options Parquet reader options
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource used to allocate the device memory of the returned tables
    */
   void setup_chunking_for_columns(read_columns_mode columns_mode,
                                   std::size_t chunk_read_limit,
@@ -256,7 +236,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
 
   /**
    * @copydoc
-   * cudf::io::parquet::experimental::hybrid_scan_multifile::setup_chunking_for_payload_columns
+   * cudf::io::parquet::experimental::hybrid_scan_multifile::setup_chunking_for_sparse_payload_columns
    */
   void setup_chunking_for_sparse_payload_columns(
     std::size_t chunk_read_limit,
@@ -292,14 +272,14 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   [[nodiscard]] bool has_next_table_chunk();
 
   /**
-   * @brief Materializes the next table chunk
+   * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::materialize_columns_chunk
    *
    * @tparam RowMaskView Row mask column view type
-   * @param row_mask Boolean column indicating surviving rows
-   * @return Table chunk of materialized columns and metadata
+   * @param columns_mode Columns to materialize. Must match the one used to setup chunking
    */
   template <row_mask_view_type RowMaskView>
-  [[nodiscard]] table_with_metadata materialize_next_table_chunk(RowMaskView row_mask);
+  [[nodiscard]] table_with_metadata materialize_next_table_chunk(read_columns_mode columns_mode,
+                                                                 RowMaskView row_mask);
 
  private:
   /**

@@ -873,11 +873,15 @@ void hybrid_scan_reader_impl::setup_chunking_for_sparse_payload_columns(
 }
 
 template <row_mask_view_type RowMaskView>
-table_with_metadata hybrid_scan_reader_impl::materialize_next_table_chunk(RowMaskView row_mask)
+table_with_metadata hybrid_scan_reader_impl::materialize_next_table_chunk(
+  read_columns_mode columns_mode, RowMaskView row_mask)
 {
   CUDF_EXPECTS(_file_preprocessed and _selected_columns_mode.has_value(),
                "Chunking for columns not yet setup");
-  CUDF_EXPECTS(is_valid_row_mask_view<RowMaskView>(*_selected_columns_mode),
+  CUDF_EXPECTS(columns_mode == *_selected_columns_mode,
+               "Columns selection mode must match the one used to setup chunking",
+               std::invalid_argument);
+  CUDF_EXPECTS(is_valid_row_mask_view<RowMaskView>(columns_mode),
                "Invalid row mask view type for the current columns selection mode",
                std::invalid_argument);
 
@@ -889,7 +893,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_next_table_chunk(RowMas
   }
 
   prepare_data(read_mode::CHUNKED_READ, {}, {}, {});
-  return read_chunk_internal(read_mode::CHUNKED_READ, *_selected_columns_mode, row_mask);
+  return read_chunk_internal(read_mode::CHUNKED_READ, columns_mode, row_mask);
 }
 
 std::pair<std::vector<std::vector<cudf::size_type>>, std::vector<cudf::size_type>>
@@ -1511,9 +1515,9 @@ template table_with_metadata hybrid_scan_reader_impl::materialize_columns(
   rmm::device_async_resource_ref);
 
 template table_with_metadata hybrid_scan_reader_impl::materialize_next_table_chunk(
-  cudf::column_view);
+  read_columns_mode, cudf::column_view);
 
 template table_with_metadata hybrid_scan_reader_impl::materialize_next_table_chunk(
-  cudf::mutable_column_view);
+  read_columns_mode, cudf::mutable_column_view);
 
 }  // namespace cudf::io::parquet::experimental::detail
