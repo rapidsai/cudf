@@ -19,6 +19,7 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/hashing.hpp>
 #include <cudf/join/streaming_hash_join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -38,6 +39,7 @@
 #include <stdexcept>
 #include <thread>
 #include <tuple>
+#include <unordered_map>
 #include <vector>
 
 namespace {
@@ -64,6 +66,42 @@ std::vector<join_match> to_sorted_host_matches(cudf::device_span<size_type const
   }
   std::sort(matches.begin(), matches.end());
   return matches;
+}
+
+/**
+ * @brief Find two distinct primitive keys with the same row hash used by the streaming map.
+ *
+ * Two primitive columns are composed into one 32-bit row hash with MurmurHash3_x86_32 at the
+ * default seed, which is also the implementation behind `murmurhash3_x86_32`. Searching this
+ * fixed range makes collision handling an integration-test property rather than relying on two
+ * values that merely happen to land in the same open-addressing bucket.
+ */
+std::pair<size_type, size_type> find_forced_hash_collision(cuda::stream_ref stream)
+{
+  constexpr size_type candidate_count = 1 << 20;
+  std::vector<int32_t> first_candidates(static_cast<std::size_t>(candidate_count));
+  std::iota(first_candidates.begin(), first_candidates.end(), int32_t{0});
+  std::vector<int32_t> second_candidates(static_cast<std::size_t>(candidate_count));
+  std::transform(
+    first_candidates.begin(), first_candidates.end(), second_candidates.begin(), [](int32_t value) {
+      return value * 37 + 11;
+    });
+  column_wrapper<int32_t> first_column(first_candidates.begin(), first_candidates.end());
+  column_wrapper<int32_t> second_column(second_candidates.begin(), second_candidates.end());
+  auto const hashes = cudf::hashing::murmurhash3_x86_32(
+    cudf::table_view{{first_column, second_column}}, cudf::DEFAULT_HASH_SEED, stream);
+  auto const host_hashes = cudf::detail::make_host_vector(
+    cudf::device_span<cudf::hash_value_type const>{hashes->view().data<cudf::hash_value_type>(),
+                                                   static_cast<std::size_t>(hashes->size())},
+    stream);
+
+  std::unordered_map<cudf::hash_value_type, size_type> first_key;
+  first_key.reserve(static_cast<std::size_t>(candidate_count));
+  for (size_type index = 0; index < candidate_count; ++index) {
+    auto const [it, inserted] = first_key.emplace(host_hashes[index], index);
+    if (!inserted) { return {it->second, index}; }
+  }
+  throw std::runtime_error{"Unable to find a forced MurmurHash3 collision"};
 }
 
 }  // namespace
@@ -101,6 +139,316 @@ TEST_F(StreamingHashJoinTest, MultiplePartitionsReturnBatchLocalIndices)
   std::vector<join_match> const expected{
     {0, 0, 1}, {0, 1, 0}, {0, 2, 0}, {1, 0, 2}, {1, 1, 2}, {1, 2, 1}, {2, 1, 1}};
   EXPECT_EQ(actual, expected);
+}
+
+TEST_F(StreamingHashJoinTest, InsertAfterProbeIncludesNewBatch)
+{
+  auto const stream = cudf::test::get_default_stream();
+  column_wrapper<int32_t> right0{1, 2};
+  column_wrapper<int32_t> right1{2, 3};
+  column_wrapper<int32_t> left{2, 3};
+  cudf::table_view const right0_view{{right0}};
+  cudf::table_view const right1_view{{right1}};
+  cudf::table_view const left_view{{left}};
+  std::vector<size_type> const keys{0};
+  cudf::streaming_hash_join joiner{right0_view,
+                                   keys,
+                                   /*total_right_rows=*/4,
+                                   /*max_num_batches=*/2,
+                                   cudf::nullable_join::NO,
+                                   cudf::null_equality::EQUAL};
+
+  joiner.insert(right0_view, stream);
+  auto [first_left, first_right] = joiner.inner_join(left_view, {}, stream);
+  EXPECT_EQ(to_sorted_host_matches(*first_left, *first_right.first, *first_right.second, stream),
+            (std::vector<join_match>{{0, 0, 1}}));
+
+  joiner.insert(right1_view, stream);
+  auto [second_left, second_right] = joiner.inner_join(left_view, {}, stream);
+  EXPECT_EQ(to_sorted_host_matches(*second_left, *second_right.first, *second_right.second, stream),
+            (std::vector<join_match>{{0, 0, 1}, {0, 1, 0}, {1, 1, 1}}));
+}
+
+TEST_F(StreamingHashJoinTest, InsertAfterProbeHandlesDirectSingletonsDuplicatesAndNullHoles)
+{
+  auto const stream = cudf::test::get_default_stream();
+  column_wrapper<int32_t> base{1};
+  // The post-seal batch has one newly-created key, one null-excluded candidate hole, and a
+  // same-batch duplicate of the new key. This exercises direct singleton ranges and their
+  // page-backed fallback together.
+  column_wrapper<int32_t> delta{{2, 0, 2}, {1, 0, 1}};
+  column_wrapper<int32_t> seal_left{1};
+  column_wrapper<int32_t> left{1, 2};
+  cudf::table_view const base_view{{base}};
+  cudf::table_view const delta_view{{delta}};
+  cudf::table_view const seal_left_view{{seal_left}};
+  cudf::table_view const left_view{{left}};
+  std::vector<size_type> const keys{0};
+  cudf::streaming_hash_join joiner{base_view,
+                                   keys,
+                                   /*total_right_rows=*/4,
+                                   /*max_num_batches=*/2,
+                                   cudf::nullable_join::YES,
+                                   cudf::null_equality::UNEQUAL};
+
+  joiner.insert(base_view, stream);
+  static_cast<void>(joiner.inner_join(seal_left_view, {}, stream));
+  joiner.insert(delta_view, stream);
+
+  auto [left_indices, right_indices] = joiner.inner_join(left_view, {}, stream);
+  EXPECT_EQ(
+    to_sorted_host_matches(*left_indices, *right_indices.first, *right_indices.second, stream),
+    (std::vector<join_match>{{0, 0, 0}, {1, 1, 0}, {1, 1, 2}}));
+}
+
+TEST_F(StreamingHashJoinTest, InsertAfterProbeAtMostOneProbeRowsCompactsMisses)
+{
+  auto const stream = cudf::test::get_default_stream();
+  column_wrapper<int32_t> base{1, 3};
+  column_wrapper<int32_t> delta{2};
+  column_wrapper<int32_t> seal_left{1};
+  column_wrapper<int32_t> left{0, 1, 2, 3};
+  cudf::table_view const base_view{{base}};
+  cudf::table_view const delta_view{{delta}};
+  cudf::table_view const seal_left_view{{seal_left}};
+  cudf::table_view const left_view{{left}};
+  std::vector<size_type> const keys{0};
+  cudf::streaming_hash_join joiner{base_view,
+                                   keys,
+                                   /*total_right_rows=*/3,
+                                   /*max_num_batches=*/2,
+                                   cudf::nullable_join::NO,
+                                   cudf::null_equality::EQUAL};
+
+  joiner.insert(base_view, stream);
+  static_cast<void>(joiner.inner_join(seal_left_view, {}, stream));
+  joiner.insert(delta_view, stream);
+
+  auto [left_indices, right_indices] = joiner.inner_join(left_view, {}, stream);
+  EXPECT_EQ(
+    to_sorted_host_matches(*left_indices, *right_indices.first, *right_indices.second, stream),
+    (std::vector<join_match>{{1, 0, 0}, {2, 1, 0}, {3, 0, 1}}));
+}
+
+TEST_F(StreamingHashJoinTest, ExactOutputSizeHintWithOneMatchPerProbe)
+{
+  auto const stream = cudf::test::get_default_stream();
+  column_wrapper<int32_t> right{1, 2};
+  column_wrapper<int32_t> left{2, 1};
+  cudf::table_view const right_view{{right}};
+  cudf::table_view const left_view{{left}};
+  std::vector<size_type> const keys{0};
+  cudf::streaming_hash_join joiner{right_view,
+                                   keys,
+                                   /*total_right_rows=*/2,
+                                   /*max_num_batches=*/1,
+                                   cudf::nullable_join::NO,
+                                   cudf::null_equality::EQUAL};
+
+  joiner.insert(right_view, stream);
+  auto [left_indices, right_indices] = joiner.inner_join(left_view, /*output_size=*/2, stream);
+  EXPECT_EQ(
+    to_sorted_host_matches(*left_indices, *right_indices.first, *right_indices.second, stream),
+    (std::vector<join_match>{{0, 0, 1}, {1, 0, 0}}));
+}
+
+TEST_F(StreamingHashJoinTest, InsertAfterProbeReadsBaseAndUncompactedGeneration)
+{
+  auto const stream = cudf::test::get_default_stream();
+  // One post-seal row is below the 25% compaction threshold of this eight-row base. The second
+  // probe must therefore concatenate the immutable base CSR and the active delta generation.
+  column_wrapper<int32_t> right0{1, 2, 3, 4, 5, 6, 7, 8};
+  column_wrapper<int32_t> right1{2};
+  column_wrapper<int32_t> left{2};
+  cudf::table_view const right0_view{{right0}};
+  cudf::table_view const right1_view{{right1}};
+  std::vector<size_type> const keys{0};
+  cudf::streaming_hash_join joiner{right0_view,
+                                   keys,
+                                   /*total_right_rows=*/9,
+                                   /*max_num_batches=*/2,
+                                   cudf::nullable_join::NO,
+                                   cudf::null_equality::EQUAL};
+
+  joiner.insert(right0_view, stream);
+  static_cast<void>(joiner.inner_join(cudf::table_view{{left}}, {}, stream));
+  joiner.insert(right1_view, stream);
+  auto [left_indices, right_indices] = joiner.inner_join(cudf::table_view{{left}}, {}, stream);
+  EXPECT_EQ(
+    to_sorted_host_matches(*left_indices, *right_indices.first, *right_indices.second, stream),
+    (std::vector<join_match>{{0, 0, 1}, {0, 1, 0}}));
+}
+
+TEST_F(StreamingHashJoinTest, InsertAfterProbeCompactsAtGenerationLimit)
+{
+  auto const stream = cudf::test::get_default_stream();
+  // Keep eight single-row generations below the row threshold (16 rows) so this specifically
+  // exercises the independent eight-generation compaction trigger.
+  std::vector<int32_t> base_values(64);
+  std::iota(base_values.begin(), base_values.end(), 0);
+  column_wrapper<int32_t> base(base_values.begin(), base_values.end());
+  column_wrapper<int32_t> duplicate{0};
+  column_wrapper<int32_t> left{0};
+  cudf::table_view const base_view{{base}};
+  cudf::table_view const duplicate_view{{duplicate}};
+  cudf::table_view const left_view{{left}};
+  std::vector<size_type> const keys{0};
+  cudf::streaming_hash_join joiner{base_view,
+                                   keys,
+                                   /*total_right_rows=*/72,
+                                   /*max_num_batches=*/9,
+                                   cudf::nullable_join::NO,
+                                   cudf::null_equality::EQUAL};
+
+  joiner.insert(base_view, stream);
+  static_cast<void>(joiner.inner_join(left_view, {}, stream));
+  for (size_type batch = 0; batch < 8; ++batch) {
+    joiner.insert(duplicate_view, stream);
+    static_cast<void>(joiner.inner_join(left_view, {}, stream));
+  }
+
+  auto [left_indices, right_indices] = joiner.inner_join(left_view, {}, stream);
+  auto const actual =
+    to_sorted_host_matches(*left_indices, *right_indices.first, *right_indices.second, stream);
+  std::vector<join_match> expected{{0, 0, 0}};
+  for (size_type batch = 1; batch < 9; ++batch) {
+    expected.emplace_back(0, batch, 0);
+  }
+  EXPECT_EQ(actual, expected);
+}
+
+TEST_F(StreamingHashJoinTest, InsertAfterProbeCompactsQueuedSparseGenerations)
+{
+  auto const stream = cudf::test::get_default_stream();
+  // Applications may enqueue more batches than the generation threshold before the next probe.
+  // This covers ordering and compaction of the sparse overlay's non-fast-path traversal.
+  column_wrapper<int32_t> base{0, 1, 2, 3, 4, 5, 6, 7};
+  column_wrapper<int32_t> duplicate{0};
+  column_wrapper<int32_t> left{0};
+  cudf::table_view const base_view{{base}};
+  cudf::table_view const duplicate_view{{duplicate}};
+  cudf::table_view const left_view{{left}};
+  std::vector<size_type> const keys{0};
+  cudf::streaming_hash_join joiner{base_view,
+                                   keys,
+                                   /*total_right_rows=*/18,
+                                   /*max_num_batches=*/11,
+                                   cudf::nullable_join::NO,
+                                   cudf::null_equality::EQUAL};
+
+  joiner.insert(base_view, stream);
+  static_cast<void>(joiner.inner_join(left_view, {}, stream));
+  for (size_type batch = 0; batch < 10; ++batch) {
+    joiner.insert(duplicate_view, stream);
+  }
+
+  auto [left_indices, right_indices] = joiner.inner_join(left_view, {}, stream);
+  auto const actual =
+    to_sorted_host_matches(*left_indices, *right_indices.first, *right_indices.second, stream);
+  std::vector<join_match> expected{{0, 0, 0}};
+  for (size_type batch = 1; batch < 11; ++batch) {
+    expected.emplace_back(0, batch, 0);
+  }
+  EXPECT_EQ(actual, expected);
+}
+
+TEST_F(StreamingHashJoinTest, HighDuplicateBuildKeySpansFixedPages)
+{
+  auto const stream = cudf::test::get_default_stream();
+  // 1,024 rows require 32 32-reference pages in the segmented implementation.
+  std::vector<int32_t> duplicate_values(1024, 42);
+  column_wrapper<int32_t> right(duplicate_values.begin(), duplicate_values.end());
+  column_wrapper<int32_t> left{42};
+  cudf::table_view const right_view{{right}};
+  cudf::table_view const left_view{{left}};
+  std::vector<size_type> const keys{0};
+  cudf::streaming_hash_join joiner{right_view,
+                                   keys,
+                                   right_view.num_rows(),
+                                   /*max_num_batches=*/1,
+                                   cudf::nullable_join::NO,
+                                   cudf::null_equality::EQUAL};
+  joiner.insert(right_view, stream);
+
+  auto [left_indices, right_indices] = joiner.inner_join(left_view, {}, stream);
+  auto const actual =
+    to_sorted_host_matches(*left_indices, *right_indices.first, *right_indices.second, stream);
+  std::vector<join_match> expected;
+  expected.reserve(duplicate_values.size());
+  for (size_type row = 0; row < static_cast<size_type>(duplicate_values.size()); ++row) {
+    expected.emplace_back(0, 0, row);
+  }
+  EXPECT_EQ(actual, expected);
+}
+
+TEST_F(StreamingHashJoinTest, SixteenUniquePreSealBatches)
+{
+  auto const stream               = cudf::test::get_default_stream();
+  constexpr size_type num_batches = 16;
+  std::vector<int32_t> values(num_batches);
+  std::iota(values.begin(), values.end(), 0);
+  column_wrapper<int32_t> right(values.begin(), values.end());
+  cudf::table_view const right_view{{right}};
+  std::vector<size_type> slice_indices;
+  slice_indices.reserve(2 * num_batches);
+  for (size_type i = 0; i < num_batches; ++i) {
+    slice_indices.push_back(i);
+    slice_indices.push_back(i + 1);
+  }
+  auto const right_partitions = cudf::slice(right_view, slice_indices);
+  column_wrapper<int32_t> left(values.begin(), values.end());
+
+  std::vector<size_type> const keys{0};
+  cudf::streaming_hash_join joiner{right_view,
+                                   keys,
+                                   /*total_right_rows=*/num_batches,
+                                   /*max_num_batches=*/num_batches,
+                                   cudf::nullable_join::NO,
+                                   cudf::null_equality::EQUAL};
+  for (auto const& partition : right_partitions) {
+    joiner.insert(partition, stream);
+  }
+
+  auto [left_indices, right_indices] = joiner.inner_join(cudf::table_view{{left}}, {}, stream);
+  auto const actual =
+    to_sorted_host_matches(*left_indices, *right_indices.first, *right_indices.second, stream);
+  std::vector<join_match> expected;
+  expected.reserve(num_batches);
+  for (size_type i = 0; i < num_batches; ++i) {
+    expected.emplace_back(i, i, 0);
+  }
+  EXPECT_EQ(actual, expected);
+}
+
+TEST_F(StreamingHashJoinTest, EqualHashUnequalKeysAcrossPreSealBatches)
+{
+  auto const stream                  = cudf::test::get_default_stream();
+  auto const [first_key, second_key] = find_forced_hash_collision(stream);
+  ASSERT_NE(first_key, second_key);
+  auto const second_value = [](size_type value) { return value * 37 + 11; };
+  column_wrapper<int32_t> right0_first{first_key};
+  column_wrapper<int32_t> right0_second{second_value(first_key)};
+  column_wrapper<int32_t> right1_first{second_key};
+  column_wrapper<int32_t> right1_second{second_value(second_key)};
+  column_wrapper<int32_t> left_first{first_key, second_key};
+  column_wrapper<int32_t> left_second{second_value(first_key), second_value(second_key)};
+  cudf::table_view const right0_view{{right0_first, right0_second}};
+  cudf::table_view const right1_view{{right1_first, right1_second}};
+  std::vector<size_type> const keys{0, 1};
+  cudf::streaming_hash_join joiner{right0_view,
+                                   keys,
+                                   /*total_right_rows=*/2,
+                                   /*max_num_batches=*/2,
+                                   cudf::nullable_join::NO,
+                                   cudf::null_equality::EQUAL};
+  joiner.insert(right0_view, stream);
+  joiner.insert(right1_view, stream);
+
+  auto [left_indices, right_indices] =
+    joiner.inner_join(cudf::table_view{{left_first, left_second}}, {}, stream);
+  auto const actual =
+    to_sorted_host_matches(*left_indices, *right_indices.first, *right_indices.second, stream);
+  EXPECT_EQ(actual, (std::vector<join_match>{{0, 0, 0}, {1, 1, 0}}));
 }
 
 TEST_F(StreamingHashJoinTest, ConcurrentInsert)
@@ -464,7 +812,9 @@ TEST_F(StreamingHashJoinTest, MemoryResources)
   // Probe scratch goes to the temporary resource and is released before the call returns.
   EXPECT_GT(scratch_mr.get_bytes_counter().peak, 0);
   EXPECT_EQ(scratch_mr.get_bytes_counter().value, 0);
-  EXPECT_EQ(persistent_mr.get_bytes_counter().value, persistent_bytes_before);
+  // Sealing may retire sparse pre-seal inputs while publishing the canonical CSR. The output
+  // itself must not increase the caller's persistent allocation footprint.
+  EXPECT_LE(persistent_mr.get_bytes_counter().value, persistent_bytes_before);
   EXPECT_EQ(left_indices->size(), 1);
   EXPECT_EQ(right_indices.first->size(), 1);
   EXPECT_EQ(right_indices.second->size(), 1);
