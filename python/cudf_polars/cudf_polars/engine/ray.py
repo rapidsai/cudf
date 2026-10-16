@@ -776,7 +776,7 @@ def _shutdown_ray(
     """Release Ray resources in dependency order."""
     ray_running = ray.is_initialized()
     steps: list[Callable[[], object]] = []
-    if ray_running and quent_collector is not None:
+    if ray_running and (quent_runtime is not None or quent_collector is not None):
         steps.append(
             lambda: ray.get([actor.close_quent.remote() for actor in rank_actors])
         )
@@ -916,6 +916,7 @@ class RayEngine(StreamingEngine):
         else:
             engine_id = uuid.uuid4()
         self._quent_runtime = None
+        self._quent_collector: quent_bindings.Collector | None = None
 
         # This engine's store uid, used to key its partitions in each actor's process rank-local store.
         self._store_uid = uuid.uuid4().hex
@@ -946,8 +947,8 @@ class RayEngine(StreamingEngine):
         exit_stack.callback(
             lambda: _shutdown_ray(
                 rank_actors,
-                quent_runtime,
-                quent_collector,
+                self._quent_runtime,
+                self._quent_collector,
                 shutdown_ray=owns_ray,
             )
         )
@@ -1012,6 +1013,7 @@ class RayEngine(StreamingEngine):
                 quent_collector = cudf_polars.quent._runtime.start_collector(
                     quent_context.run_root
                 )
+                self._quent_collector = quent_collector
                 collector_address = quent_collector.address
             else:
                 quent_collector = None
@@ -1038,6 +1040,7 @@ class RayEngine(StreamingEngine):
                     collector=quent_collector,
                 )
                 self._quent_runtime = quent_runtime
+                self._quent_collector = None  # runtime now owns the collector
 
             self._rank_actors: list[ActorHandle[RankActor]] | None = rank_actors
             super().__init__(
@@ -1301,6 +1304,7 @@ class RayEngine(StreamingEngine):
             return  # already shut down; idempotent
         self._rank_actors = None
         self._quent_runtime = None
+        self._quent_collector = None
         super().shutdown()
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:

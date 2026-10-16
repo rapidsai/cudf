@@ -1062,6 +1062,7 @@ class DaskEngine(StreamingEngine):
         quent_context = resolve_quent_context(executor_options)
         executor_options["quent_context"] = quent_context
         self._quent_runtime = None
+        self._quent_collector: quent_bindings.Collector | None = None
 
         if bootstrap.is_running_with_rrun():
             raise RuntimeError(
@@ -1096,8 +1097,8 @@ class DaskEngine(StreamingEngine):
             lambda: _shutdown_dask(
                 dask_client,
                 rapidsmpf_id,
-                quent_runtime,
-                quent_collector,
+                self._quent_runtime,
+                self._quent_collector,
                 owned_client,
                 owned_cluster,
             )
@@ -1155,6 +1156,7 @@ class DaskEngine(StreamingEngine):
                 quent_collector = cudf_polars.quent._runtime.start_collector(
                     quent_context.run_root
                 )
+                self._quent_collector = quent_collector
                 quent_collector_address = quent_collector.address
             else:
                 quent_collector_address = None
@@ -1195,6 +1197,7 @@ class DaskEngine(StreamingEngine):
                     collector=quent_collector,
                 )
                 self._quent_runtime = quent_runtime
+                self._quent_collector = None  # runtime now owns the collector
 
             dask_ctx = DaskContext(
                 client=dask_client,
@@ -1444,6 +1447,7 @@ class DaskEngine(StreamingEngine):
             return  # already shut down
         self._dask_context = None
         self._quent_runtime = None
+        self._quent_collector = None
         super().shutdown()
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
