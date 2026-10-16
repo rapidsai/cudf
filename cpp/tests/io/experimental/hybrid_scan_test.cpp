@@ -44,24 +44,6 @@ using cudf::io::parquet::experimental::read_columns_mode;
 using cudf::io::parquet::experimental::use_data_page_mask;
 
 /**
- * @brief Whether `hybrid_scan_reader::materialize_columns<mode>` accepts a `RowMaskView` row mask
- */
-template <read_columns_mode mode, typename RowMaskView>
-concept accepts_row_mask = requires(cudf::io::parquet::experimental::hybrid_scan_reader& reader,
-                                    RowMaskView row_mask,
-                                    cudf::io::parquet_reader_options const& options,
-                                    cuda::stream_ref stream,
-                                    rmm::device_async_resource_ref mr) {
-  reader.materialize_columns<mode>(
-    {}, {}, row_mask, cudf::io::parquet::experimental::use_data_page_mask::NO, options, stream, mr);
-};
-
-// Filter columns update the row mask in place so they must reject an immutable row mask
-static_assert(accepts_row_mask<read_columns_mode::FILTER_COLUMNS, cudf::mutable_column_view>);
-static_assert(not accepts_row_mask<read_columns_mode::FILTER_COLUMNS, cudf::column_view>);
-static_assert(accepts_row_mask<read_columns_mode::PAYLOAD_COLUMNS, cudf::column_view>);
-
-/**
  * @brief Helper to test the hybrid scan reader
  *
  * Concatenates the input table and writes it to parquet. Then reads it back using the regular and
