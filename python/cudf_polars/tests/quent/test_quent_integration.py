@@ -52,6 +52,7 @@ def engine_with_quent_context(
         executor_options={
             **base_options.to_executor_options(),
             "quent_context": quent_context,
+            "fallback_mode": "silent",
         },
         engine_options=base_options.to_engine_options(),
     )
@@ -63,6 +64,7 @@ def engine_with_quent_context(
             executor_options={
                 **base_options.to_executor_options(),
                 "quent_context": None,
+                "fallback_mode": "silent",
             },
             engine_options=base_options.to_engine_options(),
         )
@@ -164,7 +166,6 @@ def test_quent_controller_cleanup_continues_after_handle_failure() -> None:
     collector.close.assert_called_once_with(timeout=10.0)
 
 
-@pytest.mark.filterwarnings("ignore:Rolling.*:UserWarning")
 def test_quent_lifecycle(
     engine_with_quent_context: StreamingEngine,
     quent_context: QuentConfig,
