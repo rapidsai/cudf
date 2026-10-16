@@ -234,7 +234,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @param mr Device memory resource used to allocate the device memory of the returned tables
    */
   template <read_columns_mode mode>
-  void setup_chunking_for_columns(
+  void setup_chunked_table_materialization(
     std::size_t chunk_read_limit,
     std::size_t pass_read_limit,
     std::span<std::vector<size_type> const> row_group_indices,
@@ -249,7 +249,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @copydoc
    * cudf::io::parquet::experimental::hybrid_scan_multifile::setup_chunking_for_payload_columns
    */
-  void setup_chunking_for_sparse_payload_columns(
+  void setup_chunked_sparse_payload_materialization(
     std::size_t chunk_read_limit,
     std::size_t pass_read_limit,
     std::span<std::vector<size_type> const> row_group_indices,
@@ -290,8 +290,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @return Table chunk of materialized columns and metadata
    */
   template <read_columns_mode mode>
-  [[nodiscard]] table_with_metadata materialize_next_table_chunk(
-    row_mask_view_t<mode> const& row_mask);
+  [[nodiscard]] table_with_metadata materialize_table_chunk(row_mask_view_t<mode> const& row_mask);
 
  private:
   /**

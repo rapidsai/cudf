@@ -789,7 +789,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_table(
 }
 
 template <read_columns_mode mode>
-void hybrid_scan_reader_impl::setup_chunking_for_columns(
+void hybrid_scan_reader_impl::setup_chunked_table_materialization(
   std::size_t chunk_read_limit,
   std::size_t pass_read_limit,
   std::span<std::vector<size_type> const> row_group_indices,
@@ -815,7 +815,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_columns(
                           mr);
 }
 
-void hybrid_scan_reader_impl::setup_chunking_for_sparse_payload_columns(
+void hybrid_scan_reader_impl::setup_chunked_sparse_payload_materialization(
   std::size_t chunk_read_limit,
   std::size_t pass_read_limit,
   std::span<std::vector<size_type> const> row_group_indices,
@@ -841,7 +841,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_sparse_payload_columns(
 }
 
 template <read_columns_mode mode>
-table_with_metadata hybrid_scan_reader_impl::materialize_next_table_chunk(
+table_with_metadata hybrid_scan_reader_impl::materialize_table_chunk(
   row_mask_view_t<mode> const& row_mask)
 {
   CUDF_EXPECTS(_file_preprocessed and _selected_columns_mode.has_value(),
@@ -1459,29 +1459,29 @@ void hybrid_scan_reader_impl::set_sparse_pass_page_mask(
 }
 
 // Explicit template instantiations for the read columns modes
-#define INSTANTIATE_HYBRID_SCAN_COLUMNS_APIS(mode)                                          \
-  template std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>            \
-  hybrid_scan_reader_impl::column_chunks_byte_ranges<mode>(                                 \
-    std::span<std::vector<size_type> const>, parquet_reader_options const&);                \
-  template table_with_metadata hybrid_scan_reader_impl::materialize_table<mode>(            \
-    std::span<std::vector<size_type> const>,                                                \
-    std::span<cudf::device_span<uint8_t const> const>,                                      \
-    row_mask_view_t<mode> const&,                                                           \
-    use_data_page_mask,                                                                     \
-    parquet_reader_options const&,                                                          \
-    cuda::stream_ref,                                                                       \
-    rmm::device_async_resource_ref);                                                        \
-  template void hybrid_scan_reader_impl::setup_chunking_for_columns<mode>(                  \
-    std::size_t,                                                                            \
-    std::size_t,                                                                            \
-    std::span<std::vector<size_type> const>,                                                \
-    std::span<cudf::device_span<uint8_t const> const>,                                      \
-    cudf::column_view const&,                                                               \
-    use_data_page_mask,                                                                     \
-    parquet_reader_options const&,                                                          \
-    cuda::stream_ref,                                                                       \
-    rmm::device_async_resource_ref);                                                        \
-  template table_with_metadata hybrid_scan_reader_impl::materialize_next_table_chunk<mode>( \
+#define INSTANTIATE_HYBRID_SCAN_COLUMNS_APIS(mode)                                     \
+  template std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>       \
+  hybrid_scan_reader_impl::column_chunks_byte_ranges<mode>(                            \
+    std::span<std::vector<size_type> const>, parquet_reader_options const&);           \
+  template table_with_metadata hybrid_scan_reader_impl::materialize_table<mode>(       \
+    std::span<std::vector<size_type> const>,                                           \
+    std::span<cudf::device_span<uint8_t const> const>,                                 \
+    row_mask_view_t<mode> const&,                                                      \
+    use_data_page_mask,                                                                \
+    parquet_reader_options const&,                                                     \
+    cuda::stream_ref,                                                                  \
+    rmm::device_async_resource_ref);                                                   \
+  template void hybrid_scan_reader_impl::setup_chunked_table_materialization<mode>(    \
+    std::size_t,                                                                       \
+    std::size_t,                                                                       \
+    std::span<std::vector<size_type> const>,                                           \
+    std::span<cudf::device_span<uint8_t const> const>,                                 \
+    cudf::column_view const&,                                                          \
+    use_data_page_mask,                                                                \
+    parquet_reader_options const&,                                                     \
+    cuda::stream_ref,                                                                  \
+    rmm::device_async_resource_ref);                                                   \
+  template table_with_metadata hybrid_scan_reader_impl::materialize_table_chunk<mode>( \
     row_mask_view_t<mode> const&);
 
 INSTANTIATE_HYBRID_SCAN_COLUMNS_APIS(read_columns_mode::FILTER_COLUMNS)
