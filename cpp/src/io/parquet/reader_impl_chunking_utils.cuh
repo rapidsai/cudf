@@ -105,6 +105,9 @@ int64_t find_next_split(int64_t cur_pos,
  *
  * This function is asynchronous. Call stream.sync() before using the
  * results.
+ *
+ * TODO: Change this to a resizable buffer if/when https://github.com/NVIDIA/cccl/issues/12051
+ * is implemented
  */
 std::pair<cuda::device_buffer<cumulative_page_info>, cuda::device_buffer<int32_t>>
 adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,

@@ -356,6 +356,9 @@ constexpr auto min_segments_for_device_offsets = 1024;
 
 /**
  * @brief Compute segment row offsets via pairwise `std::set_union` fold on the host, then H2D.
+ *
+ * TODO: Change this to a resizable buffer if/when https://github.com/NVIDIA/cccl/issues/12051
+ * is implemented
  */
 [[nodiscard]] std::pair<cuda::device_buffer<size_type>, std::size_t>
 compute_segment_row_offsets_host(std::span<page_statistics_input const> inputs,
@@ -393,6 +396,9 @@ compute_segment_row_offsets_host(std::span<page_statistics_input const> inputs,
 
 /**
  * @brief Compute segment row offsets by sort+unique on page row offsets.
+ *
+ * TODO: Change this to a resizable buffer if/when https://github.com/NVIDIA/cccl/issues/12051
+ * is implemented
  */
 [[nodiscard]] std::pair<cuda::device_buffer<size_type>, std::size_t>
 compute_segment_row_offsets_device(cudf::device_span<size_type const> all_page_row_offsets,
