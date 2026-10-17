@@ -10,6 +10,7 @@
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/row_operator/hashing.cuh>
+#include <cudf/detail/utilities/buffer_factories.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
@@ -18,8 +19,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
-
-#include <rmm/device_uvector.hpp>
 
 #include <cuco/static_set.cuh>
 #include <cuda/buffer>
@@ -152,7 +151,7 @@ struct n_table_comparator {
  * target_indices via slot_offsets in a single transform.
  */
 template <typename SetRef>
-struct insert_and_check_fn {
+struct insert_fn {
   mutable SetRef set_ref;
   bitmask_type const* row_bitmask;
   size_type max_distinct_keys;
@@ -160,17 +159,26 @@ struct insert_and_check_fn {
   size_type* target_indices;
   size_type* slot_offsets;
 
-  __device__ bool operator()(size_type row_idx) const
+  __device__ void operator()(size_type row_idx) const
   {
     if (row_bitmask && !cudf::bit_is_set(row_bitmask, row_idx)) {
       target_indices[row_idx] = cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
       slot_offsets[row_idx]   = cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
-      return false;
+      return;
     }
-    auto const [iter, inserted] = set_ref.insert_and_find(max_distinct_keys + row_idx);
-    target_indices[row_idx]     = *iter;
-    slot_offsets[row_idx]       = static_cast<size_type>(iter - base);
-    return inserted;
+    auto iter               = set_ref.insert_and_find(max_distinct_keys + row_idx).first;
+    target_indices[row_idx] = *iter;
+    slot_offsets[row_idx]   = static_cast<size_type>(iter - base);
+  }
+};
+
+struct is_new_key_fn {
+  size_type const* target_indices;
+  size_type max_distinct_keys;
+
+  __device__ bool operator()(size_type row_idx) const noexcept
+  {
+    return target_indices[row_idx] == max_distinct_keys + row_idx;
   }
 };
 
@@ -269,7 +277,7 @@ auto build_cross_comparators(
     h_eqs.push_back(adapter.comparator);
   }
 
-  return cudf::detail::make_device_uvector(h_eqs, stream, temp_mr);
+  return cudf::detail::make_device_buffer(h_eqs, stream, temp_mr);
 }
 
 /// The impl struct for streaming_groupby. Defined in impl.cu.
@@ -315,7 +323,7 @@ struct streaming_groupby::impl {
 
   /// Companion vector indexed by dense ID, sized to max_distinct_keys.
   /// Each entry is {batch_id, row_in_compacted_batch}.
-  std::unique_ptr<rmm::device_uvector<key_location_t>> _key_loc;
+  std::unique_ptr<cuda::device_buffer<key_location_t>> _key_loc;
 
   std::vector<size_type> _request_first_agg_offset;
   std::vector<aggregation::Kind> _agg_kinds;
@@ -336,7 +344,7 @@ struct streaming_groupby::impl {
    */
   std::unique_ptr<mutable_table_device_view, void (*)(mutable_table_device_view*)> _d_agg_results;
   std::vector<size_type> _value_col_indices;
-  std::unique_ptr<rmm::device_uvector<aggregation::Kind>> _d_agg_kinds;
+  std::unique_ptr<cuda::device_buffer<aggregation::Kind>> _d_agg_kinds;
 
   std::unique_ptr<streaming_set_t> _key_set;
 
@@ -359,9 +367,9 @@ struct streaming_groupby::impl {
   void update_nullable_state(table_view const& batch_keys);
 
   struct batch_insert_result {
-    rmm::device_uvector<size_type> target_indices;
+    cuda::device_buffer<size_type> target_indices;
     size_type new_insertions;
-    cuda::device_buffer<std::byte> bitmask_buffer;
+    cuda::device_buffer<cudf::bitmask_type> bitmask_buffer;
   };
 
   batch_insert_result probe_and_insert(table_view const& batch_keys, cuda::stream_ref stream);
@@ -413,8 +421,15 @@ struct streaming_groupby::impl {
   [[nodiscard]] std::unique_ptr<table> gather_distinct_keys(
     cuda::stream_ref stream, rmm::device_async_resource_ref mr) const;
 
+  [[nodiscard]] std::pair<std::unique_ptr<table>, std::vector<aggregation_result>>
+  finalize_gathered(std::unique_ptr<table> keys,
+                    std::unique_ptr<table> agg_gathered,
+                    cuda::stream_ref stream,
+                    cudf::memory_resources mr) const;
   [[nodiscard]] std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> do_finalize(
     cuda::stream_ref stream, rmm::device_async_resource_ref mr) const;
+  [[nodiscard]] std::pair<std::unique_ptr<table>, std::vector<aggregation_result>>
+  do_finalize_and_release(cuda::stream_ref stream, cudf::memory_resources mr);
 
   void do_merge(impl const& other, cuda::stream_ref stream);
 };

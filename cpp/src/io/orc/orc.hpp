@@ -10,15 +10,19 @@
 #include <cudf/io/orc_metadata.hpp>
 #include <cudf/io/orc_types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/wrappers/durations.hpp>
 
+#include <cuda/std/concepts>
 #include <cuda/std/optional>
 
 #include <algorithm>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -55,6 +59,20 @@ static constexpr uint32_t cudf_writer_version = 7;
 // the maximum nanosecond remainder is 999,999 (nanoseconds in a millisecond - 1).
 static constexpr int32_t DEFAULT_MIN_NANOS = 0;
 static constexpr int32_t DEFAULT_MAX_NANOS = 999'999;
+
+/**
+ * @brief Returns the ORC epoch as it occurs in a timezone.
+ *
+ * The offset is looked up at the ORC epoch as a UTC instant; the Apache writer resolves it as a
+ * local time, which differs only for a timezone with a transition inside that offset-wide window.
+ *
+ * @param timezone Timezone name
+ *
+ * @throw cudf::logic_error if `timezone` does not resolve to a valid TZif file
+ *
+ * @return Instant that encoded timestamps are stored relative to
+ */
+[[nodiscard]] duration_s base_epoch_in_timezone(std::string_view timezone);
 
 struct PostScript {
   uint64_t footerLength       = 0;        // the length of the footer section in bytes
@@ -173,16 +191,14 @@ int static constexpr encode_field_number_base(int field_number) noexcept
   return encode_field_number(field_number, ProtofType::VARINT);
 }
 
-template <typename base_t>
+template <std::same_as<float> base_t>
 int static constexpr encode_field_number_base(int field_number) noexcept
-  requires(std::is_same_v<base_t, float>)
 {
   return encode_field_number(field_number, ProtofType::FIXED32);
 }
 
-template <typename base_t>
+template <std::same_as<double> base_t>
 int static constexpr encode_field_number_base(int field_number) noexcept
-  requires(std::is_same_v<base_t, double>)
 {
   return encode_field_number(field_number, ProtofType::FIXED64);
 }
@@ -262,9 +278,8 @@ class protobuf_reader {
 
   uint32_t read_field_size(uint8_t const* end);
 
-  template <typename T>
+  template <cuda::std::integral T>
   void read_field(T& value, uint8_t const* end)
-    requires(std::is_integral_v<T>)
   {
     value = get<T>();
   }
@@ -276,18 +291,16 @@ class protobuf_reader {
     value = static_cast<T>(get<uint32_t>());
   }
 
-  template <typename T>
+  template <std::same_as<std::string> T>
   void read_field(T& value, uint8_t const* end)
-    requires(std::is_same_v<T, std::string>)
   {
     auto const size = read_field_size(end);
     value.assign(reinterpret_cast<char const*>(m_cur), size);
     m_cur += size;
   }
 
-  template <typename T>
+  template <std::same_as<std::vector<std::string>> T>
   void read_field(T& value, uint8_t const* end)
-    requires(std::is_same_v<T, std::vector<std::string>>)
   {
     auto const size = read_field_size(end);
     value.emplace_back(reinterpret_cast<char const*>(m_cur), size);
@@ -314,15 +327,15 @@ class protobuf_reader {
   }
 
   template <typename T>
-  auto read_field(T& value, uint8_t const* end) -> decltype(read(value, 0))
+  void read_field(T& value, uint8_t const* end)
+    requires requires { read(value, size_t{}); }
   {
     auto const size = read_field_size(end);
     read(value, size);
   }
 
-  template <typename T>
+  template <std::floating_point T>
   void read_field(T& value, uint8_t const* end)
-    requires(std::is_floating_point_v<T>)
   {
     CUDF_EXPECTS(std::cmp_less_equal(sizeof(T), end - m_cur), "Protobuf parsing out of bounds");
     memcpy(&value, m_cur, sizeof(T));

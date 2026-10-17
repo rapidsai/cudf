@@ -237,7 +237,7 @@ namespace {
 // below forward to it.
 template <typename ReaderType, typename InputType>
 auto filter_row_groups_with_dictionaries_impl(InputType& inputs,
-                                              ReaderType const& reader,
+                                              ReaderType& reader,
                                               cudf::io::parquet_reader_options const& options,
                                               cuda::stream_ref stream,
                                               rmm::device_async_resource_ref mr)
@@ -248,7 +248,11 @@ auto filter_row_groups_with_dictionaries_impl(InputType& inputs,
   if constexpr (std::is_same_v<ReaderType,
                                cudf::io::parquet::experimental::hybrid_scan_multifile>) {
     auto const dict_pages = reader.dictionary_pages_byte_ranges(row_group_indices, options);
-    CUDF_EXPECTS(dict_pages.first.size() > 0, "No dictionary page byte ranges found");
+
+    // Return early if dictionary pages cannot prune any row groups with this filter
+    if (dict_pages.first.empty()) {
+      return reader.filter_row_groups_with_dictionary_pages({}, row_group_indices, options, stream);
+    }
 
     auto const dict_page_ranges_per_source =
       group_byte_ranges_by_source(dict_pages, inputs.datasources.size());
@@ -272,7 +276,11 @@ auto filter_row_groups_with_dictionaries_impl(InputType& inputs,
   } else {
     auto const dict_page_byte_ranges =
       reader.dictionary_pages_byte_ranges(row_group_indices, options);
-    CUDF_EXPECTS(dict_page_byte_ranges.size() > 0, "No dictionary page byte ranges found");
+
+    // Return early if dictionary pages cannot prune any row groups with this filter
+    if (dict_page_byte_ranges.empty()) {
+      return reader.filter_row_groups_with_dictionary_pages({}, row_group_indices, options, stream);
+    }
 
     [[maybe_unused]] auto [dict_page_buffers, dict_page_data, dict_page_tasks] =
       cudf::io::parquet::fetch_byte_ranges_to_device_async(
@@ -292,7 +300,7 @@ auto filter_row_groups_with_dictionaries_impl(InputType& inputs,
 
 std::vector<cudf::size_type> filter_row_groups_with_dictionaries(
   cudf::io::datasource& datasource,
-  cudf::io::parquet::experimental::hybrid_scan_reader const& reader,
+  cudf::io::parquet::experimental::hybrid_scan_reader& reader,
   cudf::io::parquet_reader_options const& options,
   cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
@@ -302,7 +310,7 @@ std::vector<cudf::size_type> filter_row_groups_with_dictionaries(
 
 std::vector<std::vector<cudf::size_type>> filter_row_groups_with_dictionaries(
   multifile_inputs const& inputs,
-  cudf::io::parquet::experimental::hybrid_scan_multifile const& reader,
+  cudf::io::parquet::experimental::hybrid_scan_multifile& reader,
   cudf::io::parquet_reader_options const& options,
   cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
@@ -355,12 +363,13 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<char>> create_parquet_with_s
 
     auto const make_null_mask = [stream](auto begin, auto end) {
       auto [null_mask, null_count] = cudf::test::detail::make_null_mask_vector(begin, end);
-      auto const* data             = reinterpret_cast<uint8_t const*>(null_mask.data());
-      auto d_mask                  = cuda::device_buffer<std::byte>{
+      auto const* data             = null_mask.data();
+      auto d_mask                  = cuda::device_buffer<cudf::bitmask_type>{
         stream,
         cudf::get_current_device_resource_ref(),
         data,
-        data + cudf::bitmask_allocation_size_bytes(cudf::distance(begin, end))};
+        data + cudf::bitmask_allocation_size_bytes(cudf::distance(begin, end)) /
+                 sizeof(cudf::bitmask_type)};
       stream.sync();
       return std::pair{std::move(d_mask), null_count};
     };

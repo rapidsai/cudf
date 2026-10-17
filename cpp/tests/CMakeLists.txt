@@ -265,7 +265,10 @@ ConfigureTest(FIXED_POINT_TEST fixed_point/fixed_point_tests.cpp fixed_point/fix
 
 # ##################################################################################################
 # * unary tests -----------------------------------------------------------------------------------
-ConfigureTest(UNARY_TEST unary/math_ops_test.cpp unary/unary_ops_test.cpp unary/cast_tests.cpp)
+ConfigureTest(
+  UNARY_TEST unary/math_ops_test.cpp unary/unary_ops_test.cpp unary/cast_tests.cpp
+  unary/operator_parity_test.cpp
+)
 
 # ##################################################################################################
 # * round tests -----------------------------------------------------------------------------------
@@ -280,6 +283,7 @@ ConfigureTest(
   binaryop/binop-compiled-test.cpp
   binaryop/binop-compiled-fixed_point-test.cpp
   binaryop/binop-generic-ptx-test.cpp
+  binaryop/operator_parity_test.cpp
 )
 
 # ##################################################################################################
@@ -400,8 +404,14 @@ ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cpp)
 # ##################################################################################################
 # * sort tests ------------------------------------------------------------------------------------
 ConfigureTest(
-  SORT_TEST sort/rank_test.cpp sort/segmented_sort_tests.cpp sort/sort_nested_types_tests.cpp
-  sort/sort_test.cpp sort/stable_sort_tests.cpp sort/top_k_tests.cpp
+  SORT_TEST
+  sort/rank_test.cpp
+  sort/segmented_sort_tests.cpp
+  sort/sort_nested_types_tests.cpp
+  sort/sort_test.cpp
+  sort/stable_sort_tests.cpp
+  sort/string_sort_prefix_test.cpp
+  sort/top_k_tests.cpp
   GPUS 1
   PERCENT 70
 )
@@ -443,11 +453,13 @@ ConfigureTest(
   UTILITIES_TEST
   utilities_tests/batched_memcpy_tests.cu
   utilities_tests/batched_memset_tests.cu
+  utilities_tests/buffer_factories_tests.cpp
   utilities_tests/column_debug_tests.cpp
   utilities_tests/column_utilities_tests.cpp
   utilities_tests/column_wrapper_tests.cpp
   utilities_tests/context_tests.cpp
   utilities_tests/default_stream_tests.cpp
+  utilities_tests/integer_utils_tests.cpp
   utilities_tests/io_utilities_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
   utilities_tests/memory_resource_tests.cpp
@@ -626,6 +638,7 @@ ConfigureTest(
   large_strings/case_tests.cpp
   large_strings/json_tests.cpp
   large_strings/large_strings_fixture.cpp
+  large_strings/bpe_tests.cpp
   large_strings/merge_tests.cpp
   large_strings/parquet_tests.cpp
   large_strings/replace_tests.cpp
@@ -649,6 +662,7 @@ ConfigureTest(STRUCTS_TEST structs/structs_column_tests.cpp structs/utilities_te
 ConfigureTest(
   TEXT_TEST
   text/deduplicate_tests.cpp
+  text/bpe_tests.cpp
   text/edit_distance_tests.cpp
   text/jaccard_tests.cpp
   text/minhash_tests.cpp
@@ -840,6 +854,7 @@ ConfigureTest(
 ConfigureTest(STREAM_TABLE_EQUALITY_TEST streams/table_equality_test.cpp STREAM_MODE testing)
 ConfigureTest(
   STREAM_TEXT_TEST
+  streams/text/bpe_test.cpp
   streams/text/edit_distance_test.cpp
   streams/text/ngrams_test.cpp
   streams/text/replace_test.cpp

@@ -12,6 +12,7 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/io_metadata_utilities.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/memory_resource_utilities.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
@@ -28,8 +29,13 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/error.hpp>
+#include <rmm/mr/callback_memory_resource.hpp>
+#include <rmm/mr/cuda_memory_resource.hpp>
+
 #include <cuda/iterator>
 
+#include <algorithm>
 #include <array>
 #include <numeric>
 #include <type_traits>
@@ -663,6 +669,7 @@ namespace {
 constexpr int64_t shanghai_offset     = cudf::duration_s{cudf::duration_h{8}}.count();
 constexpr int64_t new_york_offset     = cudf::duration_s{cudf::duration_h{-5}}.count();
 constexpr int64_t new_york_dst_offset = cudf::duration_s{cudf::duration_h{-4}}.count();
+constexpr int64_t phoenix_offset      = cudf::duration_s{cudf::duration_h{-7}}.count();
 constexpr int64_t kolkata_offset      = cudf::duration_s{cudf::duration_m{5 * 60 + 30}}.count();
 constexpr int64_t kathmandu_offset    = cudf::duration_s{cudf::duration_m{5 * 60 + 45}}.count();
 
@@ -726,6 +733,43 @@ TEST_F(OrcWriterTest, WriterTimezoneNonUtc)
   CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expected}), read_orc_buffer(buffer).tbl->view());
   CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expected}),
                                 read_orc_buffer(buffer, /*ignore_timezone=*/true).tbl->view());
+}
+
+TEST_F(OrcWriterTest, WriterTimezoneNearEpochBorrow)
+{
+  // Values straddling the window where UTC and the writer's local time disagree on the sign, and
+  // so on the borrow: `[-offset, 0)` for a positive offset, `[0, -offset)` for a negative one. All
+  // have a fractional part, since a whole second never borrows.
+  auto const near_epoch_ms = [](int64_t offset_s) {
+    auto const lo = std::min<cudf::timestamp_ms::rep>(-offset_s * 1000, 0);
+    auto const hi = std::max<cudf::timestamp_ms::rep>(-offset_s * 1000, 0);
+    return std::vector<cudf::timestamp_ms::rep>{
+      lo - 1'117, lo + 1, (lo + hi) / 2 + 117, hi - 1'117, hi + 1'117};
+  };
+
+  auto const agrees_whether_timezone_ignored = [&](std::string const& timezone, int64_t offset_s) {
+    auto const inputs = near_epoch_ms(offset_s);
+    auto const timestamps =
+      column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>(inputs.begin(), inputs.end());
+    auto const buffer = write_orc_with_timezone(table_view({timestamps}), timezone);
+
+    auto shifted = inputs;
+    std::transform(shifted.begin(), shifted.end(), shifted.begin(), [offset_s](auto v) {
+      return v + offset_s * 1000;
+    });
+    auto const expected =
+      column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>(shifted.begin(), shifted.end());
+
+    auto const ms = cudf::data_type{cudf::type_id::TIMESTAMP_MILLISECONDS};
+    CUDF_TEST_EXPECT_TABLES_EQUAL(
+      table_view({expected}), read_orc_buffer(buffer, /*ignore_timezone=*/false, ms).tbl->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(
+      table_view({expected}), read_orc_buffer(buffer, /*ignore_timezone=*/true, ms).tbl->view());
+  };
+
+  // Cover timezone offsets of both signs.
+  agrees_whether_timezone_ignored("Asia/Shanghai", shanghai_offset);
+  agrees_whether_timezone_ignored("America/Phoenix", phoenix_offset);
 }
 
 TEST_F(OrcWriterTest, WriterTimezoneFractionalOffset)
@@ -1146,6 +1190,12 @@ TEST_F(OrcChunkedWriterTest, MismatchedTypes)
   cudf::io::orc_chunked_writer writer(opts);
   writer.write(*table1);
   EXPECT_THROW(writer.write(*table2), cudf::logic_error);
+  writer.close();
+
+  // The mismatched write is rejected without affecting earlier writes
+  auto const result =
+    cudf::io::read_orc(cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *table1);
 }
 
 TEST_F(OrcChunkedWriterTest, ChunkedWritingAfterClosing)
@@ -1174,6 +1224,12 @@ TEST_F(OrcChunkedWriterTest, MismatchedStructure)
   cudf::io::orc_chunked_writer writer(opts);
   writer.write(*table1);
   EXPECT_THROW(writer.write(*table2), cudf::logic_error);
+  writer.close();
+
+  // The mismatched write is rejected without affecting earlier writes
+  auto const result =
+    cudf::io::read_orc(cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *table1);
 }
 
 TEST_F(OrcChunkedWriterTest, ReadStripes)
@@ -1655,6 +1711,23 @@ TEST_F(OrcStatisticsTest, Overflow)
   check_sum_exist(2, false);
   check_sum_exist(3, true);
   check_sum_exist(4, true);
+}
+
+TEST_F(OrcStatisticsTest, Decimal128Sum)
+{
+  // Valid sum that exceeds max() / non_nulls; must still be written
+  std::vector<__int128_t> const vals{__int128_t{1} << 126, 1};
+  dec128_col col{vals.begin(), vals.end(), numeric::scale_type{0}};
+  table_view tbl({col});
+
+  auto const filepath = temp_env->get_temp_filepath("OrcStatsDecimal128Sum.orc");
+  cudf::io::write_orc(
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, tbl).build());
+
+  auto const stats = cudf::io::read_parsed_orc_statistics(cudf::io::source_info{filepath});
+  auto const& ts = std::get<cudf::io::decimal_statistics>(stats.file_stats[1].type_specific_stats);
+  ASSERT_TRUE(ts.sum.has_value());
+  EXPECT_EQ(*ts.sum, "85070591730234615865843651857942052865");
 }
 
 TEST_F(OrcStatisticsTest, HasNull)
@@ -2689,13 +2762,72 @@ TEST_F(OrcChunkedWriterTest, FailedWriteCloseNotThrow)
     cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{&sink});
   auto writer = cudf::io::orc_chunked_writer(write_opts);
 
-  try {
-    writer.write(table);
-  } catch (...) {
-    // ignore the exception; we're testing that close() doesn't throw when the only write() fails
+  EXPECT_THROW(writer.write(table), std::runtime_error);
+  EXPECT_THROW(writer.write(table), cudf::logic_error);
+  EXPECT_NO_THROW(writer.close());
+}
+
+TEST_F(OrcChunkedWriterTest, OutOfMemoryRetry)
+{
+  int32_col ints{1, 2, 3};
+  str_col strings{"a", "bb", "ccc"};  // persisting string statistics allocates
+  table_view input{{ints, strings}};
+
+  std::vector<char> out_buffer;
+  std::size_t output_start = 0;
+  bool fail_allocation     = false;
+  // Not the current resource, which is replaced below
+  rmm::mr::cuda_memory_resource upstream;
+  rmm::mr::callback_memory_resource mr{
+    [&](cuda::stream_ref stream, std::size_t bytes, std::size_t alignment, void*) -> void* {
+      // An allocation after output starts could fail when the write can no longer be retried
+      EXPECT_EQ(out_buffer.size(), output_start);
+      if (fail_allocation) { throw rmm::bad_alloc{"Injected ORC OOM"}; }
+      return upstream.allocate(stream, bytes, alignment);
+    },
+    [&](cuda::stream_ref stream, void* ptr, std::size_t bytes, std::size_t alignment, void*) {
+      upstream.deallocate(stream, ptr, bytes, alignment);
+    }};
+  {
+    cudf::test::scoped_current_device_resource resource_scope{mr};
+    cudf::io::orc_chunked_writer writer{
+      cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{&out_buffer})
+        .enable_statistics(cudf::io::statistics_freq::STATISTICS_ROWGROUP)};
+    writer.write(input);
+    output_start = out_buffer.size();
+
+    fail_allocation = true;
+    EXPECT_THROW(writer.write(input), rmm::bad_alloc);
+    EXPECT_THROW(writer.close(), rmm::bad_alloc);
+    fail_allocation = false;
+    EXPECT_EQ(out_buffer.size(), output_start);
+
+    writer.write(input);
+    output_start = out_buffer.size();
+    writer.close();
   }
 
-  EXPECT_NO_THROW(writer.close());
+  auto const source =
+    cudf::io::source_info{cudf::host_span<char const>{out_buffer.data(), out_buffer.size()}};
+  auto const result   = cudf::io::read_orc(cudf::io::orc_reader_options::builder(source));
+  auto const expected = cudf::concatenate(std::vector<table_view>{input, input});
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), result.tbl->view());
+
+  // The failed write and close must not leave their chunk in the statistics
+  auto const stats = cudf::io::read_parsed_orc_statistics(source);
+  EXPECT_EQ(stats.stripes_stats.size(), 2ul);
+  ASSERT_EQ(stats.file_stats.size(), 3ul);
+  EXPECT_EQ(*stats.file_stats[0].number_of_values, 6ul);
+
+  auto const& int_stats =
+    std::get<cudf::io::integer_statistics>(stats.file_stats[1].type_specific_stats);
+  EXPECT_EQ(*int_stats.sum, 12);
+
+  auto const& str_stats =
+    std::get<cudf::io::string_statistics>(stats.file_stats[2].type_specific_stats);
+  EXPECT_EQ(*str_stats.minimum, "a");
+  EXPECT_EQ(*str_stats.maximum, "ccc");
+  EXPECT_EQ(*str_stats.sum, 12);
 }
 
 TEST_F(OrcChunkedWriterTest, NoDataInSinkWhenNoWrite)
