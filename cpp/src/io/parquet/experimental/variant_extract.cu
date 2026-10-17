@@ -25,6 +25,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/concepts.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -36,6 +37,7 @@
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/numeric>
+#include <cuda/std/concepts>
 #include <cuda/std/cstring>
 #include <cuda/std/limits>
 #include <cuda/std/optional>
@@ -519,31 +521,28 @@ __device__ bool is_variant_null(device_span<uint8_t const> enc)
 // The fixed-width signed integers a VARIANT value can be cast to: INT{8,16,32,64}.  Matches the
 // exact width types (not e.g. __int128) since those are the only variant primitive int headers.
 template <typename T>
-constexpr bool is_variant_int =
-  cudf::is_integral_not_bool<T>() && cudf::is_signed<T>() && !cuda::std::is_same_v<T, __int128_t>;
+concept variant_int = cuda::std::signed_integral<T> && !cuda::std::same_as<T, __int128_t>;
 
 // The microsecond/nanosecond timestamps a VARIANT value can be decoded into.
 template <typename T>
-constexpr bool is_variant_timestamp =
-  cuda::std::is_same_v<T, cudf::timestamp_us> || cuda::std::is_same_v<T, cudf::timestamp_ns>;
+concept variant_timestamp =
+  cuda::std::same_as<T, cudf::timestamp_us> || cuda::std::same_as<T, cudf::timestamp_ns>;
 
 // The fixed-width primitive types (signed integers, floats, timestamps) a VARIANT value can be
 // decoded into.
 template <typename T>
-constexpr bool is_variant_fixed_width =
-  is_variant_int<T> || cudf::is_floating_point<T>() || is_variant_timestamp<T>;
+concept variant_fixed_width =
+  variant_int<T> || cuda::std::floating_point<T> || variant_timestamp<T>;
 
 // The output types a VARIANT value can be cast to: the fixed-width signed integers, floats,
 // timestamps, decimals, bool, and strings.
 template <typename T>
-constexpr bool is_variant_castable =
-  is_variant_fixed_width<T> || cudf::is_fixed_point<T>() || cuda::std::is_same_v<T, bool> ||
-  cuda::std::is_same_v<T, cudf::string_view>;
+concept variant_castable = variant_fixed_width<T> || cudf::concepts::fixed_point<T> ||
+                           cudf::concepts::boolean<T> || cudf::concepts::string_view<T>;
 
 // Whether a VARIANT primitive type header encodes `T`.
-template <typename T>
+template <variant_fixed_width T>
 __device__ constexpr bool matches_primitive_type(primitive_type ptype)
-  requires(is_variant_fixed_width<T>)
 {
   if constexpr (cuda::std::is_same_v<T, int8_t>) {
     return ptype == primitive_type::INT8;
@@ -801,9 +800,8 @@ __device__ bool is_recognized_primitive_type(primitive_type ptype)
  * @brief Status helper for fixed-width primitive targets: classifies why `decode_primitive<T>`
  * failed to decode `val`, per `variant_operation_status` semantics.
  */
-template <typename T>
+template <variant_fixed_width T>
 __device__ op_status cast_status_for_primitive(device_span<uint8_t const> val)
-  requires(is_variant_fixed_width<T>)
 {
   if (val.empty()) { return op_status::MALFORMED_VARIANT; }
   if (is_variant_null(val)) { return op_status::VARIANT_NULL; }
@@ -1154,9 +1152,8 @@ struct cast_variant_fn {
   // In-out status tracking; null when no status was requested.
   op_status* d_status{nullptr};
 
-  template <typename T>
+  template <variant_fixed_width T>
   std::unique_ptr<column> operator()()
-    requires(is_variant_fixed_width<T>)
   {
     rmm::device_buffer data{num_rows * sizeof(T), stream, mr};
     auto const grid = cudf::detail::grid_1d{num_rows, block_size};
@@ -1177,9 +1174,8 @@ struct cast_variant_fn {
                                     null_count);
   }
 
-  template <typename T>
+  template <cudf::concepts::fixed_point T>
   std::unique_ptr<column> operator()()
-    requires(cudf::is_fixed_point<T>())
   {
     using Rep = typename T::rep;
     rmm::device_buffer data{num_rows * sizeof(Rep), stream, mr};
@@ -1201,9 +1197,8 @@ struct cast_variant_fn {
                                     null_count);
   }
 
-  template <typename T>
+  template <cudf::concepts::boolean T>
   std::unique_ptr<column> operator()()
-    requires(cuda::std::is_same_v<T, bool>)
   {
     rmm::device_buffer data{num_rows * sizeof(bool), stream, mr};
 
@@ -1244,9 +1239,8 @@ struct cast_variant_fn {
                                     null_count);
   }
 
-  template <typename T>
+  template <cudf::concepts::string_view T>
   std::unique_ptr<column> operator()()
-    requires(cuda::std::is_same_v<T, cudf::string_view>)
   {
     cast_variant_string_fn fn{values, d_null_mask, nullptr, nullptr, {}, d_status};
     auto [offsets_column, chars] =
@@ -1265,7 +1259,7 @@ struct cast_variant_fn {
 
   template <typename T>
   std::unique_ptr<column> operator()()
-    requires(not is_variant_castable<T>)
+    requires(not variant_castable<T>)
   {
     CUDF_FAIL("unsupported type for variant cast", std::invalid_argument);
   }
