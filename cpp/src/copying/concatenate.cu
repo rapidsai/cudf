@@ -6,6 +6,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/concatenate.hpp>
+#include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/concatenate_masks.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/device_scalar.hpp>
@@ -16,16 +17,23 @@
 #include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/concatenate.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/io/parquet.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/detail/concatenate.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/structs/detail/concatenate.hpp>
+#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -34,13 +42,19 @@
 #include <cuda/std/iterator>
 #include <cuda/stream>
 #include <thrust/binary_search.h>
+#include <thrust/copy.h>
+#include <thrust/equal.h>
 #include <thrust/execution_policy.h>
 #include <thrust/transform_scan.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <limits>
 #include <numeric>
+#include <random>
+#include <sstream>
 #include <stdexcept>
+#include <string>
 #include <utility>
 
 namespace cudf {
@@ -531,6 +545,7 @@ std::unique_ptr<column> concatenate(std::span<column_view const> columns_to_conc
                                     cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED),
                                     length);
   }
+
   return type_dispatcher<dispatch_storage_type>(
     columns_to_concat.front().type(), concatenate_dispatch{views_as_host_span, stream, mr});
 }
@@ -618,7 +633,8 @@ std::unique_ptr<column> concatenate(std::span<column_view const> columns_to_conc
                                     rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(columns_to_concat, stream, mr);
+  return batch_concatenate(
+    host_span<column_view const>{columns_to_concat.data(), columns_to_concat.size()}, stream, mr);
 }
 
 std::unique_ptr<table> concatenate(std::span<table_view const> tables_to_concat,
@@ -626,7 +642,8 @@ std::unique_ptr<table> concatenate(std::span<table_view const> tables_to_concat,
                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(tables_to_concat, stream, mr);
+  return batch_concatenate(
+    host_span<table_view const>{tables_to_concat.data(), tables_to_concat.size()}, stream, mr);
 }
 
 }  // namespace cudf
