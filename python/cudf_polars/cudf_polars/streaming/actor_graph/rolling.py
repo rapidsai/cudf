@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
@@ -17,6 +17,7 @@ from rapidsmpf.streaming.core.actor import define_actor
 
 from cudf_polars.dsl.ir import IR, Rolling
 from cudf_polars.streaming.actor_graph.collectives.overlap import (
+    BufferedChunk,
     OverlapInput,
     RangeOverlapPolicy,
     RowCountOverlapPolicy,
@@ -47,7 +48,6 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.streaming.actor_graph.collectives.overlap import (
-        BufferedChunk,
         OverlapPolicy,
         StagedChunk,
     )
@@ -56,26 +56,15 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class RollingManager:
+class RollingManager[BufferedChunkT: BufferedChunk]:
     """Rolling policy and rank-agnostic local executor."""
 
     context: Context
     ir: Rolling | FixedSizeRolling
     ir_context: IRExecutionContext
-    policy: OverlapPolicy = field(init=False)
+    policy: OverlapPolicy[BufferedChunkT]
 
-    def __post_init__(self) -> None:
-        """Choose the policy for this rolling node."""
-        if isinstance(self.ir, Rolling):
-            self.policy = RangeOverlapPolicy.from_ir(
-                self.ir, self.ir_context.get_cuda_stream()
-            )
-        else:
-            self.policy = RowCountOverlapPolicy(
-                self.ir.preceding_overlap, self.ir.following_overlap
-            )
-
-    def __enter__(self) -> RollingManager:
+    def __enter__(self) -> RollingManager[BufferedChunkT]:
         """Enter the rolling manager context."""
         return self
 
@@ -84,7 +73,10 @@ class RollingManager:
         self.policy.close()
 
     @staticmethod
-    def _latest_nonempty_chunk(current: Any, future: deque[StagedChunk]) -> Any:
+    def _latest_nonempty_chunk(
+        current: BufferedChunkT,
+        future: deque[StagedChunk[BufferedChunkT]],
+    ) -> BufferedChunkT:
         for staged in reversed(future):
             if staged.chunk.num_rows != 0:
                 return staged.chunk
@@ -92,9 +84,9 @@ class RollingManager:
 
     async def _fill_future(
         self,
-        chunks: AsyncIterator[StagedChunk],
-        current: Any,
-        future: deque[StagedChunk],
+        chunks: AsyncIterator[StagedChunk[BufferedChunkT]],
+        current: BufferedChunkT,
+        future: deque[StagedChunk[BufferedChunkT]],
     ) -> bool:
         """Read chunks until current has enough leading context."""
         while not self.policy.has_complete_future(
@@ -109,8 +101,8 @@ class RollingManager:
 
     async def _evaluate_cursor(
         self,
-        cursor: BufferedChunk,
-        chunks: Sequence[BufferedChunk],
+        cursor: BufferedChunkT,
+        chunks: Sequence[BufferedChunkT],
     ) -> TableChunk:
         start, stop = await self.policy.overlap_bounds(self.context, cursor, chunks)
         if (start, stop) == (cursor.row_start, cursor.row_stop):
@@ -191,11 +183,11 @@ class RollingManager:
         self,
         ch_out: Channel[TableChunk],
         tracer: ActorTracer | None,
-        rolling_input: OverlapInput,
+        rolling_input: OverlapInput[BufferedChunkT],
     ) -> None:
         """Evaluate this rolling node over its prepared input stream."""
-        history: list[Any] = []
-        future: deque[StagedChunk] = deque()
+        history: list[BufferedChunkT] = []
+        future: deque[StagedChunk[BufferedChunkT]] = deque()
         input_exhausted = False
         output_sequence_number = 0
         chunks = aiter(rolling_input)
@@ -272,32 +264,45 @@ async def rolling_actor(
         tracer = actor_scope.tracer
         ir_context = actor_scope.require_ir_context()
         metadata_in = await recv_metadata(ch_in, context)
-        with RollingManager(context, ir, ir_context) as manager:
-            await send_metadata(
-                ch_out,
-                context,
-                ChannelMetadata(
-                    local_count=metadata_in.local_count,
-                    partitioning=maybe_remap_partitioning(
-                        ir,
-                        metadata_in.partitioning,
-                        child_ir=ir.children[0],
-                        context=context,
-                    ),
-                    duplicated=metadata_in.duplicated,
+        await send_metadata(
+            ch_out,
+            context,
+            ChannelMetadata(
+                local_count=metadata_in.local_count,
+                partitioning=maybe_remap_partitioning(
+                    ir,
+                    metadata_in.partitioning,
+                    child_ir=ir.children[0],
+                    context=context,
                 ),
-            )
-            if tracer is not None and metadata_in.duplicated:
-                tracer.set_duplicated()
-            async with OverlapInput(
-                context,
-                comm,
-                ch_in,
-                manager.policy,
                 duplicated=metadata_in.duplicated,
-                collective_id=collective_id,
-            ) as rolling_input:
-                await manager.execute(ch_out, tracer, rolling_input)
+            ),
+        )
+        if tracer is not None and metadata_in.duplicated:
+            tracer.set_duplicated()
+
+        async def _execute_policy[BufferedChunkT: BufferedChunk](
+            policy: OverlapPolicy[BufferedChunkT],
+        ) -> None:
+            with RollingManager(context, ir, ir_context, policy) as manager:
+                async with OverlapInput(
+                    context,
+                    comm,
+                    ch_in,
+                    policy,
+                    duplicated=metadata_in.duplicated,
+                    collective_id=collective_id,
+                ) as rolling_input:
+                    await manager.execute(ch_out, tracer, rolling_input)
+
+        if isinstance(ir, Rolling):
+            await _execute_policy(
+                RangeOverlapPolicy.from_ir(ir, ir_context.get_cuda_stream())
+            )
+        else:
+            await _execute_policy(
+                RowCountOverlapPolicy(ir.preceding_overlap, ir.following_overlap)
+            )
 
 
 def generate_rolling_sub_network(
