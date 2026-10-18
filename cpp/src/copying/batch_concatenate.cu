@@ -464,6 +464,17 @@ bool is_empty_position(host_span<ColRef const> roots, ColRef const& first)
          });
 }
 
+void bounds_check_ptrs(host_span<column_view const* const> ptrs, cuda::stream_ref stream)
+{
+  std::vector<column_view> materialized;
+  materialized.reserve(ptrs.size());
+  for (auto const* p : ptrs) {
+    materialized.push_back(*p);
+  }
+  batch_bounds_and_type_check(
+    host_span<column_view const>{materialized.data(), materialized.size()}, stream);
+}
+
 /**
  * @brief Pinned bytes to reserve so every metadata upload of one call can be staged.
  *
@@ -2063,14 +2074,1137 @@ void resolve_deferred_null_counts_and_superimpose(deferred_null_counts& deferred
 /**
  * @brief Resolves every deferred sliced null count into its level's totals before slab sizing.
  */
-void resolve_deferred_null_counts(deferred_null_counts& deferred, cuda::stream_ref stream)
-{
-  resolve_deferred_null_counts_and_superimpose(
-    deferred, host_span<superimpose_check const>{}, stream);
-}
 
 }  // namespace (anonymous)
 }  // namespace (anonymous)
+namespace {
+// ============================================================================
+// 5. Walkers
+// DFS and BFS metadata collection plus the recursive root checker.
+// ============================================================================
+
+/**
+ * @brief Returns the `index`-th child of a struct column restricted to the parent's row range.
+ *
+ * `structs_column_view::get_sliced_child` recomputes the child's null count with a device
+ * reduction whenever the child is nullable, and reads `child(index)` repeatedly -- each read
+ * deep-copying that child's whole subtree of views. When the parent covers the child exactly --
+ * the common case, since only slicing makes them differ -- the child view is already the answer
+ * and its stored null count is exact.
+ *
+ * Takes the parent as a `column_view` rather than a `structs_column_view` on purpose: converting
+ * copies the parent, and with it every descendant view, once per child visited.
+ *
+ * When @p nulls is non-null (sliced-sync reduction), the slow path synthesizes the child view with
+ * placeholder null_count 0 and records a range-popcount request instead of synchronizing.
+ *
+ * @param parent The struct column to take a child from
+ * @param index Index of the child
+ * @param stream CUDA stream used for the fallback null count
+ * @param nulls Optional deferred null-count batch; null keeps the syncing fallback
+ * @param child_levels Level vector the deferred count should update (required when @p nulls set)
+ * @param child_level_idx Preorder slot of the child level (required when @p nulls set)
+ * @return The child restricted to the parent's rows
+ */
+column_view sliced_struct_child(column_view const& parent,
+                                size_type index,
+                                cuda::stream_ref stream,
+                                deferred_null_counts* nulls           = nullptr,
+                                std::vector<level_info>* child_levels = nullptr,
+                                size_type child_level_idx             = 0)
+{
+  auto const& child = *(parent.child_begin() + index);
+  if (parent.offset() == 0 && parent.size() == child.size()) { return child; }
+
+  if (nulls == nullptr) { return structs_column_view{parent}.get_sliced_child(index, stream); }
+
+  // Mirrors structs_column_view::get_sliced_child exactly, minus the count: the parent's offset
+  // replaces the child's (struct invariant), and grandchildren are left unsliced for the next
+  // level to re-slice.
+  auto view = column_view{child.type(),
+                          parent.size(),
+                          child.head(),
+                          child.null_mask(),
+                          0,
+                          parent.offset(),
+                          std::vector<column_view>(child.child_begin(), child.child_end())};
+  nulls->add(child.null_mask(),
+             parent.offset(),
+             parent.offset() + parent.size(),
+             child_levels,
+             child_level_idx);
+  return view;
+}
+
+/**
+ * @brief Returns a list column's child restricted to the parent's row range.
+ *
+ * The same shape as `sliced_struct_child` one level up: `lists_column_view::get_sliced_child` only
+ * needs the device when the parent does not cover its child exactly, and building the typed view
+ * to ask costs a copy of the parent's whole subtree before the question is even put. Reads the
+ * offsets and the child straight out of the parent instead, and falls back to the typed route on
+ * the sliced path, where the device round trip dominates the copy anyway.
+ *
+ * @param parent The list column to take the child from
+ * @param stream CUDA stream used for the sliced path's offset reads
+ * @return The child restricted to the parent's rows
+ */
+column_view sliced_list_child(column_view const& parent, cuda::stream_ref stream)
+{
+  CUDF_EXPECTS(parent.num_children() == lists_column_view::child_column_index + 1,
+               "lists column has an incorrect number of children");
+  auto const& offsets = borrowed_child(parent, lists_column_view::offsets_column_index);
+  auto const& child   = borrowed_child(parent, lists_column_view::child_column_index);
+  // `get_sliced_child`'s own fast path, with the same two conditions in the same order, plus a
+  // structural one: a child longer than the offsets' reach (make_lists_column permits it) is not
+  // exactly covered by the parent even at offset 0 — the unreachable tail must not leak into the
+  // output. child.size() == offsets.size() - 1 is the strongest host-only proof of exactness:
+  // every offset entry consumed, no tail.
+  if (parent.offset() == 0 && parent.size() >= offsets.size() - 1 &&
+      child.size() == offsets.size() - 1) {
+    return child;
+  }
+  return lists_column_view{parent}.get_sliced_child(stream);
+}
+
+/**
+ * @brief Whether a list parent span already covers its child exactly (host-only; same test as the
+ * `sliced_list_child` fast path).
+ */
+bool list_span_covers_child_exactly(column_view const& storage, size_type offset, size_type size)
+{
+  if (storage.num_children() <= lists_column_view::child_column_index) { return false; }
+  auto const& offsets = borrowed_child(storage, lists_column_view::offsets_column_index);
+  auto const& child   = borrowed_child(storage, lists_column_view::child_column_index);
+  // `size >= offsets.size() - 1` alone is only necessary: make_lists_column permits a child
+  // longer than the offsets reach, and the unreachable tail must not leak into the output.
+  // child.size() == offsets.size() - 1 is the strongest host-only proof of exact cover.
+  return offset == 0 && size >= offsets.size() - 1 && child.size() == offsets.size() - 1;
+}
+
+/**
+ * @brief Whether a list parent already covers its child exactly (host-only; same test as the
+ * `sliced_list_child` fast path).
+ */
+bool list_parent_covers_child_exactly(column_view const& parent)
+{
+  return list_span_covers_child_exactly(parent, parent.offset(), parent.size());
+}
+
+/**
+ * @brief Host-build a list child span from already-gathered offset endpoints.
+ */
+column_view host_sliced_list_child(column_view const& parent,
+                                   size_type child_begin,
+                                   size_type child_end,
+                                   deferred_null_counts* nulls,
+                                   std::vector<level_info>* child_levels,
+                                   size_type child_level_idx)
+{
+  auto const& child = borrowed_child(parent, lists_column_view::child_column_index);
+  auto const size   = child_end - child_begin;
+  if (child_begin == 0 && size == child.size()) { return child; }
+
+  auto view = column_view{child.type(),
+                          size,
+                          child.head(),
+                          child.null_mask(),
+                          0,
+                          child_begin,
+                          std::vector<column_view>(child.child_begin(), child.child_end())};
+  nulls->add(child.null_mask(), child_begin, child_end, child_levels, child_level_idx);
+  return view;
+}
+
+/**
+ * @brief Materialize list children for DFS recurse with one deferred-bounds offset batch.
+ */
+std::vector<column_view> materialize_list_children_dfs(host_span<column_view const* const> parents,
+                                                       cuda::stream_ref stream,
+                                                       deferred_null_counts* nulls,
+                                                       std::vector<level_info>* levels,
+                                                       size_type child_level_idx)
+{
+  std::vector<column_view> child_cols;
+  child_cols.reserve(parents.size());
+
+  deferred_bounds local;
+  struct item {
+    column_view const* parent;
+    int32_t first_slot;
+    int32_t last_slot;
+    bool exact;
+  };
+  std::vector<item> items;
+  items.reserve(parents.size());
+  for (auto const* p : parents) {
+    if (list_parent_covers_child_exactly(*p)) {
+      items.push_back({p, -1, -1, true});
+    } else {
+      auto const& offsets   = borrowed_child(*p, lists_column_view::offsets_column_index);
+      auto const first_slot = p->offset() > 0 ? local.add_read(offsets, p->offset()) : -1;
+      auto const last_slot  = local.add_read(offsets, p->offset() + p->size());
+      items.push_back({p, first_slot, last_slot, false});
+    }
+  }
+
+  auto const values =
+    local.reads.empty() ? std::vector<int64_t>{} : gather_deferred_reads(local, stream);
+  for (auto const& it : items) {
+    if (it.exact) {
+      child_cols.push_back(borrowed_child(*it.parent, lists_column_view::child_column_index));
+    } else {
+      auto const first =
+        it.first_slot < 0 ? size_type{0} : static_cast<size_type>(values[it.first_slot]);
+      auto const last = static_cast<size_type>(values[it.last_slot]);
+      child_cols.push_back(
+        host_sliced_list_child(*it.parent, first, last, nulls, levels, child_level_idx));
+    }
+  }
+  return child_cols;
+}
+
+/**
+ * @brief Host proof that an exact-cover list parent already has a nonempty child.
+ */
+bool list_source_proves_nonempty_child(column_view const& storage,
+                                       size_type offset,
+                                       size_type size,
+                                       column_view const& child)
+{
+  return list_span_covers_child_exactly(storage, offset, size) && child.size() > 0;
+}
+
+/**
+ * @brief Record list child dtype; omit unused empty_like schema when the source proves the child
+ *        level nonempty.
+ *
+ * Reconstruct only reads empty-child schema when `total_child_size == 0`: for an exact-cover list
+ * parent (`offset==0` and full offsets span) a nonzero `child.size()` proves the concatenated
+ * child level is nonempty, so the nested `column_view` copy into `empty_child_like` is dead.
+ * Sliced / non-exact parents still capture schema.
+ */
+void store_list_empty_child_schema(level_info& info,
+                                   column_view const& storage,
+                                   size_type offset,
+                                   size_type size,
+                                   column_view const& child)
+{
+  info.child_dtype = child.type();
+  if (list_source_proves_nonempty_child(storage, offset, size, child)) { return; }
+  info.empty_child_like = child;
+}
+
+/**
+ * @brief Host bounds and type checks for one nesting level (no recursion).
+ *
+ * Called from the fused collect walk at every level. Mirrors the non-recursive body of
+ * `batch_bounds_and_type_check`, including the same overflow and support messages.
+ *
+ * @param cols Columns of one nesting level
+ * @return true if this level is EMPTY (caller should not collect further)
+ */
+
+/**
+ * @brief Recursively collects all level information in a single pass, running the bounds and type
+ *        checks at each level so the schema is not walked twice and each child view is
+ *        materialised once.
+ *
+ * Level emission order is preorder (this level, then struct children left-to-right, then the list
+ * child). Reconstruct and the superimpose walk depend on that order; do not change it.
+ */
+/**
+ * @brief Zero the per-level counters and record the level type flags.
+ *
+ * Shared by the two walkers (`collect_level_info_recursive`, `fill_level_info_at_slot`);
+ * callers keep their own dictionary delegation loop and level emission.
+ */
+void initialize_level(level_info& info, data_type dtype, size_type num_children)
+{
+  info.dtype                   = dtype;
+  info.is_struct               = (dtype.id() == type_id::STRUCT);
+  info.is_string               = (dtype.id() == type_id::STRING);
+  info.is_list                 = (dtype.id() == type_id::LIST);
+  info.is_dictionary           = (dtype.id() == type_id::DICTIONARY32);
+  info.delegate_to_specialized = info.is_dictionary;
+  info.num_children            = num_children;
+  info.has_nulls               = false;
+  info.total_rows              = 0;
+  info.total_null_count        = 0;
+  info.total_child_size        = 0;
+}
+
+/**
+ * @brief Reserve per-level buffers from the source count and compute the element size.
+ *
+ * Fixed-width levels get their element size; struct/string/list/dictionary levels get 0. The
+ * string and list branches reserve their offsets buffers; non-nested levels reserve the data
+ * buffers. Returns the element size for the per-column scan.
+ */
+std::size_t reserve_level_buffers(level_info& info, size_type num_cols)
+{
+  std::size_t const element_size =
+    (info.is_struct || info.is_string || info.is_list || info.is_dictionary)
+      ? 0
+      : cudf::size_of(info.dtype);
+
+  info.mask_ptrs.reserve(num_cols);
+  info.mask_offsets.reserve(num_cols);
+  info.col_sizes.reserve(num_cols);
+
+  if (!info.is_struct && !info.is_string && !info.is_list) {
+    info.src_data_ptrs.reserve(num_cols);
+    info.data_sizes.reserve(num_cols);
+  }
+  if (info.is_string || info.is_list) {
+    info.src_offsets_ptrs.reserve(num_cols);
+    info.src_offsets_offsets.reserve(num_cols);
+    info.chars_partition_offsets.reserve(num_cols + 1);
+    info.chars_partition_offsets.push_back(0);
+    info.first_src_offsets.reserve(num_cols);
+  }
+  if (info.is_string) {
+    info.src_data_ptrs.reserve(num_cols);
+    info.data_sizes.reserve(num_cols);
+    info.offsets_dtype = data_type{type_id::INT32};
+  }
+  if (info.is_list) { info.offsets_dtype = data_type{type_id::INT32}; }
+  return element_size;
+}
+
+/**
+ * @brief Shared body of the two `collect_level_info_recursive` walkers, templated over the
+ *        source-column reference shape: `column_view` (value roots) or `column_view const*`
+ *        (borrowed pointer roots). Per-column access goes through `level_col_view`, so a
+ *        single body serves both shapes; `ColRef` affects only how child pointers are taken
+ *        (uniform through `&level_col_view(...)`).
+ *
+ * @param cols Columns of one nesting level
+ */
+
+template <typename ColRef>
+void collect_level_info_recursive(host_span<ColRef const> cols,
+                                  std::vector<level_info>& levels,
+                                  deferred_bounds& deferred,
+                                  cuda::stream_ref stream,
+                                  deferred_null_counts* nulls)
+{
+  if (cols.empty()) return;
+
+  if (check_bounds_and_types_at_level_impl<ColRef>(cols)) { return; }
+
+  auto const this_level_idx = static_cast<size_type>(levels.size());
+
+  level_info info;
+  auto const& first_col = level_col_view(cols.front());
+  initialize_level(info, first_col.type(), first_col.num_children());
+
+  auto const num_cols            = cols.size();
+  std::size_t const element_size = reserve_level_buffers(info, num_cols);
+
+  // Handle DICTIONARY delegation - collect columns and return early
+  if (info.delegate_to_specialized) {
+    // Collect basic mask info for all columns first
+    for (auto const& c : cols) {
+      auto const& col     = level_col_view(c);
+      auto const col_size = col.size();
+      info.total_rows += col_size;
+      info.col_sizes.push_back(col_size);
+      info.mask_ptrs.push_back(col.null_mask());
+      info.mask_offsets.push_back(col.offset());
+      info.total_null_count += col.null_count();
+      if (col.has_nulls()) { info.has_nulls = true; }
+      info.original_columns.push_back(col);
+    }
+    levels.push_back(std::move(info));
+    return;  // Don't recurse - specialized implementation handles everything
+  }
+
+  if (info.is_string) {
+    // Get offsets type from the first non-empty column's offsets child; empty string columns
+    // have no children
+    for (auto const& c : cols) {
+      auto const& col = level_col_view(c);
+      if (col.size() > 0 && col.num_children() > 0) {
+        info.offsets_dtype = borrowed_child(col, strings_column_view::offsets_column_index).type();
+        break;
+      }
+    }
+  }
+  if (info.is_list) {
+    // Store child info for empty list reconstruction
+    for (auto const& c : cols) {
+      auto const& col = level_col_view(c);
+      // Check num_children() > 0 to avoid crash on malformed columns
+      if (col.size() > 0 && col.num_children() > 0) {
+        auto const& child = borrowed_child(col, lists_column_view::child_column_index);
+        store_list_empty_child_schema(info, col, col.offset(), col.size(), child);
+        break;
+      }
+    }
+  }
+
+  // Single pass over columns to collect all info
+  for (auto const& c : cols) {
+    auto const& col     = level_col_view(c);
+    auto const col_size = col.size();
+    info.total_rows += col_size;
+    info.col_sizes.push_back(col_size);
+
+    // Mask info
+    info.mask_ptrs.push_back(col.null_mask());
+    info.mask_offsets.push_back(col.offset());
+    info.total_null_count += col.null_count();
+    if (col.has_nulls()) { info.has_nulls = true; }
+
+    // Data info based on type
+    if (info.is_string) {
+      // String column: collect offsets and chars info
+      // Note: empty string columns have no children, so we must check size AND children
+      // Check num_children() > 0 to avoid crash on malformed columns
+      if (col_size > 0 && col.num_children() > 0) {
+        auto const& offsets_col = borrowed_child(col, strings_column_view::offsets_column_index);
+        // Offsets info
+        info.src_offsets_ptrs.push_back(offsets_col.head());
+        info.src_offsets_offsets.push_back(col.offset());
+
+        // The chars bounds live on the device; batch the reads and fill the sizes in later
+        {
+          auto const first_slot =
+            col.offset() > 0 ? deferred.add_read(offsets_col, col.offset()) : -1;
+          auto const last_slot = deferred.add_read(offsets_col, col.offset() + col_size);
+          deferred.targets.push_back({&levels,
+                                      this_level_idx,
+                                      static_cast<size_type>(info.col_sizes.size() - 1),
+                                      first_slot,
+                                      last_slot});
+        }
+        // Placeholders; the chars pointer is advanced by the first offset once it is known
+        info.src_data_ptrs.push_back(col_head<char>(col));
+        info.data_sizes.push_back(0);
+        info.chars_partition_offsets.push_back(0);
+        info.first_src_offsets.push_back(0);
+      } else {
+        // Empty column - push placeholders
+        info.src_offsets_ptrs.push_back(nullptr);
+        info.src_offsets_offsets.push_back(0);
+        info.src_data_ptrs.push_back(nullptr);
+        info.data_sizes.push_back(0);
+        info.chars_partition_offsets.push_back(info.total_child_size);
+        info.first_src_offsets.push_back(0);
+      }
+    } else if (info.is_list) {
+      // List column: collect offsets info (child data handled via recursion)
+      // Check num_children() > 0 to avoid crash on malformed columns
+      if (col_size > 0 && col.num_children() > 0) {
+        auto const& offsets_col = borrowed_child(col, lists_column_view::offsets_column_index);
+        // Offsets info
+        info.src_offsets_ptrs.push_back(offsets_col.head());
+        info.src_offsets_offsets.push_back(col.offset());
+
+        // The child boundaries live on the device, so batch the reads and fill the sizes in
+        // later. They cannot be established host-side: `child().size()` is only equal to
+        // `offsets[size()]` when the child is exactly as long as the offsets reach, and
+        // nothing in a column_view records that. A child may legally run past its last offset
+        // — `make_lists_column` neither requires nor checks otherwise — and consumers that
+        // bound their reads by the offsets, `cudf::concatenate` among them, handle that
+        // correctly while a copy length taken from `child().size()` would pull the extra rows
+        // into the output. See BatchConcatenateTest.ListChildLongerThanOffsetsSpan.
+        {
+          auto const col_pos = static_cast<size_type>(info.col_sizes.size() - 1);
+          auto const first_slot =
+            col.offset() > 0 ? deferred.add_read(offsets_col, col.offset()) : -1;
+          auto const last_slot = deferred.add_read(offsets_col, col.offset() + col_size);
+          deferred.targets.push_back({&levels, this_level_idx, col_pos, first_slot, last_slot});
+        }
+        info.first_src_offsets.push_back(0);
+        info.chars_partition_offsets.push_back(0);
+      } else {
+        // Empty column - push placeholders
+        info.src_offsets_ptrs.push_back(nullptr);
+        info.src_offsets_offsets.push_back(0);
+        info.first_src_offsets.push_back(0);
+        info.chars_partition_offsets.push_back(info.total_child_size);
+      }
+    } else if (!info.is_struct) {
+      // Fixed-width type
+      info.src_data_ptrs.push_back(col_head<char>(col) + (col.offset() * element_size));
+      info.data_sizes.push_back(col_size * element_size);
+    }
+  }
+
+  levels.push_back(std::move(info));
+
+  // Recurse into struct children
+  if (first_col.type().id() == type_id::STRUCT) {
+    auto const num_children = first_col.num_children();
+    std::vector<column_view> child_cols;
+    std::vector<column_view const*> child_ptrs;
+    child_cols.reserve(num_cols);
+    child_ptrs.reserve(num_cols);
+
+    for (size_type child_idx = 0; child_idx < num_children; ++child_idx) {
+      auto const child_level_idx = static_cast<size_type>(levels.size());
+      bool all_exact             = true;
+      for (auto const& c : cols) {
+        auto const& col   = level_col_view(c);
+        auto const& child = borrowed_child(col, child_idx);
+        if (!(col.offset() == 0 && col.size() == child.size())) {
+          all_exact = false;
+          break;
+        }
+      }
+      if (all_exact) {
+        child_ptrs.clear();
+        for (auto const& c : cols) {
+          auto const& col = level_col_view(c);
+          child_ptrs.push_back(&borrowed_child(col, child_idx));
+        }
+        collect_level_info_recursive(
+          host_span<column_view const* const>{child_ptrs.data(), child_ptrs.size()},
+          levels,
+          deferred,
+          stream,
+          nulls);
+        continue;
+      }
+      child_cols.clear();
+      for (auto const& c : cols) {
+        auto const& col = level_col_view(c);
+        child_cols.push_back(
+          sliced_struct_child(col, child_idx, stream, nulls, &levels, child_level_idx));
+      }
+      collect_level_info_recursive(
+        host_span<column_view const>{child_cols.data(), child_cols.size()},
+        levels,
+        deferred,
+        stream,
+        nulls);
+    }
+  }
+
+  // Recurse into list children
+  if (first_col.type().id() == type_id::LIST) {
+    // Probe + materialize non-exact list children, then recurse into the surviving child span
+    // (the fallback for a level with any non-exact parent).
+    bool all_exact = true;
+    for (auto const& c : cols) {
+      auto const& col = level_col_view(c);
+      if (!(col.size() > 0 && col.num_children() > 0)) { continue; }
+      if (!list_parent_covers_child_exactly(col)) {
+        all_exact = false;
+        break;
+      }
+    }
+    if (all_exact) {
+      std::vector<column_view const*> child_ptrs;
+      child_ptrs.reserve(num_cols);
+      for (auto const& c : cols) {
+        auto const& col = level_col_view(c);
+        if (col.size() > 0 && col.num_children() > 0) {
+          child_ptrs.push_back(&borrowed_child(col, lists_column_view::child_column_index));
+        }
+      }
+      if (!child_ptrs.empty()) {
+        collect_level_info_recursive(
+          host_span<column_view const* const>{child_ptrs.data(), child_ptrs.size()},
+          levels,
+          deferred,
+          stream,
+          nulls);
+      }
+    } else {
+      // Some parent does not cover its child exactly: materialize the sliced children and recurse
+      std::vector<column_view> child_cols;
+      child_cols.reserve(num_cols);
+      // Only recurse if there are non-empty columns; an all-empty level contributes no child level.
+      {
+        std::vector<column_view const*> nonempty;
+        nonempty.reserve(cols.size());
+        for (auto const& c : cols) {
+          auto const& col = level_col_view(c);
+          if (col.size() > 0 && col.num_children() > 0) { nonempty.push_back(&col); }
+        }
+        if (!nonempty.empty()) {
+          child_cols = materialize_list_children_dfs(
+            span_of(nonempty), stream, nulls, &levels, static_cast<size_type>(levels.size()));
+        }
+      }
+      if (!child_cols.empty()) {
+        collect_level_info_recursive(
+          host_span<column_view const>{child_cols.data(), child_cols.size()},
+          levels,
+          deferred,
+          stream,
+          nulls);
+      }
+    }
+  }
+}
+
+/**
+ * @brief Verifies bounds and type compatibility for batch concatenation.
+ *
+ * @param cols Source columns of one level
+ * @param stream CUDA stream used for device memory operations
+ * @param views Whether to borrow nested columns' children or copy them through the typed views
+ * @param check_types Whether to compare types; `cudf::all_have_same_types` already compares the
+ *        whole nested type tree, so only the outermost call needs to, and repeating it per level
+ *        would rewalk each subtree once per ancestor
+ * @return Number of levels visited, which `collect_level_info_recursive` will produce for the same
+ *         columns. Used only to reserve, so an inexact count stays correct.
+ */
+void batch_bounds_and_type_check(host_span<column_view const> cols,
+                                 cuda::stream_ref stream,
+                                 bool check_types)
+{
+  // Check total row count doesn't exceed size_type limit, then EMPTY all-or-nothing and the
+  // support set; the root type tree compare and recursion below stay root-specific.
+  check_bounds_and_types_at_level_impl<column_view, false, false>(cols);
+
+  // Check all types match
+  if (check_types) {
+    // `cudf::all_have_same_types` captures its reference column BY VALUE -- `[want = *first]` --
+    // which deep-copies that column's whole subtree of views before a single comparison is made.
+    // `have_same_types` only reads the type tree, so a reference answers the same question.
+    auto const same_types = [&] {
+      if (cols.empty()) { return true; }
+      auto const& want = cols.front();
+      return std::all_of(std::next(cols.begin()), cols.end(), [&want](auto const& c) {
+        return cudf::have_same_types(want, c);
+      });
+    }();
+    expect_type_match(same_types);
+  }
+
+  // Recursively check struct children
+  if (cols.front().type().id() == type_id::STRUCT) {
+    auto const num_children = cols.front().num_children();
+    std::vector<column_view> nth_children;
+    nth_children.reserve(cols.size());
+
+    for (size_type child_idx = 0; child_idx < num_children; ++child_idx) {
+      {
+        nth_children.clear();
+        for (auto const& col : cols) {
+          nth_children.push_back(sliced_struct_child(col, child_idx, stream));
+        }
+      }
+      batch_bounds_and_type_check(span_of(nth_children), stream, false);
+    }
+  }
+
+  // Check string offset overflow
+  if (cols.front().type().id() == type_id::STRING) { check_level_offset_overflow(cols); }
+
+  // Recursively check list children
+  if (cols.front().type().id() == type_id::LIST) {
+    // Check offset overflow
+    check_level_offset_overflow(cols);
+
+    // Recursively check children
+    std::vector<column_view> child_cols;
+    child_cols.reserve(cols.size());
+    for (auto const& col : cols) {
+      if (col.size() > 0) { child_cols.push_back(sliced_list_child(col, stream)); }
+    }
+    if (!child_cols.empty()) {
+      batch_bounds_and_type_check(
+        host_span<column_view const>{child_cols.data(), child_cols.size()}, stream, false);
+    }
+  }
+}
+
+/**
+ * @brief Shared root walk of the two table-entry collect paths for one column position.
+ *
+ * Gathers per-table roots as borrowed pointers into the live table columns (`ptr_storage` backs
+ * the returned span, so slicing-plan callers use it as their root store), skips EMPTY-typed
+ * positions, and for all-empty positions runs the bounds check and skips collection. Returns
+ * false when the position was skipped. `on_root` receives
+ * `host_span<column_view const* const>` only when the position survives.
+ */
+template <typename RootFn>
+bool collect_table_entry_roots(host_span<table_view const> tables,
+                               size_type col_idx,
+                               size_type num_tables,
+                               std::vector<column_view const*>& ptr_storage,
+                               cuda::stream_ref stream,
+                               RootFn&& on_root)
+{
+  ptr_storage.clear();
+  ptr_storage.reserve(num_tables);
+  for (size_type t = 0; t < num_tables; ++t) {
+    ptr_storage.push_back(&tables[t].column(col_idx));
+  }
+  host_span<column_view const* const> roots{ptr_storage.data(), ptr_storage.size()};
+  if (is_empty_position(roots, roots.front())) {
+    bounds_check_ptrs(roots, stream);
+    return false;
+  }
+  on_root(roots);
+  return true;
+}
+
+/**
+ * @brief Collects level_info with deferred struct null counts and a single slicing sync.
+ *
+ * Unsliced roots take the depth-first walk; sliced roots take the BFS plan/fill path below.
+ *
+ * Plan path: host shape + plan records every list/string endpoint read with device indirection
+ * across list-nesting generations. Kernels chain on the GPU; exactly one D2H/`make_std_vector`
+ * sync brings all values back. List children and level bounds are then filled on the host with no
+ * further slicing synchronizations.
+ *
+ * @param resolve_nulls When true (default), drains deferred null counts before returning. Table
+ * concat passes false so it can share one stream sync with the superimpose decision readback.
+ */
+/**
+ * @brief Lightweight host view for the slicing-plan fill walk.
+ *
+ * Points at borrowed storage for the type tree / buffers and carries the row range separately.
+ * Avoids deep-copying nested `column_view` children on every sliced struct/list expansion.
+ * Null counts are taken from storage only when the range matches exactly; otherwise the plan or
+ * fill records a deferred range popcount and leaves `null_count == 0` here.
+ */
+struct fill_view {
+  column_view const* storage;  ///< Never null; owns the child vector we borrow
+  size_type offset;
+  size_type size;
+
+  [[nodiscard]] bool counts_known() const
+  {
+    return offset == storage->offset() && size == storage->size();
+  }
+  [[nodiscard]] data_type type() const { return storage->type(); }
+  [[nodiscard]] size_type num_children() const { return storage->num_children(); }
+  [[nodiscard]] bitmask_type const* null_mask() const { return storage->null_mask(); }
+  [[nodiscard]] size_type null_count() const { return counts_known() ? storage->null_count() : 0; }
+  [[nodiscard]] bool has_nulls() const { return counts_known() && storage->has_nulls(); }
+  template <typename T = char>
+  [[nodiscard]] T const* head() const
+  {
+    return storage->head<T>();
+  }
+};
+
+size_type level_col_size(fill_view const& c) { return c.size; }
+
+column_view const& level_col_view(fill_view const& c) { return *c.storage; }
+
+/**
+ * @brief Fills one preassigned level from borrowed fill_views (no deep column_view copies).
+ *
+ * Uses known null counts only when the fill range matches storage exactly; sliced ranges rely on
+ * deferred nulls already recorded by the plan (exact parents) or by list-child materialization.
+ */
+void fill_level_info_at_slot(host_span<fill_view const> cols,
+                             std::vector<level_info>& levels,
+                             size_type slot)
+{
+  if (cols.empty()) return;
+
+  if (check_bounds_and_types_at_level_impl<fill_view, true>(cols)) { return; }
+
+  level_info info;
+  auto const& first_col = cols.front();
+  initialize_level(info, first_col.type(), first_col.num_children());
+
+  auto const num_cols            = cols.size();
+  std::size_t const element_size = reserve_level_buffers(info, num_cols);
+
+  if (info.delegate_to_specialized) {
+    for (auto const& col : cols) {
+      info.total_rows += col.size;
+      info.col_sizes.push_back(col.size);
+      info.mask_ptrs.push_back(col.null_mask());
+      info.mask_offsets.push_back(col.offset);
+      info.total_null_count += col.null_count();
+      if (col.has_nulls()) { info.has_nulls = true; }
+      // Dictionary delegates need a real column_view; exact-range only in practice.
+      info.original_columns.push_back(column_view{
+        col.storage->type(),
+        col.size,
+        col.storage->head(),
+        col.storage->null_mask(),
+        col.null_count(),
+        col.offset,
+        std::vector<column_view>(col.storage->child_begin(), col.storage->child_end())});
+    }
+    levels[slot] = std::move(info);
+    return;
+  }
+
+  if (info.is_string) {
+    for (auto const& col : cols) {
+      if (col.size > 0 && col.num_children() > 0) {
+        info.offsets_dtype =
+          borrowed_child(*col.storage, strings_column_view::offsets_column_index).type();
+        break;
+      }
+    }
+  }
+  if (info.is_list) {
+    // Plan/fill-only: when fill will emit a child level, dtype-only (no nested empty_child copy).
+    if (std::any_of(cols.begin(), cols.end(), [](fill_view const& c) {
+          return c.size > 0 && c.num_children() > 0;
+        })) {
+      for (auto const& col : cols) {
+        if (col.size > 0 && col.num_children() > 0) {
+          info.child_dtype =
+            borrowed_child(*col.storage, lists_column_view::child_column_index).type();
+          break;
+        }
+      }
+    }
+  }
+
+  for (auto const& col : cols) {
+    info.total_rows += col.size;
+    info.col_sizes.push_back(col.size);
+
+    info.mask_ptrs.push_back(col.null_mask());
+    info.mask_offsets.push_back(col.offset);
+    // Known counts only — never call syncing range null_count on sliced placeholders.
+    info.total_null_count += col.null_count();
+    if (col.has_nulls()) { info.has_nulls = true; }
+
+    if (info.is_string) {
+      if (col.size > 0 && col.num_children() > 0) {
+        auto const& offsets_col =
+          borrowed_child(*col.storage, strings_column_view::offsets_column_index);
+        info.src_offsets_ptrs.push_back(offsets_col.head());
+        info.src_offsets_offsets.push_back(col.offset);
+        // Bounds come from the slicing plan after D2H.
+        info.src_data_ptrs.push_back(col.storage->head<char>());
+        info.data_sizes.push_back(0);
+        info.chars_partition_offsets.push_back(0);
+        info.first_src_offsets.push_back(0);
+      } else {
+        info.src_offsets_ptrs.push_back(nullptr);
+        info.src_offsets_offsets.push_back(0);
+        info.src_data_ptrs.push_back(nullptr);
+        info.data_sizes.push_back(0);
+        info.chars_partition_offsets.push_back(info.total_child_size);
+        info.first_src_offsets.push_back(0);
+      }
+    } else if (info.is_list) {
+      if (col.size > 0 && col.num_children() > 0) {
+        auto const& offsets_col =
+          borrowed_child(*col.storage, lists_column_view::offsets_column_index);
+        info.src_offsets_ptrs.push_back(offsets_col.head());
+        info.src_offsets_offsets.push_back(col.offset);
+        info.first_src_offsets.push_back(0);
+        info.chars_partition_offsets.push_back(0);
+      } else {
+        info.src_offsets_ptrs.push_back(nullptr);
+        info.src_offsets_offsets.push_back(0);
+        info.first_src_offsets.push_back(0);
+        info.chars_partition_offsets.push_back(info.total_child_size);
+      }
+    } else if (!info.is_struct) {
+      info.src_data_ptrs.push_back(col.head<char>() + (col.offset * element_size));
+      info.data_sizes.push_back(col.size * element_size);
+    }
+  }
+
+  levels[slot] = std::move(info);
+}
+
+void collect_levels_bfs(host_span<host_span<column_view const* const> const> roots,
+                        host_span<std::vector<level_info>> levels_by_column,
+                        deferred_bounds& deferred,
+                        deferred_null_counts& nulls,
+                        cuda::stream_ref stream,
+                        bool resolve_nulls = true)
+{
+  auto const num_columns = static_cast<size_type>(roots.size());
+
+  // Unsliced roots: depth-first walk with batched bound reads, no slicing plan.
+  if (!roots_need_slicing_plan(roots)) {
+    for (size_type col_idx = 0; col_idx < num_columns; ++col_idx) {
+      auto const& cols = roots[col_idx];
+      if (cols.empty() || is_empty_position(cols, cols.front())) { continue; }
+      std::vector<column_view> materialized;
+      materialized.reserve(cols.size());
+      for (auto const* p : cols) {
+        materialized.push_back(*p);
+      }
+      collect_level_info_recursive(
+        span_of(materialized), levels_by_column[col_idx], deferred, stream, &nulls);
+    }
+    resolve_deferred_bounds(deferred, stream);
+    resolve_deferred_null_counts(nulls, stream);
+    return;
+  }
+
+  (void)deferred;  // Old-path deferred_bounds unused on the slicing-plan path.
+
+  std::vector<level_tree_shape> shapes(num_columns);
+  slicing_plan plan;
+
+  std::vector<plan_frontier_item> frontier;
+  frontier.reserve(static_cast<std::size_t>(num_columns));
+
+  for (size_type col_idx = 0; col_idx < num_columns; ++col_idx) {
+    auto const& cols = roots[col_idx];
+    if (cols.empty() || is_empty_position(cols, cols.front())) { continue; }
+    shapes[col_idx] = build_level_tree_shape(cols);
+    levels_by_column[col_idx].resize(static_cast<std::size_t>(shapes[col_idx].num_levels));
+
+    std::vector<planned_source> sources;
+    sources.reserve(cols.size());
+    for (auto const* p : cols) {
+      sources.push_back(make_exact_planned(*p, 0));
+    }
+    frontier.push_back({&levels_by_column[col_idx], 0, col_idx, std::move(sources)});
+  }
+
+  // Reserve up front so the plan does not regrow while it expands.
+  std::size_t total_sources = 0;
+  for (size_type col_idx = 0; col_idx < num_columns; ++col_idx) {
+    total_sources += roots[col_idx].size();
+  }
+  plan.reads.reserve(total_sources * 2);
+  plan.targets.reserve(total_sources);
+  plan.list_children.reserve(total_sources);
+  plan.generation_ends.reserve(8);
+
+  // ---- Host plan (no sync): expand structs in-generation; queue list children for next gen ----
+  std::vector<plan_frontier_item> worklist;
+  std::vector<plan_frontier_item> next_gen;
+  size_type generation = 0;
+
+  while (!frontier.empty()) {
+    worklist = std::move(frontier);
+    frontier.clear();
+    next_gen.clear();
+
+    for (std::size_t wi = 0; wi < worklist.size(); ++wi) {
+      auto item         = std::move(worklist[wi]);
+      auto* levels      = item.levels;
+      auto const slot   = item.level_idx;
+      auto const& shape = shapes[item.col_idx];
+      auto const& kids  = shape.children_of[slot];
+      auto& sources     = item.sources;
+      if (sources.empty()) { continue; }
+
+      auto const tid = sources.front().storage->type().id();
+
+      if (tid == type_id::STRING || tid == type_id::LIST) {
+        size_type col_pos           = 0;
+        size_type list_child_source = 0;
+        std::vector<planned_source> list_child_sources;
+
+        for (auto const& src : sources) {
+          // Known-empty (exact and zero rows) or childless sources record no bounds
+          if ((src.exact && src.size_const == 0) || src.storage->num_children() == 0) {
+            ++col_pos;
+            continue;
+          }
+
+          column_view const& offsets_col =
+            (tid == type_id::STRING)
+              ? borrowed_child(*src.storage, strings_column_view::offsets_column_index)
+              : borrowed_child(*src.storage, lists_column_view::offsets_column_index);
+
+          auto const [first_slot, last_slot] = plan_endpoint_reads(plan, src, offsets_col);
+          plan.targets.push_back({levels, slot, col_pos, first_slot, last_slot});
+
+          if (tid == type_id::LIST && !kids.empty() && planned_source_contributes_child(src)) {
+            auto const& raw_child =
+              borrowed_child(*src.storage, lists_column_view::child_column_index);
+            auto const verbatim =
+              src.exact && src.offset_base == 0 && src.size_const >= offsets_col.size() - 1;
+            // First contributor of this list level starts a contiguous run in list_children.
+            auto const run_base =
+              static_cast<size_type>(plan.list_children.size()) - list_child_source;
+            plan.list_children.push_back({levels,
+                                          kids.front(),
+                                          list_child_source,
+                                          run_base,
+                                          &raw_child,
+                                          first_slot,
+                                          last_slot,
+                                          verbatim});
+            if (verbatim) {
+              list_child_sources.push_back(make_exact_planned(raw_child, src.generation));
+            } else {
+              list_child_sources.push_back(
+                make_span_planned(raw_child, first_slot, last_slot, src.generation));
+            }
+            ++list_child_source;
+          }
+          ++col_pos;
+        }
+
+        if (!list_child_sources.empty()) {
+          next_gen.push_back({levels, kids.front(), item.col_idx, std::move(list_child_sources)});
+        }
+      }
+
+      if (tid == type_id::STRUCT) {
+        auto const num_children = sources.front().storage->num_children();
+        for (size_type child_idx = 0; child_idx < num_children; ++child_idx) {
+          std::vector<planned_source> child_sources;
+          child_sources.reserve(sources.size());
+          for (auto const& src : sources) {
+            auto const& child_storage = borrowed_child(*src.storage, child_idx);
+            if (src.exact && src.offset_base == 0 && src.size_const == child_storage.size()) {
+              child_sources.push_back(make_exact_planned(child_storage, src.generation));
+              continue;
+            }
+            if (src.exact) {
+              nulls.maybe_add(child_storage,
+                              src.offset_base,
+                              src.offset_base + src.size_const,
+                              levels,
+                              kids[child_idx]);
+            }
+            auto child    = src;
+            child.storage = &child_storage;
+            child_sources.push_back(child);
+          }
+          worklist.push_back({levels, kids[child_idx], item.col_idx, std::move(child_sources)});
+        }
+      }
+    }
+
+    plan.generation_ends.push_back(static_cast<size_type>(plan.reads.size()));
+    frontier = std::move(next_gen);
+    ++generation;
+  }
+
+  // ---- One slicing sync (pageable D2H); plan-time nulls stay in @p nulls ----
+  auto const values = execute_slicing_plan(plan, stream);
+
+  // ---- Materialize list children, then fill ----
+  std::vector<fill_view> list_child_views(plan.list_children.size());
+  for (std::size_t i = 0; i < plan.list_children.size(); ++i) {
+    auto const& lc = plan.list_children[i];
+    if (lc.verbatim) {
+      list_child_views[i] = fill_view{lc.raw_child, lc.raw_child->offset(), lc.raw_child->size()};
+      continue;
+    }
+    auto const first =
+      lc.first_slot < 0 ? int64_t{0} : values[static_cast<std::size_t>(lc.first_slot)];
+    auto const last       = values[static_cast<std::size_t>(lc.last_slot)];
+    auto const child_size = static_cast<size_type>(last - first);
+    auto const begin      = lc.raw_child->offset() + static_cast<size_type>(first);
+    nulls.maybe_add(*lc.raw_child, begin, begin + child_size, lc.levels, lc.child_level_idx);
+    list_child_views[i] = fill_view{lc.raw_child, begin, child_size};
+  }
+
+  struct list_run_entry {
+    std::vector<level_info>* levels;
+    size_type child_level_idx;
+    size_type run_base;
+  };
+
+  std::vector<list_run_entry> list_runs;
+  list_runs.reserve(plan.list_children.size());
+  for (auto const& lc : plan.list_children) {
+    if (lc.child_source == 0) { list_runs.push_back({lc.levels, lc.child_level_idx, lc.run_base}); }
+  }
+
+  std::vector<collect_frontier_entry> fill_frontier;
+  std::vector<fill_view> view_pool;
+  fill_frontier.reserve(static_cast<std::size_t>(num_columns));
+  std::size_t root_sources = 0;
+  for (size_type col_idx = 0; col_idx < num_columns; ++col_idx) {
+    root_sources += roots[col_idx].size();
+  }
+  view_pool.reserve(root_sources * 4 + plan.list_children.size());
+
+  for (size_type col_idx = 0; col_idx < num_columns; ++col_idx) {
+    auto const& cols = roots[col_idx];
+    if (cols.empty() || is_empty_position(cols, cols.front())) { continue; }
+    auto const first = static_cast<size_type>(view_pool.size());
+    for (auto const* p : cols) {
+      view_pool.push_back(fill_view{p, p->offset(), p->size()});
+    }
+    fill_frontier.push_back(
+      {&levels_by_column[col_idx], 0, col_idx, first, static_cast<size_type>(cols.size())});
+  }
+
+  std::vector<collect_frontier_entry> fill_worklist;
+  while (!fill_frontier.empty()) {
+    fill_worklist = std::move(fill_frontier);
+    fill_frontier.clear();
+
+    for (std::size_t wi = 0; wi < fill_worklist.size(); ++wi) {
+      auto const entry        = fill_worklist[wi];
+      auto& levels            = *entry.levels;
+      auto const parent_first = entry.first_source;
+      auto const parent_n     = entry.num_sources;
+      auto const cols         = host_span<fill_view const>{view_pool.data() + parent_first,
+                                                           static_cast<std::size_t>(parent_n)};
+
+      auto const& kids = shapes[entry.col_idx].children_of[entry.level_idx];
+
+      fill_level_info_at_slot(cols, levels, entry.level_idx);
+
+      auto const tid          = cols.front().type().id();
+      auto const num_children = cols.front().num_children();
+      if (tid == type_id::STRUCT) {
+        for (size_type child_idx = 0; child_idx < num_children; ++child_idx) {
+          auto const child_slot   = kids[child_idx];
+          auto const first_source = static_cast<size_type>(view_pool.size());
+          for (size_type i = 0; i < parent_n; ++i) {
+            auto const& parent        = view_pool[static_cast<std::size_t>(parent_first + i)];
+            auto const& child_storage = borrowed_child(*parent.storage, child_idx);
+            // Exact parents already drained with the slicing sync. Span parents: late.
+            if (!parent.counts_known()) {
+              nulls.maybe_add(
+                child_storage, parent.offset, parent.offset + parent.size, &levels, child_slot);
+            }
+            view_pool.push_back(fill_view{&child_storage, parent.offset, parent.size});
+          }
+          fill_worklist.push_back({&levels, child_slot, entry.col_idx, first_source, parent_n});
+        }
+      } else if (tid == type_id::LIST && !kids.empty()) {
+        auto const child_slot   = kids.front();
+        auto const first_source = static_cast<size_type>(view_pool.size());
+        size_type run_base      = 0;
+        {
+          auto const run_it =
+            std::find_if(list_runs.begin(), list_runs.end(), [&](list_run_entry const& e) {
+              return e.levels == &levels && e.child_level_idx == child_slot;
+            });
+          CUDF_EXPECTS(run_it != list_runs.end(),
+                       "batch_concatenate slicing plan missing list child run");
+          run_base = run_it->run_base;
+        }
+        size_type child_source = 0;
+        for (size_type i = 0; i < parent_n; ++i) {
+          auto const& col = view_pool[static_cast<std::size_t>(parent_first + i)];
+          if (!(col.size > 0 && col.num_children() > 0)) { continue; }
+          auto const idx = static_cast<std::size_t>(run_base + child_source);
+          CUDF_EXPECTS(idx < list_child_views.size(),
+                       "batch_concatenate slicing plan list child index OOB");
+          view_pool.push_back(list_child_views[idx]);
+          ++child_source;
+        }
+        if (child_source > 0) {
+          levels[entry.level_idx].list_child_collected = true;
+          fill_frontier.push_back({&levels, child_slot, entry.col_idx, first_source, child_source});
+        }
+      }
+    }
+  }
+
+  apply_bounds_targets(
+    host_span<pending_child_bounds const>{plan.targets.data(), plan.targets.size()},
+    host_span<int64_t const>{values.data(), values.size()});
+
+  // Plan-time + span-dependent nulls remain in @p nulls; counts must land before phase-1 slab
+  // sizing (`has_nulls`).
+  if (resolve_nulls) { resolve_deferred_null_counts(nulls, stream); }
+}
+
+}  // namespace (anonymous)
+
+
 }  // namespace cudf::detail
 
 // TEMPORARY SCAFFOLD (public): at namespace cudf scope so the public wrappers resolve as
