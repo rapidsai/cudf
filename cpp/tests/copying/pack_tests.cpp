@@ -635,7 +635,8 @@ TEST_F(PackUnpackTest, EmptyBuffersPreserveStreamAndResource)
     verify_buffer(cudf::pack(input, stream, output_ref));
     if (input.num_columns() == 0 && input.num_rows() == 0) { continue; }
 
-    auto partitions = cudf::contiguous_split(input, {input.num_rows() / 2}, stream, output_ref);
+    std::vector<cudf::size_type> splits{input.num_rows() / 2};
+    auto partitions = cudf::contiguous_split(input, splits, stream, output_ref);
     ASSERT_EQ(partitions.size(), 2);
     for (auto const& partition : partitions) {
       verify_buffer(partition.data);

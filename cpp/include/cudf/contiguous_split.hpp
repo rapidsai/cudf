@@ -9,6 +9,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <cstdint>
 #include <memory>
@@ -34,7 +35,7 @@ namespace CUDF_EXPORT cudf {
  * The memory for the output views is allocated in a single contiguous `rmm::device_buffer` returned
  * in the `packed_table`. There is no top-level owning table.
  *
- * The returned views of `input` are constructed from a vector of indices, that indicate
+ * The returned views of `input` are constructed from a span of indices, that indicate
  * where each split should occur. The `i`th returned `table_view` is sliced as
  * `[0, splits[i])` if `i`=0, else `[splits[i], input.size())` if `i` is the last view and
  * `[splits[i-1], splits[i]]` otherwise.
@@ -64,7 +65,7 @@ namespace CUDF_EXPORT cudf {
  * @throws std::invalid_argument When the values in the `splits` are 'strictly decreasing'.
  *
  * @param input View of a table to split
- * @param splits A vector of indices where the view will be split
+ * @param splits A host span of indices where the view will be split
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr An optional memory resource to use for all returned device allocations
  * @return The set of requested views of `input` indicated by the `splits` and the viewed memory
@@ -72,7 +73,7 @@ namespace CUDF_EXPORT cudf {
  */
 std::vector<packed_table> contiguous_split(
   cudf::table_view const& input,
-  std::vector<size_type> const& splits,
+  host_span<size_type const> splits,
   cuda::stream_ref stream           = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

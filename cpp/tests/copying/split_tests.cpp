@@ -1427,7 +1427,8 @@ TEST_F(ContiguousSplitZeroColumnTest, PreservesRowCount)
 
   // With splits: each partition's row count comes from the split boundaries, and
   // unpacking preserves it.
-  auto const split = cudf::contiguous_split(input, {3});
+  std::vector<cudf::size_type> splits{3};
+  auto const split = cudf::contiguous_split(input, splits);
   ASSERT_EQ(split.size(), 2);
   EXPECT_EQ(split[0].table.num_columns(), 0);
   EXPECT_EQ(split[0].table.num_rows(), 3);
@@ -1449,8 +1450,13 @@ TEST_F(ContiguousSplitZeroColumnTest, PreservesRowCount)
 TEST_F(ContiguousSplitZeroColumnTest, InvalidSplitsThrow)
 {
   cudf::table_view input{std::vector<cudf::column_view>{}, 7};
-  EXPECT_THROW(cudf::contiguous_split(input, {8}), std::out_of_range);         // beyond row count
-  EXPECT_THROW(cudf::contiguous_split(input, {5, 3}), std::invalid_argument);  // non-monotonic
+
+  std::vector<cudf::size_type> bad_end{8};
+  std::vector<cudf::size_type> bad_order{5, 3};
+
+  EXPECT_THROW(cudf::contiguous_split(input, bad_end), std::out_of_range);
+
+  EXPECT_THROW(cudf::contiguous_split(input, bad_order), std::invalid_argument);
 }
 
 TEST_F(ContiguousSplitZeroColumnTest, ChunkedPackPreservesRowCount)
@@ -1682,6 +1688,28 @@ TEST_F(ContiguousSplitUntypedTest, ProgressiveSizesChunked)
   }
 }
 
+TEST_F(ContiguousSplitUntypedTest, SplitPointsSubspan)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> values{10, 20, 30, 40, 50, 60, 70, 80};
+  cudf::table_view input({values});
+
+  std::vector<cudf::size_type> offsets{0, 3, 5};
+
+  cudf::host_span<cudf::size_type const> cuts(offsets.data() + 1, offsets.size() - 1);
+
+  auto result = cudf::contiguous_split(input, cuts);
+
+  ASSERT_EQ(result.size(), 3);
+
+  cudf::test::fixed_width_column_wrapper<int32_t> first{10, 20, 30};
+  cudf::test::fixed_width_column_wrapper<int32_t> second{40, 50};
+  cudf::test::fixed_width_column_wrapper<int32_t> third{60, 70, 80};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(first, result[0].table.column(0));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(second, result[1].table.column(0));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(third, result[2].table.column(0));
+}
+
 TEST_F(ContiguousSplitUntypedTest, ValidityRepartition)
 {
   // it is tricky to actually get the internal repartitioning/load-balancing code to add new splits
@@ -1699,7 +1727,8 @@ TEST_F(ContiguousSplitUntypedTest, ValidityRepartition)
   col->set_null_mask(std::move(null_mask), null_count);
 
   cudf::table_view t({*col});
-  auto result   = cudf::contiguous_split(t, {num_rows / 2});
+  std::vector<cudf::size_type> splits{num_rows / 2};
+  auto result   = cudf::contiguous_split(t, splits);
   auto expected = cudf::split(t, {num_rows / 2});
   ASSERT_EQ(result.size(), expected.size());
 
@@ -1733,7 +1762,8 @@ TEST_F(ContiguousSplitUntypedTest, ValidityEdgeCase)
   // to be < 32 full bits, making sure we don't unintentionally read past the end of the input
   auto col = cudf::make_numeric_column(
     cudf::data_type{cudf::type_id::INT32}, 512, cudf::mask_state::ALL_VALID);
-  auto result   = cudf::contiguous_split(cudf::table_view{{*col}}, {510});
+  std::vector<cudf::size_type> splits{510};
+  auto result   = cudf::contiguous_split(cudf::table_view{{*col}}, splits);
   auto expected = cudf::split(cudf::table_view{{*col}}, {510});
 
   EXPECT_EQ(expected.size(), result.size());
@@ -2296,7 +2326,8 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitList)
     auto pre_split = cudf::split(list, {2});
 
     cudf::table_view t({pre_split[1]});
-    auto result   = cudf::contiguous_split(t, {3, 4});
+    std::vector<cudf::size_type> splits{3, 4};
+    auto result   = cudf::contiguous_split(t, splits);
     auto expected = cudf::split(t, {3, 4});
 
     auto iter = cuda::counting_iterator<cudf::size_type>{0};
@@ -2321,7 +2352,8 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitList)
     auto pre_split = cudf::split(*list, {2});
 
     cudf::table_view t({pre_split[1]});
-    auto result   = cudf::contiguous_split(t, {3, 4});
+    std::vector<cudf::size_type> splits{3, 4};
+    auto result   = cudf::contiguous_split(t, splits);
     auto expected = cudf::split(t, {3, 4});
 
     auto iter = cuda::counting_iterator<cudf::size_type>{0};
@@ -2361,7 +2393,8 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitStructs)
     auto iter = cuda::counting_iterator<cudf::size_type>{0};
     std::for_each(iter, iter + pre_split.size(), [&](cudf::size_type index) {
       cudf::table_view t({pre_split[index]});
-      auto result   = cudf::contiguous_split(t, {1});
+      std::vector<cudf::size_type> splits{1};
+      auto result   = cudf::contiguous_split(t, splits);
       auto expected = cudf::split(t, {1});
 
       CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result[0].table, expected[0]);
@@ -2390,7 +2423,8 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitStructs)
     auto pre_split = cudf::split(col, {2});
 
     cudf::table_view t({pre_split[1]});
-    auto result   = cudf::contiguous_split(t, {3, 4});
+    std::vector<cudf::size_type> splits{3, 4};
+    auto result   = cudf::contiguous_split(t, splits);
     auto expected = cudf::split(t, {3, 4});
 
     auto iter = cuda::counting_iterator<cudf::size_type>{0};
@@ -2551,12 +2585,14 @@ TEST_F(ContiguousSplitTableCornerCases, SplitEmpty)
   }
 
   {
-    auto result = cudf::contiguous_split(sliced[0], {0});
+    std::vector<cudf::size_type> splits{0};
+    auto result = cudf::contiguous_split(sliced[0], splits);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(sliced[0], result[0].table);
   }
 
   {
-    EXPECT_THROW(cudf::contiguous_split(sliced[0], {1}), std::out_of_range);
+    std::vector<cudf::size_type> bad_end{1};
+    EXPECT_THROW(cudf::contiguous_split(sliced[0], bad_end), std::out_of_range);
   }
 }
 
@@ -2911,7 +2947,8 @@ TEST_F(ContiguousSplitNestedTypesTest, DictionaryOfDictionary)
 
   cudf::table_view const src({*outer});
   auto const expected = cudf::split(src, {3});
-  auto const result   = cudf::contiguous_split(src, {3});
+  std::vector<cudf::size_type> splits{3};
+  auto const result = cudf::contiguous_split(src, splits);
   ASSERT_EQ(expected.size(), result.size());
   for (std::size_t i = 0; i < result.size(); ++i) {
     verify(expected[i].column(0), result[i].table.column(0));
