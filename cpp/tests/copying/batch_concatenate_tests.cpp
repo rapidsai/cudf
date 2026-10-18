@@ -341,6 +341,28 @@ TEST_F(BatchConcatenateTest, DictionaryColumns)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
 
+TEST_F(BatchConcatenateTest, EmptyTypedColumns)
+{
+  // All-EMPTY-typed sources take the early EMPTY path: sum the row counts, emit EMPTY output
+  auto make_empty_rows = [](cudf::size_type rows) {
+    return std::make_unique<cudf::column>(
+      cudf::data_type{cudf::type_id::EMPTY},
+      rows,
+      rmm::device_buffer{},
+      cudf::create_null_mask(rows, cudf::mask_state::UNALLOCATED),
+      rows);
+  };
+  auto c1 = make_empty_rows(3);
+  auto c2 = make_empty_rows(2);
+  std::vector<cudf::column_view> sources{c1->view(), c2->view()};
+
+  auto result = cudf::batch_concatenate(
+    sources, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+  EXPECT_EQ(result->size(), 5);
+  EXPECT_EQ(result->type().id(), cudf::type_id::EMPTY);
+  EXPECT_EQ(result->null_count(), 5);
+}
+
 TEST_F(BatchConcatenateTest, ListChildLongerThanOffsetsSpan)
 {
   // A child holding more elements than the offsets reach, which `make_lists_column` permits and
@@ -378,3 +400,143 @@ TEST_F(BatchConcatenateTest, ListChildLongerThanOffsetsSpan)
 
 struct BatchConcatenateTableTest : public cudf::test::BaseFixture {};
 
+TEST_F(BatchConcatenateTableTest, EmptyTableSpan)
+{
+  std::vector<cudf::table_view> tables;
+
+  auto result = cudf::batch_concatenate(
+    tables, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+
+  EXPECT_EQ(result->num_columns(), 0);
+  EXPECT_EQ(result->num_rows(), 0);
+}
+
+TEST_F(BatchConcatenateTableTest, TablesWithStructColumns)
+{
+  // Table 1: struct column with two children
+  auto child1_t1 = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3}, {1, 1, 0});
+  auto child2_t1 = cudf::test::fixed_width_column_wrapper<float>({1.0f, 2.0f, 3.0f}, {1, 0, 1});
+  auto struct_t1 = cudf::test::structs_column_wrapper({child1_t1, child2_t1}, {1, 0, 1});
+  cudf::table_view table1{{struct_t1}};
+
+  // Table 2: matching struct column
+  auto child1_t2 = cudf::test::fixed_width_column_wrapper<int32_t>({4, 5}, {0, 1});
+  auto child2_t2 = cudf::test::fixed_width_column_wrapper<float>({4.0f, 5.0f}, {1, 1});
+  auto struct_t2 = cudf::test::structs_column_wrapper({child1_t2, child2_t2}, {1, 1});
+  cudf::table_view table2{{struct_t2}};
+
+  std::vector<cudf::table_view> tables = {table1, table2};
+
+  auto result = cudf::batch_concatenate(
+    tables, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+
+  auto exp_child1 =
+    cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3, 4, 5}, {1, 1, 0, 0, 1});
+  auto exp_child2 =
+    cudf::test::fixed_width_column_wrapper<float>({1.0f, 2.0f, 3.0f, 4.0f, 5.0f}, {1, 0, 1, 1, 1});
+  auto exp_struct = cudf::test::structs_column_wrapper({exp_child1, exp_child2}, {1, 0, 1, 1, 1});
+  auto expected   = cudf::table_view{{exp_struct}};
+  CUDF_TEST_EXPECT_TABLES_EQUAL(result->view(), expected);
+}
+
+TEST_F(BatchConcatenateTableTest, LargePayloadRunsBatchedMaskPaths)
+{
+  // 8 MiB of flat payload is the threshold below which batch_concatenate delegates to
+  // cudf::detail::concatenate; this input crosses it, so the assertions below exercise the
+  // engine's own mask kernel: nonzero source offsets, a null spanning a word boundary between
+  // two sources, and a one-word parent.
+  constexpr int rows = 2'097'152;  // 2^21 rows x 4 bytes = 8 MiB per source
+  std::vector<int32_t> vals(rows);
+  std::iota(vals.begin(), vals.end(), 0);
+  std::vector<bool> valid(rows, true);
+  valid[31] = valid[32] = false;  // boundary nulls inside the first source
+  auto col1 =
+    cudf::test::fixed_width_column_wrapper<int32_t>(vals.begin(), vals.end(), valid.begin());
+  auto col2 = cudf::test::fixed_width_column_wrapper<int32_t>(
+    vals.begin(), vals.end());  // no mask; a table_view requires equal column sizes
+  auto full         = cudf::table_view{{col1, col2}};
+  auto const sliced = cudf::slice(full, {20, rows});  // nonzero offset, multi-word
+  auto const& s1    = sliced[0];
+
+  auto result = cudf::batch_concatenate(std::vector<cudf::table_view>{s1, s1},
+                                        cudf::get_default_stream(),
+                                        cudf::get_current_device_resource_ref());
+
+  // Row i of the output = source row (20 + (i mod (rows-20))); nulls at source rows 31, 32
+  // appear twice, at output rows 11, 12 and rows-20+11, rows-20+12
+  auto const n    = rows - 20;
+  auto const view = result->view();
+  ASSERT_EQ(view.num_rows(), 2 * n);
+  ASSERT_EQ(view.num_columns(), 2);
+  auto const col0 = view.column(0);
+  ASSERT_EQ(col0.null_count(), 4);
+  auto const col1_out = view.column(1);
+  ASSERT_EQ(col1_out.null_count(), 0);
+  auto const host = cudf::test::to_host<int32_t>(col0).first;
+  EXPECT_EQ(host[0], 20);
+  EXPECT_EQ(host[11], 31);  // source row 31 was nulled
+  EXPECT_EQ(host[12], 32);  // source row 32 was nulled
+  EXPECT_EQ(host[n], 20);   // second copy starts over
+}
+
+TEST_F(BatchConcatenateTableTest, PublicAPIWorks)
+{
+  auto col1_t1 = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3}, {1, 0, 1});
+  auto col2_t1 = cudf::test::fixed_width_column_wrapper<int64_t>({10, 20, 30});
+  cudf::table_view table1{{col1_t1, col2_t1}};
+
+  auto col1_t2 = cudf::test::fixed_width_column_wrapper<int32_t>({4, 5});
+  auto col2_t2 = cudf::test::fixed_width_column_wrapper<int64_t>({40, 50}, {1, 0});
+  cudf::table_view table2{{col1_t2, col2_t2}};
+
+  std::vector<cudf::table_view> tables = {table1, table2};
+
+  auto result = cudf::batch_concatenate(tables);
+
+  auto exp_col1 = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3, 4, 5}, {1, 0, 1, 1, 1});
+  auto exp_col2 =
+    cudf::test::fixed_width_column_wrapper<int64_t>({10, 20, 30, 40, 50}, {1, 1, 1, 1, 0});
+  auto expected = cudf::table_view{{exp_col1, exp_col2}};
+  CUDF_TEST_EXPECT_TABLES_EQUAL(result->view(), expected);
+}
+
+TEST_F(BatchConcatenateTableTest, OutputColumnsShareOneAllocationPerColumnPosition)
+{
+  auto i1 = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3}, {1, 0, 1});
+  auto s1 = cudf::test::strings_column_wrapper({"a", "bb", "ccc"}, {1, 1, 0});
+  auto l1 = cudf::test::lists_column_wrapper<int32_t>{{1, 2}, {3}, {4, 5, 6}};
+  cudf::table_view t1{{i1, s1, l1}};
+
+  auto i2 = cudf::test::fixed_width_column_wrapper<int32_t>({4, 5}, {0, 1});
+  auto s2 = cudf::test::strings_column_wrapper({"dddd", "e"}, {0, 1});
+  auto l2 = cudf::test::lists_column_wrapper<int32_t>{{7}, {8, 9}};
+  cudf::table_view t2{{i2, s2, l2}};
+
+  std::vector<cudf::table_view> tables{t1, t2};
+  auto exp_i = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3, 4, 5}, {1, 0, 1, 0, 1});
+  auto exp_s = cudf::test::strings_column_wrapper({"a", "bb", "ccc", "dddd", "e"}, {1, 1, 0, 0, 1});
+  auto exp_l = cudf::test::lists_column_wrapper<int32_t>{{1, 2}, {3}, {4, 5, 6}, {7}, {8, 9}};
+  auto const expected = cudf::table_view{{exp_i, exp_s, exp_l}};
+
+  rmm::mr::statistics_resource_adaptor stats_mr{cudf::get_current_device_resource_ref()};
+  {
+    auto result = cudf::batch_concatenate(tables, cudf::get_default_stream(), stats_mr);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(result->view(), expected);
+
+    // Every buffer of a column position comes out of one upstream block
+    EXPECT_EQ(stats_mr.get_allocations_counter().value, 3);
+
+    auto columns = result->release();
+    ASSERT_EQ(columns.size(), 3u);
+
+    // Releasing out of order must not free a block the surviving columns still point into
+    columns[1].reset();
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(columns[0]->view(), expected.column(0));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(columns[2]->view(), expected.column(2));
+
+    columns[2].reset();
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(columns[0]->view(), expected.column(0));
+  }
+
+  EXPECT_EQ(stats_mr.get_bytes_counter().value, 0);
+}

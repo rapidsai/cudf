@@ -3197,6 +3197,7 @@ void resolve_deferred_null_counts(deferred_null_counts& deferred, cuda::stream_r
 }
 
 }  // anonymous namespace
+
 // ============================================================================
 // 7. Reconstruction and entry points
 // Column rebuild, slab resources, and the public API.
@@ -3982,10 +3983,8 @@ std::unique_ptr<table> batch_concatenate(host_span<table_view const> tables_to_c
 
   return std::make_unique<table>(std::move(output_columns));
 }
-}  // namespace cudf::detail
+}  // namespace detail
 
-// TEMPORARY SCAFFOLD (public): now calling the REAL detail entries (both landed in this
-// commit). Final wrappers arrive at series completion.
 std::unique_ptr<column> batch_concatenate(host_span<column_view const> columns_to_concat,
                                           cuda::stream_ref stream,
                                           rmm::device_async_resource_ref mr)

@@ -107,7 +107,7 @@ ConfigureNVBench(
 )
 # Prototype-local: dispatch the synthetic wide-nested cell to batch_concatenate. Kept out of
 # the benchmark commit so the main-branch cherry-pick measures cudf::concatenate instead.
-# target_compile_definitions(COPYING_NVBENCH PRIVATE BATCH_CONCAT_BENCH_IMPL_BATCH)
+target_compile_definitions(COPYING_NVBENCH PRIVATE BATCH_CONCAT_BENCH_IMPL_BATCH)
 
 # ##################################################################################################
 # * contiguous_split benchmark  -------------------------------------------------------------------
