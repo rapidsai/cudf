@@ -86,3 +86,26 @@ TEST_F(BatchConcatenateTest, SmallPayloadFallsBackThroughPublicAPI)
     cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3, 4, 5, 6}, {1, 0, 1, 0, 1, 0});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
+
+TEST_F(BatchConcatenateTest, EmptyTypedColumns)
+{
+  // All-EMPTY-typed sources take the early EMPTY path: sum the row counts, emit EMPTY output
+  auto make_empty_rows = [](cudf::size_type rows) {
+    return std::make_unique<cudf::column>(
+      cudf::data_type{cudf::type_id::EMPTY},
+      rows,
+      rmm::device_buffer{},
+      cudf::create_null_mask(rows, cudf::mask_state::UNALLOCATED),
+      rows);
+  };
+  auto c1 = make_empty_rows(3);
+  auto c2 = make_empty_rows(2);
+  std::vector<cudf::column_view> sources{c1->view(), c2->view()};
+
+  auto result = cudf::batch_concatenate(
+    sources, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+  EXPECT_EQ(result->size(), 5);
+  EXPECT_EQ(result->type().id(), cudf::type_id::EMPTY);
+  EXPECT_EQ(result->null_count(), 5);
+}
+

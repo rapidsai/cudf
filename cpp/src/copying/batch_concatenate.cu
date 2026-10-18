@@ -65,12 +65,6 @@ namespace cudf {
 namespace detail {
 namespace {
 
-// TEMPORARY SCAFFOLD: the batched-memcpy/deferred-read helpers below gain their callers in
-// the following commits. Until then they are unreferenced in this TU, which trips
-// -Wunused-function under -Werror. Removed at series completion.
-#pragma GCC diagnostic ignored "-Wunused-function"
-#pragma nv_diag_suppress declared_but_not_referenced
-
 
 // ============================================================================
 // 1. Utilities
@@ -1281,6 +1275,801 @@ void accumulate_null_counts(deferred_null_counts& deferred, device_span<size_typ
   deferred.requests.clear();
 }
 
+
+// TEMPORARY SCAFFOLD: the batched-memcpy/deferred-read helpers below gain their callers in
+// the following commits. Until then they are unreferenced in this TU, which trips
+// -Wunused-function under -Werror. Removed at series completion.
+#pragma GCC diagnostic ignored "-Wunused-function"
+#pragma nv_diag_suppress declared_but_not_referenced
+namespace {
+// ============================================================================
+// 6. GPU kernels and launches
+// Every kernel paired with its launch site.
+// ============================================================================
+
+// Largest per-level source column count whose offsets are staged through shared memory. The staging
+// buffer is requested dynamically at launch and sized for the widest level in the batch, so a
+// launch reserves only what it needs; this is the point past which the request would approach the
+// 48 KB a kernel may ask for without opting in to a larger carveout.
+constexpr size_type max_smem_columns = 1024;
+
+/**
+ * @brief Bytes of dynamic shared memory to request for staging `count + 1` offsets of type `T`.
+ *
+ * @tparam T Type of the offsets being staged
+ * @param max_num_columns Widest source column count over the levels in the launch
+ */
+template <typename T>
+std::size_t smem_staging_bytes(size_type max_num_columns)
+{
+  return (static_cast<std::size_t>(std::min(max_num_columns, max_smem_columns)) + 1) * sizeof(T);
+}
+
+/**
+ * @brief Concatenates bitmasks for a single level using word-level operations.
+ *
+ * Each thread processes one output word (32 bits). The algorithm:
+ * 1. Find which column(s) contribute to this output word
+ * 2. Read one or two source words into a uint64_t
+ * 3. Shift the bits to align with the output position
+ * 4. Write the output word (with special handling for column boundaries)
+ *
+ * For boundary handling: when an output word spans two columns, the thread processing
+ * the first word of the later column will merge the trailing bits from the previous
+ * column with its own bits.
+ *
+ * @param mask_ptrs Source mask pointers for columns in this level
+ * @param mask_offsets Bit offset for each source mask (from column offset)
+ * @param offsets_ptr Prefix sum of column sizes (in bits) [num_columns + 1], possibly in shared
+ * memory
+ * @param col_sizes Number of rows in each source column
+ * @param num_columns Number of columns being concatenated
+ * @param dest_mask Output mask buffer
+ * @param num_output_words Total number of words in the output mask
+ * @param first_word_idx Index of the first output word this thread handles
+ * @param stride Distance between consecutive output words handled by this thread
+ */
+__device__ void concatenate_mask_words(bitmask_type const* const* __restrict__ mask_ptrs,
+                                       size_type const* __restrict__ mask_offsets,
+                                       size_type const* __restrict__ col_sizes,
+                                       size_type const* __restrict__ offsets_ptr,
+                                       size_type num_columns,
+                                       bitmask_type* __restrict__ dest_mask,
+                                       size_type num_output_words,
+                                       thread_index_type first_word_idx,
+                                       thread_index_type stride)
+{
+  constexpr size_type bits_per_word = detail::size_in_bits<bitmask_type>();
+
+  auto word_idx = first_word_idx;
+
+  while (word_idx < static_cast<thread_index_type>(num_output_words)) {
+    // Bit range for this output word
+    size_type const out_bit_start = static_cast<size_type>(word_idx) * bits_per_word;
+
+    // Find which column contains the start bit of this word
+    size_type col_idx =
+      thrust::upper_bound(thrust::seq, offsets_ptr, offsets_ptr + num_columns + 1, out_bit_start) -
+      offsets_ptr - 1;
+
+    bitmask_type output_word = 0;
+    size_type bits_filled    = 0;
+
+    // Process columns that contribute to this output word
+    while (bits_filled < bits_per_word && col_idx < num_columns) {
+      size_type const col_start_bit = offsets_ptr[col_idx];
+      size_type const col_end_bit   = offsets_ptr[col_idx + 1];
+      size_type const col_size      = col_end_bit - col_start_bit;
+
+      // Calculate bit positions within this column
+      size_type const current_out_bit = out_bit_start + bits_filled;
+      size_type const bit_in_col      = current_out_bit - col_start_bit;
+
+      // How many bits can we take from this column?
+      size_type const bits_remaining_in_col = col_size - bit_in_col;
+      size_type const bits_needed           = bits_per_word - bits_filled;
+      size_type const bits_to_copy          = min(bits_remaining_in_col, bits_needed);
+
+      bitmask_type const* src_mask = mask_ptrs[col_idx];
+
+      if (src_mask == nullptr) {
+        // No mask means all valid (all 1s)
+        bitmask_type const all_ones_mask = (bits_to_copy == bits_per_word)
+                                             ? ~bitmask_type{0}
+                                             : ((bitmask_type{1} << bits_to_copy) - 1);
+        output_word |= (all_ones_mask << bits_filled);
+      } else {
+        // Calculate source bit position
+        size_type const src_bit_idx = mask_offsets[col_idx] + bit_in_col;
+
+        // Read source bits using the shared funnel-shift helper (end-word clamp is safe:
+        // bits_to_copy <= bits_remaining_in_col keeps end_bit within the column's last word)
+        bitmask_type src_bits =
+          cudf::detail::get_mask_offset_word(src_mask, 0, src_bit_idx, src_bit_idx + bits_to_copy);
+
+        // Mask to get only the bits we need
+        bitmask_type const bits_mask      = (bits_to_copy == bits_per_word)
+                                              ? ~bitmask_type{0}
+                                              : ((bitmask_type{1} << bits_to_copy) - 1);
+        bitmask_type const extracted_bits = src_bits & bits_mask;
+
+        // Place the extracted bits at the correct position in the output word
+        output_word |= (extracted_bits << bits_filled);
+      }
+
+      bits_filled += bits_to_copy;
+      col_idx++;
+    }
+
+    // Write the output word
+    dest_mask[word_idx] = output_word;
+
+    word_idx += stride;
+  }
+}
+
+/**
+ * @brief Concatenates the null masks of many output levels in a single launch.
+ *
+ * `blockIdx.y` selects the level; the x dimension is a grid-stride loop over that level's output
+ * words. Every level's source metadata is flattened into the `all_*` arrays and located through
+ * the per-level boundaries, so the whole table costs one upload and one launch instead of one
+ * per level.
+ *
+ * @param all_mask_ptrs Flattened source mask pointers for every level
+ * @param all_mask_offsets Flattened bit offset of each source mask
+ * @param all_col_sizes Flattened row count of each source column
+ * @param all_output_offsets Flattened prefix sums of column sizes, `num_columns + 1` per level
+ * @param level_src_offsets Boundaries into the `all_mask_*` / `all_col_sizes` arrays [num_levels+1]
+ * @param level_output_offsets_offsets Boundaries into `all_output_offsets` [num_levels+1]
+ * @param level_num_src_columns Number of source columns per level [num_levels]
+ * @param level_dest_masks Output mask buffer per level [num_levels]
+ * @param level_num_output_words Number of output words per level [num_levels]
+ */
+
+CUDF_KERNEL void batch_concatenate_masks_kernel_2d(
+  bitmask_type const* const* __restrict__ all_mask_ptrs,
+  size_type const* __restrict__ all_mask_offsets,
+  size_type const* __restrict__ all_col_sizes,
+  size_type const* __restrict__ all_output_offsets,
+  size_type const* __restrict__ level_src_offsets,
+  size_type const* __restrict__ level_output_offsets_offsets,
+  size_type const* __restrict__ level_num_src_columns,
+  bitmask_type* const* __restrict__ level_dest_masks,
+  size_type const* __restrict__ level_num_output_words)
+{
+  auto const level = blockIdx.y;
+
+  auto const src_start        = level_src_offsets[level];
+  auto const num_columns      = level_num_src_columns[level];
+  auto const num_output_words = level_num_output_words[level];
+  auto const output_offsets   = all_output_offsets + level_output_offsets_offsets[level];
+
+  // Cache output_offsets in shared memory for the binary search, when it fits
+  extern __shared__ char smem_raw[];
+  auto* const smem_output_offsets = reinterpret_cast<size_type*>(smem_raw);
+  bool const use_smem             = (num_columns <= max_smem_columns);
+
+  if (use_smem) {
+    for (size_type i = threadIdx.x; i <= num_columns; i += batch_block_size) {
+      smem_output_offsets[i] = output_offsets[i];
+    }
+    __syncthreads();
+  }
+
+  concatenate_mask_words(all_mask_ptrs + src_start,
+                         all_mask_offsets + src_start,
+                         all_col_sizes + src_start,
+                         use_smem ? smem_output_offsets : output_offsets,
+                         num_columns,
+                         level_dest_masks[level],
+                         num_output_words,
+                         cudf::detail::grid_1d::global_thread_id<batch_block_size>(),
+                         cudf::detail::grid_1d::grid_stride<batch_block_size>());
+}
+
+/**
+ * @brief One output null mask to build, as handed to `launch_batched_mask_concat`.
+ */
+struct mask_concat_task {
+  level_info const* level;  ///< Level whose source masks are concatenated
+  bitmask_type* dest_mask;  ///< Pre-allocated output mask for that level
+};
+
+/**
+ * @brief Concatenates every requested null mask with one metadata upload and one launch.
+ *
+ * Uploading per level instead would cost four device allocations, four host-to-device copies and
+ * one launch for each of them, which dominates the runtime for wide, deeply nested schemas.
+ *
+ * @param tasks Output masks to build
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param staging Pinned block the metadata is uploaded from
+ */
+/// Blocks needed for @p n work items, clamped to at least one and at most @p cap.
+inline size_type blocks_capped(size_type n, size_type cap)
+{
+  return std::max(size_type{1},
+                  std::min(cap, cudf::util::div_rounding_up_safe(n, batch_block_size)));
+}
+
+/// Maximum active blocks of @p Kernel per SM.
+template <auto Kernel>
+inline int32_t max_active_blocks_per_sm()
+{
+  int32_t max_active_blocks{-1};
+  CUDF_CUDA_TRY(
+    cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_active_blocks, Kernel, batch_block_size, 0));
+  return max_active_blocks;
+}
+
+void launch_batched_mask_concat(host_span<mask_concat_task const> tasks,
+                                cuda::stream_ref stream,
+                                pinned_metadata& staging)
+{
+  if (tasks.empty()) { return; }
+
+  auto const num_levels = static_cast<size_type>(tasks.size());
+
+  std::size_t total_src = 0;
+  for (auto const& task : tasks) {
+    total_src += task.level->mask_ptrs.size();
+  }
+
+  std::vector<bitmask_type const*> all_mask_ptrs;
+  std::vector<size_type> all_mask_offsets;
+  std::vector<size_type> all_col_sizes;
+  std::vector<size_type> all_output_offsets;
+  all_mask_ptrs.reserve(total_src);
+  all_mask_offsets.reserve(total_src);
+  all_col_sizes.reserve(total_src);
+  all_output_offsets.reserve(total_src + num_levels);
+
+  std::vector<size_type> level_src_offsets;
+  std::vector<size_type> level_output_offsets_offsets;
+  std::vector<size_type> level_num_src_columns;
+  std::vector<bitmask_type*> level_dest_masks;
+  std::vector<size_type> level_num_output_words;
+  level_src_offsets.reserve(num_levels + 1);
+  level_output_offsets_offsets.reserve(num_levels + 1);
+  level_num_src_columns.reserve(num_levels);
+  level_dest_masks.reserve(num_levels);
+  level_num_output_words.reserve(num_levels);
+
+  size_type max_output_words    = 0;
+  size_type max_num_src_columns = 0;
+
+  for (auto const& task : tasks) {
+    auto const& level = *task.level;
+
+    level_src_offsets.push_back(static_cast<size_type>(all_mask_ptrs.size()));
+    level_output_offsets_offsets.push_back(static_cast<size_type>(all_output_offsets.size()));
+    level_num_src_columns.push_back(static_cast<size_type>(level.mask_ptrs.size()));
+    level_dest_masks.push_back(task.dest_mask);
+    max_num_src_columns =
+      std::max(max_num_src_columns, static_cast<size_type>(level.mask_ptrs.size()));
+
+    all_mask_ptrs.insert(all_mask_ptrs.end(), level.mask_ptrs.begin(), level.mask_ptrs.end());
+    all_mask_offsets.insert(
+      all_mask_offsets.end(), level.mask_offsets.begin(), level.mask_offsets.end());
+    all_col_sizes.insert(all_col_sizes.end(), level.col_sizes.begin(), level.col_sizes.end());
+
+    // Output offsets are the prefix sum of the source column sizes, in bits
+    size_type running = 0;
+    all_output_offsets.push_back(running);
+    for (auto const col_size : level.col_sizes) {
+      running += col_size;
+      all_output_offsets.push_back(running);
+    }
+
+    auto const num_output_words = cudf::util::div_rounding_up_safe(level.total_rows, 32);
+    level_num_output_words.push_back(num_output_words);
+    max_output_words = std::max(max_output_words, num_output_words);
+  }
+  level_src_offsets.push_back(static_cast<size_type>(all_mask_ptrs.size()));
+  level_output_offsets_offsets.push_back(static_cast<size_type>(all_output_offsets.size()));
+
+  auto const scratch_mr = cudf::get_current_device_resource_ref();
+
+  auto d_all_mask_ptrs      = staging.upload(all_mask_ptrs, stream, scratch_mr);
+  auto d_all_mask_offsets   = staging.upload(all_mask_offsets, stream, scratch_mr);
+  auto d_all_col_sizes      = staging.upload(all_col_sizes, stream, scratch_mr);
+  auto d_all_output_offsets = staging.upload(all_output_offsets, stream, scratch_mr);
+  auto d_level_src_offsets  = staging.upload(level_src_offsets, stream, scratch_mr);
+  auto d_level_output_offsets_offsets =
+    staging.upload(level_output_offsets_offsets, stream, scratch_mr);
+  auto d_level_num_src_columns  = staging.upload(level_num_src_columns, stream, scratch_mr);
+  auto d_level_dest_masks       = staging.upload(level_dest_masks, stream, scratch_mr);
+  auto d_level_num_output_words = staging.upload(level_num_output_words, stream, scratch_mr);
+
+
+
+  auto const occupancy_grid = max_active_blocks_per_sm<batch_concatenate_masks_kernel_2d>() *
+                              cudf::detail::num_multiprocessors();
+  auto const num_blocks_x = blocks_capped(max_output_words, occupancy_grid);
+  auto const smem_bytes   = smem_staging_bytes<size_type>(max_num_src_columns);
+
+  for_each_grid_y_chunk(
+    num_levels, static_cast<unsigned int>(num_blocks_x), [&](size_type first, dim3 grid) {
+      batch_concatenate_masks_kernel_2d<<<grid, batch_block_size, smem_bytes, stream.get()>>>(
+        d_all_mask_ptrs.data(),
+        d_all_mask_offsets.data(),
+        d_all_col_sizes.data(),
+        d_all_output_offsets.data(),
+        d_level_src_offsets.data() + first,
+        d_level_output_offsets_offsets.data() + first,
+        d_level_num_src_columns.data() + first,
+        d_level_dest_masks.data() + first,
+        d_level_num_output_words.data() + first);
+    });
+}
+
+/**
+ * @brief One (output column, source) pair: a run of offsets that copies with one constant delta.
+ *
+ * Describing the run once lets the kernel hoist everything per-element work would reload out of
+ * the loop: no per-element search, the corrections collapse into a single `delta`, and the source
+ * width stops being a per-element branch.
+ */
+
+/**
+
+ * @brief Writes one run of offsets per block row, with no per-element search.
+ *
+ * Templated on the output width so the offsetalator's per-element type dispatch is gone too; the
+ * segments are split by output width on the host and each width gets its own launch.
+ */
+template <size_type block_size, typename OutT>
+CUDF_KERNEL void batch_concatenate_offsets_segments_kernel(
+  offsets_segment const* __restrict__ segments)
+{
+  auto const seg   = segments[blockIdx.y];
+  auto* const out  = static_cast<OutT*>(seg.out_ptr) + seg.out_base;
+  auto const count = seg.count;
+  auto const delta = seg.delta;
+
+  auto const start     = static_cast<size_type>(threadIdx.x + blockIdx.x * block_size);
+  auto const stride    = static_cast<size_type>(block_size * gridDim.x);
+  auto const type_size = seg.src_is_int64 ? size_type{8} : size_type{4};
+
+  for (auto i = start; i < count; i += stride) {
+    out[i] = static_cast<OutT>(read_offset_value(seg.src_ptr, seg.src_base + i, type_size) + delta);
+  }
+
+  // The trailing element belongs to the column, not to any run, so its last run writes it
+  if (seg.write_tail && start == 0) { out[count] = static_cast<OutT>(seg.tail_value); }
+}
+
+/**
+ * @brief Phase 2's copy runs on its own stream, concurrently with phases 3 and 4.
+ *
+ * The copy descriptors are independent work items writing disjoint destinations, so any partition
+ * of them is safe; splitting by input row range instead would share boundary mask words between
+ * streams. Nothing here touches the null masks or the offsets.
+ */
+
+/// Streams the batched copy is split across. The copy descriptors write disjoint destinations, so
+/// any split is safe; past four ways the gain levels off.
+constexpr int copy_ways = 4;
+
+/**
+ * @brief Builds one descriptor per (level, source) and launches the segment-directed offsets
+ * kernel.
+ *
+ * Needs no grouping by row count: a run's length lives in its own descriptor, so runs of every
+ * length share a launch and the host-side bucketing the element-directed path performs disappears
+ * along with the search it existed to feed. One launch per output width, because the width is a
+ * template parameter rather than a per-element branch.
+ *
+ * @param levels_by_column Levels of every output column
+ * @param offsets_columns_by_column Allocated offsets column of each level, indexed to match
+ * @param stream Stream the launches and the descriptor upload are issued on
+ * @param staging Pinned block the descriptors are uploaded from
+ */
+
+
+
+
+void launch_offsets_segments(
+  std::vector<std::vector<level_info>> const& levels_by_column,
+  std::vector<std::vector<std::unique_ptr<column>>>& offsets_columns_by_column,
+  cuda::stream_ref stream,
+  pinned_metadata& staging)
+{
+  std::vector<offsets_segment> segments_32;
+  std::vector<offsets_segment> segments_64;
+
+  auto const num_columns = static_cast<size_type>(levels_by_column.size());
+  for (size_type col_idx = 0; col_idx < num_columns; ++col_idx) {
+    auto const& levels = levels_by_column[col_idx];
+    for (size_type level_idx = 0; level_idx < static_cast<size_type>(levels.size()); ++level_idx) {
+      auto const& level = levels[level_idx];
+      if (!level.is_string && !level.is_list) { continue; }
+
+      auto out_view           = offsets_columns_by_column[col_idx][level_idx]->mutable_view();
+      auto const out_is_int64 = out_view.type().id() == type_id::INT64;
+      auto& dst               = out_is_int64 ? segments_64 : segments_32;
+      auto const src_is_int64 = cudf::size_of(level.offsets_dtype) == 8;
+      auto const num_src      = static_cast<size_type>(level.src_offsets_ptrs.size());
+
+      size_type out_base = 0;
+      for (size_type s = 0; s < num_src; ++s) {
+        auto const count   = level.col_sizes[s];
+        auto const is_last = (s + 1 == num_src);
+
+        // An empty source contributes nothing, unless it is the run that owns the trailing total
+        if (count > 0 || is_last) {
+          dst.push_back(offsets_segment{
+            level.src_offsets_ptrs[s],
+            out_view.head<void>(),
+            static_cast<int64_t>(level.chars_partition_offsets[s]) - level.first_src_offsets[s],
+            static_cast<int64_t>(level.total_child_size),
+            level.src_offsets_offsets[s],
+            out_base,
+            count,
+            src_is_int64,
+            is_last});
+        }
+        out_base += count;
+      }
+    }
+  }
+
+  auto const launch = [&](auto out_type_tag, std::vector<offsets_segment> const& segments) {
+    using OutT = decltype(out_type_tag);
+    if (segments.empty()) { return; }
+
+    auto d_segments = staging.upload(segments, stream, cudf::get_current_device_resource_ref());
+
+    auto const occupancy_grid =
+      max_active_blocks_per_sm<
+        batch_concatenate_offsets_segments_kernel<batch_block_size, OutT>>() *
+      cudf::detail::num_multiprocessors();
+
+    auto const longest =
+      std::max_element(segments.begin(), segments.end(), [](auto const& a, auto const& b) {
+        return a.count < b.count;
+      })->count;
+    auto const num_blocks_x = blocks_capped(longest + 1, occupancy_grid);
+
+    auto const num_segments = static_cast<size_type>(segments.size());
+    for_each_grid_y_chunk(
+      num_segments, static_cast<unsigned int>(num_blocks_x), [&](size_type first, dim3 grid) {
+        batch_concatenate_offsets_segments_kernel<batch_block_size, OutT>
+          <<<grid, batch_block_size, 0, stream.get()>>>(d_segments.data() + first);
+      });
+  };
+
+  launch(int32_t{}, segments_32);
+  launch(int64_t{}, segments_64);
+}
+
+/**
+ * @brief Per-request range popcount for deferred sliced null counts.
+ *
+ * One block-row per request; grid.y chunked like `find_unsanitized_structs_kernel`.
+ */
+CUDF_KERNEL void batched_range_null_count_kernel(bitmask_type const* const* __restrict__ masks,
+                                                 size_type const* __restrict__ begins,
+                                                 size_type const* __restrict__ ends,
+                                                 size_type* __restrict__ out_counts)
+{
+  auto const req   = static_cast<size_type>(blockIdx.y);
+  auto const* mask = masks[req];
+  auto const begin = begins[req];
+  auto const end   = ends[req];
+  if (mask == nullptr || begin >= end) { return; }
+
+  constexpr auto word_size = detail::size_in_bits<bitmask_type>();
+  auto const first_word    = word_index(begin);
+  auto const last_word     = word_index(end - 1);
+
+  auto const tid    = static_cast<size_type>(threadIdx.x + blockIdx.x * batch_block_size);
+  auto const stride = static_cast<size_type>(batch_block_size * gridDim.x);
+  size_type thread_set{0};
+
+  for (auto word = first_word + tid; word <= last_word; word += stride) {
+    thread_set += cuda::std::popcount(mask[word]);
+  }
+
+  // Subtract slack bits outside [begin, end) on the first/last word (same as count_set_bits_kernel)
+  if (tid < 2) {
+    bool const first          = tid == 0;
+    size_type const bit_index = first ? begin : (end - 1);
+    size_type const word_idx  = first ? first_word : last_word;
+    size_type num_slack_bits  = bit_index % word_size;
+    if (!first) { num_slack_bits = word_size - num_slack_bits - 1; }
+    if (num_slack_bits > 0) {
+      auto const word = mask[word_idx];
+      auto const slack_mask =
+        first ? cuda::bitmask<bitmask_type>(0, num_slack_bits)
+              : cuda::bitmask<bitmask_type>(word_size - num_slack_bits, num_slack_bits);
+      thread_set -= cuda::std::popcount(word & slack_mask);
+    }
+  }
+
+  using BlockReduce = cub::BlockReduce<size_type, batch_block_size>;
+  __shared__ typename BlockReduce::TempStorage temp_storage;
+  auto const block_set = BlockReduce(temp_storage).Sum(thread_set);
+  if (threadIdx.x == 0) {
+    cuda::atomic_ref<size_type, cuda::thread_scope_device>{out_counts[req]}.fetch_add(
+      block_set, cuda::std::memory_order_relaxed);
+  }
+}
+
+/**
+ * @brief One struct-parent / child null-mask pair to test for agreement.
+ */
+struct superimpose_check {
+  std::uint8_t* flag;               ///< Set when the pair disagrees
+  bitmask_type const* parent_mask;  ///< Null mask of the struct level
+  bitmask_type const* child_mask;   ///< Null mask of one of its children
+  size_type num_rows;               ///< Rows both masks span
+  size_type parent_offset;          ///< Bit offset of the first row in the parent mask
+  size_type child_offset;           ///< Bit offset of the first row in the child mask
+};
+
+/**
+ * @brief Flags pairs where a child is valid on a row its struct parent calls null.
+ *
+ * @param parent_masks Struct null mask of each pair
+ * @param child_masks Child null mask of each pair
+ * @param num_rows Row count of each pair
+ * @param flags Set to 1 for each disagreeing pair; untouched otherwise
+ */
+/**
+ * @brief Reads word @p word of the @p rows bits starting at bit @p offset of @p mask.
+ *
+ * A sliced source starts partway into a word, so the word wanted spans two stored words. The last
+ * read is clamped to the word holding the final row so a slice never reads past its own mask.
+ */
+CUDF_KERNEL void find_unsanitized_structs_kernel(
+  bitmask_type const* const* __restrict__ parent_masks,
+  bitmask_type const* const* __restrict__ child_masks,
+  size_type const* __restrict__ num_rows,
+  size_type const* __restrict__ parent_offsets,
+  size_type const* __restrict__ child_offsets,
+  std::uint8_t* __restrict__ flags)
+{
+  auto const check_idx = static_cast<size_type>(blockIdx.y);
+  auto const rows      = num_rows[check_idx];
+  auto const num_words = cudf::util::div_rounding_up_safe(rows, static_cast<size_type>(32));
+
+  auto const* const parent = parent_masks[check_idx];
+  auto const* const child  = child_masks[check_idx];
+  auto const parent_offset = parent_offsets[check_idx];
+  auto const child_offset  = child_offsets[check_idx];
+
+  auto const stride = static_cast<size_type>(batch_block_size * gridDim.x);
+  for (auto word = static_cast<size_type>(threadIdx.x + blockIdx.x * batch_block_size);
+       word < num_words;
+       word += stride) {
+    // Bits past the last row are padding and must not decide the outcome
+    auto const trailing_bits = rows - word * 32;
+    auto const in_range =
+      trailing_bits >= 32 ? ~bitmask_type{0} : ((bitmask_type{1} << trailing_bits) - 1);
+
+    auto const parent_word =
+      cudf::detail::get_mask_offset_word(parent, word, parent_offset, parent_offset + rows);
+    auto const child_word =
+      cudf::detail::get_mask_offset_word(child, word, child_offset, child_offset + rows);
+    if ((~parent_word & child_word & in_range) != 0) {
+      flags[check_idx] = 1;
+      return;
+    }
+  }
+}
+
+/**
+ * @brief Records the superimpose decision from the *source* masks, before any output exists.
+ *
+ * The output mask of a struct level is its sources' masks concatenated, and a struct child always
+ * has its parent's row count, so output row i of the parent and of the child both come from the
+ * same row of the same source. A child that is valid where its parent is null therefore exists in
+ * the output if and only if it exists in some source, which makes this decision available from the
+ * inputs alone. Taking it here instead of from the finished output masks moves the readback ahead
+ * of every allocation and launch.
+ *
+ * @param levels Levels of one output column
+ * @param level_idx Preorder cursor, advanced in step with reconstruction
+ * @param needs_superimpose One entry per level, set for struct levels that cannot take the fast
+ * path
+ * @param checks Accumulates the pairs to test
+ */
+void collect_superimpose_checks_from_inputs(std::vector<level_info> const& levels,
+                                            size_type& level_idx,
+                                            std::vector<std::uint8_t>& needs_superimpose,
+                                            std::vector<superimpose_check>& checks)
+{
+  auto const current = level_idx;
+  auto const& level  = levels[current];
+  ++level_idx;
+
+  if (level.is_dictionary) { return; }
+
+  if (level.is_struct) {
+    for (size_type i = 0; i < level.num_children; ++i) {
+      auto const child_level = level_idx;
+      collect_superimpose_checks_from_inputs(levels, level_idx, needs_superimpose, checks);
+
+      auto const& child = levels[child_level];
+
+      // A dictionary child builds its own mask elsewhere and cannot be settled here
+      if (child.is_dictionary) {
+        needs_superimpose[current] = 1;
+        continue;
+      }
+
+      auto const num_sources = static_cast<size_type>(level.mask_ptrs.size());
+      for (size_type s = 0; s < num_sources; ++s) {
+        auto const* parent_mask = level.mask_ptrs[s];
+
+        // A source whose struct has no mask calls no row null, so it can push nothing down
+        if (parent_mask == nullptr) { continue; }
+
+        // A source whose child has no mask calls every row valid, including the rows its parent
+        // calls null, and that cannot be ruled out without reading the parent
+        if (s >= static_cast<size_type>(child.mask_ptrs.size()) || child.mask_ptrs[s] == nullptr) {
+          needs_superimpose[current] = 1;
+          continue;
+        }
+
+        if (level.col_sizes[s] == 0) { continue; }
+
+        checks.push_back({&needs_superimpose[current],
+                          parent_mask,
+                          child.mask_ptrs[s],
+                          level.col_sizes[s],
+                          level.mask_offsets[s],
+                          child.mask_offsets[s]});
+      }
+    }
+  } else if (level.is_list) {
+    if (level.total_child_size != 0) {
+      collect_superimpose_checks_from_inputs(levels, level_idx, needs_superimpose, checks);
+    }
+  }
+}
+
+/**
+ * @brief Builds the per-pair superimpose launch arrays and the widest word count.
+ */
+void fill_superimpose_arrays(host_span<superimpose_check const> checks,
+                             std::vector<bitmask_type const*>& parent_masks,
+                             std::vector<bitmask_type const*>& child_masks,
+                             std::vector<size_type>& num_rows,
+                             std::vector<size_type>& parent_offsets,
+                             std::vector<size_type>& child_offsets,
+                             size_type& max_words)
+{
+  auto const num_checks = static_cast<size_type>(checks.size());
+  max_words             = 0;
+  for (size_type i = 0; i < num_checks; ++i) {
+    parent_masks[i]   = checks[i].parent_mask;
+    child_masks[i]    = checks[i].child_mask;
+    num_rows[i]       = checks[i].num_rows;
+    parent_offsets[i] = checks[i].parent_offset;
+    child_offsets[i]  = checks[i].child_offset;
+    max_words         = std::max(max_words, cudf::util::div_rounding_up_safe(num_rows[i], 32));
+  }
+}
+
+/**
+ * @brief Copies each nonzero readback flag into the pair's out-flag.
+ */
+void apply_superimpose_flags(host_span<superimpose_check const> checks,
+                             host_span<std::uint8_t const> flags)
+{
+  auto const num_checks = static_cast<size_type>(checks.size());
+  for (size_type i = 0; i < num_checks; ++i) {
+    if (flags[i] != 0) { *checks[i].flag = 1; }
+  }
+}
+
+/**
+ * @brief One stream sync for deferred null-count popcounts and struct superimpose checks.
+ *
+ * Both kernels are independent of each other and only need filled `level_info` / pending ranges.
+ * Launching both then draining with a single `synchronize` saves a host round trip between them.
+ */
+void resolve_deferred_null_counts_and_superimpose(deferred_null_counts& deferred,
+                                                  host_span<superimpose_check const> checks,
+                                                  cuda::stream_ref stream)
+{
+  if (deferred.requests.empty() && checks.empty()) { return; }
+
+  auto const scratch_mr = cudf::get_current_device_resource_ref();
+  auto const num_checks = static_cast<size_type>(checks.size());
+  auto const num_nulls  = static_cast<size_type>(deferred.requests.size());
+
+  // ---- Null-count launch (pageable uploads; drained below while arrays live) ----
+  std::vector<bitmask_type const*> null_masks(num_nulls);
+  std::vector<size_type> begins(num_nulls);
+  std::vector<size_type> ends(num_nulls);
+  size_type max_null_words = 0;
+  fill_null_count_arrays(deferred, null_masks, begins, ends, max_null_words);
+  auto d_null_masks = cudf::detail::make_device_uvector_async(null_masks, stream, scratch_mr);
+  auto d_begins     = cudf::detail::make_device_uvector_async(begins, stream, scratch_mr);
+  auto d_ends       = cudf::detail::make_device_uvector_async(ends, stream, scratch_mr);
+  rmm::device_uvector<size_type> d_set_counts(num_nulls, stream, scratch_mr);
+  // cudaMemsetAsync's behavior on a null pointer at count 0 is undocumented; skip the zeroing.
+  if (num_nulls > 0) {
+    CUDF_CUDA_TRY(cudaMemsetAsync(
+      d_set_counts.data(), 0, d_set_counts.size() * sizeof(size_type), stream.get()));
+  }
+
+  auto const num_blocks_x = blocks_capped(max_null_words, 32);
+  for_each_grid_y_chunk(
+    num_nulls, static_cast<unsigned int>(num_blocks_x), [&](size_type first, dim3 grid) {
+      batched_range_null_count_kernel<<<grid, batch_block_size, 0, stream.get()>>>(
+        d_null_masks.data() + first,
+        d_begins.data() + first,
+        d_ends.data() + first,
+        d_set_counts.data() + first);
+    });
+
+  // ---- Superimpose launch ----
+  // Pageable uploads, drained below while the five arrays are still in scope — the same lifetime
+  // arrangement `pinned_metadata` exists to buy explicitly everywhere else, free here from the
+  // readback happening inside this function.
+  std::vector<bitmask_type const*> parent_masks(num_checks);
+  std::vector<bitmask_type const*> child_masks(num_checks);
+  std::vector<size_type> num_rows(num_checks);
+  std::vector<size_type> parent_offsets(num_checks);
+  std::vector<size_type> child_offsets(num_checks);
+  size_type max_check_words = 0;
+  fill_superimpose_arrays(
+    checks, parent_masks, child_masks, num_rows, parent_offsets, child_offsets, max_check_words);
+  auto d_parent_masks = cudf::detail::make_device_uvector_async(parent_masks, stream, scratch_mr);
+  auto d_child_masks  = cudf::detail::make_device_uvector_async(child_masks, stream, scratch_mr);
+  auto d_num_rows     = cudf::detail::make_device_uvector_async(num_rows, stream, scratch_mr);
+  auto d_parent_offsets =
+    cudf::detail::make_device_uvector_async(parent_offsets, stream, scratch_mr);
+  auto d_child_offsets = cudf::detail::make_device_uvector_async(child_offsets, stream, scratch_mr);
+  rmm::device_uvector<std::uint8_t> d_flags(num_checks, stream, scratch_mr);
+  if (num_checks > 0) {
+    CUDF_CUDA_TRY(
+      cudaMemsetAsync(d_flags.data(), 0, d_flags.size() * sizeof(std::uint8_t), stream.get()));
+  }
+
+  {
+    auto const num_blocks_x = blocks_capped(max_check_words, 32);
+    for_each_grid_y_chunk(
+      num_checks, static_cast<unsigned int>(num_blocks_x), [&](size_type first, dim3 grid) {
+        find_unsanitized_structs_kernel<<<grid, batch_block_size, 0, stream.get()>>>(
+          d_parent_masks.data() + first,
+          d_child_masks.data() + first,
+          d_num_rows.data() + first,
+          d_parent_offsets.data() + first,
+          d_child_offsets.data() + first,
+          d_flags.data() + first);
+      });
+  }
+  CUDF_CUDA_TRY(cudaGetLastError());
+
+  // ---- One drain for both D2Hs ----
+  auto set_counts = cudf::detail::make_std_vector_async(
+    device_span<size_type const>{d_set_counts.data(), d_set_counts.size()}, stream);
+  auto flags = cudf::detail::make_std_vector_async(
+    device_span<std::uint8_t const>{d_flags.data(), d_flags.size()}, stream);
+  cudf::detail::sync_stream(stream);
+
+  accumulate_null_counts(deferred,
+                         device_span<size_type const>{set_counts.data(), set_counts.size()});
+
+  apply_superimpose_flags(checks, flags);
+}
+
+/**
+ * @brief Resolves every deferred sliced null count into its level's totals before slab sizing.
+ */
+void resolve_deferred_null_counts(deferred_null_counts& deferred, cuda::stream_ref stream)
+{
+  resolve_deferred_null_counts_and_superimpose(
+    deferred, host_span<superimpose_check const>{}, stream);
+}
+
+}  // namespace (anonymous)
 }  // namespace (anonymous)
 }  // namespace cudf::detail
 
