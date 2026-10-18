@@ -11,7 +11,7 @@ from contextlib import nullcontext
 from dataclasses import dataclass, field
 from enum import IntEnum
 from itertools import accumulate, pairwise
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 
 import pylibcudf as plc
 from cudf_streaming.table_chunk import (
@@ -30,7 +30,7 @@ from cudf_polars.streaming.actor_graph.utils import ChunkStore, names_to_indices
 from cudf_polars.utils.cuda_stream import join_cuda_streams
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Iterable, Sequence
+    from collections.abc import AsyncIterator, Callable, Iterable, Sequence
     from typing import Never
 
     from pylibcudf.utils import CudaStreamLike
@@ -52,18 +52,17 @@ def _unsupported_policy(policy: object) -> Never:
     raise TypeError(f"Unsupported overlap policy: {type(policy).__name__}")
 
 
-class _BoundSearch(Protocol):
-    """Search for insertion points in an ordered table."""
-
-    def __call__(
-        self,
-        haystack: plc.Table,
-        needles: plc.Table,
-        column_order: list[plc.types.Order],
-        null_precedence: list[plc.types.NullOrder],
-        stream: CudaStreamLike | None = None,
-        mr: DeviceMemoryResource | None = None,
-    ) -> plc.Column: ...
+type _BoundSearch = Callable[
+    [
+        plc.Table,
+        plc.Table,
+        list[plc.types.Order],
+        list[plc.types.NullOrder],
+        CudaStreamLike | None,
+        DeviceMemoryResource | None,
+    ],
+    plc.Column,
+]
 
 
 class RangeValidation(IntEnum):
@@ -330,8 +329,8 @@ class RangeOverlapPolicy(_OverlapPolicy[RangeBufferedChunk]):
                     plc.Table([needle]),
                     [plc.types.Order.ASCENDING],
                     [plc.types.NullOrder.AFTER],
-                    stream=stream,
-                    mr=context.br().device_mr,
+                    stream,
+                    context.br().device_mr,
                 )
                 .to_scalar(stream=stream)
                 .to_py(stream=stream)
