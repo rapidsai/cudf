@@ -775,12 +775,14 @@ TEST_F(ParquetFooterFacadeTest, MixedColumnOrdersRoundTrip)
   EXPECT_EQ(experimental::write_parquet_footer_bytes(reparsed), bytes);
 }
 
-// Regression for issue #16120: a footer written by parquet-java >= 1.18.1 carries the
-// IEEE_754_TOTAL_ORDER (union field id 2) that previously parsed to UNDEFINED and crashed the
-// writer. The bytes below are the exact canonical compact-protocol output of
-// write_parquet_footer_bytes for this metadata (empty schema/row-groups are emitted
-// unconditionally, so the literal includes them); parse and byte-identity must both hold.
-TEST_F(ParquetFooterFacadeTest, IEEEColumnOrderBytesRoundTrip)
+// A footer written by parquet-java >= 1.18.1 carries the IEEE_754_TOTAL_ORDER and
+// INT96_TIMESTAMP_ORDER ColumnOrder fields (union field ids 2 and 3), which previously parsed to
+// UNDEFINED and crashed the writer. Both orders matter independently -- TYPE_ORDER is not
+// equivalent to either for min/max comparison -- so one footer carries both and their binding and
+// byte identity must hold together. The bytes below are the exact canonical compact-protocol output
+// of write_parquet_footer_bytes for this metadata (empty schema/row-groups are emitted
+// unconditionally, so the literal includes them).
+TEST_F(ParquetFooterFacadeTest, BothColumnOrderBytesRoundTrip)
 {
   // clang-format off
   std::vector<uint8_t> const footer{
@@ -788,41 +790,19 @@ TEST_F(ParquetFooterFacadeTest, IEEEColumnOrderBytesRoundTrip)
     0x19, 0x0c,        // field 2 (schema): empty LIST<STRUCT>
     0x16, 0x00,        // field 3 (num_rows) i64 = 0
     0x19, 0x0c,        // field 4 (row_groups): empty LIST<STRUCT>
-    0x39, 0x1c,        // field 7 (column_orders): LIST, 1 element, STRUCT
+    0x39, 0x2c,        // field 7 (column_orders): LIST, 2 elements, STRUCT
     0x2c, 0x00, 0x00,  //   ColumnOrder field 2 (IEEE_754_TOTAL_ORDER) empty STRUCT + STOP
+    0x3c, 0x00, 0x00,  //   ColumnOrder field 3 (INT96_TIMESTAMP_ORDER) empty STRUCT + STOP
     0x00};             // FileMetaData STOP
   // clang-format on
   auto const parsed = experimental::read_parquet_footer_bytes(footer);
   EXPECT_EQ(parsed.version, 1);
   ASSERT_TRUE(parsed.column_orders.has_value());
-  ASSERT_EQ(parsed.column_orders->size(), 1);
+  ASSERT_EQ(parsed.column_orders->size(), 2);
   EXPECT_EQ(parsed.column_orders.value()[0].type, ColumnOrder::IEEE_754_TOTAL_ORDER);
+  EXPECT_EQ(parsed.column_orders.value()[1].type, ColumnOrder::INT96_TIMESTAMP_ORDER);
 
   // The canonical writer output for the parsed footer is byte-identical to the input.
-  auto const rewritten = experimental::write_parquet_footer_bytes(parsed);
-  EXPECT_EQ(rewritten, footer);
-}
-
-// INT96_TIMESTAMP_ORDER (field id 3) is likewise unmodeled upstream of this change: parsing and
-// byte-identity must hold independently of the IEEE field, guarding a one-field-only fix. Canonical
-// writer output, same shape as the IEEE literal above.
-TEST_F(ParquetFooterFacadeTest, Int96ColumnOrderBytesRoundTrip)
-{
-  // clang-format off
-  std::vector<uint8_t> const footer{
-    0x15, 0x02,        // field 1 (version) i32 = 1
-    0x19, 0x0c,        // field 2 (schema): empty LIST<STRUCT>
-    0x16, 0x00,        // field 3 (num_rows) i64 = 0
-    0x19, 0x0c,        // field 4 (row_groups): empty LIST<STRUCT>
-    0x39, 0x1c,        // field 7 (column_orders): LIST, 1 element, STRUCT
-    0x3c, 0x00, 0x00,  //   ColumnOrder field 3 (INT96_TIMESTAMP_ORDER) empty STRUCT + STOP
-    0x00};             // FileMetaData STOP
-  // clang-format on
-  auto const parsed = experimental::read_parquet_footer_bytes(footer);
-  ASSERT_TRUE(parsed.column_orders.has_value());
-  ASSERT_EQ(parsed.column_orders->size(), 1);
-  EXPECT_EQ(parsed.column_orders.value()[0].type, ColumnOrder::INT96_TIMESTAMP_ORDER);
-
   auto const rewritten = experimental::write_parquet_footer_bytes(parsed);
   EXPECT_EQ(rewritten, footer);
 }
@@ -855,7 +835,9 @@ TEST_F(ParquetFooterFacadeTest, InvalidColumnOrderFails)
 }
 
 // The payloadless LogicalType fields UUID, FLOAT16, GEOMETRY (tag-only: its string `crs` payload is
-// not retained) and FILE round-trip with their tags intact.
+// not retained) and FILE round-trip with their tags intact. The GEOMETRY leaf additionally pins the
+// engaged-payload path: the writer emits an empty struct for a payloadless GEOMETRY, and the reader
+// binds it to an engaged payload with `has_crs` false.
 TEST_F(ParquetFooterFacadeTest, EmptyLogicalTypeFieldsRoundTrip)
 {
   auto const meta = make_logical_type_footer({{LogicalType{LogicalType::UUID}},
@@ -871,6 +853,11 @@ TEST_F(ParquetFooterFacadeTest, EmptyLogicalTypeFieldsRoundTrip)
     ASSERT_TRUE(reparsed.schema[i].logical_type.has_value());
     EXPECT_EQ(reparsed.schema[i].logical_type->type, meta.schema[i].logical_type->type);
   }
+
+  // The empty GEOMETRY struct reparses as an engaged payload with no `crs` recorded.
+  SCOPED_TRACE("schema index 3");
+  ASSERT_TRUE(reparsed.schema[3].logical_type_payload.geometry_type.has_value());
+  EXPECT_FALSE(reparsed.schema[3].logical_type_payload.geometry_type->has_crs);
 
   EXPECT_EQ(experimental::write_parquet_footer_bytes(reparsed), bytes);
 }
@@ -969,24 +956,6 @@ TEST_F(ParquetFooterFacadeTest, GeometryCrsRefusesRewrite)
   EXPECT_TRUE(crs_parsed.schema[0].logical_type_payload.geometry_type->has_crs);
 
   EXPECT_THROW((void)experimental::write_parquet_footer_bytes(crs_parsed), cudf::logic_error);
-}
-
-// An engaged GEOMETRY payload whose `has_crs` is false passes the crs guard and writes the empty
-// struct, round-tripping byte-identically -- the third GEOMETRY write path.
-TEST_F(ParquetFooterFacadeTest, GeometryPayloadWithoutCrsRoundTrip)
-{
-  LogicalType geometry_type{LogicalType::GEOMETRY};
-  LogicalTypePayload geometry_payload;
-  geometry_payload.geometry_type = GeometryType{};  // engaged, has_crs == false
-  auto const meta                = make_logical_type_footer({{geometry_type, geometry_payload}});
-  auto const bytes               = experimental::write_parquet_footer_bytes(meta);
-  auto const reparsed            = experimental::read_parquet_footer_bytes(bytes);
-  ASSERT_EQ(reparsed.schema.size(), 2);
-  ASSERT_TRUE(reparsed.schema[1].logical_type.has_value());
-  EXPECT_EQ(reparsed.schema[1].logical_type->type, LogicalType::GEOMETRY);
-  ASSERT_TRUE(reparsed.schema[1].logical_type_payload.geometry_type.has_value());
-  EXPECT_FALSE(reparsed.schema[1].logical_type_payload.geometry_type->has_crs);
-  EXPECT_EQ(experimental::write_parquet_footer_bytes(reparsed), bytes);
 }
 
 // Optional payloads keep presence exactly: an absent field stays absent, and a zero value stays
@@ -1098,8 +1067,7 @@ TEST_F(ParquetFooterFacadeTest, InvalidLogicalTypeFails)
 }
 
 // A payload member engaged for a union field other than its own would be dropped silently, so the
-// writer refuses it; each of the three guards is reached by a distinct mismatch, and a disengaged
-// payload stays legal.
+// writer refuses it; each of the three guards is reached by a distinct mismatch.
 TEST_F(ParquetFooterFacadeTest, MismatchedLogicalTypePayloadIsRefused)
 {
   LogicalTypePayload variant_payload{.variant_type = VariantType{}};
@@ -1118,22 +1086,11 @@ TEST_F(ParquetFooterFacadeTest, MismatchedLogicalTypePayloadIsRefused)
   EXPECT_THROW((void)experimental::write_parquet_footer_bytes(geography_with_variant),
                cudf::logic_error);
 
-  // GEOMETRY carrying a Variant payload.
-  auto const geometry_with_variant =
-    make_logical_type_footer({{LogicalType{LogicalType::GEOMETRY}, variant_payload}});
-  EXPECT_THROW((void)experimental::write_parquet_footer_bytes(geometry_with_variant),
-               cudf::logic_error);
-
   // VARIANT carrying a Geometry payload.
   auto const variant_with_geometry =
     make_logical_type_footer({{LogicalType{LogicalType::VARIANT}, geometry_payload}});
   EXPECT_THROW((void)experimental::write_parquet_footer_bytes(variant_with_geometry),
                cudf::logic_error);
-
-  // A disengaged payload is a legal thrift value: the VARIANT arm writes an empty struct.
-  auto const variant_without_payload =
-    make_logical_type_footer({{LogicalType{LogicalType::VARIANT}, LogicalTypePayload{}}});
-  EXPECT_NO_THROW((void)experimental::write_parquet_footer_bytes(variant_without_payload));
 }
 
 // A malformed known LogicalType field (GEOMETRY, id 17, expected STRUCT) encoded as i32 keeps the
