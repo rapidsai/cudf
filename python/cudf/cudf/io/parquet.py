@@ -2640,7 +2640,7 @@ def _process_metadata(
                 start = range_index_meta["start"] + skip_rows  # type: ignore[operator]
                 stop = int(range_index_meta["stop"])  # type: ignore[arg-type]
                 if nrows > -1:
-                    stop = start + nrows
+                    stop = min(stop, start + nrows)
                 idx = RangeIndex(
                     start=start,
                     stop=stop,
