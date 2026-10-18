@@ -468,6 +468,24 @@ def test_dataframe_loc_slice(step):
     )
 
 
+@pytest.mark.parametrize(
+    "column_slice",
+    [
+        slice("missing", "a"),
+        slice("a", "missing"),
+        slice("missing", "missing"),
+    ],
+)
+def test_dataframe_loc_slice_missing_column_boundary(column_slice):
+    pdf = pd.DataFrame({"b": [1], "a": [2], "c": [3]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_exceptions_equal(
+        lambda: pdf.loc[:, column_slice],
+        lambda: gdf.loc[:, column_slice],
+    )
+
+
 def test_dataframe_loc_arraylike():
     size = 123
     rng = np.random.default_rng(seed=0)

@@ -786,10 +786,14 @@ class ColumnAccessor(MutableMapping):
             if _keys_equal(name, start):  # type: ignore[arg-type]  # (padded key matches label shape)
                 start_idx = idx
                 break
+        else:
+            raise KeyError(key.start)
         for idx, name in enumerate(reversed(self.names)):
             if _keys_equal(name, stop):  # type: ignore[arg-type]  # (padded key matches label shape)
                 stop_idx = len(self) - idx
                 break
+        else:
+            raise KeyError(key.stop)
         keys = self.names[start_idx:stop_idx]
         return type(self)(
             {k: self._data[k] for k in keys},
