@@ -1024,7 +1024,7 @@ void scatter_offsets(tree_meta_t const& tree,
     columns_data[col_id] = json_column_data{col.string_offsets.data(),
                                             col.string_lengths.data(),
                                             col.child_offsets.data(),
-                                            reinterpret_cast<bitmask_type*>(col.validity.data())};
+                                            col.validity.data()};
   }
 
   auto d_ignore_vals = cudf::detail::make_device_buffer_async(
