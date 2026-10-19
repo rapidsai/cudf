@@ -461,13 +461,13 @@ def _update_quent_on_worker(
     *,
     uid: str,
     dask_worker: distributed.Worker | None = None,
-) -> None:
+) -> None:  # pragma: no cover - runs in a Dask worker process
     """Replace one worker's Quent runtime (or clear it when both args are ``None``)."""
     assert dask_worker is not None
     mp_ctx: _WorkerContext | None = getattr(
         dask_worker, f"_cudf_polars_mp_context_{uid}", None
     )
-    if mp_ctx is None:
+    if mp_ctx is None:  # pragma: no cover; unreachable
         return
     if mp_ctx.quent_worker_runtime is not None:
         mp_ctx.quent_worker_runtime.close()
@@ -538,7 +538,7 @@ def _shutdown_dask(
     """Release Dask resources in dependency order."""
     steps: list[Callable[[], object]] = []
     if quent_close is not None:
-        steps.append(quent_close)
+        steps.append(quent_close)  # pragma: no cover - same cleanup as reset
     if client is not None:
         steps.append(lambda: client.run(functools.partial(_teardown_worker, uid=uid)))
     if owned_client is not None:
@@ -1267,7 +1267,7 @@ class DaskEngine(StreamingEngine):
                     uid=ctx.rapidsmpf_id,
                 )
             )
-        except BaseException:
+        except BaseException:  # pragma: no cover - defensive startup cleanup
             with contextlib.suppress(Exception):
                 self._quent_close()
             raise

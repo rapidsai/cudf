@@ -129,7 +129,7 @@ class QuentControllerRuntime:
             collector = start_collector(config.run_root)
             cleanup.callback(lambda: collector.close(timeout=10.0))
             collector_address = collector.address
-            if collector_address is None:
+            if collector_address is None:  # pragma: no cover - Collector invariant
                 raise RuntimeError("Quent Collector did not advertise an address")
             session = QuentSession(collector_address)
             cleanup.callback(session.close)
@@ -158,10 +158,10 @@ class QuentControllerRuntime:
     @property
     def collector_address(self) -> str:
         """Return the live Collector's advertised address."""
-        if self.collector is None:
+        if self.collector is None:  # pragma: no cover - caller lifecycle invariant
             raise RuntimeError("Quent controller runtime is closed")
         address = self.collector.address
-        if address is None:
+        if address is None:  # pragma: no cover - Collector invariant
             raise RuntimeError("Quent Collector did not advertise an address")
         return address
 

@@ -734,14 +734,14 @@ class SPMDEngine(StreamingEngine):
         """Close SPMD Quent runtimes: barrier → workers → barrier → controller → barrier."""
         assert self._comm is not None
         comm = self._comm
-        if comm.nranks > 1:
+        if comm.nranks > 1:  # pragma: no cover - requires a multi-rank test process
             barrier(comm)
         self._close_quent_worker()
-        if comm.nranks > 1:
+        if comm.nranks > 1:  # pragma: no cover - requires a multi-rank test process
             barrier(comm)
         if comm.rank == 0:
             self._close_quent_controller()
-        if comm.nranks > 1:
+        if comm.nranks > 1:  # pragma: no cover - requires a multi-rank test process
             barrier(comm)
 
     def _quent_open(
@@ -773,7 +773,7 @@ class SPMDEngine(StreamingEngine):
                 nranks=comm.nranks,
                 instance_name=f"rank-{comm.rank}",
             )
-        except BaseException:
+        except BaseException:  # pragma: no cover - defensive startup cleanup
             steps: list[Callable[[], object]] = [
                 self._close_quent_worker,
                 self._close_quent_controller,
@@ -786,7 +786,7 @@ class SPMDEngine(StreamingEngine):
         """Run collective cleanup before local resources unwind."""
         steps: list[Callable[[], object]] = [self._drop_persisted]
         if self._quent_worker_runtime is not None or self._quent_runtime is not None:
-            steps.append(self._quent_close)
+            steps.append(self._quent_close)  # pragma: no cover - same cleanup as reset
         run_cleanup_steps("SPMD engine shutdown failed", *steps)
 
     @classmethod

@@ -369,7 +369,7 @@ class RankActor:
         self,
         quent_context: cudf_polars.quent.QuentConfig | None,
         collector_address: str | None,
-    ) -> None:
+    ) -> None:  # pragma: no cover - runs in a Ray actor process
         """
         Replace this actor's Quent worker runtime.
 
@@ -745,7 +745,7 @@ def _shutdown_ray(
     ray_running = ray.is_initialized()
     steps: list[Callable[[], object]] = []
     if ray_running and quent_close is not None:
-        steps.append(quent_close)
+        steps.append(quent_close)  # pragma: no cover - same cleanup as reset
 
     if ray_running:
 
@@ -1100,7 +1100,7 @@ class RayEngine(StreamingEngine):
                     for rank in self._rank_actors
                 ]
             )
-        except BaseException:
+        except BaseException:  # pragma: no cover - defensive startup cleanup
             with contextlib.suppress(Exception):
                 self._quent_close()
             raise
