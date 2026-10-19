@@ -34,7 +34,7 @@ def frame() -> pl.LazyFrame:
 
 @pytest.mark.parametrize("every", ["1m", "5m", "10m"])
 @pytest.mark.parametrize("group_by", [None, "group"])
-def test_taq_windows(
+def test_supported_tumbling_windows(
     engine: pl.GPUEngine,
     frame: pl.LazyFrame,
     every: str,
