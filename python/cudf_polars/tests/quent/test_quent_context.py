@@ -14,6 +14,9 @@ from __future__ import annotations
 import uuid
 from unittest.mock import MagicMock, call
 
+import pytest
+
+import cudf_polars.quent._runtime
 from cudf_polars.quent._context import (
     ActorBoundQuentIRExecutionState,
     QuentConfig,
@@ -118,3 +121,28 @@ def test_emit_evaluate_failure() -> None:
 
     running_evaluation.failed.assert_called_once_with(error=str(error))
     assert evaluate_id not in runtime.session._evaluations
+
+
+def test_quent_controller_create_closes_collector_on_failure(
+    quent_context: QuentConfig,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    collector = MagicMock(address="127.0.0.1:1234")
+    monkeypatch.setattr(
+        cudf_polars.quent._runtime,
+        "start_collector",
+        MagicMock(return_value=collector),
+    )
+    monkeypatch.setattr(
+        cudf_polars.quent._runtime,
+        "QuentSession",
+        MagicMock(side_effect=RuntimeError("session creation failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="session creation failed"):
+        cudf_polars.quent._runtime.QuentControllerRuntime.create(
+            quent_context,
+            backend="test",
+        )
+
+    collector.close.assert_called_once_with(timeout=10.0)

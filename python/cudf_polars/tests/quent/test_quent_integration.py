@@ -164,31 +164,6 @@ def test_quent_controller_cleanup_continues_after_handle_failure() -> None:
     collector.close.assert_called_once_with(timeout=10.0)
 
 
-def test_quent_controller_create_closes_collector_on_failure(
-    quent_context: QuentConfig,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    collector = MagicMock(address="127.0.0.1:1234")
-    monkeypatch.setattr(
-        cudf_polars.quent._runtime,
-        "start_collector",
-        MagicMock(return_value=collector),
-    )
-    monkeypatch.setattr(
-        cudf_polars.quent._runtime,
-        "QuentSession",
-        MagicMock(side_effect=RuntimeError("session creation failed")),
-    )
-
-    with pytest.raises(RuntimeError, match="session creation failed"):
-        cudf_polars.quent._runtime.QuentControllerRuntime.create(
-            quent_context,
-            backend="test",
-        )
-
-    collector.close.assert_called_once_with(timeout=10.0)
-
-
 def test_quent_lifecycle(
     engine_with_quent_context: tuple[StreamingEngine, StreamingOptions],
     quent_context: QuentConfig,
