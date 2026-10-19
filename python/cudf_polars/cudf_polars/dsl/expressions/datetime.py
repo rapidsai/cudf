@@ -1015,92 +1015,6 @@ def _scale_ticks(
     )
 
 
-def _combine(
-    date: plc.Column,
-    time: plc.Column,
-    unit: plc.DataType,
-    zone_desc: tuple[str, str] | None,
-    stream: Stream,
-) -> plc.Column:
-    """
-    Combine the dates of one column with the times of day of another.
-
-    Parameters
-    ----------
-    date
-        Date or Datetime column.
-    time
-        Time or Duration column, added to midnight of each date.
-    unit
-        Timestamp type of the result.
-    zone_desc
-        Time zone of ``date`` and of the result, if not naive or UTC.
-    stream
-        CUDA stream used for device memory operations and kernel launches.
-
-    Returns
-    -------
-    The combined timestamps.
-
-    Notes
-    -----
-    This mirrors polars: the date of a time zone aware Datetime is its date
-    in UTC, while the time is a wall-clock time in the time zone. Midnight of
-    a date, or a time, that does not fit in ``unit`` is null, a time in a
-    finer unit is truncated toward zero, adding the time wraps on 64-bit
-    overflow, and wall-clock times that are ambiguous or non-existent in the
-    time zone raise.
-    """
-    if date.type().id() != plc.TypeId.TIMESTAMP_DAYS:
-        date = plc.unary.cast(
-            date, plc.DataType(plc.TypeId.TIMESTAMP_DAYS), stream=stream
-        )
-    tick = _TIMESTAMP_TICK_NANOSECONDS[unit.id()]
-    days = plc.unary.cast(
-        plc.unary.bit_cast(date, plc.DataType(plc.TypeId.INT32), stream=stream),
-        _INT64,
-        stream=stream,
-    )
-    midnight = _scale_ticks(
-        days, _NANOSECONDS_PER_DAY // tick, stream, max_abs_ticks=2**31
-    )
-    if plc.traits.is_timestamp(time.type()):
-        time = plc.unary.bit_cast(
-            time, plc.DataType(plc.TypeId.DURATION_NANOSECONDS), stream=stream
-        )
-    time_tick = _unit_to_nanoseconds_conversion[time.type().id()]
-    time_ticks = plc.unary.bit_cast(time, _INT64, stream=stream)
-    if time_tick > tick:
-        time_ticks = _scale_ticks(time_ticks, time_tick // tick, stream)
-    elif time_tick < tick:
-        time_ticks = _evaluate_int64(
-            [time_ticks],
-            plc.expressions.Operation(
-                _AST.DIV,
-                plc.expressions.ColumnReference(0),
-                _int64_literal(tick // time_tick, stream),
-            ),
-            stream,
-        )
-    naive = plc.unary.bit_cast(
-        _wrapping(plc.binaryop.BinaryOperator.ADD, midnight, time_ticks, stream),
-        unit,
-        stream=stream,
-    )
-    if zone_desc is None:
-        return naive
-    zone, tzif_dir = zone_desc
-    return _localize(
-        naive,
-        zone,
-        tzif_dir,
-        ambiguous_scalar="raise",
-        ambiguous_column=None,
-        non_existent="raise",
-        stream=stream,
-    )
-
-
 class TemporalFunction(Expr):
     class Name(IntEnum):
         """Internal and picklable representation of polars' `TemporalFunction`."""
@@ -1351,17 +1265,61 @@ class TemporalFunction(Expr):
                 dtype=self.dtype,
             )
         if self.name is TemporalFunction.Name.Combine:
-            date, time = broadcast(*columns, stream=df.stream)
-            return Column(
-                _combine(
-                    date.obj,
-                    time.obj,
-                    self.dtype.plc_type,
-                    self.tz_descs[0],
-                    df.stream,
-                ),
-                dtype=self.dtype,
+            date_column, time_column = broadcast(*columns, stream=df.stream)
+            stream = df.stream
+            unit = self.dtype.plc_type
+            date = date_column.obj
+            if date.type().id() != plc.TypeId.TIMESTAMP_DAYS:
+                date = plc.unary.cast(
+                    date, plc.DataType(plc.TypeId.TIMESTAMP_DAYS), stream=stream
+                )
+            tick = _TIMESTAMP_TICK_NANOSECONDS[unit.id()]
+            days = plc.unary.cast(
+                plc.unary.bit_cast(date, plc.DataType(plc.TypeId.INT32), stream=stream),
+                _INT64,
+                stream=stream,
             )
+            midnight = _scale_ticks(
+                days, _NANOSECONDS_PER_DAY // tick, stream, max_abs_ticks=2**31
+            )
+            time = time_column.obj
+            if plc.traits.is_timestamp(time.type()):
+                time = plc.unary.bit_cast(
+                    time, plc.DataType(plc.TypeId.DURATION_NANOSECONDS), stream=stream
+                )
+            time_tick = _unit_to_nanoseconds_conversion[time.type().id()]
+            time_ticks = plc.unary.bit_cast(time, _INT64, stream=stream)
+            if time_tick > tick:
+                time_ticks = _scale_ticks(time_ticks, time_tick // tick, stream)
+            elif time_tick < tick:
+                time_ticks = _evaluate_int64(
+                    [time_ticks],
+                    plc.expressions.Operation(
+                        _AST.DIV,
+                        plc.expressions.ColumnReference(0),
+                        _int64_literal(tick // time_tick, stream),
+                    ),
+                    stream,
+                )
+            result = plc.unary.bit_cast(
+                _wrapping(
+                    plc.binaryop.BinaryOperator.ADD, midnight, time_ticks, stream
+                ),
+                unit,
+                stream=stream,
+            )
+            if (zone_desc := self.tz_descs[0]) is not None:
+                zone, tzif_dir = zone_desc
+                result = _localize(
+                    result,
+                    zone,
+                    tzif_dir,
+                    ambiguous_scalar="raise",
+                    ambiguous_column=None,
+                    non_existent="raise",
+                    stream=stream,
+                )
+            return Column(result, dtype=self.dtype)
         if self.name is TemporalFunction.Name.Time:
             (column,) = columns
             if isinstance(column.dtype.polars_type, pl.Time):

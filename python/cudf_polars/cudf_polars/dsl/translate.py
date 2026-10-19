@@ -447,7 +447,8 @@ class Translator:
             _contains_dtype(dtype.polars_type, (pl.Time,)) and not is_time_passthrough
         ) or _contains_time_input(translated):
             error = NotImplementedError(
-                "Only dt.time() and pass-through of Time columns are supported"
+                "Only dt.time(), dt.combine() and pass-through of Time columns "
+                "are supported"
             )
             self.errors.append(error)
             return expr.ErrorExpr(dtype, str(error))
@@ -1151,14 +1152,6 @@ def translate_named_expr(
     )
 
 
-def _consumes_time(node: expr.Expr) -> bool:
-    """Whether ``node`` is ``dt.time()`` or ``dt.combine()``, which accept Time inputs."""
-    return isinstance(node, expr.TemporalFunction) and node.name in {
-        expr.TemporalFunction.Name.Time,
-        expr.TemporalFunction.Name.Combine,
-    }
-
-
 def _contains_time_input(node: expr.Expr) -> bool:
     """
     Whether a descendant of ``node`` is a Time expression used as an input.
@@ -1170,7 +1163,10 @@ def _contains_time_input(node: expr.Expr) -> bool:
     lifo = [node]
     while lifo:
         parent = lifo.pop()
-        if _consumes_time(parent):
+        if isinstance(parent, expr.TemporalFunction) and parent.name in {
+            expr.TemporalFunction.Name.Time,
+            expr.TemporalFunction.Name.Combine,
+        }:
             continue
         for child in parent.children:
             if child in seen:
@@ -1180,22 +1176,6 @@ def _contains_time_input(node: expr.Expr) -> bool:
             seen.add(child)
             lifo.append(child)
     return False
-
-
-def _translate_combine_time(
-    translator: Translator, *, n: int, schema: Schema
-) -> expr.Expr:
-    """Translate the time input of ``dt.combine``, which may be a Time literal."""
-    node = translator.visitor.view_expression(n)
-    if (
-        isinstance(node, plrs._expr_nodes.Literal)
-        and not isinstance(node.value, plrs.PySeries)
-        and isinstance(translator.visitor.get_dtype(n), pl.Time)
-    ):
-        return expr.Literal(DataType(pl.Time()), node.value).astype(
-            DataType(pl.Duration("ns"))
-        )
-    return translator.translate_expr(n=n, schema=schema, allow_passthrough=True)
 
 
 def _contains_nested_lists(val: Any) -> bool:
@@ -1294,12 +1274,25 @@ def _(
         }
         if name == plrs._expr_nodes.TemporalFunction.Combine:
             date, time = node.input
+            time_node = translator.visitor.view_expression(time)
+            if (
+                isinstance(time_node, plrs._expr_nodes.Literal)
+                and not isinstance(time_node.value, plrs.PySeries)
+                and isinstance(translator.visitor.get_dtype(time), pl.Time)
+            ):
+                time_expr: expr.Expr = expr.Literal(
+                    DataType(pl.Time()), time_node.value
+                ).astype(DataType(pl.Duration("ns")))
+            else:
+                time_expr = translator.translate_expr(
+                    n=time, schema=schema, allow_passthrough=True
+                )
             return expr.TemporalFunction(
                 dtype,
                 expr.TemporalFunction.Name.Combine,
                 options,
                 translator.translate_expr(n=date, schema=schema),
-                _translate_combine_time(translator, n=time, schema=schema),
+                time_expr,
             )
         result_expr = expr.TemporalFunction(
             dtype,
