@@ -252,9 +252,7 @@ jobs:
       sha: ${{ inputs.sha }}
       continue-on-error: true
       script: "CUPY_NIGHTLY=true ci/test_wheel_cudf.sh"
-      # Only the 'latest' dependency set is compatible with nightly cupy: the
-      # 'oldest' matrix entries pin cupy==14.0.1 (see dependencies.yaml), which
-      # would conflict with the nightly cupy wheel.
+      # Only the 'latest' dependency set is compatible with nightly cupy.
       matrix_filter: map(select(.DEPENDENCIES == "latest"))
   wheel-tests-dask-cudf:
     permissions:
