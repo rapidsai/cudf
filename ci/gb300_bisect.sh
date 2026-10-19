@@ -54,6 +54,11 @@ exec gdb -q -batch -nx \\
   -ex "handle SIGSEGV stop print nopass" \\
   -ex "handle SIGPIPE nostop noprint pass" \\
   -ex run \\
+  -ex "bt 60" \\
+  -ex "p \\\$_siginfo._sifields._sigfault.si_addr" \\
+  -ex "info registers" \\
+  -ex "x/12i \\\$pc-24" \\
+  -ex "info proc mappings" \\
   -ex "info threads" \\
   -ex "thread apply all bt 40" \\
   -ex "info sharedlibrary" \\
@@ -74,8 +79,33 @@ for attempt in 1 2 3 4; do
   segv_log=$(grep -l "received signal SIGSEGV" "${WORK}"/gdb-*.log 2>/dev/null | head -n 1 || true)
   if [[ -n "${segv_log}" ]]; then
     rapids-logger "Attempt ${attempt}: all-thread backtraces from ${segv_log}"
-    grep -v -E "^0x[0-9a-f]+ +0x[0-9a-f]+ +(Yes|No) .*(lib-dynload|site-packages/(numpy|pyarrow|cupy))" "${segv_log}" \
-      | head -n 700 || true
+    sed -n '/received signal SIGSEGV/,/^Start Addr/p' "${segv_log}" | grep -v "^Start Addr" || true
+    addr=$(grep -oE '^\$1 = \(void \*\) 0x[0-9a-f]+' "${segv_log}" | grep -oE '0x[0-9a-f]+' || true)
+    rapids-logger "Mapping containing fault address ${addr:-unknown}"
+    if [[ -n "${addr}" ]]; then
+      python - "${addr}" "${segv_log}" <<'PY'
+import sys
+
+addr = int(sys.argv[1], 16)
+found = False
+for line in open(sys.argv[2], errors="replace"):
+    fields = line.split()
+    if len(fields) >= 2 and fields[0].startswith("0x") and fields[1].startswith("0x"):
+        try:
+            start, end = int(fields[0], 16), int(fields[1], 16)
+        except ValueError:
+            continue
+        if start <= addr < end:
+            print(line.rstrip())
+            found = True
+if not found:
+    print("fault address is not mapped")
+PY
+    fi
+    rapids-logger "Other threads"
+    sed -n '/^  Id   Target Id/,$p' "${segv_log}" \
+      | grep -v -E "^0x[0-9a-f]+ +0x[0-9a-f]+ +(Yes|No) " | grep -v -E "^#[0-9]+ .*(pthread_cond_wait|libc\.so\.6|libstdc\+\+|condition_variable)" \
+      | head -n 300 || true
     break
   fi
 done
