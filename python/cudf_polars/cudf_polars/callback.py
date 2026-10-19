@@ -8,7 +8,6 @@ from __future__ import annotations
 import contextlib
 import os
 import warnings
-from dataclasses import dataclass
 from functools import cache, partial
 from threading import Lock
 from typing import TYPE_CHECKING, assert_never
@@ -127,11 +126,37 @@ def default_memory_resource(
         return mr
 
 
-def _resolve_memory_resource(
+@contextlib.contextmanager
+def set_memory_resource(
     mr: rmm.mr.DeviceMemoryResource | None,
     memory_resource_config: MemoryResourceConfig | None,
     executor: ExecutorType,
-) -> rmm.mr.DeviceMemoryResource:
+) -> Generator[rmm.mr.DeviceMemoryResource, None, None]:
+    """
+    Set the current memory resource for an execution block.
+
+    Parameters
+    ----------
+    mr
+        Memory resource to use. If `None`, calls :func:`default_memory_resource`
+        to obtain an mr on the currently active device.
+    memory_resource_config
+        Memory resource configuration to use when a concrete memory resource.
+        is not provided. If ``None``, the default memory resource is used.
+    executor
+        Executor configuration.
+
+    Returns
+    -------
+    Memory resource used.
+
+    Notes
+    -----
+    At exit, the memory resource is restored to whatever was current
+    at entry. If a memory resource is provided, it must be valid to
+    use with the currently active device.
+    """
+    previous = rmm.mr.get_current_device_resource()
     if mr is None:
         # Use cuda async by default with the streaming executor.
         if (
@@ -159,71 +184,11 @@ def _resolve_memory_resource(
             memory_resource_config=memory_resource_config,
         )
 
-    return mr
-
-
-@dataclass
-class _MemoryResourceScope:
-    mr: rmm.mr.DeviceMemoryResource | None = None
-    previous: rmm.mr.DeviceMemoryResource | None = None
-    depth: int = 0
-
-
-_MEMORY_RESOURCE_SCOPE = _MemoryResourceScope()
-_MEMORY_RESOURCE_LOCK = Lock()
-
-
-@contextlib.contextmanager
-def set_memory_resource(
-    mr: rmm.mr.DeviceMemoryResource | None,
-    memory_resource_config: MemoryResourceConfig | None,
-    executor: ExecutorType,
-) -> Generator[rmm.mr.DeviceMemoryResource, None, None]:
-    """
-    Set the current memory resource for an execution block.
-
-    Parameters
-    ----------
-    mr
-        Memory resource to use. If `None`, calls :func:`default_memory_resource`
-        to obtain an mr on the currently active device.
-    memory_resource_config
-        Memory resource configuration to use when a concrete memory resource.
-        is not provided. If ``None``, the default memory resource is used.
-    executor
-        Executor configuration.
-
-    Returns
-    -------
-    Memory resource used.
-
-    Notes
-    -----
-    The current memory resource is process-global, so execution blocks that
-    overlap in time (for example, queries collected from several threads)
-    share one resource. The first block to enter installs it, and the last
-    block to exit restores whatever was current at that first entry. A block
-    that enters while another is active uses the resource that is already
-    installed.
-    """
-    with _MEMORY_RESOURCE_LOCK:
-        scope = _MEMORY_RESOURCE_SCOPE
-        if scope.depth == 0:
-            scope.previous = rmm.mr.get_current_device_resource()
-            scope.mr = _resolve_memory_resource(mr, memory_resource_config, executor)
-            rmm.mr.set_current_device_resource(scope.mr)
-        scope.depth += 1
-        active = scope.mr
-    assert active is not None
+    rmm.mr.set_current_device_resource(mr)
     try:
-        yield active
+        yield mr
     finally:
-        with _MEMORY_RESOURCE_LOCK:
-            scope.depth -= 1
-            if scope.depth == 0:
-                assert scope.previous is not None
-                rmm.mr.set_current_device_resource(scope.previous)
-                scope.mr = scope.previous = None
+        rmm.mr.set_current_device_resource(previous)
 
 
 # libcudf doesn't support executing on multiple devices from within the same process.
