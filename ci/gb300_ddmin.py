@@ -7,7 +7,8 @@ import time
 
 NUM_PROCESSES = 8
 ROUNDS = 2
-TIME_BUDGET_SECONDS = 90 * 60
+TIME_BUDGET_SECONDS = 80 * 60
+PROCESS_TIMEOUT_SECONDS = 180
 
 RUNNER = """
 import sys
@@ -46,8 +47,26 @@ def crashes(prefix, num_processes=NUM_PROCESSES, rounds=ROUNDS):
             )
             for _ in range(num_processes)
         ]
-        outputs = [p.communicate()[0] for p in procs]
-        if any(b"Fatal Python error" in out for out in outputs):
+        outputs = []
+        deadline = time.monotonic() + PROCESS_TIMEOUT_SECONDS
+        for p in procs:
+            try:
+                outputs.append(
+                    p.communicate(timeout=max(1, deadline - time.monotonic()))[
+                        0
+                    ]
+                )
+            except subprocess.TimeoutExpired:
+                p.kill()
+                outputs.append(p.communicate()[0] + b"\nHANG")
+        hangs = sum(out.endswith(b"HANG") for out in outputs)
+        segfaults = sum(b"Fatal Python error" in out for out in outputs)
+        if hangs or segfaults:
+            print(
+                f"  probe {probes}: {len(prefix)} tests -> "
+                f"{segfaults} segfaults, {hangs} hangs",
+                flush=True,
+            )
             return True
     return False
 
@@ -68,9 +87,12 @@ def ddmin(items, expand):
             complement = [x for j, c in enumerate(chunks) if j != i for x in c]
             if crashes(expand(complement)):
                 print(
-                    f"[{probes} probes] reduced {len(items)} -> {len(complement)}",
+                    f"[{probes} probes, {time.monotonic() - start_time:.0f}s] "
+                    f"reduced {len(items)} -> {len(complement)}",
                     flush=True,
                 )
+                if len(complement) <= 40:
+                    print(f"  current: {complement}", flush=True)
                 items = complement
                 n = max(n - 1, 2)
                 reduced = True
