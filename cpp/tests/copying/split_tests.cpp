@@ -1711,6 +1711,12 @@ TEST_F(ContiguousSplitUntypedTest, SplitPointsSubspan)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(first, result[0].table.column(0));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(second, result[1].table.column(0));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(third, result[2].table.column(0));
+  auto listed = cudf::contiguous_split(input, {3, 5});
+  ASSERT_EQ(listed.size(), result.size());
+
+  for (std::size_t i = 0; i < result.size(); ++i) {
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result[i].table, listed[i].table);
+  }
 }
 
 TEST_F(ContiguousSplitUntypedTest, ValidityRepartition)
@@ -1817,8 +1823,7 @@ TEST_F(ContiguousSplitUntypedTest, DISABLED_VeryLargeColumnTest)
   // tests an edge case where buf.elements * buf.element_size overflows an INT32.
   auto col = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT64}, 400 * 1024 * 1024, cudf::mask_state::UNALLOCATED);
-  auto result =
-    cudf::contiguous_split(cudf::table_view{{*col}}, std::span<cudf::size_type const>{});
+  auto result = cudf::contiguous_split(cudf::table_view{{*col}}, {});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, result[0].table.column(0));
 }
 

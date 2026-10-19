@@ -2226,7 +2226,14 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
 {
   return cudf::contiguous_split(input, std::span<size_type const>{splits}, stream, mr);
 }
-
+std::vector<packed_table> contiguous_split(cudf::table_view const& input,
+                                           std::initializer_list<size_type> splits,
+                                           cuda::stream_ref stream,
+                                           rmm::device_async_resource_ref mr)
+{
+  return cudf::contiguous_split(
+    input, std::span<size_type const>{splits.begin(), splits.size()}, stream, mr);
+}
 chunked_pack::chunked_pack(cudf::table_view const& input,
                            std::size_t user_buffer_size,
                            cuda::stream_ref stream,
