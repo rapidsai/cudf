@@ -28,6 +28,8 @@ from numba_cuda_mlir.numba_cuda.typing.templates import (
 )
 from numba_cuda_mlir.typing import signature as nb_signature
 
+from pylibcudf.strings.char_types import get_character_flags_table_ptr
+
 from cudf.core.udf.mlir_backend import string_lowering_impl as _impl
 from cudf.core.udf.mlir_backend.masked_lowering import (
     _extract_masked_value_valid,
@@ -77,6 +79,26 @@ _STR_COMBOS = (
 _BOOL_METHODS = {
     "startswith": _impl._lower_startswith,
     "endswith": _impl._lower_endswith,
+}
+
+# search method name -> its pure-MLIR impl (one string arg -> int32).
+_INT_METHODS = {
+    "find": _impl._lower_find,
+    "rfind": _impl._lower_rfind,
+    "count": _impl._lower_count,
+}
+
+# character-class predicate method name -> its pure-MLIR impl (no arg -> bool).
+_IS_METHODS = {
+    "isalpha": _impl._lower_isalpha,
+    "isalnum": _impl._lower_isalnum,
+    "isdecimal": _impl._lower_isdecimal,
+    "isdigit": _impl._lower_isdigit,
+    "isupper": _impl._lower_isupper,
+    "islower": _impl._lower_islower,
+    "isspace": _impl._lower_isspace,
+    "isnumeric": _impl._lower_isnumeric,
+    "istitle": _impl._lower_istitle,
 }
 
 
@@ -167,6 +189,39 @@ def _make_cmpop_template(cmpop: object) -> type[AbstractTemplate]:
             return None
 
     return _CmpOpTemplate
+
+
+def _make_is_attr(attrname: str, masked: bool) -> object:
+    """Build a ``resolve_<isX>`` for a no-argument predicate method.
+
+    Parameters
+    ----------
+    attrname : str
+        Predicate name (e.g. ``"isalpha"``).
+    masked : bool
+        Whether the receiver is ``Masked(mlir_string)`` (wraps the result).
+
+    Returns
+    -------
+    callable
+        A ``resolve_`` function for the attribute template.
+    """
+    result_ty = MaskedType(types.boolean) if masked else types.boolean
+    recvr = _masked_string if masked else mlir_string
+
+    class _IsTemplate(AbstractTemplate):
+        key = f"MLIRString.{attrname}.{'m' if masked else 's'}"
+
+        def generic(self, args, kws):
+            """Resolve ``s.<isX>()`` -> ``boolean`` / ``Masked(boolean)``."""
+            if not args and not kws:
+                return nb_signature(result_ty, recvr=self.this)
+            return None
+
+    def resolve(self, mod):
+        return types.BoundFunction(_IsTemplate, recvr)
+
+    return resolve
 
 
 def _make_method_attr(
@@ -278,6 +333,61 @@ for _name in _BOOL_METHODS:
         f"resolve_{_name}",
         _make_method_attr(_name, types.boolean, masked=True),
     )
+for _name in _INT_METHODS:
+    setattr(
+        MLIRStringAttrs,
+        f"resolve_{_name}",
+        _make_method_attr(_name, size_type, masked=False),
+    )
+    setattr(
+        MaskedMLIRStringAttrs,
+        f"resolve_{_name}",
+        _make_method_attr(_name, size_type, masked=True),
+    )
+for _name in _IS_METHODS:
+    setattr(
+        MLIRStringAttrs, f"resolve_{_name}", _make_is_attr(_name, masked=False)
+    )
+    setattr(
+        MaskedMLIRStringAttrs,
+        f"resolve_{_name}",
+        _make_is_attr(_name, masked=True),
+    )
+
+
+class ContainsMLIRStringTemplate(AbstractTemplate):
+    """``item in container`` (``operator.contains``) over (masked) strings."""
+
+    key = operator.contains
+
+    def generic(
+        self, args: tuple[types.Type, ...], kws: dict
+    ) -> Signature | None:
+        """Resolve ``operator.contains`` for string operands.
+
+        Parameters
+        ----------
+        args : tuple of types.Type
+            ``(container, item)`` types.
+        kws : dict
+            Keyword argument types (must be empty).
+
+        Returns
+        -------
+        Signature or None
+            ``boolean`` (all-plain) or ``Masked(boolean)`` (any masked), else
+            ``None``.
+        """
+        if len(args) != 2 or kws:
+            return None
+        a, b = args
+        if not (_is_string_arg(a) and _is_string_arg(b)):
+            return None
+        if _is_masked_string(a) or _is_masked_string(b):
+            return nb_signature(MaskedType(types.boolean), a, b)
+        if isinstance(a, MLIRStringType) or isinstance(b, MLIRStringType):
+            return nb_signature(types.boolean, a, b)
+        return None
 
 
 def _lower_len(
@@ -426,8 +536,45 @@ def _make_lower_binary(impl_fn: object) -> object:
     return _getattr
 
 
+def _flags_table_ptr_const() -> ir.Value:
+    """MLIR pointer constant for the libcudf character-flags device table."""
+    addr = int(get_character_flags_table_ptr())
+    if addr >= (1 << 63):
+        addr -= 1 << 64
+    i64 = ir.IntegerType.get_signless(64)
+    return llvm.inttoptr(llvm.PointerType.get(), arith.constant(i64, addr))
+
+
+def _make_lower_is(impl_fn: object) -> object:
+    """Build the ``lower_getattr`` for a no-arg predicate method (isalpha ...)."""
+
+    def _impl_lower(builder, target, args, kwargs):
+        valid_ty = builder.get_mlir_type(types.boolean)
+        true_val = arith.constant(valid_ty, 1)
+        view, valid = _view_and_valid(builder, args[0], true_val)
+        result = impl_fn(view, _flags_table_ptr_const())
+        _store_maybe_masked(builder, target, result, valid)
+
+    def _getattr(context, builder, target, value, attr=None):
+        builder.store_var(target, DeferredMethodCall(value, _impl_lower))
+
+    return _getattr
+
+
+def _lower_contains_op(
+    builder: MLIRLower, target: Var, args: list[Var], kwargs: list
+) -> None:
+    """``item in container`` -> ``boolean`` / ``Masked(boolean)``."""
+    valid_ty = builder.get_mlir_type(types.boolean)
+    true_val = arith.constant(valid_ty, 1)
+    container, vc = _view_and_valid(builder, args[0], true_val)
+    item, vi = _view_and_valid(builder, args[1], true_val)
+    result = _impl._lower_contains(container, item)
+    _store_maybe_masked(builder, target, result, arith.andi(vc, vi))
+
+
 def _register() -> None:
-    """Register ``len`` + comparison + affix typing/lowering with numba_cuda_mlir."""
+    """Register string op typing and lowering with ``numba_cuda_mlir``."""
     typing_registry.register_global(len)(LenMLIRStringTemplate)
     lowering_registry.lower(len, mlir_string)(_lower_len)
     lowering_registry.lower(len, MaskedType)(_lower_masked_len)
@@ -438,9 +585,25 @@ def _register() -> None:
         for lhs_ty, rhs_ty in _STR_COMBOS:
             lowering_registry.lower(cmp_op, lhs_ty, rhs_ty)(impl)
 
-    # startswith / endswith methods on mlir_string and Masked(mlir_string)
-    for name, impl_fn in _BOOL_METHODS.items():
+    # ``in`` (substring membership)
+    typing_registry.register_global(operator.contains)(
+        ContainsMLIRStringTemplate
+    )
+    for lhs_ty, rhs_ty in _STR_COMBOS:
+        lowering_registry.lower(operator.contains, lhs_ty, rhs_ty)(
+            _lower_contains_op
+        )
+
+    # one-string-arg methods on mlir_string and Masked(mlir_string):
+    # startswith/endswith (-> bool) and find/rfind/count (-> int32)
+    for name, impl_fn in {**_BOOL_METHODS, **_INT_METHODS}.items():
         getattr_fn = _make_lower_binary(impl_fn)
+        lowering_registry.lower_getattr(mlir_string, name)(getattr_fn)
+        lowering_registry.lower_getattr(_masked_string, name)(getattr_fn)
+
+    # no-arg character-class predicates (isalpha ...) -> bool / Masked(bool)
+    for name, impl_fn in _IS_METHODS.items():
+        getattr_fn = _make_lower_is(impl_fn)
         lowering_registry.lower_getattr(mlir_string, name)(getattr_fn)
         lowering_registry.lower_getattr(_masked_string, name)(getattr_fn)
 

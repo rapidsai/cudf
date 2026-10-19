@@ -943,16 +943,17 @@ namespace {
 
 nvcompBatchedCascadedCompressOpts_t cascaded_compress_options(type_id value_type)
 {
-  auto options = nvcompBatchedCascadedCompressDefaultOpts;
+  auto options    = nvcompBatchedCascadedCompressDefaultOpts;
+  auto& data_type = options.common_opts.data_type;
   switch (value_type) {
-    case type_id::INT8: options.type = NVCOMP_TYPE_CHAR; break;
-    case type_id::UINT8: options.type = NVCOMP_TYPE_UCHAR; break;
-    case type_id::INT16: options.type = NVCOMP_TYPE_SHORT; break;
-    case type_id::UINT16: options.type = NVCOMP_TYPE_USHORT; break;
-    case type_id::INT32: options.type = NVCOMP_TYPE_INT; break;
-    case type_id::UINT32: options.type = NVCOMP_TYPE_UINT; break;
-    case type_id::INT64: options.type = NVCOMP_TYPE_LONGLONG; break;
-    case type_id::UINT64: options.type = NVCOMP_TYPE_ULONGLONG; break;
+    case type_id::INT8: data_type = NVCOMP_TYPE_CHAR; break;
+    case type_id::UINT8: data_type = NVCOMP_TYPE_UCHAR; break;
+    case type_id::INT16: data_type = NVCOMP_TYPE_SHORT; break;
+    case type_id::UINT16: data_type = NVCOMP_TYPE_USHORT; break;
+    case type_id::INT32: data_type = NVCOMP_TYPE_INT; break;
+    case type_id::UINT32: data_type = NVCOMP_TYPE_UINT; break;
+    case type_id::INT64: data_type = NVCOMP_TYPE_LONGLONG; break;
+    case type_id::UINT64: data_type = NVCOMP_TYPE_ULONGLONG; break;
     default: CUDF_FAIL("Cascaded compression supports only integral value types");
   }
   return options;

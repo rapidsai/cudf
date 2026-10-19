@@ -397,7 +397,6 @@ EXPECTED_FAILURES: dict[str, str] = {
     "tests/unit/io/test_scan.py::test_scan_sink_metrics_multiple_phases": "sink metrics are not reported by the GPU engine",
     "tests/unit/io/test_parquet.py::test_read_parquet_concatenated_gzip_members_28787": "Non-deterministic garbage in the last row; likely a libcudf GZIP multi-member decompression bug",
     "tests/unit/datatypes/test_struct.py::test_struct_equal_missing_null_25360": "struct equality with a null raises libcudf 'Index out of bounds' (get_element)",
-    "tests/unit/datatypes/test_temporal.py::test_tz_aware_truncate": "truncate/round operate on the UTC instant instead of the zone's local wall-clock time",
 }
 
 
@@ -588,8 +587,11 @@ STREAMING_ENGINE_TESTS_TO_SKIP_SMALL_BLOCKSIZE: Mapping[str, str] = {
     "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Categorical-10432-True]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Categorical-10432-False]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[String-1056-False]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[String-1056-True]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-1056-False]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-1056-True]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-1056-False]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-1056-True]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[Int32]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[UInt32]": "Too slow with --inject-gpu-engine-blocksize=small",
 }
