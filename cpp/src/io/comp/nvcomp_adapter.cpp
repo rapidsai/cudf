@@ -81,10 +81,12 @@ namespace {
   return "compression_type(" + std::to_string(static_cast<int>(compression)) + ")";
 }
 
-[[nodiscard]] std::optional<bool> use_hw_decompression()
+// nvCOMP's default backend selects the Blackwell hardware Decompression Engine, which segfaults
+// inside the CUDA driver with nvCOMP 6.0 on GB300. Use it only when explicitly requested.
+[[nodiscard]] bool use_hw_decompression()
 {
   auto const env = getenv("LIBCUDF_HW_DECOMPRESSION");
-  if (env == nullptr) { return std::nullopt; }
+  if (env == nullptr) { return false; }
   std::string val{env};
   std::ranges::transform(val, val.begin(), [](unsigned char c) { return std::toupper(c); });
   return val == "ON";
@@ -156,7 +158,7 @@ auto batched_decompress_get_temp_size(compression_type compression,
 
 // Dispatcher for nvcompBatched<format>DecompressAsync
 auto batched_decompress_async(compression_type compression,
-                              std::optional<bool> use_hw_decompression,
+                              bool use_hw_decompression,
                               void const* const* device_compressed_chunk_ptrs,
                               size_t const* device_compressed_chunk_bytes,
                               size_t const* device_uncompressed_buffer_bytes,
@@ -168,13 +170,12 @@ auto batched_decompress_async(compression_type compression,
                               nvcompStatus_t* device_statuses,
                               cuda::stream_ref stream)
 {
+  auto const backend =
+    use_hw_decompression ? NVCOMP_DECOMPRESS_BACKEND_HARDWARE : NVCOMP_DECOMPRESS_BACKEND_CUDA;
   switch (compression) {
     case compression_type::SNAPPY: {
-      auto opts = nvcompBatchedSnappyDecompressDefaultOpts;
-      if (use_hw_decompression.has_value()) {
-        opts.backend = *use_hw_decompression ? NVCOMP_DECOMPRESS_BACKEND_HARDWARE
-                                             : NVCOMP_DECOMPRESS_BACKEND_CUDA;
-      }
+      auto opts    = nvcompBatchedSnappyDecompressDefaultOpts;
+      opts.backend = backend;
       return nvcompBatchedSnappyDecompressAsync(device_compressed_chunk_ptrs,
                                                 device_compressed_chunk_bytes,
                                                 device_uncompressed_buffer_bytes,
@@ -199,7 +200,9 @@ auto batched_decompress_async(compression_type compression,
                                               nvcompBatchedZstdDecompressDefaultOpts,
                                               device_statuses,
                                               stream.get());
-    case compression_type::DEFLATE:
+    case compression_type::DEFLATE: {
+      auto opts    = nvcompBatchedDeflateDecompressDefaultOpts;
+      opts.backend = backend;
       return nvcompBatchedDeflateDecompressAsync(device_compressed_chunk_ptrs,
                                                  device_compressed_chunk_bytes,
                                                  device_uncompressed_buffer_bytes,
@@ -208,10 +211,13 @@ auto batched_decompress_async(compression_type compression,
                                                  device_temp_ptr,
                                                  temp_bytes,
                                                  device_uncompressed_chunk_ptrs,
-                                                 nvcompBatchedDeflateDecompressDefaultOpts,
+                                                 opts,
                                                  device_statuses,
                                                  stream.get());
-    case compression_type::LZ4:
+    }
+    case compression_type::LZ4: {
+      auto opts    = nvcompBatchedLZ4DecompressDefaultOpts;
+      opts.backend = backend;
       return nvcompBatchedLZ4DecompressAsync(device_compressed_chunk_ptrs,
                                              device_compressed_chunk_bytes,
                                              device_uncompressed_buffer_bytes,
@@ -220,10 +226,13 @@ auto batched_decompress_async(compression_type compression,
                                              device_temp_ptr,
                                              temp_bytes,
                                              device_uncompressed_chunk_ptrs,
-                                             nvcompBatchedLZ4DecompressDefaultOpts,
+                                             opts,
                                              device_statuses,
                                              stream.get());
-    case compression_type::GZIP:
+    }
+    case compression_type::GZIP: {
+      auto opts    = nvcompBatchedGzipDecompressDefaultOpts;
+      opts.backend = backend;
       return nvcompBatchedGzipDecompressAsync(device_compressed_chunk_ptrs,
                                               device_compressed_chunk_bytes,
                                               device_uncompressed_buffer_bytes,
@@ -232,9 +241,10 @@ auto batched_decompress_async(compression_type compression,
                                               device_temp_ptr,
                                               temp_bytes,
                                               device_uncompressed_chunk_ptrs,
-                                              nvcompBatchedGzipDecompressDefaultOpts,
+                                              opts,
                                               device_statuses,
                                               stream.get());
+    }
     default: UNSUPPORTED_COMPRESSION(compression);
   }
 }
