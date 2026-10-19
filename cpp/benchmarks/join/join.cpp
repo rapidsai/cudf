@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -101,6 +101,56 @@ void nvbench_inner_join_selectivity(
 
   BM_join<false, join_t::HASH, NullEquality>(state, dtypes, join, 1, selectivity);
 }
+
+template <bool Nullable, cudf::null_equality NullEquality, data_type DataType>
+void nvbench_hash_join_size(nvbench::state& state,
+                            nvbench::type_list<nvbench::enum_type<Nullable>,
+                                               nvbench::enum_type<NullEquality>,
+                                               nvbench::enum_type<DataType>>)
+{
+  if (should_skip_large_sizes(state, true)) { return; }
+
+  auto const num_keys    = state.get_int64("num_keys");
+  auto const left_size   = static_cast<size_t>(state.get_int64("left_size"));
+  auto const right_size  = static_cast<size_t>(state.get_int64("right_size"));
+  auto const selectivity = state.get_float64("selectivity");
+  auto const kind        = state.get_string("kind");
+  auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
+
+  auto [build_table, probe_table] =
+    generate_input_tables<Nullable>(dtypes, right_size, left_size, 0, 1, selectivity);
+  auto const probe_view = probe_table->view();
+
+  // Only the probe-side size computation is timed; the hash table is built once up front.
+  auto const hash_joiner = cudf::hash_join(build_table->view(), NullEquality);
+
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().get()));
+  state.add_element_count(left_size, "probe_rows");
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
+    if (kind == "inner") {
+      [[maybe_unused]] auto size = hash_joiner.inner_join_size(probe_view);
+    } else if (kind == "left") {
+      [[maybe_unused]] auto size = hash_joiner.left_join_size(probe_view);
+    } else if (kind == "full") {
+      [[maybe_unused]] auto size = hash_joiner.full_join_size(probe_view);
+    } else {
+      CUDF_FAIL("unrecognized kind: " + kind);
+    }
+  });
+}
+
+NVBENCH_BENCH_TYPES(nvbench_hash_join_size,
+                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
+                                      DEFAULT_JOIN_NULL_EQUALITY,
+                                      SELECTIVITY_JOIN_DATATYPES))
+  .set_name("hash_join_size")
+  .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
+  .add_int64_axis("num_keys", {1, 2})
+  .add_int64_axis("left_size", {10'000'000, 100'000'000})
+  .add_int64_axis("right_size", {100'000, 10'000'000})
+  .add_float64_axis("selectivity", {0.1, 0.9})
+  .add_int64_axis("skip_large_sizes", {1})
+  .add_string_axis("kind", {"inner", "left", "full"});
 
 NVBENCH_BENCH_TYPES(nvbench_inner_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
