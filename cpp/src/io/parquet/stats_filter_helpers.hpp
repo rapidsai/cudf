@@ -219,9 +219,7 @@ class stats_caster_base {
     host_column(size_type total_row_groups, cuda::stream_ref stream)
       : val{cudf::detail::make_host_vector<T>(total_row_groups, stream)},
         chars{cudf::detail::make_empty_host_vector<char>(initial_chars_capacity, stream)},
-        null_mask(cudf::util::div_rounding_up_safe<cudf::size_type>(
-                    cudf::bitmask_allocation_size_bytes(total_row_groups), sizeof(bitmask_type)),
-                  ~bitmask_type{0})
+        null_mask(cudf::bitmask_allocation_size_words(total_row_groups), ~bitmask_type{0})
     {
     }
 
