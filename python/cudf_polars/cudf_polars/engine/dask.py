@@ -29,8 +29,6 @@ from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
 
-import cudf_polars.quent
-import cudf_polars.quent._runtime
 from cudf_polars.engine import persisted_result, rank_local_store
 from cudf_polars.engine.core import (
     ClusterInfo,
@@ -69,13 +67,13 @@ from cudf_polars.utils.config import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    import cudf_polars_quent as quent_bindings
     import kvikio
 
     from cudf_streaming.channel_metadata import ChannelMetadata
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 
+    import cudf_polars.quent
     from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.core import T
     from cudf_polars.engine.options import StreamingOptions
@@ -266,7 +264,6 @@ def _setup_root(
     hardware_binding: HardwareBindingPolicy,
     memory_resource_config: MemoryResourceConfig | None,
     dask_worker: distributed.Worker | None = None,
-    worker_id: uuid.UUID,
 ) -> bytes:
     """
     Initialize the root rank on one Dask worker.
@@ -291,8 +288,6 @@ def _setup_root(
         :class:`rmm.mr.CudaAsyncMemoryResource`.
     dask_worker
         Injected by ``distributed`` when called via :meth:`distributed.Client.run`.
-    worker_id
-        Unique identifier for this worker.
 
     Returns
     -------
@@ -334,8 +329,6 @@ def _setup_worker(
     uid: str,
     hardware_binding: HardwareBindingPolicy,
     memory_resource_config: MemoryResourceConfig | None,
-    worker_ids: list[uuid.UUID],
-    quent_context: cudf_polars.quent.QuentConfig | None,
     num_py_executors: int,
     kvikio_nthreads: int | None,
     kvikio_statistics: bool,
@@ -345,7 +338,6 @@ def _setup_worker(
     kvikio_reactor_count: int,
     kvikio_reactor_dispatch: kvikio.RemoteReactorDispatch,
     kvikio_request_ceiling: int,
-    quent_collector_address: str | None,
     dask_worker: distributed.Worker | None = None,
 ) -> None:
     """
@@ -370,11 +362,6 @@ def _setup_worker(
     memory_resource_config
         Optional RMM memory resource configuration. If ``None``, defaults to
         :class:`rmm.mr.CudaAsyncMemoryResource`.
-    worker_ids
-        List of Quent worker UUIDs indexed by rank. Each worker picks
-        its own ID after the barrier using ``comm.rank``.
-    quent_context
-        Serializable Quent configuration, or ``None`` when tracing is disabled.
     dask_worker
         Injected by ``distributed`` when called via :meth:`distributed.Client.run`.
     num_py_executors
@@ -396,8 +383,6 @@ def _setup_worker(
         ``MULTI_POLL`` reactor dispatch policy to configure on this worker process.
     kvikio_request_ceiling
         ``MULTI_POLL`` concurrent-request ceiling to configure on this worker process.
-    quent_collector_address
-        Address of the Quent collector, if Quent is enabled.
     """
     assert dask_worker is not None
     options = Options.deserialize(rapidsmpf_options_as_bytes)
@@ -447,7 +432,6 @@ def _setup_worker(
         )
 
     barrier(comm)
-    worker_id = worker_ids[comm.rank]
     ctx = Context.from_options(comm.logger, base_mr, options, statistics)
     # Set the current RMM device resource so all temporary allocations
     # in libcudf also use the same memory resource.
@@ -458,43 +442,17 @@ def _setup_worker(
         thread_name_prefix="dask-executor",
     )
 
-    if quent_collector_address is not None:
-        assert quent_context is not None
-        quent_worker_runtime = QuentWorkerRuntime.create(
-            quent_context,
-            quent_collector_address,
-            worker_id=worker_id,
-            rank=comm.rank,
-            nranks=comm.nranks,
-            instance_name=f"rank-{comm.rank}",
-        )
-    else:
-        quent_worker_runtime = None
-
     mp_ctx = _WorkerContext(
         comm=comm,
         ctx=ctx,
         py_executor=py_executor,
         base_mr=base_mr,
         mr=mr,
-        quent_worker_runtime=quent_worker_runtime,
+        quent_worker_runtime=None,
         statistics=statistics,
         kvikio_monitor=make_kvikio_monitor(enabled=kvikio_statistics),
     )
     setattr(dask_worker, attr, mp_ctx)
-
-
-def _close_quent_worker(
-    *, uid: str, dask_worker: distributed.Worker | None = None
-) -> None:
-    """Close one worker's Quent collector client."""
-    assert dask_worker is not None
-    mp_ctx: _WorkerContext | None = getattr(
-        dask_worker, f"_cudf_polars_mp_context_{uid}", None
-    )
-    if mp_ctx is not None and mp_ctx.quent_worker_runtime is not None:
-        mp_ctx.quent_worker_runtime.close()
-        mp_ctx.quent_worker_runtime = None
 
 
 def _update_quent_on_worker(
@@ -573,25 +531,14 @@ def _teardown_worker(
 def _shutdown_dask(
     client: distributed.Client | None,
     uid: str,
-    quent_runtime: QuentControllerRuntime | None,
-    quent_collector: quent_bindings.Collector | None,
+    quent_close: Callable[[], object] | None,
     owned_client: distributed.Client | None,
     owned_cluster: distributed.SpecCluster | None,
 ) -> None:
     """Release Dask resources in dependency order."""
     steps: list[Callable[[], object]] = []
-    if client is not None and (
-        quent_runtime is not None or quent_collector is not None
-    ):
-        steps.append(
-            lambda: client.run(functools.partial(_close_quent_worker, uid=uid))
-        )
-    if quent_runtime is not None:
-        steps.append(quent_runtime.close)
-    elif (
-        quent_collector is not None
-    ):  # pragma: no-cover; runs on the worker, not client
-        steps.append(quent_collector.close)
+    if quent_close is not None:
+        steps.append(quent_close)
     if client is not None:
         steps.append(lambda: client.run(functools.partial(_teardown_worker, uid=uid)))
     if owned_client is not None:
@@ -1062,7 +1009,6 @@ class DaskEngine(StreamingEngine):
         quent_context = resolve_quent_context(executor_options)
         executor_options["quent_context"] = quent_context
         self._quent_runtime = None
-        self._quent_collector: quent_bindings.Collector | None = None
 
         if bootstrap.is_running_with_rrun():
             raise RuntimeError(
@@ -1091,14 +1037,11 @@ class DaskEngine(StreamingEngine):
         exit_stack = contextlib.ExitStack()
         owned_cluster: distributed.SpecCluster | None = None
         owned_client: distributed.Client | None = None
-        quent_collector: quent_bindings.Collector | None = None
-        quent_runtime: QuentControllerRuntime | None = None
         exit_stack.callback(
             lambda: _shutdown_dask(
                 dask_client,
                 rapidsmpf_id,
-                self._quent_runtime,
-                self._quent_collector,
+                (self._quent_close if self._quent_runtime is not None else None),
                 owned_client,
                 owned_cluster,
             )
@@ -1135,8 +1078,6 @@ class DaskEngine(StreamingEngine):
             nranks = len(worker_addresses)
             root_worker = worker_addresses[0]
 
-            worker_ids = [uuid.uuid4() for _ in range(nranks)]
-
             # Phase 1: initialize root communicator on one worker.
             root_result = dask_client.run(
                 functools.partial(
@@ -1144,22 +1085,12 @@ class DaskEngine(StreamingEngine):
                     uid=rapidsmpf_id,
                     hardware_binding=hw_binding,
                     memory_resource_config=mr_config,
-                    worker_id=worker_ids[0],
                 ),
                 nranks,
                 rapidsmpf_options_as_bytes,
                 workers=[root_worker],
             )
             root_ucxx_address_as_bytes = root_result[root_worker]
-
-            if quent_context is not None:
-                quent_collector = cudf_polars.quent._runtime.start_collector(
-                    quent_context.run_root
-                )
-                self._quent_collector = quent_collector
-                quent_collector_address = quent_collector.address
-            else:
-                quent_collector_address = None
 
             # Phase 2: complete bootstrap on all workers concurrently.
             # All workers call barrier() so they must all run simultaneously.
@@ -1169,13 +1100,10 @@ class DaskEngine(StreamingEngine):
                     uid=rapidsmpf_id,
                     hardware_binding=hw_binding,
                     memory_resource_config=mr_config,
-                    worker_ids=worker_ids,
-                    quent_context=quent_context,
                 ),
                 root_ucxx_address_as_bytes,
                 nranks,
                 rapidsmpf_options_as_bytes,
-                quent_collector_address=quent_collector_address,
                 num_py_executors=executor_options.get("num_py_executors", 8),
                 kvikio_nthreads=executor_options["kvikio_nthreads"],
                 kvikio_statistics=executor_options["kvikio_statistics"],
@@ -1188,25 +1116,24 @@ class DaskEngine(StreamingEngine):
                 kvikio_reactor_dispatch=executor_options["kvikio_reactor_dispatch"],
                 kvikio_request_ceiling=executor_options["kvikio_request_ceiling"],
             )
-            if quent_context is not None:
-                assert quent_collector_address is not None
-                quent_runtime = QuentControllerRuntime.create(
-                    quent_context,
-                    quent_collector_address,
-                    backend="dask",
-                    collector=quent_collector,
-                )
-                self._quent_runtime = quent_runtime
-                self._quent_collector = None  # runtime now owns the collector
 
             dask_ctx = DaskContext(
                 client=dask_client,
                 rapidsmpf_id=rapidsmpf_id,
-                quent_controller_runtime=quent_runtime,
+                quent_controller_runtime=None,
                 owned_client=owned_client,
                 owned_cluster=owned_cluster,
             )
             self._dask_context: DaskContext | None = dask_ctx
+            self._update_quent(quent_context, None, executor_options)
+            dask_ctx = DaskContext(
+                client=dask_client,
+                rapidsmpf_id=rapidsmpf_id,
+                quent_controller_runtime=self._quent_runtime,
+                owned_client=owned_client,
+                owned_cluster=owned_cluster,
+            )
+            self._dask_context = dask_ctx
             super().__init__(
                 nranks=nranks,
                 executor_options={
@@ -1307,33 +1234,44 @@ class DaskEngine(StreamingEngine):
     def _quent_close(self) -> None:
         """Clear Quent worker runtimes on all Dask workers, then close the controller."""
         ctx = self._dask_ctx
-        # Workers first so the collector can drain before we close it.
-        ctx.client.run(
-            functools.partial(_update_quent_on_worker, None, None, uid=ctx.rapidsmpf_id)
-        )
+        steps: list[Callable[[], object]] = [
+            # Workers first so the collector can drain before we close it.
+            lambda: ctx.client.run(
+                functools.partial(
+                    _update_quent_on_worker, None, None, uid=ctx.rapidsmpf_id
+                )
+            )
+        ]
         if self._quent_runtime is not None:
-            self._quent_runtime.close()
+            steps.append(self._quent_runtime.close)
+        try:
+            run_cleanup_steps("Dask Quent shutdown failed", *steps)
+        finally:
             self._quent_runtime = None
 
-    def _quent_open(self, quent_context: cudf_polars.quent.QuentConfig) -> None:
+    def _quent_open(
+        self, quent_context: cudf_polars.quent.QuentConfig
+    ) -> cudf_polars.quent.QuentConfig:
         """Start a new Quent collector, connect workers, create controller."""
         ctx = self._dask_ctx
-        quent_collector = cudf_polars.quent._runtime.start_collector(
-            quent_context.run_root
-        )
-        collector_address = quent_collector.address
-        assert collector_address is not None
-        ctx.client.run(
-            functools.partial(
-                _update_quent_on_worker,
-                quent_context,
-                collector_address,
-                uid=ctx.rapidsmpf_id,
-            )
-        )
         self._quent_runtime = QuentControllerRuntime.create(
-            quent_context, collector_address, backend="dask", collector=quent_collector
+            quent_context,
+            backend="dask",
         )
+        try:
+            ctx.client.run(
+                functools.partial(
+                    _update_quent_on_worker,
+                    quent_context,
+                    self._quent_runtime.collector_address,
+                    uid=ctx.rapidsmpf_id,
+                )
+            )
+        except BaseException:
+            with contextlib.suppress(Exception):
+                self._quent_close()
+            raise
+        return quent_context
 
     @classmethod
     def from_options(
@@ -1445,12 +1383,11 @@ class DaskEngine(StreamingEngine):
         """
         if self._dask_context is None:
             return  # already shut down
-        self._dask_context = None
         try:
             super().shutdown()
         finally:
+            self._dask_context = None
             self._quent_runtime = None
-            self._quent_collector = None
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
         return list(self._run_by_rank(_run_with_rank, func, *args, **kwargs).values())

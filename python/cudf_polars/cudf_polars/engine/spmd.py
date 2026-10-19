@@ -42,7 +42,6 @@ from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
 
 import cudf_polars.quent
-import cudf_polars.quent._runtime
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.containers.dataframe import categoricals_to_physical
 from cudf_polars.engine import persisted_result, rank_local_store
@@ -579,7 +578,7 @@ class SPMDEngine(StreamingEngine):
         quent_context = resolve_quent_context(executor_options)
         executor_options["quent_context"] = quent_context
         self._quent_runtime = None
-        self._quent_worker_runtime = None
+        self._quent_worker_runtime: QuentWorkerRuntime | None = None
 
         check_reserved_keys(executor_options, engine_options)
         hw_binding = cast(
@@ -650,51 +649,14 @@ class SPMDEngine(StreamingEngine):
             exit_stack.enter_context(set_memory_resource(self._mr))
             exit_stack.callback(self._cleanup_ctx)
 
-            if quent_context is not None:
-                collector_cleanup: contextlib.ExitStack | None = None
-                if comm.rank == 0:
-                    quent_collector = cudf_polars.quent._runtime.start_collector(
-                        quent_context.run_root
-                    )
-                    collector_cleanup = contextlib.ExitStack()
-                    collector_cleanup.callback(quent_collector.close)
-                    exit_stack.enter_context(collector_cleanup)
-                    collector_address = quent_collector.address
-                else:
-                    quent_collector = None
-                    collector_address = ""
-                quent_context, collector_address = synchronize_quent_configuration(
-                    comm=comm,
-                    context=self._ctx,
-                    quent_config=quent_context,
-                    collector_address=collector_address,
-                )
-                executor_options["quent_context"] = quent_context
-                self._quent_worker_id = uuid.uuid4()
-                if comm.rank == 0:
-                    self._quent_runtime = QuentControllerRuntime.create(
-                        quent_context,
-                        collector_address,
-                        backend="spmd",
-                        collector=quent_collector,
-                    )
-                    exit_stack.callback(self._close_quent_controller)
-                self._quent_worker_runtime = QuentWorkerRuntime.create(
-                    quent_context,
-                    collector_address,
-                    worker_id=self._quent_worker_id,
-                    rank=comm.rank,
-                    nranks=comm.nranks,
-                    instance_name=f"rank-{comm.rank}",
-                )
-                exit_stack.callback(self._close_quent_worker)
-                if collector_cleanup is not None:
-                    # The runtime now owns the collector.
-                    collector_cleanup.pop_all()
-                engine_id = quent_context.engine_id
-            else:
-                engine_id = uuid.uuid4()
-                self._quent_worker_id = uuid.uuid4()
+            self._quent_worker_id = uuid.uuid4()
+            self._update_quent(quent_context, None, executor_options)
+            effective_quent_context = executor_options["quent_context"]
+            engine_id = (
+                effective_quent_context.engine_id
+                if effective_quent_context is not None
+                else uuid.uuid4()
+            )
 
             # Register after `_cleanup_ctx` so on teardown (LIFO) the
             # executor shuts down first. `wait=True` is safe because
@@ -782,46 +744,48 @@ class SPMDEngine(StreamingEngine):
         if comm.nranks > 1:
             barrier(comm)
 
-    def _quent_open(self, quent_context: cudf_polars.quent.QuentConfig) -> None:
+    def _quent_open(
+        self, quent_context: cudf_polars.quent.QuentConfig
+    ) -> cudf_polars.quent.QuentConfig:
         """Start SPMD Quent runtimes for ``quent_context``."""
         assert self._comm is not None
         assert self._ctx is not None
         comm = self._comm
         collector_address: str = ""
-        if comm.rank == 0:
-            quent_collector = cudf_polars.quent._runtime.start_collector(
-                quent_context.run_root
+        try:
+            if comm.rank == 0:
+                self._quent_runtime = QuentControllerRuntime.create(
+                    quent_context,
+                    backend="spmd",
+                )
+                collector_address = self._quent_runtime.collector_address
+            quent_context, collector_address = synchronize_quent_configuration(
+                comm=comm,
+                context=self._ctx,
+                quent_config=quent_context,
+                collector_address=collector_address,
             )
-            _collector_cleanup = contextlib.ExitStack()
-            _collector_cleanup.callback(quent_collector.close)
-            collector_address = quent_collector.address
-        quent_context, collector_address = synchronize_quent_configuration(
-            comm=comm,
-            context=self._ctx,
-            quent_config=quent_context,
-            collector_address=collector_address,
-        )
-        if comm.rank == 0:
-            self._quent_runtime = QuentControllerRuntime.create(
+            self._quent_worker_runtime = QuentWorkerRuntime.create(
                 quent_context,
                 collector_address,
-                backend="spmd",
-                collector=quent_collector,
+                worker_id=self._quent_worker_id,
+                rank=comm.rank,
+                nranks=comm.nranks,
+                instance_name=f"rank-{comm.rank}",
             )
-            _collector_cleanup.pop_all()
-        self._quent_worker_runtime = QuentWorkerRuntime.create(
-            quent_context,
-            collector_address,
-            worker_id=self._quent_worker_id,
-            rank=comm.rank,
-            nranks=comm.nranks,
-            instance_name=f"rank-{comm.rank}",
-        )
+        except BaseException:
+            steps: list[Callable[[], object]] = [
+                self._close_quent_worker,
+                self._close_quent_controller,
+            ]
+            run_cleanup_steps("SPMD Quent startup cleanup failed", *steps)
+            raise
+        return quent_context
 
     def _shutdown_spmd(self) -> None:
         """Run collective cleanup before local resources unwind."""
         steps: list[Callable[[], object]] = [self._drop_persisted]
-        if self._quent_worker_runtime is not None:
+        if self._quent_worker_runtime is not None or self._quent_runtime is not None:
             steps.append(self._quent_close)
         run_cleanup_steps("SPMD engine shutdown failed", *steps)
 
@@ -1055,8 +1019,9 @@ class SPMDEngine(StreamingEngine):
         self.rapidsmpf_options = rapidsmpf_options
 
         # Tear down Quent runtimes before the Context rebuild if they're changing.
-        if quent_changing:
+        if quent_changing and existing_quent_context is not None:
             self._quent_close()
+            existing_quent_context = None
 
         # Collective: synchronize all ranks before tearing down the Context.
         if self._comm.nranks > 1:
@@ -1088,9 +1053,10 @@ class SPMDEngine(StreamingEngine):
 
         # Start new Quent runtimes after the Context is rebuilt.
         self._update_quent(new_quent_context, existing_quent_context, executor_options)
+        effective_quent_context = executor_options["quent_context"]
         engine_id = (
-            new_quent_context.engine_id
-            if new_quent_context is not None
+            effective_quent_context.engine_id
+            if effective_quent_context is not None
             else uuid.uuid4()
         )
 

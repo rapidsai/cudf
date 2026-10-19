@@ -597,11 +597,11 @@ class StreamingEngine(pl.GPUEngine):
         and ``_quent_output_root``.  Subclasses implement :meth:`_quent_close`
         and :meth:`_quent_open` for the backend-specific work.
         """
-        if new_quent_context == existing_quent_context:
-            return
-        self._quent_close()
-        if new_quent_context is not None:
-            self._quent_open(new_quent_context)
+        if new_quent_context != existing_quent_context:
+            if existing_quent_context is not None:
+                self._quent_close()
+            if new_quent_context is not None:
+                new_quent_context = self._quent_open(new_quent_context)
         self._quent_output_root = (
             new_quent_context.run_root if new_quent_context is not None else None
         )
@@ -613,8 +613,8 @@ class StreamingEngine(pl.GPUEngine):
             f"{type(self).__name__} does not implement _quent_close"
         )
 
-    def _quent_open(self, quent_context: QuentConfig) -> None:
-        """Start fresh Quent runtimes for ``quent_context`` (workers + controller)."""
+    def _quent_open(self, quent_context: QuentConfig) -> QuentConfig:
+        """Start fresh Quent runtimes and return the effective configuration."""
         raise NotImplementedError(  # pragma: no cover
             f"{type(self).__name__} does not implement _quent_open"
         )
