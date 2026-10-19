@@ -33,62 +33,34 @@ rapids-pip-retry install \
     "$(find "${WORK}/wheels" -name "pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl")[test]"
 python -m pip list 2>/dev/null | grep -i -E "rmm|kvikio|nvcomp|cuda|cudf"
 
-REPRO="$(realpath ci/gb300_repro.py)"
+pushd "${WORK}/src/python/pylibcudf/tests" > /dev/null
 SUMMARY=()
 
-run_repro() {
-  local label=$1 mode=$2
+run_serial() {
+  local label=$1 target=$2
   shift 2
-  for attempt in 1 2 3 4 5; do
-    set +e
-    env "$@" timeout 5m python -X faulthandler "${REPRO}" "${mode}" 20 > "${WORK}/${label}-${attempt}.log" 2>&1
-    local status=$?
-    set -e
-    SUMMARY+=("${label} attempt=${attempt} exit=${status}")
-    if [[ ${status} -ne 0 ]]; then
-      rapids-logger "${label} attempt ${attempt} failed with ${status}"
-      grep -v -E "^\s*$" "${WORK}/${label}-${attempt}.log" | head -n 60 || true
-    fi
-  done
+  set +e
+  env "$@" timeout 20m python -m pytest -p no:xdist -p no:cacheprovider -v "${target}" > "${WORK}/${label}.log" 2>&1
+  local status=$?
+  set -e
+  local last
+  last=$(grep -E "(PASSED|FAILED|SKIPPED|XFAIL|XPASS|ERROR)" "${WORK}/${label}.log" | tail -n 1 || true)
+  SUMMARY+=("${label} exit=${status} last_completed=${last}")
+  rapids-logger "${label} exit=${status}"
+  if grep -q "Fatal Python error" "${WORK}/${label}.log"; then
+    grep -B 15 "Fatal Python error" "${WORK}/${label}.log" | grep -E "::" || true
+    sed -n '/Fatal Python error/,/Extension modules/p' "${WORK}/${label}.log" | head -n 80 || true
+  fi
 }
 
-for mode in path bytes; do
-  run_repro "${mode}-default" "${mode}"
-  run_repro "${mode}-launch-blocking" "${mode}" CUDA_LAUNCH_BLOCKING=1
-  run_repro "${mode}-hw-off" "${mode}" LIBCUDF_HW_DECOMPRESSION=OFF
-  run_repro "${mode}-hw-off-launch-blocking" "${mode}" LIBCUDF_HW_DECOMPRESSION=OFF CUDA_LAUNCH_BLOCKING=1
-done
+run_serial suite-launch-blocking . CUDA_LAUNCH_BLOCKING=1
+run_serial suite-launch-blocking-hw-off . CUDA_LAUNCH_BLOCKING=1 LIBCUDF_HW_DECOMPRESSION=OFF
+run_serial io-launch-blocking io CUDA_LAUNCH_BLOCKING=1
+run_serial test-types-launch-blocking io/test_types.py CUDA_LAUNCH_BLOCKING=1
+run_serial suite-default .
+run_serial suite-hw-on . LIBCUDF_HW_DECOMPRESSION=ON
 
-rapids-logger "8 concurrent processes, path mode"
-for round in 1 2 3; do
-  pids=()
-  for i in $(seq 8); do
-    python -X faulthandler "${REPRO}" path 50 > "${WORK}/concurrent-${round}-${i}.log" 2>&1 &
-    pids+=($!)
-  done
-  failures=0
-  for i in "${!pids[@]}"; do
-    if ! wait "${pids[$i]}"; then
-      failures=$((failures + 1))
-      grep -v -E "^\s*$" "${WORK}/concurrent-${round}-$((i + 1)).log" | head -n 40 || true
-    fi
-  done
-  SUMMARY+=("concurrent round=${round} failed_processes=${failures}/8")
-done
+popd > /dev/null
 
-rapids-logger "gdb backtrace, path mode with CUDA_LAUNCH_BLOCKING=1"
-apt-get update -qq && apt-get install -y -qq --no-install-recommends gdb > /dev/null
-set +e
-CUDA_LAUNCH_BLOCKING=1 timeout 10m gdb -q -batch \
-  -ex "handle SIGSEGV stop print nopass" \
-  -ex "set pagination off" \
-  -ex run \
-  -ex "info sharedlibrary nvcomp" \
-  -ex "info threads" \
-  -ex "thread apply all bt 30" \
-  --args python "${REPRO}" path 20 > "${WORK}/gdb.log" 2>&1
-set -e
-grep -v -E "^\[(New Thread|Thread .* exited)" "${WORK}/gdb.log" | sed -n '/SIGSEGV/,$p' | head -n 400 || true
-
-rapids-logger "GB300 repro summary"
+rapids-logger "GB300 serial summary"
 printf '%s\n' "${SUMMARY[@]}"
