@@ -18,13 +18,17 @@ RUN_CUDF_STREAMING_TESTS="${RUN_CUDF_STREAMING_TESTS:-true}"
 # so we download the wheel once and install from the local filesystem.
 CUPY_NIGHTLY="${CUPY_NIGHTLY:-false}"
 CUPY_NIGHTLY_PIP_ARGS=()
+CUDA_MAJOR="${RAPIDS_CUDA_VERSION%%.*}"
 if [[ "${CUPY_NIGHTLY}" == "true" ]]; then
-  CUDA_MAJOR="${RAPIDS_CUDA_VERSION%%.*}"
-  cupy_nightly_spec="cupy-cuda${CUDA_MAJOR}x>=14.0.1a0,!=14.1.0"
+  # The pre-release specifier here only lets pip consider pre-releases of cupy,
+  # which are merged with the constraints from depednecies.yaml to find the latest cupy;
+  cupy_nightly_spec="cupy-cuda${CUDA_MAJOR}x>=0.0.0a0"
+  rapids-generate-pip-constraints py_test_cudf "${PIP_CONSTRAINT}" constraints
   CUPY_NIGHTLY_WHEELHOUSE="$(mktemp -d)"
   rapids-logger "Downloading nightly cupy wheel"
   rapids-pip-retry download \
     --no-deps \
+    --constraint "${PIP_CONSTRAINT}" \
     --dest "${CUPY_NIGHTLY_WHEELHOUSE}" \
     --extra-index-url "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple/" \
     "${cupy_nightly_spec}"
