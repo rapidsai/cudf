@@ -11,15 +11,20 @@
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/utilities/buffer_factories.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/concepts.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
+
+#include <cuda/buffer>
+#include <cuda/std/concepts>
 
 #include <bit>
 #include <numeric>
@@ -43,9 +48,8 @@ auto constexpr stats_cols_per_column = 3;
  */
 class stats_caster_base {
  protected:
-  template <typename T>
+  template <cudf::concepts::integral_not_bool T>
   static inline T decode_fixed_width_decimal(uint8_t const* stats_val, size_t stats_size)
-    requires(cudf::is_integral<T>() and !cudf::is_boolean<T>())
   {
     // Decimal statistics with physical BYTE_ARRAY or FIXED_LEN_BYTE_ARRAY are stored as
     // signed two's-complement values using big-endian byte order. The physical width may be
@@ -80,7 +84,7 @@ class stats_caster_base {
 
   template <typename T>
   static inline T decode_fixed_width_value(uint8_t const* stats_val, size_t stats_size)
-    requires((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or cudf::is_chrono<T>())
+    requires(cudf::concepts::integral_not_bool<T> or cudf::concepts::chrono<T>)
   {
     CUDF_EXPECTS(stats_size == sizeof(T),
                  "Parquet reader encountered a mismatch in size of statistics vector and the cudf "
@@ -110,17 +114,16 @@ class stats_caster_base {
                           size_t stats_size,
                           Type const type,
                           int32_t ts_scale = 0)
-    requires(cudf::is_dictionary<T>() or cudf::is_nested<T>())
+    requires(cudf::concepts::dictionary<T> or cudf::concepts::nested<T>)
   {
     CUDF_FAIL("Unsupported type for stats casting");
   }
 
-  template <typename T>
+  template <cudf::concepts::boolean T>
   static inline T convert(uint8_t const* stats_val,
                           size_t stats_size,
                           Type const type,
                           int32_t ts_scale = 0)
-    requires(cudf::is_boolean<T>())
   {
     CUDF_EXPECTS(type == Type::BOOLEAN, "Invalid type and stats combination");
     return stats_caster_base::target_type<T>(*reinterpret_cast<bool const*>(stats_val));
@@ -132,8 +135,8 @@ class stats_caster_base {
                           size_t stats_size,
                           Type const type,
                           int32_t ts_scale = 0)
-    requires((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or cudf::is_fixed_point<T>() or
-             cudf::is_chrono<T>())
+    requires(cudf::concepts::integral_not_bool<T> or cudf::concepts::fixed_point<T> or
+             cudf::concepts::chrono<T>)
   {
     switch (type) {
       case Type::INT32:
@@ -173,12 +176,11 @@ class stats_caster_base {
     }
   }
 
-  template <typename T>
+  template <cuda::std::floating_point T>
   static inline T convert(uint8_t const* stats_val,
                           size_t stats_size,
                           Type const type,
                           int32_t ts_scale = 0)
-    requires(cudf::is_floating_point<T>())
   {
     switch (type) {
       case Type::FLOAT:
@@ -189,12 +191,11 @@ class stats_caster_base {
     }
   }
 
-  template <typename T>
+  template <cudf::concepts::string_view T>
   static inline T convert(uint8_t const* stats_val,
                           size_t stats_size,
                           Type const type,
                           int32_t ts_scale = 0)
-    requires(std::is_same_v<T, string_view>)
   {
     switch (type) {
       case Type::BYTE_ARRAY: [[fallthrough]];
@@ -220,9 +221,7 @@ class stats_caster_base {
     host_column(size_type total_row_groups, cuda::stream_ref stream)
       : val{cudf::detail::make_host_vector<T>(total_row_groups, stream)},
         chars{cudf::detail::make_empty_host_vector<char>(initial_chars_capacity, stream)},
-        null_mask(cudf::util::div_rounding_up_safe<cudf::size_type>(
-                    cudf::bitmask_allocation_size_bytes(total_row_groups), sizeof(bitmask_type)),
-                  ~bitmask_type{0})
+        null_mask(cudf::bitmask_allocation_size_words(total_row_groups), ~bitmask_type{0})
     {
     }
 
@@ -257,7 +256,7 @@ class stats_caster_base {
 
     static inline std::tuple<rmm::device_uvector<char>,
                              rmm::device_uvector<size_type>,
-                             rmm::device_uvector<size_type>>
+                             cuda::device_buffer<size_type>>
     make_strings_children(cudf::host_span<cudf::string_view const> host_strings,
                           cudf::host_span<char const> host_chars,
                           cuda::stream_ref stream,
@@ -274,7 +273,7 @@ class stats_caster_base {
       }
       auto d_chars   = cudf::detail::make_device_uvector_async(host_chars, stream, mr);
       auto d_offsets = cudf::detail::make_device_uvector_async(offsets, stream, mr);
-      auto d_sizes   = cudf::detail::make_device_uvector_async(sizes, stream, mr);
+      auto d_sizes   = cudf::detail::make_device_buffer_async(sizes, stream, mr);
       stream.sync();  // ensures the vectors are not destroyed before the copy is completed
       return {std::move(d_chars), std::move(d_offsets), std::move(d_sizes)};
     }
@@ -287,8 +286,10 @@ class stats_caster_base {
         auto [d_chars, d_offsets, _] = make_strings_children(val, chars, stream, mr);
         auto null_mask_buffer =
           cudf::create_null_mask(val.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
-        CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-          null_mask_buffer.data(), null_mask.data(), null_mask_buffer.size(), stream));
+        CUDF_CUDA_TRY(cudf::detail::memcpy_async(null_mask_buffer.data(),
+                                                 null_mask.data(),
+                                                 null_mask_buffer.size() * sizeof(bitmask_type),
+                                                 stream));
         stream.sync();
         return cudf::make_strings_column(
           val.size(),
@@ -303,8 +304,10 @@ class stats_caster_base {
       auto data = cudf::detail::make_device_uvector_async(val, stream, mr);
       auto null_mask_buffer =
         cudf::create_null_mask(val.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
-      CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-        null_mask_buffer.data(), null_mask.data(), null_mask_buffer.size(), stream));
+      CUDF_CUDA_TRY(cudf::detail::memcpy_async(null_mask_buffer.data(),
+                                               null_mask.data(),
+                                               null_mask_buffer.size() * sizeof(bitmask_type),
+                                               stream));
       stream.sync();
       return std::make_unique<column>(
         dtype, val.size(), data.release(), std::move(null_mask_buffer), null_count);

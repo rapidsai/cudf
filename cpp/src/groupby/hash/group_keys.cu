@@ -387,7 +387,7 @@ grouped_keys group_keys(table_view const& keys,
   auto [row_bitmask_data, row_bitmask] =
     skip_rows_with_nulls
       ? cudf::groupby::detail::compute_row_bitmask(keys, stream)
-      : std::pair<cuda::device_buffer<std::byte>, bitmask_type const*>{
+      : std::pair<cuda::device_buffer<cudf::bitmask_type>, bitmask_type const*>{
           cudf::create_null_mask(0, mask_state::UNALLOCATED, stream, mr.get_temporary_mr()),
           nullptr};
   std::optional<std::size_t> domain_capacity;
