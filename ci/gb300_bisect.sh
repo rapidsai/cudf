@@ -36,38 +36,46 @@ python -m pip list 2>/dev/null | grep -i -E "rmm|kvikio|nvcomp|cuda|cudf"
 pushd "${WORK}/src/python/pylibcudf/tests" > /dev/null
 SUMMARY=()
 
-rapids-logger "Serial collection check"
-python -m pytest -p no:xdist -p no:cacheprovider --collect-only -q . 2>&1 | tail -n 30 || true
+# Modules run by both crashing xdist workers before the crash, in gw7's order.
+MODULES=(
+  test_copying.py test_column_factories.py test_column_from_array.py test_column_from_device.py
+  test_column_from_iterable.py test_column_span.py test_column_struct_from_children.py
+  test_contiguous_split.py test_cuda_context.py test_datetime.py test_round.py test_experimental.py
+  test_expressions.py test_filling.py test_gpumemoryview.py test_groupby.py test_hashing.py
+  test_interop.py test_join.py test_labeling.py test_lists.py test_null_mask.py
+  test_nvtext_byte_pair_encode.py test_nvtext_deduplicate.py test_nvtext_edit_distance.py
+  test_nvtext_generate_ngrams.py test_nvtext_jaccard.py test_nvtext_minhash.py
+  test_nvtext_ngrams_tokenize.py test_nvtext_normalize.py
+)
 
-run_xdist_verbose() {
+run_serial() {
   local label=$1
   shift
-  for attempt in 1 2 3; do
-    set +e
-    env "$@" timeout 15m python -m pytest -p no:cacheprovider --numprocesses=8 --dist=worksteal -v . \
-      > "${WORK}/${label}-${attempt}.log" 2>&1
-    local status=$?
-    set -e
-    local crash
-    crash=$(grep -o "worker '[^']*' crashed while running '[^']*'" "${WORK}/${label}-${attempt}.log" | head -n 1 || true)
-    SUMMARY+=("${label} attempt=${attempt} exit=${status} ${crash}")
-    if [[ -n "${crash}" ]]; then
-      local worker
-      worker=$(sed -E "s/worker '([^']*)'.*/\1/" <<< "${crash}")
-      rapids-logger "${label} attempt ${attempt}: tests completed by ${worker} before it crashed"
-      grep -E "^\[${worker}\]" "${WORK}/${label}-${attempt}.log" || true
-      rapids-logger "${label} attempt ${attempt}: crash stack"
-      sed -n '/Fatal Python error/,/Extension modules/p' "${WORK}/${label}-${attempt}.log" | head -n 80 || true
-      return
-    fi
-  done
+  set +e
+  CUDA_LAUNCH_BLOCKING=1 timeout 20m python -m pytest -p no:xdist -p no:cacheprovider -q "$@" io/test_types.py \
+    > "${WORK}/${label}.log" 2>&1
+  local status=$?
+  set -e
+  local crashed=""
+  if grep -q "Fatal Python error" "${WORK}/${label}.log"; then crashed="SEGFAULT"; fi
+  SUMMARY+=("${label} exit=${status} ${crashed}")
+  if [[ -n "${crashed}" && ! -f "${WORK}/printed-stack" ]]; then
+    rapids-logger "First crash stack (${label})"
+    sed -n '/Fatal Python error/,/Extension modules/p' "${WORK}/${label}.log" | head -n 80 || true
+    touch "${WORK}/printed-stack"
+  fi
 }
 
-run_xdist_verbose launch-blocking CUDA_LAUNCH_BLOCKING=1
-run_xdist_verbose launch-blocking-hw-off CUDA_LAUNCH_BLOCKING=1 LIBCUDF_HW_DECOMPRESSION=OFF
-run_xdist_verbose default
+for attempt in 1 2; do
+  run_serial "all-modules-${attempt}" "${MODULES[@]}"
+done
+for module in "${MODULES[@]}"; do
+  for attempt in 1 2; do
+    run_serial "${module}-${attempt}" "${module}"
+  done
+done
 
 popd > /dev/null
 
-rapids-logger "GB300 worker-sequence summary"
+rapids-logger "GB300 module bisect summary"
 printf '%s\n' "${SUMMARY[@]}"
