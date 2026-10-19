@@ -336,7 +336,7 @@ class output_builder {
         return Buffer(size(), stream, mr);
       }
     }();
-    auto output_it = output.data();
+    auto output_it = output.begin();
     for (auto const& chunk : _chunks) {
       output_it =
         thrust::copy(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
