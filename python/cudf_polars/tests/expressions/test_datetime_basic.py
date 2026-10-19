@@ -1222,6 +1222,34 @@ def test_datetime_combine_out_of_range(
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.parametrize("input_unit", ["ms", "us", "ns"])
+def test_datetime_combine_datetime_out_of_range(
+    engine: pl.GPUEngine,
+    input_unit: Literal["ms", "us", "ns"],
+    time_unit: Literal["ms", "us", "ns"],
+):
+    ticks_per_day = _TICKS_PER_DAY[input_unit]
+    ticks = [
+        -(2**63) + 1,
+        -(2**31) * ticks_per_day - 1,
+        -(2**31) * ticks_per_day,
+        -1,
+        0,
+        2**31 * ticks_per_day - 1,
+        2**31 * ticks_per_day,
+        2**63 - 1,
+    ]
+    ldf = pl.LazyFrame(
+        {
+            "a": pl.Series(
+                [t for t in ticks if -(2**63) <= t < 2**63], dtype=pl.Int64
+            ).cast(pl.Datetime(input_unit))
+        }
+    )
+    q = ldf.select(pl.col("a").dt.combine(datetime.time(1, 2, 3), time_unit))
+    assert_gpu_result_equal(q, engine=engine)
+
+
 @pytest.mark.parametrize(
     "day",
     [datetime.date(2020, 10, 25), datetime.date(2020, 3, 29)],

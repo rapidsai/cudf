@@ -984,12 +984,7 @@ def _truncate(column: plc.Column, plan: _TruncatePlan, stream: Stream) -> plc.Co
 def _scale_ticks(
     ticks: plc.Column, factor: int, stream: Stream, *, max_abs_ticks: int = 2**63
 ) -> plc.Column:
-    """
-    ``ticks * factor`` for INT64 ``ticks``, or null where it overflows INT64.
-
-    The overflow check is skipped if ``max_abs_ticks``, a bound on the
-    absolute value of ``ticks``, shows that it cannot overflow.
-    """
+    """``ticks * factor`` for INT64 ``ticks``, or null where it overflows INT64."""
     if max_abs_ticks * factor < 2**63:
         return _wrapping(plc.binaryop.BinaryOperator.MUL, ticks, factor, stream)
     limit = (2**63 - 1) // factor
@@ -1269,16 +1264,52 @@ class TemporalFunction(Expr):
             stream = df.stream
             unit = self.dtype.plc_type
             date = date_column.obj
-            if date.type().id() != plc.TypeId.TIMESTAMP_DAYS:
-                date = plc.unary.cast(
-                    date, plc.DataType(plc.TypeId.TIMESTAMP_DAYS), stream=stream
+            if date.type().id() == plc.TypeId.TIMESTAMP_DAYS:
+                days = plc.unary.cast(
+                    plc.unary.bit_cast(
+                        date, plc.DataType(plc.TypeId.INT32), stream=stream
+                    ),
+                    _INT64,
+                    stream=stream,
                 )
+            else:
+                ticks_per_day = (
+                    _NANOSECONDS_PER_DAY
+                    // _TIMESTAMP_TICK_NANOSECONDS[date.type().id()]
+                )
+                ref = plc.expressions.ColumnReference(0)
+                days = _evaluate_int64(
+                    [plc.unary.bit_cast(date, _INT64, stream=stream)],
+                    plc.expressions.Operation(
+                        _AST.FLOOR_DIV, ref, _int64_literal(ticks_per_day, stream)
+                    ),
+                    stream,
+                )
+                if 2**63 // ticks_per_day >= 2**31:
+                    in_range = plc.transform.compute_column(
+                        plc.Table([days]),
+                        plc.expressions.Operation(
+                            _AST.LOGICAL_AND,
+                            plc.expressions.Operation(
+                                _AST.GREATER_EQUAL,
+                                ref,
+                                _int64_literal(-(2**31), stream),
+                            ),
+                            plc.expressions.Operation(
+                                _AST.LESS_EQUAL,
+                                ref,
+                                _int64_literal(2**31 - 1, stream),
+                            ),
+                        ),
+                        stream=stream,
+                    )
+                    days = plc.copying.copy_if_else(
+                        days,
+                        plc.Scalar.from_py(None, _INT64, stream=stream),
+                        in_range,
+                        stream=stream,
+                    )
             tick = _TIMESTAMP_TICK_NANOSECONDS[unit.id()]
-            days = plc.unary.cast(
-                plc.unary.bit_cast(date, plc.DataType(plc.TypeId.INT32), stream=stream),
-                _INT64,
-                stream=stream,
-            )
             midnight = _scale_ticks(
                 days, _NANOSECONDS_PER_DAY // tick, stream, max_abs_ticks=2**31
             )
