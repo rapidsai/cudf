@@ -1903,6 +1903,44 @@ TEST_F(StreamingGroupbyTest, StructKeySumTwoBatches)
   verify_against_groupby(keys, results, {batch1, batch2}, KEY_COL, reqs);
 }
 
+TEST_F(StreamingGroupbyTest, StructKeyNullChildIntroducedLater)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> child1{1, 2};
+  cudf::test::fixed_width_column_wrapper<int32_t> child2{{1, 0, 2, 0}, {true, false, true, false}};
+  cudf::test::structs_column_wrapper keys1{{child1}};
+  cudf::test::structs_column_wrapper keys2{{child2}};
+  cudf::test::fixed_width_column_wrapper<int32_t> values1{10, 20};
+  cudf::test::fixed_width_column_wrapper<int32_t> values2{100, 40, 200, 60};
+  cudf::table_view const batch1{{keys1, values1}};
+  cudf::table_view const batch2{{keys2, values2}};
+  ASSERT_FALSE(batch1.column(0).nullable());
+  ASSERT_FALSE(batch2.column(0).nullable());
+  ASSERT_FALSE(batch1.column(0).child(0).nullable());
+  ASSERT_TRUE(batch2.column(0).child(0).has_nulls());
+  auto const requests = single_agg_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+
+  for (auto const policy : {cudf::null_policy::INCLUDE, cudf::null_policy::EXCLUDE}) {
+    for (auto const merge : {false, true}) {
+      SCOPED_TRACE(::testing::Message()
+                   << "include_nulls=" << (policy == cudf::null_policy::INCLUDE)
+                   << ", merge=" << merge);
+      cudf::groupby::streaming_groupby destination(
+        KEY_COL, requests, DEFAULT_MAX_DISTINCT_KEYS, policy);
+      destination.aggregate(batch1);
+      if (merge) {
+        cudf::groupby::streaming_groupby source(
+          KEY_COL, requests, DEFAULT_MAX_DISTINCT_KEYS, policy);
+        source.aggregate(batch2);
+        destination.merge(source);
+      } else {
+        destination.aggregate(batch2);
+      }
+      auto [keys, results] = destination.finalize();
+      verify_against_groupby(keys, results, {batch1, batch2}, KEY_COL, requests, policy);
+    }
+  }
+}
+
 TEST_F(StreamingGroupbyTest, DenseAggregationsNullableFlatAndNestedKeys)
 {
   // Stable key nullability layouts isolate launcher delegation from cross-batch key schema

@@ -56,8 +56,10 @@ cuda::device_buffer<size_type> streaming_groupby::impl::probe_and_insert_impl(
     auto const capacity       = static_cast<cuda::std::uint32_t>(_key_set->size());
     auto const batch_self_cmp = cudf::detail::row::equality::self_comparator{preprocessed_batch};
     auto const batch_self_eq  = batch_self_cmp.equal_to<has_nested>(has_null, null_equality::EQUAL);
-    auto const hasher =
-      cudf::detail::row::hash::row_hasher{preprocessed_batch}.device_hasher(has_null);
+    // Nested hashes include structural validity when null checking is enabled. Keep it enabled
+    // from the first batch so later nulls cannot change the hashes of already stored valid keys.
+    auto const hasher = cudf::detail::row::hash::row_hasher{preprocessed_batch}.device_hasher(
+      cudf::nullate::DYNAMIC{has_nested || _has_nullable_keys});
     auto const d_cross_eqs = build_cross_comparators<has_nested>(
       preprocessed_batch, _preprocessed_batches, has_null, stream, cudf::memory_resources{temp_mr});
     auto const comparator = n_table_comparator{
