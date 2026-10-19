@@ -1446,9 +1446,11 @@ class DaskEngine(StreamingEngine):
         if self._dask_context is None:
             return  # already shut down
         self._dask_context = None
-        self._quent_runtime = None
-        self._quent_collector = None
-        super().shutdown()
+        try:
+            super().shutdown()
+        finally:
+            self._quent_runtime = None
+            self._quent_collector = None
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
         return list(self._run_by_rank(_run_with_rank, func, *args, **kwargs).values())

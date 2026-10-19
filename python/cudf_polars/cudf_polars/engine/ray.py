@@ -1303,9 +1303,11 @@ class RayEngine(StreamingEngine):
         if self._rank_actors is None:
             return  # already shut down; idempotent
         self._rank_actors = None
-        self._quent_runtime = None
-        self._quent_collector = None
-        super().shutdown()
+        try:
+            super().shutdown()
+        finally:
+            self._quent_runtime = None
+            self._quent_collector = None
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
         return list(
