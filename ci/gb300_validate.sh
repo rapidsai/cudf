@@ -45,12 +45,9 @@ pushd python/pylibcudf/tests > /dev/null
 for attempt in 1 2 3 4 5 6; do
   run_suite "fix-${attempt}" || FIX_CRASHES=$((FIX_CRASHES + 1))
 done
-for attempt in 1 2 3; do
-  run_suite "hw-decompression-on-${attempt}" LIBCUDF_HW_DECOMPRESSION=ON || true
-done
 popd > /dev/null
 
 rapids-logger "GB300 fix validation summary"
 printf '%s\n' "${SUMMARY[@]}"
-echo "Runs with crashes using the default backend: ${FIX_CRASHES}/6"
+echo "Runs with crashes: ${FIX_CRASHES}/6"
 [[ ${FIX_CRASHES} -eq 0 ]]

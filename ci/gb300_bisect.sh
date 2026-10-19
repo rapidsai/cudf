@@ -30,34 +30,30 @@ rapids-pip-retry install \
     "$(find "${WORK}/wheels" -name "libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl")" \
     "$(find "${WORK}/wheels" -name "pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl")[test]"
 
-REPRO="$(realpath ci/gb300_repro.py)"
+# A/B the test_interop.py change with everything else identical.
+mkdir -p "${WORK}/unfixed" "${WORK}/fixed"
+cp -r python/pylibcudf/tests "${WORK}/fixed/tests"
+cp -r python/pylibcudf/tests "${WORK}/unfixed/tests"
+git show 4473c24036cba0af26b11730e750782f3fc740ed:python/pylibcudf/tests/test_interop.py \
+  > "${WORK}/unfixed/tests/test_interop.py"
+
 SUMMARY=()
-for config in rmm-async-destroy rmm-async-sync-before-destroy rmm-async-noalloc-destroy \
-  raw-hw-pool-destroy-pending raw-plain-pool-destroy-pending rmm-async-destroy:LIBCUDF_HW_DECOMPRESSION=OFF; do
-  mode="${config%%:*}"
-  envs=()
-  if [[ "${config}" == *:* ]]; then envs=("${config#*:}"); fi
-  label="${config//[:=]/-}"
-  crashed=0
-  for round in 1 2 3; do
-    pids=()
-    for i in $(seq 8); do
-      env "${envs[@]}" timeout 5m python -X faulthandler "${REPRO}" "${mode}" > "${WORK}/${label}-${round}-${i}.log" 2>&1 &
-      pids+=($!)
-    done
-    for pid in "${pids[@]}"; do wait "${pid}" || true; done
-    for i in $(seq 8); do
-      if ! grep -q "^OK ${mode}$" "${WORK}/${label}-${round}-${i}.log"; then
-        crashed=$((crashed + 1))
-        if [[ ${crashed} -eq 1 ]]; then
-          rapids-logger "${label}: first failing process output"
-          grep -v -E "^\s*$" "${WORK}/${label}-${round}-${i}.log" | head -n 30 || true
-        fi
-      fi
-    done
+for variant in unfixed:6 fixed:10; do
+  label="${variant%%:*}"
+  count="${variant##*:}"
+  pushd "${WORK}/${label}/tests" > /dev/null
+  for attempt in $(seq "${count}"); do
+    set +e
+    timeout 15m python -m pytest -p no:cacheprovider --numprocesses=8 --dist=worksteal -q . \
+      > "${WORK}/${label}-${attempt}.log" 2>&1
+    status=$?
+    set -e
+    tail -n 1 "${WORK}/${label}-${attempt}.log"
+    crash=$(grep -o "crashed while running '[^']*'" "${WORK}/${label}-${attempt}.log" | sort -u | tr '\n' ' ' || true)
+    SUMMARY+=("${label} attempt=${attempt} exit=${status} ${crash}")
   done
-  SUMMARY+=("${label} failed_processes=${crashed}/24")
+  popd > /dev/null
 done
 
-rapids-logger "GB300 HW-decompress pool repro summary"
+rapids-logger "GB300 test_interop fix A/B summary"
 printf '%s\n' "${SUMMARY[@]}"

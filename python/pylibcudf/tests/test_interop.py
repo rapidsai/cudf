@@ -1,7 +1,8 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import decimal
+import weakref
 
 import cupy as cp
 import nanoarrow
@@ -235,12 +236,18 @@ def test_arrow_object_lifetime():
     try:
         try:
             previous = rmm.mr.get_current_device_resource()
-            rmm.mr.set_current_device_resource(
-                rmm.mr.CudaAsyncMemoryResource()
-            )
+            mr = rmm.mr.CudaAsyncMemoryResource()
+            mr_ref = weakref.ref(mr)
+            rmm.mr.set_current_device_resource(mr)
+            del mr
             f()
         finally:
             rmm.mr.set_current_device_resource(previous)
     except ValueError:
         # Ignore the exception. A failure in this test is a seg fault
-        pass
+        mr = mr_ref()
+    # Destroying the async resource's pool while frees from it are still pending
+    # corrupts CUDA driver state on GPUs with a hardware decompression engine
+    # (GB300), crashing later nvCOMP decompression. Synchronize before releasing it.
+    cp.cuda.Device().synchronize()
+    del mr
