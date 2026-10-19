@@ -140,7 +140,7 @@ CUDF_KERNEL void hash_csr_probe_count_kernel(size_type num_rows,
                                              Equal equal,
                                              Hasher hasher)
 {
-  auto const stride = grid_1d::grid_stride();
+  auto const stride                  = grid_1d::grid_stride();
   cuda::std::uint64_t thread_matches = 0;
   for (auto row = grid_1d::global_thread_id(); row < num_rows; row += stride) {
     auto const index = static_cast<size_type>(row);
