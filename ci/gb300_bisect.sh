@@ -30,30 +30,10 @@ rapids-pip-retry install \
     "$(find "${WORK}/wheels" -name "libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl")" \
     "$(find "${WORK}/wheels" -name "pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl")[test]"
 
-CONFIGS=(
-  "baseline|"
-  "per-thread-stream|CUDF_PER_THREAD_STREAM=1"
-  "nvcomp-pinned-pool-0|NVCOMP_PINNED_POOL_SIZE=0"
-)
-
 SUMMARY=()
 pushd python/pylibcudf/tests > /dev/null
-for config in "${CONFIGS[@]}"; do
-  label="${config%%|*}"
-  read -r -a envs <<< "${config#*|}"
-  for attempt in 1 2 3 4; do
-    set +e
-    env "${envs[@]}" timeout 15m python -m pytest -p no:cacheprovider --numprocesses=8 --dist=worksteal -q . \
-      > "${WORK}/${label}-${attempt}.log" 2>&1
-    status=$?
-    set -e
-    crash=$(grep -o "crashed while running '[^']*'" "${WORK}/${label}-${attempt}.log" | sort -u | tr '\n' ' ' || true)
-    SUMMARY+=("${label} attempt=${attempt} exit=${status} ${crash}")
-  done
-done
-
 rapids-logger "nvCOMP trace logging"
-for attempt in 1 2 3 4; do
+for attempt in 1 2 3 4 5 6; do
   rm -f "${WORK}/nvcomp.log"
   set +e
   NVCOMP_LOG_LEVEL=5 NVCOMP_LOG_FILE="${WORK}/nvcomp.log" timeout 15m python -m pytest -p no:cacheprovider \
@@ -62,18 +42,19 @@ for attempt in 1 2 3 4; do
   set -e
   crash=$(grep -o "crashed while running '[^']*'" "${WORK}/nvcomp-trace-${attempt}.log" | sort -u | tr '\n' ' ' || true)
   SUMMARY+=("nvcomp-trace attempt=${attempt} exit=${status} ${crash}")
-  rapids-logger "nvCOMP log attempt ${attempt}: $(wc -l < "${WORK}/nvcomp.log" 2>/dev/null || echo 0) lines"
-  if [[ -f "${WORK}/nvcomp.log" ]]; then
-    cut -d']' -f2-3 "${WORK}/nvcomp.log" | sort | uniq -c | sort -rn | head -n 20 || true
-    grep -i -E "warn|error|fail|fall" "${WORK}/nvcomp.log" | sort | uniq -c | sort -rn | head -n 40 || true
-  fi
   if [[ -n "${crash}" ]]; then
-    rapids-logger "nvCOMP log tail around the crash"
-    tail -n 80 "${WORK}/nvcomp.log" || true
+    rapids-logger "Attempt ${attempt} crashed: ${crash}"
+    rapids-logger "nvCOMP messages that are not plain API traces"
+    grep -v -E "\]\[Api\]\[" "${WORK}/nvcomp.log" | cut -c22- | sort | uniq -c | sort -rn | head -n 40 || true
+    rapids-logger "Last nvCOMP calls per process"
+    for pid in $(grep -oE "\]\[nvcomp\]\[[0-9]+\]" "${WORK}/nvcomp.log" | grep -oE "[0-9]+" | sort -u); do
+      echo "=== pid ${pid}"
+      grep -F "][nvcomp][${pid}]" "${WORK}/nvcomp.log" | grep -v "GetMaxOutputChunkSize" | tail -n 15 | cut -c1-600
+    done
     break
   fi
 done
 popd > /dev/null
 
-rapids-logger "GB300 DE workaround probe summary"
+rapids-logger "GB300 nvCOMP trace summary"
 printf '%s\n' "${SUMMARY[@]}"
