@@ -48,10 +48,6 @@ def _parse_remote_io_backend(value: str) -> kvikio.RemoteIOBackend:
     return kvikio.RemoteIOBackend[value.upper()]
 
 
-def _parse_reactor_dispatch(value: str) -> kvikio.RemoteReactorDispatch:
-    return kvikio.RemoteReactorDispatch[value.upper()]
-
-
 def _opt(
     category: str,
     env_var: str | None = None,
@@ -263,10 +259,10 @@ class StreamingOptions:
         Default: ``24``.
         Category: executor.
     kvikio_reactor_dispatch
-        How sub-ranges of one read are distributed across reactor threads under
-        the ``MULTI_POLL`` remote I/O backend.
+        **Deprecated**: Has no effect. KvikIO's ``MULTI_POLL`` reactors always
+        take sub-ranges from one shared queue. Setting it emits a
+        ``FutureWarning``.
         Env: ``CUDF_POLARS__EXECUTOR__KVIKIO_REACTOR_DISPATCH``.
-        Default: ``kvikio.RemoteReactorDispatch.PER_CHUNK``.
         Category: executor.
     kvikio_request_ceiling
         Maximum number of concurrent in-flight requests across all reactor
@@ -432,10 +428,8 @@ class StreamingOptions:
     kvikio_reactor_count: int | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__KVIKIO_REACTOR_COUNT", int
     )
-    kvikio_reactor_dispatch: kvikio.RemoteReactorDispatch | Unspecified = _opt(
-        "executor",
-        "CUDF_POLARS__EXECUTOR__KVIKIO_REACTOR_DISPATCH",
-        _parse_reactor_dispatch,
+    kvikio_reactor_dispatch: Any = _opt(
+        "executor", "CUDF_POLARS__EXECUTOR__KVIKIO_REACTOR_DISPATCH"
     )
     kvikio_request_ceiling: int | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__KVIKIO_REQUEST_CEILING", int

@@ -27,6 +27,7 @@ import functools
 import importlib.util
 import json
 import os
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
@@ -372,22 +373,6 @@ def resolve_kvikio_reactor_count(executor_options: dict[str, Any]) -> int:
     )
 
 
-def resolve_kvikio_reactor_dispatch(
-    executor_options: dict[str, Any],
-) -> kvikio.RemoteReactorDispatch:
-    """Resolve the MULTI_POLL reactor dispatch policy, with env var fallback."""
-    value = executor_options.get(
-        "kvikio_reactor_dispatch",
-        os.environ.get(
-            "CUDF_POLARS__EXECUTOR__KVIKIO_REACTOR_DISPATCH",
-            os.environ.get("KVIKIO_REMOTE_IO_REACTOR_DISPATCH", "PER_CHUNK"),
-        ),
-    )
-    if isinstance(value, kvikio.RemoteReactorDispatch):
-        return value
-    return kvikio.RemoteReactorDispatch[str(value).upper()]
-
-
 def resolve_kvikio_request_ceiling(executor_options: dict[str, Any]) -> int:
     """Resolve the MULTI_POLL concurrent-request ceiling, with env var fallback."""
     return int(
@@ -440,10 +425,6 @@ def resolve_kvikio_executor_options(executor_options: dict[str, Any]) -> dict[st
         "kvikio_reactor_count", resolve_kvikio_reactor_count(executor_options)
     )
     executor_options.setdefault(
-        "kvikio_reactor_dispatch",
-        resolve_kvikio_reactor_dispatch(executor_options),
-    )
-    executor_options.setdefault(
         "kvikio_request_ceiling",
         resolve_kvikio_request_ceiling(executor_options),
     )
@@ -459,7 +440,6 @@ KVIKIO_CONFIGURABLE_PROPERTIES = (
     "task_size",
     "bounce_buffer_size",
     "remote_io_num_reactors",
-    "remote_io_reactor_dispatch",
     "remote_io_max_concurrent_requests",
     "num_threads",
 )
@@ -472,7 +452,6 @@ KVIKIO_CONFIGURABLE_PROPERTIES = (
 KVIKIO_REACTOR_POOL_PROPERTIES = frozenset(
     {
         "remote_io_num_reactors",
-        "remote_io_reactor_dispatch",
         "remote_io_max_concurrent_requests",
     }
 )
@@ -485,7 +464,6 @@ def configure_kvikio(
     task_size: int | None = None,
     bounce_buffer_bytes: int = 16 * 1024 * 1024,
     reactor_count: int = 24,
-    reactor_dispatch: kvikio.RemoteReactorDispatch = kvikio.RemoteReactorDispatch.PER_CHUNK,
     request_ceiling: int = 256,
 ) -> None:
     """
@@ -520,7 +498,6 @@ def configure_kvikio(
         # left unset in that case.
         reactor_settings = {
             "remote_io_num_reactors": reactor_count,
-            "remote_io_reactor_dispatch": reactor_dispatch,
             "remote_io_max_concurrent_requests": request_ceiling,
         }
     else:
@@ -1222,14 +1199,11 @@ class StreamingExecutor:
         - the ``CUDF_POLARS__EXECUTOR__KVIKIO_REACTOR_COUNT`` environment variable
         - the ``KVIKIO_REMOTE_IO_NUM_REACTORS`` environment variable (lower precedence)
     kvikio_reactor_dispatch
-        How sub-ranges of one read are distributed across reactor threads under
-        the ``MULTI_POLL`` remote I/O backend. Ignored when
-        ``kvikio_remote_io_backend`` is not ``MULTI_POLL``. Defaults to
-        ``kvikio.RemoteReactorDispatch.PER_CHUNK``. This can be set via
-
-        - ``executor_options`` passed to ``polars.GPUEngine``
-        - the ``CUDF_POLARS__EXECUTOR__KVIKIO_REACTOR_DISPATCH`` environment variable
-        - the ``KVIKIO_REMOTE_IO_REACTOR_DISPATCH`` environment variable (lower precedence)
+        **Deprecated**: Has no effect. KvikIO no longer makes the ``MULTI_POLL``
+        reactor dispatch configurable. Its reactors always take sub-ranges from
+        one shared queue. Setting this option, either through ``executor_options``
+        or the ``CUDF_POLARS__EXECUTOR__KVIKIO_REACTOR_DISPATCH`` environment
+        variable, emits a ``FutureWarning``.
     kvikio_request_ceiling
         Maximum number of concurrent in-flight requests across all reactor
         threads under the ``MULTI_POLL`` remote I/O backend. 0 means unlimited.
@@ -1345,8 +1319,11 @@ class StreamingExecutor:
     kvikio_reactor_count: int = dataclasses.field(
         default_factory=lambda: resolve_kvikio_reactor_count({})
     )
-    kvikio_reactor_dispatch: kvikio.RemoteReactorDispatch = dataclasses.field(
-        default_factory=lambda: resolve_kvikio_reactor_dispatch({})
+    # Deprecated and ignored. `__post_init__` warns if a user passes it.
+    kvikio_reactor_dispatch: Any = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__KVIKIO_REACTOR_DISPATCH", str, default=None
+        )
     )
     kvikio_request_ceiling: int = dataclasses.field(
         default_factory=lambda: resolve_kvikio_request_ceiling({})
@@ -1483,12 +1460,15 @@ class StreamingExecutor:
             raise TypeError("kvikio_reactor_count must be an int")
         if self.kvikio_reactor_count <= 0:
             raise ValueError("kvikio_reactor_count must be positive")
-        if not isinstance(self.kvikio_reactor_dispatch, kvikio.RemoteReactorDispatch):
-            object.__setattr__(
-                self,
-                "kvikio_reactor_dispatch",
-                kvikio.RemoteReactorDispatch[str(self.kvikio_reactor_dispatch).upper()],
+        if self.kvikio_reactor_dispatch is not None:
+            warnings.warn(
+                "The 'kvikio_reactor_dispatch' option is deprecated and has no "
+                "effect. KvikIO's MULTI_POLL reactors always take sub-ranges from "
+                "one shared queue.",
+                FutureWarning,
+                stacklevel=2,
             )
+            object.__setattr__(self, "kvikio_reactor_dispatch", None)
         if not isinstance(self.kvikio_request_ceiling, int):
             raise TypeError("kvikio_request_ceiling must be an int")
         if self.kvikio_request_ceiling < 0:

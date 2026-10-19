@@ -594,7 +594,6 @@ class SPMDEngine(StreamingEngine):
             task_size=executor_options["kvikio_task_size"],
             bounce_buffer_bytes=executor_options["kvikio_bounce_buffer_bytes"],
             reactor_count=executor_options["kvikio_reactor_count"],
-            reactor_dispatch=executor_options["kvikio_reactor_dispatch"],
             request_ceiling=executor_options["kvikio_request_ceiling"],
         )
 
@@ -1003,7 +1002,6 @@ class SPMDEngine(StreamingEngine):
             task_size=executor_options["kvikio_task_size"],
             bounce_buffer_bytes=executor_options["kvikio_bounce_buffer_bytes"],
             reactor_count=executor_options["kvikio_reactor_count"],
-            reactor_dispatch=executor_options["kvikio_reactor_dispatch"],
             request_ceiling=executor_options["kvikio_request_ceiling"],
         )
         engine_options = engine_options or {}
