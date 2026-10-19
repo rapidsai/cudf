@@ -38,52 +38,49 @@ SUMMARY=()
 
 apt-get update -qq && apt-get install -y -qq --no-install-recommends gdb > /dev/null
 
-mapfile -t ALL_MODULES < <(find . -name "test_*.py" -not -path "./benchmarks/*" \
-  -not -path "./test_types.py" -not -path "./test_json.py" | sed 's|^\./||' | sort)
-NUM_SHARDS=8
+# xdist worker interpreter that runs under gdb, with gdb output kept off execnet's stdio channel.
+REAL_PYTHON="$(command -v python)"
+GDB_PYTHON="${WORK}/gdbpython"
+cat > "${GDB_PYTHON}" <<WRAPPER
+#!/bin/bash
+exec gdb -q -batch -nx \\
+  -ex "set logging file ${WORK}/gdb-\$\$.log" \\
+  -ex "set logging overwrite on" \\
+  -ex "set logging redirect on" \\
+  -ex "set logging enabled on" \\
+  -ex "set print thread-events off" \\
+  -ex "set print inferior-events off" \\
+  -ex "set pagination off" \\
+  -ex "handle SIGSEGV stop print nopass" \\
+  -ex "handle SIGPIPE nostop noprint pass" \\
+  -ex run \\
+  -ex "info threads" \\
+  -ex "thread apply all bt 40" \\
+  -ex "info sharedlibrary" \\
+  --args "${REAL_PYTHON}" "\$@"
+WRAPPER
+chmod +x "${GDB_PYTHON}"
 
-for round in 1 2 3; do
-  rapids-logger "Round ${round}: ${NUM_SHARDS} concurrent gdb-wrapped pytest shards"
-  pids=()
-  for shard in $(seq 0 $((NUM_SHARDS - 1))); do
-    modules=()
-    for i in "${!ALL_MODULES[@]}"; do
-      if (( (i + round) % NUM_SHARDS == shard )); then modules+=("${ALL_MODULES[$i]}"); fi
-    done
-    timeout 20m gdb -q -batch \
-      -ex "handle SIGSEGV stop print nopass" \
-      -ex "set pagination off" \
-      -ex run \
-      -ex "info sharedlibrary" \
-      -ex "info threads" \
-      -ex "thread apply all bt 40" \
-      --args python -m pytest -p no:xdist -p no:cacheprovider -q "${modules[@]}" \
-      > "${WORK}/round-${round}-shard-${shard}.log" 2>&1 &
-    pids+=($!)
-  done
-  for pid in "${pids[@]}"; do wait "${pid}" || true; done
-
-  crashed=0
-  for shard in $(seq 0 $((NUM_SHARDS - 1))); do
-    log="${WORK}/round-${round}-shard-${shard}.log"
-    if grep -q "received signal SIGSEGV" "${log}"; then
-      crashed=$((crashed + 1))
-      if [[ ! -f "${WORK}/printed" ]]; then
-        rapids-logger "Round ${round} shard ${shard} SIGSEGV: last tests, libraries, all-thread backtraces"
-        grep -E "^(io/)?test_.*\.py [.sFxXE]" "${log}" | tail -n 3 || true
-        sed -n '/received signal SIGSEGV/,$p' "${log}" \
-          | grep -v -E "^\[(New Thread|Thread .* exited)" \
-          | grep -v -E "^0x[0-9a-f]+ +0x[0-9a-f]+ +(Yes|No) .*(python3\.14/lib-dynload|site-packages/(numpy|pyarrow|cupy))" \
-          | head -n 600 || true
-        touch "${WORK}/printed"
-      fi
-    fi
-  done
-  SUMMARY+=("round=${round} crashed_shards=${crashed}/${NUM_SHARDS}")
-  if [[ -f "${WORK}/printed" ]]; then break; fi
+for attempt in 1 2 3 4; do
+  rm -f "${WORK}"/gdb-*.log
+  set +e
+  timeout 25m python -m pytest -p no:cacheprovider --tx "8*popen//python=${GDB_PYTHON}" \
+    --dist=worksteal -q . > "${WORK}/xdist-${attempt}.log" 2>&1
+  status=$?
+  set -e
+  crash=$(grep -o "worker '[^']*' crashed while running '[^']*'" "${WORK}/xdist-${attempt}.log" | head -n 1 || true)
+  SUMMARY+=("attempt=${attempt} exit=${status} ${crash}")
+  tail -n 3 "${WORK}/xdist-${attempt}.log"
+  segv_log=$(grep -l "received signal SIGSEGV" "${WORK}"/gdb-*.log 2>/dev/null | head -n 1 || true)
+  if [[ -n "${segv_log}" ]]; then
+    rapids-logger "Attempt ${attempt}: all-thread backtraces from ${segv_log}"
+    grep -v -E "^0x[0-9a-f]+ +0x[0-9a-f]+ +(Yes|No) .*(lib-dynload|site-packages/(numpy|pyarrow|cupy))" "${segv_log}" \
+      | head -n 700 || true
+    break
+  fi
 done
 
 popd > /dev/null
 
-rapids-logger "GB300 concurrent gdb summary"
+rapids-logger "GB300 xdist gdb summary"
 printf '%s\n' "${SUMMARY[@]}"
