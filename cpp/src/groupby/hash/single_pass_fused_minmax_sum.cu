@@ -162,9 +162,9 @@ struct fused_minmax_sum_fn {
         if (masked == nullptr) {
           auto [null_mask, null_count] = make_mask_from_validity(
             group_valid.data(), group_valid.data() + group_valid.size(), stream, mr);
-          result->set_null_mask(std::move(null_mask), null_count);
+          if (null_count > 0) { result->set_null_mask(std::move(null_mask), null_count); }
           masked = result.get();
-        } else {
+        } else if (masked->has_nulls()) {
           // Every extremum and sum of the column shares the validity of the first one.
           result->set_null_mask(
             cudf::detail::copy_bitmask(

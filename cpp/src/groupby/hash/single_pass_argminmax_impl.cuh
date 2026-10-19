@@ -67,7 +67,7 @@ std::unique_ptr<column> select_group_rows(reduction_context const& ctx,
   reduce(cuda::tabulate_output_iterator{select_group_row_fn{out, mask, ctx.d_values}});
   if (ctx.nullable) {
     auto const null_count = count_group_nulls(mask, ctx.num_groups, stream, mr);
-    result->set_null_mask(std::move(null_mask), null_count);
+    if (null_count > 0) { result->set_null_mask(std::move(null_mask), null_count); }
   }
   return result;
 }

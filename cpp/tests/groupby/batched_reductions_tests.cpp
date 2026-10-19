@@ -109,3 +109,70 @@ TEST_F(GroupbyBatchedReductionsTest, NullableSumWithOneExtremum)
     }
   }
 }
+
+TEST_F(GroupbyBatchedReductionsTest, OmitAllValidMasksFromNullableInputs)
+{
+  for (bool const has_null_group : {false, true}) {
+    SCOPED_TRACE(::testing::Message() << "has_null_group=" << has_null_group);
+    cudf::test::fixed_width_column_wrapper<int32_t> keys{2, 1, 2, 1, 3, 3};
+    auto const make_values = [&] {
+      return cudf::test::fixed_width_column_wrapper<int32_t>{
+        {2, 1, 3, 0, 4, 0}, {true, true, true, false, !has_null_group, false}};
+    };
+    // Separate columns exercise the selected-row, fused extrema and fused additive paths.
+    auto arg_values     = make_values();
+    auto extrema_values = make_values();
+    auto sum_values     = make_values();
+    std::vector<cudf::groupby::aggregation_request> requests(3);
+    requests[0].values = arg_values;
+    requests[0].aggregations.push_back(cudf::make_argmin_aggregation<cudf::groupby_aggregation>());
+    requests[0].aggregations.push_back(cudf::make_argmax_aggregation<cudf::groupby_aggregation>());
+    requests[1].values = extrema_values;
+    requests[1].aggregations.push_back(cudf::make_min_aggregation<cudf::groupby_aggregation>());
+    requests[1].aggregations.push_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
+    requests[1].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+    requests[2].values = sum_values;
+    requests[2].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+    requests[2].aggregations.push_back(
+      cudf::make_sum_of_squares_aggregation<cudf::groupby_aggregation>());
+
+    cudf::groupby::groupby gb(cudf::table_view{{keys}});
+    auto const [result_keys, results] = gb.aggregate(requests);
+    std::vector<cudf::column_view> outputs;
+    for (auto const& request_result : results) {
+      for (auto const& output : request_result.results) {
+        EXPECT_EQ(output->nullable(), has_null_group);
+        EXPECT_EQ(output->null_count(), has_null_group ? 1 : 0);
+        outputs.push_back(output->view());
+      }
+    }
+    auto const order       = cudf::sorted_order(result_keys->view());
+    auto const sorted_keys = cudf::gather(result_keys->view(), order->view());
+    auto const sorted      = cudf::gather(cudf::table_view{outputs}, order->view());
+    cudf::test::fixed_width_column_wrapper<int32_t> expected_keys{1, 2, 3};
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_argmin{
+      {1, 0, 4}, {true, true, !has_null_group}};
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_argmax{
+      {1, 2, 4}, {true, true, !has_null_group}};
+    cudf::test::fixed_width_column_wrapper<int32_t> expected_min{{1, 2, 4},
+                                                                 {true, true, !has_null_group}};
+    cudf::test::fixed_width_column_wrapper<int32_t> expected_max{{1, 3, 4},
+                                                                 {true, true, !has_null_group}};
+    cudf::test::fixed_width_column_wrapper<int64_t> expected_sum{{1, 5, 4},
+                                                                 {true, true, !has_null_group}};
+    cudf::test::fixed_width_column_wrapper<int64_t> expected_squares{{1, 13, 16},
+                                                                     {true, true, !has_null_group}};
+    std::array<cudf::column_view, 7> const expected{expected_argmin,
+                                                    expected_argmax,
+                                                    expected_min,
+                                                    expected_max,
+                                                    expected_sum,
+                                                    expected_sum,
+                                                    expected_squares};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, sorted_keys->get_column(0));
+    ASSERT_EQ(sorted->num_columns(), expected.size());
+    for (cudf::size_type i = 0; i < sorted->num_columns(); ++i) {
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected[i], sorted->get_column(i));
+    }
+  }
+}
