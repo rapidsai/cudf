@@ -306,7 +306,7 @@ void segmented_sort(uint32_t const* input,
                     uint32_t* output,
                     int64_t items,
                     cudf::size_type segments,
-                    int64_t const* offsets,
+                    cuda::device_buffer<int64_t>::iterator offsets,
                     cuda::stream_ref stream)
 {
   cuda::device_buffer<std::byte> temp{stream, cudf::get_current_device_resource_ref()};
@@ -362,7 +362,7 @@ std::pair<cuda::device_buffer<uint32_t>, cuda::device_buffer<int64_t>> hash_subs
     stream, cudf::get_current_device_resource_ref(), total_hashes, cuda::no_init);
   if (total_hashes < static_cast<int64_t>(std::numeric_limits<int>::max())) {
     segmented_sort(
-      hashes.data(), sorted.data(), sorted.size(), input.size(), offsets.data(), stream);
+      hashes.data(), sorted.data(), sorted.size(), input.size(), offsets.begin(), stream);
   } else {
     // The CUB segmented sort can only handle max<int> total values
     // so this code calls it in sections.
@@ -422,7 +422,7 @@ std::pair<cuda::device_buffer<uint32_t>, cuda::device_buffer<int64_t>> hash_subs
                      sorted.data() + offset1,
                      num_items,
                      num_segments,
-                     sort_offsets.data(),
+                     sort_offsets.begin(),
                      stream);
     }
   }
