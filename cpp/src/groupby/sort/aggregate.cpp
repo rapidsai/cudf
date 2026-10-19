@@ -128,7 +128,7 @@ void aggregate_result_functor::operator()<aggregation::HISTOGRAM>(aggregation co
   auto const num_groups = helper.num_groups(stream);
   if (num_groups == helper.num_keys(stream)) {
     cache.add_result(
-      values, agg, detail::make_singleton_histograms(take_grouped_values(), stream, mr));
+      values, agg, detail::make_singleton_histograms(release_grouped_values(), stream, mr));
     return;
   }
   cache.add_result(values,
@@ -487,7 +487,7 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_LIST>(aggregation
                                    mr);
     }
     // Transfer ownership to the list child, retaining a view for later aggregations.
-    return detail::group_collect(take_grouped_values(),
+    return detail::group_collect(release_grouped_values(),
                                  helper.group_offsets(stream),
                                  helper.num_groups(stream),
                                  null_handling,

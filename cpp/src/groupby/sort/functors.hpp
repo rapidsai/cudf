@@ -51,11 +51,11 @@ struct store_result_functor {
   [[nodiscard]] bool is_presorted() const { return keys_are_sorted == sorted::YES; }
 
   /**
-   * @brief Borrow a view of the grouped values without transferring ownership.
+   * @brief Borrow grouped values in their original order within each group.
    *
    * Computes the grouped values from @p values on first invocation and returns
    * the stored result on subsequent invocations, including after ownership has
-   * been transferred to a cached result by take_grouped_values().
+   * been transferred to a cached result by release_grouped_values().
    */
   column_view get_grouped_values()
   {
@@ -72,12 +72,13 @@ struct store_result_functor {
   /**
    * @brief Transfer grouped values to a result, retaining a view for later aggregations.
    *
-   * Moves the owned column to the caller and retains a non-owning view for
-   * get_grouped_values(). The caller must keep the unmodified column alive in
-   * the result cache while later aggregations use that view. For presorted keys,
-   * copies the borrowed input values instead.
+   * Moves the owned column to the caller and retains a non-owning view so later
+   * aggregations can reuse the same storage without gathering the values again.
+   * The caller must keep the unmodified column alive in the result cache while
+   * later aggregations use that view. For presorted keys, copies the borrowed
+   * input values instead.
    */
-  std::unique_ptr<column> take_grouped_values()
+  std::unique_ptr<column> release_grouped_values()
   {
     if (is_presorted()) { return std::make_unique<column>(values, stream, mr.get_output_mr()); }
     if (!grouped_values) {
@@ -88,7 +89,12 @@ struct store_result_functor {
   }
 
   /**
-   * @brief Reuse either cached layout when the aggregation does not depend on row order.
+   * @brief Borrow grouped values without requiring a particular order within each group.
+   *
+   * Both cached layouts keep groups in key order with the same group boundaries,
+   * so either can be used with helper.group_labels() and helper.group_offsets().
+   * Only the value order within each group may differ: original input order or
+   * sorted value order.
    */
   column_view get_unordered_grouped_values()
   {
@@ -103,7 +109,9 @@ struct store_result_functor {
    * @brief Get the grouped and sorted values
    *
    * Computes the grouped and sorted (within each group) values from @p values
-   * on first invocation and returns the stored result on subsequent invocation
+   * on first invocation and returns the stored result on subsequent invocations.
+   * This layout can coexist with the original-order grouped values: for example,
+   * NUNIQUE needs sorted values, while a later NTH_ELEMENT needs input order.
    */
   column_view get_sorted_values()
   {
