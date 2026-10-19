@@ -30,52 +30,54 @@ rapids-pip-retry install \
     "$(find "${WORK}/wheels" -name "libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl")" \
     "$(find "${WORK}/wheels" -name "pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl")[test]"
 
-REPRO="$(realpath ci/gb300_repro.py)"
-VARIANTS=(
-  "read-only none"
-  "orc none"
-  "orc persistent"
-  "orc temporary"
-  "parquet none"
-  "parquet persistent"
-  "parquet temporary"
-)
+NODEIDS="$(realpath ci/gb300_gw6_nodeids.txt)"
+mkdir -p "${WORK}/src"
+git archive 816f682244c080b438792eec6bc8eda6c3b0583a python/pylibcudf/tests | tar -x -C "${WORK}/src"
+
+replay() {
+  python -X faulthandler -c "
+import sys
+
+import pytest
+
+ids = open(sys.argv[1]).read().splitlines()
+sys.exit(pytest.main(['-p', 'no:xdist', '-p', 'no:cacheprovider', '-q', *ids]))
+" "${NODEIDS}"
+}
 
 SUMMARY=()
-for variant in "${VARIANTS[@]}"; do
-  read -r writer stream_kind <<< "${variant}"
-  label="${writer}-${stream_kind}"
-  crashes=0
-  for attempt in $(seq 10); do
-    set +e
-    timeout 5m python -X faulthandler "${REPRO}" "${writer}" "${stream_kind}" 20 > "${WORK}/${label}-${attempt}.log" 2>&1
-    status=$?
-    set -e
-    if [[ ${status} -ne 0 ]]; then
-      crashes=$((crashes + 1))
-      if [[ ${crashes} -eq 1 ]]; then
-        rapids-logger "${label} attempt ${attempt} failed with ${status}"
-        grep -v -E "^\s*$" "${WORK}/${label}-${attempt}.log" | head -n 50 || true
+pushd "${WORK}/src/python/pylibcudf/tests" > /dev/null
+for attempt in 1 2 3; do
+  set +e
+  replay > "${WORK}/serial-${attempt}.log" 2>&1
+  status=$?
+  set -e
+  tail -n 1 "${WORK}/serial-${attempt}.log"
+  crashed=""
+  if grep -q "Fatal Python error" "${WORK}/serial-${attempt}.log"; then crashed="SEGFAULT"; fi
+  SUMMARY+=("serial-replay attempt=${attempt} exit=${status} ${crashed}")
+done
+
+for round in 1 2; do
+  pids=()
+  for i in $(seq 8); do
+    replay > "${WORK}/concurrent-${round}-${i}.log" 2>&1 &
+    pids+=($!)
+  done
+  for pid in "${pids[@]}"; do wait "${pid}" || true; done
+  crashed=0
+  for i in $(seq 8); do
+    if grep -q "Fatal Python error" "${WORK}/concurrent-${round}-${i}.log"; then
+      crashed=$((crashed + 1))
+      if [[ ${crashed} -eq 1 ]]; then
+        grep -B 3 "Fatal Python error" "${WORK}/concurrent-${round}-${i}.log" | head -n 5 || true
+        sed -n '/Current thread/,/Current thread.s C stack/p' "${WORK}/concurrent-${round}-${i}.log" | head -n 8 || true
       fi
     fi
   done
-  SUMMARY+=("${label} failed_processes=${crashes}/10")
+  SUMMARY+=("concurrent-replay round=${round} crashed_processes=${crashed}/8")
 done
+popd > /dev/null
 
-rapids-logger "8 concurrent processes: orc writer with temporary streams"
-pids=()
-for i in $(seq 8); do
-  python -X faulthandler "${REPRO}" orc temporary 50 > "${WORK}/concurrent-${i}.log" 2>&1 &
-  pids+=($!)
-done
-failures=0
-for i in "${!pids[@]}"; do
-  if ! wait "${pids[$i]}"; then
-    failures=$((failures + 1))
-    grep -v -E "^\s*$" "${WORK}/concurrent-$((i + 1)).log" | head -n 30 || true
-  fi
-done
-SUMMARY+=("concurrent orc-temporary failed_processes=${failures}/8")
-
-rapids-logger "GB300 compress-then-DE repro summary"
+rapids-logger "GB300 exact gw6 replay summary"
 printf '%s\n' "${SUMMARY[@]}"
