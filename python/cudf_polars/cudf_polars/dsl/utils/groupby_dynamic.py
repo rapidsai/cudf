@@ -102,6 +102,8 @@ def rewrite_groupby_dynamic(
     )
 
     sort_by = [expr.NamedExpr(k.name, expr.Col(k.value.dtype, k.name)) for k in keys]
+    # TODO: Remove this compatibility sort once grouped aggregation can produce
+    # Polars' key-first, window-ordered output directly.
     ordered = ir.Sort(
         grouped.schema,
         [*sort_by, expr.NamedExpr(start_name, start_col)],
