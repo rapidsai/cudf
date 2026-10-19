@@ -20,7 +20,9 @@ def check(result):
     return result[1:]
 
 
-def raw_pool(hw_decompress, release_threshold_max, sync_before_destroy):
+def raw_pool(
+    hw_decompress, release_threshold_max, sync_before_destroy, write=False
+):
     props = runtime.cudaMemPoolProps()
     props.allocType = runtime.cudaMemAllocationType.cudaMemAllocationTypePinned
     props.location.type = runtime.cudaMemLocationType.cudaMemLocationTypeDevice
@@ -36,10 +38,24 @@ def raw_pool(hw_decompress, release_threshold_max, sync_before_destroy):
                 driver.cuuint64_t(UINT64_MAX),
             )
         )
+    sizes = (8, 64, 256, 4096)
     ptrs = [
         check(runtime.cudaMallocFromPoolAsync(size, pool, 0))[0]
-        for size in (8, 64, 256, 4096)
+        for size in sizes
     ]
+    if write:
+        host = bytes(range(256)) * 16
+        for ptr, size in zip(ptrs, sizes, strict=True):
+            check(runtime.cudaMemsetAsync(ptr, 0, size, 0))
+            check(
+                runtime.cudaMemcpyAsync(
+                    ptr,
+                    host,
+                    size,
+                    runtime.cudaMemcpyKind.cudaMemcpyHostToDevice,
+                    0,
+                )
+            )
     for ptr in ptrs:
         check(runtime.cudaFreeAsync(ptr, 0))
     if sync_before_destroy:
@@ -59,6 +75,18 @@ def rmm_async(sync_before_destroy):
     del mr
 
 
+def rmm_device_buffer_only():
+    previous = rmm.mr.get_current_device_resource()
+    mr = rmm.mr.CudaAsyncMemoryResource()
+    rmm.mr.set_current_device_resource(mr)
+    buffers = [
+        rmm.DeviceBuffer.to_device(bytes(range(256)) * 16) for _ in range(4)
+    ]
+    rmm.mr.set_current_device_resource(previous)
+    del buffers
+    del mr
+
+
 if mode == "rmm-async-destroy-pending":
     rmm_async(sync_before_destroy=False)
 elif mode == "rmm-async-destroy-synced":
@@ -69,6 +97,12 @@ elif mode == "raw-hw-max-threshold-synced":
     raw_pool(True, True, sync_before_destroy=True)
 elif mode == "raw-plain-max-threshold-pending":
     raw_pool(False, True, sync_before_destroy=False)
+elif mode == "raw-hw-max-threshold-written-pending":
+    raw_pool(True, True, sync_before_destroy=False, write=True)
+elif mode == "raw-plain-max-threshold-written-pending":
+    raw_pool(False, True, sync_before_destroy=False, write=True)
+elif mode == "rmm-device-buffer-destroy-pending":
+    rmm_device_buffer_only()
 elif mode != "none":
     raise ValueError(mode)
 

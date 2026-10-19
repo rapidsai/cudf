@@ -50,8 +50,8 @@ popd > /dev/null
 # Standalone reproduction of the root cause: each process sets up the given memory pool scenario,
 # then reads a Snappy parquet file (nvCOMP hardware decompression). 8 concurrent processes x 3.
 REPRO="$(realpath ci/gb300_repro.py)"
-for mode in none rmm-async-destroy-pending rmm-async-destroy-synced \
-  raw-hw-max-threshold-pending raw-hw-max-threshold-synced raw-plain-max-threshold-pending; do
+for mode in none rmm-async-destroy-pending rmm-async-destroy-synced rmm-device-buffer-destroy-pending \
+  raw-hw-max-threshold-pending raw-hw-max-threshold-written-pending raw-plain-max-threshold-written-pending; do
   crashed=0
   for round in 1 2 3; do
     pids=()
