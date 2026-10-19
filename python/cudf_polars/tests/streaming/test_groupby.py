@@ -311,13 +311,11 @@ def test_groupby_order_sensitive_aggs(streaming_engine_factory):
             "value": [None, 10, 20, None, 30, 40],
         }
     )
-    aggs = [
+    q = df.group_by("key").agg(
         pl.col("value").first(),
         pl.col("value").last().alias("last"),
-    ]
-    if not POLARS_VERSION_LT_138:
-        aggs.append(pl.col("value").first(ignore_nulls=True).alias("first_non_null"))
-    q = df.group_by("key").agg(*aggs)
+        pl.col("value").first(ignore_nulls=True).alias("first_non_null"),
+    )
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
