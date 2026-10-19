@@ -3468,7 +3468,7 @@ def test_parquet_empty_columns_nrows_exceeds_num_rows(tmp_path, low_memory):
     with cudf.option_context("io.parquet.low_memory", low_memory):
         got = cudf.read_parquet(path, columns=[], nrows=10)
 
-    assert got.shape == (6, 0)
+    assert got.shape == (6 if PYARROW_GE_26 else 0, 0)
 
 
 def test_parquet_nested_struct_list():
