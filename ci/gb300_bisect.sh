@@ -36,31 +36,38 @@ python -m pip list 2>/dev/null | grep -i -E "rmm|kvikio|nvcomp|cuda|cudf"
 pushd "${WORK}/src/python/pylibcudf/tests" > /dev/null
 SUMMARY=()
 
-run_serial() {
-  local label=$1 target=$2
-  shift 2
-  set +e
-  env "$@" timeout 20m python -m pytest -p no:xdist -p no:cacheprovider -v "${target}" > "${WORK}/${label}.log" 2>&1
-  local status=$?
-  set -e
-  local last
-  last=$(grep -E "(PASSED|FAILED|SKIPPED|XFAIL|XPASS|ERROR)" "${WORK}/${label}.log" | tail -n 1 || true)
-  SUMMARY+=("${label} exit=${status} last_completed=${last}")
-  rapids-logger "${label} exit=${status}"
-  if grep -q "Fatal Python error" "${WORK}/${label}.log"; then
-    grep -B 15 "Fatal Python error" "${WORK}/${label}.log" | grep -E "::" || true
-    sed -n '/Fatal Python error/,/Extension modules/p' "${WORK}/${label}.log" | head -n 80 || true
-  fi
+rapids-logger "Serial collection check"
+python -m pytest -p no:xdist -p no:cacheprovider --collect-only -q . 2>&1 | tail -n 30 || true
+
+run_xdist_verbose() {
+  local label=$1
+  shift
+  for attempt in 1 2 3; do
+    set +e
+    env "$@" timeout 15m python -m pytest -p no:cacheprovider --numprocesses=8 --dist=worksteal -v . \
+      > "${WORK}/${label}-${attempt}.log" 2>&1
+    local status=$?
+    set -e
+    local crash
+    crash=$(grep -o "worker '[^']*' crashed while running '[^']*'" "${WORK}/${label}-${attempt}.log" | head -n 1 || true)
+    SUMMARY+=("${label} attempt=${attempt} exit=${status} ${crash}")
+    if [[ -n "${crash}" ]]; then
+      local worker
+      worker=$(sed -E "s/worker '([^']*)'.*/\1/" <<< "${crash}")
+      rapids-logger "${label} attempt ${attempt}: tests completed by ${worker} before it crashed"
+      grep -E "^\[${worker}\]" "${WORK}/${label}-${attempt}.log" || true
+      rapids-logger "${label} attempt ${attempt}: crash stack"
+      sed -n '/Fatal Python error/,/Extension modules/p' "${WORK}/${label}-${attempt}.log" | head -n 80 || true
+      return
+    fi
+  done
 }
 
-run_serial suite-launch-blocking . CUDA_LAUNCH_BLOCKING=1
-run_serial suite-launch-blocking-hw-off . CUDA_LAUNCH_BLOCKING=1 LIBCUDF_HW_DECOMPRESSION=OFF
-run_serial io-launch-blocking io CUDA_LAUNCH_BLOCKING=1
-run_serial test-types-launch-blocking io/test_types.py CUDA_LAUNCH_BLOCKING=1
-run_serial suite-default .
-run_serial suite-hw-on . LIBCUDF_HW_DECOMPRESSION=ON
+run_xdist_verbose launch-blocking CUDA_LAUNCH_BLOCKING=1
+run_xdist_verbose launch-blocking-hw-off CUDA_LAUNCH_BLOCKING=1 LIBCUDF_HW_DECOMPRESSION=OFF
+run_xdist_verbose default
 
 popd > /dev/null
 
-rapids-logger "GB300 serial summary"
+rapids-logger "GB300 worker-sequence summary"
 printf '%s\n' "${SUMMARY[@]}"
