@@ -388,60 +388,44 @@ streaming_groupby::impl::finalize_gathered(std::unique_ptr<table> keys,
                                            cuda::stream_ref stream,
                                            cudf::memory_resources mr) const
 {
-  // Group user requests by their target column in `agg_gathered` so the cache layout
-  // produced by `extract_single_pass_aggs` matches the dedup'd `agg_gathered`.  Uses
-  // linear search on a small `group_offsets` vector since the number of distinct
-  // columns is typically small.
+  // Each input column needs one cache identity shared by all of its simple and compound
+  // aggregations. Prefer a result retaining the input type (e.g. SUM for decimal/duration
+  // MEAN), even when COUNT was requested first. For promoted numeric results, the compound
+  // output types are independent of the original integer width.
   auto const agg_gathered_view = agg_gathered->view();
-  std::vector<aggregation_request> column_grouped;
-  std::vector<size_type> group_offsets;
-  for (size_t i = 0; i < _requests_clone.size(); ++i) {
-    auto const offset = _request_first_agg_offset[i];
-    auto cloned       = std::unique_ptr<groupby_aggregation>{
-      dynamic_cast<groupby_aggregation*>(_requests_clone[i].aggregation->clone().release())};
-    auto const it = std::find(group_offsets.begin(), group_offsets.end(), offset);
-    if (it == group_offsets.end()) {
-      aggregation_request ar;
-      ar.values = agg_gathered_view.column(offset);
-      ar.aggregations.push_back(std::move(cloned));
-      column_grouped.push_back(std::move(ar));
-      group_offsets.push_back(offset);
-    } else {
-      column_grouped[std::distance(group_offsets.begin(), it)].aggregations.push_back(
-        std::move(cloned));
+  std::unordered_map<size_type, size_type> input_offsets;
+  for (size_type i = 0; i < agg_gathered_view.num_columns(); ++i) {
+    auto const [it, inserted] = input_offsets.try_emplace(_value_col_indices[i], i);
+    if (!inserted && agg_gathered_view.column(i).type() == _aggregate_input_types[i]) {
+      it->second = i;
     }
   }
+  std::vector<column_view> cache_keys;
+  cache_keys.reserve(_agg_kinds.size());
+  for (auto const input_column : _value_col_indices) {
+    cache_keys.push_back(agg_gathered_view.column(input_offsets.at(input_column)));
+  }
 
-  auto [values_view_fin, agg_kinds_fin, agg_objects_fin, is_intermediate_fin, has_compound_fin] =
-    detail::hash::extract_single_pass_aggs(column_grouped, stream);
-
+  // The stored aggregation objects already match the physical result order. Re-extracting
+  // them here can reorder results or duplicate intermediates shared with explicit requests.
   cudf::detail::result_cache cache(_agg_kinds.size());
-  detail::hash::finalize_output(values_view_fin, agg_objects_fin, agg_gathered, &cache, stream);
+  detail::hash::finalize_output(table_view{cache_keys}, _agg_objects, agg_gathered, &cache, stream);
 
-  if (_has_compound_aggs) {
-    // Compute compound aggs (MEAN/STD/VARIANCE/M2/...) into the cache.  The cache itself
-    // dedupes: skip if (column, kind) is already there from a prior agg in the group.
-    for (auto const& req : column_grouped) {
-      // `req.values` holds gathered intermediates, which never carry the input's nulls, so
-      // results such as MEAN must derive nulls from the counts.
-      auto const finalizer =
-        detail::hash::hash_compound_agg_finalizer(req.values, &cache, true, stream, mr);
-      for (auto const& agg : req.aggregations) {
-        if (cache.has_result(req.values, *agg)) continue;
-        cudf::detail::aggregation_dispatcher(agg->kind, finalizer, *agg);
-      }
-    }
-  }
-
-  // User-1:1 lookup keys so `extract_results` returns results in the order of the
-  // original user requests, sharing cache entries across requests on the same column.
+  // Preserve the user's request order while sharing cached simple and compound results.
   std::vector<aggregation_request> user_requests;
   user_requests.reserve(_requests_clone.size());
   for (size_t i = 0; i < _requests_clone.size(); ++i) {
     aggregation_request ar;
-    ar.values = agg_gathered_view.column(_request_first_agg_offset[i]);
+    ar.values = cache_keys[_request_first_agg_offset[i]];
     ar.aggregations.push_back(std::unique_ptr<groupby_aggregation>{
       dynamic_cast<groupby_aggregation*>(_requests_clone[i].aggregation->clone().release())});
+    auto const& agg = *ar.aggregations.front();
+    if (_has_compound_aggs && !cache.has_result(ar.values, agg)) {
+      // Gathered intermediates may lack null masks, so MEAN derives nulls from the counts.
+      auto const finalizer =
+        detail::hash::hash_compound_agg_finalizer(ar.values, &cache, true, stream, mr);
+      cudf::detail::aggregation_dispatcher(agg.kind, finalizer, agg);
+    }
     user_requests.push_back(std::move(ar));
   }
 
@@ -464,7 +448,7 @@ streaming_groupby::impl::do_finalize(cuda::stream_ref stream, cudf::memory_resou
     return result;
   } catch (...) {
     // A failed read must not leave untracked accesses before a subsequent resize.
-    static_cast<void>(cudaStreamSynchronize(stream.get()));
+    synchronize_on_error(stream);
     throw;
   }
 }
