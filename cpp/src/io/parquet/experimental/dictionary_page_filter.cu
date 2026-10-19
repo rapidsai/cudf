@@ -13,10 +13,12 @@
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
+#include <cudf/detail/utilities/buffer_factories.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_checks.hpp>
@@ -27,6 +29,7 @@
 
 #include <cuco/extent.cuh>
 #include <cuco/static_set.cuh>
+#include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/stream>
 
@@ -157,14 +160,13 @@ struct query_equality_functor {
  * @param offset Offset into the data stream
  * @param length Length of the data to read
  * @param page_data_size Size of the page data
-
  * @return Boolean indicating if there is a data stream overrun
  */
-__device__ __forceinline__ bool is_stream_overrun(size_type offset,
-                                                  size_type length,
+__device__ __forceinline__ bool is_stream_overrun(std::size_t offset,
+                                                  std::size_t length,
                                                   size_type page_data_size)
 {
-  return offset + length > page_data_size;
+  return page_data_size < 0 or offset + length > static_cast<std::size_t>(page_data_size);
 }
 
 /**
@@ -349,7 +351,7 @@ CUDF_KERNEL void query_dictionaries(cudf::device_span<T> decoded_data,
 template <SupportedFixedWidthType T>
 __device__ T decode_fixed_width_value(PageInfo const& page,
                                       ColumnChunkDesc const& chunk,
-                                      int32_t value_idx,
+                                      std::size_t value_idx,
                                       parquet::Type physical_type,
                                       kernel_error::pointer error)
 {
@@ -382,16 +384,17 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
         set_error(error, decode_error::DATA_STREAM_OVERRUN);
         return {};
       }
-      // Check if the flba length is valid
-      if (flba_length != INT96_SIZE or not cuda::std::is_same_v<T, int64_t>) {
+      // INT96 values are decoded into 64-bit timestamps. INT96 has no type length in the schema, so
+      // `INT96_SIZE` is used to index the page data.
+      if constexpr (sizeof(T) == sizeof(int64_t) and
+                    (cudf::is_timestamp<T>() or cuda::std::is_same_v<T, int64_t>)) {
+        decode_int96timestamp(page_data + (value_idx * INT96_SIZE),
+                              chunk.ts_clock_rate,
+                              reinterpret_cast<int64_t*>(&decoded_value));
+      } else {
         set_error(error, decode_error::INVALID_DATA_TYPE);
         return {};
       }
-
-      // Decode the int96 value from the page data
-      decode_int96timestamp(page_data + (value_idx * flba_length),
-                            chunk.ts_clock_rate,
-                            reinterpret_cast<int64_t*>(&decoded_value));
       break;
     }
 
@@ -547,7 +550,7 @@ __device__ cudf::string_view decode_string_value(uint8_t const* page_data,
   }
 
   // Decode string length
-  auto const string_length = static_cast<int32_t>(*(page_data + buffer_offset));
+  auto const string_length = cudf::io::unaligned_load<uint32_t>(page_data + buffer_offset);
   buffer_offset += sizeof(int32_t);
 
   // Check if we have a stream overrun
@@ -562,7 +565,7 @@ __device__ cudf::string_view decode_string_value(uint8_t const* page_data,
                       static_cast<cudf::size_type>(string_length)};
 
   // Update the buffer offset
-  buffer_offset += string_length;
+  buffer_offset += static_cast<int32_t>(string_length);
 
   return decoded_value;
 }
@@ -1044,9 +1047,9 @@ struct dictionary_caster {
     // Device vectors to store the running number of hash set slots and decoded values for all
     // dictionaries
     auto const set_offsets =
-      cudf::detail::make_device_uvector_async(host_set_offsets, stream, default_mr);
+      cudf::detail::make_device_buffer_async(host_set_offsets, stream, default_mr);
     auto const value_offsets =
-      cudf::detail::make_device_uvector_async(host_value_offsets, stream, default_mr);
+      cudf::detail::make_device_buffer_async(host_value_offsets, stream, default_mr);
 
     auto const total_set_storage_size = static_cast<std::size_t>(host_set_offsets.back());
     auto const total_num_values       = static_cast<std::size_t>(host_value_offsets.back());
@@ -1060,7 +1063,7 @@ struct dictionary_caster {
     set_storage.initialize_async(EMPTY_KEY_SENTINEL, {stream.get()});
 
     // Device vector to store the decoded values for all dictionaries
-    rmm::device_uvector<T> decoded_data{total_num_values, stream, default_mr};
+    cuda::device_buffer<T> decoded_data{stream, default_mr, total_num_values, cuda::no_init};
     kernel_error error_code(stream);
 
     // Host vector of scalar device views from all literals
@@ -1070,10 +1073,10 @@ struct dictionary_caster {
       host_scalars.push_back(literal->get_value());
     });
     // Device vector of all scalars device views
-    auto const scalars = cudf::detail::make_device_uvector_async(host_scalars, stream, default_mr);
+    auto const scalars = cudf::detail::make_device_buffer_async(host_scalars, stream, default_mr);
 
     // Device vector of all operators
-    auto const d_operators = cudf::detail::make_device_uvector_async(operators, stream, default_mr);
+    auto const d_operators = cudf::detail::make_device_buffer_async(operators, stream, default_mr);
 
     // Device buffers to store the dictionary membership results for all predicates
     std::vector<rmm::device_buffer> results_buffers(total_num_literals);
@@ -1206,10 +1209,10 @@ struct dictionary_caster {
       host_scalars.push_back(literal->get_value());
     });
     // Device vector of all scalars device views
-    auto const scalars = cudf::detail::make_device_uvector_async(host_scalars, stream, default_mr);
+    auto const scalars = cudf::detail::make_device_buffer_async(host_scalars, stream, default_mr);
 
     // Device vector of all operators
-    auto const d_operators = cudf::detail::make_device_uvector_async(operators, stream, default_mr);
+    auto const d_operators = cudf::detail::make_device_buffer_async(operators, stream, default_mr);
 
     // Device buffers to store the dictionary membership results for all predicates
     std::vector<rmm::device_buffer> results_buffers(total_num_literals);
@@ -1450,10 +1453,7 @@ aggregate_reader_metadata::apply_dictionary_filter(
   // Number of columns with dictionaries
   auto const num_dictionary_columns = static_cast<cudf::size_type>(dictionary_col_schemas.size());
   // Get parquet types for the predicate columns
-  auto const parquet_types = get_parquet_types(
-    cudf::host_span<std::vector<size_type> const>{input_row_group_indices.data(),
-                                                  input_row_group_indices.size()},
-    cudf::host_span<int const>{dictionary_col_schemas.data(), dictionary_col_schemas.size()});
+  auto const parquet_types = get_parquet_types(dictionary_col_schemas);
 
   // Convert dictionary membership for (in)equality predicate columns to a table
   // containing a column for each `col[i] == literal` or `col[i] != literal` predicate
@@ -1510,11 +1510,7 @@ aggregate_reader_metadata::apply_dictionary_filter(
   // Filter dictionary membership table with the DictionaryAST expression and collect
   // filtered row group indices
   return parquet::detail::collect_filtered_row_group_indices(
-    dictionary_membership_table,
-    dictionary_expr.value(),
-    cudf::host_span<std::vector<size_type> const>{input_row_group_indices.data(),
-                                                  input_row_group_indices.size()},
-    stream);
+    dictionary_membership_table, dictionary_expr.value(), input_row_group_indices, stream);
 }
 
 dictionary_literals_collector::dictionary_literals_collector(
