@@ -15,16 +15,6 @@ rapids-generate-pip-constraints py_test_cudf "${PIP_CONSTRAINT}" constraints
 CUDF_SHA=816f682244c080b438792eec6bc8eda6c3b0583a
 CUDF_RUN_ID=39100160924
 
-CONFIGS=(
-  "baseline|"
-  "hw-decompression-off|LIBCUDF_HW_DECOMPRESSION=OFF"
-  "hw-decompression-on|LIBCUDF_HW_DECOMPRESSION=ON"
-  "nvcomp-off|LIBCUDF_NVCOMP_POLICY=OFF"
-  "kvikio-1-thread|KVIKIO_NTHREADS=1"
-  "launch-blocking|CUDA_LAUNCH_BLOCKING=1"
-)
-ATTEMPTS=4
-
 WORK="$(mktemp -d)"
 mkdir -p "${WORK}/wheels" "${WORK}/src"
 gh run download "${CUDF_RUN_ID}" --repo NVIDIA/cudf \
@@ -43,51 +33,62 @@ rapids-pip-retry install \
     "$(find "${WORK}/wheels" -name "pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl")[test]"
 python -m pip list 2>/dev/null | grep -i -E "rmm|kvikio|nvcomp|cuda|cudf"
 
-pushd "${WORK}/src/python/pylibcudf/tests" > /dev/null
-
+REPRO="$(realpath ci/gb300_repro.py)"
 SUMMARY=()
-for config in "${CONFIGS[@]}"; do
-  label="${config%%|*}"
-  read -r -a envs <<< "${config#*|}"
-  rapids-logger "Config ${label}: ${envs[*]:-}"
-  for attempt in $(seq "${ATTEMPTS}"); do
+
+run_repro() {
+  local label=$1 mode=$2
+  shift 2
+  for attempt in 1 2 3 4 5; do
     set +e
-    env "${envs[@]}" timeout 15m python -m pytest \
-      --cache-clear \
-      --numprocesses=8 \
-      --dist=worksteal \
-      -q \
-      . > "${WORK}/${label}-${attempt}.log" 2>&1
-    status=$?
+    env "$@" timeout 5m python -X faulthandler "${REPRO}" "${mode}" 20 > "${WORK}/${label}-${attempt}.log" 2>&1
+    local status=$?
     set -e
-    tail -n 3 "${WORK}/${label}-${attempt}.log"
-    crashed=$(grep -o "crashed while running '[^']*'" "${WORK}/${label}-${attempt}.log" | sort -u | tr '\n' ' ' || true)
-    SUMMARY+=("${label} attempt=${attempt} exit=${status} ${crashed}")
+    SUMMARY+=("${label} attempt=${attempt} exit=${status}")
+    if [[ ${status} -ne 0 ]]; then
+      rapids-logger "${label} attempt ${attempt} failed with ${status}"
+      grep -v -E "^\s*$" "${WORK}/${label}-${attempt}.log" | head -n 60 || true
+    fi
   done
+}
+
+for mode in path bytes; do
+  run_repro "${mode}-default" "${mode}"
+  run_repro "${mode}-launch-blocking" "${mode}" CUDA_LAUNCH_BLOCKING=1
+  run_repro "${mode}-hw-off" "${mode}" LIBCUDF_HW_DECOMPRESSION=OFF
+  run_repro "${mode}-hw-off-launch-blocking" "${mode}" LIBCUDF_HW_DECOMPRESSION=OFF CUDA_LAUNCH_BLOCKING=1
 done
 
-rapids-logger "Single-process gdb backtraces of the segfault"
+rapids-logger "8 concurrent processes, path mode"
+for round in 1 2 3; do
+  pids=()
+  for i in $(seq 8); do
+    python -X faulthandler "${REPRO}" path 50 > "${WORK}/concurrent-${round}-${i}.log" 2>&1 &
+    pids+=($!)
+  done
+  failures=0
+  for i in "${!pids[@]}"; do
+    if ! wait "${pids[$i]}"; then
+      failures=$((failures + 1))
+      grep -v -E "^\s*$" "${WORK}/concurrent-${round}-$((i + 1)).log" | head -n 40 || true
+    fi
+  done
+  SUMMARY+=("concurrent round=${round} failed_processes=${failures}/8")
+done
+
+rapids-logger "gdb backtrace, path mode with CUDA_LAUNCH_BLOCKING=1"
 apt-get update -qq && apt-get install -y -qq --no-install-recommends gdb > /dev/null
-for attempt in 1 2 3; do
-  set +e
-  timeout 10m gdb -q -batch \
-    -ex "handle SIGSEGV stop print nopass" \
-    -ex "set pagination off" \
-    -ex run \
-    -ex "info threads" \
-    -ex "thread apply all bt 25" \
-    --args python -m pytest --cache-clear -p no:xdist -q io/test_parquet.py \
-    > "${WORK}/gdb-${attempt}.log" 2>&1
-  set -e
-  if grep -q "SIGSEGV" "${WORK}/gdb-${attempt}.log"; then
-    grep -v -E "^\[(New|Thread) .* (exited|Thread)" "${WORK}/gdb-${attempt}.log" | sed -n '/SIGSEGV/,$p'
-    SUMMARY+=("gdb attempt=${attempt} SIGSEGV")
-    break
-  fi
-  SUMMARY+=("gdb attempt=${attempt} no crash")
-done
+set +e
+CUDA_LAUNCH_BLOCKING=1 timeout 10m gdb -q -batch \
+  -ex "handle SIGSEGV stop print nopass" \
+  -ex "set pagination off" \
+  -ex run \
+  -ex "info sharedlibrary nvcomp" \
+  -ex "info threads" \
+  -ex "thread apply all bt 30" \
+  --args python "${REPRO}" path 20 > "${WORK}/gdb.log" 2>&1
+set -e
+grep -v -E "^\[(New Thread|Thread .* exited)" "${WORK}/gdb.log" | sed -n '/SIGSEGV/,$p' | head -n 400 || true
 
-popd > /dev/null
-
-rapids-logger "GB300 diagnostics summary"
+rapids-logger "GB300 repro summary"
 printf '%s\n' "${SUMMARY[@]}"
