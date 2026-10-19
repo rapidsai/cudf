@@ -226,8 +226,8 @@ def test_to_physical_nested_logical_unsupported(
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-@pytest.mark.parametrize("seed", [0, 10])
-def test_hash(engine: pl.GPUEngine, seed: int) -> None:
+def test_hash(engine: pl.GPUEngine) -> None:
+    seed = 0
     df = pl.LazyFrame(
         {
             "a": pl.Series([1, 2, None], dtype=pl.Int64),

@@ -290,7 +290,7 @@ class StringFunction(Expr):
                 for child in self.children[1:]
             ):
                 raise NotImplementedError(
-                    "Slice only supports integer literal start and stop values"
+                    "Slice does not support float literal start and stop values"
                 )
         elif self.name is StringFunction.Name.SplitExact:
             (_, inclusive) = self.options
