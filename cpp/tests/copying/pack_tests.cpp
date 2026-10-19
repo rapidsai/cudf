@@ -17,6 +17,8 @@
 
 #include <cuda/stream>
 
+#include <span>
+
 // Size of the serialized table header that precedes the column entries in the
 // packed metadata buffer: version + num_columns + num_rows + pad, four 4-byte fields.
 // Must match `serialized_table_header` in cpp/src/copying/pack.cpp.
@@ -636,7 +638,10 @@ TEST_F(PackUnpackTest, EmptyBuffersPreserveStreamAndResource)
     if (input.num_columns() == 0 && input.num_rows() == 0) { continue; }
 
     auto partitions = cudf::contiguous_split(
-      input, std::vector<cudf::size_type>{input.num_rows() / 2}, stream, output_ref);
+      input,
+      std::span<cudf::size_type const>{std::vector<cudf::size_type>{input.num_rows() / 2}},
+      stream,
+      output_ref);
     ASSERT_EQ(partitions.size(), 2);
     for (auto const& partition : partitions) {
       verify_buffer(partition.data);

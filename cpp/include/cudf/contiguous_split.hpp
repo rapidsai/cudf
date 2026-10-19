@@ -9,7 +9,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <cstdint>
 #include <memory>
@@ -73,7 +72,17 @@ namespace CUDF_EXPORT cudf {
  */
 std::vector<packed_table> contiguous_split(
   cudf::table_view const& input,
-  host_span<size_type const> splits,
+  std::span<size_type const> splits,
+  cuda::stream_ref stream           = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @deprecated Use the std::span overload instead.
+ */
+[[deprecated("Use the std::span overload instead.")]]
+std::vector<packed_table> contiguous_split(
+  cudf::table_view const& input,
+  std::vector<size_type> const& splits,
   cuda::stream_ref stream           = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
