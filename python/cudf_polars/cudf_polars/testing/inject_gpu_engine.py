@@ -483,6 +483,7 @@ STREAMING_ENGINE_TESTS_TO_SKIP: Mapping[str, str] = {
     # passes on some streaming runs and fails on others, so skip rather than
     # xfail to avoid a flaky XPASS/FAIL.
     "tests/unit/operations/test_group_by.py::test_group_by_unique_parametric[n_unique-True-True]": "non-deterministic key sort under the streaming engine",
+    "tests/unit/sql/test_correlated_subqueries.py::test_correlated_aggregate_not_over_outer_join_tree": "Intermittently segfaults when the process-global memory resource is swapped concurrently",
     "tests/unit/operations/test_slice.py::test_slice_slice_pushdown": "Too slow for CI",
     "tests/unit/io/test_partition.py::test_partition_approximate_size": "Too slow for CI",
     "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[single-parquet-async]": "Takes >60 seconds to run locally",
