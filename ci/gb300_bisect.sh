@@ -30,31 +30,30 @@ rapids-pip-retry install \
     "$(find "${WORK}/wheels" -name "libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl")" \
     "$(find "${WORK}/wheels" -name "pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl")[test]"
 
+PLUGIN_DIR="$(realpath ci)"
+CONFIGS=(
+  "baseline|"
+  "warmup|GB300_PLUGIN_MODE=warmup"
+  "sync-before-first-read|GB300_PLUGIN_MODE=sync-before-first-read"
+)
+
 SUMMARY=()
 pushd python/pylibcudf/tests > /dev/null
-rapids-logger "nvCOMP trace logging"
-for attempt in 1 2 3 4 5 6; do
-  rm -f "${WORK}/nvcomp.log"
-  set +e
-  NVCOMP_LOG_LEVEL=5 NVCOMP_LOG_FILE="${WORK}/nvcomp.log" timeout 15m python -m pytest -p no:cacheprovider \
-    --numprocesses=8 --dist=worksteal -q . > "${WORK}/nvcomp-trace-${attempt}.log" 2>&1
-  status=$?
-  set -e
-  crash=$(grep -o "crashed while running '[^']*'" "${WORK}/nvcomp-trace-${attempt}.log" | sort -u | tr '\n' ' ' || true)
-  SUMMARY+=("nvcomp-trace attempt=${attempt} exit=${status} ${crash}")
-  if [[ -n "${crash}" ]]; then
-    rapids-logger "Attempt ${attempt} crashed: ${crash}"
-    rapids-logger "nvCOMP messages that are not plain API traces"
-    grep -v -E "\]\[Api\]\[" "${WORK}/nvcomp.log" | cut -c22- | sort | uniq -c | sort -rn | head -n 40 || true
-    rapids-logger "Last nvCOMP calls per process"
-    for pid in $(grep -oE "\]\[nvcomp\]\[[0-9]+\]" "${WORK}/nvcomp.log" | grep -oE "[0-9]+" | sort -u); do
-      echo "=== pid ${pid}"
-      grep -F "][nvcomp][${pid}]" "${WORK}/nvcomp.log" | grep -v "GetMaxOutputChunkSize" | tail -n 15 | cut -c1-600
-    done
-    break
-  fi
+for config in "${CONFIGS[@]}"; do
+  label="${config%%|*}"
+  read -r -a envs <<< "${config#*|}"
+  for attempt in 1 2 3 4; do
+    set +e
+    env PYTHONPATH="${PLUGIN_DIR}" "${envs[@]}" timeout 15m python -m pytest -p gb300_plugin -p no:cacheprovider \
+      --numprocesses=8 --dist=worksteal -q . > "${WORK}/${label}-${attempt}.log" 2>&1
+    status=$?
+    set -e
+    tail -n 1 "${WORK}/${label}-${attempt}.log"
+    crash=$(grep -o "crashed while running '[^']*'" "${WORK}/${label}-${attempt}.log" | sort -u | tr '\n' ' ' || true)
+    SUMMARY+=("${label} attempt=${attempt} exit=${status} ${crash}")
+  done
 done
 popd > /dev/null
 
-rapids-logger "GB300 nvCOMP trace summary"
+rapids-logger "GB300 first-DE-use probe summary"
 printf '%s\n' "${SUMMARY[@]}"
