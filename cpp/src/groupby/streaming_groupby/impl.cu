@@ -41,6 +41,7 @@
 #include <cmath>
 #include <cstddef>
 #include <memory>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -203,8 +204,12 @@ void streaming_groupby::impl::initialize(table_view const& data, cuda::stream_re
                                        ? cudf::dictionary_column_view(values).keys().type()
                                        : values.type());
   }
-  _agg_results = make_aggregate_results(
-    0, stream, cudf::memory_resources{mr, cudf::get_current_device_resource_ref()});
+  _agg_results =
+    make_aggregate_results(0,
+                           0,
+                           _agg_kinds.size(),
+                           stream,
+                           cudf::memory_resources{mr, cudf::get_current_device_resource_ref()});
 
   _d_agg_kinds = std::make_unique<cuda::device_buffer<aggregation::Kind>>(
     cudf::detail::make_device_buffer_async(_agg_kinds, stream, mr));
@@ -251,21 +256,30 @@ void streaming_groupby::impl::initialize(table_view const& data, cuda::stream_re
 }
 
 std::unique_ptr<table> streaming_groupby::impl::make_aggregate_results(
-  size_type capacity, cuda::stream_ref stream, cudf::memory_resources mr) const
+  size_type capacity,
+  size_type first_column,
+  size_type num_columns,
+  cuda::stream_ref stream,
+  cudf::memory_resources mr) const
 {
+  auto const kinds =
+    host_span<aggregation::Kind const>{_agg_kinds}.subspan(first_column, num_columns);
+  auto const intermediates =
+    std::span<int8_t const>{_is_agg_intermediate}.subspan(first_column, num_columns);
   std::vector<std::unique_ptr<column>> schema_columns;
-  schema_columns.reserve(_aggregate_input_types.size());
-  for (auto const type : _aggregate_input_types) {
+  schema_columns.reserve(num_columns);
+  for (auto const type :
+       std::span<data_type const>{_aggregate_input_types}.subspan(first_column, num_columns)) {
     schema_columns.push_back(cudf::make_empty_column(type));
   }
   auto const schema = table{std::move(schema_columns)};
   auto results      = detail::hash::create_results_table(
-    capacity, schema.view(), _agg_kinds, _is_agg_intermediate, stream, mr.get_output_mr());
+    capacity, schema.view(), kinds, intermediates, stream, mr.get_output_mr());
   // Future batches may introduce all-null groups even when the first values were valid.
   for (size_type i = 0; i < results->num_columns(); ++i) {
     auto& result = results->get_column(i);
-    if (!_is_agg_intermediate[i] && _agg_kinds[i] != aggregation::COUNT_VALID &&
-        _agg_kinds[i] != aggregation::COUNT_ALL) {
+    if (!intermediates[i] && kinds[i] != aggregation::COUNT_VALID &&
+        kinds[i] != aggregation::COUNT_ALL) {
       result.set_null_mask(
         cudf::create_null_mask(capacity, mask_state::ALL_NULL, stream, mr.get_output_mr()),
         capacity);
@@ -292,30 +306,50 @@ void streaming_groupby::impl::ensure_aggregate_capacity(size_type required,
   }
 
   _aggregate_done.wait(stream);
-  auto next = make_aggregate_results(next_capacity * next_partials_per_group, stream, mr);
-  // A new capacity changes the partial-state pitch. Collapse live groups into the first new
-  // partial; every other partial and padding row retains its identity.
-  auto const old_groups = _distinct_keys.load(std::memory_order_relaxed);
-  if (old_groups > 0) {
-    auto const source =
-      table_device_view::create(_agg_results->view(), stream, mr.get_temporary_mr());
-    auto const target =
-      mutable_table_device_view::create(next->mutable_view(), stream, mr.get_temporary_mr());
-    thrust::for_each_n(rmm::exec_policy_nosync(stream, mr.get_temporary_mr()),
-                       cuda::counting_iterator<int64_t>{0},
-                       static_cast<int64_t>(old_groups) * _partials_per_group * _agg_kinds.size(),
-                       merge_partial_aggs_fn{nullptr,
-                                             _aggregate_capacity,
-                                             old_groups,
-                                             _partials_per_group,
-                                             _d_agg_kinds->data(),
-                                             *source,
-                                             *target});
+  if (_aggregate_capacity == 0) {
+    // There is no old device storage to overlap on the first allocation. Initialize all
+    // columns together; incremental replacement only saves memory on subsequent growth.
+    _agg_results = make_aggregate_results(
+      next_capacity * next_partials_per_group, 0, _agg_kinds.size(), stream, mr);
+    _aggregate_capacity = next_capacity;
+    _partials_per_group = next_partials_per_group;
+    return;
   }
-  // Old owners can free on their original streams. Finish every old use and transfer before
-  // retiring them.
-  stream.sync();
-  _agg_results        = std::move(next);
+  auto const old_groups  = _distinct_keys.load(std::memory_order_relaxed);
+  _growing_agg_columns   = _agg_results->release();
+  _num_grown_agg_columns = 0;
+  for (size_type i = 0; i < static_cast<size_type>(_growing_agg_columns.size()); ++i) {
+    auto& previous = _growing_agg_columns[i];
+    auto next = make_aggregate_results(next_capacity * next_partials_per_group, i, 1, stream, mr);
+    if (old_groups > 0) {
+      auto const source =
+        table_device_view::create(table_view{{previous->view()}}, stream, mr.get_temporary_mr());
+      auto const target =
+        mutable_table_device_view::create(next->mutable_view(), stream, mr.get_temporary_mr());
+      // The pitch changes with capacity. Collapse live groups into the first new partial;
+      // every other partial and padding row retains its identity.
+      thrust::for_each_n(rmm::exec_policy_nosync(stream, mr.get_temporary_mr()),
+                         cuda::counting_iterator<int64_t>{0},
+                         static_cast<int64_t>(old_groups) * _partials_per_group,
+                         merge_partial_aggs_fn{nullptr,
+                                               _aggregate_capacity,
+                                               old_groups,
+                                               _partials_per_group,
+                                               _d_agg_kinds->data() + i,
+                                               *source,
+                                               *target});
+    }
+    auto retired = std::move(previous);
+    previous     = std::move(next->release().front());
+    ++_num_grown_agg_columns;
+    // Aggregate states are fixed-width columns. Prior uses precede this stream, so retire
+    // their buffers after the transfer here, before allocating the next replacement column.
+    auto contents = retired->release();
+    contents.data->set_stream(stream);
+    contents.null_mask->set_stream(stream);
+  }
+  _agg_results = std::make_unique<table>(std::move(_growing_agg_columns));
+  _growing_agg_columns.clear();
   _aggregate_capacity = next_capacity;
   _partials_per_group = next_partials_per_group;
 }
@@ -341,13 +375,34 @@ std::unique_ptr<table> streaming_groupby::impl::gather_agg_results(cuda::stream_
                                                                    cudf::memory_resources mr) const
 {
   auto const size = _distinct_keys.load(std::memory_order_relaxed);
+  if (!_growing_agg_columns.empty()) {
+    // A failed grow leaves completed columns with their old groups in the first partial,
+    // while the untouched suffix still uses the old pitch. Preserve finalize() recovery.
+    auto result = make_aggregate_results(size, 0, _agg_kinds.size(), stream, mr);
+    if (size == 0) { return result; }
+    auto const kinds = cudf::detail::make_device_buffer(_agg_kinds, stream, mr.as_temporary());
+    for (size_type i = 0; i < static_cast<size_type>(_growing_agg_columns.size()); ++i) {
+      auto const source = table_device_view::create(
+        table_view{{_growing_agg_columns[i]->view()}}, stream, mr.get_temporary_mr());
+      auto const target = mutable_table_device_view::create(
+        mutable_table_view{{result->get_column(i).mutable_view()}}, stream, mr.get_temporary_mr());
+      auto const partials = i < _num_grown_agg_columns ? 1 : _partials_per_group;
+      thrust::for_each_n(
+        rmm::exec_policy_nosync(stream, mr.get_temporary_mr()),
+        cuda::counting_iterator<int64_t>{0},
+        static_cast<int64_t>(size) * partials,
+        merge_partial_aggs_fn{
+          nullptr, _aggregate_capacity, size, partials, kinds.data() + i, *source, *target});
+    }
+    return result;
+  }
   if (_agg_results->num_columns() == 0) { return std::make_unique<table>(); }
   if (_partials_per_group == 1 || size == 0) {
     auto const sliced = cudf::detail::slice(_agg_results->view(), {0, size}, stream).front();
     return std::make_unique<table>(sliced, stream, mr.get_output_mr());
   }
 
-  auto result = make_aggregate_results(size, stream, mr);
+  auto result = make_aggregate_results(size, 0, _agg_kinds.size(), stream, mr);
   auto const source =
     table_device_view::create(_agg_results->view(), stream, mr.get_temporary_mr());
   auto const target =
@@ -462,6 +517,7 @@ streaming_groupby::impl::do_finalize_and_release(cuda::stream_ref stream, cudf::
 
   auto agg_gathered = gather_agg_results(stream, mr);
   _agg_results.reset();
+  _growing_agg_columns.clear();
 
   return finalize_gathered(std::move(keys), std::move(agg_gathered), stream, mr);
 }
@@ -540,6 +596,9 @@ streaming_groupby::do_finalize_and_release(cuda::stream_ref stream, cudf::memory
   }
   rebind_table(state->_empty_key_schema);
   rebind_table(state->_agg_results);
+  for (auto& col : state->_growing_agg_columns) {
+    col = cudf::rebind_stream(std::move(*col), stream);
+  }
 
   return state->do_finalize_and_release(stream, mr);
 }

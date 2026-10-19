@@ -285,6 +285,10 @@ struct streaming_groupby::impl {
   size_type _partials_per_group{1};
   std::vector<data_type> _aggregate_input_types;
   std::unique_ptr<table> _agg_results;
+  // Own columns during incremental growth. A failed allocation can leave a grown prefix and
+  // an unchanged suffix; finalize() recovers both without assuming a uniform partial layout.
+  std::vector<std::unique_ptr<column>> _growing_agg_columns;
+  size_type _num_grown_agg_columns{0};
   std::vector<size_type> _value_col_indices;
   std::unique_ptr<cuda::device_buffer<aggregation::Kind>> _d_agg_kinds;
 
@@ -310,6 +314,8 @@ struct streaming_groupby::impl {
                                  cuda::stream_ref stream,
                                  cudf::memory_resources mr);
   [[nodiscard]] std::unique_ptr<table> make_aggregate_results(size_type capacity,
+                                                              size_type first_column,
+                                                              size_type num_columns,
                                                               cuda::stream_ref stream,
                                                               cudf::memory_resources mr) const;
   // Call after enqueueing this operation, while holding _insert_mutex.

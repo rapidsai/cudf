@@ -6,6 +6,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/memory_resource_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -20,17 +21,22 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <rmm/error.hpp>
+#include <rmm/mr/callback_memory_resource.hpp>
+#include <rmm/mr/cuda_memory_resource.hpp>
 #include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <cuda/stream>
 #include <cuda_runtime_api.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <limits>
 #include <thread>
 #include <tuple>
+#include <unordered_set>
 #include <vector>
 
 static std::vector<cudf::size_type> const KEY_COL{0};
@@ -435,6 +441,103 @@ TEST_F(StreamingGroupbyTest, MultiplePartialAggregationsGrowMergeAndSelfMerge)
   auto [keys, results] = source.finalize();
   verify_against_groupby(
     keys, results, {repeated_batch, repeated_batch, growth_batch}, KEY_COL, requests);
+}
+
+TEST_F(StreamingGroupbyTest, ColumnwiseGrowthPreservesResultsOnAllocationFailure)
+{
+  constexpr cudf::size_type num_rows = 65536;
+  constexpr std::size_t num_columns  = 3;
+  // Four groups initially have 64 partials each. Growth to 1,024 groups collapses them to one.
+  constexpr std::size_t old_column_bytes = 4 * 64 * sizeof(int64_t);
+  constexpr std::size_t new_column_bytes = 1024 * sizeof(int64_t);
+  std::vector<int32_t> key_data(num_rows);
+  std::vector<int64_t> value_data(num_rows);
+  std::vector<bool> validity(num_rows);
+  for (cudf::size_type i = 0; i < num_rows; ++i) {
+    key_data[i]   = i % 4;
+    value_data[i] = (i / 4) % 16 - 8;
+    validity[i]   = i % 4 != 3 && i % 13 != 0;
+  }
+  cudf::test::fixed_width_column_wrapper<int32_t> input_keys(key_data.begin(), key_data.end());
+  cudf::test::fixed_width_column_wrapper<int64_t> input_values(
+    value_data.begin(), value_data.end(), validity.begin());
+  cudf::table_view const repeated_batch{{input_keys, input_values}};
+
+  std::vector<int32_t> new_keys(1020);
+  std::vector<int64_t> new_values(1020);
+  for (std::size_t i = 0; i < new_keys.size(); ++i) {
+    new_keys[i]   = static_cast<int32_t>(i) + 4;
+    new_values[i] = static_cast<int64_t>(i % 16) - 8;
+  }
+  cudf::test::fixed_width_column_wrapper<int32_t> growth_keys(new_keys.begin(), new_keys.end());
+  cudf::test::fixed_width_column_wrapper<int64_t> growth_values(new_values.begin(),
+                                                                new_values.end());
+  cudf::table_view const growth_batch{{growth_keys, growth_values}};
+  std::vector<cudf::groupby::streaming_aggregation_request> requests;
+  requests.push_back(make_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>()));
+  requests.push_back(make_req(1, cudf::make_min_aggregation<cudf::groupby_aggregation>()));
+  requests.push_back(make_req(1, cudf::make_max_aggregation<cudf::groupby_aggregation>()));
+
+  for (std::size_t const fail_after : {0, 1, 2}) {
+    SCOPED_TRACE(fail_after);
+    std::unordered_set<void*> old_buffers;
+    std::size_t retired_columns  = 0;
+    std::size_t grown_columns    = 0;
+    std::size_t peak_state_bytes = 0;
+    bool growing                 = false;
+    // This independent upstream avoids recursion while the callback is the current resource.
+    rmm::mr::cuda_memory_resource upstream;
+    rmm::mr::callback_memory_resource mr{
+      [&](cuda::stream_ref stream, std::size_t bytes, std::size_t alignment, void*) -> void* {
+        // Fail only after a replacement was committed and its old buffer was freed, leaving
+        // both the new single-partial layout and the old multiple-partial layout live.
+        if (growing && fail_after != 0 && retired_columns == fail_after) {
+          throw rmm::bad_alloc{"Injected streaming groupby growth failure"};
+        }
+        auto* ptr = upstream.allocate(stream, bytes, alignment);
+        if (!growing && bytes == old_column_bytes) { old_buffers.insert(ptr); }
+        if (growing && bytes == new_column_bytes) {
+          ++grown_columns;
+          EXPECT_EQ(retired_columns + 1, grown_columns);
+          peak_state_bytes =
+            std::max(peak_state_bytes,
+                     old_buffers.size() * old_column_bytes + grown_columns * new_column_bytes);
+        }
+        return ptr;
+      },
+      [&](cuda::stream_ref stream, void* ptr, std::size_t bytes, std::size_t alignment, void*) {
+        if (old_buffers.erase(ptr) != 0 && growing) { ++retired_columns; }
+        upstream.deallocate(stream, ptr, bytes, alignment);
+      }};
+    cudf::test::scoped_current_device_resource resource_scope{mr};
+    cudf::groupby::streaming_groupby agg{KEY_COL, requests, num_rows};
+    agg.aggregate(repeated_batch);
+    cudf::get_default_stream().sync();
+    ASSERT_EQ(old_buffers.size(), num_columns);
+
+    growing = true;
+    if (fail_after == 0) {
+      EXPECT_NO_THROW(agg.aggregate(growth_batch));
+    } else {
+      EXPECT_THROW(agg.aggregate(growth_batch), rmm::bad_alloc);
+    }
+    growing                     = false;
+    auto const expected_columns = fail_after == 0 ? num_columns : fail_after;
+    EXPECT_EQ(retired_columns, expected_columns);
+    EXPECT_EQ(grown_columns, expected_columns);
+    EXPECT_LE(peak_state_bytes, num_columns * new_column_bytes + old_column_bytes);
+    EXPECT_EQ(agg.distinct_keys(), fail_after == 0 ? 1024 : 4);
+    if (fail_after != 0) { EXPECT_THROW(agg.aggregate(repeated_batch), cudf::logic_error); }
+
+    auto const batches   = fail_after == 0
+                             ? std::vector<cudf::table_view>{repeated_batch, growth_batch}
+                             : std::vector<cudf::table_view>{repeated_batch};
+    auto [keys, results] = agg.finalize();
+    verify_against_groupby(keys, results, batches, KEY_COL, requests);
+    auto [released_keys, released_results] = std::move(agg).finalize_and_release();
+    sort_and_compare(released_keys, released_results, keys, results);
+    EXPECT_EQ(agg.distinct_keys(), 0);
+  }
 }
 
 template <typename T>
