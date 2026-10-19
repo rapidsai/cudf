@@ -4,8 +4,6 @@
 
 set -euo pipefail
 
-source "$(dirname "${BASH_SOURCE[0]}")/install_rattler_build.sh"
-
 source rapids-datetime-string
 
 # shellcheck source=ci/build_python_common.sh
