@@ -30,6 +30,7 @@
 #include <cuda_runtime.h>
 
 #include <climits>
+#include <concepts>
 #include <limits>
 #include <type_traits>
 #include <utility>
@@ -189,16 +190,17 @@ struct is_scoped_enum<Enum, false> {
 using std::is_scoped_enum;
 #endif
 
+template <typename T>
+concept bit_flag = std::same_as<T, std::uint32_t> || is_scoped_enum<T>::value;
+
 // helpers to do bit operations on scoped enums
-template <typename... Ts,
-          CUDF_ENABLE_IF(... && (std::is_same_v<std::uint32_t, Ts> || is_scoped_enum<Ts>::value))>
+template <bit_flag... Ts>
 CUDF_HOST_DEVICE constexpr std::uint32_t BitAnd(Ts... bits)
 {
   return (... & static_cast<std::uint32_t>(bits));
 }
 
-template <typename... Ts,
-          CUDF_ENABLE_IF(... && (std::is_same_v<std::uint32_t, Ts> || is_scoped_enum<Ts>::value))>
+template <bit_flag... Ts>
 CUDF_HOST_DEVICE constexpr std::uint32_t BitOr(Ts... bits)
 {
   return (... | static_cast<std::uint32_t>(bits));
