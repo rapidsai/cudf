@@ -2261,14 +2261,6 @@ TEST_F(HybridScanFiltersTest, DictionaryPagesByteRangesIncludeUnboundedMatchesEx
     *footer_buffer, cudf::io::parquet_reader_options::builder().build());
   auto const footer_metadata = footer_reader->parquet_metadata();
 
-  auto const to_offsets_and_sizes = [](std::vector<cudf::io::text::byte_range_info> const& ranges) {
-    auto result = std::vector<std::pair<int64_t, int64_t>>{};
-    std::ranges::transform(ranges, std::back_inserter(result), [](auto const& r) {
-      return std::pair{r.offset(), r.size()};
-    });
-    return result;
-  };
-
   for (auto const drop_stats : {false, true}) {
     for (auto const hide_offsets : {false, true}) {
       SCOPED_TRACE("drop_stats=" + std::to_string(drop_stats) +
@@ -2324,7 +2316,9 @@ TEST_F(HybridScanFiltersTest, DictionaryPagesByteRangesIncludeUnboundedMatchesEx
         bounded.clear();
       }
 
-      EXPECT_EQ(to_offsets_and_sizes(bounded), to_offsets_and_sizes(exact));
+      EXPECT_TRUE(std::ranges::equal(bounded, exact, [](auto const& lhs, auto const& rhs) {
+        return lhs.offset() == rhs.offset() and lhs.size() == rhs.size();
+      }));
     }
   }
 }

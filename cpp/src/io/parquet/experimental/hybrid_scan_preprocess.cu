@@ -79,29 +79,29 @@ void decode_dictionary_page_headers(
   }
 
   // Point each chunk at its dictionary page. A chunk whose span is empty keeps a zeroed page and is
-  // not pruned with; a chunk whose span holds something other than a dictionary page is reset to
-  // match.
-  thrust::for_each(
-    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-    cuda::counting_iterator<cuda::std::size_t>(0),
-    cuda::counting_iterator<cuda::std::size_t>(chunks.size()),
-    [chunks = chunks.device_begin(), pages = pages.device_begin()] __device__(auto chunk_idx) {
-      auto& page  = pages[chunk_idx];
-      auto& chunk = chunks[chunk_idx];
-      if (page.flags & parquet::detail::PAGEINFO_FLAGS_DICTIONARY) {
-        chunk.dict_page = &page;
-      } else if (chunk.compressed_size > 0) {
-        // Not a dictionary page (e.g. a bad `dictionary_page_offset`): reset the chunk as if its
-        // span were empty, so the prune kernels don't decode a data page as a dictionary.
-        auto const src_col_schema = page.src_col_schema;
-        parquet::detail::reset_page_info(page);
-        page.chunk_idx        = static_cast<int32_t>(chunk_idx);
-        page.src_col_schema   = src_col_schema;
-        chunk.compressed_data = nullptr;
-        chunk.compressed_size = 0;
-        chunk.num_dict_pages  = 0;
-      }
-    });
+  // not pruned with. A non-empty span must hold a dictionary page.
+  thrust::for_each(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   cuda::counting_iterator<cuda::std::size_t>(0),
+                   cuda::counting_iterator<cuda::std::size_t>(chunks.size()),
+                   [chunks     = chunks.device_begin(),
+                    pages      = pages.device_begin(),
+                    error_code = error_code.data()] __device__(auto chunk_idx) {
+                     auto const& page = pages[chunk_idx];
+                     auto& chunk      = chunks[chunk_idx];
+                     if (page.flags & parquet::detail::PAGEINFO_FLAGS_DICTIONARY) {
+                       chunk.dict_page = &page;
+                     } else if (chunk.compressed_size > 0) {
+                       parquet::detail::set_error(
+                         static_cast<parquet::kernel_error::value_type>(
+                           parquet::detail::decode_error::INVALID_PAGE_TYPE),
+                         error_code);
+                     }
+                   });
+
+  if (auto const error = error_code.value_sync(stream); error != 0) {
+    CUDF_FAIL("Dictionary page data holds a non-dictionary page, code(s) " +
+              parquet::kernel_error::to_string(error));
+  }
 
   pages.device_to_host_async(stream);
   chunks.device_to_host_async(stream);
