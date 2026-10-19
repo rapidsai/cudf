@@ -274,13 +274,13 @@ namespace experimental {
 /**
  * @brief Compression algorithms supported by prepared pack operations.
  *
- * A concrete codec is applied to every chunk of a region, even when that expands the chunk.
+ * A concrete codec is applied to every block of a region, even when that expands the block.
  * Values are recorded in packed metadata and must not change.
  */
 enum class pack_compression : int32_t {
   none      = 0,  ///< Preserve the current uncompressed packed representation
   automatic = 1,  ///< Cascaded, except that string characters and small regions stay
-                  ///< uncompressed, and so do chunks that Cascaded shrinks too little
+                  ///< uncompressed, and so do blocks that Cascaded shrinks too little
   cascaded = 2,   ///< nvCOMP Cascaded, on values of each region's native width and signedness.
                   ///< Values wider than 64 bits, such as `DECIMAL128`, and string characters are
                   ///< treated as bytes.
@@ -299,7 +299,10 @@ enum class pack_region_kind {
 };
 
 /**
- * @brief Read-only description passed to a per-region codec selector.
+ * @brief One physical buffer of a column in the packed payload.
+ *
+ * A column has a region for each of its data, validity, offsets and characters buffers, and each
+ * region is compressed independently with its own codec.
  */
 struct pack_region_info {
   std::size_t region_index;  ///< Stable index within this prepared pack operation
@@ -386,7 +389,7 @@ class pack_plan {
   [[nodiscard]] pack_sizes sizes() const;
 
  private:
-  struct impl;
+  class impl;
   std::unique_ptr<impl> _impl;
 
   explicit pack_plan(std::unique_ptr<impl>&& implementation);
@@ -444,8 +447,8 @@ class pack_plan_builder {
  * @param input View of the table to pack
  * @param options Pack options; `options.compression` is each region's initial codec
  * @param stream Stream used for planning and subsequent `pack_into()` operations
- * @param mr Memory resources used by the returned plan. The output resource backs allocations that
- *           live as long as the plan; the temporary resource backs planning scratch
+ * @param mr Memory resources used by the returned plan. Planning allocates only from the output
+ *           resource, and those allocations live as long as the plan
  * @return A builder exposing the discovered regions
  */
 pack_plan_builder make_pack_plan_builder(
@@ -467,8 +470,8 @@ pack_plan_builder make_pack_plan_builder(
  * @param input Existing ordinary, uncompressed packed columns
  * @param options Pack options; `options.compression` is each region's initial codec
  * @param stream Stream used for planning and subsequent `pack_into()` operations
- * @param mr Memory resources used by the returned plan. The output resource backs allocations that
- *           live as long as the plan; the temporary resource backs planning scratch
+ * @param mr Memory resources used by the returned plan. Planning allocates only from the output
+ *           resource, and those allocations live as long as the plan
  * @return A builder exposing the discovered regions; its plan borrows `input`
  */
 pack_plan_builder make_pack_plan_builder(
@@ -481,7 +484,7 @@ pack_plan_builder make_pack_plan_builder(
  * @brief Prepare a reusable pack plan for `input`.
  *
  * Each physical column buffer (data, offsets, characters or validity) is compressed independently,
- * in chunks. For compressed plans, `sizes().payload_bytes` is an upper bound; `pack_into()`
+ * in blocks. For compressed plans, `sizes().payload_bytes` is an upper bound; `pack_into()`
  * reports the actual size.
  *
  * Payloads are compressed with `pack_compression::automatic` by default. Only
@@ -493,8 +496,8 @@ pack_plan_builder make_pack_plan_builder(
  * @param input View of the table to pack
  * @param options Compression and codec options
  * @param stream Stream used for planning and subsequent `pack_into()` operations
- * @param mr Memory resources used by the returned plan. The output resource backs allocations that
- *           live as long as the plan; the temporary resource backs planning scratch
+ * @param mr Memory resources used by the returned plan. Planning allocates only from the output
+ *           resource, and those allocations live as long as the plan
  * @return A move-only plan bound to `input` and `stream`
  */
 pack_plan prepare_pack(cudf::table_view const& input,
@@ -506,8 +509,10 @@ pack_plan prepare_pack(cudf::table_view const& input,
  * @brief Host metadata and payload size produced by `pack_into()`.
  */
 struct pack_result {
-  std::vector<uint8_t> metadata;  ///< Metadata describing the packed payload
-  std::size_t payload_bytes;      ///< Number of payload bytes written
+  /// Metadata describing the packed payload. Uncompressed output has the same metadata as
+  /// `packed_columns`; compressed output extends it with each region's codec and block layout.
+  std::vector<uint8_t> metadata;
+  std::size_t payload_bytes;  ///< Number of payload bytes written
 };
 
 /**
@@ -529,7 +534,8 @@ struct pack_result {
  *
  * @param plan Prepared pack plan
  * @param destination Caller-owned output span
- * @param mr Memory resources used for temporary allocations, including the staging buffers
+ * @param mr Memory resources for allocations freed before the call returns, including the staging
+ *           buffers; allocations that live as long as the plan use the resources given to it
  * @return Host metadata and the number of payload bytes written
  */
 pack_result pack_into(pack_plan const& plan,
@@ -555,7 +561,7 @@ struct packed_data_view {
  * @throw std::invalid_argument if `input.metadata` describes a compressed payload
  * @throw cudf::logic_error if the payload is pageable host memory and the device cannot access
  * pageable memory
- * @throw cudf::logic_error if `input.metadata` is truncated or malformed
+ * @throw cudf::logic_error if `input.metadata` or `input.payload` is truncated or malformed
  *
  * @param input Packed metadata and payload
  * @return A non-owning table view into `input.payload`

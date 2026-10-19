@@ -17,6 +17,8 @@
 #include <cudf/io/detail/codec.hpp>
 #include <cudf/null_mask.hpp>
 
+#include <rmm/mr/statistics_resource_adaptor.hpp>
+
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -39,9 +41,9 @@ struct compressed_region_entry {
   uint64_t uncompressed_offset;
   uint64_t uncompressed_bytes;
   uint64_t data_bytes;
-  uint64_t chunk_bytes;
-  uint64_t chunk_begin;
-  uint64_t num_chunks;
+  uint64_t block_bytes;
+  uint64_t block_begin;
+  uint64_t num_blocks;
   int32_t type;
   uint32_t is_validity;
   int32_t compression;
@@ -316,6 +318,20 @@ TEST_F(ExperimentalPackUnpackTest, UnpackViewPageablePayload)
   }
 }
 
+TEST_F(ExperimentalPackUnpackTest, UnpackViewTruncatedPayload)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> numbers({1, 2, 3, 4, 5});
+  cudf::test::strings_column_wrapper strings({"a", "truncated", "payload"});
+  for (auto const& input : {cudf::table_view{{numbers}}, cudf::table_view{{strings}}}) {
+    auto const packed =
+      pack_to_device(cx::prepare_pack(input, make_options(cx::pack_compression::none)));
+    auto view = packed.view();
+    CUDF_TEST_EXPECT_TABLES_EQUAL(input, cx::unpack_view(view));
+    view.payload = view.payload.first(view.payload.size() / 4);
+    EXPECT_THROW(cx::unpack_view(view), cudf::logic_error);
+  }
+}
+
 TEST_F(ExperimentalPackUnpackTest, MaterializeOversizedUncompressedPayload)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> numbers({1, 2, 3, 4, 5});
@@ -529,6 +545,47 @@ TEST_F(ExperimentalPackUnpackTest, CascadedUsesNativeTypedRegions)
   expect_materializes_to(input, packed.view());
 }
 
+TEST_F(ExperimentalPackUnpackTest, CompressMisalignedSlices)
+{
+  constexpr cudf::size_type rows = 64 * 1024;
+  auto const values =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 7; });
+  cudf::test::fixed_width_column_wrapper<int8_t> bytes(values, values + rows);
+  cudf::test::fixed_width_column_wrapper<int16_t> shorts(values, values + rows);
+  cudf::test::fixed_width_column_wrapper<int32_t> ints(values, values + rows);
+  auto const table = cudf::table_view{{bytes, shorts, ints}};
+  // Odd offsets leave the sliced data unaligned for every codec.
+  auto const input = cudf::slice(table, {3, rows - 1}).front();
+
+  for (auto const compression : {cx::pack_compression::automatic,
+                                 cx::pack_compression::cascaded,
+                                 cx::pack_compression::zstd,
+                                 cx::pack_compression::snappy}) {
+    if (!is_codec_enabled(compression)) { continue; }
+    SCOPED_TRACE(static_cast<int>(compression));
+    auto const plan = cx::prepare_pack(input, make_options(compression));
+    expect_materializes_to(input, pack_to_device(plan).view());
+  }
+}
+
+TEST_F(ExperimentalPackUnpackTest, StageOnlyRegionsThatNeedIt)
+{
+  constexpr cudf::size_type rows = 1024 * 1024;
+  auto const values = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  cudf::test::fixed_width_column_wrapper<int64_t> numbers(
+    values, values + rows, cudf::test::iterators::null_at(5));
+  // The sliced validity needs a bit shift, while the aligned data is compressed in place.
+  auto const input = cudf::slice(cudf::table_view{{numbers}}, {3, rows}).front();
+
+  rmm::mr::statistics_resource_adaptor output_mr(cudf::get_current_device_resource_ref());
+  auto const plan = cx::prepare_pack(input,
+                                     make_options(cx::pack_compression::cascaded),
+                                     cudf::get_default_stream(),
+                                     {output_mr, cudf::get_current_device_resource_ref()});
+  EXPECT_LT(output_mr.get_bytes_counter().value, rows * sizeof(int64_t) / 8);
+  expect_materializes_to(input, pack_to_device(plan).view());
+}
+
 TEST_F(ExperimentalPackUnpackTest, AutomaticPerRegionCompression)
 {
   constexpr cudf::size_type rows = 32 * 1024;
@@ -616,7 +673,7 @@ TEST_F(ExperimentalPackUnpackTest, RegionColumnPaths)
   cudf::test::fixed_width_column_wrapper<int32_t> second({4, 5, 6});
   cudf::test::structs_column_wrapper structs({first, second}, {true, false, true});
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
-  lcw lists{lcw{lcw{1, 2}, lcw{3}}, lcw{lcw{4}}, lcw{lcw{5, 6}}};
+  lcw lists{{{1, 2}, {3}}, {{4}}, {{5, 6}}};
   cudf::test::dictionary_column_wrapper<std::string> dictionary({"a", "bb", "a"});
   auto const input = cudf::table_view{{structs, lists, dictionary}};
 
@@ -645,7 +702,7 @@ TEST_F(ExperimentalPackUnpackTest, GetPackedRegionInfo)
   cudf::test::strings_column_wrapper words({"a", "", "ccc", "dd"}, {true, false, true, true});
   cudf::test::structs_column_wrapper structs({first, words}, {true, true, false, true});
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
-  lcw lists{lcw{lcw{1, 2}, lcw{3}}, lcw{lcw{4}}, lcw{}, lcw{lcw{5, 6}}};
+  lcw lists{{{1, 2}, {3}}, {{4}}, {}, {{5, 6}}};
   cudf::test::strings_column_wrapper empty_words({"", "", "", ""});
   cudf::test::fixed_width_column_wrapper<double> doubles({1.5, 2.5, 3.5, 4.5});
   cudf::test::dictionary_column_wrapper<std::string> dictionary({"a", "bb", "a", "ccc"});
@@ -761,8 +818,6 @@ TEST_F(PackUnpackTest, EmptyColumns)
 
 std::vector<std::unique_ptr<cudf::column>> generate_lists(bool include_validity)
 {
-  using LCW = cudf::test::lists_column_wrapper<int>;
-
   if (include_validity) {
     auto valids = cudf::test::iterators::valids_at_multiples_of(2);
     cudf::test::lists_column_wrapper<int> list0{{1, 2, 3},
@@ -770,20 +825,20 @@ std::vector<std::unique_ptr<cudf::column>> generate_lists(bool include_validity)
                                                 {6},
                                                 {{7, 8}, valids},
                                                 {9, 10, 11},
-                                                LCW{},
-                                                LCW{},
+                                                {},
+                                                {},
                                                 {{-1, -2, -3, -4, -5}, valids},
                                                 {{100, -200}, valids}};
 
     cudf::test::lists_column_wrapper<int> list1{{{{1, 2, 3}, valids}, {4, 5}},
-                                                {{LCW{}, LCW{}, {7, 8}, LCW{}}, valids},
-                                                {LCW{6}},
-                                                {{{7, 8}, {{9, 10, 11}, valids}, LCW{}}, valids},
-                                                {{LCW{}, {-1, -2, -3, -4, -5}}, valids},
-                                                {LCW{}},
-                                                {LCW{-10}, {-100, -200}},
-                                                {{-10, -200}, LCW{}, {8, 9}},
-                                                {LCW{8}, LCW{}, LCW{9}, {5, 6}}};
+                                                {{{}, {}, {7, 8}, {}}, valids},
+                                                {{6}},
+                                                {{{7, 8}, {{9, 10, 11}, valids}, {}}, valids},
+                                                {{{}, {-1, -2, -3, -4, -5}}, valids},
+                                                {{}},
+                                                {{-10}, {-100, -200}},
+                                                {{-10, -200}, {}, {8, 9}},
+                                                {{8}, {}, {9}, {5, 6}}};
 
     std::vector<std::unique_ptr<cudf::column>> out;
     out.push_back(list0.release());
@@ -792,17 +847,17 @@ std::vector<std::unique_ptr<cudf::column>> generate_lists(bool include_validity)
   }
 
   cudf::test::lists_column_wrapper<int> list0{
-    {1, 2, 3}, {4, 5}, {6}, {7, 8}, {9, 10, 11}, LCW{}, LCW{}, {-1, -2, -3, -4, -5}, {-100, -200}};
+    {1, 2, 3}, {4, 5}, {6}, {7, 8}, {9, 10, 11}, {}, {}, {-1, -2, -3, -4, -5}, {-100, -200}};
 
   cudf::test::lists_column_wrapper<int> list1{{{1, 2, 3}, {4, 5}},
-                                              {LCW{}, LCW{}, {7, 8}, LCW{}},
-                                              {LCW{6}},
-                                              {{7, 8}, {9, 10, 11}, LCW{}},
-                                              {LCW{}, {-1, -2, -3, -4, -5}},
-                                              {LCW{}},
+                                              {{}, {}, {7, 8}, {}},
+                                              {{6}},
+                                              {{7, 8}, {9, 10, 11}, {}},
+                                              {{}, {-1, -2, -3, -4, -5}},
+                                              {{}},
                                               {{-10}, {-100, -200}},
-                                              {{-10, -200}, LCW{}, {8, 9}},
-                                              {LCW{8}, LCW{}, LCW{9}, {5, 6}}};
+                                              {{-10, -200}, {}, {8, 9}},
+                                              {{8}, {}, {9}, {5, 6}}};
 
   std::vector<std::unique_ptr<cudf::column>> out;
   out.push_back(list0.release());
@@ -862,18 +917,17 @@ std::vector<std::unique_ptr<cudf::column>> generate_struct_of_list()
     cudf::test::fixed_width_column_wrapper<int>(ages.begin(), ages.end(), ages_validity.begin());
 
   // 3. List column
-  using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
   std::vector<bool> list_validity{true, true, true, true, true, false, true, false, true};
   cudf::test::lists_column_wrapper<cudf::string_view> list(
     {{{"abc", "d", "edf"}, {"jjj"}},
-     {{"dgaer", "-7"}, LCW{}},
-     {LCW{}},
+     {{"dgaer", "-7"}, {}},
+     {{}},
      {{"qwerty"}, {"ral", "ort", "tal"}, {"five", "six"}},
-     {LCW{}, LCW{}, {"eight", "nine"}},
-     {LCW{}},
+     {{}, {}, {"eight", "nine"}},
+     {{}},
      {{"fun"}, {"a", "bc", "def", "ghij", "klmno", "pqrstu"}},
-     {{"seven", "zz"}, LCW{}, {"xyzzy"}},
-     {LCW{"negative 3", "  ", "cleveland"}}},
+     {{"seven", "zz"}, {}, {"xyzzy"}},
+     {{"negative 3", "  ", "cleveland"}}},
     list_validity.begin());
 
   // Assemble struct column.
@@ -1155,14 +1209,12 @@ TEST_F(PackUnpackTest, NestedSliced)
   {
     auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
-    using LCW = cudf::test::lists_column_wrapper<int>;
-
     cudf::test::lists_column_wrapper<int> col0{{{{1, 2, 3}, valids}, {4, 5}},
-                                               {{LCW{}, LCW{}, {7, 8}, LCW{}}, valids},
+                                               {{{}, {}, {7, 8}, {}}, valids},
                                                {{6, 12}},
-                                               {{{7, 8}, {{9, 10, 11}, valids}, LCW{}}, valids},
-                                               {{LCW{}, {-1, -2, -3, -4, -5}}, valids},
-                                               {LCW{}},
+                                               {{{7, 8}, {{9, 10, 11}, valids}, {}}, valids},
+                                               {{{}, {-1, -2, -3, -4, -5}}, valids},
+                                               {{}},
                                                {{-10}, {-100, -200}}};
 
     cudf::test::strings_column_wrapper col1{

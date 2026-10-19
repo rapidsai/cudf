@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pylibcudf as plc
 from cudf_streaming.channel_metadata import (
@@ -39,9 +39,7 @@ if TYPE_CHECKING:
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
 
 
-HintSortedOptions: TypeAlias = tuple[
-    tuple[str, ...], tuple[bool, ...], tuple[bool, ...]
-]
+type HintSortedOptions = tuple[tuple[str, ...], tuple[bool, ...], tuple[bool, ...]]
 
 
 def _hint_sorted_options(
@@ -167,7 +165,8 @@ async def hint_sorted_actor(
         chs_aux=(ch_replay,),
         trace_ir=ir,
         ir_context=ir_context,
-    ):
+    ) as actor_scope:
+        ir_context = actor_scope.require_ir_context()
         metadata = await recv_metadata(ch_in, context)
         metadata, ch_forward = await extract_hint_sorted_metadata(
             context,
