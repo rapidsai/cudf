@@ -43,7 +43,7 @@ std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
     left, stream, cudf::get_current_device_resource_ref());
 
   auto const temp_mr     = cudf::get_current_device_resource_ref();
-  auto match_counts_sum  = cudf::detail::device_scalar<cuda::std::uint64_t>(0, stream, temp_mr);
+  auto total_matches     = cudf::detail::device_scalar<cuda::std::uint64_t>(0, stream, temp_mr);
   auto const row_bitmask = cudf::detail::bitmask_and(left, stream, temp_mr).first;
   auto const valid_rows  = _nulls_equal == null_equality::UNEQUAL ? row_bitmask.data() : nullptr;
 
@@ -52,7 +52,7 @@ std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
                                                                      valid_rows,
                                                                      nullptr,
                                                                      nullptr,
-                                                                     match_counts_sum.data(),
+                                                                     total_matches.data(),
                                                                      nullptr,
                                                                      nullptr,
                                                                      _impl->hash_table(),
@@ -63,7 +63,7 @@ std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
   };
   dispatch_join_comparator(
     _right, left, _preprocessed_right, preprocessed_left, _has_nulls, _nulls_equal, count_matches);
-  return static_cast<std::size_t>(match_counts_sum.value(stream));
+  return static_cast<std::size_t>(total_matches.value(stream));
 }
 
 template <typename Hasher>
@@ -83,9 +83,9 @@ std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
 
   auto const preprocessed_left = cudf::detail::row::equality::preprocessed_table::create(
     left, stream, cudf::get_current_device_resource_ref());
-  auto const temp_mr    = cudf::get_current_device_resource_ref();
-  auto match_counts_sum = cudf::detail::device_scalar<cuda::std::uint64_t>(0, stream, temp_mr);
-  auto matched_groups   = cudf::detail::make_zeroed_device_buffer_async<cuda::std::uint32_t>(
+  auto const temp_mr  = cudf::get_current_device_resource_ref();
+  auto total_matches  = cudf::detail::device_scalar<cuda::std::uint64_t>(0, stream, temp_mr);
+  auto matched_groups = cudf::detail::make_zeroed_device_buffer_async<cuda::std::uint32_t>(
     _right.num_rows(), stream, temp_mr);
   auto matched_build_rows = cudf::detail::device_scalar<cuda::std::uint64_t>(0, stream, temp_mr);
   auto const row_bitmask  = cudf::detail::bitmask_and(left, stream, temp_mr).first;
@@ -96,7 +96,7 @@ std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
                                              valid_rows,
                                              nullptr,
                                              nullptr,
-                                             match_counts_sum.data(),
+                                             total_matches.data(),
                                              matched_groups.data(),
                                              matched_build_rows.data(),
                                              _impl->hash_table(),
@@ -108,7 +108,7 @@ std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
   dispatch_join_comparator(
     _right, left, _preprocessed_right, preprocessed_left, _has_nulls, _nulls_equal, count_matches);
 
-  auto const left_output_size   = match_counts_sum.value(stream);
+  auto const left_output_size   = total_matches.value(stream);
   auto const matched_right_rows = matched_build_rows.value(stream);
   auto const right_rows         = static_cast<cuda::std::uint64_t>(_right.num_rows());
   auto const output_size        = left_output_size + right_rows - matched_right_rows;

@@ -175,12 +175,12 @@ CUDF_KERNEL void hash_csr_probe_count_kernel(size_type num_rows,
     }
   }
 
-  if (match_counts_sum != nullptr) {
+  if (total_matches != nullptr) {
     using block_reduce = cub::BlockReduce<cuda::std::uint64_t, hash_csr_block_size>;
     __shared__ typename block_reduce::TempStorage temp_storage;
     auto const block_matches = block_reduce(temp_storage).Sum(thread_matches);
     if (threadIdx.x == 0) {
-      cuda::atomic_ref<cuda::std::uint64_t, cuda::thread_scope_device>{*match_counts_sum}.fetch_add(
+      cuda::atomic_ref<cuda::std::uint64_t, cuda::thread_scope_device>{*total_matches}.fetch_add(
         block_matches, cuda::memory_order_relaxed);
     }
   }
@@ -240,7 +240,7 @@ void launch_hash_csr_probe_count_kernel(size_type num_rows,
                                         bitmask_type const* valid_rows,
                                         size_type* probe_groups,
                                         size_type* match_counts,
-                                        cuda::std::uint64_t* match_counts_sum,
+                                        cuda::std::uint64_t* total_matches,
                                         cuda::std::uint32_t* matched_groups,
                                         cuda::std::uint64_t* matched_build_rows,
                                         hash_table_ref map,
@@ -256,7 +256,7 @@ void launch_hash_csr_probe_count_kernel(size_type num_rows,
                                                                            valid_rows,
                                                                            probe_groups,
                                                                            match_counts,
-                                                                           match_counts_sum,
+                                                                           total_matches,
                                                                            matched_groups,
                                                                            matched_build_rows,
                                                                            map,
