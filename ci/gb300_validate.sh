@@ -47,6 +47,28 @@ for attempt in 1 2 3 4 5 6; do
 done
 popd > /dev/null
 
+# Standalone reproduction of the root cause: each process sets up the given memory pool scenario,
+# then reads a Snappy parquet file (nvCOMP hardware decompression). 8 concurrent processes x 3.
+REPRO="$(realpath ci/gb300_repro.py)"
+for mode in none rmm-async-destroy-pending rmm-async-destroy-synced \
+  raw-hw-max-threshold-pending raw-hw-max-threshold-synced raw-plain-max-threshold-pending; do
+  crashed=0
+  for round in 1 2 3; do
+    pids=()
+    for i in $(seq 8); do
+      timeout 5m python -X faulthandler "${REPRO}" "${mode}" > "${WORK}/${mode}-${round}-${i}.log" 2>&1 &
+      pids+=($!)
+    done
+    for pid in "${pids[@]}"; do wait "${pid}" || true; done
+    for i in $(seq 8); do
+      if ! grep -q "^OK ${mode}$" "${WORK}/${mode}-${round}-${i}.log"; then
+        crashed=$((crashed + 1))
+      fi
+    done
+  done
+  SUMMARY+=("repro ${mode} failed_processes=${crashed}/24")
+done
+
 rapids-logger "GB300 fix validation summary"
 printf '%s\n' "${SUMMARY[@]}"
 echo "Runs with crashes or test failures: ${FIX_CRASHES}/6"
