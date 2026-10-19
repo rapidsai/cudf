@@ -3446,14 +3446,19 @@ packed_columns decode_fused_for(fused_for_packed_columns&& input,
   auto const descriptor_size = util::round_up_safe(input.segment_count * sizeof(fused_for_segment),
                                                    fused_for_impl::wire_alignment);
   CUDF_EXPECTS(descriptor_size <= wire_size, "fused FOR descriptors exceed the wire buffer");
-
-  // The caller guarantees that the wire payload is ready on `stream`. Order
-  // its eventual deallocation after the asynchronous decode launched below.
-  input.wire_data->set_stream(stream);
+  CUDF_EXPECTS(input.segment_count != 0 || (input.logical_data_size == 0 && wire_size == 0),
+               "non-empty fused FOR output has no segments");
 
   auto output = std::make_unique<rmm::device_buffer>(input.logical_data_size, stream, mr);
+
+  // The caller guarantees that the wire payload is ready on `stream`. Take
+  // ownership so the wire buffer is released on `stream` after the
+  // asynchronous decode launched below, not whenever the caller drops `input`.
+  auto const wire_data = std::move(input.wire_data);
+  wire_data->set_stream(stream);
+
   if (input.segment_count != 0) {
-    auto const* wire = static_cast<std::uint8_t const*>(input.wire_data->data());
+    auto const* wire = static_cast<std::uint8_t const*>(wire_data->data());
     fused_for_impl::
       decode_segments<<<input.segment_count, fused_for_impl::threads_per_block, 0, stream.get()>>>(
         wire,
@@ -3462,9 +3467,6 @@ packed_columns decode_fused_for(fused_for_packed_columns&& input,
         wire_size,
         input.logical_data_size);
     CUDF_CUDA_TRY(cudaGetLastError());
-  } else {
-    CUDF_EXPECTS(input.logical_data_size == 0 && wire_size == 0,
-                 "non-empty fused FOR output has no segments");
   }
 
   return packed_columns{std::move(input.metadata), std::move(output)};

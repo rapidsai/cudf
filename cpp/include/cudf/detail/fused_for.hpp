@@ -135,7 +135,8 @@ CUDF_EXPORT fused_for_packed_columns pack_fused_for(table_view const& input,
  * values are reconstructed directly into their final logical-width locations.
  *
  * @param input Payload produced by `contiguous_split_fused_for` or
- * `pack_fused_for`
+ * `pack_fused_for`, whose wire buffer must be ready on `stream`. The payload
+ * is consumed and its wire buffer is released on `stream` after the decode.
  * @param stream CUDA stream used for all work
  * @param mr Device memory resource for the reconstructed packed allocation
  * @return Ordinary packed columns containing the reconstructed values

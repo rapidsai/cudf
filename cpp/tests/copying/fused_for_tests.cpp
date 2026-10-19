@@ -15,6 +15,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream.hpp>
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <cuda_runtime_api.h>
 
@@ -260,6 +261,33 @@ TEST_F(FusedForSplitTest, NonDefaultStreamPreservesAsyncDecodeLifetime)
   // decode on the consumer stream.
   auto decoded = cudf::detail::decode_fused_for(std::move(packed), consumer_stream_view, mr);
   expect_packed_equivalent(expected, decoded, consumer_stream_view);
+}
+
+TEST_F(FusedForSplitTest, DecodeReleasesWireBuffer)
+{
+  auto const stream = cudf::get_default_stream();
+  auto const mr     = cudf::get_current_device_resource_ref();
+
+  constexpr cudf::size_type rows = 16'384;
+  std::vector<std::int64_t> values(rows);
+  for (cudf::size_type i = 0; i < rows; ++i) {
+    values[i] = 7'000'000 + (i % 1'024);
+  }
+
+  cudf::test::fixed_width_column_wrapper<std::int64_t> column(values.begin(), values.end());
+  cudf::table_view input{{column}};
+  rmm::mr::statistics_resource_adaptor wire_mr(mr);
+  auto expected = cudf::pack(input, stream, mr);
+  auto packed   = cudf::detail::pack_fused_for(input, stream, wire_mr);
+  // The wire buffer is the only allocation from `wire_mr` that is still live.
+  ASSERT_EQ(static_cast<std::size_t>(wire_mr.get_bytes_counter().value),
+            packed.wire_data->capacity());
+
+  // The decode consumes the payload, so the caller is not left holding a wire
+  // buffer whose deallocation is tied to the decode stream.
+  auto decoded = cudf::detail::decode_fused_for(std::move(packed), stream, mr);
+  EXPECT_EQ(wire_mr.get_bytes_counter().value, 0);
+  expect_packed_equivalent(expected, decoded, stream);
 }
 
 TEST_F(FusedForSplitTest, RoundTripsNullableSliceAcrossPartitions)
