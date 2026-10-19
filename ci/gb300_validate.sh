@@ -38,7 +38,7 @@ run_suite() {
   local crash
   crash=$(grep -o "crashed while running '[^']*'" "${WORK}/${label}.log" | sort -u | tr '\n' ' ' || true)
   SUMMARY+=("${label} exit=${status} ${crash}")
-  [[ -z "${crash}" ]]
+  [[ -z "${crash}" && ${status} -eq 0 ]]
 }
 
 pushd python/pylibcudf/tests > /dev/null
@@ -49,5 +49,5 @@ popd > /dev/null
 
 rapids-logger "GB300 fix validation summary"
 printf '%s\n' "${SUMMARY[@]}"
-echo "Runs with crashes: ${FIX_CRASHES}/6"
+echo "Runs with crashes or test failures: ${FIX_CRASHES}/6"
 [[ ${FIX_CRASHES} -eq 0 ]]

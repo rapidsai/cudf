@@ -226,6 +226,9 @@ def test_column_from_arrow_stream(data):
 
 
 def test_arrow_object_lifetime():
+    class WeakrefableCudaAsyncMemoryResource(rmm.mr.CudaAsyncMemoryResource):
+        pass
+
     def f():
         # Store a temporary so it is cached in the frame when the exception is raised
         t = plc.Table.from_arrow(pa.Table.from_pydict({"a": [1]}))  # noqa: F841
@@ -236,7 +239,7 @@ def test_arrow_object_lifetime():
     try:
         try:
             previous = rmm.mr.get_current_device_resource()
-            mr = rmm.mr.CudaAsyncMemoryResource()
+            mr = WeakrefableCudaAsyncMemoryResource()
             mr_ref = weakref.ref(mr)
             rmm.mr.set_current_device_resource(mr)
             del mr
@@ -246,6 +249,7 @@ def test_arrow_object_lifetime():
     except ValueError:
         # Ignore the exception. A failure in this test is a seg fault
         mr = mr_ref()
+        assert mr is not None
     # Destroying the async resource's pool while frees from it are still pending
     # corrupts CUDA driver state on GPUs with a hardware decompression engine
     # (GB300), crashing later nvCOMP decompression. Synchronize before releasing it.

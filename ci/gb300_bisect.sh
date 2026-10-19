@@ -30,30 +30,31 @@ rapids-pip-retry install \
     "$(find "${WORK}/wheels" -name "libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl")" \
     "$(find "${WORK}/wheels" -name "pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl")[test]"
 
-# A/B the test_interop.py change with everything else identical.
-mkdir -p "${WORK}/unfixed" "${WORK}/fixed"
-cp -r python/pylibcudf/tests "${WORK}/fixed/tests"
-cp -r python/pylibcudf/tests "${WORK}/unfixed/tests"
+# A/B the test_interop.py change in place, with everything else identical.
+cp python/pylibcudf/tests/test_interop.py "${WORK}/test_interop_fixed.py"
 git show 4473c24036cba0af26b11730e750782f3fc740ed:python/pylibcudf/tests/test_interop.py \
-  > "${WORK}/unfixed/tests/test_interop.py"
+  > "${WORK}/test_interop_unfixed.py"
 
 SUMMARY=()
 for variant in unfixed:6 fixed:10; do
   label="${variant%%:*}"
   count="${variant##*:}"
-  pushd "${WORK}/${label}/tests" > /dev/null
+  cp "${WORK}/test_interop_${label}.py" python/pylibcudf/tests/test_interop.py
+  pushd python/pylibcudf/tests > /dev/null
   for attempt in $(seq "${count}"); do
     set +e
     timeout 15m python -m pytest -p no:cacheprovider --numprocesses=8 --dist=worksteal -q . \
       > "${WORK}/${label}-${attempt}.log" 2>&1
     status=$?
     set -e
-    tail -n 1 "${WORK}/${label}-${attempt}.log"
+    result=$(tail -n 1 "${WORK}/${label}-${attempt}.log")
     crash=$(grep -o "crashed while running '[^']*'" "${WORK}/${label}-${attempt}.log" | sort -u | tr '\n' ' ' || true)
-    SUMMARY+=("${label} attempt=${attempt} exit=${status} ${crash}")
+    failed=$(grep -E "^FAILED" "${WORK}/${label}-${attempt}.log" | cut -c1-150 | tr '\n' ' ' || true)
+    SUMMARY+=("${label} attempt=${attempt} exit=${status} ${result} ${crash} ${failed}")
   done
   popd > /dev/null
 done
+cp "${WORK}/test_interop_fixed.py" python/pylibcudf/tests/test_interop.py
 
 rapids-logger "GB300 test_interop fix A/B summary"
 printf '%s\n' "${SUMMARY[@]}"
