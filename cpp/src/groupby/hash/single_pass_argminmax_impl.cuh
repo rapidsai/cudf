@@ -63,7 +63,7 @@ std::unique_ptr<column> select_group_rows(reduction_context const& ctx,
                            ctx.nullable ? mask_state::ALL_VALID : mask_state::UNALLOCATED,
                            stream,
                            mr.get_output_mr());
-  auto const mask = reinterpret_cast<bitmask_type*>(null_mask.data());
+  auto const mask = null_mask.data();
   reduce(cuda::tabulate_output_iterator{select_group_row_fn{out, mask, ctx.d_values}});
   if (ctx.nullable) {
     auto const null_count = count_group_nulls(mask, ctx.num_groups, stream, mr);

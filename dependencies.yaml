@@ -774,7 +774,7 @@ dependencies:
       - output_types: conda
         packages:
           # Align nvcomp version with rapids-cmake
-          - libnvcomp-dev==5.3.0.16
+          - libnvcomp-dev==6.0.0.12
     specific:
       - output_types: [requirements, constraints, pyproject]
         matrices:
@@ -785,16 +785,16 @@ dependencies:
               cuda: "12.*"
               use_cuda_wheels: "true"
             packages:
-              - nvidia-libnvcomp-cu12==5.3.0.16
+              - nvidia-libnvcomp-cu12==6.0.0.12
           - matrix:
               cuda: "13.*"
               use_cuda_wheels: "true"
             packages:
-              - nvidia-libnvcomp-cu13==5.3.0.16
+              - nvidia-libnvcomp-cu13==6.0.0.12
           - matrix:
               use_cuda_wheels: "true"
             packages:
-              - nvidia-libnvcomp==5.3.0.16
+              - nvidia-libnvcomp==6.0.0.12
   rapids_build_skbuild:
     common:
       - output_types: [conda, requirements, constraints, pyproject]
@@ -828,10 +828,10 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-          - pyarrow>=19.0.0,<26.0.0
+          - pyarrow>=19.0.0
       - output_types: [requirements, constraints, pyproject]
         packages:
-          - pyarrow>=19.0.0,<26.0.0
+          - pyarrow>=19.0.0
   # 'cuda_version' intentionally does not contain fallback entries... we want
   # a loud error if an unsupported 'cuda' value is passed
   cuda_version:
@@ -1151,7 +1151,7 @@ dependencies:
             packages:
               - numba==0.60.0
               - *pandas
-              - numba-cuda==0.22.2
+              - numba-cuda==0.30.2
           - matrix: {dependencies: "latest"}
             packages:
               - *pandas

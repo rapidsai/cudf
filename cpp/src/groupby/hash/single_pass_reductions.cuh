@@ -247,7 +247,7 @@ struct grouped_reduction_fn {
       if (ctx.nullable) {
         null_mask =
           cudf::create_null_mask(ctx.num_groups, mask_state::ALL_VALID, stream, mr.get_output_mr());
-        auto const mask   = reinterpret_cast<bitmask_type*>(null_mask.data());
+        auto const mask   = null_mask.data();
         auto const values = cudf::detail::make_counting_transform_iterator(
           0,
           grouped_sum_overflow_fn<Source, true>{
