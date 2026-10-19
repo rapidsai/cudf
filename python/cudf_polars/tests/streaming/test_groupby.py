@@ -298,12 +298,7 @@ def test_groupby_single_partitions(df, streaming_engine_factory, op, keys):
 def test_groupby_agg(df, streaming_engine, op, keys):
     agg = getattr(pl.col("x"), op)()
     q = df.group_by(*keys).agg(agg)
-    assert_gpu_result_equal(
-        q,
-        engine=streaming_engine,
-        check_row_order=False,
-        check_exact=op not in {"std", "var"},
-    )
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
 def test_groupby_sort_by_first_last(streaming_engine_factory):
@@ -426,7 +421,7 @@ def test_groupby_sort_by_preserves_sorted_key_order(streaming_engine_factory):
 @pytest.mark.parametrize("agg", ["std", "var"])
 def test_groupby_std_var_ddof(df, engine, agg, ddof):
     q = df.group_by("y").agg(getattr(pl.col("x"), agg)(ddof=ddof))
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False, check_exact=False)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
 @pytest.mark.parametrize("fallback_mode", ["silent", "raise", "warn", "foo"])
