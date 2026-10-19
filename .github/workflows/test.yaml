@@ -366,6 +366,7 @@ jobs:
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
+      container-options: "--cap-add CAP_SYS_PTRACE"
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: >-
