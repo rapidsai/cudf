@@ -33,8 +33,7 @@ rapids-pip-retry install \
 PLUGIN_DIR="$(realpath ci)"
 CONFIGS=(
   "baseline|"
-  "warmup|GB300_PLUGIN_MODE=warmup"
-  "sync-before-first-read|GB300_PLUGIN_MODE=sync-before-first-read"
+  "files-as-bytes|GB300_PLUGIN_MODE=files-as-bytes"
 )
 
 SUMMARY=()
@@ -42,7 +41,7 @@ pushd python/pylibcudf/tests > /dev/null
 for config in "${CONFIGS[@]}"; do
   label="${config%%|*}"
   read -r -a envs <<< "${config#*|}"
-  for attempt in 1 2 3 4; do
+  for attempt in 1 2 3 4 5 6; do
     set +e
     env PYTHONPATH="${PLUGIN_DIR}" "${envs[@]}" timeout 15m python -m pytest -p gb300_plugin -p no:cacheprovider \
       --numprocesses=8 --dist=worksteal -q . > "${WORK}/${label}-${attempt}.log" 2>&1

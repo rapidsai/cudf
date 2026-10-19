@@ -22,8 +22,22 @@ def _read_tiny_snappy_parquet():
     assert err == runtime.cudaError_t.cudaSuccess
 
 
+class _FileBytesSourceInfo(plc.io.SourceInfo):
+    def __init__(self, sources):
+        if sources and all(
+            isinstance(s, (str, os.PathLike))
+            and not plc.io.SourceInfo._is_remote_uri(s)
+            for s in sources
+        ):
+            sources = [open(s, "rb").read() for s in sources]
+        self._keepalive = sources
+        super().__init__(sources)
+
+
 def pytest_configure(config):
-    if MODE == "warmup":
+    if MODE == "files-as-bytes":
+        plc.io.SourceInfo = _FileBytesSourceInfo
+    elif MODE == "warmup":
         _read_tiny_snappy_parquet()
     elif MODE == "sync-before-first-read":
         original = plc.io.parquet.read_parquet
