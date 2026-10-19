@@ -496,10 +496,10 @@ class streaming_groupby {
    *
    * @param key_indices Indices of columns in the data table that serve as groupby keys
    * @param requests The aggregations to perform and which columns to aggregate
-   * @param max_distinct_keys Upper bound on distinct key combinations. The hash set and
-   *        companion vectors are sized to this bound. Aggregate state grows with observed
-   *        groups and uses bounded partials based on batch size. Cumulative input rows are
-   *        not bounded.
+   * @param max_distinct_keys Upper bound on distinct key combinations. The hash set is sized to
+   *        approximately twice this bound and companion vectors to this bound. Aggregate state
+   *        grows with observed groups and uses bounded partials based on batch size. Cumulative
+   *        input rows are not bounded.
    * @param null_handling Indicates whether rows in keys that contain NULL values should be included
    * @param mr Device memory resource used to allocate the persistent hash table
    *

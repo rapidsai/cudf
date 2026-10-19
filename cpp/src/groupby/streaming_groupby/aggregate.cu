@@ -67,7 +67,7 @@ void streaming_groupby::impl::do_aggregate(table_view const& data, cuda::stream_
   } catch (...) {
     if (insertion_started) { _invalidated = true; }
     // Do not let partially enqueued writes escape tracking before a subsequent resize/read.
-    static_cast<void>(cudaStreamSynchronize(stream.get()));
+    synchronize_on_error(stream);
     throw;
   }
 }

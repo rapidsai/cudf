@@ -17,6 +17,7 @@
 #include <cooperative_groups/reduce.h>
 #include <cuda/std/bit>
 #include <cuda/std/cmath>
+#include <cuda/std/concepts>
 #include <cuda/std/type_traits>
 
 #include <cstdint>
@@ -24,13 +25,12 @@
 namespace cudf::groupby {
 namespace {
 
-namespace hash           = detail::hash;
-namespace cg             = cooperative_groups;
-constexpr int block_size = 256;
+namespace hash = detail::hash;
+namespace cg   = cooperative_groups;
 
 template <typename T, aggregation::Kind K>
 constexpr bool is_warp_aggregation_supported = [] {
-  if constexpr (cuda::std::is_same_v<T, numeric::decimal128> && K == aggregation::SUM) {
+  if constexpr (cuda::std::same_as<T, numeric::decimal128> && K == aggregation::SUM) {
     return true;  // This kind has a dedicated existing 128-bit atomic addition.
   }
   if constexpr (hash::is_reduction_supported<T>(K) &&
@@ -86,8 +86,8 @@ struct int128_sum {
 template <typename T, typename Op>
 __device__ T reduce_group_value(cg::coalesced_group const& thread_group, T value, Op operation)
 {
-  if constexpr (cuda::std::is_same_v<T, __int128_t>) {
-    static_assert(cuda::std::is_same_v<Op, cudf::DeviceSum>);
+  if constexpr (cuda::std::same_as<T, __int128_t>) {
+    static_assert(cuda::std::same_as<Op, cudf::DeviceSum>);
     auto const bits = static_cast<__uint128_t>(value);
     auto const packed =
       int128_words{static_cast<uint64_t>(bits), static_cast<uint64_t>(bits >> 64)};
@@ -113,8 +113,8 @@ __device__ void aggregate_value(hash::rep_type_t<T> input,
     if constexpr (K == aggregation::SUM_OF_SQUARES) { value *= value; }
     auto combine = thread_group.size() > 1;
     if constexpr (cuda::std::is_floating_point_v<Result> &&
-                  (cuda::std::is_same_v<Op, cudf::DeviceMin> ||
-                   cuda::std::is_same_v<Op, cudf::DeviceMax>)) {
+                  (cuda::std::same_as<Op, cudf::DeviceMin> ||
+                   cuda::std::same_as<Op, cudf::DeviceMax>)) {
       if (combine) {
         // Existing MIN/MAX are order-sensitive for NaNs and signed-zero ties. Keep
         // every original atomic in those thread groups.
@@ -128,8 +128,8 @@ __device__ void aggregate_value(hash::rep_type_t<T> input,
         cudf::set_bit(column.validity, target);
       }
       auto* const output = static_cast<Result*>(column.output);
-      if constexpr (cuda::std::is_same_v<Result, __int128_t>) {
-        static_assert(cuda::std::is_same_v<Op, cudf::DeviceSum>);
+      if constexpr (cuda::std::same_as<Result, __int128_t>) {
+        static_assert(cuda::std::same_as<Op, cudf::DeviceSum>);
         cudf::detail::atomic_add(output + target, combined);
       } else {
         cudf::detail::genericAtomicOperation(output + target, combined, Op{});
@@ -151,7 +151,7 @@ __device__ void aggregate_count(cg::coalesced_group const& thread_group,
 // Equal targets can be noncontiguous within a warp; labeled_partition groups lanes with the same
 // target. All requested aggregations share the input load and valid-row partition.
 template <typename T>
-CUDF_KERNEL void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(partial_aggregation_block_size)
   aggregate_warp_kernel(size_type num_rows,
                         size_type const* targets,
                         detail::value_accessor<hash::rep_type_t<T>> values,
@@ -193,16 +193,24 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
 struct aggregation_dispatch {
   template <typename T>
-    requires(!cudf::is_nested<T>() && !cuda::std::is_same_v<T, dictionary32>)
+    requires(!cudf::is_nested<T>() && !cuda::std::same_as<T, dictionary32>)
   void operator()(column_view const& input,
                   aggregation_columns outputs,
                   device_span<size_type const> targets,
                   cuda::stream_ref stream,
                   cudf::memory_resources mr) const
   {
+    CUDF_EXPECTS(
+      (!outputs.sum.output || is_warp_aggregation_supported<T, aggregation::SUM>) &&
+        (!outputs.min.output || is_warp_aggregation_supported<T, aggregation::MIN>) &&
+        (!outputs.max.output || is_warp_aggregation_supported<T, aggregation::MAX>) &&
+        (!outputs.product.output || is_warp_aggregation_supported<T, aggregation::PRODUCT>) &&
+        (!outputs.sum_of_squares.output ||
+         is_warp_aggregation_supported<T, aggregation::SUM_OF_SQUARES>),
+      "Unsupported type and aggregation kind for warp aggregation");
     auto const values   = column_device_view::create(input, stream, mr.get_temporary_mr());
     auto const num_rows = static_cast<size_type>(targets.size());
-    cudf::detail::grid_1d const grid{num_rows, block_size};
+    cudf::detail::grid_1d const grid{num_rows, partial_aggregation_block_size};
     aggregate_warp_kernel<T><<<grid.num_blocks, grid.num_threads_per_block, 0, stream.get()>>>(
       num_rows,
       targets.data(),
@@ -213,7 +221,7 @@ struct aggregation_dispatch {
   }
 
   template <typename T>
-    requires(cudf::is_nested<T>() || cuda::std::is_same_v<T, dictionary32>)
+    requires(cudf::is_nested<T>() || cuda::std::same_as<T, dictionary32>)
   void operator()(column_view const&,
                   aggregation_columns,
                   device_span<size_type const>,

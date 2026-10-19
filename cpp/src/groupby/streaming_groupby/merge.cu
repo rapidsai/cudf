@@ -107,7 +107,7 @@ void streaming_groupby::impl::do_merge(impl const& other, cuda::stream_ref strea
   } catch (...) {
     if (insertion_started) { _invalidated = true; }
     // Source reads must finish before unlocking source bookkeeping even on failure.
-    static_cast<void>(cudaStreamSynchronize(stream.get()));
+    synchronize_on_error(stream);
     throw;
   }
 }

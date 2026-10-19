@@ -14,6 +14,9 @@
 
 namespace cudf::groupby {
 
+/// Thread-block size shared by partial assignment and warp aggregation.
+inline constexpr int partial_aggregation_block_size = 256;
+
 /// Combines row values with equal targets within each warp.
 void compute_warp_aggregates(table_view const& values,
                              host_span<aggregation::Kind const> kinds,

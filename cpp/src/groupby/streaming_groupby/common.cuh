@@ -6,6 +6,7 @@
 #pragma once
 
 #include "groupby/hash/hash_csr_kernels.cuh"
+#include "warp_aggregate.hpp"
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
@@ -57,7 +58,15 @@ class insert_order_event {
   cudaEvent_t _event{};
 };
 
-inline constexpr int partial_aggregation_block_size = 256;
+/// Finish untracked work before releasing bookkeeping locks, preserving the original exception.
+inline void synchronize_on_error(cuda::stream_ref stream) noexcept
+{
+  try {
+    stream.sync();
+  } catch (...) {
+    // The caller is already handling an error; a synchronization failure must not replace it.
+  }
+}
 
 // Dense IDs within a compacted batch are contiguous and follow its gathered row order.
 // Keep their base once per comparator, so each group's companion entry needs only a batch ID.
