@@ -188,23 +188,6 @@ def test_orderby_nulls_raises_computeerror(engine: pl.GPUEngine):
             q.collect(engine=engine)
 
 
-@pytest.mark.xfail(reason="polars raises now")
-def test_rolling_nested_raises(in_memory_engine):
-    q = (
-        pl.LazyFrame(
-            {
-                "orderby": [1, 2, 3, 4, 10],
-                "values": [6, 7, 8, 9, 10],
-            }
-        )
-        .rolling("orderby", period="3i", closed="left")
-        .agg(pl.col("values").rolling("orderby", period="2i").sum())
-    )
-    with pytest.raises(pl.exceptions.InvalidOperationError):
-        q.collect(engine="in-memory")
-    assert_ir_translation_raises(q, in_memory_engine, NotImplementedError)
-
-
 def test_unsupported_agg(in_memory_engine):
     q = (
         pl.LazyFrame(
