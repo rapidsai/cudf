@@ -204,7 +204,7 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
 {
   auto const num_columns = input.size();
 
-  std::vector<cuda::device_buffer<std::byte>> null_masks;
+  std::vector<cuda::device_buffer<cudf::bitmask_type>> null_masks;
   null_masks.reserve(num_columns);
 
   auto d_chars_sizes = cudf::detail::make_zeroed_device_uvector_async<int64_t>(
@@ -227,7 +227,7 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
       cudf::detail::grid_1d{static_cast<thread_index_type>(string_count), block_size};
     strings_validity_and_size_kernel<block_size>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.get()>>>(
-        reinterpret_cast<bitmask_type*>(null_masks.back().data()),
+        null_masks.back().data(),
         string_pairs,
         string_count,
         d_valid_counts.data() + idx,

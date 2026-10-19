@@ -91,7 +91,7 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
                                             std::unique_ptr<column> offsets_column,
                                             rmm::device_buffer&& chars_buffer,
                                             size_type null_count,
-                                            cuda::device_buffer<std::byte>&& null_mask)
+                                            cuda::device_buffer<cudf::bitmask_type>&& null_mask)
 {
   CUDF_FUNC_RANGE();
 
@@ -114,7 +114,7 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
 std::unique_ptr<column> make_strings_column(size_type num_strings,
                                             rmm::device_uvector<size_type>&& offsets,
                                             rmm::device_uvector<char>&& chars,
-                                            cuda::device_buffer<std::byte>&& null_mask,
+                                            cuda::device_buffer<cudf::bitmask_type>&& null_mask,
                                             size_type null_count)
 {
   CUDF_FUNC_RANGE();
