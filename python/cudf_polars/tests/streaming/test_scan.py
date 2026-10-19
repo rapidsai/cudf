@@ -408,7 +408,7 @@ def test_scan_join(engine: pl.GPUEngine, tmp_path: Path) -> None:
     left_q = pl.scan_parquet(tmp_path / "left.parquet")
     right_q = pl.scan_parquet(tmp_path / "right.parquet")
     q = left_q.join(right_q, on="a", how="inner")
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_scan_union(engine: pl.GPUEngine, tmp_path: Path) -> None:
