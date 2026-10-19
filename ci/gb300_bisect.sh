@@ -66,7 +66,7 @@ exec gdb -q -batch -nx \\
 WRAPPER
 chmod +x "${GDB_PYTHON}"
 
-for attempt in 1 2 3 4; do
+for attempt in $(seq 10); do
   rm -f "${WORK}"/gdb-*.log
   set +e
   timeout 25m python -m pytest -p no:cacheprovider --tx "8*popen//python=${GDB_PYTHON}" \
