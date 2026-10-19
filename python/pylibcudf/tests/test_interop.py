@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import decimal
@@ -244,3 +244,30 @@ def test_arrow_object_lifetime():
     except ValueError:
         # Ignore the exception. A failure in this test is a seg fault
         pass
+
+
+@pytest.mark.parametrize(
+    "index_type, num_keys, expected_index_type",
+    [
+        ("uint8", 128, plc.TypeId.INT8),
+        ("uint8", 129, plc.TypeId.INT16),
+        ("uint16", 32768, plc.TypeId.INT16),
+        ("uint16", 32769, plc.TypeId.INT32),
+        ("uint32", 4, plc.TypeId.INT32),
+    ],
+)
+def test_from_arrow_dictionary_unsigned_indices(
+    index_type, num_keys, expected_index_type
+):
+    keys = pa.array([str(i) for i in range(num_keys)])
+    indices = pa.array([num_keys - 1, None, 0], type=getattr(pa, index_type)())
+    expected = pa.DictionaryArray.from_arrays(indices, keys)
+
+    result = plc.Table.from_arrow(pa.table({"a": expected})).columns()[0]
+
+    assert result.type().id() == plc.TypeId.DICTIONARY32
+    assert result.children()[0].type().id() == expected_index_type
+    assert (
+        result.to_arrow().dictionary_decode().to_pylist()
+        == expected.dictionary_decode().to_pylist()
+    )
