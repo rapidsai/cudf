@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
+from unittest.mock import Mock
 
 import pytest
 
@@ -18,6 +20,10 @@ from cudf_polars.engine.core import all_gather_host_data
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.engine.spmd import SPMDEngine
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
+from cudf_polars.streaming.actor_graph.collectives.overlap import (
+    OverlapInput,
+    RowCountOverlapPolicy,
+)
 from cudf_polars.streaming.actor_graph.core import evaluate_logical_plan
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
@@ -42,6 +48,22 @@ def engine(streaming_engine_factory):
     return streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=2, fallback_mode="warn"),
     )
+
+
+def test_multirank_overlap_input_requires_preparation() -> None:
+    async def run() -> None:
+        rolling_input = OverlapInput(
+            Mock(),
+            Mock(nranks=2),
+            Mock(),
+            RowCountOverlapPolicy(1, 1),
+            duplicated=False,
+            collective_id=0,
+        )
+        with pytest.raises(RuntimeError, match="async context manager"):
+            await anext(aiter(rolling_input))
+
+    asyncio.run(run())
 
 
 @pytest.mark.skipif(

@@ -130,13 +130,13 @@ class _OverlapPolicy[BufferedChunkT: BufferedChunk]:
     """Base policy for finding the rows needed by a rolling cursor."""
 
     def observe(self, chunk: BufferedChunkT) -> None:
-        del chunk
+        pass
 
     def close(self) -> None:
         pass
 
     def validate_cursor(self, cursor: BufferedChunkT) -> None:
-        del cursor
+        pass
 
     def evict_history(
         self,
@@ -760,6 +760,10 @@ class OverlapInput[BufferedChunkT: BufferedChunk]:
 
     async def _chunks(self) -> AsyncIterator[StagedChunk[BufferedChunkT]]:
         """Prepare owned and ghost chunks in logical row order."""
+        if self.multirank and self._prepared is None:
+            raise RuntimeError(
+                "Multi-rank overlap input must be used as an async context manager"
+            )
         row_offset = 0
         sources = self._prepared.sources if self._prepared else ()
         split = bisect_left(sources, self.comm.rank)
