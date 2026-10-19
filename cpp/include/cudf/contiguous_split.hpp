@@ -71,6 +71,11 @@ namespace CUDF_EXPORT cudf {
  * @return The set of requested views of `input` indicated by the `splits` and the viewed memory
  * buffer
  */
+std::vector<packed_table> contiguous_split(
+  cudf::table_view const& input,
+  std::span<size_type const> splits,
+  cuda::stream_ref stream           = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @deprecated Use the std::span overload instead.
