@@ -46,7 +46,7 @@ std::vector<cudf::detail::fused_for_segment> copy_descriptors_to_host(
   CUDF_CUDA_TRY(cudaMemcpyAsync(result.data(),
                                 input.wire_data->data(),
                                 result.size() * sizeof(result.front()),
-                                cudaMemcpyDeviceToHost,
+                                cudaMemcpyDefault,
                                 stream.get()));
   CUDF_CUDA_TRY(cudaStreamSynchronize(stream.get()));
   return result;

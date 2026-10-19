@@ -430,7 +430,9 @@ struct tile_encoding {
   detail::fused_for_layout layout;  ///< Physical representation written to the descriptor
 
   [[nodiscard]] __device__ bool is_bitpacked() const
-  { return layout == detail::fused_for_layout::bitpacked; }
+  {
+    return layout == detail::fused_for_layout::bitpacked;
+  }
 };
 
 /**
@@ -455,7 +457,7 @@ __device__ std::uint8_t byte_aligned_width(T minimum, T maximum)
 {
   using unsigned_type = cuda::std::make_unsigned_t<T>;
   auto const range    = static_cast<unsigned_type>(static_cast<unsigned_type>(maximum) -
-                                                   static_cast<unsigned_type>(minimum));
+                                                static_cast<unsigned_type>(minimum));
   if (range <= cuda::std::numeric_limits<std::uint8_t>::max()) { return sizeof(std::uint8_t); }
   if constexpr (sizeof(T) > sizeof(std::uint16_t)) {
     if (range <= cuda::std::numeric_limits<std::uint16_t>::max()) { return sizeof(std::uint16_t); }
@@ -474,7 +476,7 @@ __device__ std::uint8_t bit_width(T minimum, T maximum)
 {
   using unsigned_type = cuda::std::make_unsigned_t<T>;
   auto const range    = static_cast<unsigned_type>(static_cast<unsigned_type>(maximum) -
-                                                   static_cast<unsigned_type>(minimum));
+                                                static_cast<unsigned_type>(minimum));
   if (range == 0) { return constant_bit_width; }
   if constexpr (sizeof(T) <= sizeof(unsigned int)) {
     return static_cast<std::uint8_t>(cuda::std::numeric_limits<unsigned int>::digits -
@@ -790,12 +792,12 @@ __device__ void copy_raw_tile(std::uint8_t* wire_buffer,
     wire_offset              = reserve_wire_bytes(wire_offsets, destination->dst_buf_index, bytes);
     constexpr auto raw_width = static_cast<std::uint8_t>(sizeof(std::uint8_t));
     segments[segment_index]  = detail::fused_for_segment{wire_offset,
-                                                         destination->dst_offset,
-                                                         0,
-                                                         static_cast<std::uint32_t>(bytes),
-                                                         raw_width,
-                                                         raw_width,
-                                                         detail::fused_for_layout::byte_aligned};
+                                                        destination->dst_offset,
+                                                        0,
+                                                        static_cast<std::uint32_t>(bytes),
+                                                        raw_width,
+                                                        raw_width,
+                                                        detail::fused_for_layout::byte_aligned};
   }
   __syncthreads();
 
@@ -884,7 +886,7 @@ __device__ bool is_valid_segment(detail::fused_for_segment const& segment,
   auto const logical_width = static_cast<std::size_t>(segment.logical_width);
   auto const wire_width    = static_cast<std::size_t>(segment.wire_width);
   auto const known_layout  = segment.layout == detail::fused_for_layout::byte_aligned ||
-                             segment.layout == detail::fused_for_layout::bitpacked;
+                            segment.layout == detail::fused_for_layout::bitpacked;
   if (!known_layout || segment.reserved != 0 || !is_supported_width(logical_width)) {
     return false;
   }
@@ -1252,7 +1254,9 @@ struct buf_info_functor {
   std::pair<src_buf_info*, size_type> operator()(
     column_view const&, src_buf_info*, int, int, int, cuda::stream_ref)
     requires(not cudf::is_fixed_width<T>())
-  { CUDF_FAIL("Unsupported type"); }
+  {
+    CUDF_FAIL("Unsupported type");
+  }
 
  private:
   std::pair<src_buf_info*, size_type> add_null_buffer(column_view const& col,
@@ -1356,13 +1360,13 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::list_view
   // info for the offsets buffer
   auto offset_col = current;
   *current        = src_buf_info(type_id::INT32,
-                                 // note: offsets can be null in the case where the lists column
-                                 // has been created with empty_like().
-                                 lcv.offsets(),
-                                 offset_stack_pos,
-                                 parent_offset_index,
-                                 false,
-                                 col.offset());
+                          // note: offsets can be null in the case where the lists column
+                          // has been created with empty_like().
+                          lcv.offsets(),
+                          offset_stack_pos,
+                          parent_offset_index,
+                          false,
+                          col.offset());
   current++;
   offset_stack_pos += offset_depth;
 
@@ -1727,17 +1731,23 @@ struct size_of_helper {
   template <typename T>
   constexpr int __device__ operator()() const
     requires(!is_fixed_width<T>() && !std::is_same_v<T, cudf::string_view>)
-  { return 0; }
+  {
+    return 0;
+  }
 
   template <typename T>
   constexpr int __device__ operator()() const
     requires(!is_fixed_width<T>() && std::is_same_v<T, cudf::string_view>)
-  { return sizeof(cudf::device_storage_type_t<int8_t>); }
+  {
+    return sizeof(cudf::device_storage_type_t<int8_t>);
+  }
 
   template <typename T>
   constexpr int __device__ operator()() const noexcept
     requires(is_fixed_width<T>())
-  { return sizeof(cudf::device_storage_type_t<T>); }
+  {
+    return sizeof(cudf::device_storage_type_t<T>);
+  }
 };
 
 /**
@@ -2624,7 +2634,9 @@ struct contiguous_split_state {
   bool has_next() const { return !is_empty && chunk_iter_state->has_more_copies(); }
 
   std::size_t get_total_contiguous_size() const
-  { return is_empty ? 0 : chunk_iter_state->total_size; }
+  {
+    return is_empty ? 0 : chunk_iter_state->total_size;
+  }
 
   [[nodiscard]] cuda::stream_ref get_stream() const { return stream; }
 
@@ -3536,21 +3548,29 @@ chunked_pack::chunked_pack(cudf::table_view const& input,
 chunked_pack::~chunked_pack() = default;
 
 std::size_t chunked_pack::get_total_contiguous_size() const
-{ return state->get_total_contiguous_size(); }
+{
+  return state->get_total_contiguous_size();
+}
 
 bool chunked_pack::has_next() const { return state->has_next(); }
 
 std::size_t chunked_pack::next(cudf::device_span<uint8_t> const& user_buffer)
-{ return state->contiguous_split_chunk(user_buffer); }
+{
+  return state->contiguous_split_chunk(user_buffer);
+}
 
 std::unique_ptr<std::vector<uint8_t>> chunked_pack::build_metadata() const
-{ return state->build_packed_column_metadata(); }
+{
+  return state->build_packed_column_metadata();
+}
 
 std::unique_ptr<chunked_pack> chunked_pack::create(cudf::table_view const& input,
                                                    std::size_t user_buffer_size,
                                                    cuda::stream_ref stream,
                                                    rmm::device_async_resource_ref temp_mr)
-{ return std::make_unique<chunked_pack>(input, user_buffer_size, stream, temp_mr); }
+{
+  return std::make_unique<chunked_pack>(input, user_buffer_size, stream, temp_mr);
+}
 
 std::size_t packed_size(cudf::table_view const& input,
                         cuda::stream_ref stream,

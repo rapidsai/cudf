@@ -51,9 +51,13 @@ struct alignas(8) fused_for_segment {
   std::uint8_t reserved{};       ///< Reserved; must be zero
 
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_bitpacked() const noexcept
-  { return layout == fused_for_layout::bitpacked; }
+  {
+    return layout == fused_for_layout::bitpacked;
+  }
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_encoded() const noexcept
-  { return is_bitpacked() || wire_width < logical_width; }
+  {
+    return is_bitpacked() || wire_width < logical_width;
+  }
 };
 
 /**
