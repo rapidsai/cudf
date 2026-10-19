@@ -45,7 +45,7 @@ import cudf_polars.quent
 import cudf_polars.quent._runtime
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.containers.dataframe import categoricals_to_physical
-from cudf_polars.engine import persisted_result, rank_local_store
+from cudf_polars.engine import metadata_cache, persisted_result, rank_local_store
 from cudf_polars.engine.core import (
     ClusterInfo,
     StreamingEngine,
@@ -291,6 +291,9 @@ def evaluate_pipeline_spmd_mode(
             config_options,
             quent_query_worker_state=quent_query_worker_state,
             query_id=query_id,
+            metadata_cache=metadata_cache.resolve_cache(
+                spmd_context.store_uid, config_options.parquet_options, ir
+            ),
         )
     return df, metadata if collect_metadata else None
 
@@ -722,6 +725,7 @@ class SPMDEngine(StreamingEngine):
                         quent_worker_runtime=self._quent_worker_runtime,
                         context=self._ctx,
                         py_executor=self._py_executor,
+                        store_uid=self._store_uid,
                     ),
                 },
                 engine_options={
@@ -1064,6 +1068,7 @@ class SPMDEngine(StreamingEngine):
                     worker_id=self._quent_worker_id,
                     quent_controller_runtime=self._quent_runtime,
                     quent_worker_runtime=self._quent_worker_runtime,
+                    store_uid=self._store_uid,
                 ),
             },
             engine_options={
@@ -1219,6 +1224,12 @@ class SPMDEngine(StreamingEngine):
         """
         if self._ctx is None:
             return  # already shut down
+
+        # Free persisted partitions before _cleanup_ctx tears down the Context.
+        self._drop_persisted()
+        # Unlike persisted partitions, cached parquet metadata is host-only
+        # and outlives a Context reset; only close it here, at engine shutdown.
+        metadata_cache.close_cache(self._store_uid)
 
         # The exit stack runs collective/persisted cleanup first, then the
         # executor, Context, memory resource, and monitor callbacks.

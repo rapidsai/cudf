@@ -26,7 +26,7 @@ from rapidsmpf.streaming.core.context import Context
 
 import cudf_polars.quent
 import cudf_polars.quent._runtime
-from cudf_polars.engine import persisted_result, rank_local_store
+from cudf_polars.engine import metadata_cache, persisted_result, rank_local_store
 from cudf_polars.engine.core import (
     ClusterInfo,
     StreamingEngine,
@@ -494,6 +494,9 @@ class RankActor:
         try:
             # Drop persisted partitions before tearing down the Context.
             rank_local_store.close_all()
+            # Unlike persisted partitions, cached parquet metadata is host-only
+            # and outlives a Context reset; only close it here, at shutdown.
+            metadata_cache.close_all()
             if self._ctx is not None:
                 self._ctx.shutdown()
         finally:
@@ -634,6 +637,9 @@ class RankActor:
             config_options,
             quent_query_worker_state=quent_query_worker_state,
             query_id=query_id,
+            metadata_cache=metadata_cache.resolve_cache(
+                self._worker_id.hex, config_options.parquet_options, ir
+            ),
         )
         gpu_df = drop_if_replicated(gpu_df, self._comm.rank, metadata)
         return (
