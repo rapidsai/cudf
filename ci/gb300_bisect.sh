@@ -30,12 +30,29 @@ rapids-pip-retry install \
     "$(find "${WORK}/wheels" -name "libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl")" \
     "$(find "${WORK}/wheels" -name "pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl")[test]"
 
-NODEIDS="$(realpath ci/gb300_gw6_nodeids.txt)"
-mkdir -p "${WORK}/src"
-git archive 816f682244c080b438792eec6bc8eda6c3b0583a python/pylibcudf/tests | tar -x -C "${WORK}/src"
+REPRO="$(realpath ci/gb300_repro.py)"
+SUMMARY=()
+for mode in none rmm-async-destroy rmm-async-keepalive raw-hw-pool-destroy raw-plain-pool-destroy; do
+  crashed=0
+  for round in 1 2 3; do
+    pids=()
+    for i in $(seq 8); do
+      timeout 5m python -X faulthandler "${REPRO}" "${mode}" > "${WORK}/${mode}-${round}-${i}.log" 2>&1 &
+      pids+=($!)
+    done
+    for pid in "${pids[@]}"; do wait "${pid}" || true; done
+    for i in $(seq 8); do
+      if ! grep -q "^OK ${mode}$" "${WORK}/${mode}-${round}-${i}.log"; then
+        crashed=$((crashed + 1))
+        if [[ ${crashed} -eq 1 ]]; then
+          rapids-logger "${mode}: first failing process output"
+          grep -v -E "^\s*$" "${WORK}/${mode}-${round}-${i}.log" | head -n 30 || true
+        fi
+      fi
+    done
+  done
+  SUMMARY+=("${mode} failed_processes=${crashed}/24")
+done
 
-DDMIN="$(realpath ci/gb300_ddmin.py)"
-pushd "${WORK}/src/python/pylibcudf/tests" > /dev/null
-rapids-logger "Delta-debugging the gw6 test sequence"
-python "${DDMIN}" "${NODEIDS}"
-popd > /dev/null
+rapids-logger "GB300 HW-decompress pool repro summary"
+printf '%s\n' "${SUMMARY[@]}"

@@ -7,54 +7,59 @@ import tempfile
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pylibcudf as plc
-from rmm.pylibrmm.stream import Stream
+import rmm
+from cuda.bindings import runtime
 
-writer, stream_kind, iterations = sys.argv[1], sys.argv[2], int(sys.argv[3])
+mode = sys.argv[1]
+keepalive = []
+
+
+def check(result):
+    err = result[0]
+    assert err == runtime.cudaError_t.cudaSuccess, err
+    return result[1:]
+
+
+def raw_pool_alloc_destroy(usage):
+    props = runtime.cudaMemPoolProps()
+    props.allocType = runtime.cudaMemAllocationType.cudaMemAllocationTypePinned
+    props.location.type = runtime.cudaMemLocationType.cudaMemLocationTypeDevice
+    props.location.id = 0
+    props.usage = usage
+    (pool,) = check(runtime.cudaMemPoolCreate(props))
+    (ptr,) = check(runtime.cudaMallocFromPoolAsync(1 << 20, pool, 0))
+    check(runtime.cudaFreeAsync(ptr, 0))
+    check(runtime.cudaStreamSynchronize(0))
+    check(runtime.cudaMemPoolDestroy(pool))
+
+
+def rmm_async(keep):
+    previous = rmm.mr.get_current_device_resource()
+    mr = rmm.mr.CudaAsyncMemoryResource()
+    rmm.mr.set_current_device_resource(mr)
+    table = plc.Table.from_arrow(pa.Table.from_pydict({"a": [1]}))
+    rmm.mr.set_current_device_resource(previous)
+    del table
+    if keep:
+        keepalive.append(mr)
+    del mr
+
+
+if mode == "rmm-async-destroy":
+    rmm_async(keep=False)
+elif mode == "rmm-async-keepalive":
+    rmm_async(keep=True)
+elif mode == "raw-hw-pool-destroy":
+    raw_pool_alloc_destroy(runtime.cudaMemPoolCreateUsageHwDecompress)
+elif mode == "raw-plain-pool-destroy":
+    raw_pool_alloc_destroy(0)
 
 tmp = tempfile.mkdtemp()
-read_path = os.path.join(tmp, "read.parquet")
-pq.write_table(pa.table({"a": [1, 2, 3], "b": ["x", "y", "z"]}), read_path)
-table = plc.Table.from_arrow(
-    pa.table({"a": [1.0, 2.0, None], "b": [True, None, False]})
-)
-persistent_stream = Stream()
-
-
-def get_stream():
-    if stream_kind == "none":
-        return None
-    if stream_kind == "persistent":
-        return persistent_stream
-    return Stream()
-
-
-for _ in range(iterations):
-    stream = get_stream()
-    if writer == "orc":
-        options = (
-            plc.io.orc.OrcWriterOptions.builder(
-                plc.io.SinkInfo([os.path.join(tmp, "out.orc")]), table
-            )
-            .compression(plc.io.types.CompressionType.SNAPPY)
-            .build()
-        )
-        plc.io.orc.write_orc(options, stream)
-    elif writer == "parquet":
-        options = (
-            plc.io.parquet.ParquetWriterOptions.builder(
-                plc.io.SinkInfo([os.path.join(tmp, "out.parquet")]), table
-            )
-            .compression(plc.io.types.CompressionType.SNAPPY)
-            .build()
-        )
-        plc.io.parquet.write_parquet(options, stream)
-    if stream is not None:
-        stream.synchronize()
-    del stream
-
+path = os.path.join(tmp, "a.parquet")
+pq.write_table(pa.table({"a": [1, 2, 3], "b": ["x", "y", "z"]}), path)
+for _ in range(5):
     options = plc.io.parquet.ParquetReaderOptions.builder(
-        plc.io.SourceInfo([read_path])
+        plc.io.SourceInfo([path])
     ).build()
     plc.io.parquet.read_parquet(options)
-
-print(f"OK {writer} {stream_kind} {iterations}")
+print(f"OK {mode}")
