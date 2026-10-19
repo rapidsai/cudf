@@ -40,20 +40,20 @@ def sql(frames: dict[str, pl.LazyFrame], query: str) -> pl.LazyFrame:
     ],
 )
 def test_sum_is_null_on_empty(engine: pl.GPUEngine, frames, query):
-    assert_gpu_result_equal(sql(frames, query), engine=engine, check_row_order=False)
+    assert_gpu_result_equal(sql(frames, query), engine=engine)
 
 
 def test_scalar_subquery_is_broadcast(engine: pl.GPUEngine, frames):
     q = sql(
         frames,
-        "SELECT g FROM t GROUP BY g HAVING SUM(g) > (SELECT AVG(w) / 10 FROM u)",
+        "SELECT g FROM t GROUP BY g HAVING SUM(g) > (SELECT AVG(w) / 10 FROM u) ORDER BY g",
     )
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_left_join_on_constant_key(engine: pl.GPUEngine, frames):
-    q = sql(frames, "SELECT g, k FROM t LEFT JOIN u ON w > 15")
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    q = sql(frames, "SELECT g, k FROM t LEFT JOIN u ON w > 15 ORDER BY g, k")
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_left_join_with_hidden_predicate_raises(engine: pl.GPUEngine, frames):

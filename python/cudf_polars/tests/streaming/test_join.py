@@ -517,11 +517,7 @@ def test_join_maintain_order_fallback_streaming(
         UserWarning,
         match=r"Join\(maintain_order=.*\) not supported for multiple partitions\.",
     ):
-        assert_gpu_result_equal(
-            q,
-            engine=streaming_engine,
-            check_row_order=maintain_order in {"left_right", "right_left"},
-        )
+        assert_gpu_result_equal(q, engine=streaming_engine)
 
 
 # ---------------------------------------------------------------------------
