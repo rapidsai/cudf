@@ -21,6 +21,9 @@ export CUDF_EXTRA_DEPENDENCY_MATRIX="polars_compat_version=${POLARS_COMPAT_VERSI
 
 source ./ci/test_python_common.sh test_python_other test_cudf_polars_compat
 
+# UCX 1.22 segfaults in cuMemGetHandleForAddressRange (dmabuf query) on arm64 L4 with driver 595; skip that query.
+export UCX_CUDA_COPY_DMABUF=no
+
 rapids-logger "Check GPU usage"
 nvidia-smi
 rapids-print-env
