@@ -312,7 +312,7 @@ struct pack_region_info {
   std::vector<size_type> column_path;
   pack_region_kind kind;           ///< Physical role of the region
   type_id type;                    ///< Logical/native type used to configure the codec
-  std::size_t uncompressed_bytes;  ///< Bytes presented to the selected codec
+  std::size_t uncompressed_bytes;  ///< Size in the uncompressed payload, including padding
 };
 
 /**
@@ -418,7 +418,14 @@ class pack_plan_builder {
 
   [[nodiscard]] std::span<pack_region> regions();              ///< @return Editable regions
   [[nodiscard]] std::span<pack_region const> regions() const;  ///< @return Read-only regions
-  [[nodiscard]] pack_plan build() &&;  ///< Consume the builder @return The configured plan
+  /**
+   * @brief Consume the builder.
+   *
+   * @throw std::invalid_argument if a region's codec is not a `pack_compression` value
+   *
+   * @return The configured plan
+   */
+  [[nodiscard]] pack_plan build() &&;
 
  private:
   struct impl;
@@ -464,8 +471,10 @@ pack_plan_builder make_pack_plan_builder(
  * partition produced by `cudf::contiguous_split()`. Each region initially inherits the codec in
  * `options`. Call `build()` directly to apply `options` to every region.
  *
+ * @throw std::invalid_argument if `input.metadata` or `input.gpu_data` is null
  * @throw std::invalid_argument if `input.metadata` does not describe the layout of `input.gpu_data`
  * @throw std::invalid_argument if `options.staging_buffer_bytes` is less than 1 MiB
+ * @throw cudf::logic_error if `input.metadata` is truncated or malformed
  *
  * @param input Existing ordinary, uncompressed packed columns
  * @param options Pack options; `options.compression` is each region's initial codec
@@ -491,7 +500,7 @@ pack_plan_builder make_pack_plan_builder(
  * `pack_compression::none` produces the exact uncompressed layout that `unpack_view()` accepts.
  *
  * @throw std::invalid_argument if `options.staging_buffer_bytes` is less than 1 MiB
- * @throw cudf::logic_error if an explicitly selected codec is disabled
+ * @throw std::invalid_argument if `options.compression` is not a `pack_compression` value
  *
  * @param input View of the table to pack
  * @param options Compression and codec options
@@ -574,7 +583,6 @@ table_view unpack_view(packed_data_view input);
  * A pageable host payload is first copied to temporary device memory.
  *
  * @throw cudf::logic_error if `input.metadata` or `input.payload` is truncated or malformed
- * @throw cudf::logic_error if a codec used by the payload is disabled
  *
  * @param input Packed metadata and payload
  * @param stream Stream used for the deep copy
@@ -595,7 +603,6 @@ std::unique_ptr<table> materialize(
  *
  * @throw std::out_of_range if an index is not in `[0, num_columns)`
  * @throw cudf::logic_error if `input.metadata` or `input.payload` is truncated or malformed
- * @throw cudf::logic_error if a codec used by the payload is disabled
  *
  * @param input Packed metadata and payload
  * @param column_indices Indices of the top-level columns to materialize, in output order

@@ -2029,7 +2029,7 @@ struct contiguous_split_state {
           : nullptr;
       regions.emplace_back(destination_info.dst_offset,
                            destination_info.buf_size,
-                           direct_source != nullptr ? source_bytes : destination_info.buf_size,
+                           source_bytes,
                            source.type,
                            region_kind(source),
                            paths[destination_info.src_buf_index],
@@ -2689,6 +2689,10 @@ struct compression_metadata_entry {
   int32_t compression;  ///< `none` when every block of the region is stored raw
   uint32_t reserved;
 };
+
+// Both are written with memcpy, so padding would copy uninitialized bytes into the metadata.
+static_assert(std::has_unique_object_representations_v<compression_metadata_header>);
+static_assert(std::has_unique_object_representations_v<compression_metadata_entry>);
 
 // Shares the version sequence of legacy packed metadata and must not collide with it.
 constexpr int32_t compression_metadata_version = 3;
@@ -3480,9 +3484,6 @@ class pack_plan::impl {
       auto block_bytes = raw_block_bytes;
       auto cascaded    = type_id::UINT8;
       if (requested != pack_compression::none) {
-        CUDF_EXPECTS(requested == pack_compression::cascaded ||
-                       io::detail::is_compression_supported(to_io_compression(requested)),
-                     "The selected compression codec is disabled");
         // Region sizes are multiples of split_align, so every block is a whole number of values.
         // Half the staging buffer leaves room for a block's worst-case compressed size.
         block_bytes = std::max(
@@ -3780,10 +3781,6 @@ std::unique_ptr<table> materialize_selection(packed_data_view input,
     uncompressed_end += entry.uncompressed_bytes;
     auto const compression = static_cast<pack_compression>(entry.compression);
     CUDF_EXPECTS(is_concrete_codec(compression), "Compressed region declares an unsupported codec");
-    CUDF_EXPECTS(compression == pack_compression::none ||
-                   compression == pack_compression::cascaded ||
-                   io::detail::is_decompression_supported(to_io_compression(compression)),
-                 "The packed payload codec is disabled");
     CUDF_EXPECTS(
       entry.data_bytes <= entry.uncompressed_bytes &&
         (entry.data_bytes == 0 || entry.block_bytes > 0) &&

@@ -14,7 +14,6 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/io/detail/codec.hpp>
 #include <cudf/null_mask.hpp>
 
 #include <rmm/mr/statistics_resource_adaptor.hpp>
@@ -60,23 +59,10 @@ std::vector<compressed_region_entry> read_region_entries(std::vector<uint8_t> co
   return entries;
 }
 
-constexpr std::array compressed_codecs{
-  cx::pack_compression::cascaded, cx::pack_compression::zstd, cx::pack_compression::snappy};
 constexpr std::array all_codecs{cx::pack_compression::none,
                                 cx::pack_compression::cascaded,
                                 cx::pack_compression::zstd,
                                 cx::pack_compression::snappy};
-
-bool is_codec_enabled(cx::pack_compression compression)
-{
-  if (compression != cx::pack_compression::zstd && compression != cx::pack_compression::snappy) {
-    return true;
-  }
-  auto const type = compression == cx::pack_compression::zstd ? cudf::io::compression_type::ZSTD
-                                                              : cudf::io::compression_type::SNAPPY;
-  return cudf::io::detail::is_compression_supported(type) &&
-         cudf::io::detail::is_decompression_supported(type);
-}
 
 cx::pack_options make_options(cx::pack_compression compression)
 {
@@ -171,10 +157,13 @@ struct PackUnpackTest : public cudf::test::BaseFixture {
   }
 
   // ExperimentalPackUnpackTest.PackIntoHost covers host destinations and staging windows.
-  void verify_prepared_compressed_round_trip(cudf::table_view const& input)
+  void verify_prepared_round_trip(cudf::table_view const& input)
   {
-    for (auto const compression : compressed_codecs) {
-      if (!is_codec_enabled(compression)) { continue; }
+    for (auto const compression : {cx::pack_compression::none,
+                                   cx::pack_compression::automatic,
+                                   cx::pack_compression::cascaded,
+                                   cx::pack_compression::zstd,
+                                   cx::pack_compression::snappy}) {
       SCOPED_TRACE(static_cast<int>(compression));
       auto const plan   = cx::prepare_pack(input, make_options(compression));
       auto const packed = pack_to_device(plan);
@@ -205,7 +194,7 @@ struct PackUnpackTest : public cudf::test::BaseFixture {
       std::equal(metadata.data(), metadata.data() + metadata.size(), packed.metadata->data()),
       true);
 
-    verify_prepared_compressed_round_trip(t);
+    verify_prepared_round_trip(t);
   }
   void run_test(std::vector<cudf::column_view> const& t) { run_test(cudf::table_view{t}); }
 };
@@ -220,7 +209,6 @@ TEST_F(ExperimentalPackUnpackTest, PreparedPackInto)
   auto const input = cudf::table_view{{numbers}};
 
   for (auto const compression : all_codecs) {
-    if (!is_codec_enabled(compression)) { continue; }
     SCOPED_TRACE(static_cast<int>(compression));
     auto const plan = cx::prepare_pack(input, make_options(compression));
     EXPECT_EQ(plan.sizes().uncompressed_payload_bytes, cudf::packed_size(input));
@@ -249,7 +237,6 @@ TEST_F(ExperimentalPackUnpackTest, PackIntoHost)
   auto const input = cudf::table_view{{numbers, strings}};
 
   for (auto const compression : all_codecs) {
-    if (!is_codec_enabled(compression)) { continue; }
     auto const plan = cx::prepare_pack(input, make_options(compression));
     for (auto const kind : {destination_kind::pinned, destination_kind::pageable}) {
       SCOPED_TRACE(static_cast<int>(compression));
@@ -278,7 +265,6 @@ TEST_F(ExperimentalPackUnpackTest, PackIntoHostBufferLargerThanStaging)
   EXPECT_THROW(cx::prepare_pack(input, options), std::invalid_argument);
   options.staging_buffer_bytes = 1024 * 1024;
   for (auto const compression : all_codecs) {
-    if (!is_codec_enabled(compression)) { continue; }
     options.compression = compression;
     auto const plan     = cx::prepare_pack(input, options);
     for (auto const kind : {destination_kind::pinned, destination_kind::pageable}) {
@@ -363,7 +349,6 @@ TEST_F(ExperimentalPackUnpackTest, MaterializeColumnSubset)
   // Zstd decompresses like Snappy, and pinned payloads are read in place like device ones.
   for (auto const compression :
        {cx::pack_compression::none, cx::pack_compression::cascaded, cx::pack_compression::snappy}) {
-    if (!is_codec_enabled(compression)) { continue; }
     auto const plan = cx::prepare_pack(input, make_options(compression));
     for (auto const kind : {destination_kind::device, destination_kind::pageable}) {
       SCOPED_TRACE(static_cast<int>(compression));
@@ -402,7 +387,6 @@ TEST_F(ExperimentalPackUnpackTest, MaterializeSparseColumnSubset)
 
   for (auto const compression :
        {cx::pack_compression::none, cx::pack_compression::cascaded, cx::pack_compression::snappy}) {
-    if (!is_codec_enabled(compression)) { continue; }
     SCOPED_TRACE(static_cast<int>(compression));
     auto const packed =
       pack_to(cx::prepare_pack(input, make_options(compression)), destination_kind::pageable);
@@ -433,7 +417,6 @@ TEST_F(ExperimentalPackUnpackTest, CompressExistingPackedColumns)
   auto const packed = cudf::pack(input);
 
   for (auto const compression : all_codecs) {
-    if (!is_codec_enabled(compression)) { continue; }
     SCOPED_TRACE(static_cast<int>(compression));
     auto const plan = cx::make_pack_plan_builder(packed, make_options(compression)).build();
     EXPECT_EQ(plan.sizes().uncompressed_payload_bytes, packed.gpu_data->size());
@@ -561,7 +544,6 @@ TEST_F(ExperimentalPackUnpackTest, CompressMisalignedSlices)
                                  cx::pack_compression::cascaded,
                                  cx::pack_compression::zstd,
                                  cx::pack_compression::snappy}) {
-    if (!is_codec_enabled(compression)) { continue; }
     SCOPED_TRACE(static_cast<int>(compression));
     auto const plan = cx::prepare_pack(input, make_options(compression));
     expect_materializes_to(input, pack_to_device(plan).view());
@@ -621,10 +603,6 @@ TEST_F(ExperimentalPackUnpackTest, AutomaticPerRegionCompression)
 
 TEST_F(ExperimentalPackUnpackTest, PerRegionCompression)
 {
-  if (!is_codec_enabled(cx::pack_compression::zstd) ||
-      !is_codec_enabled(cx::pack_compression::snappy)) {
-    GTEST_SKIP() << "Zstd or Snappy is disabled";
-  }
   std::vector<int32_t> values(4096, 17);
   std::vector<bool> validity(4096, true);
   validity[3] = false;
@@ -736,7 +714,6 @@ TEST_F(ExperimentalPackUnpackTest, GetPackedRegionInfo)
 
 TEST_F(ExperimentalPackUnpackTest, CompressedInputValidation)
 {
-  if (!is_codec_enabled(cx::pack_compression::zstd)) { GTEST_SKIP() << "Zstd is disabled"; }
   std::vector<int32_t> values(32 * 1024, 23);
   cudf::test::fixed_width_column_wrapper<int32_t> numbers(values.begin(), values.end());
   auto const input = cudf::table_view{{numbers}};
