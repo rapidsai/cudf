@@ -171,10 +171,8 @@ auto batched_decompress_async(compression_type compression,
   switch (compression) {
     case compression_type::SNAPPY: {
       auto opts = nvcompBatchedSnappyDecompressDefaultOpts;
-      if (use_hw_decompression.has_value()) {
-        opts.backend = *use_hw_decompression ? NVCOMP_DECOMPRESS_BACKEND_HARDWARE
-                                             : NVCOMP_DECOMPRESS_BACKEND_CUDA;
-      }
+      opts.backend = use_hw_decompression.value_or(false) ? NVCOMP_DECOMPRESS_BACKEND_HARDWARE
+                                                          : NVCOMP_DECOMPRESS_BACKEND_CUDA;
       return nvcompBatchedSnappyDecompressAsync(device_compressed_chunk_ptrs,
                                                 device_compressed_chunk_bytes,
                                                 device_uncompressed_buffer_bytes,
