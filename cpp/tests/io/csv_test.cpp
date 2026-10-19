@@ -996,11 +996,13 @@ TEST_P(CsvStringStagingTest, MissingFields)
     "1,skip,alpha,\"a\"\"b\",\"m\"\"n\",last\n"
     "2,skip,beta,\"c\"\"d\",plain,end\n"
     "3,skip\n";
-  auto const str = dtype<cudf::string_view>();
-  auto builder =
-    string_staging_options(buffer, {dtype<int32_t>(), str, str, str, str, str}, doublequote);
-  if (prune) { builder.use_cols_names({"id", "quoted", "tail"}); }
-  auto const result = cudf::io::read_csv(builder.build());
+  auto const str  = dtype<cudf::string_view>();
+  auto const read = [&](std::vector<std::string> const& use_cols) {
+    auto builder =
+      string_staging_options(buffer, {dtype<int32_t>(), str, str, str, str, str}, doublequote);
+    if (prune) { builder.use_cols_names(use_cols); }
+    return cudf::io::read_csv(builder.build());
+  };
 
   cudf::test::fixed_width_column_wrapper<int32_t> const ids{1, 2, 3};
   cudf::test::strings_column_wrapper const ignored{"skip", "skip", "skip"};
@@ -1010,34 +1012,15 @@ TEST_P(CsvStringStagingTest, MissingFields)
   cudf::test::strings_column_wrapper const mixed{{doublequote ? "m\"n" : "m\"\"n", "plain", ""},
                                                  {true, true, false}};
   cudf::test::strings_column_wrapper const tail{{"last", "end", ""}, {true, true, false}};
-  auto const expected = prune ? table_view{{ids, quoted, tail}}
-                              : table_view{{ids, ignored, plain, quoted, mixed, tail}};
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, result.tbl->view());
-}
-
-TEST_P(CsvStringStagingTest, QuoteBranches)
-{
-  auto const [doublequote, prune] = GetParam();
-  std::string const buffer =
-    "id,ignored,plain,quoted,mixed,tail\n"
-    "1,skip,alpha,\"a\"\"b\",\"m\"\"n\",last\n"
-    "2,skip,beta,\"c\"\"d\",plain,end\n";
-  auto const str = dtype<cudf::string_view>();
-  auto builder =
-    string_staging_options(buffer, {dtype<int32_t>(), str, str, str, str, str}, doublequote);
-  if (prune) { builder.use_cols_names({"plain", "quoted", "mixed"}); }
-  auto const result = cudf::io::read_csv(builder.build());
-
-  cudf::test::fixed_width_column_wrapper<int32_t> const ids{1, 2};
-  cudf::test::strings_column_wrapper const ignored{"skip", "skip"};
-  cudf::test::strings_column_wrapper const plain{"alpha", "beta"};
-  cudf::test::strings_column_wrapper const quoted{doublequote ? "a\"b" : "a\"\"b",
-                                                  doublequote ? "c\"d" : "c\"\"d"};
-  cudf::test::strings_column_wrapper const mixed{doublequote ? "m\"n" : "m\"\"n", "plain"};
-  cudf::test::strings_column_wrapper const tail{"last", "end"};
-  auto const expected = prune ? table_view{{plain, quoted, mixed}}
-                              : table_view{{ids, ignored, plain, quoted, mixed, tail}};
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, result.tbl->view());
+  if (!prune) {
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(table_view{{ids, ignored, plain, quoted, mixed, tail}},
+                                       read({}).tbl->view());
+    return;
+  }
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(table_view{{ids, quoted, tail}},
+                                     read({"id", "quoted", "tail"}).tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(table_view{{plain, quoted, mixed}},
+                                     read({"plain", "quoted", "mixed"}).tbl->view());
 }
 
 TEST_P(CsvStringStagingTest, EmptyAndNullFields)

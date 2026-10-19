@@ -188,19 +188,19 @@ CUDF_KERNEL void strings_validity_and_size_kernel(bitmask_type* null_mask,
  * @tparam IndexPairIterator iterator over type `pair<char const*,size_type>` values
  *
  * @param input Per-column iterator to the first string row and number of rows
- * @param stream CUDA stream used for device memory operations
- * @param mr Device memory resource used to allocate the returned columns' device memory
  * @param input_consumed Called with a column index once no work enqueued afterwards reads its
  *        input, so callers can release the input early, stream-ordered on `stream`, and keep the
  *        peak memory usage low
+ * @param stream CUDA stream used for device memory operations
+ * @param mr Device memory resource used to allocate the returned columns' device memory
  * @return The strings columns, in the order of `input`
  */
 template <typename IndexPairIterator>
 std::vector<std::unique_ptr<column>> make_strings_column_batch(
   std::vector<std::pair<IndexPairIterator, size_type>> const& input,
+  std::function<void(std::size_t)> const& input_consumed,
   cuda::stream_ref stream,
-  rmm::device_async_resource_ref mr,
-  std::function<void(std::size_t)> const& input_consumed = {})
+  rmm::device_async_resource_ref mr)
 {
   auto const num_columns = input.size();
 

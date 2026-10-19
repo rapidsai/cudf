@@ -45,7 +45,6 @@
 #include <set>
 #include <string>
 #include <string_view>
-#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -684,9 +683,13 @@ std::vector<std::unique_ptr<column>> materialize_string_columns(
     input.emplace_back(cuda::transform_iterator(indices.data(), to_pair),
                        static_cast<size_type>(indices.size()));
   }
-  return cudf::strings::detail::make_strings_column_batch(input, stream, mr, [&](std::size_t idx) {
-    staging[idx] = rmm::device_uvector<string_offset_pair<OffsetT>>{0, stream};
-  });
+  return cudf::strings::detail::make_strings_column_batch(
+    input,
+    [&](std::size_t idx) {
+      staging[idx] = rmm::device_uvector<string_offset_pair<OffsetT>>{0, stream};
+    },
+    stream,
+    mr);
 }
 
 /**

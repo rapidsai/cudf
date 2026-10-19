@@ -36,7 +36,7 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
   for (auto const& pairs : input) {
     ranges.emplace_back(pairs.data(), static_cast<size_type>(pairs.size()));
   }
-  return make_strings_column_batch(ranges, stream, mr);
+  return make_strings_column_batch(ranges, {}, stream, mr);
 }
 
 }  // namespace strings::detail
