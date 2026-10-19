@@ -84,16 +84,6 @@ def _aggs() -> list[pl.Expr]:
     ]
 
 
-def _first_last_fallback(engine: pl.GPUEngine):
-    """Streaming group-bys run first/last aggregations on one partition."""
-    return warns_on_spmd(
-        engine,
-        UserWarning,
-        match="Failed to decompose groupby aggs for multiple partitions",
-        when=get_blocksize_mode(engine) == "medium",
-    )
-
-
 @pytest.mark.parametrize(
     "every", ["7m", "10m", "1h", "90m", "36h", "1d", "3d", "1w", "2w"]
 )
@@ -247,8 +237,7 @@ def test_first_last(
         pl.col("v").last().alias("v_last"),
         pl.col("t").first().alias("t_first"),
     )
-    with _first_last_fallback(engine):
-        assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_no_aggregations(engine: pl.GPUEngine, short_frame: pl.LazyFrame) -> None:
@@ -385,8 +374,7 @@ def test_taq_ohlc(engine: pl.GPUEngine, quotes: pl.LazyFrame, every: str) -> Non
         pl.col("bid").last().alias("c"),
         pl.col("bsize").sum().alias("s"),
     )
-    with _first_last_fallback(engine):
-        assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 _UNSORTED = (pl.exceptions.InvalidOperationError, "is not sorted")
