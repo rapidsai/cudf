@@ -4,8 +4,9 @@
 
 from __future__ import annotations
 
-import itertools
+import asyncio
 from dataclasses import dataclass
+from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
 from cudf_streaming.channel_metadata import ChannelMetadata
@@ -17,6 +18,9 @@ from rapidsmpf.streaming.coll.sparse_alltoall import SparseAlltoall
 from rapidsmpf.streaming.core.message import Message
 
 from cudf_polars.dsl.ir import Union
+from cudf_polars.streaming.actor_graph.collectives.common import (
+    ordered_union_collective_id_count,
+)
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
     ir_context_for_node,
@@ -46,7 +50,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class OrderedUnionPlan:
+class _OrderedUnionPlan:
     """
     Positional routing plan for an order-preserving multi-rank ``Union``.
 
@@ -89,15 +93,27 @@ class OrderedUnionPlan:
             if any(c < 0 for c in child_counts):
                 raise ValueError(f"Chunk counts must be non-negative: {child_counts}")
 
-    @property
+    @cached_property
+    def _offsets(self) -> tuple[tuple[int, ...], ...]:
+        """``_offsets[i][j]``: global position of child ``i``'s first chunk on rank ``j``."""
+        offsets = []
+        position = 0
+        for child_counts in self.counts:
+            row = []
+            for count in child_counts:
+                row.append(position)
+                position += count
+            offsets.append(tuple(row))
+        return tuple(offsets)
+
+    @cached_property
     def total(self) -> int:
         """Total estimated number of chunks across all children and ranks."""
         return sum(sum(child_counts) for child_counts in self.counts)
 
     def offset(self, child: int, rank: int) -> int:
         """Global position of the first chunk of ``child`` on ``rank``."""
-        flat = itertools.chain.from_iterable(self.counts)
-        return sum(itertools.islice(flat, child * self.nranks + rank))
+        return self._offsets[child][rank]
 
     def _owner(self, position: int) -> int:
         """Rank owning a global chunk position."""
@@ -114,8 +130,7 @@ class OrderedUnionPlan:
         total = self.total
         if total == 0:
             return 0
-        start = self.offset(child, rank)
-        last = start + max(self.counts[child][rank] - 1, 0)
+        last = self.offset(child, rank) + max(self.counts[child][rank] - 1, 0)
         return self._owner(min(last, total - 1))
 
     def destination(self, child: int, rank: int, index: int) -> int:
@@ -139,62 +154,20 @@ class OrderedUnionPlan:
             return self._owner(self.offset(child, rank) + index)
         return self.overflow_destination(child, rank)
 
-    def destinations(self, child: int, rank: int) -> frozenset[int]:
-        """All ranks that may receive chunks of ``child`` from ``rank``."""
-        start = self.offset(child, rank)
-        stop = start + self.counts[child][rank]
-        owners = {
-            dst
-            for dst in range(self.nranks)
-            if _ranges_overlap(
-                (start, stop), partition_range(dst, self.nranks, self.total)
-            )
-        }
-        owners.add(self.overflow_destination(child, rank))
-        return frozenset(owners)
-
-    def remote_destinations(self, child: int, rank: int) -> list[int]:
-        """Ranks other than ``rank`` that may receive chunks of ``child``."""
-        return sorted(self.destinations(child, rank) - {rank})
-
-    def remote_sources(self, child: int, rank: int) -> list[int]:
-        """Ranks other than ``rank`` that may send chunks of ``child`` to it."""
-        return [
-            src
-            for src in range(self.nranks)
-            if src != rank and rank in self.destinations(child, src)
-        ]
-
     def local_count(self, rank: int) -> int:
         """Estimated number of output chunks emitted by ``rank``."""
         start, stop = partition_range(rank, self.nranks, self.total)
         return stop - start
 
 
-def _ranges_overlap(a: tuple[int, int], b: tuple[int, int]) -> bool:
-    """Return whether two half-open ranges overlap."""
-    return a[0] < b[1] and b[0] < a[1]
-
-
-def needs_ordered_exchange(
+def _needs_ordered_exchange(
     ir: Union, nranks: int, metadata: Sequence[ChannelMetadata]
 ) -> bool:
     """
     Return whether a ``Union`` must exchange chunks to preserve row order.
 
-    Parameters
-    ----------
-    ir
-        The Union IR node.
-    nranks
-        Number of ranks.
-    metadata
-        Channel metadata of the union's children.
-
-    Returns
-    -------
-    ``True`` when the union must preserve order, has more than one child,
-    runs on more than one rank, and at least one child is distributed
+    This is the case when the union must preserve order, has more than one
+    child, runs on more than one rank, and at least one child is distributed
     across ranks.
     """
     return (
@@ -273,87 +246,56 @@ async def _passthrough_union(
         seq_num_offset += num_ch_chunks
 
 
-async def _ordered_union_child(
+async def _exchange_child(
     context: Context,
     comm: Communicator,
-    plan: OrderedUnionPlan,
+    plan: _OrderedUnionPlan,
     child: int,
     ch_in: Channel[TableChunk],
-    ch_out: Channel[TableChunk],
     collective_id: int,
-    sequence_number: int,
     *,
     drop: bool,
-) -> int:
+) -> list[ChunkStore]:
     """
-    Route one child's chunks to their owning ranks and emit this rank's share.
+    Route one child's chunks to their owning ranks.
 
-    Returns the next output sequence number.
+    Returns one spillable store per source rank holding the chunks of this
+    child that this rank must emit, each in source order.
     """
     rank = comm.rank
-    srcs = plan.remote_sources(child, rank)
-    dsts = plan.remote_destinations(child, rank)
-    exchange = (
-        SparseAlltoall(context, comm, collective_id, srcs=srcs, dsts=dsts)
-        if srcs or dsts
-        else None
-    )
-    # Local chunks can be emitted as they arrive unless a lower rank sends
-    # us chunks that come before them in the global order.
-    emit_local_now = all(src > rank for src in srcs)
-    local = ChunkStore(context)
+    peers = [r for r in range(comm.nranks) if r != rank]
+    # Every rank takes part in every exchange, even with nothing to send,
+    # so that finishing child i + 1 on any rank implies that every rank has
+    # finished child i (see ``_ordered_union``).
+    exchange = SparseAlltoall(context, comm, collective_id, srcs=peers, dsts=peers)
+    owned = [ChunkStore(context) for _ in range(comm.nranks)]
 
     index = 0
-    try:
-        while (msg := await ch_in.recv(context)) is not None:
-            if drop:
-                # Duplicated child: only rank 0's copy takes part.
-                continue
-            dst = plan.destination(child, rank, index)
-            chunk = TableChunk.from_message(msg, br=context.br())
-            if dst == rank:
-                if emit_local_now:
-                    sequence_number = await _send_chunk(
-                        context, ch_out, chunk, sequence_number
-                    )
-                else:
-                    local.insert(Message(index, chunk))
-            else:
-                assert exchange is not None, "chunk routed to a rank with no exchange"
-                chunk, extra = await make_table_chunks_available_or_wait(
-                    context,
-                    chunk,
-                    reserve_extra=chunk.into_packed_data_cost(),
-                    net_memory_delta=0,
-                )
-                exchange.insert(dst, chunk.into_packed_data(extra))
-            index += 1
-    finally:
-        if exchange is not None:
-            await exchange.insert_finished(context)
+    while (msg := await ch_in.recv(context)) is not None:
+        if drop:
+            # Duplicated child: only rank 0's copy takes part.
+            continue
+        dst = plan.destination(child, rank, index)
+        chunk = TableChunk.from_message(msg, br=context.br())
+        if dst == rank:
+            owned[rank].insert(Message(index, chunk))
+        else:
+            chunk, extra = await make_table_chunks_available_or_wait(
+                context,
+                chunk,
+                reserve_extra=chunk.into_packed_data_cost(),
+                net_memory_delta=0,
+            )
+            exchange.insert(dst, chunk.into_packed_data(extra))
+        index += 1
 
-    # Emit in global order: chunks from lower ranks, then our own, then
-    # chunks from higher ranks.
-    remote = set(srcs)
-    for src in range(comm.nranks):
-        if src == rank:
-            for local_msg in local:
-                sequence_number = await _send_chunk(
-                    context,
-                    ch_out,
-                    TableChunk.from_message(local_msg, br=context.br()),
-                    sequence_number,
-                )
-        elif src in remote:
-            assert exchange is not None
-            for packed in exchange.extract(src):
-                sequence_number = await _send_chunk(
-                    context,
-                    ch_out,
-                    TableChunk.from_packed_data(packed, context.br()),
-                    sequence_number,
-                )
-    return sequence_number
+    await exchange.insert_finished(context)
+    for src in peers:
+        for i, packed in enumerate(exchange.extract(src)):
+            owned[src].insert(
+                Message(i, TableChunk.from_packed_data(packed, context.br()))
+            )
+    return owned
 
 
 async def _ordered_union(
@@ -364,13 +306,24 @@ async def _ordered_union(
     metadata: Sequence[ChannelMetadata],
     collective_ids: Sequence[int],
 ) -> None:
-    """Concatenate children across ranks while preserving global row order."""
+    """
+    Concatenate children across ranks while preserving global row order.
+
+    Reading and exchanging the children is decoupled from emitting the
+    output: one task reads and exchanges each child in turn and never
+    blocks on ``ch_out``, while another emits the children in order as
+    their exchanges complete. Otherwise a downstream actor that waits on
+    a collective before consuming all of its input (e.g. dynamic-planning
+    sampling) could stall this rank's exchange and deadlock other ranks.
+    """
     nchildren = len(chs_in)
-    if len(collective_ids) != nchildren + 1:
+    expected_ids = ordered_union_collective_id_count(nchildren)
+    if len(collective_ids) != expected_ids:
         raise RuntimeError(
-            f"Ordered multi-rank Union needs {nchildren + 1} collective IDs, "
+            f"Ordered multi-rank Union needs {expected_ids} collective IDs, "
             f"got {len(collective_ids)}."
         )
+    allgather_id, *exchange_ids = collective_ids
 
     # One AllGather of every (child, rank) chunk count. Each rank fills its
     # own slots and leaves the rest zero, so the summed result is the full
@@ -379,8 +332,8 @@ async def _ordered_union(
     for child, meta in enumerate(metadata):
         if not meta.duplicated or comm.rank == 0:
             local_values[child * comm.nranks + comm.rank] = meta.local_count
-    gathered = await allgather_reduce(context, comm, collective_ids[0], *local_values)
-    plan = OrderedUnionPlan(
+    gathered = await allgather_reduce(context, comm, allgather_id, *local_values)
+    plan = _OrderedUnionPlan(
         nranks=comm.nranks,
         counts=tuple(
             tuple(gathered[child * comm.nranks : (child + 1) * comm.nranks])
@@ -392,19 +345,40 @@ async def _ordered_union(
         ch_out, context, ChannelMetadata(local_count=plan.local_count(comm.rank))
     )
 
-    sequence_number = 0
-    for child, (ch_in, meta) in enumerate(zip(chs_in, metadata, strict=True)):
-        sequence_number = await _ordered_union_child(
-            context,
-            comm,
-            plan,
-            child,
-            ch_in,
-            ch_out,
-            collective_ids[child + 1],
-            sequence_number,
-            drop=meta.duplicated and comm.rank != 0,
-        )
+    exchanged: asyncio.Queue[list[ChunkStore]] = asyncio.Queue()
+
+    async def read_and_exchange() -> None:
+        for child, (ch_in, meta) in enumerate(zip(chs_in, metadata, strict=True)):
+            # Children alternate between two exchange IDs. Reusing child i's
+            # ID for child i + 2 is safe: because every rank takes part in
+            # every exchange, a rank only finishes child i + 1 once every
+            # rank has started it, and each rank extracts child i before
+            # starting child i + 1.
+            owned = await _exchange_child(
+                context,
+                comm,
+                plan,
+                child,
+                ch_in,
+                exchange_ids[child % len(exchange_ids)],
+                drop=meta.duplicated and comm.rank != 0,
+            )
+            exchanged.put_nowait(owned)
+
+    async def emit() -> None:
+        sequence_number = 0
+        for _ in range(nchildren):
+            # Chunks from lower ranks, then our own, then higher ranks.
+            for store in await exchanged.get():
+                for msg in store:
+                    sequence_number = await _send_chunk(
+                        context,
+                        ch_out,
+                        TableChunk.from_message(msg, br=context.br()),
+                        sequence_number,
+                    )
+
+    await gather_in_task_group(read_and_exchange(), emit())
 
 
 @define_actor()
@@ -431,9 +405,9 @@ async def union_node(
     ir_context
         The execution context for the IR node.
     collective_ids
-        Collective IDs for an order-preserving multi-rank union: one for
-        the chunk-count AllGather, then one ``SparseAlltoall`` per child.
-        Empty (and unused) when the union does not need to exchange chunks.
+        Collective IDs for an order-preserving multi-rank union (see
+        :func:`ordered_union_collective_id_count`). Empty (and unused) when
+        the union does not need to exchange chunks.
     ch_out
         The output Channel[TableChunk].
     chs_in
@@ -450,7 +424,7 @@ async def union_node(
         metadata = await gather_in_task_group(
             *(recv_metadata(ch, context) for ch in chs_in)
         )
-        if needs_ordered_exchange(ir, comm.nranks, metadata):
+        if _needs_ordered_exchange(ir, comm.nranks, metadata):
             await _ordered_union(
                 context, comm, ch_out, chs_in, metadata, collective_ids
             )
@@ -470,7 +444,7 @@ def _(
     # Union operation.
     # Unordered (or single-rank) unions pass child chunks through in channel
     # order; ordered multi-rank unions route chunks so the global order is
-    # preserved (see ``OrderedUnionPlan``).
+    # preserved (see ``_OrderedUnionPlan``).
 
     # Process children
     nodes, channels = process_children(ir, rec)

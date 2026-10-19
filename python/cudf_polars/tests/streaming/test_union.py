@@ -10,8 +10,9 @@ import pytest
 import polars as pl
 
 from cudf_polars.engine.options import StreamingOptions
-from cudf_polars.streaming.actor_graph.union import OrderedUnionPlan
+from cudf_polars.streaming.actor_graph.union import _OrderedUnionPlan
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.utils.versions import POLARS_VERSION_LT_141
 
 
 def test_union_shared_fanout_no_deadlock(streaming_engine):
@@ -41,7 +42,7 @@ def test_sort_slice_over_union_of_duplicated_streams(streaming_engine):
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
-def _emitted_order(plan: OrderedUnionPlan, actual):
+def _emitted_order(plan: _OrderedUnionPlan, actual):
     """Simulate routing and return each rank's emitted ``(child, rank, index)``."""
     out = {rank: [] for rank in range(plan.nranks)}
     for child, child_counts in enumerate(actual):
@@ -49,7 +50,7 @@ def _emitted_order(plan: OrderedUnionPlan, actual):
         for src, count in enumerate(child_counts):
             for index in range(count):
                 dst = plan.destination(child, src, index)
-                assert dst in plan.destinations(child, src)
+                assert 0 <= dst < plan.nranks
                 inbox[dst][src].append((child, src, index))
         for dst, emitted in out.items():
             for src in range(plan.nranks):
@@ -59,20 +60,18 @@ def _emitted_order(plan: OrderedUnionPlan, actual):
 
 def test_ordered_union_plan_two_ranks():
     # A has 2 chunks on each rank, B has 1 chunk on each rank.
-    plan = OrderedUnionPlan(nranks=2, counts=((2, 2), (1, 1)))
+    plan = _OrderedUnionPlan(nranks=2, counts=((2, 2), (1, 1)))
     out = _emitted_order(plan, plan.counts)
     assert out[0] == [(0, 0, 0), (0, 0, 1), (0, 1, 0)]
     assert out[1] == [(0, 1, 1), (1, 0, 0), (1, 1, 0)]
     assert [plan.local_count(r) for r in range(2)] == [3, 3]
-    assert plan.remote_destinations(0, 1) == [0]
-    assert plan.remote_sources(0, 0) == [1]
 
 
 def test_ordered_union_plan_small_second_child():
     # A large first child balanced across ranks and a single-chunk second
     # child on rank 0: that chunk is appended to the last rank.
     nranks, k = 4, 5
-    plan = OrderedUnionPlan(
+    plan = _OrderedUnionPlan(
         nranks=nranks, counts=((k,) * nranks, (1,) + (0,) * (nranks - 1))
     )
     assert plan.destination(1, 0, 0) == nranks - 1
@@ -94,7 +93,7 @@ def test_ordered_union_plan_preserves_order(seed):
             tuple(max(0, c + rng.choice((0, 0, 1, 2, -1))) for c in row)
             for row in estimated
         )
-        plan = OrderedUnionPlan(nranks=nranks, counts=estimated)
+        plan = _OrderedUnionPlan(nranks=nranks, counts=estimated)
         out = _emitted_order(plan, actual)
         emitted = [item for rank in range(nranks) for item in out[rank]]
         expected = [
@@ -104,12 +103,9 @@ def test_ordered_union_plan_preserves_order(seed):
             for index in range(count)
         ]
         assert emitted == expected
-        for child in range(nchildren):
-            for src in range(nranks):
-                for dst in plan.remote_destinations(child, src):
-                    assert src in plan.remote_sources(child, dst)
 
 
+@pytest.mark.spmd
 @pytest.mark.parametrize("max_rows_per_partition", [1, 7, 1_000])
 def test_concat_preserves_order_uneven_children(
     streaming_engine_factory, max_rows_per_partition
@@ -124,6 +120,7 @@ def test_concat_preserves_order_uneven_children(
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.spmd
 def test_concat_preserves_order_with_duplicated_child(streaming_engine_factory):
     engine = streaming_engine_factory(StreamingOptions(max_rows_per_partition=10))
     # A one-row aggregate (duplicated across ranks) between distributed frames.
@@ -138,11 +135,25 @@ def test_concat_preserves_order_with_duplicated_child(streaming_engine_factory):
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.spmd
 @pytest.mark.skipif(
-    not hasattr(pl, "union"), reason="pl.union (unordered concat) not available"
+    POLARS_VERSION_LT_141, reason="unordered concat needs polars >= 1.41"
 )
 def test_unordered_union(streaming_engine_factory):
     engine = streaming_engine_factory(StreamingOptions(max_rows_per_partition=10))
     lf = pl.LazyFrame({"a": range(50)})
     q = pl.union([lf, lf.select(pl.col("a") + 100)])
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.spmd
+def test_concat_feeding_sampling_over(streaming_engine_factory):
+    # The ordered union must not stall its cross-rank exchange when the
+    # consumer (here a non-scalar over(...), which samples a few chunks and
+    # then waits on an AllGather) stops reading its input for a while.
+    engine = streaming_engine_factory(StreamingOptions(max_rows_per_partition=10))
+    n = 400
+    a = pl.LazyFrame({"g": [i % 5 for i in range(n)], "x": list(range(n))})
+    b = pl.LazyFrame({"g": [i % 5 for i in range(n)], "x": list(range(n, 2 * n))})
+    q = pl.concat([a, b]).with_columns(pl.col("x").shift(1).over("g").alias("y"))
+    assert_gpu_result_equal(q, engine=engine)

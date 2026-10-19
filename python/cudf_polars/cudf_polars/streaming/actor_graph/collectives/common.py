@@ -234,11 +234,13 @@ class ReserveOpIDs:
                             pool.acquire_unsafe(),
                         ]
                 elif isinstance(node, Union):
-                    # Ordered Union needs 1 + nchildren IDs: one for the
-                    # chunk-count AllGather and one SparseAlltoall per child
-                    # (children are exchanged one after another).
+                    # Ordered Union: one ID for the chunk-count AllGather and
+                    # two that the per-child exchanges alternate between.
                     self.collective_id_map[node] = [
-                        pool.acquire_unsafe() for _ in range(len(node.children) + 1)
+                        pool.acquire_unsafe()
+                        for _ in range(
+                            ordered_union_collective_id_count(len(node.children))
+                        )
                     ]
                 elif isinstance(node, Over) and not node.is_scalar:
                     # Non-scalar Over needs 2 IDs: one for the size AllGather +
@@ -269,6 +271,26 @@ class ReserveOpIDs:
                 for collective_id in collective_ids:
                     pool.release_unsafe(collective_id)
         return False
+
+
+def ordered_union_collective_id_count(nchildren: int) -> int:
+    """
+    Number of collective IDs an ordered multi-rank ``Union`` needs.
+
+    One ID for the chunk-count AllGather, plus two IDs that the per-child
+    ``SparseAlltoall`` exchanges alternate between (see ``_ordered_union`` in
+    ``streaming/actor_graph/union.py``).
+
+    Parameters
+    ----------
+    nchildren
+        Number of children of the union.
+
+    Returns
+    -------
+    The number of collective IDs to reserve.
+    """
+    return 1 + min(nchildren, 2)
 
 
 def _is_ordered_union(node: IR) -> bool:

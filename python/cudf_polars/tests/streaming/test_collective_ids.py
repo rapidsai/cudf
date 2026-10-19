@@ -7,10 +7,14 @@ import threading
 import uuid
 from typing import Any
 
+import pytest
+
 import polars as pl
 
 import cudf_polars.engine.core
+from cudf_polars.dsl.ir import Union
 from cudf_polars.dsl.translate import Translator
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.streaming.actor_graph.collectives import (
     ReserveOpIDs,
     collective_id_scope,
@@ -96,3 +100,17 @@ def test_evaluate_on_rank_uses_fresh_scope(monkeypatch) -> None:
             unused, unused, unused, unused, unused, query_id=uuid.uuid4()
         )
     assert seen == [expected]
+
+
+@pytest.mark.parametrize("nchildren", [2, 3, 300])
+def test_ordered_union_reserves_bounded_ids(nchildren) -> None:
+    q = pl.concat([pl.LazyFrame({"a": [i]}) for i in range(nchildren)])
+    ir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
+    (union,) = (node for node in traversal([ir]) if isinstance(node, Union))
+    assert union.maintain_order
+    # One AllGather ID plus two alternating exchange IDs, however many
+    # children the union has.
+    with collective_id_scope(), ReserveOpIDs(ir, nranks=2) as collective_id_map:
+        assert len(collective_id_map[union]) == 3
+    with collective_id_scope(), ReserveOpIDs(ir, nranks=1) as collective_id_map:
+        assert union not in collective_id_map
