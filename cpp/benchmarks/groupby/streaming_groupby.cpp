@@ -81,6 +81,10 @@ void bench_streaming_groupby(nvbench::state& state)
   auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
   auto const key_order   = state.get_string("key_order");
   auto const aggs        = state.get_string("aggs");
+  if (num_rows <= 0 || batch_size <= 0 || cardinality <= 0) {
+    state.skip("num_rows, batch_size, and cardinality must be positive");
+    return;
+  }
   // Sorted runs of a single row are the same keys as the round robin order.
   if (key_order == "sorted" && batch_size / cardinality <= 1) {
     state.skip("sorted keys equal round robin keys without runs of equal keys");
@@ -159,9 +163,15 @@ std::unique_ptr<cudf::table> make_cardinality_inputs(cudf::size_type num_rows,
                                            cudf::binary_operator::PYMOD,
                                            key_type));
   auto const nulls = null_probability > 0 ? std::optional<double>{null_probability} : std::nullopt;
-  // Attach independent masks after optional string conversion.
+  // A date and a short string category model mixed keys in analytical groupbys.
+  // Reinterpreting integer days preserves the exact composite-key cardinality.
+  if (key_format == "date_string") {
+    columns[0] = std::make_unique<cudf::column>(
+      cudf::bit_cast(columns[0]->view(), cudf::data_type{cudf::type_id::TIMESTAMP_DAYS}));
+  }
+  // Attach independent masks after optional type conversion.
   for (unsigned column = 0; column < 2; ++column) {
-    if (key_format == "string") {
+    if (key_format == "string" || (key_format == "date_string" && column == 1)) {
       columns[column] = cudf::strings::from_integers(columns[column]->view());
     }
     auto [mask, null_count] = create_random_null_mask(num_rows, nulls, seed + 17u + 14u * column);
@@ -192,6 +202,11 @@ void bench_streaming_groupby_cardinality(nvbench::state& state)
   auto const key_format       = state.get_string("key_format");
   auto const null_probability = state.get_float64("null_probability");
   auto const seed             = static_cast<unsigned>(state.get_int64("seed"));
+
+  if (num_rows <= 0 || batch_size <= 0 || cardinality <= 0 || key_modulus <= 0) {
+    state.skip("num_rows, batch_size, cardinality, and key_modulus must be positive");
+    return;
+  }
 
   // INCLUDE admits four null patterns: both valid, only quotient valid, only remainder
   // valid, and both null. Bound all possible composite keys for off-grid configurations.
@@ -301,10 +316,10 @@ NVBENCH_BENCH(bench_streaming_groupby)
 
 NVBENCH_BENCH(bench_streaming_groupby_cardinality)
   .set_name("streaming_groupby_cardinality")
-  .add_int64_axis("num_rows", {100'000'000})
-  .add_int64_axis("batch_size", {10'000'000})
+  .add_int64_axis("num_rows", {10'000'000})
+  .add_int64_axis("batch_size", {1'000'000})
   .add_int64_axis("cardinality", {257, 65'536})
-  .add_string_axis("key_format", {"int32", "string"})
+  .add_string_axis("key_format", {"int32", "string", "date_string"})
   .add_float64_axis("null_probability", {0.0, 0.1})
   .add_int64_axis("key_modulus", {97})
   .add_int64_axis("seed", {12'345});
