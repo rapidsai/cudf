@@ -31,7 +31,9 @@ __all__ = [
     "get_character_flags_table_ptr",
 ]
 
-cpdef get_character_flags_table_ptr():
+cpdef get_character_flags_table_ptr(
+    object stream: CudaStreamLike | None = None,
+):
     """
     Return a device pointer to the character-flags lookup table.
 
@@ -40,12 +42,19 @@ cpdef get_character_flags_table_ptr():
     used by :func:`all_characters_of_type`. The table is lazily copied to the
     device on first use and remains valid for the process lifetime.
 
+    Parameters
+    ----------
+    stream : Stream | None
+        CUDA stream on which to perform the (first-use) device copy.
+
     Returns
     -------
     int
         The device address of the ``uint8`` flags table.
     """
-    cdef const uint8_t* tbl = cpp_char_types.get_character_flags_table()
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().get()
+    cdef const uint8_t* tbl = cpp_char_types.get_character_flags_table(_cs)
     return int(<uintptr_t>tbl)
 
 cpdef Column all_characters_of_type(
