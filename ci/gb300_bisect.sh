@@ -30,29 +30,52 @@ rapids-pip-retry install \
     "$(find "${WORK}/wheels" -name "libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl")" \
     "$(find "${WORK}/wheels" -name "pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl")[test]"
 
-PLUGIN_DIR="$(realpath ci)"
-CONFIGS=(
-  "baseline|"
-  "files-as-bytes|GB300_PLUGIN_MODE=files-as-bytes"
+REPRO="$(realpath ci/gb300_repro.py)"
+VARIANTS=(
+  "read-only none"
+  "orc none"
+  "orc persistent"
+  "orc temporary"
+  "parquet none"
+  "parquet persistent"
+  "parquet temporary"
 )
 
 SUMMARY=()
-pushd python/pylibcudf/tests > /dev/null
-for config in "${CONFIGS[@]}"; do
-  label="${config%%|*}"
-  read -r -a envs <<< "${config#*|}"
-  for attempt in 1 2 3 4 5 6; do
+for variant in "${VARIANTS[@]}"; do
+  read -r writer stream_kind <<< "${variant}"
+  label="${writer}-${stream_kind}"
+  crashes=0
+  for attempt in $(seq 10); do
     set +e
-    env PYTHONPATH="${PLUGIN_DIR}" "${envs[@]}" timeout 15m python -m pytest -p gb300_plugin -p no:cacheprovider \
-      --numprocesses=8 --dist=worksteal -q . > "${WORK}/${label}-${attempt}.log" 2>&1
+    timeout 5m python -X faulthandler "${REPRO}" "${writer}" "${stream_kind}" 20 > "${WORK}/${label}-${attempt}.log" 2>&1
     status=$?
     set -e
-    tail -n 1 "${WORK}/${label}-${attempt}.log"
-    crash=$(grep -o "crashed while running '[^']*'" "${WORK}/${label}-${attempt}.log" | sort -u | tr '\n' ' ' || true)
-    SUMMARY+=("${label} attempt=${attempt} exit=${status} ${crash}")
+    if [[ ${status} -ne 0 ]]; then
+      crashes=$((crashes + 1))
+      if [[ ${crashes} -eq 1 ]]; then
+        rapids-logger "${label} attempt ${attempt} failed with ${status}"
+        grep -v -E "^\s*$" "${WORK}/${label}-${attempt}.log" | head -n 50 || true
+      fi
+    fi
   done
+  SUMMARY+=("${label} failed_processes=${crashes}/10")
 done
-popd > /dev/null
 
-rapids-logger "GB300 first-DE-use probe summary"
+rapids-logger "8 concurrent processes: orc writer with temporary streams"
+pids=()
+for i in $(seq 8); do
+  python -X faulthandler "${REPRO}" orc temporary 50 > "${WORK}/concurrent-${i}.log" 2>&1 &
+  pids+=($!)
+done
+failures=0
+for i in "${!pids[@]}"; do
+  if ! wait "${pids[$i]}"; then
+    failures=$((failures + 1))
+    grep -v -E "^\s*$" "${WORK}/concurrent-$((i + 1)).log" | head -n 30 || true
+  fi
+done
+SUMMARY+=("concurrent orc-temporary failed_processes=${failures}/8")
+
+rapids-logger "GB300 compress-then-DE repro summary"
 printf '%s\n' "${SUMMARY[@]}"
