@@ -17,6 +17,7 @@ from cudf_polars.dsl.ir import (
     GroupBy,
     Rolling,
     Sort,
+    Union,
 )
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.streaming.filter_hint import PushdownFilterHint
@@ -112,6 +113,10 @@ class ReserveOpIDs:
         The root IR node of the pipeline.
     config_options : ConfigOptions, optional
         Configuration options (needed for dynamic planning).
+    nranks : int, optional
+        Number of ranks the pipeline runs on. Order-preserving ``Union``
+        nodes only need collective IDs when ``nranks > 1``; if ``nranks``
+        is not given, IDs are reserved for them conservatively.
 
     Notes
     -----
@@ -127,7 +132,11 @@ class ReserveOpIDs:
     """
 
     def __init__(
-        self, ir: IR, config_options: ConfigOptions[StreamingExecutor] | None = None
+        self,
+        ir: IR,
+        config_options: ConfigOptions[StreamingExecutor] | None = None,
+        *,
+        nranks: int | None = None,
     ):
         self.config_options = config_options
 
@@ -168,8 +177,13 @@ class ReserveOpIDs:
                 PushdownFilterHint,
             )
 
+        # Order-preserving multi-rank unions exchange chunks between ranks.
+        multi_rank = nranks is None or nranks > 1
         self.collective_nodes: list[IR] = [
-            node for node in traversal([ir]) if isinstance(node, collective_types)
+            node
+            for node in traversal([ir])
+            if isinstance(node, collective_types)
+            or (multi_rank and _is_ordered_union(node))
         ]
         self.collective_id_map: dict[IR, list[int]] = {}
         self._pool: _CollectiveIDPool | None = None
@@ -219,6 +233,13 @@ class ReserveOpIDs:
                             pool.acquire_unsafe(),
                             pool.acquire_unsafe(),
                         ]
+                elif isinstance(node, Union):
+                    # Ordered Union needs 1 + nchildren IDs: one for the
+                    # chunk-count AllGather and one SparseAlltoall per child
+                    # (children are exchanged one after another).
+                    self.collective_id_map[node] = [
+                        pool.acquire_unsafe() for _ in range(len(node.children) + 1)
+                    ]
                 elif isinstance(node, Over) and not node.is_scalar:
                     # Non-scalar Over needs 2 IDs: one for the size AllGather +
                     # forward shuffle (the AllGather completes before the forward
@@ -248,6 +269,11 @@ class ReserveOpIDs:
                 for collective_id in collective_ids:
                     pool.release_unsafe(collective_id)
         return False
+
+
+def _is_ordered_union(node: IR) -> bool:
+    """Return whether ``node`` is a Union that must preserve row order."""
+    return isinstance(node, Union) and node.maintain_order and len(node.children) > 1
 
 
 @contextmanager
