@@ -7,7 +7,8 @@
 if ! command -v gdb > /dev/null; then
     exec "$@"
 fi
-exec gdb -q -batch \
+out="$(mktemp)"
+gdb -q -batch \
     -ex "set pagination off" \
     -ex "set print thread-events off" \
     -ex "handle SIGSEGV stop print nopass" \
@@ -25,4 +26,12 @@ exec gdb -q -batch \
     -ex "thread apply all bt" \
     -ex "echo \n===== GDB: mappings =====\n" \
     -ex "info proc mappings" \
-    --args "$@"
+    --args "$@" 2>&1 | tee "${out}"
+
+# gdb -batch exits 0 even if the inferior crashed; recover the real status so
+# mpirun / the caller see the failure.
+if grep -q "Program received signal\|Program terminated with signal" "${out}"; then
+    exit 139
+fi
+code="$(sed -n 's/.*exited with code \([0-9]*\)\].*/\1/p' "${out}" | tail -n 1)"
+exit $(( 10#${code:-0} ))
