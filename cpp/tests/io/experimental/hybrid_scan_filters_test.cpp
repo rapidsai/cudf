@@ -2574,7 +2574,7 @@ TEST_F(HybridScanFiltersTest, DictionaryPagesByteRangesIncludeUnboundedMatchesEx
                 (std::vector<cudf::size_type>{0, 1}));
       EXPECT_EQ(
         filter_row_groups_with_dictionaries(*datasource, *reader, absent_options, stream, mr),
-        hide_offsets ? std::vector<cudf::size_type>{0, 1} : std::vector<cudf::size_type>{1});
+        (hide_offsets ? std::vector<cudf::size_type>{0, 1} : std::vector<cudf::size_type>{1}));
     }
   }
 }
