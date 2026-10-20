@@ -32,6 +32,7 @@ if TYPE_CHECKING:
         str, plc.io.parquet_metadata.PhysicalType, int, int, tuple[Any, ...] | None
     ]
     _Layout = tuple[_ElementLayout, ...]
+    _FieldIds = tuple[int | None, tuple["_FieldIds", ...]]
 
 __all__ = ["IcebergColumn", "LakeScanOptions", "read_lake_files"]
 
@@ -69,12 +70,16 @@ class IcebergColumn:
         name recorded in any given data file.
     physical_id
         Field ID written into the parquet footer for this column.
+    kind
+        One of ``"primitive"``, ``"list"``, ``"fixed-size-list"``, ``"map"``
+        or ``"struct"``.
     children
         Fields of a nested column, empty for a primitive column.
     """
 
     name: str
     physical_id: int
+    kind: str
     children: tuple[IcebergColumn, ...]
 
     @classmethod
@@ -108,7 +113,13 @@ class IcebergColumn:
             )
         else:  # pragma: no cover; polars only produces the kinds above
             raise NotImplementedError(f"Unhandled Iceberg column type {kind!r}")
-        return cls(name=name, physical_id=physical_id, children=children)
+        return cls(name=name, physical_id=physical_id, kind=kind, children=children)
+
+    def walk(self) -> Iterable[IcebergColumn]:
+        """Yield this column and every column nested within it."""
+        yield self
+        for child in self.children:
+            yield from child.walk()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -172,8 +183,18 @@ class LakeScanOptions:
     expected_keys: frozenset[Any] | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
-        if self.columns is not None and any(column.children for column in self.columns):
-            raise NotImplementedError("Iceberg column mapping of nested columns")
+        unhandled_kinds = sorted(
+            {
+                nested.kind
+                for column in self.columns or ()
+                for nested in column.walk()
+                if nested.kind in ("fixed-size-list", "map")
+            }
+        )
+        if unhandled_kinds:
+            raise NotImplementedError(
+                f"Iceberg column mapping of {' and '.join(unhandled_kinds)} columns"
+            )
         if (self.partition_values or self.partition_errors) and self.columns is None:
             raise NotImplementedError("Iceberg partition values without column mapping")
         if self.extra_columns_policy not in ("ignore", "raise"):
@@ -184,12 +205,18 @@ class LakeScanOptions:
             raise NotImplementedError(  # pragma: no cover; only two policies exist
                 f"Missing columns policy {self.missing_columns_policy!r}"
             )
-        unknown_defaults = set(self.initial_defaults) - {
-            column.physical_id for column in self.columns or ()
-        }
-        if unknown_defaults:  # pragma: no cover; polars keys defaults by schema id
+        top_level_ids = {column.physical_id for column in self.columns or ()}
+        unknown_defaults = set(self.initial_defaults) - top_level_ids
+        if unknown_defaults:
             raise NotImplementedError(
-                f"Iceberg defaults for unmapped fields {sorted(unknown_defaults)}"
+                f"Iceberg defaults for nested or unmapped fields {sorted(unknown_defaults)}"
+            )
+        unknown_partitions = (
+            set(self.partition_values).union(self.partition_errors) - top_level_ids
+        )
+        if unknown_partitions:
+            raise NotImplementedError(
+                f"Iceberg partition values for nested fields {sorted(unknown_partitions)}"
             )
 
     @classmethod
@@ -654,11 +681,12 @@ class _Footer:
     names: tuple[str, ...]
     keys: tuple[Any, ...]
     signatures: tuple[_Layout, ...]
+    field_ids: tuple[_FieldIds | None, ...]
     num_rows: int
 
     def group_key(
         self, wanted: Mapping[Any, str]
-    ) -> tuple[tuple[Any, ...], tuple[_Layout, ...]]:
+    ) -> tuple[tuple[Any, ...], tuple[tuple[_Layout, _FieldIds | None], ...]]:
         """
         Key on which consecutive files can be read together.
 
@@ -671,13 +699,17 @@ class _Footer:
         Returns
         -------
         The top-level keys of the file, and the names, physical and logical
-        types of each wanted column it holds and of its nested fields. The
-        parquet reader requires the selected columns of its sources to agree
-        on their types and on the names of their nested fields.
+        types and field IDs of each wanted column it holds and of its nested
+        fields. The parquet reader requires the selected columns of its
+        sources to agree on their types and on the names of their nested
+        fields. Files that agree on the field IDs as well can be read by
+        name even when the scan is keyed by field ID.
         """
         return self.keys, tuple(
-            signature
-            for key, signature in zip(self.keys, self.signatures, strict=True)
+            (signature, field_ids)
+            for key, signature, field_ids in zip(
+                self.keys, self.signatures, self.field_ids, strict=True
+            )
             if key in wanted
         )
 
@@ -724,35 +756,83 @@ def _footer(
     *,
     by_field_id: bool,
 ) -> _Footer:
-    """Top-level columns and row count of a parquet file."""
+    """
+    Top-level columns and row count of a parquet file.
+
+    Raises
+    ------
+    NotImplementedError
+        If ``by_field_id`` and a field that polars identifies by its field ID
+        has none, sibling fields share a field ID, or a list uses a legacy
+        layout that the parquet reader and polars read differently.
+    """
     if metadata is None:
         metadata = plc.io.parquet_metadata.read_parquet_footers(
             plc.io.SourceInfo([path])
         )[0]
-    elements = iter(metadata.schema)
-    root = next(elements)
-    names = []
-    field_ids = []
-    signatures = []
-    for _ in range(root.num_children):
-        element = next(elements)
-        if by_field_id and element.field_id is None:
+    schema = metadata.schema
+
+    def check_unique(children: Sequence[_FieldIds]) -> None:
+        ids = [field_id for field_id, _ in children if field_id is not None]
+        if len(ids) != len(set(ids)):
+            raise NotImplementedError(
+                f"Iceberg data file with duplicate field IDs: {path}"
+            )
+
+    def nested_field_ids(index: int, *, list_parent: str | None) -> _FieldIds:
+        element = schema[index]
+        if element.is_stub():
+            if list_parent is not None and element.name in (
+                "array",
+                f"{list_parent}_tuple",
+            ):  # pragma: no cover; pyarrow cannot write this layout
+                raise NotImplementedError(
+                    f"Iceberg data file with a legacy list layout: {path}"
+                )
+            return nested_field_ids(element.children_idx[0], list_parent=list_parent)
+        if element.field_id is None and list_parent is None:
             raise NotImplementedError(
                 f"Iceberg data file without parquet field IDs: {path}"
             )
-        names.append(element.name)
-        field_ids.append(element.field_id)
-        signature = [_element_layout(element)]
-        remaining = element.num_children
-        while remaining:
-            child = next(elements)
-            signature.append(_element_layout(child))
-            remaining += child.num_children - 1
-        signatures.append(tuple(signature))
+        logical_type = element.logical_type
+        is_list = logical_type is not None and logical_type.type in (
+            plc.io.parquet_metadata.LogicalTypeId.LIST,
+            plc.io.parquet_metadata.LogicalTypeId.MAP,
+        )
+        children = tuple(
+            nested_field_ids(child, list_parent=element.name if is_list else None)
+            for child in element.children_idx
+        )
+        check_unique(children)
+        return element.field_id, children
+
+    def subtree(index: int) -> Iterable[plc.io.parquet_metadata.SchemaElement]:
+        element = schema[index]
+        yield element
+        for child in element.children_idx:
+            yield from subtree(child)
+
+    top_level = schema[0].children_idx
+    names = tuple(schema[index].name for index in top_level)
+    signatures = tuple(
+        tuple(_element_layout(element) for element in subtree(index))
+        for index in top_level
+    )
+    if not by_field_id:
+        return _Footer(
+            names=names,
+            keys=names,
+            signatures=signatures,
+            field_ids=(None,) * len(top_level),
+            num_rows=metadata.num_rows,
+        )
+    field_ids = tuple(nested_field_ids(index, list_parent=None) for index in top_level)
+    check_unique(field_ids)
     return _Footer(
-        names=tuple(names),
-        keys=tuple(field_ids) if by_field_id else tuple(names),
-        signatures=tuple(signatures),
+        names=names,
+        keys=tuple(field_id for field_id, _ in field_ids),
+        signatures=signatures,
+        field_ids=field_ids,
         num_rows=metadata.num_rows,
     )
 
@@ -823,7 +903,8 @@ def _group_filter(
     readable = {
         name: file_name
         for name, file_name in file_names.items()
-        if file_types.get(file_name) == schema[name].plc_type
+        if schema[name].id() not in _NESTED_TYPES
+        and file_types.get(file_name) == schema[name].plc_type
     }
     renames: dict[expr.Expr, expr.Expr] = {
         predicate_columns[name]: expr.Col(predicate_columns[name].dtype, file_name)
@@ -928,6 +1009,7 @@ def _cast_hint(option: str) -> str:
 
 
 _NESTED_TYPES = frozenset({plc.TypeId.STRUCT, plc.TypeId.LIST})
+_LIST_ELEMENT_DEFAULT_ID = 2**32 - 1
 
 
 def _cast_to_table_type(
@@ -936,6 +1018,7 @@ def _cast_to_table_type(
     children: Sequence[plc.io.types.ColumnNameSpec],
     target: DataType,
     cast_columns_policy: Mapping[str, Any],
+    mapping: tuple[_FieldIds, IcebergColumn] | None,
     *,
     stream: Stream,
 ) -> plc.Column:
@@ -955,20 +1038,26 @@ def _cast_to_table_type(
         Type of the column in the table schema.
     cast_columns_policy
         Which casts from the physical to the table type are permitted.
+    mapping
+        For a scan read by field ID, the field IDs of ``column`` and its
+        nested fields in the file, and the Iceberg column that ``target``
+        was built from. ``None`` to match nested fields by name.
     stream
         CUDA stream used for device memory operations and kernel launches.
 
     Returns
     -------
     The column with the type of ``target``. Struct fields are matched by
-    name, put in the order of ``target`` and cast field by field.
+    field ID when ``mapping`` is given and by name otherwise, put in the
+    order of ``target`` and cast field by field.
 
     Raises
     ------
     polars.exceptions.SchemaError
         If ``column`` and ``target`` do not nest in the same way, if a
         struct field is missing or extra and ``cast_columns_policy`` forbids
-        that, or if ``_check_cast`` rejects the cast of a leaf.
+        that, if the element of a list has a different field ID than in
+        the table schema, or if ``_check_cast`` rejects the cast of a leaf.
     """
     source_id = column.type().id()
     target_id = target.id()
@@ -982,6 +1071,21 @@ def _cast_to_table_type(
         )
     if target_id == plc.TypeId.LIST:
         (_, (_, element_children)) = children
+        element_mapping = None
+        if mapping is not None:
+            (_, file_elements), iceberg_column = mapping
+            (iceberg_element,) = iceberg_column.children
+            file_element = file_elements[0] if file_elements else (None, ())
+            element_ids = {file_element[0], iceberg_element.physical_id} - {
+                None,
+                _LIST_ELEMENT_DEFAULT_ID,
+            }
+            if len(element_ids) > 1:
+                raise pl.exceptions.SchemaError(
+                    f"data type mismatch for column {name}: "
+                    "physical ID mismatch for list values column"
+                )
+            element_mapping = (file_element, iceberg_element)
         new_children = [
             column.child(0),
             _cast_to_table_type(
@@ -990,19 +1094,33 @@ def _cast_to_table_type(
                 element_children,
                 target.children[0],
                 cast_columns_policy,
+                element_mapping,
                 stream=stream,
             ),
         ]
     else:
-        incoming = {
-            field_name: (index, field_children)
-            for index, (field_name, field_children) in enumerate(children)
-        }
         fields = cast("pl.Struct", target.polars_type).fields
+        file_fields: Sequence[_FieldIds | None]
+        incoming_keys: list[Any]
+        target_fields: list[tuple[Any, IcebergColumn | None]]
+        if mapping is None:
+            file_fields = [None] * len(children)
+            incoming_keys = [field_name for field_name, _ in children]
+            target_fields = [(field.name, None) for field in fields]
+        else:
+            (_, file_fields), iceberg_column = mapping
+            incoming_keys = [field_id for field_id, _ in file_fields]
+            target_fields = [
+                (iceberg_field.physical_id, iceberg_field)
+                for iceberg_field in iceberg_column.children
+            ]
+        position = {key: index for index, key in enumerate(incoming_keys)}
         if cast_columns_policy["extra_struct_fields"] == "raise":
-            target_names = frozenset(field.name for field in fields)
+            target_keys = frozenset(key for key, _ in target_fields)
             extra = [
-                field_name for field_name in incoming if field_name not in target_names
+                field_name
+                for (field_name, _), key in zip(children, incoming_keys, strict=True)
+                if key not in target_keys
             ]
             if extra:
                 raise pl.exceptions.SchemaError(
@@ -1012,9 +1130,13 @@ def _cast_to_table_type(
                     "cast_options=pl.ScanCastOptions(extra_struct_fields='ignore')"
                 )
         new_children = []
-        for field, field_dtype in zip(fields, target.children, strict=True):
-            if field.name in incoming:
-                index, field_children = incoming[field.name]
+        for field, field_dtype, (key, iceberg_field) in zip(
+            fields, target.children, target_fields, strict=True
+        ):
+            index = position.get(key)
+            if index is not None:
+                _, field_children = children[index]
+                file_field = file_fields[index]
                 new_children.append(
                     _cast_to_table_type(
                         name,
@@ -1022,6 +1144,9 @@ def _cast_to_table_type(
                         field_children,
                         field_dtype,
                         cast_columns_policy,
+                        None
+                        if file_field is None or iceberg_field is None
+                        else (file_field, iceberg_field),
                         stream=stream,
                     )
                 )
@@ -1104,8 +1229,8 @@ def _read_group(
     ----------
     paths
         Data files of the run, in scan order. They hold the same top-level
-        columns, with the same physical types for the wanted ones, as the
-        parquet reader requires of the sources of one read.
+        columns, and the wanted ones have the same types and the same names
+        and field IDs throughout, so the run is read by column name.
     present
         Keys of the wanted columns that the files hold: field IDs when
         ``by_field_id``, otherwise column names. The files are only read
@@ -1150,14 +1275,13 @@ def _read_group(
     num_rows = sum(rows_per_path)
     source_index: plc.Column | None = None
     if present:
-        builder = plc.io.parquet.ParquetReaderOptions.builder(
-            plc.io.SourceInfo(list(paths))
-        ).allow_mismatched_pq_schemas(val=True)
-        if by_field_id:
-            builder = builder.column_field_ids(list(present))
-        options = builder.build()
-        if not by_field_id:
-            options.set_column_names(list(present))
+        options = (
+            plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(list(paths)))
+            .allow_mismatched_pq_schemas(val=True)
+            .build()
+        )
+        name_by_key = dict(zip(footer.keys, footer.names, strict=True))
+        options.set_column_names([name_by_key[key] for key in present])
         if filters is not None:
             options.set_filter(filters)
         if source_offset is not None:
@@ -1209,17 +1333,23 @@ def _read_group(
             stream=stream,
         ).columns()
 
+    file_field_ids = dict(zip(footer.keys, footer.field_ids, strict=True))
+    iceberg_columns = {
+        column.physical_id: column for column in lake_options.columns or ()
+    }
     frame_columns = []
     for key, name in wanted.items():
         dtype = schema[name]
         if key in read:
             column, children = read[key]
+            field_ids = file_field_ids[key]
             obj = _cast_to_table_type(
                 name,
                 column,
                 children,
                 dtype,
                 lake_options.cast_columns_policy,
+                None if field_ids is None else (field_ids, iceberg_columns[key]),
                 stream=stream,
             )
             frame_columns.append(Column(obj, name=name, dtype=dtype))

@@ -646,6 +646,7 @@ def test_scan_lake_cast_columns_allowed(
         (pl.Int32, pl.Float64, pl.ScanCastOptions(integer_cast="upcast")),
         (pl.Float64, pl.Float32, pl.ScanCastOptions(float_cast="upcast")),
         (pl.Datetime("ns"), pl.Datetime("us"), pl.ScanCastOptions()),
+        (pl.Datetime("us"), pl.Datetime("ns"), pl.ScanCastOptions()),
         (
             pl.Datetime("us"),
             pl.Datetime("ms"),
@@ -659,6 +660,7 @@ def test_scan_lake_cast_columns_allowed(
         "int_to_float",
         "float_downcast",
         "datetime_forbid",
+        "datetime_us_upcast_forbid",
         "datetime_downcast",
     ],
 )
@@ -888,6 +890,313 @@ def test_scan_iceberg_without_field_ids(
         missing_columns="insert",
         _column_mapping=("iceberg-column-mapping", schema),
     )
+    assert_ir_translation_raises(q, in_memory_engine, NotImplementedError)
+
+
+def _field(name: str, dtype: pa.DataType, field_id: int) -> pa.Field:
+    return pa.field(name, dtype, metadata={b"PARQUET:field_id": str(field_id).encode()})
+
+
+def _struct_schema(*fields: tuple[str, int]) -> pa.Schema:
+    return pa.schema(
+        [
+            _field(
+                "s",
+                pa.struct([_field(name, pa.int64(), id_) for name, id_ in fields]),
+                1,
+            )
+        ]
+    )
+
+
+def _list_schema(field_name: str, element_id: int | None) -> pa.Schema:
+    element = pa.struct([_field(field_name, pa.int64(), 3)])
+    element_field = (
+        pa.field("element", element)
+        if element_id is None
+        else _field("element", element, element_id)
+    )
+    return pa.schema([_field("s", pa.list_(element_field), 1)])
+
+
+def _string_list_struct_schema(field_name: str) -> pa.Schema:
+    strings = pa.list_(_field("element", pa.string(), 3))
+    return pa.schema([_field("s", pa.struct([_field(field_name, strings, 2)]), 1)])
+
+
+def _write_iceberg_files(
+    tmp_path: Path, *files: tuple[list[Any], pa.Schema]
+) -> list[str]:
+    paths = [str(tmp_path / f"{index}.parquet") for index in range(len(files))]
+    for path, (values, schema) in zip(paths, files, strict=True):
+        pq.write_table(pa.table({"s": values}, schema=schema), path)
+    return paths
+
+
+@pytest.mark.parametrize(
+    "files, mapping, cast_options",
+    [
+        (
+            [
+                ([{"x": 1, "y": 2}, None], _struct_schema(("x", 2), ("y", 3))),
+                ([{"x": 3, "z": 4}], _struct_schema(("x", 2), ("z", 3))),
+            ],
+            _struct_schema(("x", 2), ("z", 3)),
+            pl.ScanCastOptions(),
+        ),
+        (
+            [([{"y": 1, "x": 2}, None], _struct_schema(("y", 2), ("x", 3)))],
+            _struct_schema(("x", 2), ("y", 3)),
+            pl.ScanCastOptions(),
+        ),
+        (
+            [([{"x": 1, "y": 2}, None], _struct_schema(("x", 2), ("y", 3)))],
+            _struct_schema(("x", 2), ("y", 4)),
+            pl.ScanCastOptions(
+                extra_struct_fields="ignore", missing_struct_fields="insert"
+            ),
+        ),
+        (
+            [
+                ([[{"u": 1}], None, []], _list_schema("u", 2)),
+                ([[{"v": 2}, None]], _list_schema("v", 2)),
+            ],
+            _list_schema("v", 2),
+            pl.ScanCastOptions(),
+        ),
+        (
+            [([[{"u": 1}], None], _list_schema("u", 2))],
+            _list_schema("u", None),
+            pl.ScanCastOptions(),
+        ),
+        (
+            [
+                ([{"x": ["p", None]}, None], _string_list_struct_schema("x")),
+                ([{"y": []}, {"y": ["q"]}], _string_list_struct_schema("y")),
+                ([{"y": None}], _string_list_struct_schema("y")),
+            ],
+            _string_list_struct_schema("y"),
+            pl.ScanCastOptions(),
+        ),
+    ],
+    ids=[
+        "renamed_field",
+        "swapped_names",
+        "readded_field",
+        "list_element_field",
+        "mapping_element_without_id",
+        "string_list_field",
+    ],
+)
+def test_scan_iceberg_nested_by_field_id(
+    engine: pl.GPUEngine,
+    tmp_path: Path,
+    files: list[tuple[list[Any], pa.Schema]],
+    mapping: pa.Schema,
+    cast_options: pl.ScanCastOptions,
+) -> None:
+    q = pl.scan_parquet(
+        _write_iceberg_files(tmp_path, *files),
+        schema=pl.DataFrame(mapping.empty_table()).schema,
+        missing_columns="insert",
+        cast_options=cast_options,
+        _column_mapping=("iceberg-column-mapping", mapping),
+    )
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+def test_scan_iceberg_nested_by_field_id_filter(
+    engine: pl.GPUEngine, tmp_path: Path
+) -> None:
+    paths = _write_iceberg_files(
+        tmp_path,
+        ([{"x": 1, "y": 2}, None], _struct_schema(("x", 2), ("y", 3))),
+        ([{"x": 3, "z": 4}], _struct_schema(("x", 2), ("z", 3))),
+    )
+    mapping = _struct_schema(("x", 2), ("z", 3))
+    q = pl.scan_parquet(
+        paths,
+        schema=pl.DataFrame(mapping.empty_table()).schema,
+        missing_columns="insert",
+        _column_mapping=("iceberg-column-mapping", mapping),
+    ).filter(pl.col("s").struct.field("z") > 1)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "file_schema, mapping, match",
+    [
+        (
+            _struct_schema(("x", 2), ("y", 3)),
+            _struct_schema(("x", 2), ("y", 4)),
+            "encountered extra struct field: y",
+        ),
+        (
+            _list_schema("u", 2),
+            _list_schema("u", 4),
+            "physical ID mismatch for list values column",
+        ),
+    ],
+    ids=["readded_field", "list_element_id"],
+)
+def test_scan_iceberg_nested_by_field_id_raises(
+    engine: pl.GPUEngine,
+    tmp_path: Path,
+    file_schema: pa.Schema,
+    mapping: pa.Schema,
+    match: str,
+) -> None:
+    q = pl.scan_parquet(
+        _write_iceberg_files(tmp_path, ([None], file_schema)),
+        schema=pl.DataFrame(mapping.empty_table()).schema,
+        missing_columns="insert",
+        _column_mapping=("iceberg-column-mapping", mapping),
+    )
+    with pytest.raises(pl.exceptions.SchemaError, match=match):
+        q.collect()
+    if is_streaming_engine(engine):
+        with pytest.RaisesGroup(
+            pytest.RaisesExc(pl.exceptions.SchemaError, match=match),
+            flatten_subgroups=True,
+        ):
+            q.collect(engine=engine)
+    else:
+        with pytest.raises(pl.exceptions.SchemaError, match=match):
+            q.collect(engine=engine)
+
+
+@pytest.mark.parametrize(
+    "file_schema, mapping, default_values",
+    [
+        (
+            pa.schema(
+                [
+                    _field(
+                        "s",
+                        pa.struct([pa.field("x", pa.int64())]),
+                        1,
+                    )
+                ]
+            ),
+            _struct_schema(("x", 2)),
+            None,
+        ),
+        (
+            pa.schema(
+                [
+                    _field(
+                        "s",
+                        pa.struct(
+                            [_field("x", pa.int64(), 2), _field("y", pa.int64(), 2)]
+                        ),
+                        1,
+                    )
+                ]
+            ),
+            _struct_schema(("x", 2)),
+            None,
+        ),
+        (
+            _struct_schema(("x", 2)),
+            _struct_schema(("x", 2)),
+            ("iceberg", ({2: pl.Series([1])}, {})),
+        ),
+        (
+            _struct_schema(("x", 2)),
+            _struct_schema(("x", 2)),
+            ("iceberg", ({}, {2: pl.Series([1])})),
+        ),
+        (
+            pa.schema(
+                [
+                    _field(
+                        "s",
+                        pa.map_(  # type: ignore[call-overload]
+                            pa.field(
+                                "key",
+                                pa.string(),
+                                nullable=False,
+                                metadata={b"PARQUET:field_id": b"2"},
+                            ),
+                            _field("value", pa.int64(), 3),
+                        ),
+                        1,
+                    ),
+                    _field("t", pa.int64(), 4),
+                ]
+            ),
+            None,
+            None,
+        ),
+        (
+            pa.schema(
+                [
+                    _field(
+                        "s",
+                        pa.struct(
+                            [
+                                _field(
+                                    "m",
+                                    pa.map_(  # type: ignore[call-overload]
+                                        pa.field(
+                                            "key",
+                                            pa.string(),
+                                            nullable=False,
+                                            metadata={b"PARQUET:field_id": b"3"},
+                                        ),
+                                        _field("value", pa.int64(), 4),
+                                    ),
+                                    2,
+                                )
+                            ]
+                        ),
+                        1,
+                    ),
+                    _field("t", pa.int64(), 5),
+                ]
+            ),
+            None,
+            None,
+        ),
+        (
+            pa.schema(
+                [
+                    _field("s", pa.list_(_field("element", pa.int64(), 2), 2), 1),
+                    _field("t", pa.int64(), 3),
+                ]
+            ),
+            None,
+            None,
+        ),
+    ],
+    ids=[
+        "nested_field_without_id",
+        "duplicate_sibling_ids",
+        "nested_partition",
+        "nested_initial_default",
+        "map",
+        "map_in_struct",
+        "fixed_size_list",
+    ],
+)
+def test_scan_iceberg_nested_by_field_id_unsupported(
+    in_memory_engine: pl.GPUEngine,
+    tmp_path: Path,
+    file_schema: pa.Schema,
+    mapping: pa.Schema | None,
+    default_values: Any,
+) -> None:
+    mapping = file_schema if mapping is None else mapping
+    path = str(tmp_path / "0.parquet")
+    pq.write_table(file_schema.empty_table(), path)
+    q = pl.scan_parquet(
+        path,
+        schema=pl.DataFrame(mapping.empty_table()).schema,
+        missing_columns="insert",
+        extra_columns="ignore",
+        _column_mapping=("iceberg-column-mapping", mapping),
+        _default_values=default_values,
+    ).select(mapping.names[-1])
     assert_ir_translation_raises(q, in_memory_engine, NotImplementedError)
 
 
