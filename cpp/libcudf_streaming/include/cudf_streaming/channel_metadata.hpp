@@ -131,7 +131,9 @@ struct ordering {
   [[nodiscard]] ordering with_locally_ordered(bool locally_ordered) const;
 
   /**
-   * @brief Return a strict ordering with duplicate boundary rows removed.
+   * @brief Return an equivalent ordering with strict boundaries.
+   *
+   * Duplicate boundary rows are removed when converting a non-strict ordering.
    *
    * @param br Buffer resource used to allocate new boundary rows.
    * @return A strict ordering equivalent to this ordering.

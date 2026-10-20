@@ -155,7 +155,10 @@ cdef class Ordering:
         return ret
 
     def as_strict(self, BufferResource br not None) -> Ordering:
-        """Return a strict ``Ordering`` with duplicate boundaries removed."""
+        """Return an equivalent ``Ordering`` with strict boundaries.
+
+        Duplicate boundaries are removed when converting a non-strict ordering.
+        """
         if self.strict_boundaries:
             return self
         return Ordering.from_cpp(self._handle.as_strict(deref(br.ptr())))
