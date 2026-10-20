@@ -11,6 +11,7 @@
 #include "nvcomp_adapter.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/buffer_factories.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/getenv_or.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
@@ -453,10 +454,7 @@ void compress(compression_type compression,
                                                     default_host_device_compression_cost_ratio),
                             stream);
 
-  auto tmp_results =
-    cuda::device_buffer<codec_exec_result>(stream, temp_mr, results.size(), cuda::no_init);
-  CUDF_CUDA_TRY(
-    cudf::detail::memcpy_async(tmp_results.data(), results.data(), results.size_bytes(), stream));
+  auto tmp_results = cuda::device_buffer<codec_exec_result>(stream, temp_mr, results);
   device_span<codec_exec_result> results_view = tmp_results;
 
   auto const streams = cudf::detail::fork_streams(stream, 2);
