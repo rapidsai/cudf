@@ -31,7 +31,7 @@ dependencies = [
     "nvtx>=0.2.1",
     "packaging",
     "pandas>=3.0.0,<3.1.0",
-    "pyarrow>=19.0.0,<26.0.0",
+    "pyarrow>=19.0.0",
     "pylibcudf==26.12.*,>=0.0.0a0",
     "rich",
     "rmm==26.12.*,>=0.0.0a0",
@@ -98,7 +98,7 @@ select = [
 ]
 
 # PyPI hard limit is 1GiB, but try to keep this as small as possible
-max_allowed_size_compressed = '15M'
+max_allowed_size_compressed = '5M'
 
 [tool.pytest.ini_options]
 addopts = "--tb=native --strict-config --strict-markers"
