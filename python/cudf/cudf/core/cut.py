@@ -147,6 +147,10 @@ def cut(
 
     # bins can either be an int, sequence of scalars or an intervalIndex
     if isinstance(bins, Sequence):
+        if right and include_lowest:
+            # The inclusive-edge adjustment below must not mutate the caller's bins.
+            bins = list(bins)
+            old_bins = bins.copy()
         if len(set(bins)) != len(bins):
             if duplicates == "raise":
                 raise ValueError(
