@@ -891,14 +891,93 @@ def test_scan_iceberg_without_field_ids(
     assert_ir_translation_raises(q, in_memory_engine, NotImplementedError)
 
 
+@pytest.mark.parametrize(
+    "start, columns",
+    [(1, ("a", "d")), (0, ("a",))],
+    ids=["field_in_file", "field_not_projected"],
+)
+def test_scan_iceberg_partition_error_reads_files(
+    engine: pl.GPUEngine,
+    default_files: tuple[list[str], pa.Schema],
+    start: int,
+    columns: tuple[str, ...],
+) -> None:
+    paths, schema = default_files
+    q = pl.scan_parquet(
+        paths[start:],
+        schema={"a": pl.Int64, "d": pl.Int64},
+        missing_columns="insert",
+        _column_mapping=("iceberg-column-mapping", schema),
+        _default_values=("iceberg", ({2: "unsupported type change"}, {})),
+    ).select(columns)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize("missing_columns", ["insert", "raise"])
+@pytest.mark.parametrize(
+    "initial_defaults",
+    [{}, {2: pl.Series([7], dtype=pl.Int64)}],
+    ids=["no_default", "with_default"],
+)
+def test_scan_iceberg_partition_error_missing_field(
+    engine: pl.GPUEngine,
+    default_files: tuple[list[str], pa.Schema],
+    missing_columns: Literal["insert", "raise"],
+    initial_defaults: dict[int, pl.Series],
+) -> None:
+    paths, schema = default_files
+    q = pl.scan_parquet(
+        paths,
+        schema={"a": pl.Int64, "d": pl.Int64},
+        missing_columns=missing_columns,
+        _column_mapping=("iceberg-column-mapping", schema),
+        _default_values=(
+            "iceberg",
+            ({2: "unsupported type change"}, initial_defaults),
+        ),
+    )
+    match = "unsupported type change"
+    with pytest.raises(pl.exceptions.ComputeError, match=match):
+        q.collect()
+    if is_streaming_engine(engine):
+        with pytest.RaisesGroup(
+            pytest.RaisesExc(pl.exceptions.ComputeError, match=match),
+            flatten_subgroups=True,
+        ):
+            q.collect(engine=engine)
+    else:
+        with pytest.raises(pl.exceptions.ComputeError, match=match):
+            q.collect(engine=engine)
+
+
+def test_scan_iceberg_partition_error_sliced(
+    in_memory_engine: pl.GPUEngine, default_files: tuple[list[str], pa.Schema]
+) -> None:
+    paths, schema = default_files
+    q = pl.scan_parquet(
+        paths[::-1],
+        schema={"a": pl.Int64, "d": pl.Int64},
+        missing_columns="insert",
+        _column_mapping=("iceberg-column-mapping", schema),
+        _default_values=("iceberg", ({2: "unsupported type change"}, {})),
+    ).head(1)
+    assert_ir_translation_raises(q, in_memory_engine, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [pl.Series([1, 2]), "unsupported type change"],
+    ids=["value", "error"],
+)
 def test_scan_lake_partition_values_without_column_mapping(
     in_memory_engine: pl.GPUEngine,
     default_files: tuple[list[str], pa.Schema],
+    value: pl.Series | str,
 ) -> None:
     paths, _ = default_files
     q = pl.scan_parquet(
         paths,
-        _default_values=("iceberg", ({1: pl.Series([1, 2])}, {})),
+        _default_values=("iceberg", ({1: value}, {})),
     )
     assert_ir_translation_raises(q, in_memory_engine, NotImplementedError)
 

@@ -135,6 +135,10 @@ class LakeScanOptions:
     partition_values
         Maps a physical field ID to the value its identity-transformed
         partition field takes, one row per path.
+    partition_errors
+        Maps a physical field ID to the reason polars could not supply the
+        values of its identity-transformed partition field. Such a field is
+        read from the files, and a file that lacks it fails the scan.
     initial_defaults
         Maps a physical field ID to the single-element series holding the
         Iceberg V3 initial default for a column absent from a file.
@@ -159,6 +163,7 @@ class LakeScanOptions:
     deletion_vectors: Mapping[int, str]
     delta_selections: Mapping[int, pl.Series]
     partition_values: Mapping[int, pl.Series]
+    partition_errors: Mapping[int, str]
     initial_defaults: Mapping[int, pl.Series]
     missing_columns_policy: str
     extra_columns_policy: str
@@ -169,7 +174,7 @@ class LakeScanOptions:
     def __post_init__(self) -> None:  # noqa: D105
         if self.columns is not None and any(column.children for column in self.columns):
             raise NotImplementedError("Iceberg column mapping of nested columns")
-        if self.partition_values and self.columns is None:
+        if (self.partition_values or self.partition_errors) and self.columns is None:
             raise NotImplementedError("Iceberg partition values without column mapping")
         if self.extra_columns_policy not in ("ignore", "raise"):
             raise NotImplementedError(  # pragma: no cover; only two policies exist
@@ -267,6 +272,7 @@ class LakeScanOptions:
                 )
 
         partition_values: dict[int, pl.Series] = {}
+        partition_errors: dict[int, str] = {}
         initial_defaults: dict[int, pl.Series] = {}
         if file_options.default_values is not None:
             defaults_kind, defaults_payload = file_options.default_values
@@ -275,10 +281,9 @@ class LakeScanOptions:
             partition_fields, raw_initial_defaults = defaults_payload
             for physical_id, value in partition_fields.items():
                 if isinstance(value, str):
-                    raise NotImplementedError(
-                        f"Iceberg partition field {physical_id}: {value}"
-                    )
-                partition_values[physical_id] = pl.Series._from_pyseries(value)
+                    partition_errors[physical_id] = value
+                else:
+                    partition_values[physical_id] = pl.Series._from_pyseries(value)
             initial_defaults = {
                 physical_id: pl.Series._from_pyseries(value)
                 for physical_id, value in raw_initial_defaults.items()
@@ -289,6 +294,7 @@ class LakeScanOptions:
             and not deletion_vectors
             and not delta_selections
             and not partition_values
+            and not partition_errors
             and not initial_defaults
             and file_options.missing_columns_policy == "raise"
         ):
@@ -299,6 +305,7 @@ class LakeScanOptions:
             deletion_vectors=deletion_vectors,
             delta_selections=delta_selections,
             partition_values=partition_values,
+            partition_errors=partition_errors,
             initial_defaults=initial_defaults,
             missing_columns_policy=file_options.missing_columns_policy,
             extra_columns_policy=file_options.extra_columns_policy,
@@ -427,6 +434,7 @@ class LakeScanOptions:
                 tuple(sorted(self.deletion_vectors.items())),
                 tuple(sorted(self.delta_selections)),
                 tuple(sorted(self.partition_values)),
+                tuple(sorted(self.partition_errors.items())),
                 tuple(sorted(self.initial_defaults)),
                 self.missing_columns_policy,
                 self.extra_columns_policy,
@@ -444,6 +452,7 @@ class LakeScanOptions:
             and self.deletion_vectors == other.deletion_vectors
             and _series_mapping_eq(self.delta_selections, other.delta_selections)
             and _series_mapping_eq(self.partition_values, other.partition_values)
+            and self.partition_errors == other.partition_errors
             and _series_mapping_eq(self.initial_defaults, other.initial_defaults)
             and self.missing_columns_policy == other.missing_columns_policy
             and self.extra_columns_policy == other.extra_columns_policy
@@ -1214,6 +1223,12 @@ def _read_group(
                 stream=stream,
             )
             frame_columns.append(Column(obj, name=name, dtype=dtype))
+        elif by_field_id and key in lake_options.partition_errors:
+            raise pl.exceptions.ComputeError(
+                "failed to resolve Iceberg column mapping: "
+                "error loading identity transform value from metadata for "
+                f"missing field: {lake_options.partition_errors[key]}"
+            )
         elif lake_options.missing_columns_policy == "raise":
             raise pl.exceptions.ColumnNotFoundError(f"did not find column {name}")
         else:
