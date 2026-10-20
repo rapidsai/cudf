@@ -860,11 +860,16 @@ def test_scan_iceberg_without_field_ids(
     assert_ir_translation_raises(q, in_memory_engine, NotImplementedError)
 
 
-def _field(name: str, dtype: pa.DataType, field_id: int) -> pa.Field:
-    return pa.field(name, dtype, metadata={b"PARQUET:field_id": str(field_id).encode()})
+def _field(
+    name: str, dtype: pa.DataType, field_id: int | None, *, nullable: bool = True
+) -> pa.Field:
+    metadata = (
+        None if field_id is None else {b"PARQUET:field_id": str(field_id).encode()}
+    )
+    return pa.field(name, dtype, nullable=nullable, metadata=metadata)
 
 
-def _struct_schema(*fields: tuple[str, int]) -> pa.Schema:
+def _struct_schema(*fields: tuple[str, int | None]) -> pa.Schema:
     return pa.schema(
         [
             _field(
@@ -878,17 +883,29 @@ def _struct_schema(*fields: tuple[str, int]) -> pa.Schema:
 
 def _list_schema(field_name: str, element_id: int | None) -> pa.Schema:
     element = pa.struct([_field(field_name, pa.int64(), 3)])
-    element_field = (
-        pa.field("element", element)
-        if element_id is None
-        else _field("element", element, element_id)
-    )
-    return pa.schema([_field("s", pa.list_(element_field), 1)])
+    return pa.schema([_field("s", pa.list_(_field("element", element, element_id)), 1)])
 
 
 def _string_list_struct_schema(field_name: str) -> pa.Schema:
     strings = pa.list_(_field("element", pa.string(), 3))
     return pa.schema([_field("s", pa.struct([_field(field_name, strings, 2)]), 1)])
+
+
+def _nested_schema(
+    kind: Literal["struct", "list", "string_list"], spec: tuple[Any, ...]
+) -> pa.Schema:
+    if kind == "struct":
+        return _struct_schema(*spec)
+    if kind == "list":
+        return _list_schema(*spec)
+    return _string_list_struct_schema(*spec)
+
+
+def _map_type(key_id: int, value_id: int) -> pa.DataType:
+    return pa.map_(  # type: ignore[call-overload]
+        _field("key", pa.string(), key_id, nullable=False),
+        _field("value", pa.int64(), value_id),
+    )
 
 
 def _write_iceberg_files(
@@ -901,48 +918,54 @@ def _write_iceberg_files(
 
 
 @pytest.mark.parametrize(
-    "files, mapping, cast_options",
+    "kind, files, mapping, cast_options",
     [
         (
+            "struct",
             [
-                ([{"x": 1, "y": 2}, None], _struct_schema(("x", 2), ("y", 3))),
-                ([{"x": 3, "z": 4}], _struct_schema(("x", 2), ("z", 3))),
+                ([{"x": 1, "y": 2}, None], (("x", 2), ("y", 3))),
+                ([{"x": 3, "z": 4}], (("x", 2), ("z", 3))),
             ],
-            _struct_schema(("x", 2), ("z", 3)),
+            (("x", 2), ("z", 3)),
             pl.ScanCastOptions(),
         ),
         (
-            [([{"y": 1, "x": 2}, None], _struct_schema(("y", 2), ("x", 3)))],
-            _struct_schema(("x", 2), ("y", 3)),
+            "struct",
+            [([{"y": 1, "x": 2}, None], (("y", 2), ("x", 3)))],
+            (("x", 2), ("y", 3)),
             pl.ScanCastOptions(),
         ),
         (
-            [([{"x": 1, "y": 2}, None], _struct_schema(("x", 2), ("y", 3)))],
-            _struct_schema(("x", 2), ("y", 4)),
+            "struct",
+            [([{"x": 1, "y": 2}, None], (("x", 2), ("y", 3)))],
+            (("x", 2), ("y", 4)),
             pl.ScanCastOptions(
                 extra_struct_fields="ignore", missing_struct_fields="insert"
             ),
         ),
         (
+            "list",
             [
-                ([[{"u": 1}], None, []], _list_schema("u", 2)),
-                ([[{"v": 2}, None]], _list_schema("v", 2)),
+                ([[{"u": 1}], None, []], ("u", 2)),
+                ([[{"v": 2}, None]], ("v", 2)),
             ],
-            _list_schema("v", 2),
+            ("v", 2),
             pl.ScanCastOptions(),
         ),
         (
-            [([[{"u": 1}], None], _list_schema("u", 2))],
-            _list_schema("u", None),
+            "list",
+            [([[{"u": 1}], None], ("u", 2))],
+            ("u", None),
             pl.ScanCastOptions(),
         ),
         (
+            "string_list",
             [
-                ([{"x": ["p", None]}, None], _string_list_struct_schema("x")),
-                ([{"y": []}, {"y": ["q"]}], _string_list_struct_schema("y")),
-                ([{"y": None}], _string_list_struct_schema("y")),
+                ([{"x": ["p", None]}, None], ("x",)),
+                ([{"y": []}, {"y": ["q"]}], ("y",)),
+                ([{"y": None}], ("y",)),
             ],
-            _string_list_struct_schema("y"),
+            ("y",),
             pl.ScanCastOptions(),
         ),
     ],
@@ -958,16 +981,21 @@ def _write_iceberg_files(
 def test_scan_iceberg_nested_by_field_id(
     engine: pl.GPUEngine,
     tmp_path: Path,
-    files: list[tuple[list[Any], pa.Schema]],
-    mapping: pa.Schema,
+    kind: Literal["struct", "list", "string_list"],
+    files: list[tuple[list[Any], tuple[Any, ...]]],
+    mapping: tuple[Any, ...],
     cast_options: pl.ScanCastOptions,
 ) -> None:
+    paths = _write_iceberg_files(
+        tmp_path, *((values, _nested_schema(kind, spec)) for values, spec in files)
+    )
+    mapping_schema = _nested_schema(kind, mapping)
     q = pl.scan_parquet(
-        _write_iceberg_files(tmp_path, *files),
-        schema=pl.DataFrame(mapping.empty_table()).schema,
+        paths,
+        schema=pl.DataFrame(mapping_schema.empty_table()).schema,
         missing_columns="insert",
         cast_options=cast_options,
-        _column_mapping=("iceberg-column-mapping", mapping),
+        _column_mapping=("iceberg-column-mapping", mapping_schema),
     )
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
@@ -991,33 +1019,32 @@ def test_scan_iceberg_nested_by_field_id_filter(
 
 
 @pytest.mark.parametrize(
-    "file_schema, mapping, match",
+    "kind, file_spec, mapping, match",
     [
         (
-            _struct_schema(("x", 2), ("y", 3)),
-            _struct_schema(("x", 2), ("y", 4)),
+            "struct",
+            (("x", 2), ("y", 3)),
+            (("x", 2), ("y", 4)),
             "encountered extra struct field: y",
         ),
-        (
-            _list_schema("u", 2),
-            _list_schema("u", 4),
-            "physical ID mismatch for list values column",
-        ),
+        ("list", ("u", 2), ("u", 4), "physical ID mismatch for list values column"),
     ],
     ids=["readded_field", "list_element_id"],
 )
 def test_scan_iceberg_nested_by_field_id_raises(
     engine: pl.GPUEngine,
     tmp_path: Path,
-    file_schema: pa.Schema,
-    mapping: pa.Schema,
+    kind: Literal["struct", "list"],
+    file_spec: tuple[Any, ...],
+    mapping: tuple[Any, ...],
     match: str,
 ) -> None:
+    mapping_schema = _nested_schema(kind, mapping)
     q = pl.scan_parquet(
-        _write_iceberg_files(tmp_path, ([None], file_schema)),
-        schema=pl.DataFrame(mapping.empty_table()).schema,
+        _write_iceberg_files(tmp_path, ([None], _nested_schema(kind, file_spec))),
+        schema=pl.DataFrame(mapping_schema.empty_table()).schema,
         missing_columns="insert",
-        _column_mapping=("iceberg-column-mapping", mapping),
+        _column_mapping=("iceberg-column-mapping", mapping_schema),
     )
     with pytest.raises(pl.exceptions.SchemaError, match=match):
         q.collect()
@@ -1033,129 +1060,40 @@ def test_scan_iceberg_nested_by_field_id_raises(
 
 
 @pytest.mark.parametrize(
-    "file_schema, mapping, default_values",
+    "file_fields, defaults",
     [
-        (
-            pa.schema(
-                [
-                    _field(
-                        "s",
-                        pa.struct([pa.field("x", pa.int64())]),
-                        1,
-                    )
-                ]
-            ),
-            _struct_schema(("x", 2)),
-            None,
-        ),
-        (
-            pa.schema(
-                [
-                    _field(
-                        "s",
-                        pa.struct(
-                            [_field("x", pa.int64(), 2), _field("y", pa.int64(), 2)]
-                        ),
-                        1,
-                    )
-                ]
-            ),
-            _struct_schema(("x", 2)),
-            None,
-        ),
-        (
-            _struct_schema(("x", 2)),
-            _struct_schema(("x", 2)),
-            ("iceberg", ({2: pl.Series([1])}, {})),
-        ),
-        (
-            _struct_schema(("x", 2)),
-            _struct_schema(("x", 2)),
-            ("iceberg", ({}, {2: pl.Series([1])})),
-        ),
-        (
-            pa.schema(
-                [
-                    _field(
-                        "s",
-                        pa.map_(  # type: ignore[call-overload]
-                            pa.field(
-                                "key",
-                                pa.string(),
-                                nullable=False,
-                                metadata={b"PARQUET:field_id": b"2"},
-                            ),
-                            _field("value", pa.int64(), 3),
-                        ),
-                        1,
-                    ),
-                    _field("t", pa.int64(), 4),
-                ]
-            ),
-            None,
-            None,
-        ),
-        (
-            pa.schema(
-                [
-                    _field(
-                        "s",
-                        pa.struct(
-                            [
-                                _field(
-                                    "m",
-                                    pa.map_(  # type: ignore[call-overload]
-                                        pa.field(
-                                            "key",
-                                            pa.string(),
-                                            nullable=False,
-                                            metadata={b"PARQUET:field_id": b"3"},
-                                        ),
-                                        _field("value", pa.int64(), 4),
-                                    ),
-                                    2,
-                                )
-                            ]
-                        ),
-                        1,
-                    ),
-                    _field("t", pa.int64(), 5),
-                ]
-            ),
-            None,
-            None,
-        ),
-        (
-            pa.schema(
-                [
-                    _field("s", pa.list_(_field("element", pa.int64(), 2), 2), 1),
-                    _field("t", pa.int64(), 3),
-                ]
-            ),
-            None,
-            None,
-        ),
+        ((("x", None),), None),
+        ((("x", 2), ("y", 2)), None),
+        ((("x", 2),), "partition"),
+        ((("x", 2),), "initial_default"),
     ],
     ids=[
         "nested_field_without_id",
         "duplicate_sibling_ids",
         "nested_partition",
         "nested_initial_default",
-        "map",
-        "map_in_struct",
-        "fixed_size_list",
     ],
 )
 def test_scan_iceberg_nested_by_field_id_unsupported(
     in_memory_engine: pl.GPUEngine,
     tmp_path: Path,
-    file_schema: pa.Schema,
-    mapping: pa.Schema | None,
-    default_values: Any,
+    file_fields: tuple[tuple[str, int | None], ...],
+    defaults: Literal["partition", "initial_default"] | None,
 ) -> None:
-    mapping = file_schema if mapping is None else mapping
+    default_values: (
+        tuple[
+            Literal["iceberg"],
+            tuple[dict[int, pl.Series | str], dict[int, pl.Series]],
+        ]
+        | None
+    ) = None
+    if defaults == "partition":
+        default_values = ("iceberg", ({2: pl.Series([1])}, {}))
+    elif defaults == "initial_default":
+        default_values = ("iceberg", ({}, {2: pl.Series([1])}))
+    mapping = _struct_schema(("x", 2))
     path = str(tmp_path / "0.parquet")
-    pq.write_table(file_schema.empty_table(), path)
+    pq.write_table(_struct_schema(*file_fields).empty_table(), path)
     q = pl.scan_parquet(
         path,
         schema=pl.DataFrame(mapping.empty_table()).schema,
@@ -1163,7 +1101,32 @@ def test_scan_iceberg_nested_by_field_id_unsupported(
         extra_columns="ignore",
         _column_mapping=("iceberg-column-mapping", mapping),
         _default_values=default_values,
-    ).select(mapping.names[-1])
+    ).select("s")
+    assert_ir_translation_raises(q, in_memory_engine, NotImplementedError)
+
+
+@pytest.mark.parametrize("dtype", ["map", "map_in_struct", "fixed_size_list"])
+def test_scan_iceberg_by_field_id_unsupported_type(
+    in_memory_engine: pl.GPUEngine,
+    tmp_path: Path,
+    dtype: Literal["map", "map_in_struct", "fixed_size_list"],
+) -> None:
+    if dtype == "map":
+        column = _field("s", _map_type(2, 3), 1)
+    elif dtype == "map_in_struct":
+        column = _field("s", pa.struct([_field("m", _map_type(3, 4), 2)]), 1)
+    else:
+        column = _field("s", pa.list_(_field("element", pa.int64(), 2), 2), 1)
+    schema = pa.schema([column, _field("t", pa.int64(), 5)])
+    path = str(tmp_path / "0.parquet")
+    pq.write_table(schema.empty_table(), path)
+    q = pl.scan_parquet(
+        path,
+        schema=pl.DataFrame(schema.empty_table()).schema,
+        missing_columns="insert",
+        extra_columns="ignore",
+        _column_mapping=("iceberg-column-mapping", schema),
+    ).select("t")
     assert_ir_translation_raises(q, in_memory_engine, NotImplementedError)
 
 
