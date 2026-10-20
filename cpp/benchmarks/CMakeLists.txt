@@ -103,7 +103,7 @@ endfunction()
 # * copying benchmarks ----------------------------------------------------------------------------
 ConfigureNVBench(
   COPYING_NVBENCH copying/concatenate.cpp copying/copy_if_else.cpp copying/gather.cpp
-  copying/scatter.cpp copying/shift.cpp
+  copying/scatter.cpp copying/shift.cpp copying/pack.cpp
 )
 
 # ##################################################################################################
@@ -457,6 +457,7 @@ ConfigureNVBench(
   text/tokenize.cpp
   text/unicode_normalize.cpp
   text/vocab.cpp
+  text/byte_pair_encoding.cpp
 )
 
 # ##################################################################################################

@@ -1,12 +1,16 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+import decimal
 import io
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from utils import (
+    BLOOM_FILTER_OPTIONS,
+    assert_table_and_meta_eq,
     extract_parquet_footer,
+    requires_pyarrow_bloom_filters,
     synchronize_stream,
     write_hybrid_scan_parquet_bytes,
 )
@@ -26,6 +30,35 @@ from pylibcudf.io.experimental import (
     ReadColumnsMode,
     UseDataPageMask,
 )
+
+
+def _filter_row_groups_with_dictionary_pages(
+    reader: HybridScanReader,
+    options: plc.io.parquet.ParquetReaderOptions,
+    parquet_bytes: bytes,
+    filter_expression: Operation,
+) -> list[int]:
+    """Row groups that survive dictionary page filtering with `filter_expression`."""
+    reader.reset_column_selection()
+    options.set_filter(filter_expression)
+    all_row_groups = reader.all_row_groups(options)
+    dictionary_ranges = reader.dictionary_pages_byte_ranges(
+        all_row_groups, options
+    )
+    # Keep source bytes alive until synchronize_stream() runs
+    dictionary_data = [
+        plc.gpumemoryview(
+            rmm.DeviceBuffer.to_device(
+                memoryview(parquet_bytes)[r.offset : r.offset + r.size],
+                plc.utils._get_stream(),
+            )
+        )
+        for r in dictionary_ranges
+    ]
+    synchronize_stream()
+    return reader.filter_row_groups_with_dictionary_pages(
+        dictionary_data, all_row_groups, options
+    )
 
 
 @pytest.fixture(scope="module")
@@ -229,6 +262,45 @@ def test_hybrid_scan_bloom_filter_and_dictionary_page_byte_ranges(
     # These should be lists of ByteRangeInfo
     assert isinstance(bloom_ranges, list)
     assert isinstance(dict_ranges, list)
+
+
+@requires_pyarrow_bloom_filters
+def test_hybrid_scan_bloom_filter_byte_ranges_discarded_or(
+    simple_parquet_table: pa.Table,
+) -> None:
+    """Equalities in a discarded OR branch add no bloom filter byte ranges."""
+    buf = io.BytesIO()
+    bloom_options = dict.fromkeys(["col0", "col1"], BLOOM_FILTER_OPTIONS)
+    pq.write_table(
+        simple_parquet_table, buf, bloom_filter_options=bloom_options
+    )
+
+    def bloom_ranges(expression):
+        options = plc.io.parquet.ParquetReaderOptions()
+        options.set_filter(expression)
+        reader = HybridScanReader(
+            extract_parquet_footer(buf.getvalue()), options
+        )
+        row_groups = reader.all_row_groups(options)
+        ranges = reader.bloom_filters_byte_ranges(row_groups, options)
+        return [(r.offset, r.size) for r in ranges]
+
+    col0 = ColumnNameReference("col0")
+    five = Literal(plc.Scalar.from_arrow(pa.scalar(5, pa.uint32())))
+    survivor = Operation(
+        ASTOperator.EQUAL,
+        ColumnNameReference("col1"),
+        Literal(plc.Scalar.from_arrow(pa.scalar("str_7"))),
+    )
+    # Bloom filters cannot evaluate `<`, so the OR and `col0 == 5` are dropped
+    dropped = Operation(
+        ASTOperator.LOGICAL_OR,
+        Operation(ASTOperator.EQUAL, col0, five),
+        Operation(ASTOperator.LESS, col0, five),
+    )
+    filter_expression = Operation(ASTOperator.LOGICAL_AND, dropped, survivor)
+    assert bloom_ranges(survivor)
+    assert bloom_ranges(filter_expression) == bloom_ranges(survivor)
 
 
 def test_hybrid_scan_column_chunk_byte_ranges(
@@ -925,36 +997,134 @@ def test_hybrid_scan_filter_row_groups_with_dictionary_pages_negation(
 
     col1 = ColumnNameReference("col1")
     needle = Literal(plc.Scalar.from_arrow(pa.scalar("str_0")))
-    reader = simple_hybrid_scan_reader
-
-    def prune(filter_expression: Operation) -> list[int]:
-        reader.reset_column_selection()
-        simple_parquet_options.set_filter(filter_expression)
-        all_row_groups = reader.all_row_groups(simple_parquet_options)
-        dictionary_ranges = reader.dictionary_pages_byte_ranges(
-            all_row_groups, simple_parquet_options
-        )
-        # the caller is responsible for keeping the source bytes alive until
-        # synchronize_stream() below runs.
-        # See https://github.com/rapidsai/rmm/issues/2521
-        dict_page_bytes = [
-            simple_parquet_bytes[r.offset : r.offset + r.size]
-            for r in dictionary_ranges
-        ]
-        dictionary_data = [
-            plc.gpumemoryview(
-                rmm.DeviceBuffer.to_device(b, plc.utils._get_stream())
-            )
-            for b in dict_page_bytes
-        ]
-        synchronize_stream()
-        return reader.filter_row_groups_with_dictionary_pages(
-            dictionary_data, all_row_groups, simple_parquet_options
-        )
-
     inner = Operation(negated, col1, needle)
-    assert prune(Operation(ASTOperator.NOT, inner)) == expected
-    assert prune(Operation(unnegated, col1, needle)) == expected
+    for filter_expression in (
+        Operation(ASTOperator.NOT, inner),
+        Operation(unnegated, col1, needle),
+    ):
+        assert (
+            _filter_row_groups_with_dictionary_pages(
+                simple_hybrid_scan_reader,
+                simple_parquet_options,
+                simple_parquet_bytes,
+                filter_expression,
+            )
+            == expected
+        )
+
+
+def test_hybrid_scan_dictionary_page_filter_long_strings() -> None:
+    """Dictionary values are prefixed with their 4 byte length, which can exceed 255."""
+    # Row group 0 holds "x...x5" and row group 1 holds "x...x6"
+    prefix = "x" * 300
+    buf = io.BytesIO()
+    pq.write_table(
+        pa.table({"s": [f"{prefix}5"] * 10 + [f"{prefix}6"] * 10}),
+        buf,
+        row_group_size=10,
+        use_dictionary=True,
+    )
+    parquet_bytes = buf.getvalue()
+    options = plc.io.parquet.ParquetReaderOptions.builder(
+        plc.io.SourceInfo([io.BytesIO(parquet_bytes)])
+    ).build()
+    reader = HybridScanReader(extract_parquet_footer(parquet_bytes), options)
+
+    for value, expected in [(5, [0]), (6, [1]), (7, [])]:
+        filter_expression = Operation(
+            ASTOperator.EQUAL,
+            ColumnNameReference("s"),
+            Literal(plc.Scalar.from_arrow(pa.scalar(f"{prefix}{value}"))),
+        )
+        assert (
+            _filter_row_groups_with_dictionary_pages(
+                reader, options, parquet_bytes, filter_expression
+            )
+            == expected
+        )
+
+
+@pytest.mark.parametrize(
+    "arrow_type,literal_type",
+    [
+        (pa.decimal128(9, 2), pa.decimal32(9, 2)),  # 4 byte FLBA
+        (pa.decimal128(12, 2), pa.decimal64(12, 2)),  # 6 byte FLBA
+        (pa.decimal128(20, 2), pa.decimal128(20, 2)),  # 9 byte FLBA
+    ],
+)
+def test_hybrid_scan_short_flba_decimals(arrow_type, literal_type) -> None:
+    """Decimals in FIXED_LEN_BYTE_ARRAY shorter than their cudf storage type
+    (pyarrow's default) are big-endian and must be sign-extended.
+    """
+    # Negative values. Row group 0 holds -0.55 and row group 1 does not.
+    evens = [
+        decimal.Decimal((i % 50) * 2 - 60).scaleb(-2) for i in range(1000)
+    ]
+    with_odd = [
+        decimal.Decimal(-55).scaleb(-2) if i % 50 == 1 else v
+        for i, v in enumerate(evens)
+    ]
+    table = pa.table({"c": pa.array(with_odd + evens, arrow_type)})
+    buf = io.BytesIO()
+    pq.write_table(table, buf, row_group_size=len(evens), use_dictionary=True)
+    parquet_bytes = buf.getvalue()
+    options = plc.io.parquet.ParquetReaderOptions.builder(
+        plc.io.SourceInfo([io.BytesIO(parquet_bytes)])
+    ).build()
+    reader = HybridScanReader(extract_parquet_footer(parquet_bytes), options)
+
+    def compare(op, value, scale=2):
+        decimal_type = {4: pa.decimal32, 8: pa.decimal64, 16: pa.decimal128}[
+            literal_type.byte_width
+        ](literal_type.precision, scale)
+        literal = pa.array(
+            [decimal.Decimal(value).scaleb(-scale)], decimal_type
+        )
+        return Operation(
+            op,
+            ColumnNameReference("c"),
+            Literal(plc.Scalar.from_arrow(literal[0])),
+        )
+
+    # Dictionary pages, where a literal at another scale cannot prune
+    for filter_expression, expected in [
+        (compare(ASTOperator.EQUAL, -55), [0]),
+        (compare(ASTOperator.EQUAL, -53), []),
+        (compare(ASTOperator.EQUAL, -550, scale=3), [0, 1]),
+    ]:
+        assert (
+            _filter_row_groups_with_dictionary_pages(
+                reader, options, parquet_bytes, filter_expression
+            )
+            == expected
+        )
+
+    # Statistics, where both row groups have a minimum of -0.60
+    for filter_expression, expected in [
+        (compare(ASTOperator.LESS, -60), []),
+        (compare(ASTOperator.LESS_EQUAL, -60), [0, 1]),
+    ]:
+        reader.reset_column_selection()
+        options.set_filter(filter_expression)
+        assert (
+            reader.filter_row_groups_with_stats(
+                reader.all_row_groups(options), options
+            )
+            == expected
+        )
+
+    # BYTE_STREAM_SPLIT decoding of the same values
+    buf = io.BytesIO()
+    pq.write_table(
+        table, buf, use_dictionary=False, column_encoding="BYTE_STREAM_SPLIT"
+    )
+    source = io.BytesIO(buf.getvalue())
+    got = plc.io.parquet.read_parquet(
+        plc.io.parquet.ParquetReaderOptions.builder(
+            plc.io.SourceInfo([source])
+        ).build()
+    )
+    assert got.tbl.to_arrow()[0].to_pylist() == table["c"].to_pylist()
 
 
 def test_hybrid_scan_metadata_with_page_index(
@@ -1032,12 +1202,63 @@ def test_hybrid_scan_metadata_with_page_index(
     assert row_mask.type().id() == plc.types.TypeId.BOOL8
 
 
+@pytest.mark.parametrize(
+    "write_statistics",
+    [True, False, ["col1"]],
+    ids=["column_and_offset_index", "offset_index_only", "mixed"],
+)
+def test_page_index_byte_range_optional_indexes(
+    simple_parquet_table: pa.Table,
+    row_group_size: int,
+    simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
+    write_statistics: bool | list[str],
+) -> None:
+    """Page index byte range must span exactly the indexes written between the
+    last column chunk and the footer, even when column indexes are missing.
+    """
+    data = memoryview(
+        write_hybrid_scan_parquet_bytes(
+            simple_parquet_table, row_group_size, write_statistics
+        )
+    )
+
+    # Page indexes are written right after the last column chunk and before the footer
+    pa_metadata = pq.read_metadata(io.BytesIO(data))
+    data_end = max(
+        (col.dictionary_page_offset or col.data_page_offset)
+        + col.total_compressed_size
+        for rg in range(pa_metadata.num_row_groups)
+        for col in map(
+            pa_metadata.row_group(rg).column, range(pa_metadata.num_columns)
+        )
+    )
+    footer = extract_parquet_footer(data)
+    footer_start = len(data) - 8 - len(footer)
+
+    reader = HybridScanReader(footer, simple_parquet_options)
+    page_index = reader.page_index_byte_range()
+    assert page_index.offset == data_end
+    assert page_index.offset + page_index.size == footer_start
+    reader.setup_page_index(
+        data[page_index.offset : page_index.offset + page_index.size]
+    )
+
+    # Keep the source alive for the main parquet reader
+    source = io.BytesIO(data)
+    options = plc.io.parquet.ParquetReaderOptions.builder(
+        plc.io.SourceInfo([source])
+    ).build()
+    assert_table_and_meta_eq(
+        simple_parquet_table, plc.io.parquet.read_parquet(options)
+    )
+
+
 @pytest.mark.parametrize("total_rows", [1_000, 20_000])
 def test_hybrid_scan_page_index_stats_misaligned_pages(
     total_rows: int,
     simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
 ) -> None:
-    """Row mask from page stats of columns whose page boundaries don't align."""
+    """Misaligned page stats prune without indexes for discarded columns."""
     # Different value widths with a small page size give each column a different number
     # of rows per page, so their page boundaries don't line up.
     buf = io.BytesIO()
@@ -1046,12 +1267,14 @@ def test_hybrid_scan_page_index_stats_misaligned_pages(
             {
                 "a": [f"{i:07d}" for i in range(total_rows)],
                 "b": [f"{i:011d}" for i in range(total_rows)],
+                "unused": [f"{i:07d}" for i in range(total_rows)],
             }
         ),
         buf,
         use_dictionary=False,
         write_batch_size=1,
         data_page_size=256,
+        write_statistics=["a", "b"],
         write_page_index=True,
     )
     data = memoryview(buf.getvalue())
@@ -1071,11 +1294,30 @@ def test_hybrid_scan_page_index_stats_misaligned_pages(
             Literal(plc.Scalar.from_arrow(pa.scalar(f"{hi:011d}"))),
         ),
     )
+    # This OR is true for every row because `unused` equals `a`, but the
+    # column-to-column comparison cannot use stats. Its discarded equality
+    # must not require a column index for `unused`.
+    filter_expression = Operation(
+        ASTOperator.LOGICAL_AND,
+        filter_expression,
+        Operation(
+            ASTOperator.LOGICAL_OR,
+            Operation(
+                ASTOperator.EQUAL,
+                ColumnNameReference("unused"),
+                Literal(plc.Scalar.from_arrow(pa.scalar("0000000"))),
+            ),
+            Operation(
+                ASTOperator.GREATER_EQUAL,
+                ColumnNameReference("unused"),
+                ColumnNameReference("a"),
+            ),
+        ),
+    )
     simple_parquet_options.set_filter(filter_expression)
 
-    footer_size = int.from_bytes(data[-8:-4], byteorder="little")
     reader = HybridScanReader(
-        data[-8 - footer_size : -8], simple_parquet_options
+        extract_parquet_footer(data), simple_parquet_options
     )
     page_index = reader.page_index_byte_range()
     reader.setup_page_index(

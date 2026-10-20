@@ -27,6 +27,7 @@
 
 #include <cuda/bit>
 #include <cuda/buffer>
+#include <cuda/cmath>
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/std/functional>
@@ -35,7 +36,6 @@
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/iterator_categories.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
@@ -1035,7 +1035,7 @@ struct batch_byte_size_function {
     auto const& buf = *(infos + i);
     std::size_t const bytes =
       static_cast<std::size_t>(buf.num_elements) * static_cast<std::size_t>(buf.element_size);
-    return util::round_up_unsafe(bytes, split_align);
+    return cuda::round_up(bytes, split_align);
   }
 };
 
@@ -1358,7 +1358,7 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
       int const element_size  = cudf::type_dispatcher(data_type{src_info.type}, size_of_helper{});
       std::size_t const bytes = num_elements * static_cast<std::size_t>(element_size);
 
-      return dst_buf_info{util::round_up_unsafe(bytes, split_align),
+      return dst_buf_info{cuda::round_up(bytes, split_align),
                           num_elements,
                           element_size,
                           num_rows,
@@ -1777,7 +1777,7 @@ std::unique_ptr<chunk_iteration_state> compute_batches(int num_bufs,
 
         // The number of batches we want to subdivide this buffer into
         std::size_t const num_batches = cuda::std::max(
-          std::size_t{1}, util::round_up_unsafe(bytes, desired_batch_size) / desired_batch_size);
+          std::size_t{1}, cuda::round_up(bytes, desired_batch_size) / desired_batch_size);
 
         // NOTE: leaving batch size as a separate parameter for future tuning
         // possibilities, even though in the current implementation it will be a
@@ -2070,12 +2070,13 @@ struct contiguous_split_state {
         partition_row_counts.begin(),
         partition_row_counts.end(),
         std::back_inserter(result),
-        [](size_type partition_rows) {
+        [stream = stream,
+         mr     = mr.value_or(cudf::get_current_device_resource_ref())](size_type partition_rows) {
           auto partition = cudf::table_view{std::vector<column_view>{}, partition_rows};
           return packed_table{partition,
                               packed_columns{std::make_unique<std::vector<uint8_t>>(
                                                cudf::pack_metadata(partition, nullptr, 0)),
-                                             std::make_unique<rmm::device_buffer>()}};
+                                             std::make_unique<rmm::device_buffer>(0, stream, mr)}};
         });
       return result;
     }
@@ -2129,15 +2130,17 @@ struct contiguous_split_state {
     std::vector<packed_table> result;
     result.reserve(num_partitions);
     auto const iter = cuda::counting_iterator<std::size_t>{0};
-    std::transform(iter,
-                   iter + num_partitions,
-                   std::back_inserter(result),
-                   [&empty_inputs](int partition_index) {
-                     return packed_table{empty_inputs,
-                                         packed_columns{std::make_unique<std::vector<uint8_t>>(
-                                                          pack_metadata(empty_inputs, nullptr, 0)),
-                                                        std::make_unique<rmm::device_buffer>()}};
-                   });
+    std::transform(
+      iter,
+      iter + num_partitions,
+      std::back_inserter(result),
+      [&empty_inputs, stream = stream, mr = mr.value_or(cudf::get_current_device_resource_ref())](
+        int partition_index) {
+        return packed_table{empty_inputs,
+                            packed_columns{std::make_unique<std::vector<uint8_t>>(
+                                             pack_metadata(empty_inputs, nullptr, 0)),
+                                           std::make_unique<rmm::device_buffer>(0, stream, mr)}};
+      });
 
     return result;
   }

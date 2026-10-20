@@ -24,6 +24,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <cuda/stream>
@@ -67,7 +68,7 @@ struct apply_indices_map_fn {
 
 struct remap_result {
   std::unique_ptr<cudf::column> indices;
-  cuda::device_buffer<std::byte> null_mask =
+  cuda::device_buffer<cudf::bitmask_type> null_mask =
     cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED);
   cudf::size_type null_count;
 };
@@ -92,7 +93,8 @@ struct remap_indices_dispatch_fn {
     auto const iota     = cuda::counting_iterator<cudf::size_type>{0};
 
     // create a map from the old key indices to the new ones
-    auto indices_map = rmm::device_uvector<size_type>(old_keys.size(), stream);
+    auto indices_map = cuda::device_buffer<size_type>(
+      stream, cudf::get_current_device_resource_ref(), old_keys.size(), cuda::no_init);
     create_indices_map_fn<T, decltype(keys_itr)> map_fn{
       *d_old_keys, keys_itr, keys_itr + new_keys.size(), d_sorted_indices};
     thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
