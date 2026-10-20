@@ -251,7 +251,7 @@ std::vector<std::unique_ptr<column>> compute_single_pass_aggs(
       std::ranges::move(batch, results.begin() + i);
     } else {
       auto const resources = is_agg_intermediate[i] ? mr.as_temporary() : mr;
-      results.push_back(compute_aggregation(kind, ctx, stream, resources));
+      results[i]           = compute_aggregation(kind, ctx, stream, resources);
     }
     i = end;
   }
