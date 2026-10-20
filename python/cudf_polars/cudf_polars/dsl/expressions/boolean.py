@@ -562,8 +562,8 @@ class BooleanFunction(Expr):
                     )
                 haystack_size = (
                     plc.lists.count_elements(haystack.obj, stream=df.stream)
-                    .to_scalar()
-                    .to_py()
+                    .to_scalar(stream=df.stream)
+                    .to_py(stream=df.stream)
                 )
                 (exploded,) = plc.lists.explode_outer(
                     plc.Table([haystack.obj]), 0, stream=df.stream
