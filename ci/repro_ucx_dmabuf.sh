@@ -53,7 +53,7 @@ cat /proc/sys/kernel/yama/ptrace_scope 2>&1
 gdb -batch -x "$REPRO_GDB_CMDS" -ex run -ex 'bt 3' --args python -c "import ctypes; ctypes.CDLL('libcuda.so.1').cuInit(0); print('hello')" 2>&1 | tail -15
 
 echo "=== gdb sequences"
-for i in $(seq 1 6); do
+for i in $(seq 1 10); do
   run_seq "gdb$i" "$ROOT/ci/repro_gdb_rank.sh"
   if [ $? -eq 99 ]; then break; fi
 done
