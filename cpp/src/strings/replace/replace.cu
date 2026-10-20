@@ -298,12 +298,12 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   auto const copy_end = cudf::detail::copy_if(
     copy_itr,
     copy_itr + chars_bytes,
-    targets_positions.begin(),
+    targets_positions_storage.begin(),
     [fn] __device__(int64_t idx) -> bool { return fn.is_target_within_row(idx); },
     stream);
 
   // adjust target count since the copy-if may have eliminated some invalid targets
-  target_count = std::min(std::distance(targets_positions_storage.data(), copy_end), target_count);
+  target_count = std::min(std::distance(targets_positions_storage.begin(), copy_end), target_count);
   auto targets_positions = cudf::device_span<int64_t>{targets_positions_storage.data(),
                                                       static_cast<std::size_t>(target_count)};
   auto d_positions       = targets_positions.data();
