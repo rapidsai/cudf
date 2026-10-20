@@ -561,22 +561,31 @@ TEST_F(ExperimentalPackUnpackTest, CompressMisalignedSlices)
   }
 }
 
-TEST_F(ExperimentalPackUnpackTest, StageOnlyRegionsThatNeedIt)
+TEST_F(ExperimentalPackUnpackTest, PlanStagingIsBoundedByStagingBudget)
 {
   constexpr cudf::size_type rows = 1024 * 1024;
-  auto const values = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
-  cudf::test::fixed_width_column_wrapper<int64_t> numbers(
+  auto const values =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 1000; });
+  cudf::test::fixed_width_column_wrapper<int32_t> numbers(
     values, values + rows, cudf::test::iterators::null_at(5));
-  // The sliced validity needs a bit shift, while the aligned data is compressed in place.
-  auto const input = cudf::slice(cudf::table_view{{numbers}}, {3, rows}).front();
+  // From row 1, the INT32 data starts 4 bytes past an 8-byte boundary and the validity bits need a
+  // shift, so both regions are staged, over several windows.
+  auto const input = cudf::slice(cudf::table_view{{numbers}}, {1, rows}).front();
 
-  rmm::mr::statistics_resource_adaptor output_mr(cudf::get_current_device_resource_ref());
-  auto const plan = cx::prepare_pack(input,
-                                     make_options(cx::pack_compression::cascaded),
-                                     cudf::get_default_stream(),
-                                     {output_mr, cudf::get_current_device_resource_ref()});
-  EXPECT_LT(output_mr.get_bytes_counter().value, rows * sizeof(int64_t) / 8);
-  expect_materializes_to(input, pack_to_device(plan).view());
+  for (auto const compression : {cx::pack_compression::automatic, cx::pack_compression::zstd}) {
+    SCOPED_TRACE(static_cast<int>(compression));
+    auto options                 = make_options(compression);
+    options.staging_buffer_bytes = 1024 * 1024;
+    rmm::mr::statistics_resource_adaptor output_mr(cudf::get_current_device_resource_ref());
+    auto const plan = cx::prepare_pack(input,
+                                       options,
+                                       cudf::get_default_stream(),
+                                       {output_mr, cudf::get_current_device_resource_ref()});
+    EXPECT_LE(output_mr.get_bytes_counter().value, options.staging_buffer_bytes);
+    for (auto const kind : {destination_kind::device, destination_kind::pinned}) {
+      expect_materializes_to(input, pack_to(plan, kind).view());
+    }
+  }
 }
 
 TEST_F(ExperimentalPackUnpackTest, AutomaticPerRegionCompression)

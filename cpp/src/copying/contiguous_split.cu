@@ -159,6 +159,7 @@ struct compression_region_layout {
   cudf::experimental::pack_region_kind kind;
   std::vector<size_type> column_path;  ///< See `pack_region_info::column_path`
   uint8_t const* direct_source;
+  dst_buf_info copy;  ///< Copies the region from its source columns into the payload layout
 };
 
 /**
@@ -168,7 +169,7 @@ struct pack_window {
   std::size_t first_item;      ///< Index of the first copy batch or compression block
   std::size_t end_item;        ///< One past the index of the last item
   std::size_t payload_offset;  ///< Payload offset of the window's first byte
-  std::size_t bytes;           ///< Payload bytes the window spans
+  std::size_t bytes;           ///< Staging bytes; for copy windows, also the payload bytes spanned
 };
 
 /**
@@ -2088,7 +2089,8 @@ struct contiguous_split_state {
                            source.type,
                            region_kind(source),
                            paths[destination_info.src_buf_index],
-                           direct_source);
+                           direct_source,
+                           destination_info);
     }
     std::ranges::sort(regions, {}, &compression_region_layout::uncompressed_offset);
     return regions;
@@ -2212,14 +2214,8 @@ struct contiguous_split_state {
     return windows;
   }
 
-  [[nodiscard]] std::vector<dst_buf_info> copy_batches() const
-  {
-    if (is_empty || input.num_columns() == 0) { return {}; }
-    return cudf::detail::make_std_vector(chunk_iter_state->d_batched_dst_buf_info, stream);
-  }
-
   /**
-   * @brief Run a subset of `copy_batches()` whose destination offsets are relative to `buffer`.
+   * @brief Run copies of this table's buffers whose destination offsets are relative to `buffer`.
    */
   void copy_batches_into(device_span<dst_buf_info> batches, uint8_t* buffer)
   {
@@ -2760,7 +2756,7 @@ static_assert(compression_metadata_version > cudf::detail::packed_metadata_versi
 
 struct prepared_compression_region {
   compression_region_layout layout;
-  uint8_t const* source;
+  uint8_t const* source;  ///< Null for a staged region
   pack_compression compression;
   type_id cascaded_type;
   bool allow_uncompressed_fallback;
@@ -2771,13 +2767,42 @@ struct prepared_compression_region {
 };
 
 struct block_descriptor {
-  uint8_t const* input;
+  uint8_t const* input;  ///< Null for a block staged into its window before compression
   std::size_t input_bytes;
   std::size_t output_bytes;  ///< Worst-case output size; equals `input_bytes` for raw blocks
   std::size_t region;
   bool is_raw;
   std::size_t window_offset = 0;  ///< Offset of the slot within its window's staging buffer
+  std::size_t staged_offset = 0;  ///< Offset of the staged input within the window
+
+  /// The block's input, given its window's staging buffer.
+  [[nodiscard]] __host__ __device__ uint8_t const* input_in(uint8_t const* window) const
+  {
+    return input != nullptr ? input : window + staged_offset;
+  }
 };
+
+/// The copy of block `block_index` of a staged region, which is split like the copy batches.
+[[nodiscard]] dst_buf_info staging_copy(dst_buf_info const& region_copy,
+                                        std::size_t block_index,
+                                        std::size_t block_bytes,
+                                        std::size_t dst_offset)
+{
+  auto copy                     = region_copy;
+  auto const elements_per_block = block_bytes / copy.element_size;
+  auto const rows_per_block     = copy.valid_count > 0
+                                    ? elements_per_block * detail::size_in_bits<bitmask_type>()
+                                    : elements_per_block;
+  copy.num_elements =
+    std::min(elements_per_block, region_copy.num_elements - block_index * elements_per_block);
+  copy.num_rows          = (block_index + 1) * rows_per_block > region_copy.num_rows
+                             ? region_copy.num_rows - block_index * rows_per_block
+                             : rows_per_block;
+  copy.src_element_index = region_copy.src_element_index + block_index * elements_per_block;
+  copy.dst_offset        = dst_offset;
+  copy.valid_count       = 0;  // Keeps the copy kernel from counting bits that nothing reads
+  return copy;
+}
 
 template <typename T>
 void append_bytes(std::vector<uint8_t>& output, std::span<T const> values)
@@ -3233,7 +3258,7 @@ void set_block_spans(device_span<block_descriptor const> blocks,
                      blocks.size(),
                      [blocks, slots, inputs, outputs, results] __device__(std::size_t i) {
                        auto const& block = blocks[i];
-                       inputs[i]         = {block.input, block.input_bytes};
+                       inputs[i]         = {block.input_in(slots), block.input_bytes};
                        outputs[i]        = {slots + block.window_offset, block.output_bytes};
                        results[i]        = {0, codec_status::FAILURE};
                      });
@@ -3306,14 +3331,12 @@ class pack_plan::impl {
       plan_copy_windows(options.staging_buffer_bytes);
     } else if (uncompressed_bytes > 0) {
       if (layouts.empty()) { layouts = input.state->compute_compression_regions(); }
-      plan_regions(layouts, configured_regions, options, mr);
+      plan_regions(layouts, configured_regions, options);
       plan_compression_blocks();
       // The capacity bound: the block size table, then a worst-case slot per block.
       auto const table_bytes =
         cudf::util::round_up_safe(blocks.size() * sizeof(uint64_t), split_align);
-      plan_compression_windows(table_bytes, options.staging_buffer_bytes);
-      destination_bytes =
-        windows.empty() ? table_bytes : windows.back().payload_offset + windows.back().bytes;
+      destination_bytes = plan_compression_windows(table_bytes, options.staging_buffer_bytes, mr);
       d_blocks =
         cudf::detail::make_device_uvector(blocks, input.state->get_stream(), mr.get_output_mr());
     }
@@ -3345,9 +3368,9 @@ class pack_plan::impl {
   std::vector<pack_window> windows;  ///< Block windows, or copy batch windows when uncompressed
   std::size_t max_window_bytes  = 0;
   std::size_t max_window_blocks = 0;
-  /// Regions that cannot be compressed in place, back to back, and the copies that fill them
-  std::unique_ptr<rmm::device_buffer> staging_buffer;
-  std::unique_ptr<rmm::device_uvector<dst_buf_info>> staged_batches;
+  /// Copies of the staged blocks into their windows, and the first copy of each window
+  std::unique_ptr<rmm::device_uvector<dst_buf_info>> staging_copies;
+  std::vector<std::size_t> window_staging_copies;
 
   /// Copies the table into `destination`, one staged window at a time for host destinations.
   [[nodiscard]] pack_result pack_uncompressed(std::span<uint8_t> destination,
@@ -3378,9 +3401,6 @@ class pack_plan::impl {
     auto& state        = *input.state;
     auto const stream  = state.get_stream();
     auto const temp_mr = mr.get_temporary_mr();
-    if (staging_buffer != nullptr) {
-      state.copy_batches_into(*staged_batches, static_cast<uint8_t*>(staging_buffer->data()));
-    }
 
     auto const num_blocks      = blocks.size();
     auto const table_bytes     = num_blocks * sizeof(uint64_t);
@@ -3394,7 +3414,15 @@ class pack_plan::impl {
     rmm::device_uvector<codec_exec_result> results(num_blocks, stream, temp_mr);
     set_block_spans(*d_blocks, slots, inputs, outputs, results, stream, temp_mr);
     // Raw blocks are copied straight from their input during compaction.
-    auto const compress_window = [&](pack_window const& window) {
+    auto const compress_window = [&](std::size_t window_idx) {
+      auto const& window      = windows[window_idx];
+      auto const copies_begin = window_staging_copies[window_idx];
+      auto const copies_end   = window_staging_copies[window_idx + 1];
+      if (copies_end > copies_begin) {
+        state.copy_batches_into(device_span<dst_buf_info>{*staging_copies}.subspan(
+                                  copies_begin, copies_end - copies_begin),
+                                slots);
+      }
       for (auto const& batch : batches) {
         auto const begin = std::max(batch.block_begin, window.first_item);
         auto const end   = std::min(batch.block_end, window.end_item);
@@ -3416,8 +3444,9 @@ class pack_plan::impl {
     std::vector<uint8_t const*> sources;
     std::vector<uint8_t*> targets;
     std::vector<std::size_t> copy_bytes;
-    for (auto const& window : windows) {
-      compress_window(window);
+    for (std::size_t window_idx = 0; window_idx < windows.size(); ++window_idx) {
+      auto const& window = windows[window_idx];
+      compress_window(window_idx);
       auto const h_results =
         cudf::detail::make_pinned_vector(device_span<codec_exec_result const>{results}.subspan(
                                            window.first_item, window.end_item - window.first_item),
@@ -3436,7 +3465,7 @@ class pack_plan::impl {
           cudf::util::round_up_safe(payload_bytes, is_raw ? sizeof(uint64_t) : region.alignment);
         block_offsets[block_idx] = payload_bytes;
         table[block_idx]         = is_raw ? (raw_block_flag | bytes) : bytes;
-        sources.push_back(is_raw ? block.input : slots + block.window_offset);
+        sources.push_back(is_raw ? block.input_in(slots) : slots + block.window_offset);
         targets.push_back(to_host ? compacted + (payload_bytes - window_begin)
                                   : destination.data() + payload_bytes);
         copy_bytes.push_back(bytes);
@@ -3481,8 +3510,7 @@ class pack_plan::impl {
   /// Resolves the codec and block size of each region, staging the input when needed.
   void plan_regions(std::span<compression_region_layout const> layouts,
                     std::span<pack_region const> configured_regions,
-                    pack_options const& options,
-                    cudf::memory_resources mr)
+                    pack_options const& options)
   {
     CUDF_EXPECTS(configured_regions.empty() || configured_regions.size() == layouts.size(),
                  "Region configuration does not match the prepared layout");
@@ -3513,23 +3541,13 @@ class pack_plan::impl {
                              source % block_alignment(codecs[index]) == 0);
     };
     // A packed input is already in payload layout, so regions are compressed from it in place.
-    std::vector<std::optional<std::size_t>> staged_offsets(layouts.size());
-    std::size_t staged_bytes = 0;
-    if (input.packed_source.empty()) {
-      for (std::size_t region_index = 0; region_index < layouts.size(); ++region_index) {
-        if (is_direct(region_index)) { continue; }
-        staged_offsets[region_index] = staged_bytes;
-        staged_bytes += layouts[region_index].uncompressed_bytes;
-      }
-    }
-    if (staged_bytes > 0) { plan_staging(layouts, staged_offsets, staged_bytes, mr); }
-    auto const region_source = [&](std::size_t region_index) {
+    // Other regions are staged one window at a time.
+    auto const region_source = [&](std::size_t region_index) -> uint8_t const* {
       auto const& layout = layouts[region_index];
-      if (staged_offsets[region_index].has_value()) {
-        return static_cast<uint8_t const*>(staging_buffer->data()) + *staged_offsets[region_index];
+      if (!input.packed_source.empty()) {
+        return input.packed_source.data() + layout.uncompressed_offset;
       }
-      return input.packed_source.empty() ? layout.direct_source
-                                         : input.packed_source.data() + layout.uncompressed_offset;
+      return is_direct(region_index) ? layout.direct_source : nullptr;
     };
 
     std::size_t uncompressed_end = 0;
@@ -3567,30 +3585,6 @@ class pack_plan::impl {
                  "Prepared compression regions do not cover the complete payload");
   }
 
-  /// Retargets the copy batches of staged regions at their offsets in one staging buffer.
-  void plan_staging(std::span<compression_region_layout const> layouts,
-                    std::span<std::optional<std::size_t> const> staged_offsets,
-                    std::size_t staged_bytes,
-                    cudf::memory_resources mr)
-  {
-    auto const stream = input.state->get_stream();
-    std::vector<dst_buf_info> staged;
-    for (auto batch : input.state->copy_batches()) {
-      if (batch.num_elements * batch.element_size == 0) { continue; }
-      auto const next = std::ranges::upper_bound(
-        layouts, batch.dst_offset, {}, &compression_region_layout::uncompressed_offset);
-      CUDF_EXPECTS(next != layouts.begin(), "Copy batch precedes the first region");
-      auto const region_index = static_cast<std::size_t>(next - layouts.begin() - 1);
-      if (!staged_offsets[region_index].has_value()) { continue; }
-      batch.dst_offset = *staged_offsets[region_index] + batch.dst_offset -
-                         layouts[region_index].uncompressed_offset;
-      staged.push_back(batch);
-    }
-    staged_batches = std::make_unique<rmm::device_uvector<dst_buf_info>>(
-      cudf::detail::make_device_uvector(staged, stream, mr.get_output_mr()));
-    staging_buffer = std::make_unique<rmm::device_buffer>(staged_bytes, stream, mr.get_output_mr());
-  }
-
   /// Groups regions into batches by codec and lays out their blocks batch by batch.
   void plan_compression_blocks()
   {
@@ -3622,37 +3616,64 @@ class pack_plan::impl {
         for (std::size_t offset = 0; offset < region.layout.data_bytes;
              offset += region.block_bytes) {
           auto const bytes = std::min(region.block_bytes, region.layout.data_bytes - offset);
-          blocks.emplace_back(
-            region.source + offset, bytes, is_raw ? bytes : slot_bytes, region_idx, is_raw);
+          blocks.emplace_back(region.source != nullptr ? region.source + offset : nullptr,
+                              bytes,
+                              is_raw ? bytes : slot_bytes,
+                              region_idx,
+                              is_raw);
         }
       }
       batches[batch_idx].block_end = blocks.size();
     }
   }
 
-  /// Groups blocks, starting at `payload_offset`, into staging windows of worst-case block slots.
-  void plan_compression_windows(std::size_t payload_offset, std::size_t window_budget)
+  /**
+   * @brief Groups blocks, starting at `payload_offset`, into staging windows of worst-case block
+   * slots and staged inputs, and returns the destination capacity.
+   */
+  [[nodiscard]] std::size_t plan_compression_windows(std::size_t payload_offset,
+                                                     std::size_t window_budget,
+                                                     cudf::memory_resources mr)
   {
     // A slot also fits the raw block, which bounds output with uncompressed fallback.
     auto destination_bytes = payload_offset;
+    std::vector<dst_buf_info> copies;
     for (std::size_t block_idx = 0; block_idx < blocks.size(); ++block_idx) {
       auto& block = blocks[block_idx];
-      auto const extent =
+      auto const slot_bytes =
         cudf::util::round_up_safe(std::max(block.output_bytes, block.input_bytes), split_align);
-      CUDF_EXPECTS(extent <= window_budget,
+      // A raw block is staged into its slot, which no codec writes.
+      auto const is_staged = block.input == nullptr;
+      auto const staged_bytes =
+        is_staged && !block.is_raw ? cudf::util::round_up_safe(block.input_bytes, split_align) : 0;
+      CUDF_EXPECTS(slot_bytes + staged_bytes <= window_budget,
                    "The staging buffer is too small for the compression block size");
-      if (windows.empty() ||
-          destination_bytes + extent - windows.back().payload_offset > window_budget) {
+      if (windows.empty() || windows.back().bytes + slot_bytes + staged_bytes > window_budget) {
         windows.emplace_back(block_idx, block_idx, destination_bytes, 0);
+        window_staging_copies.push_back(copies.size());
       }
       auto& window        = windows.back();
-      block.window_offset = destination_bytes - window.payload_offset;
-      destination_bytes += extent;
-      window.end_item   = block_idx + 1;
-      window.bytes      = destination_bytes - window.payload_offset;
+      block.window_offset = window.bytes;
+      block.staged_offset = block.is_raw ? block.window_offset : block.window_offset + slot_bytes;
+      if (is_staged) {
+        auto const& region = regions[block.region];
+        copies.push_back(staging_copy(region.layout.copy,
+                                      block_idx - region.block_begin,
+                                      region.block_bytes,
+                                      block.staged_offset));
+      }
+      destination_bytes += slot_bytes;
+      window.end_item = block_idx + 1;
+      window.bytes += slot_bytes + staged_bytes;
       max_window_bytes  = std::max(max_window_bytes, window.bytes);
       max_window_blocks = std::max(max_window_blocks, window.end_item - window.first_item);
     }
+    window_staging_copies.push_back(copies.size());
+    if (!copies.empty()) {
+      staging_copies = std::make_unique<rmm::device_uvector<dst_buf_info>>(
+        cudf::detail::make_device_uvector(copies, input.state->get_stream(), mr.get_output_mr()));
+    }
+    return destination_bytes;
   }
 };
 
