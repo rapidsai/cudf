@@ -29,26 +29,23 @@ run_seq() {
     [ $r -ne 0 ] && rc=$r
     if [ $r -ne 0 ]; then
       echo "----- crash output ($tag, $nrank ranks)"
-      grep -v -E "^\s*$|^\S*\.\S*\s*\[" "/tmp/seq.$tag.$nrank.log" | tail -80
+      grep -v -E "^\s*$|platform linux|rootdir|configfile|plugins|test session|collect" "/tmp/seq.$tag.$nrank.log" | tail -30
     fi
   done
   return $rc
 }
 
-echo "=== compilers"
-which cc gcc g++ clang || echo "no compiler"
-
-echo "=== driver race"
-python "$ROOT/ci/repro_race.py"
+echo "=== first-call race across processes and threads"
+python "$ROOT/ci/repro_first.py"
 
 echo "=== sequences with UCX native crash handler"
 export UCX_HANDLE_ERRORS=bt
 PYTEST_ARGS=(-p no:faulthandler "${PYTEST_ARGS[@]}")
 pf=0
-for i in $(seq 1 8); do
+for i in $(seq 1 4); do
   run_seq "ucxbt$i" ""
   [ $? -ne 0 ] && pf=$((pf+1))
 done
-echo "sequence failures: $pf / 8"
+echo "sequence failures: $pf / 4"
 echo "repro script finished"
 exit 0
