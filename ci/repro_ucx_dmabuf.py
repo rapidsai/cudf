@@ -15,8 +15,12 @@ CASES = [
     "cuMemAllocAsync_256B",
     "vmm_2MiB",
     "managed_1MiB",
+    "pinned_host_1MiB",
+    "host_registered_1MiB",
+    "hostpool_1MiB",
+    "vmm_host_2MiB",
 ]
-MODES = ["driver", "driver_threads", "ucx"]
+MODES = ["driver", "ucx", "ucx_thread"]
 
 
 def libcuda_maps():
@@ -48,6 +52,11 @@ def child(mode, case, iters):
         if case.endswith("256B")
         else (2 << 20 if "2MiB" in case else 1 << 20)
     )
+
+    page = os.sysconf("SC_PAGE_SIZE")
+    keep = []
+    pool_holder = []
+    ptr_v = ctypes.c_void_p()
 
     def alloc():
         ptr = ctypes.c_uint64()
@@ -81,6 +90,50 @@ def child(mode, case, iters):
             return ptr.value, lambda: cu.cuMemFree_v2(
                 ctypes.c_uint64(ptr.value)
             )
+        if case.startswith("pinned_host"):
+            ck(
+                cu.cuMemHostAlloc(
+                    ctypes.byref(ptr_v), ctypes.c_size_t(size), 0
+                ),
+                "hostalloc",
+            )
+            return ptr_v.value, lambda: cu.cuMemFreeHost(ptr_v)
+        if case.startswith("host_registered"):
+            buf = ctypes.create_string_buffer(size + page)
+            addr = (ctypes.addressof(buf) + page - 1) & ~(page - 1)
+            ck(
+                cu.cuMemHostRegister_v2(
+                    ctypes.c_void_p(addr), ctypes.c_size_t(size), 0
+                ),
+                "hostregister",
+            )
+            keep.append(buf)
+            return addr, lambda: cu.cuMemHostUnregister(ctypes.c_void_p(addr))
+        if case.startswith("hostpool"):
+            if not pool_holder:
+                props = (ctypes.c_char * 256)()
+                ctypes.cast(props, ctypes.POINTER(ctypes.c_int))[0] = 1
+                ctypes.cast(props, ctypes.POINTER(ctypes.c_int))[2] = 2
+                pool = ctypes.c_void_p()
+                ck(
+                    cu.cuMemPoolCreate(ctypes.byref(pool), props),
+                    "cuMemPoolCreate(host)",
+                )
+                pool_holder.append(pool)
+            ck(
+                cu.cuMemAllocFromPoolAsync(
+                    ctypes.byref(ptr),
+                    ctypes.c_size_t(size),
+                    pool_holder[0],
+                    stream,
+                ),
+                "allocFromPool",
+            )
+            ck(cu.cuStreamSynchronize(stream), "sync")
+            return ptr.value, lambda: (
+                cu.cuMemFreeAsync(ctypes.c_uint64(ptr.value), stream),
+                cu.cuStreamSynchronize(stream),
+            )
         if case.startswith("vmm"):
 
             class Loc(ctypes.Structure):
@@ -100,8 +153,8 @@ def child(mode, case, iters):
 
             prop = Prop()
             prop.type = 1
-            prop.location.type = 1
-            prop.location.id = dev.value
+            prop.location.type = 2 if "host" in case else 1
+            prop.location.id = 0 if "host" in case else dev.value
             handle = ctypes.c_uint64()
             ck(
                 cu.cuMemCreate(
@@ -149,8 +202,6 @@ def child(mode, case, iters):
             return va.value, lambda: None
         raise SystemExit(f"bad case {case}")
 
-    page = os.sysconf("SC_PAGE_SIZE")
-
     def dmabuf_query(ptr):
         base = ctypes.c_uint64()
         length = ctypes.c_size_t()
@@ -183,37 +234,7 @@ def child(mode, case, iters):
         print("driver results {err: count}:", results, flush=True)
         return
 
-    if mode == "driver_threads":
-        stop = threading.Event()
-        live = []
-        lock = threading.Lock()
-
-        def churn():
-            ck(cu.cuCtxSetCurrent(ctx), "setcurrent")
-            while not stop.is_set():
-                ptr, free = alloc()
-                with lock:
-                    live.append((ptr, free))
-                    if len(live) > 64:
-                        _, f = live.pop(0)
-                        f()
-
-        t = threading.Thread(target=churn)
-        t.start()
-        results = {}
-        for i in range(iters):
-            with lock:
-                ptr = live[-1][0] if live else None
-            if ptr is None:
-                continue
-            res = dmabuf_query(ptr)
-            results[res] = results.get(res, 0) + 1
-        stop.set()
-        t.join()
-        print("driver_threads results {err: count}:", results, flush=True)
-        return
-
-    if mode == "ucx":
+    if mode in ("ucx", "ucx_thread"):
         ucp = ctypes.CDLL("libucp.so.0")
 
         class Params(ctypes.Structure):
@@ -272,27 +293,36 @@ def child(mode, case, iters):
             ctypes.c_void_p,
         ]
         results = {}
-        for i in range(iters):
-            ptr, free = alloc()
-            req = ucp.ucp_tag_recv_nbx(
-                worker,
-                ptr,
-                size,
-                i + 1,
-                0xFFFFFFFFFFFFFFFF,
-                ctypes.byref(ReqParam()),
-            )
-            key = (
-                "err"
-                if (req is not None and req >= (1 << 64) - 100)
-                else "posted"
-            )
-            results[key] = results.get(key, 0) + 1
-            if req is not None and key == "posted":
-                ucp.ucp_request_cancel(worker, ctypes.c_void_p(req))
-                for _ in range(10):
-                    ucp.ucp_worker_progress(worker)
-            free()
+        bufs = [alloc() for _ in range(iters)]
+
+        def post_all():
+            for i, (ptr, _) in enumerate(bufs):
+                req = ucp.ucp_tag_recv_nbx(
+                    worker,
+                    ptr,
+                    size,
+                    i + 1,
+                    0xFFFFFFFFFFFFFFFF,
+                    ctypes.byref(ReqParam()),
+                )
+                key = (
+                    "err"
+                    if (req is not None and req >= (1 << 64) - 100)
+                    else "posted"
+                )
+                results[key] = results.get(key, 0) + 1
+                if req is not None and key == "posted":
+                    ucp.ucp_request_cancel(worker, ctypes.c_void_p(req))
+                    for _ in range(10):
+                        ucp.ucp_worker_progress(worker)
+
+        if mode == "ucx_thread":
+            cu.cuCtxSetCurrent(None)
+            t = threading.Thread(target=post_all)
+            t.start()
+            t.join()
+        else:
+            post_all()
         print("ucx results:", results, flush=True)
         return
 
