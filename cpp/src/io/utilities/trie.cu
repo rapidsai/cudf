@@ -97,11 +97,10 @@ cuda::device_buffer<serial_trie_node> create_serialized_trie(std::vector<std::st
     // Only add the terminating character if any nodes were added
     if (has_children) { nodes.emplace_back(trie_terminating_character); }
   }
-  auto result = cuda::device_buffer<serial_trie_node>(
-    stream, cudf::get_current_device_resource_ref(), nodes.size(), cuda::no_init);
-  cudf::detail::cuda_memcpy_async<serial_trie_node>(
-    result, cudf::host_span<serial_trie_node const>{nodes}, stream);
-  cudf::detail::sync_stream(stream);
+  auto result =
+    cudf::make_device_buffer<serial_trie_node>(cudf::host_span<serial_trie_node const>{nodes},
+                                               stream,
+                                               cudf::get_current_device_resource_ref());
   return result;
 }
 
