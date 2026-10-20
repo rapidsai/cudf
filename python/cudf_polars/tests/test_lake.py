@@ -381,10 +381,10 @@ def extra_columns(tmp_path: Path) -> Path:
 
 
 @pytest.mark.parametrize(
-    "directory, kwargs, query",
+    "directory, kwargs",
     [
-        ("first", {}, lambda q: q),
-        ("hive", {"hive_partitioning": True}, lambda q: q),
+        ("first", {}),
+        ("hive", {"hive_partitioning": True}),
     ],
     ids=["first_file", "hive_column"],
 )
@@ -393,10 +393,9 @@ def test_scan_lake_extra_columns_expected(
     extra_columns: Path,
     directory: str,
     kwargs: dict[str, Any],
-    query: Any,
 ) -> None:
     q = pl.scan_parquet(extra_columns / directory, missing_columns="insert", **kwargs)
-    assert_gpu_result_equal(query(q), engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
 @pytest.mark.parametrize(
