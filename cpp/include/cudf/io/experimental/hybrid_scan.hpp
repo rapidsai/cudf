@@ -85,7 +85,6 @@ using row_mask_view_t = std::conditional_t<mode == read_columns_mode::FILTER_COL
                                            cudf::column_view>;
 
 /**
- * @brief Columns selection
  * @brief Byte range of a column chunk's dictionary page, and whether it is exact
  *
  * An inexact range starts at the dictionary page, if present, and may extend past it. Trim it with
