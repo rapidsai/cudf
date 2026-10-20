@@ -1,0 +1,121 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#pragma once
+
+// cuDF's JIT headers use the min/max declarations provided transitively by CCCL functional.
+#include <cuda/std/algorithm>
+#include <cuda/std/utility>
+
+namespace cuda::std {
+
+template <class T = void>
+struct divides {
+  constexpr T operator()(T const& a, T const& b) const { return a / b; }
+};
+
+template <>
+struct divides<void> {
+  using is_transparent = void;
+
+  template <class T, class U>
+  constexpr auto operator()(T&& a, U&& b) const
+    noexcept(noexcept(cuda::std::forward<T>(a) / cuda::std::forward<U>(b)))
+      -> decltype(cuda::std::forward<T>(a) / cuda::std::forward<U>(b))
+  {
+    return cuda::std::forward<T>(a) / cuda::std::forward<U>(b);
+  }
+};
+
+template <class T = void>
+struct equal_to {
+  constexpr bool operator()(T const& a, T const& b) const { return a == b; }
+};
+
+template <>
+struct equal_to<void> {
+  using is_transparent = void;
+
+  template <class T, class U>
+  constexpr auto operator()(T&& a, U&& b) const
+    noexcept(noexcept(cuda::std::forward<T>(a) == cuda::std::forward<U>(b)))
+      -> decltype(cuda::std::forward<T>(a) == cuda::std::forward<U>(b))
+  {
+    return cuda::std::forward<T>(a) == cuda::std::forward<U>(b);
+  }
+};
+
+template <class T = void>
+struct less {
+  constexpr bool operator()(T const& a, T const& b) const { return a < b; }
+};
+
+template <>
+struct less<void> {
+  using is_transparent = void;
+
+  template <class T, class U>
+  constexpr auto operator()(T&& a, U&& b) const
+    noexcept(noexcept(cuda::std::forward<T>(a) < cuda::std::forward<U>(b)))
+      -> decltype(cuda::std::forward<T>(a) < cuda::std::forward<U>(b))
+  {
+    return cuda::std::forward<T>(a) < cuda::std::forward<U>(b);
+  }
+};
+
+template <class T = void>
+struct minus {
+  constexpr T operator()(T const& a, T const& b) const { return a - b; }
+};
+
+template <>
+struct minus<void> {
+  using is_transparent = void;
+
+  template <class T, class U>
+  constexpr auto operator()(T&& a, U&& b) const
+    noexcept(noexcept(cuda::std::forward<T>(a) - cuda::std::forward<U>(b)))
+      -> decltype(cuda::std::forward<T>(a) - cuda::std::forward<U>(b))
+  {
+    return cuda::std::forward<T>(a) - cuda::std::forward<U>(b);
+  }
+};
+
+template <class T = void>
+struct multiplies {
+  constexpr T operator()(T const& a, T const& b) const { return a * b; }
+};
+
+template <>
+struct multiplies<void> {
+  using is_transparent = void;
+
+  template <class T, class U>
+  constexpr auto operator()(T&& a, U&& b) const
+    noexcept(noexcept(cuda::std::forward<T>(a) * cuda::std::forward<U>(b)))
+      -> decltype(cuda::std::forward<T>(a) * cuda::std::forward<U>(b))
+  {
+    return cuda::std::forward<T>(a) * cuda::std::forward<U>(b);
+  }
+};
+
+template <class T = void>
+struct plus {
+  constexpr T operator()(T const& a, T const& b) const { return a + b; }
+};
+
+template <>
+struct plus<void> {
+  using is_transparent = void;
+
+  template <class T, class U>
+  constexpr auto operator()(T&& a, U&& b) const
+    noexcept(noexcept(cuda::std::forward<T>(a) + cuda::std::forward<U>(b)))
+      -> decltype(cuda::std::forward<T>(a) + cuda::std::forward<U>(b))
+  {
+    return cuda::std::forward<T>(a) + cuda::std::forward<U>(b);
+  }
+};
+
+}  // namespace cuda::std

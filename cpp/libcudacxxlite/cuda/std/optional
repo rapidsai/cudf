@@ -1,0 +1,84 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#pragma once
+
+#include <cuda/std/utility>
+
+namespace cuda::std {
+
+struct nullopt_t {
+  explicit constexpr nullopt_t(int) {}
+};
+
+inline constexpr nullopt_t nullopt{0};
+
+template <class T>
+class optional {
+  union {
+    unsigned char empty_;
+    T value_;
+  };
+  bool engaged_;
+
+ public:
+  using value_type = T;
+
+  constexpr optional() : empty_{}, engaged_{false} {}
+
+  constexpr optional(nullopt_t) : optional() {}
+
+  constexpr optional(T const& t) : value_{t}, engaged_{true} {}
+
+  constexpr optional(T&& t) : value_{move(t)}, engaged_{true} {}
+
+  constexpr optional& operator=(nullopt_t)
+  {
+    engaged_ = false;
+    return *this;
+  }
+
+  constexpr optional& operator=(T const& v)
+  {
+    value_   = v;
+    engaged_ = true;
+    return *this;
+  }
+
+  constexpr explicit operator bool() const { return engaged_; }
+
+  constexpr bool has_value() const { return engaged_; }
+
+  constexpr T& operator*() { return value_; }
+
+  constexpr T const& operator*() const { return value_; }
+
+  constexpr T* operator->() { return &value_; }
+
+  constexpr T const* operator->() const { return &value_; }
+
+  constexpr T value_or(T const& fallback) const { return engaged_ ? value_ : fallback; }
+
+  constexpr T& value() { return value_; }
+
+  constexpr T const& value() const { return value_; }
+};
+
+template <class T, class U>
+  requires requires(T const& a, U const& b) { requires is_convertible_v<decltype(a == b), bool>; }
+constexpr bool operator==(optional<T> const& a, optional<U> const& b)
+{
+  if (a.has_value() != b.has_value()) { return false; }
+  return !a.has_value() || *a == *b;
+}
+
+template <class T, class U>
+  requires requires(T const& a, U const& b) { requires is_convertible_v<decltype(a != b), bool>; }
+constexpr bool operator!=(optional<T> const& a, optional<U> const& b)
+{
+  if (a.has_value() != b.has_value()) { return true; }
+  return a.has_value() && *a != *b;
+}
+
+}  // namespace cuda::std

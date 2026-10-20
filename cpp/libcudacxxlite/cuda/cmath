@@ -1,0 +1,17 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#pragma once
+
+#include <cuda/std/cmath>
+
+namespace cuda {
+
+template <class T, class U>
+constexpr auto ceil_div(T x, U y)
+{
+  return x / y + (x % y != 0);
+}
+
+}  // namespace cuda

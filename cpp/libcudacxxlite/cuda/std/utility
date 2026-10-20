@@ -1,0 +1,69 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#pragma once
+
+#include <cuda/std/cstddef>
+#include <cuda/std/type_traits>
+
+namespace cuda::std {
+
+using ::std::forward;
+using ::std::move;
+
+template <class T, T... I>
+struct integer_sequence {
+  using value_type = T;
+
+  static constexpr size_t size() { return sizeof...(I); }
+};
+
+template <class T, T N>
+using make_integer_sequence = __make_integer_seq<integer_sequence, T, N>;
+
+template <size_t... I>
+using index_sequence = integer_sequence<size_t, I...>;
+
+template <size_t N>
+using make_index_sequence = make_integer_sequence<size_t, N>;
+
+template <class... T>
+using index_sequence_for = make_index_sequence<sizeof...(T)>;
+
+template <class A, class B>
+struct pair {
+  A first;
+  B second;
+};
+
+template <class A, class B>
+pair(A, B) -> pair<A, B>;
+
+template <size_t I, class A, class B>
+constexpr auto& get(pair<A, B>& p)
+{
+  if constexpr (I == 0)
+    return p.first;
+  else
+    return p.second;
+}
+
+template <size_t I, class A, class B>
+constexpr auto const& get(pair<A, B> const& p)
+{
+  if constexpr (I == 0)
+    return p.first;
+  else
+    return p.second;
+}
+
+template <class T>
+constexpr void swap(T& a, T& b)
+{
+  T t = move(a);
+  a   = move(b);
+  b   = move(t);
+}
+
+}  // namespace cuda::std

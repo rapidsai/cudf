@@ -1,0 +1,155 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#pragma once
+
+#include <cuda/std/type_traits>
+
+namespace cuda::std {
+
+template <class T>
+constexpr T abs(T x)
+{
+  return x < T(0) ? -x : x;
+}
+
+__device__ inline float acos(float x) noexcept { return ::acosf(x); }
+
+__device__ inline double acos(double x) noexcept { return ::acos(x); }
+
+template <class T>
+  requires is_integral_v<T>
+__device__ inline double acos(T x) noexcept
+{
+  return ::acos(static_cast<double>(x));
+}
+
+__device__ inline float acosh(float x) noexcept { return ::acoshf(x); }
+
+__device__ inline double acosh(double x) noexcept { return ::acosh(x); }
+
+template <class T>
+  requires is_integral_v<T>
+__device__ inline double acosh(T x) noexcept
+{
+  return ::acosh(static_cast<double>(x));
+}
+
+__device__ inline float asin(float x) noexcept { return ::asinf(x); }
+
+__device__ inline double asin(double x) noexcept { return ::asin(x); }
+
+template <class T>
+  requires is_integral_v<T>
+__device__ inline double asin(T x) noexcept
+{
+  return ::asin(static_cast<double>(x));
+}
+
+__device__ inline float asinh(float x) noexcept { return ::asinhf(x); }
+
+__device__ inline double asinh(double x) noexcept { return ::asinh(x); }
+
+template <class T>
+  requires is_integral_v<T>
+__device__ inline double asinh(T x) noexcept
+{
+  return ::asinh(static_cast<double>(x));
+}
+
+__device__ inline float atan(float x) noexcept { return ::atanf(x); }
+
+__device__ inline double atan(double x) noexcept { return ::atan(x); }
+
+template <class T>
+  requires is_integral_v<T>
+__device__ inline double atan(T x) noexcept
+{
+  return ::atan(static_cast<double>(x));
+}
+
+__device__ inline float atanh(float x) noexcept { return ::atanhf(x); }
+
+__device__ inline double atanh(double x) noexcept { return ::atanh(x); }
+
+template <class T>
+  requires is_integral_v<T>
+__device__ inline double atanh(T x) noexcept
+{
+  return ::atanh(static_cast<double>(x));
+}
+
+__device__ inline float cbrt(float x) { return ::cbrtf(x); }
+
+__device__ inline double cbrt(double x) { return ::cbrt(x); }
+
+__device__ inline float ceil(float x) { return ::ceilf(x); }
+
+__device__ inline double ceil(double x) { return ::ceil(x); }
+
+__device__ inline float cos(float x) { return ::cosf(x); }
+
+__device__ inline double cos(double x) { return ::cos(x); }
+
+__device__ inline float cosh(float x) { return ::coshf(x); }
+
+__device__ inline double cosh(double x) { return ::cosh(x); }
+
+__device__ inline float exp(float x) { return ::expf(x); }
+
+__device__ inline double exp(double x) { return ::exp(x); }
+
+__device__ inline float fabs(float x) { return ::fabsf(x); }
+
+__device__ inline double fabs(double x) { return ::fabs(x); }
+
+__device__ inline float floor(float x) { return ::floorf(x); }
+
+__device__ inline double floor(double x) { return ::floor(x); }
+
+__device__ inline float fmod(float x, float y) { return ::fmodf(x, y); }
+
+__device__ inline double fmod(double x, double y) { return ::fmod(x, y); }
+
+__device__ inline float log(float x) { return ::logf(x); }
+
+__device__ inline double log(double x) { return ::log(x); }
+
+__device__ inline float pow(float x, float y) { return ::powf(x, y); }
+
+__device__ inline double pow(double x, double y) { return ::pow(x, y); }
+
+__device__ inline float rint(float x) { return ::rintf(x); }
+
+__device__ inline double rint(double x) { return ::rint(x); }
+
+__device__ inline float round(float x) { return ::roundf(x); }
+
+__device__ inline double round(double x) { return ::round(x); }
+
+__device__ inline float sin(float x) { return ::sinf(x); }
+
+__device__ inline double sin(double x) { return ::sin(x); }
+
+__device__ inline float sinh(float x) { return ::sinhf(x); }
+
+__device__ inline double sinh(double x) { return ::sinh(x); }
+
+__device__ inline float sqrt(float x) { return ::sqrtf(x); }
+
+__device__ inline double sqrt(double x) { return ::sqrt(x); }
+
+__device__ inline float tan(float x) { return ::tanf(x); }
+
+__device__ inline double tan(double x) { return ::tan(x); }
+
+__device__ inline float tanh(float x) { return ::tanhf(x); }
+
+__device__ inline double tanh(double x) { return ::tanh(x); }
+
+__device__ inline float trunc(float x) { return ::truncf(x); }
+
+__device__ inline double trunc(double x) { return ::trunc(x); }
+
+}  // namespace cuda::std

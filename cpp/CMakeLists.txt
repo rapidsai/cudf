@@ -103,6 +103,9 @@ mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
 option(CUDF_CLANG_TIDY "Enable clang-tidy during compilation" OFF)
 option(CUDF_IWYU "Enable IWYU during compilation" OFF)
 option(CUDF_CLANG_TIDY_AUTOFIX "Enable clang-tidy autofixes" OFF)
+option(CUDF_JIT_USE_LIBCUDACXXLITE "Use the experimental CCCL subset for runtime JIT compilation"
+       ON
+)
 
 option(
   CUDF_KVIKIO_REMOTE_IO
@@ -481,16 +484,33 @@ rtcx_embed_includes(
   cudf/cpp/src/transform/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
+if(CUDF_JIT_USE_LIBCUDACXXLITE)
+  if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 13.3)
+    message(FATAL_ERROR "CUDF_JIT_USE_LIBCUDACXXLITE requires CUDA/NVRTC 13.3 or newer")
+  endif()
 
-foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
-  cmake_path(GET INC_DIR FILENAME INC_DIR_NAME)
-
-  rtcx_embed_includes(
-    cudf_cuda_embed SOURCE_DIRECTORY ${INC_DIR} DEST_DIRECTORY CCCL/libcudacxx/${INC_DIR_NAME}
-    INCLUDE_DIRECTORIES CCCL/libcudacxx/${INC_DIR_NAME}
+  set(LITE_SOURCE_DIR "${PROJECT_SOURCE_DIR}/libcudacxxlite")
+  file(
+    GLOB_RECURSE LITE_HEADERS CONFIGURE_DEPENDS
+    RELATIVE "${LITE_SOURCE_DIR}"
+    "${LITE_SOURCE_DIR}/cuda/*"
   )
-endforeach()
+  rtcx_embed_includes(
+    cudf_cuda_embed SOURCE_DIRECTORY "${LITE_SOURCE_DIR}" DEST_DIRECTORY CCCL/libcudacxxlite
+    INCLUDE_DIRECTORIES CCCL/libcudacxxlite FILES ${LITE_HEADERS}
+  )
+else()
+  get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
+
+  foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
+    cmake_path(GET INC_DIR FILENAME INC_DIR_NAME)
+
+    rtcx_embed_includes(
+      cudf_cuda_embed SOURCE_DIRECTORY ${INC_DIR} DEST_DIRECTORY CCCL/libcudacxx/${INC_DIR_NAME}
+      INCLUDE_DIRECTORIES CCCL/libcudacxx/${INC_DIR_NAME}
+    )
+  endforeach()
+endif()
 
 rtcx_embed(cudf_cuda_embed COMPRESSION zstd OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/embed")
 

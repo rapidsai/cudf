@@ -1,0 +1,96 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#pragma once
+
+#include <cuda/std/climits>
+#include <cuda/std/type_traits>
+
+namespace cuda::std {
+
+template <class T>
+struct numeric_limits;
+
+template <class T>
+  requires(is_integral_v<T> && !is_same_v<T, bool> && is_same_v<T, remove_cv_t<T>>)
+struct numeric_limits<T> {
+  static constexpr bool is_signed   = is_signed_v<T>;
+  static constexpr bool is_iec559   = false;
+  static constexpr int digits       = sizeof(T) * CHAR_BIT - int(is_signed);
+  static constexpr int max_exponent = 0;
+
+  static constexpr T max() noexcept
+  {
+    if constexpr (is_signed) {
+      return T((static_cast<unsigned __int128>(1) << digits) - 1);
+    } else {
+      return T(-1);
+    }
+  }
+
+  static constexpr T lowest() noexcept
+  {
+    if constexpr (is_signed) {
+      return -max() - 1;
+    } else {
+      return T(0);
+    }
+  }
+
+  static constexpr T min() noexcept { return lowest(); }
+  static constexpr T infinity() noexcept { return T(0); }
+};
+
+template <>
+struct numeric_limits<bool> {
+  static constexpr bool is_signed   = false;
+  static constexpr bool is_iec559   = false;
+  static constexpr int digits       = 1;
+  static constexpr int max_exponent = 0;
+
+  static constexpr bool min() noexcept { return false; }
+  static constexpr bool max() noexcept { return true; }
+  static constexpr bool lowest() noexcept { return false; }
+  static constexpr bool infinity() noexcept { return false; }
+};
+
+template <>
+struct numeric_limits<float> {
+  static constexpr bool is_iec559   = true;
+  static constexpr bool is_signed   = true;
+  static constexpr int digits       = 24;
+  static constexpr int max_exponent = 128;
+
+  static constexpr float max() noexcept { return 0x1.fffffep127f; }
+  static constexpr float min() noexcept { return 0x1p-126f; }
+  static constexpr float lowest() noexcept { return -max(); }
+  static constexpr float infinity() noexcept { return __builtin_bit_cast(float, 0x7f800000U); }
+};
+
+template <>
+struct numeric_limits<double> {
+  static constexpr bool is_iec559   = true;
+  static constexpr bool is_signed   = true;
+  static constexpr int digits       = 53;
+  static constexpr int max_exponent = 1024;
+
+  static constexpr double max() noexcept { return 0x1.fffffffffffffp1023; }
+  static constexpr double min() noexcept { return 0x1p-1022; }
+  static constexpr double lowest() noexcept { return -max(); }
+  static constexpr double infinity() noexcept
+  {
+    return __builtin_bit_cast(double, 0x7ff0000000000000ULL);
+  }
+};
+
+template <class T>
+struct numeric_limits<T const> : numeric_limits<T> {};
+
+template <class T>
+struct numeric_limits<T volatile> : numeric_limits<T> {};
+
+template <class T>
+struct numeric_limits<T const volatile> : numeric_limits<T> {};
+
+}  // namespace cuda::std

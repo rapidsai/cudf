@@ -1,0 +1,141 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#pragma once
+
+#include <cuda/std/cstddef>
+#include <cuda/std/utility>
+
+namespace cuda::std {
+
+namespace detail {
+
+template <size_t I, class T>
+struct tuple_leaf {
+  T value;
+};
+
+template <class Seq, class... T>
+struct tuple_impl;
+
+template <size_t... I, class... T>
+struct tuple_impl<index_sequence<I...>, T...> : tuple_leaf<I, T>... {
+  constexpr tuple_impl() = default;
+
+  constexpr tuple_impl(T... v)
+    requires(sizeof...(T) > 0)
+    : tuple_leaf<I, T>{move(v)}...
+  {
+  }
+};
+
+template <size_t I, class T, class... R>
+struct nth_type : nth_type<I - 1, R...> {};
+
+template <class T, class... R>
+struct nth_type<0, T, R...> {
+  using type = T;
+};
+
+}  // namespace detail
+
+template <class... T>
+struct tuple : detail::tuple_impl<index_sequence_for<T...>, T...> {
+  using detail::tuple_impl<index_sequence_for<T...>, T...>::tuple_impl;
+};
+
+template <class... T>
+tuple(T...) -> tuple<T...>;
+
+template <size_t I, class T>
+struct tuple_element;
+
+template <size_t I, class... T>
+struct tuple_element<I, tuple<T...>> : detail::nth_type<I, T...> {};
+
+template <size_t I, class T>
+using tuple_element_t = typename tuple_element<I, T>::type;
+
+template <size_t I, class... T>
+constexpr auto& get(tuple<T...>& t)
+{
+  return static_cast<detail::tuple_leaf<I, tuple_element_t<I, tuple<T...>>>&>(t).value;
+}
+
+template <size_t I, class... T>
+constexpr auto const& get(tuple<T...> const& t)
+{
+  return static_cast<detail::tuple_leaf<I, tuple_element_t<I, tuple<T...>>> const&>(t).value;
+}
+
+template <size_t I, class... T>
+constexpr decltype(auto) get(tuple<T...>&& t)
+{
+  return static_cast<tuple_element_t<I, tuple<T...>>&&>(get<I>(t));
+}
+
+template <size_t I, class... T>
+constexpr decltype(auto) get(tuple<T...> const&& t)
+{
+  return static_cast<tuple_element_t<I, tuple<T...>> const&&>(get<I>(t));
+}
+
+namespace detail {
+
+template <class F, class Tuple, size_t... I>
+constexpr decltype(auto) apply_impl(F&& f, Tuple&& t, index_sequence<I...>)
+{
+  return forward<F>(f)(get<I>(forward<Tuple>(t))...);
+}
+
+template <class... A, class... B, size_t... I, size_t... J>
+constexpr auto tuple_cat_impl(tuple<A...> const& a,
+                              tuple<B...> const& b,
+                              index_sequence<I...>,
+                              index_sequence<J...>)
+{
+  return tuple<A..., B...>{get<I>(a)..., get<J>(b)...};
+}
+
+}  // namespace detail
+
+template <class F, class... T>
+constexpr decltype(auto) apply(F&& f, tuple<T...>& t)
+{
+  return detail::apply_impl(forward<F>(f), t, index_sequence_for<T...>{});
+}
+
+template <class F, class... T>
+constexpr decltype(auto) apply(F&& f, tuple<T...> const& t)
+{
+  return detail::apply_impl(forward<F>(f), t, index_sequence_for<T...>{});
+}
+
+template <class F, class... T>
+constexpr decltype(auto) apply(F&& f, tuple<T...>&& t)
+{
+  return detail::apply_impl(forward<F>(f), move(t), index_sequence_for<T...>{});
+}
+
+constexpr auto tuple_cat() { return tuple<>{}; }
+
+template <class... T>
+constexpr auto tuple_cat(tuple<T...> const& t)
+{
+  return t;
+}
+
+template <class... A, class... B>
+constexpr auto tuple_cat(tuple<A...> const& a, tuple<B...> const& b)
+{
+  return detail::tuple_cat_impl(a, b, index_sequence_for<A...>{}, index_sequence_for<B...>{});
+}
+
+template <class A, class B, class C, class... Rest>
+constexpr auto tuple_cat(A const& a, B const& b, C const& c, Rest const&... rest)
+{
+  return tuple_cat(tuple_cat(a, b), c, rest...);
+}
+
+}  // namespace cuda::std

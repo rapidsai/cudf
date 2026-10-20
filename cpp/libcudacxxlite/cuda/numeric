@@ -1,0 +1,126 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#pragma once
+
+#include <cuda/std/limits>
+#include <cuda/std/type_traits>
+
+namespace cuda {
+
+namespace detail {
+
+template <class T>
+concept overflow_integer =
+  cuda::std::is_same_v<T, signed char> || cuda::std::is_same_v<T, unsigned char> ||
+  cuda::std::is_same_v<T, short> || cuda::std::is_same_v<T, unsigned short> ||
+  cuda::std::is_same_v<T, int> || cuda::std::is_same_v<T, unsigned int> ||
+  cuda::std::is_same_v<T, long> || cuda::std::is_same_v<T, unsigned long> ||
+  cuda::std::is_same_v<T, long long> || cuda::std::is_same_v<T, unsigned long long> ||
+  cuda::std::is_same_v<T, __int128> || cuda::std::is_same_v<T, unsigned __int128>;
+
+}  // namespace detail
+
+template <class T>
+struct overflow_result {
+  T value;
+  bool overflow;
+
+  constexpr explicit operator bool() const noexcept { return overflow; }
+};
+
+template <detail::overflow_integer T>
+constexpr overflow_result<T> sub_overflow(T a, T b)
+{
+  T r = static_cast<T>(static_cast<unsigned __int128>(a) - static_cast<unsigned __int128>(b));
+  return {r,
+          (b < 0 && a > cuda::std::numeric_limits<T>::max() + b) ||
+            (b > 0 && a < cuda::std::numeric_limits<T>::lowest() + b)};
+}
+
+template <detail::overflow_integer T>
+constexpr bool sub_overflow(T& result, T a, T b)
+{
+  auto r = sub_overflow<T>(a, b);
+  result = r.value;
+  return r.overflow;
+}
+
+template <detail::overflow_integer T>
+constexpr overflow_result<T> neg_overflow(T a)
+{
+  return sub_overflow(T(0), a);
+}
+
+template <detail::overflow_integer T>
+constexpr overflow_result<T> abs_overflow(T a)
+{
+  return a < 0 ? neg_overflow(a) : overflow_result<T>{a, false};
+}
+
+template <detail::overflow_integer T>
+constexpr overflow_result<T> add_overflow(T a, T b)
+{
+  T r = static_cast<T>(static_cast<unsigned __int128>(a) + static_cast<unsigned __int128>(b));
+  return {r,
+          (b > 0 && a > cuda::std::numeric_limits<T>::max() - b) ||
+            (b < 0 && a < cuda::std::numeric_limits<T>::lowest() - b)};
+}
+
+template <detail::overflow_integer T>
+constexpr bool add_overflow(T& result, T a, T b)
+{
+  auto r = add_overflow<T>(a, b);
+  result = r.value;
+  return r.overflow;
+}
+
+template <detail::overflow_integer T>
+constexpr overflow_result<T> div_overflow(T a, T b)
+{
+  bool bad = b == 0 || (cuda::std::is_signed_v<T> && a == cuda::std::numeric_limits<T>::lowest() &&
+                        b == T(-1));
+  return {bad ? T(0) : T(a / b), bad};
+}
+
+template <detail::overflow_integer T>
+constexpr bool div_overflow(T& result, T a, T b)
+{
+  auto r = div_overflow<T>(a, b);
+  result = r.value;
+  return r.overflow;
+}
+
+template <detail::overflow_integer T>
+constexpr overflow_result<T> mod_overflow(T a, T b)
+{
+  if (b == 0) return {0, true};
+  if (b == -1) return {0, false};
+  return {T(a % b), false};
+}
+
+template <detail::overflow_integer T>
+constexpr overflow_result<T> mul_overflow(T a, T b)
+{
+  if (a == 0 || b == 0) return {0, false};
+  if ((a == -1 && b == cuda::std::numeric_limits<T>::lowest()) ||
+      (b == -1 && a == cuda::std::numeric_limits<T>::lowest()))
+    return {0, true};
+  T r = static_cast<T>(static_cast<unsigned __int128>(a) * static_cast<unsigned __int128>(b));
+  return {r,
+          (a > 0 ? (b > 0 ? a > cuda::std::numeric_limits<T>::max() / b
+                          : b < cuda::std::numeric_limits<T>::lowest() / a)
+                 : (b > 0 ? a < cuda::std::numeric_limits<T>::lowest() / b
+                          : a < cuda::std::numeric_limits<T>::max() / b))};
+}
+
+template <detail::overflow_integer T>
+constexpr bool mul_overflow(T& result, T a, T b)
+{
+  auto r = mul_overflow<T>(a, b);
+  result = r.value;
+  return r.overflow;
+}
+
+}  // namespace cuda

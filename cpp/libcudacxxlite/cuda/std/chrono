@@ -1,0 +1,132 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#pragma once
+
+#include <cuda/std/ratio>
+#include <cuda/std/type_traits>
+
+namespace cuda::std::chrono {
+
+template <class Rep, class Period = rational<1>>
+class duration {
+  Rep count_{};
+
+ public:
+  using rep    = Rep;
+  using period = Period;
+
+  constexpr duration() = default;
+
+  constexpr explicit duration(Rep r) : count_{r} {}
+
+  template <class R, class P>
+  constexpr duration(duration<R, P> d)
+    : count_{static_cast<Rep>(static_cast<conditional_t<is_integral_v<R>, __int128, R>>(d.count()) *
+                              (P::num * Period::den) / (P::den * Period::num))}
+  {
+  }
+
+  constexpr Rep count() const { return count_; }
+
+  constexpr duration operator-() const { return duration{-count_}; }
+
+  constexpr duration& operator+=(duration d)
+  {
+    count_ += d.count_;
+    return *this;
+  }
+
+  constexpr duration& operator-=(duration d)
+  {
+    count_ -= d.count_;
+    return *this;
+  }
+
+  friend constexpr duration operator+(duration a, duration b) { return a += b; }
+
+  friend constexpr duration operator-(duration a, duration b) { return a -= b; }
+
+  friend constexpr bool operator==(duration a, duration b) { return a.count_ == b.count_; }
+
+  friend constexpr bool operator!=(duration a, duration b) { return !(a == b); }
+
+  friend constexpr bool operator<(duration a, duration b) { return a.count_ < b.count_; }
+
+  friend constexpr bool operator>(duration a, duration b) { return b < a; }
+
+  friend constexpr bool operator<=(duration a, duration b) { return !(b < a); }
+
+  friend constexpr bool operator>=(duration a, duration b) { return !(a < b); }
+};
+
+using days         = duration<int, rational<86400>>;
+using hours        = duration<int, rational<3600>>;
+using minutes      = duration<int, rational<60>>;
+using seconds      = duration<long long>;
+using milliseconds = duration<long long, rational<1, 1000>>;
+using microseconds = duration<long long, rational<1, 1000000>>;
+using nanoseconds  = duration<long long, rational<1, 1000000000>>;
+
+template <class To, class R, class P>
+constexpr To duration_cast(duration<R, P> d)
+{
+  return To{d};
+}
+
+struct system_clock {};
+
+template <class Clock, class Duration = seconds>
+class time_point {
+  Duration epoch_{};
+
+ public:
+  using duration = Duration;
+  using rep      = typename duration::rep;
+  using period   = typename duration::period;
+  using clock    = Clock;
+
+  constexpr time_point() = default;
+
+  constexpr explicit time_point(Duration d) : epoch_{d} {}
+
+  constexpr Duration time_since_epoch() const { return epoch_; }
+
+  constexpr time_point& operator+=(Duration d)
+  {
+    epoch_ += d;
+    return *this;
+  }
+
+  constexpr time_point& operator-=(Duration d)
+  {
+    epoch_ -= d;
+    return *this;
+  }
+
+  friend constexpr time_point operator+(time_point t, Duration d) { return t += d; }
+
+  friend constexpr time_point operator+(Duration d, time_point t) { return t += d; }
+
+  friend constexpr time_point operator-(time_point t, Duration d) { return t -= d; }
+
+  friend constexpr Duration operator-(time_point a, time_point b) { return a.epoch_ - b.epoch_; }
+
+  friend constexpr bool operator==(time_point a, time_point b) { return a.epoch_ == b.epoch_; }
+
+  friend constexpr bool operator!=(time_point a, time_point b) { return !(a == b); }
+
+  friend constexpr bool operator<(time_point a, time_point b) { return a.epoch_ < b.epoch_; }
+
+  friend constexpr bool operator>(time_point a, time_point b) { return b < a; }
+
+  friend constexpr bool operator<=(time_point a, time_point b) { return !(b < a); }
+
+  friend constexpr bool operator>=(time_point a, time_point b) { return !(a < b); }
+};
+
+template <class D>
+using sys_time = time_point<system_clock, D>;
+
+}  // namespace cuda::std::chrono
