@@ -376,7 +376,7 @@ constexpr int LRB_SHIFT = 4;
  * @brief Rows longer than this are scheduled as several warp tasks, one per chunk of this many
  * bytes, so every task carries a bounded amount of work regardless of row length.
  *
- * A warp scans a 4 KiB chunk in 32 steps of 128 bytes. A 1 MiB row becomes 256 independent tasks
+ * A warp scans a 4 KiB chunk in 16 steps of 256 bytes. A 1 MiB row becomes 256 independent tasks
  * that spread across the GPU, and a column with many 16 KiB rows produces 4 tasks each; neither
  * case depends on how many long rows there are. Chunks of one row never conflict: the scatter pass
  * writes `false` for every binned row and chunk tasks only ever write `true`.
@@ -505,17 +505,16 @@ CUDF_KERNEL void lrb_scatter_kernel(column_device_view const d_strings,
   __shared__ size_type s_count[LRB_NUM_BINS];
   __shared__ size_type s_base[LRB_NUM_BINS];
 
-  auto const warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
-  auto const lane = warp.thread_rank();
-  __shared__ size_type s_binned;
+  auto const warp  = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
+  auto const lane  = warp.thread_rank();
+  auto const count = d_hist[lane];
+  // every warp reads the same counts, so this exit is uniform across the block
+  if (!warp.any(count != 0)) { return; }  // every row was resolved in the histogram pass
   if (warp.meta_group_rank() == 0) {
-    auto const count = d_hist[lane];
-    auto const incl  = cg::inclusive_scan(warp, count);
-    s_start[lane]    = incl - count;
-    if (lane == cudf::detail::warp_size - 1) { s_binned = incl; }
+    auto const incl = cg::inclusive_scan(warp, count);
+    s_start[lane]   = incl - count;
   }
   __syncthreads();
-  if (s_binned == 0) { return; }  // every row was resolved in the histogram pass
 
   auto const num_rows = static_cast<thread_index_type>(d_strings.size());
   auto const stride   = cudf::detail::grid_1d::grid_stride();
@@ -592,11 +591,11 @@ __device__ __forceinline__ void lrb_search_row_tile(Tile const& tile,
   auto const d_chunk    = d_str.data() + begin;
   auto const first_char = d_target.data()[0];
 
-  // Lanes cover a window of 4*G consecutive starting positions per iteration, 4 per lane.
+  // Lanes cover a window of 8*G consecutive starting positions per iteration, 8 per lane.
   // The work of a row is the position of its *first* match, not its length, so the whole
   // tile stops at the iteration in which any lane matches (one vote per iteration). The loop
   // bound is tile-uniform because every lane of the tile searches the same row.
-  auto constexpr bytes_per_lane = 4;
+  auto constexpr bytes_per_lane = 8;
   auto constexpr window         = G * bytes_per_lane;
   auto const lane_offset        = static_cast<size_type>(tile.thread_rank()) * bytes_per_lane;
   auto found                    = false;
@@ -670,7 +669,8 @@ CUDF_KERNEL void lrb_search_kernel(column_device_view const d_strings,
   auto const lane = static_cast<int>(warp.thread_rank());
 
   // Schedule table, one bin per lane: task counts and their prefix sums live in registers.
-  auto const bin_count     = d_hist[lane];
+  auto const bin_count = d_hist[lane];
+  if (!warp.any(bin_count != 0)) { return; }  // every row was resolved in the histogram pass
   auto const rows_per_task = cudf::detail::warp_size / lrb_threads_per_row(lane);
   auto const chunk_shift   = lrb_chunk_shift(lane);  // chunk tasks per row = 1 << chunk_shift
   auto const bin_tasks =
