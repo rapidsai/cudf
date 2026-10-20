@@ -1,0 +1,19 @@
+set pagination off
+set confirm off
+set breakpoint pending on
+handle SIGUSR1 SIGUSR2 SIGCHLD SIGPIPE SIGALRM SIGURG SIGPROF nostop noprint pass
+handle SIGSEGV stop print nopass
+break cuMemGetHandleForAddressRange
+commands
+silent
+printf "GETHANDLE addr=0x%lx len=%lu type=%d flags=%lu\n", $x1, $x2, $x3, $x4
+continue
+end
+run
+printf "STOPPED signal si_addr=%p\n", $_siginfo._sifields._sigfault.si_addr
+bt 30
+info registers
+x/8i $pc-16
+info proc mappings
+info sharedlibrary
+quit
