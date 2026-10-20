@@ -18,6 +18,8 @@
 
 #include <rmm/mr/statistics_resource_adaptor.hpp>
 
+#include <cuda/stream>
+
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -25,10 +27,6 @@
 #include <map>
 #include <numeric>
 #include <string>
-
-#include <rmm/mr/statistics_resource_adaptor.hpp>
-
-#include <cuda/stream>
 
 // Size of the serialized table header that precedes the column entries in the
 // packed metadata buffer: version + num_columns + num_rows + pad, four 4-byte fields.
@@ -161,7 +159,8 @@ struct PackUnpackTest : public cudf::test::BaseFixture {
   }
 
   // ExperimentalPackUnpackTest.PackIntoHost covers host destinations and staging windows.
-  void verify_prepared_round_trip(cudf::table_view const& input)
+  void verify_prepared_round_trip(cudf::table_view const& input,
+                                  std::vector<uint8_t> const& expected_metadata)
   {
     for (auto const compression : {cx::pack_compression::none,
                                    cx::pack_compression::automatic,
@@ -172,6 +171,10 @@ struct PackUnpackTest : public cudf::test::BaseFixture {
       auto const plan   = cx::prepare_pack(input, make_options(compression));
       auto const packed = pack_to_device(plan);
       EXPECT_LE(packed.result.payload_bytes, plan.sizes().payload_bytes);
+      // Table comparisons do not check the null counts of children, but the metadata records them.
+      if (compression == cx::pack_compression::none) {
+        EXPECT_EQ(packed.result.metadata, expected_metadata);
+      }
       expect_materializes_to(input, packed.view());
     }
   }
@@ -198,7 +201,11 @@ struct PackUnpackTest : public cudf::test::BaseFixture {
       std::equal(metadata.data(), metadata.data() + metadata.size(), packed.metadata->data()),
       true);
 
-    verify_prepared_round_trip(t);
+    if (auto const chunked_metadata = cudf::chunked_pack::create(t, 1024 * 1024)->build_metadata();
+        chunked_metadata != nullptr) {
+      EXPECT_EQ(*chunked_metadata, *packed.metadata);
+    }
+    verify_prepared_round_trip(t, *packed.metadata);
   }
   void run_test(std::vector<cudf::column_view> const& t) { run_test(cudf::table_view{t}); }
 };
@@ -1239,6 +1246,13 @@ TEST_F(PackUnpackTest, NestedSliced)
     this->run_test(cudf::table_view({split[0]}));
     this->run_test(cudf::table_view({split[1]}));
     this->run_test(cudf::table_view({split[2]}));
+  }
+
+  // list whose sliced rows are empty, so its child has no rows while the whole child has a null
+  {
+    cudf::test::lists_column_wrapper<int32_t> lists{
+      {{1, 2}, cudf::test::iterators::null_at(1)}, {}, {}};
+    this->run_test(cudf::slice(cudf::table_view{{lists}}, {1, 3}).front());
   }
 }
 

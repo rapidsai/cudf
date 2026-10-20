@@ -24,6 +24,7 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/io/detail/codec.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -52,6 +53,7 @@
 #include <cstring>
 #include <functional>
 #include <limits>
+#include <map>
 #include <numeric>
 #include <optional>
 #include <ranges>
@@ -868,19 +870,12 @@ std::pair<src_buf_info*, size_type> setup_source_buf_info(InputIter begin,
  *                     This is a pointer reference because it is updated by this function as the
  *                     columns's validity and data buffers are visited
  * @param mb A metadata_builder instance to update with the column's packed metadata
- * @param use_src_null_count True for the chunked_pack case where current_info has invalid null
- *                           count information. The null count should be taken
- *                           from `src` because this case is restricted to a single partition
- *                           (no splits)
  * @returns a std::tuple containing:
  *          column size, data offset, bitmask offset, and null count
  */
 template <typename BufInfo>
 std::tuple<std::size_t, int64_t, int64_t, size_type> build_output_column_metadata(
-  column_view const& src,
-  BufInfo& current_info,
-  detail::metadata_builder& mb,
-  bool use_src_null_count)
+  column_view const& src, BufInfo& current_info, detail::metadata_builder& mb)
 {
   auto [bitmask_offset, null_count] = [&]() {
     if (src.nullable()) {
@@ -891,13 +886,8 @@ std::tuple<std::size_t, int64_t, int64_t, size_type> build_output_column_metadat
           ? -1  // this means that the bitmask buffer pointer should be nullptr
           : static_cast<int64_t>(current_info->dst_offset);
 
-      // use_src_null_count is used for the chunked contig split case, where we have
-      // no splits: the null_count is just the source column's null_count
-      size_type const null_count = use_src_null_count
-                                     ? src.null_count()
-                                     : (current_info->num_elements == 0
-                                          ? 0
-                                          : (current_info->num_rows - current_info->valid_count));
+      size_type const null_count =
+        current_info->num_elements == 0 ? 0 : (current_info->num_rows - current_info->valid_count);
 
       ++current_info;
       return std::pair(bitmask_offset, null_count);
@@ -964,7 +954,7 @@ BufInfo build_output_columns(InputIter begin,
   auto current_info = info_begin;
   std::transform(begin, end, out_begin, [&current_info, base_ptr, &mb](column_view const& src) {
     auto [col_size, data_offset, bitmask_offset, null_count] =
-      build_output_column_metadata<BufInfo>(src, current_info, mb, false);
+      build_output_column_metadata<BufInfo>(src, current_info, mb);
 
     auto const bitmask_ptr =
       base_ptr != nullptr && bitmask_offset != -1
@@ -1022,13 +1012,77 @@ BufInfo populate_metadata(InputIter begin,
 {
   auto current_info = info_begin;
   std::for_each(begin, end, [&current_info, &mb](column_view const& src) {
-    build_output_column_metadata<BufInfo>(src, current_info, mb, true);
+    build_output_column_metadata<BufInfo>(src, current_info, mb);
 
     // children
     current_info = populate_metadata(src.child_begin(), src.child_end(), current_info, mb);
   });
 
   return current_info;
+}
+
+/**
+ * @brief Validity buffers to recount, batched by bit offset and row count.
+ */
+struct recount_batch {
+  std::vector<bitmask_type const*> masks;
+  std::vector<dst_buf_info*> infos;
+};
+// Keyed by {bit_shift, num_rows}: where the copied rows start in the first mask word, and how many.
+using recount_batches = std::map<std::pair<int, size_type>, recount_batch>;
+
+/**
+ * @brief Set valid counts of a single-partition copy, visiting buffers in `populate_metadata`
+ * order.
+ *
+ * A column's null count describes its own rows, which differ from the copied rows for a child of
+ * a sliced parent. Such buffers are added to `recounts`; the others take the column's null count.
+ */
+template <typename InputIter>
+dst_buf_info* collect_valid_counts(InputIter begin,
+                                   InputIter end,
+                                   dst_buf_info* current_info,
+                                   recount_batches& recounts)
+{
+  std::for_each(begin, end, [&](column_view const& src) {
+    if (src.nullable()) {
+      auto const row_start =
+        current_info->src_element_index * detail::size_in_bits<bitmask_type>() +
+        current_info->bit_shift;
+      if (std::cmp_equal(row_start, src.offset()) &&
+          std::cmp_equal(current_info->num_rows, src.size())) {
+        current_info->valid_count = src.size() - src.null_count();
+      } else if (current_info->num_elements > 0) {
+        auto& batch =
+          recounts[{current_info->bit_shift, static_cast<size_type>(current_info->num_rows)}];
+        batch.masks.push_back(src.null_mask() + current_info->src_element_index);
+        batch.infos.push_back(current_info);
+      }
+      ++current_info;
+    }
+    ++current_info;
+    current_info = collect_valid_counts(src.child_begin(), src.child_end(), current_info, recounts);
+  });
+  return current_info;
+}
+
+/**
+ * @brief Set the valid count of every validity buffer of a single-partition copy of `input`.
+ */
+void resolve_valid_counts(cudf::table_view const& input,
+                          host_span<dst_buf_info> buf_info,
+                          cuda::stream_ref stream)
+{
+  recount_batches batches;
+  collect_valid_counts(input.begin(), input.end(), buf_info.data(), batches);
+  for (auto const& [range, batch] : batches) {
+    auto const [bit_shift, num_rows] = range;
+    auto const null_counts =
+      cudf::batch_null_count(batch.masks, bit_shift, bit_shift + num_rows, stream);
+    for (std::size_t i = 0; i < batch.infos.size(); ++i) {
+      batch.infos[i]->valid_count = num_rows - null_counts[i];
+    }
+  }
 }
 
 /**
@@ -2213,11 +2267,13 @@ struct contiguous_split_state {
       return std::move(empty_packed_tables.data.metadata);
     }
 
-    auto& h_dst_buf_info  = partition_buf_size_and_dst_buf_info->h_dst_buf_info;
-    auto cur_dst_buf_info = h_dst_buf_info.data();
+    // The copy descriptors keep their valid count flags; null counts are resolved on a copy.
+    auto const& h_dst_buf_info = partition_buf_size_and_dst_buf_info->h_dst_buf_info;
+    std::vector<dst_buf_info> buf_info(h_dst_buf_info.begin(), h_dst_buf_info.end());
+    resolve_valid_counts(input, buf_info, stream);
     detail::metadata_builder mb{input.num_columns(), std::nullopt};
 
-    populate_metadata(input.begin(), input.end(), cur_dst_buf_info, mb);
+    populate_metadata(input.begin(), input.end(), buf_info.data(), mb);
 
     return std::make_unique<std::vector<uint8_t>>(std::move(mb.build()));
   }
