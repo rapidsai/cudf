@@ -400,12 +400,24 @@ TEST_F(TextBytePairEncoding, SyntheticSlicedWithNulls)
 
 TEST_F(TextBytePairEncoding, LongRunsOfSameCharacter)
 {
-  // "a a" overlapping same-rank pairs: exercises the adjacent equal-rank deferral logic
-  std::vector<std::string> pairs{"a a", "aa a", "aa aa", "aaaa aaaa", "b a"};
+  // overlapping same-rank pairs: only non-overlapping (left-to-right) pairs merge each round;
+  // lengths include runs crossing the long segment kernel's tiles of 64 positions
+  std::vector<std::string> pairs{
+    "a a", "aa a", "aa aa", "aaaa aaaa", "b a", "é é", "éé é", "éé éé", "c a", "a c"};
   std::vector<std::string> rows;
-  for (int n : {1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17, 33, 100, 1000, 5000}) {
+  auto repeat = [](std::string const& s, int n) {
+    std::string r;
+    for (int i = 0; i < n; ++i) {
+      r += s;
+    }
+    return r;
+  };
+  for (int n : {1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17, 33, 63, 64, 65, 100, 129, 300, 1000, 5000}) {
     rows.push_back(std::string(n, 'a'));
     rows.push_back("b" + std::string(n, 'a'));
+    rows.push_back(repeat("é", n));                                       // multi-byte characters
+    rows.push_back(std::string(n, 'a') + "x" + std::string(n + 1, 'a'));  // run is reset
+    rows.push_back(std::string(n, 'a') + "c" + std::string(n, 'a'));      // run continues past c
   }
   check_against_reference(pairs, rows);
 }

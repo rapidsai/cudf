@@ -29,6 +29,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/block/block_reduce.cuh>
+#include <cub/block/block_scan.cuh>
 #include <cub/device/device_for.cuh>
 #include <cub/device/device_scan.cuh>
 #include <cub/device/device_transform.cuh>
@@ -400,8 +401,9 @@ CUDF_KERNEL void bpe_short_fn(char const* d_input_chars,
  * The process first initializes all characters to 1 per position in `d_spaces_data`.
  * All pairs are realized and their ranks stored in `d_ranks_data`.
  *
- * Iteratively, the minimum rank is located, the corresponding `d_spaces_data` location
- * is set to 0 resulting in new potential pairs. The process repeats accounting for
+ * Iteratively, the minimum rank is located and all non-overlapping (left-to-right)
+ * occurrences of it are merged by setting the corresponding `d_spaces_data` locations
+ * to 0 resulting in new potential pairs. The process repeats accounting for
  * the rank of the newly formed pairs.
  *
  * Once there are no more rankable pairs, the process finishes and the `d_spaces_data`
@@ -419,6 +421,36 @@ CUDF_KERNEL void bpe_short_fn(char const* d_input_chars,
  * @param d_ranks_data Working memory to hold pair ranks
  * @param d_rerank_data Working memory to hold locations where reranking is required
  */
+/**
+ * @brief Scan state for merging non-overlapping occurrences of the minimum ranked pair
+ *
+ * Consecutive minimum ranked pairs overlap so only every other one is merged (left-to-right).
+ * `odd` is the parity of the number of minimum ranked pairs since `reset`, which is set by a
+ * pair that is not the minimum rank.
+ */
+struct merge_parity {
+  bool reset;
+  bool odd;
+};
+
+struct merge_parity_op {
+  __device__ merge_parity operator()(merge_parity lhs, merge_parity rhs) const
+  {
+    return rhs.reset ? rhs : merge_parity{lhs.reset, lhs.odd != rhs.odd};
+  }
+};
+
+/// Carries the scan state across the tiles of a segment
+struct merge_parity_prefix {
+  merge_parity carry{false, false};
+  __device__ merge_parity operator()(merge_parity tile_aggregate)
+  {
+    auto const prefix = carry;
+    carry             = merge_parity_op{}(carry, tile_aggregate);
+    return prefix;
+  }
+};
+
 template <typename FinderType, typename IndexType>
 CUDF_KERNEL void bpe_parallel_fn(char const* d_input_chars,
                                  IndexType const* d_segments,
@@ -438,6 +470,8 @@ CUDF_KERNEL void bpe_parallel_fn(char const* d_input_chars,
   __shared__ cudf::size_type block_min_rank;
   using block_reduce = cub::BlockReduce<cudf::size_type, long_block_size>;
   __shared__ typename block_reduce::TempStorage temp_storage;
+  using block_scan = cub::BlockScan<merge_parity, long_block_size>;
+  __shared__ typename block_scan::TempStorage scan_storage;
 
   // segment per block
   for (auto idx = static_cast<int64_t>(blockIdx.x); idx < num_long; idx += gridDim.x) {
@@ -518,21 +552,26 @@ CUDF_KERNEL void bpe_parallel_fn(char const* d_input_chars,
 
     // loop through the ranks processing the current minimum until there are no more
     while (block_min_rank < max_rank) {
-      // search the d_ranks for matches to block_min_rank
-      for (auto itr = d_ranks + lane_idx; itr < end_ranks; itr += long_block_size) {
-        if (*itr == block_min_rank) {
-          auto ptr = itr - 1;  // check for adjacent min-rank (edge-case)
-          while (ptr > d_ranks && *ptr == max_rank) {
-            --ptr;
-          }
-          // set the output value to 0 at this position (erases separator, merges pair)
-          // using example string above, the min-rank is 1 at position 5
-          // string: abcdefghij
-          // spaces: 1111101111  (set position 5 to 0)
-          if (*ptr != block_min_rank) { d_spaces[cuda::std::distance(d_ranks, itr)] = 0; }
+      // merge all the non-overlapping (left-to-right) pairs matching block_min_rank;
+      // a pair is merged if an even number of min-rank pairs immediately precede it
+      // since those pairs overlap; positions inside a token are skipped
+      // using example string above, the min-rank is 1 at position 5
+      // string: abcdefghij
+      // spaces: 1111101111  (set position 5 to 0)
+      auto prefix = merge_parity_prefix{};
+      for (cudf::size_type base = 0; base < d_str.size_bytes(); base += long_block_size) {
+        auto const index = base + lane_idx;
+        auto is_min      = false;
+        auto item        = merge_parity{false, false};
+        if (index < d_str.size_bytes() && d_spaces[index] != 0) {
+          is_min = d_ranks[index] == block_min_rank;
+          item   = merge_parity{!is_min, is_min};
         }
+        merge_parity preceding;
+        block_scan(scan_storage).ExclusiveScan(item, preceding, merge_parity_op{}, prefix);
+        if (is_min && !preceding.odd) { d_spaces[index] = 0; }
+        __syncthreads();  // scan_storage is reused by the next tile
       }
-      __syncthreads();
 
       // identify all the re-rank locations (logic above invalidated adjacent pairs)
       // using example string above, the adjacent pairs have to be re-ranked
