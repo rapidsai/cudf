@@ -204,8 +204,8 @@ struct window_bits {
  * of up to `max_short_size` bytes so each lane is responsible for `positions_per_lane`
  * byte positions (position p is handled by lane p % 32). The segments in a window need not
  * be adjacent in memory; positions in the window are mapped back to each segment's bytes
- * (tokens never span segments). Segments larger than `max_short_size` are skipped
- * (see bpe_parallel_fn).
+ * (tokens never span segments). Only segments no larger than `max_short_size` are given;
+ * larger segments are encoded by bpe_parallel_fn.
  *
  * The token and segment boundaries in a window are kept in bit-sets in shared memory.
  * Each round, all segments in the window are processed together:
@@ -218,7 +218,7 @@ struct window_bits {
  * @tparam IndexType Type of the segment offsets and indices (int32_t or int64_t)
  * @param d_input_chars Pointer to the input character data
  * @param d_segments Offsets to each segment; the last entry is the end of the chars data
- * @param d_ids Indices of the segments to encode
+ * @param d_ids Indices of the segments to encode; each is no larger than `max_short_size`
  * @param num_ids Number of entries in `d_ids`
  * @param d_finder For looking up the rank of a pair of tokens
  * @param d_spaces_data Output the location where separator will be inserted
@@ -263,25 +263,20 @@ CUDF_KERNEL void bpe_short_fn(char const* d_input_chars,
   auto const last = cuda::std::min(first + warp_size, static_cast<int64_t>(num_ids));
 
   for (auto cur = first; cur < last;) {
-    // pack as many (short) segments as will fit into the window
-    auto size       = window_size + 1;  // stops the window
+    // pack as many segments as will fit into the window; each fits so n >= 1
+    auto size       = window_size + 1;  // stops the window at lanes past the last segment
     auto seg_offset = int64_t{0};
     if (cur + lane < last) {
       auto const seg = d_ids[cur + lane];
       seg_offset     = d_segments[seg];
-      auto const sz  = d_segments[seg + 1] - seg_offset;
-      if (sz <= max_short_size) { size = static_cast<int>(sz); }
+      size           = static_cast<int>(d_segments[seg + 1] - seg_offset);
     }
     auto seg_end = size;  // inclusive scan of sizes
     for (int offset = 1; offset < warp_size; offset *= 2) {
       auto const value = __shfl_up_sync(full_mask, seg_end, offset);
       if (lane >= offset) { seg_end += value; }
     }
-    auto const n = __popc(__ballot_sync(full_mask, seg_end <= window_size));
-    if (n == 0) {  // long segment is encoded by bpe_parallel_fn
-      ++cur;
-      continue;
-    }
+    auto const n         = __popc(__ballot_sync(full_mask, seg_end <= window_size));
     auto const seg_begin = seg_end - size;
     auto const width     = __shfl_sync(full_mask, seg_end, n - 1);
     auto const words     = (width + warp_size - 1) / warp_size;  // words used by this window
