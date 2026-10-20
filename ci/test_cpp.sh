@@ -95,6 +95,40 @@ if (( SUITEERROR == 0 )) && [[ "${RUN_LIBCUDF_STREAMING_TESTS}" == "true" ]]; th
         print_ucx_log_tails
     fi
 
+    # Driver-only model of the crash (no UCX/rapidsmpf/cudf): see the header of
+    # ci/debug_dmabuf_race.c. Built in a separate env so the test env is untouched.
+    # Any failure to build is non-fatal; a crash while running it is.
+    rapids-logger "UCX debug: build and run the driver-only dmabuf race test"
+    dmabuf_bin=""
+    if rapids-mamba-retry create -y -n dmabuf_build -c conda-forge \
+        "cuda-version=${RAPIDS_CUDA_VERSION%.*}" cuda-cudart-dev cuda-driver-dev \
+        "gcc_linux-$(uname -m | sed 's/x86_64/64/')=14.*"; then
+        build_prefix="$(conda info --base)/envs/dmabuf_build"
+        libcuda_path="$(ldconfig -p | awk '/libcuda\.so\.1/ {print $NF; exit}')"
+        cuda_h="$(find "${build_prefix}" -name cuda.h -path '*include*' | head -n 1)"
+        cc_bin="$(ls "${build_prefix}"/bin/*-conda-linux-gnu-gcc | head -n 1)"
+        echo "cc=${cc_bin} cuda.h=${cuda_h} libcuda=${libcuda_path}"
+        if "${cc_bin}" -O1 -g ci/debug_dmabuf_race.c -o /tmp/dmabuf_race \
+            -I"$(dirname "${cuda_h}")" -L"${build_prefix}/lib" -L"$(dirname "${cuda_h}")/../lib" \
+            "${libcuda_path}" -lcudart -lpthread -Wl,-rpath,"${build_prefix}/lib" \
+            -Wl,-rpath,"$(dirname "${cuda_h}")/../lib"; then
+            dmabuf_bin=/tmp/dmabuf_race
+        fi
+    fi
+    if [[ -z "${dmabuf_bin}" ]]; then
+        echo "WARNING: could not build dmabuf_race, skipping"
+    else
+        # senders, churners, allocator: vary the thread mix and the allocator
+        for cfg in "60 2 4 malloc" "60 4 8 malloc" "60 2 4 async"; do
+            echo "UCX debug: dmabuf_race ${cfg}"
+            timeout 5m "$(realpath ci/debug_ucx_gdb_wrap.sh)" "${dmabuf_bin}" ${cfg} || {
+                rapids-logger "UCX debug: dmabuf_race (${cfg}) FAILED"
+                EXITCODE=1
+                SUITEERROR=1
+            }
+        done
+    fi
+
     rapids-logger "UCX debug: looping the ucxx StreamingShuffler tests under gdb"
     rapids-mamba-retry install -y -n test gdb || echo "WARNING: could not install gdb"
     export OMPI_ALLOW_RUN_AS_ROOT=1
