@@ -184,21 +184,6 @@ def partitioned_delta(tmp_path: Path) -> str:
     return str(path)
 
 
-@pytest.fixture
-def evolved_hive(tmp_path: Path) -> Path:
-    path = tmp_path / "hive"
-    pl.LazyFrame({"a": [1, 2], "b": [10, 20]}).sink_parquet(
-        path / "part=u" / "data.parquet", mkdir=True
-    )
-    pl.LazyFrame({"a": [3, 4]}).sink_parquet(
-        path / "part=v" / "data.parquet", mkdir=True
-    )
-    pl.LazyFrame({"a": [5, 6], "b": [50, 60]}).sink_parquet(
-        path / "part=w" / "data.parquet", mkdir=True
-    )
-    return path
-
-
 @pytest.mark.parametrize(
     "table",
     [
@@ -350,10 +335,19 @@ def test_scan_lake_predicate_pushdown(
     ids=["data", "added", "added_only", "partition_only", "mixed"],
 )
 def test_scan_lake_hive_file_paths_predicate(
-    engine: pl.GPUEngine, evolved_hive: Path, query: Any
+    engine: pl.GPUEngine, tmp_path: Path, query: Any
 ) -> None:
+    pl.LazyFrame({"a": [1, 2], "b": [10, 20]}).sink_parquet(
+        tmp_path / "part=u" / "data.parquet", mkdir=True
+    )
+    pl.LazyFrame({"a": [3, 4]}).sink_parquet(
+        tmp_path / "part=v" / "data.parquet", mkdir=True
+    )
+    pl.LazyFrame({"a": [5, 6], "b": [50, 60]}).sink_parquet(
+        tmp_path / "part=w" / "data.parquet", mkdir=True
+    )
     q = pl.scan_parquet(
-        evolved_hive,
+        tmp_path,
         hive_partitioning=True,
         missing_columns="insert",
         include_file_paths="path",
