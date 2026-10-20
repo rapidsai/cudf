@@ -68,11 +68,11 @@ def rewrite_groupby_dynamic(
     """Rewrite a supported ``group_by_dynamic`` as a grouped truncation."""
     dynamic = options.dynamic
     _check_supported(dynamic)
-    every = _duration_string(dynamic.every)
     index_name = dynamic.index_column
     index_dtype = inp.schema[index_name]
     if not isinstance(index_dtype.polars_type, pl.Datetime):
         raise NotImplementedError("group_by_dynamic with a non-Datetime index")
+    every = _duration_string(dynamic.every)
 
     start_name = next(unique_names((*inp.schema, *schema)))
     start = expr.TemporalFunction(
