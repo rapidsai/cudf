@@ -235,8 +235,7 @@ cuda::device_buffer<std::remove_cv_t<T>> make_device_buffer(std::span<T, Extent>
                                                             cuda::stream_ref stream,
                                                             cudf::memory_resources mr)
 {
-  return make_device_buffer(
-    host_span<std::remove_cv_t<T> const>{source_data.data(), source_data.size()}, stream, mr);
+  return make_device_buffer(host_span<T const>{source_data.data(), source_data.size()}, stream, mr);
 }
 
 }  // namespace cudf::detail
