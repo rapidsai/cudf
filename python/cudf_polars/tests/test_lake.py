@@ -18,6 +18,7 @@ from cudf_polars.testing.asserts import (
 from cudf_polars.testing.engine_utils import is_streaming_engine
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
     from typing import Any, Literal
 
@@ -36,14 +37,14 @@ from pyiceberg.types import (  # noqa: E402
 
 
 @pytest.fixture
-def iceberg_catalog(tmp_path: Path) -> SqlCatalog:
+def iceberg_catalog(tmp_path: Path) -> Iterator[SqlCatalog]:
     with SqlCatalog(
         "default",
         uri=f"sqlite:///{tmp_path}/catalog.db",
         warehouse=f"file://{tmp_path / 'warehouse'}",
     ) as catalog:
         catalog.create_namespace_if_not_exists("ns")
-        return catalog
+        yield catalog
 
 
 @pytest.fixture
