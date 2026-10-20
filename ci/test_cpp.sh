@@ -100,18 +100,18 @@ if (( SUITEERROR == 0 )) && [[ "${RUN_LIBCUDF_STREAMING_TESTS}" == "true" ]]; th
     # Any failure to build is non-fatal; a crash while running it is.
     rapids-logger "UCX debug: build and run the driver-only dmabuf race test"
     dmabuf_bin=""
+    # Only the driver API is used (cuda.h + libcuda); cuda_runtime.h is not included.
     if rapids-mamba-retry create -y -n dmabuf_build -c conda-forge \
         "cuda-version=${RAPIDS_CUDA_VERSION%.*}" cuda-cudart-dev cuda-driver-dev \
         "gcc_linux-$(uname -m | sed 's/x86_64/64/')=14.*"; then
         build_prefix="$(conda info --base)/envs/dmabuf_build"
         libcuda_path="$(ldconfig -p | awk '/libcuda\.so\.1/ {print $NF; exit}')"
-        cuda_h="$(find "${build_prefix}" -name cuda.h -path '*include*' | head -n 1)"
+        # the conda sysroot also has an unrelated linux/cuda.h, so match the CUDA targets dir
+        cuda_h="$(find "${build_prefix}/targets" -name cuda.h -path '*/include/cuda.h' | head -n 1)"
         cc_bin="$(ls "${build_prefix}"/bin/*-conda-linux-gnu-gcc | head -n 1)"
         echo "cc=${cc_bin} cuda.h=${cuda_h} libcuda=${libcuda_path}"
         if "${cc_bin}" -O1 -g ci/debug_dmabuf_race.c -o /tmp/dmabuf_race \
-            -I"$(dirname "${cuda_h}")" -L"${build_prefix}/lib" -L"$(dirname "${cuda_h}")/../lib" \
-            "${libcuda_path}" -lcudart -lpthread -Wl,-rpath,"${build_prefix}/lib" \
-            -Wl,-rpath,"$(dirname "${cuda_h}")/../lib"; then
+            -I"$(dirname "${cuda_h}")" "${libcuda_path}" -lpthread; then
             dmabuf_bin=/tmp/dmabuf_race
         fi
     fi

@@ -2,6 +2,8 @@
 //
 // What happens in CI: a rapidsmpf shuffler thread calls ucp_tag_send_nbx on a
 // small (384-1024 B) buffer allocated with plain cudaMalloc (rmm cuda_memory_resource).
+// This file uses the driver API (cuMemAlloc/cuMemFree, which is what cudaMalloc/cudaFree
+// do underneath) so that it only needs cuda.h and libcuda, not the CUDA runtime.
 // UCX 1.22 (uct_cuda_copy_md_mem_query -> detect_mem_flags -> get_dmabuf) then does:
 //     cuMemGetAddressRange(&base, &size, ptr)            // -> the allocation itself
 //     start = align_down(base, 4096); end = align_up(base + size, 4096)
@@ -14,7 +16,6 @@
 //
 // usage: dmabuf_race [seconds=20] [senders=2] [churners=4] [alloc=malloc|async]
 #include <cuda.h>
-#include <cuda_runtime.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdint.h>
@@ -32,39 +33,39 @@ static CUcontext ctx;
 static int use_async;
 static atomic_long ok, errs, queries_spanning_neighbours;
 
-static void *xalloc(size_t n, cudaStream_t s) {
-    void *p = NULL;
-    cudaError_t e = use_async ? cudaMallocAsync(&p, n, s) : cudaMalloc(&p, n);
-    return e == cudaSuccess ? p : NULL;
+static void *xalloc(size_t n, CUstream s) {
+    CUdeviceptr p = 0;
+    CUresult r = use_async ? cuMemAllocAsync(&p, n, s) : cuMemAlloc(&p, n);
+    return r == CUDA_SUCCESS ? (void *)p : NULL;
 }
-static void xfree(void *p, cudaStream_t s) {
-    if (use_async) cudaFreeAsync(p, s); else cudaFree(p);
+static void xfree(void *p, CUstream s) {
+    if (use_async) cuMemFreeAsync((CUdeviceptr)p, s); else cuMemFree((CUdeviceptr)p);
 }
 // 384..1024 B in 128 B steps, like the sizes seen in the CI backtraces
 static size_t small_size(unsigned *seed) { return 384 + 128 * (rand_r(seed) % 6); }
 
 static void *churn(void *a) {
     cuCtxSetCurrent(ctx);
-    cudaStream_t s; cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking);
+    CUstream s; cuStreamCreate(&s, CU_STREAM_NON_BLOCKING);
     unsigned seed = (unsigned)(long)a * 7919 + 1;
     while (!atomic_load(&stop)) {
         int i = rand_r(&seed) % NSLOT;
         void *p = xalloc(small_size(&seed), s);
         void *prev = __atomic_exchange_n(&slots[i], p, __ATOMIC_ACQ_REL);
         if (prev) xfree(prev, s);
-        if (use_async && (rand_r(&seed) & 63) == 0) cudaStreamSynchronize(s);
+        if (use_async && (rand_r(&seed) & 63) == 0) cuStreamSynchronize(s);
     }
     return NULL;
 }
 
 static void *sender(void *a) {
     cuCtxSetCurrent(ctx);
-    cudaStream_t s; cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking);
+    CUstream s; cuStreamCreate(&s, CU_STREAM_NON_BLOCKING);
     unsigned seed = (unsigned)(long)a * 104729 + 3;
     while (!atomic_load(&stop)) {
         void *buf = xalloc(small_size(&seed), s);
         if (!buf) continue;
-        if (use_async) cudaStreamSynchronize(s);
+        if (use_async) cuStreamSynchronize(s);
 
         // --- UCX's sequence ---
         CUdeviceptr base; size_t size;
@@ -87,7 +88,12 @@ int main(int argc, char **argv) {
     int secs = argc > 1 ? atoi(argv[1]) : 20;
     int ns = argc > 2 ? atoi(argv[2]) : 2, nc = argc > 3 ? atoi(argv[3]) : 4;
     use_async = argc > 4 && !strcmp(argv[4], "async");
-    cudaSetDevice(0); cudaFree(0); cuCtxGetCurrent(&ctx);
+    CUdevice dev;
+    if (cuInit(0) || cuDeviceGet(&dev, 0) || cuDevicePrimaryCtxRetain(&ctx, dev) ||
+        cuCtxSetCurrent(ctx)) {
+        fprintf(stderr, "CUDA init failed\n");
+        return 1;
+    }
     pthread_t t[64]; int n = 0;
     for (long i = 0; i < nc; i++) pthread_create(&t[n++], NULL, churn, (void *)i);
     for (long i = 0; i < ns; i++) pthread_create(&t[n++], NULL, sender, (void *)i);
