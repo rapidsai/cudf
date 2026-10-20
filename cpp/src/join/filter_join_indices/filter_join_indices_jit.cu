@@ -260,7 +260,7 @@ apply_join_semantics(cudf::table_view const& left,
                                    {},
                                    {},
                                    {},
-                                   {},
+                                   rmm::mr::polymorphic_allocator<char>{mr.get_temporary_mr()},
                                    stream.get()};
 
     auto predicate_func = [predicate_results_ptr] __device__(std::size_t idx) -> bool {
@@ -412,9 +412,11 @@ filter_join_indices_jit(cudf::table_view const& left,
                                          false);
 
   // Allocate predicate results
-  auto predicate_results =
-    cuda::device_buffer<bool>(
-    stream, cudf::get_current_device_resource_ref(), left_indices.size(), cuda::no_init, mr.get_temporary_mr());
+  auto predicate_results = cuda::device_buffer<bool>(stream,
+                                                     cudf::get_current_device_resource_ref(),
+                                                     left_indices.size(),
+                                                     cuda::no_init,
+                                                     mr.get_temporary_mr());
 
   // Launch kernel
   launch_join_filter_kernel(kernel,
@@ -428,7 +430,7 @@ filter_join_indices_jit(cudf::table_view const& left,
 
   // Apply same join semantics as AST version
   return apply_join_semantics(
-    left, left_indices, right_indices, predicate_results, join_kind, stream, mr.get_output_mr());
+    left, left_indices, right_indices, predicate_results, join_kind, stream, mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -464,7 +466,7 @@ filter_join_indices_jit(cudf::table_view const& left,
 
   if (join_kind == join_kind::FULL_JOIN) {
     auto left_maps =
-      full_to_left_join_indices(left_indices, right_indices, stream, mr.get_output_mr());
+      full_to_left_join_indices(left_indices, right_indices, stream, mr.get_temporary_mr());
     auto filtered_left =
       cudf::detail::filter_join_indices_jit(left,
                                             right,
@@ -505,9 +507,11 @@ filter_join_indices_jit(cudf::table_view const& left,
     "cudf/cpp/src/join/jit/filter_join_kernel.cu", kernel_name, cuda_source);
 
   // Allocate and compute predicate results
-  auto predicate_results =
-    cuda::device_buffer<bool>(
-    stream, cudf::get_current_device_resource_ref(), left_indices.size(), cuda::no_init, mr.get_temporary_mr());
+  auto predicate_results = cuda::device_buffer<bool>(stream,
+                                                     cudf::get_current_device_resource_ref(),
+                                                     left_indices.size(),
+                                                     cuda::no_init,
+                                                     mr.get_temporary_mr());
   launch_join_filter_kernel(kernel,
                             left_indices,
                             right_indices,
@@ -518,7 +522,7 @@ filter_join_indices_jit(cudf::table_view const& left,
                             mr);
 
   return apply_join_semantics(
-    left, left_indices, right_indices, predicate_results, join_kind, stream, mr.get_output_mr());
+    left, left_indices, right_indices, predicate_results, join_kind, stream, mr);
 }
 
 }  // namespace detail

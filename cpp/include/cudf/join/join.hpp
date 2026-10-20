@@ -470,9 +470,8 @@ filter_join_indices_output_size(
  * ```
  * The first parameter is a pointer to a bool that the function must set to `true` or `false`.
  * The remaining parameters correspond to columns in the left table followed by the right table.
- * The function may return `cudf::errc` instead of `void` to report evaluation errors.
- * Return `cudf::errc::SUCCESS` when evaluation succeeds.
- * PTX UDFs do not support returning errors.
+ * The CUDA function may return `cudf::errc` instead of `void` to report evaluation errors. PTX UDFs
+ * do not support returning errors.
  *
  *
  * @throw std::invalid_argument if join_kind is not INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
