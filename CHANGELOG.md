@@ -1,3 +1,11 @@
+# cudf 26.10.01 (20 Oct 2026)
+
+### 🛠️ Improvements
+* Hotfix 26.10.1: Backport #24231, #24331, #24396, #24655, #24663 for HashCSR join memory and PyArrow 26 parquet fix by @josephine-wolf-oberholtzer in https://github.com/NVIDIA/cudf/pull/24713
+
+
+**Full Changelog**: https://github.com/NVIDIA/cudf/compare/v26.10.00...release/26.10
+
 # cudf 26.10.00 (7 Oct 2026)
 
 ### 🚨 Breaking Changes
