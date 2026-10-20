@@ -580,7 +580,9 @@ table_view unpack_view(packed_data_view input);
 /**
  * @brief Materialize an owning table from any supported packed representation.
  *
- * A pageable host payload is first copied to temporary device memory.
+ * A pageable host payload is first copied to temporary device memory, and can be released once
+ * this call returns. Device and pinned payloads are read in stream order and must remain valid
+ * until the work on `stream` completes.
  *
  * @throw std::invalid_argument if a compressed `input.payload` is not aligned to the
  * `payload_alignment` it was packed with
@@ -602,6 +604,9 @@ std::unique_ptr<table> materialize(
  * Only the selected columns are copied or decompressed, and only their bytes are read from a
  * pageable host payload. Indices may repeat and appear in any order; each one produces an
  * independent column.
+ *
+ * A pageable payload can be released once this call returns. Device and pinned payloads are read
+ * in stream order and must remain valid until the work on `stream` completes.
  *
  * @throw std::out_of_range if an index is not in `[0, num_columns)`
  * @throw std::invalid_argument if a compressed `input.payload` is not aligned to the
