@@ -48,7 +48,12 @@ class _AccessColumnsStack(ExitStack):
         # Consume generator and enter contexts here, not in __init__
         # _flatten_and_access will call enter_context on this stack
         # while yielding objects - consume and return directly
-        return tuple(self._objects_generator)
+        try:
+            return tuple(self._objects_generator)
+        except BaseException:
+            # Release previously entered contexts if a later access fails.
+            self.close()
+            raise
 
 
 def access_columns(
