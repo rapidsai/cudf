@@ -27,6 +27,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <limits>
 #include <numeric>
 #include <vector>
 
@@ -897,6 +898,83 @@ TYPED_TEST(MultiStepReductionTest, var_std)
                        col_nulls, *std_agg, cudf::data_type(cudf::type_id::FLOAT64))
                      .first,
                    std_nulls);
+}
+
+using StableVarianceReductionTest = ReductionTest<double>;
+
+TEST_F(StableVarianceReductionTest, LargeOffsetAcrossTiles)
+{
+  // Exercise multiple CUB tiles with a small variance relative to the mean.
+  for (bool nullable : {false, true}) {
+    SCOPED_TRACE(nullable ? "nullable" : "non-nullable");
+    std::vector<double> values(100003);
+    std::vector<bool> valid(values.size(), true);
+    long double sum = 0;
+    size_t count    = 0;
+    for (size_t i = 0; i < values.size(); ++i) {
+      values[i] = 1e12 + static_cast<int>(i % 9) - 4;
+      valid[i]  = !nullable || i % 33 != 0;
+      if (valid[i]) {
+        sum += values[i];
+        ++count;
+      }
+    }
+    auto const mean = sum / count;
+    long double m2  = 0;
+    for (size_t i = 0; i < values.size(); ++i) {
+      if (valid[i]) {
+        auto const delta = static_cast<long double>(values[i]) - mean;
+        m2 += delta * delta;
+      }
+    }
+    cudf::test::fixed_width_column_wrapper<double> col(values.begin(), values.end(), valid.begin());
+    for (int ddof : {0, 1}) {
+      SCOPED_TRACE(ddof == 0 ? "ddof=0" : "ddof=1");
+      auto const expected = static_cast<double>(m2 / (count - ddof));
+      auto const [var, var_valid] =
+        reduction_test<double>(col, *cudf::make_variance_aggregation<reduce_aggregation>(ddof));
+      auto const [std, std_valid] =
+        reduction_test<double>(col, *cudf::make_std_aggregation<reduce_aggregation>(ddof));
+      EXPECT_TRUE(var_valid);
+      EXPECT_TRUE(std_valid);
+      EXPECT_NEAR(var, expected, 1e-4);
+      EXPECT_NEAR(std, std::sqrt(expected), 1e-4);
+    }
+  }
+}
+
+TEST_F(StableVarianceReductionTest, ConstantValuesWhoseSumOverflows)
+{
+  std::vector<double> values(100003, std::numeric_limits<double>::max() / 4);
+  cudf::test::fixed_width_column_wrapper<double> col(values.begin(), values.end());
+  auto const [var, valid] =
+    reduction_test<double>(col, *cudf::make_variance_aggregation<reduce_aggregation>());
+  EXPECT_TRUE(valid);
+  EXPECT_EQ(var, 0.0);
+}
+
+TEST_F(StableVarianceReductionTest, InfinityPositionDoesNotChangeResult)
+{
+  constexpr cudf::size_type size = 10'000;
+  auto const var_at              = [&](cudf::size_type inf_pos) {
+    std::vector<double> values(size);
+    std::iota(values.begin(), values.end(), 0.0);
+    values[inf_pos] = std::numeric_limits<double>::infinity();
+    cudf::test::fixed_width_column_wrapper<double> col(values.begin(), values.end());
+    auto const [var, valid] =
+      reduction_test<double>(col, *cudf::make_variance_aggregation<reduce_aggregation>());
+    SCOPED_TRACE("inf_pos=" + std::to_string(inf_pos));
+    EXPECT_TRUE(valid);
+    return var;
+  };
+  auto const first  = var_at(0);
+  auto const middle = var_at(size / 2);
+  auto const last   = var_at(size - 1);
+  EXPECT_TRUE(std::isnan(first));
+  EXPECT_EQ(std::isnan(first), std::isnan(last));
+  EXPECT_EQ(std::isnan(first), std::isnan(middle));
+  EXPECT_EQ(std::isinf(first), std::isinf(last));
+  EXPECT_EQ(std::isinf(first), std::isinf(middle));
 }
 
 // ----------------------------------------------------------------------------
@@ -3278,10 +3356,9 @@ TEST_F(ListReductionTest, NestedListReductionNthElement)
   using LCW = cudf::test::lists_column_wrapper<int>;
 
   // test without nulls
-  auto validity    = std::vector<bool>{true, false, false, true, true};
-  auto nested_list = LCW(
-    {{LCW{}, LCW{2, 3, 4}}, {}, {LCW{5}, LCW{6}, LCW{7, 8}}, {LCW{9, 10}}, {LCW{11}, LCW{12, 13}}},
-    validity.begin());
+  auto validity = std::vector<bool>{true, false, false, true, true};
+  auto nested_list =
+    LCW({{{}, {2, 3, 4}}, {}, {{5}, {6}, {7, 8}}, {{9, 10}}, {{11}, {12, 13}}}, validity.begin());
   this->reduction_test(
     nested_list,
     LCW{{}, {2, 3, 4}},  // expected_value,
@@ -3428,14 +3505,14 @@ TEST_F(ListReductionTest, ReductionMinMaxWithNulls)
   using cudf::test::iterators::nulls_at;
   constexpr int null{0};
 
-  auto const input = LISTS_CW{{LISTS_CW{3, 4},
-                               LISTS_CW{1, 2},
-                               LISTS_CW{{1, null}, null_at(1)},
-                               LISTS_CW{} /*null*/,
-                               LISTS_CW{5, 6, 7},
-                               LISTS_CW{1, 8},
-                               LISTS_CW{{9, null}, null_at(1)},
-                               LISTS_CW{} /*null*/},
+  auto const input = LISTS_CW{{{3, 4},
+                               {1, 2},
+                               {{1, null}, null_at(1)},
+                               {} /*null*/,
+                               {5, 6, 7},
+                               {1, 8},
+                               {{9, null}, null_at(1)},
+                               {} /*null*/},
                               nulls_at({3, 7})};
   this->reduction_test(input,
                        INTS_CW{{1, null}, null_at(1)},
@@ -3552,7 +3629,7 @@ TEST_F(StructReductionTest, NestedStructReductionNthElement)
   auto result_child0 = ICW{0};
   auto result_col0   = SCW({result_child0}, std::vector<bool>{false});
   auto result_col1   = ICW{{1}, {true}};
-  auto result_col2   = LCW({LCW{}}, std::vector<bool>{true}.begin());
+  auto result_col2   = LCW({{}}, std::vector<bool>{true}.begin());
   // test without nulls
   this->reduction_test(
     struct_col1,
@@ -3565,7 +3642,7 @@ TEST_F(StructReductionTest, NestedStructReductionNthElement)
   result_child0 = ICW{0};
   result_col0   = SCW({result_child0}, std::vector<bool>{false});
   result_col1   = ICW{{0}, {false}};
-  result_col2   = LCW({LCW{3}}, std::vector<bool>{false}.begin());
+  result_col2   = LCW({{3}}, std::vector<bool>{false}.begin());
   this->reduction_test(
     struct_col1,
     cudf::table_view{{result_col0, result_col1, result_col2}},  // expected_value,
@@ -3577,7 +3654,7 @@ TEST_F(StructReductionTest, NestedStructReductionNthElement)
   result_child0 = ICW{0};
   result_col0   = SCW({result_child0}, std::vector<bool>{true});
   result_col1   = ICW{{4}, {true}};
-  result_col2   = LCW({LCW{4}}, std::vector<bool>{true}.begin());
+  result_col2   = LCW({{4}}, std::vector<bool>{true}.begin());
   this->reduction_test(
     struct_col1,
     cudf::table_view{{result_col0, result_col1, result_col2}},  // expected_value,

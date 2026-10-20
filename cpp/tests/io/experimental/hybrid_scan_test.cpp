@@ -5,6 +5,7 @@
 
 #include "hybrid_scan_common.hpp"
 #include "hybrid_scan_composer.hpp"
+#include "hybrid_scan_multifile_composer.hpp"
 #include "tests/io/parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
@@ -31,6 +32,11 @@
 #include <rmm/mr/aligned_resource_adaptor.hpp>
 
 #include <cuda/iterator>
+
+#include <array>
+#include <format>
+#include <limits>
+#include <stdexcept>
 
 namespace {
 
@@ -242,6 +248,49 @@ std::unique_ptr<cudf::table> test_hybrid_scan_column_selection(
 
 // Base test fixture for tests
 struct HybridScanTest : public cudf::test::BaseFixture {};
+
+TEST_F(HybridScanTest, PageIndexOverflowThrows)
+{
+  auto [written_table, parquet_buffer] = create_parquet_with_stats<uint32_t, 1>();
+
+  auto datasource          = cudf::io::datasource::create(cudf::host_span<std::byte const>{
+    reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()});
+  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
+
+  auto const options = cudf::io::parquet_reader_options::builder().build();
+  auto reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*footer_buffer, options);
+
+  ASSERT_FALSE(reader->page_index_byte_range().is_empty());
+
+  enum class CorruptionType : bool { COLUMN_INDEX = true, OFFSET_INDEX = false };
+
+  // Corrupt the column index or the offset index byte range of the first column chunk
+  auto const test_overflow = [&](CorruptionType corruption_type) {
+    SCOPED_TRACE(
+      std::format("Corrupt {} index byte range",
+                  corruption_type == CorruptionType::COLUMN_INDEX ? "column" : "offset"));
+    auto file_metadata = reader->parquet_metadata();
+    auto& column       = file_metadata.row_groups.front().columns.front();
+    if (corruption_type == CorruptionType::COLUMN_INDEX) {
+      column.column_index_offset = std::numeric_limits<int64_t>::max() - 1;
+      column.column_index_length = 8;
+    } else {
+      column.offset_index_offset = std::numeric_limits<int64_t>::max() - 1;
+      column.offset_index_length = 8;
+    }
+
+    // Reset the reader with the corrupted metadata
+    reader =
+      std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(file_metadata, options);
+
+    // Check for overflow error
+    EXPECT_THROW(std::ignore = reader->page_index_byte_range(), std::overflow_error);
+  };
+
+  test_overflow(CorruptionType::COLUMN_INDEX);
+  test_overflow(CorruptionType::OFFSET_INDEX);
+}
 
 TEST_F(HybridScanTest, FilterRowGroupsOnlyAndScanSelectColumns)
 {
@@ -506,16 +555,19 @@ TEST_F(HybridScanTest, ConsecutivePrunedPageOffsets)
     auto datasource = cudf::io::datasource::create({filepath});
 
     auto const expected = cudf::concatenate(cudf::slice(input, expected_slices));
-    std::unique_ptr<cudf::table> filter_table;
-    std::unique_ptr<cudf::table> payload_table;
-    ASSERT_NO_THROW(std::tie(filter_table, payload_table) =
-                      hybrid_scan(*datasource, filter, {}, true, stream, mr, aligned_mr));
+    // Read with column chunk-level and page-level payload I/O
+    auto const results =
+      std::array{hybrid_scan(*datasource, filter, {}, true, stream, mr, aligned_mr),
+                 chunked_sparse_hybrid_scan_multifile(
+                   cudf::io::source_info{filepath}, filter, {}, true, stream, mr)};
 
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view().select({0}), filter_table->view());
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view().select({1, 2, 3, 4}),
-                                       payload_table->view());
-    for (auto const& column : payload_table->view()) {
-      expect_monotonic_offsets(expect_monotonic_offsets, column);
+    for (auto const& [filter_table, payload_table] : results) {
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view().select({0}), filter_table->view());
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view().select({1, 2, 3, 4}),
+                                         payload_table->view());
+      for (auto const& column : payload_table->view()) {
+        expect_monotonic_offsets(expect_monotonic_offsets, column);
+      }
     }
   };
 
