@@ -18,8 +18,6 @@
 
 #include <nvtext/byte_pair_encoding.hpp>
 
-#include <cuda_runtime.h>
-
 #include <algorithm>
 #include <limits>
 #include <string>
@@ -38,6 +36,7 @@ std::vector<cudf::size_type> make_splits(cudf::size_type rows, int multiplier)
 }
 }  // namespace
 
+// Requires about 8GB of device memory.
 TEST_F(BPETest, LargeOutput)
 {
   // synthetic GPT-2 style table and byte-mapped text
@@ -85,10 +84,6 @@ TEST_F(BPETest, DISABLED_ManySegments)
 {
   // every character is its own (unpairable) segment so the number
   // of segments exceeds max size_type
-  std::size_t free_mem = 0, total_mem = 0;
-  cudaMemGetInfo(&free_mem, &total_mem);
-  if (free_mem < 40UL * 1024 * 1024 * 1024) { GTEST_SKIP() << "requires 40GB of device memory"; }
-
   auto const mpt = cudf::test::strings_column_wrapper({"a b", "ab c"});
   auto const mp  = nvtext::load_merge_pairs(cudf::strings_column_view(mpt));
 
