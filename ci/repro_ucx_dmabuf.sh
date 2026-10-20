@@ -11,6 +11,7 @@ uname -a
 echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}"
 ldconfig -p | grep -E "libcuda\.so" || true
 ls -la /usr/local/cuda*/compat/libcuda* || true
+set +e
 find /usr/lib /usr/lib64 -name 'libcuda.so*' 2>/dev/null
 conda list 2>/dev/null | grep -E "^(ucx|ucxx|libucxx|rapidsmpf|librapidsmpf|cuda-version|cuda-cudart |libcudf)" || true
 which gcc cc gdb || true
