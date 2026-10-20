@@ -115,10 +115,11 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   // In case of no requests, we still need to generate a set of unique keys.
   if (requests.empty()) { return gather_keys(); }
 
-  auto const rows =
-    device_span<size_type const>{groups.grouped_rows.data(), groups.grouped_rows.size()};
+  auto const rows = groups.grouped_rows ? device_span<size_type const>{groups.grouped_rows->data(),
+                                                                       groups.grouped_rows->size()}
+                                        : device_span<size_type const>{};
   auto const offsets =
-    device_span<size_type const>{groups.group_offsets.data(), groups.group_offsets.size()};
+    device_span<size_type const>{groups.group_offsets->data(), groups.group_offsets->size()};
   auto const grouped =
     needs_reduction
       ? make_grouped_rows(rows, offsets, stream, temporary_resources)

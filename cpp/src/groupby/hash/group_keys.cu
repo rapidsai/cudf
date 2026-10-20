@@ -281,10 +281,7 @@ grouped_keys group_keys(size_type num_rows,
   }
 
   if (!need_group_offsets) {
-    return {std::move(key_indices),
-            cuda::device_buffer<size_type>{stream, mr.get_output_mr()},
-            cuda::device_buffer<size_type>{stream, mr.get_output_mr()},
-            num_groups};
+    return {std::move(key_indices), std::nullopt, std::nullopt, num_groups};
   }
 
   // Every row is an included singleton group, so input order already forms a valid grouping.
@@ -299,12 +296,14 @@ grouped_keys group_keys(size_type num_rows,
       stream, mr.get_output_mr(), static_cast<std::size_t>(num_rows), cuda::no_init};
     cuda::device_buffer<size_type> group_offsets(
       stream, mr.get_output_mr(), static_cast<std::size_t>(num_rows) + 1, cuda::no_init);
-    cuda::device_buffer<size_type> grouped_rows(
-      stream, mr.get_output_mr(), need_grouped_rows ? num_rows : 0, cuda::no_init);
+    std::optional<cuda::device_buffer<size_type>> grouped_rows;
+    if (need_grouped_rows) {
+      grouped_rows.emplace(stream, mr.get_output_mr(), num_rows, cuda::no_init);
+    }
     auto const singleton_outputs = cuda::tabulate_output_iterator{
       [key_indices   = key_indices.data(),
        group_offsets = group_offsets.data(),
-       grouped_rows  = grouped_rows.data(),
+       grouped_rows  = grouped_rows ? grouped_rows->data() : nullptr,
        num_rows] __device__(cuda::std::ptrdiff_t index, size_type value) -> void {
         group_offsets[index] = value;
         if (index < num_rows) {
@@ -334,10 +333,7 @@ grouped_keys group_keys(size_type num_rows,
   auto const group_counts = cuda::make_permutation_iterator(slot_counts.data(), group_slots.data());
   thrust::inclusive_scan(policy, group_counts, group_counts + num_groups, group_offsets.data() + 1);
   if (!need_grouped_rows) {
-    return {std::move(key_indices),
-            std::move(group_offsets),
-            cuda::device_buffer<size_type>{stream, mr.get_output_mr()},
-            num_groups};
+    return {std::move(key_indices), std::move(group_offsets), std::nullopt, num_groups};
   }
 
   auto num_grouped_rows = num_rows;

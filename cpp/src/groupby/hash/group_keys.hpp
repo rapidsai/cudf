@@ -12,15 +12,19 @@
 #include <cuda/buffer>
 #include <cuda/stream>
 
+#include <optional>
+
 namespace cudf::groupby::detail::hash {
 
 /// The keys grouped by the HashCSR build.
 struct grouped_keys {
   /// Input row indices for unique keys. Entries beyond `num_groups` are uninitialized.
   cuda::device_buffer<size_type> key_indices;
-  cuda::device_buffer<size_type> group_offsets;  ///< `num_groups + 1` offsets into `grouped_rows`
-  cuda::device_buffer<size_type> grouped_rows;   ///< Input rows reordered so groups are contiguous
-  size_type num_groups;                          ///< Number of unique keys
+  /// `num_groups + 1` group offsets, present when requested.
+  std::optional<cuda::device_buffer<size_type>> group_offsets;
+  /// Input row indices in contiguous groups, present when requested.
+  std::optional<cuda::device_buffer<size_type>> grouped_rows;
+  size_type num_groups;  ///< Number of unique keys
 };
 
 /**
