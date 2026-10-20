@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <type_traits>
 #include <utility>
@@ -62,7 +63,8 @@ enum class use_data_page_mask : bool {
 };
 
 /**
- * @brief Columns selection
+ * @brief Columns selection to use for pass memory estimation
+ * row group passes
  */
 enum class read_columns_mode : int8_t {
   FILTER_COLUMNS  = 0,  ///< Filter columns
@@ -82,6 +84,27 @@ template <read_columns_mode mode>
 using row_mask_view_t = std::conditional_t<mode == read_columns_mode::FILTER_COLUMNS,
                                            cudf::mutable_column_view,
                                            cudf::column_view>;
+
+/**
+ * @brief Columns selection
+ * @brief Byte range of a column chunk's dictionary page, and whether it is exact
+ *
+ * An inexact range starts at the dictionary page, if present, and may extend past it. Trim it with
+ * `dictionary_page_length`, or pass an empty span if the page is absent or incomplete.
+ */
+struct dictionary_byte_range {
+  byte_range_info byte_range;  ///< Byte range to read from the file
+  bool is_exact{true};         ///< True if `byte_range` is exactly the page, else is an upper bound
+};
+
+/**
+ * @brief Get the length of the dictionary page at the start of the specified bytes, header included
+ *
+ * @param page_bytes Bytes read from the start of a dictionary page range
+ * @return Length of the page, or `std::nullopt` if the bytes do not start with a whole dictionary
+ *         page
+ */
+[[nodiscard]] std::optional<int64_t> dictionary_page_length(std::span<uint8_t const> page_bytes);
 
 /**
  * @brief Shareable, pre-parsed Parquet file metadata for the Hybrid Scan reader.
@@ -558,6 +581,20 @@ class hybrid_scan_reader {
    */
   [[nodiscard]] std::vector<byte_range_info> dictionary_pages_byte_ranges(
     std::span<size_type const> row_group_indices, parquet_reader_options const& options);
+
+  /**
+   * @brief Get dictionary page ranges for row group pruning, including upper-bound ranges
+   *
+   * Like `dictionary_pages_byte_ranges`, but also returns an upper-bound range for a column chunk
+   * whose footer has neither a `dictionary_page_offset` nor an offset index. See
+   * `dictionary_byte_range` for how to read these ranges.
+   *
+   * @param row_group_indices Input row groups indices
+   * @param options Parquet reader options
+   * @return Vector of dictionary page ranges subject to the filter predicate
+   */
+  [[nodiscard]] std::vector<dictionary_byte_range> dictionary_pages_byte_ranges_include_unbounded(
+    std::span<size_type const> row_group_indices, parquet_reader_options const& options) const;
 
   /**
    * @brief Filter the row groups using column chunk dictionary pages

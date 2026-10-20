@@ -119,6 +119,7 @@ ConfigureTest(
   GROUPBY_TEST
   groupby/argmin_tests.cpp
   groupby/argmax_tests.cpp
+  groupby/batched_reductions_tests.cpp
   groupby/bitwise_tests.cpp
   groupby/collect_list_tests.cpp
   groupby/collect_set_tests.cpp
@@ -453,6 +454,7 @@ ConfigureTest(
   UTILITIES_TEST
   utilities_tests/batched_memcpy_tests.cu
   utilities_tests/batched_memset_tests.cu
+  utilities_tests/buffer_factories_tests.cpp
   utilities_tests/column_debug_tests.cpp
   utilities_tests/column_utilities_tests.cpp
   utilities_tests/column_wrapper_tests.cpp
@@ -635,6 +637,7 @@ ConfigureTest(
   LARGE_STRINGS_TEST
   large_strings/concatenate_tests.cpp
   large_strings/case_tests.cpp
+  large_strings/csv_tests.cpp
   large_strings/json_tests.cpp
   large_strings/large_strings_fixture.cpp
   large_strings/bpe_tests.cpp

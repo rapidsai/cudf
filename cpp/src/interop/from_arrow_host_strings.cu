@@ -80,24 +80,21 @@ std::unique_ptr<column> from_arrow_stringview(
 
   // first copy stringview array to device
   auto items   = view.buffer_views[stringview_vector_idx].data.as_binary_view;
-  auto d_items = cuda::device_buffer<ArrowBinaryView>(
-    stream, cudf::get_current_device_resource_ref(), input->length, cuda::no_init);
-  CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-    d_items.data(), items + input->offset, input->length * sizeof(ArrowBinaryView), stream));
+  auto d_items = cudf::detail::make_device_buffer_async(
+    cudf::host_span<ArrowBinaryView const>{items + input->offset,
+                                           static_cast<std::size_t>(input->length)},
+    stream,
+    cudf::get_current_device_resource_ref());
 
   // then copy variadic buffers to device
   auto variadics     = std::vector<cuda::device_buffer<char>>();
   auto variadic_ptrs = std::vector<char const*>();
   for (auto i = 0L; i < view.n_variadic_buffers; ++i) {
     auto const* const data = static_cast<char const*>(view.variadic_buffers[i]);
-    if (view.variadic_buffer_sizes[i] == 0) {
-      variadics.emplace_back(stream, cudf::get_current_device_resource_ref());
-    } else {
-      variadics.emplace_back(stream,
-                             cudf::get_current_device_resource_ref(),
-                             data,
-                             data + view.variadic_buffer_sizes[i]);
-    }
+    variadics.emplace_back(cudf::detail::make_device_buffer_async(
+      cudf::host_span<char const>{data, static_cast<std::size_t>(view.variadic_buffer_sizes[i])},
+      stream,
+      cudf::get_current_device_resource_ref()));
     variadic_ptrs.push_back(variadics.back().data());
   }
 
@@ -116,7 +113,7 @@ std::unique_ptr<column> from_arrow_stringview(
     rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     cuda::counting_iterator<cudf::size_type>{0},
     cuda::counting_iterator{static_cast<cudf::size_type>(input->length)},
-    d_indices.data(),
+    d_indices.begin(),
     [d_items = d_items.data(), d_ptrs, d_mask] __device__(auto idx) -> string_index_pair {
       if (d_mask && !bit_is_set(d_mask, idx)) { return string_index_pair{nullptr, 0}; }
       auto const& item = d_items[idx];
@@ -128,8 +125,7 @@ std::unique_ptr<column> from_arrow_stringview(
     });
 
   cudf::detail::sync_stream(stream);
-  return cudf::make_strings_column(
-    cudf::device_span<string_index_pair const>{d_indices.data(), d_indices.size()}, stream, mr);
+  return cudf::make_strings_column(d_indices, stream, mr);
 }
 
 }  // namespace
