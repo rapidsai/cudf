@@ -16,11 +16,11 @@ TESTDIR="$PWD/python/cudf_streaming/cudf_streaming/tests"
 cd "$TESTDIR" || exit 1
 
 NRANKS="${REPRO_NRANKS:-5}"
-TEST="${REPRO_TEST:-test_streaming_allgather.py}"
+TEST="${REPRO_TEST:-.}"
 
 echo "=== plain runs: $NRANKS ranks, $TEST"
 fails=0
-for i in $(seq 1 8); do
+for i in $(seq 1 4); do
   timeout 300 mpirun --oversubscribe --map-by node --bind-to none -np "$NRANKS" \
     python -m pytest --cache-clear -x -q "$TEST" > "/tmp/plain.$i.log" 2>&1
   rc=$?
@@ -28,24 +28,21 @@ for i in $(seq 1 8); do
   [ $rc -ne 0 ] && fails=$((fails+1))
   if [ $rc -ne 0 ]; then tail -25 "/tmp/plain.$i.log"; fi
 done
-echo "plain failures: $fails / 8"
+echo "plain failures: $fails / 4"
 
 echo "=== gdb runs"
-for i in $(seq 1 12); do
+for i in $(seq 1 6); do
   export REPRO_LOG_DIR="/tmp/gdb.$i"
   mkdir -p "$REPRO_LOG_DIR"
   timeout 600 mpirun --oversubscribe --map-by node --bind-to none -np "$NRANKS" \
     "$ROOT/ci/repro_gdb_rank.sh" python -m pytest --cache-clear -x -q "$TEST" > "$REPRO_LOG_DIR/mpirun.log" 2>&1
   rc=$?
-  echo "gdb run $i rc=$rc"
-  crashed=$(grep -l "STOPPED signal" "$REPRO_LOG_DIR"/rank.*.log 2>/dev/null)
+  echo "gdb run $i rc=$rc"; tail -3 "$REPRO_LOG_DIR/mpirun.log"
+  crashed=$(grep -l "Program received signal SIGSEGV" "$REPRO_LOG_DIR"/rank.*.log 2>/dev/null)
   if [ -n "$crashed" ]; then
     for f in $crashed; do
-      echo "----- $f (last GETHANDLE calls, then crash dump)"
-      grep -c GETHANDLE "$f"
-      grep GETHANDLE "$f" | tail -5
-      sed -n '/STOPPED signal/,/Start Addr/p' "$f" | head -80
-      grep -E "libcuda|libucp|libucs|libuct" "$f" | tail -8
+      echo "----- $f"
+      python3 "$ROOT/ci/repro_report.py" "$f"
     done
     break
   fi
