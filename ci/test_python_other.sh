@@ -15,9 +15,6 @@ cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../
 # Common setup steps shared by Python test jobs
 source ./ci/test_python_common.sh test_python_other
 
-# UCX 1.22 segfaults in cuMemGetHandleForAddressRange (dmabuf query) on arm64 L4 with driver 595; skip that query.
-export UCX_CUDA_COPY_DMABUF=no
-
 rapids-logger "Check GPU usage"
 nvidia-smi
 rapids-print-env
