@@ -7,7 +7,6 @@ from libc.stdint cimport int32_t, uint64_t
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
-import pylibcudf as plc
 from pylibcudf.libcudf.types cimport null_order as cpp_null_order
 from pylibcudf.libcudf.types cimport order as cpp_order
 from pylibcudf.table cimport Table
@@ -159,37 +158,7 @@ cdef class Ordering:
         """Return a strict ``Ordering`` with duplicate boundaries removed."""
         if self.strict_boundaries:
             return self
-        boundaries = self.get_boundaries(br)
-        boundary_table = boundaries.table_view()
-        n_columns = boundary_table.num_columns()
-        stream = boundaries.stream
-        unique_boundaries = plc.stream_compaction.unique(
-            boundary_table,
-            list(range(n_columns)),
-            plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
-            plc.types.NullEquality.EQUAL,
-            stream=stream,
-        )
-        if unique_boundaries.num_rows() == boundary_table.num_rows():
-            return Ordering.from_cpp(
-                cpp_Ordering(
-                    self._handle.keys,
-                    self._handle.boundaries,
-                    True,
-                    self._handle.locally_ordered,
-                )
-            )
-        return Ordering(
-            self.keys,
-            TableChunk.from_pylibcudf_table(
-                unique_boundaries,
-                stream,
-                exclusive_view=True,
-                br=br,
-            ),
-            strict_boundaries=True,
-            locally_ordered=self.locally_ordered,
-        )
+        return Ordering.from_cpp(self._handle.as_strict(deref(br.ptr())))
 
     @property
     def keys(self) -> tuple:

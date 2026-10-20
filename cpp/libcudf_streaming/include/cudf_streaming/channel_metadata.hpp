@@ -131,6 +131,14 @@ struct ordering {
   [[nodiscard]] ordering with_locally_ordered(bool locally_ordered) const;
 
   /**
+   * @brief Return a strict ordering with duplicate boundary rows removed.
+   *
+   * @param br Buffer resource used to allocate new boundary rows.
+   * @return A strict ordering equivalent to this ordering.
+   */
+  [[nodiscard]] ordering as_strict(rapidsmpf::BufferResource& br) const;
+
+  /**
    * @brief Check whether boundary values are aligned with another ordering.
    *
    * @param other The ordering to compare against.

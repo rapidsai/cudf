@@ -215,6 +215,19 @@ TEST_F(StreamingChannelMetadataGPU, OrderingReplaceLocallyOrdered)
   EXPECT_EQ(o2.boundaries.get(), b.get());
 }
 
+TEST_F(StreamingChannelMetadataGPU, OrderingAsStrict)
+{
+  order_key k0{0, cudf::order::ASCENDING, cudf::null_order::BEFORE};
+  ordering input({k0}, make_chunk({100, 100, 200}));
+  ordering expected({k0}, make_chunk({100, 200}), true);
+
+  auto result = input.as_strict(*br);
+
+  EXPECT_TRUE(result.strict_boundaries);
+  EXPECT_TRUE(result.locally_ordered);
+  EXPECT_TRUE(result.boundaries_aligned_with(expected, *br));
+}
+
 TEST_F(StreamingChannelMetadataGPU, OrderSchemeMultipleOrderings)
 {
   order_key k0{0, cudf::order::ASCENDING, cudf::null_order::BEFORE};
