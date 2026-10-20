@@ -65,7 +65,7 @@ namespace CUDF_EXPORT cudf {
  * @throws std::invalid_argument When the values in the `splits` are 'strictly decreasing'.
  *
  * @param input View of a table to split
- * @param splits A span of indices where the view will be split
+ * @param splits Span of indices where the view will be split
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Memory resource to allocate all returned device memory
  * @return The set of requested views of `input` indicated by the `splits` and the viewed memory
