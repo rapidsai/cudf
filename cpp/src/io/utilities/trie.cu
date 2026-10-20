@@ -10,7 +10,7 @@
 
 #include "trie.cuh"
 
-#include <cudf/detail/utilities/buffer_factories.hpp>\
+#include <cudf/detail/utilities/buffer_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
