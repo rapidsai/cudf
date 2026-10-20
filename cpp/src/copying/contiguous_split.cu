@@ -2612,6 +2612,19 @@ using io::detail::codec_status;
   return attributes.type;
 }
 
+/// Runs `work`, synchronizing `stream` before an exception frees host data its copies still read.
+template <typename Work>
+decltype(auto) sync_on_throw(cuda::stream_ref stream, Work&& work)
+{
+  try {
+    return work();
+  } catch (...) {
+    // The pending exception takes precedence over a synchronization error.
+    std::ignore = cudaStreamSynchronize(stream.get());
+    throw;
+  }
+}
+
 /**
  * @brief A contiguous range of blocks processed by a single batched codec call.
  *
@@ -3448,44 +3461,46 @@ class pack_plan::impl {
     std::vector<uint8_t const*> sources;
     std::vector<uint8_t*> targets;
     std::vector<std::size_t> copy_bytes;
-    for (std::size_t window_idx = 0; window_idx < windows.size(); ++window_idx) {
-      auto const& window = windows[window_idx];
-      compress_window(window_idx);
-      auto const h_results =
-        cudf::detail::make_pinned_vector(device_span<codec_exec_result const>{results}.subspan(
-                                           window.first_item, window.end_item - window.first_item),
-                                         stream);
-      auto const window_begin = payload_bytes;
-      sources.clear();
-      targets.clear();
-      copy_bytes.clear();
-      for (auto block_idx = window.first_item; block_idx < window.end_item; ++block_idx) {
-        auto const& block  = blocks[block_idx];
-        auto const& region = regions[block.region];
-        auto const& result = h_results[block_idx - window.first_item];
-        auto const is_raw  = is_stored_raw(block, region, result);
-        auto const bytes   = is_raw ? block.input_bytes : result.bytes_written;
-        payload_bytes =
-          cudf::util::round_up_safe(payload_bytes, is_raw ? sizeof(uint64_t) : region.alignment);
-        block_offsets[block_idx] = payload_bytes;
-        table[block_idx]         = is_raw ? (raw_block_flag | bytes) : bytes;
-        sources.push_back(is_raw ? block.input_in(slots) : slots + block.window_offset);
-        targets.push_back(to_host ? compacted + (payload_bytes - window_begin)
-                                  : destination.data() + payload_bytes);
-        copy_bytes.push_back(bytes);
-        payload_bytes += bytes;
+    sync_on_throw(stream, [&] {
+      for (std::size_t window_idx = 0; window_idx < windows.size(); ++window_idx) {
+        auto const& window = windows[window_idx];
+        compress_window(window_idx);
+        auto const h_results = cudf::detail::make_pinned_vector(
+          device_span<codec_exec_result const>{results}.subspan(
+            window.first_item, window.end_item - window.first_item),
+          stream);
+        auto const window_begin = payload_bytes;
+        sources.clear();
+        targets.clear();
+        copy_bytes.clear();
+        for (auto block_idx = window.first_item; block_idx < window.end_item; ++block_idx) {
+          auto const& block  = blocks[block_idx];
+          auto const& region = regions[block.region];
+          auto const& result = h_results[block_idx - window.first_item];
+          auto const is_raw  = is_stored_raw(block, region, result);
+          auto const bytes   = is_raw ? block.input_bytes : result.bytes_written;
+          payload_bytes =
+            cudf::util::round_up_safe(payload_bytes, is_raw ? sizeof(uint64_t) : region.alignment);
+          block_offsets[block_idx] = payload_bytes;
+          table[block_idx]         = is_raw ? (raw_block_flag | bytes) : bytes;
+          sources.push_back(is_raw ? block.input_in(slots) : slots + block.window_offset);
+          targets.push_back(to_host ? compacted + (payload_bytes - window_begin)
+                                    : destination.data() + payload_bytes);
+          copy_bytes.push_back(bytes);
+          payload_bytes += bytes;
+        }
+        auto const d_sources = cudf::detail::make_device_uvector_async(sources, stream, temp_mr);
+        auto const d_targets = cudf::detail::make_device_uvector_async(targets, stream, temp_mr);
+        auto const d_copy_bytes =
+          cudf::detail::make_device_uvector_async(copy_bytes, stream, temp_mr);
+        cudf::detail::batched_memcpy_async(
+          d_sources.begin(), d_targets.begin(), d_copy_bytes.begin(), d_sources.size(), stream);
+        if (to_host) {
+          CUDF_CUDA_TRY(cudf::detail::memcpy_async(
+            destination.data() + window_begin, compacted, payload_bytes - window_begin, stream));
+        }
       }
-      auto const d_sources = cudf::detail::make_device_uvector_async(sources, stream, temp_mr);
-      auto const d_targets = cudf::detail::make_device_uvector_async(targets, stream, temp_mr);
-      auto const d_copy_bytes =
-        cudf::detail::make_device_uvector_async(copy_bytes, stream, temp_mr);
-      cudf::detail::batched_memcpy_async(
-        d_sources.begin(), d_targets.begin(), d_copy_bytes.begin(), d_sources.size(), stream);
-      if (to_host) {
-        CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-          destination.data() + window_begin, compacted, payload_bytes - window_begin, stream));
-      }
-    }
+    });
     if (to_host) {
       std::memcpy(destination.data(), table.data(), table_bytes);
     } else {
@@ -3973,39 +3988,40 @@ std::unique_ptr<table> materialize_selection(packed_data_view input,
     outputs.insert(outputs.end(), task.outputs.begin(), task.outputs.end());
     task_offsets.push_back(inputs.size());
   }
-  auto const temp_mr   = mr.get_temporary_mr();
-  auto const d_inputs  = cudf::detail::make_device_uvector_async(inputs, stream, temp_mr);
-  auto const d_outputs = cudf::detail::make_device_uvector_async(outputs, stream, temp_mr);
-  rmm::device_uvector<codec_exec_result> results(inputs.size(), stream, temp_mr);
-  thrust::fill(rmm::exec_policy_nosync(stream, temp_mr),
-               results.begin(),
-               results.end(),
-               codec_exec_result{0, codec_status::FAILURE});
+  auto const h_results = sync_on_throw(stream, [&] {
+    auto const temp_mr   = mr.get_temporary_mr();
+    auto const d_inputs  = cudf::detail::make_device_uvector_async(inputs, stream, temp_mr);
+    auto const d_outputs = cudf::detail::make_device_uvector_async(outputs, stream, temp_mr);
+    rmm::device_uvector<codec_exec_result> results(inputs.size(), stream, temp_mr);
+    thrust::fill(rmm::exec_policy_nosync(stream, temp_mr),
+                 results.begin(),
+                 results.end(),
+                 codec_exec_result{0, codec_status::FAILURE});
 
-  auto const spans = [&](std::size_t begin, std::size_t end) {
-    auto const count = end - begin;
-    return std::tuple{device_span{d_inputs}.subspan(begin, count),
-                      device_span{d_outputs}.subspan(begin, count),
-                      device_span{results}.subspan(begin, count)};
-  };
-  if (num_cascaded > 0) {
-    auto const [d_in, d_out, d_results] = spans(0, task_offsets[num_cascaded]);
-    io::detail::nvcomp::batched_cascaded_decompress(
-      d_in, d_out, d_results, {task_offsets.data(), num_cascaded + 1}, stream, mr);
-  }
-  for (auto i = num_cascaded; i < tasks.size(); ++i) {
-    auto const [d_in, d_out, d_results] = spans(task_offsets[i], task_offsets[i + 1]);
-    decompress_batch(tasks[i].codec,
-                     d_in,
-                     d_out,
-                     d_results,
-                     tasks[i].max_block_bytes,
-                     tasks[i].total_bytes,
-                     stream,
-                     mr);
-  }
-
-  auto const h_results = cudf::detail::make_pinned_vector(results, stream);
+    auto const spans = [&](std::size_t begin, std::size_t end) {
+      auto const count = end - begin;
+      return std::tuple{device_span{d_inputs}.subspan(begin, count),
+                        device_span{d_outputs}.subspan(begin, count),
+                        device_span{results}.subspan(begin, count)};
+    };
+    if (num_cascaded > 0) {
+      auto const [d_in, d_out, d_results] = spans(0, task_offsets[num_cascaded]);
+      io::detail::nvcomp::batched_cascaded_decompress(
+        d_in, d_out, d_results, {task_offsets.data(), num_cascaded + 1}, stream, mr);
+    }
+    for (auto i = num_cascaded; i < tasks.size(); ++i) {
+      auto const [d_in, d_out, d_results] = spans(task_offsets[i], task_offsets[i + 1]);
+      decompress_batch(tasks[i].codec,
+                       d_in,
+                       d_out,
+                       d_results,
+                       tasks[i].max_block_bytes,
+                       tasks[i].total_bytes,
+                       stream,
+                       mr);
+    }
+    return cudf::detail::make_pinned_vector(results, stream);
+  });
   for (std::size_t i = 0; i < tasks.size(); ++i) {
     if (tasks[i].codec == pack_compression::none) { continue; }
     CUDF_EXPECTS(std::ranges::all_of(std::views::iota(task_offsets[i], task_offsets[i + 1]),
