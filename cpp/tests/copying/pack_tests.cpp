@@ -130,6 +130,7 @@ packed_output pack_to_device(cx::pack_plan const& plan)
 void expect_materializes_to(cudf::table_view const& expected, cx::packed_data_view packed)
 {
   auto const materialized = cx::materialize(packed);
+  EXPECT_EQ(materialized->num_rows(), expected.num_rows());
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, materialized->view());
 }
 
@@ -368,6 +369,7 @@ TEST_F(ExperimentalPackUnpackTest, MaterializeColumnSubset)
       for (auto const& selection : selections) {
         auto const materialized = cx::materialize(packed.view(), selection);
         ASSERT_EQ(materialized->num_columns(), static_cast<cudf::size_type>(selection.size()));
+        EXPECT_EQ(materialized->num_rows(), input.num_rows());
         if (!selection.empty()) {
           CUDF_TEST_EXPECT_TABLES_EQUAL(input.select(selection), materialized->view());
         }
@@ -1287,9 +1289,11 @@ TEST_F(PackUnpackTest, ZeroColumnsWithRows)
 {
   // A zero-column table with rows survives a pack/unpack round-trip.
   cudf::table_view t{std::vector<cudf::column_view>{}, 7};
-  auto unpacked = cudf::unpack(cudf::pack(t));
+  auto const packed = cudf::pack(t);
+  auto unpacked     = cudf::unpack(packed);
   EXPECT_EQ(unpacked.num_columns(), 0);
   EXPECT_EQ(unpacked.num_rows(), 7);
+  verify_prepared_round_trip(t, *packed.metadata);
 
   // A genuinely empty (0, 0) table round-trips to (0, 0).
   cudf::table_view empty{std::vector<cudf::column_view>{}, 0};

@@ -3177,7 +3177,7 @@ std::unique_ptr<table> materialize_uncompressed(packed_data_view input,
   }
   // Host sources are read when the stream reaches each copy, so they must outlive this call.
   if (loader.has_pending_host_reads()) { stream.sync(); }
-  return std::make_unique<table>(std::move(columns));
+  return std::make_unique<table>(std::move(columns), metadata.num_rows());
 }
 
 [[nodiscard]] pack_compression select_automatic_compression(compression_region_layout const& layout)
@@ -3939,8 +3939,8 @@ std::unique_ptr<table> materialize_selection(packed_data_view input,
     [&](int64_t offset, device_span<uint8_t> destination) {
       submit_decompression(*find_entry(offset), destination.data());
     }};
-  auto columns = materialize_columns(
-    packed_metadata_view{parsed.legacy_metadata}, selection, source, stream, mr);
+  auto const metadata = packed_metadata_view{parsed.legacy_metadata};
+  auto columns        = materialize_columns(metadata, selection, source, stream, mr);
   loader.load(stream, mr);
   for (auto& task : tasks) {
     for (auto& block : task.inputs) {
@@ -3948,7 +3948,7 @@ std::unique_ptr<table> materialize_selection(packed_data_view input,
     }
   }
 
-  if (tasks.empty()) { return std::make_unique<table>(std::move(columns)); }
+  if (tasks.empty()) { return std::make_unique<table>(std::move(columns), metadata.num_rows()); }
 
   // Cascaded tasks go first so that their value-type groups form one contiguous range of blocks.
   auto const num_cascaded = static_cast<std::size_t>(
@@ -4007,7 +4007,7 @@ std::unique_ptr<table> materialize_selection(packed_data_view input,
                                      }),
                  "Decompression failed");
   }
-  return std::make_unique<table>(std::move(columns));
+  return std::make_unique<table>(std::move(columns), metadata.num_rows());
 }
 
 }  // namespace
