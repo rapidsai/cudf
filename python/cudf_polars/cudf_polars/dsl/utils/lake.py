@@ -148,9 +148,10 @@ class LakeScanOptions:
     row_count
         ``(total_rows, deleted_rows)`` for the whole scan when the table
         metadata could supply it.
-    expected_columns
-        Names a data file may hold when ``extra_columns_policy`` is
-        ``"raise"``, or ``None`` to allow any.
+    expected_keys
+        Keys the top-level columns of a data file may have when
+        ``extra_columns_policy`` is ``"raise"``: physical field IDs when
+        ``columns`` is given, otherwise column names. ``None`` allows any.
     """
 
     columns: tuple[IcebergColumn, ...] | None
@@ -163,7 +164,7 @@ class LakeScanOptions:
     extra_columns_policy: str
     cast_columns_policy: Mapping[str, Any]
     row_count: tuple[int, int] | None
-    expected_columns: frozenset[str] | None = None
+    expected_keys: frozenset[Any] | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.columns is not None and any(column.children for column in self.columns):
@@ -312,7 +313,7 @@ class LakeScanOptions:
         hive_names: Iterable[str],
     ) -> LakeScanOptions:
         """
-        Record the names a data file may hold.
+        Record the keys a data file may hold.
 
         Parameters
         ----------
@@ -326,15 +327,22 @@ class LakeScanOptions:
 
         Returns
         -------
-        Options whose ``expected_columns`` are set.
+        Options whose ``expected_keys`` are set: the field IDs of
+        ``columns`` when it is given, otherwise the names of the schema and
+        of the hive partition columns.
         """
+        if self.columns is not None:
+            return dataclasses.replace(
+                self,
+                expected_keys=frozenset(column.physical_id for column in self.columns),
+            )
         names = (
             reader_schema["fields"]
             if reader_schema is not None
             else _footer(first_path, None, by_field_id=False).names
         )
         return dataclasses.replace(
-            self, expected_columns=frozenset(names).union(hive_names)
+            self, expected_keys=frozenset(names).union(hive_names)
         )
 
     def check_field_ids(self, paths: Sequence[str]) -> None:
@@ -423,7 +431,7 @@ class LakeScanOptions:
                 self.missing_columns_policy,
                 self.extra_columns_policy,
                 self.row_count,
-                self.expected_columns,
+                self.expected_keys,
             )
         )
 
@@ -441,7 +449,7 @@ class LakeScanOptions:
             and self.extra_columns_policy == other.extra_columns_policy
             and self.cast_columns_policy == other.cast_columns_policy
             and self.row_count == other.row_count
-            and self.expected_columns == other.expected_columns
+            and self.expected_keys == other.expected_keys
         )
 
 
@@ -525,16 +533,20 @@ def read_lake_files(
         for path, metadata in zip(paths, metadatas, strict=True)
     ]
     rows_per_path = [footer.num_rows for footer in footers]
-    if lake_options.expected_columns is not None:
-        for footer in footers:
+    expected_keys = lake_options.expected_keys
+    if expected_keys is not None:
+        for path, footer in zip(paths, footers, strict=True):
             extra = [
                 name
-                for name in footer.names
-                if name not in lake_options.expected_columns
+                for name, key in zip(footer.names, footer.keys, strict=True)
+                if key not in expected_keys
             ]
             if extra:
                 raise pl.exceptions.SchemaError(
-                    f"extra column in file outside of expected schema: {extra[0]}"
+                    f"extra column in file outside of expected schema: {extra[0]}, "
+                    "hint: specify this column in the schema, or pass "
+                    "extra_columns='ignore' in scan options. "
+                    f"File containing extra column: '{path}'."
                 )
 
     predicate_columns = (

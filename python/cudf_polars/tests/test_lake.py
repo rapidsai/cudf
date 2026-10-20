@@ -19,7 +19,7 @@ from cudf_polars.testing.engine_utils import is_streaming_engine
 
 if TYPE_CHECKING:
     from pathlib import Path
-    from typing import Any
+    from typing import Any, Literal
 
 pytest.importorskip("pyiceberg")
 deltalake = pytest.importorskip("deltalake")
@@ -455,6 +455,67 @@ def test_scan_lake_extra_columns_raise(
     else:
         with pytest.raises(pl.exceptions.SchemaError):
             q.collect(engine=engine)
+
+
+def _write_column_with_field_id(tmp_path: Path, name: str, field_id: int) -> str:
+    path = str(tmp_path / "0.parquet")
+    field = pa.field(
+        name, pa.int64(), metadata={b"PARQUET:field_id": str(field_id).encode()}
+    )
+    pq.write_table(pa.table({name: [1, 2]}, schema=pa.schema([field])), path)
+    return path
+
+
+def test_scan_iceberg_extra_columns_by_field_id_raise(
+    engine: pl.GPUEngine, tmp_path: Path
+) -> None:
+    path = _write_column_with_field_id(tmp_path, "a", 1)
+    schema = pa.schema(
+        [pa.field("a", pa.int64(), metadata={b"PARQUET:field_id": b"2"})]
+    )
+    q = pl.scan_parquet(
+        path,
+        schema={"a": pl.Int64},
+        _column_mapping=("iceberg-column-mapping", schema),
+    )
+    match = "extra column in file outside of expected schema: a"
+    with pytest.raises(pl.exceptions.SchemaError, match=match):
+        q.collect()
+    if is_streaming_engine(engine):
+        with pytest.RaisesGroup(
+            pytest.RaisesExc(pl.exceptions.SchemaError, match=match),
+            flatten_subgroups=True,
+        ):
+            q.collect(engine=engine)
+    else:
+        with pytest.raises(pl.exceptions.SchemaError, match=match):
+            q.collect(engine=engine)
+
+
+@pytest.mark.parametrize(
+    "file_name, field_id, extra_columns",
+    [("a", 1, "ignore"), ("old", 2, "raise")],
+    ids=["readded_ignore", "renamed_raise"],
+)
+def test_scan_iceberg_extra_columns_by_field_id_allowed(
+    engine: pl.GPUEngine,
+    tmp_path: Path,
+    file_name: str,
+    field_id: int,
+    extra_columns: Literal["ignore", "raise"],
+) -> None:
+    path = _write_column_with_field_id(tmp_path, file_name, field_id)
+    schema = pa.schema(
+        [pa.field("a", pa.int64(), metadata={b"PARQUET:field_id": b"2"})]
+    )
+    q = pl.scan_parquet(
+        path,
+        schema={"a": pl.Int64},
+        missing_columns="insert",
+        extra_columns=extra_columns,
+        _column_mapping=("iceberg-column-mapping", schema),
+    )
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.fixture
