@@ -18,8 +18,10 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/detail/codec.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <cuda/buffer>
 #include <cuda/std/bit>
 
 #include <BS_thread_pool.hpp>
@@ -452,7 +454,9 @@ void compress(compression_type compression,
                             stream);
 
   auto tmp_results =
-    cudf::detail::make_device_uvector_async<detail::codec_exec_result>(results, stream, temp_mr);
+    cuda::device_buffer<codec_exec_result>(stream, temp_mr, results.size(), cuda::no_init);
+  CUDF_CUDA_TRY(
+    cudf::detail::memcpy_async(tmp_results.data(), results.data(), results.size_bytes(), stream));
   device_span<codec_exec_result> results_view = tmp_results;
 
   auto const streams = cudf::detail::fork_streams(stream, 2);
