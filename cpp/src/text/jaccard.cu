@@ -33,8 +33,10 @@
 #include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/std/algorithm>
+#include <cuda/std/bit>
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
+#include <cuda/std/limits>
 #include <cuda/std/span>
 #include <cuda/stream>
 #include <thrust/transform.h>
@@ -47,6 +49,9 @@ constexpr cudf::thread_index_type block_size       = 256;
 constexpr cudf::thread_index_type bytes_per_thread = 4;
 
 using hash_value_type = uint32_t;
+
+// Number of bits in a hash value
+constexpr int hash_bits = cuda::std::numeric_limits<hash_value_type>::digits;
 
 // Hash value 0 is reserved as the empty-slot sentinel for the sets
 constexpr hash_value_type empty_hash = 0;
@@ -171,8 +176,8 @@ CUDF_KERNEL void substring_hash_kernel(cudf::column_device_view const d_strings,
     }
     // compact the valid hash values for this warp into d_hashes
     auto const mask = warp.ballot(valid);
-    if (valid) { d_hashes[__popc(mask & ((1u << lane_idx) - 1u))] = hash; }
-    d_hashes += __popc(mask);
+    if (valid) { d_hashes[cuda::std::popcount(mask & ((1u << lane_idx) - 1u))] = hash; }
+    d_hashes += cuda::std::popcount(mask);
   }
 }
 
@@ -247,10 +252,12 @@ __device__ set_ref_type make_set(hash_value_type* slots, int32_t num_slots)
  *
  * The partition is computed from the high bits of the hash since
  * the set slot is computed from the low bits.
+ * Scaling the hash by the number of partitions and keeping only the high bits
+ * maps the hash range evenly onto `[0, partitions)`.
  */
 __device__ uint32_t partition_of(hash_value_type hash, uint64_t partitions)
 {
-  return static_cast<uint32_t>((static_cast<uint64_t>(hash) * partitions) >> 32);
+  return static_cast<uint32_t>((static_cast<uint64_t>(hash) * partitions) >> hash_bits);
 }
 
 /**
@@ -392,7 +399,9 @@ CUDF_KERNEL void partition_hashes_kernel(cuda::std::span<hash_value_type const> 
   }
   __syncthreads();
 
-  // exclusive scan of the histogram in block-sized chunks to get each bucket's start
+  // exclusive scan of the histogram in block-sized chunks to get each bucket's start;
+  // cub is used for block-wide collectives since a block-sized cooperative_groups tile
+  // requires cg::block_tile_memory scratch on architectures older than sm80
   using block_scan = cub::BlockScan<int32_t, block_size>;
   __shared__ typename block_scan::TempStorage temp_storage;
   int32_t carry = 0;
@@ -483,10 +492,13 @@ CUDF_KERNEL void count_partitions_kernel(cuda::std::span<hash_value_type const> 
   auto set1 = make_set(slots, block_slots_per_set);
   auto set2 = make_set(slots + block_slots_per_set, block_slots_per_set);
 
+  // cub is used for block-wide collectives since a block-sized cooperative_groups tile
+  // requires cg::block_tile_memory scratch on architectures older than sm80
   using block_reduce = cub::BlockReduce<cudf::size_type, block_size>;
   __shared__ typename block_reduce::TempStorage temp_storage;
   __shared__ cudf::size_type totals[3];
 
+  // the block group is needed to call count_hashes() which is shared with count_rows_kernel
   auto const block = cooperative_groups::this_thread_block();
 
   uint64_t sub_partitions    = 1;
