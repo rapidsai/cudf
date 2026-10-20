@@ -3043,13 +3043,13 @@ class byte_range_loader {
  public:
   explicit byte_range_loader(std::span<uint8_t const> payload)
     : _payload{payload},
-      _is_pageable{!payload.empty() && memory_type(payload.data()) == cudaMemoryTypeUnregistered}
+      _memory_type{payload.empty() ? cudaMemoryTypeDevice : memory_type(payload.data())}
   {
   }
 
   void request(std::span<uint8_t const> bytes)
   {
-    if (_is_pageable && !bytes.empty()) {
+    if (is_pageable() && !bytes.empty()) {
       // Staged bytes keep their alignment in the payload, which codecs such as Cascaded require.
       auto const offset = static_cast<std::size_t>(bytes.data() - _payload.data());
       _ranges.emplace_back(offset / split_align * split_align, offset + bytes.size(), 0);
@@ -3091,10 +3091,17 @@ class byte_range_loader {
   /// Whether `load()` copied any pageable bytes, which stay in use until the stream reaches them.
   [[nodiscard]] bool has_pending_host_reads() const { return !_ranges.empty(); }
 
+  [[nodiscard]] bool is_pageable() const { return _memory_type == cudaMemoryTypeUnregistered; }
+
+  [[nodiscard]] bool is_host_accessible() const
+  {
+    return is_pageable() || _memory_type == cudaMemoryTypeHost;
+  }
+
   /// Translates a payload pointer whose bytes were requested to a device-accessible pointer.
   [[nodiscard]] uint8_t const* device_pointer(uint8_t const* data) const
   {
-    if (!_is_pageable) { return data; }
+    if (!is_pageable()) { return data; }
     auto const offset = static_cast<std::size_t>(data - _payload.data());
     auto const item   = std::prev(std::ranges::upper_bound(_ranges, offset, {}, &range::begin));
     return static_cast<uint8_t const*>(_staged.data()) + item->staged_offset +
@@ -3109,7 +3116,7 @@ class byte_range_loader {
   };
 
   std::span<uint8_t const> _payload;
-  bool _is_pageable;
+  cudaMemoryType _memory_type;
   std::vector<range> _ranges;
   rmm::device_buffer _staged;
 };
@@ -3899,8 +3906,17 @@ std::unique_ptr<table> materialize_selection(packed_data_view input,
   CUDF_EXPECTS(uncompressed_end == parsed.uncompressed_payload_bytes,
                "Compressed regions do not cover the complete output");
 
-  auto const block_sizes = cudf::detail::make_pinned_vector(
-    device_span{reinterpret_cast<uint64_t const*>(input.payload.data()), num_blocks}, stream);
+  auto const* const block_table = reinterpret_cast<uint64_t const*>(input.payload.data());
+  // Host payloads are read in place once the stream has written them.
+  if (loader.is_host_accessible()) { stream.sync(); }
+  auto const copied_block_sizes = loader.is_host_accessible()
+                                    ? std::nullopt
+                                    : std::optional{cudf::detail::make_pinned_vector(
+                                        device_span{block_table, num_blocks}, stream)};
+  auto const block_sizes =
+    copied_block_sizes.has_value()
+      ? std::span<uint64_t const>{copied_block_sizes->data(), copied_block_sizes->size()}
+      : std::span<uint64_t const>{block_table, num_blocks};
 
   std::vector<decompression_task> tasks;
   auto const find_or_add_task = [&](pack_compression codec, type_id cascaded_type) -> auto& {

@@ -16,6 +16,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/mr/statistics_resource_adaptor.hpp>
 
@@ -358,6 +359,9 @@ TEST_F(ExperimentalPackUnpackTest, MaterializeColumnSubset)
   cudf::test::structs_column_wrapper structs({member});
   auto const input = cudf::table_view{{numbers, strings, lists, structs}};
   std::vector<std::vector<cudf::size_type>> const selections{{2, 0}, {1, 1}, {3}, {}};
+  // Kernel copies of small transfers must not read pageable payloads, which some devices cannot.
+  auto const previous_threshold = cudf::get_kernel_pinned_copy_threshold();
+  cudf::set_kernel_pinned_copy_threshold(1024 * 1024);
 
   // Zstd decompresses like Snappy, and pinned payloads are read in place like device ones.
   for (auto const compression :
@@ -382,6 +386,7 @@ TEST_F(ExperimentalPackUnpackTest, MaterializeColumnSubset)
       }
     }
   }
+  cudf::set_kernel_pinned_copy_threshold(previous_threshold);
 }
 
 TEST_F(ExperimentalPackUnpackTest, MaterializeSparseColumnSubset)
