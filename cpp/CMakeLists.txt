@@ -496,153 +496,13 @@ rtcx_embed(cudf_cuda_embed COMPRESSION zstd OUTPUT_DIRECTORY "${CMAKE_CURRENT_BI
 
 rtcx_add_embed(cudf_fragments)
 
-# This function precompiles the unary and binary transform kernel fragments for all fixed-width
-# types. This helps amortize the cost of JIT compilation for kernels that have matching signatures
-# and reduces the amount of time spent on source-based runtime JIT compilation for LTO-based JIT.
-function(precompile_fixed_width_kernel_fragments)
-  list(APPEND CUDF_PRECOMPILE_PHYSICAL_TYPES uint8_t uint16_t uint32_t uint64_t numeric::decimal32
-       numeric::decimal64 numeric::decimal128
-  )
-  # Pre-compile unary-op kernel fragments for fixed-width types.
-  foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_PHYSICAL_TYPES})
-    set(FRAGMENT_NAME transform_kernel)
-    get_property(
-      FILE_INDEX
-      TARGET cudf_fragments__embed_props
-      PROPERTY EMBED_FILE_INDEX
-    )
-    set(VARIANT_NAME transform_kernel_${FILE_INDEX})
-    set(INSTANCE
-        "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::column_device_view_core, ${TYPE}, false, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::mutable_column_device_view_core, ${TYPE}, false, 0>>>"
-    )
-    add_fragment(
-      cudf_fragments
-      FRAGMENT
-      ${VARIANT_NAME}
-      SOURCE
-      src/transform/jit/kernel.cu
-      KERNEL_INSTANCE
-      ${INSTANCE}
-      UDF_TYPE
-      "int(${TYPE} *, ${TYPE})"
-      DEFINITIONS
-      CUDF_LTO_MODE
-      ARRAY_IDS
-      ${FRAGMENT_NAME}_FILE_INDEX
-      ${FRAGMENT_NAME}_INSTANCE
-      ARRAY_VALUES
-      ${FILE_INDEX}
-      "${INSTANCE}"
-    )
+add_fragment(cudf_fragments FRAGMENT row_transform SOURCE src/row_operator/jit/transform.cu)
+add_fragment(cudf_fragments FRAGMENT row_join SOURCE src/row_operator/jit/join.cu)
+add_fragment(cudf_fragments FRAGMENT row_access SOURCE src/row_operator/jit/access.cu)
+add_fragment(cudf_fragments FRAGMENT row_operators SOURCE src/row_operator/jit/operators.cu)
 
-  endforeach()
-
-  # Precompile binary-op kernel fragments for fixed-width types.
-  foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_PHYSICAL_TYPES})
-    foreach(RHS_IS_SCALAR IN ITEMS "false" "true")
-      set(FRAGMENT_NAME transform_kernel)
-      get_property(
-        FILE_INDEX
-        TARGET cudf_fragments__embed_props
-        PROPERTY EMBED_FILE_INDEX
-      )
-      set(VARIANT_NAME transform_kernel_${FILE_INDEX})
-      set(INSTANCE
-          "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::column_device_view_core, ${TYPE}, false, 0>, cudf::jit::column_accessor<1ULL, cudf::column_device_view_core, ${TYPE}, ${RHS_IS_SCALAR}, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::mutable_column_device_view_core, ${TYPE}, false, 0>>>"
-      )
-      add_fragment(
-        cudf_fragments
-        FRAGMENT
-        ${VARIANT_NAME}
-        SOURCE
-        src/transform/jit/kernel.cu
-        KERNEL_INSTANCE
-        ${INSTANCE}
-        UDF_TYPE
-        "int(${TYPE} *, ${TYPE}, ${TYPE})"
-        DEFINITIONS
-        CUDF_LTO_MODE
-        ARRAY_IDS
-        ${FRAGMENT_NAME}_FILE_INDEX
-        ${FRAGMENT_NAME}_INSTANCE
-        ARRAY_VALUES
-        ${FILE_INDEX}
-        "${INSTANCE}"
-      )
-    endforeach()
-  endforeach()
-endfunction()
-
-# This function precompiles kernel fragments for string transforms. It precompiles kernel fragments
-# for common string transform operations: multi-extract, multi-split, string-parsing. This helps
-# amortize the cost of JIT compilation for kernels that have matching signatures
-function(precompile_string_kernel_fragments)
-  list(APPEND CUDF_PRECOMPILE_STRING_OUTPUT_PHYSICAL_TYPES uint8_t uint16_t uint32_t uint64_t
-       cuda::std::span<char>
-  )
-  list(
-    APPEND
-    CUDF_PRECOMPILE_STRING_OUTPUT_COLUMN_TYPES
-    cudf::mutable_column_device_view_core
-    cudf::mutable_column_device_view_core
-    cudf::mutable_column_device_view_core
-    cudf::mutable_column_device_view_core
-    cudf::jit::mutable_strings_column_device_view
-  )
-  foreach(OUTPUT_TYPE OUTPUT_COLUMN_TYPE IN ZIP_LISTS CUDF_PRECOMPILE_STRING_OUTPUT_PHYSICAL_TYPES
-                      CUDF_PRECOMPILE_STRING_OUTPUT_COLUMN_TYPES
-  )
-    # Pre-compile for up to 8 output columns
-    foreach(OUTPUT_INDICES IN ITEMS "0" "0;1" "0;1;2" "0;1;2;3" "0;1;2;3;4" "0;1;2;3;4;5"
-                                    "0;1;2;3;4;5;6" "0;1;2;3;4;5;6;7"
-    )
-      set(FRAGMENT_NAME transform_kernel)
-      get_property(
-        FILE_INDEX
-        TARGET cudf_fragments__embed_props
-        PROPERTY EMBED_FILE_INDEX
-      )
-      set(VARIANT_NAME transform_kernel_${FILE_INDEX})
-      set(OUTPUT_ACCESSORS "")
-      set(OUTPUT_POINTERS "")
-      foreach(OUTPUT_INDEX IN LISTS OUTPUT_INDICES)
-        list(
-          APPEND
-          OUTPUT_ACCESSORS
-          "cudf::jit::column_accessor<${OUTPUT_INDEX}ULL, ${OUTPUT_COLUMN_TYPE}, ${OUTPUT_TYPE}, false, 0>"
-        )
-        list(APPEND OUTPUT_POINTERS "${OUTPUT_TYPE} *")
-      endforeach()
-      list(JOIN OUTPUT_ACCESSORS " ," OUTPUT_ACCESSORS_STR)
-      list(JOIN OUTPUT_POINTERS " ," OUTPUT_POINTERS_STR)
-      set(INSTANCE
-          "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::column_device_view_core, cudf::string_view, false, 0>>, cudf::jit::type_list<${OUTPUT_ACCESSORS_STR}>>"
-      )
-      add_fragment(
-        cudf_fragments
-        FRAGMENT
-        ${VARIANT_NAME}
-        SOURCE
-        src/transform/jit/kernel.cu
-        KERNEL_INSTANCE
-        ${INSTANCE}
-        UDF_TYPE
-        "int(${OUTPUT_POINTERS_STR}, cudf::string_view)"
-        DEFINITIONS
-        CUDF_LTO_MODE
-        ARRAY_IDS
-        ${FRAGMENT_NAME}_FILE_INDEX
-        ${FRAGMENT_NAME}_INSTANCE
-        ARRAY_VALUES
-        ${FILE_INDEX}
-        "${INSTANCE}"
-      )
-    endforeach()
-  endforeach()
-endfunction()
-
-precompile_fixed_width_kernel_fragments()
-precompile_string_kernel_fragments()
+include(cmake/Modules/RowFragments.cmake)
+cudf_add_row_fragments()
 
 rtcx_embed(cudf_fragments COMPRESSION none OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/embed")
 
@@ -919,6 +779,7 @@ add_library(
   src/io/utilities/row_selection.cpp
   src/io/utilities/type_inference.cu
   src/io/utilities/trie.cu
+  src/row_operator/row_kernel.cpp
   src/jit/cache.cpp
   src/jit/helpers.cpp
   src/jit/parser.cpp

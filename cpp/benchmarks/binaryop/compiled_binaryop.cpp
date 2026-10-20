@@ -162,7 +162,10 @@ __device__ void transform(float* out, float a, float b) {
                                               inputs,
                                               outputs,
                                               {},
-                                              std::nullopt)
+                                              std::nullopt,
+                                              cudf::get_default_stream(),
+                                              cudf::get_current_device_resource_ref(),
+                                              false)
                         : cudf::transform(cuda,
                                           cudf::udf_source_type::CUDA,
                                           cudf::null_aware::NO,
@@ -178,22 +181,26 @@ __device__ void transform(float* out, float a, float b) {
   state.add_global_memory_writes<TypeOut>(num_rows);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
-    [[maybe_unused]] auto result = use_lto ? cudf::transform_lto(udf,
-                                                                 cudf::lto_binary_type::FATBIN,
-                                                                 cudf::null_aware::NO,
-                                                                 std::nullopt,
-                                                                 inputs,
-                                                                 outputs,
-                                                                 {},
-                                                                 std::nullopt)
-                                           : cudf::transform(cuda,
-                                                             cudf::udf_source_type::CUDA,
-                                                             cudf::null_aware::NO,
-                                                             std::nullopt,
-                                                             inputs,
-                                                             outputs,
-                                                             {},
-                                                             std::nullopt);
+    [[maybe_unused]] auto result = use_lto
+                                     ? cudf::transform_lto(udf,
+                                                           cudf::lto_binary_type::FATBIN,
+                                                           cudf::null_aware::NO,
+                                                           std::nullopt,
+                                                           inputs,
+                                                           outputs,
+                                                           {},
+                                                           std::nullopt,
+                                                           cudf::get_default_stream(),
+                                                           cudf::get_current_device_resource_ref(),
+                                                           false)
+                                     : cudf::transform(cuda,
+                                                       cudf::udf_source_type::CUDA,
+                                                       cudf::null_aware::NO,
+                                                       std::nullopt,
+                                                       inputs,
+                                                       outputs,
+                                                       {},
+                                                       std::nullopt);
   });
 }
 

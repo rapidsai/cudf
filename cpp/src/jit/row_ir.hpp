@@ -46,7 +46,8 @@ namespace row_ir {
  * @brief The target for which the IR is generated.
  */
 enum class target {
-  CUDA = 0  /// < CUDA C++
+  TRANSFORM,  ///< Dependency-free transform operator
+  PREDICATE   ///< Dependency-free predicate operator
 };
 
 /**
@@ -69,7 +70,8 @@ struct untyped_var_info {
  * @brief The information about the target for which the IR is generated.
  */
 struct target_info {
-  target id = target::CUDA;  ///< The target identifier
+  target id                                   = target::TRANSFORM;  ///< The target identifier
+  std::span<output_nullability const> outputs = {};  ///< Prepared output validity policy
 };
 
 ///< The scalar value represented as a column with a single element or a prepared scalar column
@@ -93,13 +95,14 @@ struct [[nodiscard]] transform_args {
   std::vector<std::optional<int32_t>> input_table_sources  = {};
   std::vector<std::optional<int32_t>> input_column_indices = {};
   std::string udf                                          = {};
-  udf_source_type source_type                              = cudf::udf_source_type::CUDA;
-  null_aware is_null_aware                                 = null_aware::NO;
-  std::optional<void*> user_data                           = std::nullopt;
-  std::vector<transform_input> inputs                      = {};
-  std::vector<transform_output> outputs                    = {};
-  std::vector<std::unique_ptr<column>> string_offsets      = {};
-  std::optional<size_type> row_size                        = std::nullopt;
+  std::vector<std::string> required_symbols           = {};  ///< Exact lowered ABI dependencies
+  udf_source_type source_type                         = cudf::udf_source_type::CUDA;
+  null_aware is_null_aware                            = null_aware::NO;
+  std::optional<void*> user_data                      = std::nullopt;
+  std::vector<transform_input> inputs                 = {};
+  std::vector<transform_output> outputs               = {};
+  std::vector<std::unique_ptr<column>> string_offsets = {};
+  std::optional<size_type> row_size                   = std::nullopt;
 };
 
 struct node;
@@ -239,9 +242,23 @@ struct [[nodiscard]] instance_context {
 struct [[nodiscard]] code_sink {
  private:
   std::string code_;
+  std::string declarations_;
+  std::unordered_set<std::string> declared_;
+  std::unordered_set<std::string> required_;
+  std::vector<std::string> required_symbols_;
 
  public:
   void emit(std::string_view code) { code_ += code; }
+  void require_symbol(std::string const& symbol)
+  {
+    if (required_.insert(symbol).second) { required_symbols_.push_back(symbol); }
+  }
+  std::vector<std::string> const& required_symbols() const { return required_symbols_; }
+  void declare(std::string const& declaration)
+  {
+    if (declared_.insert(declaration).second) { declarations_ += declaration; }
+  }
+  std::string const& declarations() const { return declarations_; }
 
   [[nodiscard]] std::string const& get_code() const { return code_; }
 };
@@ -261,6 +278,8 @@ struct [[nodiscard]] output_reference {
 
   constexpr bool operator!=(output_reference const& other) const { return index != other.index; }
 };
+
+enum class effect { PURE, READ_INPUT, WRITE_OUTPUT };
 
 struct [[nodiscard]] node {
  private:
@@ -321,6 +340,12 @@ struct [[nodiscard]] node {
   }
 
  public:
+  [[nodiscard]] effect effects() const
+  {
+    return op_ == opcode::GET_INPUT    ? effect::READ_INPUT
+           : op_ == opcode::SET_OUTPUT ? effect::WRITE_OUTPUT
+                                       : effect::PURE;
+  }
   /**
    * @brief Construct a new operation IR node
    * @param op The operation code
@@ -475,8 +500,9 @@ struct [[nodiscard]] ast_converter {
   rmm::device_async_resource_ref
     mr_;  ///< Device memory resource used to allocate the returned table's device memory
   instance_context instance_;  ///< The instance context used during the IR generation
-  table_view left_table_;      ///< The left input table for the expression
-  table_view right_table_;     ///< The right input table for the expression
+  std::vector<std::string> required_symbols_;  ///< Dependencies collected while emitting code
+  table_view left_table_;                      ///< The left input table for the expression
+  table_view right_table_;                     ///< The right input table for the expression
 
  public:
   /**

@@ -5,8 +5,11 @@
 
 #include "jit/row_ir.hpp"
 
+#include "row_operator/schema.hpp"
+#include "row_operator/type_names.hpp"
 #include "runtime/context.hpp"
 
+#include <cudf/column/column_child_offsets.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/hashing/detail/hashing.hpp>
 
@@ -460,7 +463,10 @@ int32_t instance_context::add_input(input in)
 
   data_type const type = [&in] {
     if (auto* col = std::get_if<column_input>(&in)) {
-      return col->column.type();
+      auto const column = col->column;
+      return column.type().id() == type_id::DICTIONARY32
+               ? column.child(dictionary_keys_column_index).type()
+               : column.type();
     } else {
       auto& scalar = std::get<scalar_input>(in);
       if (auto* s = std::get_if<std::unique_ptr<column>>(&scalar)) {
@@ -477,6 +483,7 @@ int32_t instance_context::add_input(input in)
 
 node const* instance_context::find_equivalent(node const& candidate) const
 {
+  if (candidate.effects() == effect::WRITE_OUTPUT) { return nullptr; }
   auto [first, last] = cse_nodes_.equal_range(candidate.hash());
   auto found =
     std::find_if(first, last, [&](auto& entry) { return candidate.is_equivalent(*entry.second); });
@@ -485,6 +492,7 @@ node const* instance_context::find_equivalent(node const& candidate) const
 
 void instance_context::add_cse_node(node const& candidate)
 {
+  if (candidate.effects() == effect::WRITE_OUTPUT) { return; }
   cse_nodes_.emplace(candidate.hash(), &candidate);
 }
 
@@ -655,12 +663,6 @@ bool node::is_always_valid() const
   return std::ranges::all_of(args_, [](auto& a) { return a->is_always_valid(); });
 }
 
-std::string to_cuda_type(cudf::data_type type, bool nullable)
-{
-  auto name = type_to_name(type);
-  return nullable ? std::format("cuda::std::optional<{}>", name) : name;
-}
-
 void node::instantiate(instance_context& ctx)
 {
   for (auto& arg : args_) {
@@ -720,97 +722,109 @@ void node::emit_code(instance_context& instance, target_info const& info, code_s
   }
 
   switch (info.id) {
-    case target::CUDA: {
-      auto type = to_cuda_type(type_, instance.has_nulls());
-
-      switch (op_) {
-        case opcode::GET_INPUT: {
-          sink.emit(std::format(
-            R"***({} {} = {};
-)***",
-            type,
-            id_,
-            instance.get_input_vars()[std::get<input_reference>(reference_).index].id));
-        } break;
-
-        case opcode::SET_OUTPUT: {
-          sink.emit(std::format(
-            R"***({} {} = {};
-*{} = {};
-)***",
-            type,
-            id_,
-            args_[0]->get_id(),
-            instance.get_output_vars()[std::get<output_reference>(reference_).index].id,
-            id_));
-        } break;
-
-        default: {
-          auto op_info   = get_op_info(op_, error_policy_);
-          auto first_arg = std::format("{}", args_[0]->get_id());
-          auto args_str  = (args_.size() == 1)
-                             ? std::string{first_arg}
-                             : std::accumulate(args_.begin() + 1,
-                                              args_.end(),
-                                              std::string{first_arg},
-                                              [](auto const& a, auto& node) {
-                                                return std::format("{}, {}", a, node->get_id());
-                                              });
-
-          if (op_ == opcode::RESCALE) {
-            args_str =
-              std::format("{}, {}", args_str, instance.get_input_vars()[scale_reference_.index].id);
-          }
-
-          auto error_policy = error_policy_ == cudf::error_policy::NULLIFY
-                                ? "cudf::error_policy::NULLIFY"
-                                : "cudf::error_policy::PROPAGATE";
-
-          if (!op_info.is_fallible) {
+    case target::TRANSFORM:
+    case target::PREDICATE: {
+      auto const type        = jit::row_abi_type(type_);
+      auto const declaration = std::format("optional<{}>", type);
+      if (op_ == opcode::GET_INPUT) {
+        sink.emit(
+          std::format("{} {} = {};\n",
+                      declaration,
+                      id_,
+                      instance.get_input_vars()[std::get<input_reference>(reference_).index].id));
+      } else if (op_ == opcode::SET_OUTPUT) {
+        auto const output = std::get<output_reference>(reference_).index;
+        if (info.id == target::PREDICATE) {
+          sink.emit(std::format("*outputs = {}.validity && {}.value;\nreturn success;\n",
+                                args_[0]->get_id(),
+                                args_[0]->get_id()));
+        } else {
+          auto const valid_output = static_cast<std::size_t>(output) < info.outputs.size() &&
+                                    info.outputs[output] == output_nullability::ALL_VALID;
+          if (!valid_output) {
+            sink.require_symbol("set_validity");
             sink.emit(std::format(
-              R"***({0} {1} = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::{2}, {3}>({4});
-)***",
-              type,
-              id_,
-              op_info.name,
-              error_policy,
-              args_str));
-          } else {
-            if (error_policy_ != cudf::error_policy::NULLIFY) {
-              sink.emit(std::format(
-                R"***(auto expected__{1} = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::{2}, {3}>({4});
-if(!expected__{1}.has_value()) {{
- return expected__{1}.error();
-}}
-{0} {1} = expected__{1}.value();
-)***",
-                type,
-                id_,
-                op_info.name,
-                error_policy,
-                args_str));
-            } else {
-              sink.emit(std::format(
-                R"***({0} {1}{{}};
-auto expected__{1} = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::{2}, {3}>({4});
-if(expected__{1}.has_value()) {{
-  {1} = expected__{1}.value();
-}} else {{
-  {1} = {{}};
-}}
-)***",
-                type,
-                id_,
-                op_info.name,
-                error_policy,
-                args_str));
-            }
+              "set_validity(outputs, {}, row, {}.validity);\n", output, args_[0]->get_id()));
+            sink.emit(std::format("if ({}.validity) {{\n", args_[0]->get_id()));
           }
+          sink.require_symbol("set_" + type);
+          sink.emit(std::format("auto stored_{} = set_{}(outputs, {}, row, {}.value);\n",
+                                id_,
+                                type,
+                                output,
+                                args_[0]->get_id()));
+          sink.emit(std::format("if (stored_{} != success) {{ return stored_{}; }}\n", id_, id_));
+          if (!valid_output) { sink.emit("}\n"); }
         }
+      } else {
+        // Preserve reflexive comparison folding across the separately compiled
+        // codecs. Floating-point comparisons retain IEEE NaN behavior.
+        auto const reflexive = args_.size() == 2 && args_[0]->get_id() == args_[1]->get_id() &&
+                               !cudf::is_floating_point(args_[0]->get_type());
+        auto const comparison = op_ == opcode::EQUAL || op_ == opcode::NOT_EQUAL ||
+                                op_ == opcode::LESS || op_ == opcode::LESS_EQUAL ||
+                                op_ == opcode::GREATER || op_ == opcode::GREATER_EQUAL ||
+                                op_ == opcode::NULL_EQUAL;
+        if (reflexive && comparison) {
+          auto const value = op_ == opcode::EQUAL || op_ == opcode::LESS_EQUAL ||
+                             op_ == opcode::GREATER_EQUAL || op_ == opcode::NULL_EQUAL;
+          auto const validity = op_ == opcode::NULL_EQUAL
+                                  ? std::string{"1"}
+                                  : std::string{args_[0]->get_id()} + ".validity";
+          sink.emit(std::format(
+            "{} {}{{{}, {}}};\n", declaration, id_, value ? "true" : "false", validity));
+          break;
+        }
+        auto const op_info = get_op_info(op_, error_policy::PROPAGATE);
+        auto const nullable_result =
+          op_info.is_null_dependent && op_info.null_policy != null_output::ALWAYS_VALID;
+        std::string symbol = std::format("cudf_row_op_{}", op_info.name);
+        std::string params;
+        std::string arguments;
+        std::string validity;
+        auto add_argument = [&](std::string const& input_type, std::string_view id) {
+          symbol += "_" + input_type;
+          if (!params.empty()) {
+            params += ", ";
+            arguments += ", ";
+            validity += " && ";
+          }
+          params += op_info.is_null_dependent ? "optional<" + input_type + ">" : input_type;
+          arguments += std::string{id} + (op_info.is_null_dependent ? "" : ".value");
+          validity += std::string{id} + ".validity";
+        };
+        for (auto const& arg : args_) {
+          add_argument(jit::row_abi_type(arg->get_type()), arg->get_id());
+        }
+        if (op_ == opcode::RESCALE) {
+          add_argument("i32", instance.get_input_vars()[scale_reference_.index].id);
+        }
+        auto const result_type = op_info.is_fallible ? "expected<" + type + ", status>"
+                                 : nullable_result   ? "optional<" + type + ">"
+                                                     : type;
+        sink.require_symbol(symbol);
+        sink.declare(
+          std::format("extern \"C\" __device__ {} {}({});\n", result_type, symbol, params));
+        sink.emit(std::format("{} {}{{}};\n", declaration, id_));
+        if (!op_info.is_null_dependent) { sink.emit("if (" + validity + ") {\n"); }
+        sink.emit(std::format("auto evaluated_{} = {}({});\n", id_, symbol, arguments));
+        if (op_info.is_fallible) {
+          if (error_policy_ == error_policy::PROPAGATE) {
+            sink.emit("if (evaluated_" + id_ + ".error != success) { ");
+            sink.emit("return evaluated_" + id_ + ".error; }\n");
+          }
+          sink.emit(std::format("{}.validity = evaluated_{}.error == success;\n", id_, id_));
+          sink.emit(
+            std::format("if ({}.validity) {{ {}.value = evaluated_{}.value; }}\n", id_, id_, id_));
+        } else if (nullable_result) {
+          sink.emit(std::format("{} = evaluated_{};\n", id_, id_));
+        } else {
+          sink.emit(std::format("{} = {{evaluated_{}, 1}};\n", id_, id_));
+        }
+        if (!op_info.is_null_dependent) { sink.emit("}\n"); }
       }
       break;
     }
-
     default:
       CUDF_FAIL(std::format("Unsupported target: {}", static_cast<int>(info.id)),
                 std::invalid_argument);
@@ -882,7 +896,11 @@ bool is_nullable(scalar_input const& in)
   }
 }
 
-bool is_nullable(column_input const& in) { return in.column.nullable(); }
+bool is_nullable(column_input const& in)
+{
+  return in.column.nullable() || (in.column.type().id() == type_id::DICTIONARY32 &&
+                                  in.column.child(dictionary_keys_column_index).nullable());
+}
 
 std::tuple<std::string, null_aware, std::vector<output_nullability>> ast_converter::generate_code(
   target target_id,
@@ -924,55 +942,109 @@ std::tuple<std::string, null_aware, std::vector<output_nullability>> ast_convert
     ir->instantiate(instance_);
   }
 
-  target_info target{target_id};
+  target_info target{target_id, null_policies};
 
-  CUDF_EXPECTS(
-    target.id == target::CUDA, "Unsupported target for code generation", std::invalid_argument);
-
-  auto output_decl = [&](auto i) {
-    auto& var = instance_.output_vars_[i];
-    auto& ir  = output_irs_[i];
-    return std::format("{}* {}", to_cuda_type(ir->get_type(), instance_.has_nulls()), var.id);
-  };
-
-  auto input_decl = [&](auto i) {
-    auto& var = instance_.input_vars_[i];
-    return std::format("{} {}", to_cuda_type(var.type, instance_.has_nulls()), var.id);
-  };
-
-  std::vector<std::string> arg_decls;
-
-  for (size_t i = 0; i < instance_.output_vars_.size(); ++i) {
-    arg_decls.emplace_back(output_decl(i));
-  }
-
-  for (size_t i = 0; i < instance_.input_vars_.size(); ++i) {
-    arg_decls.emplace_back(input_decl(i));
-  }
-
-  auto args_decl = [&] {
-    if (arg_decls.empty()) {
-      return std::string{};
-    } else if (arg_decls.size() == 1) {
-      return arg_decls[0];
-    } else {
-      return std::accumulate(
-        arg_decls.begin() + 1, arg_decls.end(), arg_decls[0], [](auto const& a, auto const& b) {
-          return std::format("{}, {}", a, b);
-        });
+  if (target.id == target::TRANSFORM || target.id == target::PREDICATE) {
+    code_sink body;
+    // RESCALE may add a scalar during instantiation, so bind after all nodes resolve.
+    for (std::size_t i = 0; i < instance_.input_vars_.size(); ++i) {
+      auto const& input   = instance_.inputs_[i];
+      auto const type     = jit::row_abi_type(instance_.input_vars_[i].type);
+      auto const* column  = std::get_if<column_input>(&input);
+      auto source_row     = column == nullptr ? "0" : "row";
+      auto const nullable = std::visit([](auto const& value) { return is_nullable(value); }, input);
+      auto const representation = std::visit(
+        [](auto const& value) -> column_view {
+          using T = std::decay_t<decltype(value)>;
+          if constexpr (std::is_same_v<T, column_input>) {
+            return value.column;
+          } else {
+            return std::visit(
+              [](auto const& scalar) -> column_view {
+                using S = std::decay_t<decltype(scalar)>;
+                if constexpr (std::is_same_v<S, scalar_column_view>) {
+                  return scalar.as_column_view();
+                } else {
+                  return scalar->view();
+                }
+              },
+              value);
+          }
+        },
+        input);
+      auto const dictionary = representation.type().id() == type_id::DICTIONARY32;
+      auto const leaf =
+        dictionary ? representation.child(dictionary_keys_column_index) : representation;
+      auto const index_tag =
+        dictionary
+          ? ", index_type_tag<" +
+              jit::row_abi_type(representation.child(dictionary_indices_column_index).type()) +
+              ">{}"
+          : "";
+      auto const offset_tag =
+        type == "string_view"
+          ? ", type_tag<" + jit::row_abi_type(leaf.child(offsets_column_index).type()) + ">{}"
+          : "";
+      auto symbol =
+        std::format("load_{}{}{}", dictionary ? "dict_" : "", type, nullable ? "_nullable" : "");
+      if (dictionary) {
+        symbol += "_index_" +
+                  jit::row_abi_type(representation.child(dictionary_indices_column_index).type());
+      }
+      if (type == "string_view") {
+        symbol += "_offset_" + jit::row_abi_type(leaf.child(offsets_column_index).type());
+      }
+      body.require_symbol(symbol);
+      auto const load  = std::format("load_{}{}{}(columns, {}, {}{}{})",
+                                    dictionary ? "dict_" : "",
+                                    type,
+                                    nullable ? "_nullable" : "",
+                                    i,
+                                    source_row,
+                                    index_tag,
+                                    offset_tag);
+      auto const value = nullable ? load : "{" + load + ", 1}";
+      body.emit(std::format("optional<{}> {} = {};\n", type, instance_.input_vars_[i].id, value));
     }
-  }();
-
-  code_sink sink;
-  sink.emit(std::format("__device__ cudf::errc {}(", function_name));
-  sink.emit(args_decl);
-  sink.emit(")\n{\n");
-  for (auto& ir : output_irs_) {
-    ir->emit_code(instance_, target, sink);
+    for (auto& ir : output_irs_) {
+      ir->emit_code(instance_, target, body);
+    }
+    required_symbols_ = body.required_symbols();
+    auto source       = std::string{"namespace cudf::row_abi {\n"};
+    for (auto const& input : instance_.inputs_) {
+      std::visit(
+        [&](auto const& value) {
+          using T = std::decay_t<decltype(value)>;
+          if constexpr (std::is_same_v<T, column_input>) {
+            source += "// column:" + std::to_string(value.table_source.value_or(0)) + ":" +
+                      jit::row_schema(value.column) + "\n";
+          } else {
+            std::visit(
+              [&](auto const& scalar) {
+                using S = std::decay_t<decltype(scalar)>;
+                if constexpr (std::is_same_v<S, scalar_column_view>) {
+                  source += "// scalar:" + jit::row_schema(scalar.as_column_view()) + "\n";
+                } else {
+                  source += "// scalar:" + jit::row_schema(scalar->view()) + "\n";
+                }
+              },
+              value);
+          }
+        },
+        input);
+    }
+    source += "// expression: " + std::string{function_name} + "\n";
+    source += body.declarations();
+    source += target.id == target::TRANSFORM
+                ? "extern \"C\" __device__ __inline_hint__ status transform_operator(void const* "
+                  "columns, void const* outputs, void* user_data, i32 row) {\n"
+                : "extern \"C\" __device__ __inline_hint__ status predicate_operator(void "
+                  "const* columns, bool8* outputs, void* user_data, i32 row) {\n";
+    source += body.get_code();
+    source += "return success;\n}\n}\n";
+    return {std::move(source), null_aware::YES, std::move(null_policies)};
   }
-  sink.emit("return cudf::errc::SUCCESS;\n}");
-  return {
-    sink.get_code(), generate_null_aware_udf ? null_aware::YES : null_aware::NO, null_policies};
+  CUDF_FAIL("Unsupported row operator target", std::invalid_argument);
 }
 
 std::variant<column_view, scalar_column_view> get_column_view(scalar_input const& in)
@@ -1041,6 +1113,7 @@ transform_args ast_converter::compute_table(
                                  .input_table_sources  = std::move(table_sources),
                                  .input_column_indices = std::move(column_indices),
                                  .udf                  = std::move(code),
+                                 .required_symbols     = std::move(converter.required_symbols_),
                                  .source_type          = cudf::udf_source_type::CUDA,
                                  .is_null_aware        = is_null_aware,
                                  .user_data            = std::nullopt,

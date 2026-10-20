@@ -726,6 +726,10 @@ add_fragment(
 
 add_fragment(cudf_test_fragments FRAGMENT to_upper SOURCE transform/fragments/to_upper.cu)
 
+add_fragment(
+  cudf_test_fragments FRAGMENT row_abi_increment SOURCE transform/fragments/row_abi_increment.cu
+)
+
 rtcx_embed(
   cudf_test_fragments COMPRESSION none OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rtcx_embed"
 )
@@ -734,6 +738,15 @@ ConfigureTest(
   TRANSFORM_LTO_TEST transform/transform_lto_test.cpp
   ${cudf_test_fragments_SOURCE_DIR}/cudf_test_fragments.s
 )
+ConfigureTest(
+  ROW_ABI_TEST transform/row_abi_test.cpp ${cudf_test_fragments_SOURCE_DIR}/cudf_test_fragments.s
+)
+add_dependencies(ROW_ABI_TEST cudf_test_fragments)
+target_link_libraries(ROW_ABI_TEST PRIVATE rtcx::rtcx)
+target_include_directories(
+  ROW_ABI_TEST PRIVATE ${cudf_test_fragments_SOURCE_DIR} ${CUDF_BINARY_DIR}/embed
+)
+
 add_dependencies(TRANSFORM_LTO_TEST cudf_test_fragments)
 target_include_directories(TRANSFORM_LTO_TEST PRIVATE ${cudf_test_fragments_SOURCE_DIR})
 
@@ -881,3 +894,14 @@ ConfigureTest(
 # Install tests ####################################################################################
 # ##################################################################################################
 rapids_test_install_relocatable(INSTALL_COMPONENT_SET testing DESTINATION bin/gtests/libcudf)
+
+# Optional cold/warm JIT measurements, also usable with a baseline libcudf via LD_LIBRARY_PATH.
+add_executable(ROW_JIT_BENCH EXCLUDE_FROM_ALL ../benchmarks/row_operator/latency.cpp)
+target_link_libraries(ROW_JIT_BENCH PRIVATE cudf::cudf CUDA::cudart_static ${CMAKE_DL_LIBS})
+set_target_properties(ROW_JIT_BENCH PROPERTIES CXX_STANDARD 20)
+add_library(row_jit_stages SHARED EXCLUDE_FROM_ALL ../benchmarks/row_operator/stages.cpp)
+target_include_directories(row_jit_stages PRIVATE ${CUDF_SOURCE_DIR}/src)
+target_link_libraries(
+  row_jit_stages PRIVATE cudf::cudf CUDA::nvrtc CUDA::nvJitLink CUDA::cuda_driver ${CMAKE_DL_LIBS}
+)
+set_target_properties(row_jit_stages PROPERTIES CXX_STANDARD 20)

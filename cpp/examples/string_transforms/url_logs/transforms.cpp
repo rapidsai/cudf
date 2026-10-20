@@ -429,7 +429,8 @@ __device__ int transform(int32_t* output, cudf::string_view input) {
                                         {},
                                 std::nullopt,
                                 stream,
-                                mr);
+                                mr,
+                                false);
   } else {
     sizes = cudf::transform(url_component_sizes_udf,
                             cudf::udf_source_type::CUDA,
@@ -473,7 +474,8 @@ __device__ int transform(int32_t* output, cudf::string_view input) {
                                std::move(offsets),
                                std::nullopt,
                                stream,
-                               mr);
+                               mr,
+                               false);
   }
   return cudf::transform(url_component_output_udf,
                          cudf::udf_source_type::CUDA,

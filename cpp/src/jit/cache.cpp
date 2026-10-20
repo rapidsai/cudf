@@ -51,11 +51,12 @@ void hash(XXH3_state_t* ctx, std::span<rtcx::memory_fragment const> memory_fragm
   for (auto const& fragment : memory_fragments) {
     if (fragment.name != nullptr) {
       XXH3_128bits_update(ctx, fragment.name, std::strlen(fragment.name));
-      XXH3_128bits_update(ctx, "\0", 1);  // null terminator
-    } else {
-      XXH3_128bits_update(ctx, fragment.data.data(), fragment.data.size());
-      XXH3_128bits_update(ctx, "\0", 1);  // null terminator
+      XXH3_128bits_update(ctx, "\0", 1);
     }
+    auto const binary_type = fragment.type;
+    XXH3_128bits_update(ctx, &binary_type, sizeof(binary_type));
+    XXH3_128bits_update(ctx, fragment.data.data(), fragment.data.size());
+    XXH3_128bits_update(ctx, "\0", 1);
   }
 }
 

@@ -42,7 +42,9 @@ TEST_F(TransformLTOTest, InvSqrt)
                                     outputs,
                                     {},
                                     std::nullopt,
-                                    cudf::test::get_default_stream());
+                                    cudf::test::get_default_stream(),
+                                    cudf::get_current_device_resource_ref(),
+                                    false);
 
   column_wrapper<float> expected{{1.0f, 0.5f, 0.33333334f, 0.25f}};
 
@@ -71,7 +73,9 @@ TEST_F(TransformLTOTest, Distance)
                                     outputs,
                                     {},
                                     std::nullopt,
-                                    cudf::test::get_default_stream());
+                                    cudf::test::get_default_stream(),
+                                    cudf::get_current_device_resource_ref(),
+                                    false);
 
   auto distance = [](float x1, float y1, float x2, float y2) {
     return std::sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
@@ -106,7 +110,9 @@ TEST_F(TransformLTOTest, ToUpper)
                                     outputs,
                                     {},
                                     std::nullopt,
-                                    cudf::test::get_default_stream());
+                                    cudf::test::get_default_stream(),
+                                    cudf::get_current_device_resource_ref(),
+                                    false);
 
   column_wrapper<uint8_t> expected{{65, 66, 65, 66, 48, 49, 32, 33, 127, 255}};
 
@@ -133,7 +139,9 @@ TEST_F(TransformLTOTest, SumOfSquares)
                                     outputs,
                                     {},
                                     std::nullopt,
-                                    cudf::test::get_default_stream());
+                                    cudf::test::get_default_stream(),
+                                    cudf::get_current_device_resource_ref(),
+                                    false);
 
   column_wrapper<float> expected{{2.0f, 20.0f, 85.0f, 356.0f}};
 
@@ -165,7 +173,9 @@ TEST_F(TransformLTOTest, FallibleIntegerLehmerMean)
                                     outputs,
                                          {},
                                     std::nullopt,
-                                    cudf::test::get_default_stream());
+                                    cudf::test::get_default_stream(),
+                                    cudf::get_current_device_resource_ref(),
+                                    false);
   auto lehmer_mean = [](int32_t a, int32_t b) { return (a * a + b * b) / (a + b); };
 
   column_wrapper<int32_t> expected{{lehmer_mean(2, 1),
@@ -186,7 +196,9 @@ TEST_F(TransformLTOTest, FallibleIntegerLehmerMean)
                                    outputs,
                                    {},
                                    std::nullopt,
-                                   cudf::test::get_default_stream()),
+                                   cudf::test::get_default_stream(),
+                                   cudf::get_current_device_resource_ref(),
+                                   false),
                cudf::evaluation_error);
 }
 
@@ -214,7 +226,9 @@ TEST_F(TransformLTOTest, BankersRounding)
                                     outputs,
                                     {},
                                     std::nullopt,
-                                    cudf::test::get_default_stream());
+                                    cudf::test::get_default_stream(),
+                                    cudf::get_current_device_resource_ref(),
+                                    false);
 
   decimal_wrapper<T> expected{{124, 126, 126, 128, -124, -126, -126, -128}, numeric::scale_type{0}};
 

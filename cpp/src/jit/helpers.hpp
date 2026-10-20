@@ -13,6 +13,7 @@
 #include <cuda/iterator>
 
 #include <jit/cache.hpp>
+#include <row_operator/row_kernel.hpp>
 
 #include <algorithm>
 #include <span>
@@ -55,7 +56,7 @@ column_views_to_device(std::span<ColumnView const> views,
   std::vector<std::unique_ptr<DeviceView, std::function<void(DeviceView*)>>> handles;
 
   std::transform(views.begin(), views.end(), std::back_inserter(handles), [&](auto const& view) {
-    return DeviceView::create(view, stream);
+    return DeviceView::create(view, stream, mr);
   });
 
   // Use pinned host memory so cuda_memcpy_async takes the device-accessible
@@ -74,6 +75,11 @@ column_views_to_device(std::span<ColumnView const> views,
 kernel get_udf_kernel(std::string const& source_file,
                       std::string const& kernel_name,
                       std::string const& cuda_source);
+
+kernel get_udf_row_kernel(std::string const& source_file,
+                          std::string const& row_instance,
+                          std::string const& cuda_source,
+                          row_execution execution);
 
 rtcx::blob get_udf_kernel_fragment(std::string const& source_file,
                                    std::string const& kernel_name,

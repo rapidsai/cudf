@@ -147,6 +147,7 @@ struct transform_program {
    * @param outputs Outputs from which to derive the output type and nullability specifications
    * @param string_offsets Optional string offsets used to determine each string output
    * representation
+   * @param row_operator Accept a CUDA transform operator; value UDFs use a row adapter.
    */
   transform_program(std::string const& udf,
                     udf_source_type source_type,
@@ -154,7 +155,8 @@ struct transform_program {
                     std::optional<void*> user_data,
                     std::span<transform_input const> inputs,
                     std::span<transform_output const> outputs,
-                    std::span<std::unique_ptr<column> const> string_offsets);
+                    std::span<std::unique_ptr<column> const> string_offsets,
+                    bool row_operator = true);
 
   /**
    * @brief Constructs a reusable program from explicit input and output specifications.
@@ -170,13 +172,15 @@ struct transform_program {
    * UDF by `run`
    * @param inputs Specifications of the transform inputs
    * @param outputs Specifications of the transform outputs
+   * @param row_operator Accept a CUDA transform operator; value UDFs use a row adapter.
    */
   transform_program(std::string const& udf,
                     udf_source_type source_type,
                     null_aware is_null_aware,
                     std::optional<void*> user_data,
                     std::span<transform_input_spec const> inputs,
-                    std::span<transform_output_spec const> outputs);
+                    std::span<transform_output_spec const> outputs,
+                    bool row_operator = true);
 
   /**
    * @brief Constructs a reusable program for an AST expression.
@@ -260,6 +264,11 @@ struct transform_program {
  * Computes:
  * `(outputs[i]...) =  UDF(inputs[i]...)`.
  *
+ * Row mode is the default. CUDA source can define `transform_operator` from
+ * `cudf/row_abi.cuh`, using opaque column pointers and ABI loaders/setters.
+ * CUDA value UDFs and PTX source are adapted to that entry; row_operator=false
+ * explicitly selects a value UDF.
+ *
  * @throws std::invalid_argument if any of the input columns have different sizes (except scalars)
  * @throws std::invalid_argument if `output_type` or any of the inputs are not fixed-width or string
  * types
@@ -290,6 +299,7 @@ struct transform_program {
  * input columns.
  * @param stream        CUDA stream used for device memory operations and kernel launches
  * @param mr            Device memory resource used to allocate the returned column's device memory
+ * @param row_operator Accept a transform_operator row entry; false selects a value UDF adapter.
  * @return              A table containing the columns resulting from applying the transform
  * function to every element of the input according to the output specifications
  *
@@ -304,7 +314,8 @@ std::unique_ptr<table> transform(
   std::vector<std::unique_ptr<column>>&& string_offsets,
   std::optional<size_type> row_size,
   cuda::stream_ref stream           = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref(),
+  bool row_operator                 = true);
 
 /**
  * @brief Creates a new table by applying a transform function against every element of the input
@@ -344,6 +355,47 @@ enum class lto_binary_type : uint8_t {
   FATBIN   //< FATBIN binary
 };
 
+/** A separately compiled helper used by a row operator. Bytes are borrowed until compilation
+ * returns. */
+struct lto_fragment {
+  std::span<uint8_t const> data;
+  lto_binary_type binary_type = lto_binary_type::LTO_IR;
+};
+
+/**
+ * @brief Transform caller-prepared outputs using the existing transform API.
+ *
+ * Row mode is the default: source defines transform_operator with opaque input
+ * and output arrays, user data, and a row index. Set row_operator=false for a
+ * CUDA/PTX value UDF; its adapter executes through the same row scheduler.
+ * Supports T, list<T>, dictionary<T>, and dictionary<list<T>> in row mode.
+ * Offsets, child storage, keys and nullable masks must be prepared by the caller.
+ * Owning-column null counts must be recomputed after output validity changes.
+ * @throws evaluation_error for a non-success operator or setter status.
+ */
+void transform(std::string const& udf,
+               udf_source_type source_type,
+               null_aware is_null_aware,
+               std::optional<void*> user_data,
+               std::span<transform_input const> inputs,
+               mutable_table_view const& outputs,
+               cuda::stream_ref stream                    = cudf::get_default_stream(),
+               rmm::device_async_resource_ref mr          = cudf::get_current_device_resource_ref(),
+               bool row_operator                          = true,
+               std::span<lto_fragment const> dependencies = {});
+
+/** @brief Run a separately compiled operator on caller-prepared outputs. */
+void transform_lto(std::span<uint8_t const> udf,
+                   lto_binary_type binary_type,
+                   null_aware is_null_aware,
+                   std::optional<void*> user_data,
+                   std::span<transform_input const> inputs,
+                   mutable_table_view const& outputs,
+                   cuda::stream_ref stream           = cudf::get_default_stream(),
+                   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref(),
+                   bool row_operator                 = true,
+                   std::span<lto_fragment const> dependencies = {});
+
 /**
  * @brief Creates a new table by applying a transform function against every
  * element of the input columns.
@@ -365,8 +417,8 @@ enum class lto_binary_type : uint8_t {
  * The size of the resulting column is the `row_size` if provided, otherwise it is inferred from
  * the input and pre-allocated output columns.
  *
- * @param udf           The LTO-IR fragment containing the transform function to apply. The UDF must
- * be named `transform` and follow the CUDF UDF ABI
+ * @param udf           The fragment defining `transform_operator` from row_abi.cuh in row mode.
+ * With row_operator=false, define `transform` using the existing value UDF calling convention.
  * @param binary_type   The type of the LTO binary provided in `udf`
  * @param is_null_aware Signifies the UDF will receive row inputs as optional values
  * @param user_data     User-defined device data to pass to the UDF
@@ -378,6 +430,7 @@ enum class lto_binary_type : uint8_t {
  * input columns
  * @param stream        CUDA stream used for device memory operations and kernel launches
  * @param mr            Device memory resource used to allocate the returned column's device memory
+ * @param row_operator Accept a transform_operator row entry; false selects a value UDF adapter.
  * @return              A table containing the columns resulting from applying the transform
  * function to every element of the input according to the output specifications
  *
@@ -392,7 +445,8 @@ std::unique_ptr<table> transform_lto(
   std::vector<std::unique_ptr<column>>&& string_offsets,
   std::optional<size_type> row_size,
   cuda::stream_ref stream           = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref(),
+  bool row_operator                 = true);
 
 /**
  * @brief Creates a null_mask from `input` by converting `NaN` elements to null rows

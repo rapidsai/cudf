@@ -76,7 +76,7 @@ std::unique_ptr<table> filter(table_view const& predicate_table,
                               cuda::stream_ref stream,
                               rmm::device_async_resource_ref mr)
 {
-  auto args = cudf::detail::row_ir::ast_converter::filter(cudf::detail::row_ir::target::CUDA,
+  auto args = cudf::detail::row_ir::ast_converter::filter(cudf::detail::row_ir::target::TRANSFORM,
                                                           predicate_expr,
                                                           predicate_table,
                                                           {},

@@ -7,6 +7,7 @@
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/join/join.hpp>
+#include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -49,7 +50,10 @@ filter_join_indices_jit(cudf::table_view const& left,
                         join_kind join_kind,
                         bool is_ptx,
                         cuda::stream_ref stream,
-                        rmm::device_async_resource_ref mr);
+                        rmm::device_async_resource_ref mr,
+                        bool row_operator                          = true,
+                        std::optional<void*> user_data             = std::nullopt,
+                        std::span<lto_fragment const> dependencies = {});
 
 /**
  * @copydoc cudf::filter_join_indices_jit(table_view const&, table_view const&,

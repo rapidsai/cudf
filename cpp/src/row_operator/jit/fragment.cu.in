@@ -1,0 +1,6 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#define CUDF_ROW_FRAGMENT @INSTANTIATION@
+#include "@CUDF_SOURCE_DIR@/@SOURCE@"

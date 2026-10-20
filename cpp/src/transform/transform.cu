@@ -21,16 +21,18 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/atomic>
 #include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/stream>
 
-#include <cudf_fragments.hpp>
 #include <jit/cache.hpp>
 #include <jit/helpers.hpp>
 #include <jit/parser.hpp>
 #include <jit/row_ir.hpp>
 #include <jit/util.hpp>
+#include <row_operator/row_kernel.hpp>
+#include <row_operator/schema.hpp>
 
 #include <algorithm>
 #include <array>
@@ -184,13 +186,14 @@ kernel instantiate(bool is_null_aware,
                            jit::build_ptx_params(ptx_output_types, ptx_input_types, has_user_data))
                        : jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
-  auto kernel = rtcx::reflect_template("cudf::jit::transform_kernel",
+  auto kernel = rtcx::reflect_template("cudf::jit::transform_row_operation",
                                        rtcx::reflect(is_null_aware),
                                        rtcx::reflect(has_user_data),
                                        ins,
                                        outs);
 
-  return jit::get_udf_kernel("cudf/cpp/src/transform/jit/kernel.cu", kernel, cuda_source);
+  return jit::get_udf_row_kernel(
+    "cudf/cpp/src/transform/jit/kernel.cu", kernel, cuda_source, jit::row_execution::TRANSFORM);
 }
 
 void launch(cudf::kernel const& kernel,
@@ -493,7 +496,7 @@ std::tuple<rtcx::blob, lto_binary_type, std::string> instantiate_fragment(
 {
   CUDF_FUNC_RANGE();
   // substitutes the `CUDF_KERNEL_INSTANCE` macro
-  auto kernel = rtcx::reflect_template("cudf::jit::transform_kernel",
+  auto kernel = rtcx::reflect_template("cudf::jit::transform_row_operation",
                                        rtcx::reflect(is_null_aware),
                                        rtcx::reflect(has_user_data),
                                        ins,
@@ -551,8 +554,13 @@ kernel get_kernel(bool is_null_aware,
                   std::span<input_column_view const> inputs,
                   std::span<output_column const> outputs,
                   std::string const& udf,
-                  udf_source_type source_type)
+                  udf_source_type source_type,
+                  bool row_operator = true)
 {
+  if (row_operator && source_type == udf_source_type::CUDA &&
+      udf.find("transform_operator") != std::string::npos) {
+    return jit::get_row_kernel(udf, jit::row_execution::TRANSFORM);
+  }
   auto [in_types, out_types, ptx_in_types, ptx_out_types] = reflect(source_type, inputs, outputs);
   return instantiate(is_null_aware,
                      has_user_data,
@@ -569,8 +577,13 @@ kernel get_kernel(bool is_null_aware,
                   std::span<transform_input_spec const> inputs,
                   std::span<transform_output_spec const> outputs,
                   std::string const& udf,
-                  udf_source_type source_type)
+                  udf_source_type source_type,
+                  bool row_operator = true)
 {
+  if (row_operator && source_type == udf_source_type::CUDA &&
+      udf.find("transform_operator") != std::string::npos) {
+    return jit::get_row_kernel(udf, jit::row_execution::TRANSFORM);
+  }
   auto [in_types, out_types, ptx_in_types, ptx_out_types] = reflect(source_type, inputs, outputs);
   return instantiate(is_null_aware,
                      has_user_data,
@@ -580,28 +593,6 @@ kernel get_kernel(bool is_null_aware,
                      ptx_out_types,
                      udf,
                      source_type);
-}
-
-void run(bool is_null_aware,
-         bool has_user_data,
-         size_type row_size,
-         bitmask_type const* d_stencil,
-         void* user_data,
-         std::span<input_column_view const> inputs,
-         std::span<output_column> outputs,
-         int32_t* d_max_error,
-         std::string const& udf,
-         udf_source_type source_type,
-         cuda::stream_ref stream,
-         rmm::device_async_resource_ref mr)
-{
-  auto kernel = get_kernel(is_null_aware, has_user_data, inputs, outputs, udf, source_type);
-  auto [cols, handles] = to_args(inputs, outputs, stream, mr);
-  auto* input_cols     = reinterpret_cast<column_device_view_core const*>(cols.data());
-  auto* output_cols =
-    reinterpret_cast<mutable_column_device_view_core const*>(input_cols + inputs.size());
-  return launch(
-    kernel, row_size, d_stencil, user_data, input_cols, output_cols, d_max_error, stream);
 }
 
 void run(kernel const& kernel,
@@ -634,9 +625,7 @@ rtcx::binary_type as_rtcx_binary_type(lto_binary_type type)
   }
 }
 
-void run_lto(std::optional<std::tuple<std::span<uint8_t const>, lto_binary_type, char const*>>
-               precompiled_kernel_fragment,
-             bool is_null_aware,
+void run_lto(bool is_null_aware,
              bool has_user_data,
              size_type row_size,
              bitmask_type const* d_stencil,
@@ -647,37 +636,21 @@ void run_lto(std::optional<std::tuple<std::span<uint8_t const>, lto_binary_type,
              std::span<uint8_t const> udf_binary,
              lto_binary_type source_type,
              cuda::stream_ref stream,
-             rmm::device_async_resource_ref mr)
+             rmm::device_async_resource_ref mr,
+             bool row_operator = true)
 {
-  auto [in_types, out_types, ptx_in_types, ptx_out_types] = reflect(source_type, inputs, outputs);
-
-  std::span<uint8_t const> kernel_fragment;
-  lto_binary_type kernel_fragment_binary_type = lto_binary_type::FATBIN;
-  rtcx::blob fragment_blob                    = nullptr;
-  std::string kernel_fragment_id;
-
-  if (precompiled_kernel_fragment.has_value()) {
-    std::tie(kernel_fragment, kernel_fragment_binary_type, kernel_fragment_id) =
-      *precompiled_kernel_fragment;
-  } else {
-    std::tie(fragment_blob, kernel_fragment_binary_type, kernel_fragment_id) =
+  rtcx::memory_fragment dependency{
+    .data = udf_binary, .type = as_rtcx_binary_type(source_type), .name = nullptr};
+  auto kernel = [&] {
+    if (row_operator) {
+      return jit::link_row_kernel({}, jit::row_execution::TRANSFORM, {}, {&dependency, 1});
+    }
+    auto [in_types, out_types, ptx_in_types, ptx_out_types] = reflect(source_type, inputs, outputs);
+    auto [fragment_blob, fragment_type, fragment_id] =
       instantiate_fragment(is_null_aware, has_user_data, in_types, out_types, inputs, outputs);
-    kernel_fragment = fragment_blob->view();
-  }
-
-  rtcx::memory_fragment memory_fragments[] = {
-    {
-      .data = kernel_fragment,
-      .type = as_rtcx_binary_type(kernel_fragment_binary_type),
-      .name = kernel_fragment_id.c_str(),
-    },
-    {
-      .data = udf_binary,
-      .type = as_rtcx_binary_type(source_type),
-      .name = nullptr  // nullptr = unnamed fragment: the binary will be used to hash the UDF
-    }};
-
-  auto kernel = get_lto_linked_kernel("cudf/cpp/src/transform/jit/kernel.cu", {}, memory_fragments);
+    return jit::link_row_kernel(
+      fragment_blob->view(), jit::row_execution::TRANSFORM, {}, {&dependency, 1});
+  }();
 
   auto [cols, handles] = to_args(inputs, outputs, stream, mr);
   auto* input_cols     = reinterpret_cast<column_device_view_core const*>(cols.data());
@@ -1153,7 +1126,8 @@ std::unique_ptr<table> execute_transform(std::string const& udf,
                                          std::vector<std::unique_ptr<column>> string_offsets,
                                          kernel const* compiled_kernel,
                                          cuda::stream_ref stream,
-                                         rmm::device_async_resource_ref mr)
+                                         rmm::device_async_resource_ref mr,
+                                         bool row_operator = true)
 {
   auto row_size = in_row_size.has_value() ? *in_row_size : jit::get_projection_size(inputs);
   auto output_may_be_nullable    = get_null_transformation(is_null_aware, inputs, outputs);
@@ -1173,16 +1147,20 @@ std::unique_ptr<table> execute_transform(std::string const& udf,
     static_cast<int32_t>(errc::SUCCESS), stream, cudf::get_current_device_resource_ref());
 
   if (compiled_kernel == nullptr) {
-    jit_transform::run(is_null_aware == null_aware::YES,
-                       user_data.has_value(),
+    auto kernel = jit_transform::get_kernel(is_null_aware == null_aware::YES,
+                                            user_data.has_value(),
+                                            inputs,
+                                            output_columns,
+                                            udf,
+                                            source_type,
+                                            row_operator);
+    jit_transform::run(kernel,
                        row_size,
                        stencil_has_nulls ? stencil_arg : nullptr,
                        user_data.value_or(nullptr),
                        inputs,
                        output_columns,
                        d_max_error.data(),
-                       udf,
-                       source_type,
                        stream,
                        mr);
   } else {
@@ -1221,7 +1199,8 @@ std::unique_ptr<table> transform(std::string const& udf,
                                  std::vector<std::unique_ptr<column>>&& string_offsets,
                                  std::optional<size_type> row_size,
                                  cuda::stream_ref stream,
-                                 rmm::device_async_resource_ref mr)
+                                 rmm::device_async_resource_ref mr,
+                                 bool row_operator)
 {
   CUDF_FUNC_RANGE();
   perform_checks(source_type, is_null_aware, row_size, inputs, outputs, string_offsets);
@@ -1235,7 +1214,8 @@ std::unique_ptr<table> transform(std::string const& udf,
                            std::move(string_offsets),
                            nullptr,
                            stream,
-                           mr);
+                           mr,
+                           row_operator);
 }
 
 std::unique_ptr<table> multi_transform(std::string const& udf,
@@ -1280,6 +1260,35 @@ std::unique_ptr<column> transform_extended(std::span<transform_input const> inpu
   return std::move(columns.front());
 }
 
+namespace {
+std::unique_ptr<table> execute_ast_transform(detail::row_ir::transform_args args,
+                                             cuda::stream_ref stream,
+                                             rmm::device_async_resource_ref mr)
+{
+  perform_checks(args.source_type,
+                 args.is_null_aware,
+                 args.row_size,
+                 args.inputs,
+                 args.outputs,
+                 args.string_offsets);
+  auto kernel = jit::get_row_kernel(args.udf,
+                                    jit::row_execution::TRANSFORM,
+                                    {},
+                                    std::span<std::string const>{args.required_symbols});
+  return execute_transform(args.udf,
+                           args.source_type,
+                           args.is_null_aware,
+                           args.row_size,
+                           args.user_data,
+                           args.inputs,
+                           args.outputs,
+                           std::move(args.string_offsets),
+                           &kernel,
+                           stream,
+                           mr);
+}
+}  // namespace
+
 std::unique_ptr<column> compute_column_jit(table_view const& table,
                                            ast::expression const& expr,
                                            cuda::stream_ref stream,
@@ -1288,17 +1297,8 @@ std::unique_ptr<column> compute_column_jit(table_view const& table,
   CUDF_FUNC_RANGE();
   std::array<std::reference_wrapper<ast::expression const>, 1> expressions{expr};
   auto args = detail::row_ir::ast_converter::compute_table(
-    detail::row_ir::target::CUDA, expressions, table, {}, "compute_operation", stream, mr);
-  auto result = transform(args.udf,
-                          args.source_type,
-                          args.is_null_aware,
-                          args.user_data,
-                          args.inputs,
-                          args.outputs,
-                          std::move(args.string_offsets),
-                          args.row_size,
-                          stream,
-                          mr);
+    detail::row_ir::target::TRANSFORM, expressions, table, {}, "compute_operation", stream, mr);
+  auto result = execute_ast_transform(std::move(args), stream, mr);
   auto cols   = result->release();
   return std::move(cols[0]);
 }
@@ -1311,60 +1311,8 @@ std::unique_ptr<table> compute_table_jit(
 {
   CUDF_FUNC_RANGE();
   auto args = detail::row_ir::ast_converter::compute_table(
-    detail::row_ir::target::CUDA, expressions, table, {}, "compute_operation", stream, mr);
-  return transform(args.udf,
-                   args.source_type,
-                   args.is_null_aware,
-                   args.user_data,
-                   args.inputs,
-                   args.outputs,
-                   std::move(args.string_offsets),
-                   args.row_size,
-                   stream,
-                   mr);
-}
-
-// if we have a matching pre-compiled kernel fragment for the given transform configuration, return
-// it to use for LTO linking instead of compiling a new one
-std::optional<std::tuple<std::span<uint8_t const>, lto_binary_type, char const*>>
-dispatch_lto_kernel_fragment(bool is_null_aware,
-                             bool has_user_data,
-                             std::span<transform_input const> inputs,
-                             std::span<output_column const> outputs)
-{
-  auto strip_whitespace = [](std::string_view str) {
-    std::string result;
-    result.reserve(str.size());
-    for (char c : str) {
-      if (!std::isspace(static_cast<unsigned char>(c))) { result.push_back(c); }
-    }
-    return result;
-  };
-
-  // TODO: better and less error-prone symbol mangling, but this is sufficient for now.
-
-  // the contract here is that CMake and this dispatch function agree on symbol mangling of the
-  // reflected kernel name.
-  auto [in_types, out_types, ptx_in_types, ptx_out_types] =
-    jit_transform::reflect(lto_binary_type::FATBIN, inputs, outputs);
-  auto target = strip_whitespace(rtcx::reflect_template("cudf::jit::transform_kernel",
-                                                        rtcx::reflect(is_null_aware),
-                                                        rtcx::reflect(has_user_data),
-                                                        in_types,
-                                                        out_types));
-
-  for (size_t i = 0; i < std::size(cudf_fragments::transform_kernel_FILE_INDEX); i++) {
-    auto file_index = cudf_fragments::transform_kernel_FILE_INDEX[i];
-    auto instance   = strip_whitespace(cudf_fragments::transform_kernel_INSTANCE[i]);
-    if (target == instance) {
-      auto range = cudf_fragments::file_ranges[file_index];
-      return std::make_tuple(cudf_fragments::files.subspan(range[0], range[1]),
-                             lto_binary_type::FATBIN,
-                             cudf_fragments::transform_kernel_INSTANCE[i]);
-    }
-  }
-
-  return std::nullopt;
+    detail::row_ir::target::TRANSFORM, expressions, table, {}, "compute_operation", stream, mr);
+  return execute_ast_transform(std::move(args), stream, mr);
 }
 
 std::unique_ptr<table> transform_lto(std::span<uint8_t const> udf,
@@ -1376,7 +1324,8 @@ std::unique_ptr<table> transform_lto(std::span<uint8_t const> udf,
                                      std::vector<std::unique_ptr<column>>&& string_offsets,
                                      std::optional<size_type> in_row_size,
                                      cuda::stream_ref stream,
-                                     rmm::device_async_resource_ref mr)
+                                     rmm::device_async_resource_ref mr,
+                                     bool row_operator)
 {
   CUDF_FUNC_RANGE();
   perform_checks(binary_type, is_null_aware, in_row_size, inputs, outputs, string_offsets);
@@ -1394,14 +1343,10 @@ std::unique_ptr<table> transform_lto(std::span<uint8_t const> udf,
   auto stencil_arg               = stencil.has_value() ? stencil->first : nullptr;
   auto stencil_has_nulls         = stencil.has_value() ? (stencil->second > 0) : false;
 
-  auto precompiled_kernel_fragment = dispatch_lto_kernel_fragment(
-    is_null_aware == null_aware::YES, user_data.has_value(), inputs, output_columns);
-
   cudf::detail::device_scalar<int32_t> d_max_error(
     static_cast<int32_t>(errc::SUCCESS), stream, cudf::get_current_device_resource_ref());
 
-  jit_transform::run_lto(precompiled_kernel_fragment,
-                         is_null_aware == null_aware::YES,
+  jit_transform::run_lto(is_null_aware == null_aware::YES,
                          user_data.has_value(),
                          row_size,
                          stencil_has_nulls ? stencil_arg : nullptr,
@@ -1412,7 +1357,8 @@ std::unique_ptr<table> transform_lto(std::span<uint8_t const> udf,
                          udf,
                          binary_type,
                          stream,
-                         mr);
+                         mr,
+                         row_operator);
 
   auto error = static_cast<errc>(d_max_error.value(stream));
   switch (error) {
@@ -1446,17 +1392,22 @@ struct transform_program::impl {
        null_aware is_null_aware,
        std::optional<void*> user_data,
        std::vector<transform_input_spec> inputs,
-       std::vector<transform_output_spec> outputs)
+       std::vector<transform_output_spec> outputs,
+       bool row_operator                                            = true,
+       std::optional<std::span<std::string const>> required_symbols = std::nullopt)
     : reflection_{jit_transform::reflect(source_type, inputs, outputs)},
       source_type_{source_type},
       is_null_aware_{is_null_aware},
       user_data_{user_data},
-      kernel_{jit_transform::get_kernel(is_null_aware_ == null_aware::YES,
-                                        user_data_.has_value(),
-                                        inputs,
-                                        outputs,
-                                        udf,
-                                        source_type_)}
+      kernel_{required_symbols
+                ? jit::get_row_kernel(udf, jit::row_execution::TRANSFORM, {}, required_symbols)
+                : jit_transform::get_kernel(is_null_aware_ == null_aware::YES,
+                                            user_data_.has_value(),
+                                            inputs,
+                                            outputs,
+                                            udf,
+                                            source_type_,
+                                            row_operator)}
   {
   }
 
@@ -1468,8 +1419,7 @@ struct transform_program::impl {
   kernel kernel_;
   std::vector<std::unique_ptr<column>> ast_scalar_columns_;
   std::optional<std::vector<std::optional<int32_t>>> ast_input_column_indices_;
-  std::vector<data_type> ast_input_types_;
-  std::vector<bool> ast_input_nullable_;
+  std::vector<std::string> ast_input_schemas_;
   std::vector<transform_output> ast_outputs_;
 };
 
@@ -1479,13 +1429,15 @@ transform_program::transform_program(std::string const& udf,
                                      std::optional<void*> user_data,
                                      std::span<transform_input const> inputs,
                                      std::span<transform_output const> outputs,
-                                     std::span<std::unique_ptr<column> const> string_offsets)
+                                     std::span<std::unique_ptr<column> const> string_offsets,
+                                     bool row_operator)
   : transform_program(udf,
                       source_type,
                       is_null_aware,
                       user_data,
                       jit_transform::make_input_specs(inputs),
-                      jit_transform::make_output_specs(outputs, string_offsets))
+                      jit_transform::make_output_specs(outputs, string_offsets),
+                      row_operator)
 {
 }
 
@@ -1494,16 +1446,17 @@ transform_program::transform_program(std::string const& udf,
                                      null_aware is_null_aware,
                                      std::optional<void*> user_data,
                                      std::span<transform_input_spec const> inputs,
-                                     std::span<transform_output_spec const> outputs)
+                                     std::span<transform_output_spec const> outputs,
+                                     bool row_operator)
 {
   CUDF_FUNC_RANGE();
-  impl_ =
-    std::make_unique<impl>(udf,
-                           source_type,
-                           is_null_aware,
-                           user_data,
-                           std::vector<transform_input_spec>{inputs.begin(), inputs.end()},
-                           std::vector<transform_output_spec>{outputs.begin(), outputs.end()});
+  impl_ = std::make_unique<impl>(udf,
+                                 source_type,
+                                 is_null_aware,
+                                 user_data,
+                                 std::vector<transform_input_spec>{inputs.begin(), inputs.end()},
+                                 std::vector<transform_output_spec>{outputs.begin(), outputs.end()},
+                                 row_operator);
 }
 
 transform_program::transform_program(
@@ -1514,14 +1467,16 @@ transform_program::transform_program(
 {
   CUDF_FUNC_RANGE();
   auto args = detail::row_ir::ast_converter::compute_table(
-    detail::row_ir::target::CUDA, expressions, table, {}, "compute_operation", stream, mr);
+    detail::row_ir::target::TRANSFORM, expressions, table, {}, "compute_operation", stream, mr);
   impl_ =
     std::make_unique<impl>(args.udf,
                            args.source_type,
                            args.is_null_aware,
                            args.user_data,
                            jit_transform::make_input_specs(args.inputs),
-                           jit_transform::make_output_specs(args.outputs, args.string_offsets));
+                           jit_transform::make_output_specs(args.outputs, args.string_offsets),
+                           true,
+                           std::span<std::string const>{args.required_symbols});
   CUDF_EXPECTS(args.inputs.size() == args.input_column_indices.size(),
                "AST transform input metadata size mismatch");
   for (auto i = std::size_t{0}; i < args.inputs.size(); ++i) {
@@ -1529,9 +1484,8 @@ transform_program::transform_program(
     CUDF_EXPECTS(
       args.input_column_indices[i].has_value() == std::holds_alternative<column_view>(input),
       "AST transform inputs must be table columns or scalar literals");
-    impl_->ast_input_types_.push_back(std::visit([](auto& view) { return view.type(); }, input));
-    impl_->ast_input_nullable_.push_back(
-      std::visit([](auto& view) { return view.nullable(); }, input));
+    impl_->ast_input_schemas_.push_back(
+      std::visit([](auto const& view) { return jit::row_schema(as_column_view(view)); }, input));
     if (auto const* scalar = std::get_if<scalar_column_view>(&input)) {
       // The program must outlive non-owning scalar-column literals in the source AST.
       // TODO: Reuse converter-owned scalar columns to avoid copies while preserving input order.
@@ -1586,8 +1540,7 @@ std::unique_ptr<table> transform_program::run(table_view const& table,
     auto& column_index = (*impl_->ast_input_column_indices_)[i];
     if (column_index.has_value()) {
       auto input = table.column(*column_index);
-      CUDF_EXPECTS(input.type() == impl_->ast_input_types_[i] &&
-                     input.nullable() == impl_->ast_input_nullable_[i],
+      CUDF_EXPECTS(jit::row_schema(input) == impl_->ast_input_schemas_[i],
                    "AST transform program input schema does not match the provided table",
                    std::invalid_argument);
       inputs.emplace_back(input);
@@ -1602,4 +1555,189 @@ std::unique_ptr<table> transform_program::run(table_view const& table,
   return run(inputs, impl_->ast_outputs_, {}, table.num_rows(), stream, mr);
 }
 
+namespace {
+CUDF_KERNEL void propagate_input_nulls(size_type rows,
+                                       bitmask_type const* stencil,
+                                       mutable_column_device_view_core const* outputs,
+                                       size_type output_count)
+{
+  for (auto row = detail::grid_1d::global_thread_id(); row < rows;
+       row += detail::grid_1d::grid_stride()) {
+    auto const valid = bit_is_set(stencil, row);
+    for (size_type col = 0; col < output_count; ++col) {
+      if (outputs[col].null_mask() == nullptr) { continue; }
+      auto const bit = row + outputs[col].offset();
+      cuda::atomic_ref<bitmask_type, cuda::thread_scope_device> word(
+        outputs[col].null_mask()[word_index(bit)]);
+      auto const mask = bitmask_type{1} << intra_word_index(bit);
+      if (valid) {
+        word.fetch_or(mask, cuda::memory_order_relaxed);
+      } else {
+        word.fetch_and(~mask, cuda::memory_order_relaxed);
+      }
+    }
+  }
+}
+template <typename Compile>
+void execute_prepared_transform(Compile&& compile,
+                                std::span<transform_input const> inputs,
+                                mutable_table_view const& outputs,
+                                null_aware is_null_aware,
+                                std::optional<void*> user_data,
+                                cuda::stream_ref stream,
+                                rmm::device_async_resource_ref mr)
+{
+  auto const rows = outputs.num_rows();
+  CUDF_EXPECTS(
+    outputs.num_columns() != 0, "Transform requires prepared outputs", std::invalid_argument);
+  std::vector<column_view> views;
+  for (auto const& input : inputs) {
+    auto column = std::visit([](auto const& v) -> column_view { return as_column_view(v); }, input);
+    jit::validate_row_column(column);
+    CUDF_EXPECTS(std::holds_alternative<scalar_column_view>(input) || column.size() == rows,
+                 "Input and output row counts differ",
+                 std::invalid_argument);
+    views.push_back(column);
+  }
+  for (auto const& output : outputs) {
+    jit::validate_row_column(output);
+  }
+  auto kernel = compile();
+  if (rows == 0) { return; }
+  auto [input_handles, input_views] =
+    jit::column_views_to_device<column_device_view, column_view>(views, stream, mr);
+  std::vector<mutable_column_view> output_columns{outputs.begin(), outputs.end()};
+  auto [output_handles, output_views] =
+    jit::column_views_to_device<mutable_column_device_view, mutable_column_view>(
+      output_columns, stream, mr);
+  auto stencil = create_null_mask(
+    is_null_aware == null_aware::NO ? rows : 0, mask_state::UNINITIALIZED, stream, mr);
+  auto* mask = reinterpret_cast<bitmask_type*>(stencil.data());
+  auto const nulls =
+    is_null_aware == null_aware::NO ? inplace_null_mask_and(mask, rows, inputs, stream) : 0;
+  if (nulls > 0) {
+    CUDF_EXPECTS(std::ranges::all_of(outputs, [](auto const& out) { return out.nullable(); }),
+                 "Null-unaware prepared transforms require masks to propagate input nulls",
+                 std::invalid_argument);
+  }
+  if (is_null_aware == null_aware::NO &&
+      std::ranges::any_of(outputs, [](auto const& out) { return out.nullable(); })) {
+    detail::grid_1d config(rows, 256);
+    propagate_input_nulls<<<config.num_blocks, config.num_threads_per_block, 0, stream.get()>>>(
+      rows, mask, output_views.data(), outputs.num_columns());
+    CUDF_CHECK_CUDA(stream.get());
+  }
+  detail::device_scalar<int32_t> error{0, stream, mr};
+  jit_transform::launch(kernel,
+                        rows,
+                        nulls > 0 ? mask : nullptr,
+                        user_data.value_or(nullptr),
+                        input_views.data(),
+                        output_views.data(),
+                        error.data(),
+                        stream);
+  auto code = static_cast<errc>(error.value(stream));
+  if (code != errc::SUCCESS) {
+    throw evaluation_error(code, std::string{"Transform evaluation failed: "} + to_string(code));
+  }
+}
+std::vector<rtcx::memory_fragment> row_dependencies(std::span<lto_fragment const> dependencies)
+{
+  std::vector<rtcx::memory_fragment> result;
+  for (auto const& dep : dependencies) {
+    CUDF_EXPECTS(!dep.data.empty(), "Empty LTO dependency", std::invalid_argument);
+    result.push_back({.data = dep.data,
+                      .type = jit_transform::as_rtcx_binary_type(dep.binary_type),
+                      .name = nullptr});
+  }
+  return result;
+}
+}  // namespace
+void transform(std::string const& udf,
+               udf_source_type source_type,
+               null_aware is_null_aware,
+               std::optional<void*> user_data,
+               std::span<transform_input const> inputs,
+               mutable_table_view const& outputs,
+               cuda::stream_ref stream,
+               rmm::device_async_resource_ref mr,
+               bool row_operator,
+               std::span<lto_fragment const> dependencies)
+{
+  execute_prepared_transform(
+    [&] {
+      auto fragments = row_dependencies(dependencies);
+      if (row_operator && source_type == udf_source_type::CUDA) {
+        return jit::get_row_kernel(udf, jit::row_execution::TRANSFORM, fragments);
+      }
+      CUDF_EXPECTS(dependencies.empty(),
+                   "Value UDF dependencies must be supplied as LTO",
+                   std::invalid_argument);
+      std::vector<transform_output_spec> specs;
+      for (auto const& out : outputs) {
+        specs.push_back({.type               = out.type().id(),
+                         .nullability        = output_nullability::PRESERVE,
+                         .has_string_offsets = out.type().id() == type_id::STRING});
+      }
+      return jit_transform::get_kernel(is_null_aware == null_aware::YES,
+                                       user_data.has_value(),
+                                       jit_transform::make_input_specs(inputs),
+                                       specs,
+                                       udf,
+                                       source_type,
+                                       false);
+    },
+    inputs,
+    outputs,
+    is_null_aware,
+    user_data,
+    stream,
+    mr);
+}
+void transform_lto(std::span<uint8_t const> udf,
+                   lto_binary_type binary_type,
+                   null_aware is_null_aware,
+                   std::optional<void*> user_data,
+                   std::span<transform_input const> inputs,
+                   mutable_table_view const& outputs,
+                   cuda::stream_ref stream,
+                   rmm::device_async_resource_ref mr,
+                   bool row_operator,
+                   std::span<lto_fragment const> dependencies)
+{
+  execute_prepared_transform(
+    [&] {
+      auto fragments = row_dependencies(dependencies);
+      fragments.push_back(
+        {.data = udf, .type = jit_transform::as_rtcx_binary_type(binary_type), .name = nullptr});
+      if (row_operator) {
+        return jit::link_row_kernel({}, jit::row_execution::TRANSFORM, {}, fragments);
+      }
+      auto input_specs = jit_transform::make_input_specs(inputs);
+      std::vector<transform_output_spec> output_specs;
+      for (auto const& out : outputs) {
+        output_specs.push_back({.type               = out.type().id(),
+                                .nullability        = output_nullability::PRESERVE,
+                                .has_string_offsets = out.type().id() == type_id::STRING});
+      }
+      auto [in_types, out_types, ptx_in, ptx_out] =
+        jit_transform::reflect(binary_type, input_specs, output_specs);
+      auto kernel_name = rtcx::reflect_template("cudf::jit::transform_row_operation",
+                                                rtcx::reflect(is_null_aware == null_aware::YES),
+                                                rtcx::reflect(user_data.has_value()),
+                                                in_types,
+                                                out_types);
+      auto signature   = jit_transform::reflect_udf_signature(
+        is_null_aware == null_aware::YES, user_data.has_value(), input_specs, output_specs, true);
+      auto row = jit::get_udf_kernel_fragment(
+        "cudf/cpp/src/transform/jit/kernel.cu", kernel_name, signature);
+      return jit::link_row_kernel(row->view(), jit::row_execution::TRANSFORM, {}, fragments);
+    },
+    inputs,
+    outputs,
+    is_null_aware,
+    user_data,
+    stream,
+    mr);
+}
 }  // namespace cudf

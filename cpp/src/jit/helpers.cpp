@@ -102,6 +102,18 @@ kernel get_udf_kernel(std::string const& source_file,
   return get_kernel(source_file, source_file, include_names, include_headers, kernel_name);
 }
 
+kernel get_udf_row_kernel(std::string const& source_file,
+                          std::string const& row_instance,
+                          std::string const& cuda_source,
+                          row_execution execution)
+{
+  auto instance = std::format("#define CUDF_KERNEL_INSTANCE {}", row_instance);
+  char const* names[]{"cudf/detail/operation_udf.cuh", "cudf/detail/kernel_instance.cuh"};
+  char const* headers[]{cuda_source.c_str(), instance.c_str()};
+  auto row = get_kernel_fragment(source_file, source_file, names, headers, row_instance);
+  return link_row_kernel(row->view(), execution);
+}
+
 rtcx::blob get_udf_kernel_fragment(std::string const& source_file,
                                    std::string const& kernel_name,
                                    std::string const& udf_type)

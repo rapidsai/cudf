@@ -6,6 +6,7 @@
 #include <cudf/column/column_device_view_base.cuh>
 #include <cudf/detail/row_ir/opcode.hpp>
 #include <cudf/errc.hpp>
+#include <cudf/row_abi.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/durations.hpp>
@@ -73,42 +74,61 @@ __device__ errc invoke_transform_op(void* user_data, size_type row, Args... args
   }
 }
 
-/// @brief The generic transform kernel. Supports all types and nullability combinations.
+/// @brief Header-compatible legacy UDF adapter; scheduling lives in the erased kernel.
 template <bool is_null_aware, bool has_user_data, typename InputAccessors, typename OutputAccessors>
-__device__ void transform_kernel(size_type row_size,
-                                 bitmask_type const* __restrict__ stencil,
-                                 void* __restrict__ user_data,
-                                 column_device_view_core const* __restrict__ input_cols,
-                                 mutable_column_device_view_core const* __restrict__ output_cols,
-                                 int32_t* __restrict__ max_error)
+__device__ errc transform_row_operation(void* user_data,
+                                        column_device_view_core const* input_cols,
+                                        mutable_column_device_view_core const* output_cols,
+                                        size_type row)
 {
-  auto operation = [&](size_type row, auto... args) {
-    return invoke_transform_op<has_user_data>(user_data, row, args...);
-  };
-
-  detail::transform_kernel<is_null_aware, InputAccessors, OutputAccessors>(
-    row_size, stencil, input_cols, output_cols, max_error, operation);
+  if constexpr (is_null_aware) {
+    auto outs = OutputAccessors::map(
+      [&]<typename... A>() { return cuda::std::tuple{A::null_output_arg(output_cols, row)...}; });
+    auto error = OutputAccessors::map([&]<typename... Out>() {
+      return InputAccessors::map([&]<typename... In>() {
+        return invoke_transform_op<has_user_data>(user_data,
+                                                  row,
+                                                  &cuda::std::get<Out::index>(outs)...,
+                                                  In::nullable_element(input_cols, row)...);
+      });
+    });
+    OutputAccessors::map([&]<typename... A>() {
+      (
+        [&] {
+          auto const& value = cuda::std::get<A::index>(outs);
+          if (value.has_value()) { A::assign(output_cols, row, *value); }
+          jit::set_validity_warp_cooperative(output_cols[A::index], row, value.has_value());
+        }(),
+        ...);
+    });
+    return error;
+  } else {
+    auto outs = OutputAccessors::map(
+      [&]<typename... A>() { return cuda::std::tuple{A::output_arg(output_cols, row)...}; });
+    auto error = OutputAccessors::map([&]<typename... Out>() {
+      return InputAccessors::map([&]<typename... In>() {
+        return invoke_transform_op<has_user_data>(
+          user_data, row, &cuda::std::get<Out::index>(outs)..., In::element(input_cols, row)...);
+      });
+    });
+    OutputAccessors::map(
+      [&]<typename... A>() { (A::assign(output_cols, row, cuda::std::get<A::index>(outs)), ...); });
+    return error;
+  }
 }
-
 }  // namespace jit
 }  // namespace cudf
 
-// The entry point for the JIT compiled kernel. This is the C-ABI function that will be used to
-// retrieve the `CuFunction` for the kernel from the compiled module. This is because we don't want
-// to track the scope-dependent C++ mangled name of the kernel, and can just use a fixed name to
-// retrieve the `CuFunction` of the kernel.
-// A C++-mangled symbol has ambiguous and complex resolution rules, and can change based on the
-// scope of the function, the types of the arguments, and other factors that will not be known until
-// after compilation. By using a fixed C-ABI symbol name for the kernel entry point, we can avoid
-// these issues and ensure that we can always retrieve the correct `CuFunction` for the kernel
-// regardless of the context in which it was compiled or used.
-extern "C" __global__ void cudf_kernel_entry(
-  cudf::size_type row_size,
-  cudf::bitmask_type const* __restrict__ stencil,
-  void* __restrict__ user_data,
-  cudf::column_device_view_core const* __restrict__ input_cols,
-  cudf::mutable_column_device_view_core const* __restrict__ output_cols,
-  int32_t* __restrict__ max_error)
+namespace cudf::row_abi {
+extern "C" __device__ __inline_hint__ status transform_operator(void const* inputs,
+                                                                void const* outputs,
+                                                                void* user_data,
+                                                                i32 row)
 {
-  CUDF_KERNEL_INSTANCE(row_size, stencil, user_data, input_cols, output_cols, max_error);
+  return static_cast<status>(
+    CUDF_KERNEL_INSTANCE(user_data,
+                         static_cast<cudf::column_device_view_core const*>(inputs),
+                         static_cast<cudf::mutable_column_device_view_core const*>(outputs),
+                         row));
 }
+}  // namespace cudf::row_abi

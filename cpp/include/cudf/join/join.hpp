@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <span>
 #include <utility>
 
 /**
@@ -29,6 +30,8 @@
  */
 
 namespace CUDF_EXPORT cudf {
+
+struct lto_fragment;
 
 /**
  * @addtogroup column_join
@@ -463,7 +466,21 @@ filter_join_indices_output_size(
  *
  * ## Predicate Function Requirements
  *
- * The predicate_code must define a device function with signature:
+ * Row mode is the default. CUDA source may define the entry declared in
+ * `cudf/row_abi.cuh`:
+ * ```cpp
+ * extern "C" __device__ status predicate_operator(
+ *   void const* inputs, bool8* output, void* user_data, i32 row);
+ * ```
+ * Gathered columns are ordered left then right and share the pair row index.
+ * Access them through the ABI loaders. Write the predicate value to `*output`,
+ * using false for null predicates, and return `success`. Return an arithmetic
+ * failure status to raise `evaluation_error`.
+ * The ABI header and namespace are available automatically to CUDA row source.
+ *
+ * CUDA value predicates and PTX predicates are adapted to the same row entry.
+ * Set `row_operator=false` to explicitly select this value convention:
+ *
  * ```cpp
  * __device__ void predicate(bool* output, T1 left_col0, T2 left_col1, ..., T1 right_col0, T2
  * right_col1, ...)
@@ -484,22 +501,27 @@ filter_join_indices_output_size(
  * @param is_ptx Whether predicate_code contains PTX assembly instead of CUDA C++.
  * @param stream CUDA stream used for kernel launches and memory operations.
  * @param mr Device memory resource used to allocate output indices.
+ * @param row_operator Accept a CUDA predicate operator; value predicates use a row adapter.
+ * @param user_data Borrowed device data passed to each predicate invocation.
+ * @param dependencies Separately compiled helpers linked with a CUDA predicate operator.
  *
  * @return A pair of device vectors [filtered_left_indices, filtered_right_indices]
  *         corresponding to rows that satisfy the join semantics and predicate.
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-filter_join_indices_jit(
-  cudf::table_view const& left,
-  cudf::table_view const& right,
-  cudf::device_span<size_type const> left_indices,
-  cudf::device_span<size_type const> right_indices,
-  std::string const& predicate_code,
-  cudf::join_kind join_kind,
-  bool is_ptx                       = false,
-  cuda::stream_ref stream           = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+filter_join_indices_jit(cudf::table_view const& left,
+                        cudf::table_view const& right,
+                        cudf::device_span<size_type const> left_indices,
+                        cudf::device_span<size_type const> right_indices,
+                        std::string const& predicate_code,
+                        cudf::join_kind join_kind,
+                        bool is_ptx                       = false,
+                        cuda::stream_ref stream           = cudf::get_default_stream(),
+                        rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref(),
+                        bool row_operator                 = true,
+                        std::optional<void*> user_data    = std::nullopt,
+                        std::span<lto_fragment const> dependencies = {});
 
 /**
  * @brief Filters join indices using a JIT-compiled predicate from an AST expression.

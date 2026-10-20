@@ -6,11 +6,13 @@
 #include <cudf/column/column_device_view_base.cuh>
 #include <cudf/detail/row_ir/opcode.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/row_abi.cuh>
 #include <cudf/types.hpp>
 
 #include <cuda/std/cstddef>
 #include <cuda/std/limits>
 #include <cuda/std/tuple>
+#include <cuda/std/type_traits>
 
 #include <jit/column_accessor.cuh>
 #include <jit/type_list.cuh>
@@ -33,78 +35,74 @@ namespace cudf::join::jit {
 constexpr cudf::size_type JoinNoMatch = cuda::std::numeric_limits<cudf::size_type>::min();
 
 template <bool has_user_data, typename... T>
-__device__ void execute_predicate_op(void* user_data,
-                                     size_type row_index,
-                                     cuda::std::tuple<T...> args)
+__device__ row_abi::status execute_predicate_op(void* user_data,
+                                                size_type row_index,
+                                                cuda::std::tuple<T...> args)
 {
-  if constexpr (has_user_data) {
-    cuda::std::apply(
-      [&](auto&&... args) { (void)GENERIC_JOIN_FILTER_OP(user_data, row_index, args...); }, args);
-  } else {
-    cuda::std::apply([&](auto&&... args) { (void)GENERIC_JOIN_FILTER_OP(args...); }, args);
-  }
+  return cuda::std::apply(
+    [&](auto&&... args) -> row_abi::status {
+      if constexpr (has_user_data) {
+        if constexpr (cuda::std::is_void_v<decltype(GENERIC_JOIN_FILTER_OP(
+                        user_data, row_index, args...))>) {
+          GENERIC_JOIN_FILTER_OP(user_data, row_index, args...);
+          return 0;
+        } else {
+          return static_cast<row_abi::status>(
+            GENERIC_JOIN_FILTER_OP(user_data, row_index, args...));
+        }
+      } else {
+        if constexpr (cuda::std::is_void_v<decltype(GENERIC_JOIN_FILTER_OP(args...))>) {
+          GENERIC_JOIN_FILTER_OP(args...);
+          return 0;
+        } else {
+          return static_cast<row_abi::status>(GENERIC_JOIN_FILTER_OP(args...));
+        }
+      }
+    },
+    args);
 }
 
 template <bool has_user_data, bool is_null_aware, typename Accessors>
-__device__ void filter_join_kernel(cudf::size_type num_rows,
-                                   cudf::size_type const* __restrict__ left_indices,
-                                   cudf::size_type const* __restrict__ right_indices,
-                                   cudf::column_device_view_core const* __restrict__ columns,
-                                   bool* __restrict__ predicate_results,
-                                   void* __restrict__ user_data)
+__device__ row_abi::status filter_join_row_operation(cudf::column_device_view_core const* columns,
+                                                     row_abi::bool8* outputs,
+                                                     void* user_data,
+                                                     size_type row)
 {
-  auto const start  = cudf::detail::grid_1d::global_thread_id();
-  auto const stride = cudf::detail::grid_1d::grid_stride();
-
-  for (auto i = start; i < num_rows; i += stride) {
-    // Skip if either index is JoinNoMatch
-    if (left_indices[i] == JoinNoMatch || right_indices[i] == JoinNoMatch) {
-      predicate_results[i] = false;
-      continue;
+  if constexpr (is_null_aware) {
+    cuda::std::optional<bool> result{false};
+    auto inputs = Accessors::map(
+      [&]<typename... A>() { return cuda::std::tuple{A::nullable_element(columns, row)...}; });
+    auto error = execute_predicate_op<has_user_data>(
+      user_data, row, cuda::std::tuple_cat(cuda::std::tuple{&result}, inputs));
+    if (error != row_abi::success) { return error; }
+    *outputs = result.value_or(false);
+    return row_abi::success;
+  } else {
+    auto any_null =
+      Accessors::map([&]<typename... A>() { return (A::is_null(columns, row) || ...); });
+    if (any_null) {
+      *outputs = false;
+      return row_abi::success;
     }
-
-    cudf::size_type const* indices[] = {left_indices, right_indices};
-
-    // Each accessor receives both tables and both indices, and internally selects
-    // the appropriate table based on whether it's a left or right accessor.
-    if constexpr (is_null_aware) {
-      // Null-aware path: pass optional<T> inputs, get optional<bool> result
-      cuda::std::optional<bool> result{false};
-      auto inputs = Accessors::map([&]<typename... A>() {
-        return cuda::std::tuple{A::nullable_element(columns, indices[A::table_index][i])...};
-      });
-      execute_predicate_op<has_user_data>(
-        user_data, i, cuda::std::tuple_cat(cuda::std::tuple{&result}, inputs));
-      predicate_results[i] = result.has_value() && result.value();
-    } else {
-      // Non-null-aware path: if any input is null, predicate is false
-      auto any_null = Accessors::map(
-        [&]<typename... A>() { return (A::is_null(columns, indices[A::table_index][i]) || ...); });
-      if (any_null) {
-        predicate_results[i] = false;
-        continue;
-      }
-      bool result = false;
-      auto inputs = Accessors::map([&]<typename... A>() {
-        return cuda::std::tuple{A::element(columns, indices[A::table_index][i])...};
-      });
-      execute_predicate_op<has_user_data>(
-        user_data, i, cuda::std::tuple_cat(cuda::std::tuple{&result}, inputs));
-      predicate_results[i] = result;
-    }
+    bool result = false;
+    auto inputs = Accessors::map(
+      [&]<typename... A>() { return cuda::std::tuple{A::element(columns, row)...}; });
+    auto error = execute_predicate_op<has_user_data>(
+      user_data, row, cuda::std::tuple_cat(cuda::std::tuple{&result}, inputs));
+    if (error != row_abi::success) { return error; }
+    *outputs = result;
+    return row_abi::success;
   }
 }
-
 }  // namespace cudf::join::jit
 
-extern "C" __global__ void cudf_kernel_entry(
-  cudf::size_type num_rows,
-  cudf::size_type const* __restrict__ left_indices,
-  cudf::size_type const* __restrict__ right_indices,
-  cudf::column_device_view_core const* __restrict__ columns,
-  bool* __restrict__ predicate_results,
-  void* __restrict__ user_data)
+namespace cudf::row_abi {
+extern "C" __device__ __inline_hint__ status predicate_operator(void const* inputs,
+                                                                bool8* outputs,
+                                                                void* user_data,
+                                                                i32 row)
 {
-  CUDF_KERNEL_INSTANCE(
-    num_rows, left_indices, right_indices, columns, predicate_results, user_data);
+  return CUDF_KERNEL_INSTANCE(
+    static_cast<cudf::column_device_view_core const*>(inputs), outputs, user_data, row);
 }
+}  // namespace cudf::row_abi

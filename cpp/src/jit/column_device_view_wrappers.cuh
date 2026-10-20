@@ -9,11 +9,50 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
+#include <cuda/atomic>
 #include <cuda/std/optional>
 #include <cuda/std/span>
 
 namespace cudf {
 namespace jit {
+
+__device__ inline void set_validity_warp_cooperative(mutable_column_device_view_core const& column,
+                                                     size_type row,
+                                                     bool valid)
+{
+  if (column.null_mask() == nullptr) { return; }
+  auto const bit      = row + column.offset();
+  auto const mask     = bitmask_type{1} << (bit % 32);
+  auto* address       = column.null_mask() + bit / 32;
+  auto const active   = __activemask();
+  auto const lane     = threadIdx.x % 32;
+  auto const rotation = (bit - lane) & 31;
+  auto const same_rotation =
+    __all_sync(active, rotation == __shfl_sync(active, rotation, __ffs(active) - 1));
+  if (same_rotation) {
+    // A sliced row interval can straddle two words. Group only the currently
+    // active lanes writing the same word; early errors and partial warps are safe.
+    auto const group = __match_any_sync(active, reinterpret_cast<unsigned long long>(address));
+    auto const valid_lanes = __ballot_sync(active, valid != 0) & group;
+    auto rotate            = [rotation](uint32_t bits) {
+      return rotation == 0 ? bits : (bits << rotation) | (bits >> (32 - rotation));
+    };
+    if (lane == __ffs(group) - 1) {
+      cuda::atomic_ref<bitmask_type, cuda::thread_scope_device> word(*address);
+      auto const valid_bits   = rotate(valid_lanes);
+      auto const invalid_bits = rotate(group & ~valid_lanes);
+      if (valid_bits) { word.fetch_or(valid_bits, cuda::memory_order_relaxed); }
+      if (invalid_bits) { word.fetch_and(~invalid_bits, cuda::memory_order_relaxed); }
+    }
+  } else {
+    cuda::atomic_ref<bitmask_type, cuda::thread_scope_device> word(*address);
+    if (valid) {
+      word.fetch_or(mask, cuda::memory_order_relaxed);
+    } else {
+      word.fetch_and(~mask, cuda::memory_order_relaxed);
+    }
+  }
+}
 
 /**
  * @brief A column wrapper type that treats a column as a vector of elements.
