@@ -63,9 +63,7 @@ CUDF_KERNEL void hash_csr_retrieve_kernel(cuda::std::int64_t output_size,
           continue;
         }
       }
-      // Keep the difference in 64 bits. Narrowing it can miscompile the CSR address calculation
-      // when output_index and offsets[probe_row] straddle the signed 32-bit boundary.
-      auto const local_match      = output_index - offsets[probe_row];
+      auto const local_match = static_cast<thread_index_type>(output_index - offsets[probe_row]);
       right_indices[output_index] = csr.values[csr.begin(group) + local_match];
     }
   }
