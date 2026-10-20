@@ -1275,7 +1275,7 @@ def _(
         if name == plrs._expr_nodes.TemporalFunction.Combine:
             date, time = node.input
             time_node = translator.visitor.view_expression(time)
-            if isinstance(time_node, plrs._expr_nodes.Cast):
+            if isinstance(time_node, plrs._expr_nodes.Cast):  # pragma: no cover
                 inner = translator.visitor.view_expression(time_node.expr)
                 # Needed for Polars 1.35, which casts a null literal to Time.
                 if isinstance(inner, plrs._expr_nodes.Literal) and inner.value is None:
