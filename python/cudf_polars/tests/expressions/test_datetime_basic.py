@@ -1292,7 +1292,7 @@ def test_datetime_combine_literal(engine: pl.GPUEngine, make_expr):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_datetime_combine_integer_time_unsupported(engine: pl.GPUEngine):
+def test_datetime_combine_integer_time_unsupported(in_memory_engine: pl.GPUEngine):
     ldf = pl.LazyFrame({"a": [datetime.date(2024, 1, 1)], "b": [1]})
     q = ldf.select(pl.col("a").dt.combine(pl.col("b")))
-    assert_ir_translation_raises(q, engine, NotImplementedError)
+    assert_ir_translation_raises(q, in_memory_engine, NotImplementedError)
