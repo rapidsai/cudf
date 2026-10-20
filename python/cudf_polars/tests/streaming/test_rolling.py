@@ -32,15 +32,6 @@ from cudf_polars.testing.asserts import (
 from cudf_polars.testing.engine_utils import warns_on_spmd
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions
-from cudf_polars.utils.versions import POLARS_VERSION_LT_136, POLARS_VERSION_LT_139
-
-POLARS_LT_136_EMPTY_SUM_XFAIL = pytest.mark.xfail(
-    POLARS_VERSION_LT_136,
-    reason=(
-        "Polars 1.35 returns null for sum over these empty rolling windows; "
-        "newer Polars returns 0."
-    ),
-)
 
 
 @pytest.fixture
@@ -66,10 +57,6 @@ def test_multirank_overlap_input_requires_preparation() -> None:
     asyncio.run(run())
 
 
-@pytest.mark.skipif(
-    not POLARS_VERSION_LT_136 and POLARS_VERSION_LT_139,
-    reason="Rolling window expressions are not accessible in polars 1.36-1.38",
-)
 def test_rolling_datetime(engine):
     dates = [
         "2020-01-01 13:45:48",
@@ -277,16 +264,8 @@ def test_fixed_size_rolling_mean(engine, center) -> None:
     "kind,offset,closed",
     [
         *(("range", "-4i", closed) for closed in ("left", "right", "both", "none")),
-        pytest.param("range", "0i", "right", marks=POLARS_LT_136_EMPTY_SUM_XFAIL),
-        pytest.param(
-            "count",
-            None,
-            None,
-            marks=pytest.mark.skipif(
-                POLARS_VERSION_LT_136,
-                reason="RollingFunction not available in this polars version",
-            ),
-        ),
+        ("range", "0i", "right"),
+        ("count", None, None),
     ],
     ids=[
         "range-left",
@@ -345,16 +324,7 @@ def _share_source_path(spmd_engine, source) -> str:
 @pytest.mark.spmd
 @pytest.mark.parametrize(
     "kind",
-    [
-        "range",
-        pytest.param(
-            "count",
-            marks=pytest.mark.skipif(
-                POLARS_VERSION_LT_136,
-                reason="RollingFunction not available in this polars version",
-            ),
-        ),
-    ],
+    ["range", "count"],
 )
 def test_rolling_multirank_spmd(spmd_engine, tmp_path, kind) -> None:
     source = tmp_path / "rolling.parquet"
@@ -454,28 +424,13 @@ def test_fixed_size_rolling_mean_after_unaligned_siblings(
     "closed, period, offset",
     [
         ("left", "10i", "-5i"),
-        pytest.param(
-            "left",
-            "10i",
-            "20i",
-            marks=POLARS_LT_136_EMPTY_SUM_XFAIL,
-        ),
+        ("left", "10i", "20i"),
         ("left", "10i", "-30i"),
         ("right", "10i", "-5i"),
-        pytest.param(
-            "right",
-            "10i",
-            "20i",
-            marks=POLARS_LT_136_EMPTY_SUM_XFAIL,
-        ),
+        ("right", "10i", "20i"),
         ("right", "10i", "-30i"),
         ("both", "10i", "-5i"),
-        pytest.param(
-            "both",
-            "10i",
-            "20i",
-            marks=POLARS_LT_136_EMPTY_SUM_XFAIL,
-        ),
+        ("both", "10i", "20i"),
         ("both", "10i", "-30i"),
         ("none", "10i", "-5i"),
         ("none", "10i", "20i"),
@@ -625,10 +580,6 @@ def test_over_select_static_planning_falls_back(spmd_engine_factory) -> None:
         assert_gpu_result_equal(q, engine=engine, check_row_order=True)
 
 
-@pytest.mark.skipif(
-    not POLARS_VERSION_LT_136 and POLARS_VERSION_LT_139,
-    reason="Rolling window expressions are not accessible in polars 1.36-1.38",
-)
 def test_rolling_sum_over(engine):
     df = (
         pl.LazyFrame(
@@ -688,10 +639,6 @@ def test_rolling_sum_over(engine):
     assert_frame_equal(q.collect(engine=engine), expected)
 
 
-@pytest.mark.skipif(
-    not POLARS_VERSION_LT_136 and POLARS_VERSION_LT_139,
-    reason="Rolling window expressions are not accessible in polars 1.36-1.38",
-)
 def test_rolling_common_aggs_over(engine):
     df = pl.LazyFrame(
         {
