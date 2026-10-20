@@ -14,6 +14,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/dictionary/encode.hpp>
 #include <cudf/null_mask.hpp>
 
 #include <rmm/mr/statistics_resource_adaptor.hpp>
@@ -473,7 +474,10 @@ TEST_F(ExperimentalPackUnpackTest, CompressContiguousSplitPartitions)
     0, [](int32_t i) { return static_cast<int16_t>(i % 300); });
   cudf::test::fixed_width_column_wrapper<int16_t> member(members, members + num_rows);
   cudf::test::structs_column_wrapper structs({member}, cudf::test::iterators::null_at(30000));
-  auto const input = cudf::table_view{{numbers, strings, lists->view(), structs}};
+  // contiguous_split copies the keys into every partition, including the empty one.
+  auto const dictionary = cudf::dictionary::encode(strings);
+  auto const input =
+    cudf::table_view{{numbers, strings, lists->view(), structs, dictionary->view()}};
 
   std::vector<cudf::size_type> const splits{0, 1000, 20000, 20001, 50000};
   auto const partitions = cudf::contiguous_split(input, splits);
@@ -484,7 +488,13 @@ TEST_F(ExperimentalPackUnpackTest, CompressContiguousSplitPartitions)
     auto const plan =
       cx::make_pack_plan_builder(partitions[i].data, make_options(cx::pack_compression::cascaded))
         .build();
-    expect_materializes_to(expected[i], pack_to_device(plan).view());
+    auto const packed = pack_to_device(plan);
+    if (expected[i].num_rows() > 0) {
+      expect_materializes_to(expected[i], packed.view());
+    } else {
+      // Like cudf::pack, the empty partition packs no buffers, so its empty columns lose children.
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[i], cx::materialize(packed.view())->view());
+    }
   }
 }
 
@@ -747,6 +757,15 @@ TEST_F(ExperimentalPackUnpackTest, CompressedInputValidation)
   auto truncated    = packed.view();
   truncated.payload = truncated.payload.first(truncated.payload.size() - 1);
   EXPECT_THROW(cx::materialize(truncated), cudf::logic_error);
+
+  // The same payload behind a 4-byte header, as a transport layer might frame it.
+  auto const stream = cudf::get_default_stream();
+  rmm::device_buffer framed(packed.result.payload_bytes + 4, stream);
+  auto* const payload = static_cast<uint8_t*>(framed.data()) + 4;
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    payload, packed.data, packed.result.payload_bytes, cudaMemcpyDefault, stream.get()));
+  EXPECT_THROW(cx::materialize({packed.result.metadata, {payload, packed.result.payload_bytes}}),
+               std::invalid_argument);
 }
 
 TEST_F(PackUnpackTest, SingleColumnFixedWidth)

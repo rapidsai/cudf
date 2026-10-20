@@ -3222,14 +3222,18 @@ struct plan_input {
     CUDF_EXPECTS(input.metadata != nullptr && input.gpu_data != nullptr,
                  "Packed input must contain metadata and a device allocation",
                  std::invalid_argument);
-    state = make_split_state(
-      cudf::detail::unpack(*input.metadata, static_cast<uint8_t const*>(input.gpu_data->data())),
-      options,
-      stream,
-      mr);
+    auto const table =
+      cudf::detail::unpack(*input.metadata, static_cast<uint8_t const*>(input.gpu_data->data()));
+    state        = make_split_state(table, options, stream, mr);
+    auto planned = state->build_packed_column_metadata();
+    // Like cudf::pack, a table without rows packs no buffers. This drops the dictionary keys that
+    // contiguous_split copies into an empty partition.
+    if (table.num_rows() == 0 && input.gpu_data->size() > 0) {
+      if (planned != nullptr) { metadata = std::move(*planned); }
+      return;
+    }
     // Equal metadata means equal buffer offsets, so the planned layout matches the allocation.
     // An empty allocation has no layout to match, however its empty columns are described.
-    auto const planned = state->build_packed_column_metadata();
     CUDF_EXPECTS(
       state->get_total_contiguous_size() == input.gpu_data->size() &&
         (input.gpu_data->size() == 0 || (planned != nullptr && *planned == *input.metadata)),
@@ -3846,6 +3850,10 @@ std::unique_ptr<table> materialize_selection(packed_data_view input,
     return materialize_uncompressed(input, selection, loader, stream, mr);
   }
 
+  // Blocks are aligned relative to the payload start, as decoders require.
+  CUDF_EXPECTS(reinterpret_cast<std::uintptr_t>(input.payload.data()) % split_align == 0,
+               "The compressed payload is not aligned to the packed payload alignment",
+               std::invalid_argument);
   auto const parsed = read_compression_metadata(input.metadata);
   CUDF_EXPECTS(!parsed.entries.empty(), "Compressed payload has no region directory");
   auto const num_blocks = parsed.block_offsets.size();

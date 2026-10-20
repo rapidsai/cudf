@@ -582,6 +582,8 @@ table_view unpack_view(packed_data_view input);
  *
  * A pageable host payload is first copied to temporary device memory.
  *
+ * @throw std::invalid_argument if a compressed `input.payload` is not aligned to the
+ * `payload_alignment` it was packed with
  * @throw cudf::logic_error if `input.metadata` or `input.payload` is truncated or malformed
  *
  * @param input Packed metadata and payload
@@ -602,6 +604,8 @@ std::unique_ptr<table> materialize(
  * independent column.
  *
  * @throw std::out_of_range if an index is not in `[0, num_columns)`
+ * @throw std::invalid_argument if a compressed `input.payload` is not aligned to the
+ * `payload_alignment` it was packed with
  * @throw cudf::logic_error if `input.metadata` or `input.payload` is truncated or malformed
  *
  * @param input Packed metadata and payload
