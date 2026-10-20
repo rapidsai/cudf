@@ -22,16 +22,17 @@
 
 namespace cudf::groupby::detail::hash {
 
-/// Stores each group's selected row and clears the validity of groups without a valid row.
+/// Stores each group's input row index and clears the validity of groups without a valid row.
 struct select_group_row_fn {
   size_type* out;
   bitmask_type* mask;
   column_device_view values;
 
-  __device__ void operator()(cuda::std::ptrdiff_t group, size_type row) const
+  __device__ void operator()(cuda::std::ptrdiff_t group, size_type row_index) const
   {
-    out[group] = row;
-    if (mask != nullptr && (row < 0 || row >= values.size() || values.is_null(row))) {
+    out[group] = row_index;
+    if (mask != nullptr &&
+        (row_index < 0 || row_index >= values.size() || values.is_null(row_index))) {
       cudf::clear_bit(mask, static_cast<size_type>(group));
     }
   }
