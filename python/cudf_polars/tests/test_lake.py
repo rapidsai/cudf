@@ -685,6 +685,190 @@ def test_scan_lake_cast_columns_forbidden(
             q.collect(engine=engine)
 
 
+def _write_nested_files(
+    tmp_path: Path, *files: tuple[list[Any], pl.DataType]
+) -> list[str]:
+    paths = [str(tmp_path / f"{index}.parquet") for index in range(len(files))]
+    for path, (values, dtype) in zip(paths, files, strict=True):
+        pl.DataFrame({"a": pl.Series(values, dtype=dtype)}).write_parquet(path)
+    return paths
+
+
+@pytest.mark.parametrize(
+    "second, target, cast_options",
+    [
+        (
+            ([{"y": 4, "x": 3}], pl.Struct({"y": pl.Int64, "x": pl.Int64})),
+            pl.Struct({"x": pl.Int64, "y": pl.Int64}),
+            pl.ScanCastOptions(),
+        ),
+        (
+            ([{"x": 3}], pl.Struct({"x": pl.Int64})),
+            pl.Struct({"x": pl.Int64, "y": pl.Int64}),
+            pl.ScanCastOptions(missing_struct_fields="insert"),
+        ),
+        (
+            (
+                [{"x": 3, "y": 4, "z": 5}],
+                pl.Struct({"x": pl.Int64, "y": pl.Int64, "z": pl.Int64}),
+            ),
+            pl.Struct({"x": pl.Int64, "y": pl.Int64}),
+            pl.ScanCastOptions(extra_struct_fields="ignore"),
+        ),
+        (
+            ([{"x": 3, "y": 4}], pl.Struct({"x": pl.Int32, "y": pl.Int64})),
+            pl.Struct({"x": pl.Int64, "y": pl.Int64}),
+            pl.ScanCastOptions(integer_cast="upcast"),
+        ),
+        (
+            ([{"x": 3, "z": 4}], pl.Struct({"x": pl.Int64, "z": pl.Int64})),
+            pl.Struct({"x": pl.Int64, "y": pl.Int64}),
+            pl.ScanCastOptions(
+                missing_struct_fields="insert", extra_struct_fields="ignore"
+            ),
+        ),
+    ],
+    ids=[
+        "reordered",
+        "missing_insert",
+        "extra_ignore",
+        "field_upcast",
+        "same_layout_other_name",
+    ],
+)
+def test_scan_lake_struct_cast_allowed(
+    engine: pl.GPUEngine,
+    tmp_path: Path,
+    second: tuple[list[Any], pl.DataType],
+    target: pl.DataType,
+    cast_options: pl.ScanCastOptions,
+) -> None:
+    paths = _write_nested_files(tmp_path, ([{"x": 1, "y": 2}, None], target), second)
+    q = pl.scan_parquet(
+        paths, schema={"a": target}, missing_columns="insert", cast_options=cast_options
+    )
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+def test_scan_lake_missing_nested_struct_fields(
+    engine: pl.GPUEngine, tmp_path: Path
+) -> None:
+    target = pl.Struct(
+        {"x": pl.Int64, "s": pl.Struct({"u": pl.String}), "l": pl.List(pl.Int64)}
+    )
+    paths = _write_nested_files(
+        tmp_path,
+        ([{"x": 1, "s": {"u": "p"}, "l": [1, 2]}], target),
+        ([{"x": 3}, None], pl.Struct({"x": pl.Int64})),
+    )
+    q = pl.scan_parquet(
+        paths,
+        schema={"a": target},
+        missing_columns="insert",
+        cast_options=pl.ScanCastOptions(missing_struct_fields="insert"),
+    )
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+def test_scan_lake_missing_nested_column(engine: pl.GPUEngine, tmp_path: Path) -> None:
+    paths = [str(tmp_path / "0.parquet"), str(tmp_path / "1.parquet")]
+    pl.DataFrame({"a": [1]}).write_parquet(paths[0])
+    pl.DataFrame({"a": [2], "s": [{"x": 3}]}).write_parquet(paths[1])
+    q = pl.scan_parquet(
+        paths,
+        schema={"a": pl.Int64, "s": pl.Struct({"x": pl.Int64})},
+        missing_columns="insert",
+    )
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "values, source, target, cast_options",
+    [
+        (
+            [[1, 2], None, []],
+            pl.List(pl.Int32),
+            pl.List(pl.Int64),
+            pl.ScanCastOptions(integer_cast="upcast"),
+        ),
+        (
+            [[{"x": 1, "y": 2}], None, []],
+            pl.List(pl.Struct({"y": pl.Int64, "x": pl.Int64})),
+            pl.List(pl.Struct({"x": pl.Int64, "y": pl.Int64})),
+            pl.ScanCastOptions(),
+        ),
+    ],
+    ids=["element_upcast", "element_struct_reordered"],
+)
+def test_scan_lake_list_cast_allowed(
+    engine: pl.GPUEngine,
+    tmp_path: Path,
+    values: list[Any],
+    source: pl.DataType,
+    target: pl.DataType,
+    cast_options: pl.ScanCastOptions,
+) -> None:
+    paths = _write_nested_files(tmp_path, (values, source), (values, target))
+    q = pl.scan_parquet(
+        paths, schema={"a": target}, missing_columns="insert", cast_options=cast_options
+    )
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "source, target, match",
+    [
+        (
+            pl.Struct({"x": pl.Int64}),
+            pl.Struct({"x": pl.Int64, "y": pl.Int64}),
+            "encountered missing struct field: y",
+        ),
+        (
+            pl.Struct({"x": pl.Int64, "y": pl.Int64, "z": pl.Int64}),
+            pl.Struct({"x": pl.Int64, "y": pl.Int64}),
+            "encountered extra struct field: z",
+        ),
+        (
+            pl.Struct({"x": pl.Int32}),
+            pl.Struct({"x": pl.Int64}),
+            r"integer_cast='upcast'",
+        ),
+        (pl.List(pl.Int32), pl.List(pl.Int64), r"integer_cast='upcast'"),
+        (pl.Struct({"x": pl.Int64}), pl.Int64, "data type mismatch for column a"),
+        (pl.Int64, pl.List(pl.Int64), "data type mismatch for column a"),
+    ],
+    ids=[
+        "missing_field",
+        "extra_field",
+        "field_upcast",
+        "element_upcast",
+        "struct_to_primitive",
+        "primitive_to_list",
+    ],
+)
+def test_scan_lake_nested_cast_forbidden(
+    engine: pl.GPUEngine,
+    tmp_path: Path,
+    source: pl.DataType,
+    target: pl.DataType,
+    match: str,
+) -> None:
+    path = str(tmp_path / "0.parquet")
+    pl.DataFrame({"a": pl.Series([None], dtype=source)}).write_parquet(path)
+    q = pl.scan_parquet(path, schema={"a": target}, missing_columns="insert")
+    with pytest.raises(pl.exceptions.SchemaError, match=match):
+        q.collect()
+    if is_streaming_engine(engine):
+        with pytest.RaisesGroup(
+            pytest.RaisesExc(pl.exceptions.SchemaError, match=match),
+            flatten_subgroups=True,
+        ):
+            q.collect(engine=engine)
+    else:
+        with pytest.raises(pl.exceptions.SchemaError, match=match):
+            q.collect(engine=engine)
+
+
 @pytest.mark.parametrize("missing_index", [0, 1])
 def test_scan_iceberg_without_field_ids(
     in_memory_engine: pl.GPUEngine, tmp_path: Path, missing_index: int

@@ -7,7 +7,7 @@ from __future__ import annotations
 import dataclasses
 import itertools
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import polars as pl
 
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from cudf_polars.typing import Schema
 
     _ElementLayout = tuple[
-        plc.io.parquet_metadata.PhysicalType, int, int, tuple[Any, ...] | None
+        str, plc.io.parquet_metadata.PhysicalType, int, int, tuple[Any, ...] | None
     ]
     _Layout = tuple[_ElementLayout, ...]
 
@@ -661,9 +661,10 @@ class _Footer:
 
         Returns
         -------
-        The top-level keys of the file, and the physical and logical types
-        of each wanted column it holds. The parquet reader requires the
-        selected columns of its sources to agree on both.
+        The top-level keys of the file, and the names, physical and logical
+        types of each wanted column it holds and of its nested fields. The
+        parquet reader requires the selected columns of its sources to agree
+        on their types and on the names of their nested fields.
         """
         return self.keys, tuple(
             signature
@@ -675,10 +676,16 @@ class _Footer:
 def _element_layout(
     element: plc.io.parquet_metadata.SchemaElement,
 ) -> _ElementLayout:
-    """Physical and logical type of a parquet schema element."""
+    """Name, physical and logical type of a parquet schema element."""
     logical_type = element.logical_type
     if logical_type is None:
-        return element.type, element.type_length, element.num_children, None
+        return (
+            element.name,
+            element.type,
+            element.type_length,
+            element.num_children,
+            None,
+        )
     decimal_type = logical_type.decimal_type
     temporal_type = (
         logical_type.time_type
@@ -687,6 +694,7 @@ def _element_layout(
     )
     int_type = logical_type.int_type
     return (
+        element.name,
         element.type,
         element.type_length,
         element.num_children,
@@ -854,42 +862,216 @@ def _check_cast(
     dest = target.plc_type.id()
     if source == dest:
         return
+    hint: str | None
     if source in _INTEGER_TYPES and dest in _INTEGER_TYPES:
         source_bits, source_signed = _INTEGER_TYPES[source]
         dest_bits, dest_signed = _INTEGER_TYPES[dest]
-        allowed = (
-            cast_columns_policy["integer_upcast"]
-            and dest_bits > source_bits
-            and (dest_signed or not source_signed)
-        )
+        if not cast_columns_policy["integer_upcast"]:
+            hint = _cast_hint("integer_cast='upcast'")
+        elif dest_bits > source_bits and (dest_signed or not source_signed):
+            hint = None
+        else:
+            hint = "incoming dtype cannot safely cast to target dtype"
     elif source in _FLOAT_WIDTHS and dest in _FLOAT_WIDTHS:
-        allowed = cast_columns_policy[
-            "float_upcast"
+        policy, option = (
+            ("float_upcast", "upcast")
             if _FLOAT_WIDTHS[dest] > _FLOAT_WIDTHS[source]
-            else "float_downcast"
-        ]
+            else ("float_downcast", "downcast")
+        )
+        hint = (
+            None
+            if cast_columns_policy[policy]
+            else _cast_hint(f"float_cast='{option}'")
+        )
     elif source in _INTEGER_TYPES and dest in _FLOAT_WIDTHS:
-        allowed = cast_columns_policy["integer_to_float_cast"]
+        hint = (
+            None
+            if cast_columns_policy["integer_to_float_cast"]
+            else _cast_hint("integer_cast='allow-float'")
+        )
     elif source in _TIMESTAMP_DIGITS and dest in _TIMESTAMP_DIGITS:
         source_digits = _TIMESTAMP_DIGITS[source]
         dest_digits = _TIMESTAMP_DIGITS[dest]
         if source_digits == 9:
-            allowed = cast_columns_policy["datetime_nanoseconds_downcast"]
+            policy, option = "datetime_nanoseconds_downcast", "nanosecond-downcast"
+        elif source_digits == 6 and dest_digits == 3:
+            policy, option = "datetime_microseconds_downcast", "microsecond-downcast"
         elif source_digits == 6:
-            allowed = cast_columns_policy[
-                "datetime_microseconds_downcast"
-                if dest_digits == 3
-                else "datetime_microseconds_upcast"
-            ]
+            policy, option = "datetime_microseconds_upcast", "microsecond-upcast"
         else:
-            allowed = cast_columns_policy["datetime_milliseconds_upcast"]
+            policy, option = "datetime_milliseconds_upcast", "millisecond-upcast"
+        hint = (
+            None
+            if cast_columns_policy[policy]
+            else _cast_hint(f"datetime_cast='{option}'")
+        )
     else:
         return
-    if not allowed:
+    if hint is not None:
         raise pl.exceptions.SchemaError(
             f"data type mismatch for column {name}: "
-            f"incoming: {source.name} != target: {target.polars_type}"
+            f"incoming: {source.name} != target: {target.polars_type}, {hint}"
         )
+
+
+def _cast_hint(option: str) -> str:
+    return f"hint: pass cast_options=pl.ScanCastOptions({option})"
+
+
+_NESTED_TYPES = frozenset({plc.TypeId.STRUCT, plc.TypeId.LIST})
+
+
+def _cast_to_table_type(
+    name: str,
+    column: plc.Column,
+    children: Sequence[plc.io.types.ColumnNameSpec],
+    target: DataType,
+    cast_columns_policy: Mapping[str, Any],
+    *,
+    stream: Stream,
+) -> plc.Column:
+    """
+    Cast a column read from a file to its type in the table schema.
+
+    Parameters
+    ----------
+    name
+        Name of the top-level column in the table schema.
+    column
+        Column as read from the file.
+    children
+        Names of the children of ``column``, as the parquet reader
+        reports them.
+    target
+        Type of the column in the table schema.
+    cast_columns_policy
+        Which casts from the physical to the table type are permitted.
+    stream
+        CUDA stream used for device memory operations and kernel launches.
+
+    Returns
+    -------
+    The column with the type of ``target``. Struct fields are matched by
+    name, put in the order of ``target`` and cast field by field.
+
+    Raises
+    ------
+    polars.exceptions.SchemaError
+        If ``column`` and ``target`` do not nest in the same way, if a
+        struct field is missing or extra and ``cast_columns_policy`` forbids
+        that, or if ``_check_cast`` rejects the cast of a leaf.
+    """
+    source_id = column.type().id()
+    target_id = target.id()
+    if source_id not in _NESTED_TYPES and target_id not in _NESTED_TYPES:
+        _check_cast(name, column.type(), target, cast_columns_policy)
+        return Column(column, dtype=target).astype(target, stream).obj
+    if source_id != target_id:
+        raise pl.exceptions.SchemaError(
+            f"data type mismatch for column {name}: "
+            f"incoming: {source_id.name} != target: {target.polars_type}"
+        )
+    if target_id == plc.TypeId.LIST:
+        (_, (_, element_children)) = children
+        new_children = [
+            column.child(0),
+            _cast_to_table_type(
+                name,
+                column.child(1),
+                element_children,
+                target.children[0],
+                cast_columns_policy,
+                stream=stream,
+            ),
+        ]
+    else:
+        incoming = {
+            field_name: (index, field_children)
+            for index, (field_name, field_children) in enumerate(children)
+        }
+        fields = cast("pl.Struct", target.polars_type).fields
+        if cast_columns_policy["extra_struct_fields"] == "raise":
+            target_names = frozenset(field.name for field in fields)
+            extra = [
+                field_name for field_name in incoming if field_name not in target_names
+            ]
+            if extra:
+                raise pl.exceptions.SchemaError(
+                    f"data type mismatch for column {name}: "
+                    f"encountered extra struct field: {extra[0]}, "
+                    "hint: specify this field in the schema, or pass "
+                    "cast_options=pl.ScanCastOptions(extra_struct_fields='ignore')"
+                )
+        new_children = []
+        for field, field_dtype in zip(fields, target.children, strict=True):
+            if field.name in incoming:
+                index, field_children = incoming[field.name]
+                new_children.append(
+                    _cast_to_table_type(
+                        name,
+                        column.child(index),
+                        field_children,
+                        field_dtype,
+                        cast_columns_policy,
+                        stream=stream,
+                    )
+                )
+            elif cast_columns_policy["missing_struct_fields"] == "raise":
+                raise pl.exceptions.SchemaError(
+                    f"data type mismatch for column {name}: "
+                    f"encountered missing struct field: {field.name}, "
+                    + _cast_hint("missing_struct_fields='insert'")
+                )
+            else:
+                new_children.append(
+                    _null_column(
+                        field_dtype, column.offset() + column.size(), stream=stream
+                    )
+                )
+    return plc.Column(
+        column.type(),
+        column.size(),
+        None,
+        column.null_mask(),
+        column.null_count(),
+        column.offset(),
+        new_children,
+    )
+
+
+def _null_column(dtype: DataType, size: int, *, stream: Stream) -> plc.Column:
+    """An all-null column of any type, including nested types."""
+    type_id = dtype.id()
+    if type_id not in _NESTED_TYPES:
+        return plc.Column.from_scalar(
+            plc.Scalar.from_py(None, dtype.plc_type, stream=stream),
+            size,
+            stream=stream,
+        )
+    if type_id == plc.TypeId.LIST:
+        children = [
+            plc.Column.from_scalar(
+                plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32), stream=stream),
+                size + 1,
+                stream=stream,
+            ),
+            _null_column(dtype.children[0], 0, stream=stream),
+        ]
+    else:
+        children = [
+            _null_column(child, size, stream=stream) for child in dtype.children
+        ]
+    return plc.Column(
+        dtype.plc_type,
+        size,
+        None,
+        plc.null_mask.create_null_mask(
+            size, plc.types.MaskState.ALL_NULL, stream=stream
+        ),
+        size,
+        0,
+        children,
+    )
 
 
 def _read_group(
@@ -955,7 +1137,7 @@ def _read_group(
         was read from, or ``None`` when ``source_offset`` is ``None``. Its
         data is valid on ``stream``.
     """
-    read: dict[Any, plc.Column] = {}
+    read: dict[Any, tuple[plc.Column, Sequence[plc.io.types.ColumnNameSpec]]] = {}
     num_rows = sum(rows_per_path)
     source_index: plc.Column | None = None
     if present:
@@ -973,7 +1155,7 @@ def _read_group(
             options.enable_prepend_source_index_column(val=True)
         table = plc.io.parquet.read_parquet(options, stream=stream)
         num_rows = table.tbl.num_rows()
-        names = table.column_names(include_children=False)
+        names = table.column_names(include_children=True)
         columns = table.tbl.columns()
         if source_offset is not None:
             source_index = (
@@ -993,8 +1175,8 @@ def _read_group(
             columns = columns[1:]
         key_by_name = dict(zip(footer.names, footer.keys, strict=True))
         read = {
-            key_by_name[name]: column
-            for name, column in zip(names, columns, strict=True)
+            key_by_name[name]: (column, children)
+            for (name, children), column in zip(names, columns, strict=True)
         }
     elif source_offset is not None:
         (source_index,) = plc.filling.repeat(
@@ -1022,20 +1204,22 @@ def _read_group(
     for key, name in wanted.items():
         dtype = schema[name]
         if key in read:
-            _check_cast(name, read[key].type(), dtype, lake_options.cast_columns_policy)
-            frame_columns.append(
-                Column(read[key], name=name, dtype=dtype).astype(dtype, stream)
+            column, children = read[key]
+            obj = _cast_to_table_type(
+                name,
+                column,
+                children,
+                dtype,
+                lake_options.cast_columns_policy,
+                stream=stream,
             )
+            frame_columns.append(Column(obj, name=name, dtype=dtype))
         elif lake_options.missing_columns_policy == "raise":
             raise pl.exceptions.ColumnNotFoundError(f"did not find column {name}")
         else:
             default = lake_options.initial_defaults.get(key) if by_field_id else None
             if default is None:
-                obj = plc.Column.from_scalar(
-                    plc.Scalar.from_py(None, dtype.plc_type, stream=stream),
-                    num_rows,
-                    stream=stream,
-                )
+                obj = _null_column(dtype, num_rows, stream=stream)
                 frame_columns.append(Column(obj, name=name, dtype=dtype))
             else:
                 (obj,) = plc.filling.repeat(
