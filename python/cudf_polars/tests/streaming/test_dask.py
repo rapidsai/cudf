@@ -156,6 +156,7 @@ def reset_engine(dask_client: distributed.Client) -> Iterator[DaskEngine]:
     """
     with DaskEngine(
         executor_options={"max_rows_per_partition": 10},
+        engine_options={"allow_gpu_sharing": True},
         dask_client=dask_client,
     ) as e:
         yield e
@@ -175,6 +176,7 @@ def test_reset_keeps_workers_alive(reset_engine: DaskEngine) -> None:
     )
     pids_after = sorted(reset_engine._run(os.getpid))
 
+    assert reset_engine._allow_gpu_sharing is True
     # Same worker addresses …
     assert workers_before == workers_after
     # … and the workers are running in the same OS processes.

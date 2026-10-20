@@ -242,19 +242,28 @@ class QuentWorkerRuntime:
         from cudf_polars.quent._context import WorkerResources
 
         session = QuentSession(collector_address)
-        worker_handle = (
-            session.binding_context.worker_observer()
-            .handle(worker_id)
-            .init(instance_name=instance_name, engine=config.engine_id)
-        )
-        resources = WorkerResources.build(
-            instance_suffix=instance_name,
-            engine_id=config.engine_id,
-            worker_id=worker_id,
-            rank=rank,
-            nranks=nranks,
-        )
-        resources.declare(session)
+        worker_handle: quent_bindings.WorkerInitHandle | None = None
+        try:
+            worker_handle = (
+                session.binding_context.worker_observer()
+                .handle(worker_id)
+                .init(instance_name=instance_name, engine=config.engine_id)
+            )
+            resources = WorkerResources.build(
+                instance_suffix=instance_name,
+                engine_id=config.engine_id,
+                worker_id=worker_id,
+                rank=rank,
+                nranks=nranks,
+            )
+            resources.declare(session)
+        except BaseException:  # pragma: no cover
+            if worker_handle is not None:
+                with contextlib.suppress(Exception):
+                    worker_handle.exit()
+            with contextlib.suppress(Exception):
+                session.close()
+            raise
         return cls(
             config=config,
             session=session,

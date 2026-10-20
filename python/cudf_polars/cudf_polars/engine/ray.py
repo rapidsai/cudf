@@ -865,6 +865,7 @@ class RayEngine(StreamingEngine):
     ) -> None:
         executor_options = resolve_kvikio_executor_options(executor_options or {})
         engine_options = engine_options or {}
+        self._allow_gpu_sharing = bool(engine_options.get("allow_gpu_sharing", False))
         ray_init_options = ray_init_options or {}
 
         if bootstrap.is_running_with_rrun():
@@ -1021,7 +1022,9 @@ class RayEngine(StreamingEngine):
                 "kvikio_nthreads", existing_executor_options["kvikio_nthreads"]
             )
         executor_options = resolve_kvikio_executor_options(executor_options)
-        engine_options = engine_options or {}
+        engine_options = dict(engine_options or {})
+        engine_options.setdefault("allow_gpu_sharing", self._allow_gpu_sharing)
+        self._allow_gpu_sharing = bool(engine_options["allow_gpu_sharing"])
         self.rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
         rapidsmpf_options_as_bytes = self.rapidsmpf_options.serialize()
 
