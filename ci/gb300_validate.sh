@@ -8,8 +8,15 @@ source rapids-init-pip
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 
-LIBCUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-artifact-name wheel_cpp libcudf cudf --cuda "$RAPIDS_CUDA_VERSION")")
-PYLIBCUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-artifact-name wheel_python pylibcudf cudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
+# The fix only changes Python tests, so use the main build of this branch's base commit
+# (4473c24036) instead of building wheels in this PR.
+WHEELHOUSE="$(mktemp -d)"
+gh run download 39273725253 --repo NVIDIA/cudf \
+    --name "cudf_wheel_cpp_libcudf_aarch64_${RAPIDS_PY_CUDA_SUFFIX}" \
+    --name "cudf_wheel_python_pylibcudf_aarch64_abi3_${RAPIDS_PY_CUDA_SUFFIX}" \
+    --dir "${WHEELHOUSE}"
+LIBCUDF_WHEELHOUSE="${WHEELHOUSE}"
+PYLIBCUDF_WHEELHOUSE="${WHEELHOUSE}"
 
 rapids-generate-pip-constraints py_test_cudf "${PIP_CONSTRAINT}" constraints
 
