@@ -139,12 +139,54 @@ TEST_F(TextBytePairEncoding, BPE_Error)
   EXPECT_THROW(nvtext::load_merge_pairs(cudf::strings_column_view(*empty)), cudf::logic_error);
   auto null_pairs = cudf::test::strings_column_wrapper({"", ""}, {true, false});
   EXPECT_THROW(nvtext::load_merge_pairs(cudf::strings_column_view(null_pairs)), cudf::logic_error);
-  auto duplicates = cudf::test::strings_column_wrapper({"a b", "c d", "ab c", "c d", "e f"});
-  EXPECT_THROW(nvtext::load_merge_pairs(cudf::strings_column_view(duplicates)),
-               std::invalid_argument);
-  // same strings split differently are not duplicates
-  auto not_duplicates = cudf::test::strings_column_wrapper({"a bc", "ab c", "abc d"});
-  EXPECT_NO_THROW(nvtext::load_merge_pairs(cudf::strings_column_view(not_duplicates)));
+}
+
+TEST_F(TextBytePairEncoding, DuplicatePairs)
+{
+  // a duplicate pair keeps its lowest rank: "b c" (rank 0) merges before "a b" (rank 1)
+  auto mpt      = cudf::test::strings_column_wrapper({"b c", "a b", "c d", "b c", "a b"});
+  auto mp       = nvtext::load_merge_pairs(cudf::strings_column_view(mpt));
+  auto input    = cudf::test::strings_column_wrapper({"abc", "abcd", "cab"});
+  auto results  = nvtext::byte_pair_encoding(cudf::strings_column_view(input), *mp);
+  auto expected = cudf::test::strings_column_wrapper({"a bc", "a bc d", "c ab"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+
+  // many duplicates in reverse order give the same result as the unique pairs
+  std::vector<std::string> const pairs{"e n",
+                                       "i t",
+                                       "i s",
+                                       "e s",
+                                       "en t",
+                                       "c e",
+                                       "es t",
+                                       "en ce",
+                                       "t h",
+                                       "h i",
+                                       "th is",
+                                       "t est",
+                                       "s i",
+                                       "s ent"};
+  auto duplicates = pairs;
+  for (int i = 0; i < 50; ++i) {
+    duplicates.insert(duplicates.end(), pairs.rbegin(), pairs.rend());
+  }
+  auto unique_mpt = cudf::test::strings_column_wrapper(pairs.begin(), pairs.end());
+  auto dup_mpt    = cudf::test::strings_column_wrapper(duplicates.begin(), duplicates.end());
+  auto unique_mp  = nvtext::load_merge_pairs(cudf::strings_column_view(unique_mpt));
+  auto dup_mp     = nvtext::load_merge_pairs(cudf::strings_column_view(dup_mpt));
+  auto text      = cudf::test::strings_column_wrapper({"thisisit", "test sentence", "thisis test"});
+  auto text_view = cudf::strings_column_view(text);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(nvtext::byte_pair_encoding(text_view, *dup_mp)->view(),
+                                      nvtext::byte_pair_encoding(text_view, *unique_mp)->view());
+
+  // same strings split differently are not duplicates: "ab c" is needed to finish "abc"
+  auto split_mpt   = cudf::test::strings_column_wrapper({"a bc", "ab c", "a b"});
+  auto split_mp    = nvtext::load_merge_pairs(cudf::strings_column_view(split_mpt));
+  auto split_input = cudf::test::strings_column_wrapper({"abc"});
+  auto split_results =
+    nvtext::byte_pair_encoding(cudf::strings_column_view(split_input), *split_mp);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(split_results->view(),
+                                      cudf::test::strings_column_wrapper({"abc"}));
 }
 
 // ---------------------------------------------------------------------------------------------

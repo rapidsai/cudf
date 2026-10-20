@@ -35,18 +35,14 @@ cdef class BPEMergePairs:
     Parameters
     ----------
     merge_pairs : Column
-        Strings column of unique merge pairs. Each row contains the two halves
+        Strings column of merge pairs. Each row contains the two halves
         of a pair separated by a single space. Pairs are ranked by their row
-        position; earlier rows have higher priority.
+        position; earlier rows have higher priority. A duplicate pair keeps
+        its earliest (highest priority) rank.
     stream : Stream | None
         CUDA stream on which to perform the operation.
     mr : DeviceMemoryResource | None
         Device memory resource used to allocate the merge pairs table.
-
-    Raises
-    ------
-    ValueError
-        If the merge pairs contain duplicates.
     """
     def __cinit__(
         self,

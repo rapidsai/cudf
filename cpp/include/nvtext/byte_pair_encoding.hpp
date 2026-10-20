@@ -34,9 +34,7 @@ struct bpe_merge_pairs {
    *
    * Each merge pair is stored as two consecutive rows of `input`:
    * the left half at row `2i` and the right half at row `2i+1`
-   * where `i` is the pair's rank.
-   *
-   * @throw std::invalid_argument if `input` contains duplicate pairs
+   * where `i` is the pair's rank. A duplicate pair keeps its lowest rank.
    *
    * @param input Strings column of merge pair halves
    * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -50,8 +48,6 @@ struct bpe_merge_pairs {
    * @brief Construct a new bpe merge pairs object
    *
    * See @ref nvtext::load_merge_pairs for the format of `input`.
-   *
-   * @throw std::invalid_argument if `input` contains duplicate pairs
    *
    * @param input Strings column with one merge pair per row
    * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -72,7 +68,7 @@ struct bpe_merge_pairs {
 /**
  * @brief Create a nvtext::bpe_merge_pairs from a strings column
  *
- * The input column should contain a unique pair of strings per row separated by
+ * The input column should contain a pair of strings per row separated by
  * a single space. An incorrect format will result in undefined behavior.
  *
  * Example:
@@ -84,11 +80,11 @@ struct bpe_merge_pairs {
  *
  * The pairs are expected to be ordered by their rank relative to each other.
  * A pair in an earlier row has priority over any pairs in later rows.
+ * If a pair appears more than once, only its first (lowest ranked) row is used.
  *
  * @throw cudf::logic_error if `merge_pairs` is empty or contains nulls
- * @throw std::invalid_argument if `merge_pairs` contains duplicate pairs
  *
- * @param merge_pairs Column containing the unique merge pairs
+ * @param merge_pairs Column containing the merge pairs
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Memory resource to allocate any returned objects
  * @return A nvtext::bpe_merge_pairs object

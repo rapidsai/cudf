@@ -164,11 +164,14 @@ def test_byte_pair_encoding_random(seed):
     assert_column_eq(encode(strings, merge_pairs), pa.array(expected))
 
 
+def test_byte_pair_encoding_duplicate_pairs():
+    # a duplicate pair keeps its lowest rank
+    merge_pairs = ["b c", "a b", "c d", "b c", "a b"]
+    result = encode(["abc", "abcd", "cab"], merge_pairs)
+    assert_column_eq(result, pa.array(["a bc", "a bc d", "c ab"]))
+
+
 def test_byte_pair_encoding_errors(merge_pairs):
-    with pytest.raises(ValueError, match="unique"):
-        plc.nvtext.byte_pair_encode.BPEMergePairs(
-            plc.Column.from_arrow(pa.array(["a b", "c d", "a b"]))
-        )
     for separator in ["", "ab", "é"]:
         with pytest.raises(RuntimeError, match="separator"):
             encode(["thisisit"], merge_pairs, separator)

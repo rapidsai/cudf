@@ -19,14 +19,10 @@ class BytePairEncoder:
     Parameters
     ----------
     merges_pair : cudf.Series
-        Strings series of unique merge pairs. Each row contains the two
+        Strings series of merge pairs. Each row contains the two
         halves of a pair separated by a single space. Pairs are ranked by
         their position in the series; earlier rows have higher priority.
-
-    Raises
-    ------
-    ValueError
-        If the merge pairs contain duplicates.
+        A duplicate pair keeps its earliest (highest priority) rank.
     """
 
     def __init__(self, merges_pair: Series) -> None:

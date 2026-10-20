@@ -1122,8 +1122,10 @@ def test_byte_pair_encoding(separator, input, results):
 
 
 def test_byte_pair_encoding_duplicate_pairs():
-    with pytest.raises(ValueError, match="unique"):
-        BytePairEncoder(cudf.Series(["a b", "c d", "a b"]))
+    # a duplicate pair keeps its lowest rank
+    encoder = BytePairEncoder(cudf.Series(["b c", "a b", "c d", "b c", "a b"]))
+    actual = encoder(cudf.Series(["abc", "abcd", "cab"]))
+    assert_eq(cudf.Series(["a bc", "a bc d", "c ab"]), actual)
 
 
 @pytest.fixture
