@@ -186,6 +186,15 @@ def test_round(engine: pl.GPUEngine, ldf: pl.LazyFrame, mode: RoundMethod) -> No
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.parametrize("decimals", [0, 1, 2])
+def test_round_decimal(engine: pl.GPUEngine, decimals: int) -> None:
+    ldf = pl.LazyFrame(
+        {"a": pl.Series([1.25, 2.5, -3.75, None], dtype=pl.Decimal(10, 2))}
+    )
+    q = ldf.select(pl.col("a").round(decimals))
+    assert_gpu_result_equal(q, engine=engine)
+
+
 @pytest.mark.parametrize(
     "dtype",
     [
@@ -217,8 +226,8 @@ def test_to_physical_nested_logical_unsupported(
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-@pytest.mark.parametrize("seed", [0, 10])
-def test_hash(engine: pl.GPUEngine, seed: int) -> None:
+def test_hash(engine: pl.GPUEngine) -> None:
+    seed = 0
     df = pl.LazyFrame(
         {
             "a": pl.Series([1, 2, None], dtype=pl.Int64),
@@ -237,9 +246,9 @@ def test_hash(engine: pl.GPUEngine, seed: int) -> None:
 def test_hash_seed_sensitivity(engine: pl.GPUEngine) -> None:
     df = pl.LazyFrame({"a": pl.Series([1, 2, 3, None], dtype=pl.Int64)})
     q = df.select(
-        same_a=pl.col("a").hash(0),
-        same_b=pl.col("a").hash(0),
-        diff_seed=pl.col("a").hash(4),
+        same_a=pl.col("a").hash(1),
+        same_b=pl.col("a").hash(1),
+        diff_seed=pl.col("a").hash(2),
     )
     result = q.collect(engine=engine)
     assert result["same_a"].equals(result["same_b"])

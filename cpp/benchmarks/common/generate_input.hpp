@@ -611,9 +611,9 @@ std::unique_ptr<cudf::column> create_string_column(cudf::size_type num_rows,
 /**
  * @brief Generates a string column filled with ASCII characters only
  *
- * Only the string length distribution and null probability of the profile are used.
- * The cardinality and average run length settings are ignored, so every row is
- * generated independently.
+ * This is the same as calling `create_random_column` with `cudf::type_id::STRING`
+ * except the upper bound of the profile's character range is limited to 126.
+ * All other profile settings are used as-is.
  *
  * @param profile Data profile for the output column
  * @param num_rows Number of rows in the output column
@@ -674,5 +674,5 @@ std::vector<cudf::type_id> mix_dtypes(std::pair<cudf::type_id, cudf::type_id> co
  * @param seed Optional, seed for the pseudo-random engine
  * @return null mask device buffer with random null mask data and null count
  */
-std::pair<cuda::device_buffer<std::byte>, cudf::size_type> create_random_null_mask(
+std::pair<cuda::device_buffer<cudf::bitmask_type>, cudf::size_type> create_random_null_mask(
   cudf::size_type size, std::optional<double> null_probability = std::nullopt, unsigned seed = 1);

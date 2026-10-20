@@ -24,11 +24,6 @@ from cudf_polars.testing.asserts import (
 )
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions, ParquetOptions
-from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_138,
-    POLARS_VERSION_LT_139,
-    POLARS_VERSION_LT_142,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -36,12 +31,6 @@ if TYPE_CHECKING:
 
     from pytest_httpserver import HTTPServer
     from werkzeug import Request
-
-
-requires_hive_ir = pytest.mark.skipif(
-    POLARS_VERSION_LT_142,
-    reason="hive::HivePartitionedDf not exposed in the logical plan before 1.42",
-)
 
 
 @pytest.fixture
@@ -240,6 +229,13 @@ def test_scan_unsupported_raises(engine: pl.GPUEngine, tmp_path):
     df.write_ipc(tmp_path / "df.ipc")
     q = pl.scan_ipc(tmp_path / "df.ipc")
     assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+def test_scan_parquet_insert_missing_columns(engine: pl.GPUEngine, tmp_path):
+    pl.DataFrame({"a": [1, 2], "b": [3, 4]}).write_parquet(tmp_path / "0.parquet")
+    pl.DataFrame({"a": [5, 6]}).write_parquet(tmp_path / "1.parquet")
+    q = pl.scan_parquet(tmp_path / "*.parquet", missing_columns="insert")
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
 def test_scan_ndjson_nrows_notimplemented(engine: pl.GPUEngine, tmp_path, df):
@@ -499,7 +495,6 @@ def test_scan_parquet_include_file_path_with_predicate(
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-@requires_hive_ir
 def test_scan_parquet_include_file_path_with_hive(
     engine: pl.GPUEngine, hive_root: Path
 ) -> None:
@@ -509,7 +504,6 @@ def test_scan_parquet_include_file_path_with_hive(
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-@requires_hive_ir
 def test_scan_parquet_include_file_path_with_hive_only_projection(
     engine: pl.GPUEngine, hive_root: Path
 ) -> None:
@@ -598,7 +592,7 @@ def test_select_arbitrary_order_with_row_index_column(engine: pl.GPUEngine, tmp_
     "has_header,new_columns",
     [
         (True, None),
-        (False, ["a", "b", "c"]),
+        (False, ["a", "b", "c", "d"]),
     ],
 )
 def test_scan_csv_with_and_without_header(
@@ -657,14 +651,7 @@ def test_scan_with_row_index(engine: pl.GPUEngine, tmp_path: Path) -> None:
     "subdir",
     [
         "foo",
-        pytest.param(
-            "foo=bar",
-            marks=pytest.mark.xfail(
-                condition=POLARS_VERSION_LT_142,
-                reason="https://github.com/pola-rs/polars/issues/27840",
-                strict=True,
-            ),
-        ),
+        "foo=bar",
     ],
 )
 def test_scan_from_file_uri(engine: pl.GPUEngine, tmp_path: Path, subdir: str) -> None:
@@ -701,7 +688,11 @@ def test_scan_parquet_remote(
         # parse bytes=200-500 for example (the actual data)
         rng = req.headers.get("Range")
         if rng and rng.startswith("bytes="):
-            start, end = map(int, req.headers["Range"][6:].split("-"))
+            first, last = req.headers["Range"][6:].split("-")
+            if first:
+                start, end = int(first), int(last or size - 1)
+            else:
+                start, end = max(size - int(last), 0), size - 1
             mv = memoryview(bytes_)[start : end + 1]
             return Response(
                 mv.tobytes(),
@@ -744,8 +735,7 @@ def test_scan_parquet_remote(
 
 
 @pytest.mark.xfail(
-    condition=not POLARS_VERSION_LT_139,
-    reason="polars 1.39+ ndjson remote reader requires range request support",
+    reason="polars ndjson remote reader requires range request support",
 )
 def test_scan_ndjson_remote(
     engine: pl.GPUEngine,
@@ -812,13 +802,8 @@ polars"""
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_hits_scan_row_index_duplicate(engine: pl.GPUEngine, request, tmp_path):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=not POLARS_VERSION_LT_138,
-            reason="polars >= 1.38 raises duplicate row_index name ahead of time",
-        )
-    )
+@pytest.mark.xfail(reason="polars raises duplicate row_index name ahead of time")
+def test_hits_scan_row_index_duplicate(engine: pl.GPUEngine, tmp_path):
     pl.DataFrame({"col": [1, 2, 3]}).write_parquet(tmp_path / "a.parquet")
 
     q = pl.scan_parquet(tmp_path / "*.parquet", row_index_name="index").with_row_index(
@@ -866,9 +851,6 @@ def test_scan_tiny_file_not_compressed(engine: pl.GPUEngine, tmp_path):
     assert_gpu_result_equal(q, engine=engine)
 
 
-@pytest.mark.skipif(
-    POLARS_VERSION_LT_138, reason="pl.LazyFrame(height=...) requires polars >= 1.38"
-)
 @pytest.mark.parametrize("custom_engine", [None, NO_CHUNK_ENGINE])
 def test_scan_parquet_zero_width_with_limit(
     engine: pl.GPUEngine, tmp_path, custom_engine
@@ -937,7 +919,6 @@ def test_scan_parquet_is_between_literal_dtype_mismatch_22622(
     assert_gpu_result_equal(q, engine=engine)
 
 
-@requires_hive_ir
 @pytest.mark.parametrize(
     "query",
     [
@@ -971,7 +952,6 @@ def test_scan_parquet_hive_partitioned(
     assert_gpu_result_equal(q, engine=engine)
 
 
-@requires_hive_ir
 def test_scan_parquet_hive_partitioned_group_by(
     engine: pl.GPUEngine, hive_root: Path
 ) -> None:
@@ -983,7 +963,6 @@ def test_scan_parquet_hive_partitioned_group_by(
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-@requires_hive_ir
 def test_scan_parquet_hive_partitioned_schema_override(
     engine: pl.GPUEngine, hive_root: Path
 ) -> None:
@@ -993,7 +972,6 @@ def test_scan_parquet_hive_partitioned_schema_override(
     assert_gpu_result_equal(q, engine=engine)
 
 
-@requires_hive_ir
 def test_scan_parquet_hive_partitioned_single_file(
     engine: pl.GPUEngine, tmp_path: Path
 ) -> None:
@@ -1003,7 +981,6 @@ def test_scan_parquet_hive_partitioned_single_file(
     assert_gpu_result_equal(q, engine=engine)
 
 
-@requires_hive_ir
 def test_scan_parquet_hive_partitioned_shadowed_column(
     engine: pl.GPUEngine, tmp_path: Path
 ) -> None:
@@ -1016,7 +993,6 @@ def test_scan_parquet_hive_partitioned_shadowed_column(
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-@requires_hive_ir
 def test_scan_parquet_hive_partitioned_null_value(
     engine: pl.GPUEngine, tmp_path: Path
 ) -> None:
@@ -1027,7 +1003,6 @@ def test_scan_parquet_hive_partitioned_null_value(
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-@requires_hive_ir
 @pytest.mark.parametrize(
     "query",
     [
@@ -1050,7 +1025,6 @@ def test_scan_parquet_hive_partitioned_chunked(hive_root: Path, query) -> None:
     )
 
 
-@requires_hive_ir
 @pytest.mark.parametrize(
     "dtype",
     [
@@ -1078,7 +1052,6 @@ def test_scan_parquet_hive_partitioned_dtypes(
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-@requires_hive_ir
 @pytest.mark.parametrize(
     "offset,length",
     [(0, None), (0, 4), (4, None), (3, 3), (9, None), (20, 5), (0, 0)],
@@ -1097,7 +1070,6 @@ def test_scan_parquet_hive_only_projection_sliced(
     assert_gpu_result_equal(q, engine=engine)
 
 
-@requires_hive_ir
 def test_scan_parquet_hive_partitioned_uniform_multiple_files(
     engine: pl.GPUEngine, tmp_path: Path
 ) -> None:
@@ -1110,7 +1082,6 @@ def test_scan_parquet_hive_partitioned_uniform_multiple_files(
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-@requires_hive_ir
 def test_scan_parquet_hive_partitioned_uniform_null_value(
     engine: pl.GPUEngine, tmp_path: Path
 ) -> None:
@@ -1122,7 +1093,6 @@ def test_scan_parquet_hive_partitioned_uniform_null_value(
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-@requires_hive_ir
 @pytest.mark.parametrize(
     "query",
     [
@@ -1154,7 +1124,6 @@ def test_scan_parquet_hive_partitioned_decimal_key(
     assert_gpu_result_equal(q, engine=engine)
 
 
-@requires_hive_ir
 def test_scan_parquet_hive_partitioned_decimal_predicate(
     engine: pl.GPUEngine, tmp_path: Path
 ) -> None:
