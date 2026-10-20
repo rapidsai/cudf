@@ -412,11 +412,8 @@ filter_join_indices_jit(cudf::table_view const& left,
                                          false);
 
   // Allocate predicate results
-  auto predicate_results = cuda::device_buffer<bool>(stream,
-                                                     cudf::get_current_device_resource_ref(),
-                                                     left_indices.size(),
-                                                     cuda::no_init,
-                                                     mr.get_temporary_mr());
+  auto predicate_results =
+    cuda::device_buffer<bool>(stream, mr.get_temporary_mr(), left_indices.size(), cuda::no_init);
 
   // Launch kernel
   launch_join_filter_kernel(kernel,
@@ -507,11 +504,8 @@ filter_join_indices_jit(cudf::table_view const& left,
     "cudf/cpp/src/join/jit/filter_join_kernel.cu", kernel_name, cuda_source);
 
   // Allocate and compute predicate results
-  auto predicate_results = cuda::device_buffer<bool>(stream,
-                                                     cudf::get_current_device_resource_ref(),
-                                                     left_indices.size(),
-                                                     cuda::no_init,
-                                                     mr.get_temporary_mr());
+  auto predicate_results =
+    cuda::device_buffer<bool>(stream, mr.get_temporary_mr(), left_indices.size(), cuda::no_init);
   launch_join_filter_kernel(kernel,
                             left_indices,
                             right_indices,
