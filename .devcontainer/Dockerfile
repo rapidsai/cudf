@@ -6,10 +6,14 @@ ARG PYTHON_PACKAGE_MANAGER=conda
 FROM ${BASE} as pip-base
 
 # libnuma-dev is required for pip devcontainers for cucascade from rapidsmpf
+# default-jdk-headless, maven and libboost-dev are required to build and test cudf-java
 RUN apt update -y \
  && DEBIAN_FRONTEND=noninteractive apt install -y \
+    default-jdk-headless \
     librdkafka-dev \
+    libboost-dev \
     libnuma-dev \
+    maven \
  && rm -rf /tmp/* /var/tmp/* /var/cache/apt/* /var/lib/apt/lists/*;
 
 ENV DEFAULT_VIRTUAL_ENV=rapids

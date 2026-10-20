@@ -2,7 +2,7 @@
 
 This directory contains [devcontainer configurations](https://containers.dev/implementors/json_reference/) for using VSCode to [develop in a container](https://code.visualstudio.com/docs/devcontainers/containers) via the `Remote Containers` [extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) or [GitHub Codespaces](https://github.com/codespaces).
 
-This container is a turnkey development environment for building and testing the cuDF C++ and Python libraries.
+This container is a turnkey development environment for building and testing the cuDF C++, Python and Java libraries. Building cuDF Java requires libcudf to be configured with the CMake options listed in [java/README.md](../java/README.md).
 
 ## Table of Contents
 

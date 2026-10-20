@@ -33,6 +33,7 @@ files:
       - depends_on_rmm
       - depends_on_ucxx
       - develop
+      - develop_java
       - docs
       - iwyu
       - notebooks
@@ -769,6 +770,16 @@ dependencies:
           - make
           - maven
           - openjdk=8.*
+  develop_java:
+    common:
+      - output_types: conda
+        packages:
+          # Toolchain for building and testing cudf-java against a local libcudf
+          # build in the dev containers. libboost-devel is needed for the
+          # BoostConfig.cmake that the bundled Arrow build looks for.
+          - libboost-devel
+          - maven
+          - openjdk=17.*
   depends_on_libnvcomp:
     common:
       - output_types: conda
