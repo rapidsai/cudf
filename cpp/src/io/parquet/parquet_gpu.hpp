@@ -24,7 +24,6 @@
 #include <cuda/atomic>
 #include <cuda/cmath>
 #include <cuda/iterator>
-#include <cuda/std/cstring>
 #include <cuda/std/limits>
 #include <cuda/std/optional>
 #include <cuda/stream>
@@ -466,20 +465,6 @@ struct PageInfo {
     return prepass_state != nullptr && prepass_family == family;
   }
 };
-
-/**
- * @brief Reset a page to the state an empty page span decodes to
- *
- * @param page Page to reset
- */
-__device__ inline void reset_page_info(PageInfo& page)
-{
-  cuda::std::memset(&page, 0, sizeof(page));
-  // Apply non-zero defaults
-  page.skipped_values = -1;
-  page.is_compressed  = true;
-  page.kernel_mask    = decode_kernel_mask::NONE;
-}
 
 // forward declaration
 struct column_chunk_info;

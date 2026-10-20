@@ -12,7 +12,9 @@
 
 #include <thrust/host_vector.h>
 
+#include <algorithm>
 #include <exception>
+#include <iterator>
 #include <optional>
 #include <utility>
 
@@ -177,9 +179,8 @@ std::vector<text::byte_range_info> hybrid_scan_reader::dictionary_pages_byte_ran
   auto const ranges = _impl->dictionary_pages_byte_ranges(input_row_group_indices, options);
   std::vector<text::byte_range_info> byte_ranges;
   byte_ranges.reserve(ranges.first.size());
-  for (auto const& range : ranges.first) {
-    byte_ranges.push_back(range.byte_range);
-  }
+  std::ranges::transform(
+    ranges.first, std::back_inserter(byte_ranges), &dictionary_byte_range::byte_range);
   return byte_ranges;
 }
 

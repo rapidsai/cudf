@@ -68,7 +68,7 @@ enum class use_data_page_mask : bool {
  */
 struct dictionary_byte_range {
   byte_range_info byte_range;  ///< Byte range to read from the file
-  bool is_exact;               ///< True if `byte_range` is exactly the page, else is an upper bound
+  bool is_exact{true};         ///< True if `byte_range` is exactly the page, else is an upper bound
 };
 
 /**

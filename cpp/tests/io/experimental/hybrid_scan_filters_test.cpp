@@ -2252,6 +2252,13 @@ TEST_F(HybridScanFiltersTest, DictionaryPagesByteRangesIncludeUnboundedMatchesEx
   auto const options =
     cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
 
+  auto absent_literal_value = cudf::string_scalar("absent_value", true, stream);
+  auto absent_literal       = cudf::ast::literal(absent_literal_value);
+  auto const absent_filter_expression =
+    cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col0_ref, absent_literal);
+  auto const absent_options =
+    cudf::io::parquet_reader_options::builder().filter(absent_filter_expression).build();
+
   // Footer metadata that a reader built from an edited copy of it can still resolve columns with,
   // and without the page index. A raw thrift parse leaves the derived schema fields unset, and
   // `read_parquet_footers` also loads the offset index, so go through a reader built from the
@@ -2319,6 +2326,15 @@ TEST_F(HybridScanFiltersTest, DictionaryPagesByteRangesIncludeUnboundedMatchesEx
       EXPECT_TRUE(std::ranges::equal(bounded, exact, [](auto const& lhs, auto const& rhs) {
         return lhs.offset() == rhs.offset() and lhs.size() == rhs.size();
       }));
+
+      // Prune with the exact ranges. RG 1 has no dictionary to prune with, and with hidden offsets
+      // neither does RG 0, so only an absent literal with RG 0's offset intact prunes anything.
+      auto const mr = cudf::get_current_device_resource_ref();
+      EXPECT_EQ(filter_row_groups_with_dictionaries(*datasource, *reader, options, stream, mr),
+                (std::vector<cudf::size_type>{0, 1}));
+      EXPECT_EQ(
+        filter_row_groups_with_dictionaries(*datasource, *reader, absent_options, stream, mr),
+        hide_offsets ? std::vector<cudf::size_type>{0, 1} : std::vector<cudf::size_type>{1});
     }
   }
 }
