@@ -179,22 +179,22 @@ struct window_bits {
   /// Highest set position less than p or -1 if none
   __device__ int prev(int p) const
   {
-    auto j = p >> 5;
-    auto m = words[j] & ((1u << (p & 31)) - 1);
-    while (m == 0 && j > 0) {
-      m = words[--j];
+    auto j    = p >> 5;
+    auto bits = words[j] & ((1u << (p & 31)) - 1);
+    while (bits == 0 && j > 0) {
+      bits = words[--j];
     }
-    return m ? (j << 5) + 31 - cuda::std::countl_zero(m) : -1;
+    return bits ? (j << 5) + 31 - cuda::std::countl_zero(bits) : -1;
   }
   /// Lowest set position greater than p or `end` if none
   __device__ int next(int p, int end) const
   {
-    auto j = p >> 5;
-    auto m = ((p & 31) == 31) ? 0u : (words[j] & (~0u << ((p & 31) + 1)));
-    while (m == 0 && j + 1 < num_words) {
-      m = words[++j];
+    auto j    = p >> 5;
+    auto bits = ((p & 31) == 31) ? 0u : (words[j] & (~0u << ((p & 31) + 1)));
+    while (bits == 0 && j + 1 < num_words) {
+      bits = words[++j];
     }
-    return m ? (j << 5) + cuda::std::countr_zero(m) : end;
+    return bits ? (j << 5) + cuda::std::countr_zero(bits) : end;
   }
 };
 
@@ -246,18 +246,18 @@ CUDF_KERNEL void bpe_short_fn(char const* d_input_chars,
   __shared__ int64_t s_seg_offset[num_warps][warp_size];  // segment's offset in d_input_chars
   __shared__ int s_seg_begin[num_warps][warp_size];       // segment's position in the window
 
-  auto const warp_idx    = cudf::detail::grid_1d::global_thread_id() / warp_size;
-  auto const lane        = static_cast<int>(threadIdx.x % warp_size);
-  auto const widx        = threadIdx.x / warp_size;
-  auto const ranks       = s_ranks[widx];
-  auto const seg_idx     = s_seg_idx[widx];
-  auto const seg_min     = s_seg_min[widx];
-  auto const seg_offsets = s_seg_offset[widx];
-  auto const seg_begins  = s_seg_begin[widx];
-  auto const S           = window_bits{s_bits[widx][0]};  // token starts
-  auto const G           = window_bits{s_bits[widx][1]};  // segment starts
-  auto const M           = window_bits{s_bits[widx][2]};  // merged this round
-  auto const R           = window_bits{s_bits[widx][3]};  // re-rank this round
+  auto const warp_idx     = cudf::detail::grid_1d::global_thread_id() / warp_size;
+  auto const lane         = static_cast<int>(threadIdx.x % warp_size);
+  auto const widx         = threadIdx.x / warp_size;
+  auto const ranks        = s_ranks[widx];
+  auto const seg_idx      = s_seg_idx[widx];
+  auto const seg_min      = s_seg_min[widx];
+  auto const seg_offsets  = s_seg_offset[widx];
+  auto const seg_begins   = s_seg_begin[widx];
+  auto const token_starts = window_bits{s_bits[widx][0]};
+  auto const seg_starts   = window_bits{s_bits[widx][1]};
+  auto const merged       = window_bits{s_bits[widx][2]};  // merged this round
+  auto const rerank       = window_bits{s_bits[widx][3]};  // re-rank this round
 
   auto const first = warp_idx * warp_size;
   if (first >= num_ids) { return; }
@@ -288,43 +288,45 @@ CUDF_KERNEL void bpe_short_fn(char const* d_input_chars,
       seg_begins[lane]  = seg_begin;
     }
     if (lane < num_words) {
-      S.words[lane] = 0;
-      G.words[lane] = 0;
-      M.words[lane] = 0;
-      R.words[lane] = 0;
+      token_starts.words[lane] = 0;
+      seg_starts.words[lane]   = 0;
+      merged.words[lane]       = 0;
+      rerank.words[lane]       = 0;
     }
     __syncwarp();
-    if (lane < n) { atomicOr(&G.words[seg_begin >> 5], 1u << (seg_begin & 31)); }
+    if (lane < n) { atomicOr(&seg_starts.words[seg_begin >> 5], 1u << (seg_begin & 31)); }
     __syncwarp();
 
     // offset into d_input_chars for window position p
     auto chars_offset = [&](int p) {
-      auto const k = seg_idx[p];
-      return seg_offsets[k] + (p - seg_begins[k]);
+      auto const seg = seg_idx[p];
+      return seg_offsets[seg] + (p - seg_begins[seg]);
     };
     // rank of the pair formed by the token starting at p and the token before it
     auto pair_rank = [&](int p) {
-      if (!S.test(p) || G.test(p)) { return max_rank; }
-      auto const q = S.prev(p);
-      auto const e = S.next(p, width);
-      return d_finder.find(d_input_chars + chars_offset(q), p - q, e - q);
+      if (!token_starts.test(p) || seg_starts.test(p)) { return max_rank; }
+      auto const prev_start = token_starts.prev(p);
+      auto const next_start = token_starts.next(p, width);
+      return d_finder.find(
+        d_input_chars + chars_offset(prev_start), p - prev_start, next_start - prev_start);
     };
 
     // segment of each position and the initial token starts
     for (int j = 0; j < words; ++j) {
       auto const p   = lane + j * warp_size;
       auto const pos = cuda::std::min(p, width - 1);
-      auto const k   = __popc(G.words[j] & ((2u << lane) - 1u)) - 1;  // within this word
-      auto prefix    = 0;
+      auto const word_seg =
+        __popc(seg_starts.words[j] & ((2u << lane) - 1u)) - 1;  // within this word
+      auto prefix = 0;
       for (int i = 0; i < j; ++i) {
-        prefix += __popc(G.words[i]);
+        prefix += __popc(seg_starts.words[i]);
       }
-      seg_idx[p] = static_cast<uint8_t>(prefix + k);
+      seg_idx[p] = static_cast<uint8_t>(prefix + word_seg);
       __syncwarp();
       auto const is_start =
         p < width && cudf::strings::detail::is_begin_utf8_char(d_input_chars[chars_offset(pos)]);
-      auto const ballot = __ballot_sync(full_mask, is_start) | G.words[j];
-      if (lane == 0) { S.words[j] = ballot; }
+      auto const ballot = __ballot_sync(full_mask, is_start) | seg_starts.words[j];
+      if (lane == 0) { token_starts.words[j] = ballot; }
     }
     __syncwarp();
     for (int j = 0; j < words; ++j) {
@@ -343,50 +345,54 @@ CUDF_KERNEL void bpe_short_fn(char const* d_input_chars,
       __syncwarp();
       auto found = false;
       for (int j = 0; j < words; ++j) {
-        auto const p = lane + j * warp_size;
-        auto const c = ranks[p] < max_rank && ranks[p] == seg_min[seg_idx[p]];
-        found        = found || c;
-        auto const C = __ballot_sync(full_mask, c);
+        auto const p        = lane + j * warp_size;
+        auto const is_min   = ranks[p] < max_rank && ranks[p] == seg_min[seg_idx[p]];
+        found               = found || is_min;
+        auto const min_mask = __ballot_sync(full_mask, is_min);
         // merge left-to-right skipping a pair whose left token was just merged
         if (lane == 0) {
-          for (auto m = C; m; m &= m - 1) {
-            auto const q = (j << 5) + cuda::std::countr_zero(m);
-            if (!M.test(S.prev(q))) { M.words[j] |= 1u << (q & 31); }
+          for (auto remaining = min_mask; remaining; remaining &= remaining - 1) {
+            auto const pos = (j << 5) + cuda::std::countr_zero(remaining);
+            if (!merged.test(token_starts.prev(pos))) { merged.words[j] |= 1u << (pos & 31); }
           }
         }
         __syncwarp();
       }
       if (!__any_sync(full_mask, found)) { break; }
-      if (lane < words) { S.words[lane] &= ~M.words[lane]; }
+      if (lane < words) { token_starts.words[lane] &= ~merged.words[lane]; }
       __syncwarp();
 
       // re-rank the pairs adjacent to each merged position
       for (int j = 0; j < words; ++j) {
         auto const p = lane + j * warp_size;
-        if (p < width && M.test(p)) {
-          ranks[p]     = max_rank;  // no longer a token start
-          auto const q = S.prev(p);
-          if (!G.test(q)) { atomicOr(&R.words[q >> 5], 1u << (q & 31)); }
-          auto const e = S.next(p, width);
-          if (e < width && !G.test(e)) { atomicOr(&R.words[e >> 5], 1u << (e & 31)); }
+        if (p < width && merged.test(p)) {
+          ranks[p]              = max_rank;  // no longer a token start
+          auto const prev_start = token_starts.prev(p);
+          if (!seg_starts.test(prev_start)) {
+            atomicOr(&rerank.words[prev_start >> 5], 1u << (prev_start & 31));
+          }
+          auto const next_start = token_starts.next(p, width);
+          if (next_start < width && !seg_starts.test(next_start)) {
+            atomicOr(&rerank.words[next_start >> 5], 1u << (next_start & 31));
+          }
         }
       }
       __syncwarp();
       for (int j = 0; j < words; ++j) {
         auto const p = lane + j * warp_size;
-        if (p < width && R.test(p)) { ranks[p] = pair_rank(p); }
+        if (p < width && rerank.test(p)) { ranks[p] = pair_rank(p); }
       }
       __syncwarp();
       if (lane < num_words) {
-        M.words[lane] = 0;
-        R.words[lane] = 0;
+        merged.words[lane] = 0;
+        rerank.words[lane] = 0;
       }
       __syncwarp();
     }
 
     for (int j = 0; j < words; ++j) {
       auto const p = lane + j * warp_size;
-      if (p < width) { d_spaces_data[chars_offset(p)] = static_cast<int8_t>(S.test(p)); }
+      if (p < width) { d_spaces_data[chars_offset(p)] = static_cast<int8_t>(token_starts.test(p)); }
     }
     cur += n;
   }
