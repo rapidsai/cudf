@@ -1130,26 +1130,19 @@ def _contains_time_input(node: expr.Expr) -> bool:
     """
     Whether a descendant of ``node`` is a Time expression used as an input.
 
-    Inputs of ``dt.time()`` and ``dt.combine()`` are not searched, since
+    Inputs of ``dt.time()`` and ``dt.combine()`` are not checked, since
     they were validated when those expressions were translated.
     """
-    seen: set[expr.Expr] = set()
-    lifo = [node]
-    while lifo:
-        parent = lifo.pop()
-        if isinstance(parent, expr.TemporalFunction) and parent.name in {
-            expr.TemporalFunction.Name.Time,
-            expr.TemporalFunction.Name.Combine,
-        }:
-            continue
-        for child in parent.children:
-            if child in seen:
-                continue
-            if _contains_dtype(child.dtype.polars_type, (pl.Time,)):
-                return True
-            seen.add(child)
-            lifo.append(child)
-    return False
+    return any(
+        _contains_dtype(child.dtype.polars_type, (pl.Time,))
+        for parent in traversal([node])
+        if not (
+            isinstance(parent, expr.TemporalFunction)
+            and parent.name
+            in {expr.TemporalFunction.Name.Time, expr.TemporalFunction.Name.Combine}
+        )
+        for child in parent.children
+    )
 
 
 def _contains_nested_lists(val: Any) -> bool:
