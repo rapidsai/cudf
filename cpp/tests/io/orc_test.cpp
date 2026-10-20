@@ -1674,12 +1674,12 @@ TEST_F(OrcWriterTest, Decimal32)
 
 TEST_F(OrcStatisticsTest, Overflow)
 {
-  using int64_limits  = std::numeric_limits<int64_t>;
-  using double_limits = std::numeric_limits<double>;
-  using int128_limits = std::numeric_limits<__int128_t>;
-  constexpr int num_rows        = 10;
+  using int64_limits     = std::numeric_limits<int64_t>;
+  using double_limits    = std::numeric_limits<double>;
+  using int128_limits    = std::numeric_limits<__int128_t>;
+  constexpr int num_rows = 10;
 
-  auto too_large_seq  = cudf::detail::make_counting_transform_iterator(
+  auto too_large_seq = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i * (int64_limits::max() / 20); });
   auto too_small_seq = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i * (int64_limits::min() / 20); });
@@ -1693,7 +1693,7 @@ TEST_F(OrcStatisticsTest, Overflow)
   auto double_large_seq = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i == 0 ? double_limits::max() / 2 : 0.; });
   auto double_overflow_seq = cuda::make_constant_iterator(double_limits::max());
-  auto int128_cancel_seq = cudf::detail::make_counting_transform_iterator(
+  auto int128_cancel_seq   = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i < 5 ? int128_limits::max() : int128_limits::min(); });
   auto int128_overflow_seq = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i == 0 ? int128_limits::max() : __int128_t{1}; });

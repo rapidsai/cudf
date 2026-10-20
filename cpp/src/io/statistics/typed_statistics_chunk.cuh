@@ -94,12 +94,12 @@ using sum_type = cuda::std::
   conditional_t<cuda::std::is_floating_point_v<A>, A, reduction::detail::sum_overflow_result<A>>;
 template <typename A>
 using sum_op = cuda::std::conditional_t<cuda::std::is_floating_point_v<A>,
-                                  cuda::std::plus<A>,
-                                  reduction::detail::overflow_sum_op<A>>;
+                                        cuda::std::plus<A>,
+                                        reduction::detail::overflow_sum_op<A>>;
 template <typename A>
 using to_sum = cuda::std::conditional_t<cuda::std::is_floating_point_v<A>,
-                                  cuda::std::identity,
-                                  reduction::detail::to_sum_overflow<A>>;
+                                        cuda::std::identity,
+                                        reduction::detail::to_sum_overflow<A>>;
 
 }  // namespace detail
 
