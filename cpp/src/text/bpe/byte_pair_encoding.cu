@@ -70,6 +70,7 @@ constexpr int positions_per_lane = 8;    // window of 256 bytes processed by a w
 constexpr int max_short_size     = 32 * positions_per_lane;  // larger segments use a block
 constexpr int short_block_size   = 256;                      // for encoding short segments
 constexpr int max_dedup_size     = 4096;  // larger segments are always encoded (not de-duplicated)
+constexpr int8_t copy_flag       = 2;     // marks a segment that copies its result while encoding
 
 /**
  * @brief Identifies unpairable boundaries in the given chars array
@@ -134,7 +135,6 @@ struct bpe_dedup_fn {
   IndexType slot_mask;  // number of slots - 1 (number of slots is a power of 2)
 
   __device__ IndexType size(IndexType seg) const { return d_segments[seg + 1] - d_segments[seg]; }
-  __device__ bool is_short(IndexType seg) const { return size(seg) <= max_short_size; }
   __device__ bool is_candidate(IndexType seg) const { return size(seg) <= max_dedup_size; }
   __device__ IndexType slot(IndexType seg) const
   {
@@ -652,6 +652,10 @@ CUDF_KERNEL void bpe_finalize(cudf::column_device_view const d_strings,
  * On input, `d_spaces` contains a 1 for each byte that starts a segment.
  * On output, it contains a 1 for each byte that starts a token.
  *
+ * While encoding, the first byte of a segment that copies the result of an identical
+ * segment is set to `copy_flag`. The encoding kernels only write to the segments they
+ * encode so the flag remains until the result is copied.
+ *
  * @tparam IndexType Type for segment offsets and indices: int32_t when the chars
  *                   size allows, to reduce the memory footprint
  */
@@ -689,12 +693,26 @@ void encode_segments(char const* d_input_chars,
     bpe_dedup_fn<IndexType>{d_input_chars, d_segments.data(), d_slots.data(), num_slots - 1};
   CUDF_CUDA_TRY(cub::DeviceFor::Bulk(
     num_segments, [dedup] __device__(IndexType seg) { dedup.claim(seg); }, stream.get()));
+  // segments that copy their result are flagged once since hashing is expensive
+  CUDF_CUDA_TRY(cub::DeviceFor::Bulk(
+    num_segments,
+    [dedup, d_segments = d_segments.data(), d_spaces] __device__(IndexType seg) {
+      if (dedup.source(seg) >= 0) { d_spaces[d_segments[seg]] = copy_flag; }
+    },
+    stream.get()));
+  auto const seg_size = [d_segments = d_segments.data()] __device__(IndexType seg) -> IndexType {
+    return d_segments[seg + 1] - d_segments[seg];
+  };
+  auto const is_copy = [d_segments = d_segments.data(), d_spaces] __device__(IndexType seg) {
+    return d_spaces[d_segments[seg]] == copy_flag;
+  };
 
-  auto const d_encode = cuda::transform_iterator(
-    cuda::counting_iterator<IndexType>{0},
-    cuda::proclaim_return_type<IndexType>([dedup] __device__(IndexType seg) -> IndexType {
-      return dedup.is_short(seg) && dedup.source(seg) < 0;
-    }));
+  auto const d_encode =
+    cuda::transform_iterator(cuda::counting_iterator<IndexType>{0},
+                             cuda::proclaim_return_type<IndexType>(
+                               [seg_size, is_copy] __device__(IndexType seg) -> IndexType {
+                                 return seg_size(seg) <= max_short_size && !is_copy(seg);
+                               }));
   auto const num_encode = cudf::detail::reduce(
     d_encode, d_encode + num_segments, IndexType{0}, cuda::std::plus<IndexType>{}, stream);
   auto d_encode_ids = rmm::device_uvector<IndexType>(num_encode, stream);
@@ -721,10 +739,11 @@ void encode_segments(char const* d_input_chars,
   // encode the distinct long segments with a block per segment
   auto const d_seg_sizes = cuda::transform_iterator(
     cuda::counting_iterator<IndexType>{0},
-    cuda::proclaim_return_type<IndexType>([dedup] __device__(IndexType idx) -> IndexType {
-      auto const size = dedup.size(idx);
-      return (size > max_short_size && dedup.source(idx) < 0) ? size : IndexType{0};
-    }));
+    cuda::proclaim_return_type<IndexType>(
+      [seg_size, is_copy] __device__(IndexType idx) -> IndexType {
+        auto const size = seg_size(idx);
+        return (size > max_short_size && !is_copy(idx)) ? size : IndexType{0};
+      }));
   auto const d_is_long = cuda::transform_iterator(
     d_seg_sizes, cuda::proclaim_return_type<IndexType>([] __device__(IndexType size) -> IndexType {
       return size > 0;
@@ -773,12 +792,12 @@ void encode_segments(char const* d_input_chars,
   // copy the results to the duplicate segments
   CUDF_CUDA_TRY(cub::DeviceFor::Bulk(
     num_segments,
-    [dedup, d_segments = d_segments.data(), d_spaces = d_spaces] __device__(IndexType seg) {
+    [dedup, seg_size, is_copy, d_segments = d_segments.data(), d_spaces] __device__(IndexType seg) {
+      if (!is_copy(seg)) { return; }
       auto const rep = dedup.source(seg);
-      if (rep < 0) { return; }
       auto const src = d_spaces + d_segments[rep];
       auto const dst = d_spaces + d_segments[seg];
-      for (IndexType i = 0; i < dedup.size(seg); ++i) {
+      for (IndexType i = 0; i < seg_size(seg); ++i) {
         dst[i] = src[i];
       }
     },
