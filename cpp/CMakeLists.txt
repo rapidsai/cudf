@@ -752,6 +752,8 @@ add_library(
   src/groupby/sort/aggregate.cpp
   src/groupby/sort/group_argmax.cu
   src/groupby/sort/group_argmin.cu
+  src/groupby/sort/group_argminmax_nested.cu
+  src/groupby/sort/group_argminmax_primitives.cu
   src/groupby/sort/group_bitwise.cu
   src/groupby/sort/group_collect.cu
   src/groupby/sort/group_correlation.cu
@@ -1486,18 +1488,6 @@ if(TARGET conda_env)
 endif()
 
 rapids_cuda_set_runtime(cudf USE_STATIC ON)
-
-file(
-  WRITE "${CUDF_BINARY_DIR}/fatbin.ld"
-  [=[
-SECTIONS
-{
-  .nvFatBinSegment : { *(.nvFatBinSegment) }
-  .nv_fatbin : { *(.nv_fatbin) }
-}
-]=]
-)
-target_link_options(cudf PRIVATE "$<HOST_LINK:${CUDF_BINARY_DIR}/fatbin.ld>")
 
 add_library(cudf::cudf ALIAS cudf)
 

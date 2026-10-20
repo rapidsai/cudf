@@ -20,6 +20,7 @@
 #include <functional>
 #include <numeric>
 #include <optional>
+#include <stdexcept>
 #include <unordered_set>
 #include <utility>
 
@@ -60,47 +61,6 @@ namespace {
   return static_cast<cudf::size_type>(total_row_groups);
 }
 
-// Compute the page index (column index and/or offset index) byte range
-[[nodiscard]] byte_range_info page_index_byte_range(parquet::detail::metadata const& file_metadata)
-{
-  if (file_metadata.is_page_index_setup()) { return {}; }
-
-  auto const& row_groups = file_metadata.row_groups;
-  if (row_groups.empty() or row_groups.front().columns.empty()) { return {}; }
-
-  // Helpers to check if a column chunk has a column index or offset index
-  auto const has_column_index = [](ColumnChunk const& col) {
-    return col.column_index_offset > 0 and col.column_index_length > 0;
-  };
-  auto const has_offset_index = [](ColumnChunk const& col) {
-    return col.offset_index_offset > 0 and col.offset_index_length > 0;
-  };
-
-  auto const min_offset = [&]() -> int64_t {
-    auto const& first_col = row_groups.front().columns.front();
-    if (has_column_index(first_col)) {
-      return first_col.column_index_offset;
-    } else if (has_offset_index(first_col)) {
-      return first_col.offset_index_offset;
-    }
-    return int64_t{0};
-  }();
-
-  auto const max_offset = [&]() -> int64_t {
-    auto const& last_col = row_groups.back().columns.back();
-    if (has_offset_index(last_col)) {
-      return last_col.offset_index_offset + last_col.offset_index_length;
-    } else if (has_column_index(last_col)) {
-      return last_col.column_index_offset + last_col.column_index_length;
-    }
-    return int64_t{0};
-  }();
-
-  return (min_offset > 0 and max_offset > min_offset)
-           ? byte_range_info{min_offset, max_offset - min_offset}
-           : byte_range_info{};
-}
-
 }  // namespace
 
 metadata::metadata(cudf::host_span<uint8_t const> footer_bytes)
@@ -112,7 +72,7 @@ metadata::metadata(cudf::host_span<uint8_t const> footer_bytes)
 }
 
 aggregate_reader_metadata::aggregate_reader_metadata(
-  cudf::host_span<cudf::host_span<uint8_t const> const> footer_bytes,
+  std::span<cudf::host_span<uint8_t const> const> footer_bytes,
   bool use_arrow_schema,
   bool has_cols_from_mismatched_srcs)
   : aggregate_reader_metadata(
@@ -124,7 +84,7 @@ aggregate_reader_metadata::aggregate_reader_metadata(
 }
 
 aggregate_reader_metadata::aggregate_reader_metadata(
-  cudf::host_span<FileMetaData const> parquet_metadatas,
+  std::span<FileMetaData const> parquet_metadatas,
   bool use_arrow_schema,
   bool has_cols_from_mismatched_srcs)
   : aggregate_reader_metadata(
@@ -148,7 +108,7 @@ std::vector<text::byte_range_info> aggregate_reader_metadata::page_index_byte_ra
   std::ranges::transform(per_file_metadata,
                          std::back_inserter(page_index_byte_ranges),
                          [](auto const& file_metadata) -> text::byte_range_info {
-                           return page_index_byte_range(file_metadata);
+                           return file_metadata.page_index_byte_range();
                          });
 
   return page_index_byte_ranges;
@@ -216,11 +176,19 @@ void aggregate_reader_metadata::setup_page_indexes(
     CUDF_EXPECTS(not row_groups.empty() and not row_groups.front().columns.empty(),
                  "No column chunks in Parquet schema to read page index for");
 
-    auto const expected_byte_range = page_index_byte_range(file_metadata);
+    // Treat an exception as an invalid byte range
+    auto const expected_byte_range = [&]() -> text::byte_range_info {
+      try {
+        return file_metadata.page_index_byte_range();
+      } catch (std::overflow_error const&) {
+        return {};
+      }
+    }();
 
     CUDF_EXPECTS(not expected_byte_range.is_empty() and
                    std::cmp_equal(pgidx_bytes.size(), expected_byte_range.size()),
-                 "Encountered an invalid page index buffer");
+                 "Encountered an invalid page index buffer",
+                 std::invalid_argument);
 
     file_metadata.setup_page_index(pgidx_bytes, expected_byte_range.offset());
   });
@@ -407,14 +375,20 @@ aggregate_reader_metadata::bloom_filters_byte_ranges(
   std::span<cudf::size_type const> output_column_schemas,
   std::reference_wrapper<ast::expression const> filter)
 {
+  // Timestamp columns stored with another precision in any source cannot use bloom filters
+  auto const ts_precision_mismatches =
+    calc_mismatched_timestamp_mask(output_dtypes, output_column_schemas);
+
   // Collect equality literals for each input table column
   auto literals_collector = equality_literals_collector{
-    filter.get(), output_dtypes, output_column_schemas, per_file_metadata[0].schema};
+    filter.get(),
+    output_dtypes,
+    std::span{ts_precision_mismatches.data(), ts_precision_mismatches.size()}};
 
   // Return early if bloom filters cannot prune any row groups with this filter
   if (not literals_collector.can_filter()) { return {}; }
 
-  auto const literals = std::move(literals_collector).get_literals();
+  auto const literals = std::move(literals_collector).get_literals_and_operators().first;
 
   // Collect schema indices of columns with equality predicate(s)
   std::vector<cudf::size_type> bloom_filter_col_schemas;
@@ -486,7 +460,7 @@ aggregate_reader_metadata::dictionary_pages_byte_ranges(
   // Return early if dictionary pages cannot prune any row groups with this filter
   if (not literals_collector.can_filter()) { return {}; }
 
-  auto const literals = std::move(literals_collector).get_literals();
+  auto const literals = std::move(literals_collector).get_literals_and_operators().first;
 
   // Collect schema indices of columns with equality predicate(s)
   std::vector<cudf::size_type> dictionary_col_schemas;
@@ -642,14 +616,20 @@ aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
   std::reference_wrapper<ast::expression const> filter,
   cuda::stream_ref stream) const
 {
+  // Timestamp columns stored with another precision in any source cannot use bloom filters
+  auto const ts_precision_mismatches =
+    calc_mismatched_timestamp_mask(output_dtypes, output_column_schemas);
+
   // Collect equality literals for each input table column
   auto literals_collector = equality_literals_collector{
-    filter.get(), output_dtypes, output_column_schemas, per_file_metadata[0].schema};
+    filter.get(),
+    output_dtypes,
+    std::span{ts_precision_mismatches.data(), ts_precision_mismatches.size()}};
 
   // Return early if bloom filters cannot prune any row groups with this filter
   if (not literals_collector.can_filter()) { return all_row_group_indices(row_group_indices); }
 
-  auto const literals = std::move(literals_collector).get_literals();
+  auto const [literals, operators] = std::move(literals_collector).get_literals_and_operators();
 
   // Collect schema indices of columns with equality predicate(s)
   std::vector<cudf::size_type> bloom_filter_col_schemas;
@@ -679,16 +659,15 @@ aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
         reinterpret_cast<cuda::std::byte const*>(data.data()), data.size()};
     });
 
-  auto const bloom_filtered_row_groups =
-    apply_bloom_filters(transformed_bloom_filter_data,
-                        host_span<std::vector<cudf::size_type> const>{row_group_indices.data(),
-                                                                      row_group_indices.size()},
-                        literals,
-                        total_row_groups,
-                        host_span<data_type const>{output_dtypes.data(), output_dtypes.size()},
-                        bloom_filter_col_schemas,
-                        filter,
-                        stream);
+  auto const bloom_filtered_row_groups = apply_bloom_filters(transformed_bloom_filter_data,
+                                                             row_group_indices,
+                                                             literals,
+                                                             operators,
+                                                             total_row_groups,
+                                                             output_dtypes,
+                                                             bloom_filter_col_schemas,
+                                                             filter,
+                                                             stream);
 
   return bloom_filtered_row_groups.value_or(all_row_group_indices(row_group_indices));
 }

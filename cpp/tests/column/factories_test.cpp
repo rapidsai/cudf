@@ -409,9 +409,9 @@ TYPED_TEST(ListsFixedWidthLeafTest, FromNonNested)
   auto s   = cudf::make_list_scalar(FCW({1, -1, 3}, {1, 0, 1}));
   auto col = cudf::make_column_from_scalar(*s, 3);
 
-  auto expected = LCW{LCW({1, 2, 3}, valid_t{1, 0, 1}.begin()),
-                      LCW({1, 2, 3}, valid_t{1, 0, 1}.begin()),
-                      LCW({1, 2, 3}, valid_t{1, 0, 1}.begin())};
+  auto expected = LCW{{{1, 2, 3}, valid_t{1, 0, 1}.begin()},
+                      {{1, 2, 3}, valid_t{1, 0, 1}.begin()},
+                      {{1, 2, 3}, valid_t{1, 0, 1}.begin()}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col, expected);
 }
 
@@ -420,16 +420,14 @@ TYPED_TEST(ListsFixedWidthLeafTest, FromNested)
   using LCW     = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
   using valid_t = std::vector<cudf::valid_type>;
 
-#define row_data \
-  LCW({LCW({-1, -1, 3}, valid_t{0, 0, 1}.begin()), LCW{}, LCW{}}, valid_t{1, 0, 1}.begin())
+  typename LCW::initializer_type const row_data{{{{-1, -1, 3}, valid_t{0, 0, 1}.begin()}, {}, {}},
+                                                valid_t{1, 0, 1}.begin()};
 
-  auto s   = cudf::make_list_scalar(row_data);
+  auto s   = cudf::make_list_scalar(LCW(row_data));
   auto col = cudf::make_column_from_scalar(*s, 5);
 
-  auto expected = LCW{row_data, row_data, row_data, row_data, row_data};
+  auto expected = LCW({row_data, row_data, row_data, row_data, row_data});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col, expected);
-
-#undef row_data
 }
 
 template <typename T>
@@ -461,7 +459,7 @@ TYPED_TEST(ListsDictionaryLeafTest, FromNested)
   DCW leaf({1, 3, -1, 1, 3, 1, 3, -1, 1, 3}, {1, 1, 0, 1, 1, 1, 1, 0, 1, 1});
   offset_t offsets{0, 3, 3, 6, 6, 10};
   auto mask = cudf::create_null_mask(5, cudf::mask_state::ALL_VALID);
-  cudf::set_null_mask(reinterpret_cast<cudf::bitmask_type*>(mask.data()), 1, 2, false);
+  cudf::set_null_mask(mask.data(), 1, 2, false);
   auto data = cudf::make_lists_column(5, offsets.release(), leaf.release(), 0, std::move(mask));
 
   auto s   = cudf::make_list_scalar(*data);
@@ -473,9 +471,9 @@ TYPED_TEST(ListsDictionaryLeafTest, FromNested)
     {1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1});
   offset_t offsets2{0, 3, 3, 6, 6, 10, 13, 13, 16, 16, 20, 23, 23, 26, 26, 30};
   auto mask2 = cudf::create_null_mask(15, cudf::mask_state::ALL_VALID);
-  cudf::set_null_mask(reinterpret_cast<cudf::bitmask_type*>(mask2.data()), 1, 2, false);
-  cudf::set_null_mask(reinterpret_cast<cudf::bitmask_type*>(mask2.data()), 6, 7, false);
-  cudf::set_null_mask(reinterpret_cast<cudf::bitmask_type*>(mask2.data()), 11, 12, false);
+  cudf::set_null_mask(mask2.data(), 1, 2, false);
+  cudf::set_null_mask(mask2.data(), 6, 7, false);
+  cudf::set_null_mask(mask2.data(), 11, 12, false);
   auto nested = [&] {
     auto tmp =
       cudf::make_lists_column(15, offsets2.release(), leaf2.release(), 3, std::move(mask2));
@@ -501,10 +499,10 @@ TEST_F(ListsStringLeafTest, FromNonNested)
   auto s   = cudf::make_list_scalar(SCW({"xx", "", "z"}, {true, false, true}));
   auto col = cudf::make_column_from_scalar(*s, 4);
 
-  auto expected = LCW{LCW({"xx", "", "z"}, valid_t{1, 0, 1}.begin()),
-                      LCW({"xx", "", "z"}, valid_t{1, 0, 1}.begin()),
-                      LCW({"xx", "", "z"}, valid_t{1, 0, 1}.begin()),
-                      LCW({"xx", "", "z"}, valid_t{1, 0, 1}.begin())};
+  auto expected = LCW{{{"xx", "", "z"}, valid_t{1, 0, 1}.begin()},
+                      {{"xx", "", "z"}, valid_t{1, 0, 1}.begin()},
+                      {{"xx", "", "z"}, valid_t{1, 0, 1}.begin()},
+                      {{"xx", "", "z"}, valid_t{1, 0, 1}.begin()}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col, expected);
 }
 
@@ -513,20 +511,19 @@ TEST_F(ListsStringLeafTest, FromNested)
   using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
   using valid_t = std::vector<cudf::valid_type>;
 
-#define row_data                                                              \
-  LCW({LCW{},                                                                 \
-       LCW({"@@", "rapids", "", "四", "ら"}, valid_t{1, 1, 0, 1, 1}.begin()), \
-       LCW{},                                                                 \
-       LCW({"hello", ""}, valid_t{1, 0}.begin())},                            \
-      valid_t{0, 1, 1, 1}.begin())
+  LCW::initializer_type const row_data{
+    {{},
+     {{"@@", "rapids", "", "四", "ら"}, valid_t{1, 1, 0, 1, 1}.begin()},
+     {},
+     {{"hello", ""}, valid_t{1, 0}.begin()}},
+    valid_t{0, 1, 1, 1}.begin()};
 
-  auto s = cudf::make_list_scalar(row_data);
+  auto s = cudf::make_list_scalar(LCW(row_data));
 
   auto col = cudf::make_column_from_scalar(*s, 3);
 
-  auto expected = LCW{row_data, row_data, row_data};
+  auto expected = LCW({row_data, row_data, row_data});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col, expected);
-#undef row_data
 }
 
 template <typename T>
@@ -585,13 +582,12 @@ TYPED_TEST(ListsStructsLeafTest, FromNested)
   using StringCW   = cudf::test::strings_column_wrapper;
   using offset_t   = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
   using valid_t    = std::vector<cudf::valid_type>;
-  auto leaf        = this->make_test_structs_column(
-    {{1, 2}, {0, 1}},
-    StringCW({"étoile", "星"}, {true, true}),
-    LCWinner_t({LCWinner_t{}, LCWinner_t{42}}, valid_t{1, 1}.begin()),
-    valid_t{0, 1}.begin());
-  auto mask = cudf::create_null_mask(3, cudf::mask_state::ALL_VALID);
-  cudf::set_null_mask(reinterpret_cast<cudf::bitmask_type*>(mask.data()), 0, 1, false);
+  auto leaf        = this->make_test_structs_column({{1, 2}, {0, 1}},
+                                             StringCW({"étoile", "星"}, {true, true}),
+                                             LCWinner_t({{}, {42}}, valid_t{1, 1}.begin()),
+                                             valid_t{0, 1}.begin());
+  auto mask        = cudf::create_null_mask(3, cudf::mask_state::ALL_VALID);
+  cudf::set_null_mask(mask.data(), 0, 1, false);
   auto data =
     cudf::make_lists_column(3, offset_t{0, 0, 1, 2}.release(), leaf.release(), 1, std::move(mask));
   auto s = cudf::make_list_scalar(*data);
@@ -602,14 +598,12 @@ TYPED_TEST(ListsStructsLeafTest, FromNested)
     {{1, 2, 1, 2, 1, 2}, {0, 1, 0, 1, 0, 1}},
     StringCW({"étoile", "星", "étoile", "星", "étoile", "星"},
              {true, true, true, true, true, true}),
-    LCWinner_t(
-      {LCWinner_t{}, LCWinner_t{42}, LCWinner_t{}, LCWinner_t{42}, LCWinner_t{}, LCWinner_t{42}},
-      valid_t{1, 1, 1, 1, 1, 1}.begin()),
+    LCWinner_t({{}, {42}, {}, {42}, {}, {42}}, valid_t{1, 1, 1, 1, 1, 1}.begin()),
     valid_t{0, 1, 0, 1, 0, 1}.begin());
   auto mask2 = cudf::create_null_mask(9, cudf::mask_state::ALL_VALID);
-  cudf::set_null_mask(reinterpret_cast<cudf::bitmask_type*>(mask2.data()), 0, 1, false);
-  cudf::set_null_mask(reinterpret_cast<cudf::bitmask_type*>(mask2.data()), 3, 4, false);
-  cudf::set_null_mask(reinterpret_cast<cudf::bitmask_type*>(mask2.data()), 6, 7, false);
+  cudf::set_null_mask(mask2.data(), 0, 1, false);
+  cudf::set_null_mask(mask2.data(), 3, 4, false);
+  cudf::set_null_mask(mask2.data(), 6, 7, false);
   auto data2 = [&] {
     auto tmp = cudf::make_lists_column(
       9, offset_t{0, 0, 1, 2, 2, 3, 4, 4, 5, 6}.release(), leaf2.release(), 3, std::move(mask2));
@@ -654,7 +648,7 @@ TEST_F(ListsZeroLengthColumnTest, MixedTypes)
   }
 
   {
-    auto s      = cudf::make_list_scalar(LCW{LCW{1, 2, 3}, LCW{}, LCW{5, 6}});
+    auto s      = cudf::make_list_scalar(LCW{{1, 2, 3}, {}, {5, 6}});
     auto got    = cudf::make_column_from_scalar(*s, 0);
     auto nested = cudf::make_lists_column(0,
                                           offset_t{}.release(),
@@ -730,12 +724,10 @@ TEST_F(ListsZeroLengthColumnTest, SuperimposeNulls)
 
 void struct_from_scalar(bool is_valid)
 {
-  using LCW = cudf::test::lists_column_wrapper<int>;
-
   cudf::test::fixed_width_column_wrapper<int> col0{1};
   cudf::test::strings_column_wrapper col1{"abc"};
   cudf::test::lists_column_wrapper<int> col2{{1, 2, 3}};
-  cudf::test::lists_column_wrapper<int> col3{LCW{}};
+  cudf::test::lists_column_wrapper<int> col3{{}};
 
   std::vector<cudf::column_view> src_children({col0, col1, col2, col3});
   auto value = cudf::struct_scalar(src_children, is_valid);
