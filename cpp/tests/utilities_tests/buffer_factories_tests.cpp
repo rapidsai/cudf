@@ -122,6 +122,14 @@ TYPED_TEST(BufferFactoriesTest, StdSpan)
         return cudf::detail::make_device_buffer_async(span, this->stream, mr);
       },
       input);
+    SCOPED_TRACE(::testing::Message() << "size=" << size << ", mutable");
+    auto mutable_input = input;
+    this->check_buffer(
+      [&](cudf::memory_resources mr) {
+        return cudf::detail::make_device_buffer(
+          std::span<TypeParam>{mutable_input}, this->stream, mr);
+      },
+      input);
   }
 }
 
