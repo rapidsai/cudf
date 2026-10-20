@@ -800,9 +800,9 @@ def test_scan_lake_list_cast_allowed(
         (
             pl.Struct({"x": pl.Int32}),
             pl.Struct({"x": pl.Int64}),
-            r"integer_cast='upcast'",
+            "data type mismatch for column",
         ),
-        (pl.List(pl.Int32), pl.List(pl.Int64), r"integer_cast='upcast'"),
+        (pl.List(pl.Int32), pl.List(pl.Int64), "data type mismatch for column a"),
         (pl.Struct({"x": pl.Int64}), pl.Int64, "data type mismatch for column a"),
         (pl.Int64, pl.List(pl.Int64), "data type mismatch for column a"),
     ],

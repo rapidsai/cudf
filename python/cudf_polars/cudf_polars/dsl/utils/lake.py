@@ -579,9 +579,7 @@ def read_lake_files(
             ]
             if extra:
                 raise pl.exceptions.SchemaError(
-                    f"extra column in file outside of expected schema: {extra[0]}, "
-                    "hint: specify this column in the schema, or pass "
-                    "extra_columns='ignore' in scan options. "
+                    f"extra column in file outside of expected schema: {extra[0]}. "
                     f"File containing extra column: '{path}'."
                 )
 
@@ -952,60 +950,42 @@ def _check_cast(
     dest = target.plc_type.id()
     if source == dest:
         return
-    hint: str | None
     if source in _INTEGER_TYPES and dest in _INTEGER_TYPES:
         source_bits, source_signed = _INTEGER_TYPES[source]
         dest_bits, dest_signed = _INTEGER_TYPES[dest]
-        if not cast_columns_policy["integer_upcast"]:
-            hint = _cast_hint("integer_cast='upcast'")
-        elif dest_bits > source_bits and (dest_signed or not source_signed):
-            hint = None
-        else:
-            hint = "incoming dtype cannot safely cast to target dtype"
+        allowed = (
+            cast_columns_policy["integer_upcast"]
+            and dest_bits > source_bits
+            and (dest_signed or not source_signed)
+        )
     elif source in _FLOAT_WIDTHS and dest in _FLOAT_WIDTHS:
-        policy, option = (
-            ("float_upcast", "upcast")
+        policy = (
+            "float_upcast"
             if _FLOAT_WIDTHS[dest] > _FLOAT_WIDTHS[source]
-            else ("float_downcast", "downcast")
+            else "float_downcast"
         )
-        hint = (
-            None
-            if cast_columns_policy[policy]
-            else _cast_hint(f"float_cast='{option}'")
-        )
+        allowed = cast_columns_policy[policy]
     elif source in _INTEGER_TYPES and dest in _FLOAT_WIDTHS:
-        hint = (
-            None
-            if cast_columns_policy["integer_to_float_cast"]
-            else _cast_hint("integer_cast='allow-float'")
-        )
+        allowed = cast_columns_policy["integer_to_float_cast"]
     elif source in _TIMESTAMP_DIGITS and dest in _TIMESTAMP_DIGITS:
         source_digits = _TIMESTAMP_DIGITS[source]
         dest_digits = _TIMESTAMP_DIGITS[dest]
         if source_digits == 9:
-            policy, option = "datetime_nanoseconds_downcast", "nanosecond-downcast"
+            policy = "datetime_nanoseconds_downcast"
         elif source_digits == 6 and dest_digits == 3:
-            policy, option = "datetime_microseconds_downcast", "microsecond-downcast"
+            policy = "datetime_microseconds_downcast"
         elif source_digits == 6:
-            policy, option = "datetime_microseconds_upcast", "microsecond-upcast"
+            policy = "datetime_microseconds_upcast"
         else:
-            policy, option = "datetime_milliseconds_upcast", "millisecond-upcast"
-        hint = (
-            None
-            if cast_columns_policy[policy]
-            else _cast_hint(f"datetime_cast='{option}'")
-        )
+            policy = "datetime_milliseconds_upcast"
+        allowed = cast_columns_policy[policy]
     else:
         return
-    if hint is not None:
+    if not allowed:
         raise pl.exceptions.SchemaError(
             f"data type mismatch for column {name}: "
-            f"incoming: {source.name} != target: {target.polars_type}, {hint}"
+            f"incoming: {source.name} != target: {target.polars_type}"
         )
-
-
-def _cast_hint(option: str) -> str:
-    return f"hint: pass cast_options=pl.ScanCastOptions({option})"
 
 
 _NESTED_TYPES = frozenset({plc.TypeId.STRUCT, plc.TypeId.LIST})
@@ -1125,9 +1105,7 @@ def _cast_to_table_type(
             if extra:
                 raise pl.exceptions.SchemaError(
                     f"data type mismatch for column {name}: "
-                    f"encountered extra struct field: {extra[0]}, "
-                    "hint: specify this field in the schema, or pass "
-                    "cast_options=pl.ScanCastOptions(extra_struct_fields='ignore')"
+                    f"encountered extra struct field: {extra[0]}"
                 )
         new_children = []
         for field, field_dtype, (key, iceberg_field) in zip(
@@ -1153,8 +1131,7 @@ def _cast_to_table_type(
             elif cast_columns_policy["missing_struct_fields"] == "raise":
                 raise pl.exceptions.SchemaError(
                     f"data type mismatch for column {name}: "
-                    f"encountered missing struct field: {field.name}, "
-                    + _cast_hint("missing_struct_fields='insert'")
+                    f"encountered missing struct field: {field.name}"
                 )
             else:
                 new_children.append(
