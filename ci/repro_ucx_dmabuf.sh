@@ -27,7 +27,16 @@ run_seq() {
     r=$?
     echo "seq $tag nranks=$nrank rc=$r"
     [ $r -ne 0 ] && rc=$r
+    crashed=$(grep -l "Program received signal SIGSEGV" "$REPRO_LOG_DIR"/rank.*.log 2>/dev/null)
+    if [ -n "$crashed" ]; then
+      for f in $crashed; do
+        echo "----- $f"
+        python3 "$ROOT/ci/repro_report.py" "$f"
+      done
+      return 99
+    fi
     if [ $r -ne 0 ]; then
+      if [ -f "$REPRO_LOG_DIR/rank.0.log" ]; then echo "----- rank.0.log (head)"; head -20 "$REPRO_LOG_DIR/rank.0.log"; fi
       echo "----- crash output ($tag, $nrank ranks)"
       grep -v -E "^\s*$|platform linux|rootdir|configfile|plugins|test session|collect" "/tmp/seq.$tag.$nrank.log" | tail -30
     fi
@@ -35,17 +44,18 @@ run_seq() {
   return $rc
 }
 
-echo "=== first-call race across processes and threads"
-python "$ROOT/ci/repro_first.py"
+echo "=== gdb sanity"
+export REPRO_GDB_CMDS="$ROOT/ci/repro_gdb.cmds"
+export REPRO_LOG_DIR=/tmp/gdbsanity
+mkdir -p "$REPRO_LOG_DIR"
+gdb --version | head -1
+cat /proc/sys/kernel/yama/ptrace_scope 2>&1
+gdb -batch -x "$REPRO_GDB_CMDS" -ex run -ex 'bt 3' --args python -c "import ctypes; ctypes.CDLL('libcuda.so.1').cuInit(0); print('hello')" 2>&1 | tail -15
 
-echo "=== sequences with UCX native crash handler"
-export UCX_HANDLE_ERRORS=bt
-PYTEST_ARGS=(-p no:faulthandler "${PYTEST_ARGS[@]}")
-pf=0
-for i in $(seq 1 4); do
-  run_seq "ucxbt$i" ""
-  [ $? -ne 0 ] && pf=$((pf+1))
+echo "=== gdb sequences"
+for i in $(seq 1 6); do
+  run_seq "gdb$i" "$ROOT/ci/repro_gdb_rank.sh"
+  if [ $? -eq 99 ]; then break; fi
 done
-echo "sequence failures: $pf / 4"
 echo "repro script finished"
 exit 0
