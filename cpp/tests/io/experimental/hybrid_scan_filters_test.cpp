@@ -2567,14 +2567,20 @@ TEST_F(HybridScanFiltersTest, DictionaryPagesByteRangesIncludeUnboundedMatchesEx
         return lhs.offset() == rhs.offset() and lhs.size() == rhs.size();
       }));
 
-      // Prune with the exact ranges. RG 1 has no dictionary to prune with, and with hidden offsets
-      // neither does RG 0, so only an absent literal with RG 0's offset intact prunes anything.
+      // With hidden offsets there are no exact ranges, so there is nothing to prune with
+      if (hide_offsets) {
+        EXPECT_TRUE(exact.empty());
+        continue;
+      }
+
+      // Prune with the exact ranges. RG 1 has no dictionary to prune with, so only an absent
+      // literal prunes RG 0.
       auto const mr = cudf::get_current_device_resource_ref();
       EXPECT_EQ(filter_row_groups_with_dictionaries(*datasource, *reader, options, stream, mr),
                 (std::vector<cudf::size_type>{0, 1}));
       EXPECT_EQ(
         filter_row_groups_with_dictionaries(*datasource, *reader, absent_options, stream, mr),
-        (hide_offsets ? std::vector<cudf::size_type>{0, 1} : std::vector<cudf::size_type>{1}));
+        (std::vector<cudf::size_type>{1}));
     }
   }
 }
