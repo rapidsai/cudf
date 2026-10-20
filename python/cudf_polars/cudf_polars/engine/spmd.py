@@ -402,6 +402,54 @@ def synchronize_quent_configuration(
     )
 
 
+def synchronize_quent_reset_contexts(
+    *,
+    comm: Communicator,
+    context: Context,
+    existing_context: cudf_polars.quent.QuentConfig | None,
+    new_context: cudf_polars.quent.QuentConfig | None,
+) -> tuple[
+    cudf_polars.quent.QuentConfig | None,
+    cudf_polars.quent.QuentConfig | None,
+]:
+    """Broadcast rank 0's current and requested Quent contexts."""
+    if comm.nranks == 1:
+        return existing_context, new_context
+    if comm.rank == 0:
+        data = json.dumps(
+            {
+                "existing": (
+                    existing_context._serialize().decode()
+                    if existing_context is not None
+                    else None
+                ),
+                "new": (
+                    new_context._serialize().decode()
+                    if new_context is not None
+                    else None
+                ),
+            }
+        ).encode()
+    else:
+        data = b""
+    with reserve_op_id() as op_id:
+        all_data = all_gather_host_data(comm, context.br(), op_id, data)
+    synchronized = json.loads(all_data[0])
+    existing_data = synchronized["existing"]
+    new_data = synchronized["new"]
+    deserialized_existing = (
+        cudf_polars.quent.QuentConfig._deserialize(existing_data.encode())
+        if existing_data is not None
+        else None
+    )
+    deserialized_new = (
+        cudf_polars.quent.QuentConfig._deserialize(new_data.encode())
+        if new_data is not None
+        else None
+    )
+    return (deserialized_existing, deserialized_new)
+
+
 def synchronize_quent_query_id(
     *,
     comm: Communicator,
@@ -1013,6 +1061,12 @@ class SPMDEngine(StreamingEngine):
         engine_options = engine_options or {}
         new_quent_context: cudf_polars.quent.QuentConfig | None = executor_options.get(
             "quent_context", existing_quent_context
+        )
+        existing_quent_context, new_quent_context = synchronize_quent_reset_contexts(
+            comm=self._comm,
+            context=self._ctx,
+            existing_context=existing_quent_context,
+            new_context=new_quent_context,
         )
         quent_changing = new_quent_context != existing_quent_context
         rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)

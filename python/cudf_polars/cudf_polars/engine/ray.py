@@ -750,7 +750,9 @@ def _shutdown_ray(
     if ray_running:
 
         def shutdown_actors() -> None:
-            refs = [actor.shutdown.remote() for actor in rank_actors]
+            refs: list[ObjectRef[Any]] = [
+                actor.shutdown.remote() for actor in rank_actors
+            ]
             run_cleanup_steps(
                 "Ray actor shutdown failed",
                 *(lambda ref=ref: _wait_for_actor_shutdown(ref) for ref in refs),
