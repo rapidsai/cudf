@@ -8,23 +8,44 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <cuda/buffer>
 #include <cuda/stream>
 
+#include <cstddef>
 #include <optional>
+#include <utility>
 
 namespace cudf::groupby::detail::hash {
 
 /// The keys grouped by the HashCSR build.
-struct grouped_keys {
-  /// Input row indices for unique keys. Entries beyond `num_groups` are uninitialized.
-  cuda::device_buffer<size_type> key_indices;
-  /// `num_groups + 1` group offsets, present when requested.
+class grouped_keys {
+  cuda::device_buffer<size_type> _key_storage;
+
+ public:
+  grouped_keys(cuda::device_buffer<size_type>&& indices,
+               std::optional<cuda::device_buffer<size_type>>&& offsets,
+               std::optional<cuda::device_buffer<size_type>>&& rows,
+               size_type num_groups)
+    : _key_storage{std::move(indices)},
+      key_indices{_key_storage.data(), static_cast<std::size_t>(num_groups)},
+      group_offsets{std::move(offsets)},
+      grouped_rows{std::move(rows)}
+  {
+  }
+
+  grouped_keys(grouped_keys const&)            = delete;
+  grouped_keys& operator=(grouped_keys const&) = delete;
+  grouped_keys(grouped_keys&&)                 = default;
+  grouped_keys& operator=(grouped_keys&&)      = default;
+
+  /// Input row indices for unique keys; size equals the number of groups.
+  device_span<size_type const> key_indices;
+  /// `key_indices.size() + 1` group offsets, present when requested.
   std::optional<cuda::device_buffer<size_type>> group_offsets;
   /// Input row indices in contiguous groups, present when requested.
   std::optional<cuda::device_buffer<size_type>> grouped_rows;
-  size_type num_groups;  ///< Number of unique keys
 };
 
 /**

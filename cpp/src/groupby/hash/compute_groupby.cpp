@@ -101,11 +101,9 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   auto const groups = group_keys(
     keys, include_null_keys, !requests.empty(), needs_reduction, stream, temporary_resources);
 
-  auto const key_indices = device_span<size_type const>{
-    groups.key_indices.data(), static_cast<std::size_t>(groups.num_groups)};
   auto const gather_keys = [&] {
     return cudf::detail::gather(keys,
-                                key_indices,
+                                groups.key_indices,
                                 out_of_bounds_policy::DONT_CHECK,
                                 cudf::negative_index_policy::NOT_ALLOWED,
                                 stream,
