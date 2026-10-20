@@ -2277,12 +2277,23 @@ __device__ cudf::errc predicate(bool* output, int a, int b)
   cudf::column_view const skipped_view = skipped_indices;
   cudf::device_span<cudf::size_type const> const skipped_maps{skipped_view.data<cudf::size_type>(),
                                                               4};
-  EXPECT_NO_THROW(cudf::filter_join_indices_jit(cudf::table_view{{nullable_left}},
-                                                cudf::table_view{{right}},
-                                                skipped_maps,
-                                                maps,
-                                                udf,
-                                                GetParam()));
+  std::vector<index_pair> expected{{0, 0}, {3, 3}};
+  if (GetParam() != cudf::join_kind::INNER_JOIN) {
+    expected.emplace_back(1, cudf::JoinNoMatch);
+    expected.emplace_back(2, cudf::JoinNoMatch);
+  }
+  if (GetParam() == cudf::join_kind::FULL_JOIN) {
+    expected.emplace_back(cudf::JoinNoMatch, 1);
+    expected.emplace_back(cudf::JoinNoMatch, 2);
+  }
+  std::sort(expected.begin(), expected.end());
+  EXPECT_EQ(to_pairs(cudf::filter_join_indices_jit(cudf::table_view{{nullable_left}},
+                                                   cudf::table_view{{right}},
+                                                   skipped_maps,
+                                                   maps,
+                                                   udf,
+                                                   GetParam())),
+            expected);
 }
 
 TEST_P(FilterJoinJitErrorTest, AstErrorHandling)
@@ -2309,22 +2320,38 @@ TEST_P(FilterJoinJitErrorTest, AstErrorHandling)
     } catch (cudf::evaluation_error const& error) {
       EXPECT_EQ(error.error_code(), cudf::errc::DIVISION_BY_ZERO);
     }
-    EXPECT_NO_THROW(cudf::filter_join_indices_jit(cudf::table_view{{left}},
-                                                  cudf::table_view{{valid_right}},
-                                                  maps,
-                                                  maps,
-                                                  predicate,
-                                                  GetParam()));
+    std::vector<index_pair> expected{{0, 0}, {2, 2}, {3, 3}};
+    if (!nullable) {
+      expected.emplace_back(1, 1);
+    } else {
+      if (GetParam() != cudf::join_kind::INNER_JOIN) {
+        expected.emplace_back(1, cudf::JoinNoMatch);
+      }
+      if (GetParam() == cudf::join_kind::FULL_JOIN) { expected.emplace_back(cudf::JoinNoMatch, 1); }
+    }
+    std::sort(expected.begin(), expected.end());
+    EXPECT_EQ(to_pairs(cudf::filter_join_indices_jit(cudf::table_view{{left}},
+                                                     cudf::table_view{{valid_right}},
+                                                     maps,
+                                                     maps,
+                                                     predicate,
+                                                     GetParam())),
+              expected);
   }
 
   cudf::test::fixed_width_column_wrapper<int> null_dividend{{1, 2, 3, 4},
                                                             {true, true, false, true}};
-  EXPECT_NO_THROW(cudf::filter_join_indices_jit(cudf::table_view{{null_dividend}},
-                                                cudf::table_view{{right}},
-                                                maps,
-                                                maps,
-                                                predicate,
-                                                GetParam()));
+  std::vector<index_pair> expected{{0, 0}, {1, 1}, {3, 3}};
+  if (GetParam() != cudf::join_kind::INNER_JOIN) { expected.emplace_back(2, cudf::JoinNoMatch); }
+  if (GetParam() == cudf::join_kind::FULL_JOIN) { expected.emplace_back(cudf::JoinNoMatch, 2); }
+  std::sort(expected.begin(), expected.end());
+  EXPECT_EQ(to_pairs(cudf::filter_join_indices_jit(cudf::table_view{{null_dividend}},
+                                                   cudf::table_view{{right}},
+                                                   maps,
+                                                   maps,
+                                                   predicate,
+                                                   GetParam())),
+            expected);
 }
 
 INSTANTIATE_TEST_SUITE_P(JoinKinds,
