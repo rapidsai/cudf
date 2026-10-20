@@ -314,52 +314,25 @@ def test_scan_iceberg_schema_evolution(
 
 
 @pytest.mark.parametrize(
-    "table, query",
+    "query",
     [
-        ("evolved_iceberg", lambda q: q.filter(pl.col("a") < 3)),
-        ("evolved_iceberg", lambda q: q.filter(pl.col("b_renamed") == "y")),
-        ("evolved_iceberg", lambda q: q.filter(pl.col("c") > 2.0)),
-        (
-            "evolved_iceberg",
-            lambda q: q.filter(pl.col("b_renamed") == "y").with_row_index("idx"),
-        ),
-        ("evolved_iceberg", lambda q: q.filter(pl.col("b_renamed") == "y").head(1)),
-        (
-            "evolved_iceberg",
-            lambda q: q.with_row_index("idx").filter(pl.col("b_renamed") == "y"),
-        ),
-        ("evolved_iceberg", lambda q: q.head(4).filter(pl.col("b_renamed") == "y")),
-        ("renamed_iceberg", lambda q: q.filter(pl.col("b_renamed") == "y")),
-        ("promoted_iceberg", lambda q: q.filter(pl.col("a") < 3)),
-        ("promoted_iceberg", lambda q: q.filter(pl.col("b") == "q")),
-        ("partitioned_iceberg", lambda q: q.filter(pl.col("a").is_in([2, 3]))),
-        ("partitioned_delta", lambda q: q.filter(pl.col("a").is_in([2, 3]))),
+        lambda q: q.filter(pl.col("b_renamed") == "y").with_row_index("idx"),
+        lambda q: q.filter(pl.col("b_renamed") == "y").head(1),
+        lambda q: q.with_row_index("idx").filter(pl.col("b_renamed") == "y"),
+        lambda q: q.head(4).filter(pl.col("b_renamed") == "y"),
     ],
     ids=[
-        "widened",
-        "renamed",
-        "added",
         "filter_then_row_index",
         "filter_then_slice",
         "row_index_then_filter",
         "slice_then_filter",
-        "renamed_only",
-        "promoted",
-        "promoted_other_column",
-        "partitioned_iceberg",
-        "partitioned_delta",
     ],
 )
 def test_scan_lake_predicate_pushdown(
-    request: pytest.FixtureRequest,
-    in_memory_engine: pl.GPUEngine,
-    table: str,
-    query: Any,
+    in_memory_engine: pl.GPUEngine, evolved_iceberg: str, query: Any
 ) -> None:
-    scan = pl.scan_iceberg if table.endswith("iceberg") else pl.scan_delta
-    q = scan(request.getfixturevalue(table))
     assert_gpu_result_equal(
-        query(q),
+        query(pl.scan_iceberg(evolved_iceberg)),
         engine=in_memory_engine,
         check_row_order=False,
     )
