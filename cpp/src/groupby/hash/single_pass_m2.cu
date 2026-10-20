@@ -13,24 +13,12 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cuda/iterator>
-#include <cuda/std/array>
 #include <cuda/std/cmath>
 #include <cuda/std/limits>
 #include <cuda/std/tuple>
 
 namespace cudf::groupby::detail::hash {
 namespace {
-
-// Counts within a chunk are bounded. Cache rounded double reciprocals so the hot
-// per-value and chunk-tree merges need a multiply rather than a full FP64 division.
-// Cross-chunk merges with larger counts retain the ordinary division.
-__constant__ cuda::std::array<double, rows_per_chunk + 1> const inverse_counts = [] {
-  cuda::std::array<double, rows_per_chunk + 1> result{};
-  for (size_type i = 1; i <= rows_per_chunk; ++i) {
-    result[i] = 1.0 / i;
-  }
-  return result;
-}();
 
 template <typename T>
 concept count_type = cudf::is_integral_not_bool<T>() || cudf::is_floating_point<T>();
@@ -74,10 +62,12 @@ struct merge_m2 {
       auto constexpr nan = cuda::std::numeric_limits<double>::quiet_NaN();
       return {a.count + b.count, nan, nan};
     }
-    auto const count   = a.count + b.count;
-    auto const delta   = b.mean - a.mean;
-    auto const delta_n = count <= T{rows_per_chunk} ? delta * inverse_counts[count]
-                                                    : delta / static_cast<double>(count);
+    auto const count = a.count + b.count;
+    auto const delta = b.mean - a.mean;
+    // This is the same merge operator as for whole-column reductions of M2. A rounded
+    // reciprocal avoids both full division and a count-dependent lookup, including when
+    // merging partials across chunks.
+    auto const delta_n = delta * __drcp_rn(static_cast<double>(count));
     return {count, a.mean + delta_n * b.count, a.m2 + b.m2 + delta * delta_n * a.count * b.count};
   }
 
@@ -92,10 +82,11 @@ struct merge_m2 {
     // Preserve the general merge's non-finite/overflow behavior.
     if (!cuda::std::isfinite(delta)) { return (*this)(a, static_cast<m2_state<T>>(b)); }
     auto const count   = a.count + T{1};
-    auto const delta_n = count <= T{rows_per_chunk} ? delta * inverse_counts[count]
-                                                    : delta / static_cast<double>(count);
-    auto const mean    = a.mean + delta_n;
-    return {count, mean, a.m2 + delta * (b.value - mean)};
+    auto const delta_n = delta * __drcp_rn(static_cast<double>(count));
+    // As well as avoiding some work compared to the full merge, this specialization means
+    // avoids the problem that subtracting the updated mean from b.value would lose small
+    // deviations when the rounded mean equals b.value.
+    return {count, a.mean + delta_n, a.m2 + delta * delta_n * a.count};
   }
 };
 

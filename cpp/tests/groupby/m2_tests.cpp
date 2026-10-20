@@ -263,6 +263,48 @@ TYPED_TEST(GroupbyM2TypedTest, SlicedColumnsInput)
 
 struct GroupbyStableM2Test : public cudf::test::BaseFixture {};
 
+TEST_F(GroupbyStableM2Test, SingletonMergeWithRoundedMean)
+{
+  // The exact mean is halfway between representable doubles. The M2 correction
+  // must use the mean difference between states, rather than the rounded new mean.
+  keys_col<int32_t> keys{0, 0};
+  vals_col<double> values{0x1p52, 0x1p52 + 1};
+  std::vector<cudf::groupby::aggregation_request> requests(1);
+  requests[0].values = values;
+  requests[0].aggregations.push_back(cudf::make_m2_aggregation<cudf::groupby_aggregation>());
+  requests[0].aggregations.push_back(cudf::make_variance_aggregation<cudf::groupby_aggregation>(0));
+  requests[0].aggregations.push_back(cudf::make_std_aggregation<cudf::groupby_aggregation>(0));
+  cudf::groupby::groupby gb(cudf::table_view{{keys}});
+  auto result = gb.aggregate(requests);
+  vals_col<double> m2{0.5}, variance{0.25}, stddev{0.5};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(m2, *result.second[0].results[0]);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(variance, *result.second[0].results[1]);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(stddev, *result.second[0].results[2]);
+}
+
+TEST_F(GroupbyStableM2Test, ExtremeConstantsAcrossReductionBoundaries)
+{
+  for (int n : {1, 31, 32, 33, 1023, 1024, 1025, 4097}) {
+    SCOPED_TRACE(::testing::Message() << "n=" << n);
+    std::vector<int32_t> keys(n, 0);
+    std::vector<double> values(n, std::numeric_limits<double>::max());
+    keys_col<int32_t> input_keys(keys.begin(), keys.end());
+    vals_col<double> input_values(values.begin(), values.end());
+    std::vector<cudf::groupby::aggregation_request> requests(1);
+    requests[0].values = input_values;
+    requests[0].aggregations.push_back(cudf::make_m2_aggregation<cudf::groupby_aggregation>());
+    requests[0].aggregations.push_back(
+      cudf::make_variance_aggregation<cudf::groupby_aggregation>(0));
+    requests[0].aggregations.push_back(cudf::make_std_aggregation<cudf::groupby_aggregation>(0));
+    cudf::groupby::groupby gb(cudf::table_view{{input_keys}});
+    auto result = gb.aggregate(requests);
+    vals_col<double> expected{0.0};
+    for (auto const& column : result.second[0].results) {
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *column);
+    }
+  }
+}
+
 TEST_F(GroupbyStableM2Test, LargeOffsetAcrossReductionBoundaries)
 {
   for (int n : {1, 31, 32, 33, 1023, 1024, 1025, 4097}) {
