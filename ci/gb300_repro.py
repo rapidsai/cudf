@@ -11,6 +11,8 @@ import rmm
 from cuda.bindings import driver, runtime
 
 mode = sys.argv[1]
+if mode.endswith("-hw-off"):
+    os.environ["LIBCUDF_HW_DECOMPRESSION"] = "OFF"
 UINT64_MAX = 2**64 - 1
 
 
@@ -99,8 +101,13 @@ elif mode == "raw-plain-max-threshold-pending":
     raw_pool(False, True, sync_before_destroy=False)
 elif mode == "raw-hw-max-threshold-written-pending":
     raw_pool(True, True, sync_before_destroy=False, write=True)
-elif mode == "raw-plain-max-threshold-written-pending":
+elif mode in (
+    "raw-plain-max-threshold-written-pending",
+    "raw-plain-max-threshold-written-pending-hw-off",
+):
     raw_pool(False, True, sync_before_destroy=False, write=True)
+elif mode == "raw-plain-max-threshold-written-synced":
+    raw_pool(False, True, sync_before_destroy=True, write=True)
 elif mode == "rmm-device-buffer-destroy-pending":
     rmm_device_buffer_only()
 elif mode != "none":
