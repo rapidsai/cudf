@@ -44,14 +44,14 @@ Optional `GITHUB_REF` selects release tag vs SNAPSHOT versioning. Unset means
 SNAPSHOT. See the versioning section below.
 
 This compiles the JNI layer against the static libcudf from Step 1 and emits
-the classifier JAR (e.g. `cudf-26.10.0-SNAPSHOT-cuda12.jar`), a
+the classifier JAR (e.g. `cudf-26.10.1-SNAPSHOT-cuda12.jar`), a
 classifier-independent sources jar and javadoc jar, and the POM into a
 classifier-named subdirectory under `--output-dir`:
 
 ```text
 /tmp/jars/cuda12/
-    cudf-26.10.0-SNAPSHOT-cuda12.jar
-    cudf-26.10.0-SNAPSHOT.pom
+    cudf-26.10.1-SNAPSHOT-cuda12.jar
+    cudf-26.10.1-SNAPSHOT.pom
 ```
 
 The classifier is derived from `--cuda-version` (major) + host arch (`uname
@@ -81,12 +81,12 @@ lays them out as:
 
 ```text
 /tmp/maven-repo/ai/rapids/cudf/<CUDF_VERSION>-SNAPSHOT/
-    cudf-26.10.0-SNAPSHOT.jar
-    cudf-26.10.0-SNAPSHOT-cuda12.jar
-    cudf-26.10.0-SNAPSHOT-cuda13.jar
-    cudf-26.10.0-SNAPSHOT-sources.jar
-    cudf-26.10.0-SNAPSHOT-javadoc.jar
-    cudf-26.10.0-SNAPSHOT.pom
+    cudf-26.10.1-SNAPSHOT.jar
+    cudf-26.10.1-SNAPSHOT-cuda12.jar
+    cudf-26.10.1-SNAPSHOT-cuda13.jar
+    cudf-26.10.1-SNAPSHOT-sources.jar
+    cudf-26.10.1-SNAPSHOT-javadoc.jar
+    cudf-26.10.1-SNAPSHOT.pom
 ```
 
 The set of classifiers is whatever subdirectories are present under
@@ -99,7 +99,7 @@ it, so an `aarch64`-only set of subdirectories is not a valid gather input.
 ### Release Tag vs SNAPSHOT Versioning
 
 Release tag CI runs (`GITHUB_REF=refs/tags/vYY.MM.PP`) produce release-versioned
-JARs (`cudf-26.10.0-SNAPSHOT`. Gated by
+JARs (`cudf-26.10.1-SNAPSHOT`. Gated by
 [`rapids-is-release-build`](https://github.com/rapidsai/gha-tools/blob/main/tools/rapids-is-release-build).
 `GITHUB_REF` is optional. Unset or non-tag values stay SNAPSHOT.
 
@@ -171,4 +171,4 @@ ${sclCMD} "java/ci/build-in-docker.sh"
 
 ### The output
 
-You can find the cuDF jar in java/target/ like cudf-26.10.0-SNAPSHOT-cuda12.jar.
+You can find the cuDF jar in java/target/ like cudf-26.10.1-SNAPSHOT-cuda12.jar.
