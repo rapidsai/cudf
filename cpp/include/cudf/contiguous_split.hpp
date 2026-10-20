@@ -67,7 +67,7 @@ namespace CUDF_EXPORT cudf {
  * @param input View of a table to split
  * @param splits A span of indices where the view will be split
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr An optional memory resource to use for all returned device allocations
+ * @param mr Memory resource to allocate all returned device memory
  * @return The set of requested views of `input` indicated by the `splits` and the viewed memory
  * buffer
  */
