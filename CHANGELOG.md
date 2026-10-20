@@ -1,3 +1,11 @@
+# cudf 26.10.02 (20 Oct 2026)
+
+### 🛠️ Improvements
+* Require only major.minor rapidsmpf version in libcudf_streaming (#24719) by @josephine-wolf-oberholtzer in https://github.com/NVIDIA/cudf/pull/24721
+
+
+**Full Changelog**: https://github.com/NVIDIA/cudf/compare/v26.10.01...release/26.10
+
 # cudf 26.10.01 (20 Oct 2026)
 
 ### 🛠️ Improvements
