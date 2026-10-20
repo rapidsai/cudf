@@ -16,10 +16,11 @@ namespace cudf::groupby::detail::hash {
 
 /// The keys grouped by the HashCSR build.
 struct grouped_keys {
-  cuda::device_buffer<size_type> key_rows;       ///< First `num_groups` entries identify group keys
+  /// Input row indices for unique keys. Entries beyond `num_groups` are uninitialized.
+  cuda::device_buffer<size_type> key_indices;
   cuda::device_buffer<size_type> group_offsets;  ///< `num_groups + 1` offsets into `grouped_rows`
   cuda::device_buffer<size_type> grouped_rows;   ///< Input rows reordered so groups are contiguous
-  size_type num_groups;                          ///< Number of representative rows in `key_rows`
+  size_type num_groups;                          ///< Number of unique keys
 };
 
 /**
