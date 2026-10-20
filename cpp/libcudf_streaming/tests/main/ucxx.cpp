@@ -18,6 +18,7 @@
 #include <rapidsmpf/progress_thread.hpp>
 #include <ucxx/listener.h>
 
+#include <cstdlib>
 #include <memory>
 
 namespace {
@@ -29,6 +30,11 @@ class UCXXEnvironment : public Environment {
 
   void SetUp() override
   {
+    // UCX >= 1.22 exports a dmabuf for every newly seen device buffer to detect its memory flags.
+    // That export intermittently segfaults inside the CUDA driver while other threads allocate
+    // and free device memory. The tests do not use dmabuf, so disable it unless set by the user.
+    setenv("UCX_CUDA_COPY_DMABUF", "no", 0);
+
     // Ensure CUDA context is created before UCX is initialized.
     RAPIDSMPF_CUDA_TRY(cudaFree(nullptr));
 
