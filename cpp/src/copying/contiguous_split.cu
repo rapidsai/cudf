@@ -2939,8 +2939,12 @@ std::unique_ptr<column> allocate_materialized_column(
     CUDF_EXPECTS(metadata.null_count() == 0, "Packed column with nulls has no validity buffer");
   }
 
+  // Empty chars start where the offsets do, so they must not be filled from the offsets.
+  auto const has_chars =
+    metadata.type().id() != type_id::STRING ||
+    (metadata.num_children() > 0 && metadata.data_offset() != metadata.child(0).data_offset());
   rmm::device_buffer data;
-  if (auto const offset = metadata.data_offset(); offset != -1) {
+  if (auto const offset = metadata.data_offset(); offset != -1 && has_chars) {
     auto const required_bytes = is_fixed_width(metadata.type())
                                   ? metadata.num_rows() * size_of(metadata.type())
                                   : std::size_t{0};

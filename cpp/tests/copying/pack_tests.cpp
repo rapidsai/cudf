@@ -501,6 +501,15 @@ TEST_F(ExperimentalPackUnpackTest, CompressContiguousSplitPartitions)
       CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[i], cx::materialize(packed.view())->view());
     }
   }
+
+  // The strings of [1000, 20000) have no chars, so nothing may be copied into them.
+  for (auto const compression : {cx::pack_compression::none, cx::pack_compression::cascaded}) {
+    SCOPED_TRACE(static_cast<int>(compression));
+    auto const plan =
+      cx::make_pack_plan_builder(partitions[2].data, make_options(compression)).build();
+    auto columns = cx::materialize(pack_to_device(plan).view())->release();
+    EXPECT_EQ(columns[1]->release().data->size(), 0);
+  }
 }
 
 TEST_F(ExperimentalPackUnpackTest, ExistingPackedColumnsRequireMatchingLayout)
