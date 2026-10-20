@@ -805,10 +805,7 @@ void decompress(compression_type compression,
                                                       default_host_device_decompression_cost_ratio),
                               stream);
 
-  auto tmp_results =
-    cuda::device_buffer<codec_exec_result>(stream, temp_mr, results.size(), cuda::no_init);
-  CUDF_CUDA_TRY(
-    cudf::detail::memcpy_async(tmp_results.data(), results.data(), results.size_bytes(), stream));
+  auto tmp_results = cuda::device_buffer<codec_exec_result>(stream, temp_mr, results);
   device_span<codec_exec_result> results_view = tmp_results;
 
   // Chunks [0, split_idx) go to the host engine, [split_idx, end) to the device engine.
