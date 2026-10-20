@@ -181,7 +181,6 @@ def test_parquet_source_info_uses_decoded_dtype_floor(
             max_footer_samples: int,
             *,
             parse_hybrid_metadata: bool = False,
-            uniform_schema: bool = True,
         ) -> None:
             self.paths = paths
             self.max_footer_samples = max_footer_samples

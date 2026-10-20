@@ -801,6 +801,12 @@ class Scan(IR):
             self.lake_options is not None and self.typ != "parquet"
         ):  # pragma: no cover; polars only builds parquet lake scans
             raise NotImplementedError(f"Iceberg or Delta scan of {self.typ} files")
+        if (
+            self.lake_options is not None and include_file_paths is not None
+        ):  # pragma: no cover; polars lake scans never include file paths
+            raise NotImplementedError(
+                "Including file paths in an Iceberg or Delta scan"
+            )
 
         if self.typ not in ("csv", "parquet", "ndjson"):  # pragma: no cover
             # This line is unhittable ATM since IPC/Anonymous scan raise
@@ -1056,8 +1062,6 @@ class Scan(IR):
         )
         if source_index is not None:
             columns = per_path.gather(source_index, stream=df.stream)
-        elif per_path.is_uniform:
-            columns = per_path.broadcast(df.num_rows, stream=df.stream)
         else:
             assert rows_per_path is not None
             columns = per_path.repeat(rows_per_path, stream=df.stream)
@@ -1369,8 +1373,7 @@ class Scan(IR):
                 with_columns,
                 cached_parquet_info,
                 predicate.value if push_predicate and predicate is not None else None,
-                with_source_index=any(not parts.is_uniform for parts in per_path_parts)
-                or (include_file_paths is not None and len(set(paths)) > 1),
+                with_source_index=any(not parts.is_uniform for parts in per_path_parts),
                 stream=stream,
             )
             if push_predicate and exact:
@@ -1383,14 +1386,6 @@ class Scan(IR):
                 else:
                     per_path_columns = parts.repeat(rows_per_path, stream=stream)
                 df = df.with_columns(per_path_columns, stream=stream)
-            if include_file_paths is not None:
-                df = Scan.add_file_paths(
-                    include_file_paths,
-                    paths,
-                    df,
-                    rows_per_path=rows_per_path,
-                    source_index=source_index,
-                )
             if lake_options.has_deletions:
                 df = apply_deletions(
                     df, paths, rows_per_path, lake_options, stream=stream

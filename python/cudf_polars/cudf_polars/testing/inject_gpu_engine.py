@@ -266,7 +266,6 @@ def pytest_report_header(config: pytest.Config) -> str:
 
 EXPECTED_FAILURES: dict[str, str] = {
     "tests/unit/io/test_delta.py::test_scan_delta_nanosecond_timestamp": "polars generates the wrong schema: https://github.com/pola-rs/polars/issues/23949",
-    "tests/unit/io/test_iceberg.py::test_scan_iceberg_row_index_renamed": "cudf-polars strips the file:// scheme from scan paths, so include_file_paths reports a different path than polars",
     "tests/unit/io/test_iceberg.py::test_scan_iceberg_parquet_prefilter_with_column_mapping[True]": "The test asserts on the verbose log of the polars reader, which the GPU engine does not emit",
     "tests/unit/io/test_iceberg.py::test_scan_iceberg_parquet_prefilter_with_column_mapping[False]": "The test asserts on the verbose log of the polars reader, which the GPU engine does not emit",
     "tests/unit/io/test_io_plugin.py::test_datetime_io_predicate_pushdown_21790": "cudf-polars validates the IO source schema exactly and does not coerce datetime time units (us vs ns)",
@@ -567,8 +566,6 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/test_window.py::test_over_literal_cum_sum_26800": "TODO: https://github.com/NVIDIA/cudf/pull/22048#discussion_r3238041970",
     "tests/unit/functions/test_concat.py::test_concat_horizontal_lazy_strict_raises_shape_error_27415": "horizontal-concat strict height-mismatch raised inside an ExceptionGroup under the streaming engine",
     "tests/unit/io/test_io_plugin.py::test_defer_validate_true": "correct SchemaError raised but wrapped in an ExceptionGroup under the streaming engine",
-    "tests/unit/io/test_iceberg.py::test_scan_iceberg_extra_columns": "correct SchemaError raised but wrapped in an ExceptionGroup under the streaming engine",
-    "tests/unit/io/test_iceberg.py::test_scan_iceberg_extra_struct_fields": "correct SchemaError raised but wrapped in an ExceptionGroup under the streaming engine",
     "tests/unit/lazyframe/test_projections.py::test_merge_sorted_projection_pd": "https://github.com/NVIDIA/cudf/issues/23055",
     "tests/unit/operations/test_slice.py::test_hconcat_tail_unequal_heights_strict_raises_27552": "horizontal-concat strict height-mismatch raised inside an ExceptionGroup under the streaming engine",
 }

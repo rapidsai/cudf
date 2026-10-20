@@ -36,24 +36,21 @@ if TYPE_CHECKING:
 
 __all__ = ["IcebergColumn", "LakeScanOptions", "read_lake_files"]
 
-_INTEGER_TYPES = MappingProxyType(
+_LAKE_CAST_POLICY = MappingProxyType(
     {
-        plc.TypeId.INT8: (8, True),
-        plc.TypeId.INT16: (16, True),
-        plc.TypeId.INT32: (32, True),
-        plc.TypeId.INT64: (64, True),
-        plc.TypeId.UINT8: (8, False),
-        plc.TypeId.UINT16: (16, False),
-        plc.TypeId.UINT32: (32, False),
-        plc.TypeId.UINT64: (64, False),
-    }
-)
-_FLOAT_WIDTHS = MappingProxyType({plc.TypeId.FLOAT32: 32, plc.TypeId.FLOAT64: 64})
-_TIMESTAMP_DIGITS = MappingProxyType(
-    {
-        plc.TypeId.TIMESTAMP_MILLISECONDS: 3,
-        plc.TypeId.TIMESTAMP_MICROSECONDS: 6,
-        plc.TypeId.TIMESTAMP_NANOSECONDS: 9,
+        "integer_upcast": True,
+        "integer_to_float_cast": False,
+        "float_upcast": True,
+        "float_downcast": True,
+        "datetime_nanoseconds_downcast": True,
+        "datetime_microseconds_downcast": False,
+        "datetime_milliseconds_upcast": False,
+        "datetime_microseconds_upcast": False,
+        "datetime_convert_timezone": True,
+        "null_upcast": True,
+        "categorical_to_string": True,
+        "missing_struct_fields": "insert",
+        "extra_struct_fields": "ignore",
     }
 )
 
@@ -71,8 +68,7 @@ class IcebergColumn:
     physical_id
         Field ID written into the parquet footer for this column.
     kind
-        One of ``"primitive"``, ``"list"``, ``"fixed-size-list"``, ``"map"``
-        or ``"struct"``.
+        One of ``"primitive"``, ``"list"``, ``"map"`` or ``"struct"``.
     children
         Fields of a nested column, empty for a primitive column.
     """
@@ -93,7 +89,6 @@ class IcebergColumn:
             ``(name, physical_id, type_)`` where ``type_`` is one of:
                 * ``("primitive", dtype)``
                 * ``("list", column)``
-                * ``("fixed-size-list", column, width)``
                 * ``("map", key, value)``
                 * ``("struct", {physical_id: column})``
 
@@ -107,11 +102,9 @@ class IcebergColumn:
             children: tuple[IcebergColumn, ...] = ()
         elif kind == "struct":
             children = tuple(cls.from_polars(child) for child in rest[0].values())
-        elif kind in ("list", "fixed-size-list", "map"):
-            children = tuple(
-                cls.from_polars(child) for child in rest if isinstance(child, tuple)
-            )
-        else:  # pragma: no cover; polars only produces the kinds above
+        elif kind in ("list", "map"):
+            children = tuple(cls.from_polars(child) for child in rest)
+        else:  # pragma: no cover; Iceberg schemas only produce the kinds above
             raise NotImplementedError(f"Unhandled Iceberg column type {kind!r}")
         return cls(name=name, physical_id=physical_id, kind=kind, children=children)
 
@@ -153,20 +146,16 @@ class LakeScanOptions:
     initial_defaults
         Maps a physical field ID to the single-element series holding the
         Iceberg V3 initial default for a column absent from a file.
-    missing_columns_policy
-        ``"insert"`` to fill columns absent from a file, ``"raise"`` to fail.
-    extra_columns_policy
-        ``"ignore"`` to drop columns a file has but the schema does not,
-        ``"raise"`` to fail.
-    cast_columns_policy
-        Which casts from the physical to the table type are permitted.
     row_count
         ``(total_rows, deleted_rows)`` for the whole scan when the table
         metadata could supply it.
-    expected_keys
-        Keys the top-level columns of a data file may have when
-        ``extra_columns_policy`` is ``"raise"``: physical field IDs when
-        ``columns`` is given, otherwise column names. ``None`` allows any.
+
+    Notes
+    -----
+    A file may lack columns of the schema, which are filled with their
+    initial default or with nulls, and may hold columns or struct fields
+    the schema does not, which are ignored. Iceberg and Delta scans always
+    read files this way.
     """
 
     columns: tuple[IcebergColumn, ...] | None
@@ -176,35 +165,15 @@ class LakeScanOptions:
     partition_values: Mapping[int, pl.Series]
     partition_errors: Mapping[int, str]
     initial_defaults: Mapping[int, pl.Series]
-    missing_columns_policy: str
-    extra_columns_policy: str
-    cast_columns_policy: Mapping[str, Any]
     row_count: tuple[int, int] | None
-    expected_keys: frozenset[Any] | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
-        unhandled_kinds = sorted(
-            {
-                nested.kind
-                for column in self.columns or ()
-                for nested in column.walk()
-                if nested.kind in ("fixed-size-list", "map")
-            }
-        )
-        if unhandled_kinds:
-            raise NotImplementedError(
-                f"Iceberg column mapping of {' and '.join(unhandled_kinds)} columns"
-            )
-        if (self.partition_values or self.partition_errors) and self.columns is None:
-            raise NotImplementedError("Iceberg partition values without column mapping")
-        if self.extra_columns_policy not in ("ignore", "raise"):
-            raise NotImplementedError(  # pragma: no cover; only two policies exist
-                f"Extra columns policy {self.extra_columns_policy!r}"
-            )
-        if self.missing_columns_policy not in ("insert", "raise"):
-            raise NotImplementedError(  # pragma: no cover; only two policies exist
-                f"Missing columns policy {self.missing_columns_policy!r}"
-            )
+        if any(
+            nested.kind == "map"
+            for column in self.columns or ()
+            for nested in column.walk()
+        ):
+            raise NotImplementedError("Iceberg column mapping of map columns")
         top_level_ids = {column.physical_id for column in self.columns or ()}
         unknown_defaults = set(self.initial_defaults) - top_level_ids
         if unknown_defaults:
@@ -240,21 +209,38 @@ class LakeScanOptions:
         Raises
         ------
         NotImplementedError
-            If polars supplies a variant we do not understand. Failing here
-            keeps us from silently ignoring information that changes the
-            result.
+            If polars supplies a variant we do not understand, or the scan
+            inserts missing columns but resolves the schema differently from
+            an Iceberg or Delta scan. Failing here keeps us from silently
+            ignoring information that changes the result.
 
         Notes
         -----
         A Delta scan carries no column mapping, deletions or defaults, but a
         table that has evolved still has files that are missing a column of
         the schema, which a plain parquet read cannot express. Such a scan is
-        recognised by its missing columns policy.
+        recognised by the policies polars gives every Iceberg and Delta scan
+        for missing columns, extra columns and casts.
 
         A Delta deletion vector arrives as a callback holding a handle to the
         table, which cannot be sent to another process, so it is resolved
         here rather than in the tasks that read the files.
         """
+        is_lake_scan = (
+            file_options.column_mapping is not None
+            or file_options.deletion_files is not None
+            or file_options.default_values is not None
+        )
+        if not is_lake_scan and file_options.missing_columns_policy == "raise":
+            return None
+        if (
+            file_options.missing_columns_policy != "insert"
+            or file_options.extra_columns_policy != "ignore"
+            or file_options.cast_columns_policy != _LAKE_CAST_POLICY
+        ):
+            raise NotImplementedError(
+                "Inserting missing columns is only supported for Iceberg and Delta scans"
+            )
         column_mapping = file_options.column_mapping
         columns: tuple[IcebergColumn, ...] | None = None
         if column_mapping is not None:
@@ -315,17 +301,6 @@ class LakeScanOptions:
                 physical_id: pl.Series._from_pyseries(value)
                 for physical_id, value in raw_initial_defaults.items()
             }
-        if (
-            columns is None
-            and not position_deletes
-            and not deletion_vectors
-            and not delta_selections
-            and not partition_values
-            and not partition_errors
-            and not initial_defaults
-            and file_options.missing_columns_policy == "raise"
-        ):
-            return None
         return cls(
             columns=columns,
             position_deletes=position_deletes,
@@ -334,49 +309,7 @@ class LakeScanOptions:
             partition_values=partition_values,
             partition_errors=partition_errors,
             initial_defaults=initial_defaults,
-            missing_columns_policy=file_options.missing_columns_policy,
-            extra_columns_policy=file_options.extra_columns_policy,
-            cast_columns_policy=file_options.cast_columns_policy,
             row_count=file_options.row_count,
-        )
-
-    def expect_columns(
-        self,
-        reader_schema: Mapping[str, Any] | None,
-        first_path: str,
-        hive_names: Iterable[str],
-    ) -> LakeScanOptions:
-        """
-        Record the keys a data file may hold.
-
-        Parameters
-        ----------
-        reader_schema
-            Schema given to the scan, as polars serializes it, or ``None``
-            when the scan infers its schema from the first file.
-        first_path
-            First data file of the scan.
-        hive_names
-            Names of the hive partition columns, which a file may also hold.
-
-        Returns
-        -------
-        Options whose ``expected_keys`` are set: the field IDs of
-        ``columns`` when it is given, otherwise the names of the schema and
-        of the hive partition columns.
-        """
-        if self.columns is not None:
-            return dataclasses.replace(
-                self,
-                expected_keys=frozenset(column.physical_id for column in self.columns),
-            )
-        names = (
-            reader_schema["fields"]
-            if reader_schema is not None
-            else _footer(first_path, None, by_field_id=False).names
-        )
-        return dataclasses.replace(
-            self, expected_keys=frozenset(names).union(hive_names)
         )
 
     def check_field_ids(self, paths: Sequence[str]) -> None:
@@ -463,10 +396,7 @@ class LakeScanOptions:
                 tuple(sorted(self.partition_values)),
                 tuple(sorted(self.partition_errors.items())),
                 tuple(sorted(self.initial_defaults)),
-                self.missing_columns_policy,
-                self.extra_columns_policy,
                 self.row_count,
-                self.expected_keys,
             )
         )
 
@@ -481,11 +411,7 @@ class LakeScanOptions:
             and _series_mapping_eq(self.partition_values, other.partition_values)
             and self.partition_errors == other.partition_errors
             and _series_mapping_eq(self.initial_defaults, other.initial_defaults)
-            and self.missing_columns_policy == other.missing_columns_policy
-            and self.extra_columns_policy == other.extra_columns_policy
-            and self.cast_columns_policy == other.cast_columns_policy
             and self.row_count == other.row_count
-            and self.expected_keys == other.expected_keys
         )
 
 
@@ -569,20 +495,6 @@ def read_lake_files(
         for path, metadata in zip(paths, metadatas, strict=True)
     ]
     rows_per_path = [footer.num_rows for footer in footers]
-    expected_keys = lake_options.expected_keys
-    if expected_keys is not None:
-        for path, footer in zip(paths, footers, strict=True):
-            extra = [
-                name
-                for name, key in zip(footer.names, footer.keys, strict=True)
-                if key not in expected_keys
-            ]
-            if extra:
-                raise pl.exceptions.SchemaError(
-                    f"extra column in file outside of expected schema: {extra[0]}. "
-                    f"File containing extra column: '{path}'."
-                )
-
     predicate_columns = (
         {
             node.name: node
@@ -761,21 +673,14 @@ def _footer(
     ------
     NotImplementedError
         If ``by_field_id`` and a field that polars identifies by its field ID
-        has none, sibling fields share a field ID, or a list uses a legacy
-        layout that the parquet reader and polars read differently.
+        has none, or a list uses a legacy layout that the parquet reader and
+        polars read differently.
     """
     if metadata is None:
         metadata = plc.io.parquet_metadata.read_parquet_footers(
             plc.io.SourceInfo([path])
         )[0]
     schema = metadata.schema
-
-    def check_unique(children: Sequence[_FieldIds]) -> None:
-        ids = [field_id for field_id, _ in children if field_id is not None]
-        if len(ids) != len(set(ids)):
-            raise NotImplementedError(
-                f"Iceberg data file with duplicate field IDs: {path}"
-            )
 
     def nested_field_ids(index: int, *, list_parent: str | None) -> _FieldIds:
         element = schema[index]
@@ -801,7 +706,6 @@ def _footer(
             nested_field_ids(child, list_parent=element.name if is_list else None)
             for child in element.children_idx
         )
-        check_unique(children)
         return element.field_id, children
 
     def subtree(index: int) -> Iterable[plc.io.parquet_metadata.SchemaElement]:
@@ -825,7 +729,6 @@ def _footer(
             num_rows=metadata.num_rows,
         )
     field_ids = tuple(nested_field_ids(index, list_parent=None) for index in top_level)
-    check_unique(field_ids)
     return _Footer(
         names=names,
         keys=tuple(field_id for field_id, _ in field_ids),
@@ -918,86 +821,13 @@ def _group_filter(
     return filters, filters is not None and residual is None
 
 
-def _check_cast(
-    name: str,
-    incoming: plc.DataType,
-    target: DataType,
-    cast_columns_policy: Mapping[str, Any],
-) -> None:
-    """
-    Check that a column read from a file may be cast to the table type.
-
-    Parameters
-    ----------
-    name
-        Name of the column in the table schema.
-    incoming
-        Type the column was read with.
-    target
-        Type of the column in the table schema.
-    cast_columns_policy
-        Which casts from the physical to the table type are permitted.
-
-    Raises
-    ------
-    polars.exceptions.SchemaError
-        If ``cast_columns_policy`` forbids an integer, float or datetime
-        unit cast that the column needs. Other type differences are cast
-        without checking, since cudf and polars do not represent every
-        type the same way.
-    """
-    source = incoming.id()
-    dest = target.plc_type.id()
-    if source == dest:
-        return
-    if source in _INTEGER_TYPES and dest in _INTEGER_TYPES:
-        source_bits, source_signed = _INTEGER_TYPES[source]
-        dest_bits, dest_signed = _INTEGER_TYPES[dest]
-        allowed = (
-            cast_columns_policy["integer_upcast"]
-            and dest_bits > source_bits
-            and (dest_signed or not source_signed)
-        )
-    elif source in _FLOAT_WIDTHS and dest in _FLOAT_WIDTHS:
-        policy = (
-            "float_upcast"
-            if _FLOAT_WIDTHS[dest] > _FLOAT_WIDTHS[source]
-            else "float_downcast"
-        )
-        allowed = cast_columns_policy[policy]
-    elif source in _INTEGER_TYPES and dest in _FLOAT_WIDTHS:
-        allowed = cast_columns_policy["integer_to_float_cast"]
-    elif source in _TIMESTAMP_DIGITS and dest in _TIMESTAMP_DIGITS:
-        source_digits = _TIMESTAMP_DIGITS[source]
-        dest_digits = _TIMESTAMP_DIGITS[dest]
-        if source_digits == 9:
-            policy = "datetime_nanoseconds_downcast"
-        elif source_digits == 6 and dest_digits == 3:
-            policy = "datetime_microseconds_downcast"
-        elif source_digits == 6:
-            policy = "datetime_microseconds_upcast"
-        else:
-            policy = "datetime_milliseconds_upcast"
-        allowed = cast_columns_policy[policy]
-    else:
-        return
-    if not allowed:
-        raise pl.exceptions.SchemaError(
-            f"data type mismatch for column {name}: "
-            f"incoming: {source.name} != target: {target.polars_type}"
-        )
-
-
 _NESTED_TYPES = frozenset({plc.TypeId.STRUCT, plc.TypeId.LIST})
-_LIST_ELEMENT_DEFAULT_ID = 2**32 - 1
 
 
 def _cast_to_table_type(
-    name: str,
     column: plc.Column,
     children: Sequence[plc.io.types.ColumnNameSpec],
     target: DataType,
-    cast_columns_policy: Mapping[str, Any],
     mapping: tuple[_FieldIds, IcebergColumn] | None,
     *,
     stream: Stream,
@@ -1007,8 +837,6 @@ def _cast_to_table_type(
 
     Parameters
     ----------
-    name
-        Name of the top-level column in the table schema.
     column
         Column as read from the file.
     children
@@ -1016,8 +844,6 @@ def _cast_to_table_type(
         reports them.
     target
         Type of the column in the table schema.
-    cast_columns_policy
-        Which casts from the physical to the table type are permitted.
     mapping
         For a scan read by field ID, the field IDs of ``column`` and its
         nested fields in the file, and the Iceberg column that ``target``
@@ -1029,64 +855,41 @@ def _cast_to_table_type(
     -------
     The column with the type of ``target``. Struct fields are matched by
     field ID when ``mapping`` is given and by name otherwise, put in the
-    order of ``target`` and cast field by field.
-
-    Raises
-    ------
-    polars.exceptions.SchemaError
-        If ``column`` and ``target`` do not nest in the same way, if a
-        struct field is missing or extra and ``cast_columns_policy`` forbids
-        that, if the element of a list has a different field ID than in
-        the table schema, or if ``_check_cast`` rejects the cast of a leaf.
+    order of ``target`` and cast field by field. Fields of ``target`` that
+    ``column`` lacks are filled with nulls, and fields of ``column`` that
+    ``target`` lacks are dropped.
     """
-    source_id = column.type().id()
-    target_id = target.id()
-    if source_id not in _NESTED_TYPES and target_id not in _NESTED_TYPES:
-        _check_cast(name, column.type(), target, cast_columns_policy)
+    if target.id() not in _NESTED_TYPES:
         return Column(column, dtype=target).astype(target, stream).obj
-    if source_id != target_id:
-        raise pl.exceptions.SchemaError(
-            f"data type mismatch for column {name}: "
-            f"incoming: {source_id.name} != target: {target.polars_type}"
-        )
-    if target_id == plc.TypeId.LIST:
+    if target.id() == plc.TypeId.LIST:
         (_, (_, element_children)) = children
         element_mapping = None
         if mapping is not None:
             (_, file_elements), iceberg_column = mapping
             (iceberg_element,) = iceberg_column.children
             file_element = file_elements[0] if file_elements else (None, ())
-            element_ids = {file_element[0], iceberg_element.physical_id} - {
-                None,
-                _LIST_ELEMENT_DEFAULT_ID,
-            }
-            if len(element_ids) > 1:
-                raise pl.exceptions.SchemaError(
-                    f"data type mismatch for column {name}: "
-                    "physical ID mismatch for list values column"
-                )
             element_mapping = (file_element, iceberg_element)
         new_children = [
             column.child(0),
             _cast_to_table_type(
-                name,
                 column.child(1),
                 element_children,
                 target.children[0],
-                cast_columns_policy,
                 element_mapping,
                 stream=stream,
             ),
         ]
     else:
-        fields = cast("pl.Struct", target.polars_type).fields
         file_fields: Sequence[_FieldIds | None]
         incoming_keys: list[Any]
         target_fields: list[tuple[Any, IcebergColumn | None]]
         if mapping is None:
             file_fields = [None] * len(children)
             incoming_keys = [field_name for field_name, _ in children]
-            target_fields = [(field.name, None) for field in fields]
+            target_fields = [
+                (field.name, None)
+                for field in cast("pl.Struct", target.polars_type).fields
+            ]
         else:
             (_, file_fields), iceberg_column = mapping
             incoming_keys = [field_id for field_id, _ in file_fields]
@@ -1095,50 +898,31 @@ def _cast_to_table_type(
                 for iceberg_field in iceberg_column.children
             ]
         position = {key: index for index, key in enumerate(incoming_keys)}
-        if cast_columns_policy["extra_struct_fields"] == "raise":
-            target_keys = frozenset(key for key, _ in target_fields)
-            extra = [
-                field_name
-                for (field_name, _), key in zip(children, incoming_keys, strict=True)
-                if key not in target_keys
-            ]
-            if extra:
-                raise pl.exceptions.SchemaError(
-                    f"data type mismatch for column {name}: "
-                    f"encountered extra struct field: {extra[0]}"
-                )
         new_children = []
-        for field, field_dtype, (key, iceberg_field) in zip(
-            fields, target.children, target_fields, strict=True
+        for field_dtype, (key, iceberg_field) in zip(
+            target.children, target_fields, strict=True
         ):
             index = position.get(key)
-            if index is not None:
-                _, field_children = children[index]
-                file_field = file_fields[index]
-                new_children.append(
-                    _cast_to_table_type(
-                        name,
-                        column.child(index),
-                        field_children,
-                        field_dtype,
-                        cast_columns_policy,
-                        None
-                        if file_field is None or iceberg_field is None
-                        else (file_field, iceberg_field),
-                        stream=stream,
-                    )
-                )
-            elif cast_columns_policy["missing_struct_fields"] == "raise":
-                raise pl.exceptions.SchemaError(
-                    f"data type mismatch for column {name}: "
-                    f"encountered missing struct field: {field.name}"
-                )
-            else:
+            if index is None:
                 new_children.append(
                     _null_column(
                         field_dtype, column.offset() + column.size(), stream=stream
                     )
                 )
+                continue
+            _, field_children = children[index]
+            file_field = file_fields[index]
+            new_children.append(
+                _cast_to_table_type(
+                    column.child(index),
+                    field_children,
+                    field_dtype,
+                    None
+                    if file_field is None or iceberg_field is None
+                    else (file_field, iceberg_field),
+                    stream=stream,
+                )
+            )
     return plc.Column(
         column.type(),
         column.size(),
@@ -1223,8 +1007,8 @@ def _read_group(
     schema
         Schema the scan must produce.
     lake_options
-        Options of the scan, giving the policy and defaults for columns the
-        files do not hold.
+        Options of the scan, giving the defaults for columns the files do
+        not hold.
     filters
         Parquet filter to apply while reading, in terms of the names the
         files hold, or ``None`` to read every row.
@@ -1321,11 +1105,9 @@ def _read_group(
             column, children = read[key]
             field_ids = file_field_ids[key]
             obj = _cast_to_table_type(
-                name,
                 column,
                 children,
                 dtype,
-                lake_options.cast_columns_policy,
                 None if field_ids is None else (field_ids, iceberg_columns[key]),
                 stream=stream,
             )
@@ -1336,8 +1118,6 @@ def _read_group(
                 "error loading identity transform value from metadata for "
                 f"missing field: {lake_options.partition_errors[key]}"
             )
-        elif lake_options.missing_columns_policy == "raise":
-            raise pl.exceptions.ColumnNotFoundError(f"did not find column {name}")
         else:
             default = lake_options.initial_defaults.get(key) if by_field_id else None
             if default is None:

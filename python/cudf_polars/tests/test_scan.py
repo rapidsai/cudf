@@ -231,11 +231,11 @@ def test_scan_unsupported_raises(engine: pl.GPUEngine, tmp_path):
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_scan_parquet_insert_missing_columns(engine: pl.GPUEngine, tmp_path):
+def test_scan_parquet_insert_missing_columns_raises(engine: pl.GPUEngine, tmp_path):
     pl.DataFrame({"a": [1, 2], "b": [3, 4]}).write_parquet(tmp_path / "0.parquet")
     pl.DataFrame({"a": [5, 6]}).write_parquet(tmp_path / "1.parquet")
     q = pl.scan_parquet(tmp_path / "*.parquet", missing_columns="insert")
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 def test_scan_ndjson_nrows_notimplemented(engine: pl.GPUEngine, tmp_path, df):
