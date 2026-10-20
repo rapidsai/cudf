@@ -45,7 +45,7 @@ def _check_supported(dynamic: Any) -> None:
         raise NotImplementedError(f"group_by_dynamic with label={dynamic.label!r}")
     if dynamic.include_boundaries:
         raise NotImplementedError("group_by_dynamic with boundary columns")
-    if dynamic.start_by not in {"window", "window_bound"}:
+    if dynamic.start_by != "window_bound":
         raise NotImplementedError(
             f"group_by_dynamic with start_by={dynamic.start_by!r}"
         )

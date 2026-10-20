@@ -21,8 +21,8 @@ def frame() -> pl.LazyFrame:
     return pl.LazyFrame(
         {
             "time": [start + dt.timedelta(minutes=i) for i in range(120)],
-            "group": ["a", "b", "c"] * 40,
-            "group_id": [0, 1, 2] * 40,
+            "group": ["a", "b", None] * 40,
+            "group_id": [0, 1, None] * 40,
             "price": range(120),
             "size": [10, 20, 30, 40] * 30,
             "bid": [10.0, 11.0, 12.0, 13.0] * 30,
