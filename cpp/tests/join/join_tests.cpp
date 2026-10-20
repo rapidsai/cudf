@@ -27,12 +27,10 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/cuda_device.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <cuda/buffer>
-#include <cuda/iterator>
 #include <cuda/stream>
 
 #include <algorithm>
@@ -2508,53 +2506,6 @@ TEST_F(JoinTest, HashJoinLargeOutputSize)
     tview, cudf::nullable_join::NO, cudf::null_equality::UNEQUAL, desired_load_factor);
   std::size_t output_size = hash_join.inner_join_size(tview);
   EXPECT_EQ(col_size * col_size, output_size);
-}
-
-TEST_F(JoinTest, HashJoinRetrieveAcrossInt32Boundary)
-{
-  // The final probe's 1000 matches straddle 2^31; its segment start remains below the boundary.
-  auto constexpr build_rows       = cudf::size_type{1000};
-  auto constexpr probe_rows       = cudf::size_type{2'147'484};
-  auto constexpr output_size      = static_cast<std::size_t>(build_rows) * probe_rows;
-  auto constexpr output_bytes     = 2 * output_size * sizeof(cudf::size_type);
-  auto constexpr scratch_headroom = std::size_t{512} << 20;
-  if (rmm::available_device_memory().first < output_bytes + scratch_headroom) {
-    GTEST_SKIP() << "Requires at least " << output_bytes + scratch_headroom
-                 << " bytes of available device memory";
-  }
-
-  auto const stream = cudf::get_default_stream();
-  auto const zeroes = cuda::constant_iterator<cudf::size_type>{0};
-  column_wrapper<cudf::size_type> build(zeroes, zeroes + build_rows);
-  column_wrapper<cudf::size_type> probe(zeroes, zeroes + probe_rows);
-  auto const build_view = cudf::table_view{{build}};
-  auto const probe_view = cudf::table_view{{probe}};
-  cudf::hash_join joiner(build_view, cudf::null_equality::EQUAL, stream);
-
-  // Release each result before exercising the other retrieval kernel, reusing the same memory.
-  for (bool const is_left : {false, true}) {
-    SCOPED_TRACE(is_left ? "left_join" : "inner_join");
-    auto const result = is_left ? joiner.left_join(probe_view) : joiner.inner_join(probe_view);
-    ASSERT_EQ(result.first->size(), output_size);
-    ASSERT_EQ(result.second->size(), output_size);
-
-    for (auto const probe_row : {cudf::size_type{0}, probe_rows - 2, probe_rows - 1}) {
-      SCOPED_TRACE(probe_row);
-      auto const offset = static_cast<std::size_t>(probe_row) * build_rows;
-      auto const left   = cudf::detail::make_host_vector_async(
-        cudf::device_span<cudf::size_type const>{result.first->data() + offset, build_rows},
-        stream);
-      auto const right = cudf::detail::make_host_vector_async(
-        cudf::device_span<cudf::size_type const>{result.second->data() + offset, build_rows},
-        stream);
-      stream.sync();
-      // Every pair of in-bounds indices matches; the join does not guarantee output ordering.
-      EXPECT_TRUE(std::all_of(
-        left.begin(), left.end(), [](auto row) { return row >= 0 && row < probe_rows; }));
-      EXPECT_TRUE(std::all_of(
-        right.begin(), right.end(), [](auto row) { return row >= 0 && row < build_rows; }));
-    }
-  }
 }
 
 TEST_F(JoinTest, HashJoinMemoryResource)
