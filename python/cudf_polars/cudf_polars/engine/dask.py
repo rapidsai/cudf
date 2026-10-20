@@ -1041,7 +1041,11 @@ class DaskEngine(StreamingEngine):
             lambda: _shutdown_dask(
                 dask_client,
                 rapidsmpf_id,
-                (self._quent_close if self._quent_runtime is not None else None),
+                (
+                    functools.partial(self._set_quent, None)
+                    if self._quent_runtime is not None
+                    else None
+                ),
                 owned_client,
                 owned_cluster,
             )
@@ -1125,7 +1129,7 @@ class DaskEngine(StreamingEngine):
                 owned_cluster=owned_cluster,
             )
             self._dask_context: DaskContext | None = dask_ctx
-            self._update_quent(quent_context, None, executor_options)
+            executor_options["quent_context"] = self._set_quent(quent_context)
             dask_ctx = DaskContext(
                 client=dask_client,
                 rapidsmpf_id=rapidsmpf_id,
@@ -1205,7 +1209,9 @@ class DaskEngine(StreamingEngine):
         new_quent_context: cudf_polars.quent.QuentConfig | None = executor_options.get(
             "quent_context", existing_quent_context
         )
-        self._update_quent(new_quent_context, existing_quent_context, executor_options)
+        if new_quent_context != existing_quent_context:
+            new_quent_context = self._set_quent(new_quent_context)
+        executor_options["quent_context"] = new_quent_context
         new_ctx = DaskContext(
             client=ctx.client,
             rapidsmpf_id=ctx.rapidsmpf_id,
@@ -1231,29 +1237,27 @@ class DaskEngine(StreamingEngine):
             exit_stack=self._exit_stack,
         )
 
-    def _quent_close(self) -> None:
-        """Clear Quent worker runtimes on all Dask workers, then close the controller."""
+    def _set_quent(
+        self, quent_context: cudf_polars.quent.QuentConfig | None
+    ) -> cudf_polars.quent.QuentConfig | None:
+        """Replace this engine's Dask Quent runtimes."""
         ctx = self._dask_ctx
-        steps: list[Callable[[], object]] = [
-            # Workers first so the collector can drain before we close it.
-            lambda: ctx.client.run(
-                functools.partial(
-                    _update_quent_on_worker, None, None, uid=ctx.rapidsmpf_id
-                )
-            )
-        ]
         if self._quent_runtime is not None:
+            steps: list[Callable[[], object]] = [
+                # Workers first so the collector can drain before we close it.
+                lambda: ctx.client.run(
+                    functools.partial(
+                        _update_quent_on_worker, None, None, uid=ctx.rapidsmpf_id
+                    )
+                )
+            ]
             steps.append(self._quent_runtime.close)
-        try:
-            run_cleanup_steps("Dask Quent shutdown failed", *steps)
-        finally:
-            self._quent_runtime = None
-
-    def _quent_open(
-        self, quent_context: cudf_polars.quent.QuentConfig
-    ) -> cudf_polars.quent.QuentConfig:
-        """Start a new Quent collector, connect workers, create controller."""
-        ctx = self._dask_ctx
+            try:
+                run_cleanup_steps("Dask Quent shutdown failed", *steps)
+            finally:
+                self._quent_runtime = None
+        if quent_context is None:
+            return None
         self._quent_runtime = QuentControllerRuntime.create(
             quent_context,
             backend="dask",
@@ -1269,7 +1273,7 @@ class DaskEngine(StreamingEngine):
             )
         except BaseException:  # pragma: no cover - defensive startup cleanup
             with contextlib.suppress(Exception):
-                self._quent_close()
+                self._set_quent(None)
             raise
         return quent_context
 

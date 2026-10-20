@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import functools
 import json
 import os
 import uuid
@@ -698,7 +699,7 @@ class SPMDEngine(StreamingEngine):
             exit_stack.callback(self._cleanup_ctx)
 
             self._quent_worker_id = uuid.uuid4()
-            self._update_quent(quent_context, None, executor_options)
+            executor_options["quent_context"] = self._set_quent(quent_context)
             effective_quent_context = executor_options["quent_context"]
             engine_id = (
                 effective_quent_context.engine_id
@@ -778,27 +779,25 @@ class SPMDEngine(StreamingEngine):
             finally:
                 self._quent_runtime = None
 
-    def _quent_close(self) -> None:
-        """Close SPMD Quent runtimes: barrier → workers → barrier → controller → barrier."""
-        assert self._comm is not None
-        comm = self._comm
-        if comm.nranks > 1:  # pragma: no cover - requires a multi-rank test process
-            barrier(comm)
-        self._close_quent_worker()
-        if comm.nranks > 1:  # pragma: no cover - requires a multi-rank test process
-            barrier(comm)
-        if comm.rank == 0:
-            self._close_quent_controller()
-        if comm.nranks > 1:  # pragma: no cover - requires a multi-rank test process
-            barrier(comm)
-
-    def _quent_open(
-        self, quent_context: cudf_polars.quent.QuentConfig
-    ) -> cudf_polars.quent.QuentConfig:
-        """Start SPMD Quent runtimes for ``quent_context``."""
+    def _set_quent(
+        self, quent_context: cudf_polars.quent.QuentConfig | None
+    ) -> cudf_polars.quent.QuentConfig | None:
+        """Replace this engine's SPMD Quent runtimes."""
         assert self._comm is not None
         assert self._ctx is not None
         comm = self._comm
+        if self._quent_worker_runtime is not None or self._quent_runtime is not None:
+            if comm.nranks > 1:  # pragma: no cover - requires a multi-rank test process
+                barrier(comm)
+            self._close_quent_worker()
+            if comm.nranks > 1:  # pragma: no cover - requires a multi-rank test process
+                barrier(comm)
+            if comm.rank == 0:
+                self._close_quent_controller()
+            if comm.nranks > 1:  # pragma: no cover - requires a multi-rank test process
+                barrier(comm)
+        if quent_context is None:
+            return None
         collector_address: str = ""
         try:
             if comm.rank == 0:
@@ -834,7 +833,9 @@ class SPMDEngine(StreamingEngine):
         """Run collective cleanup before local resources unwind."""
         steps: list[Callable[[], object]] = [self._drop_persisted]
         if self._quent_worker_runtime is not None or self._quent_runtime is not None:
-            steps.append(self._quent_close)  # pragma: no cover - same cleanup as reset
+            steps.append(  # pragma: no cover - same cleanup as reset
+                functools.partial(self._set_quent, None)
+            )
         run_cleanup_steps("SPMD engine shutdown failed", *steps)
 
     @classmethod
@@ -1072,14 +1073,10 @@ class SPMDEngine(StreamingEngine):
         rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
         self.rapidsmpf_options = rapidsmpf_options
 
-        # Tear down Quent runtimes before the Context rebuild if they're changing.
-        if quent_changing and existing_quent_context is not None:
-            self._quent_close()
-            existing_quent_context = None
+        if quent_changing:
+            new_quent_context = self._set_quent(new_quent_context)
+        executor_options["quent_context"] = new_quent_context
 
-        # Collective: synchronize all ranks before tearing down the Context.
-        if self._comm.nranks > 1:
-            barrier(self._comm)
         # Free persisted partitions before the Context is torn down.
         self._drop_persisted()
         # Same-thread shutdown, _reset runs on the thread that built the
@@ -1105,8 +1102,6 @@ class SPMDEngine(StreamingEngine):
         self._mr = self._ctx.br().device_mr_adaptor()
         rmm.mr.set_current_device_resource(self._mr)
 
-        # Start new Quent runtimes after the Context is rebuilt.
-        self._update_quent(new_quent_context, existing_quent_context, executor_options)
         effective_quent_context = executor_options["quent_context"]
         engine_id = (
             effective_quent_context.engine_id

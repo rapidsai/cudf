@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import contextlib
+import functools
 import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -904,7 +905,11 @@ class RayEngine(StreamingEngine):
         exit_stack.callback(
             lambda: _shutdown_ray(
                 rank_actors,
-                (self._quent_close if self._quent_runtime is not None else None),
+                (
+                    functools.partial(self._set_quent, None)
+                    if self._quent_runtime is not None
+                    else None
+                ),
                 shutdown_ray=owns_ray,
             )
         )
@@ -974,7 +979,7 @@ class RayEngine(StreamingEngine):
             )
 
             self._rank_actors: list[ActorHandle[RankActor]] | None = rank_actors
-            self._update_quent(quent_context, None, executor_options)
+            executor_options["quent_context"] = self._set_quent(quent_context)
             super().__init__(
                 nranks=nranks,
                 executor_options={
@@ -1046,7 +1051,9 @@ class RayEngine(StreamingEngine):
         new_quent_context: cudf_polars.quent.QuentConfig | None = executor_options.get(
             "quent_context", existing_quent_context
         )
-        self._update_quent(new_quent_context, existing_quent_context, executor_options)
+        if new_quent_context != existing_quent_context:
+            new_quent_context = self._set_quent(new_quent_context)
+        executor_options["quent_context"] = new_quent_context
 
         # Re-run ``StreamingEngine.__init__`` on the existing instance to
         # reconfigure the polars ``GPUEngine`` layer (``self.config``,
@@ -1066,28 +1073,26 @@ class RayEngine(StreamingEngine):
             exit_stack=self._exit_stack,
         )
 
-    def _quent_close(self) -> None:
-        """Clear Quent worker runtimes on all actors, then close the controller."""
+    def _set_quent(
+        self, quent_context: cudf_polars.quent.QuentConfig | None
+    ) -> cudf_polars.quent.QuentConfig | None:
+        """Replace this engine's Ray Quent runtimes."""
         assert self._rank_actors is not None
         rank_actors = self._rank_actors
-        steps: list[Callable[[], object]] = [
-            # Workers first so the collector can drain before we close it.
-            lambda: ray.get(
-                [rank.update_quent.remote(None, None) for rank in rank_actors]
-            )
-        ]
         if self._quent_runtime is not None:
+            steps: list[Callable[[], object]] = [
+                # Workers first so the collector can drain before we close it.
+                lambda: ray.get(
+                    [rank.update_quent.remote(None, None) for rank in rank_actors]
+                )
+            ]
             steps.append(self._quent_runtime.close)
-        try:
-            run_cleanup_steps("Ray Quent shutdown failed", *steps)
-        finally:
-            self._quent_runtime = None
-
-    def _quent_open(
-        self, quent_context: cudf_polars.quent.QuentConfig
-    ) -> cudf_polars.quent.QuentConfig:
-        """Start a new Quent collector, connect actors, create controller."""
-        assert self._rank_actors is not None
+            try:
+                run_cleanup_steps("Ray Quent shutdown failed", *steps)
+            finally:
+                self._quent_runtime = None
+        if quent_context is None:
+            return None
         self._quent_runtime = QuentControllerRuntime.create(
             quent_context,
             backend="ray",
@@ -1104,7 +1109,7 @@ class RayEngine(StreamingEngine):
             )
         except BaseException:  # pragma: no cover - defensive startup cleanup
             with contextlib.suppress(Exception):
-                self._quent_close()
+                self._set_quent(None)
             raise
         return quent_context
 

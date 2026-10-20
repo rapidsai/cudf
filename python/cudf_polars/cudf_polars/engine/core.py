@@ -583,40 +583,10 @@ class StreamingEngine(pl.GPUEngine):
         """Exit the context manager, calling :meth:`shutdown`."""
         self.shutdown()
 
-    def _update_quent(
-        self,
-        new_quent_context: QuentConfig | None,
-        existing_quent_context: QuentConfig | None,
-        executor_options: dict[str, Any],
-    ) -> None:
-        """
-        Apply a ``quent_context`` change in-place.
-
-        Closes existing Quent runtimes, starts new ones for
-        ``new_quent_context``, and patches ``executor_options["quent_context"]``
-        and ``_quent_output_root``.  Subclasses implement :meth:`_quent_close`
-        and :meth:`_quent_open` for the backend-specific work.
-        """
-        if new_quent_context != existing_quent_context:
-            if existing_quent_context is not None:
-                self._quent_close()
-            if new_quent_context is not None:
-                new_quent_context = self._quent_open(new_quent_context)
-        self._quent_output_root = (
-            new_quent_context.run_root if new_quent_context is not None else None
-        )
-        executor_options["quent_context"] = new_quent_context
-
-    def _quent_close(self) -> None:
-        """Close all Quent runtimes for this engine (workers then controller)."""
+    def _set_quent(self, quent_context: QuentConfig | None) -> QuentConfig | None:
+        """Replace this engine's Quent runtimes and return the effective config."""
         raise NotImplementedError(  # pragma: no cover
-            f"{type(self).__name__} does not implement _quent_close"
-        )
-
-    def _quent_open(self, quent_context: QuentConfig) -> QuentConfig:
-        """Start fresh Quent runtimes and return the effective configuration."""
-        raise NotImplementedError(  # pragma: no cover
-            f"{type(self).__name__} does not implement _quent_open"
+            f"{type(self).__name__} does not implement _set_quent"
         )
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
