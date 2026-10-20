@@ -470,8 +470,10 @@ def _update_quent_on_worker(
     if mp_ctx is None:  # pragma: no cover; unreachable
         return
     if mp_ctx.quent_worker_runtime is not None:
-        mp_ctx.quent_worker_runtime.close()
-        mp_ctx.quent_worker_runtime = None
+        try:
+            mp_ctx.quent_worker_runtime.close()
+        finally:
+            mp_ctx.quent_worker_runtime = None
     if quent_context is not None and collector_address is not None:
         assert mp_ctx.comm is not None
         worker_id = uuid.uuid4()

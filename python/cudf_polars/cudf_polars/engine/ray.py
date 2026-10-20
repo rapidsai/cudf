@@ -378,8 +378,10 @@ class RankActor:
         without starting a new one.
         """
         if self._quent_worker_runtime is not None:
-            self._quent_worker_runtime.close()
-            self._quent_worker_runtime = None
+            try:
+                self._quent_worker_runtime.close()
+            finally:
+                self._quent_worker_runtime = None
         if quent_context is not None and collector_address is not None:
             assert self._comm is not None
             self._quent_worker_runtime = QuentWorkerRuntime.create(
