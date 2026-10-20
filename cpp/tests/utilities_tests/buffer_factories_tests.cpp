@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <type_traits>
 #include <vector>
 
@@ -89,6 +90,26 @@ TYPED_TEST(BufferFactoriesTest, ConstHostSpan)
   for (auto size : {0U, 1U, 257U, 65537U}) {
     auto const input = this->make_input(size);
     auto const span  = cudf::host_span<TypeParam const>{input};
+    SCOPED_TRACE(::testing::Message() << "size=" << size);
+    this->check_buffer(
+      [&](cudf::memory_resources mr) {
+        return cudf::detail::make_device_buffer(span, this->stream, mr);
+      },
+      input);
+    SCOPED_TRACE(::testing::Message() << "size=" << size << ", async");
+    this->check_buffer(
+      [&](cudf::memory_resources mr) {
+        return cudf::detail::make_device_buffer_async(span, this->stream, mr);
+      },
+      input);
+  }
+}
+
+TYPED_TEST(BufferFactoriesTest, StdSpan)
+{
+  for (auto size : {0U, 1U, 257U, 65537U}) {
+    auto const input = this->make_input(size);
+    auto const span  = std::span<TypeParam const>{input};
     SCOPED_TRACE(::testing::Message() << "size=" << size);
     this->check_buffer(
       [&](cudf::memory_resources mr) {
