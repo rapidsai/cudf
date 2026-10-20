@@ -248,6 +248,10 @@ TEST(SpanTest, CanMakeDeviceUvectorFromStdSpan)
   auto const d_data = cudf::detail::make_device_uvector_async(
     std::span<int const>{h_data}, stream, cudf::get_current_device_resource_ref());
   EXPECT_EQ(cudf::detail::make_std_vector(d_data, stream), h_data);
+
+  auto const d_data_sync = cudf::detail::make_device_uvector(
+    std::span<int const>{h_data}, stream, cudf::get_current_device_resource_ref());
+  EXPECT_EQ(cudf::detail::make_std_vector(d_data_sync, stream), h_data);
 }
 
 CUDF_KERNEL void simple_device_kernel(device_span<bool> result) { result[0] = true; }

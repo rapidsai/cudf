@@ -267,6 +267,29 @@ rmm::device_uvector<T> make_device_uvector(std::vector<T, Allocator> const& sour
 
 /**
  * @brief Synchronously construct a `device_uvector` containing a deep copy of data from a
+ * `std::span`
+ *
+ * @note This function synchronizes `stream`.
+ *
+ * @tparam T The type of the data to copy (may be const-qualified)
+ * @tparam Extent The extent of the std::span
+ * @param source_data The std::span of data to deep copy
+ * @param stream The stream on which to allocate memory and perform the copy
+ * @param mr The memory resource to use for allocating the returned device_uvector
+ * @return A device_uvector containing the copied data
+ */
+template <typename T, std::size_t Extent>
+rmm::device_uvector<std::remove_cv_t<T>> make_device_uvector(std::span<T, Extent> source_data,
+                                                             cuda::stream_ref stream,
+                                                             rmm::device_async_resource_ref mr)
+{
+  auto ret = make_device_uvector_async(source_data, stream, mr);
+  cudf::detail::sync_stream(stream);
+  return ret;
+}
+
+/**
+ * @brief Synchronously construct a `device_uvector` containing a deep copy of data from a
  * `device_span`
  *
  * @note This function synchronizes `stream`.
