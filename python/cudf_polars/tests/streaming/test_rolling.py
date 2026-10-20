@@ -10,7 +10,6 @@ from unittest.mock import Mock
 import pytest
 
 import polars as pl
-from polars import polars as plrs  # type: ignore[attr-defined]
 from polars.testing import assert_frame_equal
 
 from cudf_streaming.channel_metadata import OrderScheme
@@ -135,10 +134,6 @@ def test_rolling_preserves_index_ordering_metadata(spmd_engine_factory) -> None:
     assert ordering.strict_boundaries is True
 
 
-@pytest.mark.skipif(
-    not hasattr(plrs._expr_nodes, "RollingFunction"),
-    reason="RollingFunction not available in this polars version",
-)
 def test_fixed_size_rolling_with_ordered_passthrough_metadata(
     spmd_engine_factory,
 ) -> None:
@@ -248,10 +243,6 @@ def test_rolling_unsorted_across_chunks_raises(
         q.collect(engine=engine)
 
 
-@pytest.mark.skipif(
-    not hasattr(plrs._expr_nodes, "RollingFunction"),
-    reason="RollingFunction not available in this polars version",
-)
 @pytest.mark.parametrize("center", [False, True])
 def test_fixed_size_rolling_mean(engine, center) -> None:
     df = pl.LazyFrame({"x": [1.0, 2.0, 4.0, 8.0, 16.0]})
@@ -378,10 +369,6 @@ def test_rolling_uint64_out_of_bounds(spmd_engine, tmp_path) -> None:
         q.collect(engine=spmd_engine)
 
 
-@pytest.mark.skipif(
-    not hasattr(plrs._expr_nodes, "RollingFunction"),
-    reason="RollingFunction not available in this polars version",
-)
 def test_fixed_size_rolling_mean_after_drop_nulls(engine) -> None:
     df = pl.LazyFrame({"x": [None, 1.0, 2.0, None, 4.0, 8.0, 16.0]})
     q = df.select(pl.col("x").drop_nulls().rolling_mean(window_size=2))
@@ -389,10 +376,6 @@ def test_fixed_size_rolling_mean_after_drop_nulls(engine) -> None:
     assert_gpu_result_equal(q, engine=engine)
 
 
-@pytest.mark.skipif(
-    not hasattr(plrs._expr_nodes, "RollingFunction"),
-    reason="RollingFunction not available in this polars version",
-)
 @pytest.mark.parametrize(
     "within_expression", [False, True], ids=["select", "expression"]
 )
