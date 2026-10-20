@@ -78,7 +78,7 @@ std::vector<packed_table> contiguous_split(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @deprecated Use the std::span overload instead.
+ * @deprecated in 26.12 and will be removed in a future release. Use the std::span overload instead.
  */
 [[deprecated("Use the std::span overload instead.")]]
 std::vector<packed_table> contiguous_split(
