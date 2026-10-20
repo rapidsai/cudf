@@ -118,7 +118,8 @@ std::unique_ptr<detail::cross_set_type> initialize_cross_set(cudf::column_device
                                                              cuda::stream_ref stream)
 {
   auto const elements = input.size() / 2;
-  auto cross_set      = std::make_unique<cross_set_type>(static_cast<size_t>(elements),
+  // keys hold UTF-8 bytes which are never 0xFF so the all-ones key is never a valid key
+  auto cross_set = std::make_unique<cross_set_type>(static_cast<size_t>(elements),
                                                     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
                                                     cuco::empty_key{~cross_key_type{0}},
                                                     cuda::std::equal_to<cross_key_type>{},
@@ -133,6 +134,7 @@ std::unique_ptr<detail::cross_set_type> initialize_cross_set(cudf::column_device
     0, cuda::proclaim_return_type<cross_key_type>([input] __device__(cudf::size_type idx) {
       auto const lhs = input.element<cudf::string_view>(idx * 2);
       auto const rhs = input.element<cudf::string_view>(idx * 2 + 1);
+      // a never-matching key (not the empty key) for a pair with an empty half
       if (lhs.empty() || rhs.empty()) { return ~cross_key_type{0} - 1; }
       auto ptr = lhs.data() + lhs.size_bytes() - 1;
       while (ptr > lhs.data() && !cudf::strings::detail::is_begin_utf8_char(*ptr)) {
