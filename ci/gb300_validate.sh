@@ -63,6 +63,10 @@ for mode in none rmm-async-destroy-pending rmm-async-destroy-synced rmm-device-b
     for i in $(seq 8); do
       if ! grep -q "^OK ${mode}$" "${WORK}/${mode}-${round}-${i}.log"; then
         crashed=$((crashed + 1))
+        if [[ ${crashed} -eq 1 ]]; then
+          rapids-logger "repro ${mode}: first failing process output"
+          grep -v -E "^\s*$" "${WORK}/${mode}-${round}-${i}.log" | head -n 25 || true
+        fi
       fi
     done
   done
