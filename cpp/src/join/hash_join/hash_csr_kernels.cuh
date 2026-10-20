@@ -10,6 +10,7 @@
 
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda.hpp>
+#include <cudf/detail/utilities/dispatchers.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -253,8 +254,8 @@ void launch_hash_csr_probe_count_kernel(size_type num_rows,
   auto const config = grid_1d{num_rows, hash_csr_block_size};
   // Keep reduction registers and shared memory out of the kernels used by match contexts and
   // retrieval. A device-side null check still reserves those resources for every probe.
-  auto const launch_kernel = [&]<bool ComputeSum>() {
-    hash_csr_probe_count_kernel<IsOuter, ComputeSum>
+  dispatch_bool(total_matches != nullptr, [&](auto compute_sum) {
+    hash_csr_probe_count_kernel<IsOuter, decltype(compute_sum)::value>
       <<<config.num_blocks, config.num_threads_per_block, 0, stream.get()>>>(num_rows,
                                                                              valid_rows,
                                                                              probe_groups,
@@ -266,12 +267,7 @@ void launch_hash_csr_probe_count_kernel(size_type num_rows,
                                                                              csr,
                                                                              equal,
                                                                              hasher);
-  };
-  if (total_matches != nullptr) {
-    launch_kernel.template operator()<true>();
-  } else {
-    launch_kernel.template operator()<false>();
-  }
+  });
   CUDF_CUDA_TRY(cudaGetLastError());
 }
 
