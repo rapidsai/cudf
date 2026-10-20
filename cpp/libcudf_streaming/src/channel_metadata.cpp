@@ -71,7 +71,8 @@ ordering ordering::as_strict(rapidsmpf::BufferResource& br) const
   auto const boundary_view = boundaries->table_view();
   std::vector<cudf::size_type> key_columns(boundary_view.num_columns());
   std::iota(key_columns.begin(), key_columns.end(), 0);
-  auto const stream      = boundaries->stream();
+  auto const stream = boundaries->stream();
+  // Equal boundary rows are adjacent because boundaries are ordered.
   auto unique_boundaries = cudf::unique(boundary_view,
                                         key_columns,
                                         cudf::duplicate_keep_option::KEEP_FIRST,
