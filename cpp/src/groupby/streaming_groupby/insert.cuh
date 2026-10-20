@@ -90,8 +90,9 @@ cuda::device_buffer<size_type> streaming_groupby::impl::probe_and_insert_impl(
     CUDF_FAIL("Distinct key count (" + std::to_string(distinct_so_far + new_distinct_keys) +
               ") would exceed max_distinct_keys (" + std::to_string(_max_distinct_keys) + ").");
   }
-  ensure_aggregate_capacity(
-    distinct_so_far + new_distinct_keys, stream, cudf::memory_resources{temp_mr, temp_mr});
+  // Aggregate storage and compacted keys outlive this call and belong to the object.
+  auto const state_mr = cudf::memory_resources{_mr, temp_mr};
+  ensure_aggregate_capacity(distinct_so_far + new_distinct_keys, stream, state_mr);
 
   if (new_distinct_keys > 0) {
     // Gather compacted distinct keys from the batch.
@@ -102,10 +103,10 @@ cuda::device_buffer<size_type> streaming_groupby::impl::probe_and_insert_impl(
       out_of_bounds_policy::DONT_CHECK,
       cudf::negative_index_policy::NOT_ALLOWED,
       stream,
-      temp_mr);
+      state_mr);
 
-    auto preprocessed_compacted =
-      cudf::detail::row::hash::preprocessed_table::create(compacted->view(), stream, temp_mr);
+    auto preprocessed_compacted = cudf::detail::row::hash::preprocessed_table::create(
+      compacted->view(), stream, state_mr.get_output_mr());
 
     // Reserve both vectors before enqueueing/publishing the new persistent group IDs.
     _compacted_batches.reserve(_compacted_batches.size() + 1);

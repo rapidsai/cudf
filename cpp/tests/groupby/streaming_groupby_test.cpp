@@ -485,7 +485,6 @@ TEST_F(StreamingGroupbyTest, ColumnwiseGrowthPreservesResultsOnAllocationFailure
     std::size_t grown_columns    = 0;
     std::size_t peak_state_bytes = 0;
     bool growing                 = false;
-    // This independent upstream avoids recursion while the callback is the current resource.
     rmm::mr::cuda_memory_resource upstream;
     rmm::mr::callback_memory_resource mr{
       [&](cuda::stream_ref stream, std::size_t bytes, std::size_t alignment, void*) -> void* {
@@ -509,8 +508,8 @@ TEST_F(StreamingGroupbyTest, ColumnwiseGrowthPreservesResultsOnAllocationFailure
         if (old_buffers.erase(ptr) != 0 && growing) { ++retired_columns; }
         upstream.deallocate(stream, ptr, bytes, alignment);
       }};
-    cudf::test::scoped_current_device_resource resource_scope{mr};
-    cudf::groupby::streaming_groupby agg{KEY_COL, requests, num_rows};
+    cudf::groupby::streaming_groupby agg{
+      KEY_COL, requests, num_rows, cudf::null_policy::EXCLUDE, mr};
     agg.aggregate(repeated_batch);
     cudf::get_default_stream().sync();
     ASSERT_EQ(old_buffers.size(), num_columns);

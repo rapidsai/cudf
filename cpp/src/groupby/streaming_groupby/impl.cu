@@ -144,7 +144,7 @@ streaming_groupby::impl::impl(host_span<size_type const> key_indices,
 
 void streaming_groupby::impl::initialize(table_view const& data, cuda::stream_ref stream)
 {
-  auto const mr = cudf::get_current_device_resource_ref();
+  auto const mr = cudf::memory_resources{_mr, cudf::get_current_device_resource_ref()};
 
   // Detect nested key columns (struct, list) for comparator template dispatch.
   std::vector<column_view> key_cols;
@@ -204,12 +204,7 @@ void streaming_groupby::impl::initialize(table_view const& data, cuda::stream_re
                                        ? cudf::dictionary_column_view(values).keys().type()
                                        : values.type());
   }
-  _agg_results =
-    make_aggregate_results(0,
-                           0,
-                           _agg_kinds.size(),
-                           stream,
-                           cudf::memory_resources{mr, cudf::get_current_device_resource_ref()});
+  _agg_results = make_aggregate_results(0, 0, _agg_kinds.size(), stream, mr);
 
   _d_agg_kinds = std::make_unique<cuda::device_buffer<aggregation::Kind>>(
     cudf::detail::make_device_buffer_async(_agg_kinds, stream, mr));
@@ -249,8 +244,8 @@ void streaming_groupby::impl::initialize(table_view const& data, cuda::stream_re
   }
 
   // Companion vector: one compacted batch ID per dense group.
-  _key_batch_ids =
-    std::make_unique<cuda::device_buffer<size_type>>(stream, mr, _max_distinct_keys, cuda::no_init);
+  _key_batch_ids = std::make_unique<cuda::device_buffer<size_type>>(
+    stream, mr.get_output_mr(), _max_distinct_keys, cuda::no_init);
 
   _initialized = true;
 }

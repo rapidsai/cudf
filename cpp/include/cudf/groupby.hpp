@@ -501,7 +501,9 @@ class streaming_groupby {
    *        grows with observed groups and uses bounded partials based on batch size. Cumulative
    *        input rows are not bounded.
    * @param null_handling Indicates whether rows in keys that contain NULL values should be included
-   * @param mr Device memory resource used to allocate the persistent hash table
+   * @param mr Device memory resource used to allocate all persistent state, including the hash
+   *        table, stored keys, and aggregate results. Temporary allocations made by aggregate()
+   *        and merge() use the current device memory resource.
    *
    * @throws std::invalid_argument if `max_distinct_keys <= 0`
    * @throws std::invalid_argument if any requested aggregation kind is unsupported
