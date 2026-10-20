@@ -66,30 +66,27 @@ __device__ void transform_kernel(size_type row_size,
 
       if constexpr (direct_access) {
         // Expand column pointers and input loads directly into the UDF arguments.
-        auto row_error = InputAccessors::map([&]<typename... I>() {
-          return OutputAccessors::map([&]<typename... O>() {
+        auto const row_error = InputAccessors::map([&]<typename... In>() {
+          return OutputAccessors::map([&]<typename... Out>() {
             return operation(
               row,
-              (O::column(output_cols).template data<typename O::element_type>() + row)...,
-              I::column(input_cols)
-                .template data<typename I::element_type>()[I::map_index(row)]...);
+              (Out::column(output_cols).template data<typename Out::element_type>() + row)...,
+              In::column(input_cols)
+                .template data<typename In::element_type>()[In::map_index(row)]...);
           });
         });
 
         thread_error = cuda::std::max(thread_error, row_error);
       } else {
-        auto outs = OutputAccessors::map(
-          [&]<typename... A>() { return cuda::std::tuple{A::output_arg(output_cols, row)...}; });
-
         auto const row_error = OutputAccessors::map([&]<typename... Out>() {
-          return InputAccessors::map([&]<typename... In>() {
-            return operation(
-              row, &cuda::std::get<Out::index>(outs)..., In::element(input_cols, row)...);
-          });
-        });
+          return [&](auto... outs) {
+            auto const error = InputAccessors::map([&]<typename... In>() {
+              return operation(row, &outs..., In::element(input_cols, row)...);
+            });
 
-        OutputAccessors::map([&]<typename... A>() {
-          (A::assign(output_cols, row, cuda::std::get<A::index>(outs)), ...);
+            (Out::assign(output_cols, row, outs), ...);
+            return error;
+          }(Out::output_arg(output_cols, row)...);
         });
 
         thread_error = cuda::std::max(thread_error, row_error);
@@ -103,23 +100,17 @@ __device__ void transform_kernel(size_type row_size,
     for (auto row_index = start; row_index < warp_padded_size; row_index += stride) {
       auto const active_mask = __ballot_sync(0xffff'ffffu, row_index < row_size);
       if (row_index >= row_size) { continue; }
-      auto const row = static_cast<size_type>(row_index);
-
-      auto outs = OutputAccessors::map(
-        [&]<typename... A>() { return cuda::std::tuple{A::null_output_arg(output_cols, row)...}; });
-
+      auto const row       = static_cast<size_type>(row_index);
       auto const row_error = OutputAccessors::map([&]<typename... Out>() {
-        return InputAccessors::map([&]<typename... In>() {
-          return operation(
-            row, &cuda::std::get<Out::index>(outs)..., In::nullable_element(input_cols, row)...);
-        });
-      });
+        return [&](auto... outs) {
+          auto const error = InputAccessors::map([&]<typename... In> {
+            return operation(row, &outs..., In::nullable_element(input_cols, row)...);
+          });
 
-      OutputAccessors::map([&]<typename... A>() {
-        (A::assign(output_cols, row, *cuda::std::get<A::index>(outs)), ...);
-        (jit::warp_compact_validity<A>(
-           active_mask, output_cols, row, cuda::std::get<A::index>(outs).has_value()),
-         ...);
+          (Out::assign(output_cols, row, *outs), ...);
+          (jit::warp_compact_validity<Out>(active_mask, output_cols, row, outs.has_value()), ...);
+          return error;
+        }(Out::null_output_arg(output_cols, row)...);
       });
 
       thread_error = cuda::std::max(thread_error, row_error);
