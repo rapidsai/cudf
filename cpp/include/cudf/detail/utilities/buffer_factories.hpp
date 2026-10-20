@@ -235,9 +235,8 @@ cuda::device_buffer<std::remove_cv_t<T>> make_device_buffer(std::span<T, Extent>
                                                             cuda::stream_ref stream,
                                                             cudf::memory_resources mr)
 {
-  auto ret = make_device_buffer_async(source_data, stream, mr);
-  cudf::detail::sync_stream(stream);
-  return ret;
+  return make_device_buffer(
+    host_span<std::remove_cv_t<T> const>{source_data.data(), source_data.size()}, stream, mr);
 }
 
 }  // namespace cudf::detail
