@@ -97,9 +97,7 @@ class CachedParquetInfo:
 
 @nvtx_annotate_cudf_polars(message="fetch_parquet_footers_for_paths")
 def _prefetch_parquet_footers_for_paths(
-    paths: list[str],
-    *,
-    parse_hybrid_metadata: bool = False,
+    paths: list[str], *, parse_hybrid_metadata: bool = False
 ) -> list[CachedParquetInfo]:
     """
     Prefetch parquet footers for a list of paths.
@@ -136,12 +134,13 @@ def _prefetch_parquet_footers_for_paths(
         else:
             sizes.append(None)
 
-    sources = [
-        plc.io.types.FilepathSource(path, size)
-        for path, size in zip(paths, sizes, strict=True)
-    ]
     metadata = plc.io.parquet_metadata.read_parquet_footers(
-        plc.io.types.SourceInfo(sources)
+        plc.io.types.SourceInfo(
+            [
+                plc.io.types.FilepathSource(path, size)
+                for path, size in zip(paths, sizes, strict=True)
+            ]
+        )
     )
 
     return [
