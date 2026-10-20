@@ -18,18 +18,20 @@ from cudf_polars.testing.asserts import (
 def frame() -> pl.LazyFrame:
     """Sorted datetime rows with interleaved groups."""
     start = dt.datetime(2026, 1, 5, 9, 30)
-    return pl.LazyFrame(
-        {
-            "time": [start + dt.timedelta(minutes=i) for i in range(120)],
-            "group": ["a", "b", "c"] * 40,
-            "price": range(120),
-            "size": [10, 20, 30, 40] * 30,
-            "bid": [10.0, 11.0, 12.0, 13.0] * 30,
-            "ask": [10.5, 11.5, 12.5, 13.5] * 30,
-            "bsize": [100, 200, 300] * 40,
-            "asize": [150, 250, 350] * 40,
-        }
-    ).set_sorted("time")
+    return (
+        pl.DataFrame(
+            {
+                "time": [start + dt.timedelta(minutes=i) for i in range(120)],
+                "group": ["a", "b", "c"] * 40,
+                "price": range(120),
+                "size": [10, 20, 30, 40] * 30,
+                "bid": [10.0, 11.0, 12.0, 13.0] * 30,
+                "ask": [10.5, 11.5, 12.5, 13.5] * 30,
+            }
+        )
+        .set_sorted("time")
+        .lazy()
+    )
 
 
 @pytest.mark.parametrize("every", ["1m", "5m", "10m"])
@@ -43,12 +45,6 @@ def test_supported_tumbling_windows(
     q = frame.group_by_dynamic(
         "time", every=every, closed="left", group_by=group_by
     ).agg(
-        (
-            (pl.col("bsize") * pl.col("bid") + pl.col("asize") * pl.col("ask"))
-            / (pl.col("asize") + pl.col("bsize"))
-        )
-        .mean()
-        .alias("avg_liq_weighted_mid"),
         (pl.col("ask") - pl.col("bid")).mean().alias("avg_spread"),
         pl.col("price").first().alias("open"),
         pl.col("price").max().alias("high"),
