@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 # TEMPORARY (UCX segfault debugging, not for merge).
 # Wrapper that runs a command under gdb in batch mode and dumps as much context
 # as possible if the process receives SIGSEGV. libcuda.so is stripped, so frames
