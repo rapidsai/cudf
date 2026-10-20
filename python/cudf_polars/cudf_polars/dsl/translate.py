@@ -642,7 +642,7 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
     )
     lake_options = LakeScanOptions.from_file_options(file_options, node.paths)
     if lake_options is not None:
-        lake_options.check_field_ids(paths[0])
+        lake_options.check_field_ids(paths)
         if lake_options.extra_columns_policy == "raise":
             lake_options = lake_options.expect_columns(
                 reader_options.get("schema"),

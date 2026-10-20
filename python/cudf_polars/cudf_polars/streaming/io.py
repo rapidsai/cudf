@@ -1131,8 +1131,6 @@ class ParquetMetadata:
     parse_hybrid_metadata
         Whether to eagerly parse ``HybridScanMetadata`` for sampled paths.
         Only useful when ``ParquetOptions.use_hybrid_scan`` is enabled.
-    uniform_schema
-        Whether every path stores the same columns.
     """
 
     __slots__ = (
@@ -1172,7 +1170,6 @@ class ParquetMetadata:
         max_footer_samples: int,
         *,
         parse_hybrid_metadata: bool = False,
-        uniform_schema: bool = True,
     ):
         from cudf_polars.dsl.utils.io import _prefetch_parquet_footers_for_paths
 
@@ -1202,7 +1199,6 @@ class ParquetMetadata:
         sample_parquet_info = _prefetch_parquet_footers_for_paths(
             list(self.sample_paths),
             parse_hybrid_metadata=parse_hybrid_metadata,
-            uniform_schema=uniform_schema,
         )
         sample_footers = [info.file_metadata for info in sample_parquet_info]
 
@@ -1334,14 +1330,12 @@ class ParquetSourceInfo:
         max_row_group_samples: int,
         *,
         parse_hybrid_metadata: bool = False,
-        uniform_schema: bool = True,
     ) -> ParquetSourceInfo:
         """Build a ParquetSourceInfo from a list of paths."""
         metadata = ParquetMetadata(
             paths,
             max_footer_samples,
             parse_hybrid_metadata=parse_hybrid_metadata,
-            uniform_schema=uniform_schema,
         )
         row_count = metadata.row_count
 
@@ -1467,7 +1461,6 @@ def _build_parquet_source(
     max_row_group_samples: int,
     *,
     parse_hybrid_metadata: bool = False,
-    uniform_schema: bool = True,
 ) -> ParquetSourceInfo:
     """Return cached, fully-computed Parquet datasource information."""
     return ParquetSourceInfo.from_paths(
@@ -1477,7 +1470,6 @@ def _build_parquet_source(
         max_footer_samples,
         max_row_group_samples,
         parse_hybrid_metadata=parse_hybrid_metadata,
-        uniform_schema=uniform_schema,
     )
 
 
@@ -1518,7 +1510,6 @@ def _build_source_info(
             max_footer,
             max_rg,
             parse_hybrid_metadata=use_hybrid_scan,
-            uniform_schema=ir.lake_options is None,
         )
     else:  # pragma: no cover
         raise ValueError(f"Unsupported Scan type: {ir.typ}")

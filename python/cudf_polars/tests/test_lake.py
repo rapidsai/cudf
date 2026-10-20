@@ -624,16 +624,21 @@ def test_scan_lake_cast_columns_forbidden(
             q.collect(engine=engine)
 
 
+@pytest.mark.parametrize("missing_index", [0, 1])
 def test_scan_iceberg_without_field_ids(
-    in_memory_engine: pl.GPUEngine, tmp_path: Path
+    in_memory_engine: pl.GPUEngine, tmp_path: Path, missing_index: int
 ) -> None:
-    path = str(tmp_path / "0.parquet")
-    pq.write_table(pa.table({"a": [1, 2]}), path)
     schema = pa.schema(
         [pa.field("a", pa.int64(), metadata={b"PARQUET:field_id": b"1"})]
     )
+    paths = [str(tmp_path / "0.parquet"), str(tmp_path / "1.parquet")]
+    for index, path in enumerate(paths):
+        file_schema = (
+            pa.schema([pa.field("a", pa.int64())]) if index == missing_index else schema
+        )
+        pq.write_table(pa.table({"a": [index]}, schema=file_schema), path)
     q = pl.scan_parquet(
-        path,
+        paths,
         schema={"a": pl.Int64},
         missing_columns="insert",
         _column_mapping=("iceberg-column-mapping", schema),

@@ -337,23 +337,28 @@ class LakeScanOptions:
             self, expected_columns=frozenset(names).union(hive_names)
         )
 
-    def check_field_ids(self, first_path: str) -> None:
+    def check_field_ids(self, paths: Sequence[str]) -> None:
         """
-        Check that the first data file can be read by field ID.
+        Check that every data file can be read by field ID.
 
         Parameters
         ----------
-        first_path
-            First data file of the scan.
+        paths
+            Data files of the scan.
 
         Raises
         ------
         NotImplementedError
-            If the scan reads columns by field ID and ``first_path`` holds
-            no parquet field IDs. Other files are checked when they are read.
+            If the scan reads columns by field ID and any of ``paths`` holds
+            no parquet field IDs.
         """
-        if self.columns is not None:
-            _footer(first_path, None, by_field_id=True)
+        if self.columns is None:
+            return
+        metadatas = plc.io.parquet_metadata.read_parquet_footers(
+            plc.io.SourceInfo(list(paths))
+        )
+        for path, metadata in zip(paths, metadatas, strict=True):
+            _footer(path, metadata, by_field_id=True)
 
     @property
     def has_deletions(self) -> bool:
