@@ -409,20 +409,23 @@ constexpr size_type LRB_DIRECT_MAX_BYTES = 64;
  * @param size_bytes Row length in bytes (any value if is_null)
  * @param target_bytes Target length in bytes (> 0)
  * @param is_null Whether the row is null
- * @return Bin in [0, 31]
+ * @return 0, or a bin in [7, 31] for rows longer than LRB_DIRECT_MAX_BYTES
  */
 __device__ __forceinline__ int lrb_bin(size_type size_bytes, size_type target_bytes, bool is_null)
 {
   if (is_null || size_bytes < target_bytes || size_bytes <= LRB_DIRECT_MAX_BYTES) { return 0; }
   // ceil(log2(bytes)): bin b holds 2^(b-1) < bytes <= 2^b, so a row of exactly 2^b bytes sits at
   // the top of bin b and the bin's chunk count (2^b / LRB_CHUNK_BYTES) is exact for it
-  return cuda::std::max(1, 32 - __clz(static_cast<unsigned>(size_bytes - 1)));
+  return 32 - __clz(static_cast<unsigned>(size_bytes - 1));
 }
 
 /**
  * @brief Threads that cooperate on one row of `bin`, i.e. 1 << clamp(bin - LRB_SHIFT, 0, 5).
  *
- * @param bin Bin index from lrb_bin()
+ * Bins below 7 are never populated, but the search kernel evaluates this for every lane of its
+ * bin table, so the lower clamp keeps the shift valid for them.
+ *
+ * @param bin Bin index
  * @return 8, 16 or 32 for the bins that reach the search pass
  */
 __host__ __device__ constexpr int lrb_threads_per_row(int bin)
