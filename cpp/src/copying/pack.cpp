@@ -400,10 +400,6 @@ size_type packed_metadata_view::column_view::num_rows() const { return _size; }
 
 size_type packed_metadata_view::column_view::null_count() const { return _null_count; }
 
-int64_t packed_metadata_view::column_view::data_offset() const { return _data_offset; }
-
-int64_t packed_metadata_view::column_view::null_mask_offset() const { return _null_mask_offset; }
-
 size_type packed_metadata_view::column_view::num_children() const { return _num_children; }
 
 packed_metadata_view::column_view packed_metadata_view::column_view::child(size_type i) const

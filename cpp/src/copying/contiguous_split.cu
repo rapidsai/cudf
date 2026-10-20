@@ -2919,6 +2919,8 @@ struct buffer_source {
   std::function<void(int64_t offset, device_span<uint8_t> destination)> fill;
 };
 
+using detail::packed_metadata_access;
+
 std::unique_ptr<column> allocate_materialized_column(
   packed_metadata_view::column_view const& metadata,
   buffer_source const& source,
@@ -2926,7 +2928,7 @@ std::unique_ptr<column> allocate_materialized_column(
   cudf::memory_resources mr)
 {
   auto null_mask = cudf::detail::create_null_mask(0, mask_state::UNALLOCATED, stream, mr);
-  if (auto const offset = metadata.null_mask_offset(); offset != -1) {
+  if (auto const offset = packed_metadata_access::null_mask_offset(metadata); offset != -1) {
     auto const bytes =
       source.size(offset, bitmask_allocation_size_bytes(metadata.num_rows()), true);
     null_mask = cuda::device_buffer<bitmask_type>(
@@ -2939,18 +2941,19 @@ std::unique_ptr<column> allocate_materialized_column(
     CUDF_EXPECTS(metadata.null_count() == 0, "Packed column with nulls has no validity buffer");
   }
 
+  auto const data_offset = packed_metadata_access::data_offset(metadata);
   // Empty chars start where the offsets do, so they must not be filled from the offsets.
-  auto const has_chars =
-    metadata.type().id() != type_id::STRING ||
-    (metadata.num_children() > 0 && metadata.data_offset() != metadata.child(0).data_offset());
+  auto const has_chars = metadata.type().id() != type_id::STRING ||
+                         (metadata.num_children() > 0 &&
+                          data_offset != packed_metadata_access::data_offset(metadata.child(0)));
   rmm::device_buffer data;
-  if (auto const offset = metadata.data_offset(); offset != -1 && has_chars) {
+  if (data_offset != -1 && has_chars) {
     auto const required_bytes = is_fixed_width(metadata.type())
                                   ? metadata.num_rows() * size_of(metadata.type())
                                   : std::size_t{0};
-    auto const bytes          = source.size(offset, required_bytes, false);
+    auto const bytes          = source.size(data_offset, required_bytes, false);
     data                      = rmm::device_buffer(bytes, stream, mr.get_output_mr());
-    source.fill(offset, {static_cast<uint8_t*>(data.data()), bytes});
+    source.fill(data_offset, {static_cast<uint8_t*>(data.data()), bytes});
   }
 
   std::vector<std::unique_ptr<column>> children;
@@ -2973,7 +2976,8 @@ std::unique_ptr<column> allocate_materialized_column(
 void collect_buffer_offsets(packed_metadata_view::column_view const& metadata,
                             std::vector<int64_t>& offsets)
 {
-  for (auto const offset : {metadata.null_mask_offset(), metadata.data_offset()}) {
+  for (auto const offset : {packed_metadata_access::null_mask_offset(metadata),
+                            packed_metadata_access::data_offset(metadata)}) {
     if (offset != -1) { offsets.push_back(offset); }
   }
   for (size_type i = 0; i < metadata.num_children(); ++i) {
@@ -3000,14 +3004,17 @@ void append_packed_buffers(packed_metadata_view::column_view const& column,
     };
   auto const rows = static_cast<std::size_t>(column.num_rows());
   auto const type = column.type();
-  add(column.null_mask_offset(),
+  add(packed_metadata_access::null_mask_offset(column),
       pack_region_kind::validity,
       type_id::INT32,
       cudf::util::div_rounding_up_safe(rows, std::size_t{32}) * sizeof(bitmask_type));
   if (type.id() == type_id::STRING) {
-    add(column.data_offset(), pack_region_kind::string_characters, type.id(), std::nullopt);
+    add(packed_metadata_access::data_offset(column),
+        pack_region_kind::string_characters,
+        type.id(),
+        std::nullopt);
   } else {
-    add(column.data_offset(),
+    add(packed_metadata_access::data_offset(column),
         data_kind,
         type.id(),
         is_fixed_width(type) ? std::optional{rows * size_of(type)} : std::nullopt);

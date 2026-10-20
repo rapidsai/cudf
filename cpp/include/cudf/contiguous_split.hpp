@@ -85,6 +85,9 @@ namespace detail {
  *
  */
 struct contiguous_split_state;
+
+/// Reads the payload offsets that `packed_metadata_view::column_view` keeps private.
+struct packed_metadata_access;
 }  // namespace detail
 
 /**
@@ -759,18 +762,6 @@ class packed_metadata_view {
     [[nodiscard]] size_type null_count() const;
 
     /**
-     * @brief @return Byte offset of this column's data in the uncompressed packed payload, or -1
-     * if the column has no data buffer.
-     */
-    [[nodiscard]] int64_t data_offset() const;
-
-    /**
-     * @brief @return Byte offset of this column's validity mask in the uncompressed packed
-     * payload, or -1 if the column is not nullable.
-     */
-    [[nodiscard]] int64_t null_mask_offset() const;
-
-    /**
      * @brief @return The number of children of this column.
      */
     [[nodiscard]] size_type num_children() const;
@@ -786,6 +777,7 @@ class packed_metadata_view {
 
    private:
     friend class packed_metadata_view;
+    friend struct detail::packed_metadata_access;
     data_type _type{type_id::EMPTY};
     size_type _size{};
     size_type _null_count{};
