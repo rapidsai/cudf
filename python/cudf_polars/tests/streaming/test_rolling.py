@@ -304,11 +304,14 @@ def test_rolling_multirank(engine, tmp_path, kind, offset, closed) -> None:
     _assert_rolling_result(engine, source, kind, offset, closed)
 
 
-def _write_rolling_source(source) -> None:
+def _write_rolling_source(source, *, orderby_dtype=None) -> None:
+    orderby: list[int] | pl.Series = [0, 1, 2, 3, 3, 4, 5, 6]
+    if orderby_dtype is not None:
+        orderby = pl.Series(orderby, dtype=orderby_dtype)
     make_partitioned_source(
         pl.DataFrame(
             {
-                "orderby": [0, 1, 2, 3, 3, 4, 5, 6],
+                "orderby": orderby,
                 "values": [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0],
             }
         ),
@@ -359,6 +362,15 @@ def test_rolling_multirank_spmd(spmd_engine, tmp_path, kind) -> None:
         _write_rolling_source(source)
     source = _share_source_path(spmd_engine, source)
     _assert_rolling_result(spmd_engine, source, kind, "-2i")
+
+
+@pytest.mark.spmd
+def test_rolling_multirank_uint64(spmd_engine, tmp_path) -> None:
+    source = tmp_path / "rolling-uint64.parquet"
+    if spmd_engine.rank == 0:
+        _write_rolling_source(source, orderby_dtype=pl.UInt64)
+    source = _share_source_path(spmd_engine, source)
+    _assert_rolling_result(spmd_engine, source, "range", "-2i")
 
 
 @pytest.mark.spmd

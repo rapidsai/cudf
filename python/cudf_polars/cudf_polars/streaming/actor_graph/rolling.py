@@ -57,7 +57,12 @@ if TYPE_CHECKING:
 
 @dataclass
 class RollingManager[BufferedChunkT: BufferedChunk]:
-    """Rolling policy and rank-agnostic local executor."""
+    """
+    Rolling policy and rank-agnostic local executor.
+
+    Owned chunks produce output. Ghost chunks provide history or future
+    context only.
+    """
 
     context: Context
     ir: Rolling | FixedSizeRolling
@@ -77,6 +82,7 @@ class RollingManager[BufferedChunkT: BufferedChunk]:
         current: BufferedChunkT,
         future: deque[StagedChunk[BufferedChunkT]],
     ) -> BufferedChunkT:
+        """Return the latest nonempty chunk available to the cursor."""
         for staged in reversed(future):
             if staged.chunk.num_rows != 0:
                 return staged.chunk
@@ -88,7 +94,7 @@ class RollingManager[BufferedChunkT: BufferedChunk]:
         current: BufferedChunkT,
         future: deque[StagedChunk[BufferedChunkT]],
     ) -> bool:
-        """Read chunks until current has enough leading context."""
+        """Read chunks until current has enough following context."""
         while not self.policy.has_complete_future(
             self._latest_nonempty_chunk(current, future),
             current,
@@ -104,6 +110,13 @@ class RollingManager[BufferedChunkT: BufferedChunk]:
         cursor: BufferedChunkT,
         chunks: Sequence[BufferedChunkT],
     ) -> TableChunk:
+        """
+        Evaluate one owned cursor with its required overlap.
+
+        ``chunks`` use one row coordinate system for this rank. The policy
+        returns a half-open span in that system. The result is trimmed back to
+        rows owned by ``cursor``.
+        """
         start, stop = await self.policy.overlap_bounds(self.context, cursor, chunks)
         if (start, stop) == (cursor.row_start, cursor.row_stop):
             return await evaluate_chunk(
@@ -131,7 +144,7 @@ class RollingManager[BufferedChunkT: BufferedChunk]:
                 )
         assert pieces
         if len(pieces) == 1:
-            ghosted = pieces[0]
+            evaluation_chunk = pieces[0]
         else:
             reservation = await self.context.memory(MemoryType.DEVICE).reserve_or_wait(
                 sum(piece.data_alloc_size() for piece in pieces),
@@ -149,7 +162,7 @@ class RollingManager[BufferedChunkT: BufferedChunk]:
                     stream=stream,
                     mr=self.context.br().device_mr,
                 )
-                ghosted = TableChunk.from_pylibcudf_table(
+                evaluation_chunk = TableChunk.from_pylibcudf_table(
                     table,
                     stream,
                     exclusive_view=True,
@@ -157,7 +170,7 @@ class RollingManager[BufferedChunkT: BufferedChunk]:
                 )
         result = await evaluate_chunk(
             self.context,
-            ghosted,
+            evaluation_chunk,
             self.ir,
             ir_context=self.ir_context,
             already_available=True,
@@ -185,7 +198,7 @@ class RollingManager[BufferedChunkT: BufferedChunk]:
         tracer: ActorTracer | None,
         rolling_input: OverlapInput[BufferedChunkT],
     ) -> None:
-        """Evaluate this rolling node over its prepared input stream."""
+        """Evaluate owned chunks. Ghost chunks provide context but no output."""
         history: list[BufferedChunkT] = []
         future: deque[StagedChunk[BufferedChunkT]] = deque()
         input_exhausted = False
@@ -193,14 +206,14 @@ class RollingManager[BufferedChunkT: BufferedChunk]:
         chunks = aiter(rolling_input)
         staged = await anext(chunks, None)
         while staged is not None:
-            cursor = staged.chunk
-            self.policy.validate_cursor(cursor)
+            chunk = staged.chunk
+            self.policy.validate_chunk(chunk)
             if not staged.owned:
-                history.append(cursor)
-            elif cursor.num_rows == 0:
+                history.append(chunk)
+            elif chunk.num_rows == 0:
                 result = await evaluate_chunk(
                     self.context,
-                    cursor.chunk,
+                    chunk.chunk,
                     self.ir,
                     ir_context=self.ir_context,
                     already_available=True,
@@ -214,6 +227,7 @@ class RollingManager[BufferedChunkT: BufferedChunk]:
                 )
                 output_sequence_number += 1
             else:
+                cursor = chunk
                 history = self.policy.evict_history(history, cursor)
                 if not input_exhausted:
                     input_exhausted = await self._fill_future(
@@ -284,6 +298,7 @@ async def rolling_actor(
         async def _execute_policy[BufferedChunkT: BufferedChunk](
             policy: OverlapPolicy[BufferedChunkT],
         ) -> None:
+            """Prepare input and execute one concrete overlap policy."""
             with RollingManager(context, ir, ir_context, policy) as manager:
                 async with OverlapInput(
                     context,
