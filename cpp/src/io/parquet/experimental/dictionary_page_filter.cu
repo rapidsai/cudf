@@ -743,7 +743,8 @@ CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
   // Check for BYTE_ARRAY decimals
   auto const is_byte_array = physical_type == parquet::Type::BYTE_ARRAY;
 
-  // Only one thread decodes BYTE_ARRAY decimals
+  // Only one thread decodes BYTE_ARRAY decimals as they are rare (deprecated). If this becomes a
+  // bottleneck, use a warp-sized kernel or prefetch page data into shared memory
   if (is_byte_array and group.thread_rank() != 0) { return; }
 
   // Initial byte array decimal offset
@@ -939,7 +940,8 @@ CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
 
   // Check for BYTE_ARRAY decimals
   auto const is_byte_array = physical_type == parquet::Type::BYTE_ARRAY;
-  // Only one thread decodes BYTE_ARRAY decimals
+  // Only one thread decodes BYTE_ARRAY decimals as they are rare (deprecated). If this becomes a
+  // bottleneck, use a warp-sized kernel or prefetch page data into shared memory
   if (is_byte_array and group.thread_rank() != 0) { return; }
   // Initial byte array decimal offset
   auto byte_array_offset = int32_t{0};

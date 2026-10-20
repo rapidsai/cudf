@@ -2347,7 +2347,7 @@ TYPED_TEST(ByteArrayDecimalDictTest, FilterRowGroups)
 {
   using T = TypeParam;
 
-  // Minimal big-endian BYTE_ARRAY decimals; row group 1 holds row group 0's 10 values plus one
+  // Big-endian BYTE_ARRAY decimals; row group 1 holds row group 0's 10 values plus one
   auto constexpr rows_per_row_group = 5000;
   auto constexpr step               = int64_t{70'001};
   auto constexpr scale              = 2;
@@ -2364,11 +2364,13 @@ TYPED_TEST(ByteArrayDecimalDictTest, FilterRowGroups)
     auto const byte_array_decimals =
       cudf::detail::make_counting_transform_iterator(0, [](int64_t i) {
         auto const value = (i % 10 - 5) * step + i / rows_per_row_group;
-        // Fewest bytes that hold the magnitude bits plus a sign bit
+        // Odd values use the fewest bytes that hold the magnitude bits plus a sign bit, and even
+        // values are sign-extended to `sizeof(T)` and `sizeof(T) + 1` bytes in alternation
         auto const magnitude = static_cast<uint64_t>(value < 0 ? ~value : value);
-        auto const num_bytes = std::bit_width(magnitude) / 8 + 1;
-        std::string bytes(num_bytes, '\0');
-        for (auto b = 0; b < num_bytes; ++b) {
+        auto const num_bytes = i % 2 ? static_cast<int>(std::bit_width(magnitude) / 8 + 1)
+                                     : static_cast<int>(sizeof(typename T::rep) + i % 4 / 2);
+        std::string bytes(num_bytes, value < 0 ? '\xff' : '\0');
+        for (auto b = 0; b < std::min(num_bytes, 8); ++b) {
           bytes[num_bytes - 1 - b] = static_cast<char>(value >> (8 * b));
         }
         return bytes;
@@ -2415,7 +2417,8 @@ TYPED_TEST(ByteArrayDecimalDictTest, FilterRowGroups)
   for (auto const& [value, expected_row_groups] :
        {std::pair{-3 * step, std::vector<cudf::size_type>{0}},
         std::pair{-3 * step + 1, std::vector<cudf::size_type>{1}},
-        std::pair{-3 * step + 2, std::vector<cudf::size_type>{}}}) {
+        std::pair{-3 * step + 2, std::vector<cudf::size_type>{}},
+        std::pair{-4 * step, std::vector<cudf::size_type>{0}}}) {
     auto literal_value = make_literal_value(value);
     auto const literal = cudf::ast::literal(literal_value);
     auto const filter_expression =
