@@ -11,7 +11,6 @@ export OMPI_ALLOW_RUN_AS_ROOT=1
 export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
 export OMPI_MCA_opal_cuda_support=1
 ROOT="$PWD"
-export REPRO_GDB_CMDS="$ROOT/ci/repro_gdb.cmds"
 TESTDIR="$PWD/python/cudf_streaming/cudf_streaming/tests"
 cd "$TESTDIR" || exit 1
 
@@ -28,31 +27,28 @@ run_seq() {
     r=$?
     echo "seq $tag nranks=$nrank rc=$r"
     [ $r -ne 0 ] && rc=$r
-    crashed=$(grep -l "Program received signal SIGSEGV" "$REPRO_LOG_DIR"/rank.*.log 2>/dev/null)
-    if [ -n "$crashed" ]; then
-      for f in $crashed; do
-        echo "----- $f"
-        python3 "$ROOT/ci/repro_report.py" "$f"
-      done
-      return 99
+    if [ $r -ne 0 ]; then
+      echo "----- crash output ($tag, $nrank ranks)"
+      grep -v -E "^\s*$|^\S*\.\S*\s*\[" "/tmp/seq.$tag.$nrank.log" | tail -80
     fi
-    if [ $r -ne 0 ]; then tail -12 "/tmp/seq.$tag.$nrank.log"; fi
   done
   return $rc
 }
 
-echo "=== plain sequences (1,2,5 ranks, exactly as CI)"
+echo "=== compilers"
+which cc gcc g++ clang || echo "no compiler"
+
+echo "=== driver race"
+python "$ROOT/ci/repro_race.py"
+
+echo "=== sequences with UCX native crash handler"
+export UCX_HANDLE_ERRORS=bt
+PYTEST_ARGS=(-p no:faulthandler "${PYTEST_ARGS[@]}")
 pf=0
-for i in $(seq 1 5); do
-  run_seq "plain$i" ""
+for i in $(seq 1 8); do
+  run_seq "ucxbt$i" ""
   [ $? -ne 0 ] && pf=$((pf+1))
 done
-echo "plain sequence failures: $pf / 5"
-
-echo "=== gdb sequences"
-for i in $(seq 1 5); do
-  run_seq "gdb$i" "$ROOT/ci/repro_gdb_rank.sh"
-  [ $? -eq 99 ] && break
-done
+echo "sequence failures: $pf / 8"
 echo "repro script finished"
 exit 0
