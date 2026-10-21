@@ -1243,7 +1243,8 @@ template <typename IndexType>
 void expect_unsigned_dictionary_from_device(cudf::column_view keys,
                                             cudf::column_view indices,
                                             cudf::column_view expected,
-                                            std::size_t expected_owned_columns)
+                                            std::size_t expected_owned_columns,
+                                            int64_t offset = 0)
 {
   nanoarrow::UniqueSchema schema;
   NANOARROW_THROW_NOT_OK(
@@ -1257,6 +1258,9 @@ void expect_unsigned_dictionary_from_device(cudf::column_view keys,
   populate_from_col<int64_t>(array->dictionary, keys);
   NANOARROW_THROW_NOT_OK(
     ArrowArrayFinishBuilding(array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
+  array->offset     = offset;
+  array->length     = expected.size();
+  array->null_count = expected.null_count();
 
   ArrowDeviceArray input;
   input.device_id   = rmm::get_current_cuda_device().value();
@@ -1315,4 +1319,7 @@ TYPED_TEST(FromArrowDeviceDictionaryNarrowIndicesTest, WidenAboveSignedLimit)
   auto expected = cudf::make_dictionary_column(keys, expected_indices);
 
   expect_unsigned_dictionary_from_device<IndexType>(keys, indices, expected->view(), 1);
+
+  auto expected_sliced = cudf::slice(expected->view(), {1, 3}).front();
+  expect_unsigned_dictionary_from_device<IndexType>(keys, indices, expected_sliced, 1, 1);
 }
