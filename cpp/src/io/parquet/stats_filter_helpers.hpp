@@ -214,12 +214,13 @@ class stats_caster_base {
                           Type const type,
                           int32_t ts_scale = 0)
     {
-      auto const ignore_value = [&] {
+      // Helper to set the stat value to null (ignore)
+      auto const set_to_null = [&] {
         clear_bit_unsafe(null_mask.data(), index);
         null_count++;
       };
 
-      if (not binary_value.has_value()) { return ignore_value(); }
+      if (not binary_value.has_value()) { return set_to_null(); }
 
       // For strings, also insert the characters
       if constexpr (std::is_same_v<T, string_view>) {
@@ -237,12 +238,11 @@ class stats_caster_base {
       } else {
         val[index] = stats_caster_base::convert<T>(
           binary_value.value().data(), binary_value.value().size(), type, ts_scale);
-
         // Per Parquet spec, a `NaN` stats value must be ignored (set to null)
         if constexpr (cudf::is_floating_point<T>()) {
           if (std::isnan(val[index])) {
-            val[index] = T{};
-            return ignore_value();
+            val[index] = T{};  // No non-empty nulls
+            return set_to_null();
           }
         }
       }
