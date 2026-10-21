@@ -182,13 +182,14 @@ def _iceberg_positions(
         from pyiceberg.table.deletion_vector import deletion_vectors_from_puffin_file
         from pyiceberg.table.puffin import PuffinFile
 
+        # Scan paths have the file:// scheme stripped, so the keys must too.
         puffin_cache[puffin] = {
-            vector.referenced_data_file: vector.to_vector()
+            vector.referenced_data_file.removeprefix("file://"): vector.to_vector()
             for vector in deletion_vectors_from_puffin_file(
                 PuffinFile(Path(puffin).read_bytes())
             )
         }
     vector = puffin_cache[puffin].get(path)
-    if vector is None:  # pragma: no cover; polars keys on the scan path
+    if vector is None:  # pragma: no cover; polars passes covering Puffin files
         return None
     return plc.Column.from_arrow(vector.cast("int64"), stream=stream)

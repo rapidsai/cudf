@@ -886,12 +886,13 @@ def deleted_rows_scan(request: pytest.FixtureRequest, tmp_path: Path) -> pl.Lazy
             _deletion_files=("iceberg", (position_deletes, {})),
         )
     if request.param == "deletion_vectors":
+        uris = [f"file://{path}" for path in paths]
         puffin = tmp_path / "deletes.puffin"
         puffin.write_bytes(
-            _puffin({paths[index]: positions for index, positions in deleted.items()})
+            _puffin({uris[index]: positions for index, positions in deleted.items()})
         )
         return _scan_iceberg_files(
-            paths,
+            uris,
             pq.read_schema(paths[0]),
             _deletion_files=("iceberg", ({}, dict.fromkeys(deleted, str(puffin)))),
         )
