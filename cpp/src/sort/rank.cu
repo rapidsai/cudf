@@ -67,8 +67,7 @@ cuda::device_buffer<size_type> sorted_dense_rank(column_view input_col,
     sorted_order_view.begin<size_type>(), cuda::counting_iterator<size_type>{0});
 
   auto const input_size = input_col.size();
-  cuda::device_buffer<size_type> dense_rank_sorted(
-    stream, temp_mr, input_size, cuda::no_init);
+  cuda::device_buffer<size_type> dense_rank_sorted(stream, temp_mr, input_size, cuda::no_init);
 
   auto const comparator_helper = [&](auto const device_comparator) {
     thrust::transform(rmm::exec_policy_nosync(stream, temp_mr),
@@ -127,8 +126,7 @@ void tie_break_ranks_transform(cudf::device_span<size_type const> dense_rank_sor
   auto const input_size = sorted_order_view.size();
   // algorithm: reduce_by_key(dense_rank, 1, n, reduction_tie_breaker)
   // reduction_tie_breaker = min, max, min_count
-  cuda::device_buffer<TieType> tie_sorted(
-    stream, temp_mr, sorted_order_view.size(), cuda::no_init);
+  cuda::device_buffer<TieType> tie_sorted(stream, temp_mr, sorted_order_view.size(), cuda::no_init);
   thrust::reduce_by_key(rmm::exec_policy_nosync(stream, temp_mr),
                         dense_rank_sorted.begin(),
                         dense_rank_sorted.end(),
@@ -305,8 +303,7 @@ std::unique_ptr<column> rank(column_view const& input,
       if (method != rank_method::FIRST)
         return sorted_dense_rank(input, sorted_order_view, stream, temp_mr);
       else
-        return cuda::device_buffer<size_type>(
-          stream, temp_mr, 0, cuda::no_init);
+        return cuda::device_buffer<size_type>(stream, temp_mr, 0, cuda::no_init);
     }();
 
   if (output_type.id() == type_id::FLOAT64) {

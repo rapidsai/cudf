@@ -191,9 +191,8 @@ struct column_sorted_order_fn {
                                 cuda::stream_ref stream,
                                 rmm::device_async_resource_ref temp_mr)
   {
-    auto prefixes = cuda::device_buffer<PrefixKey>(
-      stream, temp_mr, input.size(), cuda::no_init);
-    auto rows = cuda::counting_iterator<cudf::size_type>{0};
+    auto prefixes = cuda::device_buffer<PrefixKey>(stream, temp_mr, input.size(), cuda::no_init);
+    auto rows     = cuda::counting_iterator<cudf::size_type>{0};
     thrust::transform(rmm::exec_policy_nosync(stream, temp_mr),
                       rows,
                       rows + input.size(),
@@ -310,8 +309,8 @@ struct column_sorted_order_fn {
     auto map = ordered_indices->view().template data<size_type>();
     auto itr = cudf::detail::indexalator_factory::make_input_iterator(
       dictionary_column_view(input).indices());
-    auto mapped_indices = cuda::device_buffer<size_type>(
-      stream, temp_mr, input.size(), cuda::no_init);
+    auto mapped_indices =
+      cuda::device_buffer<size_type>(stream, temp_mr, input.size(), cuda::no_init);
     thrust::gather(rmm::exec_policy_nosync(stream, temp_mr),
                    itr,
                    itr + input.size(),

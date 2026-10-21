@@ -66,15 +66,10 @@ struct sorted_order_radix_fn {
   void radix_sort()
   {
     auto d_in   = input.begin<T>();
-    auto output = cuda::device_buffer<T>(
-      stream, temp_mr, input.size(), cuda::no_init);
-    auto d_out = output.data();  // not returned
-    auto seqs  = cuda::device_buffer<cudf::size_type>(
-      stream, temp_mr, input.size(), cuda::no_init);
-    thrust::sequence(rmm::exec_policy_nosync(stream, temp_mr),
-                     seqs.begin(),
-                     seqs.end(),
-                     0);
+    auto output = cuda::device_buffer<T>(stream, temp_mr, input.size(), cuda::no_init);
+    auto d_out  = output.data();  // not returned
+    auto seqs = cuda::device_buffer<cudf::size_type>(stream, temp_mr, input.size(), cuda::no_init);
+    thrust::sequence(rmm::exec_policy_nosync(stream, temp_mr), seqs.begin(), seqs.end(), 0);
     auto dv_in  = seqs.data();
     auto dv_out = indices.begin<cudf::size_type>();
 
@@ -103,15 +98,13 @@ struct sorted_order_radix_fn {
   void operator()()
     requires(cudf::is_floating_point<T>())
   {
-    auto pair_in = cuda::device_buffer<float_pair<T>>(
-      stream, temp_mr, input.size(), cuda::no_init);
-    auto d_in = pair_in.data();
+    auto pair_in = cuda::device_buffer<float_pair<T>>(stream, temp_mr, input.size(), cuda::no_init);
+    auto d_in    = pair_in.data();
     // pair_out/d_out is not returned to the caller but used as an intermediate
-    auto pair_out = cuda::device_buffer<float_pair<T>>(
-      stream, temp_mr, input.size(), cuda::no_init);
-    auto d_out = pair_out.data();
-    auto vals  = cuda::device_buffer<size_type>(
-      stream, temp_mr, indices.size(), cuda::no_init);
+    auto pair_out =
+      cuda::device_buffer<float_pair<T>>(stream, temp_mr, input.size(), cuda::no_init);
+    auto d_out  = pair_out.data();
+    auto vals   = cuda::device_buffer<size_type>(stream, temp_mr, indices.size(), cuda::no_init);
     auto dv_in  = vals.data();
     auto dv_out = indices.begin<cudf::size_type>();
 
