@@ -134,19 +134,15 @@ void generate_depth_remappings(
   // compute "Y" from above
   for (int s_idx = schema.max_definition_level; s_idx >= 0; s_idx--) {
     auto find_deepest = [&](int d) {
-      SchemaElement prev_schema;
       int schema_idx = mapped_src_col_schema;
       int r1         = 0;
       while (schema_idx > 0) {
         SchemaElement cur_schema = md.get_schema(schema_idx, src_file_idx);
         if (cur_schema.max_definition_level == d) {
-          // if this is a repeated field, map it one level deeper
-          r1 = cur_schema.is_stub() ? prev_schema.max_repetition_level
-                                    : cur_schema.max_repetition_level;
+          r1 = cur_schema.max_repetition_level;
           break;
         }
-        prev_schema = cur_schema;
-        schema_idx  = cur_schema.parent_idx;
+        schema_idx = cur_schema.parent_idx;
       }
 
       // we now know R1 from above. return the deepest nesting level that has the
@@ -168,8 +164,7 @@ void generate_depth_remappings(
           break;
         }
         if (!cur_schema.is_stub()) { depth -= one_level_list ? 2 : 1; }
-        prev_schema = cur_schema;
-        schema_idx  = cur_schema.parent_idx;
+        schema_idx = cur_schema.parent_idx;
       }
       return depth;
     };

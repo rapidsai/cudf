@@ -3086,6 +3086,20 @@ def test_parquet_reader_one_level_list(datadir, fname):
     assert_eq(pd.concat([expect] * 3, ignore_index=True), got)
 
 
+def test_parquet_reader_one_level_list_in_stub(datadir):
+    fname = datadir / "one_level_list_in_stub.parquet"
+
+    # pyarrow reads the `repeated group list` stub as a struct; cudf as the
+    # list element
+    expect = [
+        None if row is None else [s["a"].tolist() for s in row]
+        for row in pd.read_parquet(fname)["l"]
+    ]
+    got = cudf.read_parquet(fname)["l"].to_arrow().to_pylist()
+
+    assert expect == got
+
+
 def test_parquet_reader_binary_decimal(datadir):
     fname = datadir / "binary_decimal.parquet"
 
