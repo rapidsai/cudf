@@ -157,11 +157,13 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lh
                                                      rmm::device_async_resource_ref mr)
 {
   auto gather_map = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
+  cudf::memory_resources mrs{mr};
   auto const gather_map_end = cudf::detail::copy_if(cuda::counting_iterator<size_type>{0},
                                                     cuda::counting_iterator<size_type>{size},
                                                     gather_map.begin(),
                                                     is_left,
-                                                    stream);
+                                                    stream,
+                                                    mrs.as_temporary());
 
   gather_map.resize(cuda::std::distance(gather_map.begin(), gather_map_end), stream);
 
@@ -170,7 +172,7 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lh
                                                     out_of_bounds_policy::DONT_CHECK,
                                                     negative_index_policy::NOT_ALLOWED,
                                                     stream,
-                                                    cudf::get_current_device_resource_ref());
+                                                    mrs.as_temporary());
 
   auto result = cudf::detail::scatter(
     table_view{std::vector<column_view>{scatter_src_lhs->get_column(0).view()}},
@@ -195,7 +197,8 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::scalar const& lhs,
                                                      cuda::counting_iterator<size_type>{size},
                                                      scatter_map.begin(),
                                                      is_left,
-                                                     stream);
+                                                     stream,
+                                                     mrs.as_temporary());
 
   auto const scatter_map_size  = std::distance(scatter_map.begin(), scatter_map_end);
   auto scatter_source          = std::vector<std::reference_wrapper<scalar const>>{std::ref(lhs)};

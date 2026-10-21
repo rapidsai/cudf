@@ -334,6 +334,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                                                  cuda::stream_ref stream,
                                                  rmm::device_async_resource_ref mr)
 {
+  cudf::memory_resources mrs{mr};
   if (input.is_empty() || input.chars_size(stream) == 0) {
     return cudf::make_empty_column(cudf::type_id::STRING);
   }
@@ -433,8 +434,8 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
   auto offsets_at_non_zero = [d_spaces = d_spaces.data()] __device__(auto idx) -> bool {
     return d_spaces[idx] > 0;  // separator to be inserted here
   };
-  auto const copy_end =
-    cudf::detail::copy_if(chars_begin + 1, chars_end, d_inserts, offsets_at_non_zero, stream);
+  auto const copy_end = cudf::detail::copy_if(
+    chars_begin + 1, chars_end, d_inserts, offsets_at_non_zero, stream, mrs.as_temporary());
 
   // this will insert the single-byte separator into positions specified in d_inserts
   auto const sep_char = cuda::constant_iterator<char>(separator.to_string(stream)[0]);

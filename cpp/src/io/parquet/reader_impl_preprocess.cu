@@ -87,16 +87,18 @@ void reader_impl::build_string_dict_indices()
 {
   CUDF_FUNC_RANGE();
 
-  auto& pass = *_pass_itm_data;
+  cudf::memory_resources mrs(_mr);
+  auto temp_mr = mrs.get_temporary_mr();
+  auto& pass   = *_pass_itm_data;
 
   // compute number of indices per chunk and a summed total
   cuda::device_buffer<size_t> str_dict_index_count(
-    _stream, cudf::get_current_device_resource_ref(), pass.chunks.size() + 1, cuda::no_init);
-  thrust::fill(rmm::exec_policy_nosync(_stream, cudf::get_current_device_resource_ref()),
+    _stream, temp_mr, pass.chunks.size() + 1, cuda::no_init);
+  thrust::fill(rmm::exec_policy_nosync(_stream, temp_mr),
                str_dict_index_count.begin(),
                str_dict_index_count.end(),
                0);
-  thrust::for_each(rmm::exec_policy_nosync(_stream, cudf::get_current_device_resource_ref()),
+  thrust::for_each(rmm::exec_policy_nosync(_stream, temp_mr),
                    pass.pages.d_begin(),
                    pass.pages.d_end(),
                    set_str_dict_index_count{str_dict_index_count, pass.chunks});
@@ -105,13 +107,14 @@ void reader_impl::build_string_dict_indices()
                                                            str_dict_index_count.end(),
                                                            size_t{0},
                                                            cuda::std::plus<size_t>{},
-                                                           _stream);
+                                                           _stream,
+                                                           mrs.as_temporary());
 
   if (total_str_dict_indexes == 0) { return; }
 
   // convert to offsets
   cuda::device_buffer<size_t>& str_dict_index_offsets = str_dict_index_count;
-  thrust::exclusive_scan(rmm::exec_policy_nosync(_stream, cudf::get_current_device_resource_ref()),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(_stream, temp_mr),
                          str_dict_index_offsets.begin(),
                          str_dict_index_offsets.end(),
                          str_dict_index_offsets.begin(),
@@ -119,11 +122,11 @@ void reader_impl::build_string_dict_indices()
 
   // allocate and distribute pointers
   pass.str_dict_index = cudf::detail::make_zeroed_device_buffer_async<string_index_pair>(
-    total_str_dict_indexes, _stream, cudf::get_current_device_resource_ref());
+    total_str_dict_indexes, _stream, temp_mr);
 
   auto iter = cuda::counting_iterator<size_t>{0};
   thrust::for_each(
-    rmm::exec_policy_nosync(_stream, cudf::get_current_device_resource_ref()),
+    rmm::exec_policy_nosync(_stream, temp_mr),
     iter,
     iter + pass.chunks.size(),
     set_str_dict_index_ptr{
@@ -519,6 +522,8 @@ struct compute_page_offset_count {
 
 void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t num_rows)
 {
+  cudf::memory_resources mrs(_mr);
+  auto temp_mr  = mrs.get_temporary_mr();
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
@@ -539,16 +544,16 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
   cuda::device_buffer<size_t> d_page_offset_counts(
     _stream, cudf::get_current_device_resource_ref(), num_pages, cuda::no_init);
 
-  thrust::transform(rmm::exec_policy_nosync(_stream, cudf::get_current_device_resource_ref()),
+  thrust::transform(rmm::exec_policy_nosync(_stream, temp_mr),
                     cuda::counting_iterator<size_t>{0},
                     cuda::counting_iterator<size_t>{num_pages},
                     d_page_offset_counts.begin(),
                     compute_page_offset_count{subpass.pages, pass.chunks, skip_rows, num_rows});
 
   // Compute prefix sum (exclusive scan) to get indices for each page
-  subpass.page_string_offset_indices = cuda::device_buffer<size_t>(
-    _stream, cudf::get_current_device_resource_ref(), num_pages, cuda::no_init);
-  thrust::exclusive_scan(rmm::exec_policy_nosync(_stream, cudf::get_current_device_resource_ref()),
+  subpass.page_string_offset_indices =
+    cuda::device_buffer<size_t>(_stream, temp_mr, num_pages, cuda::no_init);
+  thrust::exclusive_scan(rmm::exec_policy_nosync(_stream, temp_mr),
                          d_page_offset_counts.begin(),
                          d_page_offset_counts.end(),
                          subpass.page_string_offset_indices.begin());
@@ -558,7 +563,8 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
                                                       d_page_offset_counts.end(),
                                                       size_t{0},
                                                       cuda::std::plus<size_t>{},
-                                                      _stream);
+                                                      _stream,
+                                                      mrs.as_temporary());
 
   // Allocate the string offset buffer
   subpass.string_offset_buffer =
@@ -1053,6 +1059,8 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
 {
   CUDF_FUNC_RANGE();
 
+  cudf::memory_resources mrs(_mr);
+  auto temp_mr  = mrs.get_temporary_mr();
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
@@ -1137,8 +1145,7 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
                          [](auto& l, auto& r) { return l.nesting_depth < r.nesting_depth; }))
         .nesting_depth;
 
-    auto const d_cols_info = cudf::detail::make_device_buffer_async(
-      h_cols_info, _stream, cudf::get_current_device_resource_ref());
+    auto const d_cols_info = cudf::detail::make_device_buffer_async(h_cols_info, _stream, temp_mr);
 
     // Vector to store page sizes for each column at each depth
     cudf::detail::hostdevice_vector<size_t> sizes{_input_columns.size() * max_depth, _stream};
@@ -1171,7 +1178,7 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
       // Number of keys processed in this iteration
       auto const num_keys_this_iter = std::min<size_t>(num_keys_per_iter, num_keys - key_start);
       thrust::transform(
-        rmm::exec_policy_nosync(_stream, cudf::get_current_device_resource_ref()),
+        rmm::exec_policy_nosync(_stream, temp_mr),
         cuda::counting_iterator<size_t>{key_start},
         cuda::counting_iterator<size_t>{key_start + num_keys_this_iter},
         size_input.begin(),
@@ -1189,19 +1196,19 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
                                   cuda::make_discard_iterator(),
                                   sizes.d_begin() + (key_start / subpass.pages.size()),
                                   cuda::std::plus<>{},
-                                  _stream);
+                                  _stream,
+                                  mrs.as_temporary());
 
       // For nested hierarchies, compute per-page start offset
-      thrust::exclusive_scan_by_key(
-        rmm::exec_policy_nosync(_stream, cudf::get_current_device_resource_ref()),
-        reduction_keys,
-        reduction_keys + num_keys_this_iter,
-        size_input.cbegin(),
-        start_offset_output_iterator{subpass.pages.device_begin(),
-                                     key_start,
-                                     d_cols_info.data(),
-                                     max_depth,
-                                     subpass.pages.size()});
+      thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(_stream, temp_mr),
+                                    reduction_keys,
+                                    reduction_keys + num_keys_this_iter,
+                                    size_input.cbegin(),
+                                    start_offset_output_iterator{subpass.pages.device_begin(),
+                                                                 key_start,
+                                                                 d_cols_info.data(),
+                                                                 max_depth,
+                                                                 subpass.pages.size()});
       // Increment the key_start
       key_start += num_keys_this_iter;
     }
@@ -1295,6 +1302,8 @@ void reader_impl::fill_pruned_offsets(size_t skip_rows,
 
 cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
 {
+  cudf::memory_resources mrs(_mr);
+  auto temp_mr  = mrs.get_temporary_mr();
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
@@ -1309,7 +1318,7 @@ cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
 
   // do scan by key to calculate string offsets for each page
   thrust::exclusive_scan_by_key(
-    rmm::exec_policy_nosync(_stream, cudf::get_current_device_resource_ref()),
+    rmm::exec_policy_nosync(_stream, temp_mr),
     page_keys,
     page_keys + subpass.pages.size(),
     val_iter,
@@ -1324,7 +1333,8 @@ cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
                               reduce_keys.begin(),
                               d_col_sizes.begin(),
                               cuda::std::plus<>{},
-                              _stream);
+                              _stream,
+                              mrs.as_temporary());
 
   return cudf::detail::make_pinned_vector(d_col_sizes, _stream);
 }

@@ -25,6 +25,7 @@ template <join_kind Join>
 std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
                                          cuda::stream_ref stream) const
 {
+  cudf::memory_resources mr = cudf::get_current_device_resource_ref();
   static_assert(Join == join_kind::INNER_JOIN || Join == join_kind::LEFT_JOIN);
 
   CUDF_FUNC_RANGE();
@@ -39,10 +40,9 @@ std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
                "Left table has nulls while right table was not hashed with null check.",
                std::invalid_argument);
 
-  auto const preprocessed_left = cudf::detail::row::equality::preprocessed_table::create(
-    left, stream, cudf::get_current_device_resource_ref());
-
-  auto const temp_mr     = cudf::get_current_device_resource_ref();
+  auto const temp_mr = mr.get_temporary_mr();
+  auto const preprocessed_left =
+    cudf::detail::row::equality::preprocessed_table::create(left, stream, temp_mr);
   auto total_matches     = cudf::detail::device_scalar<cuda::std::uint64_t>(0, stream, temp_mr);
   auto const row_bitmask = cudf::detail::bitmask_and(left, stream, temp_mr).first;
   auto const valid_rows  = _nulls_equal == null_equality::UNEQUAL ? row_bitmask.data() : nullptr;
@@ -70,7 +70,7 @@ template <typename Hasher>
 template <join_kind Join>
 std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
                                          cuda::stream_ref stream,
-                                         [[maybe_unused]] rmm::device_async_resource_ref mr) const
+                                         rmm::device_async_resource_ref temp_mr) const
 {
   static_assert(Join == join_kind::FULL_JOIN);
 
@@ -81,9 +81,8 @@ std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
                "Left table has nulls while right table was not hashed with null check.",
                std::invalid_argument);
 
-  auto const preprocessed_left = cudf::detail::row::equality::preprocessed_table::create(
-    left, stream, cudf::get_current_device_resource_ref());
-  auto const temp_mr  = cudf::get_current_device_resource_ref();
+  auto const preprocessed_left =
+    cudf::detail::row::equality::preprocessed_table::create(left, stream, temp_mr);
   auto total_matches  = cudf::detail::device_scalar<cuda::std::uint64_t>(0, stream, temp_mr);
   auto matched_groups = cudf::detail::make_zeroed_device_buffer_async<cuda::std::uint32_t>(
     _right.num_rows(), stream, temp_mr);
