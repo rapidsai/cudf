@@ -144,9 +144,8 @@ struct merge_centroids {
  * which we can get by just taking floor(next_limit).  For example if our next limit is 3.56, the
  * nearest whole number <= it is floor(3.56) == 3.
  */
-template <typename GroupOffsetsIter>
 struct nearest_value_scalar_weights_grouped {
-  GroupOffsetsIter group_offsets;
+  size_type const* group_offsets;
 
   cuda::std::pair<double, int> operator()
     CUDF_HOST_DEVICE(double next_limit, size_type group_index) const
@@ -184,11 +183,11 @@ struct nearest_value_scalar_weights {
  *
  * This functor assumes we are dealing with grouped, sorted, weighted centroids.
  */
-template <typename WeightIterator, typename GroupOffsetsIter, typename TDigestOffsetsIter>
+template <typename GroupOffsetsIter>
 struct nearest_value_centroid_weights {
-  WeightIterator cumulative_weights;   // cumulative weights of non-empty clusters
-  GroupOffsetsIter group_offsets;      // groups
-  TDigestOffsetsIter tdigest_offsets;  // tdigests within a group
+  double const* cumulative_weights;  // cumulative weights of non-empty clusters
+  GroupOffsetsIter group_offsets;    // groups
+  int32_t const* tdigest_offsets;    // tdigests within a group
 
   cuda::std::pair<double, int> operator()
     CUDF_HOST_DEVICE(double next_limit, size_type group_index) const
@@ -199,7 +198,7 @@ struct nearest_value_centroid_weights {
     // NOTE: as it is today, this functor will never be called for any digests that are empty, but
     // I'll leave this check here for safety.
     if (num_weights == 0) { return cuda::std::pair<double, int>{0, 0}; }
-    auto const group_cumulative_weights = cumulative_weights + tdigest_offsets[tdigest_begin];
+    double const* group_cumulative_weights = cumulative_weights + tdigest_offsets[tdigest_begin];
 
     auto const index = ((thrust::lower_bound(thrust::seq,
                                              group_cumulative_weights,
@@ -256,11 +255,11 @@ struct cumulative_scalar_weight {
  *
  * This functor assumes we are dealing with grouped, weighted centroids.
  */
-template <typename WeightIterator, typename GroupLabelsIter, typename GroupOffsetsIter>
+template <typename GroupLabelsIter, typename GroupOffsetsIter>
 struct cumulative_centroid_weight {
-  WeightIterator cumulative_weights;  // cumulative weights of non-empty clusters
-  GroupLabelsIter group_labels;       // group labels for each tdigest including empty ones
-  GroupOffsetsIter group_offsets;     // groups
+  double const* cumulative_weights;  // cumulative weights of non-empty clusters
+  GroupLabelsIter group_labels;      // group labels for each tdigest including empty ones
+  GroupOffsetsIter group_offsets;    // groups
   // Host-device span, as the offsets may reside in either device memory or pinned host memory
   cuda::std::span<int32_t const> tdigest_offsets;  // tdigests with a group
 
@@ -277,21 +276,20 @@ struct cumulative_centroid_weight {
           thrust::seq, tdigest_offsets.begin(), tdigest_offsets.end(), value_index) -
         tdigest_offsets.begin()) -
       1;
-    auto const group_index              = group_labels[tdigest_index];
-    auto const first_tdigest_index      = group_offsets[group_index];
-    auto const first_weight_index       = tdigest_offsets[first_tdigest_index];
-    auto const relative_value_index     = value_index - first_weight_index;
-    auto const group_cumulative_weights = cumulative_weights + first_weight_index;
+    auto const group_index                 = group_labels[tdigest_index];
+    auto const first_tdigest_index         = group_offsets[group_index];
+    auto const first_weight_index          = tdigest_offsets[first_tdigest_index];
+    auto const relative_value_index        = value_index - first_weight_index;
+    double const* group_cumulative_weights = cumulative_weights + first_weight_index;
 
     return {group_index, relative_value_index, group_cumulative_weights[relative_value_index]};
   }
 };
 
 // retrieve group info (total weight, size, start offset) of scalar inputs by group index.
-template <typename ValidCountsIterator, typename GroupOffsetsIter>
 struct scalar_group_info_grouped {
-  ValidCountsIterator group_valid_counts;
-  GroupOffsetsIter group_offsets;
+  size_type const* group_valid_counts;
+  size_type const* group_offsets;
 
   CUDF_HOST_DEVICE cuda::std::tuple<double, size_type, size_type> operator()(
     size_type group_index) const
@@ -314,11 +312,11 @@ struct scalar_group_info {
 };
 
 // retrieve group info of centroid inputs by group index
-template <typename WeightIterator, typename GroupOffsetsIter, typename TDigestOffsetsIter>
+template <typename GroupOffsetsIter>
 struct centroid_group_info {
-  WeightIterator cumulative_weights;  // cumulative weights of non-empty clusters
+  double const* cumulative_weights;  // cumulative weights of non-empty clusters
   GroupOffsetsIter group_offsets;
-  TDigestOffsetsIter tdigest_offsets;
+  int32_t const* tdigest_offsets;
 
   CUDF_HOST_DEVICE cuda::std::tuple<double, size_type, size_type> operator()(
     size_type group_index) const
@@ -426,20 +424,15 @@ std::unique_ptr<scalar> to_tdigest_scalar(std::unique_ptr<column>&& tdigest,
  * @param group_cluster_start Start pos per-group to the start of it's clusters
  * @param has_nulls Whether or not the input contains nulls
  */
-template <typename GroupInfo,
-          typename NearestWeightFunc,
-          typename CumulativeWeight,
-          typename ClusterWeightIterator,
-          typename ClusterSizeIterator,
-          typename ClusterStartIterator>
+template <typename GroupInfo, typename NearestWeightFunc, typename CumulativeWeight>
 CUDF_HOST_DEVICE void generate_cluster_limit(int group_index,
                                              int delta,
                                              NearestWeightFunc nearest_weight,
                                              GroupInfo group_info,
                                              CumulativeWeight cumulative_weight,
-                                             ClusterWeightIterator group_cluster_wl,
-                                             ClusterSizeIterator group_num_clusters,
-                                             ClusterStartIterator group_cluster_start,
+                                             double* group_cluster_wl,
+                                             size_type* group_num_clusters,
+                                             size_type const* group_cluster_start,
                                              bool has_nulls)
 {
   // we will generate at most delta clusters.
@@ -448,9 +441,8 @@ CUDF_HOST_DEVICE void generate_cluster_limit(int group_index,
   cuda::std::tie(total_weight, group_size, group_start) = group_info(group_index);
 
   // start at the correct place based on our cluster offset.
-  auto cluster_wl = group_cluster_wl != ClusterWeightIterator{}
-                      ? group_cluster_wl + group_cluster_start[group_index]
-                      : ClusterWeightIterator{};
+  double* cluster_wl =
+    group_cluster_wl ? group_cluster_wl + group_cluster_start[group_index] : nullptr;
 
   // a group with nothing in it.
   group_num_clusters[group_index] = 0;
@@ -486,9 +478,7 @@ CUDF_HOST_DEVICE void generate_cluster_limit(int group_index,
 
     // if the next limit is < the cur limit, we're past the end of the distribution, so we're done.
     if (next_limit <= cur_limit) {
-      if (cluster_wl != ClusterWeightIterator{}) {
-        cluster_wl[group_num_clusters[group_index]] = total_weight;
-      }
+      if (cluster_wl) { cluster_wl[group_num_clusters[group_index]] = total_weight; }
       group_num_clusters[group_index]++;
       break;
     }
@@ -540,9 +530,7 @@ CUDF_HOST_DEVICE void generate_cluster_limit(int group_index,
       // update the weight with our adjusted value.
       nearest_w = adjusted_w;
     }
-    if (cluster_wl != ClusterWeightIterator{}) {
-      cluster_wl[group_num_clusters[group_index]] = adjusted_next_limit;
-    }
+    if (cluster_wl) { cluster_wl[group_num_clusters[group_index]] = adjusted_next_limit; }
     last_inserted_index = adjusted_w_index;
 
     group_num_clusters[group_index]++;
@@ -553,19 +541,16 @@ CUDF_HOST_DEVICE void generate_cluster_limit(int group_index,
 template <typename GroupIndex,
           typename GroupInfo,
           typename NearestWeightFunc,
-          typename CumulativeWeight,
-          typename ClusterWeightIterator,
-          typename ClusterSizeIterator,
-          typename ClusterStartIterator>
+          typename CumulativeWeight>
 CUDF_KERNEL void generate_cluster_limits_kernel(int delta,
                                                 size_type num_groups,
                                                 NearestWeightFunc nearest_weight,
                                                 GroupIndex group_index,
                                                 GroupInfo group_info,
                                                 CumulativeWeight cumulative_weight,
-                                                ClusterWeightIterator group_cluster_wl,
-                                                ClusterSizeIterator group_num_clusters,
-                                                ClusterStartIterator group_cluster_offsets,
+                                                double* group_cluster_wl,
+                                                size_type* group_num_clusters,
+                                                size_type const* group_cluster_offsets,
                                                 bool has_nulls)
 {
   int const tid = cudf::detail::grid_1d::global_thread_id();
@@ -602,20 +587,15 @@ CUDF_KERNEL void generate_cluster_limits_kernel(int delta,
  * @param has_nulls Whether or not the input contains nulls
  * @param stream Stream to run kernels on
  */
-template <typename GroupInfo,
-          typename NearestWeightFunc,
-          typename CumulativeWeight,
-          typename ClusterWeightIterator,
-          typename ClusterSizeIterator,
-          typename ClusterStartIterator>
+template <typename GroupInfo, typename NearestWeightFunc, typename CumulativeWeight>
 void generate_cluster_limits(int delta,
                              size_type num_groups,
                              NearestWeightFunc nearest_weight,
                              GroupInfo group_info,
                              CumulativeWeight cumulative_weight,
-                             ClusterWeightIterator group_cluster_wl,
-                             ClusterSizeIterator group_num_clusters,
-                             ClusterStartIterator group_cluster_start,
+                             double* group_cluster_wl,
+                             size_type* group_num_clusters,
+                             size_type const* group_cluster_start,
                              bool has_nulls,
                              cuda::stream_ref stream)
 {
@@ -791,9 +771,9 @@ cluster_info generate_group_cluster_info(int delta,
                             nearest_weight,
                             group_info,
                             cumulative_weight,
-                            decltype(cinfo.cluster_wl.begin()){},
-                            cinfo.num_clusters.begin(),
-                            decltype(cinfo.cluster_start.begin()){},
+                            nullptr,
+                            cinfo.num_clusters.data(),
+                            nullptr,
                             has_nulls,
                             stream);
   }
@@ -828,9 +808,9 @@ cluster_info generate_group_cluster_info(int delta,
                           nearest_weight,
                           group_info,
                           cumulative_weight,
-                          cinfo.cluster_wl.begin(),
-                          cinfo.num_clusters.begin(),
-                          cinfo.cluster_start.begin(),
+                          cinfo.cluster_wl.data(),
+                          cinfo.num_clusters.data(),
+                          cinfo.cluster_start.data(),
                           has_nulls,
                           stream);
 
@@ -1174,10 +1154,10 @@ struct typed_group_tdigest {
         auto ret = generate_group_cluster_info(
           delta,
           num_groups,
-          nearest_value_scalar_weights_grouped{p_group_offsets.begin()},
-          scalar_group_info_grouped{p_group_valid_counts.begin(), p_group_offsets.begin()},
+          nearest_value_scalar_weights_grouped{p_group_offsets.data()},
+          scalar_group_info_grouped{p_group_valid_counts.data(), p_group_offsets.data()},
           cumulative_scalar_weight_grouped{
-            cuda::std::span<size_type const>{p_group_offsets.begin(), p_group_offsets.size()}},
+            cuda::std::span<size_type const>{p_group_offsets.data(), p_group_offsets.size()}},
           col.null_count() > 0,
           stream,
           mr);
@@ -1600,14 +1580,13 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
         delta,
         num_groups,
         nearest_value_centroid_weights{
-          p_cumulative_weights.begin(), p_group_offsets, p_tdigest_offsets.begin()},
-        centroid_group_info{
-          p_cumulative_weights.begin(), p_group_offsets, p_tdigest_offsets.begin()},
+          p_cumulative_weights.data(), p_group_offsets, p_tdigest_offsets.data()},
+        centroid_group_info{p_cumulative_weights.data(), p_group_offsets, p_tdigest_offsets.data()},
         cumulative_centroid_weight{
-          p_cumulative_weights.begin(),
+          p_cumulative_weights.data(),
           p_group_labels,
           p_group_offsets,
-          cuda::std::span<int32_t const>{p_tdigest_offsets.begin(), p_tdigest_offsets.size()}},
+          cuda::std::span<int32_t const>{p_tdigest_offsets.data(), p_tdigest_offsets.size()}},
         has_nulls,
         stream,
         mr);
@@ -1618,11 +1597,11 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
       delta,
       num_groups,
       nearest_value_centroid_weights{
-        cumulative_weights.begin(), group_offsets, tdigest_offsets.begin<int32_t>()},
+        cumulative_weights.data(), group_offsets, tdigest_offsets.begin<int32_t>()},
       centroid_group_info{
-        cumulative_weights.begin(), group_offsets, tdigest_offsets.begin<int32_t>()},
+        cumulative_weights.data(), group_offsets, tdigest_offsets.begin<int32_t>()},
       cumulative_centroid_weight{
-        cumulative_weights.begin(),
+        cumulative_weights.data(),
         group_labels,
         group_offsets,
         cuda::std::span<int32_t const>{tdigest_offsets.begin<int32_t>(),
@@ -1642,7 +1621,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
     centroids,
     centroids + merged_means.size(),
     cumulative_centroid_weight{
-      cumulative_weights.begin(),
+      cumulative_weights.data(),
       group_labels,
       group_offsets,
       cuda::std::span<int32_t const>{tdigest_offsets.begin<int32_t>(),
