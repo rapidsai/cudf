@@ -149,6 +149,7 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
   auto corr_iter =
     cudf::detail::make_counting_transform_iterator(cudf::size_type{0}, covariance_transform_op);
 
+  cudf::memory_resources mrs{mr};
   cudf::detail::reduce_by_key_async(group_labels.begin(),
                                     group_labels.end(),
                                     corr_iter,
@@ -156,7 +157,7 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
                                     d_result,
                                     cuda::std::plus<result_type>(),
                                     stream,
-                                    mr);
+                                    mrs.as_temporary());
 
   auto is_null = [ddof, min_periods] __device__(size_type group_size) {
     return not(group_size == 0 or group_size - ddof <= 0 or group_size < min_periods);

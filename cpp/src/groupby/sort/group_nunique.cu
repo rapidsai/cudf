@@ -114,6 +114,7 @@ std::unique_ptr<column> group_nunique(column_view const& values,
 
   // calling this with a vector instead of a transform iterator is 10x faster to compile;
   // it also helps that we are only calling it once for both conditions
+  cudf::memory_resources mrs{mr};
   cudf::detail::reduce_by_key_async(group_labels.begin(),
                                     group_labels.end(),
                                     d_result.begin(),
@@ -121,7 +122,7 @@ std::unique_ptr<column> group_nunique(column_view const& values,
                                     result->mutable_view().begin<size_type>(),
                                     cuda::std::plus<size_type>(),
                                     stream,
-                                    mr);
+                                    mrs.as_temporary());
 
   return result;
 }

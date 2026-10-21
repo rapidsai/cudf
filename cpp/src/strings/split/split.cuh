@@ -576,6 +576,7 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
   cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
 {
+  cudf::memory_resources mrs{mr};
   auto delimiter_positions = [&] {
     if constexpr (std::is_same_v<DelimiterFn, string_delimiter_fn>) {
       return find_string_delimiter_positions(input, delimiter_fn.d_delimiter, stream);
@@ -606,7 +607,7 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
                                   positions.begin(),
                                   delimiter_fn,
                                   stream,
-                                  mr);
+                                  mrs.as_temporary());
       return positions;
     }
   }();

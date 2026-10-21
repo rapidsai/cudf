@@ -88,6 +88,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
     // group_size to recalculate n if n<0
     cuda::device_buffer<size_type> group_count = [&] {
       if (n < 0) {
+        cudf::memory_resources mrs{mr};
         cuda::device_buffer<size_type> group_count(
           stream, cudf::get_current_device_resource_ref(), num_groups, cuda::no_init);
         cudf::detail::reduce_by_key_async(group_labels.begin(),
@@ -97,7 +98,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
                                           group_count.begin(),
                                           cuda::std::plus<size_type>(),
                                           stream,
-                                          mr);
+                                          mrs.as_temporary());
         return group_count;
       } else {
         return cuda::device_buffer<size_type>(

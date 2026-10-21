@@ -27,6 +27,7 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
                                           cuda::stream_ref stream,
                                           rmm::device_async_resource_ref mr)
 {
+  cudf::memory_resources mrs{mr};
   CUDF_EXPECTS(num_groups >= 0, "number of groups cannot be negative");
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
                "Size of values column should be same as that of group labels");
@@ -53,7 +54,7 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
                                       result->mutable_view().begin<size_type>(),
                                       cuda::std::plus<size_type>(),
                                       stream,
-                                      mr);
+                                      mrs.as_temporary());
   } else {
     cudf::detail::reduce_by_key_async(group_labels.begin(),
                                       group_labels.end(),
@@ -62,7 +63,7 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
                                       result->mutable_view().begin<size_type>(),
                                       cuda::std::plus<size_type>(),
                                       stream,
-                                      mr);
+                                      mrs.as_temporary());
   }
 
   return result;

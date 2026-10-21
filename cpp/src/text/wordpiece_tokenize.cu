@@ -215,6 +215,7 @@ wordpiece_vocabulary::wordpiece_vocabulary(cudf::strings_column_view const& inpu
                                            cuda::stream_ref stream,
                                            rmm::device_async_resource_ref mr)
 {
+  cudf::memory_resources mrs{mr};
   CUDF_EXPECTS(not input.is_empty(), "vocabulary must not be empty", std::invalid_argument);
   CUDF_EXPECTS(not input.has_nulls(), "vocabulary must not have nulls", std::invalid_argument);
 
@@ -246,7 +247,7 @@ wordpiece_vocabulary::wordpiece_vocabulary(cudf::strings_column_view const& inpu
     sub_map_indices.begin(),
     copy_pieces_fn{*d_vocabulary},
     stream,
-    mr);
+    mrs.as_temporary());
   sub_map_indices.resize(cuda::std::distance(sub_map_indices.begin(), end), stream);
 
   // build a 2nd map with just the ## prefixed items

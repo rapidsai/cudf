@@ -466,6 +466,7 @@ decompress_page_data(host_span<ColumnChunkDesc const> chunks,
                      cuda::stream_ref stream,
                      rmm::device_async_resource_ref mr)
 {
+  cudf::memory_resources mrs{mr};
   CUDF_FUNC_RANGE();
 
   CUDF_EXPECTS(
@@ -654,7 +655,7 @@ decompress_page_data(host_span<ColumnChunkDesc const> chunks,
                            return res.status == codec_status::SUCCESS;
                          }),
                          stream,
-                         mr),
+                         mrs.as_temporary()),
     "Error during decompression");
 
   return {std::move(pass_decomp_pages), std::move(subpass_decomp_pages)};

@@ -66,6 +66,7 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
                                          cuda::stream_ref stream,
                                          rmm::device_async_resource_ref mr)
 {
+  cudf::memory_resources mrs{mr};
   // outgoing offsets.
   auto offsets = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, input.num_rows() + 1, mask_state::UNALLOCATED, stream, mr);
@@ -107,7 +108,7 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
                                     offsets->mutable_view().begin<int32_t>(),
                                     cuda::std::plus<size_type>(),
                                     stream,
-                                    mr);
+                                    mrs.as_temporary());
 
   // convert to offsets
   auto total_size =

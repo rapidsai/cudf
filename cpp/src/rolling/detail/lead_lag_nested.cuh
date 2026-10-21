@@ -83,6 +83,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                                                     cuda::stream_ref stream,
                                                     rmm::device_async_resource_ref mr)
 {
+  cudf::memory_resources mrs{mr};
   CUDF_EXPECTS(op == aggregation::LEAD || op == aggregation::LAG,
                "Unexpected aggregation type in compute_lead_lag_for_nested");
   CUDF_EXPECTS(cudf::have_same_types(input, default_outputs),
@@ -167,7 +168,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                           scatter_map.begin(),
                           is_null_index_predicate(input.size(), gather_map.begin<size_type>()),
                           stream,
-                          mr);
+                          mrs.as_temporary());
 
   scatter_map.resize(cuda::std::distance(scatter_map.begin(), scatter_map_end), stream);
   // Bail early, if all LEAD/LAG computations succeeded. No defaults need be substituted.

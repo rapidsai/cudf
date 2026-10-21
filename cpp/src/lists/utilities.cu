@@ -17,6 +17,7 @@ std::unique_ptr<column> generate_labels(lists_column_view const& input,
                                         cuda::stream_ref stream,
                                         rmm::device_async_resource_ref mr)
 {
+  cudf::memory_resources mrs{mr};
   auto labels = make_numeric_column(
     data_type(type_to_id<size_type>()), n_elements, cudf::mask_state::UNALLOCATED, stream, mr);
   auto const labels_begin = labels->mutable_view().template begin<size_type>();
@@ -25,7 +26,7 @@ std::unique_ptr<column> generate_labels(lists_column_view const& input,
                                labels_begin,
                                labels_begin + n_elements,
                                stream,
-                               mr);
+                               mrs.as_temporary());
   return labels;
 }
 
@@ -35,6 +36,7 @@ std::unique_ptr<column> reconstruct_offsets(column_view const& labels,
                                             rmm::device_async_resource_ref mr)
 
 {
+  cudf::memory_resources mrs{mr};
   auto out_offsets = make_numeric_column(
     data_type{type_id::INT32}, n_lists + 1, mask_state::UNALLOCATED, stream, mr);
 
@@ -45,7 +47,7 @@ std::unique_ptr<column> reconstruct_offsets(column_view const& labels,
                                   offsets_begin,
                                   offsets_begin + out_offsets->size(),
                                   stream,
-                                  mr);
+                                  mrs.as_temporary());
   return out_offsets;
 }
 
