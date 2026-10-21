@@ -54,42 +54,37 @@ __device__ void transform_kernel(size_type row_size,
   auto const stride = grid_1d::grid_stride();
   auto thread_error = errc::SUCCESS;
 
-  // Keep row_index wide: the final stride increment and warp padding can exceed size_type's range.
-  // Only narrow to row after checking bounds, so column accessors and UDFs receive a safe
-  // size_type.
+  // `row_index` is intentionally kept wide to reduce register pressure.
+  // The row indexes are checked against the row sizes before use.
   // Both branches expand argument packs directly to avoid concatenated tuple types and
-  // cuda::std::apply machinery, reducing frontend work, especially for JIT compilation.
+  // `cuda::std::apply` machinery, reducing frontend work, especially for JIT compilation.
   if constexpr (!IsNullAware) {
     for (auto row_index = start; row_index < row_size; row_index += stride) {
-      auto const row = static_cast<size_type>(row_index);
-      if (stencil != nullptr && !bit_is_set(stencil, row)) { continue; }
+      if (stencil != nullptr && !bit_is_set(stencil, row_index)) { continue; }
 
       if constexpr (direct_access) {
-        // Expand column pointers and input loads directly into the UDF arguments.
-        auto const row_error = InputAccessors::map([&]<typename... In>() {
-          return OutputAccessors::map([&]<typename... Out>() {
-            return operation(
-              row,
-              (Out::column(output_cols).template data<typename Out::element_type>() + row)...,
+        InputAccessors::map([&]<typename... In> {
+          OutputAccessors::map([&]<typename... Out> {
+            auto const error = operation(
+              row_index,
+              (Out::column(output_cols).template data<typename Out::element_type>() + row_index)...,
               In::column(input_cols)
-                .template data<typename In::element_type>()[In::map_index(row)]...);
+                .template data<typename In::element_type>()[In::map_index(row_index)]...);
+            thread_error = cuda::std::max(thread_error, error);
           });
         });
-
-        thread_error = cuda::std::max(thread_error, row_error);
       } else {
-        auto const row_error = OutputAccessors::map([&]<typename... Out>() {
-          return [&](auto... outs) {
-            auto const error = InputAccessors::map([&]<typename... In>() {
-              return operation(row, &outs..., In::element(input_cols, row)...);
+        OutputAccessors::map([&]<typename... Out> {
+          [&](auto... outs) {
+            InputAccessors::map([&]<typename... In> {
+              auto const error =
+                operation(row_index, &outs..., In::element(input_cols, row_index)...);
+              (Out::assign(output_cols, row_index, outs), ...);
+
+              thread_error = cuda::std::max(thread_error, error);
             });
-
-            (Out::assign(output_cols, row, outs), ...);
-            return error;
-          }(Out::output_arg(output_cols, row)...);
+          }(Out::output_arg(output_cols, row_index)...);
         });
-
-        thread_error = cuda::std::max(thread_error, row_error);
       }
     }
   } else {
@@ -100,20 +95,18 @@ __device__ void transform_kernel(size_type row_size,
     for (auto row_index = start; row_index < warp_padded_size; row_index += stride) {
       auto const active_mask = __ballot_sync(0xffff'ffffu, row_index < row_size);
       if (row_index >= row_size) { continue; }
-      auto const row       = static_cast<size_type>(row_index);
-      auto const row_error = OutputAccessors::map([&]<typename... Out>() {
-        return [&](auto... outs) {
-          auto const error = InputAccessors::map([&]<typename... In> {
-            return operation(row, &outs..., In::nullable_element(input_cols, row)...);
+      OutputAccessors::map([&]<typename... Out> {
+        [&](auto... outs) {
+          InputAccessors::map([&]<typename... In> {
+            auto const error =
+              operation(row_index, &outs..., In::nullable_element(input_cols, row_index)...);
+            (Out::assign(output_cols, row_index, *outs), ...);
+            (jit::warp_compact_validity<Out>(active_mask, output_cols, row_index, outs.has_value()),
+             ...);
+            thread_error = cuda::std::max(thread_error, error);
           });
-
-          (Out::assign(output_cols, row, *outs), ...);
-          (jit::warp_compact_validity<Out>(active_mask, output_cols, row, outs.has_value()), ...);
-          return error;
-        }(Out::null_output_arg(output_cols, row)...);
+        }(Out::null_output_arg(output_cols, row_index)...);
       });
-
-      thread_error = cuda::std::max(thread_error, row_error);
     }
   }
 
