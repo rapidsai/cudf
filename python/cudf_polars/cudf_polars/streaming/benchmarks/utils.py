@@ -12,6 +12,7 @@ import importlib.util
 import json
 import os
 import pprint
+import re
 import shlex
 import sys
 import textwrap
@@ -22,7 +23,8 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
 from statistics import mean
-from typing import TYPE_CHECKING, Any, Literal
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import nvtx
 
@@ -81,7 +83,7 @@ except ImportError:
     CUDF_POLARS_AVAILABLE = False
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable, Mapping
 
     from cudf_polars.engine.options import StreamingOptions
     from cudf_polars.quent import QuentConfig
@@ -1024,6 +1026,96 @@ class QueryResult:
     sort_keys: list[tuple[pl.Expr, bool]] | None = None
 
 
+_QUERY_ATTRIBUTE = re.compile(r"q\d+")
+
+
+@dataclasses.dataclass(frozen=True)
+class SQLQueryFiles:
+    """
+    SQL text for benchmark queries, read from one file per query.
+
+    Parameters
+    ----------
+    name
+        The query set name, ``"pdsh"`` or ``"pdsds"``.
+    directory
+        Directory containing ``qNN.sql`` (zero-padded) or ``qN.sql`` files.
+    """
+
+    name: str
+    directory: Path
+
+    def path(self, q_id: int) -> Path:
+        """Return the SQL file path for a query, preferring the zero-padded name."""
+        padded = self.directory / f"q{q_id:02d}.sql"
+        if padded.exists():
+            return padded
+        return self.directory / f"q{q_id}.sql"
+
+    def missing(self, q_ids: Iterable[int]) -> tuple[Path, ...]:
+        """Return the SQL file paths that do not exist for the given queries."""
+        return tuple(path for path in map(self.path, q_ids) if not path.exists())
+
+    def __getattr__(self, attr: str) -> Callable[[RunConfig], str]:
+        """Query lookup."""
+        if _QUERY_ATTRIBUTE.fullmatch(attr) is None:
+            raise AttributeError(attr)
+        path = self.path(int(attr[1:]))
+
+        def query(run_config: RunConfig) -> str:
+            return path.read_text()
+
+        return query
+
+
+class SQLQueries:
+    """
+    Benchmark queries read from SQL files and run with ``polars.SQLContext``.
+
+    Parameters
+    ----------
+    name
+        The query set name, ``"pdsh"`` or ``"pdsds"``. Selects the tables to register.
+    sql_directory
+        Directory containing one SQL file per query.
+    """
+
+    EXPECTED_CASTS: ClassVar[Mapping[int, list[pl.Expr]]] = MappingProxyType({})
+    EXPECTED_CASTS_DECIMAL: ClassVar[Mapping[int, list[pl.Expr]]] = MappingProxyType({})
+    EXPECTED_CASTS_TIMESTAMP: ClassVar[Mapping[int, list[pl.Expr]]] = MappingProxyType(
+        {}
+    )
+
+    def __init__(self, name: str, sql_directory: Path) -> None:
+        self.name = name
+        self.duckdb_queries = SQLQueryFiles(name=name, directory=sql_directory)
+
+    def __getattr__(self, attr: str) -> Callable[[RunConfig], QueryResult]:
+        """Query lookup."""
+        if _QUERY_ATTRIBUTE.fullmatch(attr) is None:
+            raise AttributeError(attr)
+        get_sql = getattr(self.duckdb_queries, attr)
+        table_names = PDSDS_TABLE_NAMES if self.name == "pdsds" else PDSH_TABLE_NAMES
+
+        def query(run_config: RunConfig) -> QueryResult:
+            context = pl.SQLContext(
+                {
+                    table: get_data(run_config.dataset_path, table, run_config.suffix)
+                    for table in table_names
+                }
+            )
+            return QueryResult(frame=context.execute(get_sql(run_config)), sort_by=[])
+
+        return query
+
+
+def _duckdb_queries(benchmark: Any) -> Any:
+    """Return the DuckDB query definitions for a benchmark class or ``SQLQueries``."""
+    if isinstance(benchmark, SQLQueries):
+        return benchmark.duckdb_queries
+    return benchmark().duckdb_queries
+
+
 def _collect_statistics(engine: pl.GPUEngine | None) -> dict[str, Any] | None:
     """Gather + clear per-rank rapidsmpf statistics into a merged dict."""
     if engine is None:
@@ -1152,7 +1244,7 @@ def run_polars_query(
             case "polars-cpu":
                 expected = q.collect()
             case "duckdb":
-                duckdb_queries_cls = benchmark().duckdb_queries
+                duckdb_queries_cls = _duckdb_queries(benchmark)
                 get_ddb = getattr(duckdb_queries_cls, f"q{q_id}")
                 base_sql = get_ddb(run_config)
                 expected = execute_duckdb_query(
@@ -2281,8 +2373,18 @@ def parse_args(
 
 def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
     """Run the queries using the given benchmark and frontend."""
+    if args.query_mode == "sql":
+        benchmark = SQLQueries(benchmark.name, args.sql_directory)
     vars(args).update({"query_set": benchmark.name})
     run_config = RunConfig.from_args(args)
+
+    if run_config.query_mode == "sql":
+        missing = benchmark.duckdb_queries.missing(run_config.queries)
+        if missing:
+            raise ValueError(
+                "Missing SQL files for the requested queries: "
+                + ", ".join(map(str, missing))
+            )
 
     if run_config.connect is not None and run_config.frontend not in ("dask", "ray"):
         raise ValueError("--connect is only supported with --frontend ray or dask.")
@@ -2342,7 +2444,7 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
                 benchmark, args, run_config, parquet_options, numeric_type, date_type
             )
         case "duckdb":
-            run_duckdb(benchmark().duckdb_queries, args)
+            run_duckdb(_duckdb_queries(benchmark), args)
         case "in-memory":
             run_polars_in_memory(
                 benchmark, args, run_config, parquet_options, numeric_type, date_type
