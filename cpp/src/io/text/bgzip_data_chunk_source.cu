@@ -62,6 +62,8 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
  private:
   // Reuse scratch storage across batches. Previous batch contents are no longer needed
   // when a larger allocation is required.
+  // TODO: Replace these with resizable buffers once https://github.com/NVIDIA/cccl/issues/12051 is
+  // resolved
   template <typename T>
   static void ensure_capacity(cuda::device_buffer<T>& device,
                               std::size_t size,
