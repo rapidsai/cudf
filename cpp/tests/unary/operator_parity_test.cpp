@@ -6,13 +6,12 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
 
 #include <cudf/unary.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <limits>
-
-namespace {
 
 struct UnaryOperatorParityTest : public cudf::test::BaseFixture {};
 
@@ -68,4 +67,3 @@ TEST_F(UnaryOperatorParityTest, CheckedUnaryDecimal)
     cudf::unary_operation(input, cudf::unary_operator::ABS_OVERFLOW, cudf::error_policy::NULLIFY);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
-}  // namespace

@@ -8,10 +8,20 @@
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <cuda/stream>
+
+#include <algorithm>
+#include <functional>
+#include <memory>
+#include <span>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
 namespace cudf {
 namespace ast {
@@ -122,11 +132,10 @@ bool operation::may_evaluate_null(table_view const& left,
                                   table_view const& right,
                                   cuda::stream_ref stream) const
 {
-  return std::any_of(operands.cbegin(),
-                     operands.cend(),
-                     [&left, &right, &stream](std::reference_wrapper<expression const> subexpr) {
-                       return subexpr.get().may_evaluate_null(left, right, stream);
-                     });
+  return std::ranges::any_of(
+    operands, [&left, &right, &stream](std::reference_wrapper<expression const> subexpr) {
+      return subexpr.get().may_evaluate_null(left, right, stream);
+    });
 };
 
 cudf::size_type detail::predicate::accept(detail::expression_parser& visitor) const

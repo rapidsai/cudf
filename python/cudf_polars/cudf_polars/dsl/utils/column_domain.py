@@ -17,10 +17,12 @@ from cudf_polars.dsl.ir import (
     HStack,
     Join,
     Projection,
+    Rolling,
     Select,
     Slice,
     Sort,
 )
+from cudf_polars.streaming.filter_hint import PushdownFilterHint
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -109,6 +111,12 @@ def _(node: GroupBy) -> Mapping[str, ColumnBinding]:
     }
 
 
+@column_domain_bindings.register(Rolling)
+def _(node: Rolling) -> Mapping[str, ColumnBinding]:
+    assert isinstance(node.index.value, expr.Col)
+    return {node.index.name: ColumnBinding(0, node.index.value.name)}
+
+
 @column_domain_bindings.register(Join)
 def _(node: Join) -> Mapping[str, ColumnBinding]:
     left, right = node.children
@@ -140,4 +148,12 @@ def _(
     child = node.children[0]
     return {
         name: ColumnBinding(0, name) for name in node.schema if name in child.schema
+    }
+
+
+@column_domain_bindings.register(PushdownFilterHint)
+def _(node: PushdownFilterHint) -> Mapping[str, ColumnBinding]:
+    target = node.children[0]
+    return {
+        name: ColumnBinding(0, name) for name in node.schema if name in target.schema
     }

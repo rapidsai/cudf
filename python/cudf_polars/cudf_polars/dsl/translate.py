@@ -10,18 +10,19 @@ import json
 from contextlib import AbstractContextManager, nullcontext
 from functools import singledispatch
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, assert_never
+from typing import TYPE_CHECKING, Any, assert_never, cast
 
 import polars as pl
 
-# polars.polars is not a part of the public API,
+# polars._plr is not a part of the public API,
 # so we cannot rely on importing it directly
 # See https://github.com/pola-rs/polars/issues/24826
-from polars import polars as plrs  # type: ignore[attr-defined]
+from polars import _plr as plrs
 
 import pylibcudf as plc
 
 from cudf_polars.containers import DataType
+from cudf_polars.containers.datatype import _contains_dtype
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.to_ast import insert_colrefs
@@ -29,27 +30,20 @@ from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.aggregations import decompose_single_agg
 from cudf_polars.dsl.utils.groupby import rewrite_groupby
 from cudf_polars.dsl.utils.naming import unique_names
+from cudf_polars.dsl.utils.per_path import PerPathValues
 from cudf_polars.dsl.utils.replace import replace
 from cudf_polars.dsl.utils.rolling import rewrite_rolling
 from cudf_polars.typing import Schema
 from cudf_polars.utils import config, sorting
-from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_136,
-    POLARS_VERSION_LT_138,
-    POLARS_VERSION_LT_139,
-    POLARS_VERSION_LT_140,
-    POLARS_VERSION_LT_141,
-    POLARS_VERSION_LT_142,
-)
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Sequence
 
     from polars import GPUEngine
 
     from cudf_polars.typing import NodeTraverser, Slice as Zlice
 
-_HAS_ROLLING_FUNCTION = hasattr(plrs._expr_nodes, "RollingFunction")
+_ARRAY_PASSTHROUGH_ERROR = "Only pass-through of Array columns is supported"
 
 __all__ = ["Translator", "translate_named_expr"]
 
@@ -66,7 +60,10 @@ def _align_decimal_float_for_comparison(
     """
     has_decimal = any(plc.traits.is_fixed_point(op.dtype.plc_type) for op in operands)
     has_float = any(plc.traits.is_floating_point(op.dtype.plc_type) for op in operands)
-    if has_decimal and has_float:
+    if has_decimal and has_float:  # pragma: no cover
+        # Polars now inserts this cast itself under the latest supported
+        # version (coverage only runs against latest), but older supported
+        # versions still need this workaround.
         f64 = DataType(pl.Float64())
         return tuple(
             expr.Cast(f64, False, op)  # noqa: FBT003
@@ -75,6 +72,41 @@ def _align_decimal_float_for_comparison(
             for op in operands
         )
     return operands
+
+
+def _contains_array_input(expression: expr.Expr) -> bool:
+    """Return whether an expression consumes an Array-typed input."""
+    return any(
+        _contains_dtype(node.dtype.polars_type, (pl.Array,))
+        for node in traversal([expression])
+    )
+
+
+def _contains_categorical_input(expression: expr.Expr) -> bool:
+    """Return whether an expression consumes a Categorical or Enum input."""
+    return any(
+        _contains_dtype(node.dtype.polars_type, (pl.Categorical, pl.Enum))
+        for node in traversal([expression])
+    )
+
+
+def _contains_categorical_key(keys: Sequence[expr.NamedExpr]) -> bool:
+    return any(
+        _contains_dtype(k.value.dtype.polars_type, (pl.Categorical, pl.Enum))
+        for k in keys
+    )
+
+
+def _supports_categorical(config_options: config.ConfigOptions) -> bool:
+    # TODO: Support multi-rank execution of Categorical columns.
+    executor = config_options.executor
+    if executor.name == "in-memory":
+        return True
+    if executor.ray_context is not None or executor.dask_context is not None:
+        return False
+    if executor.spmd_context is not None:
+        return executor.spmd_context.comm.nranks == 1
+    return executor.cluster == config.Cluster.DEFAULT_SINGLETON
 
 
 def _strip_file_uri(path: str) -> str:
@@ -143,6 +175,28 @@ def _unsupported_fill_over_window(value: expr.Expr) -> bool:
     )
 
 
+def _is_len_sum_uint128_node(visitor: NodeTraverser, node: Any) -> bool:
+    """
+    Whether ``node`` is part of polars' ``col("len").cast(UInt128).sum()``.
+
+    polars rewrites ``concat(...).select(len())`` into
+    ``col("len").cast(UInt128).sum().cast(IDX_DTYPE)``. Both the ``sum`` and
+    its ``"len"`` cast independently report a ``UInt128`` dtype during
+    translation, so both must be recognized here.
+    """
+    # TODO: this matches the exact shape of that one rewrite, not UInt128 in
+    # general; if polars changes it, or introduces UInt128 elsewhere, this
+    # will stop matching (and fall back to CPU / raise cleanly, not silently
+    # misbehave, since general UInt128 use is still unconditionally rejected
+    # elsewhere). See https://github.com/NVIDIA/cudf/issues/24108.
+    if isinstance(node, plrs._expr_nodes.Agg):
+        return node.name == "sum"
+    if isinstance(node, plrs._expr_nodes.Cast):
+        child = visitor.view_expression(node.expr)
+        return isinstance(child, plrs._expr_nodes.Column) and child.name == "len"
+    return False  # pragma: no cover
+
+
 class Translator:
     """
     Translates polars-internal IR nodes and expressions to our representation.
@@ -162,6 +216,7 @@ class Translator:
         self._cache_nodes: dict[int, ir.Cache] = {}
         self._expr_context: ExecutionContext = ExecutionContext.FRAME
         self._internal_name_gen: Generator[str, None, None] | None = None
+        self._list_literals_as_elements: bool = False
 
     def translate_ir(self, *, n: int | None = None) -> ir.IR:
         """
@@ -197,7 +252,7 @@ class Translator:
         # IR is versioned with major.minor, minor is bumped for backwards
         # compatible changes (e.g. adding new nodes), major is bumped for
         # incompatible changes (e.g. renaming nodes).
-        if (version := self.visitor.version()) >= (14, 4):
+        if (version := self.visitor.version()) >= (15, 3):
             e = NotImplementedError(
                 f"No support for polars IR {version=}"
             )  # pragma: no cover; no such version for now.
@@ -221,12 +276,49 @@ class Translator:
             except Exception as e:
                 self.errors.append(e)
                 return ir.ErrorNode(schema, str(e))
+            if not isinstance(
+                node,
+                (
+                    plrs._ir_nodes.Select,
+                    plrs._ir_nodes.HStack,
+                    plrs._ir_nodes.Filter,
+                    plrs._ir_nodes.Slice,
+                    plrs._ir_nodes.Sort,
+                    plrs._ir_nodes.Cache,
+                    plrs._ir_nodes.SimpleProjection,
+                    plrs._ir_nodes.Union,
+                    plrs._ir_nodes.HConcat,
+                    plrs._ir_nodes.Join,
+                    plrs._ir_nodes.GroupBy,
+                ),
+            ) and any(
+                _contains_dtype(dtype.polars_type, (pl.Time,))
+                for ir_node in (result, *result.children)
+                for dtype in ir_node.schema.values()
+            ):
+                error = NotImplementedError(
+                    "Only dt.time() and pass-through of Time columns are supported; "
+                    f"unsupported node {type(node).__name__}"
+                )
+                self.errors.append(error)
+                return ir.ErrorNode(schema, str(error))
             if any(
                 isinstance(dtype, pl.Null)
                 for dtype in pl.datatypes.unpack_dtypes(*polars_schema.values())
             ):
                 error = NotImplementedError(
                     f"No GPU support for {result} with Null column dtype."
+                )
+                self.errors.append(error)
+                return ir.ErrorNode(schema, str(error))
+            if not _supports_categorical(self.config_options) and any(
+                isinstance(dtype, pl.Categorical)
+                for dtype in pl.datatypes.unpack_dtypes(*polars_schema.values())
+            ):
+                error = NotImplementedError(
+                    "Categorical columns are only supported on the in-memory "
+                    "executor and single-rank streaming engines; use pl.Enum "
+                    "for multi-rank execution"
                 )
                 self.errors.append(error)
                 return ir.ErrorNode(schema, str(error))
@@ -257,7 +349,9 @@ class Translator:
         )
         return NotImplementedError(message, unique_errors)
 
-    def translate_expr(self, *, n: int, schema: Schema) -> expr.Expr:
+    def translate_expr(
+        self, *, n: int, schema: Schema, allow_passthrough: bool = False
+    ) -> expr.Expr:
         """
         Translate a polars-internal expression IR into our representation.
 
@@ -267,6 +361,8 @@ class Translator:
             Node to translate, an integer referencing a polars internal node.
         schema
             Schema of the IR node this expression uses as evaluation context.
+        allow_passthrough
+            Whether a direct Array or Time column, or a ``dt.time()`` result, may be returned.
 
         Returns
         -------
@@ -280,12 +376,78 @@ class Translator:
         to determine if the query is supported.
         """
         node = self.visitor.view_expression(n)
-        dtype = DataType(self.visitor.get_dtype(n))
+        polars_dtype = self.visitor.get_dtype(n)
+        if isinstance(polars_dtype, pl.UInt128) and _is_len_sum_uint128_node(
+            self.visitor, node
+        ):
+            # libcudf has no 128-bit integer type (size_type is 32-bit today;
+            # see https://github.com/NVIDIA/cudf/issues/13159). polars
+            # rewrites concat(...).select(len()) into
+            # col("len").cast(UInt128).sum().cast(IDX_DTYPE), widening before
+            # the sum so it can't overflow, then narrowing back down. This
+            # value is never materialized as real UInt128 data, so represent
+            # it as UInt64 instead: no libcudf table can hold anywhere near
+            # 2**64 rows, so the sum can't overflow it either.
+            polars_dtype = pl.UInt64()
+        dtype = DataType(polars_dtype)
+        is_array_passthrough = (
+            allow_passthrough
+            and isinstance(dtype.polars_type, pl.Array)
+            and isinstance(node, plrs._expr_nodes.Column)
+        )
+        if isinstance(dtype.polars_type, pl.Array) and not is_array_passthrough:
+            error = NotImplementedError(_ARRAY_PASSTHROUGH_ERROR)
+            self.errors.append(error)
+            return expr.ErrorExpr(dtype, str(error))
+        is_column = isinstance(node, plrs._expr_nodes.Column)
+        if not is_column and _contains_dtype(
+            dtype.polars_type, (pl.Categorical, pl.Enum)
+        ):
+            error = NotImplementedError(
+                "Only pass-through of Categorical/Enum columns is supported"
+            )
+            self.errors.append(error)
+            return expr.ErrorExpr(dtype, str(error))
         try:
-            return _translate_expr(node, self, dtype, schema)
+            translated = _translate_expr(node, self, dtype, schema)
         except Exception as e:
             self.errors.append(e)
             return expr.ErrorExpr(dtype, str(e))
+        if not is_array_passthrough and _contains_array_input(translated):
+            error = NotImplementedError(_ARRAY_PASSTHROUGH_ERROR)
+            self.errors.append(error)
+            return expr.ErrorExpr(dtype, str(error))
+        if not is_column and _contains_categorical_input(translated):
+            error = NotImplementedError(
+                "Only pass-through of Categorical/Enum columns is supported"
+            )
+            self.errors.append(error)
+            return expr.ErrorExpr(dtype, str(error))
+        is_time_function = (
+            isinstance(translated, expr.TemporalFunction)
+            and translated.name is expr.TemporalFunction.Name.Time
+        )
+        is_time_passthrough = (
+            allow_passthrough
+            and isinstance(dtype.polars_type, pl.Time)
+            and (isinstance(translated, expr.Col) or is_time_function)
+        )
+        if (
+            _contains_dtype(dtype.polars_type, (pl.Time,)) and not is_time_passthrough
+        ) or (
+            # dt.time() children were already validated with allow_passthrough=True.
+            not is_time_function
+            and any(
+                _contains_dtype(child.dtype.polars_type, (pl.Time,))
+                for child in traversal(list(translated.children))
+            )
+        ):
+            error = NotImplementedError(
+                "Only dt.time() and pass-through of Time columns are supported"
+            )
+            self.errors.append(error)
+            return expr.ErrorExpr(dtype, str(error))
+        return translated
 
 
 class set_node(AbstractContextManager[None]):
@@ -353,8 +515,7 @@ def _drop_dyn_pred_hints(
             return None
         raise
     if (
-        not POLARS_VERSION_LT_142
-        and isinstance(node, plrs._expr_nodes.Function)
+        isinstance(node, plrs._expr_nodes.Function)
         and node.function_data[0] == "dynamic_pred"
     ):
         return None
@@ -452,6 +613,11 @@ def _(node: plrs._ir_nodes.PythonScan, translator: Translator, schema: Schema) -
 @_translate_ir.register
 def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.IR:
     typ, *options = node.scan_type
+    if any(
+        _contains_dtype(dtype.polars_type, (pl.Categorical, pl.Enum))
+        for dtype in schema.values()
+    ):
+        raise NotImplementedError("Reading Categorical/Enum columns is not supported")
     paths = [_strip_file_uri(p) for p in node.paths]
     # Polars can produce a Scan with an empty ``node.paths`` (eg. the native
     # Iceberg reader on a table with no data files yet). In this case, polars returns an
@@ -469,12 +635,22 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
     row_index = file_options.row_index
     include_file_paths = file_options.include_file_paths
     deletion_files = file_options.deletion_files
-    if deletion_files:  # pragma: no cover
+    if (
+        deletion_files
+        or file_options.column_mapping is not None
+        or file_options.default_values is not None
+    ):  # pragma: no cover
         raise NotImplementedError(
-            "Iceberg format is not supported in cudf-polars. Furthermore, row-level deletions are not supported."
+            "Iceberg format is not supported in cudf-polars. Furthermore, "
+            "row-level deletions, column mapping and default values are not supported."
         )  # pragma: no cover
-    if not POLARS_VERSION_LT_142 and node.hive_parts is not None:
-        raise NotImplementedError("Hive-partitioned scans are not supported")
+    if file_options.missing_columns_policy != "raise":
+        raise NotImplementedError("Inserting missing columns is not supported.")
+    hive_parts = (
+        None
+        if node.hive_parts is None
+        else PerPathValues.from_polars(pl.DataFrame._from_pydf(node.hive_parts))
+    )
     config_options = translator.config_options
     parquet_options = config_options.parquet_options
 
@@ -522,6 +698,7 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
             )
         ),
         parquet_options,
+        hive_parts=hive_parts,
         cached_parquet_info=None,
     )
 
@@ -557,7 +734,12 @@ def _(node: plrs._ir_nodes.Select, translator: Translator, schema: Schema) -> ir
         inp = translator.translate_ir(n=None)
         with set_internal_name_gen(translator, inp.schema):
             exprs = [
-                translate_named_expr(translator, n=e, schema=inp.schema)
+                translate_named_expr(
+                    translator,
+                    n=e,
+                    schema=inp.schema,
+                    allow_passthrough=True,
+                )
                 for e in node.expr
             ]
     return ir.Select(schema, exprs, node.should_broadcast, inp)
@@ -575,6 +757,8 @@ def _(node: plrs._ir_nodes.GroupBy, translator: Translator, schema: Schema) -> i
                 translate_named_expr(translator, n=e, schema=inp.schema)
                 for e in node.aggs
             ]
+    if _contains_categorical_key(keys):
+        raise NotImplementedError("Grouping by Categorical/Enum keys is not supported")
     is_rolling = node.options.rolling is not None
     is_dynamic = node.options.dynamic is not None
     if is_dynamic:
@@ -585,13 +769,6 @@ def _(node: plrs._ir_nodes.GroupBy, translator: Translator, schema: Schema) -> i
         )
     else:
         # TODO: Investigate whether polars can raise ahead of time
-        # polars >= 1.40 rewrites an empty-key group_by into a Select, so an
-        # empty-key group_by only reaches here on older polars; the raise is
-        # dead on the latest polars used for coverage.
-        if POLARS_VERSION_LT_140 and not keys:
-            raise NotImplementedError(  # pragma: no cover
-                "at least one key is required in a group_by operation"
-            )
         return rewrite_groupby(node, schema, keys, original_aggs, inp)
 
 
@@ -612,6 +789,8 @@ def _(node: plrs._ir_nodes.Join, translator: Translator, schema: Schema) -> ir.I
             translate_named_expr(translator, n=e, schema=inp_right.schema)
             for e in node.right_on
         ]
+    if _contains_categorical_key(left_on) or _contains_categorical_key(right_on):
+        raise NotImplementedError("Joining on Categorical/Enum keys is not supported")
 
     if (how := node.options[0]) in {
         "Inner",
@@ -622,6 +801,10 @@ def _(node: plrs._ir_nodes.Join, translator: Translator, schema: Schema) -> ir.I
         "Semi",
         "Anti",
     }:
+        if how != "Cross" and not left_on:
+            raise NotImplementedError(
+                "Joins without keys carry a predicate that polars does not expose"
+            )
         return ir.Join(
             schema,
             left_on,
@@ -678,7 +861,12 @@ def _(node: plrs._ir_nodes.HStack, translator: Translator, schema: Schema) -> ir
         inp = translator.translate_ir(n=None)
         with set_internal_name_gen(translator, inp.schema):
             exprs = [
-                translate_named_expr(translator, n=e, schema=inp.schema)
+                translate_named_expr(
+                    translator,
+                    n=e,
+                    schema=inp.schema,
+                    allow_passthrough=True,
+                )
                 for e in node.exprs
             ]
     return ir.HStack(schema, exprs, node.should_broadcast, inp)
@@ -701,13 +889,24 @@ def _(node: plrs._ir_nodes.Distinct, translator: Translator, schema: Schema) -> 
     (keep, subset, maintain_order, zlice) = node.options
     keep = ir.Distinct._KEEP_MAP[keep]
     subset = frozenset(subset) if subset is not None else None
+    inp = translator.translate_ir(n=node.input)
+    keys = inp.schema if subset is None else subset
+    if any(_contains_dtype(inp.schema[name].polars_type, (pl.Array,)) for name in keys):
+        raise NotImplementedError(_ARRAY_PASSTHROUGH_ERROR)
+    if any(
+        _contains_dtype(inp.schema[name].polars_type, (pl.Categorical, pl.Enum))
+        for name in keys
+    ):
+        raise NotImplementedError(
+            "Distinct on Categorical/Enum columns is not supported"
+        )
     return ir.Distinct(
         schema,
         keep,
         subset,
         zlice,
         maintain_order,
-        translator.translate_ir(n=node.input),
+        inp,
     )
 
 
@@ -719,6 +918,8 @@ def _(node: plrs._ir_nodes.Sort, translator: Translator, schema: Schema) -> ir.I
             translate_named_expr(translator, n=e, schema=inp.schema)
             for e in node.by_column
         ]
+    if _contains_categorical_key(by):
+        raise NotImplementedError("Sorting by Categorical/Enum keys is not supported")
     stable, nulls_last, descending = node.sort_options
     order, null_order = sorting.sort_order(
         descending, nulls_last=nulls_last, num_keys=len(by)
@@ -728,7 +929,7 @@ def _(node: plrs._ir_nodes.Sort, translator: Translator, schema: Schema) -> ir.I
     # DynamicPred Function node in an upstream scan. The sort actor could
     # set a threshold predicate on it (e.g. col < max_seen) to prune rows
     # at the source.
-    if not POLARS_VERSION_LT_142 and node.slice is not None:
+    if node.slice is not None:
         offset, length, *_ = node.slice
         zlice: Zlice | None = (offset, length)
     else:
@@ -770,8 +971,13 @@ def _(
     node: plrs._ir_nodes.MergeSorted, translator: Translator, schema: Schema
 ) -> ir.IR:
     key = node.key
+    if len(key) != 1:
+        raise NotImplementedError("Merging on multiple keys is not supported")
+    key = key[0]
     inp_left = translator.translate_ir(n=node.input_left)
     inp_right = translator.translate_ir(n=node.input_right)
+    if _contains_dtype(inp_left.schema[key].polars_type, (pl.Categorical, pl.Enum)):
+        raise NotImplementedError("Merging on Categorical/Enum keys is not supported")
     return ir.MergeSorted(
         schema,
         key,
@@ -795,26 +1001,22 @@ def _(
 
 @_translate_ir.register
 def _(node: plrs._ir_nodes.Union, translator: Translator, schema: Schema) -> ir.IR:
-    zlice = node.options if POLARS_VERSION_LT_141 else node.slice
-    maintain_order = True if POLARS_VERSION_LT_141 else node.maintain_order
     return ir.Union(
         schema,
-        zlice,
-        maintain_order,
+        node.slice,
+        node.maintain_order,
         *(translator.translate_ir(n=n) for n in node.inputs),
     )
 
 
 @_translate_ir.register
 def _(node: plrs._ir_nodes.HConcat, translator: Translator, schema: Schema) -> ir.IR:
-    if POLARS_VERSION_LT_139:
-        strict = False  # pragma: no cover
-    else:
-        _, strict, _ = node.options
+    _, strict, broadcast_unit_length = node.options
     return ir.HConcat(
         schema,
-        False,  # noqa: FBT003
+        broadcast_unit_length,
         strict,
+        False,  # noqa: FBT003
         *(translator.translate_ir(n=n) for n in node.inputs),
     )
 
@@ -822,11 +1024,17 @@ def _(node: plrs._ir_nodes.HConcat, translator: Translator, schema: Schema) -> i
 @_translate_ir.register
 def _(node: plrs._ir_nodes.Sink, translator: Translator, schema: Schema) -> ir.IR:
     payload = json.loads(node.payload)
+    if callback := payload.get("Callback"):
+        return ir.CallbackSink(
+            schema,
+            bytes(callback["function"]),
+            callback["chunk_size"],
+            callback["maintain_order"],
+            translator.translate_ir(n=node.input),
+        )
     try:
         file = payload["File"]
-        sink_kind_options = file[
-            "file_type" if POLARS_VERSION_LT_136 else "file_format"
-        ]
+        sink_kind_options = file["file_format"]
     except KeyError as err:  # pragma: no cover
         raise NotImplementedError("Unsupported payload structure") from err
     if isinstance(sink_kind_options, dict):
@@ -838,31 +1046,33 @@ def _(node: plrs._ir_nodes.Sink, translator: Translator, schema: Schema) -> ir.I
             "Unsupported sink options structure"
         )  # pragma: no cover
 
-    if POLARS_VERSION_LT_138:  # pragma: no cover
-        sink_options = file.get("sink_options", {})
-        cloud_options = file.get("cloud_options")
-        options = format_options.copy()
-        options.update(sink_options)
-    else:
-        unified_args = file.get("unified_sink_args", {})
-        cloud_options = unified_args.get("cloud_options")
-        options = {} if sink_kind == "NDJson" else format_options.copy()
+    unified_args = file.get("unified_sink_args", {})
+    cloud_options = unified_args.get("cloud_options")
+    options = {} if sink_kind == "NDJson" else format_options.copy()
 
-        for k, v in unified_args.items():
-            if k in {"mkdir", "maintain_order", "sync_on_close"}:
-                options[k] = v
+    for k, v in unified_args.items():
+        if k in {"mkdir", "maintain_order", "sync_on_close"}:
+            options[k] = v
 
-    if sink_kind in ("Csv", "NDJson", "Json"):
+    if sink_kind in ("Csv", "NDJson"):
         compression = format_options.get("compression")
         if compression and compression != "Uncompressed":
             raise NotImplementedError(
                 f"{sink_kind} compression ('{compression}') is not supported."
             )
 
-    if POLARS_VERSION_LT_138:  # pragma: no cover
-        path = file["target"]["Local"]
-    else:
-        path = file["target"]["inner"]
+    path = file["target"]["inner"]
+
+    df = translator.translate_ir(n=node.input)
+    if any(
+        _contains_dtype(dtype.polars_type, (pl.Array,)) for dtype in df.schema.values()
+    ):
+        raise NotImplementedError(_ARRAY_PASSTHROUGH_ERROR)
+    if any(
+        _contains_dtype(dtype.polars_type, (pl.Categorical, pl.Enum))
+        for dtype in df.schema.values()
+    ):
+        raise NotImplementedError("Writing Categorical/Enum columns is not supported")
 
     return ir.Sink(
         schema=schema,
@@ -871,12 +1081,16 @@ def _(node: plrs._ir_nodes.Sink, translator: Translator, schema: Schema) -> ir.I
         parquet_options=translator.config_options.parquet_options,
         options=options,
         cloud_options=cloud_options,
-        df=translator.translate_ir(n=node.input),
+        df=df,
     )
 
 
 def translate_named_expr(
-    translator: Translator, *, n: plrs._expr_nodes.PyExprIR, schema: Schema
+    translator: Translator,
+    *,
+    n: plrs._expr_nodes.PyExprIR,
+    schema: Schema,
+    allow_passthrough: bool = False,
 ) -> expr.NamedExpr:
     """
     Translate a polars-internal named expression IR object into our representation.
@@ -889,6 +1103,8 @@ def translate_named_expr(
         Node to translate, a named expression node.
     schema
         Schema of the IR node this expression uses as evaluation context.
+    allow_passthrough
+        Whether a direct Array or Time column, or a ``dt.time()`` result, may be returned.
 
     Returns
     -------
@@ -907,7 +1123,12 @@ def translate_named_expr(
         If any translation fails due to unsupported functionality.
     """
     return expr.NamedExpr(
-        n.output_name, translator.translate_expr(n=n.node, schema=schema)
+        n.output_name,
+        translator.translate_expr(
+            n=n.node,
+            schema=schema,
+            allow_passthrough=allow_passthrough,
+        ),
     )
 
 
@@ -915,6 +1136,17 @@ def _contains_nested_lists(val: Any) -> bool:
     if not val:
         return False
     return any(isinstance(_, list) for _ in val)
+
+
+_LIST_LITERAL_CONSUMERS = frozenset(
+    {
+        "replace",
+        "replace_strict",
+        plrs._expr_nodes.BooleanFunction.IsIn,
+        plrs._expr_nodes.StringFunction.ContainsAny,
+        plrs._expr_nodes.StringFunction.ReplaceMany,
+    }
+)
 
 
 @singledispatch
@@ -928,6 +1160,21 @@ def _translate_expr(
 
 @_translate_expr.register
 def _(
+    node: plrs._expr_nodes.Function,
+    translator: Translator,
+    dtype: DataType,
+    schema: Schema,
+) -> expr.Expr:
+    name = node.function_data[0]
+    previous = translator._list_literals_as_elements
+    translator._list_literals_as_elements = name in _LIST_LITERAL_CONSUMERS
+    try:
+        return _translate_function(node, translator, dtype, schema)
+    finally:
+        translator._list_literals_as_elements = previous
+
+
+def _translate_function(
     node: plrs._expr_nodes.Function,
     translator: Translator,
     dtype: DataType,
@@ -975,10 +1222,9 @@ def _(
             )
             (closed,) = options
             lop, rop = expr.BooleanFunction._BETWEEN_OPS[closed]
-            if not POLARS_VERSION_LT_139:
-                # IsBetween type coercion does not
-                # insert casts for Decimal/Float comparisons.
-                column, lo, hi = _align_decimal_float_for_comparison(column, lo, hi)
+            # IsBetween type coercion does not
+            # insert casts for Decimal/Float comparisons.
+            column, lo, hi = _align_decimal_float_for_comparison(column, lo, hi)
             return expr.BinOp(
                 dtype,
                 plc.binaryop.BinaryOperator.LOGICAL_AND,
@@ -1009,19 +1255,29 @@ def _(
             dtype,
             expr.TemporalFunction.Name.from_polars(name),
             options,
-            *(translator.translate_expr(n=n, schema=schema) for n in node.input),
+            *(
+                translator.translate_expr(
+                    n=n,
+                    schema=schema,
+                    allow_passthrough=name == plrs._expr_nodes.TemporalFunction.Time,
+                )
+                for n in node.input
+            ),
         )
         if name in needs_cast:
             return expr.Cast(dtype, True, result_expr)  # noqa: FBT003
         return result_expr
     elif isinstance(name, plrs._expr_nodes.StructFunction):
+        if name == plrs._expr_nodes.StructFunction.RenameFields:
+            (new_field_names,) = options
+            options = (tuple(new_field_names),)
         return expr.StructFunction(
             dtype,
             expr.StructFunction.Name.from_polars(name),
             options,
             *(translator.translate_expr(n=n, schema=schema) for n in node.input),
         )
-    elif _HAS_ROLLING_FUNCTION and isinstance(name, plrs._expr_nodes.RollingFunction):
+    elif isinstance(name, plrs._expr_nodes.RollingFunction):
         window_size, min_periods, weights, center, fn_params = options
         if weights is not None:
             raise NotImplementedError("Weighted rolling windows")
@@ -1058,14 +1314,6 @@ def _(
         )
     elif isinstance(name, str):
         children = (translator.translate_expr(n=n, schema=schema) for n in node.input)
-        if name == "rechunk":
-            # Rechunking is a physical execution hint to Polars.
-            # cudf-polars has no concept of chunking, so we can just
-            # drop it.
-            # Note: This could be a plan hook for explicit repartition for streaming engines
-            # https://github.com/NVIDIA/cudf/pull/23192#discussion_r3553113408
-            (child,) = children
-            return child
         if name == "fused":
             # TODO: fuse into a single kernel via JIT transform, see
             # https://github.com/NVIDIA/cudf/issues/21456. We don't use
@@ -1103,11 +1351,10 @@ def _(
             return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
         elif name == "product":
             return expr.Agg(dtype, "product", None, translator._expr_context, *children)
-        elif not POLARS_VERSION_LT_141 and name == "quantile":
-            # polars >= 1.41 emits quantile as a string-named Function
-            # expression (function_data=("quantile", interpolation)) with the
-            # column and quantile value as inputs; earlier versions used a
-            # dedicated Agg node.
+        elif name == "quantile":
+            # quantile is emitted as a string-named Function expression
+            # (function_data=("quantile", interpolation)) with the column
+            # and quantile value as inputs.
             (interp,) = options
             return expr.Agg(
                 dtype, "quantile", interp, translator._expr_context, *children
@@ -1134,9 +1381,9 @@ def _(
     dtype: DataType,
     schema: Schema,
 ) -> expr.Expr:
-    if hasattr(plrs._expr_nodes, "RollingGroupOptions") and isinstance(
+    if isinstance(
         node.options, plrs._expr_nodes.RollingGroupOptions
-    ):  # pragma: no cover; polars >=1.36 uses AExpr::Rolling now
+    ):  # pragma: no cover; polars uses AExpr::Rolling now
         with set_expr_context(translator, ExecutionContext.ROLLING):
             agg = translator.translate_expr(n=node.function, schema=schema)
         name_generator = translator._internal_name_gen or unique_names(schema)
@@ -1179,9 +1426,7 @@ def _(
         return replace([named_post_agg.value], replacements)[0]
     elif isinstance(node.options, plrs._expr_nodes.WindowMapping):
         # pl.col("a").over(...)
-        # Note: pl.col("a").rolling(...).over("g") also lands here. But
-        # is not supported in polars < 1.39 since the AExpr::Rolling was
-        # not exposed until polars 1.39.
+        # Note: pl.col("a").rolling(...).over("g") also lands here.
         with set_expr_context(translator, ExecutionContext.WINDOW):
             agg = translator.translate_expr(n=node.function, schema=schema)
         name_gen = translator._internal_name_gen or unique_names(schema)
@@ -1312,11 +1557,7 @@ def _translate_rolling(
     return replace([named_post_agg.value], replacements)[0]
 
 
-# Rolling was added in polars 1.39. Use explicit registration (not annotation-based)
-# so that Python 3.14's stricter get_type_hints() resolution does not fail when
-# running on older polars versions that lack this node type.
-if hasattr(plrs._expr_nodes, "Rolling"):
-    _translate_expr.register(plrs._expr_nodes.Rolling)(_translate_rolling)
+_translate_expr.register(plrs._expr_nodes.Rolling)(_translate_rolling)
 
 
 @_translate_expr.register
@@ -1328,13 +1569,17 @@ def _(
 ) -> expr.Expr:
     if isinstance(node.value, plrs.PySeries):
         return expr.LiteralColumn(dtype, pl.Series._from_pyseries(node.value))
-    if dtype.id() == plc.TypeId.LIST:  # pragma: no cover
+    if dtype.id() == plc.TypeId.LIST:
         # TODO: Remove once pylibcudf.Scalar supports lists
-        if _contains_nested_lists(node.value):
-            return expr.LiteralColumn(
-                dtype, pl.Series([node.value], dtype=dtype.polars_type)
-            )
-        return expr.LiteralColumn(dtype, pl.Series(node.value))
+        if translator._list_literals_as_elements and not _contains_nested_lists(
+            node.value
+        ):
+            return expr.LiteralColumn(dtype, pl.Series(node.value))
+        if isinstance(cast("pl.List", dtype.polars_type).inner, pl.Null):
+            raise NotImplementedError("List literals of null values are not supported")
+        return expr.LiteralColumn(
+            dtype, pl.Series([node.value], dtype=dtype.polars_type)
+        )
     if dtype.id() == plc.TypeId.STRUCT:
         raise NotImplementedError("Struct literals are not supported")
     return expr.Literal(dtype, node.value)
@@ -1422,6 +1667,9 @@ def _(
     strict = node.options != 1
     inner = translator.translate_expr(n=node.expr, schema=schema)
 
+    if isinstance(inner.dtype.polars_type, pl.Array):
+        raise NotImplementedError("Casting from Array is not supported")
+
     if plc.traits.is_floating_point(inner.dtype.plc_type) and plc.traits.is_fixed_point(
         dtype.plc_type
     ):
@@ -1457,18 +1705,13 @@ def _(
     agg_name = node.name
     args = [translator.translate_expr(n=arg, schema=schema) for arg in node.arguments]
 
-    if (
-        not POLARS_VERSION_LT_140
-        and agg_name == "implode"
-        and translator._expr_context
-        in (ExecutionContext.GROUPBY, ExecutionContext.ROLLING)
+    if agg_name == "implode" and translator._expr_context in (
+        ExecutionContext.GROUPBY,
+        ExecutionContext.ROLLING,
     ):
-        # polars >= 1.40 makes the per-group collect-to-list explicit: an
-        # element-wise expression inside a groupby/rolling aggregation is now
-        # wrapped in an explicit ``implode`` node. Earlier versions left it
-        # implicit, emitting the bare expression (whose dtype already reflects
-        # the per-group list). Unwrap the explicit ``implode`` so the existing
-        # pointwise-collect path handles it as before.
+        # An element-wise expression inside a groupby/rolling aggregation is
+        # wrapped in an explicit ``implode`` node. Unwrap it so the existing
+        # pointwise-collect path handles it.
         (child,) = args
         return child
 
@@ -1515,6 +1758,10 @@ def _(
 ) -> expr.Expr:
     left = translator.translate_expr(n=node.left, schema=schema)
     right = translator.translate_expr(n=node.right, schema=schema)
+    if isinstance(left.dtype.polars_type, pl.Array) or isinstance(
+        right.dtype.polars_type, pl.Array
+    ):
+        raise NotImplementedError("Binary operations on Array are not supported")
     if node.op == plrs._expr_nodes.Operator.TrueDivide and (
         plc.traits.is_fixed_point(left.dtype.plc_type)
         or plc.traits.is_fixed_point(right.dtype.plc_type)

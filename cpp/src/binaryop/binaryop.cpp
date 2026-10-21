@@ -53,8 +53,11 @@ namespace binops {
 bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op)
 {
   if (cudf::detail::checked_arithmetic::is_checked(op)) {
-    return out.id() == lhs.id() && lhs.id() == rhs.id() &&
-           ((is_numeric(lhs) && lhs.id() != type_id::BOOL8) || is_fixed_point(lhs));
+    if (out.id() != lhs.id() || lhs.id() != rhs.id()) { return false; }
+    if (is_fixed_point(lhs)) {
+      return out.scale() == binary_operation_fixed_point_scale(op, lhs.scale(), rhs.scale());
+    }
+    return is_numeric(lhs) && lhs.id() != type_id::BOOL8;
   }
   return cudf::binops::compiled::is_supported_operation(out, lhs, rhs, op);
 }
@@ -62,13 +65,14 @@ bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_
 /**
  * @brief Computes output valid mask for op between a column and a scalar
  */
-std::pair<rmm::device_buffer, size_type> scalar_col_valid_mask_and(
+std::pair<cuda::device_buffer<cudf::bitmask_type>, size_type> scalar_col_valid_mask_and(
   column_view const& col,
   scalar const& s,
   cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
 {
-  if (col.is_empty()) return std::pair(rmm::device_buffer{0, stream, mr}, 0);
+  if (col.is_empty())
+    return std::pair(cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED, stream, mr), 0);
 
   if (not s.is_valid(stream)) {
     return std::pair(cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr),
@@ -76,7 +80,7 @@ std::pair<rmm::device_buffer, size_type> scalar_col_valid_mask_and(
   } else if (s.is_valid(stream) and col.nullable()) {
     return std::pair(cudf::detail::copy_bitmask(col, stream, mr), col.null_count());
   } else {
-    return std::pair(rmm::device_buffer{0, stream, mr}, 0);
+    return std::pair(cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED, stream, mr), 0);
   }
 }
 
@@ -219,6 +223,13 @@ std::unique_ptr<column> binary_operation(LhsType const& lhs,
                                          cuda::stream_ref stream,
                                          rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(not cudf::is_dictionary(lhs.type()) and not cudf::is_dictionary(rhs.type()),
+               "Dictionary operands are not supported",
+               cudf::data_type_error);
+  CUDF_EXPECTS(not cudf::is_dictionary(output_type),
+               "Dictionary output type is not supported",
+               cudf::data_type_error);
+
   if constexpr (std::is_same_v<LhsType, column_view> and std::is_same_v<RhsType, column_view>)
     CUDF_EXPECTS(lhs.size() == rhs.size(), "Column sizes don't match", std::invalid_argument);
 

@@ -86,12 +86,12 @@ enum class binary_operator : int32_t {
                      ///< operands are true, returns true; otherwise returns null
   NULL_LOGICAL_OR,   ///< three-valued (Kleene) ||: if any operand is true, returns true; if both
                      ///< operands are false, returns false; otherwise returns null
-  INVALID_BINARY,    ///< invalid operation
   ADD_OVERFLOW,      ///< Addition with overflow detection
   SUB_OVERFLOW,      ///< Subtraction with overflow detection
   MUL_OVERFLOW,      ///< Multiplication with overflow detection
   DIV_OVERFLOW,      ///< Division with overflow and divide-by-zero detection
-  MOD_OVERFLOW       ///< Modulo with divide-by-zero detection
+  MOD_OVERFLOW,      ///< Modulo with divide-by-zero detection
+  INVALID_BINARY     ///< invalid operation
 };
 
 /// Binary operation common type default
@@ -167,6 +167,7 @@ constexpr inline bool binary_op_has_common_type_v =
  * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
  * operations.
  * @throw cudf::data_type_error if the operation is not supported for the types of @p lhs and @p rhs
+ * @throw cudf::data_type_error if @p rhs or @p output_type is a dictionary type
  */
 std::unique_ptr<column> binary_operation(
   scalar const& lhs,
@@ -200,6 +201,7 @@ std::unique_ptr<column> binary_operation(
  * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
  * operations.
  * @throw cudf::data_type_error if the operation is not supported for the types of @p lhs and @p rhs
+ * @throw cudf::data_type_error if @p lhs or @p output_type is a dictionary type
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
@@ -232,6 +234,7 @@ std::unique_ptr<column> binary_operation(
  * operations.
  * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
  * @throw cudf::data_type_error if the operation is not supported for the types of @p lhs and @p rhs
+ * @throw cudf::data_type_error if @p lhs, @p rhs, or @p output_type is a dictionary type
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
@@ -255,6 +258,10 @@ std::unique_ptr<column> binary_operation(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column
  * @return Output column
+ * @throws cudf::evaluation_error if @p policy is `error_policy::PROPAGATE` and any row fails
+ * @throws cudf::logic_error if @p op is not a checked arithmetic operator
+ * @throws cudf::data_type_error if the input and output types do not match, are not supported
+ * arithmetic or fixed-point types, or @p output_type has an invalid fixed-point scale
  */
 std::unique_ptr<column> binary_operation(
   scalar const& lhs,
@@ -265,8 +272,24 @@ std::unique_ptr<column> binary_operation(
   cuda::stream_ref stream           = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
-/** @copydoc binary_operation(scalar const&, column_view const&, binary_operator, data_type,
- * error_policy, cuda::stream_ref, rmm::device_async_resource_ref)
+/**
+ * @brief Performs a checked binary operation between a column and a scalar.
+ *
+ * `PROPAGATE` throws `cudf::evaluation_error` when any row fails; `NULLIFY` makes failing rows
+ * null.
+ *
+ * @param lhs Left operand column
+ * @param rhs Right operand scalar
+ * @param op Checked binary operator
+ * @param output_type Desired output type
+ * @param policy Error handling policy
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column
+ * @return Output column
+ * @throws cudf::evaluation_error if @p policy is `error_policy::PROPAGATE` and any row fails
+ * @throws cudf::logic_error if @p op is not a checked arithmetic operator
+ * @throws cudf::data_type_error if the input and output types do not match, are not supported
+ * arithmetic or fixed-point types, or @p output_type has an invalid fixed-point scale
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
@@ -277,8 +300,25 @@ std::unique_ptr<column> binary_operation(
   cuda::stream_ref stream           = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
-/** @copydoc binary_operation(scalar const&, column_view const&, binary_operator, data_type,
- * error_policy, cuda::stream_ref, rmm::device_async_resource_ref)
+/**
+ * @brief Performs a checked binary operation between two columns.
+ *
+ * `PROPAGATE` throws `cudf::evaluation_error` when any row fails; `NULLIFY` makes failing rows
+ * null.
+ *
+ * @param lhs Left operand column
+ * @param rhs Right operand column
+ * @param op Checked binary operator
+ * @param output_type Desired output type
+ * @param policy Error handling policy
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column
+ * @return Output column
+ * @throws cudf::evaluation_error if @p policy is `error_policy::PROPAGATE` and any row fails
+ * @throws cudf::logic_error if @p op is not a checked arithmetic operator
+ * @throws cudf::data_type_error if the input and output types do not match, are not supported
+ * arithmetic or fixed-point types, or @p output_type has an invalid fixed-point scale
+ * @throws std::invalid_argument if @p lhs and @p rhs have different sizes
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
@@ -367,7 +407,7 @@ bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_
  * @param mr      Device memory resource used to allocate the returned valid mask
  * @return        Computed validity mask
  */
-std::pair<rmm::device_buffer, size_type> scalar_col_valid_mask_and(
+std::pair<cuda::device_buffer<cudf::bitmask_type>, size_type> scalar_col_valid_mask_and(
   column_view const& col,
   scalar const& s,
   cuda::stream_ref stream           = cudf::get_default_stream(),
