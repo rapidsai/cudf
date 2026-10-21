@@ -699,6 +699,12 @@ class SPMDEngine(StreamingEngine):
             exit_stack.callback(self._cleanup_ctx)
 
             self._quent_worker_id = uuid.uuid4()
+            _, quent_context = synchronize_quent_reset_contexts(
+                comm=comm,
+                context=self._ctx,
+                existing_context=None,
+                new_context=quent_context,
+            )
             executor_options["quent_context"] = self._set_quent(quent_context)
             effective_quent_context = executor_options["quent_context"]
             engine_id = (
