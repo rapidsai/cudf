@@ -432,13 +432,6 @@ def test_scan_delta_nested_schema_evolution(
     assert_gpu_result_equal(pl.scan_delta(path), engine=engine, check_row_order=False)
 
 
-def _assert_falls_back(q: pl.LazyFrame, engine: pl.GPUEngine, match: str) -> None:
-    with pytest.raises(
-        pl.exceptions.ComputeError, match=f"NotImplementedError: {re.escape(match)}"
-    ):
-        q.collect(engine=engine)
-
-
 def test_scan_iceberg_readded_column(
     engine: pl.GPUEngine, iceberg_catalog: SqlCatalog
 ) -> None:
@@ -475,53 +468,14 @@ def test_scan_iceberg_without_field_ids(
     path = str(tmp_path / "without_field_ids.parquet")
     pq.write_table(pa.table({"a": pa.array([2], pa.int64())}), path)
     tbl.add_files([path])
-    _assert_falls_back(
-        pl.scan_iceberg(tbl.metadata_location),
-        in_memory_engine,
-        "Iceberg data file without parquet field IDs",
-    )
-
-
-def _nested_iceberg_schema(
-    kind: Literal["struct", "list", "string_list"],
-) -> pyiceberg.schema.Schema:
-    if kind == "struct":
-        column = StructType(
-            NestedField(2, "x", LongType(), required=False),
-            NestedField(3, "y", LongType(), required=False),
-        )
-    elif kind == "list":
-        column = ListType(
-            2,
-            StructType(NestedField(3, "u", LongType(), required=False)),
-            element_required=False,
-        )
-    else:
-        column = StructType(
-            NestedField(
-                2,
-                "p",
-                ListType(3, StringType(), element_required=False),
-                required=False,
-            )
-        )
-    return pyiceberg.schema.Schema(NestedField(1, "s", column, required=False))
-
-
-def _evolve_nested_iceberg(
-    iceberg_catalog: SqlCatalog,
-    kind: Literal["struct", "list", "string_list"],
-    first: list[dict[str, Any]],
-    evolutions: tuple[Callable[[UpdateSchema], Any], ...],
-    second: list[dict[str, Any]],
-) -> str:
-    tbl = iceberg_catalog.create_table("ns.nested", schema=_nested_iceberg_schema(kind))
-    tbl.append(pa.Table.from_pylist(first, schema=tbl.schema().as_arrow()))
-    for evolve in evolutions:
-        with tbl.update_schema() as update:
-            evolve(update)
-    tbl.append(pa.Table.from_pylist(second, schema=tbl.schema().as_arrow()))
-    return tbl.metadata_location
+    q = pl.scan_iceberg(tbl.metadata_location)
+    with pytest.raises(
+        pl.exceptions.ComputeError,
+        match=re.escape(
+            "NotImplementedError: Iceberg data file without parquet field IDs"
+        ),
+    ):
+        q.collect(engine=in_memory_engine)
 
 
 @pytest.mark.parametrize(
@@ -581,28 +535,69 @@ def test_scan_iceberg_nested_by_field_id(
     evolutions: tuple[Callable[[UpdateSchema], Any], ...],
     second: list[dict[str, Any]],
 ) -> None:
-    location = _evolve_nested_iceberg(iceberg_catalog, kind, first, evolutions, second)
+    if kind == "struct":
+        column: StructType | ListType = StructType(
+            NestedField(2, "x", LongType(), required=False),
+            NestedField(3, "y", LongType(), required=False),
+        )
+    elif kind == "list":
+        column = ListType(
+            2,
+            StructType(NestedField(3, "u", LongType(), required=False)),
+            element_required=False,
+        )
+    else:
+        column = StructType(
+            NestedField(
+                2,
+                "p",
+                ListType(3, StringType(), element_required=False),
+                required=False,
+            )
+        )
+    tbl = iceberg_catalog.create_table(
+        "ns.nested",
+        schema=pyiceberg.schema.Schema(NestedField(1, "s", column, required=False)),
+    )
+    tbl.append(pa.Table.from_pylist(first, schema=tbl.schema().as_arrow()))
+    for evolve in evolutions:
+        with tbl.update_schema() as update:
+            evolve(update)
+    tbl.append(pa.Table.from_pylist(second, schema=tbl.schema().as_arrow()))
     assert_gpu_result_equal(
-        pl.scan_iceberg(location), engine=engine, check_row_order=False
+        pl.scan_iceberg(tbl.metadata_location), engine=engine, check_row_order=False
     )
 
 
 def test_scan_iceberg_nested_by_field_id_filter(
     engine: pl.GPUEngine, iceberg_catalog: SqlCatalog
 ) -> None:
-    location = _evolve_nested_iceberg(
-        iceberg_catalog,
-        "struct",
-        [{"s": {"x": 1, "y": 2}}, {"s": None}],
-        (lambda update: update.rename_column("s.y", "z"),),
-        [{"s": {"x": 3, "z": 4}}],
+    tbl = iceberg_catalog.create_table(
+        "ns.nested",
+        schema=pyiceberg.schema.Schema(
+            NestedField(
+                1,
+                "s",
+                StructType(
+                    NestedField(2, "x", LongType(), required=False),
+                    NestedField(3, "y", LongType(), required=False),
+                ),
+                required=False,
+            )
+        ),
     )
-    q = pl.scan_iceberg(location).filter(pl.col("s").struct.field("z") > 1)
+    tbl.append(
+        pa.Table.from_pylist(
+            [{"s": {"x": 1, "y": 2}}, {"s": None}], schema=tbl.schema().as_arrow()
+        )
+    )
+    with tbl.update_schema() as update:
+        update.rename_column("s.y", "z")
+    tbl.append(
+        pa.Table.from_pylist([{"s": {"x": 3, "z": 4}}], schema=tbl.schema().as_arrow())
+    )
+    q = pl.scan_iceberg(tbl.metadata_location).filter(pl.col("s").struct.field("z") > 1)
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
-
-
-def _map_type(key_id: int, value_id: int) -> MapType:
-    return MapType(key_id, StringType(), value_id, LongType(), value_required=False)
 
 
 def test_scan_iceberg_dropped_map_column(
@@ -611,7 +606,12 @@ def test_scan_iceberg_dropped_map_column(
     tbl = iceberg_catalog.create_table(
         "ns.dropped_map",
         schema=pyiceberg.schema.Schema(
-            NestedField(1, "m", _map_type(2, 3), required=False),
+            NestedField(
+                1,
+                "m",
+                MapType(2, StringType(), 3, LongType(), value_required=False),
+                required=False,
+            ),
             NestedField(4, "t", LongType(), required=False),
         ),
     )
@@ -644,10 +644,19 @@ def test_scan_iceberg_nested_unsupported(
     match: str,
 ) -> None:
     if column == "map":
-        field_type: MapType | StructType = _map_type(2, 3)
+        field_type: MapType | StructType = MapType(
+            2, StringType(), 3, LongType(), value_required=False
+        )
         row = {"s": [("k", 1)], "t": 1}
     elif column == "map_in_struct":
-        field_type = StructType(NestedField(2, "m", _map_type(5, 6), required=False))
+        field_type = StructType(
+            NestedField(
+                2,
+                "m",
+                MapType(5, StringType(), 6, LongType(), value_required=False),
+                required=False,
+            )
+        )
         row = {"s": {"m": [("k", 1)]}, "t": 1}
     else:
         field_type = StructType(NestedField(2, "x", LongType(), required=False))
@@ -663,11 +672,11 @@ def test_scan_iceberg_nested_unsupported(
         with tbl.update_spec() as update:
             update.add_identity("s.x")
     tbl.append(pa.Table.from_pylist([row], schema=tbl.schema().as_arrow()))
-    _assert_falls_back(
-        pl.scan_iceberg(tbl.metadata_location).select(projection),
-        in_memory_engine,
-        match,
-    )
+    q = pl.scan_iceberg(tbl.metadata_location).select(projection)
+    with pytest.raises(
+        pl.exceptions.ComputeError, match=f"NotImplementedError: {re.escape(match)}"
+    ):
+        q.collect(engine=in_memory_engine)
 
 
 def _partition_error_iceberg(
@@ -729,11 +738,14 @@ def test_scan_iceberg_partition_error_sliced(
     q = pl.scan_iceberg(
         _partition_error_iceberg(iceberg_catalog, file_without_field=True)
     ).head(1)
-    _assert_falls_back(
-        q,
-        in_memory_engine,
-        "Sliced Iceberg scan with partition values polars cannot supply",
-    )
+    with pytest.raises(
+        pl.exceptions.ComputeError,
+        match=re.escape(
+            "NotImplementedError: "
+            "Sliced Iceberg scan with partition values polars cannot supply"
+        ),
+    ):
+        q.collect(engine=in_memory_engine)
 
 
 def _write_with_field_ids(path: Path, table: pa.Table) -> None:
@@ -747,25 +759,17 @@ def _write_with_field_ids(path: Path, table: pa.Table) -> None:
     pq.write_table(table.cast(pa.schema(fields)), path)
 
 
-def _scan_lake_files(paths: list[str], **kwargs: Any) -> pl.LazyFrame:
-    # pyiceberg cannot write V3 tables or position deletes and deltalake cannot
-    # write deletion vectors, so build the scan that pl.scan_iceberg or
-    # pl.scan_delta builds for such a table.
-    return pl.scan_parquet(
-        paths,
-        missing_columns="insert",
-        extra_columns="ignore",
-        cast_options=pl.ScanCastOptions._default_iceberg(),
-        **kwargs,
-    )
-
-
 def _scan_iceberg_files(
     paths: list[str], mapping: pa.Schema, **kwargs: Any
 ) -> pl.LazyFrame:
-    return _scan_lake_files(
+    # pyiceberg cannot write V3 tables or position deletes, so build the scan
+    # that pl.scan_iceberg builds for such a table.
+    return pl.scan_parquet(
         paths,
         schema=pl.DataFrame(mapping.empty_table()).schema,
+        missing_columns="insert",
+        extra_columns="ignore",
+        cast_options=pl.ScanCastOptions._default_iceberg(),
         _column_mapping=("iceberg-column-mapping", mapping),
         **kwargs,
     )
@@ -903,8 +907,13 @@ def deleted_rows_scan(request: pytest.FixtureRequest, tmp_path: Path) -> pl.Lazy
         )
 
     partitioned = request.param == "delta_partitioned"
-    return _scan_lake_files(
+    # deltalake cannot write deletion vectors, so build the scan that
+    # pl.scan_delta builds for such a table.
+    return pl.scan_parquet(
         paths,
+        missing_columns="insert",
+        extra_columns="ignore",
+        cast_options=pl.ScanCastOptions._default_iceberg(),
         hive_partitioning=partitioned,
         hive_schema={"part": pl.Int64} if partitioned else None,
         _deletion_files=("delta-deletion-vector", selection_vectors),

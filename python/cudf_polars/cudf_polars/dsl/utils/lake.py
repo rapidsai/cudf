@@ -7,7 +7,7 @@ from __future__ import annotations
 import dataclasses
 import itertools
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import polars as pl
 
@@ -36,24 +36,6 @@ if TYPE_CHECKING:
 
 __all__ = ["IcebergColumn", "LakeScanOptions", "read_lake_files"]
 
-_LAKE_CAST_POLICY = MappingProxyType(
-    {
-        "integer_upcast": True,
-        "integer_to_float_cast": False,
-        "float_upcast": True,
-        "float_downcast": True,
-        "datetime_nanoseconds_downcast": True,
-        "datetime_microseconds_downcast": False,
-        "datetime_milliseconds_upcast": False,
-        "datetime_microseconds_upcast": False,
-        "datetime_convert_timezone": True,
-        "null_upcast": True,
-        "categorical_to_string": True,
-        "missing_struct_fields": "insert",
-        "extra_struct_fields": "ignore",
-    }
-)
-
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class IcebergColumn:
@@ -77,6 +59,23 @@ class IcebergColumn:
     physical_id: int
     kind: str
     children: tuple[IcebergColumn, ...]
+    _LAKE_CAST_POLICY: ClassVar[Mapping[str, bool | str]] = MappingProxyType(
+        {
+            "integer_upcast": True,
+            "integer_to_float_cast": False,
+            "float_upcast": True,
+            "float_downcast": True,
+            "datetime_nanoseconds_downcast": True,
+            "datetime_microseconds_downcast": False,
+            "datetime_milliseconds_upcast": False,
+            "datetime_microseconds_upcast": False,
+            "datetime_convert_timezone": True,
+            "null_upcast": True,
+            "categorical_to_string": True,
+            "missing_struct_fields": "insert",
+            "extra_struct_fields": "ignore",
+        }
+    )
 
     @classmethod
     def from_polars(cls, spec: tuple[str, int, tuple[Any, ...]]) -> IcebergColumn:
@@ -236,7 +235,7 @@ class LakeScanOptions:
         if (
             file_options.missing_columns_policy != "insert"
             or file_options.extra_columns_policy != "ignore"
-            or file_options.cast_columns_policy != _LAKE_CAST_POLICY
+            or file_options.cast_columns_policy != IcebergColumn._LAKE_CAST_POLICY
         ):
             raise NotImplementedError(
                 "Inserting missing columns is only supported for Iceberg and Delta scans"
