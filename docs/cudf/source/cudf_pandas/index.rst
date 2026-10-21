@@ -36,22 +36,15 @@ automatically **falling back to pandas** for other operations.
 +---------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------+
 
 
-.. _cudf-pandas-jupyterlab-toggle:
-
 .. admonition:: Enable from the JupyterLab toolbar, no %load_ext needed
    :class: tip
 
-   In JupyterLab, you can also enable ``cudf.pandas`` from the GPU accelerator
-   toggle, **without loading the extension**: you do not need to add
-   ``%load_ext cudf.pandas`` or make any other changes to the notebook. This
-   toggle requires the `jupyterlab-nvdashboard`_ extension to be installed.
-   Once it is installed, open the **GPU Accel** menu in the notebook toolbar,
-   select **cuDF pandas**, and restart the kernel when prompted. The option is
-   shown only when cuDF is installed in the notebook's environment. See the
-   `GPU Accelerators documentation`_ for a demo and details.
+   With the `jupyterlab-nvdashboard`_ extension, you can turn ``cudf.pandas``
+   on for a notebook from the **GPU Accel** toolbar menu, without adding
+   ``%load_ext cudf.pandas`` or editing a single cell.
+   See :ref:`cudf-pandas-jupyterlab-toggle` for setup instructions.
 
-.. _jupyterlab-nvdashboard: https://github.com/rapidsai/jupyterlab-nvdashboard#installation
-.. _GPU Accelerators documentation: https://github.com/rapidsai/jupyterlab-nvdashboard#gpu-accelerators
+.. _jupyterlab-nvdashboard: https://github.com/rapidsai/jupyterlab-nvdashboard
 
 ``cudf.pandas`` is available as part of the ``cudf`` package. See the
 `installation and deployment guide

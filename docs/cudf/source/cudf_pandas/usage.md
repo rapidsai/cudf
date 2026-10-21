@@ -33,6 +33,8 @@ you will need to restart your kernel and run `%load_ext cudf.pandas` as the
 first command before any pandas imports or usage.
 ```
 
+(cudf-pandas-jupyterlab-toggle)=
+
 ## JupyterLab Usage with jupyterlab-nvdashboard
 
 In JupyterLab, you can enable `cudf.pandas` from the GPU accelerator toggle
