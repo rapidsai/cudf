@@ -5,14 +5,14 @@
 
 #pragma once
 
-#include <cudf/utilities/traits.hpp>
+#include <cudf/types.hpp>
 
 #include <cstdint>
 
 namespace cudf::io::orc::detail {
 
 // Epoch days of 1582-10-15. Earlier hybrid dates use the Julian calendar.
-constexpr int32_t calendar_cutover = -141427;
+constexpr int32_t calendar_cutover = -141'427;
 
 CUDF_HOST_DEVICE constexpr int64_t floor_div(int64_t value, int64_t divisor)
 {
@@ -31,21 +31,26 @@ CUDF_HOST_DEVICE constexpr int64_t rebase_days(int64_t days)
 {
   if (days >= calendar_cutover) { return days; }
 
-  auto const z    = days + (to_hybrid ? 719468 : 719470);
-  auto const era  = floor_div(z, to_hybrid ? 146097 : 1461);
-  auto const doe  = z - era * (to_hybrid ? 146097 : 1461);
-  auto const yoe  = to_hybrid ? (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
-                              : (doe == 1460 ? 3 : doe / 365);
+  constexpr int64_t gregorian_epoch_offset = 719'468;
+  constexpr int64_t julian_epoch_offset    = 719'470;
+  constexpr int64_t gregorian_era_days     = 146'097;
+  constexpr int64_t julian_era_days        = 1'461;
+  constexpr auto source_era_days           = to_hybrid ? gregorian_era_days : julian_era_days;
+  auto const z    = days + (to_hybrid ? gregorian_epoch_offset : julian_epoch_offset);
+  auto const era  = floor_div(z, source_era_days);
+  auto const doe  = z - era * source_era_days;
+  auto const yoe  = to_hybrid ? (doe - doe / 1'460 + doe / 36'524 - doe / 146'096) / 365
+                              : (doe == 1'460 ? 3 : doe / 365);
   auto const year = yoe + era * (to_hybrid ? 400 : 4);
   auto const doy  = doe - (365 * yoe + (to_hybrid ? yoe / 4 - yoe / 100 : 0));
   auto const mp   = (5 * doy + 2) / 153;
   auto const day  = doy - (153 * mp + 2) / 5 + 1;
 
   if constexpr (to_hybrid) {
-    return 365 * year + floor_div(year, 4) + (153 * mp + 2) / 5 + day - 1 - 719470;
+    return 365 * year + floor_div(year, 4) + (153 * mp + 2) / 5 + day - 1 - julian_epoch_offset;
   } else {
     return 365 * year + floor_div(year, 4) - floor_div(year, 100) + floor_div(year, 400) +
-           (153 * mp + 2) / 5 + day - 1 - 719468;
+           (153 * mp + 2) / 5 + day - 1 - gregorian_epoch_offset;
   }
 }
 

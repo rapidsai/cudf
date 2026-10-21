@@ -36,7 +36,7 @@ enum CompressionKind : uint8_t {
 /**
  * @brief Identifies the calendar used to encode dates and timestamps in an ORC file.
  */
-enum class CalendarKind : uint8_t {
+enum class CalendarKind : uint32_t {
   UNKNOWN_CALENDAR    = 0,  ///< Calendar is unspecified
   JULIAN_GREGORIAN    = 1,  ///< Hybrid calendar with the October 1582 cutover
   PROLEPTIC_GREGORIAN = 2,  ///< Gregorian calendar extended to all dates

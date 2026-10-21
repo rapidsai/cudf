@@ -4,6 +4,7 @@
  */
 
 #include "calendar.cuh"
+#include "decode_error.cuh"
 #include "io/utilities/block_utils.cuh"
 #include "io/utilities/column_buffer.hpp"
 #include "orc_gpu.hpp"
@@ -1668,10 +1669,10 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     // If we have an index, seek to the initial run and update row positions
     if (num_rowgroups > 0) {
       if (s->top.data.index.strm_offset[0] > s->chunk.strm_len[CI_DATA]) {
-        atomicAdd(error_count, 1);
+        set_decode_error(error_count);
       }
       if (s->top.data.index.strm_offset[1] > s->chunk.strm_len[CI_DATA2]) {
-        atomicAdd(error_count, 1);
+        set_decode_error(error_count);
       }
       auto const ofs0       = min(s->top.data.index.strm_offset[0], s->chunk.strm_len[CI_DATA]);
       auto const ofs1       = min(s->top.data.index.strm_offset[1], s->chunk.strm_len[CI_DATA2]);
@@ -2006,7 +2007,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
                 s->chunk.convert_dates_to_proleptic ? rebase_days<false>(original) : original;
               if (s->chunk.convert_dates_to_proleptic and
                   not is_representable_date<false>(original, rebased)) {
-                atomicAdd(error_count, 1);
+                set_decode_error(error_count);
               }
               if (s->chunk.dtype_len == 8) {
                 cudf::duration_D days{static_cast<int32_t>(rebased)};

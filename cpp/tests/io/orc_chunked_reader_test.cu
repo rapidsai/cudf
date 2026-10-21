@@ -4,6 +4,7 @@
  */
 
 #include "compression_common.hpp"
+#include "io/orc/decode_error.cuh"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -20,6 +21,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
@@ -31,6 +33,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/iterator>
@@ -192,9 +195,30 @@ void expect_selected_nested_empty_struct_chunked_round_trip(
   expect_selected_nested_empty_struct_table(expected->view(), chunk.tbl->view());
 }
 
+void record_two_decode_errors(cudf::size_type* status, cuda::stream_ref stream)
+{
+  cudf::detail::device_single_thread(
+    [status] __device__ {
+      cudf::io::orc::detail::set_decode_error(status);
+      cudf::io::orc::detail::set_decode_error(status);
+    },
+    stream);
+}
+
 }  // namespace
 
 struct OrcChunkedReaderTest : public cudf::test::BaseFixture {};
+
+TEST_F(OrcChunkedReaderTest, CalendarDecodeErrorDoesNotWrap)
+{
+  auto const stream = cudf::get_default_stream();
+  for (auto initial : {cudf::size_type{0}, cudf::size_type{-2}}) {
+    rmm::device_scalar<cudf::size_type> status{initial, stream};
+    // -2 represents the state after 2^32 - 2 failures. Two more increments used to clear it.
+    record_two_decode_errors(status.data(), stream);
+    EXPECT_NE(status.value(stream), 0);
+  }
+}
 
 using OrcChunkedDecompressionTest = DecompressionTest<OrcChunkedReaderTest>;
 

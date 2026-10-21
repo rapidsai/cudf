@@ -136,6 +136,16 @@ class ORCCalendarTest {
           assertTablesAreEqual(expected, actual);
         }
       }
+      // Unknown protobuf enum numbers must not alias recognized calendars after narrowing.
+      for (int calendar : new int[] {3, 257, 258, -1}) {
+        byte[] variant = withCalendarValue(originalBytes, calendar);
+        try (ColumnVector dates = ColumnVector.timestampDaysFromBoxedInts(hybrid);
+             Table expected = new Table(dates);
+             Table actual = Table.readORC(ORCOptions.builder().withNumPyTypes(false)
+                 .convertDatesToProleptic(true).build(), variant)) {
+          assertTablesAreEqual(expected, actual);
+        }
+      }
       Long[] millis = Arrays.stream(proleptic).map(day -> day.longValue() * 86400000L)
           .toArray(Long[]::new);
       try (ColumnVector dates = ColumnVector.timestampMilliSecondsFromBoxedLongs(millis);
@@ -274,6 +284,10 @@ class ORCCalendarTest {
   // Rewrite only the uncompressed footer using Apache's independently generated protobuf classes.
   private static byte[] withCalendar(byte[] file, org.apache.orc.OrcProto.CalendarKind calendar)
       throws IOException {
+    return withCalendarValue(file, calendar == null ? null : calendar.getNumber());
+  }
+
+  private static byte[] withCalendarValue(byte[] file, Integer calendar) throws IOException {
     int postscriptLength = Byte.toUnsignedInt(file[file.length - 1]);
     int postscriptStart = file.length - 1 - postscriptLength;
     org.apache.orc.OrcProto.PostScript ps = org.apache.orc.OrcProto.PostScript.parseFrom(
@@ -281,8 +295,19 @@ class ORCCalendarTest {
     int footerStart = postscriptStart - Math.toIntExact(ps.getFooterLength());
     org.apache.orc.OrcProto.Footer.Builder footer = org.apache.orc.OrcProto.Footer.parseFrom(
         Arrays.copyOfRange(file, footerStart, postscriptStart)).toBuilder();
-    if (calendar == null) { footer.clearCalendar(); } else { footer.setCalendar(calendar); }
-    byte[] footerBytes = footer.build().toByteArray();
+    footer.clearCalendar();
+    ByteArrayOutputStream rewrittenFooter = new ByteArrayOutputStream();
+    rewrittenFooter.write(footer.build().toByteArray());
+    if (calendar != null) {
+      rewrittenFooter.write(0x58); // Footer.calendar, field 11, varint.
+      long value = Integer.toUnsignedLong(calendar);
+      while ((value & ~0x7fL) != 0) {
+        rewrittenFooter.write((int) (value & 0x7f) | 0x80);
+        value >>>= 7;
+      }
+      rewrittenFooter.write((int) value);
+    }
+    byte[] footerBytes = rewrittenFooter.toByteArray();
     byte[] psBytes = ps.toBuilder().setFooterLength(footerBytes.length).build().toByteArray();
     ByteArrayOutputStream output = new ByteArrayOutputStream();
     output.write(file, 0, footerStart);
