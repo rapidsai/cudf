@@ -57,4 +57,4 @@ void BM_tpch_q1_compute(nvbench::state& state)
 NVBENCH_BENCH(BM_tpch_q1_compute)
   .set_name("tpch_q1_compute")
   .add_string_axis("expression", {"disc_price", "charge"})
-  .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000, 100'000'000, 600'037'902});
+  .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000});
