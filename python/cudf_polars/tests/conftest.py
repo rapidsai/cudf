@@ -19,21 +19,6 @@ from cudf_polars.testing.engine_utils import (
     create_streaming_options,
     merge_streaming_options,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_140, POLARS_VERSION_LT_141
-
-
-@pytest.fixture
-def xfail_decimal_sum_precision_polars_140(request: pytest.FixtureRequest) -> None:
-    """xfail decimal ``sum`` tests on polars 1.40."""
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(not POLARS_VERSION_LT_140) and POLARS_VERSION_LT_141,
-            reason="polars 1.40 reports narrow precision for decimal sum "
-            "(Decimal(9,2) vs (38,2)), fixed in 1.41. "
-            "See https://github.com/pola-rs/polars/issues/27269",
-        )
-    )
-
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
@@ -89,6 +74,20 @@ def _skip_unless_spmd(request: pytest.FixtureRequest) -> None:
         and not request.node.get_closest_marker("spmd")
     ):
         pytest.skip("skip: SPMD nranks > 1 (mark with pytest.mark.spmd to run)")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _configure_dask() -> Generator[None, None, None]:
+    """Apply test-suite-wide Dask configuration."""
+    # workaround https://github.com/dask/distributed/issues/9374
+    try:
+        import dask
+    except ImportError:
+        yield
+        return
+
+    with dask.config.set({"distributed.client.scheduler-info-interval": "60s"}):
+        yield
 
 
 @pytest.fixture(scope="session")

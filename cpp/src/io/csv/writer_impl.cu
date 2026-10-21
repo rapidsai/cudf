@@ -41,6 +41,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/cmath>
 #include <cuda/std/concepts>
 #include <cuda/stream>
 #include <thrust/execution_policy.h>
@@ -91,7 +92,7 @@ size_t compression_block_size(compression_type compression, size_t requested_siz
   auto const size        = std::min(requested_size, codec_limit.value_or(requested_size));
 
   auto const alignment = io::detail::compress_required_chunk_alignment(compression);
-  return std::max(alignment, cudf::util::round_down_safe(size, alignment));
+  return std::max(alignment, cuda::round_down(size, alignment));
 }
 
 /**
@@ -267,9 +268,8 @@ struct column_to_strings_fn {
 
   // bools:
   //
-  template <typename column_type>
+  template <cudf::concepts::boolean column_type>
   std::unique_ptr<column> operator()(column_view const& column) const
-    requires(std::is_same_v<column_type, bool>)
   {
     string_scalar true_string{
       options_.get_true_value(), true, stream_, cudf::get_current_device_resource_ref()};
@@ -280,9 +280,8 @@ struct column_to_strings_fn {
 
   // strings:
   //
-  template <typename column_type>
+  template <cudf::concepts::string_view column_type>
   std::unique_ptr<column> operator()(column_view const& column_v) const
-    requires(std::is_same_v<column_type, cudf::string_view>)
   {
     if (options_.get_quoting() == cudf::io::quote_style::NONE) {
       return std::make_unique<column>(column_v, stream_, mr_);

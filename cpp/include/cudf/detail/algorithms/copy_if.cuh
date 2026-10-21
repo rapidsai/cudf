@@ -36,7 +36,7 @@ namespace cudf::detail {
  * @param result Device-accessible iterator to start of output values
  * @param predicate Unary predicate that returns true for elements to copy
  * @param stream CUDA stream to use
- * @param mr Device memory resources to use
+ * @param mr Memory resources whose temporary resource is used for scratch allocations
  * @return Iterator pointing to the end of the output range
  */
 template <typename InputIterator,
