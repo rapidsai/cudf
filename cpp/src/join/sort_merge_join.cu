@@ -869,7 +869,8 @@ sort_merge_join::left_join(table_view const& left,
 
       auto const validity_mask =
         reinterpret_cast<bitmask_type const*>(preprocessed_left._validity_mask.value().data());
-      auto temp_mr = cudf::get_current_device_resource_ref();
+      cudf::memory_resources mrs(mr);
+      auto temp_mr = mrs.get_temporary_mr();
       rmm::device_uvector<size_type> null_left_indices{
         static_cast<std::size_t>(num_filtered_nulls), stream, temp_mr};
       cudf::detail::copy_if_async(cuda::counting_iterator<size_type>{0},
@@ -878,7 +879,7 @@ sort_merge_join::left_join(table_view const& left,
                                   null_left_indices.begin(),
                                   is_row_null{validity_mask},
                                   stream,
-                                  cudf::memory_resources{temp_mr, temp_mr});
+                                  mrs.as_temporary());
 
       rmm::device_uvector<size_type> left_result_indices(total_output_size, stream, mr);
       rmm::device_uvector<size_type> right_result_indices(total_output_size, stream, mr);

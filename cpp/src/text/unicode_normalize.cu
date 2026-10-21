@@ -777,8 +777,9 @@ std::unique_ptr<cudf::column> normalize_unicode(cudf::strings_column_view const&
   auto const chars_size = last_offset - first_offset;
   if (chars_size == 0) { return std::make_unique<cudf::column>(input.parent(), stream, mr); }
 
-  auto const& p          = *normalizer._impl;
-  auto const temp_mr     = cudf::get_current_device_resource_ref();
+  auto const& p = *normalizer._impl;
+  cudf::memory_resources mrs(mr);
+  auto const temp_mr     = mrs.get_temporary_mr();
   auto const policy      = rmm::exec_policy_nosync(stream, temp_mr);
   auto const byte_iter   = cuda::make_counting_iterator(int64_t{0});
   auto const d_raw_chars = input.chars_begin(stream) + first_offset;
@@ -790,11 +791,8 @@ std::unique_ptr<cudf::column> normalize_unicode(cudf::strings_column_view const&
   // If none found the column is already normalized and we can just return a copy.
   if (p.form == unicode_normalization_form::NFC || p.form == unicode_normalization_form::NFKC) {
     auto nfc_qc_fn = detail::nfc_quick_check_fn{chars_span, p.ccc_table, p.compat_decomp_flags};
-    if (!cudf::detail::any_of(byte_iter,
-                              byte_iter + chars_size,
-                              nfc_qc_fn,
-                              stream,
-                              cudf::memory_resources{temp_mr, temp_mr})) {
+    if (!cudf::detail::any_of(
+          byte_iter, byte_iter + chars_size, nfc_qc_fn, stream, mrs.as_temporary())) {
       return std::make_unique<cudf::column>(input.parent(), stream, mr);
     }
   }
