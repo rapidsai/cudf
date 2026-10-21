@@ -32,12 +32,17 @@ import java.nio.channels.FileChannel.MapMode;
 public class HostMemoryBuffer extends MemoryBuffer {
   /** Optional handler for device-to-host copies into specialized host allocations. */
   public interface DeviceToHostCopyHandler {
+    /**
+     * Return true only if the copy has completed. Return false to use the default CUDA copy.
+     * The handler must check whether it owns the destination and may receive any host buffer.
+     */
     boolean copy(HostMemoryBuffer dst, long dstOffset, BaseDeviceMemoryBuffer src,
                  long srcOffset, long length, Cuda.Stream stream);
   }
 
   private static volatile DeviceToHostCopyHandler deviceToHostCopyHandler;
 
+  /** Register a process-wide copy handler, or pass null to restore the default CUDA copy. */
   public static void setDeviceToHostCopyHandler(DeviceToHostCopyHandler handler) {
     deviceToHostCopyHandler = handler;
   }
