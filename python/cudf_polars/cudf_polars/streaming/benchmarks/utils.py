@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal
 import nvtx
 
 import polars as pl
+from polars.testing import assert_frame_equal
 
 __all__: list[str] = [
     "COUNT_DTYPE",
@@ -996,6 +997,25 @@ def validate_result(
         return ValidationResult(status="Passed", message=None)
 
 
+def validate_result_exact(
+    result: pl.DataFrame,
+    expected: pl.DataFrame,
+    **kwargs: Any,
+) -> ValidationResult:
+    """
+    Validate the computed result against the expected answer.
+
+    Rows and columns are compared in order with ``polars.testing.assert_frame_equal``.
+    Unlike ``validate_result``, ties at a ``LIMIT`` boundary are not handled.
+    """
+    try:
+        assert_frame_equal(result, expected, **kwargs)
+    except Exception as e:
+        return ValidationResult.from_error(e)
+    else:
+        return ValidationResult(status="Passed", message=None)
+
+
 @dataclasses.dataclass
 class QueryResult:
     """
@@ -1173,7 +1193,11 @@ def run_polars_query_iteration(
     io_summaries = _collect_io_summaries(engine)
     statistics = _collect_statistics(engine)
 
-    if expected is not None:
+    if expected is not None and run_config.query_mode == "sql":
+        validation_result = validate_result_exact(
+            result, expected, **get_validation_options(args)
+        )
+    elif expected is not None:
         validation_result = validate_result(
             result,
             expected,
