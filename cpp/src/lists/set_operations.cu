@@ -80,12 +80,10 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
   auto const num_rows = lhs.size();
 
   // This stores the unique label values, used as scatter map.
-  auto list_indices = cuda::device_buffer<size_type>(
-    stream, temp_mr, num_rows, cuda::no_init);
+  auto list_indices = cuda::device_buffer<size_type>(stream, temp_mr, num_rows, cuda::no_init);
 
   // Stores the result of checking overlap for non-empty lists.
-  auto overlap_results = cuda::device_buffer<bool>(
-    stream, temp_mr, num_rows, cuda::no_init);
+  auto overlap_results = cuda::device_buffer<bool>(stream, temp_mr, num_rows, cuda::no_init);
 
   auto const labels_begin = rhs_labels->view().begin<size_type>();
   auto const end          = cudf::detail::reduce_by_key(labels_begin,  // keys

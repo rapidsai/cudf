@@ -40,7 +40,7 @@ std::size_t hash_join<Hasher>::join_size(cudf::table_view const& left,
                "Left table has nulls while right table was not hashed with null check.",
                std::invalid_argument);
 
-  auto const temp_mr           = mr.get_temporary_mr();
+  auto const temp_mr = mr.get_temporary_mr();
   auto const preprocessed_left =
     cudf::detail::row::equality::preprocessed_table::create(left, stream, temp_mr);
   auto total_matches     = cudf::detail::device_scalar<cuda::std::uint64_t>(0, stream, temp_mr);

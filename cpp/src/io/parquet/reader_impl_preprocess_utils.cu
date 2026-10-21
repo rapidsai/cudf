@@ -642,8 +642,8 @@ void decode_page_headers_impl(pass_intermediate_data& pass,
                                                            mr)
                                  .second;
   auto const num_page_counts = page_counts_end - page_counts.begin();
-  pass.page_offsets          = cuda::device_buffer<size_type>(
-    stream, temp_mr, num_page_counts + 1, cuda::no_init);
+  pass.page_offsets =
+    cuda::device_buffer<size_type>(stream, temp_mr, num_page_counts + 1, cuda::no_init);
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream, temp_mr),
                          page_counts.begin(),
                          page_counts.begin() + num_page_counts + 1,

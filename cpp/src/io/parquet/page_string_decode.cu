@@ -1045,14 +1045,13 @@ void compute_page_string_sizes_pass2(cudf::detail::hostdevice_span<PageInfo> pag
     // page's chunk of the temp buffer
     cuda::device_buffer<int64_t> page_string_offsets(
       stream, mr.get_temporary_mr(), pages.size(), cuda::no_init);
-    thrust::transform_exclusive_scan(
-      rmm::exec_policy_nosync(stream, mr.get_temporary_mr()),
-      pages.device_begin(),
-      pages.device_end(),
-      page_string_offsets.begin(),
-      page_sizes,
-      0L,
-      cuda::std::plus<int64_t>{});
+    thrust::transform_exclusive_scan(rmm::exec_policy_nosync(stream, mr.get_temporary_mr()),
+                                     pages.device_begin(),
+                                     pages.device_end(),
+                                     page_string_offsets.begin(),
+                                     page_sizes,
+                                     0L,
+                                     cuda::std::plus<int64_t>{});
 
     // allocate the temp space
     temp_string_buf = cuda::device_buffer<uint8_t>(

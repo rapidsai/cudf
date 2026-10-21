@@ -311,8 +311,7 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
   }
 
   // page keys grouped by split.
-  cuda::device_buffer<int32_t> page_keys_by_split(
-    stream, temp_mr, c_info.size(), cuda::no_init);
+  cuda::device_buffer<int32_t> page_keys_by_split(stream, temp_mr, c_info.size(), cuda::no_init);
   thrust::transform(rmm::exec_policy_nosync(stream, temp_mr),
                     c_info_sorted.begin(),
                     c_info_sorted.end(),

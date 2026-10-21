@@ -1029,12 +1029,9 @@ void scatter_offsets(tree_meta_t const& tree,
                                             col.validity.data()};
   }
 
-  auto d_ignore_vals = cudf::detail::make_device_buffer_async(
-    ignore_vals, stream, temp_mr);
-  auto d_is_mixed_pruned = cudf::detail::make_device_buffer_async(
-    is_mixed_pruned, stream, temp_mr);
-  auto d_columns_data = cudf::detail::make_device_buffer_async(
-    columns_data, stream, temp_mr);
+  auto d_ignore_vals     = cudf::detail::make_device_buffer_async(ignore_vals, stream, temp_mr);
+  auto d_is_mixed_pruned = cudf::detail::make_device_buffer_async(is_mixed_pruned, stream, temp_mr);
+  auto d_columns_data    = cudf::detail::make_device_buffer_async(columns_data, stream, temp_mr);
 
   // 3. scatter string offsets to respective columns, set validity bits
   thrust::for_each_n(

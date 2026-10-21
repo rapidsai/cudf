@@ -131,13 +131,15 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
 
   NodeIndexT num_columns = unpermuted_col_ids.size();
 
-  auto mapped_col_ids = cuda::device_buffer<NodeIndexT>(stream, temp_mr, unpermuted_col_ids.size(), cuda::no_init);
+  auto mapped_col_ids =
+    cuda::device_buffer<NodeIndexT>(stream, temp_mr, unpermuted_col_ids.size(), cuda::no_init);
   CUDF_CUDA_TRY(cudf::detail::memcpy_async(mapped_col_ids.data(),
                                            unpermuted_col_ids.data(),
                                            unpermuted_col_ids.size() * sizeof(NodeIndexT),
                                            stream));
   cuda::device_buffer<NodeIndexT> rev_mapped_col_ids(stream, temp_mr, num_columns, cuda::no_init);
-  cuda::device_buffer<NodeIndexT> reordering_index(stream, temp_mr, unpermuted_col_ids.size(), cuda::no_init);
+  cuda::device_buffer<NodeIndexT> reordering_index(
+    stream, temp_mr, unpermuted_col_ids.size(), cuda::no_init);
 
   thrust::sequence(
     rmm::exec_policy_nosync(stream, temp_mr), reordering_index.begin(), reordering_index.end());
@@ -151,7 +153,8 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
       unpermuted_tree.node_levels, unpermuted_col_ids, unpermuted_tree.parent_node_ids});
 
   {
-    auto mapped_col_ids_copy = cuda::device_buffer<NodeIndexT>(stream, temp_mr, mapped_col_ids.size(), cuda::no_init);
+    auto mapped_col_ids_copy =
+      cuda::device_buffer<NodeIndexT>(stream, temp_mr, mapped_col_ids.size(), cuda::no_init);
     CUDF_CUDA_TRY(cudf::detail::memcpy_async(mapped_col_ids_copy.data(),
                                              mapped_col_ids.data(),
                                              mapped_col_ids.size() * sizeof(NodeIndexT),
@@ -192,17 +195,17 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
   auto construct_row_idx = [&stream, &mr](NodeIndexT num_columns,
                                           device_span<NodeIndexT const> parent_col_ids) {
     auto const temp_mr = mr.get_temporary_mr();
-    auto row_idx = cudf::detail::make_zeroed_device_buffer_async<NodeIndexT>(
+    auto row_idx       = cudf::detail::make_zeroed_device_buffer_async<NodeIndexT>(
       static_cast<std::size_t>(num_columns + 1), stream, temp_mr);
     // Note that the first element of csr_parent_col_ids is -1 (parent_node_sentinel)
     // children adjacency
 
-    auto num_non_leaf_columns =
-      thrust::unique_count(rmm::exec_policy_nosync(stream, temp_mr),
-                           parent_col_ids.begin() + 1,
-                           parent_col_ids.end());
-    cuda::device_buffer<NodeIndexT> non_leaf_nodes(stream, temp_mr, num_non_leaf_columns, cuda::no_init);
-    cuda::device_buffer<NodeIndexT> non_leaf_nodes_children(stream, temp_mr, num_non_leaf_columns, cuda::no_init);
+    auto num_non_leaf_columns = thrust::unique_count(
+      rmm::exec_policy_nosync(stream, temp_mr), parent_col_ids.begin() + 1, parent_col_ids.end());
+    cuda::device_buffer<NodeIndexT> non_leaf_nodes(
+      stream, temp_mr, num_non_leaf_columns, cuda::no_init);
+    cuda::device_buffer<NodeIndexT> non_leaf_nodes_children(
+      stream, temp_mr, num_non_leaf_columns, cuda::no_init);
     cudf::detail::reduce_by_key_async(parent_col_ids.begin() + 1,
                                       parent_col_ids.end(),
                                       cuda::make_constant_iterator(1),
@@ -251,18 +254,14 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
                                           device_span<NodeIndexT const> row_idx) {
     auto const temp_mr = mr.get_temporary_mr();
     cuda::device_buffer<NodeIndexT> col_idx(stream, temp_mr, (num_columns - 1) * 2, cuda::no_init);
-    thrust::fill(rmm::exec_policy_nosync(stream, temp_mr),
-                 col_idx.begin(),
-                 col_idx.end(),
-                 -1);
+    thrust::fill(rmm::exec_policy_nosync(stream, temp_mr), col_idx.begin(), col_idx.end(), -1);
     // excluding root node, construct scatter map
     cuda::device_buffer<NodeIndexT> map(stream, temp_mr, num_columns - 1, cuda::no_init);
-    thrust::inclusive_scan_by_key(
-      rmm::exec_policy_nosync(stream, temp_mr),
-      parent_col_ids.begin() + 1,
-      parent_col_ids.end(),
-      cuda::make_constant_iterator(1),
-      map.begin());
+    thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream, temp_mr),
+                                  parent_col_ids.begin() + 1,
+                                  parent_col_ids.end(),
+                                  cuda::make_constant_iterator(1),
+                                  map.begin());
     thrust::for_each_n(rmm::exec_policy_nosync(stream, temp_mr),
                        cuda::counting_iterator<NodeIndexT>{1},
                        num_columns - 1,

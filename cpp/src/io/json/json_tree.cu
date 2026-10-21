@@ -444,8 +444,8 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
         default: return false;
       };
     };
-    auto const num_nested = cudf::detail::count_if(
-      tokens.begin(), tokens.end(), is_nested, stream, mrs.as_temporary());
+    auto const num_nested =
+      cudf::detail::count_if(tokens.begin(), tokens.end(), is_nested, stream, mrs.as_temporary());
     cuda::device_buffer<TreeDepthT> token_levels(
       stream, mrs.get_temporary_mr(), num_nested, cuda::no_init);
     cuda::device_buffer<NodeIndexT> token_id(
@@ -783,12 +783,11 @@ get_array_children_indices(TreeDepthT row_array_children_level,
   // exclusive scan by key (on key their parent_node_id, because we need indices in each row.
   // parent_node_id for each row will be same).
   // -> return their indices and their node id
-  auto const num_nodes = node_levels.size();
-  auto num_level2_nodes =
-    thrust::count(rmm::exec_policy_nosync(stream, mr.get_temporary_mr()),
-                  node_levels.begin(),
-                  node_levels.end(),
-                  row_array_children_level);
+  auto const num_nodes  = node_levels.size();
+  auto num_level2_nodes = thrust::count(rmm::exec_policy_nosync(stream, mr.get_temporary_mr()),
+                                        node_levels.begin(),
+                                        node_levels.end(),
+                                        row_array_children_level);
   cuda::device_buffer<NodeIndexT> level2_nodes(
     stream, mr.get_temporary_mr(), num_level2_nodes, cuda::no_init);
   cuda::device_buffer<NodeIndexT> level2_indices(
