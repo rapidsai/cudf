@@ -585,11 +585,8 @@ transform_lists_of_structs(column_view const& lhs,
       auto const concatenated_children = cudf::detail::concatenate(
         std::vector<column_view>{child_lhs, child_rhs}, stream, mr.get_temporary_mr());
 
-      auto const temp_mr      = mr.get_temporary_mr();
-      auto const ranks        = compute_ranks(concatenated_children->view(),
-                                       column_null_order,
-                                       stream,
-                                       cudf::memory_resources{temp_mr, temp_mr});
+      auto const ranks =
+        compute_ranks(concatenated_children->view(), column_null_order, stream, mr.as_temporary());
       auto const ranks_slices = cudf::detail::slice(
         ranks->view(),
         {0, child_lhs.size(), child_lhs.size(), child_lhs.size() + child_rhs.size()},

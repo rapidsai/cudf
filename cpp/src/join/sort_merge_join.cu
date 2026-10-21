@@ -204,12 +204,11 @@ right_run_index build_right_run_index(table_view const& table,
                                       cuda::stream_ref stream,
                                       cudf::memory_resources mr)
 {
-  auto const temp_mr   = mr.get_temporary_mr();
   auto const has_nulls = has_nested_nulls(table);
   std::vector<cudf::order> column_order(table.num_columns(), cudf::order::ASCENDING);
   std::vector<cudf::null_order> null_precedence(table.num_columns(), cudf::null_order::BEFORE);
   auto const row_less = detail::row::lexicographic::self_comparator{
-    table, column_order, null_precedence, stream, cudf::memory_resources{temp_mr, temp_mr}};
+    table, column_order, null_precedence, stream, mr.as_temporary()};
   if (cudf::has_nested_columns(table)) {
     return build_right_run_index(
       sorted_order, table.num_rows(), row_less.less<true>(nullate::DYNAMIC{has_nulls}), stream, mr);
@@ -390,15 +389,14 @@ template <typename SmallerIterator>
 typename merge<SmallerIterator>::match_ranges merge<SmallerIterator>::find_match_ranges(
   compute_match_starts compute_starts, cuda::stream_ref stream, cudf::memory_resources mr)
 {
-  auto const output_mr        = mr.get_output_mr();
-  auto const has_nulls        = has_nested_nulls(smaller) or has_nested_nulls(larger);
-  auto const larger_numrows   = larger.num_rows();
-  auto const num_smaller_runs = static_cast<size_type>(unique_smaller_rows.size());
-  auto match_starts =
-    compute_starts == compute_match_starts::YES
-      ? std::make_unique<cuda::device_buffer<size_type>>(
-          stream, output_mr, larger_numrows, cuda::no_init)
-      : nullptr;
+  auto const output_mr         = mr.get_output_mr();
+  auto const has_nulls         = has_nested_nulls(smaller) or has_nested_nulls(larger);
+  auto const larger_numrows    = larger.num_rows();
+  auto const num_smaller_runs  = static_cast<size_type>(unique_smaller_rows.size());
+  auto match_starts            = compute_starts == compute_match_starts::YES
+                                   ? std::make_unique<cuda::device_buffer<size_type>>(
+                            stream, output_mr, larger_numrows, cuda::no_init)
+                                   : nullptr;
   auto const match_starts_data = match_starts == nullptr ? nullptr : match_starts->data();
   auto match_counts            = cudf::detail::make_zeroed_device_uvector_async<size_type>(
     static_cast<std::size_t>(larger_numrows) + 1, stream, output_mr);
@@ -454,7 +452,7 @@ merge<SmallerIterator>::inner(cuda::stream_ref stream, cudf::memory_resources mr
   auto const larger_numrows = larger.num_rows();
 
   auto [match_starts, match_counts] =
-    find_match_ranges(compute_match_starts::YES, stream, cudf::memory_resources{temp_mr, temp_mr});
+    find_match_ranges(compute_match_starts::YES, stream, mr.as_temporary());
 
   // Use 64-bit prefix sums to handle large output sizes (> INT32_MAX rows)
   // The prefix sums can exceed INT32_MAX even though individual match counts are small
@@ -486,7 +484,7 @@ merge<SmallerIterator>::inner(cuda::stream_ref stream, cudf::memory_resources mr
                match_counts->begin(),
                larger_numrows,
                stream,
-               cudf::memory_resources{temp_mr, temp_mr});
+               mr.as_temporary());
 
   return {std::make_unique<rmm::device_uvector<size_type>>(std::move(smaller_indices)),
           std::make_unique<rmm::device_uvector<size_type>>(std::move(larger_indices))};
@@ -512,7 +510,7 @@ merge<SmallerIterator>::left(cuda::stream_ref stream, cudf::memory_resources mr)
   auto const larger_numrows = larger.num_rows();
 
   auto [match_starts, match_counts] =
-    find_match_ranges(compute_match_starts::YES, stream, cudf::memory_resources{temp_mr, temp_mr});
+    find_match_ranges(compute_match_starts::YES, stream, mr.as_temporary());
 
   cudf::detail::device_scalar<int64_t> total_matches(stream, temp_mr);
   auto match_offsets =
@@ -542,12 +540,8 @@ merge<SmallerIterator>::left(cuda::stream_ref stream, cudf::memory_resources mr)
   auto const output_iterators = cuda::transform_iterator(
     row_indices,
     output_range{match_offsets.data(), larger_indices.begin(), smaller_indices.begin()});
-  batched_copy(input_iterators,
-               output_iterators,
-               output_sizes,
-               larger_numrows,
-               stream,
-               cudf::memory_resources{temp_mr, temp_mr});
+  batched_copy(
+    input_iterators, output_iterators, output_sizes, larger_numrows, stream, mr.as_temporary());
 
   return {std::make_unique<rmm::device_uvector<size_type>>(std::move(smaller_indices)),
           std::make_unique<rmm::device_uvector<size_type>>(std::move(larger_indices))};

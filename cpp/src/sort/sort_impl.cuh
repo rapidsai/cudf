@@ -110,7 +110,7 @@ std::unique_ptr<column> sorted_order(table_view input,
     do_sort(comp.less(nullate::DYNAMIC{has_nulls(input)}));
   } else {
     auto const comp = cudf::detail::row::lexicographic::self_comparator(
-      input, column_order, null_precedence, stream, cudf::memory_resources{temp_mr, temp_mr});
+      input, column_order, null_precedence, stream, mr.as_temporary());
     if (cudf::detail::has_nested_columns(input)) {
       auto const comparator = comp.less<true>(nullate::DYNAMIC{has_nested_nulls(input)});
       do_sort(comparator);

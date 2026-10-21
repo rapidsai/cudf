@@ -171,9 +171,7 @@ class arg_minmax_dispatcher {
                                                    cudf::memory_resources mr) const
     requires(is_supported<ElementType>())
   {
-    auto const temp_mr = mr.get_temporary_mr();
-    auto const idx =
-      find_arg_minmax<ElementType>(input, stream, cudf::memory_resources{temp_mr, temp_mr});
+    auto const idx = find_arg_minmax<ElementType>(input, stream, mr.as_temporary());
     return make_fixed_width_scalar<size_type>(idx, stream, mr.get_output_mr());
   }
 

@@ -207,12 +207,10 @@ struct group_reduction_functor<
         binop);
     };
 
-    auto const result_begin    = result->mutable_view().template begin<ResultType>();
+    auto const result_begin = result->mutable_view().template begin<ResultType>();
+    cudf::memory_resources mrs(mr);
     auto const binop_generator = cudf::reduction::detail::arg_minmax_binop_generator::create<K>(
-      values,
-      stream,
-      cudf::memory_resources{cudf::get_current_device_resource_ref(),
-                             cudf::get_current_device_resource_ref()});
+      values, stream, mrs.as_temporary());
     launch_argminmax_reduction(group_labels, binop_generator.binop(), result_begin, stream);
 
     if (values.has_nulls()) {
