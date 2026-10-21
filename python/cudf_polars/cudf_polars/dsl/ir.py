@@ -4197,7 +4197,7 @@ class HConcat(IR):
                 table,
                 plc.Table(
                     [
-                        plc.Column.all_null_like(column, nrows, stream=stream)
+                        dtypes.make_all_null_column(column, nrows, stream)
                         for column in table.columns()
                     ]
                 ),

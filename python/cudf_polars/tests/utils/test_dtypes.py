@@ -9,11 +9,12 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.containers import DataType
+from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 from cudf_polars.utils.dtypes import (
     can_cast,
     is_order_preserving_cast,
+    make_all_null_column,
     make_empty_column,
 )
 
@@ -90,3 +91,22 @@ def test_make_empty_column_dictionary(dtype):
         plc.TypeId.INT32,
         plc.TypeId.STRING,
     ]
+
+
+def test_make_all_null_column_dictionary():
+    stream = get_cuda_stream()
+    like = DataFrame.from_polars(
+        pl.DataFrame({"a": pl.Series(["x", "y"], dtype=pl.Enum(["y", "x"]))}),
+        stream=stream,
+    ).columns[0]
+
+    result = make_all_null_column(like.obj, 3, stream)
+
+    assert result.type().id() == plc.TypeId.DICTIONARY32
+    assert result.size() == 3
+    assert result.null_count() == 3
+    assert [child.type().id() for child in result.children()] == [
+        plc.TypeId.INT32,
+        plc.TypeId.STRING,
+    ]
+    assert result.children()[1].size() == 0

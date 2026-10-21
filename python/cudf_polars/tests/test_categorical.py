@@ -196,6 +196,12 @@ def test_concat_horizontal(categorical_frame, engine):
     assert_passthrough(q, engine)
 
 
+def test_concat_horizontal_different_heights(categorical_frame, engine):
+    right = categorical_frame.head(3).select(pl.col("cat").alias("cat_right"))
+    q = pl.concat([categorical_frame, right], how="horizontal_extend")
+    assert_passthrough(q, engine)
+
+
 def test_cache(categorical_frame, engine):
     lf = categorical_frame.filter(pl.col("int") > 5)
     q = pl.concat([lf, lf.select(pl.col("int"), pl.col("cat"), pl.col("other"))])

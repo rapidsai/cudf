@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 __all__ = [
     "can_cast",
     "is_order_preserving_cast",
+    "make_all_null_column",
     "make_empty_column",
 ]
 
@@ -76,6 +77,49 @@ def make_empty_column(dtype: DataType, stream: Stream) -> plc.Column:
         )
 
     return plc.column_factories.make_empty_column(dtype.plc_type, stream=stream)
+
+
+def make_all_null_column(like: plc.Column, size: int, stream: Stream) -> plc.Column:
+    """
+    Create an all-null column with the type of ``like``, including for dictionaries.
+
+    ``plc.Column.all_null_like`` rejects DICTIONARY32, so dictionaries are built
+    from all-null indices and an empty keys column.
+
+    Parameters
+    ----------
+    like
+        Column whose type the result takes.
+    size
+        Number of rows of the result.
+    stream
+        CUDA stream for any device allocations.
+
+    Returns
+    -------
+    An all-null column of ``size`` rows.
+    """
+    if like.type().id() != plc.TypeId.DICTIONARY32:
+        return plc.Column.all_null_like(like, size, stream=stream)
+    indices = plc.Column.from_scalar(
+        plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32), stream=stream),
+        size,
+        stream=stream,
+    )
+    keys_type = (
+        like.children()[1].type()
+        if like.num_children() == 2
+        else plc.DataType(plc.TypeId.STRING)
+    )
+    return plc.Column(
+        like.type(),
+        size,
+        None,
+        plc.null_mask.create_null_mask(size, plc.MaskState.ALL_NULL, stream=stream),
+        size,
+        0,
+        [indices, plc.column_factories.make_empty_column(keys_type, stream=stream)],
+    )
 
 
 def can_cast(from_: plc.DataType, to: plc.DataType) -> bool:
