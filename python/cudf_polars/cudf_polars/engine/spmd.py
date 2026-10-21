@@ -44,7 +44,6 @@ from rapidsmpf.streaming.core.context import Context
 import cudf_polars.quent
 import cudf_polars.quent._runtime
 from cudf_polars.containers import DataFrame, DataType
-from cudf_polars.containers.dataframe import categoricals_to_physical
 from cudf_polars.engine import persisted_result, rank_local_store
 from cudf_polars.engine.core import (
     ClusterInfo,
@@ -343,7 +342,7 @@ def allgather_polars_dataframe(
             "Categorical columns cannot be gathered across ranks yet."
         )
 
-    plc_table = plc.Table.from_arrow(categoricals_to_physical(local_df), stream=stream)
+    plc_table = plc.Table.from_arrow(local_df, stream=stream)
 
     packed_data = packed_data_from_cudf_packed_columns(
         pack(plc_table, stream),

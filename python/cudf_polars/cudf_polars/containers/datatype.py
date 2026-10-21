@@ -70,22 +70,6 @@ def _check_nested_dtype(inner: PolarsDataType) -> None:
             )
 
 
-_CATEGORICAL_PHYSICAL_TO_TYPE_ID: dict[PolarsDataType, plc.TypeId] = {
-    pl.UInt8: plc.TypeId.UINT8,
-    pl.UInt16: plc.TypeId.UINT16,
-    pl.UInt32: plc.TypeId.UINT32,
-}
-
-
-def _categorical_physical_type_id(physical: PolarsDataType) -> plc.TypeId:
-    try:
-        return _CATEGORICAL_PHYSICAL_TO_TYPE_ID[physical]
-    except KeyError as err:  # pragma: no cover
-        raise NotImplementedError(
-            f"Unsupported categorical physical type {physical!r}"
-        ) from err
-
-
 def _dtype_to_header(dtype: PolarsDataType) -> DataTypeHeader:
     if isinstance(dtype, type):
         dtype = dtype()
@@ -256,15 +240,8 @@ def _from_polars(dtype: pl.DataType) -> plc.DataType:
     elif isinstance(dtype, pl.Null):
         # TODO: Hopefully
         return plc.DataType(plc.TypeId.EMPTY)
-    elif isinstance(dtype, pl.Enum):
-        # pl.Series(...).to_physical().dtype so we get Polars' codes type
-        return plc.DataType(
-            _categorical_physical_type_id(
-                pl.Series([], dtype=dtype).to_physical().dtype
-            )
-        )
-    elif isinstance(dtype, pl.Categorical):
-        return plc.DataType(_categorical_physical_type_id(dtype.categories.physical()))
+    elif isinstance(dtype, (pl.Enum, pl.Categorical)):
+        return plc.DataType(plc.TypeId.DICTIONARY32)
     elif isinstance(dtype, pl.List):
         _check_nested_dtype(dtype.inner)
         # Recurse to catch unsupported inner types

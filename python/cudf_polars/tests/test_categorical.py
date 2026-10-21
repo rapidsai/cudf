@@ -14,7 +14,7 @@ from polars.testing import assert_frame_equal
 
 import pylibcudf as plc
 
-from cudf_polars.containers import Column, DataFrame, DataType
+from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.testing.asserts import (
@@ -91,15 +91,7 @@ def test_dataframe_roundtrip(categorical_frame):
 
     for column in result.columns:
         assert column.obj.type() == column.dtype.plc_type
-    physical = df.select(pl.all().to_physical())
-    codes = DataFrame(
-        [
-            Column(c.obj, name=c.name, dtype=DataType(physical.schema[c.name]))
-            for c in result.columns
-        ],
-        stream=result.stream,
-    ).to_polars()
-    assert_frame_equal(codes, physical)
+    assert result.column_map["cat"].obj.type().id() == plc.TypeId.DICTIONARY32
     assert_frame_equal(result.to_polars(), df, check_dtypes=True)
 
 
