@@ -28,6 +28,7 @@
 #include <cuda/std/concepts>
 
 #include <bit>
+#include <cmath>
 #include <numeric>
 #include <span>
 #include <string_view>
@@ -231,7 +232,14 @@ class stats_caster_base {
           val[index] = stats_caster_base::convert<T>(
             binary_value.value().data(), binary_value.value().size(), type, ts_scale);
         }
-      } else {
+      }
+
+      // Per the Parquet spec, a missing or a `NaN` stats value is ignored (set to null)
+      auto const is_nan = [&] {
+        if constexpr (cudf::is_floating_point<T>()) { return std::isnan(val[index]); }
+        return false;
+      };
+      if (not binary_value.has_value() or is_nan()) {
         clear_bit_unsafe(null_mask.data(), index);
         null_count++;
       }

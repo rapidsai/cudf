@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 import decimal
 import io
+import struct
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -1390,3 +1391,51 @@ def test_hybrid_scan_page_index_stats_all_null_page(
     ).to_arrow()
 
     assert row_mask.to_pylist() == [expected_keep] * num_rows
+
+
+@pytest.mark.parametrize(
+    "op, value, expected_row_groups",
+    [
+        pytest.param(ASTOperator.EQUAL, 2.5, [0], id="equal_nan_max_rg"),
+        pytest.param(ASTOperator.GREATER, 2.0, [0, 1], id="greater"),
+        pytest.param(ASTOperator.LESS, 5.0, [0], id="less"),
+        pytest.param(ASTOperator.EQUAL, 20.0, [0, 1], id="equal_other_rg"),
+    ],
+)
+def test_hybrid_scan_filter_row_groups_with_nan_max_stats(
+    op: ASTOperator,
+    value: float,
+    expected_row_groups: list[int],
+    simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
+) -> None:
+    """Row groups whose stats carry a NaN stat must not be pruned by it."""
+    max_with_nan = 2.5
+    table = pa.table(
+        {
+            "a": pa.array(
+                [1.0, float("nan"), max_with_nan, 10.0, 20.0, 30.0],
+                pa.float64(),
+            )
+        }
+    )
+    # pyarrow does not write `NaN`s to stats, so patch the footer to write one
+    footer = bytes(
+        extract_parquet_footer(write_hybrid_scan_parquet_bytes(table, 3))
+    )
+    old_max = struct.pack("<d", max_with_nan)
+    # Both the deprecated `max` and the `max_value` fields of row group 0
+    assert footer.count(old_max) == 2
+    footer = footer.replace(old_max, struct.pack("<d", float("nan")))
+
+    simple_parquet_options.set_filter(
+        Operation(
+            op,
+            ColumnNameReference("a"),
+            Literal(plc.Scalar.from_arrow(pa.scalar(value, pa.float64()))),
+        )
+    )
+    reader = HybridScanReader(memoryview(footer), simple_parquet_options)
+    filtered = reader.filter_row_groups_with_stats(
+        reader.all_row_groups(simple_parquet_options), simple_parquet_options
+    )
+    assert filtered == expected_row_groups
